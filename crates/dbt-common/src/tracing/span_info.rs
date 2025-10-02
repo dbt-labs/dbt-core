@@ -6,8 +6,28 @@ use dbt_telemetry::{DebugValue, SpanStatus, TelemetryAttributes};
 use tracing::Span;
 use tracing_subscriber::{
     Registry,
-    registry::{ExtensionsMut, LookupSpan, SpanRef},
+    registry::{Extensions, ExtensionsMut, LookupSpan, SpanRef},
 };
+
+/// Object-safe abstraction over a span sufficient for our needs.
+/// This erases the concrete registry type `R` and avoids generic blowup
+pub(super) trait SpanAccess {
+    fn extensions(&self) -> Extensions<'_>;
+    fn extensions_mut(&self) -> ExtensionsMut<'_>;
+}
+
+impl<'a, R> SpanAccess for SpanRef<'a, R>
+where
+    R: LookupSpan<'a>,
+{
+    fn extensions(&self) -> Extensions<'_> {
+        SpanRef::extensions(self)
+    }
+
+    fn extensions_mut(&self) -> ExtensionsMut<'_> {
+        SpanRef::extensions_mut(self)
+    }
+}
 
 /// Helper that extracts arbitrary captured fields into a map.
 pub(super) fn get_span_debug_extra_attrs(values: Recordable<'_>) -> BTreeMap<String, DebugValue> {

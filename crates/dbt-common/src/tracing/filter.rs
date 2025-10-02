@@ -84,16 +84,16 @@ where
         self.filter.is_log_enabled(span, meta) && self.inner.is_log_enabled(span, meta)
     }
 
-    fn on_span_start(&self, span: &SpanStartInfo, metric_provider: &DataProvider<'_>) {
-        self.inner.on_span_start(span, metric_provider);
+    fn on_span_start(&self, span: &SpanStartInfo, data_provider: &DataProvider<'_>) {
+        self.inner.on_span_start(span, data_provider);
     }
 
-    fn on_span_end(&self, span: &SpanEndInfo, metric_provider: &DataProvider<'_>) {
-        self.inner.on_span_end(span, metric_provider);
+    fn on_span_end(&self, span: &SpanEndInfo, data_provider: &DataProvider<'_>) {
+        self.inner.on_span_end(span, data_provider);
     }
 
-    fn on_log_record(&self, event: &LogRecordInfo, metric_provider: &DataProvider<'_>) {
-        self.inner.on_log_record(event, metric_provider);
+    fn on_log_record(&self, event: &LogRecordInfo, data_provider: &DataProvider<'_>) {
+        self.inner.on_log_record(event, data_provider);
     }
 }
 

@@ -42,15 +42,15 @@ pub trait TelemetryConsumer {
 
     /// Callback invoked when a span starts.
     #[allow(unused_variables)]
-    fn on_span_start(&self, span: &SpanStartInfo, metric_provider: &DataProvider<'_>) {}
+    fn on_span_start(&self, span: &SpanStartInfo, data_provider: &DataProvider<'_>) {}
 
     /// Callback invoked when a span ends.
     #[allow(unused_variables)]
-    fn on_span_end(&self, span: &SpanEndInfo, metric_provider: &DataProvider<'_>) {}
+    fn on_span_end(&self, span: &SpanEndInfo, data_provider: &DataProvider<'_>) {}
 
     /// Callback invoked when a log record is created.
     #[allow(unused_variables)]
-    fn on_log_record(&self, log_record: &LogRecordInfo, metric_provider: &DataProvider<'_>) {}
+    fn on_log_record(&self, log_record: &LogRecordInfo, data_provider: &DataProvider<'_>) {}
 
     // Non dispatchable
 
@@ -94,7 +94,7 @@ pub trait TelemetryMiddleware {
     fn on_span_start(
         &self,
         span: SpanStartInfo,
-        metric_provider: &mut DataProviderMut<'_>,
+        data_provider: &mut DataProviderMut<'_>,
     ) -> Option<SpanStartInfo> {
         Some(span)
     }
@@ -105,7 +105,7 @@ pub trait TelemetryMiddleware {
     fn on_span_end(
         &self,
         span: SpanEndInfo,
-        metric_provider: &mut DataProviderMut<'_>,
+        data_provider: &mut DataProviderMut<'_>,
     ) -> Option<SpanEndInfo> {
         Some(span)
     }
@@ -116,7 +116,7 @@ pub trait TelemetryMiddleware {
     fn on_log_record(
         &self,
         record: LogRecordInfo,
-        metric_provider: &mut DataProviderMut<'_>,
+        data_provider: &mut DataProviderMut<'_>,
     ) -> Option<LogRecordInfo> {
         Some(record)
     }

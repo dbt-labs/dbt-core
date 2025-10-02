@@ -1,14 +1,20 @@
 use crate::tracing::{
+    data_provider::DataProviderMut,
     init::create_tracing_subcriber_with_layer,
-    layer::{ConsumerLayer, MiddlewareLayer},
+    layer::{ConsumerLayer, MiddlewareLayer, TelemetryMiddleware},
     layers::data_layer::TelemetryDataLayer,
     metrics::{MetricKey, get_metric},
+    tests::mocks::{MockDynLogEvent, MockDynSpanEvent, MockMiddleware, TestLayer},
 };
 use crate::{create_info_span, create_root_info_span, emit_tracing_event};
 
-use super::mocks::{MockDynLogEvent, MockDynSpanEvent, MockMiddleware, TestLayer};
-use dbt_telemetry::TelemetryOutputFlags;
-use tracing::level_filters::LevelFilter;
+use dbt_telemetry::{LogRecordInfo, TelemetryOutputFlags};
+use std::thread;
+use std::{
+    sync::{Arc, Barrier, Condvar, Mutex},
+    time::Duration,
+};
+use tracing::{Dispatch, level_filters::LevelFilter};
 
 #[test]
 fn middleware_modifies_drops_and_updates_metrics() {
@@ -188,4 +194,125 @@ fn middleware_modifies_drops_and_updates_metrics() {
     assert!(attrs.was_scrubbed, "middleware should update attributes");
 
     assert_eq!(mutated_span.span_id, mutated_end.span_id);
+}
+
+#[derive(Default)]
+struct CooperativeMiddlewareShared {
+    state: Mutex<(u8, u8)>,
+    condvar: Condvar,
+}
+
+impl CooperativeMiddlewareShared {
+    fn record_entry(&self) {
+        let mut guard = self.state.lock().expect("middleware state poisoned");
+        let (ref mut active, ref mut max_active) = *guard;
+        *active += 1;
+        *max_active = (*max_active).max(*active);
+        self.condvar.notify_all();
+    }
+
+    fn wait_for_other(&self) {
+        let guard = self.state.lock().expect("middleware state poisoned");
+        let (mut guard, _) = self
+            .condvar
+            // Wait up to 100ms for another thread to enter, should be plenty of time
+            .wait_timeout(guard, Duration::from_millis(100))
+            .expect("middleware state poisoned while waiting for other thread");
+
+        guard.0 -= 1;
+    }
+
+    fn max_active(&self) -> u8 {
+        self.state.lock().expect("middleware state poisoned").1
+    }
+}
+
+#[derive(Clone, Default)]
+struct CooperativeMiddleware {
+    shared: Arc<CooperativeMiddlewareShared>,
+}
+
+impl CooperativeMiddleware {
+    fn new() -> (Self, Arc<CooperativeMiddlewareShared>) {
+        let shared = Arc::new(CooperativeMiddlewareShared::default());
+        (
+            Self {
+                shared: shared.clone(),
+            },
+            shared,
+        )
+    }
+}
+
+impl TelemetryMiddleware for CooperativeMiddleware {
+    fn on_log_record(
+        &self,
+        record: LogRecordInfo,
+        _data_provider: &mut DataProviderMut<'_>,
+    ) -> Option<LogRecordInfo> {
+        self.shared.record_entry();
+        self.shared.wait_for_other();
+        Some(record)
+    }
+}
+
+#[test]
+fn middleware_invocations_do_not_block_across_threads() {
+    let trace_id = rand::random::<u128>();
+    let (test_layer, _, _, _) = TestLayer::new();
+
+    let (cooperative_middleware, shared_state) = CooperativeMiddleware::new();
+    let middlewares: Vec<MiddlewareLayer> = vec![Box::new(cooperative_middleware)];
+    let consumers: Vec<ConsumerLayer> = vec![Box::new(test_layer)];
+
+    let mut data_layer = TelemetryDataLayer::new(
+        trace_id,
+        false,
+        middlewares.into_iter(),
+        consumers.into_iter(),
+    );
+    data_layer.with_sequential_ids();
+
+    let subscriber = create_tracing_subcriber_with_layer(LevelFilter::TRACE, data_layer);
+    let disptcher = Dispatch::new(subscriber);
+
+    tracing::dispatcher::with_default(&disptcher, || {
+        let root_span = create_root_info_span!(
+            MockDynSpanEvent {
+                name: "shared-root".to_string(),
+                flags: TelemetryOutputFlags::ALL,
+                ..Default::default()
+            }
+            .into()
+        );
+        let _root_guard = root_span.enter();
+
+        const NUM_THREADS: usize = 2;
+        let start_barrier = Barrier::new(NUM_THREADS);
+        thread::scope(|s| {
+            for _idx in 0..NUM_THREADS {
+                s.spawn(|| {
+                    tracing::dispatcher::with_default(&disptcher, || {
+                        let _thread_guard = root_span.enter();
+                        start_barrier.wait();
+
+                        emit_tracing_event!(
+                            MockDynLogEvent {
+                                code: 42i32,
+                                flags: TelemetryOutputFlags::ALL,
+                                ..Default::default()
+                            }
+                            .into(),
+                            "middleware concurrency check"
+                        );
+                    });
+                });
+            }
+        });
+    });
+
+    assert!(
+        shared_state.max_active() == 2,
+        "expected middleware invocations to overlap across threads"
+    );
 }

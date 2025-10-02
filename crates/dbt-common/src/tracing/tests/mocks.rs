@@ -191,12 +191,18 @@ impl SharedWriter for TestWriter {
     }
 }
 
+type SpanStartConsumerHandler = dyn for<'a> Fn(&SpanStartInfo, &DataProvider<'a>) + Send + Sync;
+type SpanEndConsumerHandler = dyn for<'a> Fn(&SpanEndInfo, &DataProvider<'a>) + Send + Sync;
+type LogRecordConsumerHandler = dyn for<'a> Fn(&LogRecordInfo, &DataProvider<'a>) + Send + Sync;
+
 // Shared capture layer used by multiple tests to collect structured telemetry
-#[derive(Clone)]
 pub struct TestLayer {
-    pub span_starts: Arc<Mutex<Vec<SpanStartInfo>>>,
-    pub span_ends: Arc<Mutex<Vec<SpanEndInfo>>>,
-    pub log_records: Arc<Mutex<Vec<LogRecordInfo>>>,
+    span_starts: Arc<Mutex<Vec<SpanStartInfo>>>,
+    span_ends: Arc<Mutex<Vec<SpanEndInfo>>>,
+    log_records: Arc<Mutex<Vec<LogRecordInfo>>>,
+    on_span_start: Box<SpanStartConsumerHandler>,
+    on_span_end: Box<SpanEndConsumerHandler>,
+    on_log_record: Box<LogRecordConsumerHandler>,
 }
 
 impl TestLayer {
@@ -215,38 +221,71 @@ impl TestLayer {
             span_starts: span_starts.clone(),
             span_ends: span_ends.clone(),
             log_records: log_records.clone(),
+            on_span_start: Box::new(|_, _| {}),
+            on_span_end: Box::new(|_, _| {}),
+            on_log_record: Box::new(|_, _| {}),
         };
 
         (layer, span_starts, span_ends, log_records)
     }
+
+    #[allow(dead_code)]
+    pub fn with_span_start<F>(mut self, f: F) -> Self
+    where
+        F: for<'a> Fn(&SpanStartInfo, &DataProvider<'a>) + Send + Sync + 'static,
+    {
+        self.on_span_start = Box::new(f);
+        self
+    }
+
+    #[allow(dead_code)]
+    pub fn with_span_end<F>(mut self, f: F) -> Self
+    where
+        F: for<'a> Fn(&SpanEndInfo, &DataProvider<'a>) + Send + Sync + 'static,
+    {
+        self.on_span_end = Box::new(f);
+        self
+    }
+
+    #[allow(dead_code)]
+    pub fn with_log_record<F>(mut self, f: F) -> Self
+    where
+        F: for<'a> Fn(&LogRecordInfo, &DataProvider<'a>) + Send + Sync + 'static,
+    {
+        self.on_log_record = Box::new(f);
+        self
+    }
 }
 
 impl TelemetryConsumer for TestLayer {
-    fn on_span_start(&self, span: &SpanStartInfo, _: &DataProvider<'_>) {
+    fn on_span_start(&self, span: &SpanStartInfo, data_provider: &DataProvider<'_>) {
+        (self.on_span_start)(span, data_provider);
         self.span_starts.lock().unwrap().push(span.clone());
     }
 
-    fn on_span_end(&self, span: &SpanEndInfo, _: &DataProvider<'_>) {
+    fn on_span_end(&self, span: &SpanEndInfo, data_provider: &DataProvider<'_>) {
+        (self.on_span_end)(span, data_provider);
         self.span_ends.lock().unwrap().push(span.clone());
     }
 
-    fn on_log_record(&self, record: &LogRecordInfo, _: &DataProvider<'_>) {
+    fn on_log_record(&self, record: &LogRecordInfo, data_provider: &DataProvider<'_>) {
+        (self.on_log_record)(record, data_provider);
         self.log_records.lock().unwrap().push(record.clone());
     }
 }
 
-type SpanStartHandler =
+type SpanStartMiddlewareHandler =
     dyn for<'a> Fn(SpanStartInfo, &mut DataProviderMut<'a>) -> Option<SpanStartInfo> + Send + Sync;
-type SpanEndHandler =
+type SpanEndMiddlewareHandler =
     dyn for<'a> Fn(SpanEndInfo, &mut DataProviderMut<'a>) -> Option<SpanEndInfo> + Send + Sync;
-type LogRecordHandler =
+type LogRecordMiddlewareHandler =
     dyn for<'a> Fn(LogRecordInfo, &mut DataProviderMut<'a>) -> Option<LogRecordInfo> + Send + Sync;
 
 /// A configurable middleware used to test how telemetry data passes through middleware hooks.
 pub struct MockMiddleware {
-    span_start: Box<SpanStartHandler>,
-    span_end: Box<SpanEndHandler>,
-    log_record: Box<LogRecordHandler>,
+    span_start: Box<SpanStartMiddlewareHandler>,
+    span_end: Box<SpanEndMiddlewareHandler>,
+    log_record: Box<LogRecordMiddlewareHandler>,
 }
 
 impl Default for MockMiddleware {
@@ -303,24 +342,24 @@ impl TelemetryMiddleware for MockMiddleware {
     fn on_span_start(
         &self,
         span: SpanStartInfo,
-        metric_provider: &mut DataProviderMut<'_>,
+        data_provider: &mut DataProviderMut<'_>,
     ) -> Option<SpanStartInfo> {
-        (self.span_start)(span, metric_provider)
+        (self.span_start)(span, data_provider)
     }
 
     fn on_span_end(
         &self,
         span: SpanEndInfo,
-        metric_provider: &mut DataProviderMut<'_>,
+        data_provider: &mut DataProviderMut<'_>,
     ) -> Option<SpanEndInfo> {
-        (self.span_end)(span, metric_provider)
+        (self.span_end)(span, data_provider)
     }
 
     fn on_log_record(
         &self,
         record: LogRecordInfo,
-        metric_provider: &mut DataProviderMut<'_>,
+        data_provider: &mut DataProviderMut<'_>,
     ) -> Option<LogRecordInfo> {
-        (self.log_record)(record, metric_provider)
+        (self.log_record)(record, data_provider)
     }
 }

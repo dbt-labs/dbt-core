@@ -4,7 +4,8 @@ use super::super::{
     event_info::{get_log_message, take_event_attributes},
     filter::FilterMask,
     init::process_span,
-    layer::{MiddlewareLayer, TelemetryConsumer},
+    layer::{ConsumerLayer, MiddlewareLayer},
+    metrics::MetricCounters,
     span_info::get_span_debug_extra_attrs,
 };
 use rand::RngCore;
@@ -12,7 +13,11 @@ use rand::RngCore;
 use std::{sync::atomic::AtomicU64, time::SystemTime};
 
 use tracing::{Level, Subscriber, span};
-use tracing_subscriber::{Layer, layer::Context};
+use tracing_subscriber::{
+    Layer,
+    layer::Context,
+    registry::{LookupSpan, SpanRef},
+};
 
 use dbt_telemetry::{
     CallTrace, Invocation, LogMessage, LogRecordInfo, RecordCodeLocation, SpanEndInfo,
@@ -26,7 +31,7 @@ use dbt_telemetry::{
 /// records that include the trace ID for correlation across systems.
 pub struct TelemetryDataLayer<S>
 where
-    S: Subscriber + for<'lookup> tracing_subscriber::registry::LookupSpan<'lookup>,
+    S: Subscriber + for<'lookup> LookupSpan<'lookup>,
 {
     /// The trace ID used for spans & events lacking a proper parent span
     /// (essentially the root span and any buggy tracing calls missing proper invocation
@@ -37,7 +42,7 @@ where
     /// The telemetry middlewares to apply before notifying consumers.
     middlewares: Vec<MiddlewareLayer>,
     /// The telemetry consumers to notify of span & event events.
-    consumers: Vec<Box<dyn TelemetryConsumer + Send + Sync>>,
+    consumers: Vec<ConsumerLayer>,
     /// If set, uses sequential span & event IDs for easier testing and debugging.
     /// Normally this is None and we use a thread-local RNG to generate
     /// unique span IDs, uuid::Uuid::new_v7() for event IDs.
@@ -48,13 +53,13 @@ where
 
 impl<S> TelemetryDataLayer<S>
 where
-    S: Subscriber + for<'lookup> tracing_subscriber::registry::LookupSpan<'lookup>,
+    S: Subscriber + for<'lookup> LookupSpan<'lookup>,
 {
     pub(in crate::tracing) fn new(
         fallback_trace_id: u128,
         strip_code_location: bool,
         middlewares: impl Iterator<Item = MiddlewareLayer>,
-        consumers: impl Iterator<Item = Box<dyn TelemetryConsumer + Send + Sync>>,
+        consumers: impl Iterator<Item = ConsumerLayer>,
     ) -> Self {
         Self {
             fallback_trace_id,
@@ -110,7 +115,7 @@ where
 
 impl<S> Layer<S> for TelemetryDataLayer<S>
 where
-    S: Subscriber + for<'lookup> tracing_subscriber::registry::LookupSpan<'lookup>,
+    S: Subscriber + for<'lookup> LookupSpan<'lookup>,
 {
     fn on_new_span(&self, attrs: &span::Attributes<'_>, id: &span::Id, ctx: Context<'_, S>) {
         let span = ctx
@@ -226,6 +231,19 @@ where
             attributes: attributes.clone(),
         };
 
+        // If this is the root span, initialize invocation-level metrics storage.
+        // We have to do it early to ensure it is available to middlewares
+        if span.parent().is_none() {
+            span.extensions_mut().insert(MetricCounters::new());
+        }
+
+        // Get root_span for data provider
+        let root_span = span
+            .scope()
+            .from_root()
+            .next()
+            .expect("Root span must exist");
+
         // For each span we save which consumers have filtered out this span
         let mut span_filter_mask = FilterMask::empty();
 
@@ -246,19 +264,13 @@ where
                 attributes: attributes.clone(),
             };
 
-            let root_span = span
-                .scope()
-                .from_root()
-                .next()
-                .expect("Root span must exist");
-
             // This block scope ensures that we don't hold mutable extensions beyond middleware calls.
             // This is important because current span may be the root span itself, and we later take
             // another mutable reference to store the data there.
-            let mut metric_provider = DataProviderMut::new(root_span.extensions_mut());
+            let mut data_provider = DataProviderMut::new(&root_span);
 
             for middleware in &self.middlewares {
-                match middleware.on_span_start(record, &mut metric_provider) {
+                match middleware.on_span_start(record, &mut data_provider) {
                     Some(next_record) => {
                         record = next_record;
                     }
@@ -281,7 +293,7 @@ where
         // This block also creates scope to limit read-only borrow of span extensions
         // as we need mutable borrow later
         if !span_filter_mask.is_disabled() {
-            let metric_provider = DataProvider::new(span.extensions());
+            let data_provider = DataProvider::new(&root_span);
 
             for (index, consumer) in self.consumers.iter().enumerate() {
                 debug_assert!(
@@ -302,7 +314,7 @@ where
                 if !parent_span_filter_mask.is_filtered(index) {
                     // Parent span is not filtered out, we can pass the record as is
                     // No need to search for unfiltered parent
-                    consumer.on_span_start(&record, &metric_provider);
+                    consumer.on_span_start(&record, &data_provider);
                     continue;
                 }
 
@@ -311,7 +323,7 @@ where
                 // and then create a new record with the updated parent span ID
                 let active_parent_span_id = lookup_filtered_parent_span_id(
                     index,
-                    span.parent().expect(
+                    &span.parent().expect(
                         "Parent span must exist or otherwise we would have taken the other branch",
                     ),
                 );
@@ -322,7 +334,7 @@ where
                     ..record.clone()
                 };
 
-                consumer.on_span_start(&modified_record, &metric_provider);
+                consumer.on_span_start(&modified_record, &data_provider);
             }
         }
 
@@ -456,17 +468,17 @@ where
             return;
         }
 
-        if !self.middlewares.is_empty() {
-            let root_span = span
-                .scope()
-                .from_root()
-                .next()
-                .expect("Root span must exist");
+        let root_span = span
+            .scope()
+            .from_root()
+            .next()
+            .expect("Root span must exist");
 
-            let mut metric_provider = DataProviderMut::new(root_span.extensions_mut());
+        if !self.middlewares.is_empty() {
+            let mut data_provider = DataProviderMut::new(&root_span);
 
             for middleware in &self.middlewares {
-                match middleware.on_span_end(record, &mut metric_provider) {
+                match middleware.on_span_end(record, &mut data_provider) {
                     Some(next_record) => {
                         record = next_record;
                     }
@@ -480,7 +492,12 @@ where
 
         // Notify consumers if the span was not filtered out by middleware
 
-        let metric_provider = DataProvider::new(span.extensions());
+        let data_provider = DataProvider::new(&root_span);
+        let curr_parent = span.parent();
+        let parent_span_filter_mask = curr_parent
+            .as_ref()
+            .and_then(|parent_span| parent_span.extensions().get::<FilterMask>().copied())
+            .unwrap_or_else(FilterMask::empty);
 
         for (index, consumer) in self.consumers.iter().enumerate() {
             debug_assert!(
@@ -493,27 +510,19 @@ where
                 continue;
             }
 
-            let Some(curr_parent) = span.parent() else {
-                // No parent span, so no filtering to do
-                consumer.on_span_end(&record, &metric_provider);
+            let Some(curr_parent) = curr_parent.as_ref() else {
+                // No parent span, so no filtering to do. Call consumer and continue
+                consumer.on_span_end(&record, &data_provider);
                 continue;
             };
 
             // Check parent span is enabled for this consumer. This is the fast path
             // for the common case where parent span is not filtered out and we
             // can pass the record as is
-            let parent_span_filter_mask = {
-                let parent_span_ext = curr_parent.extensions();
-                parent_span_ext
-                    .get::<FilterMask>()
-                    .copied()
-                    .unwrap_or_else(FilterMask::empty)
-            };
-
             if !parent_span_filter_mask.is_filtered(index) {
                 // Parent span is not filtered out, we can pass the record as is
                 // No need to search for unfiltered parent
-                consumer.on_span_end(&record, &metric_provider);
+                consumer.on_span_end(&record, &data_provider);
                 continue;
             }
 
@@ -528,7 +537,7 @@ where
                 ..record.clone()
             };
 
-            consumer.on_span_end(&modified_record, &metric_provider);
+            consumer.on_span_end(&modified_record, &data_provider);
         }
     }
 
@@ -620,17 +629,18 @@ where
             attributes,
         };
 
-        if !self.middlewares.is_empty() {
-            let root_span =
-                parent_span.map(|ps| ps.scope().from_root().next().expect("Root span must exist"));
+        let root_span = parent_span
+            .as_ref()
+            .map(|ps| ps.scope().from_root().next().expect("Root span must exist"));
 
-            let mut metric_provider = root_span
+        if !self.middlewares.is_empty() {
+            let mut data_provider = root_span
                 .as_ref()
-                .map(|root_span| DataProviderMut::new(root_span.extensions_mut()))
+                .map(|root_span| DataProviderMut::new(root_span))
                 .unwrap_or_else(DataProviderMut::none);
 
             for middleware in &self.middlewares {
-                match middleware.on_log_record(log_record, &mut metric_provider) {
+                match middleware.on_log_record(log_record, &mut data_provider) {
                     Some(next_record) => {
                         log_record = next_record;
                     }
@@ -641,6 +651,11 @@ where
                 }
             }
         }
+
+        let data_provider = parent_span
+            .as_ref()
+            .map(|parent_span| DataProvider::new(parent_span))
+            .unwrap_or_else(DataProvider::none);
 
         // Notify consumers if the event was not filtered out by middleware
         for (index, consumer) in self.consumers.iter().enumerate() {
@@ -653,23 +668,23 @@ where
                 continue;
             }
 
-            // Unfortunately, have to get the parent on each iteration because
-            // SpanRef doesn't implement Clone... but this is not that slow in practice
-            let Some(curr_parent) = ctx.event_span(event).or_else(|| process_span(&ctx)) else {
-                // No parent span, so no filtering to do & can't get a real metric provider
-                consumer.on_log_record(&log_record, &DataProvider::none());
-                continue;
-            };
-
             // Check parent span is enabled for this consumer. This is the fast path
             // for the common case where parent span is not filtered out and we
             // can pass the record as is
             if !parent_span_filter_mask.is_filtered(index) {
                 // Parent span is not filtered out, we can pass the record as is
                 // No need to search for unfiltered parent
-                consumer.on_log_record(&log_record, &DataProvider::new(curr_parent.extensions()));
+                consumer.on_log_record(&log_record, &data_provider);
                 continue;
             }
+
+            // Looking up filtered parent span ID requires a parent span, so check
+            // we have one
+            let Some(curr_parent) = parent_span.as_ref() else {
+                // No parent span, so no filtering to do & can't get a real data provider
+                consumer.on_log_record(&log_record, &data_provider);
+                continue;
+            };
 
             // Slow path: parent span was filtered out for this consumer.
             // Find the closest unfiltered parent span ID for this consumer (if any)
@@ -682,27 +697,22 @@ where
                 ..log_record.clone()
             };
 
-            // Yes, we have to look up the parent span again, because `lookup_filtered_parent_span_id`
-            // consumes the `SpanRef` we pass to it.
-            ctx.event_span(event)
-                .or_else(|| process_span(&ctx))
-                .map(|s| {
-                    consumer.on_log_record(&modified_record, &DataProvider::new(s.extensions()))
-                })
-                .unwrap_or_else(|| consumer.on_log_record(&modified_record, &DataProvider::none()));
+            consumer.on_log_record(&modified_record, &data_provider);
         }
     }
 }
 
-fn lookup_filtered_parent_span_id<S>(
-    index: usize,
-    mut curr: tracing_subscriber::registry::SpanRef<'_, S>,
-) -> Option<u64>
+fn lookup_filtered_parent_span_id<S>(index: usize, curr: &SpanRef<'_, S>) -> Option<u64>
 where
-    S: Subscriber + for<'lookup> tracing_subscriber::registry::LookupSpan<'lookup>,
+    S: Subscriber + for<'lookup> LookupSpan<'lookup>,
 {
-    while let Some(parent) = curr.parent() {
-        // Create a block to limit the lifetime of parent_ext borrow
+    let Some(mut parent) = curr.parent() else {
+        // No parent span, so no active parent span ID
+        return None;
+    };
+
+    loop {
+        // Create a block scope to limit the borrow of parent extensions
         {
             let parent_ext = parent.extensions();
             let parent_span_filter_mask = parent_ext
@@ -721,8 +731,11 @@ where
             }
         }
 
-        curr = parent;
-    }
+        let Some(grand_parent) = parent.parent() else {
+            // No parent span, so no active parent span ID
+            return None;
+        };
 
-    None
+        parent = grand_parent;
+    }
 }

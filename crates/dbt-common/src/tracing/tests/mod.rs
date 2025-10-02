@@ -1,3 +1,4 @@
+mod data_provider_tests;
 mod filter_tests;
 mod infra_tests;
 mod layers_file_log_tests;

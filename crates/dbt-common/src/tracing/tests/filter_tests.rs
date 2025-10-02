@@ -27,7 +27,6 @@ fn find_span_by_event_name<'a>(
         .expect("span with expected name should exist")
 }
 
-#[derive(Clone)]
 struct TokenFilteringConsumer {
     inner: TestLayer,
     span_token: String,
@@ -56,24 +55,20 @@ impl TelemetryConsumer for TokenFilteringConsumer {
         log.body.contains(&self.log_token)
     }
 
-    fn on_span_start(
-        &self,
-        span: &dbt_telemetry::SpanStartInfo,
-        metric_provider: &DataProvider<'_>,
-    ) {
-        self.inner.on_span_start(span, metric_provider);
+    fn on_span_start(&self, span: &dbt_telemetry::SpanStartInfo, data_provider: &DataProvider<'_>) {
+        self.inner.on_span_start(span, data_provider);
     }
 
-    fn on_span_end(&self, span: &dbt_telemetry::SpanEndInfo, metric_provider: &DataProvider<'_>) {
-        self.inner.on_span_end(span, metric_provider);
+    fn on_span_end(&self, span: &dbt_telemetry::SpanEndInfo, data_provider: &DataProvider<'_>) {
+        self.inner.on_span_end(span, data_provider);
     }
 
     fn on_log_record(
         &self,
         record: &dbt_telemetry::LogRecordInfo,
-        metric_provider: &DataProvider<'_>,
+        data_provider: &DataProvider<'_>,
     ) {
-        self.inner.on_log_record(record, metric_provider);
+        self.inner.on_log_record(record, data_provider);
     }
 }
 
