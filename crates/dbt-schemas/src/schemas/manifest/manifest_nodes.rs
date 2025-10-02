@@ -389,6 +389,8 @@ pub struct ManifestSource {
     pub loader: String,
     pub loaded_at_field: Option<String>,
     pub loaded_at_query: Option<String>,
+
+    #[serialize_always]
     pub freshness: Option<FreshnessDefinition>,
 
     pub __other__: BTreeMap<String, YmlValue>,

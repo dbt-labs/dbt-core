@@ -113,7 +113,7 @@ pub fn resolve_sources(
             .clone();
         project_config.default_to(global_config);
 
-        let source_properties_config = if let Some(properties) = &source.config {
+        let mut source_properties_config = if let Some(properties) = &source.config {
             let mut properties_config: SourceConfig = properties.clone();
             properties_config.default_to(&project_config);
             properties_config
@@ -160,6 +160,7 @@ pub fn resolve_sources(
             source_properties_config.freshness.as_ref(),
             &table_config.freshness,
         );
+        source_properties_config.freshness = merged_freshness.clone();
 
         // This should be set due to propagation from the resolved root project
         let properties_quoting = source_properties_config
@@ -341,7 +342,9 @@ fn merge_freshness(
             .as_ref()
             .and_then(|update| merge_freshness_unwrapped(base, Some(update))),
         // If there is no freshness present in the update then it is inherited (merged) from the base.
-        Omissible::Omitted => merge_freshness_unwrapped(base, None),
+        Omissible::Omitted => {
+            merge_freshness_unwrapped(base, Some(&FreshnessDefinition::default()))
+        }
     }
 }
 
