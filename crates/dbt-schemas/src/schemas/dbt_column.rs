@@ -1,7 +1,7 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use dbt_common::FsResult;
-use dbt_serde_yaml::JsonSchema;
+use dbt_serde_yaml::{JsonSchema, UntaggedEnumDeserialize};
 use serde::{Deserialize, Serialize, Serializer};
 use serde_with::skip_serializing_none;
 use strum::Display;
@@ -214,7 +214,7 @@ pub fn process_columns(
         .unwrap_or_default())
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, Eq, PartialEq)]
+#[derive(UntaggedEnumDeserialize, Serialize, Debug, Clone, JsonSchema, Eq, PartialEq)]
 #[serde(untagged)]
 pub enum ColumnPropertiesDimension {
     DimensionConfig(ColumnPropertiesDimensionConfig),
@@ -240,7 +240,7 @@ pub struct ColumnPropertiesDimensionConfig {
     pub validity_params: Option<DimensionValidityParams>,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(UntaggedEnumDeserialize, Serialize, Debug, Clone, JsonSchema)]
 #[serde(untagged)]
 pub enum Entity {
     EntityConfig(EntityConfig),
