@@ -256,7 +256,7 @@ class ConfiguredParser(
         # but we don't get the return type until we patch the node with the yml definition
         # so we need to set it to a default value here.
         if self.resource_type == NodeType.Function:
-            dct["return_type"] = {"type": "INVALID_TYPE"}
+            dct["returns"] = {"data_type": "INVALID_TYPE"}
 
         try:
             return self.parse_from_dict(dct, validate=True)

@@ -1291,7 +1291,7 @@ class FunctionPatchParser(NodePatchParser[UnparsedFunctionUpdate]):
         assert isinstance(node, FunctionNode)
 
         node.arguments = patch.arguments
-        node.return_type = patch.return_type
+        node.returns = patch.returns
         node.type = patch.type
 
     def _get_node_patch(self, block: TargetBlock[NodeTarget], refs: ParserRef) -> ParsedNodePatch:
@@ -1315,7 +1315,7 @@ class FunctionPatchParser(NodePatchParser[UnparsedFunctionUpdate]):
             deprecation_date=None,
             time_spine=None,
             arguments=target.arguments,
-            return_type=target.return_type,
+            returns=target.returns,
             type=target.type,
         )
 

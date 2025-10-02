@@ -26,19 +26,19 @@ class FunctionConfig(NodeConfig):
 @dataclass
 class FunctionArgument(dbtClassMixin):
     name: str
-    type: str
+    data_type: str
     description: Optional[str] = None
 
 
 @dataclass
-class FunctionReturnType(dbtClassMixin):
-    type: str
+class FunctionReturns(dbtClassMixin):
+    data_type: str
     description: Optional[str] = None
 
 
 @dataclass
 class FunctionMandatory(dbtClassMixin):
-    return_type: FunctionReturnType
+    returns: FunctionReturns
 
 
 @dataclass

@@ -3,7 +3,7 @@ from typing import Dict
 import agate
 import pytest
 
-from dbt.artifacts.resources import FunctionReturnType
+from dbt.artifacts.resources import FunctionReturns
 from dbt.artifacts.resources.types import FunctionType
 from dbt.contracts.graph.nodes import FunctionNode
 from dbt.tests.util import run_dbt
@@ -18,10 +18,10 @@ functions:
     description: Doubles whatever number is passed in
     arguments:
       - name: value
-        type: float
+        data_type: float
         description: A number to be doubled
-    return_type:
-      type: float
+    returns:
+      data_type: float
 """
 
 
@@ -46,9 +46,9 @@ class TestBasicSQLUDF(BasicUDFSetup):
         assert len(function_node.arguments) == 1
         argument = function_node.arguments[0]
         assert argument.name == "value"
-        assert argument.type == "float"
+        assert argument.data_type == "float"
         assert argument.description == "A number to be doubled"
-        assert function_node.return_type == FunctionReturnType(type="float")
+        assert function_node.returns == FunctionReturns(data_type="float")
 
 
 class TestCreationOfUDFs(BasicUDFSetup):
@@ -64,7 +64,7 @@ class TestCreationOfUDFs(BasicUDFSetup):
         argument = function_node.arguments[0]
         assert argument.name == "value"
         assert argument.type == "float"
-        assert results[0].node.return_type == FunctionReturnType(type="float")
+        assert results[0].node.returns == FunctionReturns(type="float")
 
 
 class TestCanInlineShowUDF(BasicUDFSetup):

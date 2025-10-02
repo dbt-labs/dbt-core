@@ -40,7 +40,7 @@ from dbt.artifacts.resources.v1.function import (
     FunctionArgument,
     FunctionConfig,
     FunctionMandatory,
-    FunctionReturnType,
+    FunctionReturns,
 )
 from dbt.artifacts.resources.v1.generic_test import GenericTest, TestMetadata
 from dbt.artifacts.resources.v1.group import Group, GroupConfig

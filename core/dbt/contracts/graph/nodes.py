@@ -33,7 +33,7 @@ from dbt.artifacts.resources import Documentation as DocumentationResource
 from dbt.artifacts.resources import Exposure as ExposureResource
 from dbt.artifacts.resources import FileHash
 from dbt.artifacts.resources import Function as FunctionResource
-from dbt.artifacts.resources import FunctionArgument, FunctionReturnType
+from dbt.artifacts.resources import FunctionArgument, FunctionReturns
 from dbt.artifacts.resources import GenericTest as GenericTestResource
 from dbt.artifacts.resources import GraphResource
 from dbt.artifacts.resources import Group as GroupResource
@@ -1725,7 +1725,7 @@ class ParsedNodePatch(ParsedPatch):
 
 @dataclass
 class ParsedFunctionPatchRequired:
-    return_type: FunctionReturnType
+    returns: FunctionReturns
 
 
 # TODO: Maybe this shouldn't be a subclass of ParsedNodePatch, but ParsedPatch instead

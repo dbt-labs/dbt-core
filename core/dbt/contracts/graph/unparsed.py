@@ -16,7 +16,7 @@ from dbt.artifacts.resources import (
     ExternalTable,
     FreshnessThreshold,
     FunctionArgument,
-    FunctionReturnType,
+    FunctionReturns,
     MacroArgument,
     MaturityType,
     MeasureAggregationParameters,
@@ -663,14 +663,12 @@ class UnparsedGroup(dbtClassMixin):
 
 
 @dataclass
-class UnparsedFunctionReturnType(dbtClassMixin):
-    return_type: FunctionReturnType
+class UnparsedFunctionReturns(dbtClassMixin):
+    returns: FunctionReturns
 
 
 @dataclass
-class UnparsedFunctionUpdate(
-    HasConfig, HasColumnProps, HasYamlMetadata, UnparsedFunctionReturnType
-):
+class UnparsedFunctionUpdate(HasConfig, HasColumnProps, HasYamlMetadata, UnparsedFunctionReturns):
     access: Optional[str] = None
     arguments: List[FunctionArgument] = field(default_factory=list)
     type: FunctionType = FunctionType.Scalar

@@ -8133,11 +8133,11 @@
             "type": "object",
             "title": "Function",
             "properties": {
-              "return_type": {
+              "returns": {
                 "type": "object",
-                "title": "FunctionReturnType",
+                "title": "FunctionReturns",
                 "properties": {
-                  "type": {
+                  "data_type": {
                     "type": "string"
                   },
                   "description": {
@@ -8154,7 +8154,7 @@
                 },
                 "additionalProperties": false,
                 "required": [
-                  "type"
+                  "data_type"
                 ]
               },
               "database": {
@@ -8986,7 +8986,7 @@
                     "name": {
                       "type": "string"
                     },
-                    "type": {
+                    "data_type": {
                       "type": "string"
                     },
                     "description": {
@@ -9004,7 +9004,7 @@
                   "additionalProperties": false,
                   "required": [
                     "name",
-                    "type"
+                    "data_type"
                   ]
                 }
               },
@@ -9019,7 +9019,7 @@
             },
             "additionalProperties": false,
             "required": [
-              "return_type",
+              "returns",
               "database",
               "schema",
               "name",
@@ -19731,11 +19731,11 @@
                   "type": "object",
                   "title": "Function",
                   "properties": {
-                    "return_type": {
+                    "returns": {
                       "type": "object",
-                      "title": "FunctionReturnType",
+                      "title": "FunctionReturns",
                       "properties": {
-                        "type": {
+                        "data_type": {
                           "type": "string"
                         },
                         "description": {
@@ -19752,7 +19752,7 @@
                       },
                       "additionalProperties": false,
                       "required": [
-                        "type"
+                        "data_type"
                       ]
                     },
                     "database": {
@@ -20584,7 +20584,7 @@
                           "name": {
                             "type": "string"
                           },
-                          "type": {
+                          "data_type": {
                             "type": "string"
                           },
                           "description": {
@@ -20602,7 +20602,7 @@
                         "additionalProperties": false,
                         "required": [
                           "name",
-                          "type"
+                          "data_type"
                         ]
                       }
                     },
@@ -20617,7 +20617,7 @@
                   },
                   "additionalProperties": false,
                   "required": [
-                    "return_type",
+                    "returns",
                     "database",
                     "schema",
                     "name",
@@ -26249,11 +26249,11 @@
         "type": "object",
         "title": "Function",
         "properties": {
-          "return_type": {
+          "returns": {
             "type": "object",
-            "title": "FunctionReturnType",
+            "title": "FunctionReturns",
             "properties": {
-              "type": {
+              "data_type": {
                 "type": "string"
               },
               "description": {
@@ -26270,7 +26270,7 @@
             },
             "additionalProperties": false,
             "required": [
-              "type"
+              "data_type"
             ]
           },
           "database": {
@@ -27102,7 +27102,7 @@
                 "name": {
                   "type": "string"
                 },
-                "type": {
+                "data_type": {
                   "type": "string"
                 },
                 "description": {
@@ -27120,7 +27120,7 @@
               "additionalProperties": false,
               "required": [
                 "name",
-                "type"
+                "data_type"
               ]
             }
           },
@@ -27135,7 +27135,7 @@
         },
         "additionalProperties": false,
         "required": [
-          "return_type",
+          "returns",
           "database",
           "schema",
           "name",

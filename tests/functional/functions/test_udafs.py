@@ -2,7 +2,7 @@ from typing import Dict
 
 import pytest
 
-from dbt.artifacts.resources import FunctionReturnType
+from dbt.artifacts.resources import FunctionReturns
 from dbt.artifacts.resources.types import FunctionType
 from dbt.contracts.graph.nodes import FunctionNode
 from dbt.tests.util import run_dbt
@@ -18,10 +18,10 @@ functions:
     description: Sums the sequence of numbers and then doubles the result
     arguments:
       - name: values
-        type: float
+        data_type: float
         description: A sequence of numbers
-    return_type:
-      type: float
+    returns:
+      data_type: float
 """
 
 
@@ -48,6 +48,6 @@ class TestBasicSQLUDAF(BasicUDAFSetup):
         assert len(function_node.arguments) == 1
         argument = function_node.arguments[0]
         assert argument.name == "values"
-        assert argument.type == "float"
+        assert argument.data_type == "float"
         assert argument.description == "A sequence of numbers"
-        assert function_node.return_type == FunctionReturnType(type="float")
+        assert function_node.returns == FunctionReturns(data_type="float")
