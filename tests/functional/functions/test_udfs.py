@@ -63,8 +63,8 @@ class TestCreationOfUDFs(BasicUDFSetup):
 
         argument = function_node.arguments[0]
         assert argument.name == "value"
-        assert argument.type == "float"
-        assert results[0].node.returns == FunctionReturns(type="float")
+        assert argument.data_type == "float"
+        assert results[0].node.returns == FunctionReturns(data_type="float")
 
 
 class TestCanInlineShowUDF(BasicUDFSetup):
@@ -89,6 +89,25 @@ class TestCanCallUDFInModel(BasicUDFSetup):
 
     def test_can_call_udf_in_model(self, project):
         run_dbt(["build"])
+
+        result = run_dbt(["show", "--select", "double_it_model"])
+        assert len(result.results) == 1
+        agate_table = result.results[0].agate_table
+        assert isinstance(agate_table, agate.Table)
+        assert agate_table.column_names == ("double_it",)
+        assert agate_table.rows == [(2.0,)]
+
+
+class TestCanUseWithEmptyMode(BasicUDFSetup):
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "double_it_model.sql": "select {{ function('double_it') }}(1) as double_it",
+        }
+
+    def test_can_use_with_empty_model(self, project):
+        run_dbt(["build", "--empty"])
 
         result = run_dbt(["show", "--select", "double_it_model"])
         assert len(result.results) == 1
