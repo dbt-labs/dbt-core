@@ -4,16 +4,15 @@ use std::{collections::BTreeMap, sync::Arc};
 use dbt_common::adapter::AdapterType;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_args::StaticAnalysisKind;
-use dbt_common::show_error;
 use dbt_common::{FsResult, error::AbstractLocation};
+use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
-use dbt_jinja_utils::{jinja_environment::JinjaEnv, refs_and_sources::RefsAndSources};
 use dbt_schemas::schemas::common::{Access, DbtMaterialization, DbtQuoting, ResolvedQuoting};
 use dbt_schemas::schemas::dbt_column::process_columns;
 use dbt_schemas::schemas::nodes::AdapterAttr;
 use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::{DbtModelAttr, IntrospectionKind};
-use dbt_schemas::state::{ModelStatus, RefsAndSourcesTracker};
+use dbt_schemas::state::ModelStatus;
 use dbt_schemas::{
     schemas::{
         CommonAttributes, DbtModel, NodeBaseAttributes,
@@ -55,7 +54,6 @@ pub async fn resolve_analyses(
     env: Arc<JinjaEnv>,
     base_ctx: &BTreeMap<String, minijinja::Value>,
     runtime_config: Arc<DbtRuntimeConfig>,
-    refs_and_sources: &mut RefsAndSources,
     token: &CancellationToken,
 ) -> FsResult<(
     HashMap<String, Arc<DbtModel>>,
@@ -270,13 +268,6 @@ pub async fn resolve_analyses(
             &components,
             adapter_type,
         )?;
-
-        match refs_and_sources.insert_ref(&dbt_model, adapter_type, status, false) {
-            Ok(_) => (),
-            Err(e) => {
-                show_error!(&arg.io, e.with_location(dbt_asset.path.clone()));
-            }
-        }
 
         if status == ModelStatus::Enabled {
             analyses.insert(unique_id.to_owned(), Arc::new(dbt_model));

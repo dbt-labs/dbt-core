@@ -76,7 +76,11 @@ impl RefsAndSources {
                     ModelStatus::Enabled,
                 )?;
             } else {
-                refs_and_sources.insert_ref(node, adapter_type, ModelStatus::Enabled, false)?;
+                match node.resource_type() {
+                    NodeType::Model | NodeType::Snapshot | NodeType::Seed => refs_and_sources
+                        .insert_ref(node, adapter_type, ModelStatus::Enabled, false)?,
+                    _ => (),
+                }
             }
         }
         Ok(refs_and_sources)

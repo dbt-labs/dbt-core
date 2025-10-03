@@ -575,7 +575,6 @@ pub async fn resolve_inner(
         jinja_env.clone(),
         &base_ctx,
         runtime_config.clone(),
-        refs_and_sources,
         token,
     )
     .await?;
