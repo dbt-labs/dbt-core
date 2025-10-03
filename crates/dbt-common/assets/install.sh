@@ -1,45 +1,72 @@
 #!/bin/sh
-set -e
+
+# Exit immediately if a command exits with a non-zero status.
+# Treat unset variables as an error when substituting.
+set -eu
+
+# Function to be called on script exit for cleanup purposes.
+cleanup() {
+    # Clean up any temporary directories
+    if [ -n "${td:-}" ]; then
+        rm -rf "$td"
+    fi
+}
+
+# Register the cleanup function to be called on EXIT.
+trap cleanup EXIT
 
 # Color codes
 GRAY='\033[0;90m'
+RED='\033[0;31m'
 NC='\033[0m' # No Color
+
+TARGET_VERSION=""
 
 log() {
     printf "install.sh: %s\n" "$1"
 }
 
 log_grey() {
-    printf "${GRAY}install.sh: %s${NC}\n" "$1" >&2
+    printf "${GRAY}install.sh: %s${NC}\n" "$1"
 }
 
-err() {
-    if [ ! -z $td ]; then
-        rm -rf $td
+# debug messages only show where there's an error in the installation
+# when the install/update is triggered from dbt system update
+log_debug() {
+    printf "${GRAY}install.sh: %s${NC}\n" "$1" 2>&1
+}
+
+err_and_exit() {
+    Message="${1:-}"
+    AdditionalInfo="${2:-}"
+
+    info_suffix=""
+    if [ -n "$AdditionalInfo" ]; then
+        info_suffix=" - $AdditionalInfo"
     fi
 
-    log_grey "ERROR $1"
+    printf "${RED}ERROR: %s%s ${NC}\n" "$Message" "$info_suffix"
     exit 1
 }
 
 need() {
-    if ! command -v $1 >/dev/null 2>&1; then
-        err "need $1 (command not found)"
+    if ! command -v "$1" >/dev/null 2>&1; then
+        err_and_exit "need $1 (command not found)"
     fi
 }
 
 # Function to install jq automatically
 install_jq() {
-    local jq_version="1.7.1"
-    local jq_url=""
-    local jq_binary_name="jq"
-    local temp_dir=""
+    jq_version="1.7.1"
+    jq_url=""
+    jq_binary_name="jq"
+    temp_dir=""
     
     log_grey "jq not found, installing automatically..."
     
     # Detect platform for jq download
-    local os=$(uname -s | tr '[:upper:]' '[:lower:]')
-    local arch=$(uname -m)
+    os=$(uname -s | tr '[:upper:]' '[:lower:]')
+    arch=$(uname -m)
     
     case "$os" in
         linux)
@@ -51,9 +78,7 @@ install_jq() {
                     jq_url="https://github.com/jqlang/jq/releases/download/jq-${jq_version}/jq-linux-arm64"
                     ;;
                 *)
-                    log_grey "Unsupported architecture for automatic jq installation: $arch"
-                    log_grey "Please install jq manually and re-run this script"
-                    return 1
+                    err_and_exit "Unsupported architecture for automatic jq installation: $arch" "Please install jq manually and re-run this script"
                     ;;
             esac
             ;;
@@ -66,61 +91,56 @@ install_jq() {
                     jq_url="https://github.com/jqlang/jq/releases/download/jq-${jq_version}/jq-macos-arm64"
                     ;;
                 *)
-                    log_grey "Unsupported architecture for automatic jq installation: $arch"
-                    log_grey "Please install jq manually and re-run this script"
-                    return 1
+                    err_and_exit "Unsupported architecture for automatic jq installation: $arch" "Please install jq manually and re-run this script"
                     ;;
             esac
             ;;
         *)
-            log_grey "Unsupported OS for automatic jq installation: $os"
-            log_grey "Please install jq manually and re-run this script"
-            return 1
+            err_and_exit "Unsupported OS for automatic jq installation: $os" "Please install jq manually and re-run this script"
             ;;
     esac
-    
+
     # Create temporary directory for jq installation
     temp_dir=$(mktemp -d || mktemp -d -t tmp)
-    
+
     # Download jq
-    log_grey "Downloading jq from: $jq_url"
+    log_debug "Downloading jq from: $jq_url"
     if ! curl -sL -f -o "$temp_dir/jq" "$jq_url"; then
         rm -rf "$temp_dir"
-        log_grey "Failed to download jq. Please install jq manually and re-run this script"
-        return 1
+        err_and_exit "Failed to download jq. Please install jq manually and re-run this script"
     fi
-    
+
     # Make jq executable
     chmod +x "$temp_dir/jq"
-    
+
     # Determine where to install jq
-    local jq_install_dir=""
+    jq_install_dir=""
     if [ -w "/usr/local/bin" ] 2>/dev/null; then
         jq_install_dir="/usr/local/bin"
     elif [ -d "$HOME/.local/bin" ]; then
         jq_install_dir="$HOME/.local/bin"
         # Ensure it's in PATH for this session
-        export PATH="$HOME/.local/bin:$PATH"
+        PATH=$PATH:$HOME/.local/bin
+        export PATH
     else
         mkdir -p "$HOME/.local/bin"
         jq_install_dir="$HOME/.local/bin"
-        export PATH="$HOME/.local/bin:$PATH"
+        PATH=$PATH:$HOME/.local/bin
+        export PATH
     fi
     
     # Install jq
     if ! cp "$temp_dir/jq" "$jq_install_dir/jq"; then
         rm -rf "$temp_dir"
-        log_grey "Failed to install jq to $jq_install_dir. Please install jq manually and re-run this script"
-        return 1
+        err_and_exit "Failed to install jq to $jq_install_dir. Please install jq manually and re-run this script"
     fi
     
     rm -rf "$temp_dir"
-    log_grey "Successfully installed jq to $jq_install_dir/jq"
+    log_debug "Successfully installed jq to $jq_install_dir/jq"
     
     # Verify installation
     if ! command -v jq >/dev/null 2>&1; then
-        log_grey "jq installed but not found in PATH. You may need to restart your terminal or update your PATH"
-        return 1
+        err_and_exit "jq installed but not found in PATH. You may need to restart your terminal or update your PATH"
     fi
     
     return 0
@@ -138,7 +158,7 @@ help() {
 }
 
 update=false
-while test $# -gt 0; do
+while [ $# -gt 0 ]; do
     case $1 in
     --update | -u)
         update=true
@@ -169,63 +189,58 @@ while test $# -gt 0; do
     shift
 done
 
-# Set default package if not specified
-package="${package:-dbt}"
-
-# Dependencies
-need basename
-need curl
-need install
-need mkdir
-need mktemp
-need tar
-
 # Check for jq and install if missing
-if ! command -v jq >/dev/null 2>&1; then
-    if ! install_jq; then
-        err "jq is required but could not be installed automatically. Please install jq manually and re-run this script."
+check_jq() {
+    if ! command -v jq >/dev/null 2>&1; then
+        if ! install_jq; then
+            err_and_exit "jq is required but could not be installed automatically. Please install jq manually and re-run this script."
+        fi
     fi
-else
-    log_grey "jq found: $(command -v jq)"
-fi
+}
 
-# Optional dependencies
-if [ -z $version ] || [ -z $target ]; then
-    need cut
-fi
+check_dependencies() {
+    version_arg="${1:-}"
+    target_arg="${2:-}"
 
-if [ -z $version ]; then
-    need rev
-fi
+    # Dependencies
+    need basename
+    need curl
+    need install
+    need mkdir
+    need mktemp
+    need tar
 
-if [ -z $target ]; then
-    need grep
-fi
+    # optional dependencies
+    if [ -z "$version_arg" ] || [ -z "$target_arg" ]; then
+        need cut
+    fi
 
-if [ -z "${dest:-}" ]; then
-    dest="$HOME/.local/bin"
-else
-    # Convert relative path to absolute
-    case "$dest" in
-        /*) ;; # Already absolute path
-        *) dest="$PWD/$dest" ;; # Convert relative to absolute
-    esac
-fi
+    if [ -z "$version_arg" ]; then
+        need rev
+    fi
 
-# Function to format install output in grey
-format_install_output() {
-    while IFS= read -r line; do
-        printf "${GRAY}%s${NC}\n" "$line" >&2
-    done
+    if [ -z "$target_arg" ]; then
+        need grep
+    fi
+
+    if [ -z "${dest:-}" ]; then
+        dest="$HOME/.local/bin"
+    else
+        # Convert relative path to absolute
+        case "$dest" in
+            /*) ;; # Already absolute path
+            *) dest="$PWD/$dest" ;; # Convert relative to absolute
+        esac
+    fi
 }
 
 # Check version of an installed binary
 # Usage: check_binary_version binary_path binary_name
 # Returns: version string if found, empty string if not found
 check_binary_version() {
-    local binary_path="$1"
-    local binary_name="$2"
-    local version=""
+    binary_path="$1"
+    binary_name="$2"
+    version=""
 
     if [ -f "$binary_path" ] && [ -x "$binary_path" ]; then
         version=$("$binary_path" --version 2>/dev/null | cut -d ' ' -f 2 || echo "")
@@ -238,10 +253,10 @@ check_binary_version() {
 # Usage: compare_versions current_version target_version is_latest
 # Returns: 0 if versions match, 1 if they don't match
 compare_versions() {
-    local current_version="$1"
-    local target_version="$2"
-    local version="$3"
-    local package="$4"
+    current_version="$1"
+    target_version="$2"
+    version="$3"
+    package="$4"
 
     if [ "$current_version" = "$target_version" ]; then
         if [ -z "$version" ]; then
@@ -255,13 +270,27 @@ compare_versions() {
     return 1
 }
 
+# validate if a version exists on the CDN
+# Usage: version_exists version target
+# Returns: 0 if version exists, error if it doesn't
+check_version_exists() {
+    version="$1"
+    target="$2"
+    url="https://public.cdn.getdbt.com/fs/cli/fs-v$version-$target.tar.gz"
+    log_debug "Checking if version $version exists on CDN: $url"
+    if ! curl -sL -f -o /dev/null "$url"; then
+        err_and_exit "Version $version not found on CDN. Please check available versions and try again."
+    fi
+    return 0
+}
+
 # Detect and set target platform
 # Usage: detect_target
 # Returns: target platform string
-detect_target() {
-    local cpu_arch_target=$(uname -m)
-    local operating_system=$(uname -s | tr '[:upper:]' '[:lower:]')
-    local target=""
+detect_target_platform() {
+    cpu_arch_target=$(uname -m)
+    operating_system=$(uname -s | tr '[:upper:]' '[:lower:]')
+    target=""
 
     if [ "$operating_system" = "linux" ]; then
         if [ "$cpu_arch_target" = "arm64" ] || [ "$cpu_arch_target" = "aarch64" ]; then
@@ -269,7 +298,7 @@ detect_target() {
         elif [ "$cpu_arch_target" = "x86_64" ]; then
             target="x86_64-unknown-linux-gnu"
         else
-            err "Unsupported CPU Architecture: $cpu_arch_target"
+            err_and_exit "Unsupported CPU Architecture: $cpu_arch_target"
         fi
     elif [ "$operating_system" = "darwin" ]; then
         if [ "$cpu_arch_target" = "arm64" ]; then
@@ -278,10 +307,9 @@ detect_target() {
             target="x86_64-apple-darwin"
         fi
     else
-        err "Unsupported OS: $operating_system"
+        err_and_exit "Unsupported OS: $operating_system"
     fi
 
-    log_grey "Target: $target"
     echo "$target"
 }
 
@@ -300,9 +328,9 @@ show_path_instructions() {
 # Setup shell config file and PATH
 # Usage: setup_shell_config dest_path
 setup_shell_config() {
-    local dest="$1"
-    local config_file=""
-    local shell_name=""
+    dest="$1"
+    config_file=""
+    shell_name=""
 
     # Detect shell and config file early
     if [ -n "$SHELL" ]; then
@@ -313,7 +341,7 @@ setup_shell_config() {
         elif [ -f "$HOME/.profile" ]; then
             shell_name="sh"
         else
-            shell_name=$(ps -p $PPID -o comm= | sed 's/.*\///')
+            shell_name=$(ps -p "$PPID" -o comm= | sed 's/.*\///')
         fi
     fi
 
@@ -335,9 +363,10 @@ setup_shell_config() {
     # check if the config file exists or not and create it if it doesn't
     if [ ! -f "$config_file" ]; then
         if touch "$config_file"; then
-            log_grey "Created config file $config_file"
+            log_debug "Created config file $config_file"
         else
-            log_grey "Note: Failed to create config file $config_file.  You will need to manually update your PATH."
+            log_grey "Note: Failed to create config file $config_file."
+            show_path_instructions
             return 1
         fi
     fi
@@ -364,9 +393,9 @@ setup_shell_config() {
                 echo "" >> "$config_file" && \
                 echo "# Added by dbt installer" >> "$config_file" && \
                 echo "export PATH=\"\$PATH:$dest\"" >> "$config_file" && \
-                log_grey "Added $dest to PATH in $config_file"
+                log_debug "Added $dest to PATH in $config_file"
             } || {
-                log "NOTE: Failed to modify $config_file."
+                log_grey "NOTE: Failed to modify $config_file."
                 show_path_instructions
                 return 1
             }
@@ -375,7 +404,7 @@ setup_shell_config() {
         if [ "$needs_config_path_update" = true ]; then
             {
                 echo "fish_add_path $dest" >> "$config_file"
-                log_grey "Added $dest to PATH in $config_file"
+                log_debug "Added $dest to PATH in $config_file"
             } || {
                 log_grey "NOTE: Failed to modify $config_file."
                 show_path_instructions
@@ -412,32 +441,39 @@ setup_shell_config() {
 # Usage: determine_version [specific_version]
 # Returns: target version string
 determine_version() {
-    local specific_version="$1"
-    local target_version=""
+    specific_version="$1"
     version_url="https://public.cdn.getdbt.com/fs/versions.json"
+    versions=""
 
-    versions=$(curl -s "$version_url")
+    TARGET_VERSION=""
+
+    log_debug "Fetching versions from: $version_url"
+    versions=$(curl -s -f "$version_url") || err_and_exit "Failed to fetch versions from $version_url"
+
+    if [ -z "$versions" ]; then
+        err_and_exit "No version information received from $version_url"
+    fi
 
     if [ -z "$specific_version" ];then
         log_grey "Checking for latest version"
-        target_version=$(echo "$versions" | jq -r ".latest.tag" | sed 's/^v//')
-        log_grey "$specific_version available version: $target_version"
+        TARGET_VERSION=$(echo "$versions" | jq -r ".latest.tag" | sed 's/^v//') || err_and_exit "Failed to parse latest version from versions data."
+        log_grey "Latest available version: $TARGET_VERSION"
+    # check the version that tag maps to, if the tag exists
     elif echo "$versions" | jq -e "has(\"$specific_version\")" > /dev/null;then
         log_grey "Checking for $specific_version version"
-        target_version=$(echo "$versions" | jq -r ".\"$specific_version\".tag" | sed 's/^v//')
-        log_grey "$specific_version available version: $target_version"
+        TARGET_VERSION=$(echo "$versions" | jq -r ".\"$specific_version\".tag" | sed 's/^v//') || err_and_exit "Failed to parse requested version $specific_version from versions data."
+        log_grey "$specific_version available version: $TARGET_VERSION"
     else
-        target_version="$specific_version"
-        log_grey "Requested version: $target_version"
+        TARGET_VERSION="$specific_version"
+        log_grey "Requested version: $TARGET_VERSION"
     fi
-    echo "$target_version"
 }
 
 # Display ASCII art for a package
 # Usage: display_ascii_art package_name version
 display_ascii_art() {
-    local package_name="$1"
-    local version="$2"
+    package_name="$1"
+    version="$2"
 
     if [ "$package_name" = "dbt" ]; then
         cat<<EOF
@@ -466,14 +502,14 @@ EOF
 # Usage: install_package package_name version target dest update
 # Returns: 0 on success, 1 on failure
 install_package() {
-    local package_name="$1"
-    local version="$2"
-    local target="$3"
-    local dest="$4"
-    local update="$5"
-    local td=""
-    local url=""
-    local current_version=""
+    package_name="$1"
+    version="$2"
+    target="$3"
+    dest="$4"
+    update="$5"
+    td=""
+    url=""
+    current_version=""
 
     # Check if already installed and get version
     current_version=$(check_binary_version "$dest/$package_name" "$package_name")
@@ -481,13 +517,12 @@ install_package() {
         log "$package_name version $version is already installed"
         return 0
     elif [ -n "$current_version" ]; then
-        log_grey "Current installed $package_name version: $current_version"
+        log_debug "Current installed $package_name version: $current_version"
     fi
 
     # If we get here, version is different, so check if we can proceed
     if [ -e "$dest/$package_name" ] && [ "$update" = false ]; then
-        err "$package_name already exists in $dest, use the --update flag to reinstall"
-        return 1
+        err_and_exit "$package_name already exists in $dest, use the --update flag to reinstall"
     fi
 
     log "Installing $package_name to: $dest"
@@ -506,49 +541,49 @@ install_package() {
             url="https://public.cdn.getdbt.com/fs/lsp/fs-lsp-v$version-$target.tar.gz"
             ;;
         *)
-            err "Invalid package name: $package_name"
-            return 1
+            err_and_exit "Invalid package name: $package_name"
             ;;
     esac
 
-    log_grey "Downloading: $url"
+    log_debug "Downloading: $url"
     # Check if URL exists and returns valid content
     if ! curl -sL -f -o /dev/null "$url"; then
-        err "Failed to download package from $url. Verify you are requesting a valid version on a supported platform."
-        return 1
+        err_and_exit "Failed to download package from $url. Verify you are requesting a valid version on a supported platform."
     fi
 
     # Now download and extract
     if ! curl -sL "$url" | tar -C "$td" -xz; then
-        err "Failed to extract package. The downloaded archive appears to be invalid."
-        return 1
+        err_and_exit "Failed to extract package. The downloaded archive appears to be invalid."
     fi
 
     # Check if any files were extracted
-    if [ -z "$(ls -A "$td")" ]; then
-        err "No files were extracted from the archive"
-        return 1
+    if [ ! -d "$td" ] || [ -z "$(ls -A "$td")" ]; then
+        err_and_exit "No files were extracted from the archive"
     fi
 
-    for f in $(cd "$td" && find . -type f); do
-        test -x "$td/$f" || {
-            log_grey "File $f is not executable, skipping"
+    for f in "$(cd "$td" && find . -type f)"; do
+        [ -x "$td/$f" ] || {
+            log_debug "File $f is not executable, skipping"
             continue
         }
 
         if [ -e "$dest/$package_name" ] && [ "$update" = true ]; then
             # Remove file - no sudo needed for home directory
             rm -f "$dest/$package_name" || {
-                err "Error: Failed to remove existing $package_name binary."
-                return 1
+                err_and_exit "Error: Failed to remove existing $package_name binary."
             }
         fi
 
-        log_grey "Moving $f to $dest/$package_name"
-        # No sudo needed for home directory
-        mkdir -p "$dest" && install -v -m 755 "$td/$f" "$dest/$package_name" 2>&1 | format_install_output || {
-            err "Error: Failed to install $package_name binary."
-            return 1
+        log_debug "Moving $f to $dest/$package_name"
+
+        # Ensure the destination directory exists
+        mkdir -p "$dest" || err_and_exit "Error: Failed to create installation directory: $dest"
+
+        # Install the binary and pipe its verbose output to log_debug
+        install -v -m 755 "$td/$f" "$dest/$package_name" 2>&1 | while IFS= read -r line; do
+            log_debug "$line"
+        done || {
+            err_and_exit "Error: Failed to install $package_name binary."
         }
     done
 
@@ -558,7 +593,6 @@ install_package() {
         log_grey "Successfully updated $package_name from $current_version to $version"
     fi
 
-    rm -rf "$td"
     return 0
 }
 
@@ -566,15 +600,15 @@ install_package() {
 # Usage: install_packages package target_version target dest update
 # Returns: 0 on success, 1 on failure
 install_packages() {
-    local package="$1"
-    local target_version="$2"
-    local target="$3"
-    local dest="$4"
-    local update="$5"
-    local current_dbt_version=""
-    local current_lsp_version=""
-    local dbt_needs_update=false
-    local lsp_needs_update=false
+    package="$1"
+    target_version="$2"
+    target="$3"
+    dest="$4"
+    update="$5"
+    current_dbt_version=""
+    current_lsp_version=""
+    dbt_needs_update=false
+    lsp_needs_update=false
 
     # Check if versions match
     if [ "$package" = "all" ] || [ "$package" = "dbt" ]; then
@@ -618,7 +652,7 @@ install_packages() {
 }
 
 validate_versions() {
-    local dest="$1"
+    dest="$1"
 
     dbt_path="$dest/dbt"
     lsp_path="$dest/dbt-lsp"
@@ -644,11 +678,36 @@ validate_versions() {
 }
 
 
-# Determine version to install
-target_version=$(determine_version "$version")
+main() {
+    # Initialize variables with defaults if not set by command-line parsing
+    # These variables are parsed from command-line arguments (lines 155-189)
+    # If not provided on command line, they will default to empty or a specific value here.
+    package="${package:-dbt}"
+    version="${version:-}"
+    target="${target:-}"
+    dest="${dest:-$HOME/.local/bin}"
+    update="${update:-false}"
 
-target="${target:-$(detect_target)}"
+    check_jq
 
-install_packages "$package" "$target_version" "$target" "$dest" "$update"
+    # Determine version to install
+    determine_version "$version"
+    target_version="$TARGET_VERSION"
 
-validate_versions "$dest"
+    check_dependencies "$version" "$target_version"
+
+    target_platform="${target:-$(detect_target_platform)}"
+    log_grey "Target: $target_platform"
+
+    check_version_exists "$target_version" "$target_platform"
+
+    install_packages "$package" "$target_version" "$target_platform" "$dest" "$update"
+
+    # Only validate versions if not skipped and installing multiple packages
+    if [ -z "${_FS_SKIP_VERSION_CHECK:-}" ] && [ "$package" = "all" ]; then
+        validate_versions "$dest"
+    fi
+}
+
+
+main
