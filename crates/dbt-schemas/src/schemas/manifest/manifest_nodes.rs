@@ -80,6 +80,10 @@ pub struct ManifestMaterializableCommonAttributes {
 
     // Meta
     pub description: Option<String>,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default)]
+    pub meta: BTreeMap<String, YmlValue>,
 }
 
 #[skip_serializing_none]
@@ -153,6 +157,8 @@ impl From<DbtSeed> for ManifestSeed {
                 original_file_path: seed.__common_attr__.original_file_path,
                 patch_path: seed.__common_attr__.patch_path,
                 description: seed.__common_attr__.description,
+                tags: seed.__common_attr__.tags,
+                meta: seed.__common_attr__.meta,
             },
             __base_attr__: ManifestNodeBaseAttributes {
                 alias: seed.__base_attr__.alias,
@@ -220,6 +226,8 @@ impl From<DbtUnitTest> for ManifestUnitTest {
                 original_file_path: unit_test.__common_attr__.original_file_path,
                 patch_path: unit_test.__common_attr__.patch_path,
                 description: unit_test.__common_attr__.description,
+                tags: unit_test.__common_attr__.tags,
+                meta: unit_test.__common_attr__.meta,
             },
             __base_attr__: ManifestNodeBaseAttributes {
                 alias: unit_test.__base_attr__.alias,
@@ -289,6 +297,8 @@ impl From<DbtTest> for ManifestDataTest {
                 original_file_path: test.__common_attr__.original_file_path,
                 patch_path: test.__common_attr__.patch_path,
                 description: test.__common_attr__.description,
+                tags: test.__common_attr__.tags,
+                meta: test.__common_attr__.meta,
             },
             __base_attr__: ManifestNodeBaseAttributes {
                 alias: test.__base_attr__.alias,
@@ -349,6 +359,8 @@ impl From<DbtSnapshot> for ManifestSnapshot {
                 original_file_path: snapshot.__common_attr__.original_file_path,
                 patch_path: snapshot.__common_attr__.patch_path,
                 description: snapshot.__common_attr__.description,
+                tags: snapshot.__common_attr__.tags,
+                meta: snapshot.__common_attr__.meta,
             },
             __base_attr__: ManifestNodeBaseAttributes {
                 alias: snapshot.__base_attr__.alias,
@@ -420,6 +432,8 @@ impl From<DbtSource> for ManifestSource {
                 original_file_path: source.__common_attr__.original_file_path,
                 patch_path: source.__common_attr__.patch_path,
                 description: source.__common_attr__.description,
+                tags: source.__common_attr__.tags,
+                meta: source.__common_attr__.meta,
             },
             relation_name: source.__base_attr__.relation_name,
             identifier: source.__source_attr__.identifier,
@@ -481,6 +495,8 @@ impl From<DbtModel> for ManifestModel {
                 original_file_path: model.__common_attr__.original_file_path,
                 patch_path: model.__common_attr__.patch_path,
                 description: model.__common_attr__.description,
+                tags: model.__common_attr__.tags,
+                meta: model.__common_attr__.meta,
             },
             __base_attr__: ManifestNodeBaseAttributes {
                 alias: model.__base_attr__.alias,
