@@ -206,7 +206,23 @@ pub fn dispatch_adapter_calls(
         }
         "upload_file" => adapter.upload_file(state, args),
         "get_bq_table" => adapter.get_bq_table(state, args),
-        "describe_relation" => adapter.describe_relation(state, args),
+        "describe_relation" => {
+            // relation: BaseRelation
+            let iter = ArgsIter::new(name, &["relation"], args);
+            let relation = iter.next_arg::<&Value>()?;
+            let relation = relation
+                .downcast_object::<RelationObject>()
+                .ok_or_else(|| {
+                    MinijinjaError::new(
+                        MinijinjaErrorKind::InvalidOperation,
+                        "relation must be a BaseRelation object",
+                    )
+                })?
+                .inner();
+            iter.finish()?;
+
+            adapter.describe_relation(state, relation)
+        }
         "grant_access_to" => adapter.grant_access_to(state, args),
         "get_dataset_location" => adapter.get_dataset_location(state, args),
         "get_column_schema_from_query" => adapter.get_column_schema_from_query(state, args),

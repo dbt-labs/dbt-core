@@ -486,7 +486,11 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
     }
 
     /// describe_relation
-    fn describe_relation(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError>;
+    fn describe_relation(
+        &self,
+        _state: &State,
+        _relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, MinijinjaError>;
 
     /// grant_access_to
     fn grant_access_to(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError>;

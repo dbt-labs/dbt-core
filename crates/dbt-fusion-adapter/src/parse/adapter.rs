@@ -612,7 +612,11 @@ impl BaseAdapter for ParseAdapter {
         Ok(none_value())
     }
 
-    fn describe_relation(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn describe_relation(
+        &self,
+        _state: &State,
+        _relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, MinijinjaError> {
         Ok(none_value())
     }
 
