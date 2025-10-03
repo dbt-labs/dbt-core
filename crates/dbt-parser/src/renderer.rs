@@ -8,7 +8,7 @@ use crate::utils::{get_node_fqn, register_duplicate_resource, trigger_duplicate_
 use dbt_common::adapter::AdapterType;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::PARSING;
-use dbt_common::io_args::IoArgs;
+use dbt_common::io_args::{IoArgs, StaticAnalysisKind};
 use dbt_common::tokiofs::read_to_string;
 use dbt_common::{
     ErrorCode, FsError, FsResult, fs_err, fsinfo, show_error, show_progress, show_warning,
@@ -18,14 +18,13 @@ use dbt_jinja_utils::listener::{
     DefaultRenderingEventListenerFactory, RenderingEventListenerFactory,
 };
 use dbt_jinja_utils::phases::build_compile_and_run_base_context;
-use dbt_jinja_utils::phases::compile::build_compile_node_context;
+use dbt_jinja_utils::phases::compile::build_compile_node_context_inner;
 use dbt_jinja_utils::phases::parse::build_resolve_model_context;
 use dbt_jinja_utils::phases::parse::sql_resource::SqlResource;
 use dbt_jinja_utils::refs_and_sources::RefsAndSources;
 use dbt_jinja_utils::serde::into_typed_with_jinja_error_context;
 use dbt_jinja_utils::silence_base_context;
 use dbt_jinja_utils::utils::render_sql;
-use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_schemas::schemas::common::{DbtChecksum, DbtQuoting, Hooks};
 use dbt_schemas::schemas::project::DefaultTo;
 use dbt_schemas::schemas::properties::GetConfig;
@@ -868,17 +867,14 @@ async fn process_model_chunk_for_unsafe_detection(
             MinijinjaValue::from(model.common().unique_id.clone()),
         );
 
-        let (mut render_resolved_context, _) = build_compile_node_context(
-            &MinijinjaValue::from_serialize(model.serialize()),
-            model.common(),
-            model.base(),
-            &model.serialized_config(),
+        let (mut render_resolved_context, _) = build_compile_node_context_inner(
+            &model,
             adapter_type,
             &render_base_context,
             &root_project_name,
-            runtime_config.dependencies.keys().cloned().collect(),
             Arc::new(refs_and_sources.clone()),
             runtime_config.clone(),
+            StaticAnalysisKind::On,
             true,
         );
 

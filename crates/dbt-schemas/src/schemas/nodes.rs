@@ -48,6 +48,18 @@ pub enum IntrospectionKind {
     Unknown,
 }
 
+impl IntrospectionKind {
+    pub fn is_unsafe(&self) -> bool {
+        matches!(
+            self,
+            IntrospectionKind::Execute
+                | IntrospectionKind::InternalSchema
+                | IntrospectionKind::ExternalSchema
+                | IntrospectionKind::Unknown
+        )
+    }
+}
+
 impl Display for IntrospectionKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {

@@ -276,13 +276,20 @@ pub trait RefsAndSourcesTracker: fmt::Debug + Send + Sync {
         name: &str,
         version: &Option<String>,
         node_package_name: &Option<String>,
-    ) -> FsResult<(String, MinijinjaValue, ModelStatus)>;
+    ) -> FsResult<(String, MinijinjaValue, ModelStatus, Option<MinijinjaValue>)>;
     fn lookup_source(
         &self,
         package_name: &str,
         source_name: &str,
         table_name: &str,
     ) -> FsResult<(String, MinijinjaValue, ModelStatus)>;
+    fn compile_or_test(&self) -> bool;
+    fn update_ref_with_deferral(
+        &mut self,
+        node: &dyn InternalDbtNodeAttributes,
+        adapter_type: AdapterType,
+        is_frontier: bool,
+    ) -> FsResult<()>;
 }
 
 // test only
@@ -322,7 +329,7 @@ impl RefsAndSourcesTracker for DummyRefsAndSourcesTracker {
         name: &str,
         _version: &Option<String>,
         _node_package_name: &Option<String>,
-    ) -> FsResult<(String, MinijinjaValue, ModelStatus)> {
+    ) -> FsResult<(String, MinijinjaValue, ModelStatus, Option<MinijinjaValue>)> {
         Err(fs_err!(
             ErrorCode::Generic,
             "DummyRefsAndSourcesTracker: lookup_ref not implemented for '{}'",
@@ -342,6 +349,22 @@ impl RefsAndSourcesTracker for DummyRefsAndSourcesTracker {
             source_name,
             table_name
         ))
+    }
+
+    fn update_ref_with_deferral(
+        &mut self,
+        _node: &dyn InternalDbtNodeAttributes,
+        _adapter_type: AdapterType,
+        _is_frontier: bool,
+    ) -> FsResult<()> {
+        Err(fs_err!(
+            ErrorCode::Generic,
+            "DummyRefsAndSourcesTracker: update_ref_with_deferral not implemented"
+        ))
+    }
+
+    fn compile_or_test(&self) -> bool {
+        false
     }
 }
 

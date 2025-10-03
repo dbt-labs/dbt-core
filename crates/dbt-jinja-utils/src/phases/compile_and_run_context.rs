@@ -134,6 +134,8 @@ pub struct RefFunction {
     runtime_config: Arc<DbtRuntimeConfig>,
     /// Optional validation configuration - None means no validation
     validation_config: Option<RefValidationConfig>,
+    /// Only meaningful for node contexts; base context leaves this unset
+    static_analysis_unsafe: Option<bool>,
 }
 
 #[derive(Debug)]
@@ -156,6 +158,7 @@ impl RefFunction {
             package_name,
             runtime_config,
             validation_config: None,
+            static_analysis_unsafe: None,
         }
     }
 
@@ -166,6 +169,7 @@ impl RefFunction {
         runtime_config: Arc<DbtRuntimeConfig>,
         allowed_dependencies: Arc<BTreeSet<String>>,
         skip_validation: bool,
+        static_analysis_unsafe: bool,
     ) -> Self {
         Self {
             refs_and_sources,
@@ -175,6 +179,15 @@ impl RefFunction {
                 allowed_dependencies,
                 skip_validation,
             }),
+            static_analysis_unsafe: Some(static_analysis_unsafe),
+        }
+    }
+
+    fn should_use_deferred(&self) -> bool {
+        if self.refs_and_sources.compile_or_test() {
+            self.static_analysis_unsafe.unwrap_or(false)
+        } else {
+            true
         }
     }
 
@@ -260,10 +273,18 @@ impl Object for RefFunction {
             &version,
             &Some(self.package_name.clone()),
         ) {
-            Ok((unique_id, relation, _)) => {
+            Ok((unique_id, relation, _, deferred_relation)) => {
                 // Validate that this ref is allowed (only if validation is configured)
                 self.validate_dependency(&unique_id, &package_name, &model_name)?;
-                Ok(relation)
+                // Here, we check if we should use the deferred relation or the normal relation
+                // This is only relevant for the compile or test command
+                // If we are compiling or testing, and the static analysis is unsafe, we use the deferred relation
+                // Otherwise, we use the normal relation
+                let resolved_relation = match (self.should_use_deferred(), deferred_relation) {
+                    (true, Some(deferred)) => deferred,
+                    _ => relation,
+                };
+                Ok(resolved_relation)
             }
             Err(_) => Err(MinijinjaError::new(
                 MinijinjaErrorKind::NonKey,
@@ -291,7 +312,7 @@ impl Object for RefFunction {
                     &version,
                     &Some(self.package_name.clone()),
                 ) {
-                    Ok((unique_id, _, _)) => {
+                    Ok((unique_id, _, _, _)) => {
                         // Validate that this ref is allowed (only if validation is configured)
                         self.validate_dependency(&unique_id, &package_name, &model_name)?;
                         Ok(MinijinjaValue::from(unique_id))

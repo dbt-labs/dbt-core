@@ -182,6 +182,7 @@ pub async fn resolve(
         None,
         arg.sample_config.clone(),
         arg.sample_renaming.clone(),
+        arg.command == "compile" || arg.command == "test",
     )?;
     let mut collector = RenderResults {
         rendering_results: BTreeMap::new(),

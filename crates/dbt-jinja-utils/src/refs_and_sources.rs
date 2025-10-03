@@ -23,15 +23,17 @@ use dbt_schemas::{
 };
 use minijinja::Value as MinijinjaValue;
 
+type RefRecord = (String, MinijinjaValue, ModelStatus, Option<MinijinjaValue>);
+
 /// A wrapper around refs and sources with methods to get and insert refs and sources.
 ///
 /// Carries optional `sample_plan` which, when present, remaps source relations to the
 /// sampled schema in remote runs (e.g., `<schema>_SAMPLE` or an explicit `remote.schema`).
 #[derive(Debug, Default, Clone)]
 pub struct RefsAndSources {
-    /// Map of ref_name (either {project}.{ref_name}, {ref_name}) to (unique_id, relation, status)
+    /// Map of ref_name (either {project}.{ref_name}, {ref_name}) to (unique_id, relation, status, deferred_relation)
     #[allow(clippy::type_complexity)]
-    pub refs: BTreeMap<String, Vec<(String, MinijinjaValue, ModelStatus)>>,
+    pub refs: BTreeMap<String, Vec<RefRecord>>,
     /// Map of (package_name.source_name.name ) to (unique_id, relation, status)
     pub sources: BTreeMap<String, Vec<(String, MinijinjaValue, ModelStatus)>>,
     /// Root project name (needed for resolving refs)
@@ -42,6 +44,8 @@ pub struct RefsAndSources {
     pub run_filter: RunFilter,
     /// Optional remap plan for sources when sampling is enabled
     pub renaming: BTreeMap<String, (String, String, String)>,
+    /// Whether this is a compile or test command
+    pub compile_or_test: bool,
 }
 
 impl RefsAndSources {
@@ -53,12 +57,14 @@ impl RefsAndSources {
         mantle_quoting: Option<DbtQuoting>,
         run_filter: RunFilter,
         renaming: BTreeMap<String, (String, String, String)>,
+        compile_or_test: bool,
     ) -> FsResult<Self> {
         let mut refs_and_sources = RefsAndSources {
             root_package_name,
             mantle_quoting,
             run_filter,
             renaming,
+            compile_or_test,
             ..Default::default()
         };
         for (_, node) in nodes.iter() {
@@ -81,14 +87,16 @@ impl RefsAndSources {
     pub fn merge(&mut self, source: RefsAndSources) {
         for (key, source_entries) in source.refs {
             let target_entries = self.refs.entry(key).or_default();
-            let existing_ids: HashSet<String> =
-                target_entries.iter().map(|(id, _, _)| id.clone()).collect();
+            let existing_ids: HashSet<String> = target_entries
+                .iter()
+                .map(|(id, _, _, _)| id.clone())
+                .collect();
 
             // Add only entries that don't exist in target
             target_entries.extend(
                 source_entries
                     .into_iter()
-                    .filter(|(unique_id, _, _)| !existing_ids.contains(unique_id)),
+                    .filter(|(unique_id, _, _, _)| !existing_ids.contains(unique_id)),
             );
         }
 
@@ -104,6 +112,42 @@ impl RefsAndSources {
                     .filter(|(unique_id, _, _)| !existing_ids.contains(unique_id)),
             );
         }
+    }
+
+    fn push_or_replace_entry(
+        entries: &mut Vec<RefRecord>,
+        unique_id: &str,
+        relation: &MinijinjaValue,
+        status: ModelStatus,
+        override_existing: bool,
+    ) {
+        if override_existing
+            && let Some(existing) = entries.iter_mut().find(|(id, _, _, _)| id == unique_id)
+        {
+            *existing = (unique_id.to_string(), relation.clone(), status, None);
+            return;
+        }
+
+        entries.push((unique_id.to_string(), relation.clone(), status, None));
+    }
+
+    fn set_deferred_relation(
+        entries: &mut [RefRecord],
+        unique_id: &str,
+        deferred_relation: &MinijinjaValue,
+        is_frontier: bool,
+    ) {
+        // For each entry that matches the unique_id, set the deferred relation
+        entries
+            .iter_mut()
+            .filter(|(id, _, _, _)| id == unique_id)
+            .for_each(|(_, relation, _, deferred)| {
+                *deferred = Some(deferred_relation.clone());
+                // If this is a frontier node, we **always** defer if the relation is available
+                if is_frontier {
+                    *relation = deferred_relation.clone();
+                }
+            });
     }
 }
 
@@ -139,33 +183,26 @@ impl RefsAndSourcesTracker for RefsAndSources {
         if maybe_version == maybe_latest_version {
             // Lookup by ref name
             let ref_entry = self.refs.entry(model_name.clone()).or_default();
-            if override_existing {
-                if let Some(existing) = ref_entry.iter_mut().find(|(id, _, _)| id == &unique_id) {
-                    *existing = (unique_id.to_string(), relation.clone(), status);
-                } else {
-                    ref_entry.push((unique_id.to_string(), relation.clone(), status));
-                }
-            } else {
-                ref_entry.push((unique_id.to_string(), relation.clone(), status));
-            }
+            Self::push_or_replace_entry(
+                ref_entry,
+                &unique_id,
+                &relation,
+                status,
+                override_existing,
+            );
 
             // Lookup by package and ref name
             let package_ref_entry = self
                 .refs
                 .entry(format!("{package_name}.{model_name}"))
                 .or_default();
-            if override_existing {
-                if let Some(existing) = package_ref_entry
-                    .iter_mut()
-                    .find(|(id, _, _)| id == &unique_id)
-                {
-                    *existing = (unique_id.to_string(), relation.clone(), status);
-                } else {
-                    package_ref_entry.push((unique_id.to_string(), relation.clone(), status));
-                }
-            } else {
-                package_ref_entry.push((unique_id.to_string(), relation.clone(), status));
-            }
+            Self::push_or_replace_entry(
+                package_ref_entry,
+                &unique_id,
+                &relation,
+                status,
+                override_existing,
+            );
         }
 
         // All other entries are versioned, if one exists
@@ -177,37 +214,36 @@ impl RefsAndSourcesTracker for RefsAndSources {
                 .refs
                 .entry(model_name_with_version.to_owned())
                 .or_default();
-            if override_existing {
-                if let Some(existing) = versioned_ref_entry
-                    .iter_mut()
-                    .find(|(id, _, _)| id == &unique_id)
-                {
-                    *existing = (unique_id.to_string(), relation.clone(), status);
-                } else {
-                    versioned_ref_entry.push((unique_id.to_string(), relation.clone(), status));
-                }
-            } else {
-                versioned_ref_entry.push((unique_id.to_string(), relation.clone(), status));
-            }
+            Self::push_or_replace_entry(
+                versioned_ref_entry,
+                &unique_id,
+                &relation,
+                status,
+                override_existing,
+            );
 
             let package_versioned_ref_entry = self
                 .refs
                 .entry(format!("{package_name}.{model_name_with_version}"))
                 .or_default();
             if override_existing {
-                if let Some(existing) = package_versioned_ref_entry
-                    .iter_mut()
-                    .find(|(id, _, _)| id == &unique_id)
-                {
-                    *existing = (unique_id.clone(), relation, status);
-                } else {
-                    package_versioned_ref_entry.push((unique_id, relation, status));
-                }
+                Self::push_or_replace_entry(
+                    package_versioned_ref_entry,
+                    &unique_id,
+                    &relation,
+                    status,
+                    true,
+                );
             } else if !package_versioned_ref_entry
                 .iter()
-                .any(|(id, _, _)| id == &unique_id)
+                .any(|(id, _, _, _)| id == &unique_id)
             {
-                package_versioned_ref_entry.push((unique_id, relation, status));
+                package_versioned_ref_entry.push((
+                    unique_id.to_string(),
+                    relation.clone(),
+                    status,
+                    None,
+                ));
             }
         }
         Ok(())
@@ -273,7 +309,7 @@ impl RefsAndSourcesTracker for RefsAndSources {
         name: &str,
         version: &Option<String>,
         maybe_node_package_name: &Option<String>,
-    ) -> FsResult<(String, MinijinjaValue, ModelStatus)> {
+    ) -> FsResult<RefRecord> {
         // Create a list of packages to search, where None means to
         // search non-package limited names
         let root_package = Some(self.root_package_name.clone());
@@ -302,8 +338,8 @@ impl RefsAndSourcesTracker for RefsAndSources {
                 .map(|v| format!(".v{v}"))
                 .unwrap_or_default()
         );
-        let mut enabled_ref: Option<(String, MinijinjaValue, ModelStatus)> = None;
-        let mut disabled_ref: Option<(String, MinijinjaValue, ModelStatus)> = None;
+        let mut enabled_ref: Option<RefRecord> = None;
+        let mut disabled_ref: Option<RefRecord> = None;
         let mut search_ref_names: Vec<String> = Vec::new();
         for maybe_package in search_packages.iter() {
             // If this is a package, use the package name + ref_name to search
@@ -317,7 +353,7 @@ impl RefsAndSourcesTracker for RefsAndSources {
             if let Some(res) = self.refs.get(&search_ref_name) {
                 let (enabled_refs, disabled_refs): (Vec<_>, Vec<_>) = res
                     .iter()
-                    .partition(|(_, _, status)| *status != ModelStatus::Disabled);
+                    .partition(|(_, _, status, _)| *status != ModelStatus::Disabled);
                 // We got a ref or we wouldn't be here
                 if !disabled_refs.is_empty() {
                     disabled_ref = Some(disabled_refs[0].clone());
@@ -335,7 +371,7 @@ impl RefsAndSourcesTracker for RefsAndSources {
                             "Found ambiguous ref('{}') pointing to multiple nodes: [{}]",
                             ref_name,
                             res.iter()
-                                .map(|(r, _, _)| format!("'{r}'"))
+                                .map(|(r, _, _, _)| format!("'{r}'"))
                                 .collect::<Vec<_>>()
                                 .join(", ")
                         );
@@ -424,6 +460,76 @@ impl RefsAndSourcesTracker for RefsAndSources {
             )
         }
     }
+
+    fn update_ref_with_deferral(
+        &mut self,
+        node: &dyn InternalDbtNodeAttributes,
+        adapter_type: AdapterType,
+        is_frontier: bool,
+    ) -> FsResult<()> {
+        let package_name = &node.package_name();
+        let model_name = node.name();
+        let unique_id = node.unique_id();
+        let (maybe_version, maybe_latest_version) = if node.resource_type() == NodeType::Model {
+            (node.version(), node.latest_version())
+        } else {
+            (None, None)
+        };
+
+        let deferred_relation = RelationObject::new_with_filter(
+            create_relation_from_node(adapter_type, node, Some(self.run_filter.clone()))?,
+            self.run_filter.clone(),
+            node.event_time(),
+        )
+        .into_value();
+
+        if maybe_version == maybe_latest_version {
+            let ref_entry = self.refs.entry(model_name.clone()).or_default();
+            Self::set_deferred_relation(ref_entry, &unique_id, &deferred_relation, is_frontier);
+
+            let package_ref_entry = self
+                .refs
+                .entry(format!("{package_name}.{model_name}"))
+                .or_default();
+            Self::set_deferred_relation(
+                package_ref_entry,
+                &unique_id,
+                &deferred_relation,
+                is_frontier,
+            );
+        }
+
+        if let Some(version) = maybe_version {
+            let model_name_with_version = format!("{model_name}.v{version}");
+            let versioned_ref_entry = self
+                .refs
+                .entry(model_name_with_version.to_owned())
+                .or_default();
+            Self::set_deferred_relation(
+                versioned_ref_entry,
+                &unique_id,
+                &deferred_relation,
+                is_frontier,
+            );
+
+            let package_versioned_ref_entry = self
+                .refs
+                .entry(format!("{package_name}.{model_name_with_version}"))
+                .or_default();
+            Self::set_deferred_relation(
+                package_versioned_ref_entry,
+                &unique_id,
+                &deferred_relation,
+                is_frontier,
+            );
+        }
+
+        Ok(())
+    }
+
+    fn compile_or_test(&self) -> bool {
+        self.compile_or_test
+    }
 }
 
 /// Resolve the dependencies for a model
@@ -469,7 +575,7 @@ pub fn resolve_dependencies(
                 &version.as_ref().map(|v| v.to_string()),
                 node_package_name_value,
             ) {
-                Ok((dependency_id, _, _)) => {
+                Ok((dependency_id, _, _, _)) => {
                     // Check for self-reference
                     if dependency_id == node_unique_id {
                         show_error!(

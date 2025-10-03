@@ -6,10 +6,13 @@ use std::{
 };
 
 use dashmap::DashMap;
-use dbt_common::{adapter::AdapterType, serde_utils::convert_yml_to_dash_map};
-use dbt_fusion_adapter::{load_store::ResultStore, relation_object::create_relation};
-use dbt_schemas::schemas::{CommonAttributes, NodeBaseAttributes};
-use dbt_schemas::state::{DbtRuntimeConfig, RefsAndSourcesTracker};
+use dbt_common::io_args::StaticAnalysisKind;
+use dbt_common::serde_utils::convert_yml_to_dash_map;
+use dbt_fusion_adapter::{AdapterType, load_store::ResultStore, relation_object::create_relation};
+use dbt_schemas::{
+    schemas::{InternalDbtNodeAttributes, telemetry::NodeType},
+    state::{DbtRuntimeConfig, RefsAndSourcesTracker, ResolverState},
+};
 use minijinja::{
     Value as MinijinjaValue,
     constants::{CURRENT_PATH, CURRENT_SPAN, TARGET_PACKAGE_NAME, TARGET_UNIQUE_ID},
@@ -21,27 +24,52 @@ use crate::phases::MacroLookupContext;
 use super::super::compile_and_run_context::RefFunction;
 use super::compile_config::CompileConfig;
 
-type YmlValue = dbt_serde_yaml::Value;
-
-/// Build a compile model context
-/// Returns a context and the current relation
+/// Build a compile model context (wrapper for build_compile_node_context_inner)
 #[allow(clippy::type_complexity, clippy::too_many_arguments)]
-pub fn build_compile_node_context(
-    model: &MinijinjaValue,
-    common_attr: &CommonAttributes,
-    base_attr: &NodeBaseAttributes,
-    config: &YmlValue,
-    adapter_type: AdapterType,
+pub fn build_compile_node_context<T>(
+    model: &T,
+    resolver_state: &ResolverState,
     base_context: &BTreeMap<String, MinijinjaValue>,
-    root_project_name: &str,
-    packages: BTreeSet<String>,
-    refs_and_sources: Arc<dyn RefsAndSourcesTracker>,
-    runtime_config: Arc<DbtRuntimeConfig>,
+    global_static_analysis: StaticAnalysisKind,
     skip_ref_validation: bool,
 ) -> (
     BTreeMap<String, MinijinjaValue>,
     Arc<DashMap<String, MinijinjaValue>>,
-) {
+)
+where
+    T: InternalDbtNodeAttributes + ?Sized,
+{
+    build_compile_node_context_inner(
+        model,
+        resolver_state.adapter_type,
+        base_context,
+        &resolver_state.root_project_name,
+        resolver_state.refs_and_sources.clone(),
+        resolver_state.runtime_config.clone(),
+        global_static_analysis,
+        skip_ref_validation,
+    )
+}
+
+/// Build a compile model context
+/// Returns a context and the current relation
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
+pub fn build_compile_node_context_inner<T>(
+    model: &T,
+    adapter_type: AdapterType,
+    base_context: &BTreeMap<String, MinijinjaValue>,
+    root_project_name: &str,
+    refs_and_sources: Arc<dyn RefsAndSourcesTracker>,
+    runtime_config: Arc<DbtRuntimeConfig>,
+    global_static_analysis: StaticAnalysisKind,
+    skip_ref_validation: bool,
+) -> (
+    BTreeMap<String, MinijinjaValue>,
+    Arc<DashMap<String, MinijinjaValue>>,
+)
+where
+    T: InternalDbtNodeAttributes + ?Sized,
+{
     let mut base_builtins = if let Some(builtins) = base_context.get("builtins") {
         builtins
             .as_object()
@@ -55,48 +83,33 @@ pub fn build_compile_node_context(
     let mut ctx = base_context.clone();
 
     // Create a relation for 'this' using config values
-    let dyn_object = model.as_object().expect("Model must be an object");
-    let this_relation = match dyn_object
-        .get_value(&MinijinjaValue::from("resource_type"))
-        .and_then(|v| v.as_str().map(|v| v.to_string()))
-    {
-        Some(value) => match value.as_str() {
-            "unit_test" => {
-                // Get the model name from the dependencies
-                let this_relation_name = base_attr
-                    .refs
-                    .first()
-                    .cloned()
-                    .map(|r| r.name)
-                    .expect("Unit test must have a dependency");
-                let (_, this_relation, _) = refs_and_sources
-                    .lookup_ref(
-                        &Some(common_attr.package_name.clone()),
-                        &this_relation_name,
-                        &None,
-                        &None,
-                    )
-                    .expect("Ref must exist");
-                this_relation
-            }
-            _ => create_relation(
-                adapter_type,
-                base_attr.database.clone(),
-                base_attr.schema.clone(),
-                Some(base_attr.alias.clone()),
-                None,
-                base_attr.quoting,
-            )
-            .unwrap()
-            .as_value(),
-        },
-        None => create_relation(
+    let this_relation = match model.resource_type() {
+        NodeType::UnitTest => {
+            // Get the model name from the dependencies
+            let this_relation_name = model
+                .base()
+                .refs
+                .first()
+                .cloned()
+                .map(|r| r.name)
+                .expect("Unit test must have a dependency");
+            let (_, this_relation, _, _) = refs_and_sources
+                .lookup_ref(
+                    &Some(model.common().package_name.clone()),
+                    &this_relation_name,
+                    &None,
+                    &None,
+                )
+                .expect("Ref must exist");
+            this_relation
+        }
+        _ => create_relation(
             adapter_type,
-            base_attr.database.clone(),
-            base_attr.schema.clone(),
-            Some(base_attr.alias.clone()),
+            model.base().database.clone(),
+            model.base().schema.clone(),
+            Some(model.base().alias.clone()),
             None,
-            base_attr.quoting,
+            model.base().quoting,
         )
         .unwrap()
         .as_value(),
@@ -104,18 +117,18 @@ pub fn build_compile_node_context(
     ctx.insert("this".to_owned(), this_relation);
     ctx.insert(
         "database".to_owned(),
-        MinijinjaValue::from(base_attr.database.to_string()),
+        MinijinjaValue::from(model.base().database.to_string()),
     );
     ctx.insert(
         "schema".to_owned(),
-        MinijinjaValue::from(base_attr.schema.to_string()),
+        MinijinjaValue::from(model.base().schema.to_string()),
     );
     ctx.insert(
         "identifier".to_owned(),
-        MinijinjaValue::from(base_attr.alias.clone()),
+        MinijinjaValue::from(model.base().alias.clone()),
     );
 
-    let config_map = Arc::new(convert_yml_to_dash_map(config.clone()));
+    let config_map = Arc::new(convert_yml_to_dash_map(model.serialized_config()));
     let compile_config = CompileConfig {
         config: config_map.clone(),
     };
@@ -131,14 +144,18 @@ pub fn build_compile_node_context(
 
     // Create validated ref function with dependency checking
     let allowed_dependencies: Arc<BTreeSet<String>> =
-        Arc::new(base_attr.depends_on.nodes.iter().cloned().collect());
+        Arc::new(model.base().depends_on.nodes.iter().cloned().collect());
 
     let ref_function = RefFunction::new_with_validation(
         refs_and_sources.clone(),
-        common_attr.package_name.clone(),
-        runtime_config,
+        model.common().package_name.clone(),
+        runtime_config.clone(),
         allowed_dependencies,
         skip_ref_validation,
+        // Update to use introspection kind
+        (matches!(model.base().static_analysis, StaticAnalysisKind::Unsafe)
+            || global_static_analysis == StaticAnalysisKind::Unsafe)
+            || model.introspection().is_unsafe(),
     );
 
     let ref_value = MinijinjaValue::from_object(ref_function);
@@ -150,7 +167,10 @@ pub fn build_compile_node_context(
         "builtins".to_owned(),
         MinijinjaValue::from_object(base_builtins),
     );
-    ctx.insert("model".to_owned(), model.clone());
+    ctx.insert(
+        "model".to_owned(),
+        MinijinjaValue::from_serialize(model.serialize()),
+    );
 
     let result_store = ResultStore::default();
     ctx.insert(
@@ -167,14 +187,18 @@ pub fn build_compile_node_context(
     );
     ctx.insert(
         TARGET_PACKAGE_NAME.to_owned(),
-        MinijinjaValue::from(&common_attr.package_name),
+        MinijinjaValue::from(&model.common().package_name),
     );
     ctx.insert(
         TARGET_UNIQUE_ID.to_owned(),
-        MinijinjaValue::from(&common_attr.unique_id),
+        MinijinjaValue::from(&model.common().unique_id),
     );
 
-    let mut packages = packages;
+    let mut packages = runtime_config
+        .dependencies
+        .keys()
+        .cloned()
+        .collect::<BTreeSet<String>>();
     packages.insert(root_project_name.to_string());
 
     ctx.insert(
@@ -188,7 +212,7 @@ pub fn build_compile_node_context(
 
     ctx.insert(
         CURRENT_PATH.to_string(),
-        MinijinjaValue::from(common_attr.original_file_path.clone().to_string_lossy()),
+        MinijinjaValue::from(model.common().original_file_path.clone().to_string_lossy()),
     );
     ctx.insert(
         CURRENT_SPAN.to_string(),
