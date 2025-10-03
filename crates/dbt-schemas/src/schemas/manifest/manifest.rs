@@ -49,6 +49,7 @@ pub struct ManifestMetadata {
     pub __base__: BaseMetadata,
     #[serde(default)]
     pub project_name: String,
+    /// The MD5 hash of the project name.
     pub project_id: Option<String>,
     pub user_id: Option<String>,
     pub send_anonymous_usage_stats: Option<bool>,
@@ -121,6 +122,10 @@ pub fn build_manifest(invocation_id: &str, resolver_state: &ResolverState) -> Db
                 .db_config
                 .adapter_type()
                 .to_string(),
+            project_id: Some(format!(
+                "{:x}",
+                md5::compute(resolver_state.root_project_name.as_bytes())
+            )),
             ..Default::default()
         },
         nodes: resolver_state
