@@ -129,9 +129,39 @@ pub fn dispatch_adapter_calls(
         "cache_added" => adapter.cache_added(state, args),
         "cache_dropped" => adapter.cache_dropped(state, args),
         "cache_renamed" => adapter.cache_renamed(state, args),
-        "quote" => adapter.quote(state, args),
-        "quote_as_configured" => adapter.quote_as_configured(state, args),
-        "quote_seed_column" => adapter.quote_seed_column(state, args),
+        "quote" => {
+            // identifier: str
+            let iter = ArgsIter::new(name, &["identifier"], args);
+
+            let identifier = iter.next_arg::<&str>()?;
+            iter.finish()?;
+
+            adapter.quote(state, identifier)
+        }
+        "quote_as_configured" => {
+            // identifier: str
+            // quote_key: str
+            let iter = ArgsIter::new(name, &["identifier", "quote_key"], args);
+
+            let identifier = iter.next_arg::<&str>()?;
+            let quote_key = iter.next_arg::<&str>()?;
+
+            iter.finish()?;
+
+            adapter.quote_as_configured(state, identifier, quote_key)
+        }
+        "quote_seed_column" => {
+            // column: str
+            // quote_config: Optional[bool]
+            let iter = ArgsIter::new(name, &["column", "quote_config"], args);
+
+            let column = iter.next_arg::<&str>()?;
+            let quote_config = iter.next_kwarg::<Option<bool>>("quote_config")?;
+
+            iter.finish()?;
+
+            adapter.quote_seed_column(state, column, quote_config)
+        }
         "drop_relation" => adapter.drop_relation(state, args),
         "truncate_relation" => adapter.truncate_relation(state, args),
         "rename_relation" => adapter.rename_relation(state, args),

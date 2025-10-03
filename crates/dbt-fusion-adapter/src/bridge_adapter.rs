@@ -301,36 +301,18 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip_all, level = "trace")]
-    fn quote(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
-        let parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 1, 1)?;
-
-        let identifier = args
-            .first()
-            .expect("quote requires exactly one argument")
-            .to_string();
-
-        let quoted_identifier = self.typed_adapter.quote(state, &identifier)?;
+    fn quote(&self, state: &State, identifier: &str) -> Result<Value, MinijinjaError> {
+        let quoted_identifier = self.typed_adapter.quote(state, identifier)?;
         Ok(Value::from(quoted_identifier))
     }
 
     #[tracing::instrument(skip_all, level = "trace")]
-    fn quote_as_configured(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
-        let parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 2, 2)?;
-
-        let identifier = args
-            .first()
-            .expect("quote_as_configured requires two arguments")
-            .as_str()
-            .unwrap();
-
-        let quote_key = args
-            .last()
-            .expect("quote_as_configured requires two arguments")
-            .as_str()
-            .unwrap();
-
+    fn quote_as_configured(
+        &self,
+        state: &State,
+        identifier: &str,
+        quote_key: &str,
+    ) -> Result<Value, MinijinjaError> {
         let quote_key = quote_key.parse::<ComponentName>().map_err(|_| {
             MinijinjaError::new(
                 MinijinjaErrorKind::InvalidArgument,
@@ -346,17 +328,15 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip_all, level = "trace")]
-    fn quote_seed_column(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
-        // column: str, quote_config: Optional[bool]
-        let mut parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 1, 2)?;
-
-        let column = parser.get::<String>("column")?;
-        let quote_config = parser.get_optional::<bool>("quote_config");
-
+    fn quote_seed_column(
+        &self,
+        state: &State,
+        column: &str,
+        quote_config: Option<bool>,
+    ) -> Result<Value, MinijinjaError> {
         let result = self
             .typed_adapter
-            .quote_seed_column(state, &column, quote_config)?;
+            .quote_seed_column(state, column, quote_config)?;
         Ok(Value::from(result))
     }
 

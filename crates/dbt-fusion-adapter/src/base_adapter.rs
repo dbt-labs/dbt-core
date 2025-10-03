@@ -136,13 +136,53 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
     ) -> Result<Value, MinijinjaError>;
 
     /// Encloses identifier in the correct quotes for the adapter when escaping reserved column names etc.
-    fn quote(&self, state: &State, _args: &[Value]) -> Result<Value, MinijinjaError>;
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/5fba80c621c3f0f732dba71aa6cf9055792b6495/dbt-adapters/src/dbt/adapters/base/impl.py#L1064
+    ///
+    /// ```python
+    /// @classmethod
+    /// def quote(
+    ///     cls,
+    ///     identifier: str
+    /// ) -> str
+    /// ```
+    fn quote(&self, state: &State, identifier: &str) -> Result<Value, MinijinjaError>;
 
     /// Quote as configured.
-    fn quote_as_configured(&self, state: &State, _args: &[Value]) -> Result<Value, MinijinjaError>;
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/5fba80c621c3f0f732dba71aa6cf9055792b6495/dbt-adapters/src/dbt/adapters/base/impl.py#L1070C5-L1070C75
+    ///
+    /// ```python
+    /// def quote_as_configured(
+    ///     self,
+    ///     identifier: str,
+    ///     quote_key: str
+    /// ) -> str
+    /// ```
+    fn quote_as_configured(
+        &self,
+        state: &State,
+        identifier: &str,
+        quote_key: &str,
+    ) -> Result<Value, MinijinjaError>;
 
     /// Quote seed column.
-    fn quote_seed_column(&self, state: &State, _args: &[Value]) -> Result<Value, MinijinjaError>;
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/5fba80c621c3f0f732dba71aa6cf9055792b6495/dbt-adapters/src/dbt/adapters/base/impl.py#L1091
+    ///
+    /// ```python
+    /// def quote_seed_column(
+    ///     self,
+    ///     column: str,
+    ///     quote_config: Optional[bool]
+    /// ) -> str
+    /// ```
+    fn quote_seed_column(
+        &self,
+        state: &State,
+        column: &str,
+        quote_config: Option<bool>,
+    ) -> Result<Value, MinijinjaError>;
 
     /// Convert type.
     fn convert_type(&self, state: &State, _args: &[Value]) -> Result<Value, MinijinjaError>;

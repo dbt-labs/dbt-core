@@ -424,15 +424,7 @@ impl BaseAdapter for ParseAdapter {
         Ok(empty_vec_value())
     }
 
-    fn quote(&self, _state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
-        let parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 1, 1)?;
-
-        let _ = args
-            .first()
-            .expect("quote requires exactly one argument")
-            .to_string();
-
+    fn quote(&self, _state: &State, _identifier: &str) -> Result<Value, MinijinjaError> {
         Ok(empty_vec_value())
     }
 
@@ -635,12 +627,18 @@ impl BaseAdapter for ParseAdapter {
     fn quote_as_configured(
         &self,
         _state: &State,
-        _args: &[Value],
+        _identifier: &str,
+        _quote_key: &str,
     ) -> Result<Value, MinijinjaError> {
         Ok(empty_string_value())
     }
 
-    fn quote_seed_column(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn quote_seed_column(
+        &self,
+        _state: &State,
+        _column: &str,
+        _quote_config: Option<bool>,
+    ) -> Result<Value, MinijinjaError> {
         Ok(empty_string_value())
     }
 
