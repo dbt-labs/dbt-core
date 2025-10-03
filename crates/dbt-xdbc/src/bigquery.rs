@@ -48,6 +48,7 @@ pub const QUERY_DEFAULT_PROJECT_ID: &str = "adbc.bigquery.sql.query.default_proj
 pub const QUERY_DEFAULT_DATASET_ID: &str = "adbc.bigquery.sql.query.default_dataset_id";
 pub const QUERY_CREATE_DISPOSITION: &str = "adbc.bigquery.sql.query.create_disposition";
 pub const QUERY_WRITE_DISPOSITION: &str = "adbc.bigquery.sql.query.write_disposition";
+pub const QUERY_LABELS: &str = "adbc.bigquery.sql.query.labels";
 pub const QUERY_DISABLE_QUERY_CACHE: &str = "adbc.bigquery.sql.query.disable_query_cache"; // bool
 pub const DISABLE_FLATTENED_RESULTS: &str = "adbc.bigquery.sql.query.disable_flattened_results"; // bool
 pub const QUERY_ALLOW_LARGE_RESULTS: &str = "adbc.bigquery.sql.query.allow_large_results"; // bool

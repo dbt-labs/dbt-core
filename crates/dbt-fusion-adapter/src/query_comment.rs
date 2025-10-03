@@ -2,7 +2,7 @@ use std::{fmt::Debug, sync::LazyLock};
 
 use dbt_common::adapter::AdapterType;
 use dbt_schemas::schemas::project::QueryComment;
-use minijinja::{Error, State, Value};
+use minijinja::{Error, State};
 use regex::Regex;
 use serde::Deserialize;
 
@@ -109,7 +109,7 @@ impl QueryCommentConfig {
 
     /// Reference: https://github.com/dbt-labs/dbt-adapters/blob/b0223a88d67012bcc4c6cce5449c4fe10c6ed198/dbt-bigquery/src/dbt/adapters/bigquery/connections.py#L629
     /// Return job labels from query comment
-    pub fn get_labels_from_query_comment(&self, state: &State) -> Vec<Value> {
+    pub fn get_job_labels_from_query_comment(&self, state: &State) -> Vec<(String, String)> {
         let mut labels = Vec::new();
 
         if let Ok(resolved_comment) = self.resolve_comment(state)
@@ -120,18 +120,13 @@ impl QueryCommentConfig {
             ) {
                 Ok(json) => {
                     for (key, value) in json.into_iter() {
-                        labels.push(Value::from_iter(vec![
-                            Value::from(sanitize_label(key)),
-                            Value::from(sanitize_label(value.to_string())),
-                        ]));
+                        labels.push((sanitize_label(key), sanitize_label(value.to_string())))
                     }
                 }
-                Err(_) => {
-                    labels.push(Value::from_iter(vec![
-                        Value::from("query_comment"),
-                        Value::from(sanitize_label(resolved_comment)),
-                    ]));
-                }
+                Err(_) => labels.push((
+                    "query_comment".to_string(),
+                    sanitize_label(resolved_comment),
+                )),
             }
         }
 

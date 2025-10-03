@@ -39,7 +39,7 @@ use std::sync::RwLock;
 use std::sync::{Arc, LazyLock};
 use std::{thread, time::Duration};
 
-type Options = Vec<(String, OptionValue)>;
+pub type Options = Vec<(String, OptionValue)>;
 
 /// Naive statement splitter used in the MockAdapter
 ///

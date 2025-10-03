@@ -7,7 +7,7 @@ use crate::record_batch_utils::get_column_values;
 use crate::relation_object::RelationObject;
 use crate::response::{AdapterResponse, ResultObject};
 use crate::snapshots::SnapshotStrategy;
-use crate::sql_engine::{SqlEngine, execute_query_with_retry};
+use crate::sql_engine::{Options as ExecuteOptions, SqlEngine, execute_query_with_retry};
 use crate::{AdapterResult, AdapterType, AdapterTyping};
 
 use adbc_core::options::OptionValue;
@@ -130,6 +130,9 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             .into_iter()
             .map(|(key, value)| (key, OptionValue::String(value)))
             .collect::<Vec<_>>();
+        if let Some(state) = state {
+            options.extend(self.get_adbc_execute_options(state));
+        }
 
         // Configure warehouse specific options
         #[allow(clippy::single_match)]
@@ -1074,6 +1077,11 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     /// when available. Default is None for non-replay adapters.
     fn schema_exists_from_trace(&self, _database: &str, _schema: &str) -> Option<bool> {
         None
+    }
+
+    /// Get the default ADBC statement options, including query comment labels if necessary
+    fn get_adbc_execute_options(&self, _state: &State) -> ExecuteOptions {
+        Vec::new()
     }
 }
 
