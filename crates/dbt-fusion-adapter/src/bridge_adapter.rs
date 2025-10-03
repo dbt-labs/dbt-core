@@ -508,16 +508,9 @@ impl BaseAdapter for BridgeAdapter {
     fn expand_target_column_types(
         &self,
         state: &State,
-        args: &[Value],
+        from_relation: Arc<dyn BaseRelation>,
+        to_relation: Arc<dyn BaseRelation>,
     ) -> Result<Value, MinijinjaError> {
-        let mut parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 2, 2)?;
-
-        let from_relation = parser.get::<Value>("from_relation")?;
-        let to_relation = parser.get::<Value>("to_relation")?;
-
-        let from_relation = downcast_value_to_dyn_base_relation(&from_relation)?;
-        let to_relation = downcast_value_to_dyn_base_relation(&to_relation)?;
         let result =
             self.typed_adapter
                 .expand_target_column_types(state, from_relation, to_relation)?;

@@ -326,10 +326,21 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
     fn rename_relation(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError>;
 
     /// Expand target column types.
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L764
+    ///
+    /// ```python
+    /// def expand_column_types(
+    ///     self,
+    ///     goal: BaseRelation,
+    ///     current: BaseRelation
+    /// ) -> None
+    /// ```
     fn expand_target_column_types(
         &self,
         state: &State,
-        args: &[Value],
+        from_relation: Arc<dyn BaseRelation>,
+        to_relation: Arc<dyn BaseRelation>,
     ) -> Result<Value, MinijinjaError>;
 
     /// List schemas.

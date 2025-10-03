@@ -373,7 +373,8 @@ impl BaseAdapter for ParseAdapter {
     fn expand_target_column_types(
         &self,
         _state: &State,
-        _args: &[Value],
+        _from_relation: Arc<dyn BaseRelation>,
+        _to_relation: Arc<dyn BaseRelation>,
     ) -> Result<Value, MinijinjaError> {
         Ok(none_value())
     }

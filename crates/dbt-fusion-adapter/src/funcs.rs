@@ -165,7 +165,33 @@ pub fn dispatch_adapter_calls(
         "drop_relation" => adapter.drop_relation(state, args),
         "truncate_relation" => adapter.truncate_relation(state, args),
         "rename_relation" => adapter.rename_relation(state, args),
-        "expand_target_column_types" => adapter.expand_target_column_types(state, args),
+        "expand_target_column_types" => {
+            // from_relation: BaseRelation, to_relation: BaseRelation
+            let iter = ArgsIter::new(name, &["from_relation", "to_relation"], args);
+            let from_relation = iter.next_arg::<&Value>()?;
+            let from_relation = from_relation
+                .downcast_object::<RelationObject>()
+                .ok_or_else(|| {
+                    MinijinjaError::new(
+                        MinijinjaErrorKind::InvalidOperation,
+                        "from_relation must be a BaseRelation object",
+                    )
+                })?
+                .inner();
+            let to_relation = iter.next_arg::<&Value>()?;
+            let to_relation = to_relation
+                .downcast_object::<RelationObject>()
+                .ok_or_else(|| {
+                    MinijinjaError::new(
+                        MinijinjaErrorKind::InvalidOperation,
+                        "to_relation must be a BaseRelation object",
+                    )
+                })?
+                .inner();
+            iter.finish()?;
+
+            adapter.expand_target_column_types(state, from_relation, to_relation)
+        }
         "list_schemas" => adapter.list_schemas(state, args),
         "create_schema" => adapter.create_schema(state, args),
         "drop_schema" => adapter.drop_schema(state, args),

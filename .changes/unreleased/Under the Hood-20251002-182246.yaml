@@ -1,0 +1,7 @@
+kind: Under the Hood
+body: extracted parameter passing in funcs for expand target column types
+time: 2025-10-02T18:22:46.296992+03:00
+custom:
+    author: dbtagarovat
+    issue: ""
+    project: dbt-fusion
