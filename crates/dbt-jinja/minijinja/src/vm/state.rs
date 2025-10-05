@@ -11,8 +11,6 @@ use crate::value::mutable_map::MutableMap;
 use crate::value::{ArgType, Value};
 use crate::vm::context::Context;
 
-use serde::Deserialize;
-
 #[cfg(feature = "fuel")]
 use crate::vm::fuel::FuelTracker;
 use std::collections::{BTreeMap, BTreeSet};
@@ -138,43 +136,13 @@ impl<'template, 'env> State<'template, 'env> {
             .unwrap_or_default()
     }
 
-    /// Returns true if the model to be executed is materialized as incremental
-    pub fn is_run_incremental(&self) -> bool {
-        let model = self.lookup("model");
-        if let Some(model) = model {
-            if let Some(config) = model.get_attr_fast("config") {
-                if let Some(result) = config.get_attr_fast("materialized") {
-                    return result.as_str() == Some("incremental");
-                }
-            }
+    /// Returns the relation name for current node from the state.
+    pub fn relation_name_from_state(&self) -> Option<String> {
+        let model = self.lookup("model")?;
+        if let Some(relation_name) = model.get_attr_fast("relation_name") {
+            return relation_name.as_str().map(|s| s.to_string());
         }
-        false
-    }
-
-    /// Returns true if the relation of name fqn is a snapshot
-    pub fn is_relation_snapshot(&self, fqn: &str) -> bool {
-        let graph = self.lookup("graph");
-        if let Some(graph) = graph {
-            // refers to 'build_flat_graph'
-            // https://github.com/dbt-labs/fs/blob/b3b283e6becd65acdddd7cc43944e43de226cc14/fs/sa/crates/dbt-jinja-utils/src/functions/base.rs#L1130
-            #[derive(Deserialize, Debug)]
-            struct _Graph {
-                nodes: BTreeMap<String, _Node>,
-            }
-            #[derive(Deserialize, Debug)]
-            struct _Node {
-                resource_type: String,
-                relation_name: String,
-            }
-            let graph = <_Graph>::deserialize(graph);
-            if let Ok(graph) = graph {
-                let node = graph.nodes.values().find(|node| node.relation_name == fqn);
-                if let Some(node) = node {
-                    return node.resource_type == "snapshot";
-                }
-            }
-        }
-        false
+        None
     }
 
     /// Returns the base context of the state and add file_stack to it.

@@ -788,14 +788,20 @@ impl BaseAdapter for BridgeAdapter {
         relation: Arc<dyn BaseRelation>,
     ) -> Result<Value, MinijinjaError> {
         let maybe_from_local = if let Some(db) = &self.db {
-            // skip local compilation results if it's invoked upon a snapshot
-            // as we considered risk is too high to trust the types to be consistent with the remote
-            if !state.is_relation_snapshot(&relation.render_self_as_str())
-                // see example at crates/dbt-adapter-tests/tests/data/repros/incremental_simple
-                // if a model is incremental, always query the remote state
-                // since the compiled sql in incremental run may represent a schema of which the model that will have when the run is done
-                && !state.is_run_incremental()
-            {
+            // Check if the relation being queried is the same as the one currently being rendered
+            // Skip local compilation results for the current relation since the compiled sql
+            // may represent a schema that the model will have when the run is done, not the current state
+            let is_current_relation = if let (relation_fqn, Some(current_relation_name)) = (
+                relation.render_self_as_str(),
+                state.relation_name_from_state(),
+            ) {
+                // This might cause false positive, but fine since we just make one more remote call.
+                relation_fqn.to_lowercase() == current_relation_name.to_lowercase()
+            } else {
+                false
+            };
+
+            if !is_current_relation {
                 let schema = db.get_schema(&relation.get_fqn().unwrap_or_default());
                 if let Some(schema) = &schema {
                     let from_local = self.typed_adapter.schema_to_columns(schema)?;
