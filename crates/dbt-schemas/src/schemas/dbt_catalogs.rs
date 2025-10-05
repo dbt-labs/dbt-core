@@ -6,24 +6,23 @@
 //!       active_write_integration: <string, non-empty>
 //!       write_integrations:
 //!         - name|integration_name: <string, non-empty>
-//!           catalog_type: built_in | iceberg_rest                // case-insensitive
-//!           table_format: iceberg                                // default; case-insensitive
-//!           external_volume: <string>                            // required & non-empty for built_in; required for REST write-support
-//!           base_location_root: <string>                         // built_in only; if present, non-empty
-//!           base_location_subpath: <string>                      // built_in only; if present, non-empty
-//!           catalog_linked_database: <string>                    // REST write-support gate
-//!           adapter_properties:                                  // variant-specific; strict keys
+//!           // TODO: catalog type info schema and DDL
+//!           catalog_type: built_in | snowflake | rest | iceberg_rest  // case-insensitive
+//!           table_format: iceberg                                     // default; case-insensitive
+//!           external_volume: <string>                                 // required & non-empty for built_in; forbidden for REST write-support
+//!           base_location_root: <string>                              // built_in only; if present, non-empty
+//!           base_location_subpath: <string>                           // built_in only; if present, non-empty
+//!           adapter_properties:                                       // variant-specific; strict keys
 //!             // built_in:
-//!             storage_serialization_policy: COMPATIBLE|OPTIMIZED // case-insensitive
+//!             change_tracking: <bool>
 //!             data_retention_time_in_days: <u32 in 0..=90>
 //!             max_data_extension_time_in_days: <u32 in 0..=90>
-//!             change_tracking: <bool>
-//!             target_file_size: 'AUTO'|'16MB'|'32MB'|'64MB'|'128MB'  // case-insensitive
+//!             storage_serialization_policy: COMPATIBLE|OPTIMIZED      // case-insensitive
 //!             // REST:
-//!             target_file_size: 'AUTO'|'16MB'|'32MB'|'64MB'|'128MB'  // case-insensitive
 //!             auto_refresh: <bool>
+//!             catalog_linked_database: <string, if present non-empty> // REST write-support gate
 //!             max_data_extension_time_in_days: <u32 in 0..=90>
-//!             catalog_namespace: <string, if present non-empty>
+//!             target_file_size: 'AUTO'|'16MB'|'32MB'|'64MB'|'128MB'   // case-insensitive
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -71,10 +70,37 @@ pub enum CatalogType {
     IcebergRest,
 }
 
-const CATALOG_TYPES: [(&str, CatalogType); 2] = [
+impl CatalogType {
+    pub fn parse_strict(catalog_type_raw: &str) -> FsResult<Self> {
+        CATALOG_TYPES
+            .iter()
+            .find_map(|(name, ct)| catalog_type_raw.eq_ignore_ascii_case(name).then_some(*ct))
+            .ok_or_else(|| {
+                fs_err!(
+                    ErrorCode::InvalidConfig,
+                    "catalog_type '{}' invalid. choose one of ({})",
+                    catalog_type_raw,
+                    CATALOG_TYPE_OPTS
+                )
+            })
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            CatalogType::BuiltIn => "BUILT_IN",
+            CatalogType::IcebergRest => "ICEBERG_REST",
+        }
+    }
+}
+
+const CATALOG_TYPES: [(&str, CatalogType); 4] = [
     ("built_in", CatalogType::BuiltIn),
+    ("snowflake", CatalogType::BuiltIn),
+    ("rest", CatalogType::IcebergRest),
     ("iceberg_rest", CatalogType::IcebergRest),
 ];
+
+const CATALOG_TYPE_OPTS: &str = "built_in|snowflake|rest|iceberg_rest";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TableFormat {
@@ -83,19 +109,18 @@ pub enum TableFormat {
 
 #[derive(Debug, Default)]
 pub struct BuiltInPropsView {
-    pub storage_serialization_policy: Option<SerializationPolicy>,
-    pub max_data_extension_time_in_days: Option<u32>,
-    pub data_retention_time_in_days: Option<u32>,
     pub change_tracking: Option<bool>,
-    pub target_file_size: Option<TargetFileSize>,
+    pub data_retention_time_in_days: Option<u32>,
+    pub max_data_extension_time_in_days: Option<u32>,
+    pub storage_serialization_policy: Option<SerializationPolicy>,
 }
 
 #[derive(Debug, Default)]
 pub struct RestPropsView<'a> {
-    pub target_file_size: Option<TargetFileSize>,
     pub auto_refresh: Option<bool>,
+    pub catalog_linked_database: Option<&'a str>,
     pub max_data_extension_time_in_days: Option<u32>,
-    pub catalog_namespace: Option<&'a str>,
+    pub target_file_size: Option<TargetFileSize>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -121,7 +146,9 @@ pub enum AdapterPropsView<'a> {
 }
 
 fn get_str<'a>(m: &'a yml::Mapping, k: &str) -> Option<&'a str> {
-    m.get(yml::Value::from(k)).and_then(|v| v.as_str())
+    m.get(yml::Value::from(k))
+        .and_then(|v| v.as_str())
+        .map(|s| s.trim())
 }
 
 fn get_map<'a>(m: &'a yml::Mapping, k: &str) -> Option<&'a yml::Mapping> {
@@ -185,7 +212,9 @@ fn check_unknown_keys(m: &yml::Mapping, allowed: &[&str], ctx: &str) -> FsResult
 pub struct WriteIntegrationView<'a> {
     pub integration_name: &'a str, // alias: name
     pub catalog_type: CatalogType,
-    pub table_format: TableFormat, // defaults to iceberg
+    // defaults to iceberg; core reconciles with extra info_schema
+    // concept we do not have
+    pub table_format: TableFormat,
     pub external_volume: Option<&'a str>,
 
     // built_in only
@@ -193,8 +222,6 @@ pub struct WriteIntegrationView<'a> {
     pub base_location_subpath: Option<&'a str>,
 
     pub adapter_properties: Option<AdapterPropsView<'a>>,
-    // REST linked-DB gate (forward compat)
-    pub catalog_linked_database: Option<&'a str>,
 }
 
 #[derive(Debug)]
@@ -291,7 +318,6 @@ impl<'a> WriteIntegrationView<'a> {
                 "base_location_root",
                 "base_location_subpath",
                 "adapter_properties",
-                "catalog_linked_database",
             ],
             "write_integration",
         )?;
@@ -322,16 +348,11 @@ impl<'a> WriteIntegrationView<'a> {
             .iter()
             .find_map(|(name, v)| catalog_type_raw.eq_ignore_ascii_case(name).then_some(*v))
             .ok_or_else(|| {
-                let opts = CATALOG_TYPES
-                    .iter()
-                    .map(|(name, _)| *name)
-                    .collect::<Vec<_>>()
-                    .join("|");
                 fs_err!(
                     ErrorCode::InvalidConfig,
                     "catalog_type '{}' invalid. choose one of ({})",
                     catalog_type_raw,
-                    opts
+                    CATALOG_TYPE_OPTS
                 )
             })?;
 
@@ -347,11 +368,43 @@ impl<'a> WriteIntegrationView<'a> {
             );
         };
 
-        let external_volume = get_str(map, "external_volume");
+        // External volume currently invalid for Rest catalog
+        let external_volume: Option<&str> = match catalog_type {
+            CatalogType::BuiltIn => {
+                let v = get_str(map, "external_volume").ok_or_else(|| {
+                    fs_err!(
+                        ErrorCode::InvalidConfig,
+                        "integration '{}': 'external_volume' is required for BUILT_IN catalogs.",
+                        integration_name
+                    )
+                })?;
+                if v.is_empty() {
+                    return err!(
+                        ErrorCode::InvalidConfig,
+                        "integration '{}': 'external_volume' is required for BUILT_IN catalogs and cannot be blank.",
+                        integration_name
+                    );
+                }
+                Some(v)
+            }
+
+            CatalogType::IcebergRest => {
+                // must be absent or empty string; non-empty is invalid
+                match get_str(map, "external_volume") {
+                    None | Some("") => None,
+                    Some(_) => {
+                        return err!(
+                            ErrorCode::InvalidConfig,
+                            "integration '{}': 'external_volume' is not supported for Iceberg REST with catalog-linked databases.",
+                            integration_name
+                        );
+                    }
+                }
+            }
+        };
+
         let base_location_root = get_str(map, "base_location_root");
         let base_location_subpath = get_str(map, "base_location_subpath");
-
-        let catalog_linked_database = get_str(map, "catalog_linked_database");
 
         let adapter_properties = get_map(map, "adapter_properties")
             .map(|properties| parse_adapter_properties(properties, catalog_type))
@@ -365,7 +418,6 @@ impl<'a> WriteIntegrationView<'a> {
             base_location_root,
             base_location_subpath,
             adapter_properties,
-            catalog_linked_database,
         })
     }
 }
@@ -379,17 +431,15 @@ fn parse_adapter_properties<'a>(
             check_unknown_keys(
                 properties,
                 &[
-                    "storage_serialization_policy",
+                    "change_tracking",
                     "data_retention_time_in_days",
                     "max_data_extension_time_in_days",
-                    "change_tracking",
-                    "target_file_size",
+                    "storage_serialization_policy",
                 ],
                 "adapter_properties(built_in)",
             )?;
             Ok(AdapterPropsView::BuiltIn(BuiltInPropsView {
                 storage_serialization_policy: get_str(properties, "storage_serialization_policy")
-                    .map(str::trim)
                     .filter(|s| !s.is_empty())
                     .map(|s| {
                         if s.eq_ignore_ascii_case("compatible") {
@@ -411,17 +461,16 @@ fn parse_adapter_properties<'a>(
                 )?,
                 data_retention_time_in_days: get_u32(properties, "data_retention_time_in_days")?,
                 change_tracking: get_bool(properties, "change_tracking")?,
-                target_file_size: target_file_size(get_str(properties, "target_file_size"))?,
             }))
         }
         CatalogType::IcebergRest => {
             check_unknown_keys(
                 properties,
                 &[
-                    "target_file_size",
                     "auto_refresh",
+                    "catalog_linked_database",
                     "max_data_extension_time_in_days",
-                    "catalog_namespace",
+                    "target_file_size",
                 ],
                 "adapter_properties(iceberg_rest)",
             )?;
@@ -432,7 +481,7 @@ fn parse_adapter_properties<'a>(
                     properties,
                     "max_data_extension_time_in_days",
                 )?,
-                catalog_namespace: get_str(properties, "catalog_namespace"),
+                catalog_linked_database: get_str(properties, "catalog_linked_database"),
             }))
         }
     }
@@ -555,20 +604,7 @@ pub fn validate_catalogs(spec: &DbtCatalogsView<'_>, path: &Path) -> FsResult<()
             // === 6. Validate other write integration fields modulo catalog type
             match write_integration.catalog_type {
                 // === 6a. built in catalog type
-                CatalogType::BuiltIn => {
-                    let ext_vol_missing = write_integration
-                        .external_volume
-                        .map(|s| s.trim().is_empty())
-                        .unwrap_or(true);
-                    if ext_vol_missing {
-                        return err!(
-                            code => ErrorCode::InvalidConfig,
-                            loc  => err_loc(),
-                            "Catalog '{}' integration '{}': 'external_volume' must be set for built_in",
-                            catalog.catalog_name, write_integration.integration_name
-                        );
-                    }
-                }
+                CatalogType::BuiltIn => { /* no non-structural constraints */ }
 
                 // === 6b. iceberg rest catalog type
                 CatalogType::IcebergRest => {
@@ -584,60 +620,26 @@ pub fn validate_catalogs(spec: &DbtCatalogsView<'_>, path: &Path) -> FsResult<()
                         );
                     }
 
-                    // REST: blank catalog_namespace invalid if field listed
-                    if let Some(AdapterPropsView::Rest(rp)) = &write_integration.adapter_properties
-                        && let Some(ns) = rp.catalog_namespace
-                        && is_blank(ns)
-                    {
-                        return err!(
-                            code => ErrorCode::InvalidConfig,
-                            loc  => err_loc(),
-                            "Catalog '{}' integration '{}': 'catalog_namespace' cannot be blank",
-                            catalog.catalog_name, write_integration.integration_name
-                        );
-                    }
-
-                    let write_properties_set = match &write_integration.adapter_properties {
-                        Some(AdapterPropsView::Rest(rest_properties)) => {
-                            rest_properties.max_data_extension_time_in_days.is_some()
-                                || rest_properties.target_file_size.is_some()
-                        }
-                        _ => false,
-                    };
-
-                    let catalog_linked_database_name: Option<&str> = write_integration
-                        .catalog_linked_database
-                        .map(|s| {
-                            let t = s.trim();
-                            if t.is_empty() {
-                                err!(
+                    match &write_integration.adapter_properties {
+                        Some(AdapterPropsView::Rest(rest)) => match rest.catalog_linked_database {
+                            Some(name) if !name.is_empty() => {}
+                            _ => {
+                                return err!(
                                     code => ErrorCode::InvalidConfig,
                                     loc  => err_loc(),
-                                    "Catalog '{}' integration '{}': 'catalog_linked_database' cannot be blank",
-                                    catalog.catalog_name, write_integration.integration_name
-                                )
-                            } else {
-                                Ok(t)
+                                    "integration '{}': 'catalog_linked_database' is required and cannot be blank for Iceberg REST",
+                                    write_integration.integration_name
+                                );
                             }
-                        })
-                        .transpose()?;
-
-                    // handle external volume
-                    let ext_vol_missing = write_integration
-                        .external_volume
-                        .map(|s| s.trim().is_empty())
-                        .unwrap_or(true);
-
-                    let needs_external_volume =
-                        catalog_linked_database_name.is_some() || write_properties_set;
-                    if needs_external_volume && ext_vol_missing {
-                        return err!(
-                            code => ErrorCode::InvalidConfig,
-                            loc  => err_loc(),
-                            "Catalog '{}' integration '{}': 'external_volume' required for REST write-support \
-                             (catalog_linked_database set or writer properties set: target_file_size / max_data_extension_time_in_days)",
-                            catalog.catalog_name, write_integration.integration_name
-                        );
+                        },
+                        _ => {
+                            return err!(
+                                code => ErrorCode::InvalidConfig,
+                                loc  => err_loc(),
+                                "integration '{}': only REST adapter_properties are valid for Iceberg REST",
+                                write_integration.integration_name
+                            );
+                        }
                     }
                 }
             }
@@ -678,20 +680,17 @@ catalogs:
           data_retention_time_in_days: 1
           max_data_extension_time_in_days: 14
           change_tracking: false
-          target_file_size: "64MB"
   - name: polaris
     active_write_integration: polaris_int
     write_integrations:
       - name: polaris_int
         catalog_type: iceberg_rest
-        # external_volume is allowed (optional) for REST:
-        external_volume: ext_vol_ok_for_rest
         table_format: iceberg
         adapter_properties:
           target_file_size: AUTO
           auto_refresh: true
           max_data_extension_time_in_days: 14
-          catalog_namespace: "CAT_NS/SCHEMA_NS"
+          catalog_linked_database: "CAT_NS/SCHEMA_NS"
 "#;
         let res = parse_view_and_validate(yaml);
         assert!(
@@ -732,6 +731,7 @@ catalogs:
         catalog_type: iceberg_rest
         table_format: iceberg
         adapter_properties:
+          catalog_linked_database: another_db
           auto_refresh: true
 "#;
         let res = parse_view_and_validate(yaml);
@@ -752,6 +752,8 @@ catalogs:
       - name: i1
         catalog_type: iceberg_rest
         table_format: iceberg
+        adapter_properties:
+            catalog_linked_database: cld
 "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
         let m = yml_val
@@ -918,8 +920,7 @@ catalogs:
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
-        let v = DbtCatalogsView::from_mapping(m).unwrap();
-        let res = validate_catalogs(&v, Path::new("<test>"));
+        let res = DbtCatalogsView::from_mapping(m);
         assert!(
             res.is_err(),
             "built_in without external_volume must fail validation"
@@ -986,7 +987,6 @@ catalogs:
         external_volume: EV
         adapter_properties:
           storage_serialization_policy: compatible
-          target_file_size: auto
 "#;
         let res = parse_view_and_validate(yaml);
         assert!(
@@ -1045,7 +1045,7 @@ catalogs:
     }
 
     #[test]
-    fn blank_catalog_namespace_fails() {
+    fn blank_catalog_linked_database_fails() {
         let yaml = r#"
 catalogs:
   - name: c1
@@ -1054,10 +1054,10 @@ catalogs:
       - name: i1
         catalog_type: iceberg_rest
         adapter_properties:
-          catalog_namespace: "  "
+          catalog_linked_database: "  "
 "#;
         let res = parse_view_and_validate(yaml);
-        assert!(res.is_err(), "blank catalog_namespace must fail");
+        assert!(res.is_err(), "blank catalog_linked_database must fail");
     }
 
     #[test]
@@ -1069,7 +1069,7 @@ catalogs:
     write_integrations:
       - name: i1
         catalog_type: iceberg_rest
-        catalog_linked_database: true
+        catalog_linked_database: my_db
 "#;
         let res = parse_view_and_validate(yaml);
         assert!(
@@ -1126,10 +1126,9 @@ catalogs:
     write_integrations:
       - name: i1
         catalog_type: iceberg_rest
-        external_volume: ev
         table_format: iceberg
-        catalog_linked_database: true
         adapter_properties:
+          catalog_linked_database: more_more_databases
           max_data_extension_time_in_days: 1
 "#;
         let res = parse_view_and_validate(yaml);
@@ -1316,9 +1315,11 @@ catalogs:
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
-        let v = DbtCatalogsView::from_mapping(m).unwrap();
-        let res = validate_catalogs(&v, Path::new("<test>"));
-        assert!(res.is_err(), "blank external_volume must fail");
+        let res = DbtCatalogsView::from_mapping(m);
+        assert!(
+            res.is_err(),
+            "'external_volume' is required for BUILT_IN catalogs"
+        );
     }
 
     #[test]
@@ -1450,7 +1451,8 @@ catalogs:
       - name: i1
         table_format: iceberg
         catalog_type: iceberg_rest
-        external_volume: ev
+        adapter_properties:
+            catalog_linked_database: cld
       - name: i1
         catalog_type: built_in
         table_format: iceberg

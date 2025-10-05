@@ -112,6 +112,7 @@ mod tests {
             IoArgs::default(),
             None,
             never_cancels(),
+            None,
         )
         .unwrap();
 
@@ -297,6 +298,7 @@ mod tests {
                 DEFAULT_DBT_QUOTING,
                 Box::new(NaiveTypeFormatterImpl::new(AdapterType::Postgres)),
                 never_cancels(),
+                None,
             )) as Arc<dyn BaseAdapter>;
             env.add_global("adapter", adapter.as_value());
             let empty_blocks = BTreeMap::new();

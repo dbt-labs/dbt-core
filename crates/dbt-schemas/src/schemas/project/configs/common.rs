@@ -218,6 +218,7 @@ pub struct WarehouseSpecificNodeConfig {
     pub schedule: Option<ScheduleConfig>,
 
     // Snowflake
+    pub adapter_properties: Option<BTreeMap<String, YmlValue>>,
     pub table_tag: Option<String>,
     pub row_access_policy: Option<String>,
     pub external_volume: Option<String>,
@@ -314,6 +315,7 @@ impl DefaultTo<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConfig {
             schedule,
 
             // Snowflake
+            adapter_properties,
             table_tag,
             row_access_policy,
             external_volume,
@@ -396,6 +398,7 @@ impl DefaultTo<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConfig {
                 // Snowflake
                 table_tag,
                 row_access_policy,
+                adapter_properties,
                 external_volume,
                 base_location_root,
                 base_location_subpath,

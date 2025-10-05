@@ -307,6 +307,13 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         identifier: &str,
     ) -> AdapterResult<Option<Arc<dyn BaseRelation>>>;
 
+    /// Get a catalog relation, which in Core is a serialized type.
+    /// In Fusion, we treat it as a Jinja accessible flat container of values
+    /// needed for Iceberg ddl generation.
+    fn build_catalog_relation(&self, _model_config: &Value) -> AdapterResult<Value> {
+        unimplemented!("only available with Snowflake adapter")
+    }
+
     /// Drop relation
     fn drop_relation(
         &self,

@@ -50,6 +50,7 @@ mod tests {
             IoArgs::default(),
             None,
             never_cancels(),
+            None,
         )
         .unwrap()
     }

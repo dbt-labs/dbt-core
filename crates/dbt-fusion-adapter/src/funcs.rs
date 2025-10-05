@@ -124,6 +124,30 @@ pub fn dispatch_adapter_calls(
 
             adapter.get_columns_in_relation(state, relation)
         }
+        "build_catalog_relation" => {
+            let iter = ArgsIter::new(name, &["model"], args);
+            let full_model_config = iter.next_arg::<&Value>()?;
+            iter.finish()?;
+
+            // Case 1: caller passed a plain string (CLD name) -- this is a hack for
+            // incremental polaris model. TODO: remove this when catalog_relation is
+            // fully engineered to no longer require runtime attribute shim-based solutions
+            if full_model_config.kind() == ValueKind::String {
+                return adapter.build_catalog_relation(full_model_config);
+            }
+
+            // Case 2: caller passed a model object with a config attribute
+            let model_config = full_model_config.get_item(&Value::from("config"))?;
+            if model_config.is_undefined() {
+                return Err(MinijinjaError::new(
+                    MinijinjaErrorKind::InvalidOperation,
+                    "model is missing 'config' field",
+                ));
+            }
+
+            adapter.build_catalog_relation(&model_config)
+        }
+        "get_catalog_integration" => adapter.get_catalog_integration(state, args),
         "type" => Ok(Value::from(adapter.adapter_type().to_string())),
         "get_hard_deletes_behavior" => adapter.get_hard_deletes_behavior(state, args),
         "cache_added" => adapter.cache_added(state, args),

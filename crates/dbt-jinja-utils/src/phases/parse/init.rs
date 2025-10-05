@@ -16,6 +16,7 @@ use dbt_fusion_adapter::{BaseAdapter, ParseAdapter, sql_types::NaiveTypeFormatte
 use dbt_schemas::{
     schemas::{
         common::DbtQuoting,
+        dbt_catalogs::DbtCatalogs,
         profiles::{DbConfig, TargetContext},
     },
     state::DbtVars,
@@ -55,6 +56,7 @@ pub fn initialize_parse_jinja_environment(
     io_args: IoArgs,
     listener_factory: Option<Arc<dyn RenderingEventListenerFactory>>,
     token: CancellationToken,
+    catalogs: Option<Arc<DbtCatalogs>>,
 ) -> FsResult<JinjaEnv> {
     // Set the thread local dependencies
     THREAD_LOCAL_DEPENDENCIES.get_or_init(|| Mutex::new(all_package_names));
@@ -124,6 +126,7 @@ pub fn initialize_parse_jinja_environment(
         package_quoting,
         type_formatter,
         token,
+        catalogs,
     );
 
     let env = JinjaEnvBuilder::new()

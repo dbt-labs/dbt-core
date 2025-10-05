@@ -760,6 +760,11 @@ impl BaseAdapter for BridgeAdapter {
         }
     }
 
+    #[tracing::instrument(skip(self), level = "trace")]
+    fn build_catalog_relation(&self, model_config: &Value) -> Result<Value, MinijinjaError> {
+        Ok(self.typed_adapter.build_catalog_relation(model_config)?)
+    }
+
     #[tracing::instrument(skip(self, state), level = "trace")]
     fn get_missing_columns(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
         let mut parser = ArgParser::new(args, None);

@@ -1,5 +1,6 @@
 use crate::base_adapter::{AdapterType, AdapterTyping, BaseAdapter, backend_of};
 use crate::cast_util::downcast_value_to_dyn_base_relation;
+use crate::catalog_relation::CatalogRelation;
 use crate::funcs::{
     dispatch_adapter_calls, empty_map_value, empty_mutable_vec_value, empty_string_value,
     empty_vec_value, none_value,
@@ -21,6 +22,7 @@ use dbt_common::behavior_flags::Behavior;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::{FsError, current_function_name};
 use dbt_schemas::schemas::common::{DbtQuoting, ResolvedQuoting};
+use dbt_schemas::schemas::dbt_catalogs::DbtCatalogs;
 use dbt_schemas::schemas::relations::base::{BaseRelation, RelationPattern};
 use dbt_xdbc::Connection;
 use minijinja::Value;
@@ -59,6 +61,8 @@ pub struct ParseAdapter {
     execute_sqls: DashSet<String>,
     /// The global CLI cancellation token
     cancellation_token: CancellationToken,
+    /// catalogs.yml stored when found and loaded
+    catalogs: Option<Arc<DbtCatalogs>>,
 }
 
 impl fmt::Debug for ParseAdapter {
@@ -95,6 +99,7 @@ impl ParseAdapter {
         package_quoting: DbtQuoting,
         type_formatter: Box<dyn TypeFormatter>,
         token: CancellationToken,
+        catalogs: Option<Arc<DbtCatalogs>>,
     ) -> Self {
         let backend = backend_of(adapter_type);
 
@@ -126,6 +131,7 @@ impl ParseAdapter {
             unsafe_nodes: DashSet::new(),
             execute_sqls: DashSet::new(),
             cancellation_token: token,
+            catalogs,
         }
     }
 
@@ -322,6 +328,12 @@ impl BaseAdapter for ParseAdapter {
     ) -> Result<Value, MinijinjaError> {
         self.record_get_relation_call(state, database, schema, identifier)?;
         Ok(RelationObject::new(Arc::new(EmptyRelation {})).into_value())
+    }
+
+    fn build_catalog_relation(&self, model_config: &Value) -> Result<Value, MinijinjaError> {
+        Ok(Value::from_object(
+            CatalogRelation::from_model_config_and_catalogs(model_config, self.catalogs.clone())?,
+        ))
     }
 
     fn get_columns_in_relation(

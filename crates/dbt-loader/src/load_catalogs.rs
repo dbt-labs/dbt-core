@@ -1,22 +1,27 @@
 use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_schemas::schemas::{dbt_catalogs::DbtCatalogs, validate_catalogs};
 use dbt_serde_yaml as yml;
-use once_cell::sync::OnceCell;
 use std::path::Path;
+use std::sync::{Arc, RwLock};
 
-static CATALOGS: OnceCell<DbtCatalogs> = OnceCell::new();
+static CATALOGS: RwLock<Option<Arc<DbtCatalogs>>> = RwLock::new(None);
 
-#[inline]
-pub fn fetch_catalogs() -> Option<&'static DbtCatalogs> {
-    CATALOGS.get()
+/// Reader: returns a read guard to loaded catalogs.yml if present
+pub fn fetch_catalogs() -> Option<Arc<DbtCatalogs>> {
+    match CATALOGS.read() {
+        Ok(g) => g.as_ref().cloned(),
+        Err(p) => p.into_inner().as_ref().cloned(),
+    }
 }
 
 /// Load <project_root>/catalogs.yml, validate, and return a validated mapping holder.
-///
-/// Synchronizes CATALOGS state by explicitly taking first arrival as source of truth
-/// No-op after first invocation
-pub fn load_catalogs(text: &str, dbt_catalogs_path: &Path) -> FsResult<()> {
-    CATALOGS.get_or_try_init(|| do_load_catalogs(text, dbt_catalogs_path))?;
+pub fn load_catalogs(text: &str, path: &Path) -> FsResult<()> {
+    let validated = do_load_catalogs(text, path)?;
+    let mut write_guard = match CATALOGS.write() {
+        Ok(g) => g,
+        Err(p) => p.into_inner(),
+    };
+    *write_guard = Some(Arc::new(validated));
     Ok(())
 }
 
@@ -59,7 +64,7 @@ catalogs:
 "#
     }
 
-    fn bad_yaml_missing_ev_rest_writer() -> &'static str {
+    fn bad_yaml_missing_cld_rest_writer() -> &'static str {
         r#"
 catalogs:
   - name: c1
@@ -85,10 +90,12 @@ catalogs:
     #[test]
     fn build_catalogs_surfaces_validation_error() {
         let path = Path::new("<test>/catalogs.yml");
-        let err = do_load_catalogs(bad_yaml_missing_ev_rest_writer(), path).unwrap_err();
+        let err = do_load_catalogs(bad_yaml_missing_cld_rest_writer(), path).unwrap_err();
         let msg = format!("{err:?}");
         assert!(
-            msg.contains("'external_volume' required for REST write-support"),
+            msg.contains(
+                "'catalog_linked_database' is required and cannot be blank for Iceberg REST"
+            ),
             "got: {msg}",
         );
     }

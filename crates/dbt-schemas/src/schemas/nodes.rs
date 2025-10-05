@@ -2002,6 +2002,7 @@ impl AdapterAttr {
                 AdapterAttr::default().with_snowflake_attr(Some(Box::new(SnowflakeAttr {
                     table_tag: config.table_tag.clone(),
                     row_access_policy: config.row_access_policy.clone(),
+                    adapter_properties: config.adapter_properties.clone(),
                     external_volume: config.external_volume.clone(),
                     base_location_root: config.base_location_root.clone(),
                     base_location_subpath: config.base_location_subpath.clone(),
@@ -2078,6 +2079,7 @@ impl AdapterAttr {
                     .with_snowflake_attr(Some(Box::new(SnowflakeAttr {
                         table_tag: config.table_tag.clone(),
                         row_access_policy: config.row_access_policy.clone(),
+                        adapter_properties: config.adapter_properties.clone(),
                         external_volume: config.external_volume.clone(),
                         base_location_root: config.base_location_root.clone(),
                         base_location_subpath: config.base_location_subpath.clone(),
@@ -2153,6 +2155,7 @@ impl AdapterAttr {
 pub struct SnowflakeAttr {
     pub table_tag: Option<String>,
     pub row_access_policy: Option<String>,
+    pub adapter_properties: Option<BTreeMap<String, YmlValue>>,
     pub external_volume: Option<String>,
     pub base_location_root: Option<String>,
     pub base_location_subpath: Option<String>,

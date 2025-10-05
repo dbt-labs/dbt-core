@@ -82,6 +82,8 @@ pub struct ProjectSeedConfig {
     pub delimiter: Option<Spanned<String>>,
     #[serde(rename = "+external_volume")]
     pub external_volume: Option<String>,
+    #[serde(rename = "+adapter_properties")]
+    pub adapter_properties: Option<BTreeMap<String, YmlValue>>,
     #[serde(rename = "+base_location_root")]
     pub base_location_root: Option<String>,
     #[serde(rename = "+base_location_subpath")]
@@ -321,6 +323,7 @@ impl From<ProjectSeedConfig> for SeedConfig {
             description: config.description,
             materialized: Some(DbtMaterialization::Seed),
             __warehouse_specific_config__: WarehouseSpecificNodeConfig {
+                adapter_properties: config.adapter_properties,
                 external_volume: config.external_volume,
                 base_location_root: config.base_location_root,
                 base_location_subpath: config.base_location_subpath,
@@ -418,6 +421,7 @@ impl From<SeedConfig> for ProjectSeedConfig {
             quoting: config.quoting,
             description: config.description,
             // Snowflake fields
+            adapter_properties: config.__warehouse_specific_config__.adapter_properties,
             snowflake_warehouse: config.__warehouse_specific_config__.snowflake_warehouse,
             transient: config.__warehouse_specific_config__.transient,
             copy_grants: config.__warehouse_specific_config__.copy_grants,

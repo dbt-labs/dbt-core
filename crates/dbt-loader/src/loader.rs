@@ -137,6 +137,7 @@ pub async fn load(
         packages: vec![],
         vars: BTreeMap::new(),
         cli_vars: arg.vars.clone(),
+        catalogs: load_catalogs::fetch_catalogs(),
     };
 
     // If we are running `dbt debug` we don't need to collect dbt_project.yml files
@@ -155,6 +156,7 @@ pub async fn load(
         &flags,
         arg.io.clone(),
         token.clone(),
+        dbt_state.catalogs.clone(),
     )?;
 
     let adapter_type = dbt_state

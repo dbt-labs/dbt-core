@@ -42,6 +42,8 @@ pub struct ProjectSourceConfig {
     pub static_analysis: Option<StaticAnalysisKind>,
 
     // Snowflake specific fields
+    #[serde(rename = "+adapter_properties")]
+    pub adapter_properties: Option<BTreeMap<String, YmlValue>>,
     #[serde(rename = "+external_volume")]
     pub external_volume: Option<String>,
     #[serde(rename = "+base_location_root")]
@@ -283,6 +285,7 @@ impl From<ProjectSourceConfig> for SourceConfig {
             static_analysis: config.static_analysis,
             description: config.description,
             __warehouse_specific_config__: WarehouseSpecificNodeConfig {
+                adapter_properties: config.adapter_properties,
                 external_volume: config.external_volume,
                 base_location_root: config.base_location_root,
                 base_location_subpath: config.base_location_subpath,
@@ -371,6 +374,7 @@ impl From<SourceConfig> for ProjectSourceConfig {
             static_analysis: config.static_analysis,
             description: config.description,
             // Snowflake fields
+            adapter_properties: config.__warehouse_specific_config__.adapter_properties,
             external_volume: config.__warehouse_specific_config__.external_volume,
             base_location_root: config.__warehouse_specific_config__.base_location_root,
             base_location_subpath: config.__warehouse_specific_config__.base_location_subpath,

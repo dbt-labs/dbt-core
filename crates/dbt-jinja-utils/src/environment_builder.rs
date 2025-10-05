@@ -532,7 +532,7 @@ mod tests {
             .render_str(
                 r#"
     {%- set x = y | as_bool -%}
-    {%- set x = y | as_number -%}   
+    {%- set x = y | as_number -%}
     all okay!
     "#,
                 context! {},
@@ -610,6 +610,7 @@ all okay!");
             DEFAULT_DBT_QUOTING,
             Box::new(NaiveTypeFormatterImpl::new(AdapterType::Postgres)),
             never_cancels(),
+            None,
         );
         let builder: JinjaEnvBuilder = JinjaEnvBuilder::new()
             .with_adapter(Arc::new(adapter) as Arc<dyn BaseAdapter>)
@@ -697,6 +698,7 @@ all okay!");
             DEFAULT_DBT_QUOTING,
             Box::new(NaiveTypeFormatterImpl::new(AdapterType::Postgres)),
             never_cancels(),
+            None,
         );
         let builder: JinjaEnvBuilder = JinjaEnvBuilder::new()
             .with_adapter(Arc::new(adapter) as Arc<dyn BaseAdapter>)
@@ -759,6 +761,7 @@ all okay!");
             DEFAULT_DBT_QUOTING,
             Box::new(NaiveTypeFormatterImpl::new(AdapterType::Postgres)),
             never_cancels(),
+            None,
         );
         let env = JinjaEnvBuilder::new()
             .with_root_package("test_package".to_string())
@@ -874,6 +877,7 @@ all okay!");
             DEFAULT_DBT_QUOTING,
             Box::new(NaiveTypeFormatterImpl::new(AdapterType::Postgres)),
             never_cancels(),
+            None,
         );
 
         // Root package has no macros

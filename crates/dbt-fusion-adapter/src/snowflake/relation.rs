@@ -276,7 +276,9 @@ impl BaseRelation for SnowflakeRelation {
 
         if let Some(old_relation) = value.downcast_object_ref::<RelationObject>() {
             let old_relation = old_relation.inner();
-            if old_relation.is_table() || old_relation.is_dynamic_table() {
+            // core does only checks this for table conversions since dynamic tables
+            // are expected to be rebuilt cross-catalog using full refresh mode
+            if old_relation.is_table() {
                 // invoke drop for table -> Iceberg or Iceberg -> table
                 let old_relation_table_format = old_relation
                     .as_any()

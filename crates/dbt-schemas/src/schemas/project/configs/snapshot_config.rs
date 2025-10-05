@@ -98,6 +98,8 @@ pub struct ProjectSnapshotConfig {
     #[serde(rename = "+docs")]
     pub docs: Option<DocsConfig>,
     // Adapter-specific fields (Snowflake)
+    #[serde(rename = "+adapter_properties")]
+    pub adapter_properties: Option<BTreeMap<String, YmlValue>>,
     #[serde(
         default,
         rename = "+automatic_clustering",
@@ -476,6 +478,7 @@ impl From<ProjectSnapshotConfig> for SnapshotConfig {
             docs: config.docs,
             description: config.description,
             __warehouse_specific_config__: WarehouseSpecificNodeConfig {
+                adapter_properties: config.adapter_properties,
                 external_volume: config.external_volume,
                 base_location_root: config.base_location_root,
                 base_location_subpath: config.base_location_subpath,
@@ -582,6 +585,7 @@ impl From<SnapshotConfig> for ProjectSnapshotConfig {
             docs: config.docs,
             description: config.description,
             // Snowflake fields
+            adapter_properties: config.__warehouse_specific_config__.adapter_properties,
             external_volume: config.__warehouse_specific_config__.external_volume,
             base_location_root: config.__warehouse_specific_config__.base_location_root,
             base_location_subpath: config.__warehouse_specific_config__.base_location_subpath,

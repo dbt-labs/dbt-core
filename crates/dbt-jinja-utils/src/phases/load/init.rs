@@ -11,6 +11,7 @@ use dbt_common::{
 use dbt_fusion_adapter::{BaseAdapter, ParseAdapter, sql_types::NaiveTypeFormatterImpl};
 use dbt_schemas::{
     dbt_utils::resolve_package_quoting,
+    schemas::dbt_catalogs::DbtCatalogs,
     schemas::profiles::{DbConfig, TargetContext},
 };
 use minijinja::value::Value as MinijinjaValue;
@@ -37,6 +38,7 @@ pub fn initialize_load_jinja_environment(
     flags: &BTreeMap<String, minijinja::Value>,
     io_args: IoArgs,
     token: CancellationToken,
+    catalogs: Option<Arc<DbtCatalogs>>,
 ) -> FsResult<JinjaEnv> {
     let adapter_config_mapping = db_config.to_mapping().unwrap();
     let target_context = TargetContext::try_from(db_config)
@@ -73,6 +75,7 @@ pub fn initialize_load_jinja_environment(
         package_quoting,
         type_formatter,
         token,
+        catalogs,
     );
     Ok(JinjaEnvBuilder::new()
         .with_adapter(Arc::new(adapter) as Arc<dyn BaseAdapter>)

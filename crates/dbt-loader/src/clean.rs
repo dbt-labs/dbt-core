@@ -40,6 +40,7 @@ pub async fn execute_clean_command(
         &flags,
         arg.io.clone(),
         token.clone(),
+        dbt_state.catalogs,
     )?;
 
     let dbt_project_path = arg.io.in_dir.join(DBT_PROJECT_YML);

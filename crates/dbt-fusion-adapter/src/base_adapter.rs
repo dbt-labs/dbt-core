@@ -400,6 +400,42 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
         identifier: &str,
     ) -> Result<Value, MinijinjaError>;
 
+    /// Get a catalog relation object.
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/c16cc7047e8678f8bb88ae294f43da2c68e9f5cc/dbt-adapters/src/dbt/adapters/base/impl.py#L338
+    ///
+    /// ```python
+    /// def build_catalog_relation(
+    ///     self,
+    ///     model: RelationConfig
+    /// )  -> Optional[CatalogRelation]
+    /// ```
+    ///
+    /// In Core, there are numerous derived flavors of CatalogRelation.
+    /// We handle this in Fusion as a piecemeal instantiated flat object
+    /// and push down validation to the DDL level.
+    fn build_catalog_relation(&self, model: &Value) -> Result<Value, MinijinjaError>;
+
+    /// Get a catalog integration object.
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/c16cc7047e8678f8bb88ae294f43da2c68e9f5cc/dbt-adapters/src/dbt/adapters/base/impl.py#L334
+    ///
+    /// ```python
+    /// def get_catalog_integration(
+    ///     self,
+    ///     name: str,
+    /// )  -> Optional[CatalogRelation]
+    /// ```
+    fn get_catalog_integration(
+        &self,
+        _state: &State,
+        _args: &[Value],
+    ) -> Result<Value, MinijinjaError> {
+        unimplemented!(
+            "get_catalog_integration is unavailable in Fusion. Access catalogs metadata directly from a catalog relation obtained using adapter.build_catalog_relation(model: RelationConfig)"
+        )
+    }
+
     /// Returns a list of columns.
     fn get_missing_columns(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError>;
 

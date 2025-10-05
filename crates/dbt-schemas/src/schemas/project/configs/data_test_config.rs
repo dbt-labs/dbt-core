@@ -65,6 +65,8 @@ pub struct ProjectDataTestConfig {
     pub static_analysis: Option<StaticAnalysisKind>,
 
     // Snowflake specific fields
+    #[serde(rename = "+adapter_properties")]
+    pub adapter_properties: Option<BTreeMap<String, YmlValue>>,
     #[serde(rename = "+external_volume")]
     pub external_volume: Option<String>,
     #[serde(rename = "+base_location_root")]
@@ -328,6 +330,7 @@ impl From<ProjectDataTestConfig> for DataTestConfig {
             materialized: Some(DbtMaterialization::Test),
             // Initialize adapter specific configs with values from flattened fields
             __warehouse_specific_config__: WarehouseSpecificNodeConfig {
+                adapter_properties: config.adapter_properties,
                 external_volume: config.external_volume,
                 base_location_root: config.base_location_root,
                 base_location_subpath: config.base_location_subpath,
@@ -425,6 +428,7 @@ impl From<DataTestConfig> for ProjectDataTestConfig {
             description: config.description,
             partition_by: config.__warehouse_specific_config__.partition_by,
             // Snowflake fields
+            adapter_properties: config.__warehouse_specific_config__.adapter_properties,
             external_volume: config.__warehouse_specific_config__.external_volume,
             base_location_root: config.__warehouse_specific_config__.base_location_root,
             base_location_subpath: config.__warehouse_specific_config__.base_location_subpath,

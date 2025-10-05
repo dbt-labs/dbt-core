@@ -44,6 +44,8 @@ use dbt_serde_yaml::ShouldBe;
 pub struct ProjectModelConfig {
     #[serde(rename = "+access")]
     pub access: Option<Access>,
+    #[serde(rename = "+adapter_properties")]
+    pub adapter_properties: Option<BTreeMap<String, YmlValue>>,
     #[serde(rename = "+alias")]
     pub alias: Option<String>,
     #[serde(
@@ -437,6 +439,7 @@ impl From<ProjectModelConfig> for ModelConfig {
             unique_key: config.unique_key,
             description: config.description,
             __warehouse_specific_config__: WarehouseSpecificNodeConfig {
+                adapter_properties: config.adapter_properties,
                 external_volume: config.external_volume,
                 base_location_root: config.base_location_root,
                 base_location_subpath: config.base_location_subpath,
@@ -554,6 +557,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             tags: config.tags.into(),
             transient: config.__warehouse_specific_config__.transient,
             unique_key: config.unique_key,
+            adapter_properties: config.__warehouse_specific_config__.adapter_properties,
             external_volume: config.__warehouse_specific_config__.external_volume,
             base_location_root: config.__warehouse_specific_config__.base_location_root,
             base_location_subpath: config.__warehouse_specific_config__.base_location_subpath,

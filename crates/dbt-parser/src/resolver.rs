@@ -158,6 +158,7 @@ pub async fn resolve(
         arg.io.clone(),
         listener_factory,
         token.clone(),
+        dbt_state.catalogs.clone(),
     )?);
 
     // Load and resolve selectors

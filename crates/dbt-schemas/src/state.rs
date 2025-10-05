@@ -11,6 +11,7 @@ use std::{
 use crate::schemas::{
     DbtSource, InternalDbtNodeAttributes, Nodes,
     common::{DbtQuoting, ResolvedQuoting},
+    dbt_catalogs::DbtCatalogs,
     macros::{DbtDocsMacro, DbtMacro},
     manifest::{DbtOperation, DbtSelector},
     profiles::DbConfig,
@@ -200,6 +201,7 @@ pub struct DbtState {
     /// Key is the package name, value are all package scoped vars
     pub vars: BTreeMap<String, BTreeMap<String, DbtVars>>,
     pub cli_vars: BTreeMap<String, dbt_serde_yaml::Value>,
+    pub catalogs: Option<Arc<DbtCatalogs>>,
 }
 
 impl DbtState {
