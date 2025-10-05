@@ -3,7 +3,7 @@ use std::sync::LazyLock;
 use crate::AdapterResult;
 use crate::columns::{BigqueryColumnMode, StdColumn};
 use crate::metadata;
-use crate::sql_types::{self, TypeFormatter};
+use crate::sql_types::{self, TypeOps};
 use arrow_schema::{DataType, FieldRef};
 use dbt_common::adapter::AdapterType;
 use regex::Regex;
@@ -17,18 +17,14 @@ impl ColumnBuilder {
         Self { adapter_type }
     }
 
-    pub fn build(
-        &self,
-        field: &FieldRef,
-        type_formatter: &dyn TypeFormatter,
-    ) -> AdapterResult<StdColumn> {
+    pub fn build(&self, field: &FieldRef, type_ops: &dyn TypeOps) -> AdapterResult<StdColumn> {
         use AdapterType::*;
         match self.adapter_type {
-            Snowflake => self.build_snowflake(field, type_formatter),
-            Bigquery => self.build_bigquery(field, type_formatter),
-            Databricks => self.build_databricks(field, type_formatter),
-            Redshift => self.build_redshift(field, type_formatter),
-            Postgres | Salesforce => self.build_postgres_like(field, type_formatter),
+            Snowflake => self.build_snowflake(field, type_ops),
+            Bigquery => self.build_bigquery(field, type_ops),
+            Databricks => self.build_databricks(field, type_ops),
+            Redshift => self.build_redshift(field, type_ops),
+            Postgres | Salesforce => self.build_postgres_like(field, type_ops),
         }
     }
 
@@ -80,7 +76,7 @@ impl ColumnBuilder {
     fn build_snowflake(
         &self,
         field: &FieldRef,
-        type_formatter: &dyn TypeFormatter,
+        type_ops: &dyn TypeOps,
     ) -> AdapterResult<StdColumn> {
         use AdapterType::Snowflake;
         use sql_types::snowflake::*;
@@ -103,7 +99,7 @@ impl ColumnBuilder {
         };
 
         let mut type_name_or_formatted = String::new();
-        if type_formatter
+        if type_ops
             .format_arrow_type_as_sql(data_type, &mut type_name_or_formatted)
             .is_err()
         {
@@ -150,7 +146,7 @@ impl ColumnBuilder {
                 // Extract size from metadata if present
                 if let Some(char_size) = field
                     .metadata()
-                    .get(metadata::snowflake::ARROW_FIELD_SNOWFLAKE_CHAR_SIZE_METADATA_KEY)
+                    .get(metadata::snowflake::ARROW_FIELD_SNOWFLAKE_FIELD_WIDTH_METADATA_KEY)
                 {
                     resolved_char_size = char_size
                         .parse::<usize>()
@@ -161,7 +157,7 @@ impl ColumnBuilder {
             DataType::Binary => {
                 if let Some(char_size) = field
                     .metadata()
-                    .get(metadata::snowflake::ARROW_FIELD_SNOWFLAKE_BYTE_LENGTH_METADATA_KEY)
+                    .get(metadata::snowflake::ARROW_FIELD_SNOWFLAKE_FIELD_WIDTH_METADATA_KEY)
                 {
                     resolved_char_size = char_size
                         .parse::<usize>()
@@ -186,13 +182,9 @@ impl ColumnBuilder {
     /// The logic from `get_column_schema_from_query` for BigQuery [1].
     ///
     /// [1] https://github.com/dbt-labs/dbt-adapters/blob/c16cc7047e8678f8bb88ae294f43da2c68e9f5cc/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L444
-    fn build_bigquery(
-        &self,
-        field: &FieldRef,
-        type_formatter: &dyn TypeFormatter,
-    ) -> AdapterResult<StdColumn> {
+    fn build_bigquery(&self, field: &FieldRef, type_ops: &dyn TypeOps) -> AdapterResult<StdColumn> {
         let mut data_type = String::new();
-        if type_formatter
+        if type_ops
             .format_arrow_type_as_sql(field.data_type(), &mut data_type)
             .is_err()
         {
@@ -223,7 +215,7 @@ impl ColumnBuilder {
     fn build_databricks(
         &self,
         field: &FieldRef,
-        type_formatter: &dyn TypeFormatter,
+        type_ops: &dyn TypeOps,
     ) -> AdapterResult<StdColumn> {
         let name = field.name().to_string();
         let type_text = {
@@ -235,7 +227,7 @@ impl ColumnBuilder {
                 type_text.to_owned()
             } else {
                 let mut type_text = String::new();
-                type_formatter
+                type_ops
                     .format_arrow_type_as_sql(field.data_type(), &mut type_text)
                     .unwrap();
                 if !field.is_nullable() {
@@ -258,7 +250,7 @@ impl ColumnBuilder {
     fn build_postgres_like(
         &self,
         field: &FieldRef,
-        type_formatter: &dyn TypeFormatter,
+        type_ops: &dyn TypeOps,
     ) -> AdapterResult<StdColumn> {
         let mut data_type = String::new();
         match field.data_type() {
@@ -267,7 +259,7 @@ impl ColumnBuilder {
             // TODO: remove this broken formatting behavior
             DataType::Timestamp(_, _) | DataType::Time64(_) => data_type.push_str("datetime"),
             _ => {
-                type_formatter
+                type_ops
                     .format_arrow_type_as_sql(field.data_type(), &mut data_type)
                     .unwrap();
             }
@@ -286,11 +278,7 @@ impl ColumnBuilder {
         Ok(column)
     }
 
-    fn build_redshift(
-        &self,
-        field: &FieldRef,
-        type_formatter: &dyn TypeFormatter,
-    ) -> AdapterResult<StdColumn> {
+    fn build_redshift(&self, field: &FieldRef, type_ops: &dyn TypeOps) -> AdapterResult<StdColumn> {
         use AdapterType::Redshift;
         let data_type = field.data_type();
         let char_size = sql_types::var_size(Redshift, data_type);
@@ -307,7 +295,7 @@ impl ColumnBuilder {
         };
 
         let mut type_name_or_formatted = String::new();
-        if type_formatter
+        if type_ops
             .format_arrow_type_as_sql(data_type, &mut type_name_or_formatted)
             .is_err()
         {

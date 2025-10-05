@@ -1,7 +1,7 @@
 //! This module is based on the `func getTableSchemaWithFilter` from the following file:
 //! https://github.com/dbt-labs/arrow-adbc/blob/6a57518fead4fde556aafdd96d64a259727fa942/go/adbc/driver/bigquery/connection.go#L630
 
-use crate::sql_types::TypeFormatter;
+use crate::sql_types::TypeOps;
 use arrow_schema::Schema;
 use chrono::{DateTime, TimeDelta, Utc};
 use dbt_schemas::schemas::{
@@ -44,16 +44,13 @@ pub trait BigqueryPartitionConfigExt
 where
     Self: Sized,
 {
-    fn try_from_schema(
-        schema: &Schema,
-        type_formatter: &dyn TypeFormatter,
-    ) -> Result<Option<Self>, String>;
+    fn try_from_schema(schema: &Schema, type_ops: &dyn TypeOps) -> Result<Option<Self>, String>;
 }
 
 impl BigqueryPartitionConfigExt for BigqueryPartitionConfig {
     fn try_from_schema(
         schema: &Schema,
-        type_formatter: &dyn TypeFormatter,
+        type_opts: &dyn TypeOps,
     ) -> Result<Option<BigqueryPartitionConfig>, String> {
         let metadata = &schema.metadata;
         let time_partition = if let Some(partition) = metadata.get("TimePartitioning.Field") {
@@ -65,7 +62,7 @@ impl BigqueryPartitionConfigExt for BigqueryPartitionConfig {
                 format!("Field '{field_name}' does not exist in arrow schema returned by BigQuery.")
             })?;
             let mut data_type = String::new();
-            type_formatter
+            type_opts
                 .format_arrow_type_as_sql(field.data_type(), &mut data_type)
                 .map_err(|_e| format!("Could not format arrow type for field '{field_name}'"))?;
 
@@ -194,7 +191,7 @@ impl dyn BigqueryMaterializedViewConfig {
 
     pub fn try_from_schema(
         schema: &Schema,
-        type_formatter: &dyn TypeFormatter,
+        type_ops: &dyn TypeOps,
     ) -> Result<Arc<dyn BigqueryMaterializedViewConfig>, String> {
         let table_type = schema.metadata.get_or_err("Type")?;
         if table_type != "MATERIALIZED_VIEW" {
@@ -260,7 +257,7 @@ impl dyn BigqueryMaterializedViewConfig {
                 .get("Description")
                 .map(|s| s.to_owned())
                 .unwrap_or_else(|| "".to_owned()),
-            partition_by: BigqueryPartitionConfig::try_from_schema(schema, type_formatter)?,
+            partition_by: BigqueryPartitionConfig::try_from_schema(schema, type_ops)?,
 
             // NOTE: dbt set this to None, but the ADBC driver provides it under
             // MaterializedView.MaxStaleness.
@@ -750,7 +747,7 @@ pub fn cluster_by_from_schema(schema: &Schema) -> Result<Vec<String>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sql_types::NaiveTypeFormatterImpl;
+    use crate::sql_types::NaiveTypeOpsImpl;
     use arrow::datatypes::DataType;
     use arrow_schema::{Field, Fields, TimeUnit};
     use dbt_common::adapter::AdapterType;
@@ -759,8 +756,7 @@ mod tests {
     /// can be parsed into a `BigqueryPartitionConfigRepr`
     #[test]
     fn test_materialized_view_from_schema() {
-        let tf =
-            Box::new(NaiveTypeFormatterImpl::new(AdapterType::Bigquery)) as Box<dyn TypeFormatter>;
+        let tf = Box::new(NaiveTypeOpsImpl::new(AdapterType::Bigquery)) as Box<dyn TypeOps>;
         // Metadata reference: https://github.com/apache/arrow-adbc/blob/f5c0354ac80eaa829c1228e1e0dba7ddc7fd1787/go/adbc/driver/bigquery/connection.go#L703
         let fields = Fields::from(vec![Field::new(
             "my_field",
@@ -863,8 +859,7 @@ mod tests {
     /// can be parsed into a `PartitionConfig`
     #[test]
     fn test_empty_partition_config_from_schema() {
-        let tf =
-            Box::new(NaiveTypeFormatterImpl::new(AdapterType::Bigquery)) as Box<dyn TypeFormatter>;
+        let tf = Box::new(NaiveTypeOpsImpl::new(AdapterType::Bigquery)) as Box<dyn TypeOps>;
 
         let schema = Schema::new(Fields::empty());
         assert!(
@@ -878,8 +873,7 @@ mod tests {
     /// can be parsed into a `PartitionConfig`
     #[test]
     fn test_partition_config_from_schema() {
-        let tf =
-            Box::new(NaiveTypeFormatterImpl::new(AdapterType::Bigquery)) as Box<dyn TypeFormatter>;
+        let tf = Box::new(NaiveTypeOpsImpl::new(AdapterType::Bigquery)) as Box<dyn TypeOps>;
         // Metadata reference: https://github.com/apache/arrow-adbc/blob/f5c0354ac80eaa829c1228e1e0dba7ddc7fd1787/go/adbc/driver/bigquery/connection.go#L703
         let metadata = HashMap::from_iter(
             [

@@ -234,8 +234,8 @@ pub enum SqlType {
     Clob,
     /// BLOB / BINARY LARGE OBJECT
     Blob,
-    /// BINARY / VARBINARY
-    Binary,
+    /// BINARY / VARBINARY [ '(' length ')' ]
+    Binary(Option<usize>),
     /// DATE
     Date,
     /// TIME [ '(' precision ')' ] [ WITH TIME ZONE | WITH LOCAL | WITHOUT TIME ZONE ]
@@ -343,7 +343,7 @@ impl SqlType {
             (BigQuery, Char(_) | Varchar(_) | Text | Clob) => {
                 write!(out, "STRING")
             }
-            (BigQuery, Blob | Binary) => write!(out, "BYTES"),
+            (BigQuery, Blob | Binary(_)) => write!(out, "BYTES"),
             (BigQuery, Time { time_zone_spec, .. }) => {
                 write!(out, "TIME")?;
                 // BigQuery does not use precision for time and timestamp types
@@ -408,7 +408,7 @@ impl SqlType {
 
             // PostgreSQL {{{
             (Postgres | Redshift | RedshiftODBC, TinyInt) => write!(out, "SMALLINT"),
-            (Postgres | Redshift | RedshiftODBC, Binary | Blob) => write!(out, "BYTEA"),
+            (Postgres | Redshift | RedshiftODBC, Binary(_) | Blob) => write!(out, "BYTEA"),
             (Postgres | Redshift | RedshiftODBC, DateTime) => write!(out, "TIMESTAMP"),
             (
                 Postgres | Redshift | RedshiftODBC,
@@ -437,7 +437,7 @@ impl SqlType {
             // }}}
 
             // Databricks {{{
-            (Databricks | DatabricksODBC, Binary | Blob) => write!(out, "BINARY"),
+            (Databricks | DatabricksODBC, Binary(_) | Blob) => write!(out, "BINARY"),
             (Databricks | DatabricksODBC, Clob | Text | Varchar(_)) => write!(out, "STRING"),
             (Databricks | DatabricksODBC, Numeric(None) | BigNumeric(None)) => {
                 write!(out, "DECIMAL")
@@ -501,7 +501,14 @@ impl SqlType {
             (_, Text) => write!(out, "TEXT"),
             (_, Clob) => write!(out, "CLOB"),
             (_, Blob) => write!(out, "BLOB"),
-            (_, Binary) => write!(out, "BINARY"),
+            (_, Binary(None)) => write!(out, "BINARY"),
+            (_, Binary(Some(len))) => {
+                write!(out, "BINARY")?;
+                if *len > 0 {
+                    write!(out, "({len})")?;
+                }
+                Ok(())
+            }
 
             (_, Date) => write!(out, "DATE"),
             (
@@ -619,7 +626,7 @@ impl SqlType {
             DataType::Binary
             | DataType::LargeBinary
             | DataType::BinaryView
-            | DataType::FixedSizeBinary(_) => SqlType::Binary,
+            | DataType::FixedSizeBinary(_) => SqlType::Binary(None),
             DataType::Date32 | DataType::Date64 => SqlType::Date,
             DataType::Time32(TimeUnit::Second) => SqlType::Time {
                 precision: None,
@@ -1279,10 +1286,12 @@ impl<'source> Parser<'source> {
                         self.expect(Token::Word("OBJECT"))?;
                         SqlType::Blob // BINARY LARGE OBJECT
                     } else {
-                        SqlType::Binary
+                        let len = self.precision()?;
+                        SqlType::Binary(len)
                     }
                 } else if eqi(w, "VARBINARY") || eqi(w, "BYTES") || eqi(w, "BYTEA") {
-                    SqlType::Binary
+                    let len = self.precision()?;
+                    SqlType::Binary(len)
                 } else if eqi(w, "DATE") {
                     SqlType::Date
                 } else if eqi(w, "TIME") {

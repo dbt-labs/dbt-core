@@ -2,7 +2,7 @@ use crate::errors::{AdapterError, AdapterResult, AsyncAdapterResult};
 use crate::funcs::execute_macro;
 use crate::metadata::*;
 use crate::relation_object::{create_relation, create_relation_internal};
-use crate::sql_types::SdfSchema;
+use crate::sql_types::{SdfSchema, arrow_schema_to_sdf_schema};
 use crate::typed_adapter::TypedBaseAdapter;
 
 use arrow::array::RecordBatch;
@@ -54,9 +54,6 @@ pub trait MetadataAdapter: TypedBaseAdapter + Send + Sync {
         relations: &[Arc<dyn BaseRelation>],
     ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<Arc<Schema>>>>;
 
-    /// Convert Arrow schema to SDF schema. See [dbt_adapter::arrow_schema_to_sdf_schema].
-    fn arrow_schema_to_sdf_schema(&self, schema: Arc<Schema>) -> AdapterResult<SdfSchema>;
-
     fn list_relations_sdf_schemas<'a>(
         &'a self,
         unique_id: Option<String>,
@@ -68,8 +65,9 @@ pub trait MetadataAdapter: TypedBaseAdapter + Send + Sync {
                 .map(|map| {
                     map.into_iter()
                         .map(|(k, v)| {
-                            // TODO: make this a direct call when we move `arrow_schema_to_sdf_schema` to `fs/sa`
-                            let v = v.and_then(|schema| self.arrow_schema_to_sdf_schema(schema));
+                            let v = v.and_then(|schema| {
+                                arrow_schema_to_sdf_schema(schema, self.engine().type_ops())
+                            });
                             (k, v)
                         })
                         .collect()

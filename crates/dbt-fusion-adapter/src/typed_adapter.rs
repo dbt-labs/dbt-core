@@ -464,7 +464,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
 
         let mut out = String::new();
         self.engine()
-            .type_formatter()
+            .type_ops()
             .format_arrow_type_as_sql(data_type, &mut out)?;
         Ok(out)
     }
@@ -769,7 +769,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     /// driver-generated schemas versus canonicalized sdf frontend schemas
     fn schema_to_columns(&self, schema: &Arc<Schema>) -> AdapterResult<Vec<StdColumn>> {
         let engine = self.engine();
-        let type_formatter = engine.type_formatter();
+        let type_formatter = engine.type_ops();
         let builder = ColumnBuilder::new(self.adapter_type());
 
         let fields = schema.fields();

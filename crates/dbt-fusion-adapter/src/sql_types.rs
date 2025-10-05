@@ -1,12 +1,21 @@
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::AdapterResult;
 use crate::base_adapter::backend_of;
 use crate::errors::{AdapterError, AdapterErrorKind};
-use arrow_schema::{DataType, Schema, TimeUnit};
+use crate::metadata::snowflake::ARROW_FIELD_SNOWFLAKE_FIELD_WIDTH_METADATA_KEY;
+use crate::metadata::*;
+use arrow_schema::{DataType, Field, Schema, TimeUnit};
 use dbt_common::adapter::AdapterType;
 use dbt_xdbc::sql::types::SqlType;
+
+// TODO: Add keys here as necessary
+pub const REDSHIFT_METADATA_SQL_TYPE_KEY: &str = "Type";
+pub const BIGQUERY_METADATA_SQL_TYPE_KEY: &str = "Type";
+// XXX: Snowflake does DATA_TYPE for GetTableSchema and SNOWFLAKE_TYPE for other queries...
+pub const SNOWFLAKE_METADATA_SQL_TYPE_KEY: &str = "DATA_TYPE";
 
 /// An Arrow schema containing SDF types
 #[derive(Clone)]
@@ -32,7 +41,10 @@ impl SdfSchema {
     }
 }
 
-pub trait TypeFormatter: Send + Sync {
+pub trait TypeOps: Send + Sync {
+    /// Returns the adapter type this [TypeOps] instance is for.
+    fn adapter_type(&self) -> AdapterType;
+
     /// Picks a SQL type for a given Arrow DataType and renders it as SQL.
     ///
     /// The implementation is dialect-specific.
@@ -43,18 +55,36 @@ pub trait TypeFormatter: Send + Sync {
     ///
     /// The implementation is dialect-specific.
     fn format_sql_type(&self, sql_type: SqlType, out: &mut String) -> AdapterResult<()>;
+
+    fn parse_into_nullable_arrow_type(&self, s: &str) -> AdapterResult<(DataType, bool)>;
+
+    fn parse_into_arrow_type(&self, s: &str) -> AdapterResult<DataType> {
+        self.parse_into_nullable_arrow_type(s).map(|(dt, _)| dt)
+    }
 }
 
-pub struct NaiveTypeFormatterImpl(AdapterType, dbt_xdbc::Backend);
+pub fn parse_nullable_sql_type(
+    s: &str,
+    adapter_type: AdapterType,
+) -> AdapterResult<(SqlType, bool)> {
+    let backend = backend_of(adapter_type);
+    SqlType::parse(backend, s).map_err(|e| AdapterError::new(AdapterErrorKind::UnexpectedResult, e))
+}
 
-impl NaiveTypeFormatterImpl {
+pub struct NaiveTypeOpsImpl(AdapterType, dbt_xdbc::Backend);
+
+impl NaiveTypeOpsImpl {
     pub fn new(adapter_type: AdapterType) -> Self {
         let backend = backend_of(adapter_type);
         Self(adapter_type, backend)
     }
 }
 
-impl TypeFormatter for NaiveTypeFormatterImpl {
+impl TypeOps for NaiveTypeOpsImpl {
+    fn adapter_type(&self) -> AdapterType {
+        self.0
+    }
+
     fn format_arrow_type_as_sql(
         &self,
         data_type: &DataType,
@@ -84,6 +114,121 @@ impl TypeFormatter for NaiveTypeFormatterImpl {
                 format!("Failed to convert SQL type {sql_type:?}. Error: {e}"),
             )
         })
+    }
+
+    fn parse_into_nullable_arrow_type(&self, _s: &str) -> AdapterResult<(DataType, bool)> {
+        todo!("NaiveTypeOpsImpl::parse_into_nullable_arrow_type")
+    }
+}
+
+/// Replacement for `new_arrow_field_with_metadata` that fuses parsing and `Field` creation.
+pub fn make_arrow_field(
+    type_ops: &dyn TypeOps,
+    col_name: String,
+    sql_type_str: &str,
+    nullable_override: Option<bool>,
+    comment: Option<String>,
+) -> Result<Field, AdapterError> {
+    let (data_type, nullable) = type_ops.parse_into_nullable_arrow_type(sql_type_str)?;
+    let field = Field::new(col_name, data_type, nullable_override.unwrap_or(nullable));
+
+    let mut metadata = HashMap::new();
+    metadata.insert(
+        ARROW_FIELD_ORIGINAL_TYPE_METADATA_KEY.to_string(),
+        sql_type_str.to_string(),
+    );
+    if let Some(comment) = comment {
+        metadata.insert(ARROW_FIELD_COMMENT_METADATA_KEY.to_string(), comment);
+    }
+
+    let adapter_type = type_ops.adapter_type();
+    // HACK: Insert the width of the field as its own value
+    // Special handling for Snowflake char width fields
+    // because these are given to the user as separate types
+    if adapter_type == AdapterType::Snowflake {
+        let maybe_parsed = SqlType::parse(backend_of(adapter_type), sql_type_str);
+        match maybe_parsed {
+            Ok((SqlType::Varchar(Some(size)), _)) | Ok((SqlType::Binary(Some(size)), _)) => {
+                metadata.insert(
+                    ARROW_FIELD_SNOWFLAKE_FIELD_WIDTH_METADATA_KEY.to_string(),
+                    size.to_string(),
+                );
+            }
+            _ => {}
+        }
+    }
+
+    let field = field.with_metadata(metadata);
+
+    Ok(field)
+}
+
+pub const fn get_field_sql_type_metadata_key(adapter_type: AdapterType) -> &'static str {
+    match adapter_type {
+        AdapterType::Bigquery => BIGQUERY_METADATA_SQL_TYPE_KEY,
+        AdapterType::Redshift => REDSHIFT_METADATA_SQL_TYPE_KEY,
+        AdapterType::Snowflake => SNOWFLAKE_METADATA_SQL_TYPE_KEY,
+        AdapterType::Databricks => todo!(),
+        AdapterType::Postgres => todo!(),
+        AdapterType::Salesforce => todo!(),
+    }
+}
+
+/// Converts a regular Arrow Schema into an SDF Arrow Schema.
+///
+/// A regular Arrow Schema is one that may come from drivers or internal adapter
+/// logic. It's free of any SDF-specific type encoding rules (e.g. `FixedSizeList`
+/// hack for timestamps) which we can't expect to be present in these contexts.
+///
+/// Applies SDF-specific type encoding rules (e.g. `FixedSizeList` hack for timestamps).
+pub fn arrow_schema_to_sdf_schema(
+    src_schema: Arc<Schema>,
+    type_ops: &dyn TypeOps,
+) -> AdapterResult<SdfSchema> {
+    use AdapterType::*;
+    match type_ops.adapter_type() {
+        Bigquery => {
+            let mut fields = Vec::with_capacity(src_schema.fields().len());
+            for field in src_schema.fields() {
+                let metadata = field.metadata();
+                let current_type = field.data_type();
+                let nullable = field.is_nullable();
+
+                let maybe_original_type_text = bigquery::field_to_string(field);
+
+                // XXX: We should probably error here rather than approximate
+                let resolved_type = if let Some(ref original_type_text) = maybe_original_type_text {
+                    type_ops
+                        .parse_into_arrow_type(original_type_text)
+                        .unwrap_or_else(|_| current_type.clone())
+                } else {
+                    current_type.clone()
+                };
+
+                // TODO: Comment handling for other adapters
+                let comment = metadata.get("Description").map(|s| s.to_string());
+
+                let field = new_arrow_field_with_metadata(
+                    field.name(),
+                    resolved_type,
+                    nullable,
+                    maybe_original_type_text,
+                    comment,
+                );
+                fields.push(field);
+            }
+            let new_schema = Schema::new(fields);
+            let sdf_schema = SdfSchema::from_sdf_arrow_schema(Arc::new(new_schema));
+            Ok(sdf_schema)
+        }
+        Postgres | Snowflake | Databricks | Redshift | Salesforce => {
+            // NOTE(felipecrv): this is not correct, but it's a temporary fallback
+            // that allows us to call [to_sdf_arrow_schema] from anywhere.
+            //
+            // TODO: move conversion logic for other adapters here
+            let sdf_schema = SdfSchema::from_sdf_arrow_schema(src_schema);
+            Ok(sdf_schema)
+        }
     }
 }
 
@@ -190,6 +335,65 @@ pub fn sql_type_hint_to_str<'a>(
     Cow::Borrowed(str)
 }
 
+pub mod bigquery {
+    // XXX: make private once all tests are moved to here
+    use arrow_schema::{DataType, Field};
+    use dbt_common::adapter::AdapterType;
+
+    use crate::sql_types::get_field_sql_type_metadata_key;
+
+    pub fn field_to_string(field: &Field) -> Option<String> {
+        let type_key = get_field_sql_type_metadata_key(AdapterType::Bigquery);
+
+        if let Some(original_type) = field.metadata().get(type_key) {
+            let base_type = match original_type.as_str() {
+                "RECORD" => {
+                    // STRUCT/RECORD type, recurse and build original type
+                    match field.data_type() {
+                        DataType::Struct(fields) => {
+                            let field_strings: Vec<String> = fields
+                                .iter()
+                                .map(|nested_field| {
+                                    let field_name = format!("`{}`", nested_field.name());
+                                    let field_type = field_to_string(nested_field)?;
+                                    Some(format!("{field_name} {field_type}"))
+                                })
+                                .collect::<Option<Vec<_>>>()?;
+                            Some(format!("STRUCT<{}>", field_strings.join(", ")))
+                        }
+                        _ => Some(original_type.to_string()),
+                    }
+                }
+                _ => Some(map_bigquery_metadata_type(original_type).to_string()),
+            };
+
+            // REPEATED - this is an Array type
+            if let Some(repeated) = field.metadata().get("Repeated")
+                && repeated == "true"
+            {
+                return base_type.map(|t| format!("ARRAY<{t}>"));
+            }
+
+            base_type
+        } else {
+            None
+        }
+    }
+
+    /// Maps bigquery aliases to their expected form for DDL statements
+    fn map_bigquery_metadata_type(metadata_type: &str) -> &str {
+        match metadata_type {
+            "INTEGER" => "INT64",
+            "FLOAT" => "FLOAT64",
+            "BOOLEAN" => "BOOL",
+            // XXX: This one has explicit special handling elsewhere. Added for completeness
+            "RECORD" => "STRUCT",
+            // Pass through other types as-is
+            other => other,
+        }
+    }
+}
+
 pub mod postgres {
     use arrow_schema::{DataType, TimeUnit};
 
@@ -259,6 +463,7 @@ pub mod postgres {
 pub const fn max_varchar_size(adapter_type: AdapterType) -> Option<usize> {
     use AdapterType::*;
     match adapter_type {
+        // FIXME: Actual MAX is 134_217_728 - 16_777_216 is the default value
         Snowflake => Some(16_777_216),
         Redshift => Some(256),
         Postgres | Bigquery | Databricks | Salesforce => None,

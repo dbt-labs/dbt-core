@@ -11,8 +11,7 @@ use crate::record_batch_utils::get_column_values;
 use crate::snowflake::relation::SnowflakeRelation;
 use crate::{AdapterResult, AdapterTyping};
 
-pub const ARROW_FIELD_SNOWFLAKE_CHAR_SIZE_METADATA_KEY: &str = "SNOWFLAKE:char_size";
-pub const ARROW_FIELD_SNOWFLAKE_BYTE_LENGTH_METADATA_KEY: &str = "SNOWFLAKE:byte_length";
+pub const ARROW_FIELD_SNOWFLAKE_FIELD_WIDTH_METADATA_KEY: &str = "SNOWFLAKE:field_width";
 
 /// Helper to differentiate between tables and dynamic tables using the is_dynamic flag.
 /// TODO: When we implement iceberg tables, we might want to pass in the is_iceberg flag here.

@@ -7,6 +7,7 @@ use std::{
 use crate::{
     AdapterResult, AdapterType,
     errors::{AdapterError, AdapterErrorKind},
+    sql_types::TypeOps,
 };
 use arrow::array::RecordBatch;
 use arrow_schema::{DataType, Field, Schema};
@@ -160,7 +161,7 @@ pub trait MetadataProcessor {
     fn from_record_batch(batch: Arc<RecordBatch>) -> AdapterResult<Self>
     where
         Self: Sized;
-    fn to_arrow_schema(&self) -> AdapterResult<Arc<Schema>>;
+    fn to_arrow_schema(&self, type_ops: &dyn TypeOps) -> AdapterResult<Arc<Schema>>;
 }
 
 /// This represents a UDF downloaded from a remote data warehouse

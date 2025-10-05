@@ -5,7 +5,7 @@ use crate::databricks::databricks_compute_from_state;
 use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
 use crate::query_comment::{EMPTY_CONFIG, QueryCommentConfig};
 use crate::record_and_replay::{RecordEngine, ReplayEngine};
-use crate::sql_types::{NaiveTypeFormatterImpl, TypeFormatter};
+use crate::sql_types::{NaiveTypeOpsImpl, TypeOps};
 use crate::stmt_splitter::StmtSplitter;
 use crate::{AdapterResponse, TrackedStatement};
 
@@ -48,12 +48,12 @@ pub type Options = Vec<(String, OptionValue)>;
 static NAIVE_STMT_SPLITTER: LazyLock<Arc<dyn StmtSplitter>> =
     LazyLock::new(|| Arc::new(crate::stmt_splitter::NaiveStmtSplitter));
 
-/// Naive type formatter used in the MockAdapter
+/// Naive type parser/formatter used in the MockAdapter
 ///
 /// IMPORTANT: not suitable for production use. DEFAULTS TO SNOWFLAKE ALSO.
-/// TODO: remove when the full formatter is available to this crate.
-static NAIVE_TYPE_FORMATTER: LazyLock<Box<dyn TypeFormatter>> =
-    LazyLock::new(|| Box::new(NaiveTypeFormatterImpl::new(AdapterType::Snowflake)));
+/// TODO: remove when the full parser/formatter is available to this crate.
+static NAIVE_TYPE_OPS: LazyLock<Box<dyn TypeOps>> =
+    LazyLock::new(|| Box::new(NaiveTypeOpsImpl::new(AdapterType::Snowflake)));
 
 #[derive(Default)]
 struct IdentityHasher {
@@ -139,8 +139,8 @@ pub struct ActualEngine {
     splitter: Arc<dyn StmtSplitter>,
     /// Query comment config
     query_comment: QueryCommentConfig,
-    /// Type formatter for the dilect this engine is for
-    pub type_formatter: Box<dyn TypeFormatter>,
+    /// Type operations (e.g. parsing, formatting) for the dilect this engine is for
+    pub type_ops: Box<dyn TypeOps>,
     /// Global CLI cancellation token
     cancellation_token: CancellationToken,
 }
@@ -154,7 +154,7 @@ impl ActualEngine {
         quoting: ResolvedQuoting,
         splitter: Arc<dyn StmtSplitter>,
         query_comment: QueryCommentConfig,
-        type_formatter: Box<dyn TypeFormatter>,
+        type_ops: Box<dyn TypeOps>,
         token: CancellationToken,
     ) -> Self {
         let threads = config
@@ -176,7 +176,7 @@ impl ActualEngine {
             configured_databases: RwLock::new(DatabaseMap::default()),
             semaphore: Arc::new(Semaphore::new(permits)),
             splitter,
-            type_formatter,
+            type_ops,
             query_comment,
 
             cancellation_token: token,
@@ -293,7 +293,7 @@ impl SqlEngine {
         quoting: ResolvedQuoting,
         stmt_splitter: Arc<dyn StmtSplitter>,
         query_comment: QueryCommentConfig,
-        type_formatter: Box<dyn TypeFormatter>,
+        type_ops: Box<dyn TypeOps>,
         token: CancellationToken,
     ) -> Arc<Self> {
         let engine = ActualEngine::new(
@@ -303,7 +303,7 @@ impl SqlEngine {
             quoting,
             stmt_splitter,
             query_comment,
-            type_formatter,
+            type_ops,
             token,
         );
         Arc::new(SqlEngine::Warehouse(Arc::new(engine)))
@@ -318,7 +318,7 @@ impl SqlEngine {
         quoting: ResolvedQuoting,
         stmt_splitter: Arc<dyn StmtSplitter>,
         query_comment: QueryCommentConfig,
-        type_formatter: Box<dyn TypeFormatter>,
+        type_ops: Box<dyn TypeOps>,
         token: CancellationToken,
     ) -> Arc<Self> {
         let engine = ReplayEngine::new(
@@ -328,7 +328,7 @@ impl SqlEngine {
             quoting,
             stmt_splitter,
             query_comment,
-            type_formatter,
+            type_ops,
             token,
         );
         Arc::new(SqlEngine::Replay(engine))
@@ -363,12 +363,12 @@ impl SqlEngine {
         }
     }
 
-    pub fn type_formatter(&self) -> &dyn TypeFormatter {
+    pub fn type_ops(&self) -> &dyn TypeOps {
         match self {
-            SqlEngine::Warehouse(engine) => engine.type_formatter.as_ref(),
-            SqlEngine::Record(engine) => engine.type_formatter(),
-            SqlEngine::Replay(engine) => engine.type_formatter(),
-            SqlEngine::Mock(_adapter_type) => NAIVE_TYPE_FORMATTER.as_ref(),
+            SqlEngine::Warehouse(engine) => engine.type_ops.as_ref(),
+            SqlEngine::Record(engine) => engine.type_ops(),
+            SqlEngine::Replay(engine) => engine.type_ops(),
+            SqlEngine::Mock(_adapter_type) => NAIVE_TYPE_OPS.as_ref(),
         }
     }
 

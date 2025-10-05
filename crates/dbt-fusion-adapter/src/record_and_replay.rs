@@ -3,7 +3,7 @@ use crate::config::AdapterConfig;
 use crate::errors::AdapterResult;
 use crate::query_comment::QueryCommentConfig;
 use crate::sql_engine::SqlEngine;
-use crate::sql_types::TypeFormatter;
+use crate::sql_types::TypeOps;
 use crate::stmt_splitter::StmtSplitter;
 
 use adbc_core::error::{Error as AdbcError, Result as AdbcResult, Status as AdbcStatus};
@@ -209,8 +209,8 @@ impl RecordEngine {
         self.0.engine.query_comment()
     }
 
-    pub(crate) fn type_formatter(&self) -> &dyn TypeFormatter {
-        self.0.engine.type_formatter()
+    pub(crate) fn type_ops(&self) -> &dyn TypeOps {
+        self.0.engine.type_ops()
     }
 
     pub fn cancellation_token(&self) -> CancellationToken {
@@ -438,7 +438,7 @@ struct ReplayEngineInner {
     quoting: ResolvedQuoting,
     stmt_splitter: Arc<dyn StmtSplitter>,
     query_comment: QueryCommentConfig,
-    type_formatter: Box<dyn TypeFormatter>,
+    type_ops: Box<dyn TypeOps>,
     /// Global CLI cancellation token
     cancellation_token: CancellationToken,
 }
@@ -461,7 +461,7 @@ impl ReplayEngine {
         quoting: ResolvedQuoting,
         stmt_splitter: Arc<dyn StmtSplitter>,
         query_comment: QueryCommentConfig,
-        type_formatter: Box<dyn TypeFormatter>,
+        type_ops: Box<dyn TypeOps>,
         token: CancellationToken,
     ) -> Self {
         let inner = ReplayEngineInner {
@@ -472,7 +472,7 @@ impl ReplayEngine {
             quoting,
             stmt_splitter,
             query_comment,
-            type_formatter,
+            type_ops,
             cancellation_token: token,
         };
         ReplayEngine(Arc::new(inner))
@@ -515,8 +515,8 @@ impl ReplayEngine {
         &self.0.query_comment
     }
 
-    pub(crate) fn type_formatter(&self) -> &dyn TypeFormatter {
-        self.0.type_formatter.as_ref()
+    pub(crate) fn type_ops(&self) -> &dyn TypeOps {
+        self.0.type_ops.as_ref()
     }
 
     pub fn cancellation_token(&self) -> CancellationToken {
