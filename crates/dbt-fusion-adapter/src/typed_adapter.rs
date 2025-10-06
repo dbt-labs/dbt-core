@@ -1086,7 +1086,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         None
     }
 
-    /// Get the default ADBC statement options, including query comment labels if necessary
+    /// Get the default ADBC statement options
     fn get_adbc_execute_options(&self, _state: &State) -> ExecuteOptions {
         Vec::new()
     }

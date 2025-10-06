@@ -23,6 +23,7 @@ use dbt_common::tracing::span_info::record_current_span_status_from_attrs;
 use dbt_frontend_common::dialect::Dialect;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::telemetry::{QueryExecuted, QueryOutcome};
+use dbt_xdbc::bigquery::QUERY_LABELS;
 use dbt_xdbc::semaphore::Semaphore;
 use dbt_xdbc::{Backend, Connection, Database, QueryCtx, Statement, connection, database, driver};
 use log;
@@ -467,15 +468,29 @@ impl SqlEngine {
     ) -> AdapterResult<RecordBatch> {
         assert!(query_ctx.sql().is_some() || !options.is_empty());
 
-        let query_ctx = if let Some(sql) = query_ctx.sql() {
-            if let Some(state) = state {
-                &query_ctx.with_sql(self.query_comment().add_comment(state, sql)?)
+        let maybe_query_comment = if let Some(state) = state {
+            Some(self.query_comment().resolve_comment(state)?)
+        } else {
+            None
+        };
+
+        let query_ctx =
+            if let (Some(sql), Some(comment)) = (query_ctx.sql(), maybe_query_comment.as_ref()) {
+                &query_ctx.with_sql(self.query_comment().add_comment(&sql, comment))
             } else {
                 query_ctx
-            }
-        } else {
-            query_ctx
-        };
+            };
+
+        let mut options = options;
+        let job_label_option = maybe_query_comment.as_ref().and_then(|comment| {
+            self.query_comment()
+                .get_job_labels_from_query_comment(comment)
+        });
+        if let Some(job_label_option) = job_label_option
+            && self.adapter_type() == AdapterType::Bigquery
+        {
+            options.push((QUERY_LABELS.to_owned(), job_label_option));
+        }
 
         Self::log_query_ctx_for_execution(query_ctx);
 

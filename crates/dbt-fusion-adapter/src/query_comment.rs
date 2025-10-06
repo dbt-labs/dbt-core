@@ -1,10 +1,13 @@
 use std::{fmt::Debug, sync::LazyLock};
 
+use adbc_core::options::OptionValue;
 use dbt_common::adapter::AdapterType;
 use dbt_schemas::schemas::project::QueryComment;
 use minijinja::{Error, State};
 use regex::Regex;
 use serde::Deserialize;
+use serde_json::Map as JsonMap;
+use serde_json::Value as JsonValue;
 
 // Reference: https://github.com/dbt-labs/dbt-adapters/blob/317e809abd19026d3784e04281b307c5e6a9d469/dbt-adapters/src/dbt/adapters/contracts/connection.py#L197
 pub const DEFAULT_QUERY_COMMENT: &str = "
@@ -93,44 +96,41 @@ impl QueryCommentConfig {
     }
 
     /// Add query comment to SQL.
-    pub fn add_comment(&self, state: &State, sql: String) -> Result<String, Error> {
-        if self.comment.is_empty() {
-            return Ok(sql);
+    pub fn add_comment(&self, sql: &str, resolved_comment: &str) -> String {
+        if resolved_comment.is_empty() {
+            return sql.to_owned();
         }
 
-        let resolved_comment = self.resolve_comment(state)?;
-
-        Ok(if self.append {
+        if self.append {
             format!("{sql}\n/* {resolved_comment} */")
         } else {
             format!("/* {resolved_comment} */\n{sql}")
-        })
+        }
     }
 
     /// Reference: https://github.com/dbt-labs/dbt-adapters/blob/b0223a88d67012bcc4c6cce5449c4fe10c6ed198/dbt-bigquery/src/dbt/adapters/bigquery/connections.py#L629
     /// Return job labels from query comment
-    pub fn get_job_labels_from_query_comment(&self, state: &State) -> Vec<(String, String)> {
-        let mut labels = Vec::new();
-
-        if let Ok(resolved_comment) = self.resolve_comment(state)
-            && self.job_label
-        {
-            match serde_json::from_str::<serde_json::Map<String, serde_json::Value>>(
-                &resolved_comment,
-            ) {
-                Ok(json) => {
-                    for (key, value) in json.into_iter() {
-                        labels.push((sanitize_label(key), sanitize_label(value.to_string())))
-                    }
-                }
-                Err(_) => labels.push((
-                    "query_comment".to_string(),
-                    sanitize_label(resolved_comment),
-                )),
-            }
+    pub fn get_job_labels_from_query_comment(&self, resolved_comment: &str) -> Option<OptionValue> {
+        if !self.job_label {
+            return None;
         }
 
-        labels
+        let job_labels = match serde_json::from_str::<JsonMap<String, JsonValue>>(resolved_comment)
+        {
+            Ok(json) => json
+                .into_iter()
+                .map(|(key, value)| (sanitize_label(&key), sanitize_label(&value.to_string())))
+                .collect(),
+            Err(_) => vec![(
+                "query_comment".to_string(),
+                sanitize_label(resolved_comment),
+            )],
+        };
+
+        let labels_json =
+            serde_json::to_string(&job_labels).expect("This should be able to serialize");
+
+        Some(OptionValue::String(labels_json))
     }
 }
 
@@ -140,8 +140,8 @@ const _VALIDATE_LABEL_LENGTH_LIMIT: usize = 63;
 
 /// Reference: https://github.com/dbt-labs/dbt-adapters/blob/b0223a88d67012bcc4c6cce5449c4fe10c6ed198/dbt-bigquery/src/dbt/adapters/bigquery/connections.py#L640
 /// Return a legal value for a BigQuery label.
-fn sanitize_label(mut value: String) -> String {
-    value.make_ascii_lowercase();
+fn sanitize_label(label: &str) -> String {
+    let value = label.to_lowercase();
 
     let re = Regex::new(_SANITIZE_LABEL_PATTERN).unwrap();
     let sanitized_value = re.replace_all(&value, "_");
