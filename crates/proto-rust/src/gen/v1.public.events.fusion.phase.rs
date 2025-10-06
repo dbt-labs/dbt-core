@@ -60,6 +60,8 @@ pub enum ExecutionPhase {
     Parse = 30,
     /// Schedule nodes based on selection criteria and dependencies.
     Schedule = 40,
+    /// Run dbt-compare macros against selected nodes
+    Compare = 45,
     /// Initializing the adapter (warehouse connection and configuration)
     InitAdapter = 50,
     /// Handling deferral. Fetching state source schemas from remote, hydrating relation, and schema cache
@@ -93,6 +95,7 @@ impl ExecutionPhase {
             Self::LoadProject => "EXECUTION_PHASE_LOAD_PROJECT",
             Self::Parse => "EXECUTION_PHASE_PARSE",
             Self::Schedule => "EXECUTION_PHASE_SCHEDULE",
+            Self::Compare => "EXECUTION_PHASE_COMPARE",
             Self::InitAdapter => "EXECUTION_PHASE_INIT_ADAPTER",
             Self::DeferHydration => "EXECUTION_PHASE_DEFER_HYDRATION",
             Self::TaskGraphBuild => "EXECUTION_PHASE_TASK_GRAPH_BUILD",
@@ -113,6 +116,7 @@ impl ExecutionPhase {
             "EXECUTION_PHASE_LOAD_PROJECT" => Some(Self::LoadProject),
             "EXECUTION_PHASE_PARSE" => Some(Self::Parse),
             "EXECUTION_PHASE_SCHEDULE" => Some(Self::Schedule),
+            "EXECUTION_PHASE_COMPARE" => Some(Self::Compare),
             "EXECUTION_PHASE_INIT_ADAPTER" => Some(Self::InitAdapter),
             "EXECUTION_PHASE_DEFER_HYDRATION" => Some(Self::DeferHydration),
             "EXECUTION_PHASE_TASK_GRAPH_BUILD" => Some(Self::TaskGraphBuild),

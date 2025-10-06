@@ -23,6 +23,9 @@ enum ExecutionPhase {
   // Schedule nodes based on selection criteria and dependencies.
   EXECUTION_PHASE_SCHEDULE = 40;
 
+  // Run dbt-compare macros against selected nodes
+  EXECUTION_PHASE_COMPARE = 45;
+
   // Initializing the adapter (warehouse connection and configuration)
   EXECUTION_PHASE_INIT_ADAPTER = 50;
 

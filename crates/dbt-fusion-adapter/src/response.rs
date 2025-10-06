@@ -6,20 +6,24 @@ use minijinja::Value;
 use minijinja::listener::RenderingEventListener;
 use minijinja::value::{Enumerator, Object};
 use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State};
-
+use serde::{Deserialize, Serialize};
 use std::rc::Rc;
 use std::sync::Arc;
 
 /// Response from adapter statement execution
-#[derive(Debug, Default, Clone, PartialEq)]
+#[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AdapterResponse {
-    /// Message from adapter
+    /// Mantle compare_results historically emits `_message`
+    #[serde(default, alias = "_message")]
     pub message: String,
     /// Status code from adapter
+    #[serde(default)]
     pub code: String,
     /// Rows affected by statement
+    #[serde(default)]
     pub rows_affected: i64,
     /// Query ID of executed statement, if available
+    #[serde(default)]
     pub query_id: Option<String>,
 }
 

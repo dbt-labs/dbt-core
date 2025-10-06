@@ -433,6 +433,7 @@ pub enum Phases {
     JinjaCheck, // dbt jinja-check
     Compile,    // dbt compile
     Show,       // dbt show
+    Compare,    // dbt compare
     Sample,     // dbt sample
     Lineage,
     RunOperation,

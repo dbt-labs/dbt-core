@@ -98,7 +98,8 @@ pub fn dbt_core_event_code_for_node_evaluation_start(
         | ExecutionPhase::NodeCacheHydration
         | ExecutionPhase::Analyze
         | ExecutionPhase::Lineage
-        | ExecutionPhase::Debug => None,
+        | ExecutionPhase::Debug
+        | ExecutionPhase::Compare => None,
     }
 }
 

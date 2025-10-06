@@ -452,7 +452,12 @@ pub async fn resolve_models(
                 latest_version: maybe_latest_version.map(|v| v.into()),
                 constraints: model_constraints,
                 deprecation_date: None,
-                primary_key: vec![],
+                primary_key: model_config
+                    .__warehouse_specific_config__
+                    .primary_key
+                    .as_ref()
+                    .map(|pk| vec![pk.clone()])
+                    .unwrap_or_default(),
                 time_spine,
                 access: model_config.access.clone().unwrap_or_default(),
                 group: model_config.group.clone(),

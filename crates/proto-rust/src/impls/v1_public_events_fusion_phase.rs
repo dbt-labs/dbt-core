@@ -20,6 +20,7 @@ impl Display for ExecutionPhase {
             Self::FreshnessAnalysis => "FreshnessAnalysis",
             Self::Lineage => "Lineage",
             Self::Debug => "Debug",
+            Self::Compare => "Compare",
         };
         f.write_str(s)
     }
