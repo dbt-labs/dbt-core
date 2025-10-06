@@ -24,6 +24,7 @@ impl AsRef<str> for NodeType {
             Self::Metric => "metric",
             Self::SavedQuery => "saved_query",
             Self::SemanticModel => "semantic_model",
+            Self::Function => "function",
         }
     }
 }
@@ -36,6 +37,7 @@ pub fn dbt_core_event_code_for_node_evaluation_start(
         ExecutionPhase::Render => match node_type {
             // Q030: NodeCompiling — clear match for compiling models (render phase)
             NodeType::Model => Some("Q030"),
+            NodeType::Function => Some("Q030"),
 
             // TODO: Snapshots/tests are compiled too in Core; map to Q030?
             // Leaving as None until confirmed to avoid over-reporting.
@@ -67,6 +69,9 @@ pub fn dbt_core_event_code_for_node_evaluation_start(
 
             // Tests have separate start lines in Core; not a clear Q031 mapping
             NodeType::Test | NodeType::UnitTest => None, // TODO: consider Q011 if we add generic start
+
+            // Functions have an executable phase in the build command, but not run
+            NodeType::Function => None,
 
             // Not executed directly in Run phase
             NodeType::Source

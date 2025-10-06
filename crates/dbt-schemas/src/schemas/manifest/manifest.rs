@@ -10,14 +10,15 @@ type YmlValue = dbt_serde_yaml::Value;
 use crate::{
     dbt_utils::get_dbt_schema_version,
     schemas::{
-        CommonAttributes, DbtModel, DbtModelAttr, DbtSeed, DbtSnapshot, DbtSource, DbtTest,
-        DbtUnitTest, DbtUnitTestAttr, IntrospectionKind, NodeBaseAttributes, Nodes, TimeSpine,
-        TimeSpinePrimaryColumn,
+        CommonAttributes, DbtFunction, DbtFunctionAttr, DbtModel, DbtModelAttr, DbtSeed,
+        DbtSnapshot, DbtSource, DbtTest, DbtUnitTest, DbtUnitTestAttr, IntrospectionKind,
+        NodeBaseAttributes, Nodes, TimeSpine, TimeSpinePrimaryColumn,
         common::{Access, DbtChecksum, DbtMaterialization, DbtQuoting, NodeDependsOn},
         manifest::{
             ManifestExposure, ManifestGroup, ManifestSavedQuery, ManifestUnitTest,
             manifest_nodes::{
-                ManifestDataTest, ManifestModel, ManifestOperation, ManifestSeed, ManifestSnapshot,
+                ManifestDataTest, ManifestFunction, ManifestModel, ManifestOperation, ManifestSeed,
+                ManifestSnapshot,
             },
             saved_query::DbtSavedQueryAttr,
             semantic_model::NodeRelation,
@@ -40,6 +41,7 @@ pub enum DbtNode {
     Snapshot(ManifestSnapshot),
     Seed(ManifestSeed),
     Operation(ManifestOperation),
+    Function(ManifestFunction),
     Analysis(ManifestModel),
 }
 
@@ -174,6 +176,7 @@ pub fn build_manifest(invocation_id: &str, resolver_state: &ResolverState) -> Db
                     .iter()
                     .map(|(id, node)| (id.clone(), DbtNode::Analysis((**node).clone().into()))),
             )
+            // Note: Functions are now handled separately in the functions field, not in nodes
             .chain(resolver_state.operations.on_run_start.iter().map(|node| {
                 (
                     node.__common_attr__.unique_id.clone(),
@@ -224,6 +227,12 @@ pub fn build_manifest(invocation_id: &str, resolver_state: &ResolverState) -> Db
             .map(|(id, unit_test)| (id.clone(), (**unit_test).clone().into()))
             .collect(),
         macros: resolver_state.macros.macros.clone(),
+        functions: resolver_state
+            .nodes
+            .functions
+            .iter()
+            .map(|(id, function)| (id.clone(), (**function).clone().into()))
+            .collect(),
         groups: resolver_state
             .nodes
             .groups
@@ -308,6 +317,21 @@ fn build_disabled_map(resolver_state: &ResolverState) -> BTreeMap<String, Vec<Ym
                         id.clone(),
                         vec![
                             dbt_serde_yaml::to_value(ManifestModel::from((**analysis).clone()))
+                                .unwrap_or_default(),
+                        ],
+                    )
+                }),
+        )
+        .chain(
+            resolver_state
+                .disabled_nodes
+                .functions
+                .iter()
+                .map(|(id, function)| {
+                    (
+                        id.clone(),
+                        vec![
+                            dbt_serde_yaml::to_value(ManifestFunction::from((**function).clone()))
                                 .unwrap_or_default(),
                         ],
                     )
@@ -466,6 +490,10 @@ fn build_parent_and_child_maps(
         ));
     }
 
+    for (id, function) in &nodes.functions {
+        all_nodes.push((id.clone(), function.__base_attr__.depends_on.clone()));
+    }
+
     // Process all collected nodes
     for (node_id, depends_on) in all_nodes {
         // Initialize parent list for this node
@@ -572,6 +600,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                             depends_on: test.__base_attr__.depends_on,
                             refs: test.__base_attr__.refs,
                             sources: test.__base_attr__.sources,
+                            functions: test.__base_attr__.functions,
                             metrics: test.__base_attr__.metrics,
                         },
                         __test_attr__: DbtTestAttr {
@@ -640,6 +669,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                             depends_on: snapshot.__base_attr__.depends_on,
                             refs: snapshot.__base_attr__.refs,
                             sources: snapshot.__base_attr__.sources,
+                            functions: snapshot.__base_attr__.functions,
                             metrics: snapshot.__base_attr__.metrics,
                         },
                         __snapshot_attr__: DbtSnapshotAttr {
@@ -712,6 +742,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                             depends_on: seed.__base_attr__.depends_on,
                             refs: seed.__base_attr__.refs,
                             sources: seed.__base_attr__.sources,
+                            functions: seed.__base_attr__.functions,
                             metrics: seed.__base_attr__.metrics,
                         },
                         __seed_attr__: DbtSeedAttr {
@@ -726,6 +757,65 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                 );
             }
             DbtNode::Operation(_) => {}
+            DbtNode::Function(function) => {
+                nodes.functions.insert(
+                    unique_id,
+                    Arc::new(DbtFunction {
+                        __common_attr__: CommonAttributes {
+                            unique_id: function.__common_attr__.unique_id,
+                            name: function.__common_attr__.name,
+                            package_name: function.__common_attr__.package_name,
+                            path: function.__common_attr__.path,
+                            name_span: Span::default(),
+                            original_file_path: function.__common_attr__.original_file_path,
+                            patch_path: function.__common_attr__.patch_path,
+                            fqn: function.__common_attr__.fqn,
+                            description: function.__common_attr__.description,
+                            raw_code: None,
+                            checksum: DbtChecksum::default(),
+                            language: function.language.clone(),
+                            tags: function
+                                .config
+                                .tags
+                                .clone()
+                                .map(|tags| tags.into())
+                                .unwrap_or_default(),
+                            meta: function.config.meta.clone().unwrap_or_default(),
+                        },
+                        __base_attr__: NodeBaseAttributes {
+                            database: function.__common_attr__.database,
+                            schema: function.__common_attr__.schema,
+                            alias: function.__base_attr__.alias,
+                            relation_name: function.__base_attr__.relation_name,
+                            materialized: DbtMaterialization::Function,
+                            static_analysis: StaticAnalysisKind::On,
+                            static_analysis_off_reason: None,
+                            quoting: dbt_quoting.try_into().expect("DbtQuoting should be set"),
+                            quoting_ignore_case: false,
+                            enabled: function.config.enabled.unwrap_or(true),
+                            extended_model: false,
+                            persist_docs: None,
+                            columns: BTreeMap::new(),
+                            depends_on: function.__base_attr__.depends_on,
+                            refs: function.__base_attr__.refs,
+                            sources: function.__base_attr__.sources,
+                            functions: function.__base_attr__.functions,
+                            metrics: function.__base_attr__.metrics,
+                        },
+                        __function_attr__: DbtFunctionAttr {
+                            access: function.access,
+                            group: function.group,
+                            language: function.language,
+                            on_configuration_change: function.on_configuration_change,
+                            returns: function.returns,
+                            arguments: function.arguments,
+                            function_kind: function.function_kind.unwrap_or_default(),
+                        },
+                        deprecated_config: function.config,
+                        __other__: function.__other__,
+                    }),
+                );
+            }
             DbtNode::Analysis(analysis) => {
                 nodes.analyses.insert(
                     unique_id,
@@ -788,6 +878,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     depends_on: NodeDependsOn::default(),
                     refs: vec![],
                     sources: vec![],
+                    functions: vec![],
                     metrics: vec![],
                 },
                 __source_attr__: DbtSourceAttr {
@@ -839,6 +930,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     columns: BTreeMap::new(),
                     refs: exposure.__base_attr__.refs,
                     sources: exposure.__base_attr__.sources,
+                    functions: vec![],
                     metrics: exposure.__base_attr__.metrics,
                     depends_on: exposure.__base_attr__.depends_on,
                     quoting_ignore_case: false,
@@ -898,6 +990,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     depends_on: unit_test.__base_attr__.depends_on,
                     refs: unit_test.__base_attr__.refs,
                     sources: unit_test.__base_attr__.sources,
+                    functions: unit_test.__base_attr__.functions,
                     metrics: unit_test.__base_attr__.metrics,
                 },
                 __unit_test_attr__: DbtUnitTestAttr {
@@ -1000,12 +1093,84 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     quoting_ignore_case: false,
                     refs: vec![],
                     sources: vec![],
+                    functions: vec![],
                     metrics: vec![],
                 },
                 __group_attr__: DbtGroupAttr { owner: group.owner },
             }),
         );
     }
+
+    // Process functions from the separate manifest.functions field
+    for (unique_id, function) in manifest.functions {
+        nodes.functions.insert(
+            unique_id,
+            Arc::new(DbtFunction {
+                __common_attr__: CommonAttributes {
+                    unique_id: function.__common_attr__.unique_id,
+                    name: function.__common_attr__.name,
+                    package_name: function.__common_attr__.package_name,
+                    path: function.__common_attr__.path,
+                    name_span: Span::default(),
+                    original_file_path: function.__common_attr__.original_file_path,
+                    patch_path: None,
+                    fqn: function.__common_attr__.fqn,
+                    description: function.__common_attr__.description,
+                    raw_code: None,
+                    checksum: DbtChecksum::default(),
+                    language: function.language.clone(),
+                    tags: function
+                        .config
+                        .tags
+                        .clone()
+                        .map(|tags| tags.into())
+                        .unwrap_or_default(),
+                    meta: function.config.meta.clone().unwrap_or_default(),
+                },
+                __base_attr__: NodeBaseAttributes {
+                    database: String::new(),
+                    schema: String::new(),
+                    alias: function.__base_attr__.alias,
+                    relation_name: function.__base_attr__.relation_name,
+                    materialized: DbtMaterialization::View,
+                    static_analysis: StaticAnalysisKind::On,
+                    static_analysis_off_reason: None,
+                    enabled: function.config.enabled.unwrap_or(true),
+                    extended_model: false,
+                    quoting: function
+                        .config
+                        .quoting
+                        .map(|mut quoting| {
+                            quoting.default_to(&dbt_quoting);
+                            quoting
+                        })
+                        .unwrap_or(dbt_quoting)
+                        .try_into()
+                        .expect("DbtQuoting should be set"),
+                    quoting_ignore_case: false,
+                    persist_docs: None,
+                    columns: function.__base_attr__.columns,
+                    depends_on: function.__base_attr__.depends_on,
+                    refs: function.__base_attr__.refs,
+                    sources: function.__base_attr__.sources,
+                    functions: function.__base_attr__.functions,
+                    metrics: vec![],
+                },
+                __function_attr__: DbtFunctionAttr {
+                    access: function.access,
+                    group: function.group,
+                    language: function.language,
+                    on_configuration_change: function.on_configuration_change,
+                    returns: function.returns,
+                    arguments: function.arguments,
+                    function_kind: function.function_kind.unwrap_or_default(),
+                },
+                deprecated_config: function.config,
+                __other__: function.__other__,
+            }),
+        );
+    }
+
     nodes
 }
 
@@ -1089,6 +1254,7 @@ pub fn manifest_model_to_dbt_model(
             depends_on: model.__base_attr__.depends_on,
             refs: model.__base_attr__.refs,
             sources: model.__base_attr__.sources,
+            functions: model.__base_attr__.functions,
             metrics: model.__base_attr__.metrics,
         },
         __model_attr__: DbtModelAttr {
@@ -1137,6 +1303,7 @@ mod tests {
             metrics: BTreeMap::new(),
             saved_queries: BTreeMap::new(),
             groups: BTreeMap::new(),
+            functions: BTreeMap::new(),
         }
     }
 

@@ -27,6 +27,7 @@ use crate::schemas::serde::StringOrInteger;
 
 use super::ProjectDataTestConfig;
 use super::ProjectExposureConfig;
+use super::ProjectFunctionConfig;
 use super::ProjectMetricConfigs;
 use super::ProjectModelConfig;
 use super::ProjectSeedConfig;
@@ -119,6 +120,8 @@ pub struct DbtProject {
     pub macro_paths: Option<Vec<String>>,
     #[serde(rename = "model-paths")]
     pub model_paths: Option<Vec<String>>,
+    #[serde(rename = "function-paths")]
+    pub function_paths: Option<Vec<String>>,
     #[serde(rename = "seed-paths")]
     pub seed_paths: Option<Vec<String>>,
     #[serde(rename = "snapshot-paths")]
@@ -136,6 +139,7 @@ pub struct DbtProject {
     // Configs
     pub metrics: Option<ProjectMetricConfigs>,
     pub models: Option<ProjectModelConfig>,
+    pub functions: Option<ProjectFunctionConfig>,
     pub snapshots: Option<ProjectSnapshotConfig>,
     pub seeds: Option<ProjectSeedConfig>,
     pub sources: Option<ProjectSourceConfig>,
@@ -182,12 +186,15 @@ impl DbtProject {
     pub fn all_source_paths(&self) -> Vec<String> {
         /*
         Returns a vector of strings combining all path configurations:
-        model_paths, seed_paths, snapshot_paths, analysis_paths, macro_paths, and test_paths.
+        model_paths, function_paths, seed_paths, snapshot_paths, analysis_paths, macro_paths, and test_paths.
         */
         let mut paths = Vec::new();
 
         if let Some(ref model_paths) = self.model_paths {
             paths.extend(model_paths.clone());
+        }
+        if let Some(ref function_paths) = self.function_paths {
+            paths.extend(function_paths.clone());
         }
         if let Some(ref seed_paths) = self.seed_paths {
             paths.extend(seed_paths.clone());
@@ -288,6 +295,7 @@ mod tests {
             asset_paths: Some(vec![]),
             macro_paths: Some(vec![]),
             model_paths: Some(vec![]),
+            function_paths: Some(vec![]),
             seed_paths: Some(vec![]),
             snapshot_paths: Some(vec![]),
             test_paths: Some(vec![]),
@@ -297,6 +305,7 @@ mod tests {
             packages_install_path: Some("packages".to_string()),
             metrics: None,
             models: None,
+            functions: None,
             snapshots: None,
             seeds: None,
             sources: None,

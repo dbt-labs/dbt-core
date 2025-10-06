@@ -42,11 +42,11 @@ pub mod schemas {
 
     pub mod nodes;
     pub use nodes::{
-        CommonAttributes, DbtExposure, DbtExposureAttr, DbtModel, DbtModelAttr, DbtSeed,
-        DbtSeedAttr, DbtSnapshot, DbtSnapshotAttr, DbtSource, DbtSourceAttr, DbtTest, DbtTestAttr,
-        DbtUnitTest, DbtUnitTestAttr, InternalDbtNode, InternalDbtNodeAttributes,
-        InternalDbtNodeWrapper, IntrospectionKind, NodeBaseAttributes, Nodes, TestMetadata,
-        TimeSpine, TimeSpinePrimaryColumn,
+        CommonAttributes, DbtExposure, DbtExposureAttr, DbtFunction, DbtFunctionAttr, DbtModel,
+        DbtModelAttr, DbtSeed, DbtSeedAttr, DbtSnapshot, DbtSnapshotAttr, DbtSource, DbtSourceAttr,
+        DbtTest, DbtTestAttr, DbtUnitTest, DbtUnitTestAttr, InternalDbtNode,
+        InternalDbtNodeAttributes, InternalDbtNodeWrapper, IntrospectionKind, NodeBaseAttributes,
+        Nodes, TestMetadata, TimeSpine, TimeSpinePrimaryColumn,
     };
 
     pub use sources::{FreshnessResultsArtifact, FreshnessResultsMetadata, FreshnessResultsNode};
@@ -88,9 +88,9 @@ pub mod schemas {
             nodes_from_dbt_manifest,
         };
         pub use manifest_nodes::{
-            ManifestDataTest, ManifestExposure, ManifestMetric, ManifestModel, ManifestSavedQuery,
-            ManifestSeed, ManifestSemanticModel, ManifestSnapshot, ManifestSource,
-            ManifestUnitTest,
+            ManifestDataTest, ManifestExposure, ManifestFunction, ManifestMetric, ManifestModel,
+            ManifestSavedQuery, ManifestSeed, ManifestSemanticModel, ManifestSnapshot,
+            ManifestSource, ManifestUnitTest,
         };
         pub use metric::DbtMetric;
         pub use operation::DbtOperation;
@@ -117,6 +117,7 @@ pub mod schemas {
             pub mod common;
             pub mod data_test_config;
             pub mod exposure_config;
+            pub mod function_config;
             pub mod metric_config;
             pub mod model_config;
             pub mod omissible_utils;
@@ -132,6 +133,7 @@ pub mod schemas {
         pub use configs::common::WarehouseSpecificNodeConfig;
         pub use configs::data_test_config::{DataTestConfig, ProjectDataTestConfig};
         pub use configs::exposure_config::{ExposureConfig, ProjectExposureConfig};
+        pub use configs::function_config::{FunctionConfig, ProjectFunctionConfig};
         pub use configs::metric_config::{MetricConfig, ProjectMetricConfigs};
         pub use configs::model_config::{ModelConfig, ProjectModelConfig};
         pub use configs::saved_query_config::{
@@ -153,6 +155,7 @@ pub mod schemas {
     pub mod properties {
         mod data_test_properties;
         mod exposure_properties;
+        mod function_properties;
         pub mod metrics_properties;
         pub mod model_properties;
         #[allow(clippy::module_inception)]
@@ -165,6 +168,9 @@ pub mod schemas {
 
         pub use data_test_properties::DataTestProperties;
         pub use exposure_properties::ExposureProperties;
+        pub use function_properties::{
+            FunctionArgument, FunctionKind, FunctionProperties, FunctionReturnType,
+        };
         pub use metrics_properties::MetricsProperties;
         pub use model_properties::ModelConstraint;
         pub use model_properties::ModelFreshness;

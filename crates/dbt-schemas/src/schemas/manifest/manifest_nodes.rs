@@ -7,7 +7,7 @@ use serde_with::skip_serializing_none;
 type YmlValue = dbt_serde_yaml::Value;
 
 use crate::schemas::{
-    DbtExposure, DbtModel, DbtSeed, DbtSnapshot, DbtSource, DbtTest, DbtUnitTest,
+    DbtExposure, DbtFunction, DbtModel, DbtSeed, DbtSnapshot, DbtSource, DbtTest, DbtUnitTest,
     common::{
         Access, DbtChecksum, DbtContract, DbtQuoting, Expect, FreshnessDefinition, Given,
         IncludeExclude, NodeDependsOn,
@@ -21,8 +21,9 @@ use crate::schemas::{
     },
     nodes::TestMetadata,
     project::{
-        DataTestConfig, ExposureConfig, MetricConfig, ModelConfig, SavedQueryConfig, SeedConfig,
-        SemanticModelConfig, SnapshotConfig, SourceConfig, UnitTestConfig,
+        DataTestConfig, ExposureConfig, FunctionConfig, MetricConfig, ModelConfig,
+        SavedQueryConfig, SeedConfig, SemanticModelConfig, SnapshotConfig, SourceConfig,
+        UnitTestConfig,
     },
     properties::{
         ModelConstraint, UnitTestOverrides,
@@ -107,6 +108,8 @@ pub struct ManifestNodeBaseAttributes {
     pub refs: Vec<DbtRef>,
     #[serde(default)]
     pub sources: Vec<DbtSourceWrapper>,
+    #[serde(default)]
+    pub functions: Vec<DbtRef>,
 
     // Code
     pub raw_code: Option<String>,
@@ -167,6 +170,7 @@ impl From<DbtSeed> for ManifestSeed {
                 depends_on: seed.__base_attr__.depends_on,
                 refs: seed.__base_attr__.refs,
                 sources: seed.__base_attr__.sources,
+                functions: seed.__base_attr__.functions,
                 metrics: seed.__base_attr__.metrics,
                 raw_code: seed.__common_attr__.raw_code,
                 compiled: None,
@@ -236,6 +240,7 @@ impl From<DbtUnitTest> for ManifestUnitTest {
                 depends_on: unit_test.__base_attr__.depends_on,
                 refs: unit_test.__base_attr__.refs,
                 sources: unit_test.__base_attr__.sources,
+                functions: unit_test.__base_attr__.functions,
                 metrics: unit_test.__base_attr__.metrics,
                 raw_code: unit_test.__common_attr__.raw_code,
                 compiled: None,
@@ -307,6 +312,7 @@ impl From<DbtTest> for ManifestDataTest {
                 depends_on: test.__base_attr__.depends_on,
                 refs: test.__base_attr__.refs,
                 sources: test.__base_attr__.sources,
+                functions: test.__base_attr__.functions,
                 metrics: test.__base_attr__.metrics,
                 raw_code: test.__common_attr__.raw_code,
                 compiled: None,
@@ -369,6 +375,7 @@ impl From<DbtSnapshot> for ManifestSnapshot {
                 depends_on: snapshot.__base_attr__.depends_on,
                 refs: snapshot.__base_attr__.refs,
                 sources: snapshot.__base_attr__.sources,
+                functions: snapshot.__base_attr__.functions,
                 metrics: snapshot.__base_attr__.metrics,
                 raw_code: snapshot.__common_attr__.raw_code,
                 compiled: None,
@@ -505,6 +512,7 @@ impl From<DbtModel> for ManifestModel {
                 depends_on: model.__base_attr__.depends_on,
                 refs: model.__base_attr__.refs,
                 sources: model.__base_attr__.sources,
+                functions: model.__base_attr__.functions,
                 metrics: model.__base_attr__.metrics,
                 raw_code: model.__common_attr__.raw_code,
                 compiled: None,
@@ -567,6 +575,71 @@ impl From<DbtOperation> for ManifestOperation {
             },
             __base_attr__: ManifestNodeBaseAttributes::default(),
             __other__: operation.__other__,
+        }
+    }
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct ManifestFunction {
+    pub __common_attr__: ManifestMaterializableCommonAttributes,
+
+    pub __base_attr__: ManifestNodeBaseAttributes,
+
+    // Function Specific Attributes
+    pub config: FunctionConfig,
+    pub access: Access,
+    pub group: Option<String>,
+    pub language: Option<String>,
+    pub on_configuration_change: Option<String>,
+    pub returns: Option<crate::schemas::properties::FunctionReturnType>,
+    pub arguments: Option<Vec<crate::schemas::properties::FunctionArgument>>,
+    #[serde(rename = "type")]
+    pub function_kind: Option<crate::schemas::properties::FunctionKind>,
+
+    pub __other__: BTreeMap<String, YmlValue>,
+}
+
+impl From<DbtFunction> for ManifestFunction {
+    fn from(function: DbtFunction) -> Self {
+        Self {
+            __common_attr__: ManifestMaterializableCommonAttributes {
+                database: function.__base_attr__.database,
+                schema: function.__base_attr__.schema,
+                unique_id: function.__common_attr__.unique_id,
+                name: function.__common_attr__.name,
+                package_name: function.__common_attr__.package_name,
+                fqn: function.__common_attr__.fqn,
+                path: function.__common_attr__.original_file_path.clone(),
+                patch_path: function.__common_attr__.patch_path,
+                original_file_path: function.__common_attr__.original_file_path,
+                description: function.__common_attr__.description,
+                tags: function.__common_attr__.tags,
+                meta: function.__common_attr__.meta,
+            },
+            __base_attr__: ManifestNodeBaseAttributes {
+                alias: function.__base_attr__.alias,
+                relation_name: function.__base_attr__.relation_name,
+                compiled_path: None,
+                build_path: None,
+                columns: BTreeMap::new(),
+                depends_on: function.__base_attr__.depends_on,
+                refs: function.__base_attr__.refs,
+                sources: function.__base_attr__.sources,
+                raw_code: function.__common_attr__.raw_code,
+                compiled: None,
+                ..Default::default()
+            },
+            config: function.deprecated_config,
+            access: function.__function_attr__.access,
+            group: function.__function_attr__.group,
+            language: function.__function_attr__.language,
+            on_configuration_change: function.__function_attr__.on_configuration_change,
+            returns: function.__function_attr__.returns,
+            arguments: function.__function_attr__.arguments,
+            function_kind: Some(function.__function_attr__.function_kind),
+            __other__: function.__other__,
         }
     }
 }

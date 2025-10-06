@@ -8,7 +8,7 @@ use dbt_common::adapter::AdapterType;
 use dbt_common::{ErrorCode, FsResult, fs_err, show_error, stdfs};
 use dbt_frontend_common::Dialect;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
-use dbt_jinja_utils::refs_and_sources::RefsAndSources;
+use dbt_jinja_utils::node_resolver::NodeResolver;
 use dbt_jinja_utils::serde::into_typed_with_jinja;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_schemas::dbt_utils::validate_delimeter;
@@ -19,7 +19,7 @@ use dbt_schemas::schemas::project::{DbtProject, SeedConfig};
 use dbt_schemas::schemas::properties::SeedProperties;
 use dbt_schemas::schemas::{CommonAttributes, DbtSeed, DbtSeedAttr, NodeBaseAttributes};
 use dbt_schemas::state::{DbtPackage, GenericTestAsset};
-use dbt_schemas::state::{ModelStatus, RefsAndSourcesTracker};
+use dbt_schemas::state::{ModelStatus, NodeResolverTracker};
 use minijinja::value::Value as MinijinjaValue;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
@@ -43,7 +43,7 @@ pub fn resolve_seeds(
     jinja_env: &JinjaEnv,
     base_ctx: &BTreeMap<String, MinijinjaValue>,
     collected_generic_tests: &mut Vec<GenericTestAsset>,
-    refs_and_sources: &mut RefsAndSources,
+    node_resolver: &mut NodeResolver,
 ) -> FsResult<(HashMap<String, Arc<DbtSeed>>, HashMap<String, Arc<DbtSeed>>)> {
     let mut seeds: HashMap<String, Arc<DbtSeed>> = HashMap::new();
     let mut disabled_seeds: HashMap<String, Arc<DbtSeed>> = HashMap::new();
@@ -245,7 +245,7 @@ pub fn resolve_seeds(
             ModelStatus::Disabled
         };
 
-        match refs_and_sources.insert_ref(&dbt_seed, adapter_type, status, false) {
+        match node_resolver.insert_ref(&dbt_seed, adapter_type, status, false) {
             Ok(_) => (),
             Err(e) => {
                 show_error!(&io_args, e.with_location(path.clone()));

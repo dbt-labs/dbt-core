@@ -308,6 +308,8 @@ pub fn resource_counts_event(args: InvocationArgs, manifest: &DbtManifest) {
     let mut snapshot_count = 0;
     let mut operation_count = 0;
     let mut analysis_count = 0;
+    // We need to add functions to ResourceCounts proto
+    let mut _function_count = 0;
     for (_, node) in manifest.nodes.iter() {
         match node {
             DbtNode::Model(_) => model_count += 1,
@@ -316,6 +318,7 @@ pub fn resource_counts_event(args: InvocationArgs, manifest: &DbtManifest) {
             DbtNode::Snapshot(_) => snapshot_count += 1,
             DbtNode::Operation(_) => operation_count += 1,
             DbtNode::Analysis(_) => analysis_count += 1,
+            DbtNode::Function(_) => _function_count += 1,
         }
     }
 

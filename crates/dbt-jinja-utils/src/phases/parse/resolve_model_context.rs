@@ -40,7 +40,9 @@ use minijinja::{
     constants::{CURRENT_PATH, CURRENT_SPAN, TARGET_UNIQUE_ID},
     listener::RenderingEventListener,
     machinery::Span,
-    value::{Object, ObjectRepr, Value as MinijinjaValue, ValueKind},
+    value::{
+        Object, ObjectRepr, Value as MinijinjaValue, ValueKind, function_object::FunctionObject,
+    },
 };
 use minijinja_contrib::modules::{py_datetime::datetime::PyDateTime, pytz::PytzTimezone};
 
@@ -123,6 +125,18 @@ pub fn build_resolve_model_context<T: DefaultTo<T> + 'static>(
     let source_value = MinijinjaValue::from_object(source_function);
     context.insert("source".to_owned(), source_value.clone());
     builtins.insert("source".to_string(), source_value);
+
+    // Create function function
+    let function_function = ResolveFunctionFunction {
+        database: database.to_string(),
+        schema: schema.to_string(),
+        sql_resources: sql_resources.clone(),
+        adapter_type,
+        package_quoting,
+    };
+    let function_value = MinijinjaValue::from_object(function_function);
+    context.insert("function".to_owned(), function_value.clone());
+    builtins.insert("function".to_string(), function_value);
 
     let sql_resources_clone = sql_resources.clone();
     context.insert(
@@ -231,6 +245,7 @@ pub fn build_resolve_model_context<T: DefaultTo<T> + 'static>(
             },
             refs: vec![],
             sources: vec![],
+            functions: vec![],
             metrics: vec![],
         },
         __model_attr__: DbtModelAttr {
@@ -490,6 +505,92 @@ impl<T: DefaultTo<T>> Object for ResolveSourceFunction<T> {
                 "source requires 2 string arguments",
             ))
         }
+    }
+}
+
+#[derive(Debug)]
+struct ResolveFunctionFunction<T: DefaultTo<T>> {
+    database: String,
+    schema: String,
+    adapter_type: AdapterType,
+    sql_resources: Arc<Mutex<Vec<SqlResource<T>>>>,
+    package_quoting: DbtQuoting,
+}
+
+impl<T: DefaultTo<T>> Object for ResolveFunctionFunction<T> {
+    fn get_value(self: &Arc<Self>, key: &MinijinjaValue) -> Option<MinijinjaValue> {
+        match key.as_str()? {
+            "function_name" => Some(MinijinjaValue::from("function")),
+            _ => None,
+        }
+    }
+
+    fn call(
+        self: &Arc<Self>,
+        _state: &State<'_, '_>,
+        args: &[MinijinjaValue],
+        _listeners: &[Rc<dyn RenderingEventListener>],
+    ) -> Result<MinijinjaValue, MinijinjaError> {
+        if args.is_empty() || args.len() > 3 {
+            return Err(MinijinjaError::new(
+                MinijinjaErrorKind::InvalidOperation,
+                "invalid number of arguments for function macro",
+            ));
+        }
+        let mut parser = ArgParser::new(args, None);
+
+        let name: String;
+        let mut package: Option<String> = None;
+
+        if parser.positional_len() == 1 {
+            name = parser.get::<String>("")?;
+        } else if parser.positional_len() == 2 {
+            let package_arg = parser.get::<String>("")?;
+            let name_arg = parser.get::<String>("")?;
+            package = Some(package_arg);
+            name = name_arg;
+        } else {
+            return Err(MinijinjaError::new(
+                MinijinjaErrorKind::InvalidOperation,
+                "function() takes at most 2 positional arguments",
+            ));
+        }
+
+        let function_name = name;
+        let namespace = package;
+        let location: MinijinjaValue = parser.get("location")?;
+        let (source_line, source_col, source_index): (usize, usize, usize) = (
+            location.get_item_by_index(0).unwrap().as_usize().unwrap(),
+            location.get_item_by_index(1).unwrap().as_usize().unwrap(),
+            location.get_item_by_index(2).unwrap().as_usize().unwrap(),
+        );
+        let location = CodeLocation::new(source_line, source_col, source_index);
+        self.sql_resources
+            .lock()
+            .unwrap()
+            .push(SqlResource::Function((
+                function_name.clone(),
+                namespace,
+                location,
+            )));
+
+        let relation = create_relation(
+            self.adapter_type,
+            self.database.clone(),
+            self.schema.clone(),
+            Some(function_name),
+            None,
+            self.package_quoting
+                .try_into()
+                .expect("Failed to convert quoting to resolved quoting"),
+        )
+        .unwrap();
+
+        // Create a FunctionObject instead of returning the relation directly
+        let qualified_name = relation.render_self_as_str();
+        let function_object = FunctionObject::new(qualified_name);
+
+        Ok(function_object.into_value())
     }
 }
 

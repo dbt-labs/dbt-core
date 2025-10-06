@@ -11,17 +11,18 @@ use dbt_common::{
 use dbt_fusion_adapter::relation_object::{
     RelationObject, create_relation_from_node, create_relation_internal,
 };
+use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::{
     filter::RunFilter,
     schemas::{
-        DbtSource, InternalDbtNodeAttributes, Nodes,
+        DbtFunction, DbtSource, InternalDbtNodeAttributes, Nodes,
         common::DbtQuoting,
         ref_and_source::{DbtRef, DbtSourceWrapper},
         telemetry::NodeType,
     },
-    state::{ModelStatus, RefsAndSourcesTracker},
+    state::{ModelStatus, NodeResolverTracker},
 };
-use minijinja::Value as MinijinjaValue;
+use minijinja::{Value as MinijinjaValue, value::function_object::FunctionObject};
 
 type RefRecord = (String, MinijinjaValue, ModelStatus, Option<MinijinjaValue>);
 
@@ -30,12 +31,14 @@ type RefRecord = (String, MinijinjaValue, ModelStatus, Option<MinijinjaValue>);
 /// Carries optional `sample_plan` which, when present, remaps source relations to the
 /// sampled schema in remote runs (e.g., `<schema>_SAMPLE` or an explicit `remote.schema`).
 #[derive(Debug, Default, Clone)]
-pub struct RefsAndSources {
+pub struct NodeResolver {
     /// Map of ref_name (either {project}.{ref_name}, {ref_name}) to (unique_id, relation, status, deferred_relation)
     #[allow(clippy::type_complexity)]
     pub refs: BTreeMap<String, Vec<RefRecord>>,
     /// Map of (package_name.source_name.name ) to (unique_id, relation, status)
     pub sources: BTreeMap<String, Vec<(String, MinijinjaValue, ModelStatus)>>,
+    /// Map of function_name (either {project}.{function_name}, {function_name}) to (unique_id, function_object, status)
+    pub functions: BTreeMap<String, Vec<(String, MinijinjaValue, ModelStatus)>>,
     /// Root project name (needed for resolving refs)
     pub root_package_name: String,
     /// Optional Quoting Config produced by mantle/core manifest needed for back compatibility for defer in fusion
@@ -48,8 +51,8 @@ pub struct RefsAndSources {
     pub compile_or_test: bool,
 }
 
-impl RefsAndSources {
-    /// Create a new RefsAndSources from a DbtManifest
+impl NodeResolver {
+    /// Create a new NodeResolver from a DbtManifest
     pub fn from_dbt_nodes(
         nodes: &Nodes,
         adapter_type: AdapterType,
@@ -59,7 +62,7 @@ impl RefsAndSources {
         renaming: BTreeMap<String, (String, String, String)>,
         compile_or_test: bool,
     ) -> FsResult<Self> {
-        let mut refs_and_sources = RefsAndSources {
+        let mut node_resolver = NodeResolver {
             root_package_name,
             mantle_quoting,
             run_filter,
@@ -69,26 +72,29 @@ impl RefsAndSources {
         };
         for (_, node) in nodes.iter() {
             if let Some(source) = node.as_any().downcast_ref::<DbtSource>() {
-                refs_and_sources.insert_source(
+                node_resolver.insert_source(
                     &node.common().package_name,
                     source,
                     adapter_type,
                     ModelStatus::Enabled,
                 )?;
+            } else if let Some(function) = node.as_any().downcast_ref::<DbtFunction>() {
+                node_resolver.insert_function(function, adapter_type, ModelStatus::Enabled)?;
             } else {
                 match node.resource_type() {
-                    NodeType::Model | NodeType::Snapshot | NodeType::Seed => refs_and_sources
-                        .insert_ref(node, adapter_type, ModelStatus::Enabled, false)?,
+                    NodeType::Model | NodeType::Snapshot | NodeType::Seed => {
+                        node_resolver.insert_ref(node, adapter_type, ModelStatus::Enabled, false)?
+                    }
                     _ => (),
                 }
             }
         }
-        Ok(refs_and_sources)
+        Ok(node_resolver)
     }
 
-    /// Merge another RefsAndSources into this one, avoiding duplicates
+    /// Merge another NodeResolver into this one, avoiding duplicates
     /// This uses functional programming style for cleaner code
-    pub fn merge(&mut self, source: RefsAndSources) {
+    pub fn merge(&mut self, source: NodeResolver) {
         for (key, source_entries) in source.refs {
             let target_entries = self.refs.entry(key).or_default();
             let existing_ids: HashSet<String> = target_entries
@@ -106,6 +112,19 @@ impl RefsAndSources {
 
         for (key, source_entries) in source.sources {
             let target_entries = self.sources.entry(key).or_default();
+            let existing_ids: HashSet<String> =
+                target_entries.iter().map(|(id, _, _)| id.clone()).collect();
+
+            // Add only entries that don't exist in target
+            target_entries.extend(
+                source_entries
+                    .into_iter()
+                    .filter(|(unique_id, _, _)| !existing_ids.contains(unique_id)),
+            );
+        }
+
+        for (key, source_entries) in source.functions {
+            let target_entries = self.functions.entry(key).or_default();
             let existing_ids: HashSet<String> =
                 target_entries.iter().map(|(id, _, _)| id.clone()).collect();
 
@@ -135,6 +154,23 @@ impl RefsAndSources {
         entries.push((unique_id.to_string(), relation.clone(), status, None));
     }
 
+    fn push_or_replace_function_entry(
+        entries: &mut Vec<(String, MinijinjaValue, ModelStatus)>,
+        unique_id: &str,
+        function_object: &MinijinjaValue,
+        status: ModelStatus,
+        override_existing: bool,
+    ) {
+        if override_existing
+            && let Some(existing) = entries.iter_mut().find(|(id, _, _)| id == unique_id)
+        {
+            *existing = (unique_id.to_string(), function_object.clone(), status);
+            return;
+        }
+
+        entries.push((unique_id.to_string(), function_object.clone(), status));
+    }
+
     fn set_deferred_relation(
         entries: &mut [RefRecord],
         unique_id: &str,
@@ -155,10 +191,11 @@ impl RefsAndSources {
     }
 }
 
-impl RefsAndSourcesTracker for RefsAndSources {
+impl NodeResolverTracker for NodeResolver {
     fn as_any(&self) -> &dyn Any {
         self
     }
+
     /// Insert or overwrite a ref from a node into the refs map
     fn insert_ref(
         &mut self,
@@ -250,6 +287,45 @@ impl RefsAndSourcesTracker for RefsAndSources {
                 ));
             }
         }
+        Ok(())
+    }
+
+    /// Insert or overwrite a function() from a node into the functions map
+    fn insert_function(
+        &mut self,
+        node: &dyn InternalDbtNodeAttributes,
+        adapter_type: AdapterType,
+        status: ModelStatus,
+    ) -> FsResult<()> {
+        let package_name = &node.package_name();
+        let function_name = node.name();
+        let unique_id = node.unique_id();
+
+        // For functions, create a FunctionObject that renders function calls
+        let function_object = create_function_object_from_node(adapter_type, node)?.into_value();
+
+        // Lookup by function name
+        let function_entry = self.functions.entry(function_name.clone()).or_default();
+        Self::push_or_replace_function_entry(
+            function_entry,
+            &unique_id,
+            &function_object,
+            status,
+            true,
+        );
+
+        // Lookup by package and function name
+        let package_function_entry = self
+            .functions
+            .entry(format!("{package_name}.{function_name}"))
+            .or_default();
+        Self::push_or_replace_function_entry(
+            package_function_entry,
+            &unique_id,
+            &function_object,
+            status,
+            true,
+        );
         Ok(())
     }
 
@@ -465,6 +541,102 @@ impl RefsAndSourcesTracker for RefsAndSources {
         }
     }
 
+    /// Lookup a function by package name and function name
+    fn lookup_function(
+        &self,
+        maybe_package_name: &Option<String>,
+        function_name: &str,
+        maybe_node_package_name: &Option<String>,
+    ) -> FsResult<(String, MinijinjaValue, ModelStatus)> {
+        // Create a list of packages to search, where None means to
+        // search non-package limited names
+        let root_package = Some(self.root_package_name.clone());
+        let search_packages = match (maybe_package_name, maybe_node_package_name) {
+            // If maybe_package_name is specified, only search that package
+            (Some(_), _) => vec![maybe_package_name],
+            // If maybe_node_package_name is specified, and this is the root package,
+            // search this package and the global functions
+            (None, Some(node_pkg)) if *node_pkg == self.root_package_name => {
+                vec![&root_package, &None]
+            }
+            // If maybe_node_package_name is specified, and this is not the root package,
+            // search this package, the root package, and then finally global functions
+            (None, Some(_)) => vec![maybe_node_package_name, &root_package, &None],
+            // If maybe_package_name and maybe_node_package_name are not specified,
+            // search only the global functions
+            (None, None) => vec![&None],
+        };
+
+        let mut enabled_function: Option<(String, MinijinjaValue, ModelStatus)> = None;
+        let mut disabled_function: Option<(String, MinijinjaValue, ModelStatus)> = None;
+        let mut search_function_names: Vec<String> = Vec::new();
+
+        for maybe_package in search_packages.iter() {
+            // If this is a package, use the package name + function_name to search
+            let search_function_name = if let Some(package_name) = maybe_package {
+                format!("{}.{}", package_name.clone(), function_name)
+            } else {
+                // If this is not a package, just use the function_name to search
+                function_name.to_string()
+            };
+            search_function_names.push(search_function_name.clone());
+
+            if let Some(res) = self.functions.get(&search_function_name) {
+                let (enabled_functions, disabled_functions): (Vec<_>, Vec<_>) = res
+                    .iter()
+                    .partition(|(_, _, status)| *status != ModelStatus::Disabled);
+
+                // We got a function or we wouldn't be here
+                if !disabled_functions.is_empty() {
+                    disabled_function = Some(disabled_functions[0].clone());
+                }
+
+                match enabled_functions.len() {
+                    // If there is one enabled function, use it
+                    1 => {
+                        enabled_function = Some(enabled_functions[0].clone());
+                        break;
+                    }
+                    n if n > 1 => {
+                        // More than one enabled function with the same name, issue error
+                        return err!(
+                            ErrorCode::InvalidConfig,
+                            "Found ambiguous function('{}') pointing to multiple nodes: [{}]",
+                            function_name,
+                            res.iter()
+                                .map(|(r, _, _)| format!("'{r}'"))
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        );
+                    }
+                    // If there are no enabled functions, continue to next package
+                    _ => {}
+                };
+            }
+        }
+
+        // If function not found issue error
+        match enabled_function {
+            Some(function_result) => Ok(function_result),
+            None => {
+                if disabled_function.is_some() {
+                    err!(
+                        ErrorCode::DisabledDependency,
+                        "Attempted to use disabled function '{}'",
+                        function_name
+                    )
+                } else {
+                    err!(
+                        ErrorCode::InvalidConfig,
+                        "Function '{}' not found in project. Searched for '{}'",
+                        function_name,
+                        search_function_names.join(", ")
+                    )
+                }
+            }
+        }
+    }
+
     fn update_ref_with_deferral(
         &mut self,
         node: &dyn InternalDbtNodeAttributes,
@@ -538,11 +710,12 @@ impl RefsAndSourcesTracker for RefsAndSources {
 
 /// Resolve the dependencies for a model
 /// Returns a set of node unique_ids that had resolution errors
+#[allow(clippy::cognitive_complexity)]
 pub fn resolve_dependencies(
     io: &IoArgs,
     nodes: &mut Nodes,
     disabled_nodes: &mut Nodes,
-    refs_and_sources: &RefsAndSources,
+    node_resolver: &NodeResolver,
 ) -> HashSet<String> {
     let mut tests_to_disable = Vec::new();
     let mut nodes_with_errors = HashSet::new();
@@ -573,7 +746,7 @@ pub fn resolve_dependencies(
             } else {
                 CodeLocation::default()
             };
-            match refs_and_sources.lookup_ref(
+            match node_resolver.lookup_ref(
                 package,
                 name,
                 &version.as_ref().map(|v| v.to_string()),
@@ -624,7 +797,7 @@ pub fn resolve_dependencies(
                 CodeLocation::default()
             };
 
-            match refs_and_sources.lookup_source(&node_package_name, &source_name, &table_name) {
+            match node_resolver.lookup_source(&node_package_name, &source_name, &table_name) {
                 Ok((dependency_id, _, _)) => {
                     node_base.depends_on.nodes.push(dependency_id.clone());
                     node_base
@@ -638,6 +811,41 @@ pub fn resolve_dependencies(
                         has_disabled_dependency = true;
                     } else {
                         // Track this node as having an error (unresolved ref/source)
+                        nodes_with_errors.insert(node_unique_id.clone());
+                        show_error!(io, e.with_location(location));
+                    }
+                }
+            };
+        }
+
+        // Check functions
+        for DbtRef {
+            name,
+            package,
+            version: _,
+            location,
+        } in node_base.functions.iter()
+        {
+            let location = if let Some(location) = location {
+                location.clone().with_file(&node_path)
+            } else {
+                CodeLocation::default()
+            };
+
+            match node_resolver.lookup_function(node_package_name_value, name, package) {
+                Ok((dependency_id, _, _)) => {
+                    node_base.depends_on.nodes.push(dependency_id.clone());
+                    node_base
+                        .depends_on
+                        .nodes_with_ref_location
+                        .push((dependency_id, location));
+                }
+                Err(e) => {
+                    // Check if this is a disabled dependency error
+                    if is_test && e.code == ErrorCode::DisabledDependency {
+                        has_disabled_dependency = true;
+                    } else {
+                        // Track this node as having an error (unresolved function)
                         nodes_with_errors.insert(node_unique_id.clone());
                         show_error!(io, e.with_location(location));
                     }
@@ -659,4 +867,23 @@ pub fn resolve_dependencies(
 
     // Return the set of nodes that had resolution errors
     nodes_with_errors
+}
+
+/// Create a FunctionObject from a node (specifically for dbt functions)
+pub fn create_function_object_from_node(
+    adapter_type: AdapterType,
+    node: &dyn InternalDbtNodeAttributes,
+) -> FsResult<FunctionObject> {
+    let relation = create_relation_internal(
+        adapter_type,
+        node.database(),
+        node.schema(),
+        Some(node.base().alias.clone()),
+        Some(RelationType::from(node.materialized())),
+        node.quoting(),
+    )?;
+
+    // Create the qualified function name
+    let rendered = relation.render_self_as_str();
+    Ok(FunctionObject::new(rendered))
 }

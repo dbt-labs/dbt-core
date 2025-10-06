@@ -38,6 +38,7 @@ pub struct MinimalProperties {
     pub models: BTreeMap<String, MinimalPropertiesEntry>,
     pub seeds: BTreeMap<String, MinimalPropertiesEntry>,
     pub snapshots: BTreeMap<String, MinimalPropertiesEntry>,
+    pub functions: BTreeMap<String, MinimalPropertiesEntry>,
     pub unit_tests: BTreeMap<String, MinimalPropertiesEntry>,
     pub tests: BTreeMap<String, MinimalPropertiesEntry>,
     pub exposures: BTreeMap<String, MinimalPropertiesEntry>,
@@ -237,6 +238,38 @@ impl MinimalProperties {
                             name_span: Span::default(),
                             relative_path: properties_path.to_path_buf(),
                             schema_value: snapshot_value,
+                            table_value: None,
+                            version_info: None,
+                            duplicate_paths: vec![],
+                        },
+                    );
+                }
+            }
+        }
+        if let Some(functions) = other.functions {
+            for function_value in functions {
+                let function = into_typed_with_jinja::<MinimalSchemaValue, _>(
+                    io_args,
+                    function_value.clone(),
+                    false,
+                    jinja_env,
+                    base_ctx,
+                    &[],
+                    dependency_package_name_from_ctx(jinja_env, base_ctx),
+                    true,
+                )?;
+                if let Some(existing_function) = self.functions.get_mut(&function.name) {
+                    existing_function
+                        .duplicate_paths
+                        .push(properties_path.to_path_buf());
+                } else {
+                    self.functions.insert(
+                        function.name.clone(),
+                        MinimalPropertiesEntry {
+                            name: validate_resource_name(&function.name)?,
+                            name_span: Span::default(),
+                            relative_path: properties_path.to_path_buf(),
+                            schema_value: function_value,
                             table_value: None,
                             version_info: None,
                             duplicate_paths: vec![],

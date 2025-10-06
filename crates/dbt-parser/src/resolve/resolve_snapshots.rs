@@ -13,7 +13,7 @@ use dbt_common::error::AbstractLocation;
 use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
 use dbt_common::{ErrorCode, FsResult, fs_err, show_error, show_warning, stdfs, unexpected_fs_err};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
-use dbt_jinja_utils::refs_and_sources::RefsAndSources;
+use dbt_jinja_utils::node_resolver::NodeResolver;
 use dbt_jinja_utils::serde::into_typed_with_jinja;
 use dbt_schemas::schemas::common::{DbtMaterialization, DbtQuoting, NodeDependsOn};
 use dbt_schemas::schemas::dbt_column::process_columns;
@@ -24,7 +24,7 @@ use dbt_schemas::schemas::properties::SnapshotProperties;
 use dbt_schemas::schemas::ref_and_source::{DbtRef, DbtSourceWrapper};
 use dbt_schemas::schemas::{CommonAttributes, DbtSnapshot, DbtSnapshotAttr, NodeBaseAttributes};
 use dbt_schemas::state::{
-    DbtAsset, DbtPackage, DbtRuntimeConfig, ModelStatus, RefsAndSourcesTracker,
+    DbtAsset, DbtPackage, DbtRuntimeConfig, ModelStatus, NodeResolverTracker,
 };
 use minijinja::Value as MinijinjaValue;
 use std::collections::BTreeMap;
@@ -49,7 +49,7 @@ pub async fn resolve_snapshots(
     jinja_env: Arc<JinjaEnv>,
     base_ctx: &BTreeMap<String, MinijinjaValue>,
     runtime_config: Arc<DbtRuntimeConfig>,
-    refs_and_sources: &mut RefsAndSources,
+    node_resolver: &mut NodeResolver,
     token: &CancellationToken,
 ) -> FsResult<(
     HashMap<String, Arc<DbtSnapshot>>,
@@ -323,6 +323,16 @@ pub async fn resolve_snapshots(
                             location: Some(location.with_file(&dbt_asset.path)),
                         })
                         .collect(),
+                    functions: sql_file_info
+                        .functions
+                        .iter()
+                        .map(|(function_name, package, location)| DbtRef {
+                            name: function_name.to_owned(),
+                            package: package.to_owned(),
+                            version: None, // Functions don't have versions
+                            location: Some(location.with_file(&dbt_asset.path)),
+                        })
+                        .collect(),
                     sources: sql_file_info
                         .sources
                         .iter()
@@ -375,7 +385,7 @@ pub async fn resolve_snapshots(
                 dbt_snapshot.__base_attr__.schema = target_schema.clone();
             }
 
-            match refs_and_sources.insert_ref(&dbt_snapshot, adapter_type, status, false) {
+            match node_resolver.insert_ref(&dbt_snapshot, adapter_type, status, false) {
                 Ok(_) => (),
                 Err(e) => {
                     show_error!(&arg.io, e.with_location(dbt_asset.path.clone()));

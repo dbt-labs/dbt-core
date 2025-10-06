@@ -25,10 +25,13 @@ use crate::schemas::{
     manifest::semantic_model::NodeRelation,
     manifest::{DbtMetric, DbtSavedQuery, DbtSemanticModel},
     project::{
-        DataTestConfig, ExposureConfig, ModelConfig, SeedConfig, SnapshotConfig,
+        DataTestConfig, ExposureConfig, FunctionConfig, ModelConfig, SeedConfig, SnapshotConfig,
         SnapshotMetaColumnNames, SourceConfig, UnitTestConfig,
     },
-    properties::{ModelConstraint, ModelFreshness, UnitTestOverrides},
+    properties::{
+        FunctionArgument, FunctionKind, FunctionReturnType, ModelConstraint, ModelFreshness,
+        UnitTestOverrides,
+    },
     ref_and_source::{DbtRef, DbtSourceWrapper},
     serde::StringOrInteger,
 };
@@ -115,6 +118,7 @@ pub enum InternalDbtNodeWrapper {
     Source(Box<DbtSource>),
     Snapshot(Box<DbtSnapshot>),
     Exposure(Box<DbtExposure>),
+    Function(Box<DbtFunction>),
 }
 
 impl InternalDbtNodeWrapper {
@@ -143,6 +147,7 @@ impl InternalDbtNodeWrapper {
             InternalDbtNodeWrapper::Source(source) => source.as_ref(),
             InternalDbtNodeWrapper::Snapshot(snapshot) => snapshot.as_ref(),
             InternalDbtNodeWrapper::Exposure(exposure) => exposure.as_ref(),
+            InternalDbtNodeWrapper::Function(function) => function.as_ref(),
         }
     }
 }
@@ -1102,6 +1107,91 @@ impl InternalDbtNode for DbtMetric {
     }
 }
 
+impl InternalDbtNode for DbtFunction {
+    fn common(&self) -> &CommonAttributes {
+        &self.__common_attr__
+    }
+
+    fn base(&self) -> &NodeBaseAttributes {
+        &self.__base_attr__
+    }
+
+    fn resource_type(&self) -> NodeType {
+        NodeType::Function
+    }
+
+    fn base_mut(&mut self) -> &mut NodeBaseAttributes {
+        &mut self.__base_attr__
+    }
+
+    fn common_mut(&mut self) -> &mut CommonAttributes {
+        &mut self.__common_attr__
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn serialize_inner(&self) -> YmlValue {
+        dbt_serde_yaml::to_value(self).expect("Failed to serialize to YAML")
+    }
+
+    fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
+        if let Some(other_function) = other.as_any().downcast_ref::<DbtFunction>() {
+            self.deprecated_config == other_function.deprecated_config
+        } else {
+            false
+        }
+    }
+
+    fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
+        if let Some(other_function) = other.as_any().downcast_ref::<DbtFunction>() {
+            self.__common_attr__.checksum == other_function.__common_attr__.checksum
+        } else {
+            false
+        }
+    }
+
+    fn set_detected_introspection(&mut self, _introspection: IntrospectionKind) {
+        // Functions don't support introspection in the same way as models
+        // This could be a no-op or we could add introspection support later
+    }
+}
+
+impl InternalDbtNodeAttributes for DbtFunction {
+    fn static_analysis(&self) -> StaticAnalysisKind {
+        self.__base_attr__.static_analysis
+    }
+
+    fn set_quoting(&mut self, quoting: ResolvedQuoting) {
+        self.__base_attr__.quoting = quoting;
+    }
+
+    fn set_static_analysis(&mut self, static_analysis: StaticAnalysisKind) {
+        self.__base_attr__.static_analysis = static_analysis;
+    }
+
+    fn get_access(&self) -> Option<Access> {
+        Some(self.__function_attr__.access.clone())
+    }
+
+    fn get_group(&self) -> Option<String> {
+        self.__function_attr__.group.clone()
+    }
+
+    fn search_name(&self) -> String {
+        self.__common_attr__.name.clone()
+    }
+
+    fn selector_string(&self) -> String {
+        self.__common_attr__.fqn.join(".")
+    }
+
+    fn serialized_config(&self) -> YmlValue {
+        dbt_serde_yaml::to_value(&self.deprecated_config).expect("Failed to serialize to YAML")
+    }
+}
+
 impl InternalDbtNode for DbtMacro {
     fn common(&self) -> &CommonAttributes {
         unimplemented!("macro common attributes access")
@@ -1149,6 +1239,7 @@ pub struct Nodes {
     pub metrics: BTreeMap<String, Arc<DbtMetric>>,
     pub saved_queries: BTreeMap<String, Arc<DbtSavedQuery>>,
     pub groups: BTreeMap<String, Arc<DbtGroup>>,
+    pub functions: BTreeMap<String, Arc<DbtFunction>>,
 }
 
 impl Nodes {
@@ -1213,6 +1304,11 @@ impl Nodes {
             .iter()
             .map(|(id, node)| (id.clone(), Arc::new((**node).clone())))
             .collect();
+        let functions = self
+            .functions
+            .iter()
+            .map(|(id, node)| (id.clone(), Arc::new((**node).clone())))
+            .collect();
         Nodes {
             models,
             seeds,
@@ -1226,6 +1322,7 @@ impl Nodes {
             metrics,
             saved_queries,
             groups,
+            functions,
         }
     }
 
@@ -1240,6 +1337,7 @@ impl Nodes {
             .chain(self.snapshots.keys())
             .chain(self.analyses.keys())
             .chain(self.exposures.keys())
+            .chain(self.functions.keys())
     }
 
     pub fn get_node(&self, unique_id: &str) -> Option<&dyn InternalDbtNodeAttributes> {
@@ -1278,6 +1376,11 @@ impl Nodes {
             })
             .or_else(|| {
                 self.exposures
+                    .get(unique_id)
+                    .map(|n| Arc::as_ref(n) as &dyn InternalDbtNodeAttributes)
+            })
+            .or_else(|| {
+                self.functions
                     .get(unique_id)
                     .map(|n| Arc::as_ref(n) as &dyn InternalDbtNodeAttributes)
             })
@@ -1322,6 +1425,11 @@ impl Nodes {
                     .get(unique_id)
                     .map(|n| n.clone() as Arc<dyn InternalDbtNodeAttributes>)
             })
+            .or_else(|| {
+                self.functions
+                    .get(unique_id)
+                    .map(|n| n.clone() as Arc<dyn InternalDbtNodeAttributes>)
+            })
     }
 
     /// Check if a node exists in the graph.
@@ -1337,6 +1445,7 @@ impl Nodes {
             || self.analyses.contains_key(unique_id)
             || self.exposures.contains_key(unique_id)
             || self.metrics.contains_key(unique_id)
+            || self.functions.contains_key(unique_id)
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (&String, &dyn InternalDbtNodeAttributes)> + '_ {
@@ -1378,6 +1487,11 @@ impl Nodes {
                     .iter()
                     .map(|(id, node)| (id, Arc::as_ref(node) as &dyn InternalDbtNodeAttributes)),
             )
+            .chain(
+                self.functions
+                    .iter()
+                    .map(|(id, node)| (id, Arc::as_ref(node) as &dyn InternalDbtNodeAttributes)),
+            )
     }
 
     pub fn into_iter(
@@ -1415,6 +1529,10 @@ impl Nodes {
             .exposures
             .iter()
             .map(|(id, node)| (id.clone(), upcast(node.clone())));
+        let functions = self
+            .functions
+            .iter()
+            .map(|(id, node)| (id.clone(), upcast(node.clone())));
 
         models
             .chain(seeds)
@@ -1424,6 +1542,7 @@ impl Nodes {
             .chain(snapshots)
             .chain(analyses)
             .chain(exposures)
+            .chain(functions)
     }
 
     pub fn iter_values_mut(
@@ -1461,6 +1580,10 @@ impl Nodes {
             .exposures
             .values_mut()
             .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNodeAttributes);
+        let map_functions = self
+            .functions
+            .values_mut()
+            .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNodeAttributes);
 
         map_models
             .chain(map_seeds)
@@ -1470,6 +1593,7 @@ impl Nodes {
             .chain(map_snapshots)
             .chain(map_analyses)
             .chain(map_exposures)
+            .chain(map_functions)
     }
 
     pub fn get_value_mut(&mut self, unique_id: &str) -> Option<&mut dyn InternalDbtNodeAttributes> {
@@ -1508,6 +1632,11 @@ impl Nodes {
             })
             .or_else(|| {
                 self.exposures
+                    .get_mut(unique_id)
+                    .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNodeAttributes)
+            })
+            .or_else(|| {
+                self.functions
                     .get_mut(unique_id)
                     .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNodeAttributes)
             })
@@ -1571,6 +1700,14 @@ impl Nodes {
                     })
                     .map(|arc| Arc::as_ref(arc) as &dyn InternalDbtNodeAttributes)
             })
+            .or_else(|| {
+                self.functions
+                    .values()
+                    .find(|function| {
+                        function.base().relation_name == Some(relation_name.to_string())
+                    })
+                    .map(|arc| Arc::as_ref(arc) as &dyn InternalDbtNodeAttributes)
+            })
     }
 
     pub fn extend(&mut self, other: Nodes) {
@@ -1586,6 +1723,7 @@ impl Nodes {
         self.metrics.extend(other.metrics);
         self.saved_queries.extend(other.saved_queries);
         self.groups.extend(other.groups);
+        self.functions.extend(other.functions);
     }
 
     pub fn warn_on_custom_materializations(&self) -> FsResult<()> {
@@ -1687,6 +1825,8 @@ pub struct NodeBaseAttributes {
     pub refs: Vec<DbtRef>,
     #[serde(default)]
     pub sources: Vec<DbtSourceWrapper>,
+    #[serde(default)]
+    pub functions: Vec<DbtRef>,
     #[serde(default)]
     pub metrics: Vec<Vec<String>>,
 
@@ -2252,6 +2392,37 @@ pub struct DbtModelAttr {
     pub primary_key: Vec<String>,
     pub time_spine: Option<TimeSpine>,
     pub event_time: Option<String>,
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct DbtFunction {
+    pub __common_attr__: CommonAttributes,
+
+    pub __base_attr__: NodeBaseAttributes,
+
+    pub __function_attr__: DbtFunctionAttr,
+
+    // To be deprecated
+    #[serde(rename = "config")]
+    pub deprecated_config: FunctionConfig,
+
+    pub __other__: BTreeMap<String, YmlValue>,
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct DbtFunctionAttr {
+    pub access: Access,
+    pub group: Option<String>,
+    pub language: Option<String>,
+    pub on_configuration_change: Option<String>,
+    pub returns: Option<FunctionReturnType>,
+    pub arguments: Option<Vec<FunctionArgument>>,
+    #[serde(rename = "type")]
+    pub function_kind: FunctionKind,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]

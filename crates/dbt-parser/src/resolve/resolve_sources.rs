@@ -7,7 +7,7 @@ use dbt_common::adapter::AdapterType;
 use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
 use dbt_common::{ErrorCode, FsResult, err, show_error};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
-use dbt_jinja_utils::refs_and_sources::RefsAndSources;
+use dbt_jinja_utils::node_resolver::NodeResolver;
 use dbt_jinja_utils::serde::{Omissible, into_typed_with_jinja};
 use dbt_jinja_utils::utils::generate_relation_name;
 use dbt_schemas::schemas::common::{
@@ -18,7 +18,7 @@ use dbt_schemas::schemas::dbt_column::process_columns;
 use dbt_schemas::schemas::project::{DefaultTo, SourceConfig};
 use dbt_schemas::schemas::properties::{SourceProperties, Tables};
 use dbt_schemas::schemas::{CommonAttributes, DbtSource, DbtSourceAttr, NodeBaseAttributes};
-use dbt_schemas::state::{DbtPackage, GenericTestAsset, ModelStatus, RefsAndSourcesTracker};
+use dbt_schemas::state::{DbtPackage, GenericTestAsset, ModelStatus, NodeResolverTracker};
 use minijinja::Value as MinijinjaValue;
 use regex::Regex;
 use std::collections::BTreeMap;
@@ -41,7 +41,7 @@ pub fn resolve_sources(
     base_ctx: &BTreeMap<String, MinijinjaValue>,
     jinja_env: &JinjaEnv,
     collected_generic_tests: &mut Vec<GenericTestAsset>,
-    refs_and_sources: &mut RefsAndSources,
+    node_resolver: &mut NodeResolver,
 ) -> FsResult<(
     HashMap<String, Arc<DbtSource>>,
     HashMap<String, Arc<DbtSource>>,
@@ -277,6 +277,7 @@ pub fn resolve_sources(
                 columns,
                 refs: vec![],
                 sources: vec![],
+                functions: vec![],
                 depends_on: NodeDependsOn::default(),
                 metrics: vec![],
             },
@@ -298,7 +299,7 @@ pub fn resolve_sources(
             ModelStatus::Disabled
         };
 
-        match refs_and_sources.insert_source(package_name, &dbt_source, adapter_type, status) {
+        match node_resolver.insert_source(package_name, &dbt_source, adapter_type, status) {
             Ok(_) => (),
             Err(e) => {
                 show_error!(&io_args, e.with_location(mpe.relative_path.clone()));

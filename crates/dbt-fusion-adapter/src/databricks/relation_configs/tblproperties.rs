@@ -245,6 +245,7 @@ mod tests {
                 columns: BTreeMap::new(),
                 refs: vec![],
                 sources: vec![],
+                functions: vec![],
                 metrics: vec![],
                 depends_on: NodeDependsOn::default(),
             },

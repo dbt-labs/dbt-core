@@ -46,6 +46,7 @@ pub enum ResourcePathKind {
     TestPaths,
     FixturePaths,
     SessionPaths,
+    FunctionPaths,
 }
 
 impl fmt::Display for ResourcePathKind {
@@ -62,6 +63,7 @@ impl fmt::Display for ResourcePathKind {
             ResourcePathKind::ProfilePaths => "profile paths",
             ResourcePathKind::FixturePaths => "fixture paths",
             ResourcePathKind::SessionPaths => "session paths",
+            ResourcePathKind::FunctionPaths => "function paths",
         };
         write!(f, "{kind_str}")
     }
@@ -175,6 +177,7 @@ pub struct DbtPackage {
     pub dbt_properties: Vec<DbtAsset>,
     pub analysis_files: Vec<DbtAsset>,
     pub model_sql_files: Vec<DbtAsset>,
+    pub function_sql_files: Vec<DbtAsset>,
     pub macro_files: Vec<DbtAsset>,
     pub test_files: Vec<DbtAsset>,
     pub fixture_files: Vec<DbtAsset>,
@@ -256,7 +259,7 @@ impl fmt::Display for DbtState {
     }
 }
 
-pub trait RefsAndSourcesTracker: fmt::Debug + Send + Sync {
+pub trait NodeResolverTracker: fmt::Debug + Send + Sync {
     fn as_any(&self) -> &dyn Any;
     fn insert_ref(
         &mut self,
@@ -264,6 +267,12 @@ pub trait RefsAndSourcesTracker: fmt::Debug + Send + Sync {
         adapter_type: AdapterType,
         model_status: ModelStatus,
         overwrite: bool,
+    ) -> FsResult<()>;
+    fn insert_function(
+        &mut self,
+        node: &dyn InternalDbtNodeAttributes,
+        adapter_type: AdapterType,
+        model_status: ModelStatus,
     ) -> FsResult<()>;
     fn insert_source(
         &mut self,
@@ -285,6 +294,12 @@ pub trait RefsAndSourcesTracker: fmt::Debug + Send + Sync {
         source_name: &str,
         table_name: &str,
     ) -> FsResult<(String, MinijinjaValue, ModelStatus)>;
+    fn lookup_function(
+        &self,
+        maybe_package_name: &Option<String>,
+        function_name: &str,
+        maybe_node_package_name: &Option<String>,
+    ) -> FsResult<(String, MinijinjaValue, ModelStatus)>;
     fn compile_or_test(&self) -> bool;
     fn update_ref_with_deferral(
         &mut self,
@@ -296,9 +311,9 @@ pub trait RefsAndSourcesTracker: fmt::Debug + Send + Sync {
 
 // test only
 #[derive(Debug)]
-pub struct DummyRefsAndSourcesTracker;
+pub struct DummyNodeResolverTracker;
 
-impl RefsAndSourcesTracker for DummyRefsAndSourcesTracker {
+impl NodeResolverTracker for DummyNodeResolverTracker {
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -309,6 +324,16 @@ impl RefsAndSourcesTracker for DummyRefsAndSourcesTracker {
         _adapter_type: AdapterType,
         _model_status: ModelStatus,
         _overwrite: bool,
+    ) -> FsResult<()> {
+        // No-op for dummy
+        Ok(())
+    }
+
+    fn insert_function(
+        &mut self,
+        _node: &dyn InternalDbtNodeAttributes,
+        _adapter_type: AdapterType,
+        _model_status: ModelStatus,
     ) -> FsResult<()> {
         // No-op for dummy
         Ok(())
@@ -334,7 +359,7 @@ impl RefsAndSourcesTracker for DummyRefsAndSourcesTracker {
     ) -> FsResult<(String, MinijinjaValue, ModelStatus, Option<MinijinjaValue>)> {
         Err(fs_err!(
             ErrorCode::Generic,
-            "DummyRefsAndSourcesTracker: lookup_ref not implemented for '{}'",
+            "DummyNodeResolverTracker: lookup_ref not implemented for '{}'",
             name
         ))
     }
@@ -347,9 +372,22 @@ impl RefsAndSourcesTracker for DummyRefsAndSourcesTracker {
     ) -> FsResult<(String, MinijinjaValue, ModelStatus)> {
         Err(fs_err!(
             ErrorCode::Generic,
-            "DummyRefsAndSourcesTracker: lookup_source not implemented for '{}.{}'",
+            "DummyNodeResolverTracker: lookup_source not implemented for '{}.{}'",
             source_name,
             table_name
+        ))
+    }
+
+    fn lookup_function(
+        &self,
+        _maybe_package_name: &Option<String>,
+        function_name: &str,
+        _maybe_node_package_name: &Option<String>,
+    ) -> FsResult<(String, MinijinjaValue, ModelStatus)> {
+        Err(fs_err!(
+            ErrorCode::Generic,
+            "DummyNodeResolverTracker: lookup_function not implemented for '{}'",
+            function_name
         ))
     }
 
@@ -361,7 +399,7 @@ impl RefsAndSourcesTracker for DummyRefsAndSourcesTracker {
     ) -> FsResult<()> {
         Err(fs_err!(
             ErrorCode::Generic,
-            "DummyRefsAndSourcesTracker: update_ref_with_deferral not implemented"
+            "DummyNodeResolverTracker: update_ref_with_deferral not implemented"
         ))
     }
 
@@ -370,9 +408,9 @@ impl RefsAndSourcesTracker for DummyRefsAndSourcesTracker {
     }
 }
 
-impl Default for DummyRefsAndSourcesTracker {
+impl Default for DummyNodeResolverTracker {
     fn default() -> Self {
-        DummyRefsAndSourcesTracker
+        DummyNodeResolverTracker
     }
 }
 #[derive(Debug, Clone, Default)]
@@ -401,7 +439,7 @@ pub struct ResolverState {
     pub operations: Operations,
     pub dbt_profile: DbtProfile,
     pub render_results: RenderResults,
-    pub refs_and_sources: Arc<dyn RefsAndSourcesTracker>,
+    pub node_resolver: Arc<dyn NodeResolverTracker>,
     pub get_relation_calls: GetRelationCalls,
     pub get_columns_in_relation_calls: GetColumnsInRelationCalls,
     pub patterned_dangling_sources: PatternedDanglingSources,

@@ -17,11 +17,11 @@ use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::listener::{
     DefaultRenderingEventListenerFactory, RenderingEventListenerFactory,
 };
+use dbt_jinja_utils::node_resolver::NodeResolver;
 use dbt_jinja_utils::phases::build_compile_and_run_base_context;
 use dbt_jinja_utils::phases::compile::build_compile_node_context_inner;
 use dbt_jinja_utils::phases::parse::build_resolve_model_context;
 use dbt_jinja_utils::phases::parse::sql_resource::SqlResource;
-use dbt_jinja_utils::refs_and_sources::RefsAndSources;
 use dbt_jinja_utils::serde::into_typed_with_jinja_error_context;
 use dbt_jinja_utils::silence_base_context;
 use dbt_jinja_utils::utils::render_sql;
@@ -260,7 +260,7 @@ pub async fn render_unresolved_sql_files_sequentially<
             &listener_factory,
             &display_path,
         ) {
-            Ok(rendered_sql_except_refs_and_sources) => {
+            Ok(rendered_sql_except_node_resolver) => {
                 let sql_resources_cloned = sql_resources.clone();
 
                 if root_project_name != package_name {
@@ -313,7 +313,7 @@ pub async fn render_unresolved_sql_files_sequentially<
                 model_sql_resources_map.push(SqlFileRenderResult {
                     asset: dbt_asset.clone(),
                     sql_file_info,
-                    rendered_sql: rendered_sql_except_refs_and_sources,
+                    rendered_sql: rendered_sql_except_node_resolver,
                     macro_spans,
                     macro_calls,
                     properties: maybe_model,
@@ -602,7 +602,7 @@ pub async fn render_unresolved_sql_files<
                     &listener_factory,
                     &display_path,
                 ) {
-                    Ok(rendered_sql_except_refs_and_sources) => {
+                    Ok(rendered_sql_except_node_resolver) => {
                         let sql_resources_cloned = sql_resources.clone();
 
                         if root_project_name != package_name {
@@ -658,7 +658,7 @@ pub async fn render_unresolved_sql_files<
                         local_results.push(SqlFileRenderResult {
                             asset: dbt_asset.clone(),
                             sql_file_info,
-                            rendered_sql: rendered_sql_except_refs_and_sources,
+                            rendered_sql: rendered_sql_except_node_resolver,
                             macro_spans,
                             macro_calls,
                             properties: maybe_model,
@@ -757,7 +757,7 @@ pub async fn render_unresolved_sql_files<
 pub async fn collect_adapter_identifiers_detect_unsafe(
     arg: &ResolveArgs,
     models: &mut HashMap<String, Arc<DbtModel>>,
-    refs_and_sources: &RefsAndSources,
+    node_resolver: &NodeResolver,
     jinja_env: Arc<JinjaEnv>,
     adapter_type: AdapterType,
     package_name: &str,
@@ -789,7 +789,7 @@ pub async fn collect_adapter_identifiers_detect_unsafe(
         collect_adapter_identifiers_sequential(
             arg,
             model_vec,
-            refs_and_sources,
+            node_resolver,
             &jinja_env,
             adapter_type,
             package_name,
@@ -804,7 +804,7 @@ pub async fn collect_adapter_identifiers_detect_unsafe(
         collect_adapter_identifiers_parallel(
             arg,
             model_vec,
-            refs_and_sources,
+            node_resolver,
             jinja_env,
             adapter_type,
             package_name,
@@ -833,7 +833,7 @@ pub async fn collect_adapter_identifiers_detect_unsafe(
 async fn process_model_chunk_for_unsafe_detection(
     chunk: Vec<(String, Arc<DbtModel>)>,
     arg: ResolveArgs,
-    refs_and_sources: RefsAndSources,
+    node_resolver: NodeResolver,
     jinja_env: &JinjaEnv,
     adapter_type: AdapterType,
     package_name: String,
@@ -844,7 +844,7 @@ async fn process_model_chunk_for_unsafe_detection(
 ) -> FsResult<Vec<String>> {
     let mut unsafe_ids = Vec::new();
     let mut render_base_context = build_compile_and_run_base_context(
-        Arc::new(refs_and_sources.clone()),
+        Arc::new(node_resolver.clone()),
         &package_name,
         &Nodes::default(),
         runtime_config.clone(),
@@ -872,7 +872,7 @@ async fn process_model_chunk_for_unsafe_detection(
             adapter_type,
             &render_base_context,
             &root_project_name,
-            Arc::new(refs_and_sources.clone()),
+            Arc::new(node_resolver.clone()),
             runtime_config.clone(),
             StaticAnalysisKind::On,
             true,
@@ -918,7 +918,7 @@ async fn process_model_chunk_for_unsafe_detection(
 async fn collect_adapter_identifiers_sequential(
     arg: &ResolveArgs,
     model_vec: Vec<(String, Arc<DbtModel>)>,
-    refs_and_sources: &RefsAndSources,
+    node_resolver: &NodeResolver,
     jinja_env: &JinjaEnv,
     adapter_type: AdapterType,
     package_name: &str,
@@ -935,7 +935,7 @@ async fn collect_adapter_identifiers_sequential(
         let unsafe_ids = process_model_chunk_for_unsafe_detection(
             chunk,
             arg.clone(),
-            refs_and_sources.clone(),
+            node_resolver.clone(),
             jinja_env,
             adapter_type,
             package_name.to_string(),
@@ -956,7 +956,7 @@ async fn collect_adapter_identifiers_sequential(
 async fn collect_adapter_identifiers_parallel(
     arg: &ResolveArgs,
     model_vec: Vec<(String, Arc<DbtModel>)>,
-    refs_and_sources: &RefsAndSources,
+    node_resolver: &NodeResolver,
     jinja_env: Arc<JinjaEnv>,
     adapter_type: AdapterType,
     package_name: &str,
@@ -971,7 +971,7 @@ async fn collect_adapter_identifiers_parallel(
     for chunk in model_vec.chunks(chunk_size) {
         let chunk = chunk.to_vec();
         let arg = arg.clone();
-        let refs_and_sources = refs_and_sources.clone();
+        let node_resolver_clone = node_resolver.clone();
         let jinja_env = jinja_env.clone();
         let package_name = package_name.to_string();
         let root_project_name = root_project_name.to_string();
@@ -983,7 +983,7 @@ async fn collect_adapter_identifiers_parallel(
             process_model_chunk_for_unsafe_detection(
                 chunk,
                 arg,
-                refs_and_sources,
+                node_resolver_clone,
                 &jinja_env,
                 adapter_type,
                 package_name,

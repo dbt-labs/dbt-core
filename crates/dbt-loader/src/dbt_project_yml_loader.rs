@@ -41,6 +41,7 @@ pub fn load_project_yml(
     // Set default model paths if not specified
     fill_default(&mut dbt_project.analysis_paths, "analyses");
     fill_default(&mut dbt_project.asset_paths, "assets");
+    fill_default(&mut dbt_project.function_paths, "functions");
     fill_default(&mut dbt_project.macro_paths, "macros");
     fill_default(&mut dbt_project.model_paths, "models");
     fill_default(&mut dbt_project.seed_paths, "seeds");

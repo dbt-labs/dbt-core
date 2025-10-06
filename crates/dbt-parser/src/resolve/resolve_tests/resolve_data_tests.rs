@@ -316,6 +316,16 @@ pub async fn resolve_data_tests(
                         location: Some(location.with_file(&dbt_asset.path)),
                     })
                     .collect(),
+                functions: sql_file_info
+                    .functions
+                    .iter()
+                    .map(|(function_name, package, location)| DbtRef {
+                        name: function_name.to_owned(),
+                        package: package.to_owned(),
+                        version: None, // Functions don't have versions
+                        location: Some(location.with_file(&dbt_asset.path)),
+                    })
+                    .collect(),
                 sources: sql_file_info
                     .sources
                     .iter()

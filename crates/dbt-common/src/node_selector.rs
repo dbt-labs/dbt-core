@@ -61,6 +61,7 @@ pub enum MethodName {
     Config,
     Exposure,
     File,
+    Function,
     Fqn,
     Group,
     Metric,

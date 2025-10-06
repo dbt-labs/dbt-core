@@ -178,6 +178,7 @@ pub async fn resolve_exposures(
                     columns: BTreeMap::new(),
                     refs,
                     sources,
+                    functions: vec![],
                     metrics,
                     depends_on: NodeDependsOn::default(),
                     quoting_ignore_case: false,

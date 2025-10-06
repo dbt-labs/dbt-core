@@ -91,6 +91,7 @@ pub async fn resolve_groups(
                     quoting_ignore_case: false,
                     refs: vec![],
                     sources: vec![],
+                    functions: vec![],
                     metrics: vec![],
                 },
                 __group_attr__: DbtGroupAttr { owner: group.owner },

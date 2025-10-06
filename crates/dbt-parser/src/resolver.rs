@@ -9,9 +9,9 @@ use dbt_common::tracing::event_info::store_event_attributes;
 use dbt_common::{ErrorCode, FsResult, err, fs_err, show_error, with_progress};
 use dbt_common::{show_warning, stdfs};
 use dbt_jinja_utils::invocation_args::InvocationArgs;
+use dbt_jinja_utils::node_resolver::{NodeResolver, resolve_dependencies};
 use dbt_jinja_utils::phases::parse::build_resolve_context;
 use dbt_jinja_utils::phases::parse::init::initialize_parse_jinja_environment;
-use dbt_jinja_utils::refs_and_sources::{RefsAndSources, resolve_dependencies};
 use dbt_jinja_utils::serde::{into_typed_with_error, into_typed_with_jinja};
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_schemas::dbt_utils::resolve_package_quoting;
@@ -40,6 +40,7 @@ use tokio::fs as tokiofs;
 
 use crate::resolve::resolve_analyses::resolve_analyses;
 use crate::resolve::resolve_exposures::resolve_exposures;
+use crate::resolve::resolve_functions::resolve_functions;
 use crate::resolve::resolve_macros::resolve_docs_macros;
 use crate::resolve::resolve_macros::resolve_macros;
 use crate::resolve::resolve_metrics::resolve_metrics;
@@ -176,7 +177,7 @@ pub async fn resolve(
     let root_project_configs = Arc::new(root_project_configs);
     // Process packages in topological order
 
-    let mut refs_and_sources = RefsAndSources::from_dbt_nodes(
+    let mut node_resolver = NodeResolver::from_dbt_nodes(
         &nodes,
         adapter_type,
         root_project_name.to_string(),
@@ -209,7 +210,7 @@ pub async fn resolve(
             adapter_type,
             &macros,
             jinja_env.clone(),
-            &mut refs_and_sources,
+            &mut node_resolver,
             &mut all_runtime_configs,
             token,
         )
@@ -236,7 +237,7 @@ pub async fn resolve(
             adapter_type,
             &macros,
             jinja_env.clone(),
-            &mut refs_and_sources,
+            &mut node_resolver,
             &mut all_runtime_configs,
             token,
         )
@@ -271,7 +272,7 @@ pub async fn resolve(
     // take refs and sources, resolve them to a unique_id and put in depends_on
     // This returns a set of node IDs that had resolution errors (unresolved refs/sources)
     let nodes_with_resolution_errors =
-        resolve_dependencies(&arg.io, &mut nodes, &mut disabled_nodes, &refs_and_sources);
+        resolve_dependencies(&arg.io, &mut nodes, &mut disabled_nodes, &node_resolver);
 
     // Check access
     check_access(arg, &nodes, &all_runtime_configs);
@@ -288,7 +289,7 @@ pub async fn resolve(
             render_results: collector,
             run_started_at: dbt_state.run_started_at,
             nodes_with_resolution_errors,
-            refs_and_sources: Arc::new(refs_and_sources),
+            node_resolver: Arc::new(node_resolver),
             get_relation_calls: get_relation_calls?,
             get_columns_in_relation_calls: get_columns_in_relation_calls?,
             patterned_dangling_sources,
@@ -402,10 +403,10 @@ pub async fn resolve_inner(
     adapter_type: AdapterType,
     macros: &Macros,
     jinja_env: Arc<JinjaEnv>,
-    refs_and_sources: &mut RefsAndSources,
+    node_resolver: &mut NodeResolver,
     runtime_config: Arc<DbtRuntimeConfig>,
     token: &CancellationToken,
-) -> FsResult<(Nodes, Nodes, RenderResults, RefsAndSources, bool)> {
+) -> FsResult<(Nodes, Nodes, RenderResults, NodeResolver, bool)> {
     let mut nodes = Nodes::default();
     let mut disabled_nodes = Nodes::default();
 
@@ -491,7 +492,7 @@ pub async fn resolve_inner(
         &base_ctx,
         &jinja_env,
         &mut collected_generic_tests,
-        refs_and_sources,
+        node_resolver,
     )?;
     nodes.sources.extend(sources);
     disabled_nodes.sources.extend(disabled_sources);
@@ -511,7 +512,7 @@ pub async fn resolve_inner(
         &jinja_env,
         &base_ctx,
         &mut collected_generic_tests,
-        refs_and_sources,
+        node_resolver,
     )?;
     nodes.seeds.extend(seeds);
     disabled_nodes.seeds.extend(disabled_seeds);
@@ -531,7 +532,7 @@ pub async fn resolve_inner(
         jinja_env.clone(),
         &base_ctx,
         runtime_config.clone(),
-        refs_and_sources,
+        node_resolver,
         token,
     )
     .await?;
@@ -555,7 +556,7 @@ pub async fn resolve_inner(
         &base_ctx,
         runtime_config.clone(),
         &mut collected_generic_tests,
-        refs_and_sources,
+        node_resolver,
         token,
     )
     .await?;
@@ -580,6 +581,27 @@ pub async fn resolve_inner(
     )
     .await?;
     nodes.analyses.extend(analyses);
+
+    // Resolve functions
+    let (functions, functions_rendering_results) = resolve_functions(
+        arg,
+        package,
+        package_quoting,
+        dbt_state.root_project(),
+        root_project_configs,
+        &mut min_properties.functions,
+        database,
+        schema,
+        adapter_type,
+        package_name,
+        jinja_env.clone(),
+        &base_ctx,
+        runtime_config.clone(),
+        node_resolver,
+        token,
+    )
+    .await?;
+    nodes.functions.extend(functions);
 
     let (exposures, disabled_exposures) = resolve_exposures(
         arg,
@@ -706,6 +728,7 @@ pub async fn resolve_inner(
         rendering_results: rendering_results
             .into_iter()
             .chain(analyses_rendering_results)
+            .chain(functions_rendering_results)
             .collect(),
     };
 
@@ -715,7 +738,7 @@ pub async fn resolve_inner(
         nodes,
         disabled_nodes,
         collector,
-        refs_and_sources.clone(),
+        node_resolver.clone(),
         semantic_layer_spec_is_legacy,
     ))
 }
@@ -763,7 +786,7 @@ async fn resolve_package(
     adapter_type: AdapterType,
     macros: Macros,
     jinja_env: Arc<JinjaEnv>,
-    refs_and_sources: RefsAndSources,
+    node_resolver: NodeResolver,
     all_runtime_configs: BTreeMap<String, Arc<DbtRuntimeConfig>>,
     token: &CancellationToken,
 ) -> FsResult<(
@@ -772,7 +795,7 @@ async fn resolve_package(
     Nodes,
     Nodes,
     RenderResults,
-    RefsAndSources,
+    NodeResolver,
     bool,
 )> {
     let package = dbt_state
@@ -804,7 +827,7 @@ async fn resolve_package(
         new_nodes,
         new_disabled_nodes,
         rendering_results,
-        updated_refs_and_sources,
+        updated_node_resolver,
         semantic_layer_spec_is_legacy,
     ) = resolve_inner(
         &arg,
@@ -815,7 +838,7 @@ async fn resolve_package(
         adapter_type,
         &macros,
         jinja_env.clone(),
-        &mut refs_and_sources.clone(),
+        &mut node_resolver.clone(),
         runtime_config.clone(),
         token,
     )
@@ -828,7 +851,7 @@ async fn resolve_package(
         new_nodes,
         new_disabled_nodes,
         rendering_results,
-        updated_refs_and_sources,
+        updated_node_resolver,
         semantic_layer_spec_is_legacy,
     ))
 }
@@ -844,7 +867,7 @@ async fn resolve_packages_sequentially(
     adapter_type: AdapterType,
     macros: &Macros,
     jinja_env: Arc<JinjaEnv>,
-    refs_and_sources: &mut RefsAndSources,
+    node_resolver: &mut NodeResolver,
     all_runtime_configs: &mut BTreeMap<String, Arc<DbtRuntimeConfig>>,
     token: &CancellationToken,
 ) -> FsResult<(Nodes, Nodes, RenderResults, bool)> {
@@ -867,7 +890,7 @@ async fn resolve_packages_sequentially(
                 adapter_type,
                 macros.clone(),
                 jinja_env.clone(),
-                refs_and_sources.clone(),
+                node_resolver.clone(),
                 all_runtime_configs.clone(),
                 token,
             )
@@ -879,7 +902,7 @@ async fn resolve_packages_sequentially(
                 new_nodes,
                 new_disabled_nodes,
                 rendering_results,
-                updated_refs_and_sources,
+                updated_node_resolver,
                 resolved_semantic_layer_spec_is_legacy,
             ) = result;
 
@@ -894,7 +917,7 @@ async fn resolve_packages_sequentially(
                 .rendering_results
                 .extend(rendering_results.rendering_results);
             // Update refs and sources
-            refs_and_sources.merge(updated_refs_and_sources);
+            node_resolver.merge(updated_node_resolver);
         }
     }
 
@@ -917,7 +940,7 @@ async fn resolve_packages_parallel(
     adapter_type: AdapterType,
     macros: &Macros,
     jinja_env: Arc<JinjaEnv>,
-    refs_and_sources: &mut RefsAndSources,
+    node_resolver: &mut NodeResolver,
     all_runtime_configs: &mut BTreeMap<String, Arc<DbtRuntimeConfig>>,
     token: &CancellationToken,
 ) -> FsResult<(Nodes, Nodes, RenderResults, bool)> {
@@ -938,7 +961,7 @@ async fn resolve_packages_parallel(
             let root_project_configs = root_project_configs.clone();
             let macros = macros.clone();
             let jinja_env = jinja_env.clone();
-            let refs_and_sources = refs_and_sources.clone();
+            let node_resolver = node_resolver.clone();
             let all_runtime_configs = all_runtime_configs.clone(); // read-only for this wave
             let dbt_state = dbt_state.clone();
             let token = token.clone();
@@ -952,7 +975,7 @@ async fn resolve_packages_parallel(
                     adapter_type,
                     macros,
                     jinja_env,
-                    refs_and_sources,
+                    node_resolver,
                     all_runtime_configs,
                     &token,
                 )
@@ -970,7 +993,7 @@ async fn resolve_packages_parallel(
                 new_nodes,
                 new_disabled_nodes,
                 rendering_results,
-                updated_refs_and_sources,
+                updated_node_resolver,
                 resolved_semantic_layer_spec_is_legacy,
             ) = match result {
                 Ok(Ok(val)) => val,
@@ -988,7 +1011,7 @@ async fn resolve_packages_parallel(
                 .rendering_results
                 .extend(rendering_results.rendering_results);
             // This could be optimized refs and sources can all be inserted at the end instead of merging
-            refs_and_sources.merge(updated_refs_and_sources);
+            node_resolver.merge(updated_node_resolver);
         }
     }
 

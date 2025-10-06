@@ -10,7 +10,7 @@ use dbt_common::once_cell_vars::DISPATCH_CONFIG;
 use dbt_fusion_adapter::BaseAdapter;
 use dbt_fusion_adapter::load_store::ResultStore;
 use dbt_schemas::schemas::Nodes;
-use dbt_schemas::state::{DbtRuntimeConfig, RefsAndSourcesTracker};
+use dbt_schemas::state::{DbtRuntimeConfig, NodeResolverTracker};
 use minijinja::arg_utils::{ArgParser, ArgsIter};
 use minijinja::constants::MACRO_DISPATCH_ORDER;
 use minijinja::dispatch_object::DispatchObject;
@@ -33,7 +33,7 @@ pub fn configure_compile_and_run_jinja_environment(
 
 /// Configure the Jinja environment for the compile phase.
 pub fn build_compile_and_run_base_context(
-    refs_and_sources: Arc<dyn RefsAndSourcesTracker>,
+    node_resolver: Arc<dyn NodeResolverTracker>,
     package_name: &str,
     nodes: &Nodes,
     runtime_config: Arc<DbtRuntimeConfig>,
@@ -69,7 +69,7 @@ pub fn build_compile_and_run_base_context(
 
     // Create base ref function for macros (without validation)
     let ref_function = RefFunction::new_unvalidated(
-        refs_and_sources.clone(),
+        node_resolver.clone(),
         package_name.to_owned(),
         runtime_config.clone(),
     );
@@ -79,12 +79,22 @@ pub fn build_compile_and_run_base_context(
 
     // Create source function
     let source_function = SourceFunction {
-        refs_and_sources: refs_and_sources.clone(),
+        node_resolver: node_resolver.clone(),
         package_name: package_name.to_owned(),
     };
     let source_value = MinijinjaValue::from_object(source_function);
     ctx.insert("source".to_string(), source_value.clone());
     builtins.insert("source".to_string(), source_value);
+
+    // Create function function
+    let function_function = FunctionFunction::new_unvalidated(
+        node_resolver.clone(),
+        package_name.to_owned(),
+        runtime_config.clone(),
+    );
+    let function_value = MinijinjaValue::from_object(function_function);
+    ctx.insert("function".to_string(), function_value.clone());
+    builtins.insert("function".to_string(), function_value);
 
     // This is used in macros to gate the sql execution (set to true only after parse stage)
     // for example dbt_macro_assets/dbt-adapters/macros/etc/statement.sql
@@ -129,7 +139,7 @@ pub fn build_compile_and_run_base_context(
 
 #[derive(Debug)]
 pub struct RefFunction {
-    refs_and_sources: Arc<dyn RefsAndSourcesTracker>,
+    node_resolver: Arc<dyn NodeResolverTracker>,
     package_name: String,
     runtime_config: Arc<DbtRuntimeConfig>,
     /// Optional validation configuration - None means no validation
@@ -149,12 +159,12 @@ pub struct RefValidationConfig {
 impl RefFunction {
     /// Create a new RefFunction without validation (for base context)
     pub fn new_unvalidated(
-        refs_and_sources: Arc<dyn RefsAndSourcesTracker>,
+        node_resolver: Arc<dyn NodeResolverTracker>,
         package_name: String,
         runtime_config: Arc<DbtRuntimeConfig>,
     ) -> Self {
         Self {
-            refs_and_sources,
+            node_resolver,
             package_name,
             runtime_config,
             validation_config: None,
@@ -164,7 +174,7 @@ impl RefFunction {
 
     /// Create a new RefFunction with validation (for node context)
     pub fn new_with_validation(
-        refs_and_sources: Arc<dyn RefsAndSourcesTracker>,
+        node_resolver: Arc<dyn NodeResolverTracker>,
         package_name: String,
         runtime_config: Arc<DbtRuntimeConfig>,
         allowed_dependencies: Arc<BTreeSet<String>>,
@@ -172,7 +182,7 @@ impl RefFunction {
         static_analysis_unsafe: bool,
     ) -> Self {
         Self {
-            refs_and_sources,
+            node_resolver,
             package_name,
             runtime_config,
             validation_config: Some(RefValidationConfig {
@@ -184,7 +194,7 @@ impl RefFunction {
     }
 
     fn should_use_deferred(&self) -> bool {
-        if self.refs_and_sources.compile_or_test() {
+        if self.node_resolver.compile_or_test() {
             self.static_analysis_unsafe.unwrap_or(false)
         } else {
             true
@@ -267,7 +277,7 @@ impl Object for RefFunction {
     ) -> Result<MinijinjaValue, MinijinjaError> {
         let (package_name, model_name, version) = self.resolve_args(args)?;
 
-        match self.refs_and_sources.lookup_ref(
+        match self.node_resolver.lookup_ref(
             &package_name,
             &model_name,
             &version,
@@ -306,7 +316,7 @@ impl Object for RefFunction {
         match method {
             "id" => {
                 let (package_name, model_name, version) = self.resolve_args(args)?;
-                match self.refs_and_sources.lookup_ref(
+                match self.node_resolver.lookup_ref(
                     &package_name,
                     &model_name,
                     &version,
@@ -344,7 +354,7 @@ impl Object for RefFunction {
 
 #[derive(Debug)]
 struct SourceFunction {
-    refs_and_sources: Arc<dyn RefsAndSourcesTracker>,
+    node_resolver: Arc<dyn NodeResolverTracker>,
     package_name: String,
 }
 
@@ -372,7 +382,7 @@ impl Object for SourceFunction {
             )),
         }?;
         match self
-            .refs_and_sources
+            .node_resolver
             .lookup_source(&self.package_name, &source_name, &table_name)
         {
             Ok((_, relation, _)) => Ok(relation),
@@ -382,6 +392,193 @@ impl Object for SourceFunction {
                     "Source not found for source name: {source_name}, table name: {table_name}"
                 ),
             )),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct FunctionFunction {
+    node_resolver: Arc<dyn NodeResolverTracker>,
+    package_name: String,
+    runtime_config: Arc<DbtRuntimeConfig>,
+    /// Optional validation configuration - None means no validation
+    validation_config: Option<FunctionValidationConfig>,
+}
+
+#[derive(Debug)]
+pub struct FunctionValidationConfig {
+    /// The set of allowed function dependencies for this specific node
+    pub allowed_dependencies: Arc<BTreeSet<String>>,
+    /// Whether to skip dependency validation used for REPL and inline queries
+    pub skip_validation: bool,
+}
+
+impl FunctionFunction {
+    /// Create a new FunctionFunction without validation (for base context)
+    pub fn new_unvalidated(
+        node_resolver: Arc<dyn NodeResolverTracker>,
+        package_name: String,
+        runtime_config: Arc<DbtRuntimeConfig>,
+    ) -> Self {
+        Self {
+            node_resolver,
+            package_name,
+            runtime_config,
+            validation_config: None,
+        }
+    }
+
+    /// Create a new FunctionFunction with validation (for node context)
+    pub fn new_with_validation(
+        node_resolver: Arc<dyn NodeResolverTracker>,
+        package_name: String,
+        runtime_config: Arc<DbtRuntimeConfig>,
+        allowed_dependencies: Arc<BTreeSet<String>>,
+        skip_validation: bool,
+    ) -> Self {
+        Self {
+            node_resolver,
+            package_name,
+            runtime_config,
+            validation_config: Some(FunctionValidationConfig {
+                allowed_dependencies,
+                skip_validation,
+            }),
+        }
+    }
+
+    fn resolve_args(
+        &self,
+        args: &[MinijinjaValue],
+    ) -> Result<(Option<String>, String), MinijinjaError> {
+        if args.is_empty() || args.len() > 3 {
+            return Err(MinijinjaError::new(
+                MinijinjaErrorKind::InvalidOperation,
+                "invalid number of arguments for function macro",
+            ));
+        }
+        let mut parser = ArgParser::new(args, None);
+        // If there are two positional args, the first is the package name and the second is the function name
+        let arg0 = parser.get::<String>("")?;
+        let arg1 = parser.get_optional::<String>("");
+        let (namespace, function_name) = match (arg0, arg1) {
+            (namespace, Some(function_name)) => (Some(namespace), function_name),
+            (function_name, None) => (None, function_name),
+        };
+
+        let package_name = namespace;
+
+        Ok((package_name, function_name))
+    }
+
+    /// Validate that the referenced function is in the allowed dependencies
+    fn validate_dependency(
+        &self,
+        unique_id: &str,
+        package_name: &Option<String>,
+        function_name: &str,
+    ) -> Result<(), MinijinjaError> {
+        let Some(validation_config) = &self.validation_config else {
+            // No validation config means no validation needed
+            return Ok(());
+        };
+
+        if validation_config.skip_validation {
+            return Ok(());
+        }
+
+        if validation_config.allowed_dependencies.contains(unique_id) {
+            Ok(())
+        } else {
+            // Construct the function string for the error message
+            let function_string = if let Some(pkg) = package_name {
+                format!("{{{{ function('{pkg}', '{function_name}') }}}}")
+            } else {
+                format!("{{{{ function('{function_name}') }}}}")
+            };
+
+            Err(MinijinjaError::new(
+                MinijinjaErrorKind::InvalidOperation,
+                format!(
+                    "dbt was unable to infer all dependencies for the function \"{function_name}\". This typically happens when function() is placed within a conditional block.
+To fix this, add the following hint to the top of the model: 
+-- depends_on: {function_string}"
+                ),
+            ))
+        }
+    }
+}
+
+impl Object for FunctionFunction {
+    fn call(
+        self: &Arc<Self>,
+        _state: &State<'_, '_>,
+        args: &[MinijinjaValue],
+        _listeners: &[Rc<dyn RenderingEventListener>],
+    ) -> Result<MinijinjaValue, MinijinjaError> {
+        let (package_name, function_name) = self.resolve_args(args)?;
+
+        match self.node_resolver.lookup_function(
+            &package_name,
+            &function_name,
+            &Some(self.package_name.clone()),
+        ) {
+            Ok((unique_id, function_call, _)) => {
+                // Validate that this function is allowed (only if validation is configured)
+                self.validate_dependency(&unique_id, &package_name, &function_name)?;
+                Ok(function_call)
+            }
+            Err(_) => Err(MinijinjaError::new(
+                MinijinjaErrorKind::NonKey,
+                format!(
+                    "function not found for package: {}, function: {}",
+                    self.package_name, function_name
+                ),
+            )),
+        }
+    }
+
+    fn call_method(
+        self: &Arc<Self>,
+        _state: &State<'_, '_>,
+        method: &str,
+        args: &[MinijinjaValue],
+        _listeners: &[Rc<dyn RenderingEventListener>],
+    ) -> Result<MinijinjaValue, MinijinjaError> {
+        match method {
+            "id" => {
+                let (package_name, function_name) = self.resolve_args(args)?;
+                match self.node_resolver.lookup_function(
+                    &package_name,
+                    &function_name,
+                    &Some(self.package_name.clone()),
+                ) {
+                    Ok((unique_id, _relation, _)) => {
+                        // Validate that this function is allowed (only if validation is configured)
+                        self.validate_dependency(&unique_id, &package_name, &function_name)?;
+                        Ok(MinijinjaValue::from(unique_id.as_str()))
+                    }
+                    Err(_) => Err(MinijinjaError::new(
+                        MinijinjaErrorKind::NonKey,
+                        format!(
+                            "function not found for package: {}, function: {}",
+                            self.package_name, function_name
+                        ),
+                    )),
+                }
+            }
+            _ => Err(MinijinjaError::new(
+                MinijinjaErrorKind::UnknownMethod,
+                format!("No method named '{method}' on function objects"),
+            )),
+        }
+    }
+
+    fn get_value(self: &Arc<Self>, key: &MinijinjaValue) -> Option<MinijinjaValue> {
+        match key.as_str()? {
+            "config" => Some(MinijinjaValue::from_dyn_object(self.runtime_config.clone())),
+            "function_name" => Some(MinijinjaValue::from("function")),
+            _ => None,
         }
     }
 }

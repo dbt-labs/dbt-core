@@ -244,6 +244,7 @@ pub fn resolve_unit_tests(
                 depends_on: NodeDependsOn::default(),
                 refs: dependent_refs,
                 sources: vec![],
+                functions: vec![],
                 enabled,
                 extended_model: false,
                 persist_docs: None,

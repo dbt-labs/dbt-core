@@ -24,7 +24,7 @@ use dbt_common::io_args::StaticAnalysisOffReason;
 use dbt_common::show_error;
 use dbt_common::show_warning;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
-use dbt_jinja_utils::refs_and_sources::RefsAndSources;
+use dbt_jinja_utils::node_resolver::NodeResolver;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_schemas::schemas::CommonAttributes;
 use dbt_schemas::schemas::DbtModel;
@@ -53,7 +53,7 @@ use dbt_schemas::state::DbtPackage;
 use dbt_schemas::state::DbtRuntimeConfig;
 use dbt_schemas::state::GenericTestAsset;
 use dbt_schemas::state::ModelStatus;
-use dbt_schemas::state::RefsAndSourcesTracker;
+use dbt_schemas::state::NodeResolverTracker;
 use minijinja::MacroSpans;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -84,7 +84,7 @@ pub async fn resolve_models(
     base_ctx: &BTreeMap<String, minijinja::Value>,
     runtime_config: Arc<DbtRuntimeConfig>,
     collected_generic_tests: &mut Vec<GenericTestAsset>,
-    refs_and_sources: &mut RefsAndSources,
+    node_resolver: &mut NodeResolver,
     token: &CancellationToken,
 ) -> FsResult<(
     HashMap<String, Arc<DbtModel>>,
@@ -409,6 +409,16 @@ pub async fn resolve_models(
                         location: Some(location.with_file(&dbt_asset.path)),
                     })
                     .collect(),
+                functions: sql_file_info
+                    .functions
+                    .iter()
+                    .map(|(function_name, package, location)| DbtRef {
+                        name: function_name.to_owned(),
+                        package: package.to_owned(),
+                        version: None, // Functions don't have versions
+                        location: Some(location.with_file(&dbt_asset.path)),
+                    })
+                    .collect(),
                 sources: sql_file_info
                     .sources
                     .iter()
@@ -494,7 +504,7 @@ pub async fn resolve_models(
                 };
             }
         }
-        match refs_and_sources.insert_ref(&dbt_model, adapter_type, status, false) {
+        match node_resolver.insert_ref(&dbt_model, adapter_type, status, false) {
             Ok(_) => (),
             Err(e) => {
                 show_error!(&arg.io, e.with_location(dbt_asset.path.clone()));
@@ -577,7 +587,7 @@ pub async fn resolve_models(
     collect_adapter_identifiers_detect_unsafe(
         arg,
         &mut models_with_execute,
-        refs_and_sources,
+        node_resolver,
         env,
         adapter_type,
         package_name,

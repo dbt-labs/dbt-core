@@ -11,8 +11,8 @@ use crate::schemas::{
         DbtNode, ManifestMetadata,
         manifest::serialize_with_resource_type,
         manifest_nodes::{
-            ManifestExposure, ManifestMetric, ManifestSavedQuery, ManifestSemanticModel,
-            ManifestSource, ManifestUnitTest,
+            ManifestExposure, ManifestFunction, ManifestMetric, ManifestSavedQuery,
+            ManifestSemanticModel, ManifestSource, ManifestUnitTest,
         },
     },
 };
@@ -31,6 +31,8 @@ pub struct DbtManifestV12 {
     pub saved_queries: BTreeMap<String, ManifestSavedQuery>,
     pub exposures: BTreeMap<String, ManifestExposure>,
     pub metrics: BTreeMap<String, ManifestMetric>,
+    #[serde(default)]
+    pub functions: BTreeMap<String, ManifestFunction>,
     pub child_map: BTreeMap<String, Vec<String>>,
     pub parent_map: BTreeMap<String, Vec<String>>,
     pub group_map: BTreeMap<String, Vec<String>>,
@@ -49,6 +51,7 @@ impl DbtManifestV12 {
                 DbtNode::Snapshot(snapshot) => Some((id, snapshot.__base_attr__.compiled_code)),
                 DbtNode::Seed(seed) => Some((id, seed.__base_attr__.compiled_code)),
                 DbtNode::Operation(_operation) => None,
+                DbtNode::Function(_function) => None,
                 DbtNode::Analysis(analysis) => Some((id, analysis.__base_attr__.compiled_code)),
             })
             .collect::<HashMap<_, _>>()
@@ -200,6 +203,25 @@ impl Serialize for DbtManifestV12 {
         map.insert(
             "metrics".to_string(),
             dbt_serde_yaml::to_value(metrics_serialized).map_err(serde::ser::Error::custom)?,
+        );
+
+        // Serialize functions
+        let functions_serialized: BTreeMap<String, YmlValue> = self
+            .functions
+            .iter()
+            .map(|(k, v)| {
+                Ok((
+                    k.clone(),
+                    serialize_with_resource_type(
+                        dbt_serde_yaml::to_value(v).map_err(serde::ser::Error::custom)?,
+                        "function",
+                    ),
+                ))
+            })
+            .collect::<Result<_, _>>()?;
+        map.insert(
+            "functions".to_string(),
+            dbt_serde_yaml::to_value(functions_serialized).map_err(serde::ser::Error::custom)?,
         );
 
         map.insert(

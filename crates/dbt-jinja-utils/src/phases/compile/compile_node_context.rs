@@ -11,7 +11,7 @@ use dbt_common::serde_utils::convert_yml_to_dash_map;
 use dbt_fusion_adapter::{AdapterType, load_store::ResultStore, relation_object::create_relation};
 use dbt_schemas::{
     schemas::{InternalDbtNodeAttributes, telemetry::NodeType},
-    state::{DbtRuntimeConfig, RefsAndSourcesTracker, ResolverState},
+    state::{DbtRuntimeConfig, NodeResolverTracker, ResolverState},
 };
 use minijinja::{
     Value as MinijinjaValue,
@@ -20,6 +20,7 @@ use minijinja::{
 };
 
 use crate::phases::MacroLookupContext;
+use crate::phases::compile_and_run_context::FunctionFunction;
 
 use super::super::compile_and_run_context::RefFunction;
 use super::compile_config::CompileConfig;
@@ -44,7 +45,7 @@ where
         resolver_state.adapter_type,
         base_context,
         &resolver_state.root_project_name,
-        resolver_state.refs_and_sources.clone(),
+        resolver_state.node_resolver.clone(),
         resolver_state.runtime_config.clone(),
         global_static_analysis,
         skip_ref_validation,
@@ -59,7 +60,7 @@ pub fn build_compile_node_context_inner<T>(
     adapter_type: AdapterType,
     base_context: &BTreeMap<String, MinijinjaValue>,
     root_project_name: &str,
-    refs_and_sources: Arc<dyn RefsAndSourcesTracker>,
+    node_resolver: Arc<dyn NodeResolverTracker>,
     runtime_config: Arc<DbtRuntimeConfig>,
     global_static_analysis: StaticAnalysisKind,
     skip_ref_validation: bool,
@@ -93,7 +94,7 @@ where
                 .cloned()
                 .map(|r| r.name)
                 .expect("Unit test must have a dependency");
-            let (_, this_relation, _, _) = refs_and_sources
+            let (_, this_relation, _, _) = node_resolver
                 .lookup_ref(
                     &Some(model.common().package_name.clone()),
                     &this_relation_name,
@@ -147,10 +148,10 @@ where
         Arc::new(model.base().depends_on.nodes.iter().cloned().collect());
 
     let ref_function = RefFunction::new_with_validation(
-        refs_and_sources.clone(),
+        node_resolver.clone(),
         model.common().package_name.clone(),
         runtime_config.clone(),
-        allowed_dependencies,
+        allowed_dependencies.clone(),
         skip_ref_validation,
         // Update to use introspection kind
         (matches!(model.base().static_analysis, StaticAnalysisKind::Unsafe)
@@ -161,6 +162,19 @@ where
     let ref_value = MinijinjaValue::from_object(ref_function);
     ctx.insert("ref".to_string(), ref_value.clone());
     base_builtins.insert("ref".to_string(), ref_value);
+
+    // Create validated function function with dependency checking
+    let function_function = FunctionFunction::new_with_validation(
+        node_resolver.clone(),
+        model.common().package_name.clone(),
+        runtime_config.clone(),
+        allowed_dependencies,
+        skip_ref_validation,
+    );
+
+    let function_value = MinijinjaValue::from_object(function_function);
+    ctx.insert("function".to_string(), function_value.clone());
+    base_builtins.insert("function".to_string(), function_value);
 
     // Register builtins as a global
     ctx.insert(

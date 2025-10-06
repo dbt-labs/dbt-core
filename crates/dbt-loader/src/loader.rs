@@ -490,12 +490,21 @@ pub async fn load_inner(
         &all_files,
     );
 
+    let function_ymls = find_files_by_kind_and_extension(
+        package_path,
+        &dbt_project.name,
+        &ResourcePathKind::FunctionPaths,
+        &["yml", "yaml"],
+        &all_files,
+    );
+
     // todo: change dbt_properties to be BTreeSet, this may require many goldies updates
     for item in seed_ymls
         .iter()
         .chain(&snapshot_ymls)
         .chain(&analysis_ymls)
         .chain(&test_ymls)
+        .chain(&function_ymls)
     {
         if !dbt_properties.contains(item) {
             dbt_properties.push(item.clone());
@@ -513,6 +522,13 @@ pub async fn load_inner(
         package_path,
         &dbt_project.name,
         &ResourcePathKind::ModelPaths,
+        &["sql"],
+        &all_files,
+    );
+    let function_sql_files = find_files_by_kind_and_extension(
+        package_path,
+        &dbt_project.name,
+        &ResourcePathKind::FunctionPaths,
         &["sql"],
         &all_files,
     );
@@ -578,6 +594,7 @@ pub async fn load_inner(
         dbt_properties,
         analysis_files,
         model_sql_files,
+        function_sql_files,
         test_files,
         fixture_files,
         seed_files,
@@ -726,6 +743,10 @@ fn collect_paths(dbt_project: &DbtProject) -> HashMap<ResourcePathKind, Vec<Stri
         dbt_project.asset_paths.clone().unwrap_or_default(),
     );
     all_dirs.insert(
+        ResourcePathKind::FunctionPaths,
+        dbt_project.function_paths.clone().unwrap_or_default(),
+    );
+    all_dirs.insert(
         ResourcePathKind::MacroPaths,
         dbt_project.macro_paths.clone().unwrap_or_default(),
     );
@@ -765,6 +786,7 @@ fn collect_paths(dbt_project: &DbtProject) -> HashMap<ResourcePathKind, Vec<Stri
         let mut result: Vec<String> = vec![];
 
         result.extend_from_slice(dbt_project.analysis_paths.as_deref().unwrap_or_default());
+        result.extend_from_slice(dbt_project.function_paths.as_deref().unwrap_or_default());
         result.extend_from_slice(dbt_project.macro_paths.as_deref().unwrap_or_default());
         result.extend_from_slice(dbt_project.model_paths.as_deref().unwrap_or_default());
         result.extend_from_slice(dbt_project.seed_paths.as_deref().unwrap_or_default());

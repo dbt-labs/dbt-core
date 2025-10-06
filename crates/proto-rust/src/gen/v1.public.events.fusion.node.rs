@@ -272,6 +272,7 @@ pub enum NodeType {
     Metric = 12,
     SavedQuery = 13,
     SemanticModel = 14,
+    Function = 15,
 }
 impl NodeType {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -295,6 +296,7 @@ impl NodeType {
             Self::Metric => "NODE_TYPE_METRIC",
             Self::SavedQuery => "NODE_TYPE_SAVED_QUERY",
             Self::SemanticModel => "NODE_TYPE_SEMANTIC_MODEL",
+            Self::Function => "NODE_TYPE_FUNCTION",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -315,6 +317,7 @@ impl NodeType {
             "NODE_TYPE_METRIC" => Some(Self::Metric),
             "NODE_TYPE_SAVED_QUERY" => Some(Self::SavedQuery),
             "NODE_TYPE_SEMANTIC_MODEL" => Some(Self::SemanticModel),
+            "NODE_TYPE_FUNCTION" => Some(Self::Function),
             _ => None,
         }
     }
@@ -531,6 +534,7 @@ pub enum NodeMaterialization {
     StreamingTable = 12,
     /// ONLY FOR SNOWFLAKE
     DynamicTable = 13,
+    Function = 14,
     Custom = 100,
 }
 impl NodeMaterialization {
@@ -554,6 +558,7 @@ impl NodeMaterialization {
             Self::Analysis => "NODE_MATERIALIZATION_ANALYSIS",
             Self::StreamingTable => "NODE_MATERIALIZATION_STREAMING_TABLE",
             Self::DynamicTable => "NODE_MATERIALIZATION_DYNAMIC_TABLE",
+            Self::Function => "NODE_MATERIALIZATION_FUNCTION",
             Self::Custom => "NODE_MATERIALIZATION_CUSTOM",
         }
     }
@@ -574,6 +579,7 @@ impl NodeMaterialization {
             "NODE_MATERIALIZATION_ANALYSIS" => Some(Self::Analysis),
             "NODE_MATERIALIZATION_STREAMING_TABLE" => Some(Self::StreamingTable),
             "NODE_MATERIALIZATION_DYNAMIC_TABLE" => Some(Self::DynamicTable),
+            "NODE_MATERIALIZATION_FUNCTION" => Some(Self::Function),
             "NODE_MATERIALIZATION_CUSTOM" => Some(Self::Custom),
             _ => None,
         }

@@ -26,6 +26,8 @@ pub enum RelationType {
     DynamicTable,
     /// An enum for a delta table type that supports streaming or incremental data processing (databricks only)
     StreamingTable,
+    /// An enum for a warehouse function
+    Function,
 }
 
 impl RelationType {
@@ -68,6 +70,7 @@ impl fmt::Display for RelationType {
             RelationType::PointerTable => "pointer_table",
             RelationType::DynamicTable => "dynamic_table",
             RelationType::StreamingTable => "streaming_table",
+            RelationType::Function => "function",
         };
         write!(f, "{s}")
     }
@@ -84,6 +87,7 @@ impl From<&str> for RelationType {
             "external" => RelationType::External,
             "dynamic_table" => RelationType::DynamicTable,
             "streaming_table" => RelationType::StreamingTable,
+            "function" => RelationType::Function,
             _ => panic!("Invalid relation type: {s}"),
         }
     }

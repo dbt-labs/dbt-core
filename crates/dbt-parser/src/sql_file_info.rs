@@ -26,6 +26,8 @@ pub struct SqlFileInfo<T: DefaultTo<T>> {
     pub docs: Vec<(String, Span)>,
     /// e.g. snapshots
     pub snapshots: Vec<(String, Span)>,
+    /// e.g. functions
+    pub functions: Vec<(String, Option<String>, CodeLocation)>,
     /// e.g. checksums
     pub checksum: DbtChecksum,
     /// true if `execute` flag exists in this .sql file, otherwise false
@@ -44,6 +46,7 @@ impl<T: DefaultTo<T>> Default for SqlFileInfo<T> {
             materializations: Vec::new(),
             docs: Vec::new(),
             snapshots: Vec::new(),
+            functions: Vec::new(),
             checksum: DbtChecksum::default(),
             execute: false,
         }
@@ -66,11 +69,13 @@ impl<T: DefaultTo<T>> SqlFileInfo<T> {
         let mut materializations = Vec::new();
         let mut docs = Vec::new();
         let mut snapshots = Vec::new();
+        let mut functions = Vec::new();
 
         for resource in resources {
             match resource {
                 SqlResource::Source(source) => sources.push(source),
                 SqlResource::Ref(reference) => refs.push(reference),
+                SqlResource::Function(function) => functions.push(function),
                 SqlResource::Metric(metric) => metrics.push(metric),
                 SqlResource::Config(mut resource_config) => {
                     resource_config.default_to(&*config);
@@ -98,6 +103,7 @@ impl<T: DefaultTo<T>> SqlFileInfo<T> {
             materializations,
             docs,
             snapshots,
+            functions,
             checksum,
             execute,
         }

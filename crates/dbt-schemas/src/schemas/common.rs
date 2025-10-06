@@ -209,6 +209,7 @@ pub enum DbtMaterialization {
     Ephemeral,
     Unit,
     Analysis,
+    Function,
     /// only for databricks
     StreamingTable,
     /// only for snowflake
@@ -232,6 +233,7 @@ impl FromStr for DbtMaterialization {
             "ephemeral" => Ok(DbtMaterialization::Ephemeral),
             "unit" => Ok(DbtMaterialization::Unit),
             "analysis" => Ok(DbtMaterialization::Analysis),
+            "function" => Ok(DbtMaterialization::Function),
             "streaming_table" => Ok(DbtMaterialization::StreamingTable),
             "dynamic_table" => Ok(DbtMaterialization::DynamicTable),
             "inline" => Ok(DbtMaterialization::Inline),
@@ -259,6 +261,7 @@ impl std::fmt::Display for DbtMaterialization {
             DbtMaterialization::StreamingTable => "streaming_table",
             DbtMaterialization::DynamicTable => "dynamic_table",
             DbtMaterialization::Analysis => "analysis",
+            DbtMaterialization::Function => "function",
             DbtMaterialization::Inline => "inline",
             DbtMaterialization::Unknown(s) => s.as_str(),
             DbtMaterialization::Snapshot => "snapshot",
@@ -287,6 +290,7 @@ impl From<DbtMaterialization> for RelationType {
             DbtMaterialization::Unknown(_) => RelationType::External, // TODO Validate this
             DbtMaterialization::Snapshot => RelationType::Table,   // TODO Validate this
             DbtMaterialization::Seed => RelationType::Table,       // TODO Validate this
+            DbtMaterialization::Function => RelationType::Function,
         }
     }
 }
@@ -309,6 +313,7 @@ impl From<&DbtMaterialization> for NodeMaterialization {
             DbtMaterialization::Unknown(_) => Self::Custom,
             DbtMaterialization::Snapshot => Self::Snapshot,
             DbtMaterialization::Seed => Self::Seed,
+            DbtMaterialization::Function => Self::Function,
         }
     }
 }

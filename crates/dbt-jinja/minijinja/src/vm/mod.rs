@@ -884,7 +884,7 @@ impl<'env> Vm<'env> {
                         // leave the one argument on the stack for the recursion.  The
                         // recurse_loop! macro itself will perform a jump and not return here.
                         recurse_loop!(true, &this_span);
-                    } else if (*name == "ref" || *name == "source") && {
+                    } else if (*name == "ref" || *name == "source" || *name == "function") && {
                         // we only consider the ref source override in root package
                         let template_result = self.env.get_template(name).or_else(|_| {
                             self.env
@@ -927,21 +927,23 @@ impl<'env> Vm<'env> {
                             .map(|x| x.to_string())
                             .unwrap_or_else(|| (*name).to_string());
 
-                        let args: Vec<Value> =
-                            if function_name == "ref" || function_name == "source" {
-                                let start: (u32, u32, u32) = (
-                                    this_span.start_line,
-                                    this_span.start_col,
-                                    this_span.start_offset,
-                                );
-                                let mut location_arg = value_map_with_capacity(1);
-                                location_arg
-                                    .insert(Value::from("location"), Value::from_serialize(start));
-                                let kwargs = Kwargs::wrap(location_arg);
-                                args.iter().cloned().chain(vec![kwargs]).collect()
-                            } else {
-                                args.to_vec()
-                            };
+                        let args: Vec<Value> = if function_name == "ref"
+                            || function_name == "source"
+                            || function_name == "function"
+                        {
+                            let start: (u32, u32, u32) = (
+                                this_span.start_line,
+                                this_span.start_col,
+                                this_span.start_offset,
+                            );
+                            let mut location_arg = value_map_with_capacity(1);
+                            location_arg
+                                .insert(Value::from("location"), Value::from_serialize(start));
+                            let kwargs = Kwargs::wrap(location_arg);
+                            args.iter().cloned().chain(vec![kwargs]).collect()
+                        } else {
+                            args.to_vec()
+                        };
 
                         let rv = func
                             .call(state, &args, listeners)
@@ -1098,7 +1100,10 @@ impl<'env> Vm<'env> {
                             .get_attr_fast("function_name")
                             .map(|x| x.to_string())
                             .unwrap_or_else(|| (*name).to_string());
-                        let args_vals = if function_name == "ref" || function_name == "source" {
+                        let args_vals = if function_name == "ref"
+                            || function_name == "source"
+                            || function_name == "function"
+                        {
                             let start: (u32, u32, u32) = (
                                 this_span.start_line,
                                 this_span.start_col,

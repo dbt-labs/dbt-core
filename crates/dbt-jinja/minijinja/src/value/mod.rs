@@ -229,6 +229,7 @@ pub mod type_erase;
 pub(crate) mod argtypes;
 #[cfg(feature = "deserialization")]
 mod deserialize;
+pub mod function_object;
 pub(crate) mod merge_object;
 pub(crate) mod namespace_name;
 pub(crate) mod namespace_object;

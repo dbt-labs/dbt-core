@@ -15,6 +15,7 @@ type YmlValue = dbt_serde_yaml::Value;
 
 use super::DataTestProperties;
 use super::ExposureProperties;
+use super::FunctionProperties;
 use super::MetricsProperties;
 use super::ModelProperties;
 use super::SavedQueriesProperties;
@@ -32,6 +33,7 @@ pub struct DbtPropertiesFileValues {
     pub macros: Option<Vec<dbt_serde_yaml::Value>>,
     pub metrics: Option<Vec<dbt_serde_yaml::Value>>,
     pub models: Option<Vec<dbt_serde_yaml::Value>>,
+    pub functions: Option<Vec<dbt_serde_yaml::Value>>,
     pub saved_queries: Option<Vec<dbt_serde_yaml::Value>>,
     pub seeds: Option<Vec<dbt_serde_yaml::Value>>,
     // semantic_models cannot be removed for backward compatibility
@@ -79,6 +81,7 @@ pub struct DbtPropertiesFile {
     pub groups: Option<Vec<GroupProperties>>,
     pub macros: Option<Vec<MacrosProperties>>,
     pub metrics: Option<Vec<MetricsProperties>>,
+    pub functions: Option<Vec<FunctionProperties>>,
     // semantic_models cannot be removed for backward compatibility
     // removal would result in many regression tests failing
     pub semantic_models: Option<Vec<dbt_serde_yaml::Value>>,
