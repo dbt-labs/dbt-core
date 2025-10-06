@@ -24,6 +24,26 @@ functions:
       data_type: float
 """
 
+numbers_model_sql = """
+SELECT 1 as number
+UNION ALL
+SELECT 2 as number
+UNION ALL
+SELECT 3 as number
+"""
+
+sum_numbers_function_sql = """
+SELECT sum(number) as sum_numbers FROM {{ ref('numbers_model') }}
+"""
+
+sum_numbers_function_yml = """
+functions:
+  - name: sum_numbers_function
+    description: Sums the numbers in the numbers_model
+    returns:
+      data_type: integer
+"""
+
 
 class BasicUDFSetup:
     @pytest.fixture(scope="class")
@@ -115,3 +135,34 @@ class TestCanUseWithEmptyMode(BasicUDFSetup):
         assert isinstance(agate_table, agate.Table)
         assert agate_table.column_names == ("double_it",)
         assert agate_table.rows == [(2.0,)]
+
+
+class TestCanUseRefInUDF:
+    @pytest.fixture(scope="class")
+    def functions(self) -> Dict[str, str]:
+        return {
+            "sum_numbers_function.sql": sum_numbers_function_sql,
+            "sum_numbers_function.yml": sum_numbers_function_yml,
+        }
+
+    @pytest.fixture(scope="class")
+    def models(self) -> Dict[str, str]:
+        return {
+            "numbers_model.sql": numbers_model_sql,
+        }
+
+    def test_can_use_ref_in_udf(self, project):
+        run_dbt(["build"])
+
+        result = run_dbt(
+            [
+                "show",
+                "--inline",
+                "select {{ function('sum_numbers_function') }}() as summed_numbers",
+            ]
+        )
+        assert len(result.results) == 1
+        agate_table = result.results[0].agate_table
+        assert isinstance(agate_table, agate.Table)
+        assert agate_table.column_names == ("summed_numbers",)
+        assert agate_table.rows == [(6,)]
