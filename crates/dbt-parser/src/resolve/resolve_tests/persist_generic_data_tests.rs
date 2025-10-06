@@ -203,6 +203,20 @@ fn persist_inner(
         base_path: io_args.out_dir.to_path_buf(),
         package_name: project_name.to_string(),
     };
+    let (meta_name, meta_namespace) = (Some(test_macro_name), namespace);
+    let column_name = kwargs
+        .get("column_name")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let combination_of_columns = kwargs
+        .get("combination_of_columns")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                .collect()
+        });
+
     Ok(GenericTestAsset {
         dbt_asset,
         original_file_path: original_file_path.clone(),
@@ -210,6 +224,10 @@ fn persist_inner(
         resource_type: test_config.resource_type.clone(),
         test_name: full_name,
         defined_at: test.span().clone().into(),
+        test_metadata_name: meta_name,
+        test_metadata_namespace: meta_namespace,
+        test_metadata_column_name: column_name,
+        test_metadata_combination_of_columns: combination_of_columns,
     })
 }
 

@@ -34,6 +34,7 @@ use dbt_schemas::schemas::common::DbtQuoting;
 use dbt_schemas::schemas::common::DocsConfig;
 use dbt_schemas::schemas::common::NodeDependsOn;
 use dbt_schemas::schemas::common::ResolvedQuoting;
+use dbt_schemas::schemas::nodes::TestMetadata;
 use dbt_schemas::schemas::project::DataTestConfig;
 use dbt_schemas::schemas::project::DbtProject;
 use dbt_schemas::schemas::project::DefaultTo;
@@ -46,6 +47,7 @@ use dbt_schemas::state::DbtRuntimeConfig;
 use dbt_schemas::state::GenericTestAsset;
 use dbt_schemas::state::ModelStatus;
 use dbt_schemas::state::{DbtAsset, DbtPackage};
+use dbt_serde_yaml::Value as YmlValue;
 use md5;
 use minijinja::Value;
 use minijinja::constants::DEFAULT_TEST_SCHEMA;
@@ -56,6 +58,32 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 use std::str::FromStr as _;
 use std::sync::Arc;
+
+fn test_metadata_from_asset(asset: &GenericTestAsset) -> Option<TestMetadata> {
+    if let Some(name) = &asset.test_metadata_name {
+        let mut kwargs = BTreeMap::new();
+        if let Some(col) = &asset.test_metadata_column_name {
+            kwargs.insert("column_name".to_string(), YmlValue::string(col.clone()));
+        }
+        if let Some(cols) = &asset.test_metadata_combination_of_columns {
+            let seq = cols
+                .iter()
+                .cloned()
+                .map(YmlValue::string)
+                .collect::<Vec<_>>();
+            kwargs.insert(
+                "combination_of_columns".to_string(),
+                YmlValue::Sequence(seq, Default::default()),
+            );
+        }
+        return Some(TestMetadata {
+            name: name.clone(),
+            kwargs,
+            namespace: asset.test_metadata_namespace.clone(),
+        });
+    }
+    None
+}
 
 #[allow(clippy::too_many_arguments)]
 pub async fn resolve_data_tests(
@@ -246,6 +274,16 @@ pub async fn resolve_data_tests(
             language = Some("sql".to_string());
         }
 
+        // Populate TestMetadata only for generic data tests (not singular .sql tests)
+        // This ensures external tooling (e.g., project-evaluator) correctly classifies tests
+        let inferred_test_metadata = if is_singular_data_test {
+            None
+        } else {
+            test_path_to_test_asset
+                .get(&dbt_asset.path)
+                .and_then(|asset| test_metadata_from_asset(asset))
+        };
+
         let mut dbt_test = DbtTest {
             defined_at: test_path_to_test_asset
                 .get(&dbt_asset.path)
@@ -348,7 +386,7 @@ pub async fn resolve_data_tests(
                             test_asset.resource_name
                         )
                     }),
-                test_metadata: None,
+                test_metadata: inferred_test_metadata,
                 file_key_name: None,
             },
             deprecated_config: *test_config.clone(),
@@ -385,4 +423,72 @@ pub async fn resolve_data_tests(
     }
 
     Ok((nodes, disabled_tests))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dbt_schemas::state::DbtAsset;
+
+    #[test]
+    fn test_builds_test_metadata_from_asset_single_col() {
+        let asset = GenericTestAsset {
+            dbt_asset: DbtAsset {
+                base_path: PathBuf::new(),
+                path: PathBuf::from("generic_tests/not_null_customers_id.sql"),
+                package_name: "pkg".to_string(),
+            },
+            original_file_path: PathBuf::from("models/schema.yml"),
+            resource_name: "customers".to_string(),
+            resource_type: "model".to_string(),
+            test_name: "not_null_customers_id".to_string(),
+            defined_at: Default::default(),
+            test_metadata_name: Some("not_null".to_string()),
+            test_metadata_namespace: None,
+            test_metadata_column_name: Some("id".to_string()),
+            test_metadata_combination_of_columns: None,
+        };
+        let md = test_metadata_from_asset(&asset).expect("metadata");
+        assert_eq!(md.name, "not_null");
+        assert!(md.namespace.is_none());
+        assert_eq!(
+            md.kwargs
+                .get("column_name")
+                .and_then(|v| v.as_str())
+                .unwrap(),
+            "id"
+        );
+    }
+
+    #[test]
+    fn test_builds_test_metadata_from_asset_combo_cols() {
+        let asset = GenericTestAsset {
+            dbt_asset: DbtAsset {
+                base_path: PathBuf::new(),
+                path: PathBuf::from(
+                    "generic_tests/unique_combination_of_columns_customers_a__b.sql",
+                ),
+                package_name: "pkg".to_string(),
+            },
+            original_file_path: PathBuf::from("models/schema.yml"),
+            resource_name: "customers".to_string(),
+            resource_type: "model".to_string(),
+            test_name: "unique_combination_of_columns_customers_a__b".to_string(),
+            defined_at: Default::default(),
+            test_metadata_name: Some("unique_combination_of_columns".to_string()),
+            test_metadata_namespace: None,
+            test_metadata_column_name: None,
+            test_metadata_combination_of_columns: Some(vec!["a".to_string(), "b".to_string()]),
+        };
+        let md = test_metadata_from_asset(&asset).expect("metadata");
+        assert_eq!(md.name, "unique_combination_of_columns");
+        let vals: Vec<String> = match md.kwargs.get("combination_of_columns").unwrap() {
+            YmlValue::Sequence(arr, _) => arr
+                .iter()
+                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                .collect(),
+            _ => panic!("expected sequence for combination_of_columns"),
+        };
+        assert_eq!(vals, vec!["a", "b"]);
+    }
 }

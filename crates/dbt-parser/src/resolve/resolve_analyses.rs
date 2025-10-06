@@ -35,6 +35,7 @@ use crate::{
     },
 };
 
+/// Resolve analysis resources for a package into models and rendered SQL, updating refs/sources.
 #[allow(clippy::too_many_arguments)]
 pub async fn resolve_analyses(
     arg: &ResolveArgs,

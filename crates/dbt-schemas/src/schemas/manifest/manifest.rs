@@ -3,7 +3,6 @@ use dbt_common::{Span, adapter::AdapterType, io_args::StaticAnalysisKind};
 use dbt_serde_yaml::UntaggedEnumDeserialize;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::PathBuf, str::FromStr as _, sync::Arc};
-
 // Type aliases for clarity
 type YmlValue = dbt_serde_yaml::Value;
 
@@ -137,6 +136,7 @@ pub fn build_manifest(invocation_id: &str, resolver_state: &ResolverState) -> Db
             .map(|(id, node)| {
                 (id.clone(), {
                     let mut model_node: ManifestModel = (**node).clone().into();
+
                     // External public models should not have a path or original_file_path
                     if model_node.access == Some(Access::Public)
                         && resolver_state.root_project_name

@@ -1,5 +1,7 @@
+/// Utilities for inferring model primary keys from constraints and tests
+pub(crate) mod primary_key_inference;
 /// Functions for resolving analyses
-pub(crate) mod resolve_analyses;
+pub mod resolve_analyses;
 /// Functions for resolving exposures
 pub(crate) mod resolve_exposures;
 /// Functions for resolving functions

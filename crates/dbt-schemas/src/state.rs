@@ -115,18 +115,24 @@ pub struct GenericTestAsset {
     pub resource_type: String,
     pub test_name: String,
     pub defined_at: dbt_common::CodeLocation,
+    // Structured metadata for generic tests (optional; not used for singular tests)
+    pub test_metadata_name: Option<String>,
+    pub test_metadata_namespace: Option<String>,
+    pub test_metadata_column_name: Option<String>,
+    pub test_metadata_combination_of_columns: Option<Vec<String>>,
 }
 
 impl fmt::Display for GenericTestAsset {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "GenericTestAsset {{ dbt_asset: {}, original_file_path: {}, resource_name: {}, resource_type: {}, test_name: {} }}",
+            "GenericTestAsset {{ dbt_asset: {}, original_file_path: {}, resource_name: {}, resource_type: {}, test_name: {}, test_metadata_name: {:?} }}",
             self.dbt_asset,
             self.original_file_path.display(),
             self.resource_name,
             self.resource_type,
-            self.test_name
+            self.test_name,
+            self.test_metadata_name
         )
     }
 }

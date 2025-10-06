@@ -20,7 +20,7 @@ use minijinja::{
     listener::RenderingEventListener,
     value::{Kwargs, Object},
 };
-
+type YmlValue = dbt_serde_yaml::Value;
 use crate::utils::{
     DBT_INTERNAL_ENV_VAR_PREFIX, ENV_VARS, SECRET_ENV_VAR_PREFIX, node_metadata_from_state,
 };
@@ -1186,10 +1186,19 @@ pub fn build_flat_graph(nodes: &Nodes) -> MutableMap {
             )
         }))
         .chain(nodes.tests.iter().map(|(unique_id, test)| {
-            (
-                unique_id.clone(),
-                Value::from_serialize((Arc::as_ref(test) as &dyn InternalDbtNode).serialize()),
-            )
+            // For tests, update original_file_path to use patch_path if it exists
+            // we also do this this when we write the test to the manifest
+            // (indicates test was defined in a YAML file)
+            let mut serialized = (Arc::as_ref(test) as &dyn InternalDbtNode).serialize();
+            if let YmlValue::Mapping(ref mut map, _) = serialized
+                && let Some(patch_path) = &test.__common_attr__.patch_path
+            {
+                map.insert(
+                    YmlValue::string("original_file_path".to_string()),
+                    YmlValue::string(patch_path.display().to_string()),
+                );
+            }
+            (unique_id.clone(), Value::from_serialize(serialized))
         }))
         .chain(nodes.seeds.iter().map(|(unique_id, seed)| {
             (

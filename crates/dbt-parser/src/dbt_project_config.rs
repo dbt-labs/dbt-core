@@ -68,11 +68,17 @@ impl<T: DefaultTo<T>> DbtProjectConfig<T> {
     ///
     /// # Example
     /// ```rust
-    /// // For an exposure defined in models/exposures.yml:
-    /// // exposure_name: "weekly_revenue_report"
-    /// // package_name: "analytics"
+    /// use dbt_parser::dbt_project_config::DbtProjectConfig;
+    /// use dbt_schemas::schemas::project::ModelConfig;
+    /// use std::collections::HashMap;
+    ///
+    /// // Minimal config tree; in practice this is built from dbt_project.yml
+    /// let config = DbtProjectConfig::<ModelConfig> {
+    ///     config: ModelConfig::default(),
+    ///     children: HashMap::new(),
+    /// };
     /// let fqn = vec!["analytics".to_string(), "weekly_revenue_report".to_string()];
-    /// let config = project_config.get_config_for_fqn(&fqn);
+    /// let _cfg = config.get_config_for_fqn(&fqn);
     /// ```
     pub fn get_config_for_fqn(&self, fqn: &[String]) -> &T {
         let mut current_config = self;

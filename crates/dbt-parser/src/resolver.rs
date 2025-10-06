@@ -54,12 +54,11 @@ use crate::resolve::resolve_sources::resolve_sources;
 use crate::resolve::resolve_tests::resolve_data_tests::resolve_data_tests;
 use crate::resolve::resolve_tests::resolve_unit_tests::resolve_unit_tests;
 
+use crate::resolve::primary_key_inference::infer_and_apply_primary_keys;
 use crate::resolve::resolve_selectors::{
     resolve_final_selectors, resolve_manifest_selectors, resolve_selectors_from_yaml,
 };
-
-// Type aliases for clarity
-type YmlValue = dbt_serde_yaml::Value;
+use dbt_serde_yaml::Value as YmlValue;
 
 /// Entrypoint for the resolve phase.
 ///
@@ -691,6 +690,8 @@ pub async fn resolve_inner(
     .await?;
     nodes.tests.extend(data_tests);
     disabled_nodes.tests.extend(disabled_tests);
+
+    infer_and_apply_primary_keys(&mut nodes, &disabled_nodes);
 
     let (unit_tests, disabled_unit_tests) = resolve_unit_tests(
         &arg.io,

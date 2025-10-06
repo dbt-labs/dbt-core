@@ -40,9 +40,8 @@ pub fn validate_metric(props: &MetricsProperties) -> FsResult<()> {
 /// * `Err(FsError)` with SchemaError code if the name is invalid
 ///
 /// # Example
-/// ```
-/// use validate_metrics::validate_metric_name;
-///
+/// ```rust
+/// use dbt_parser::resolve::validate_metric_name;
 /// assert!(validate_metric_name("valid_metric_name").is_ok());
 /// assert!(validate_metric_name("invalid name").is_err()); // contains spaces
 /// ```
