@@ -47,7 +47,7 @@ static DBT_TMP_UUID_PATTERN: Lazy<Regex> = Lazy::new(|| {
 // schemas in tests. Note ideal it is not localized but if things
 // change in the ways we generate scheams things will start
 // failing.
-fn cleanup_schema_name(input: &str) -> String {
+pub fn cleanup_schema_name(input: &str) -> String {
     let re = Regex::new(r"___.*?___").unwrap();
     re.replace_all(input, "").to_string()
 }
