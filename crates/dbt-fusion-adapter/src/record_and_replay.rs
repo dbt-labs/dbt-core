@@ -298,6 +298,10 @@ impl Connection for RecordEngineConnection {
             }
         }
     }
+
+    fn update_node_id(&mut self, node_id: Option<String>) {
+        self.2 = node_id
+    }
 }
 
 struct RecordEngineStatement {
@@ -593,6 +597,10 @@ impl Connection for ReplayEngineConnection {
 
         let schema = schema_builder.finish();
         Ok(schema)
+    }
+
+    fn update_node_id(&mut self, node_id: Option<String>) {
+        self.1 = node_id
     }
 }
 

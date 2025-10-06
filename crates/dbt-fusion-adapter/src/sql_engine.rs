@@ -122,6 +122,8 @@ impl Connection for NoopConnection {
     ) -> adbc_core::error::Result<Schema> {
         unimplemented!("ADBC table schema retrieval in mock connection")
     }
+
+    fn update_node_id(&mut self, _node_id: Option<String>) {}
 }
 
 pub struct ActualEngine {

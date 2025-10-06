@@ -42,6 +42,9 @@ pub trait Connection: Send {
     /// Allocate and initialize a new statement.
     fn new_statement(&mut self) -> Result<Box<dyn Statement>>;
 
+    /// Updates the node_id associated with this [Connection]
+    fn update_node_id(&mut self, node_id: Option<String>);
+
     /// Cancel the in-progress operation on a connection.
     fn cancel(&mut self) -> Result<()>;
 
@@ -501,6 +504,10 @@ impl Connection for AdbcConnection {
     fn debug_fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(self, f)
     }
+
+    fn update_node_id(&mut self, _node_id: Option<String>) {
+        // noop: AdbcConnection does not use the node id
+    }
 }
 
 /// ODBC Connection.
@@ -536,4 +543,6 @@ impl Connection for OdbcConnection {
     fn debug_fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(self, f)
     }
+
+    fn update_node_id(&mut self, _node_id: Option<String>) {}
 }

@@ -173,6 +173,8 @@ impl BridgeAdapter {
         if conn.is_none() {
             self.new_connection(state, node_id)
                 .map(|new_conn| conn.replace(new_conn))?;
+        } else if let Some(c) = conn.as_mut() {
+            c.update_node_id(node_id);
         }
         let guard = ConnectionGuard::new(conn.unwrap());
         Ok(guard)
