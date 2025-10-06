@@ -12,6 +12,7 @@ pub mod types;
 pub mod utils;
 
 use dbt_common::cancellation::CancellationToken;
+use dbt_common::constants::DBT_PROJECT_YML;
 use dbt_common::fsinfo;
 use dbt_common::io_args::IoArgs;
 use dbt_common::{
@@ -104,10 +105,16 @@ pub async fn get_or_install_packages(
         .await?;
     }
 
+    // A package is considered "missing" if the 'dbt_project.yml' file for that
+    // package does not exist.
     let mut missing_packages = Vec::new();
     if !lock {
         for package in dbt_packages_lock.packages.iter() {
-            if !packages_install_path.join(package.package_name()).exists() {
+            if !packages_install_path
+                .join(package.package_name())
+                .join(DBT_PROJECT_YML)
+                .exists()
+            {
                 missing_packages.push(package.package_name());
             }
         }
