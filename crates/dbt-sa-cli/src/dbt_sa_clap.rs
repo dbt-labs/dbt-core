@@ -20,8 +20,8 @@ use dbt_common::io_args::{
 };
 use dbt_common::row_limit::RowLimit;
 
-use clap::arg;
 use clap::{Parser, Subcommand};
+use clap::{ValueEnum, arg};
 
 use dbt_common::node_selector::{IndirectSelection, parse_model_specifiers};
 
@@ -89,6 +89,16 @@ pub enum Commands {
     Man(ManArgs),
 }
 
+#[derive(
+    Debug, Copy, Clone, PartialEq, Eq, Default, Display, ValueEnum, Serialize, Deserialize,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum ProjectTemplate {
+    #[default]
+    JaffleShop,
+    MomsFlowerShop,
+}
+
 // ----------------------------------------------------------------------------------------------
 // Command Args
 #[derive(Parser, Debug, Default, Clone, Serialize, Deserialize)]
@@ -100,6 +110,10 @@ pub struct InitArgs {
     /// Skip interactive profile setup
     #[arg(long, default_value = "false")]
     pub skip_profile_setup: bool,
+
+    /// The sample project to initialize with
+    #[arg(long, default_value = "jaffle-shop")]
+    pub sample: ProjectTemplate,
 
     // Flattened Common args
     #[clap(flatten)]

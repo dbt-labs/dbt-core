@@ -1,7 +1,8 @@
-use crate::dbt_sa_clap::{Cli, Commands};
+use crate::dbt_sa_clap::{Cli, Commands, ProjectTemplate};
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::create_root_info_span;
 use dbt_common::tracing::create_invocation_attributes;
+use dbt_init::init;
 use dbt_jinja_utils::invocation_args::InvocationArgs;
 use dbt_loader::clean::execute_clean_command;
 use dbt_schemas::man::execute_man_command;
@@ -94,10 +95,16 @@ async fn do_execute_fs(eval_arg: &EvalArgs, cli: Cli, token: CancellationToken) 
             Some(init_args.project_name.clone())
         };
 
+        let project_template = match init_args.sample {
+            ProjectTemplate::JaffleShop => init::assets::ProjectTemplateAsset::JaffleShop,
+            ProjectTemplate::MomsFlowerShop => init::assets::ProjectTemplateAsset::MomsFlowerShop,
+        };
+
         match run_init_workflow(
             project_name,
             init_args.skip_profile_setup,
             init_args.common_args.profile.clone(), // Get profile from common args
+            &project_template,
         )
         .await
         {

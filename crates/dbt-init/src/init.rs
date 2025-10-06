@@ -4,14 +4,56 @@
 use crate::profile_setup::ProfileSetup;
 use dbt_common::pretty_string::{GREEN, YELLOW};
 use dbt_common::{ErrorCode, FsResult, fs_err};
-use rust_embed::RustEmbed;
 use std::env;
 use std::fs;
 use std::path::Path;
 
-#[derive(RustEmbed)]
-#[folder = "assets/jaffle_shop/"]
-struct ProjectTemplate;
+pub mod assets {
+    #![allow(clippy::disallowed_methods)] // RustEmbed generates calls to std::path::Path::canonicalize
+
+    use rust_embed::{EmbeddedFile, RustEmbed};
+
+    #[derive(RustEmbed)]
+    #[folder = "assets/jaffle_shop/"]
+    struct JaffleShopProjectTemplate;
+
+    #[derive(RustEmbed)]
+    #[folder = "assets/moms_flower_shop/"]
+    struct MomsFlowerShopProjectTemplate;
+
+    pub enum ProjectTemplateAsset {
+        JaffleShop,
+        MomsFlowerShop,
+    }
+
+    impl ProjectTemplateAsset {
+        /// Return the name of the project in assets/{project_name}.
+        pub fn default_project_name(&self) -> &'static str {
+            match self {
+                ProjectTemplateAsset::JaffleShop => "jaffle_shop",
+                ProjectTemplateAsset::MomsFlowerShop => "moms_flower_shop",
+            }
+        }
+
+        pub fn get(&self, file_path: &str) -> Option<EmbeddedFile> {
+            match self {
+                ProjectTemplateAsset::JaffleShop => JaffleShopProjectTemplate::get(file_path),
+                ProjectTemplateAsset::MomsFlowerShop => {
+                    MomsFlowerShopProjectTemplate::get(file_path)
+                }
+            }
+        }
+
+        pub fn iter(&self) -> Box<dyn Iterator<Item = ::std::borrow::Cow<'static, str>>> {
+            match self {
+                ProjectTemplateAsset::JaffleShop => Box::new(JaffleShopProjectTemplate::iter()),
+                ProjectTemplateAsset::MomsFlowerShop => {
+                    Box::new(MomsFlowerShopProjectTemplate::iter())
+                }
+            }
+        }
+    }
+}
 
 /// Create or update .vscode/extensions.json file with dbt extension recommendation
 fn create_or_update_vscode_extensions(target_dir: &Path) -> FsResult<()> {
@@ -96,12 +138,16 @@ fn create_or_update_vscode_extensions(target_dir: &Path) -> FsResult<()> {
     Ok(())
 }
 
-pub fn init_project(project_name: &str, target_dir: &Path) -> FsResult<()> {
+pub fn init_project(
+    project_name: &str,
+    target_dir: &Path,
+    project_template: &assets::ProjectTemplateAsset,
+) -> FsResult<()> {
     fs::create_dir_all(target_dir)?;
 
     // Extract all embedded files
-    for file_path in ProjectTemplate::iter() {
-        let file_content = ProjectTemplate::get(&file_path).ok_or_else(|| {
+    for file_path in project_template.iter() {
+        let file_content = project_template.get(&file_path).ok_or_else(|| {
             fs_err!(
                 ErrorCode::IoError,
                 "Failed to read embedded file: {}",
@@ -118,7 +164,7 @@ pub fn init_project(project_name: &str, target_dir: &Path) -> FsResult<()> {
 
         // Read the content as string and replace project name placeholder
         let content = String::from_utf8_lossy(&file_content.data);
-        let content = content.replace("jaffle_shop", project_name);
+        let content = content.replace(project_template.default_project_name(), project_name);
 
         // Write the file
         fs::write(&target_file_path, content)?;
@@ -249,6 +295,7 @@ pub async fn run_init_workflow(
     project_name: Option<String>,
     skip_profile_setup: bool,
     existing_profile: Option<String>,
+    project_template: &assets::ProjectTemplateAsset,
 ) -> FsResult<()> {
     let profiles_dir = get_profiles_dir();
     let profile_setup = ProfileSetup::new(profiles_dir.clone());
@@ -258,7 +305,7 @@ pub async fn run_init_workflow(
     // Determine whether the user explicitly provided a project name.
     let (mut project_name, user_specified_project_name) = match project_name {
         Some(name) => (name, true),
-        None => ("jaffle_shop".to_string(), false),
+        None => (project_template.default_project_name().to_string(), false),
     };
 
     // CASE 1: Inside an existing project **and** the user did NOT provide a new project name →
@@ -316,7 +363,7 @@ pub async fn run_init_workflow(
 
         // Create the project
         let project_dir = Path::new(&project_name);
-        init_project(&project_name, project_dir)?;
+        init_project(&project_name, project_dir, project_template)?;
 
         // Create or update .vscode/extensions.json in the new project
         create_or_update_vscode_extensions(project_dir)?;
