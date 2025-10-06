@@ -13,6 +13,7 @@ use std::collections::BTreeMap;
 // Type aliases for clarity
 type YmlValue = dbt_serde_yaml::Value;
 
+use super::AnalysesProperties;
 use super::DataTestProperties;
 use super::ExposureProperties;
 use super::FunctionProperties;
@@ -90,24 +91,6 @@ pub struct DbtPropertiesFile {
 }
 
 // -- Additional Properties
-
-#[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
-pub struct AnalysesProperties {
-    pub columns: Option<Vec<AnalysesColumns>>,
-    pub config: Option<AnalysesConfig>,
-    pub description: Option<String>,
-    pub name: String,
-}
-
-#[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
-pub struct AnalysesColumns {
-    pub data_type: Option<String>,
-    pub description: Option<String>,
-    pub name: String,
-}
-
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct AnalysesConfig {

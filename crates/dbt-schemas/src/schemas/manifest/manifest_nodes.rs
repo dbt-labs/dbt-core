@@ -7,10 +7,11 @@ use serde_with::skip_serializing_none;
 type YmlValue = dbt_serde_yaml::Value;
 
 use crate::schemas::{
-    DbtExposure, DbtFunction, DbtModel, DbtSeed, DbtSnapshot, DbtSource, DbtTest, DbtUnitTest,
+    DbtAnalysis, DbtExposure, DbtFunction, DbtModel, DbtSeed, DbtSnapshot, DbtSource, DbtTest,
+    DbtUnitTest,
     common::{
-        Access, DbtChecksum, DbtContract, DbtQuoting, Expect, FreshnessDefinition, Given,
-        IncludeExclude, NodeDependsOn,
+        Access, DbtChecksum, DbtContract, DbtMaterialization, DbtQuoting, Expect,
+        FreshnessDefinition, Given, IncludeExclude, NodeDependsOn, PersistDocsConfig,
     },
     dbt_column::DbtColumnRef,
     manifest::{
@@ -21,7 +22,7 @@ use crate::schemas::{
     },
     nodes::TestMetadata,
     project::{
-        DataTestConfig, ExposureConfig, FunctionConfig, MetricConfig, ModelConfig,
+        AnalysesConfig, DataTestConfig, ExposureConfig, FunctionConfig, MetricConfig, ModelConfig,
         SavedQueryConfig, SeedConfig, SemanticModelConfig, SnapshotConfig, SourceConfig,
         UnitTestConfig,
     },
@@ -34,6 +35,20 @@ use crate::schemas::{
     semantic_layer::semantic_manifest::SemanticLayerElementConfig,
     serde::{StringOrArrayOfStrings, StringOrInteger},
 };
+
+use dbt_common::io_args::StaticAnalysisKind;
+
+fn default_analysis_materialized() -> DbtMaterialization {
+    DbtMaterialization::Analysis
+}
+
+fn default_analysis_static_analysis() -> StaticAnalysisKind {
+    StaticAnalysisKind::Off
+}
+
+fn default_analysis_enabled() -> bool {
+    true
+}
 
 /// Common attributes for all manifest nodes, materializable or not.
 #[skip_serializing_none]
@@ -544,6 +559,85 @@ impl From<DbtModel> for ManifestModel {
                     standard_granularity_column: ts.primary_column.name,
                 }),
             __other__: model.__other__,
+        }
+    }
+}
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct ManifestAnalysis {
+    pub __common_attr__: ManifestMaterializableCommonAttributes,
+
+    pub __base_attr__: ManifestNodeBaseAttributes,
+
+    #[serde(default = "default_analysis_materialized")]
+    pub materialized: DbtMaterialization,
+    #[serde(default = "default_analysis_static_analysis")]
+    pub static_analysis: StaticAnalysisKind,
+    #[serde(default = "default_analysis_enabled")]
+    pub enabled: bool,
+    pub quoting: Option<DbtQuoting>,
+    #[serde(default)]
+    pub quoting_ignore_case: bool,
+    pub persist_docs: Option<PersistDocsConfig>,
+    pub config: AnalysesConfig,
+
+    pub __other__: BTreeMap<String, YmlValue>,
+}
+
+impl From<DbtAnalysis> for ManifestAnalysis {
+    fn from(analysis: DbtAnalysis) -> Self {
+        Self {
+            __common_attr__: ManifestMaterializableCommonAttributes {
+                unique_id: analysis.__common_attr__.unique_id,
+                database: analysis.__base_attr__.database,
+                schema: analysis.__base_attr__.schema,
+                name: analysis.__common_attr__.name,
+                package_name: analysis.__common_attr__.package_name,
+                fqn: analysis.__common_attr__.fqn,
+                path: analysis.__common_attr__.path,
+                original_file_path: analysis.__common_attr__.original_file_path,
+                patch_path: analysis.__common_attr__.patch_path,
+                description: analysis.__common_attr__.description,
+                tags: analysis.__common_attr__.tags,
+                meta: analysis.__common_attr__.meta,
+            },
+            __base_attr__: ManifestNodeBaseAttributes {
+                alias: analysis.__base_attr__.alias,
+                relation_name: analysis.__base_attr__.relation_name,
+                columns: analysis.__base_attr__.columns,
+                depends_on: analysis.__base_attr__.depends_on,
+                refs: analysis.__base_attr__.refs,
+                sources: analysis.__base_attr__.sources,
+                metrics: analysis.__base_attr__.metrics,
+                raw_code: analysis.__common_attr__.raw_code,
+                compiled: None,
+                compiled_code: None,
+                checksum: analysis.__common_attr__.checksum,
+                language: analysis.__common_attr__.language,
+                unrendered_config: Default::default(),
+                doc_blocks: Default::default(),
+                extra_ctes_injected: Default::default(),
+                extra_ctes: Default::default(),
+                created_at: Default::default(),
+                compiled_path: Default::default(),
+                build_path: Default::default(),
+                contract: Default::default(),
+                functions: analysis.__base_attr__.functions,
+            },
+            materialized: analysis.__base_attr__.materialized,
+            static_analysis: analysis.__base_attr__.static_analysis,
+            enabled: analysis.__base_attr__.enabled,
+            quoting: Some(DbtQuoting {
+                database: Some(analysis.__base_attr__.quoting.database),
+                identifier: Some(analysis.__base_attr__.quoting.identifier),
+                schema: Some(analysis.__base_attr__.quoting.schema),
+                snowflake_ignore_case: None,
+            }),
+            quoting_ignore_case: analysis.__base_attr__.quoting_ignore_case,
+            persist_docs: analysis.__base_attr__.persist_docs.clone(),
+            config: analysis.deprecated_config,
+            __other__: analysis.__other__,
         }
     }
 }

@@ -17,15 +17,15 @@ use crate::{
         manifest::{
             ManifestExposure, ManifestGroup, ManifestSavedQuery, ManifestUnitTest,
             manifest_nodes::{
-                ManifestDataTest, ManifestFunction, ManifestModel, ManifestOperation, ManifestSeed,
-                ManifestSnapshot,
+                ManifestAnalysis, ManifestDataTest, ManifestFunction, ManifestModel,
+                ManifestOperation, ManifestSeed, ManifestSnapshot,
             },
             saved_query::DbtSavedQueryAttr,
             semantic_model::NodeRelation,
         },
         nodes::{
-            AdapterAttr, DbtGroup, DbtGroupAttr, DbtSeedAttr, DbtSnapshotAttr, DbtSourceAttr,
-            DbtTestAttr,
+            AdapterAttr, DbtAnalysis, DbtAnalysisAttr, DbtGroup, DbtGroupAttr, DbtSeedAttr,
+            DbtSnapshotAttr, DbtSourceAttr, DbtTestAttr,
         },
     },
     state::ResolverState,
@@ -41,8 +41,8 @@ pub enum DbtNode {
     Snapshot(ManifestSnapshot),
     Seed(ManifestSeed),
     Operation(ManifestOperation),
+    Analysis(ManifestAnalysis),
     Function(ManifestFunction),
-    Analysis(ManifestModel),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -316,7 +316,7 @@ fn build_disabled_map(resolver_state: &ResolverState) -> BTreeMap<String, Vec<Ym
                     (
                         id.clone(),
                         vec![
-                            dbt_serde_yaml::to_value(ManifestModel::from((**analysis).clone()))
+                            dbt_serde_yaml::to_value(ManifestAnalysis::from((**analysis).clone()))
                                 .unwrap_or_default(),
                         ],
                     )
@@ -817,13 +817,64 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                 );
             }
             DbtNode::Analysis(analysis) => {
+                let config = analysis.config;
+                let tags = config
+                    .tags
+                    .clone()
+                    .map(|tags| tags.into())
+                    .unwrap_or_default();
+                let meta = config.meta.clone().unwrap_or_default();
                 nodes.analyses.insert(
                     unique_id,
-                    Arc::new(manifest_model_to_dbt_model(
-                        analysis,
-                        &manifest,
-                        dbt_quoting,
-                    )),
+                    Arc::new(DbtAnalysis {
+                        __common_attr__: CommonAttributes {
+                            unique_id: analysis.__common_attr__.unique_id,
+                            name: analysis.__common_attr__.name,
+                            package_name: analysis.__common_attr__.package_name,
+                            path: analysis.__common_attr__.path,
+                            name_span: Span::default(),
+                            original_file_path: analysis.__common_attr__.original_file_path,
+                            patch_path: analysis.__common_attr__.patch_path,
+                            fqn: analysis.__common_attr__.fqn,
+                            description: analysis.__common_attr__.description,
+                            raw_code: analysis.__base_attr__.raw_code,
+                            checksum: analysis.__base_attr__.checksum,
+                            language: analysis.__base_attr__.language,
+                            tags,
+                            meta,
+                        },
+                        __base_attr__: NodeBaseAttributes {
+                            database: analysis.__common_attr__.database,
+                            schema: analysis.__common_attr__.schema,
+                            alias: analysis.__base_attr__.alias,
+                            relation_name: analysis.__base_attr__.relation_name,
+                            materialized: analysis.materialized,
+                            static_analysis: analysis.static_analysis,
+                            enabled: analysis.enabled,
+                            static_analysis_off_reason: None,
+                            extended_model: false,
+                            quoting: analysis
+                                .quoting
+                                .map(|mut quoting| {
+                                    quoting.default_to(&dbt_quoting);
+                                    quoting
+                                })
+                                .unwrap_or(dbt_quoting)
+                                .try_into()
+                                .expect("DbtQuoting should be set"),
+                            quoting_ignore_case: analysis.quoting_ignore_case,
+                            persist_docs: analysis.persist_docs.clone(),
+                            columns: analysis.__base_attr__.columns,
+                            depends_on: analysis.__base_attr__.depends_on,
+                            refs: analysis.__base_attr__.refs,
+                            sources: analysis.__base_attr__.sources,
+                            metrics: analysis.__base_attr__.metrics,
+                            functions: analysis.__base_attr__.functions,
+                        },
+                        __analysis_attr__: DbtAnalysisAttr::default(),
+                        deprecated_config: config,
+                        __other__: analysis.__other__,
+                    }),
                 );
             }
         }

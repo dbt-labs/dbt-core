@@ -569,7 +569,7 @@ pub async fn resolve_inner(
         package_quoting,
         dbt_state.root_project(),
         root_project_configs,
-        &mut min_properties.models,
+        &mut min_properties.analyses,
         database,
         schema,
         adapter_type,

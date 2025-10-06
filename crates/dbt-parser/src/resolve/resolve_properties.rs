@@ -11,7 +11,7 @@ use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::serde::{from_yaml_raw, into_typed_with_jinja};
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_schemas::schemas::properties::{
-    DbtPropertiesFileValues, MinimalSchemaValue, MinimalTableValue,
+    AnalysesProperties, DbtPropertiesFileValues, MinimalSchemaValue, MinimalTableValue,
 };
 use dbt_schemas::schemas::serde::FloatOrString;
 use dbt_schemas::state::DbtPackage;
@@ -36,6 +36,7 @@ pub struct MinimalPropertiesEntry {
 pub struct MinimalProperties {
     pub source_tables: BTreeMap<(String, String), MinimalPropertiesEntry>,
     pub models: BTreeMap<String, MinimalPropertiesEntry>,
+    pub analyses: BTreeMap<String, MinimalPropertiesEntry>,
     pub seeds: BTreeMap<String, MinimalPropertiesEntry>,
     pub snapshots: BTreeMap<String, MinimalPropertiesEntry>,
     pub functions: BTreeMap<String, MinimalPropertiesEntry>,
@@ -92,6 +93,38 @@ impl MinimalProperties {
                             },
                         );
                     }
+                }
+            }
+        }
+        if let Some(analyses) = other.analyses {
+            for analysis_value in analyses {
+                let analysis = into_typed_with_jinja::<AnalysesProperties, _>(
+                    io_args,
+                    analysis_value.clone(),
+                    false,
+                    jinja_env,
+                    base_ctx,
+                    &[],
+                    dependency_package_name_from_ctx(jinja_env, base_ctx),
+                    true,
+                )?;
+                if let Some(existing_analysis) = self.analyses.get_mut(&analysis.name) {
+                    existing_analysis
+                        .duplicate_paths
+                        .push(properties_path.to_path_buf());
+                } else {
+                    self.analyses.insert(
+                        analysis.name.clone(),
+                        MinimalPropertiesEntry {
+                            name: validate_resource_name(&analysis.name)?,
+                            name_span: Span::default(),
+                            relative_path: properties_path.to_path_buf(),
+                            schema_value: analysis_value,
+                            table_value: None,
+                            version_info: None,
+                            duplicate_paths: vec![],
+                        },
+                    );
                 }
             }
         }

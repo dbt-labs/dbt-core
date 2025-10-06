@@ -373,6 +373,7 @@ pub enum ClapResourceType {
     Snapshot,
     Test,
     UnitTest,
+    Analysis,
 }
 
 impl Display for ClapResourceType {
@@ -384,6 +385,7 @@ impl Display for ClapResourceType {
             ClapResourceType::Snapshot => "snapshot",
             ClapResourceType::Test => "test",
             ClapResourceType::UnitTest => "unit_test",
+            ClapResourceType::Analysis => "analysis",
         };
         write!(f, "{s}")
     }
@@ -398,6 +400,7 @@ impl From<&ClapResourceType> for NodeType {
             ClapResourceType::Snapshot => NodeType::Snapshot,
             ClapResourceType::Test => NodeType::Test,
             ClapResourceType::UnitTest => NodeType::UnitTest,
+            ClapResourceType::Analysis => NodeType::Analysis,
         }
     }
 }

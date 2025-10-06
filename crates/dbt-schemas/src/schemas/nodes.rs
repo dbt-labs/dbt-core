@@ -1233,7 +1233,7 @@ pub struct Nodes {
     pub unit_tests: BTreeMap<String, Arc<DbtUnitTest>>,
     pub sources: BTreeMap<String, Arc<DbtSource>>,
     pub snapshots: BTreeMap<String, Arc<DbtSnapshot>>,
-    pub analyses: BTreeMap<String, Arc<DbtModel>>,
+    pub analyses: BTreeMap<String, Arc<DbtAnalysis>>,
     pub exposures: BTreeMap<String, Arc<DbtExposure>>,
     pub semantic_models: BTreeMap<String, Arc<DbtSemanticModel>>,
     pub metrics: BTreeMap<String, Arc<DbtMetric>>,
@@ -2464,5 +2464,114 @@ mod tests {
         if let Err(err) = config {
             panic!("Could not deserialize and failed with the following error: {err}");
         }
+    }
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub struct DbtAnalysis {
+    pub __common_attr__: CommonAttributes,
+
+    pub __base_attr__: NodeBaseAttributes,
+
+    pub __analysis_attr__: DbtAnalysisAttr,
+
+    /// To be deprecated  
+    #[serde(rename = "config")]
+    pub deprecated_config: super::project::configs::analysis_config::AnalysesConfig,
+
+    pub __other__: BTreeMap<String, YmlValue>,
+}
+
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct DbtAnalysisAttr {
+    // Analysis nodes have minimal attributes since they're for ad-hoc querying
+    // Most functionality comes from the base attributes and config
+}
+
+impl InternalDbtNode for DbtAnalysis {
+    fn common(&self) -> &CommonAttributes {
+        &self.__common_attr__
+    }
+
+    fn base(&self) -> &NodeBaseAttributes {
+        &self.__base_attr__
+    }
+
+    fn base_mut(&mut self) -> &mut NodeBaseAttributes {
+        &mut self.__base_attr__
+    }
+
+    fn common_mut(&mut self) -> &mut CommonAttributes {
+        &mut self.__common_attr__
+    }
+
+    fn resource_type(&self) -> NodeType {
+        NodeType::Analysis
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn serialize_inner(&self) -> YmlValue {
+        dbt_serde_yaml::to_value(self).expect("Failed to serialize to YAML")
+    }
+
+    fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
+        if let Some(other_analysis) = other.as_any().downcast_ref::<DbtAnalysis>() {
+            self.deprecated_config == other_analysis.deprecated_config
+        } else {
+            false
+        }
+    }
+
+    fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
+        if let Some(other_analysis) = other.as_any().downcast_ref::<DbtAnalysis>() {
+            self.__common_attr__.checksum == other_analysis.__common_attr__.checksum
+        } else {
+            false
+        }
+    }
+
+    fn set_detected_introspection(&mut self, _introspection: IntrospectionKind) {
+        panic!("DbtAnalysis does not support setting detected_unsafe");
+    }
+}
+
+impl InternalDbtNodeAttributes for DbtAnalysis {
+    fn static_analysis(&self) -> StaticAnalysisKind {
+        self.__base_attr__.static_analysis
+    }
+
+    fn set_quoting(&mut self, quoting: ResolvedQuoting) {
+        self.__base_attr__.quoting = quoting;
+    }
+
+    fn set_static_analysis(&mut self, static_analysis: StaticAnalysisKind) {
+        self.__base_attr__.static_analysis = static_analysis;
+    }
+
+    fn get_access(&self) -> Option<Access> {
+        None // Analysis nodes don't have access controls
+    }
+
+    fn get_group(&self) -> Option<String> {
+        None // Analysis nodes don't have groups
+    }
+
+    fn search_name(&self) -> String {
+        self.__common_attr__.name.clone()
+    }
+
+    fn selector_string(&self) -> String {
+        format!("analysis:{}", self.__common_attr__.name)
+    }
+
+    fn serialized_config(&self) -> YmlValue {
+        dbt_serde_yaml::to_value(&self.deprecated_config).expect("Failed to serialize to YAML")
     }
 }

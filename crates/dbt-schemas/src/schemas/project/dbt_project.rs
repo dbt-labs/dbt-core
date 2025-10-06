@@ -18,6 +18,7 @@ use serde_with::skip_serializing_none;
 use strum::{Display, EnumString};
 
 use crate::schemas::common::DbtQuoting;
+use crate::schemas::project::ProjectAnalysisConfig;
 use crate::schemas::project::ProjectSemanticModelConfig;
 use crate::schemas::project::configs::saved_query_config::ProjectSavedQueryConfig;
 use crate::schemas::serde::FloatOrString;
@@ -147,6 +148,7 @@ pub struct DbtProject {
     pub unit_tests: Option<ProjectUnitTestConfig>,
     pub data_tests: Option<ProjectDataTestConfig>,
     pub exposures: Option<ProjectExposureConfig>,
+    pub analyses: Option<ProjectAnalysisConfig>,
     #[serde(rename = "saved-queries")]
     pub saved_queries: Option<ProjectSavedQueryConfig>,
     #[serde(rename = "semantic-models")]
@@ -315,6 +317,7 @@ mod tests {
             saved_queries: None,
             semantic_models: None,
             exposures: None,
+            analyses: None,
             clean_targets: None,
             config_version: None,
             dbt_cloud: None,

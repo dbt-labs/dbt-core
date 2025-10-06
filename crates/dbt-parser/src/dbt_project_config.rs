@@ -11,8 +11,8 @@ use dbt_common::{
     ErrorCode, FsResult, fs_err, io_args::IoArgs, show_error, show_package_error, show_strict_error,
 };
 use dbt_schemas::schemas::project::{
-    DataTestConfig, DefaultTo, ExposureConfig, IterChildren, MetricConfig, ModelConfig,
-    SavedQueryConfig, SeedConfig, SemanticModelConfig, SnapshotConfig, SourceConfig,
+    AnalysesConfig, DataTestConfig, DefaultTo, ExposureConfig, IterChildren, MetricConfig,
+    ModelConfig, SavedQueryConfig, SeedConfig, SemanticModelConfig, SnapshotConfig, SourceConfig,
     UnitTestConfig,
 };
 use dbt_schemas::schemas::{common::DbtQuoting, project::DbtProject};
@@ -182,6 +182,8 @@ pub struct RootProjectConfigs {
     pub metrics: DbtProjectConfig<MetricConfig>,
     /// Saved query configs
     pub saved_queries: DbtProjectConfig<SavedQueryConfig>,
+    /// Analysis configs
+    pub analyses: DbtProjectConfig<AnalysesConfig>,
 }
 
 /// Build the [RootProjectConfigs] from a [DbtProject]
@@ -290,6 +292,15 @@ pub fn build_root_project_configs(
             io_args,
             &root_project.saved_queries,
             SavedQueryConfig {
+                enabled: Some(true),
+                ..Default::default()
+            },
+            None,
+        )?,
+        analyses: init_project_config(
+            io_args,
+            &root_project.analyses,
+            AnalysesConfig {
                 enabled: Some(true),
                 ..Default::default()
             },

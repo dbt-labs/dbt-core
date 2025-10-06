@@ -42,11 +42,12 @@ pub mod schemas {
 
     pub mod nodes;
     pub use nodes::{
-        CommonAttributes, DbtExposure, DbtExposureAttr, DbtFunction, DbtFunctionAttr, DbtModel,
-        DbtModelAttr, DbtSeed, DbtSeedAttr, DbtSnapshot, DbtSnapshotAttr, DbtSource, DbtSourceAttr,
-        DbtTest, DbtTestAttr, DbtUnitTest, DbtUnitTestAttr, InternalDbtNode,
-        InternalDbtNodeAttributes, InternalDbtNodeWrapper, IntrospectionKind, NodeBaseAttributes,
-        Nodes, TestMetadata, TimeSpine, TimeSpinePrimaryColumn,
+        CommonAttributes, DbtAnalysis, DbtAnalysisAttr, DbtExposure, DbtExposureAttr, DbtFunction,
+        DbtFunctionAttr, DbtModel, DbtModelAttr, DbtSeed, DbtSeedAttr, DbtSnapshot,
+        DbtSnapshotAttr, DbtSource, DbtSourceAttr, DbtTest, DbtTestAttr, DbtUnitTest,
+        DbtUnitTestAttr, InternalDbtNode, InternalDbtNodeAttributes, InternalDbtNodeWrapper,
+        IntrospectionKind, NodeBaseAttributes, Nodes, TestMetadata, TimeSpine,
+        TimeSpinePrimaryColumn,
     };
 
     pub use sources::{FreshnessResultsArtifact, FreshnessResultsMetadata, FreshnessResultsNode};
@@ -114,6 +115,7 @@ pub mod schemas {
     pub mod project {
         mod dbt_project;
         pub(crate) mod configs {
+            pub mod analysis_config;
             pub mod common;
             pub mod data_test_config;
             pub mod exposure_config;
@@ -130,6 +132,7 @@ pub mod schemas {
             pub mod unit_test_config;
         }
 
+        pub use configs::analysis_config::{AnalysesConfig, ProjectAnalysisConfig};
         pub use configs::common::WarehouseSpecificNodeConfig;
         pub use configs::data_test_config::{DataTestConfig, ProjectDataTestConfig};
         pub use configs::exposure_config::{ExposureConfig, ProjectExposureConfig};
@@ -153,6 +156,7 @@ pub mod schemas {
     }
 
     pub mod properties {
+        mod analysis_properties;
         mod data_test_properties;
         mod exposure_properties;
         mod function_properties;
@@ -166,6 +170,7 @@ pub mod schemas {
         mod source_properties;
         mod unit_test_properties;
 
+        pub use analysis_properties::AnalysesProperties;
         pub use data_test_properties::DataTestProperties;
         pub use exposure_properties::ExposureProperties;
         pub use function_properties::{
