@@ -225,7 +225,6 @@ mod template;
 mod types;
 mod utils;
 mod vm;
-pub use vm::find_macro_signatures;
 pub use vm::listeners::DefaultTypecheckingEventListener;
 pub use vm::listeners::TypecheckingEventListener;
 

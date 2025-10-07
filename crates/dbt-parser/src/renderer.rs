@@ -15,7 +15,8 @@ use dbt_common::{
 };
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::listener::{
-    DefaultRenderingEventListenerFactory, RenderingEventListenerFactory,
+    DefaultRenderingEventListenerFactory, JinjaTypeCheckingEventListenerFactory,
+    RenderingEventListenerFactory,
 };
 use dbt_jinja_utils::node_resolver::NodeResolver;
 use dbt_jinja_utils::phases::build_compile_and_run_base_context;
@@ -34,7 +35,7 @@ use std::fmt::Debug;
 
 use minijinja::constants::{TARGET_PACKAGE_NAME, TARGET_UNIQUE_ID};
 use minijinja::{MacroSpans, Value as MinijinjaValue};
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -53,8 +54,6 @@ pub struct SqlFileRenderResult<T: DefaultTo<T>, S> {
     pub rendered_sql: String,
     /// The macro spans for the rendered SQL
     pub macro_spans: MacroSpans,
-    /// The macro calls made during rendering
-    pub macro_calls: HashSet<String>,
     /// The properties for the model
     pub properties: Option<S>,
     /// The path to the properties file that defines this model
@@ -120,6 +119,7 @@ fn extract_model_and_version_config<T: DefaultTo<T>, S: GetConfig<T> + Debug>(
 /// Render the SQL files and return the SQL resources found while rendering the files
 #[allow(dead_code)]
 #[allow(clippy::too_many_arguments)]
+#[allow(clippy::cognitive_complexity)]
 pub async fn render_unresolved_sql_files_sequentially<
     T: DefaultTo<T> + 'static,
     S: GetConfig<T> + Debug,
@@ -128,6 +128,7 @@ pub async fn render_unresolved_sql_files_sequentially<
     model_sql_files: &[DbtAsset],
     node_properties: &mut BTreeMap<String, MinimalPropertiesEntry>,
     token: &CancellationToken,
+    jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
 ) -> FsResult<Vec<SqlFileRenderResult<T, S>>> {
     let RenderCtx {
         inner,
@@ -252,6 +253,24 @@ pub async fn render_unresolved_sql_files_sequentially<
             args.io,
             fsinfo!(PARSING.into(), display_path.display().to_string())
         );
+        if let Some(model) = resolve_model_context.get("model")
+            && let Ok(unique_id) = model.get_attr("unique_id")
+            && let Some(unique_id) = unique_id.as_str()
+        {
+            dbt_jinja_utils::typecheck::typecheck(
+                &args.io,
+                jinja_env.clone(),
+                &HashMap::new(),
+                jinja_type_checking_event_listener_factory.clone(),
+                None,
+                &jinja_env.env.get_root_package_name(),
+                MinijinjaValue::from_dyn_object(jinja_env.env.get_dbt_and_adapters_namespace()),
+                &display_path,
+                &sql,
+                &dbt_common::CodeLocation::new(1, 1, 0, display_path.clone()),
+                unique_id,
+            )?;
+        }
         let listener_factory = DefaultRenderingEventListenerFactory::default();
         match render_sql(
             &sql,
@@ -284,10 +303,11 @@ pub async fn render_unresolved_sql_files_sequentially<
                 // Collect dependencies from pre and post hooks (adds to same sql_resources)
                 collect_hook_dependencies_from_config(
                     &*temp_sql_file_info.config,
-                    jinja_env,
+                    jinja_env.clone(),
                     &display_path, // path to sql file, might not be path to hooks
                     args.io.clone(),
                     &resolve_model_context,
+                    jinja_type_checking_event_listener_factory.clone(),
                 )?;
 
                 // Create final sql_file_info with all dependencies (main SQL + hooks)
@@ -309,13 +329,11 @@ pub async fn render_unresolved_sql_files_sequentially<
                 };
 
                 let macro_spans = listener_factory.drain_macro_spans(&display_path);
-                let macro_calls = listener_factory.drain_macro_calls(&display_path);
                 model_sql_resources_map.push(SqlFileRenderResult {
                     asset: dbt_asset.clone(),
                     sql_file_info,
                     rendered_sql: rendered_sql_except_node_resolver,
                     macro_spans,
-                    macro_calls,
                     properties: maybe_model,
                     status,
                     patch_path: node_properties
@@ -358,7 +376,6 @@ pub async fn render_unresolved_sql_files_sequentially<
                     sql_file_info,
                     rendered_sql: "".to_string(),
                     macro_spans: MacroSpans::default(),
-                    macro_calls: HashSet::new(),
                     properties: maybe_model,
                     status,
                     patch_path: node_properties
@@ -424,6 +441,7 @@ pub async fn render_unresolved_sql_files<
     model_sql_files: &[DbtAsset],
     node_properties: &mut BTreeMap<String, MinimalPropertiesEntry>,
     token: &CancellationToken,
+    jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
 ) -> FsResult<Vec<SqlFileRenderResult<T, S>>> {
     let mut model_sql_resources_map = Vec::new();
     let mut duplicate_errors = Vec::new();
@@ -439,6 +457,7 @@ pub async fn render_unresolved_sql_files<
             model_sql_files,
             node_properties,
             token,
+            jinja_type_checking_event_listener_factory,
         )
         .await;
     }
@@ -470,6 +489,8 @@ pub async fn render_unresolved_sql_files<
     for (chunk, mut chunk_node_properties) in chunked_files.into_iter().zip(chunked_node_props) {
         let render_ctx = render_ctx.clone();
         let token = token.clone();
+        let jinja_type_checking_event_listener_factory =
+            jinja_type_checking_event_listener_factory.clone();
         tasks.push(tokio::spawn(async move {
             let RenderCtx {
                 inner,
@@ -594,6 +615,27 @@ pub async fn render_unresolved_sql_files<
                     args.io,
                     fsinfo!(PARSING.into(), display_path.display().to_string())
                 );
+                if let Some(model) = resolve_model_context.get("model")
+                    && let Ok(unique_id) = model.get_attr("unique_id")
+                    && let Some(unique_id) = unique_id.as_str()
+                {
+                    dbt_jinja_utils::typecheck::typecheck(
+                        &args.io,
+                        jinja_env.clone(),
+                        &HashMap::new(),
+                        jinja_type_checking_event_listener_factory.clone(),
+                        None,
+                        &jinja_env.env.get_root_package_name(),
+                        MinijinjaValue::from_dyn_object(
+                            jinja_env.env.get_dbt_and_adapters_namespace(),
+                        ),
+                        &display_path,
+                        &sql,
+                        &dbt_common::CodeLocation::new(1, 1, 0, display_path.clone()),
+                        unique_id,
+                    )
+                    .unwrap(); //todo
+                }
                 let listener_factory = DefaultRenderingEventListenerFactory::default();
                 match render_sql(
                     &sql,
@@ -627,10 +669,11 @@ pub async fn render_unresolved_sql_files<
                         // Collect dependencies from pre and post hooks (adds to same sql_resources)
                         collect_hook_dependencies_from_config(
                             &*temp_sql_file_info.config,
-                            &jinja_env,
+                            jinja_env.clone(),
                             &display_path, // path to sql file, might not be path to hooks
                             args.io.clone(),
                             &resolve_model_context,
+                            jinja_type_checking_event_listener_factory.clone(),
                         )
                         .map_err(|e| *e)?;
 
@@ -654,13 +697,11 @@ pub async fn render_unresolved_sql_files<
                         };
 
                         let macro_spans = listener_factory.drain_macro_spans(&display_path);
-                        let macro_calls = listener_factory.drain_macro_calls(&display_path);
                         local_results.push(SqlFileRenderResult {
                             asset: dbt_asset.clone(),
                             sql_file_info,
                             rendered_sql: rendered_sql_except_node_resolver,
                             macro_spans,
-                            macro_calls,
                             properties: maybe_model,
                             status,
                             patch_path: chunk_node_properties
@@ -706,7 +747,6 @@ pub async fn render_unresolved_sql_files<
                             sql_file_info,
                             rendered_sql: "".to_string(),
                             macro_spans: MacroSpans::default(),
-                            macro_calls: HashSet::new(),
                             properties: maybe_model,
                             status,
                             patch_path: chunk_node_properties
@@ -1023,10 +1063,11 @@ async fn collect_adapter_identifiers_parallel(
 #[allow(clippy::too_many_arguments)]
 pub fn collect_hook_dependencies_from_config<T: DefaultTo<T> + 'static>(
     config: &T,
-    jinja_env: &JinjaEnv,
+    jinja_env: Arc<JinjaEnv>,
     resource_path: &std::path::Path,
     io: IoArgs,
     hook_context: &BTreeMap<String, MinijinjaValue>,
+    jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
 ) -> FsResult<()> {
     // Helper function to extract SQL strings from hooks
     // Note: YAML span information is available in the original Verbatim<Option<Hooks>> wrapper
@@ -1054,11 +1095,28 @@ pub fn collect_hook_dependencies_from_config<T: DefaultTo<T> + 'static>(
 
     // Helper function to render hook SQL and collect dependencies into the shared sql_resources
     let render_hook_for_deps = |sql: &str| -> FsResult<()> {
+        if let Some(model) = hook_context.get("model")
+            && let Ok(unique_id) = model.get_attr("unique_id")
+            && let Some(unique_id) = unique_id.as_str()
+        {
+            dbt_jinja_utils::typecheck::typecheck(
+                &io,
+                jinja_env.clone(),
+                &HashMap::new(),
+                jinja_type_checking_event_listener_factory.clone(),
+                None,
+                &jinja_env.env.get_root_package_name(),
+                MinijinjaValue::from_dyn_object(jinja_env.env.get_dbt_and_adapters_namespace()),
+                resource_path,
+                sql,
+                &dbt_common::CodeLocation::new(1, 1, 0, resource_path.to_path_buf()),
+                unique_id,
+            )?;
+        }
         let listener_factory = DefaultRenderingEventListenerFactory::default();
-
         match render_sql(
             sql,
-            jinja_env,
+            jinja_env.as_ref(),
             hook_context,
             &listener_factory,
             resource_path,

@@ -13,6 +13,7 @@ use dbt_common::error::AbstractLocation;
 use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
 use dbt_common::{ErrorCode, FsResult, fs_err, show_error, show_warning, stdfs, unexpected_fs_err};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
+use dbt_jinja_utils::listener::DefaultJinjaTypeCheckEventListenerFactory;
 use dbt_jinja_utils::node_resolver::NodeResolver;
 use dbt_jinja_utils::serde::into_typed_with_jinja;
 use dbt_schemas::schemas::common::{DbtMaterialization, DbtQuoting, NodeDependsOn};
@@ -57,6 +58,8 @@ pub async fn resolve_snapshots(
 )> {
     let mut snapshots: HashMap<String, Arc<DbtSnapshot>> = HashMap::new();
     let mut disabled_snapshots: HashMap<String, Arc<DbtSnapshot>> = HashMap::new();
+    let jinja_type_checking_event_listener_factory =
+        Arc::new(DefaultJinjaTypeCheckEventListenerFactory::default());
 
     let dependency_package_name = if package.dbt_project.name != root_project.name {
         Some(package.dbt_project.name.as_str())
@@ -200,6 +203,7 @@ pub async fn resolve_snapshots(
             &snapshot_files,
             &mut snapshot_properties,
             token,
+            jinja_type_checking_event_listener_factory.clone(),
         )
         .await?;
 
@@ -211,6 +215,12 @@ pub async fn resolve_snapshots(
             .cmp(&b.asset.path.file_name())
             .then(a.asset.path.cmp(&b.asset.path))
     });
+
+    let all_depends_on = jinja_type_checking_event_listener_factory
+        .all_depends_on
+        .read()
+        .unwrap()
+        .clone();
 
     for SqlFileRenderResult {
         asset: dbt_asset,
@@ -261,6 +271,13 @@ pub async fn resolve_snapshots(
                 .static_analysis
                 .unwrap_or(StaticAnalysisKind::On);
 
+            let macro_depends_on = all_depends_on
+                .get(&format!("{package_name}.{snapshot_name}"))
+                .cloned()
+                .unwrap_or_default()
+                .into_iter()
+                .collect();
+
             // Create initial snapshot with default values
             let mut dbt_snapshot = DbtSnapshot {
                 __common_attr__: CommonAttributes {
@@ -292,7 +309,11 @@ pub async fn resolve_snapshots(
                     alias: "".to_owned(),    // will be updated below
                     relation_name: None,     // will be updated below
                     columns,
-                    depends_on: NodeDependsOn::default(),
+                    depends_on: NodeDependsOn {
+                        macros: macro_depends_on,
+                        nodes: vec![],
+                        nodes_with_ref_location: vec![],
+                    },
                     enabled: final_config.enabled.unwrap_or(true),
                     extended_model: false,
                     persist_docs: final_config.persist_docs.clone(),

@@ -7,7 +7,6 @@ use crate::renderer::SqlFileRenderResult;
 use crate::renderer::collect_adapter_identifiers_detect_unsafe;
 use crate::renderer::render_unresolved_sql_files;
 use crate::utils::RelationComponents;
-use crate::utils::convert_macro_names_to_unique_ids;
 use crate::utils::get_node_fqn;
 use crate::utils::get_original_file_path;
 use crate::utils::get_unique_id;
@@ -24,6 +23,7 @@ use dbt_common::io_args::StaticAnalysisOffReason;
 use dbt_common::show_error;
 use dbt_common::show_warning;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
+use dbt_jinja_utils::listener::JinjaTypeCheckingEventListenerFactory;
 use dbt_jinja_utils::node_resolver::NodeResolver;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_schemas::schemas::CommonAttributes;
@@ -86,6 +86,7 @@ pub async fn resolve_models(
     collected_generic_tests: &mut Vec<GenericTestAsset>,
     node_resolver: &mut NodeResolver,
     token: &CancellationToken,
+    jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
 ) -> FsResult<(
     HashMap<String, Arc<DbtModel>>,
     HashMap<String, (String, MacroSpans)>,
@@ -164,6 +165,7 @@ pub async fn resolve_models(
             &package.model_sql_files,
             &mut models_properties_sans_semantics,
             token,
+            jinja_type_checking_event_listener_factory.clone(),
         )
         .await?;
     // make deterministic
@@ -177,12 +179,12 @@ pub async fn resolve_models(
 
     // Initialize a counter struct to track the version of each model
     let mut duplicates = Vec::new();
+
     for SqlFileRenderResult {
         asset: dbt_asset,
         sql_file_info,
         rendered_sql,
         macro_spans,
-        macro_calls,
         properties: maybe_properties,
         status,
         patch_path,
@@ -358,6 +360,9 @@ pub async fn resolve_models(
             });
         }
 
+        jinja_type_checking_event_listener_factory
+            .update_unique_id(&format!("{package_name}.{model_name}"), &unique_id);
+
         // Create the DbtModel with all properties already set
         let mut dbt_model = DbtModel {
             __common_attr__: CommonAttributes {
@@ -395,7 +400,7 @@ pub async fn resolve_models(
                 persist_docs: model_config.persist_docs.clone(),
                 columns,
                 depends_on: NodeDependsOn {
-                    macros: convert_macro_names_to_unique_ids(&macro_calls),
+                    macros: vec![],
                     nodes: vec![],
                     nodes_with_ref_location: vec![],
                 },

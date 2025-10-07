@@ -90,6 +90,10 @@ pub trait FunctionType: Object + Send + Sync + std::fmt::Debug {
     fn function_get_path(&self) -> Option<PathBuf> {
         None
     }
+
+    fn function_get_unique_id(&self) -> Option<String> {
+        None
+    }
 }
 
 impl<T: FunctionType> Object for T {
@@ -126,6 +130,10 @@ impl<T: FunctionType> Object for T {
 
     fn get_path(&self) -> Option<PathBuf> {
         self.function_get_path()
+    }
+
+    fn get_unique_id(&self) -> Option<String> {
+        self.function_get_unique_id()
     }
 }
 
@@ -210,6 +218,8 @@ pub struct UserDefinedFunctionType {
     pub path: PathBuf,
     /// The start span of the macro.
     pub span: Span,
+    /// The unique id of the function.
+    pub unique_id: String,
 }
 
 impl fmt::Debug for UserDefinedFunctionType {
@@ -220,13 +230,21 @@ impl fmt::Debug for UserDefinedFunctionType {
 
 impl UserDefinedFunctionType {
     /// Create a new user defined function type.
-    pub fn new(name: &str, args: Vec<Argument>, ret_type: Type, path: &Path, span: &Span) -> Self {
+    pub fn new(
+        name: &str,
+        args: Vec<Argument>,
+        ret_type: Type,
+        path: &Path,
+        span: &Span,
+        unique_id: &str,
+    ) -> Self {
         Self {
             name: name.to_string(),
             args,
             ret_type,
             path: path.to_path_buf(),
             span: *span,
+            unique_id: unique_id.to_string(),
         }
     }
 }
@@ -268,6 +286,10 @@ impl FunctionType for UserDefinedFunctionType {
     fn function_get_path(&self) -> Option<PathBuf> {
         Some(self.path.clone())
     }
+
+    fn function_get_unique_id(&self) -> Option<String> {
+        Some(self.unique_id.clone())
+    }
 }
 
 /// The undefined function type.
@@ -281,6 +303,8 @@ pub struct UndefinedFunctionType {
     pub path: PathBuf,
     /// The start span of the function.
     pub span: Span,
+    /// The unique id of the function.
+    pub unique_id: String,
 }
 
 impl fmt::Debug for UndefinedFunctionType {
@@ -291,12 +315,19 @@ impl fmt::Debug for UndefinedFunctionType {
 
 impl UndefinedFunctionType {
     /// Create a new undefined function type.
-    pub fn new(name: &str, location: CodeLocation, path: &Path, span: &Span) -> Self {
+    pub fn new(
+        name: &str,
+        location: CodeLocation,
+        path: &Path,
+        span: &Span,
+        unique_id: &str,
+    ) -> Self {
         Self {
             name: name.to_string(),
             location,
             path: path.to_path_buf(),
             span: *span,
+            unique_id: unique_id.to_string(),
         }
     }
 }
@@ -324,6 +355,10 @@ impl FunctionType for UndefinedFunctionType {
 
     fn function_get_path(&self) -> Option<PathBuf> {
         Some(self.path.clone())
+    }
+
+    fn function_get_unique_id(&self) -> Option<String> {
+        Some(self.unique_id.clone())
     }
 }
 

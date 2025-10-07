@@ -839,6 +839,9 @@ pub trait Object: Send + Sync + std::fmt::Debug {
     fn get_path(&self) -> Option<PathBuf> {
         None
     }
+    fn get_unique_id(&self) -> Option<String> {
+        None
+    }
 }
 
 type_erase! {
@@ -848,6 +851,7 @@ type_erase! {
         fn subscript(&self, index: &Type, listener: Rc<dyn TypecheckingEventListener>) -> Result<Type, crate::Error>;
         fn get_span(&self) -> Option<Span>;
         fn get_path(&self) -> Option<PathBuf>;
+        fn get_unique_id(&self) -> Option<String>;
     }
 }
 

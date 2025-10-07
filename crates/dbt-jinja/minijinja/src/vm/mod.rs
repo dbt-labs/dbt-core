@@ -49,8 +49,6 @@ mod loop_object;
 mod macro_object;
 mod state;
 pub mod typemeta;
-mod utils;
-pub use utils::find_macro_signatures;
 
 // the cost of a single include against the stack limit.
 #[cfg(feature = "multi_template")]

@@ -1,6 +1,7 @@
 use std::{path::PathBuf, rc::Rc, sync::Arc};
 
 use dashmap::DashMap;
+use indexmap::IndexMap;
 
 use crate::{
     machinery::Span,
@@ -13,7 +14,7 @@ use crate::{
         },
         DynObject, Object, Type,
     },
-    TypecheckingEventListener,
+    TypecheckingEventListener, Value,
 };
 
 // Singleton for builtins registry
@@ -90,10 +91,19 @@ fn init_builtins(namespace_registry: Vec<String>) -> Arc<DashMap<String, Type>> 
 /// # Returns
 /// A shared reference to the cached map of object id to Type.
 pub fn load_builtins(
-    namespace_registry: Vec<String>,
+    namespace_registry: Arc<IndexMap<Value, Value>>,
 ) -> Result<Arc<DashMap<String, Type>>, crate::Error> {
     Ok(BUILTINS_REGISTRY
-        .get_or_init(|| init_builtins(namespace_registry))
+        .get_or_init(|| {
+            let namespace_registry = namespace_registry
+                .keys()
+                .cloned()
+                .collect::<Vec<_>>()
+                .iter()
+                .map(|k| k.as_str().unwrap().to_string())
+                .collect::<Vec<_>>();
+            init_builtins(namespace_registry)
+        })
         .clone())
 }
 
@@ -258,6 +268,7 @@ impl Object for BuiltinDefinition {
                         ret_type,
                         &PathBuf::from(""),
                         &Span::default(),
+                        "",
                     );
                     return udf.resolve_arguments(positional_args, kwargs, listener);
                 }

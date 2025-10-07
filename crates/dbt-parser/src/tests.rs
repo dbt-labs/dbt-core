@@ -1,11 +1,4 @@
 //! Render tests for the dbt-parser crate
-
-#[cfg(test)]
-mod test_macro_dependency_integration;
-
-#[cfg(test)]
-mod test_namespaced_macro_tracking;
-
 #[cfg(test)]
 #[allow(clippy::module_inception)]
 mod tests {
@@ -110,7 +103,6 @@ mod tests {
             &invocation_args,
             BTreeSet::from(["common".to_string()]),
             IoArgs::default(),
-            None,
             never_cancels(),
             None,
         )

@@ -1,6 +1,6 @@
 use std::{
     cell::RefCell,
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     path::{Path, PathBuf},
     rc::Rc,
     sync::{Arc, RwLock},
@@ -27,9 +27,6 @@ pub trait RenderingEventListenerFactory: Send + Sync {
 
     /// get macro spans
     fn drain_macro_spans(&self, filename: &Path) -> MacroSpans;
-
-    /// get macro calls
-    fn drain_macro_calls(&self, filename: &Path) -> HashSet<String>;
 }
 
 /// Default implementation of the `ListenerFactory` trait
@@ -37,8 +34,6 @@ pub trait RenderingEventListenerFactory: Send + Sync {
 pub struct DefaultRenderingEventListenerFactory {
     /// macro spans
     pub macro_spans: Arc<RwLock<HashMap<PathBuf, MacroSpans>>>,
-    /// macro calls
-    pub macro_calls: Arc<RwLock<HashMap<PathBuf, HashSet<String>>>>,
 }
 
 impl RenderingEventListenerFactory for DefaultRenderingEventListenerFactory {
@@ -62,13 +57,6 @@ impl RenderingEventListenerFactory for DefaultRenderingEventListenerFactory {
             } else {
                 log::error!("Failed to acquire write lock on macro_spans");
             }
-
-            let new_macro_calls = default_listener.macro_calls.borrow().clone();
-            if let Ok(mut macro_calls) = self.macro_calls.write() {
-                macro_calls.insert(filename.to_path_buf(), new_macro_calls);
-            } else {
-                log::error!("Failed to acquire write lock on macro_calls");
-            }
         }
     }
 
@@ -80,15 +68,6 @@ impl RenderingEventListenerFactory for DefaultRenderingEventListenerFactory {
             MacroSpans::default()
         }
     }
-
-    fn drain_macro_calls(&self, filename: &Path) -> HashSet<String> {
-        if let Ok(mut calls) = self.macro_calls.write() {
-            calls.remove(filename).unwrap_or_default()
-        } else {
-            log::error!("Failed to acquire write lock on macro_calls");
-            HashSet::new()
-        }
-    }
 }
 
 /// Trait for creating and destroying Jinja type checking event listeners
@@ -97,25 +76,35 @@ pub trait JinjaTypeCheckingEventListenerFactory: Send + Sync {
     fn create_listener(
         &self,
         args: &IoArgs,
-        filename: &Path,
+        offset: dbt_common::CodeLocation,
         noqa_comments: Option<HashSet<u32>>,
+        unique_id: &str,
     ) -> Rc<dyn TypecheckingEventListener>;
 
     /// Destroys a rendering event listener
     fn destroy_listener(&self, filename: &Path, listener: Rc<dyn TypecheckingEventListener>);
+
+    /// Update the unique id
+    /// This is for DagExtractListener (Macro depends on) only
+    /// We need to type check sql before unique id is determined
+    fn update_unique_id(&self, _old_unique_id: &str, _new_unique_id: &str) {}
 }
 
 /// Default implementation of the `ListenerFactory` trait
 #[derive(Default, Debug)]
-pub struct DefaultJinjaTypeCheckEventListenerFactory {}
+pub struct DefaultJinjaTypeCheckEventListenerFactory {
+    /// all macro depends on
+    pub all_depends_on: Arc<RwLock<BTreeMap<String, BTreeSet<String>>>>,
+}
 
 impl JinjaTypeCheckingEventListenerFactory for DefaultJinjaTypeCheckEventListenerFactory {
     /// Creates a new rendering event listener
     fn create_listener(
         &self,
         _args: &IoArgs,
-        _filename: &Path,
+        _offset: dbt_common::CodeLocation,
         _noqa_comments: Option<HashSet<u32>>,
+        unique_id: &str,
     ) -> Rc<dyn TypecheckingEventListener> {
         // create a WarningPrinter instance
         // TODO: enable warning printer
@@ -124,23 +113,48 @@ impl JinjaTypeCheckingEventListenerFactory for DefaultJinjaTypeCheckEventListene
         //     filename.to_path_buf(),
         //     noqa_comments,
         // ))
-        Rc::new(DummyJinjaTypeCheckingEventListener::new())
+        Rc::new(DagExtractListener::new(unique_id))
     }
 
-    fn destroy_listener(&self, _filename: &Path, _listener: Rc<dyn TypecheckingEventListener>) {
-        //
+    fn destroy_listener(&self, _filename: &Path, listener: Rc<dyn TypecheckingEventListener>) {
+        if let Some(dag_extract_listener) = listener.as_any().downcast_ref::<DagExtractListener>() {
+            let depends_on = dag_extract_listener.depends_on.borrow().clone();
+            if let Ok(mut all_depends_on) = self.all_depends_on.write() {
+                for (reference, definition) in depends_on {
+                    all_depends_on
+                        .entry(reference)
+                        .or_default()
+                        .insert(definition);
+                }
+            }
+        }
+    }
+
+    fn update_unique_id(&self, old_unique_id: &str, new_unique_id: &str) {
+        // delete the old unique id and insert the new unique id
+        if let Ok(mut all_depends_on) = self.all_depends_on.write()
+            && let Some(depends_on) = all_depends_on.remove(old_unique_id)
+        {
+            all_depends_on.insert(new_unique_id.to_string(), depends_on);
+        }
     }
 }
 
-struct DummyJinjaTypeCheckingEventListener {}
+struct DagExtractListener {
+    unique_id: String,
+    depends_on: RefCell<Vec<(String, String)>>, // (ref, def)
+}
 
-impl DummyJinjaTypeCheckingEventListener {
-    pub fn new() -> Self {
-        Self {}
+impl DagExtractListener {
+    pub fn new(unique_id: &str) -> Self {
+        Self {
+            unique_id: unique_id.to_string(),
+            depends_on: RefCell::new(vec![]),
+        }
     }
 }
 
-impl TypecheckingEventListener for DummyJinjaTypeCheckingEventListener {
+impl TypecheckingEventListener for DagExtractListener {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
@@ -160,6 +174,18 @@ impl TypecheckingEventListener for DummyJinjaTypeCheckingEventListener {
         _full_name: &str,
         _def_spans: Vec<minijinja::machinery::Span>,
     ) {
+    }
+
+    fn on_function_call(
+        &self,
+        _source_span: &minijinja::machinery::Span,
+        _def_span: &minijinja::machinery::Span,
+        _def_path: &Path,
+        def_unique_id: &str,
+    ) {
+        self.depends_on
+            .borrow_mut()
+            .push((self.unique_id.clone(), def_unique_id.to_string()));
     }
 }
 
@@ -202,6 +228,7 @@ impl TypecheckingEventListener for WarningPrinter {
         //
     }
     fn warn(&self, message: &str) {
+        // todo: consider self.offset
         if self.noqa_comments.is_some()
             && self
                 .noqa_comments

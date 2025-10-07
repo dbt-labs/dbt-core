@@ -1544,10 +1544,17 @@ impl<'src> TypeChecker<'src> {
                                 &kwargs,
                                 listener.clone(),
                             )?);
-                            if let (Some(def_span), Some(def_path)) =
-                                (funcsign.get_span(), funcsign.get_path())
-                            {
-                                listener.on_function_call(span, &def_span, &def_path);
+                            if let (Some(def_span), Some(def_path), Some(def_unique_id)) = (
+                                funcsign.get_span(),
+                                funcsign.get_path(),
+                                funcsign.get_unique_id(),
+                            ) {
+                                listener.on_function_call(
+                                    span,
+                                    &def_span,
+                                    &def_path,
+                                    &def_unique_id,
+                                );
                             }
                         }
                     } else if let Ok(Type::Any { hard: true }) = typestate
@@ -1565,10 +1572,17 @@ impl<'src> TypeChecker<'src> {
                                 &kwargs,
                                 listener.clone(),
                             )?);
-                            if let (Some(def_span), Some(def_path)) =
-                                (funcsign.get_span(), funcsign.get_path())
-                            {
-                                listener.on_function_call(span, &def_span, &def_path);
+                            if let (Some(def_span), Some(def_path), Some(def_unique_id)) = (
+                                funcsign.get_span(),
+                                funcsign.get_path(),
+                                funcsign.get_unique_id(),
+                            ) {
+                                listener.on_function_call(
+                                    span,
+                                    &def_span,
+                                    &def_path,
+                                    &def_unique_id,
+                                );
                             }
                         }
                     } else if let Some(template_name) = macro_namespace_template_resolver(
@@ -1586,10 +1600,17 @@ impl<'src> TypeChecker<'src> {
                                     &kwargs,
                                     listener.clone(),
                                 )?);
-                                if let (Some(def_span), Some(def_path)) =
-                                    (funcsign.get_span(), funcsign.get_path())
-                                {
-                                    listener.on_function_call(span, &def_span, &def_path);
+                                if let (Some(def_span), Some(def_path), Some(def_unique_id)) = (
+                                    funcsign.get_span(),
+                                    funcsign.get_path(),
+                                    funcsign.get_unique_id(),
+                                ) {
+                                    listener.on_function_call(
+                                        span,
+                                        &def_span,
+                                        &def_path,
+                                        &def_unique_id,
+                                    );
                                 }
                             }
                         }
@@ -1638,10 +1659,17 @@ impl<'src> TypeChecker<'src> {
                                     &kwargs,
                                     listener.clone(),
                                 )?);
-                                if let (Some(def_span), Some(def_path)) =
-                                    (funcsign.get_span(), funcsign.get_path())
-                                {
-                                    listener.on_function_call(span, &def_span, &def_path);
+                                if let (Some(def_span), Some(def_path), Some(def_unique_id)) = (
+                                    funcsign.get_span(),
+                                    funcsign.get_path(),
+                                    funcsign.get_unique_id(),
+                                ) {
+                                    listener.on_function_call(
+                                        span,
+                                        &def_span,
+                                        &def_path,
+                                        &def_unique_id,
+                                    );
                                 }
                             } else {
                                 typestate.stack.push(Type::Any { hard: false });

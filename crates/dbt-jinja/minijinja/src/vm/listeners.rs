@@ -51,7 +51,14 @@ pub trait TypecheckingEventListener {
     }
 
     /// Called when a function call is encountered during typechecking.
-    fn on_function_call(&self, _source_span: &Span, _def_span: &Span, _def_path: &Path) {}
+    fn on_function_call(
+        &self,
+        _source_span: &Span,
+        _def_span: &Span,
+        _def_path: &Path,
+        _def_unique_id: &str,
+    ) {
+    }
 }
 
 /// Default implementation of the TypecheckingEventListener trait that does nothing.

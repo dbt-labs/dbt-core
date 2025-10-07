@@ -7,7 +7,6 @@ use crate::renderer::SqlFileRenderResult;
 use crate::renderer::render_unresolved_sql_files;
 use crate::resolve::resolve_properties::MinimalPropertiesEntry;
 use crate::utils::RelationComponents;
-use crate::utils::convert_macro_names_to_unique_ids;
 use crate::utils::generate_relation_components;
 use crate::utils::get_node_fqn;
 use crate::utils::get_original_file_contents;
@@ -25,6 +24,8 @@ use dbt_common::io_args::StaticAnalysisOffReason;
 use dbt_common::io_utils::try_read_yml_to_str;
 use dbt_common::stdfs;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
+use dbt_jinja_utils::listener::DefaultJinjaTypeCheckEventListenerFactory;
+use dbt_jinja_utils::listener::JinjaTypeCheckingEventListenerFactory;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_schemas::schemas::DbtTestAttr;
 use dbt_schemas::schemas::common::DbtChecksum;
@@ -102,6 +103,8 @@ pub async fn resolve_data_tests(
     collected_generic_tests: &[GenericTestAsset],
     token: &CancellationToken,
 ) -> FsResult<(HashMap<String, Arc<DbtTest>>, HashMap<String, Arc<DbtTest>>)> {
+    let jinja_type_checking_event_listener_factory =
+        Arc::new(DefaultJinjaTypeCheckEventListenerFactory::default());
     let mut nodes: HashMap<String, Arc<DbtTest>> = HashMap::new();
     let mut disabled_tests: HashMap<String, Arc<DbtTest>> = HashMap::new();
     let package_name = package.dbt_project.name.as_str();
@@ -165,13 +168,15 @@ pub async fn resolve_data_tests(
         runtime_config: runtime_config.clone(),
     };
 
-    let mut test_sql_resources_map = render_unresolved_sql_files::<
-        DataTestConfig,
-        DataTestProperties,
-    >(
-        &render_ctx, &test_assets_to_render, test_properties, token
-    )
-    .await?;
+    let mut test_sql_resources_map =
+        render_unresolved_sql_files::<DataTestConfig, DataTestProperties>(
+            &render_ctx,
+            &test_assets_to_render,
+            test_properties,
+            token,
+            jinja_type_checking_event_listener_factory.clone(),
+        )
+        .await?;
     // make deterministic
     test_sql_resources_map.sort_by(|a, b| {
         a.asset
@@ -188,12 +193,18 @@ pub async fn resolve_data_tests(
         limit: None,
         ..Default::default()
     };
+
+    let all_depends_on = jinja_type_checking_event_listener_factory
+        .all_depends_on
+        .read()
+        .unwrap()
+        .clone();
+
     for SqlFileRenderResult {
         asset: dbt_asset,
         sql_file_info,
         rendered_sql,
         macro_spans: _macro_spans,
-        macro_calls,
         properties: maybe_properties,
         status,
         patch_path,
@@ -273,6 +284,12 @@ pub async fn resolve_data_tests(
             raw_code = get_original_file_contents(&arg.io.in_dir, &original_file_path);
             language = Some("sql".to_string());
         }
+        let macro_depends_on = all_depends_on
+            .get(&format!("{package_name}.{test_name}"))
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .collect();
 
         // Populate TestMetadata only for generic data tests (not singular .sql tests)
         // This ensures external tooling (e.g., project-evaluator) correctly classifies tests
@@ -340,7 +357,7 @@ pub async fn resolve_data_tests(
                 persist_docs: None,
                 columns: BTreeMap::new(),
                 depends_on: NodeDependsOn {
-                    macros: convert_macro_names_to_unique_ids(macro_calls),
+                    macros: macro_depends_on,
                     nodes: vec![],
                     nodes_with_ref_location: vec![],
                 },

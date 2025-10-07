@@ -33,7 +33,6 @@ use crate::{
     functions::ConfiguredVar,
     invocation_args::InvocationArgs,
     jinja_environment::JinjaEnv,
-    listener::RenderingEventListenerFactory,
     phases::utils::build_target_context_map,
 };
 
@@ -54,7 +53,6 @@ pub fn initialize_parse_jinja_environment(
     invocation_args: &InvocationArgs,
     all_package_names: BTreeSet<String>,
     io_args: IoArgs,
-    listener_factory: Option<Arc<dyn RenderingEventListenerFactory>>,
     token: CancellationToken,
     catalogs: Option<Arc<DbtCatalogs>>,
 ) -> FsResult<JinjaEnv> {
@@ -135,7 +133,7 @@ pub fn initialize_parse_jinja_environment(
         .with_root_package(project_name.to_string())
         .with_globals(globals)
         .with_io_args(io_args)
-        .try_with_macros(MacroUnitsWrapper::new(macro_units), listener_factory)?
+        .try_with_macros(MacroUnitsWrapper::new(macro_units))?
         .build();
     Ok(env)
 }

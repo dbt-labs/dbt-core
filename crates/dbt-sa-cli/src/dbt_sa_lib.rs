@@ -4,6 +4,7 @@ use dbt_common::create_root_info_span;
 use dbt_common::tracing::create_invocation_attributes;
 use dbt_init::init;
 use dbt_jinja_utils::invocation_args::InvocationArgs;
+use dbt_jinja_utils::listener::DefaultJinjaTypeCheckEventListenerFactory;
 use dbt_loader::clean::execute_clean_command;
 use dbt_schemas::man::execute_man_command;
 
@@ -27,7 +28,8 @@ use git_version::git_version;
 use dbt_schemas::schemas::manifest::build_manifest;
 use tracing::Instrument;
 
-use std::{sync::Arc, time::SystemTime};
+use std::sync::Arc;
+use std::time::SystemTime;
 
 use dbt_loader::{args::LoadArgs, load};
 use dbt_parser::{args::ResolveArgs, resolver::resolve};
@@ -226,10 +228,8 @@ async fn execute_all_phases(
         dbt_state,
         Macros::default(),
         Nodes::default(),
-        Some(Arc::new(
-            dbt_jinja_utils::listener::DefaultRenderingEventListenerFactory::default(),
-        )),
         token,
+        Arc::new(DefaultJinjaTypeCheckEventListenerFactory::default()), // TODO: use option<>
     )
     .await?;
 

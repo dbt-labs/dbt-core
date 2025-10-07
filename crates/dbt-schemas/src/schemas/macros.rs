@@ -61,6 +61,7 @@ pub fn build_macro_units(nodes: &BTreeMap<String, DbtMacro>) -> BTreeMap<String,
                     span: inner_macro.span.expect("span is required"),
                     funcsign: inner_macro.funcsign.clone(),
                     args: inner_macro.args.clone(),
+                    unique_id: inner_macro.unique_id.clone(),
                 },
                 sql: inner_macro.macro_sql.clone(),
             });

@@ -5,6 +5,7 @@ use dbt_common::adapter::AdapterType;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::{FsResult, error::AbstractLocation, show_error};
+use dbt_jinja_utils::listener::DefaultJinjaTypeCheckEventListenerFactory;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_jinja_utils::{jinja_environment::JinjaEnv, node_resolver::NodeResolver};
 use dbt_schemas::schemas::DbtFunctionAttr;
@@ -28,9 +29,7 @@ use crate::utils::{RelationComponents, update_node_relation_components};
 use crate::{
     args::ResolveArgs,
     renderer::{SqlFileRenderResult, render_unresolved_sql_files},
-    utils::{
-        convert_macro_names_to_unique_ids, get_node_fqn, get_original_file_path, get_unique_id,
-    },
+    utils::{get_node_fqn, get_original_file_path, get_unique_id},
 };
 
 use super::resolve_properties::MinimalPropertiesEntry;
@@ -105,6 +104,7 @@ pub async fn resolve_functions(
         &package.function_sql_files,
         function_properties,
         token,
+        Arc::new(DefaultJinjaTypeCheckEventListenerFactory::default()),
     )
     .await?;
     // make deterministic
@@ -121,7 +121,6 @@ pub async fn resolve_functions(
         sql_file_info,
         rendered_sql,
         macro_spans,
-        macro_calls,
         properties: maybe_properties,
         status,
         patch_path,
@@ -153,7 +152,7 @@ pub async fn resolve_functions(
         };
 
         let depends_on = NodeDependsOn {
-            macros: convert_macro_names_to_unique_ids(&macro_calls),
+            macros: vec![],
             nodes: vec![],
             nodes_with_ref_location: vec![],
         };

@@ -7,6 +7,7 @@ mod tests {
     use dbt_common::io_args::IoArgs;
     use dbt_common::serde_utils::Omissible;
     use dbt_jinja_utils::jinja_environment::JinjaEnv;
+    use dbt_jinja_utils::listener::DefaultJinjaTypeCheckEventListenerFactory;
     use dbt_schemas::filter::RunFilter;
     use dbt_schemas::schemas::common::DbtQuoting;
     use dbt_schemas::schemas::project::ModelConfig;
@@ -125,6 +126,7 @@ mod tests {
             &[test_asset],
             &mut node_properties,
             &token,
+            Arc::new(DefaultJinjaTypeCheckEventListenerFactory::default()),
         )
         .await
         .unwrap();
@@ -157,6 +159,7 @@ mod tests {
             &many_assets,
             &mut node_properties,
             &token,
+            Arc::new(DefaultJinjaTypeCheckEventListenerFactory::default()),
         )
         .await
         .unwrap();

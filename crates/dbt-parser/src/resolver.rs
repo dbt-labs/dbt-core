@@ -9,6 +9,7 @@ use dbt_common::tracing::event_info::store_event_attributes;
 use dbt_common::{ErrorCode, FsResult, err, fs_err, show_error, with_progress};
 use dbt_common::{show_warning, stdfs};
 use dbt_jinja_utils::invocation_args::InvocationArgs;
+use dbt_jinja_utils::listener::JinjaTypeCheckingEventListenerFactory;
 use dbt_jinja_utils::node_resolver::{NodeResolver, resolve_dependencies};
 use dbt_jinja_utils::phases::parse::build_resolve_context;
 use dbt_jinja_utils::phases::parse::init::initialize_parse_jinja_environment;
@@ -79,8 +80,8 @@ pub async fn resolve(
     mut dbt_state: DbtState,
     macros: Macros,
     nodes: Nodes,
-    listener_factory: Option<Arc<dyn dbt_jinja_utils::listener::RenderingEventListenerFactory>>,
     token: &CancellationToken,
+    jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
 ) -> FsResult<(ResolverState, Arc<JinjaEnv>)> {
     let _pb = with_progress!(arg.io, spinner => RESOLVING);
 
@@ -156,7 +157,6 @@ pub async fn resolve(
             .map(|p| p.dbt_project.name.clone())
             .collect(),
         arg.io.clone(),
-        listener_factory,
         token.clone(),
         dbt_state.catalogs.clone(),
     )?);
@@ -212,6 +212,7 @@ pub async fn resolve(
             &mut node_resolver,
             &mut all_runtime_configs,
             token,
+            jinja_type_checking_event_listener_factory.clone(),
         )
         .await?;
         nodes.extend(resolved_nodes);
@@ -239,6 +240,7 @@ pub async fn resolve(
             &mut node_resolver,
             &mut all_runtime_configs,
             token,
+            jinja_type_checking_event_listener_factory.clone(),
         )
         .await?;
         nodes.extend(resolved_nodes);
@@ -405,6 +407,7 @@ pub async fn resolve_inner(
     node_resolver: &mut NodeResolver,
     runtime_config: Arc<DbtRuntimeConfig>,
     token: &CancellationToken,
+    jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
 ) -> FsResult<(Nodes, Nodes, RenderResults, NodeResolver, bool)> {
     let mut nodes = Nodes::default();
     let mut disabled_nodes = Nodes::default();
@@ -557,6 +560,7 @@ pub async fn resolve_inner(
         &mut collected_generic_tests,
         node_resolver,
         token,
+        jinja_type_checking_event_listener_factory.clone(),
     )
     .await?;
     nodes.models.extend(models);
@@ -790,6 +794,7 @@ async fn resolve_package(
     node_resolver: NodeResolver,
     all_runtime_configs: BTreeMap<String, Arc<DbtRuntimeConfig>>,
     token: &CancellationToken,
+    jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
 ) -> FsResult<(
     String,
     Arc<DbtRuntimeConfig>,
@@ -842,6 +847,7 @@ async fn resolve_package(
         &mut node_resolver.clone(),
         runtime_config.clone(),
         token,
+        jinja_type_checking_event_listener_factory.clone(),
     )
     .await?;
 
@@ -871,6 +877,7 @@ async fn resolve_packages_sequentially(
     node_resolver: &mut NodeResolver,
     all_runtime_configs: &mut BTreeMap<String, Arc<DbtRuntimeConfig>>,
     token: &CancellationToken,
+    jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
 ) -> FsResult<(Nodes, Nodes, RenderResults, bool)> {
     let mut nodes = Nodes::default();
     let mut disabled_nodes = Nodes::default();
@@ -894,6 +901,7 @@ async fn resolve_packages_sequentially(
                 node_resolver.clone(),
                 all_runtime_configs.clone(),
                 token,
+                jinja_type_checking_event_listener_factory.clone(),
             )
             .await?;
 
@@ -944,6 +952,7 @@ async fn resolve_packages_parallel(
     node_resolver: &mut NodeResolver,
     all_runtime_configs: &mut BTreeMap<String, Arc<DbtRuntimeConfig>>,
     token: &CancellationToken,
+    jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
 ) -> FsResult<(Nodes, Nodes, RenderResults, bool)> {
     let mut nodes = Nodes::default();
     let mut disabled_nodes = Nodes::default();
@@ -966,6 +975,8 @@ async fn resolve_packages_parallel(
             let all_runtime_configs = all_runtime_configs.clone(); // read-only for this wave
             let dbt_state = dbt_state.clone();
             let token = token.clone();
+            let jinja_type_checking_event_listener_factory =
+                jinja_type_checking_event_listener_factory.clone();
             handles.push(tokio::spawn(async move {
                 resolve_package(
                     package_name,
@@ -979,6 +990,7 @@ async fn resolve_packages_parallel(
                     node_resolver,
                     all_runtime_configs,
                     &token,
+                    jinja_type_checking_event_listener_factory,
                 )
                 .await
                 .map_err(|e| *e)

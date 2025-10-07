@@ -33,3 +33,6 @@ pub mod invocation_args;
 
 /// Module for the Refs and Sources
 pub mod node_resolver;
+
+/// Module for the typechecking
+pub mod typecheck;

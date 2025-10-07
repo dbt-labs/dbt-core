@@ -28,4 +28,6 @@ pub struct MacroInfo {
     pub funcsign: Option<String>,
     /// The args of the macro.
     pub args: Vec<ArgSpec>,
+    /// The unique id of the macro.
+    pub unique_id: String,
 }
