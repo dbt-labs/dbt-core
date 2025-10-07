@@ -63,10 +63,42 @@ fn test_parser() {
             (line!(), "CHar(20)     ", Char(Some(20))),
             (line!(), "chARACter    ", Char(None)),
             (line!(), "chARACter(20)", Char(Some(20))),
-            (line!(), "charaCTER VARying      ", Varchar(None)),
-            (line!(), "charaCTER VARying (20 )", Varchar(Some(20))),
+            (
+                line!(),
+                "charaCTER VARying      ",
+                Varchar(None, Default::default()),
+            ),
+            (
+                line!(),
+                "charaCTER VARying (20 )",
+                Varchar(Some(20), Default::default()),
+            ),
             (line!(), "natioNAL CHar          ", Char(None)),
-            (line!(), "natioNAL CHar vaRying  ", Varchar(None)),
+            (
+                line!(),
+                "natioNAL CHar vaRying  ",
+                Varchar(None, Default::default()),
+            ),
+            (
+                line!(),
+                "VARCHAR COLLATE 'utf8'",
+                Varchar(
+                    None,
+                    StringAttrs {
+                        collate_spec: Some("'utf8'".to_string()),
+                    },
+                ),
+            ),
+            (
+                line!(),
+                "STRING COLLATE UNICODE_CI",
+                Varchar(
+                    None,
+                    StringAttrs {
+                        collate_spec: Some("UNICODE_CI".to_string()),
+                    },
+                ),
+            ),
             (line!(), "charactER LARge  object", Clob),
             (line!(), "  binaRY   LARge object", Blob),
             (line!(), "binary     ", Binary(None)),
@@ -173,7 +205,9 @@ fn test_parser() {
             (
                 line!(),
                 "arrAY<Array<CHARACTER VARYING>>",
-                Array(Some(Box::new(Array(Some(Box::new(Varchar(None))))))),
+                Array(Some(Box::new(Array(Some(Box::new(SqlType::varchar(
+                    None,
+                ))))))),
             ),
             (line!(), "struct", Struct(None)),
             (line!(), "struct<>", Struct(Some(vec![]))),
@@ -181,28 +215,50 @@ fn test_parser() {
                 line!(),
                 "STRUCT<name varchar, age int NOT NULL>",
                 Struct(Some(vec![
-                    (Ident::new("name", backend), Varchar(None), true),
-                    (Ident::new("age", backend), Integer, false),
+                    StructField::new(Ident::new("name", backend), SqlType::varchar(None), true),
+                    StructField::new(Ident::new("age", backend), Integer, false),
                 ])),
             ),
             (
                 line!(),
                 r#"strUCT<name VARchar, age int NULLABLE>"#,
                 Struct(Some(vec![
-                    (Ident::new("name", backend), Varchar(None), true),
-                    (Ident::new("age", backend), Integer, true),
+                    StructField::new(Ident::new("name", backend), SqlType::varchar(None), true),
+                    StructField::new(Ident::new("age", backend), Integer, true),
+                ])),
+            ),
+            (
+                line!(),
+                "STRUCT<name STRING COLLATE UNICODE_CI NOT NULL COMMENT 'the comment', age int>",
+                Struct(Some(vec![
+                    StructField::new(
+                        Ident::new("name", backend),
+                        Varchar(
+                            None,
+                            StringAttrs {
+                                collate_spec: Some("UNICODE_CI".to_string()),
+                            },
+                        ),
+                        false,
+                    )
+                    .with_comment("'the comment'".to_string()),
+                    StructField::new(Ident::new("age", backend), Integer, true),
                 ])),
             ),
             (
                 line!(),
                 "struct<name varchar, info struct<id int, value varchar>>",
                 Struct(Some(vec![
-                    (Ident::new("name", backend), Varchar(None), true),
-                    (
+                    StructField::new(Ident::new("name", backend), SqlType::varchar(None), true),
+                    StructField::new(
                         Ident::new("info", backend),
                         Struct(Some(vec![
-                            (Ident::new("id", backend), Integer, true),
-                            (Ident::new("value", backend), Varchar(None), true),
+                            StructField::new(Ident::new("id", backend), Integer, true),
+                            StructField::new(
+                                Ident::new("value", backend),
+                                SqlType::varchar(None),
+                                true,
+                            ),
                         ])),
                         true,
                     ),
@@ -211,7 +267,7 @@ fn test_parser() {
             (
                 line!(),
                 "MAP<VARchar, int>",
-                Map(Some((Box::new(Varchar(None)), Box::new(Integer)))),
+                Map(Some((Box::new(SqlType::varchar(None)), Box::new(Integer)))),
             ),
             (line!(), "Variant", Variant),
             (line!(), " void  ", Void),
@@ -387,7 +443,7 @@ fn expected_type_rendering_for(backend: Backend) -> Vec<(u32, SqlType, &'static 
         ),
         (
             line!(),
-            Varchar(None),
+            SqlType::varchar(None),
             "STRING",
             "VARCHAR",
             "VARCHAR",
@@ -396,7 +452,7 @@ fn expected_type_rendering_for(backend: Backend) -> Vec<(u32, SqlType, &'static 
         ),
         (
             line!(),
-            Varchar(Some(255)),
+            SqlType::varchar(Some(255)),
             "STRING",
             "VARCHAR(255)",
             "VARCHAR(255)",
@@ -742,29 +798,33 @@ fn expected_type_rendering_for(backend: Backend) -> Vec<(u32, SqlType, &'static 
         ),
         (
             line!(),
-            Struct(Some(vec![(Ident::plain("a"), Float(None), true)])),
+            Struct(Some(vec![StructField::new(
+                Ident::plain("a"),
+                Float(None),
+                true,
+            )])),
             "STRUCT<a FLOAT64>",
             "STRUCT<a FLOAT>",
             "(a REAL)",
-            "STRUCT<a FLOAT>",
+            "STRUCT<a: FLOAT>",
             "STRUCT<a FLOAT>",
         ),
         (
             line!(),
             Struct(Some(vec![
-                (Ident::plain("name"), Varchar(None), true),
-                (Ident::plain("age"), Integer, false),
+                StructField::new(Ident::plain("name"), SqlType::varchar(None), true),
+                StructField::new(Ident::plain("age"), Integer, false),
             ])),
             "STRUCT<name STRING, age INT64 NOT NULL>",
             "STRUCT<name VARCHAR, age INT NOT NULL>",
             "(name VARCHAR, age INT NOT NULL)",
-            "STRUCT<name STRING, age INT NOT NULL>",
+            "STRUCT<name: STRING, age: INT NOT NULL>",
             "STRUCT<name VARCHAR, age INT NOT NULL>",
         ),
         (
             line!(),
             Struct(Some(vec![
-                (
+                StructField::new(
                     Ident::plain("last_completion_time"),
                     Timestamp {
                         precision: None,
@@ -772,7 +832,7 @@ fn expected_type_rendering_for(backend: Backend) -> Vec<(u32, SqlType, &'static 
                     },
                     true,
                 ),
-                (
+                StructField::new(
                     Ident::plain("error_time"),
                     Timestamp {
                         precision: None,
@@ -780,12 +840,12 @@ fn expected_type_rendering_for(backend: Backend) -> Vec<(u32, SqlType, &'static 
                     },
                     true,
                 ),
-                (
+                StructField::new(
                     Ident::plain("error"),
                     Struct(Some(vec![
-                        (Ident::plain("reason"), Varchar(None), true),
-                        (Ident::plain("location"), Varchar(None), true),
-                        (Ident::plain("message"), Varchar(None), true),
+                        StructField::new(Ident::plain("reason"), SqlType::varchar(None), true),
+                        StructField::new(Ident::plain("location"), SqlType::varchar(None), true),
+                        StructField::new(Ident::plain("message"), SqlType::varchar(None), true),
                     ])),
                     true,
                 ),
@@ -793,40 +853,40 @@ fn expected_type_rendering_for(backend: Backend) -> Vec<(u32, SqlType, &'static 
             "STRUCT<last_completion_time TIMESTAMP, error_time TIMESTAMP, error STRUCT<reason STRING, location STRING, message STRING>>",
             "STRUCT<last_completion_time TIMESTAMP_NTZ, error_time TIMESTAMP_NTZ, error STRUCT<reason VARCHAR, location VARCHAR, message VARCHAR>>",
             "(last_completion_time TIMESTAMP, error_time TIMESTAMP, error (reason VARCHAR, location VARCHAR, message VARCHAR))",
-            "STRUCT<last_completion_time TIMESTAMP_NTZ, error_time TIMESTAMP_NTZ, error STRUCT<reason STRING, location STRING, message STRING>>",
+            "STRUCT<last_completion_time: TIMESTAMP_NTZ, error_time: TIMESTAMP_NTZ, error: STRUCT<reason: STRING, location: STRING, message: STRING>>",
             "STRUCT<last_completion_time TIMESTAMP WITHOUT TIME ZONE, error_time TIMESTAMP WITHOUT TIME ZONE, error STRUCT<reason VARCHAR, location VARCHAR, message VARCHAR>>",
         ),
         (
             line!(),
             Array(Some(Box::new(Struct(Some(vec![
-                (Ident::plain("date"), Date, true),
-                (Ident::plain("value"), Varchar(None), true),
+                StructField::new(Ident::plain("date"), Date, true),
+                StructField::new(Ident::plain("value"), SqlType::varchar(None), true),
             ]))))),
             "ARRAY<STRUCT<date DATE, value STRING>>",
             "ARRAY<STRUCT<date DATE, value VARCHAR>>",
             "(date DATE, value VARCHAR)[]",
-            "ARRAY<STRUCT<date DATE, value STRING>>",
+            "ARRAY<STRUCT<date: DATE, value: STRING>>",
             "ARRAY<STRUCT<date DATE, value VARCHAR>>",
         ),
         (
             line!(),
-            Struct(Some(vec![(
+            Struct(Some(vec![StructField::new(
                 Ident::plain("elements"),
                 Array(Some(Box::new(Struct(Some(vec![
-                    (Ident::plain("date"), Date, true),
-                    (Ident::plain("value"), Varchar(None), true),
+                    StructField::new(Ident::plain("date"), Date, true),
+                    StructField::new(Ident::plain("value"), SqlType::varchar(None), true),
                 ]))))),
                 true,
             )])),
             "STRUCT<elements ARRAY<STRUCT<date DATE, value STRING>>>",
             "STRUCT<elements ARRAY<STRUCT<date DATE, value VARCHAR>>>",
             "(elements (date DATE, value VARCHAR)[])",
-            "STRUCT<elements ARRAY<STRUCT<date DATE, value STRING>>>",
+            "STRUCT<elements: ARRAY<STRUCT<date: DATE, value: STRING>>>",
             "STRUCT<elements ARRAY<STRUCT<date DATE, value VARCHAR>>>",
         ),
         (
             line!(),
-            Map(Some((Box::new(Varchar(None)), Box::new(Integer)))),
+            Map(Some((Box::new(SqlType::varchar(None)), Box::new(Integer)))),
             "MAP<STRING, INT64>",
             "MAP<VARCHAR, INT>",
             "MAP<VARCHAR, INT>",
@@ -883,8 +943,8 @@ fn test_roundtrip_struct_with_quoted_field() {
     // the quote style carried on the SqlType depends on the backend
     let expected_ty = |backend| {
         Struct(Some(vec![
-            (Ident::plain("name"), Varchar(None), true),
-            (
+            StructField::new(Ident::plain("name"), SqlType::varchar(None), true),
+            StructField::new(
                 Ident::unquoted(canonical_quote(backend), "age"),
                 Integer,
                 true,
@@ -921,8 +981,8 @@ fn test_timestamp_on_databricks() {
 fn test_struct_on_snowflake() {
     let s = r#"STRUCT<name VARCHAR, "age" INT>"#;
     let t = Struct(Some(vec![
-        (Ident::new("name", Snowflake), Varchar(None), true),
-        (
+        StructField::new(Ident::new("name", Snowflake), SqlType::varchar(None), true),
+        StructField::new(
             Ident::unquoted(canonical_quote(Snowflake), "age"),
             Integer,
             true,

@@ -85,11 +85,11 @@ impl DateTimeField {
 
 #[derive(Debug, Copy, Clone)]
 pub enum TimeZoneSpec {
-    /// WITH LOCAL TIME ZONE
+    /// WITH LOCAL TIME ZONE, TIMESTAMP_LTZ
     Local,
-    // WITH TIME ZONE
+    // WITH TIME ZONE, TIMESTAMPTZ, TIMESTAMP_TZ
     With,
-    // WITHOUT TIME ZONE
+    // WITHOUT TIME ZONE, TIMESTAMP_NTZ
     Without,
     // no specification (e.g. TIMESTAMP)
     Unspecified,
@@ -137,24 +137,19 @@ impl TimeZoneSpec {
 
             // TIMETZ and TIMESTAMPTZ in PostgreSQL which doesn't have
             // a type that is specifically for local time zone.
-            (Postgres | Redshift | RedshiftODBC, Local | With) => {
+            (Postgres | Redshift | RedshiftODBC | Salesforce, Local | With) => {
                 debug_assert!(
-                    matches!(self, With),
+                    !matches!(self, Local),
                     "PostgreSQL does not have a TIMESTAMP WITH LOCAL TIME ZONE type"
                 );
                 write!(out, "TZ")
             }
             // In PostgreSQL, TIMESTAMP WITHOUT TIME ZONE is just TIMESTAMP
-            (Postgres | Redshift | RedshiftODBC, Without | Unspecified) => Ok(()),
+            (Postgres | Redshift | RedshiftODBC | Salesforce, Without | Unspecified) => Ok(()),
 
-            // See [TimeZoneSpec::write_with_leading_space] for explanation about Databricks.
-            (Databricks | DatabricksODBC, Local | Unspecified) => {
-                debug_assert!(
-                    !matches!(self, Local),
-                    "Databricks does not have a TIMESTAMP WITH LOCAL TIME ZONE type"
-                );
-                Ok(())
-            }
+            // Databricks doesn't have a TIMESTAMP WITH TIME ZONE type, only WITH LOCAL TIME ZONE
+            // (TIMESTAMP or TIMESTAMP_LTZ) and WITHOUT TIME ZONE (TIMESTAMP_NTZ).
+            (Databricks | DatabricksODBC, Unspecified) => Ok(()),
             (Databricks | DatabricksODBC, Without) => write!(out, "_NTZ"),
             (Databricks | DatabricksODBC, With) => Ok(()),
 
@@ -167,6 +162,10 @@ impl TimeZoneSpec {
             // In Snowflake, TIMESTAMP without a time zone spec is ambiguous,
             // we forward the ambiguity to the rendered SQL instead of picking
             // a default.
+            //
+            // In Databricks, TIMESTAMP has TIMESTAMP_LTZ semantics by default,
+            // but we don't render it as TIMESTAMP_LTZ unless explicitly specified
+            // even though TIMESTAMP_LTZ is an alias to TIMESTAMP in Databricks.
             (_, Unspecified) => Ok(()),
         }
     }
@@ -175,7 +174,7 @@ impl TimeZoneSpec {
         use Backend::*;
         use TimeZoneSpec::*;
         match (backend, self) {
-            // Databricks TIMESTAMP is "WITH TIME ZONE" by default
+            // Databricks TIMESTAMP has WITH LOCAL TIME ZONE semantics by default
             (Databricks, Unspecified | With | Local) => true,
 
             (Snowflake, Unspecified) => {
@@ -192,6 +191,37 @@ Avoid constructing Snowflake TIME/TIMESTAMP types without an explicit time zone 
             (_, With | Local) => true,
             (_, Without | Unspecified) => false,
         }
+    }
+}
+
+/// Additional attributes for string types.
+#[derive(Debug, Clone, Default)]
+pub struct StringAttrs {
+    pub collate_spec: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct StructField {
+    pub name: Ident,
+    pub sql_type: SqlType,
+    pub nullable: bool,
+    /// The raw token found after the COMMENT keyword.
+    pub comment_tok: Option<String>,
+}
+
+impl StructField {
+    pub fn new(name: Ident, sql_type: SqlType, nullable: bool) -> Self {
+        Self {
+            name,
+            sql_type,
+            nullable,
+            comment_tok: None,
+        }
+    }
+
+    pub fn with_comment(mut self, comment: String) -> Self {
+        self.comment_tok = Some(comment);
+        self
     }
 }
 
@@ -225,9 +255,10 @@ pub enum SqlType {
     BigNumeric(Option<(u8, Option<i8>)>),
     /// (CHAR | CHARACTER | NCHAR | NATIONAL CHAR) [ '(' length ')' ]
     Char(Option<usize>),
-    /// (VARCHAR | CHARACTER VARYING) [ '(' length ')' ] |
-    /// (NVARCHAR | NATIONAL CHAR VARYING) [ '(' length ')' ]
-    Varchar(Option<usize>),
+    /// ((VARCHAR | CHARACTER VARYING) [ '(' length ')' ] |
+    ///  (NVARCHAR | NATIONAL CHAR VARYING) [ '(' length ')' ])
+    /// [ COLLATE collation ]
+    Varchar(Option<usize>, StringAttrs),
     /// TEXT
     Text,
     /// CLOB / CHARACTER LARGE OBJECT
@@ -266,7 +297,7 @@ pub enum SqlType {
     /// ARRAY
     Array(Option<Box<SqlType>>),
     /// STRUCT, STRUCT<>, STRUCT<...>
-    Struct(Option<Vec<(Ident, SqlType, bool)>>),
+    Struct(Option<Vec<StructField>>),
     /// MAP <key type, value type>
     Map(Option<(Box<SqlType>, Box<SqlType>)>),
     /// VARIANT
@@ -283,6 +314,10 @@ pub enum SqlType {
 }
 
 impl SqlType {
+    pub fn varchar(max_len: Option<usize>) -> Self {
+        SqlType::Varchar(max_len, Default::default())
+    }
+
     /// Extract the SQL type and nullability from an Arrow `Field`.
     ///
     /// This is a lossless conversion if the SQL type is stored in the
@@ -316,7 +351,7 @@ impl SqlType {
 
     /// Parse the SQL type and return it along with a boolean indicating if its nullable.
     pub fn parse(backend: Backend, input: &str) -> Result<(SqlType, bool), String> {
-        let mut parser = Parser::new(backend, input);
+        let mut parser = Parser::new(input);
         parser
             .parse(backend)
             .map_err(|err| format!("Failed to parse SQL type '{input}': {err}"))
@@ -340,7 +375,7 @@ impl SqlType {
             (BigQuery, Real | Float(_) | Double) => {
                 write!(out, "FLOAT64")
             }
-            (BigQuery, Char(_) | Varchar(_) | Text | Clob) => {
+            (BigQuery, Char(_) | Varchar(..) | Text | Clob) => {
                 write!(out, "STRING")
             }
             (BigQuery, Blob | Binary(_)) => write!(out, "BYTES"),
@@ -437,8 +472,19 @@ impl SqlType {
             // }}}
 
             // Databricks {{{
-            (Databricks | DatabricksODBC, Binary(_) | Blob) => write!(out, "BINARY"),
-            (Databricks | DatabricksODBC, Clob | Text | Varchar(_)) => write!(out, "STRING"),
+            (Databricks | DatabricksODBC, Binary(_) | Blob) => {
+                // max_len for BINARY is ignored because Databricks doesn't support it
+                write!(out, "BINARY")
+            }
+            (Databricks | DatabricksODBC, Clob | Text | Varchar(..)) => {
+                write!(out, "STRING")?;
+                if let Varchar(_, attrs) = self {
+                    if let Some(collate_spec) = &attrs.collate_spec {
+                        write!(out, " COLLATE {collate_spec}")?;
+                    }
+                }
+                Ok(())
+            }
             (Databricks | DatabricksODBC, Numeric(None) | BigNumeric(None)) => {
                 write!(out, "DECIMAL")
             }
@@ -490,11 +536,14 @@ impl SqlType {
                 }
                 Ok(())
             }
-            (_, Varchar(None)) => write!(out, "VARCHAR"),
-            (_, Varchar(Some(len))) => {
+            (_, Varchar(max_len, attrs)) => {
                 write!(out, "VARCHAR")?;
-                if *len > 0 {
-                    write!(out, "({len})")?;
+                let max_len = max_len.unwrap_or(0);
+                if max_len > 0 {
+                    write!(out, "({max_len})")?;
+                }
+                if let Some(collate_spec) = &attrs.collate_spec {
+                    write!(out, " COLLATE {collate_spec}")?;
                 }
                 Ok(())
             }
@@ -570,14 +619,34 @@ impl SqlType {
                 } else {
                     write!(out, "STRUCT<")?;
                 }
-                for (i, (name, sql_type, nullable)) in fields.iter().enumerate() {
+                for (i, field) in fields.iter().enumerate() {
+                    let StructField {
+                        name,
+                        sql_type,
+                        nullable,
+                        comment_tok,
+                    } = field;
+
                     if i > 0 {
                         write!(out, ", ")?;
                     }
-                    write!(out, "{} ", name.display(backend))?;
+                    write!(
+                        out,
+                        "{}{}",
+                        name.display(backend),
+                        // Databricks allows a `:` between the name and type
+                        if matches!(backend, Databricks | DatabricksODBC) {
+                            ": "
+                        } else {
+                            " "
+                        }
+                    )?;
                     sql_type.write(backend, out)?;
                     if !nullable {
                         write!(out, " NOT NULL")?;
+                    }
+                    if let Some(tok) = comment_tok {
+                        write!(out, " COMMENT {tok}")?;
                     }
                 }
                 if matches!(backend, Postgres | Redshift | RedshiftODBC) {
@@ -609,7 +678,7 @@ impl SqlType {
     /// doesn't contain the SQL type string.
     fn _from_arrow_type(backend: Backend, data_type: &DataType) -> SqlType {
         match data_type {
-            DataType::Null => SqlType::Varchar(None),
+            DataType::Null => SqlType::Varchar(None, Default::default()),
             DataType::Boolean => SqlType::Boolean,
             DataType::Int8 | DataType::UInt8 | DataType::Int16 => SqlType::SmallInt,
             DataType::UInt16 | DataType::Int32 => SqlType::Integer,
@@ -621,7 +690,7 @@ impl SqlType {
                 // for each different backend.
                 SqlType::Numeric(Some((*p, Some(*s))))
             }
-            DataType::Utf8View | DataType::Utf8 => SqlType::Varchar(None),
+            DataType::Utf8View | DataType::Utf8 => SqlType::Varchar(None, Default::default()),
             DataType::LargeUtf8 => SqlType::Text,
             DataType::Binary
             | DataType::LargeBinary
@@ -744,7 +813,7 @@ impl SqlType {
                     // quote characters that need to be escaped (meaning they should exist
                     // in a Ident::Unquoted). But we don't have that information here.
                     let name = Ident::Plain(field.name().clone());
-                    sql_fields.push((name, sql_type, nullable));
+                    sql_fields.push(StructField::new(name, sql_type, nullable));
                 }
                 SqlType::Struct(Some(sql_fields))
             }
@@ -907,15 +976,12 @@ fn _unescape_quoted_ident<'source>(
 }
 
 struct Parser<'source> {
-    #[allow(dead_code)]
-    backend: Backend,
     tokenizer: Tokenizer<'source>,
 }
 
 impl<'source> Parser<'source> {
-    pub fn new(backend: Backend, input: &'source str) -> Self {
+    pub fn new(input: &'source str) -> Self {
         Parser {
-            backend,
             tokenizer: Tokenizer::new(input),
         }
     }
@@ -1071,12 +1137,48 @@ impl<'source> Parser<'source> {
 
     /// Parse an identifier, which can be a quoted or unquoted word.
     #[allow(dead_code)]
-    fn expect_identifier(&mut self, backend: Backend) -> Result<Ident, ParseError<'source>> {
+    fn identifier(&mut self, backend: Backend) -> Result<Ident, ParseError<'source>> {
         let tok = self.next()?;
         match tok {
             Token::Word(w) => word2ident(w.to_string(), backend),
             _ => Err(ParseError::Unexpected(tok)),
         }
+    }
+
+    /// Parse a string literal.
+    ///
+    /// Currently used only on Databricks struct field comments (after COMMENT).
+    fn string_literal(&mut self) -> Result<Token<'source>, ParseError<'source>> {
+        let tok = self.next()?;
+        // TODO: check that token starts with a quote for the given backend
+        Ok(tok)
+    }
+
+    /// Parse the token that comes after COLLATE in a type definition.
+    ///
+    /// The token is returned *AS IT IS* in the input string, without removing
+    /// the quotes or unescaping anything.
+    ///
+    /// On Snowflake it seems to be a string literal since it uses single quotes
+    /// and the characterr for quoting identifiers in Snowflake is the double quote.
+    ///
+    /// On Databricks it seems to be an identifier. I haven't found examples where this
+    /// identifier is quoted because no collation name contains special characters.
+    fn collation_spec(&mut self, _backend: Backend) -> Result<String, ParseError<'source>> {
+        let tok = self.next()?;
+        Ok(tok.to_string())
+    }
+
+    fn string_attrs(&mut self, backend: Backend) -> Result<StringAttrs, ParseError<'source>> {
+        let mut collate_spec = None;
+        loop {
+            if collate_spec.is_none() && self.match_word("COLLATE") {
+                collate_spec = Some(self.collation_spec(backend)?);
+                continue;
+            }
+            break;
+        }
+        Ok(StringAttrs { collate_spec })
     }
 
     /// Parse the inner fields of a struct type after `(` or after `STRUCT<`.
@@ -1086,7 +1188,7 @@ impl<'source> Parser<'source> {
         &mut self,
         backend: Backend,
         terminator: Token<'source>,
-    ) -> Result<Vec<(Ident, SqlType, bool)>, ParseError<'source>> {
+    ) -> Result<Vec<StructField>, ParseError<'source>> {
         let mut fields = Vec::new();
         loop {
             let tok = self.next()?;
@@ -1098,9 +1200,52 @@ impl<'source> Parser<'source> {
                     return Err(e);
                 }
             };
+
+            // Databricks supports an optional `:` after the field name,
+            // so we consume it if present.
+            let _ = self.match_(Token::Colon);
+
             let (ty, nullable) = self.parse_constrained_type(backend)?;
             // Assume nullable if NOT NULL or NULLABLE is not specified for the field
-            fields.push((name, ty, nullable.unwrap_or(true)));
+            let nullable = nullable.unwrap_or(true);
+
+            // Databricks struct fields can have additional attributes:
+            //
+            //     [COLLATE <ident>] [COMMENT <string>]
+            //
+            // We also allow COLLATE to happen after COMMENT, but if we find a COLLATE
+            // like that, we have to place it in the attributes of the string type itself.
+            let mut collate: Option<String> = None;
+            let mut comment: Option<Token> = None;
+            loop {
+                if collate.is_none() && self.match_word("COLLATE") {
+                    collate = Some(self.collation_spec(backend)?);
+                    continue;
+                }
+                if comment.is_none() && self.match_word("COMMENT") {
+                    comment = Some(self.string_literal()?);
+                    continue;
+                }
+                break;
+            }
+            let sql_type = match (ty, collate) {
+                (SqlType::Varchar(max_len, attrs), Some(collate_spec)) => {
+                    let mut attrs = attrs;
+                    attrs.collate_spec = Some(collate_spec);
+                    SqlType::Varchar(max_len, attrs)
+                }
+                (ty, Some(_)) => {
+                    debug_assert!(false, "COLLATE specified for a non-string type");
+                    ty
+                }
+                (ty, _) => ty,
+            };
+
+            let mut field = StructField::new(name, sql_type, nullable);
+            if let Some(tok) = comment {
+                field.comment_tok = Some(tok.to_string());
+            }
+            fields.push(field);
 
             let tok = self.next()?;
             match tok {
@@ -1187,7 +1332,8 @@ impl<'source> Parser<'source> {
             | Token::RBracket
             | Token::LAngle
             | Token::RAngle
-            | Token::Comma => {
+            | Token::Comma
+            | Token::Colon => {
                 return Err(ParseError::Unexpected(tok));
             }
             Token::Word(w) => {
@@ -1255,26 +1401,30 @@ impl<'source> Parser<'source> {
                         let varying = self.match_word("VARYING");
                         let len = self.precision()?;
                         if varying {
-                            SqlType::Varchar(len)
+                            let attrs = self.string_attrs(backend)?;
+                            SqlType::Varchar(len, attrs)
                         } else {
                             SqlType::Char(len)
                         }
                     }
                 } else if eqi(w, "VARCHAR") || eqi(w, "NVARCHAR") {
                     let len = self.precision()?;
-                    SqlType::Varchar(len)
+                    let attrs = self.string_attrs(backend)?;
+                    SqlType::Varchar(len, attrs)
                 } else if eqi(w, "NATIONAL") {
                     self.expect(Token::Word("CHAR"))?;
                     let varying = self.match_word("VARYING");
                     let len = self.precision()?;
                     if varying {
-                        SqlType::Varchar(len)
+                        let attrs = self.string_attrs(backend)?;
+                        SqlType::Varchar(len, attrs)
                     } else {
                         SqlType::Char(len)
                     }
                 } else if eqi(w, "STRING") {
                     // BigQuery uses STRING as an alias for VARCHAR
-                    SqlType::Varchar(None)
+                    let attrs = self.string_attrs(backend)?;
+                    SqlType::Varchar(None, attrs)
                 } else if eqi(w, "TEXT") {
                     SqlType::Text
                 } else if eqi(w, "CLOB") {
@@ -1326,6 +1476,12 @@ impl<'source> Parser<'source> {
                     SqlType::Timestamp {
                         precision: None,
                         time_zone_spec: TimeZoneSpec::With,
+                    }
+                } else if eqi(w, "TIMESTAMP_LTZ") {
+                    let precision = self.precision()?;
+                    SqlType::Timestamp {
+                        precision,
+                        time_zone_spec: TimeZoneSpec::Local,
                     }
                 } else if eqi(w, "TIMESTAMP_NTZ") {
                     let precision = self.precision()?;

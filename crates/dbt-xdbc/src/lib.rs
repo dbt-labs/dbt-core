@@ -5,6 +5,7 @@
 )]
 #![doc = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/README.md"))]
 #![allow(clippy::cognitive_complexity)]
+#![allow(clippy::collapsible_if)]
 #![allow(clippy::if_same_then_else)]
 #![allow(clippy::let_and_return)]
 #![allow(clippy::needless_bool)]

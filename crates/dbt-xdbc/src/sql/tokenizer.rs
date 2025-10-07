@@ -13,6 +13,7 @@ pub enum Token<'source> {
     /// Right angled bracket: >.
     RAngle,
     Comma,
+    Colon,
     /// Word includes keywords, identifiers, quoted identifiers, string literals,
     /// numeric literals and similar continuous pieces of source text.
     ///
@@ -33,6 +34,7 @@ impl PartialEq for Token<'_> {
             (Token::LAngle, Token::LAngle) => true,
             (Token::RAngle, Token::RAngle) => true,
             (Token::Comma, Token::Comma) => true,
+            (Token::Colon, Token::Colon) => true,
             (Token::Word(a), Token::Word(b)) => a.eq_ignore_ascii_case(b),
             _ => false,
         }
@@ -49,6 +51,7 @@ impl fmt::Display for Token<'_> {
             Token::LAngle => write!(f, "<"),
             Token::RAngle => write!(f, ">"),
             Token::Comma => write!(f, ","),
+            Token::Colon => write!(f, ":"),
             Token::Word(w) => write!(f, "{w}"),
         }
     }
@@ -175,7 +178,8 @@ impl<'source> Tokenizer<'source> {
         // We have already consumed the first non-whitespace, non-delimiter byte of the word.
         while let Some(b) = self._peek_byte() {
             match b {
-                b'(' | b')' | b'[' | b']' | b'<' | b'>' | b',' => break,
+                b'(' | b')' | b'[' | b']' | b'<' | b'>' => break,
+                b',' | b':' => break,
                 b'\'' | b'"' | b'`' => break,
                 _ if is_whitespace(b) => break,
                 _ => {
@@ -207,6 +211,7 @@ impl<'source> Tokenizer<'source> {
                 b'<' => Token::LAngle,
                 b'>' => Token::RAngle,
                 b',' => Token::Comma,
+                b':' => Token::Colon,
                 b'\'' | b'"' | b'`' => self.rest_of_quoted_word(start, b),
                 _ => return self.rest_of_word(start),
             }
@@ -378,12 +383,13 @@ mod tests {
             // Quoted words and other delimiters
             (
                 line!(),
-                r#""Abra", 'ca' `dabra` (c)Abra-ca-dabra <d> Abracadabra[e] "oo""na"na  "#,
+                r#""Abra", 'ca' `dabra`: (c)Abra-ca-dabra <d>: Abracadabra[e]: :"oo""na"na:  "#,
                 vec![
                     Token::Word(r#""Abra""#),
                     Token::Comma,
                     Token::Word(r#"'ca'"#),
                     Token::Word(r#"`dabra`"#),
+                    Token::Colon,
                     Token::LParen,
                     Token::Word("c"),
                     Token::RParen,
@@ -391,12 +397,16 @@ mod tests {
                     Token::LAngle,
                     Token::Word("d"),
                     Token::RAngle,
+                    Token::Colon,
                     Token::Word("Abracadabra"),
                     Token::LBracket,
                     Token::Word("e"),
                     Token::RBracket,
+                    Token::Colon,
+                    Token::Colon,
                     Token::Word(r#""oo""na""#),
                     Token::Word(r#"na"#),
+                    Token::Colon,
                 ],
             ),
             (

@@ -148,10 +148,11 @@ pub fn make_arrow_field(
     if adapter_type == AdapterType::Snowflake {
         let maybe_parsed = SqlType::parse(backend_of(adapter_type), sql_type_str);
         match maybe_parsed {
-            Ok((SqlType::Varchar(Some(size)), _)) | Ok((SqlType::Binary(Some(size)), _)) => {
+            Ok((SqlType::Varchar(Some(max_len), _), _))
+            | Ok((SqlType::Binary(Some(max_len)), _)) => {
                 metadata.insert(
                     ARROW_FIELD_SNOWFLAKE_FIELD_WIDTH_METADATA_KEY.to_string(),
-                    size.to_string(),
+                    max_len.to_string(),
                 );
             }
             _ => {}
