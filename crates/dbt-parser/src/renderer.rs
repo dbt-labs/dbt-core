@@ -257,7 +257,7 @@ pub async fn render_unresolved_sql_files_sequentially<
             && let Ok(unique_id) = model.get_attr("unique_id")
             && let Some(unique_id) = unique_id.as_str()
         {
-            dbt_jinja_utils::typecheck::typecheck(
+            let _ = dbt_jinja_utils::typecheck::typecheck(
                 &args.io,
                 jinja_env.clone(),
                 &HashMap::new(),
@@ -269,7 +269,7 @@ pub async fn render_unresolved_sql_files_sequentially<
                 &sql,
                 &dbt_common::CodeLocation::new(1, 1, 0, display_path.clone()),
                 unique_id,
-            )?;
+            );
         }
         let listener_factory = DefaultRenderingEventListenerFactory::default();
         match render_sql(
@@ -630,7 +630,7 @@ pub async fn render_unresolved_sql_files<
                     && let Ok(unique_id) = model.get_attr("unique_id")
                     && let Some(unique_id) = unique_id.as_str()
                 {
-                    dbt_jinja_utils::typecheck::typecheck(
+                    let _ = dbt_jinja_utils::typecheck::typecheck(
                         &args.io,
                         jinja_env.clone(),
                         &HashMap::new(),
@@ -644,8 +644,7 @@ pub async fn render_unresolved_sql_files<
                         &sql,
                         &dbt_common::CodeLocation::new(1, 1, 0, display_path.clone()),
                         unique_id,
-                    )
-                    .unwrap(); //todo
+                    );
                 }
                 let listener_factory = DefaultRenderingEventListenerFactory::default();
                 match render_sql(
@@ -1110,7 +1109,7 @@ pub fn collect_hook_dependencies_from_config<T: DefaultTo<T> + 'static>(
             && let Ok(unique_id) = model.get_attr("unique_id")
             && let Some(unique_id) = unique_id.as_str()
         {
-            dbt_jinja_utils::typecheck::typecheck(
+            let _ = dbt_jinja_utils::typecheck::typecheck(
                 &io,
                 jinja_env.clone(),
                 &HashMap::new(),
@@ -1122,7 +1121,7 @@ pub fn collect_hook_dependencies_from_config<T: DefaultTo<T> + 'static>(
                 sql,
                 &dbt_common::CodeLocation::new(1, 1, 0, resource_path.to_path_buf()),
                 unique_id,
-            )?;
+            );
         }
         let listener_factory = DefaultRenderingEventListenerFactory::default();
         match render_sql(
