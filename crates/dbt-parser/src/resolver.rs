@@ -444,6 +444,8 @@ pub async fn resolve_inner(
     let dependency_package_name = dependency_package_name_from_ctx(&jinja_env, &base_ctx);
     let mut typed_models_properties: BTreeMap<String, ModelProperties> = BTreeMap::new();
 
+    let semantic_layer_spec_is_legacy = min_properties.semantic_layer_spec_is_legacy;
+
     for (model_name, minimal_model_props) in &min_properties.models {
         // Extract metrics to be parsed separately because they are not supposed to be rendered with Jinja
         let mut maybe_model_metrics_yml: Option<YmlValue> = None;
@@ -465,17 +467,19 @@ pub async fn resolve_inner(
             false,
         )?;
 
-        // The caveat to parsing model.metrics separately is that any yaml errors will be reported with root path
-        // as `models.[$].metrics` meaning if there's an unexpected key such as `models.[$].metrics.[$].non_existent_key`
-        // it will report unexpected key at `.[$].non_existent_key`, when it should be `.metrics.[$].non_existent_key`
-        //
-        // This will be inconsistent with unexpected keys in `models.[$]` where for example an unexpected
-        // key in `models.[$].derived_semantics.made_up_key` will report unexpected key at
-        // `derived_semantics.[$].non_existent_key`
-        if let Some(model_metrics_yml) = maybe_model_metrics_yml {
-            let typed_model_metrics_props: Option<Vec<MetricsProperties>> =
-                into_typed_with_error(&arg.io, model_metrics_yml, true, None, None)?;
-            typed_model_props.metrics = typed_model_metrics_props;
+        if !semantic_layer_spec_is_legacy {
+            // The caveat to parsing model.metrics separately is that any yaml errors will be reported with root path
+            // as `models.[$].metrics` meaning if there's an unexpected key such as `models.[$].metrics.[$].non_existent_key`
+            // it will report unexpected key at `.[$].non_existent_key`, when it should be `.metrics.[$].non_existent_key`
+            //
+            // This will be inconsistent with unexpected keys in `models.[$]` where for example an unexpected
+            // key in `models.[$].derived_semantics.made_up_key` will report unexpected key at
+            // `derived_semantics.[$].non_existent_key`
+            if let Some(model_metrics_yml) = maybe_model_metrics_yml {
+                let typed_model_metrics_props: Option<Vec<MetricsProperties>> =
+                    into_typed_with_error(&arg.io, model_metrics_yml, true, None, None)?;
+                typed_model_props.metrics = typed_model_metrics_props;
+            }
         }
 
         typed_models_properties.insert(model_name.clone(), typed_model_props);
@@ -622,8 +626,6 @@ pub async fn resolve_inner(
     .await?;
     nodes.exposures.extend(exposures);
     disabled_nodes.exposures.extend(disabled_exposures);
-
-    let semantic_layer_spec_is_legacy = min_properties.semantic_layer_spec_is_legacy;
 
     if !semantic_layer_spec_is_legacy {
         let (semantic_models, disabled_semantic_models) = resolve_semantic_models(

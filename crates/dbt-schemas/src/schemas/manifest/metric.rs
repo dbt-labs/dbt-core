@@ -295,7 +295,7 @@ impl From<MetricPropertiesMetricInput> for MetricInput {
             offset_window: metric_input
                 .offset_window
                 .and_then(|w| MetricTimeWindow::from_string(w).ok()),
-            offset_to_grain: None,
+            offset_to_grain: metric_input.offset_to_grain,
         }
     }
 }
@@ -316,10 +316,10 @@ impl From<MetricsProperties> for MetricTypeParams {
         };
         let expr = props.expr.clone().map(String::from);
 
-        let metric_aliases: Option<Vec<MetricInput>> = props
-            .metric_aliases
+        let input_metrics: Option<Vec<MetricInput>> = props
+            .input_metrics
             .clone()
-            .map(|metric_aliases| metric_aliases.into_iter().map(MetricInput::from).collect());
+            .map(|input_metrics| input_metrics.into_iter().map(MetricInput::from).collect());
         let metrics = props
             .metrics
             .clone()
@@ -349,7 +349,7 @@ impl From<MetricsProperties> for MetricTypeParams {
             conversion_type_params,
             expr,
             window,
-            metrics: metrics.or(metric_aliases), // TODO: confirm which ones take precedence
+            metrics: metrics.or(input_metrics), // TODO: confirm which ones take precedence
             input_measures: Some(vec![]),
             ..Default::default()
         };

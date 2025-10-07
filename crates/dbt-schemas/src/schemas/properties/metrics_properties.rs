@@ -2,10 +2,8 @@ use crate::schemas::dbt_column::Granularity;
 use crate::schemas::project::MetricConfig;
 use dbt_serde_yaml::JsonSchema;
 use dbt_serde_yaml::UntaggedEnumDeserialize;
-use dbt_serde_yaml::Verbatim;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
-use std::collections::BTreeMap;
 
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, Default)]
@@ -33,18 +31,12 @@ pub struct MetricsProperties {
     pub numerator: Option<StringOrMetricPropertiesMetricInput>,
     pub denominator: Option<StringOrMetricPropertiesMetricInput>,
     pub metrics: Option<Vec<StringOrMetricPropertiesMetricInput>>,
-    pub metric_aliases: Option<Vec<MetricPropertiesMetricInput>>,
+    pub input_metrics: Option<Vec<MetricPropertiesMetricInput>>,
     pub entity: Option<String>,
     pub calculation: Option<ConversionCalculationType>,
     pub base_metric: Option<StringOrMetricPropertiesMetricInput>,
     pub conversion_metric: Option<StringOrMetricPropertiesMetricInput>,
     pub constant_properties: Option<Vec<ConstantProperty>>,
-
-    // Flattened field:
-    // TODO: remove this if you want to show yaml errors such as unexpected keys
-    // or you can keep this __unused__ and choose not to report yaml errors when
-    // parsing metrics yaml
-    pub __unused__: Verbatim<BTreeMap<String, dbt_serde_yaml::Value>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, JsonSchema)]
@@ -115,6 +107,7 @@ pub struct MetricPropertiesMetricInput {
     pub filter: Option<String>,
     pub alias: Option<String>,
     pub offset_window: Option<String>,
+    pub offset_to_grain: Option<String>,
 }
 
 #[derive(UntaggedEnumDeserialize, Serialize, Debug, Clone, JsonSchema)]
