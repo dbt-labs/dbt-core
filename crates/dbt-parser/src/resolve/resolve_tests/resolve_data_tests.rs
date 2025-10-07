@@ -86,6 +86,26 @@ fn test_metadata_from_asset(asset: &GenericTestAsset) -> Option<TestMetadata> {
     None
 }
 
+pub fn build_data_test_raw_code(
+    test_metadata: Option<TestMetadata>,
+    alias: String,
+) -> Option<String> {
+    if let Some(test_metadata) = test_metadata {
+        let config_str = format!("config(alias=\"{alias}\")");
+
+        let mut test_macro_name = format!("test_{}", test_metadata.name);
+        if let Some(namespace) = test_metadata.namespace {
+            test_macro_name = format!("{}.{}", namespace, test_macro_name);
+        }
+
+        return Some(format!(
+            "{{{{ {test_macro_name}(**_dbt_generic_test_kwargs) }}}}{{{{ {config_str} }}}}"
+        ));
+    }
+
+    None
+}
+
 #[allow(clippy::too_many_arguments)]
 pub async fn resolve_data_tests(
     arg: &ResolveArgs,
@@ -274,22 +294,33 @@ pub async fn resolve_data_tests(
             .static_analysis
             .unwrap_or(StaticAnalysisKind::On);
 
-        let original_file_path =
-            get_original_file_path(&dbt_asset.base_path, &arg.io.in_dir, &dbt_asset.path);
-        let is_singular_data_test = original_file_path.ends_with(".sql");
-
-        let mut raw_code: Option<String> = None;
-        let mut language: Option<String> = None;
-        if is_singular_data_test {
-            raw_code = get_original_file_contents(&arg.io.in_dir, &original_file_path);
-            language = Some("sql".to_string());
-        }
         let macro_depends_on = all_depends_on
             .get(&format!("{package_name}.{test_name}"))
             .cloned()
             .unwrap_or_default()
             .into_iter()
             .collect();
+
+        // NOTE: This says get_original_file_path but for tests this is the path to the generated sql file
+        let generated_file_path =
+            get_original_file_path(&dbt_asset.base_path, &arg.io.in_dir, &dbt_asset.path);
+
+        let defined_at = test_path_to_test_asset
+            .get(&dbt_asset.path)
+            .map(|test_asset| test_asset.defined_at.clone());
+
+        let patch_path = test_path_to_test_asset
+            .get(&dbt_asset.path)
+            .map(|test_asset| test_asset.original_file_path.clone())
+            .or_else(|| patch_path.clone());
+
+        let is_singular_data_test = defined_at.is_none();
+
+        let manifest_original_file_path = if is_singular_data_test {
+            generated_file_path.clone()
+        } else {
+            patch_path.clone().unwrap()
+        };
 
         // Populate TestMetadata only for generic data tests (not singular .sql tests)
         // This ensures external tooling (e.g., project-evaluator) correctly classifies tests
@@ -302,19 +333,16 @@ pub async fn resolve_data_tests(
         };
 
         let mut dbt_test = DbtTest {
-            defined_at: test_path_to_test_asset
-                .get(&dbt_asset.path)
-                .map(|test_asset| test_asset.defined_at.clone()),
+            defined_at,
+            manifest_original_file_path: manifest_original_file_path.clone(),
             __common_attr__: CommonAttributes {
                 name: test_name.to_owned(),
                 package_name: package_name.to_owned(),
                 path: dbt_asset.path.to_owned(),
                 name_span: dbt_common::Span::default(),
-                original_file_path,
-                patch_path: test_path_to_test_asset
-                    .get(&dbt_asset.path)
-                    .map(|test_asset| test_asset.original_file_path.clone())
-                    .or_else(|| patch_path.clone()),
+                // original_file_path is a misnomer for tests, it's the path to the generated sql file
+                original_file_path: generated_file_path,
+                patch_path,
                 unique_id: unique_id.clone(),
                 fqn,
                 description: properties.description.clone(),
@@ -322,10 +350,10 @@ pub async fn resolve_data_tests(
                 // TODO: hydrate for generic + singular tests
                 // Examples in Mantle:
                 // - Generic test: "{{ test_not_null(**_dbt_generic_test_kwargs) }}"
-                // - Generic test with dbt_utils.expression_is_true:"{{ dbt_utils.test_expression_is_true(**_dbt_generic_test_kwargs) }}{{ config(alias=\"dbt_utils_expression_is_true_c_177c20685a18a9071d4a71719e3d9565\") }}"
+                // - Generic test with dbt_utils.expression_is_true: "{{ dbt_utils.test_expression_is_true(**_dbt_generic_test_kwargs) }}{{ config(alias=\"dbt_utils_expression_is_true_c_177c20685a18a9071d4a71719e3d9565\") }}"
                 // - Singular test: "SELECT 1\nFROM {{ ref('customers') }}\nLIMIT 0"
-                raw_code,
-                language,
+                raw_code: Some("will_be_updated_below".to_string()),
+                language: Some("sql".to_string()),
                 tags: test_config
                     .tags
                     .clone()
@@ -403,7 +431,7 @@ pub async fn resolve_data_tests(
                             test_asset.resource_name
                         )
                     }),
-                test_metadata: inferred_test_metadata,
+                test_metadata: inferred_test_metadata.clone(),
                 file_key_name: None,
             },
             deprecated_config: *test_config.clone(),
@@ -427,6 +455,12 @@ pub async fn resolve_data_tests(
             &components,
             adapter_type,
         )?;
+
+        dbt_test.__common_attr__.raw_code = if is_singular_data_test {
+            get_original_file_contents(&arg.io.in_dir, &manifest_original_file_path)
+        } else {
+            build_data_test_raw_code(inferred_test_metadata, dbt_test.__base_attr__.alias.clone())
+        };
 
         match status {
             ModelStatus::Enabled => {

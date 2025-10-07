@@ -1773,7 +1773,14 @@ pub struct CommonAttributes {
 
     // Paths
     pub path: PathBuf,
+
+    /// The original file path where this node was defined
+    ///
+    /// **NOTE**: For [DbtTest] nodes, this is currently the path to the
+    /// generated SQL file, *NOT* the path to the YAML file where the test was
+    /// defined!
     pub original_file_path: PathBuf,
+
     pub raw_code: Option<String>,
     pub patch_path: Option<PathBuf>,
     pub name_span: dbt_common::Span,
@@ -1954,6 +1961,9 @@ pub struct DbtTest {
     pub __base_attr__: NodeBaseAttributes,
     pub __test_attr__: DbtTestAttr,
     pub defined_at: Option<dbt_common::CodeLocation>,
+
+    // not to be confused with __common_attr__.original_file_path, which is the path to the generated sql file
+    pub manifest_original_file_path: PathBuf,
 
     // To be deprecated
     #[serde(rename = "config")]
@@ -2477,7 +2487,7 @@ pub struct DbtAnalysis {
 
     pub __analysis_attr__: DbtAnalysisAttr,
 
-    /// To be deprecated  
+    /// To be deprecated
     #[serde(rename = "config")]
     pub deprecated_config: super::project::configs::analysis_config::AnalysesConfig,
 

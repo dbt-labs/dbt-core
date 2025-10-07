@@ -1,0 +1,7 @@
+kind: Fixes
+body: 'Manifest: fix `original_file_path` field for generic data tests'
+time: 2025-10-04T00:19:06.074392863Z
+custom:
+    author: sadboy
+    issue: ""
+    project: dbt-fusion

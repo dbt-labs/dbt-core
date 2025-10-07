@@ -299,6 +299,7 @@ pub struct ManifestDataTest {
     pub attached_node: Option<String>,
     pub test_metadata: Option<TestMetadata>,
     pub file_key_name: Option<String>,
+    pub generated_sql_file: Option<String>,
 
     pub __other__: BTreeMap<String, YmlValue>,
 }
@@ -314,8 +315,15 @@ impl From<DbtTest> for ManifestDataTest {
                 package_name: test.__common_attr__.package_name,
                 fqn: test.__common_attr__.fqn,
                 path: test.__common_attr__.path,
-                original_file_path: test.__common_attr__.original_file_path,
+
+                // NOTE: `test.__common_attr__.original_file_path` is the path
+                // to the generated SQL file, which is *not* what we want here
+                // -- in the manifest, `original_file_path` should be the path
+                // to the YAML file where the test was defined
+                original_file_path: test.manifest_original_file_path,
+
                 patch_path: test.__common_attr__.patch_path,
+
                 description: test.__common_attr__.description,
                 tags: test.__common_attr__.tags,
                 meta: test.__common_attr__.meta,
@@ -348,6 +356,12 @@ impl From<DbtTest> for ManifestDataTest {
             attached_node: test.__test_attr__.attached_node,
             test_metadata: test.__test_attr__.test_metadata,
             file_key_name: test.__test_attr__.file_key_name,
+            generated_sql_file: Some(
+                test.__common_attr__
+                    .original_file_path
+                    .to_string_lossy()
+                    .to_string(),
+            ),
             __other__: test.__other__,
         }
     }

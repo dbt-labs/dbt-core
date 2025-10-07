@@ -552,15 +552,30 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                 nodes.tests.insert(
                     unique_id,
                     Arc::new(DbtTest {
-                        defined_at: None,
+                        // TODO: persist the line/column info through the manifest as well
+                        defined_at: Some(test.__common_attr__.original_file_path.clone().into()),
+
+                        manifest_original_file_path: test
+                            .__common_attr__
+                            .original_file_path
+                            .clone(),
+
                         __common_attr__: CommonAttributes {
                             unique_id: test.__common_attr__.unique_id,
                             name: test.__common_attr__.name,
                             package_name: test.__common_attr__.package_name,
                             path: test.__common_attr__.path,
                             name_span: Span::default(),
-                            original_file_path: test.__common_attr__.original_file_path,
+
+                            original_file_path: test.generated_sql_file.map_or_else(
+                                // Note: for fusion generated manifests, the
+                                // `generated_sql_file` field should really never be
+                                // None (see [ManifestDataTest])
+                                || test.__common_attr__.original_file_path.clone(),
+                                PathBuf::from,
+                            ),
                             patch_path: test.__common_attr__.patch_path,
+
                             fqn: test.__common_attr__.fqn,
                             description: test.__common_attr__.description,
                             raw_code: test.__base_attr__.raw_code,
