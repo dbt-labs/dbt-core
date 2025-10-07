@@ -44,6 +44,24 @@ functions:
       data_type: integer
 """
 
+numbers_seed_csv = """number
+1
+2
+3
+"""
+
+numbers_source_yml = """
+sources:
+  - name: test_source
+    schema: "{{ target.schema }}"
+    tables:
+      - name: numbers_seed
+"""
+
+sum_numbers_function_from_source_sql = """
+SELECT sum(number) as sum_numbers FROM {{ source('test_source', 'numbers_seed') }}
+"""
+
 
 class BasicUDFSetup:
     @pytest.fixture(scope="class")
@@ -152,6 +170,44 @@ class TestCanUseRefInUDF:
         }
 
     def test_can_use_ref_in_udf(self, project):
+        run_dbt(["build"])
+
+        result = run_dbt(
+            [
+                "show",
+                "--inline",
+                "select {{ function('sum_numbers_function') }}() as summed_numbers",
+            ]
+        )
+        assert len(result.results) == 1
+        agate_table = result.results[0].agate_table
+        assert isinstance(agate_table, agate.Table)
+        assert agate_table.column_names == ("summed_numbers",)
+        assert agate_table.rows == [(6,)]
+
+
+class TestCanUseSourceInUDF:
+    @pytest.fixture(scope="class")
+    def functions(self) -> Dict[str, str]:
+        return {
+            "sum_numbers_function.sql": sum_numbers_function_from_source_sql,
+            "sum_numbers_function.yml": sum_numbers_function_yml,
+        }
+
+    @pytest.fixture(scope="class")
+    def models(self) -> Dict[str, str]:
+        return {
+            "numbers_source.yml": numbers_source_yml,
+        }
+
+    @pytest.fixture(scope="class")
+    def seeds(self) -> Dict[str, str]:
+        return {
+            "numbers_seed.csv": numbers_seed_csv,
+        }
+
+    def test_can_use_ref_in_udf(self, project):
+        run_dbt(["seed"])
         run_dbt(["build"])
 
         result = run_dbt(
