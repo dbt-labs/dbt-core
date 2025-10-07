@@ -1,0 +1,152 @@
+use std::collections::HashMap;
+
+use chrono::{DateTime, Utc};
+use dbt_telemetry::{Invocation, SpanEndInfo};
+use serde_json::json;
+use tracing::level_filters::LevelFilter;
+
+use super::super::{
+    background_writer::BackgroundWriter,
+    data_provider::DataProvider,
+    formatters::invocation::format_invocation_summary,
+    layer::{ConsumerLayer, TelemetryConsumer},
+    metrics::{InvocationMetricKey, MetricKey},
+    shared_writer::SharedWriter,
+    shutdown::TelemetryShutdownItem,
+};
+
+use proto_rust::v1::public::fields::core_types::CoreEventInfo;
+
+/// Build a JSON compatibility layer. This will write directly to the writer.
+/// If you want to write to slow IO sink, prefer `build_json_compat_layer_with_background_writer`
+pub fn build_json_compat_layer<W: SharedWriter + 'static>(
+    writer: W,
+    max_log_verbosity: LevelFilter,
+    invocation_id: uuid::Uuid,
+) -> ConsumerLayer {
+    Box::new(JsonCompatLayer::new(writer, invocation_id).with_filter(max_log_verbosity))
+}
+
+/// Build a JSON compatibility layer with a background writer. This is preferred for writing to
+/// slow IO sinks like files.
+pub fn build_json_compat_layer_with_background_writer<W: std::io::Write + Send + 'static>(
+    writer: W,
+    max_log_verbosity: LevelFilter,
+    invocation_id: uuid::Uuid,
+) -> (ConsumerLayer, TelemetryShutdownItem) {
+    let (writer, handle) = BackgroundWriter::new(writer);
+
+    (
+        build_json_compat_layer(writer, max_log_verbosity, invocation_id),
+        Box::new(handle),
+    )
+}
+
+/// A telemetry consumer that writes out events in a format compatible with dbt-core structured json logs.
+///
+/// It is only writing a small subset of event types and not 100% matching dbt-core schema and left only
+/// for backward compatibility with what has been implemented in fusion by May 2025 launch.
+struct JsonCompatLayer {
+    writer: Box<dyn SharedWriter>,
+    invocation_id: uuid::Uuid,
+}
+
+impl JsonCompatLayer {
+    pub fn new<W: SharedWriter + 'static>(writer: W, invocation_id: uuid::Uuid) -> Self {
+        Self {
+            writer: Box::new(writer),
+            invocation_id,
+        }
+    }
+
+    fn build_core_event_info(
+        &self,
+        code: Option<&str>,
+        name: Option<&str>,
+        level: &str,
+        msg: String,
+    ) -> CoreEventInfo {
+        CoreEventInfo {
+            category: "".to_string(),
+            code: code.unwrap_or("").to_string(),
+            invocation_id: self.invocation_id.to_string(),
+            name: name.unwrap_or("Generic").to_string(),
+            pid: std::process::id() as i32,
+            thread: std::thread::current().name().unwrap_or("main").to_string(),
+            // drop the timezone offset and format as microseconds to conform to python logging timestamp parsing
+            ts: Some(Utc::now().into()),
+            msg,
+            level: level.to_lowercase(),
+            extra: HashMap::new(),
+        }
+    }
+}
+
+impl TelemetryConsumer for JsonCompatLayer {
+    fn on_span_end(&self, span: &SpanEndInfo, data_provider: &DataProvider<'_>) {
+        let Some(invocation) = span.attributes.downcast_ref::<Invocation>() else {
+            return;
+        };
+
+        let formatted = format_invocation_summary(span, invocation, data_provider, false, None);
+
+        if let Some(line) = formatted.autofix_line() {
+            let info_json = serde_json::to_value(self.build_core_event_info(
+                None,
+                None,
+                &span.severity_text,
+                line.to_string(),
+            ))
+            .expect("Failed to serialize core event info to JSON");
+
+            let value = json!({
+                "info": info_json,
+                "data": {
+                    "log_version": 3,
+                    "version": env!("CARGO_PKG_VERSION"),
+                }
+            })
+            .to_string();
+
+            let _ = self.writer.writeln(value.as_str());
+        }
+
+        let message = formatted.summary_lines().join("\n");
+        let elapsed_secs = span
+            .end_time_unix_nano
+            .duration_since(span.start_time_unix_nano)
+            .unwrap_or_default()
+            .as_secs_f32();
+
+        let completed_at: DateTime<Utc> = span.end_time_unix_nano.into();
+        let completed_at_str = completed_at.to_rfc3339_opts(chrono::SecondsFormat::Micros, true);
+        let success = data_provider.get_metric(MetricKey::InvocationMetric(
+            InvocationMetricKey::TotalErrors,
+        )) == 0;
+
+        let info_json = serde_json::to_value(self.build_core_event_info(
+            Some("Q039"),
+            Some("CommandCompleted"),
+            &span.severity_text,
+            message,
+        ))
+        .expect("Failed to serialize core event info to JSON");
+
+        // We only use structured type for info, because proto defined data
+        // types are not matching what fusion emitted for compatibility by the
+        // original launch date.
+        let value = json!({
+            "info": info_json,
+            "data": {
+                "log_version": 3,
+                "version": env!("CARGO_PKG_VERSION"),
+                "completed_at": completed_at_str,
+                "elapsed": elapsed_secs,
+                "success": success
+            }
+        })
+        .to_string();
+
+        let _ = self.writer.writeln(value.as_str());
+    }
+}

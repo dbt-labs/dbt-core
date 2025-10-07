@@ -1,45 +1,5 @@
 pub use humantime as _vendored_human_time;
 
-/// Format duration in a concise way:
-/// - If < 1 minute: show seconds and milliseconds (e.g., "1s 298ms", "500ms")
-/// - If >= 1 minute: show minutes and seconds (e.g., "1m 30s")
-pub fn format_duration_concise(duration: std::time::Duration, show_millis: bool) -> String {
-    let total_secs = duration.as_secs_f64();
-
-    if total_secs >= 60.0 {
-        // >= 1 minute: show minutes and seconds
-        let minutes = (total_secs / 60.0) as u64;
-        let remaining_secs = total_secs % 60.0;
-        if remaining_secs >= 1.0 {
-            format!("{minutes}m {remaining_secs:.0}s")
-        } else {
-            format!("{minutes}m")
-        }
-    } else if total_secs >= 1.0 {
-        // >= 1 second but < 1 minute: show seconds and milliseconds
-        let secs = total_secs as u64;
-        let remaining_millis = ((total_secs - secs as f64) * 1000.0) as u64;
-        if remaining_millis > 0 && show_millis {
-            format!("{secs}s {remaining_millis}ms")
-        } else {
-            format!("{secs}s")
-        }
-    } else {
-        // < 1 second: show most appropriate single unit
-        let millis = duration.as_millis();
-        if millis >= 1 {
-            format!("{millis}ms")
-        } else {
-            let micros = duration.as_micros();
-            if micros >= 1 {
-                format!("{micros}μs")
-            } else {
-                format!("{}ns", duration.as_nanos())
-            }
-        }
-    }
-}
-
 /// Format duration with fixed width for alignment (5 characters total)
 /// Supports ns, μs, ms, s, m, h for materializations
 pub fn format_duration_fixed_width(duration: std::time::Duration) -> String {
@@ -993,8 +953,32 @@ macro_rules! show_error {
         use $crate::pretty_string::RED;
         use $crate::macros::_dbt_error::FsError;
         increment_error_counter(&$io.invocation_id.to_string());
+
         // clean up the path before showing the error
-        let mut err = $err;
+        let err = $err;
+
+        // New tracing based logic
+        use $crate::tracing::convert::log_level_to_severity;
+        use $crate::tracing::emit::_tracing::Level as TracingLevel;
+        use $crate::macros::_dbt_telemetry::LogMessage;
+
+        let (original_severity_number, original_severity_text) = log_level_to_severity(&$crate::macros::log_adapter::log::Level::Error);
+
+        $crate::emit_tracing_event!(
+            level: TracingLevel::ERROR,
+            LogMessage {
+                code: Some(err.code as u16 as u32),
+                dbt_core_event_code: None,
+                original_severity_number: original_severity_number as i32,
+                original_severity_text: original_severity_text.to_string(),
+                // The rest will be auto injected
+                ..Default::default()
+            }
+            .into(),
+            "{}",
+            err.pretty().as_str()
+        );
+
         if let Some(status_reporter) = &$io.status_reporter {
             status_reporter.collect_error(&err);
         }
@@ -1100,78 +1084,19 @@ macro_rules! this_crate_path {
 // ------------------------------------------------------------------------------------------------
 #[macro_export]
 macro_rules! show_progress_exit {
-    ( $arg:expr, $start_time:expr) => {{
-        use $crate::io_args::ShowOptions;
-        use $crate::constants::FINISHED;
-        use $crate::error_counter::{get_autofix_suggestion_counter, get_error_counter, get_warning_counter};
-        use $crate::macros::format_duration_concise;
-        use $crate::pretty_string::color_quotes;
-        use $crate::pretty_string::{GREEN, RED, YELLOW, BLUE};
+    ( $arg:expr ) => {{
+        use $crate::error_counter::get_error_counter;
         use $crate::macros::_dbt_error::FsError;
-        use serde_json::json;
         let e_ct = get_error_counter(&$arg.io.invocation_id.to_string());
-        let w_ct = get_warning_counter(&$arg.io.invocation_id.to_string());
-        let a_ct = get_autofix_suggestion_counter(&$arg.io.invocation_id.to_string());
-        let e_msg = RED.apply_to(if e_ct == 1 { "error" } else { "errors" });
-        let w_msg = YELLOW.apply_to(if w_ct == 1 { "warning" } else { "warnings" });
-
-        // Show autofix suggestion if there are any autofix suggestions
-        if a_ct > 0 {
-            let msg = format!(
-                "{} Run '{}' to see the latest fusion compatible packages. For compatibility errors, try the autofix script: {}",
-                BLUE.apply_to("suggestion:"),
-                YELLOW.apply_to("dbt deps"),
-                BLUE.apply_to("https://github.com/dbt-labs/dbt-autofix")
-            );
-            $crate::show_autofix_suggestion!($arg.io, msg);
-        }
-
-        let (action, msg) = if e_ct > 0 && w_ct > 0 {
-            (
-                RED.apply_to(FINISHED),
-                format!(" with {} {} and {} {}", e_ct, e_msg, w_ct, w_msg),
-            )
-        } else if e_ct > 0 {
-            (RED.apply_to(FINISHED), format!(" with {} {}", e_ct, e_msg))
-        } else if w_ct > 0 {
-            (
-                YELLOW.apply_to(FINISHED),
-                format!(" with {} {}", w_ct, w_msg),
-            )
-        } else {
-            (GREEN.apply_to(FINISHED), "".to_owned())
-        };
-        let duration = if $arg.from_main {
-            let duration = format_duration_concise($start_time.elapsed().unwrap(), true).to_string();
-
-            format!(" in {}", duration)
-        } else {
-            "".to_owned()
-        };
-        let target = match &$arg.target {
-            Some(target) => color_quotes(&format!("target '{}'", target)),
-            None => "".to_owned(),
-        };
-
-        let output = format!(
-            "{} '{}' {}{}{}",
-            action, &$arg.command, target, msg, duration
-        );
-        if $arg.io.show.contains(&ShowOptions::Completed) || e_ct > 0 {
-            let elapsed = $start_time.elapsed().unwrap().as_secs_f32();
-            let completed_at = chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.6fZ").to_string();
-            log::info!(elapsed = elapsed, name = "CommandCompleted", data:serde = json!({"completed_at": completed_at, "elapsed": elapsed, "success": e_ct == 0}); "{}", output);
-        }
-
         Ok::<i32, Box<FsError>>(if e_ct == 0 { 0 } else { 1 })
     }};
 }
 
 #[macro_export]
 macro_rules! maybe_interactive_or_exit {
-    ( $arg:expr, $start_time:expr, $resolver_state:expr, $db:expr, $map_compiled_sql:expr, $jinja_env:expr, $token:expr) => {
+    ( $arg:expr, $resolver_state:expr, $db:expr, $map_compiled_sql:expr, $jinja_env:expr, $token:expr) => {
         if !$arg.interactive {
-            show_progress_exit!($arg, $start_time)
+            show_progress_exit!($arg)
         } else {
             repl::run(
                 $resolver_state,
@@ -1188,26 +1113,25 @@ macro_rules! maybe_interactive_or_exit {
 
 #[macro_export]
 macro_rules! checkpoint_maybe_exit {
-    ( $phase:expr, $arg:expr, $start_time:expr ) => {
+    ( $phase:expr, $arg:expr ) => {
         if $arg.phase <= $phase
             || $crate::error_counter::get_error_counter($arg.io.invocation_id.to_string().as_str())
                 > 0
         {
-            return show_progress_exit!($arg, $start_time);
+            return show_progress_exit!($arg);
         }
     };
 }
 
 #[macro_export]
 macro_rules! checkpoint_maybe_interactive_or_exit {
-    ( $phase:expr, $arg:expr, $start_time:expr, $resolver_state:expr, $db:expr, $map_compiled_sql:expr, $jinja_env:expr, $cancel_token:expr) => {
+    ( $phase:expr, $arg:expr, $resolver_state:expr, $db:expr, $map_compiled_sql:expr, $jinja_env:expr, $cancel_token:expr) => {
         if $arg.phase <= $phase
             || $crate::error_counter::get_error_counter($arg.io.invocation_id.to_string().as_str())
                 > 0
         {
             return maybe_interactive_or_exit!(
                 $arg,
-                $start_time,
                 $resolver_state,
                 $db,
                 $map_compiled_sql,

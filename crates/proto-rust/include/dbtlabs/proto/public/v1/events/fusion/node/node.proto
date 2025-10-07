@@ -77,6 +77,8 @@ enum NodeSkipReason {
   NODE_SKIP_REASON_PHASE_DISABLED = 3;
   // Operation had no effect (e.g. ephemeral models).
   NODE_SKIP_REASON_NO_OP = 4;
+  // Current evaluation phase skipped for this node due to previous phase outcome.
+  NODE_SKIP_REASON_PHASE_SKIPPED = 5;
 }
 
 // Cache reuse classification when node_skip_reason == NODE_SKIP_REASON_CACHED.
@@ -145,6 +147,11 @@ message NodeCacheDetail {
   NodeCacheReason node_cache_reason = 1;
 }
 
+message NodeSkipUpstreamDetail {
+  // unique_id of the upstream node that caused this node to be skipped.
+  string upstream_unique_id = 1;
+}
+
 message NodeEvaluated {
   // unique_id is the globally unique identifier for this node.
   string unique_id = 1;
@@ -203,6 +210,10 @@ message NodeEvaluated {
     // Source freshness specific outcome details.
     // Present for source nodes with freshness checks when node_outcome == NODE_OUTCOME_SUCCESS.
     SourceFreshnessDetail node_freshness_outcome = 32;
+
+    // Upstream node that caused this node to be skipped.
+    // Present when node_skip_reason == NODE_SKIP_REASON_UPSTREAM.
+    NodeSkipUpstreamDetail node_skip_upstream_detail = 33;
   }
 
   // Optional legacy dbt core event code (e.g. "Q018") if this event has a strict mapping to a dbt core event.

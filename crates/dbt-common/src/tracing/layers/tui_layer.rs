@@ -1,41 +1,33 @@
+use std::collections::HashSet;
+
+use console::Term;
 use dbt_telemetry::{
-    ExecutionPhase, NodeEvaluated, PhaseExecuted, SpanEndInfo, SpanStartInfo, SpanStatus,
-    StatusCode, TelemetryAttributes,
+    ExecutionPhase, Invocation, NodeEvaluated, PhaseExecuted, SpanEndInfo, SpanStartInfo,
+    SpanStatus, StatusCode, TelemetryAttributes,
 };
 use tracing::level_filters::LevelFilter;
 
 use crate::{
     constants::{ANALYZING, RENDERING, RUNNING},
+    io_args::ShowOptions,
     logging::{LogFormat, StatEvent, TermEvent},
     tracing::{
         data_provider::DataProvider,
+        formatters::invocation::format_invocation_summary,
         layer::{ConsumerLayer, TelemetryConsumer},
-        shared_writer::SharedWriter,
     },
 };
 
 /// Build TUI layer that handles all terminal user interface on stdout and stderr, including progress bars
-pub fn build_tui_layer<S: SharedWriter + 'static, E: SharedWriter + 'static>(
-    std_writer: S,
-    err_writer: E,
+pub fn build_tui_layer(
     max_log_verbosity: LevelFilter,
     log_format: LogFormat,
+    show_options: HashSet<ShowOptions>,
 ) -> ConsumerLayer {
-    let is_terminal = std_writer.is_terminal();
-
     // Enables progress bar for now.
-    let is_interactive = log_format == LogFormat::Default && is_terminal;
-    let enable_color = is_terminal;
+    let is_interactive = log_format == LogFormat::Default;
 
-    Box::new(
-        TuiLayer::new(
-            Box::new(std_writer),
-            Box::new(err_writer),
-            is_interactive,
-            enable_color,
-        )
-        .with_filter(max_log_verbosity),
-    )
+    Box::new(TuiLayer::new(is_interactive, show_options).with_filter(max_log_verbosity))
 }
 
 /// A tracing layer that handles all terminal user interface on stdout and stderr, including progress bars.
@@ -43,29 +35,24 @@ pub fn build_tui_layer<S: SharedWriter + 'static, E: SharedWriter + 'static>(
 /// As of today this is a bridge into existing logging-based setup, but eventually
 /// should own the progress bar manager itself
 pub struct TuiLayer {
-    #[allow(unused)]
-    std_writer: Box<dyn SharedWriter>,
-    #[allow(unused)]
-    err_writer: Box<dyn SharedWriter>,
+    stdout_term: Term,
+    #[allow(dead_code)]
+    stderr_writer: Term,
     /// Enables progress bar for now.
     is_interactive: bool,
-    /// If true, text will be formatted with color.
-    #[allow(unused)]
-    enable_color: bool,
+    show_options: HashSet<ShowOptions>,
 }
 
 impl TuiLayer {
-    pub fn new(
-        std_writer: Box<dyn SharedWriter>,
-        err_writer: Box<dyn SharedWriter>,
-        is_interactive: bool,
-        enable_color: bool,
-    ) -> Self {
+    pub fn new(is_interactive: bool, show_options: HashSet<ShowOptions>) -> Self {
+        let stdout_term = Term::stdout();
+        let is_interactive = is_interactive && stdout_term.is_term();
+
         Self {
-            std_writer,
-            err_writer,
+            stdout_term,
+            stderr_writer: Term::stderr(),
             is_interactive,
-            enable_color,
+            show_options,
         }
     }
 }
@@ -117,8 +104,11 @@ fn get_progress_params(
 impl TelemetryConsumer for TuiLayer {
     fn on_span_start(&self, span: &SpanStartInfo, _: &DataProvider<'_>) {
         if !self.is_interactive {
+            // Non-interactive mode does not have progress bars
             return;
         }
+
+        // Handle progress bars
         if let Some((bar_uid, total, item)) = get_progress_params(&span.attributes) {
             // TODO: switch to direct interface with progress bar ocntroller
             // Create progress bar via log
@@ -144,10 +134,17 @@ impl TelemetryConsumer for TuiLayer {
         }
     }
 
-    fn on_span_end(&self, span: &SpanEndInfo, _: &DataProvider<'_>) {
+    fn on_span_end(&self, span: &SpanEndInfo, data_provider: &DataProvider<'_>) {
+        if let Some(invocation) = span.attributes.downcast_ref::<Invocation>() {
+            self.handle_invocation_summary(span, invocation, data_provider);
+        }
+
         if !self.is_interactive {
+            // Non-interactive mode does not have progress bars
             return;
         }
+
+        // Handle progress bars
         if let Some((bar_uid, total, item)) = get_progress_params(&span.attributes) {
             // TODO: switch to direct interface with progress bar ocntroller
             // Create progress bar via log
@@ -181,6 +178,38 @@ impl TelemetryConsumer for TuiLayer {
                 }
                 _ => {}
             };
+        }
+    }
+}
+
+impl TuiLayer {
+    fn handle_invocation_summary(
+        &self,
+        span: &SpanEndInfo,
+        invocation: &Invocation,
+        data_provider: &DataProvider<'_>,
+    ) {
+        let max_line_width = self
+            .stdout_term
+            .size_checked()
+            .map(|(_, cols)| cols as usize);
+
+        let formatted =
+            format_invocation_summary(span, invocation, data_provider, true, max_line_width);
+
+        // Per pre-migration logic, autofix line were always printed ignoring show options
+        if let Some(line) = formatted.autofix_line() {
+            let _ = self.stdout_term.write_line(line);
+        }
+
+        if !self.show_options.contains(&ShowOptions::Completed)
+            && !self.show_options.contains(&ShowOptions::All)
+        {
+            return;
+        }
+
+        for line in formatted.summary_lines() {
+            let _ = self.stdout_term.write_line(line.as_str());
         }
     }
 }

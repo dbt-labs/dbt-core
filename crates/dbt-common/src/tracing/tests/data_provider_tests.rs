@@ -5,7 +5,7 @@ use super::super::{
     metrics::{MetricKey, get_metric},
     tests::mocks::{MockDynSpanEvent, MockMiddleware, TestLayer},
 };
-use crate::{create_info_span, create_root_info_span};
+use crate::{create_info_span, create_root_info_span, tracing::metrics::InvocationMetricKey};
 use dbt_telemetry::TelemetryOutputFlags;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -18,7 +18,7 @@ fn data_provider_isolates_roots_and_shares_within_tree() {
     let trace_id = rand::random::<u128>();
     let (test_layer, ..) = TestLayer::new();
 
-    let test_metric = MetricKey::TotalWarnings;
+    let test_metric = MetricKey::InvocationMetric(InvocationMetricKey::TotalWarnings);
 
     // Middleware will increment metric and store extension on each span
     let middleware = MockMiddleware::new().with_span_start(move |span, data_provider| {

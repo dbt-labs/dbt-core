@@ -470,7 +470,18 @@ pub async fn render_unresolved_sql_files<
 
     let chunk_size = model_sql_files.len().div_ceil(max_concurrency);
     // Partition the workload and node_properties into chunks
-    let mut tasks = Vec::new();
+    #[allow(clippy::type_complexity)]
+    let mut tasks: Vec<
+        // Full type specified here due to compiler failing to infer it due to some macro
+        // nesting in `show_error`
+        tokio::task::JoinHandle<
+            FsResult<(
+                Vec<SqlFileRenderResult<T, S>>,
+                Vec<FsError>,
+                BTreeMap<String, MinimalPropertiesEntry>,
+            )>,
+        >,
+    > = Vec::new();
     let mut chunked_files: Vec<Vec<DbtAsset>> = Vec::new();
     let mut chunked_node_props: Vec<BTreeMap<String, MinimalPropertiesEntry>> = Vec::new();
     for chunk in model_sql_files.chunks(chunk_size) {

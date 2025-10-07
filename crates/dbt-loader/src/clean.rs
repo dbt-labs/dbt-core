@@ -3,7 +3,7 @@ use crate::{
     dbt_project_yml_loader::{collect_protected_paths, load_project_yml},
     load,
 };
-use std::{collections::BTreeMap, path::Path, time::SystemTime};
+use std::{collections::BTreeMap, path::Path};
 
 use dbt_common::{
     ErrorCode, FsResult,
@@ -22,8 +22,6 @@ pub async fn execute_clean_command(
     files: &[String],
     token: &CancellationToken,
 ) -> FsResult<i32> {
-    let start = SystemTime::now();
-
     let load_args = LoadArgs::from_eval_args(arg);
     let invocation_args = InvocationArgs::from_eval_args(arg);
     let (dbt_state, num_threads, _dbt_cloud) = load(&load_args, &invocation_args, token).await?;
@@ -95,7 +93,7 @@ pub async fn execute_clean_command(
         })?;
     }
 
-    show_progress_exit!(arg, start)
+    show_progress_exit!(arg)
 }
 
 fn unrelated_paths<P: AsRef<Path>, Q: AsRef<Path>>(io: &IoArgs, to: P, from: Q) -> bool {

@@ -29,6 +29,29 @@ impl AsRef<str> for NodeType {
     }
 }
 
+impl NodeType {
+    pub fn pretty(&self) -> &str {
+        match self {
+            Self::Unspecified => "unspecified",
+            Self::Model => "model",
+            Self::Seed => "seed",
+            Self::Snapshot => "snapshot",
+            Self::Source => "source",
+            Self::Test => "test",
+            Self::UnitTest => "unit test",
+            Self::Macro => "macro",
+            Self::DocsMacro => "docs macro",
+            Self::Analysis => "analysis",
+            Self::Operation => "operation",
+            Self::Exposure => "exposure",
+            Self::Metric => "metric",
+            Self::SavedQuery => "saved query",
+            Self::SemanticModel => "semantic model",
+            Self::Function => "function",
+        }
+    }
+}
+
 pub fn dbt_core_event_code_for_node_evaluation_start(
     node_type: NodeType,
     phase: ExecutionPhase,

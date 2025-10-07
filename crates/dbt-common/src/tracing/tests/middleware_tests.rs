@@ -3,7 +3,7 @@ use crate::tracing::{
     init::create_tracing_subcriber_with_layer,
     layer::{ConsumerLayer, MiddlewareLayer, TelemetryMiddleware},
     layers::data_layer::TelemetryDataLayer,
-    metrics::{MetricKey, get_metric},
+    metrics::{InvocationMetricKey, MetricKey, get_metric},
     tests::mocks::{MockDynLogEvent, MockDynSpanEvent, MockMiddleware, TestLayer},
 };
 use crate::{create_info_span, create_root_info_span, emit_tracing_event};
@@ -28,7 +28,10 @@ fn middleware_modifies_drops_and_updates_metrics() {
             }
 
             if span.span_name.ends_with("child") {
-                metrics.increment_metric(MetricKey::TotalWarnings, 1);
+                metrics.increment_metric(
+                    MetricKey::InvocationMetric(InvocationMetricKey::TotalWarnings),
+                    1,
+                );
 
                 span.attributes = MockDynSpanEvent {
                     name: "mutated-child".to_string(),
@@ -127,7 +130,9 @@ fn middleware_modifies_drops_and_updates_metrics() {
             );
         });
 
-        get_metric(MetricKey::TotalWarnings)
+        get_metric(MetricKey::InvocationMetric(
+            InvocationMetricKey::TotalWarnings,
+        ))
     });
 
     assert_eq!(recorded_metric, 1, "middleware should increment metric");

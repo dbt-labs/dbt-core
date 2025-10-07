@@ -1,6 +1,8 @@
-use dbt_telemetry::{Invocation, InvocationEvalArgs, create_process_event_data};
+use dbt_telemetry::{
+    Invocation, InvocationEvalArgs, TelemetryAttributes, create_process_event_data,
+};
 
-use crate::io_args::EvalArgs;
+use crate::{io_args::EvalArgs, tracing::span_info::with_root_span};
 
 fn create_invocation_eval_args(eval_arg: &EvalArgs) -> InvocationEvalArgs {
     InvocationEvalArgs {
@@ -67,4 +69,22 @@ pub fn create_invocation_attributes(package: &str, eval_arg: &EvalArgs) -> Invoc
         process_info: Some(create_process_event_data(package)),
         metrics: Default::default(),
     }
+}
+
+pub fn with_invocation_mut<F>(mut f: F)
+where
+    F: FnMut(&mut Invocation),
+{
+    with_root_span(|root_span| {
+        let mut span_ext_mut = root_span.extensions_mut();
+
+        // Get the current attributes, and update or replace them
+        let attrs = span_ext_mut
+            .get_mut::<TelemetryAttributes>()
+            .expect("Telemetry hasn't been properly initialized. Missing span event attributes");
+
+        if let Some(invocation) = attrs.downcast_mut::<Invocation>() {
+            f(invocation);
+        }
+    });
 }

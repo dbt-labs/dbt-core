@@ -1,17 +1,20 @@
-use std::path::PathBuf;
+use std::{collections::HashSet, path::PathBuf};
 
 use super::{
     convert::log_level_filter_to_tracing,
     layer::{ConsumerLayer, MiddlewareLayer},
     layers::{
         file_log_layer::build_file_log_layer_with_background_writer,
+        json_compat_layer::{
+            build_json_compat_layer, build_json_compat_layer_with_background_writer,
+        },
         jsonl_writer::{build_jsonl_layer, build_jsonl_layer_with_background_writer},
-        metric_aggregator::TelemetryMetricAggregator,
         otlp::build_otlp_layer,
         parquet_writer::build_parquet_writer_layer,
         query_log::build_query_log_layer_with_background_writer,
         tui_layer::build_tui_layer,
     },
+    middlewares::metric_aggregator::TelemetryMetricAggregator,
     shutdown::TelemetryShutdownItem,
 };
 use crate::{
@@ -19,7 +22,7 @@ use crate::{
         DBT_DEAFULT_LOG_FILE_NAME, DBT_DEAFULT_QUERY_LOG_FILE_NAME, DBT_LOG_DIR_NAME,
         DBT_METADATA_DIR_NAME, DBT_PROJECT_YML, DBT_TARGET_DIR_NAME,
     },
-    io_args::IoArgs,
+    io_args::{IoArgs, ShowOptions},
     io_utils::determine_project_dir,
     logging::LogFormat,
 };
@@ -60,6 +63,8 @@ pub struct FsTraceConfig {
     pub(super) log_format: LogFormat,
     /// If True, enables separate query log file output
     pub(super) enable_query_log: bool,
+    /// Show options controlling terminal/file output visibility
+    pub(super) show_options: HashSet<ShowOptions>,
 }
 
 impl Default for FsTraceConfig {
@@ -75,6 +80,7 @@ impl Default for FsTraceConfig {
             export_to_otlp: false,
             log_format: LogFormat::Default,
             enable_query_log: false,
+            show_options: HashSet::new(),
         }
     }
 }
@@ -128,6 +134,7 @@ impl FsTraceConfig {
     ///   via OTEL environment variables
     /// * `log_format` - The log format being used
     /// * `enable_query_log` - If true, enables writing a separate query log file
+    /// * `show_options` - Set of ShowOptions controlling terminal/file output visibility
     ///
     /// # Path Resolution
     ///
@@ -142,7 +149,7 @@ impl FsTraceConfig {
     /// ```rust
     /// use tracing::level_filters::LevelFilter;
     /// use uuid::Uuid;
-    /// use std::path::PathBuf;
+    /// use std::{collections::HashSet, path::PathBuf};
     ///
     /// let config = FsTraceConfig::new(
     ///     "dbt-cli",
@@ -157,6 +164,7 @@ impl FsTraceConfig {
     ///     false, // Don't export to OTLP
     ///     LogFormat::Default, // Use default log format
     ///     true,  // Enable query log
+    ///     HashSet::new(),
     /// );
     /// ```
     #[allow(clippy::too_many_arguments)]
@@ -173,6 +181,7 @@ impl FsTraceConfig {
         export_to_otlp: bool,
         log_format: LogFormat,
         enable_query_log: bool,
+        show_options: HashSet<ShowOptions>,
     ) -> Self {
         let (in_dir, out_dir) = calculate_trace_dirs(project_dir, target_path);
 
@@ -200,6 +209,7 @@ impl FsTraceConfig {
             export_to_otlp,
             log_format,
             enable_query_log,
+            show_options,
         }
     }
 
@@ -234,6 +244,7 @@ impl FsTraceConfig {
             io_args.export_to_otlp,
             io_args.log_format,
             true, // Always enable query log for now
+            io_args.show.clone(),
         )
     }
 
@@ -310,15 +321,25 @@ impl FsTraceConfig {
             consumer_layers.push(parquet_layer)
         };
 
-        // Create progress bar layer if log-format default enabled (but not for Otel)
-        if self.log_format != LogFormat::Otel && self.log_format != LogFormat::Json {
-            // Create layer and apply user specified filtering
-            consumer_layers.push(build_tui_layer(
-                std::io::stdout(),
-                std::io::stderr(),
-                self.max_log_verbosity,
-                self.log_format,
-            ))
+        // Create console layer based on log format
+        match self.log_format {
+            LogFormat::Default | LogFormat::Text => {
+                // Create layer and apply user specified filtering
+                consumer_layers.push(build_tui_layer(
+                    self.max_log_verbosity,
+                    self.log_format,
+                    self.show_options.clone(),
+                ))
+            }
+            LogFormat::Json => {
+                // Create layer and apply user specified filtering
+                consumer_layers.push(build_json_compat_layer(
+                    std::io::stdout(),
+                    self.max_log_verbosity,
+                    self.invocation_id,
+                ))
+            }
+            LogFormat::Otel => {}
         };
 
         // If any of the file logs are enabled - create the log directory
@@ -347,14 +368,23 @@ impl FsTraceConfig {
                     )
                 })?;
 
-            let (file_log_layer, writer_handle) =
-                build_file_log_layer_with_background_writer(file, self.max_file_log_verbosity);
+            if let Some((file_log_layer, writer_handle)) = match self.log_format {
+                LogFormat::Default | LogFormat::Text => Some(
+                    build_file_log_layer_with_background_writer(file, self.max_file_log_verbosity),
+                ),
+                LogFormat::Json => Some(build_json_compat_layer_with_background_writer(
+                    file,
+                    self.max_file_log_verbosity,
+                    self.invocation_id,
+                )),
+                LogFormat::Otel => None,
+            } {
+                // Keep a handle for shutdown
+                shutdown_items.push(writer_handle);
 
-            // Keep a handle for shutdown
-            shutdown_items.push(writer_handle);
-
-            // Create layer. User specified filtering is not applied here
-            consumer_layers.push(file_log_layer)
+                // Create layer. User specified filtering is not applied here
+                consumer_layers.push(file_log_layer)
+            }
         };
 
         // Create query log writer layer (always enabled; internal-only event sink)

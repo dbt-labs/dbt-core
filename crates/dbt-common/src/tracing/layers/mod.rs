@@ -2,11 +2,9 @@
 // from tracing crate machinery to our telemetry layers.
 pub mod data_layer;
 
-// Composable middleware layers
-pub mod metric_aggregator;
-
 // Composable consumer layers
 pub mod file_log_layer;
+pub mod json_compat_layer;
 pub mod jsonl_writer;
 pub mod otlp;
 pub mod parquet_writer;

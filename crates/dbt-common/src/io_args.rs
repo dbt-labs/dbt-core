@@ -26,6 +26,7 @@ use crate::{
         parse_model_specifiers,
     },
     pretty_string::BLUE,
+    tracing::invocation::with_invocation_mut,
 };
 
 // ----------------------------------------------------------------------------------------------
@@ -301,11 +302,26 @@ impl fmt::Debug for EvalArgs {
 impl EvalArgs {
     // todo: switch to using a builder pattern that doesn't clone...
     pub fn with_target(&self, target: String) -> Self {
+        // Update span info as it is used in telemetry & TUI
+        with_invocation_mut(|invocation| {
+            if let Some(args) = invocation.eval_args.as_mut() {
+                args.target = Some(target.clone());
+            };
+        });
+
         let mut new_args = self.clone();
         new_args.target = Some(target);
+
         new_args
     }
     pub fn with_threads(&self, num_threads: Option<usize>) -> Self {
+        // Update span info as it is used in telemetry & TUI
+        with_invocation_mut(|invocation| {
+            if let Some(args) = invocation.eval_args.as_mut() {
+                args.num_threads = num_threads.map(|l| l as u64);
+            };
+        });
+
         let mut new_args = self.clone();
         new_args.num_threads = num_threads;
         new_args
@@ -326,6 +342,15 @@ impl EvalArgs {
         if res.exclude.is_some() {
             res.exclude = conjoin_expression(self.exclude.clone(), predicate_expr);
         }
+
+        // Update span info as it is used in telemetry & TUI
+        with_invocation_mut(|invocation| {
+            if let Some(args) = invocation.eval_args.as_mut() {
+                args.select = res.select.iter().map(|s| s.to_string()).collect();
+                args.exclude = res.exclude.iter().map(|s| s.to_string()).collect();
+            };
+        });
+
         res
     }
 

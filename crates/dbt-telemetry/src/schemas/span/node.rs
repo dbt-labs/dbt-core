@@ -10,10 +10,12 @@ use crate::{
 use prost::Name;
 use std::borrow::Cow;
 
+pub use proto_rust::impls::node::update_dbt_core_event_code_for_node_evaluation_end;
 pub use proto_rust::v1::public::events::fusion::node::{
-    NodeCacheReason, NodeCancelReason, NodeErrorType, NodeEvaluated, NodeMaterialization,
-    NodeOutcome, NodeSkipReason, NodeType, SourceFreshnessDetail, SourceFreshnessOutcome,
-    TestEvaluationDetail, TestOutcome, node_evaluated::NodeOutcomeDetail,
+    NodeCacheDetail, NodeCacheReason, NodeCancelReason, NodeErrorType, NodeEvaluated,
+    NodeMaterialization, NodeOutcome, NodeSkipReason, NodeSkipUpstreamDetail, NodeType,
+    SourceFreshnessDetail, SourceFreshnessOutcome, TestEvaluationDetail, TestOutcome,
+    node_evaluated::NodeOutcomeDetail,
 };
 
 impl ProtoTelemetryEvent for NodeEvaluated {
@@ -67,7 +69,7 @@ impl ArrowSerializableTelemetryEvent for NodeEvaluated {
             dbt_core_event_code: self.dbt_core_event_code.as_deref().map(Cow::Borrowed),
             // Serialize node_outcome_detail into JSON as it may grow with arbitrary data and less
             // likely to be queried directly
-            json_payload: self.node_outcome_detail.map(|v| {
+            json_payload: self.node_outcome_detail.as_ref().map(|v| {
                 serde_json::to_string(&v).unwrap_or_else(|_| {
                     panic!(
                         "Failed to serialize `node_outcome_detail` in event type \"{}\" to JSON",

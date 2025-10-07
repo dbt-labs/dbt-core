@@ -1,5 +1,8 @@
 use super::{
-    metrics::{MetricKey, get_metric_from_span_extension, increment_metric_on_span},
+    metrics::{
+        MetricKey, get_all_metrics_from_span_extension, get_metric_from_span_extension,
+        increment_metric_on_span,
+    },
     span_info::SpanAccess,
 };
 use tracing_subscriber::registry::{LookupSpan, SpanRef};
@@ -37,10 +40,17 @@ impl<'a> DataProvider<'a> {
             .map(|root_span| root_span.extensions().get::<T>().map(f));
     }
 
-    /// Gets a specific invocation totals metrics (stored in the root invocation span).
+    /// Gets a specific per-invocation metric (stored in the root invocation span).
     pub fn get_metric(&self, key: MetricKey) -> u64 {
         self.root_span
             .map(|root_span| get_metric_from_span_extension(&root_span.extensions(), key))
+            .unwrap_or_default()
+    }
+
+    /// Gets all per-invocation metrics (stored in the root invocation span).
+    pub fn get_all_metrics(&self) -> Vec<(MetricKey, u64)> {
+        self.root_span
+            .map(|root_span| get_all_metrics_from_span_extension(&root_span.extensions()))
             .unwrap_or_default()
     }
 }
@@ -102,7 +112,21 @@ impl<'a> DataProviderMut<'a> {
         };
     }
 
-    /// Increments a metric counter on the invocation span extensions directly.
+    /// Gets a specific per-invocation metric (stored in the root invocation span).
+    pub fn get_metric(&self, key: MetricKey) -> u64 {
+        self.root_span
+            .map(|root_span| get_metric_from_span_extension(&root_span.extensions(), key))
+            .unwrap_or_default()
+    }
+
+    /// Gets all per-invocation metrics (stored in the root invocation span).
+    pub fn get_all_metrics(&self) -> Vec<(MetricKey, u64)> {
+        self.root_span
+            .map(|root_span| get_all_metrics_from_span_extension(&root_span.extensions()))
+            .unwrap_or_default()
+    }
+
+    /// Increments a per-invocation metric counter on the invocation span extensions directly.
     pub fn increment_metric(&self, key: MetricKey, value: u64) {
         if let Some(root_span) = self.root_span {
             increment_metric_on_span(root_span, key, value);

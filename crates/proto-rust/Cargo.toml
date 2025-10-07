@@ -14,6 +14,7 @@ workspace = true
 
 [dependencies]
 bytes = { workspace = true }
+chrono = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 fake = { workspace = true, optional = true }
 pbjson-types = { workspace = true }

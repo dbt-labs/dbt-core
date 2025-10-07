@@ -100,6 +100,30 @@ impl ::prost::Name for NodeCacheDetail {
 #[derive(crate::macros::ProtoNew)]
 #[cfg_attr(any(test, feature = "test-utils"), derive(::fake::Dummy))]
 #[::serde_with::skip_serializing_none]
+#[derive(::serde::Serialize, ::serde::Deserialize)]
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct NodeSkipUpstreamDetail {
+    /// unique_id of the upstream node that caused this node to be skipped.
+    #[prost(string, tag = "1")]
+    pub upstream_unique_id: ::prost::alloc::string::String,
+}
+impl crate::StaticName for NodeSkipUpstreamDetail {
+    const FULL_NAME: &'static str = "v1.public.events.fusion.node.NodeSkipUpstreamDetail";
+    const TYPE_URL: &'static str = "/v1.public.events.fusion.node.NodeSkipUpstreamDetail";
+}
+impl ::prost::Name for NodeSkipUpstreamDetail {
+    const NAME: &'static str = "NodeSkipUpstreamDetail";
+    const PACKAGE: &'static str = "v1.public.events.fusion.node";
+    fn full_name() -> ::prost::alloc::string::String {
+        "v1.public.events.fusion.node.NodeSkipUpstreamDetail".into()
+    }
+    fn type_url() -> ::prost::alloc::string::String {
+        "/v1.public.events.fusion.node.NodeSkipUpstreamDetail".into()
+    }
+}
+#[derive(crate::macros::ProtoNew)]
+#[cfg_attr(any(test, feature = "test-utils"), derive(::fake::Dummy))]
+#[::serde_with::skip_serializing_none]
 #[derive(::serde::Serialize)]
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct NodeEvaluated {
@@ -211,7 +235,7 @@ pub struct NodeEvaluated {
     #[prost(string, optional, tag = "40")]
     pub dbt_core_event_code: ::core::option::Option<::prost::alloc::string::String>,
     /// Node type specific details (e.g. test fail counts, cache use reasons).
-    #[prost(oneof = "node_evaluated::NodeOutcomeDetail", tags = "30, 31, 32")]
+    #[prost(oneof = "node_evaluated::NodeOutcomeDetail", tags = "30, 31, 32, 33")]
     pub node_outcome_detail: ::core::option::Option<node_evaluated::NodeOutcomeDetail>,
 }
 /// Nested message and enum types in `NodeEvaluated`.
@@ -221,7 +245,7 @@ pub mod node_evaluated {
     #[derive(crate::macros::ProtoEnumSerde)]
     #[derive(::serde::Serialize, ::serde::Deserialize)]
     #[serde(untagged)]
-    #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Oneof)]
+    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Oneof)]
     pub enum NodeOutcomeDetail {
         /// Detailed reason why cache was used.
         /// Present when node_skip_reason == NODE_SKIP_REASON_CACHED.
@@ -235,6 +259,10 @@ pub mod node_evaluated {
         /// Present for source nodes with freshness checks when node_outcome == NODE_OUTCOME_SUCCESS.
         #[prost(message, tag = "32")]
         NodeFreshnessOutcome(super::SourceFreshnessDetail),
+        /// Upstream node that caused this node to be skipped.
+        /// Present when node_skip_reason == NODE_SKIP_REASON_UPSTREAM.
+        #[prost(message, tag = "33")]
+        NodeSkipUpstreamDetail(super::NodeSkipUpstreamDetail),
     }
 }
 impl crate::StaticName for NodeEvaluated {
@@ -449,6 +477,8 @@ pub enum NodeSkipReason {
     PhaseDisabled = 3,
     /// Operation had no effect (e.g. ephemeral models).
     NoOp = 4,
+    /// Current evaluation phase skipped for this node due to previous phase outcome.
+    PhaseSkipped = 5,
 }
 impl NodeSkipReason {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -462,6 +492,7 @@ impl NodeSkipReason {
             Self::Cached => "NODE_SKIP_REASON_CACHED",
             Self::PhaseDisabled => "NODE_SKIP_REASON_PHASE_DISABLED",
             Self::NoOp => "NODE_SKIP_REASON_NO_OP",
+            Self::PhaseSkipped => "NODE_SKIP_REASON_PHASE_SKIPPED",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -472,6 +503,7 @@ impl NodeSkipReason {
             "NODE_SKIP_REASON_CACHED" => Some(Self::Cached),
             "NODE_SKIP_REASON_PHASE_DISABLED" => Some(Self::PhaseDisabled),
             "NODE_SKIP_REASON_NO_OP" => Some(Self::NoOp),
+            "NODE_SKIP_REASON_PHASE_SKIPPED" => Some(Self::PhaseSkipped),
             _ => None,
         }
     }

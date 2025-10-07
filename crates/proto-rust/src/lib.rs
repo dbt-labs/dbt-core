@@ -1,6 +1,7 @@
 // Various manual trait impls and utilities for working with the generated proto code.
 pub mod impls;
 pub mod macros;
+pub mod serde_timestamp_micros;
 mod static_full_name;
 
 pub use static_full_name::StaticName;

@@ -19,6 +19,7 @@ pub struct CoreEventInfo {
     #[prost(string, tag = "7")]
     pub thread: ::prost::alloc::string::String,
     #[prost(message, optional, tag = "8")]
+    #[serde(serialize_with = "crate::serde_timestamp_micros::serialize")]
     pub ts: ::core::option::Option<::pbjson_types::Timestamp>,
     #[prost(map = "string, string", tag = "9")]
     pub extra: ::std::collections::HashMap<
@@ -6424,6 +6425,7 @@ pub struct CommandCompleted {
     #[prost(bool, tag = "2")]
     pub success: bool,
     #[prost(message, optional, tag = "3")]
+    #[serde(serialize_with = "crate::serde_timestamp_micros::serialize")]
     pub completed_at: ::core::option::Option<::pbjson_types::Timestamp>,
     #[prost(float, tag = "4")]
     pub elapsed: f32,
