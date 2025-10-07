@@ -88,7 +88,10 @@ impl ModelFreshnessRules {
             return Ok(());
         }
         let rule = rule.expect("rule should be Some now");
-        if rule.count.is_none() || rule.period.is_none() {
+        let count_present = rule.count.is_some();
+        let period_present = rule.period.is_some();
+
+        if count_present != period_present {
             return Err(fs_err!(
                 ErrorCode::InvalidArgument,
                 "count and period are required when freshness is provided, count: {:?}, period: {:?}",
