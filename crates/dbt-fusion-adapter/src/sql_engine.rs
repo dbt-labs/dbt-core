@@ -170,7 +170,11 @@ impl ActualEngine {
             .map(|t| t as u32)
             .unwrap_or(0u32);
 
-        let permits = if threads > 0 { threads } else { u32::MAX };
+        let permits = if matches!(adapter_type, AdapterType::Redshift) && threads > 0 {
+            threads
+        } else {
+            u32::MAX
+        };
         Self {
             adapter_type,
             auth,
