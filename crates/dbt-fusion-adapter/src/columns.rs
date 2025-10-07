@@ -1,3 +1,5 @@
+use once_cell::sync::Lazy;
+use regex::Regex;
 use std::sync::Arc;
 
 use dbt_common::{adapter::AdapterType, current_function_name};
@@ -11,6 +13,9 @@ use minijinja::{
 };
 
 use dbt_schemas::schemas::dbt_column::DbtColumn;
+
+static LOG_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"([^(]+)(\([^)]+\))?").expect("A valid regex"));
 
 /// A struct representing a column type for use with static methods
 #[derive(Clone, Copy, Debug)]
@@ -460,8 +465,8 @@ impl StdColumn {
             });
         }
         // Parse data type using regex pattern ([^(]+)(\([^)]+\))?
-        let re = regex::Regex::new(r"([^(]+)(\([^)]+\))?").expect("A valid regex");
-        let captures = re
+
+        let captures = LOG_RE
             .captures(raw_data_type)
             .ok_or_else(|| format!("Could not interpret raw_data_type \"{raw_data_type}\""))?;
 
