@@ -126,7 +126,7 @@ pub fn resolve_macros(
 
             for resource in resources {
                 match resource {
-                    SqlResource::Test(name, span) => {
+                    SqlResource::Test(name, span, macro_name_span) => {
                         let unique_id = format!("macro.{package_name}.{name}");
                         let split_macro_sql =
                             &macro_sql[span.start_offset as usize..span.end_offset as usize];
@@ -145,12 +145,13 @@ pub fn resolve_macros(
                             patch_path: None,
                             funcsign: None,
                             args: vec![],
+                            macro_name_span: Some(macro_name_span),
                             __other__: BTreeMap::new(),
                         };
 
                         nodes.insert(unique_id, dbt_macro);
                     }
-                    SqlResource::Macro(name, span, func_sign, args) => {
+                    SqlResource::Macro(name, span, func_sign, args, macro_name_span) => {
                         let unique_id = format!("macro.{package_name}.{name}");
                         let split_macro_sql =
                             &macro_sql[span.start_offset as usize..span.end_offset as usize];
@@ -169,12 +170,13 @@ pub fn resolve_macros(
                             patch_path: None,
                             funcsign: func_sign.clone(),
                             args: args.clone(),
+                            macro_name_span: Some(macro_name_span),
                             __other__: BTreeMap::new(),
                         };
 
                         nodes.insert(unique_id, dbt_macro);
                     }
-                    SqlResource::Materialization(name, _, span) => {
+                    SqlResource::Materialization(name, _, span, macro_name_span) => {
                         let split_macro_sql =
                             &macro_sql[span.start_offset as usize..span.end_offset as usize];
                         // TODO: Return the adapter type with the SqlResource (for now, default always)
@@ -193,12 +195,13 @@ pub fn resolve_macros(
                             patch_path: None,
                             funcsign: None,
                             args: vec![],
+                            macro_name_span: Some(macro_name_span),
                             __other__: BTreeMap::new(),
                         };
 
                         nodes.insert(unique_id, dbt_macro);
                     }
-                    SqlResource::Snapshot(name, span) => {
+                    SqlResource::Snapshot(name, span, macro_name_span) => {
                         let unique_id = format!("snapshot.{package_name}.{name}");
                         let split_macro_sql =
                             &macro_sql[span.start_offset as usize..span.end_offset as usize];
@@ -217,6 +220,7 @@ pub fn resolve_macros(
                             patch_path: None,
                             funcsign: None,
                             args: vec![],
+                            macro_name_span: Some(macro_name_span),
                             __other__: BTreeMap::new(),
                         };
 

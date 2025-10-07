@@ -1397,6 +1397,7 @@ impl<'a> Parser<'a> {
         args: Vec<ast::Expr<'a>>,
         defaults: Vec<ast::Expr<'a>>,
         name: Option<&'a str>,
+        name_span: Span,
     ) -> Result<ast::Macro<'a>, Error> {
         expect_token!(self, Token::BlockEnd, "end of block");
         let old_in_loop = std::mem::replace(&mut self.in_loop, false);
@@ -1414,6 +1415,7 @@ impl<'a> Parser<'a> {
             args,
             defaults,
             body,
+            name_span,
         })
     }
 
@@ -1423,6 +1425,7 @@ impl<'a> Parser<'a> {
         args: Vec<ast::Expr<'a>>,
         defaults: Vec<ast::Expr<'a>>,
         name: Option<&'a str>,
+        name_span: Span,
     ) -> Result<ast::Macro<'a>, Error> {
         expect_token!(self, Token::BlockEnd, "end of block");
         let old_in_loop = std::mem::replace(&mut self.in_loop, false);
@@ -1440,6 +1443,7 @@ impl<'a> Parser<'a> {
             args,
             defaults,
             body,
+            name_span,
         })
     }
 
@@ -1447,6 +1451,7 @@ impl<'a> Parser<'a> {
     fn parse_snapshot_or_call_block_body(
         &mut self,
         name: Option<&'a str>,
+        name_span: Span,
     ) -> Result<ast::Macro<'a>, Error> {
         expect_token!(self, Token::BlockEnd, "end of block");
         let old_in_loop = std::mem::replace(&mut self.in_loop, false);
@@ -1464,6 +1469,7 @@ impl<'a> Parser<'a> {
             args: Vec::new(),
             defaults: Vec::new(),
             body,
+            name_span,
         })
     }
 
@@ -1473,6 +1479,7 @@ impl<'a> Parser<'a> {
         args: Vec<ast::Expr<'a>>,
         defaults: Vec<ast::Expr<'a>>,
         name: Option<&'a str>,
+        name_span: Span,
     ) -> Result<ast::Macro<'a>, Error> {
         let old_in_loop = std::mem::replace(&mut self.in_loop, false);
         let old_in_macro = std::mem::replace(&mut self.in_macro, true);
@@ -1489,6 +1496,7 @@ impl<'a> Parser<'a> {
             args,
             defaults,
             body,
+            name_span,
         })
     }
 
@@ -1496,6 +1504,7 @@ impl<'a> Parser<'a> {
     fn parse_materialization_or_call_block_body(
         &mut self,
         name: Option<&'a str>,
+        name_span: Span,
     ) -> Result<ast::Macro<'a>, Error> {
         expect_token!(self, Token::BlockEnd, "end of block");
         let old_in_loop = std::mem::replace(&mut self.in_loop, false);
@@ -1513,42 +1522,43 @@ impl<'a> Parser<'a> {
             args: Vec::new(),
             defaults: Vec::new(),
             body,
+            name_span,
         })
     }
 
     #[cfg(feature = "macros")]
     fn parse_macro(&mut self) -> Result<ast::Macro<'a>, Error> {
-        let (name, _) = expect_token!(self, Token::Ident(name) => name, "identifier");
+        let (name, span) = expect_token!(self, Token::Ident(name) => name, "identifier");
         expect_token!(self, Token::ParenOpen, "`(`");
         let mut args = Vec::new();
         let mut defaults = Vec::new();
         ok!(self.parse_macro_args_and_defaults(&mut args, &mut defaults));
-        self.parse_macro_or_call_block_body(args, defaults, Some(name))
+        self.parse_macro_or_call_block_body(args, defaults, Some(name), span)
     }
 
     #[cfg(feature = "macros")]
     fn parse_test(&mut self) -> Result<ast::Macro<'a>, Error> {
-        let (name, _) = expect_token!(self, Token::Ident(name) => name, "identifier");
+        let (name, span) = expect_token!(self, Token::Ident(name) => name, "identifier");
         // Assuming self has access to an arena or string interner
         let macro_name = self.intern_string(&format!("test_{name}"));
         expect_token!(self, Token::ParenOpen, "`(`");
         let mut args = Vec::new();
         let mut defaults = Vec::new();
         ok!(self.parse_macro_args_and_defaults(&mut args, &mut defaults));
-        self.parse_test_or_call_block_body(args, defaults, Some(macro_name))
+        self.parse_test_or_call_block_body(args, defaults, Some(macro_name), span)
     }
 
     #[cfg(feature = "macros")]
     fn parse_snapshot(&mut self) -> Result<ast::Macro<'a>, Error> {
-        let (name, _) = expect_token!(self, Token::Ident(name) => name, "identifier");
+        let (name, span) = expect_token!(self, Token::Ident(name) => name, "identifier");
         // Assuming self has access to an arena or string interner
         let macro_name = self.intern_string(&format!("snapshot_{name}"));
-        self.parse_snapshot_or_call_block_body(Some(macro_name))
+        self.parse_snapshot_or_call_block_body(Some(macro_name), span)
     }
 
     #[cfg(feature = "macros")]
     fn parse_doc(&mut self) -> Result<ast::Macro<'a>, Error> {
-        let (name, _) = expect_token!(self, Token::Ident(name) => name, "identifier");
+        let (name, span) = expect_token!(self, Token::Ident(name) => name, "identifier");
 
         // Skip everything until BlockEnd, advancing on Token Errors
         // This is specifically because doc macros can have random
@@ -1567,18 +1577,18 @@ impl<'a> Parser<'a> {
             }
         }
 
-        self.parse_doc_or_call_block_body(Vec::new(), Vec::new(), Some(name))
+        self.parse_doc_or_call_block_body(Vec::new(), Vec::new(), Some(name), span)
     }
 
     #[cfg(feature = "macros")]
     fn parse_materialization(&mut self) -> Result<(ast::Macro<'a>, String), Error> {
-        let (name, _) = expect_token!(self, Token::Ident(name) => name, "identifier");
+        let (name, span) = expect_token!(self, Token::Ident(name) => name, "identifier");
         let mut supported_languages = None;
         let adapter = ok!(self.parse_materialization_adapter_languages(&mut supported_languages));
         // TODO: This can be cleaned up to add better error messages for miss-formatted materialization macros
         let macro_name = self.intern_string(&materialization_macro_name(name, &adapter));
         Ok((
-            ok!(self.parse_materialization_or_call_block_body(Some(macro_name))),
+            ok!(self.parse_materialization_or_call_block_body(Some(macro_name), span)),
             adapter,
         ))
     }
@@ -1598,7 +1608,8 @@ impl<'a> Parser<'a> {
                 expr.description()
             ),
         };
-        let macro_decl = ok!(self.parse_macro_or_call_block_body(args, defaults, None));
+        let macro_decl =
+            ok!(self.parse_macro_or_call_block_body(args, defaults, None, call.span()));
         Ok(ast::CallBlock {
             call,
             macro_decl: Spanned::new(macro_decl, self.stream.expand_span(span)),

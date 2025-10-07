@@ -30,4 +30,6 @@ pub struct MacroInfo {
     pub args: Vec<ArgSpec>,
     /// The unique id of the macro.
     pub unique_id: String,
+    /// The start span of the macro name.
+    pub name_span: Span,
 }

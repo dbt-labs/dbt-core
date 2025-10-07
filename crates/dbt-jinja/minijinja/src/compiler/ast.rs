@@ -295,6 +295,7 @@ pub struct FilterBlock<'a> {
 #[cfg_attr(feature = "unstable_machinery_serde", derive(serde::Serialize))]
 pub struct Macro<'a> {
     pub name: &'a str,
+    pub name_span: Span,
     pub args: Vec<Expr<'a>>,
     pub defaults: Vec<Expr<'a>>,
     pub body: Vec<Stmt<'a>>,

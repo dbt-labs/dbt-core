@@ -81,15 +81,15 @@ impl<T: DefaultTo<T>> SqlFileInfo<T> {
                     resource_config.default_to(&*config);
                     config = resource_config;
                 }
-                SqlResource::Test(name, span) => tests.push((name, span)),
-                SqlResource::Macro(name, span, func_sign, args) => {
+                SqlResource::Test(name, span, _) => tests.push((name, span)),
+                SqlResource::Macro(name, span, func_sign, args, _) => {
                     macros.push((name, span, func_sign, args))
                 }
-                SqlResource::Materialization(name, adapter, span) => {
+                SqlResource::Materialization(name, adapter, span, _) => {
                     materializations.push((name, adapter, span))
                 }
                 SqlResource::Doc(name, span) => docs.push((name, span)),
-                SqlResource::Snapshot(name, span) => snapshots.push((name, span)),
+                SqlResource::Snapshot(name, span, _) => snapshots.push((name, span)),
             }
         }
 

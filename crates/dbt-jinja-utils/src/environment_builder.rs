@@ -224,7 +224,7 @@ impl JinjaEnvBuilder {
                             args,
                             returns,
                             &macro_unit.info.path,
-                            &macro_unit.info.span,
+                            &macro_unit.info.name_span,
                             &macro_unit.info.unique_id,
                         )))
                     }
@@ -505,6 +505,7 @@ mod tests {
                 funcsign: None,
                 args: vec![],
                 unique_id: "test".to_string(),
+                name_span: Span::default(),
             },
             sql: sql.to_string(),
         }
@@ -771,6 +772,7 @@ all okay!");
                             funcsign: None,
                             args: vec![],
                             unique_id: "test".to_string(),
+                            name_span: Span::default(),
                         },
                         sql: "{% macro some_macro() %}hello{% endmacro %}".to_string(),
                     },
@@ -782,6 +784,7 @@ all okay!");
                             funcsign: None,
                             args: vec![],
                             unique_id: "test".to_string(),
+                            name_span: Span::default(),
                         },
                         sql: "{% macro macro_b() %}{%- set small_macro_name = some_macro -%} {{ small_macro_name() }}{% endmacro %}".to_string(),
                     },

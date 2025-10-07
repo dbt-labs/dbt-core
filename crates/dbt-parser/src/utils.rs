@@ -453,10 +453,15 @@ fn extract_sql_resources_from_ast<T: DefaultTo<T>>(
                         span,
                         func_sign,
                         args,
+                        macro_node.name_span,
                     ));
                 }
                 MacroKind::Test => {
-                    sql_resources.push(SqlResource::Test(macro_name.to_string(), span));
+                    sql_resources.push(SqlResource::Test(
+                        macro_name.to_string(),
+                        span,
+                        macro_node.name_span,
+                    ));
                 }
                 MacroKind::Doc => {
                     if let Some(Stmt::EmitRaw(emit_raw)) = macro_node.body.first() {
@@ -464,7 +469,11 @@ fn extract_sql_resources_from_ast<T: DefaultTo<T>>(
                     }
                 }
                 MacroKind::Snapshot => {
-                    sql_resources.push(SqlResource::Snapshot(macro_name.to_string(), span));
+                    sql_resources.push(SqlResource::Snapshot(
+                        macro_name.to_string(),
+                        span,
+                        macro_node.name_span,
+                    ));
                 }
                 MacroKind::Materialization => {
                     let adapter_type = meta.get("adapter").expect("adapter is required");
@@ -472,6 +481,7 @@ fn extract_sql_resources_from_ast<T: DefaultTo<T>>(
                         macro_name.to_string(),
                         adapter_type.as_str().unwrap().to_string(),
                         span,
+                        macro_node.name_span,
                     ));
                 }
             }

@@ -22,15 +22,15 @@ pub enum SqlResource<T: DefaultTo<T>> {
     /// A config call (e.g. `{{ config(database='a', schema='b') }}`)
     Config(Box<T>),
     /// A test definition (e.g. `{% test foo() %}`)
-    Test(String, Span),
+    Test(String, Span, Span), // name, span, macro_name_span
     /// A macro definition (e.g. `{% macro my_macro(a, b) %}`)
-    Macro(String, Span, Option<String>, Vec<ArgSpec>), // name, span, funcsign, args
+    Macro(String, Span, Option<String>, Vec<ArgSpec>, Span), // name, span, funcsign, args, macro_name_span
     /// A docs definition (e.g. `{% docs my_docs %}`)
     Doc(String, Span),
     /// A snapshot definition (e.g. `{% snapshot my_snapshot %}`)
-    Snapshot(String, Span),
+    Snapshot(String, Span, Span), // name, span, macro_name_span
     /// A materialization macro definition (e.g. `{% materialization my_materialization, adapter='snowflake' %}`)
-    Materialization(String, String, Span),
+    Materialization(String, String, Span, Span), // name, adapter, span, macro_name_span
 }
 
 impl<T: DefaultTo<T>> std::fmt::Display for SqlResource<T> {
@@ -49,13 +49,13 @@ impl<T: DefaultTo<T>> std::fmt::Display for SqlResource<T> {
                 write!(f, "Metric({a}, {b:?})")
             }
             SqlResource::Config(config) => write!(f, "Config({config:?})"),
-            SqlResource::Test(name, span) => write!(f, "Test({name} {span:#?})"),
-            SqlResource::Macro(name, span, _, _) => write!(f, "Macro({name} {span:#?})"),
+            SqlResource::Test(name, span, _) => write!(f, "Test({name} {span:#?})"),
+            SqlResource::Macro(name, span, _, _, _) => write!(f, "Macro({name} {span:#?})"),
             SqlResource::Doc(name, span) => write!(f, "Docs({name} {span:#?})"),
-            SqlResource::Materialization(name, adapter, span) => {
+            SqlResource::Materialization(name, adapter, span, _) => {
                 write!(f, "Materialization({name} {adapter} {span:#?})")
             }
-            SqlResource::Snapshot(name, span) => {
+            SqlResource::Snapshot(name, span, _) => {
                 write!(f, "Snapshot({name} {span:#?})")
             }
         }

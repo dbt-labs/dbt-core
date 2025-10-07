@@ -9,6 +9,7 @@ Ok(
             (
                 Macro {
                     name: "test_foo",
+                    name_span:  @ 1:9-1:12,
                     args: [],
                     defaults: [],
                     body: [
@@ -26,6 +27,7 @@ Ok(
             (
                 Macro {
                     name: "test_foo",
+                    name_span:  @ 2:9-2:12,
                     args: [
                         Var {
                             id: "a",
@@ -50,6 +52,7 @@ Ok(
             (
                 Macro {
                     name: "test_foo",
+                    name_span:  @ 3:9-3:12,
                     args: [
                         Var {
                             id: "a",
@@ -78,6 +81,7 @@ Ok(
             (
                 Macro {
                     name: "test_foo",
+                    name_span:  @ 4:9-4:12,
                     args: [
                         Var {
                             id: "a",
@@ -102,6 +106,7 @@ Ok(
             (
                 Macro {
                     name: "test_foo",
+                    name_span:  @ 5:9-5:12,
                     args: [
                         Var {
                             id: "a",

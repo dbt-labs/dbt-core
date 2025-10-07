@@ -537,7 +537,15 @@ mod tests {
                     end_offset: 94
                 },
                 None,
-                vec![]
+                vec![],
+                Span {
+                    start_line: 2,
+                    start_col: 22,
+                    start_offset: 22,
+                    end_line: 2,
+                    end_col: 30,
+                    end_offset: 30
+                }
             )]
         );
         Ok(())
@@ -565,6 +573,14 @@ mod tests {
                     end_line: 6,
                     end_col: 26,
                     end_offset: 186
+                },
+                Span {
+                    start_line: 2,
+                    start_col: 21,
+                    start_offset: 21,
+                    end_line: 2,
+                    end_col: 35,
+                    end_offset: 35
                 }
             )]
         );
@@ -603,7 +619,15 @@ mod tests {
                         end_offset: 84
                     },
                     None,
-                    vec![]
+                    vec![],
+                    Span {
+                        start_line: 2,
+                        start_col: 22,
+                        start_offset: 22,
+                        end_line: 2,
+                        end_col: 27,
+                        end_offset: 27
+                    }
                 ),
                 SqlResource::Test(
                     "test_second".to_string(),
@@ -614,6 +638,14 @@ mod tests {
                         end_line: 8,
                         end_col: 26,
                         end_offset: 190
+                    },
+                    Span {
+                        start_line: 6,
+                        start_col: 21,
+                        start_offset: 106,
+                        end_line: 6,
+                        end_col: 27,
+                        end_offset: 112
                     }
                 ),
                 SqlResource::Macro(
@@ -627,7 +659,15 @@ mod tests {
                         end_offset: 275
                     },
                     None,
-                    vec![]
+                    vec![],
+                    Span {
+                        start_line: 10,
+                        start_col: 22,
+                        start_offset: 213,
+                        end_line: 10,
+                        end_col: 27,
+                        end_offset: 218
+                    }
                 ),
             ]
         );
@@ -659,7 +699,15 @@ mod tests {
                         end_offset: 155
                     },
                     None,
-                    vec![]
+                    vec![],
+                    Span {
+                        start_line: 2,
+                        start_col: 22,
+                        start_offset: 22,
+                        end_line: 2,
+                        end_col: 27,
+                        end_offset: 27
+                    }
                 ),
                 SqlResource::Macro(
                     "inner".to_string(),
@@ -672,7 +720,15 @@ mod tests {
                         end_offset: 128
                     },
                     None,
-                    vec![]
+                    vec![],
+                    Span {
+                        start_line: 3,
+                        start_col: 26,
+                        start_offset: 58,
+                        end_line: 3,
+                        end_col: 31,
+                        end_offset: 63
+                    }
                 ),
             ]
         );
@@ -717,6 +773,14 @@ mod tests {
                     end_col: 37,
                     start_offset: 13,
                     end_offset: 86
+                },
+                Span {
+                    start_line: 2,
+                    start_col: 32,
+                    start_offset: 32,
+                    end_line: 2,
+                    end_col: 36,
+                    end_offset: 36
                 }
             )]
         );
@@ -741,6 +805,14 @@ mod tests {
                     end_col: 33,
                     start_offset: 9,
                     end_offset: 128
+                },
+                Span {
+                    start_line: 2,
+                    start_col: 28,
+                    start_offset: 28,
+                    end_line: 2,
+                    end_col: 32,
+                    end_offset: 32
                 }
             )]
         );
