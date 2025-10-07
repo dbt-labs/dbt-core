@@ -4,7 +4,8 @@ use dbt_common::{
     constants::{DBT_DEPENDENCIES_YML, DBT_PACKAGES_YML},
     err, fs_err, stdfs,
 };
-use dbt_jinja_utils::serde::{value_from_file, yaml_to_fs_error};
+use dbt_jinja_utils::serde::value_from_file;
+use dbt_schemas::schemas::serde::yaml_to_fs_error;
 use pathdiff::diff_paths;
 use std::{
     collections::{BTreeMap, BTreeSet},

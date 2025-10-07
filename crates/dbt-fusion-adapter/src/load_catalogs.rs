@@ -1,4 +1,5 @@
 use dbt_common::{ErrorCode, FsResult, fs_err};
+use dbt_schemas::schemas::serde::yaml_to_fs_error;
 use dbt_schemas::schemas::{dbt_catalogs::DbtCatalogs, validate_catalogs};
 use dbt_serde_yaml as yml;
 use std::path::Path;
@@ -26,8 +27,7 @@ pub fn load_catalogs(text: &str, path: &Path) -> FsResult<()> {
 }
 
 pub fn do_load_catalogs(text: &str, path: &Path) -> FsResult<DbtCatalogs> {
-    let text_yml: yml::Value =
-        yml::from_str(text).map_err(|e| dbt_jinja_utils::serde::yaml_to_fs_error(e, Some(path)))?;
+    let text_yml: yml::Value = yml::from_str(text).map_err(|e| yaml_to_fs_error(e, Some(path)))?;
 
     let repr = match text_yml {
         yml::Value::Mapping(mapping, _) => mapping,

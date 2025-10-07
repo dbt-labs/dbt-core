@@ -2,14 +2,19 @@ use dbt_schemas::schemas::{DbtModel, DbtSnapshot};
 use minijinja::State;
 use serde::Deserialize;
 
+pub mod adapter;
 /// Databricks constraint utilities
 pub mod constraints;
+pub mod metadata;
 /// Databricks relation
 pub mod relation;
 /// Databricks relation config
 pub mod relation_configs;
 /// serde schemas for Databricks
 pub mod schemas;
+
+pub mod describe_table;
+pub(crate) mod version;
 
 // Get the Databricks compute engine configured for this model/snapshot
 // https://docs.getdbt.com/reference/resource-configs/databricks-configs#selecting-compute-per-model

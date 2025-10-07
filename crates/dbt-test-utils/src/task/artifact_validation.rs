@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use dbt_jinja_utils::serde::yaml_to_fs_error;
+use dbt_schemas::schemas::serde::yaml_to_fs_error;
 use serde::Serialize;
 use serde_json::Value;
 use std::path::PathBuf;

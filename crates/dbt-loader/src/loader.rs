@@ -6,12 +6,12 @@ use dbt_common::constants::{
 };
 use dbt_common::once_cell_vars::DISPATCH_CONFIG;
 use dbt_common::show_warning;
+use dbt_fusion_adapter::load_catalogs;
 use dbt_jinja_utils::invocation_args::InvocationArgs;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::phases::load::init::initialize_load_jinja_environment;
 use dbt_jinja_utils::phases::load::init::initialize_load_profile_jinja_environment;
-use dbt_jinja_utils::serde::yaml_to_fs_error;
-use dbt_schemas::schemas::serde::StringOrInteger;
+use dbt_schemas::schemas::serde::{StringOrInteger, yaml_to_fs_error};
 use dbt_schemas::schemas::telemetry::{ExecutionPhase, PhaseExecuted};
 use dbt_schemas::state::DbtProfile;
 use fs_deps::get_or_install_packages;
@@ -42,7 +42,6 @@ use dbt_schemas::state::{DbtAsset, DbtPackage, DbtState, DbtVars, ResourcePathKi
 use crate::args::LoadArgs;
 use crate::dbt_project_yml_loader::load_project_yml;
 use crate::download_publication::download_publication_artifacts;
-use crate::load_catalogs;
 use crate::utils::{collect_file_info, identify_package_dependencies};
 use crate::{
     load_internal_packages, load_packages, load_profiles, load_vars, persist_internal_packages,
@@ -87,7 +86,7 @@ pub async fn load(
     // initialize loader into a crate accessible static location
     let catalogs_yml_path = arg.io.in_dir.join(DBT_CATALOGS_YML);
     match fs::read_to_string(&catalogs_yml_path) {
-        Ok(text) => load_catalogs(&text, &catalogs_yml_path),
+        Ok(text) => load_catalogs::load_catalogs(&text, &catalogs_yml_path),
         Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
         Err(e) => Err(fs_err!(
             code => ErrorCode::InvalidConfig,

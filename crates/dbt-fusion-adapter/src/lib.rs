@@ -15,6 +15,7 @@ pub mod factory;
 pub mod formatter;
 pub mod funcs;
 pub mod information_schema;
+pub mod load_catalogs;
 pub mod metadata;
 pub mod need_quotes;
 pub mod query_comment;
@@ -55,6 +56,8 @@ pub mod salesforce;
 /// Snowflake adapter
 pub mod snowflake;
 
+pub mod mock;
+
 /// Record batch utils
 pub mod record_batch_utils;
 
@@ -78,4 +81,6 @@ pub use typed_adapter::TypedBaseAdapter;
 
 // Exposing structs for testing
 pub use dbt_auth::AdapterConfig as AdapterConfigForTesting;
+pub use postgres::adapter::PostgresAdapter as PostgresAdapterForTesting;
+pub use snowflake::adapter::SnowflakeAdapter as SnowflakeAdapterForTesting;
 pub use sql_engine::SqlEngine as SqlEngineForTesting;

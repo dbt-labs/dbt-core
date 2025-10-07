@@ -2,11 +2,11 @@ use dbt_common::io_args::IoArgs;
 use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_jinja_utils::phases::load::LoadContext;
 use dbt_jinja_utils::phases::load::init::initialize_load_profile_jinja_environment;
-use dbt_jinja_utils::serde::yaml_to_fs_error;
 use dbt_loader::args::LoadArgs;
 use dbt_loader::utils::read_profiles_and_extract_db_config;
 use dbt_schemas::schemas::profiles::{DbConfig, DbTargets};
 
+use dbt_schemas::schemas::serde::yaml_to_fs_error;
 use dbt_serde_yaml;
 use std::collections::HashMap;
 use std::fs::File;

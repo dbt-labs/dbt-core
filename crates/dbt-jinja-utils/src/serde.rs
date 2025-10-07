@@ -79,6 +79,7 @@ use dbt_common::{
     io_utils::try_read_yml_to_str, show_error, show_package_error, show_strict_error,
     show_warning_soon_to_be_error,
 };
+use dbt_schemas::schemas::serde::yaml_to_fs_error;
 use dbt_serde_yaml::Value;
 use minijinja::listener::RenderingEventListener;
 use regex::Regex;
@@ -485,29 +486,6 @@ pub fn check_single_expression_without_whitepsace_control(input: &str) -> bool {
         && input.starts_with("{{")
         && input.ends_with("}}")
         && { RE_SIMPLE_EXPR.is_match(input) }
-}
-
-/// Converts a `dbt_serde_yaml::Error` into a `FsError`, attaching the error location
-pub fn yaml_to_fs_error(err: dbt_serde_yaml::Error, filename: Option<&Path>) -> Box<FsError> {
-    let msg = err.display_no_mark().to_string();
-    let location = err
-        .span()
-        .map_or_else(CodeLocation::default, CodeLocation::from);
-    let location = if let Some(filename) = filename {
-        location.with_file(filename)
-    } else {
-        location
-    };
-
-    if let Some(err) = err.into_external()
-        && let Ok(err) = err.downcast::<FsError>()
-    {
-        // These are errors raised from our own callbacks:
-        return err;
-    }
-    FsError::new(ErrorCode::SerializationError, format!("YAML error: {msg}"))
-        .with_location(location)
-        .into()
 }
 
 #[cfg(test)]
