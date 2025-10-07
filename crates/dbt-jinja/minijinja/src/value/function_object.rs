@@ -71,20 +71,12 @@ impl Object for FunctionObject {
         None
     }
 
-    // Try implementing a "call" method for function object
-    fn call(
-        self: &Arc<Self>,
-        state: &State<'_, '_>,
-        args: &[Value],
-        _listeners: &[std::rc::Rc<dyn RenderingEventListener>],
-    ) -> Result<Value, MinijinjaError> {
-        let _ = state;
-
-        // Format arguments as strings and join them with commas
-        let arg_strings: Vec<String> = args.iter().map(|arg| format!("{}", arg)).collect();
-        let args_str = arg_strings.join(", ");
-
-        Ok(format!("{}({})", self.qualified_name, args_str).into())
+    fn render(self: &Arc<Self>, f: &mut fmt::Formatter<'_>) -> fmt::Result
+    where
+        Self: Sized + 'static,
+    {
+        // When the FunctionObject is rendered in Jinja, return the qualified function name
+        write!(f, "{}", self.qualified_name)
     }
 }
 
