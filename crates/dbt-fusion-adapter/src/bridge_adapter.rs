@@ -905,6 +905,7 @@ impl BaseAdapter for BridgeAdapter {
             database: Some(database),
             schema: "INFORMATION_SCHEMA".to_string(),
             identifier: None,
+            location: None,
         };
 
         let (package_name, macro_name) =

@@ -126,10 +126,15 @@ pub trait BaseRelationProperties {
 
     fn get_identifier(&self) -> FsResult<String>;
 
+    fn get_location(&self) -> FsResult<Option<String>> {
+        Ok(None)
+    }
+
     fn get_fqn(&self) -> FsResult<FullyQualifiedName> {
         let catalog = self.get_database()?;
         let schema = self.get_schema()?;
         let table = self.get_identifier()?;
+        // TODO: should we add location here?
         Ok(FullyQualifiedName::new(catalog, schema, table))
     }
 }
@@ -265,6 +270,28 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
             ),
         }
     }
+
+    fn location(&self) -> Value {
+        Value::NONE
+    }
+
+    fn location_as_str(&self) -> Result<Option<String>, MinijinjaError> {
+        Ok(self.location().to_str().map(|s| s.to_string()))
+    }
+
+    fn location_as_resolved_str(&self) -> Result<Option<String>, MinijinjaError> {
+        match self.location().to_str() {
+            Some(val) => {
+                if !self.quote_policy().database {
+                    Ok(Some(self.normalize_component(val.as_ref())))
+                } else {
+                    Ok(Some(val.to_string()))
+                }
+            }
+            None => Ok(None),
+        }
+    }
+
     /// Return the relation type if available, defaulting to None.
     fn relation_type(&self) -> Option<RelationType> {
         None
@@ -604,15 +631,20 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
             None => self.relation_type(),
         };
 
-        Ok(self
-            .create_relation(
-                database,
-                schema,
-                identifier,
-                relation_type,
-                self.quote_policy(),
-            )?
-            .as_value())
+        self.create_relation(
+            database,
+            schema,
+            identifier,
+            relation_type,
+            self.quote_policy(),
+        )?
+        .post_incorporate(args)
+    }
+
+    /// Hook for adapter-specific incorporate behavior.
+    /// Default implementation just delegates to create_relation.
+    fn post_incorporate(&self, _args: ArgParser) -> Result<Value, MinijinjaError> {
+        Ok(self.as_value())
     }
 
     /// Create a new relation with the specified components and policies.

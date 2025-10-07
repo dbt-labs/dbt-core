@@ -2,6 +2,7 @@ use crate::bigquery::relation_config::{
     BigqueryMaterializedViewConfig, BigqueryMaterializedViewConfigChangesetObject,
     BigqueryMaterializedViewConfigObject,
 };
+use crate::information_schema::InformationSchema;
 use crate::relation_object::{RelationObject, StaticBaseRelation};
 
 use arrow::array::RecordBatch;
@@ -13,10 +14,11 @@ use dbt_schemas::schemas::relations::base::{
     BaseRelation, BaseRelationProperties, Policy, RelationPath,
 };
 use dbt_schemas::schemas::serde::minijinja_value_to_typed_struct;
-use minijinja::arg_utils::ArgsIter;
+use minijinja::arg_utils::{ArgParser, ArgsIter};
 use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State, Value};
 
 use std::any::Any;
+// use std::ops::Deref;
 use std::sync::Arc;
 
 const INFORMATION_SCHEMA_SCHEMA: &str = "information_schema";
@@ -64,6 +66,8 @@ pub struct BigqueryRelation {
     /// The actual schema of the relation we got from db
     #[allow(dead_code)]
     pub native_schema: Option<RecordBatch>,
+    /// The location/region for this relation (e.g., "US", "EU")
+    pub location: Option<String>,
 }
 
 impl BaseRelationProperties for BigqueryRelation {
@@ -128,6 +132,7 @@ impl BigqueryRelation {
             include_policy: Policy::trues(),
             quote_policy: custom_quoting,
             native_schema,
+            location: None,
         }
     }
 
@@ -144,6 +149,7 @@ impl BigqueryRelation {
             include_policy,
             native_schema: None,
             quote_policy,
+            location: None,
         }
     }
 }
@@ -206,6 +212,17 @@ impl BaseRelation for BigqueryRelation {
         Ok(relation.as_value())
     }
 
+    fn post_incorporate(&self, mut args: ArgParser) -> Result<Value, MinijinjaError> {
+        // Extract and consume 'location' kwarg (consistent with base consume approach)
+        let loc_opt: Option<String> = args.consume_optional_only_from_kwargs("location");
+        if let Some(loc) = loc_opt {
+            let mut cloned = self.clone();
+            cloned.location = Some(loc);
+            return Ok(cloned.as_value());
+        }
+        Ok(self.as_value())
+    }
+
     fn normalize_component(&self, component: &str) -> String {
         component.to_lowercase()
     }
@@ -230,10 +247,50 @@ impl BaseRelation for BigqueryRelation {
 
     fn information_schema_inner(
         &self,
-        _database: Option<String>,
-        _view_name: &str,
+        database: Option<String>,
+        view_name: &str,
     ) -> Result<Value, MinijinjaError> {
-        todo!("InformationSchema")
+        let mut info_schema = InformationSchema::try_from_relation(database.clone(), view_name)?;
+
+        // BigQuery INFORMATION_SCHEMA scoping rules:
+        // - OBJECT_PRIVILEGES: project-level with region → project.`region-<loc>`.INFORMATION_SCHEMA.<view>
+        // - Other views: dataset-level → dataset.INFORMATION_SCHEMA.<view> (using the relation's own dataset)
+
+        if view_name.eq_ignore_ascii_case("OBJECT_PRIVILEGES") {
+            // OBJECT_PRIVILEGES require a location. If the location is blank there is nothing
+            // the user can do about it.
+            let loc = self.location.as_ref().ok_or_else(|| {
+                MinijinjaError::new(
+                    minijinja::ErrorKind::InvalidOperation,
+                    format!(
+                        "No location/region found when trying to retrieve \"{}\"",
+                        view_name
+                    ),
+                )
+            })?;
+
+            let project = database.or_else(|| self.path.database.clone());
+            if let Some(proj) = project {
+                info_schema.database = Some(proj);
+                info_schema.location = Some(loc.to_string());
+            } else {
+                return Err(MinijinjaError::new(
+                    minijinja::ErrorKind::InvalidOperation,
+                    "Database/project is required for OBJECT_PRIVILEGES view",
+                ));
+            }
+        } else {
+            // Dataset-level: use the relation's own project.dataset or just dataset
+            info_schema.location = None;
+            let project = self.path.database.clone();
+            let dataset = self.path.schema.clone();
+            match (project, dataset) {
+                (Some(proj), Some(ds)) => info_schema.database = Some(format!("{}.{}", proj, ds)),
+                (None, Some(ds)) => info_schema.database = Some(ds),
+                _ => {}
+            }
+        }
+        Ok(RelationObject::new(Arc::new(info_schema)).into_value())
     }
 
     fn materialized_view_config_changeset(&self, args: &[Value]) -> Result<Value, MinijinjaError> {
@@ -323,5 +380,110 @@ mod tests {
             "`d`.`s`.`i`"
         );
         assert_eq!(relation.relation_type().unwrap(), RelationType::Table);
+    }
+
+    #[test]
+    fn test_information_schema_with_database() {
+        let relation = BigqueryRelation::new(
+            Some("test_db".to_string()),
+            Some("test_schema".to_string()),
+            Some("test_table".to_string()),
+            Some(RelationType::Table),
+            None,
+            DEFAULT_RESOLVED_QUOTING,
+        );
+
+        // Test TABLES view - BigQuery uses dataset-level INFORMATION_SCHEMA
+        // When relation has both project and dataset, format as project.dataset.INFORMATION_SCHEMA
+        let info_schema = relation
+            .information_schema_inner(Some("other_db".to_string()), "TABLES")
+            .unwrap();
+
+        let info_relation = info_schema.downcast_object::<RelationObject>().unwrap();
+        let rendered = info_relation.inner().render_self().unwrap();
+        assert_eq!(
+            rendered.as_str().unwrap(),
+            "test_db.test_schema.INFORMATION_SCHEMA.TABLES"
+        );
+
+        // Test COLUMNS view
+        let info_schema = relation
+            .information_schema_inner(Some("other_db".to_string()), "COLUMNS")
+            .unwrap();
+
+        let info_relation = info_schema.downcast_object::<RelationObject>().unwrap();
+        let rendered = info_relation.inner().render_self().unwrap();
+        assert_eq!(
+            rendered.as_str().unwrap(),
+            "test_db.test_schema.INFORMATION_SCHEMA.COLUMNS"
+        );
+
+        // Test SCHEMATA view - still uses dataset-level with project.dataset format
+        let info_schema = relation.information_schema_inner(None, "SCHEMATA").unwrap();
+
+        let info_relation = info_schema.downcast_object::<RelationObject>().unwrap();
+        let rendered = info_relation.inner().render_self().unwrap();
+        assert_eq!(
+            rendered.as_str().unwrap(),
+            "test_db.test_schema.INFORMATION_SCHEMA.SCHEMATA"
+        );
+    }
+
+    #[test]
+    fn test_object_privileges_requires_location() {
+        let mut relation = BigqueryRelation::new(
+            Some("test_db".to_string()),
+            Some("test_schema".to_string()),
+            Some("test_table".to_string()),
+            Some(RelationType::Table),
+            None,
+            DEFAULT_RESOLVED_QUOTING,
+        );
+
+        // Test OBJECT_PRIVILEGES without location - should fail
+        let result =
+            relation.information_schema_inner(Some("test_db".to_string()), "OBJECT_PRIVILEGES");
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("No location/region found when trying to retrieve")
+        );
+
+        // Add location and test again - should succeed
+        relation.location = Some("US".to_string());
+        let info_schema = relation
+            .information_schema_inner(Some("test_db".to_string()), "OBJECT_PRIVILEGES")
+            .unwrap();
+
+        let info_relation = info_schema.downcast_object::<RelationObject>().unwrap();
+        let rendered = info_relation.inner().render_self().unwrap();
+        assert_eq!(
+            rendered.as_str().unwrap(),
+            "test_db.`region-US`.INFORMATION_SCHEMA.OBJECT_PRIVILEGES"
+        );
+    }
+
+    #[test]
+    fn test_information_schema_without_database() {
+        let relation = BigqueryRelation::new(
+            None,
+            Some("test_schema".to_string()),
+            Some("test_table".to_string()),
+            Some(RelationType::Table),
+            None,
+            DEFAULT_RESOLVED_QUOTING,
+        );
+
+        // Test TABLES view without database - uses dataset-level INFORMATION_SCHEMA
+        let info_schema = relation.information_schema_inner(None, "TABLES").unwrap();
+
+        let info_relation = info_schema.downcast_object::<RelationObject>().unwrap();
+        let rendered = info_relation.inner().render_self().unwrap();
+        assert_eq!(
+            rendered.as_str().unwrap(),
+            "test_schema.INFORMATION_SCHEMA.TABLES"
+        );
     }
 }

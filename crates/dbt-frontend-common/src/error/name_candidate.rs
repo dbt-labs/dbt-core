@@ -151,6 +151,7 @@ fn strip_internal_components(mut qualifier: Vec<String>) -> Vec<Identifier> {
     {
         qualifier.remove(0);
     }
+
     qualifier.into_iter().map(|s| s.into()).collect::<Vec<_>>()
 }
 

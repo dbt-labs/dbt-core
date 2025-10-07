@@ -123,6 +123,7 @@ impl Object for RelationObject {
             Some("database") => Some(self.database()),
             Some("schema") => Some(self.schema()),
             Some("identifier") | Some("name") | Some("table") => Some(self.identifier()),
+
             Some("is_table") => Some(Value::from(self.is_table())),
             Some("is_delta") => Some(Value::from(self.is_delta())),
             Some("is_view") => Some(Value::from(self.is_view())),
@@ -140,6 +141,10 @@ impl Object for RelationObject {
             Some("Table") => Some(Value::from(RelationType::Table.to_string())),
             Some("DynamicTable") => Some(Value::from(RelationType::DynamicTable.to_string())),
             Some("StreamingTable") => Some(Value::from(RelationType::StreamingTable.to_string())),
+            // BigQuery
+            Some("location") => Some(self.location()),
+            Some("project") => Some(self.database()),
+            Some("dataset") => Some(self.schema()),
             _ => None,
         }
     }

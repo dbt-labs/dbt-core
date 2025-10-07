@@ -8,7 +8,6 @@ use serde::{Deserialize, Deserializer, Serialize, de};
 use std::path::PathBuf;
 
 pub use dbt_ident::{Ident, Identifier};
-
 /// Owned version of [Qualified].
 pub type QualifiedName = Qualified<'static>;
 
@@ -129,7 +128,8 @@ impl<'de> Deserialize<'de> for Qualified<'static> {
         D: Deserializer<'de>,
     {
         let value = String::deserialize(deserializer)?;
-        Dialect::default()
+        let dialect = infer_dialect_for_deserialize(&value);
+        dialect
             .parse_qualified_name(&value)
             .map_err(|e| de::Error::custom(e.to_string()))
     }
@@ -391,7 +391,9 @@ impl<'a> TryFrom<Vec<Ident<'a>>> for Qualified<'a> {
                     table: iter.next().unwrap(),
                 })
             }
-            _ => internal_err!("Invalid number of identifiers: {:?}", value),
+            _ => {
+                internal_err!("Invalid number of identifiers: {:?}", value)
+            }
         }
     }
 }
@@ -462,7 +464,8 @@ impl<'de> Deserialize<'de> for FullyQualifiedName {
         D: Deserializer<'de>,
     {
         let value = String::deserialize(deserializer)?;
-        Dialect::default()
+        let dialect = infer_dialect_for_deserialize(&value);
+        dialect
             .parse_fqn(&value)
             .map_err(|e| de::Error::custom(e.to_string()))
     }
@@ -878,4 +881,20 @@ impl NamedItemCollection for arrow_schema::Fields {
             .enumerate()
             .find(|(_, field)| name.matches(field.name()))
     }
+}
+
+fn infer_dialect_for_deserialize(value: &str) -> Dialect {
+    let dot_count = value.matches('.').count();
+
+    // Check for 4-part identifier (BigQuery pattern)
+    if dot_count == 3 {
+        return Dialect::Bigquery;
+    }
+
+    // Check for region- pattern specifically in context of INFORMATION_SCHEMA
+    if value.contains("region-") && value.to_uppercase().contains("INFORMATION_SCHEMA") {
+        return Dialect::Bigquery;
+    }
+
+    Dialect::default()
 }

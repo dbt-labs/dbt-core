@@ -224,7 +224,6 @@ impl TypedBaseAdapter for BigqueryAdapter {
             Err(err) => {
                 let err_msg = err.to_string();
                 if err_msg.contains("Dataset") && err_msg.contains("was not found") {
-                    // If dataset is not found, we return None (and do not error)
                     return Ok(None);
                 } else {
                     return Err(err);
@@ -244,14 +243,18 @@ impl TypedBaseAdapter for BigqueryAdapter {
         let relation_type =
             RelationType::from_adapter_type(AdapterType::Bigquery, &relation_type_name);
 
-        Ok(Some(Arc::new(BigqueryRelation::new(
+        let mut relation = BigqueryRelation::new(
             Some(database.to_string()),
             Some(schema.to_string()),
             Some(identifier.to_string()),
             Some(relation_type),
             None,
             self.quoting(),
-        ))))
+        );
+        let relation_value = Value::from_object(RelationObject::new(Arc::new(relation.clone())));
+        let location = self.get_dataset_location(state, conn, relation_value)?;
+        relation.location = location;
+        Ok(Some(Arc::new(relation)))
     }
 
     /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L246-L255
@@ -634,7 +637,8 @@ impl TypedBaseAdapter for BigqueryAdapter {
         let location = get_column_values::<StringArray>(&batch, "location")?;
         debug_assert!(batch.num_rows() <= 1);
         if batch.num_rows() == 1 {
-            Ok(Some(location.value(0).to_owned()))
+            let loc = location.value(0).to_owned();
+            Ok(Some(loc))
         } else {
             Ok(None)
         }

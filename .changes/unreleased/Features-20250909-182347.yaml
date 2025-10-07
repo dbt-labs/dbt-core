@@ -1,0 +1,7 @@
+kind: Features
+body: '[adapters] [bigquery] Implemented information schema.'
+time: 2025-09-09T18:23:47.584621+03:00
+custom:
+    author: dbtagarovat
+    issue: "539"
+    project: dbt-fusion

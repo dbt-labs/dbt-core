@@ -15,6 +15,7 @@ pub struct InformationSchema {
     pub schema: String,
     pub identifier: Option<String>,
     // quote_policy
+    pub location: Option<String>,
 }
 
 impl InformationSchema {
@@ -31,6 +32,7 @@ impl InformationSchema {
             },
             schema: "INFORMATION_SCHEMA".to_string(),
             identifier: Some(information_schema_view.to_string()),
+            location: None,
         })
     }
 }
@@ -82,6 +84,10 @@ impl BaseRelation for InformationSchema {
         Value::from(self.identifier.clone())
     }
 
+    fn location(&self) -> Value {
+        Value::from(self.location.clone())
+    }
+
     fn adapter_type(&self) -> Option<String> {
         unimplemented!("information schema adapter type detection")
     }
@@ -95,15 +101,30 @@ impl BaseRelation for InformationSchema {
     }
 
     fn render_self(&self) -> Result<Value, MinijinjaError> {
-        let result = match (&self.database, &self.identifier) {
-            (Some(database), Some(identifier)) => {
+        let rendered: String = match (&self.database, &self.location, &self.identifier) {
+            // With database and location
+            (Some(database), Some(location), Some(identifier)) => {
+                let region = format!("`region-{location}`");
+                format!("{database}.{region}.{}.{}", &self.schema, identifier)
+            }
+            (Some(database), Some(location), None) => {
+                let region = format!("`region-{location}`");
+                format!("{database}.{region}.{}", &self.schema)
+            }
+
+            // With database, without location
+            (Some(database), None, Some(identifier)) => {
                 format!("{}.{}.{}", database, &self.schema, identifier)
             }
-            (Some(database), None) => format!("{}.{}", database, &self.schema),
-            (None, Some(identifier)) => format!("{}.{}", &self.schema, identifier),
-            (None, None) => self.schema.to_string(),
+            (Some(database), None, None) => format!("{}.{}", database, &self.schema),
+
+            // Without database (ignore location if present)
+            (None, Some(_), Some(identifier)) => format!("{}.{}", &self.schema, identifier),
+            (None, Some(_), None) => self.schema.to_string(),
+            (None, None, Some(identifier)) => format!("{}.{}", &self.schema, identifier),
+            (None, None, None) => self.schema.to_string(),
         };
-        Ok(Value::from(result))
+        Ok(Value::from(rendered))
     }
 
     fn is_hive_metastore(&self) -> Value {
