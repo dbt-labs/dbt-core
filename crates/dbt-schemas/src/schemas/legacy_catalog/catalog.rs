@@ -92,7 +92,8 @@ pub fn build_catalog(
                     node.__base_attr__.database.clone(),
                     node.__base_attr__.schema.clone(),
                     node.__base_attr__.alias.clone()
-                );
+                )
+                .to_lowercase();
                 match node_stats_and_stuff.get(&fully_qualified_name) {
                     Some(node) => {
                         let mut result = node.to_owned();
@@ -117,7 +118,8 @@ pub fn build_catalog(
                             node.__base_attr__.database.clone(),
                             node.__base_attr__.schema.clone(),
                             node.__base_attr__.alias.clone()
-                        );
+                        )
+                        .to_lowercase();
                         match node_stats_and_stuff.get(&fully_qualified_name) {
                             Some(node) => {
                                 let mut result = node.to_owned();
@@ -138,7 +140,8 @@ pub fn build_catalog(
                     node.__base_attr__.database.clone(),
                     node.__base_attr__.schema.clone(),
                     node.__base_attr__.alias.clone()
-                );
+                )
+                .to_lowercase();
                 match node_stats_and_stuff.get(&fully_qualified_name) {
                     Some(node) => {
                         let mut result = node.to_owned();
@@ -158,7 +161,8 @@ pub fn build_catalog(
                     node.__base_attr__.database.clone(),
                     node.__base_attr__.schema.clone(),
                     node.__base_attr__.alias.clone()
-                );
+                )
+                .to_lowercase();
                 match node_stats_and_stuff.get(&fully_qualified_name) {
                     Some(node) => {
                         let mut result = node.to_owned();
@@ -183,7 +187,8 @@ pub fn build_catalog(
                     source.__base_attr__.database.clone(),
                     source.__base_attr__.schema.clone(),
                     source.__base_attr__.alias.clone()
-                );
+                )
+                .to_lowercase();
                 match node_stats_and_stuff.get(&fully_qualified_name) {
                     Some(node) => {
                         let mut result = node.to_owned();
