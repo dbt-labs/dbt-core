@@ -31,7 +31,7 @@ use dbt_schemas::schemas::manifest::{
 use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::properties::ModelConstraint;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
-use dbt_schemas::schemas::serde::minijinja_value_to_typed_struct;
+use dbt_schemas::schemas::serde::{minijinja_value_to_typed_struct, yml_value_to_minijinja};
 use dbt_xdbc::Connection;
 use minijinja::arg_utils::{ArgParser, ArgsIter, check_num_args};
 use minijinja::dispatch_object::DispatchObject;
@@ -1408,6 +1408,9 @@ impl BaseAdapter for BridgeAdapter {
         state: &State,
         args: &[Value],
     ) -> Result<Value, MinijinjaError> {
+        if self.adapter_type() != AdapterType::Databricks {
+            unimplemented!("update_tblproperties_for_iceberg is only supported in Databricks")
+        }
         let mut parser = ArgParser::new(args, None);
         check_num_args(current_function_name!(), &parser, 1, 2)?;
 
@@ -1422,7 +1425,14 @@ impl BaseAdapter for BridgeAdapter {
                     MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
                 })?
             }
-            _ => BTreeMap::new(),
+            _ => config
+                .__warehouse_specific_config__
+                .tblproperties
+                .clone()
+                .unwrap_or_default()
+                .into_iter()
+                .map(|(k, v)| (k, yml_value_to_minijinja(v)))
+                .collect(),
         };
 
         let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
