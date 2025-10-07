@@ -329,6 +329,7 @@ pub struct StdColumn {
     /// Whether this column is `NULLABLE` or `NOT NULL` (optional).
     #[allow(clippy::used_underscore_binding)]
     _nullable: Option<bool>,
+
     /// Whether this column is an array/repeated field (optional).
     ///
     /// This is important for BigQuery, where a column can be `REPEATED`.
@@ -338,6 +339,13 @@ pub struct StdColumn {
     /// represented by an empty array.
     #[allow(clippy::used_underscore_binding)]
     _repeated: Option<bool>,
+
+    /// The fields of this column in case it's a nested struct (on BigQuery).
+    ///
+    /// BigQuery allows columns to be nested structs such through the `STRUCT<NUMBER, BOOL>`
+    /// syntax. These subfields can be infinitely nested to compose complex objects.
+    #[allow(clippy::used_underscore_binding)]
+    _fields: Vec<Self>,
 
     /// Name of the column. Confusingly named `column` in dbt-adapters.
     name: String,
@@ -352,6 +360,22 @@ pub struct StdColumn {
 }
 
 impl StdColumn {
+    #[cfg(test)]
+    fn cmp_column(&self, other: &Self) -> bool {
+        self._adapter_type == other._adapter_type
+            && self._nullable == other._nullable
+            && self._repeated == other._repeated
+            && self
+                ._fields
+                .iter()
+                .zip(other._fields.iter())
+                .all(|(a, b)| a.cmp_column(b))
+            && self.name == other.name
+            && self.dtype == other.dtype
+            && self.char_size == other.char_size
+            && self.numeric_precision == other.numeric_precision
+            && self.numeric_scale == other.numeric_scale
+    }
     pub fn new(
         adapter_type: AdapterType,
         name: String,
@@ -364,6 +388,7 @@ impl StdColumn {
             _adapter_type: adapter_type,
             _nullable: None,
             _repeated: None,
+            _fields: Vec::new(),
             name,
             dtype,
             char_size,
@@ -378,6 +403,7 @@ impl StdColumn {
             _adapter_type: adapter_type,
             _nullable: None,
             _repeated: None,
+            _fields: Vec::new(),
             name: col.name,
             dtype: col.dtype,
             char_size: col.char_size,
@@ -418,7 +444,12 @@ impl StdColumn {
     /// Create a new BigQuery column
     ///
     /// `mode` ias a field is seen in BQ (https://cloud.google.com/bigquery/docs/schemas#modes)
-    pub fn new_bigquery(name: String, dtype: String, mode: BigqueryColumnMode) -> Self {
+    pub fn new_bigquery(
+        name: String,
+        dtype: String,
+        fields: impl Into<Vec<Self>>,
+        mode: BigqueryColumnMode,
+    ) -> Self {
         use BigqueryColumnMode::*;
         let (nullable, repeated) = match mode {
             Nullable => (Some(true), None),
@@ -429,6 +460,7 @@ impl StdColumn {
             _adapter_type: AdapterType::Bigquery,
             _nullable: nullable,
             _repeated: repeated,
+            _fields: fields.into(),
             name,
             dtype,
             char_size: None,
@@ -457,6 +489,7 @@ impl StdColumn {
                 _adapter_type: AdapterType::Snowflake,
                 _nullable: None,
                 _repeated: None,
+                _fields: Vec::new(),
                 name: name.to_string(),
                 dtype: raw_data_type.to_string(),
                 char_size: None,
@@ -518,6 +551,7 @@ impl StdColumn {
             _adapter_type: AdapterType::Snowflake,
             _nullable: None,
             _repeated: None,
+            _fields: Vec::new(),
             name: name.to_string(),
             dtype: data_type,
             char_size,
@@ -718,6 +752,39 @@ impl StdColumn {
                     minijinja::Error::new(minijinja::ErrorKind::MissingArgument, msg)
                 })?)
     }
+
+    fn _bq_flatten_inner(&self, prefix: &str) -> Vec<Self> {
+        let new_prefix = if prefix.is_empty() {
+            self.name.clone()
+        } else {
+            format!("{prefix}.{}", self.name)
+        };
+
+        if self._fields.is_empty() {
+            Vec::from([Self::new_bigquery(
+                new_prefix,
+                self.dtype.clone(),
+                &[],
+                self.mode(),
+            )])
+        } else {
+            let mut new_fields = Vec::new();
+            for f in &self._fields {
+                let mut flatten_f = f._bq_flatten_inner(&new_prefix);
+                new_fields.append(&mut flatten_f);
+            }
+            new_fields
+        }
+    }
+
+    /// https://github.com/dbt-labs/dbt-adapters/blob/c16cc7047e8678f8bb88ae294f43da2c68e9f5cc/dbt-bigquery/src/dbt/adapters/bigquery/column.py#L69
+    pub fn flatten(&self) -> Vec<Self> {
+        if !matches!(self._adapter_type, AdapterType::Bigquery) {
+            unimplemented!("'flatten' is only implemented for Bigquery")
+        }
+
+        self._bq_flatten_inner("")
+    }
 }
 
 impl Object for StdColumn {
@@ -745,6 +812,9 @@ impl Object for StdColumn {
                 let other = StdColumn::from_jinja_value(self._adapter_type, other_raw)?;
                 Ok(Value::from(self.can_expand_to(&other)?))
             }
+            // Bigquery only
+            "flatten" => Ok(Value::from(self.flatten())),
+
             _ => Err(minijinja::Error::new(
                 minijinja::ErrorKind::InvalidOperation,
                 format!("Unknown method on StdColumn: '{name}'"),
@@ -764,6 +834,12 @@ impl Object for StdColumn {
             Some("numeric_precision") => Some(Value::from(self.numeric_precision)),
             Some("numeric_scale") => Some(Value::from(self.numeric_scale)),
             Some("mode") => Some(Value::from(self.mode().as_ref())),
+            Some("fields") => Some(Value::from(
+                self._fields
+                    .iter()
+                    .map(|f| Value::from_object(f.clone()))
+                    .collect::<Vec<_>>(),
+            )),
             _ => None,
         }
     }
@@ -780,6 +856,7 @@ impl Object for StdColumn {
         ];
 
         if matches!(self._adapter_type, AdapterType::Bigquery) {
+            keys.push("fields");
             keys.push("mode");
         }
 
@@ -841,5 +918,117 @@ mod tests {
         assert_eq!(column.char_size, Some(18));
         assert_eq!(column.numeric_precision, None);
         assert_eq!(column.numeric_scale, None);
+    }
+
+    #[test]
+    fn test_bq_flatten() {
+        let simple = StdColumn::new_bigquery(
+            "col".to_string(),
+            "NUMBER".to_string(),
+            &[],
+            BigqueryColumnMode::Nullable,
+        );
+        assert!(
+            simple
+                .flatten()
+                .iter()
+                .zip(
+                    [StdColumn::new_bigquery(
+                        "col".to_string(),
+                        "NUMBER".to_string(),
+                        &[],
+                        BigqueryColumnMode::Nullable
+                    )]
+                    .iter()
+                )
+                .all(|(a, b)| a.cmp_column(b))
+        );
+
+        let nested = StdColumn::new_bigquery(
+            "parent".to_string(),
+            "STRUCT<NUMBER col>".to_string(),
+            &[simple],
+            BigqueryColumnMode::Nullable,
+        );
+        assert!(
+            nested
+                .flatten()
+                .iter()
+                .zip(
+                    [StdColumn::new_bigquery(
+                        "parent.col".to_string(),
+                        "NUMBER".to_string(),
+                        &[],
+                        BigqueryColumnMode::Nullable
+                    ),]
+                    .iter()
+                )
+                .all(|(a, b)| a.cmp_column(b))
+        );
+
+        let deeply_nested = StdColumn::new_bigquery(
+            "grandpa".to_string(),
+            "STRUCT<NUMBER col>".to_string(),
+            &[nested],
+            BigqueryColumnMode::Nullable,
+        );
+        assert!(
+            deeply_nested
+                .flatten()
+                .iter()
+                .zip(
+                    [StdColumn::new_bigquery(
+                        "grandpa.parent.col".to_string(),
+                        "NUMBER".to_string(),
+                        &[],
+                        BigqueryColumnMode::Nullable
+                    ),]
+                    .iter()
+                )
+                .all(|(a, b)| a.cmp_column(b))
+        );
+
+        let nested_with_siblings = StdColumn::new_bigquery(
+            "parent".to_string(),
+            "STRUCT<NUMBER a, BOOLEAN b>".to_string(),
+            &[
+                StdColumn::new_bigquery(
+                    "a".to_string(),
+                    "NUMBER".to_string(),
+                    &[],
+                    BigqueryColumnMode::Nullable,
+                ),
+                StdColumn::new_bigquery(
+                    "b".to_string(),
+                    "BOOLEAN".to_string(),
+                    &[],
+                    BigqueryColumnMode::Nullable,
+                ),
+            ],
+            BigqueryColumnMode::Nullable,
+        );
+        assert!(
+            nested_with_siblings
+                .flatten()
+                .iter()
+                .zip(
+                    vec![
+                        StdColumn::new_bigquery(
+                            "parent.a".to_string(),
+                            "NUMBER".to_string(),
+                            &[],
+                            BigqueryColumnMode::Nullable
+                        ),
+                        StdColumn::new_bigquery(
+                            "parent.b".to_string(),
+                            "BOOLEAN".to_string(),
+                            &[],
+                            BigqueryColumnMode::Nullable
+                        ),
+                    ]
+                    .iter()
+                )
+                .all(|(a, b)| a.cmp_column(b))
+        );
     }
 }

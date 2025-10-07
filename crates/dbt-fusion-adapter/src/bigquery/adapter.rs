@@ -6,6 +6,7 @@ use crate::bigquery::relation_config::{
     partitions_match,
 };
 use crate::cast_util::downcast_value_to_dyn_base_relation;
+use crate::column::ColumnBuilder;
 use crate::columns::{BigqueryColumnMode, StdColumn};
 use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
 use crate::funcs::{execute_macro, none_value};
@@ -519,6 +520,31 @@ impl TypedBaseAdapter for BigqueryAdapter {
         Ok(result)
     }
 
+    /// https://github.com/dbt-labs/dbt-adapters/blob/f4dfd350942cce11ff25e3d22f2bee9e60b12b6d/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L444
+    fn get_column_schema_from_query(
+        &self,
+        state: &State,
+        conn: &mut dyn Connection,
+        query_ctx: &QueryCtx,
+    ) -> AdapterResult<Vec<StdColumn>> {
+        let batch = self.engine().execute(Some(state), conn, query_ctx)?;
+        let schema = batch.schema();
+
+        let type_ops = self.engine.type_ops();
+        let builder = ColumnBuilder::new(self.adapter_type());
+
+        let fields = schema.fields();
+
+        let mut columns = Vec::<StdColumn>::with_capacity(fields.len());
+        for field in fields {
+            let column = builder.build(field, type_ops)?;
+            columns.push(column);
+        }
+
+        let flattened_columns = columns.iter().flat_map(|column| column.flatten()).collect();
+        Ok(flattened_columns)
+    }
+
     /// https://github.com/dbt-labs/dbt-adapters/blob/4a00354a497214d9043bf4122810fe2d04de17bb/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L834
     fn grant_access_to(
         &self,
@@ -767,6 +793,7 @@ impl TypedBaseAdapter for BigqueryAdapter {
                 .expect("must be a str")
                 .to_owned(),
             partition_config.data_type,
+            &[],
             // TODO(serramatutu): proper mode
             BigqueryColumnMode::Nullable,
         ));

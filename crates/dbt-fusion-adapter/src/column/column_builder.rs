@@ -20,11 +20,11 @@ impl ColumnBuilder {
     pub fn build(&self, field: &FieldRef, type_ops: &dyn TypeOps) -> AdapterResult<StdColumn> {
         use AdapterType::*;
         match self.adapter_type {
-            Snowflake => self.build_snowflake(field, type_ops),
-            Bigquery => self.build_bigquery(field, type_ops),
-            Databricks => self.build_databricks(field, type_ops),
-            Redshift => self.build_redshift(field, type_ops),
-            Postgres | Salesforce => self.build_postgres_like(field, type_ops),
+            Snowflake => Ok(Self::build_snowflake(field, type_ops)),
+            Bigquery => Ok(Self::build_bigquery(field, type_ops)),
+            Databricks => Ok(Self::build_databricks(field, type_ops)),
+            Redshift => Ok(Self::build_redshift(field, type_ops)),
+            Postgres | Salesforce => Ok(Self::build_postgres_like(field, type_ops)),
         }
     }
 
@@ -36,9 +36,9 @@ impl ColumnBuilder {
         numeric_precision: Option<u64>,
         numeric_scale: Option<u64>,
         mode: Option<BigqueryColumnMode>,
-    ) -> Result<StdColumn, minijinja::Error> {
+    ) -> StdColumn {
         use AdapterType::*;
-        let column = match self.adapter_type {
+        match self.adapter_type {
             Postgres => StdColumn::new(
                 Postgres,
                 name,
@@ -55,7 +55,8 @@ impl ColumnBuilder {
                 numeric_precision,
                 numeric_scale,
             ),
-            Bigquery => StdColumn::new_bigquery(name, dtype, mode.unwrap()),
+            // TODO: BigQuery fields
+            Bigquery => StdColumn::new_bigquery(name, dtype, &[], mode.unwrap()),
             Redshift => StdColumn::new(
                 Redshift,
                 name,
@@ -69,15 +70,10 @@ impl ColumnBuilder {
                 None, // numeric_scale
             ),
             Salesforce => todo!("Salesforce column creation not implemented yet"),
-        };
-        Ok(column)
+        }
     }
 
-    fn build_snowflake(
-        &self,
-        field: &FieldRef,
-        type_ops: &dyn TypeOps,
-    ) -> AdapterResult<StdColumn> {
+    fn build_snowflake(field: &FieldRef, type_ops: &dyn TypeOps) -> StdColumn {
         use AdapterType::Snowflake;
         use sql_types::snowflake::*;
 
@@ -168,21 +164,20 @@ impl ColumnBuilder {
             _ => {}
         }
 
-        let column = StdColumn::new(
+        StdColumn::new(
             Snowflake,
             field.name().to_string(),
             dtype,
             resolved_char_size.map(|p| p as u32),
             numeric_precision.map(|p| p as u64),
             numeric_scale.map(|s| s as u64),
-        );
-        Ok(column)
+        )
     }
 
     /// The logic from `get_column_schema_from_query` for BigQuery [1].
     ///
     /// [1] https://github.com/dbt-labs/dbt-adapters/blob/c16cc7047e8678f8bb88ae294f43da2c68e9f5cc/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L444
-    fn build_bigquery(&self, field: &FieldRef, type_ops: &dyn TypeOps) -> AdapterResult<StdColumn> {
+    fn build_bigquery(field: &FieldRef, type_ops: &dyn TypeOps) -> StdColumn {
         let mut data_type = String::new();
         if type_ops
             .format_arrow_type_as_sql(field.data_type(), &mut data_type)
@@ -208,15 +203,35 @@ impl ColumnBuilder {
                 }
             }
         };
-        let column = StdColumn::new_bigquery(field.name().to_string(), data_type, mode);
-        Ok(column)
+
+        let inner_columns = match field.data_type() {
+            DataType::List(inner)
+            | DataType::ListView(inner)
+            | DataType::FixedSizeList(inner, _)
+            | DataType::LargeList(inner)
+            | DataType::LargeListView(inner) => {
+                match inner.data_type() {
+                    // only structs can have named fields
+                    DataType::Struct(inner) => inner
+                        .into_iter()
+                        .map(|f| Self::build_bigquery(f, type_ops))
+                        .collect(),
+                    // we don't need to worry about nested lists because that is not supported by
+                    // BigQuery
+                    _ => Vec::new(),
+                }
+            }
+            DataType::Struct(fields) => fields
+                .into_iter()
+                .map(|f| Self::build_bigquery(f, type_ops))
+                .collect(),
+            _ => Vec::new(),
+        };
+
+        StdColumn::new_bigquery(field.name().to_string(), data_type, inner_columns, mode)
     }
 
-    fn build_databricks(
-        &self,
-        field: &FieldRef,
-        type_ops: &dyn TypeOps,
-    ) -> AdapterResult<StdColumn> {
+    fn build_databricks(field: &FieldRef, type_ops: &dyn TypeOps) -> StdColumn {
         let name = field.name().to_string();
         let type_text = {
             // TODO(jason): This needs to be updated to match the driver convention once available
@@ -236,22 +251,17 @@ impl ColumnBuilder {
                 type_text
             }
         };
-        let colunn = StdColumn::new(
+        StdColumn::new(
             AdapterType::Databricks,
             name,
             type_text,
             None, // char_size
             None, // numeric_precision
             None, // numeric_scale
-        );
-        Ok(colunn)
+        )
     }
 
-    fn build_postgres_like(
-        &self,
-        field: &FieldRef,
-        type_ops: &dyn TypeOps,
-    ) -> AdapterResult<StdColumn> {
+    fn build_postgres_like(field: &FieldRef, type_ops: &dyn TypeOps) -> StdColumn {
         let mut data_type = String::new();
         match field.data_type() {
             // Mimic broken conversion that was here before just in case
@@ -267,18 +277,17 @@ impl ColumnBuilder {
         if !field.is_nullable() {
             data_type.push_str(" not null");
         }
-        let column = StdColumn::new(
+        StdColumn::new(
             AdapterType::Postgres,
             field.name().to_string(),
             data_type,
             None, // char_size
             None, // numeric_precision
             None, // numeric_scale
-        );
-        Ok(column)
+        )
     }
 
-    fn build_redshift(&self, field: &FieldRef, type_ops: &dyn TypeOps) -> AdapterResult<StdColumn> {
+    fn build_redshift(field: &FieldRef, type_ops: &dyn TypeOps) -> StdColumn {
         use AdapterType::Redshift;
         let data_type = field.data_type();
         let char_size = sql_types::var_size(Redshift, data_type);
@@ -312,14 +321,13 @@ impl ColumnBuilder {
             type_name_or_formatted
         };
 
-        let column = StdColumn::new(
+        StdColumn::new(
             Redshift,
             field.name().to_string(),
             base_type_name, // dtype
             char_size.map(|p| p as u32),
             numeric_precision.map(|p| p as u64),
             numeric_scale.map(|s| s as u64),
-        );
-        Ok(column)
+        )
     }
 }
