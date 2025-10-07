@@ -50,8 +50,10 @@ impl TelemetryConsumer for FileLogLayer {
             let _ = self.writer.writeln(line);
         }
 
-        for line in formatted.summary_lines() {
-            let _ = self.writer.writeln(line.as_str());
+        if let Some(summary_lines) = formatted.summary_lines() {
+            for line in summary_lines {
+                let _ = self.writer.writeln(line.as_str());
+            }
         }
     }
 }

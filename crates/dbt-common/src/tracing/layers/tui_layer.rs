@@ -137,6 +137,7 @@ impl TelemetryConsumer for TuiLayer {
     fn on_span_end(&self, span: &SpanEndInfo, data_provider: &DataProvider<'_>) {
         if let Some(invocation) = span.attributes.downcast_ref::<Invocation>() {
             self.handle_invocation_summary(span, invocation, data_provider);
+            return;
         }
 
         if !self.is_interactive {
@@ -146,7 +147,7 @@ impl TelemetryConsumer for TuiLayer {
 
         // Handle progress bars
         if let Some((bar_uid, total, item)) = get_progress_params(&span.attributes) {
-            // TODO: switch to direct interface with progress bar ocntroller
+            // TODO: switch to direct interface with progress bar controller
             // Create progress bar via log
             match item {
                 None if total > 0 => log::info!(
@@ -208,8 +209,10 @@ impl TuiLayer {
             return;
         }
 
-        for line in formatted.summary_lines() {
-            let _ = self.stdout_term.write_line(line.as_str());
+        if let Some(summary_lines) = formatted.summary_lines() {
+            for line in summary_lines {
+                let _ = self.stdout_term.write_line(line.as_str());
+            }
         }
     }
 }

@@ -16,6 +16,8 @@ use crate::{
 
 use super::duration::format_duration_for_summary;
 
+/// Commands that should not include the result breakdown line.
+const RESULT_LINE_OPT_OUT_COMMANDS: [&str; 1] = ["man"];
 /// Commands that should include the extended evaluation/result breakdown.
 const SUMMARY_COMMANDS: [&str; 6] = ["build", "compile", "run", "seed", "snapshot", "test"];
 
@@ -92,13 +94,13 @@ struct InvocationSummaryInput<'a> {
 
 #[derive(Debug)]
 pub struct FormattedInvocationSummary {
-    summary_lines: Vec<String>,
+    summary_lines: Option<Vec<String>>,
     autofix_line: Option<String>,
 }
 
 impl FormattedInvocationSummary {
-    pub fn summary_lines(&self) -> &[String] {
-        &self.summary_lines
+    pub fn summary_lines(&self) -> Option<&[String]> {
+        self.summary_lines.as_deref()
     }
 
     pub fn autofix_line(&self) -> Option<&str> {
@@ -195,13 +197,25 @@ pub fn format_invocation_summary(
     colorize: bool,
     max_line_width: Option<usize>,
 ) -> FormattedInvocationSummary {
+    let (command, target) = extract_invocation_command_and_target(invocation);
+
+    // Exit early if the command is opted out of summary display
+    if RESULT_LINE_OPT_OUT_COMMANDS
+        .iter()
+        .any(|cmd| cmd.eq_ignore_ascii_case(command))
+    {
+        return FormattedInvocationSummary {
+            summary_lines: None,
+            autofix_line: None,
+        };
+    }
+
     let metrics: InvocationMetricsSnapshot =
         collect_invocation_metrics(data_provider, invocation.invocation_id.as_ref());
     let elapsed = span
         .end_time_unix_nano
         .duration_since(span.start_time_unix_nano)
         .unwrap_or_default();
-    let (command, target) = extract_invocation_command_and_target(invocation);
 
     let summary = InvocationSummaryInput {
         command,
@@ -242,7 +256,7 @@ pub fn format_invocation_summary(
     };
 
     FormattedInvocationSummary {
-        summary_lines: lines,
+        summary_lines: Some(lines),
         autofix_line,
     }
 }

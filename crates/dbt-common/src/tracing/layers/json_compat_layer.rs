@@ -111,7 +111,11 @@ impl TelemetryConsumer for JsonCompatLayer {
             let _ = self.writer.writeln(value.as_str());
         }
 
-        let message = formatted.summary_lines().join("\n");
+        let message = formatted
+            .summary_lines()
+            .map(|summary_lines| summary_lines.join("\n"))
+            .unwrap_or_default();
+
         let elapsed_secs = span
             .end_time_unix_nano
             .duration_since(span.start_time_unix_nano)
