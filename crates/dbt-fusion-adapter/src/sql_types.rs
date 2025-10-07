@@ -129,34 +129,46 @@ pub fn make_arrow_field(
     nullable_override: Option<bool>,
     comment: Option<String>,
 ) -> Result<Field, AdapterError> {
-    let (data_type, nullable) = type_ops.parse_into_nullable_arrow_type(sql_type_str)?;
-    let field = Field::new(col_name, data_type, nullable_override.unwrap_or(nullable));
-
     let mut metadata = HashMap::new();
-    metadata.insert(
-        ARROW_FIELD_ORIGINAL_TYPE_METADATA_KEY.to_string(),
-        sql_type_str.to_string(),
-    );
-    if let Some(comment) = comment {
-        metadata.insert(ARROW_FIELD_COMMENT_METADATA_KEY.to_string(), comment);
-    }
-
     let adapter_type = type_ops.adapter_type();
     // HACK: Insert the width of the field as its own value
     // Special handling for Snowflake char width fields
     // because these are given to the user as separate types
-    if adapter_type == AdapterType::Snowflake {
+    let normalized_type_str: Cow<str> = if adapter_type == AdapterType::Snowflake {
         let maybe_parsed = SqlType::parse(backend_of(adapter_type), sql_type_str);
         match maybe_parsed {
-            Ok((SqlType::Varchar(Some(max_len), _), _))
-            | Ok((SqlType::Binary(Some(max_len)), _)) => {
+            Ok((SqlType::Varchar(maybe_max_len, _), _)) => {
+                if let Some(max_len) = maybe_max_len {
+                    metadata.insert(
+                        ARROW_FIELD_SNOWFLAKE_FIELD_WIDTH_METADATA_KEY.to_string(),
+                        max_len.to_string(),
+                    );
+                }
+                // HACK: Clean up collation
+                Cow::Owned(SqlType::varchar(maybe_max_len).to_string(backend_of(adapter_type)))
+            }
+            Ok((SqlType::Binary(Some(max_len)), _)) => {
                 metadata.insert(
                     ARROW_FIELD_SNOWFLAKE_FIELD_WIDTH_METADATA_KEY.to_string(),
                     max_len.to_string(),
                 );
+                Cow::Borrowed(sql_type_str)
             }
-            _ => {}
+            _ => Cow::Borrowed(sql_type_str),
         }
+    } else {
+        Cow::Borrowed(sql_type_str)
+    };
+
+    let (data_type, nullable) = type_ops.parse_into_nullable_arrow_type(&normalized_type_str)?;
+    let field = Field::new(col_name, data_type, nullable_override.unwrap_or(nullable));
+
+    metadata.insert(
+        ARROW_FIELD_ORIGINAL_TYPE_METADATA_KEY.to_string(),
+        normalized_type_str.to_string(),
+    );
+    if let Some(comment) = comment {
+        metadata.insert(ARROW_FIELD_COMMENT_METADATA_KEY.to_string(), comment);
     }
 
     let field = field.with_metadata(metadata);
