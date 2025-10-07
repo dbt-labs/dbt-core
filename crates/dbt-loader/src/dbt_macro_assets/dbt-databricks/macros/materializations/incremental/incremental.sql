@@ -1,28 +1,21 @@
 {% materialization incremental, adapter='databricks', supported_languages=['sql', 'python'] -%}
   {{ log("MATERIALIZING INCREMENTAL") }}
-  {# -- todo: use adapter.build_catalog_relation here once we have support for it -- #}
 
-  {#-- Validate early so we don't run SQL if the file_format + strategy combo is invalid --#}
-  {%- set raw_file_format = config.get('file_format', default='delta') -%}
-  {%- set raw_strategy = config.get('incremental_strategy') or 'merge' -%}
+  {%- set catalog_relation = adapter.build_catalog_relation(config.model) -%}
+
+  {#-- Core discrepancy: this line has been removed but it is a nice pre-database validation step;
+    -- todo(versusfacit) make this a model-level config check or catalog_relation check #}
+  {%- set _ = dbt_databricks_validate_get_file_format(catalog_relation.file_format) -%}
+
+  {%- set existing_relation = load_relation_with_metadata(this) %}
+  {%- set target_relation = this.incorporate(type='table') -%}
+  {%- set incremental_strategy = get_incremental_strategy(catalog_relation.file_format) -%}
   {%- set grant_config = config.get('grants') -%}
-  {%- set tblproperties = config.get('tblproperties') -%}
-  {%- set tags = config.get('databricks_tags') -%}
-
-  {%- set file_format = dbt_databricks_validate_get_file_format(raw_file_format) -%}
-  {%- set incremental_strategy = dbt_databricks_validate_get_incremental_strategy(raw_strategy, file_format) -%}
-
-  {#-- Set vars --#}
-
   {%- set full_refresh = should_full_refresh() %}
-  {%- set incremental_predicates = config.get('predicates', default=none) or config.get('incremental_predicates', default=none) -%}
-  {%- set unique_key = config.get('unique_key', none) -%}
   {%- set partition_by = config.get('partition_by', none) -%}
   {%- set language = model['language'] -%}
   {%- set on_schema_change = incremental_validate_on_schema_change(config.get('on_schema_change'), default='ignore') -%}
-  {%- set target_relation = this.incorporate(type='table') -%}
-  {%- set existing_relation = load_relation_with_metadata(this) %}
-  {%- set is_delta = (file_format == 'delta' and existing_relation.is_delta) %}
+  {%- set is_delta = (catalog_relation.file_format == 'delta' and existing_relation.is_delta) -%}
 
   {% if adapter.behavior.use_materialization_v2 %}
     {{ log("USING V2 MATERIALIZATION") }}
@@ -91,7 +84,12 @@
     {{ run_post_hooks() }}
 
   {% else %}
+    {%- set tblproperties = config.get('tblproperties') -%}
+    {%- set tags = config.get('databricks_tags') -%}
     {% set temp_relation = make_temp_relation(target_relation) %}
+    {%- set incremental_predicates = config.get('predicates', default=none) or config.get('incremental_predicates', default=none) -%}
+    {%- set unique_key = config.get('unique_key', none) -%}
+
     {#-- Run pre-hooks --#}
     {{ run_hooks(pre_hooks) }}
     {#-- Incremental run logic --#}
@@ -190,7 +188,7 @@
   {%- if incremental_strategy == 'insert_overwrite' and not full_refresh -%}
     {{ set_overwrite_mode('STATIC') }}
   {%- endif -%}
-  
+
   {{ return({'relations': [target_relation]}) }}
 
 {%- endmaterialization %}

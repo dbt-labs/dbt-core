@@ -254,6 +254,7 @@ prevent unnecessary latency for other users."#,
     fn build_catalog_relation(&self, model_config: &Value) -> AdapterResult<Value> {
         Ok(Value::from_object(
             CatalogRelation::from_model_config_and_catalogs(
+                &self.adapter_type(),
                 model_config,
                 load_catalogs::fetch_catalogs(),
             )?,

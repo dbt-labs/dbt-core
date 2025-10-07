@@ -189,6 +189,7 @@ pub struct WarehouseSpecificNodeConfig {
 
     // Databricks
     pub file_format: Option<String>,
+    pub catalog_name: Option<String>,
     pub location_root: Option<String>,
     pub tblproperties: Option<BTreeMap<String, YmlValue>>,
     // this config is introduced here https://github.com/databricks/dbt-databricks/pull/823
@@ -292,6 +293,7 @@ impl DefaultTo<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConfig {
 
             // Databricks
             file_format,
+            catalog_name,
             location_root,
             tblproperties,
             include_full_name_in_path,
@@ -374,6 +376,7 @@ impl DefaultTo<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConfig {
                 max_staleness,
                 // Databricks
                 file_format,
+                catalog_name,
                 location_root,
                 tblproperties,
                 include_full_name_in_path,

@@ -5,7 +5,7 @@
   {% set model_constraints = model.get('constraints', []) %}
   {% set columns_and_constraints = adapter.parse_columns_and_constraints(existing_columns, model_columns, model_constraints) %}
   {% set target_relation = relation.enrich(columns_and_constraints[1]) %}
-  
+
   {% call statement('main') %}
     {{ get_create_table_sql(target_relation, columns_and_constraints[0], compiled_code) }}
   {% endcall %}
@@ -49,14 +49,15 @@
 {% endmacro %}
 
 {% macro databricks__create_table_as(temporary, relation, compiled_code, language='sql') -%}
+  {%- set catalog_relation = adapter.build_catalog_relation(config.model) -%}
+
   {%- if language == 'sql' -%}
     {%- if temporary -%}
-      -- INTENTIONAL DIVERGENCE 
+      -- INTENTIONAL DIVERGENCE
       -- create_temporary_view method cannot be used here, because DBX v2 api doesn't support session
       {{ _create_view_simple(relation, compiled_code) }}
     {%- else -%}
-      {%- set file_format = config.get('file_format', default='delta') -%}
-      {% if file_format == 'delta' %}
+      {% if catalog_relation.file_format == 'delta' %}
         create or replace table {{ relation.render() }}
       {% else %}
         create table {{ relation.render() }}
@@ -66,12 +67,12 @@
         {{ get_assert_columns_equivalent(compiled_code) }}
         {%- set compiled_code = get_select_subquery(compiled_code) %}
       {% endif %}
-      {{ file_format_clause() }}
-      {{ options_clause() }}
+      {{ file_format_clause(catalog_relation) }}
+      {{ databricks__options_clause(catalog_relation) }}
       {{ partition_cols(label="partitioned by") }}
       {{ liquid_clustered_cols() }}
       {{ clustered_cols(label="clustered by") }}
-      {{ location_clause(relation) }}
+      {{ location_clause(catalog_relation) }}
       {{ comment_clause() }}
       {{ tblproperties_clause() }}
       as
@@ -89,9 +90,15 @@
   {%- endif -%}
 {%- endmacro -%}
 
-{% macro databricks__options_clause() -%}
+{% macro databricks__options_clause(catalog_relation=none) -%}
+  {%- if catalog_relation is not none -%}
+    {%- set file_format = catalog_relation.file_format -%}
+  {%- else -%}
+    {%- set file_format = config.get('file_format', default='delta') -%}
+  {%- endif -%}
+
   {%- set options = config.get('options') -%}
-  {%- if config.get('file_format', default='delta') == 'hudi' -%}
+  {%- if file_format == 'hudi' -%}
     {%- set unique_key = config.get('unique_key') -%}
     {%- if unique_key is not none and options is none -%}
       {%- set options = {'primaryKey': config.get('unique_key')} -%}
@@ -120,7 +127,7 @@
 
 {% macro get_create_intermediate_table(relation, compiled_code, language) %}
   {%- if language == 'sql' -%}
-    -- INTENTIONAL DIVERGENCE 
+    -- INTENTIONAL DIVERGENCE
     -- create_temporary_view method cannot be used here, because DBX v2 api doesn't support session
     {{ _create_view_simple(relation, compiled_code) }}
   {%- else -%}

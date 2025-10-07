@@ -10,10 +10,12 @@ use crate::databricks::relation_configs::relation_api::get_from_relation_config;
 use crate::databricks::relation_configs::streaming_table::StreamingTableConfig;
 use crate::databricks::relation_configs::view::ViewConfig;
 
+use crate::catalog_relation::CatalogRelation;
 use crate::columns::StdColumn;
 use crate::databricks::relation::DatabricksRelation;
 use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
 use crate::funcs::execute_macro_wrapper_with_package;
+use crate::load_catalogs;
 use crate::metadata::*;
 use crate::query_ctx::query_ctx_from_state;
 use crate::record_batch_utils::get_column_values;
@@ -24,6 +26,7 @@ use crate::{AdapterType, AdapterTyping};
 use arrow::array::{Array, StringArray};
 use dbt_agate::AgateTable;
 use dbt_common::behavior_flags::BehaviorFlag;
+
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::common::{
     ConstraintSupport, ConstraintType, DbtIncrementalStrategy, DbtMaterialization,
@@ -427,6 +430,9 @@ impl TypedBaseAdapter for DatabricksAdapter {
     }
 
     /// https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/impl.py#L187-L188
+    ///
+    /// squashes featureset of DatabricksAdapter iceberg_table_properties
+    /// https://github.com/databricks/dbt-databricks/blob/53cd1a2c1fcb245ef25ecf2e41249335fd4c8e4b/dbt/adapters/databricks/impl.py#L229C9-L229C41
     fn update_tblproperties_for_iceberg(
         &self,
         state: &State,
@@ -434,7 +440,12 @@ impl TypedBaseAdapter for DatabricksAdapter {
         config: ModelConfig,
         tblproperties: &mut BTreeMap<String, Value>,
     ) -> AdapterResult<()> {
-        if config.table_format == Some("iceberg".to_owned()) {
+        let catalog_relation = CatalogRelation::from_model_config_and_catalogs(
+            &self.adapter_type(),
+            &Value::from_serialize(config.clone()),
+            load_catalogs::fetch_catalogs(),
+        )?;
+        if catalog_relation.table_format == "iceberg" {
             if self
                 .compare_dbr_version(state, conn, 14, 3)?
                 .as_i64()
@@ -446,11 +457,8 @@ impl TypedBaseAdapter for DatabricksAdapter {
                     "Iceberg support requires Databricks Runtime 14.3 or later.",
                 ));
             }
-            if config
-                .__warehouse_specific_config__
-                .file_format
-                .is_some_and(|v| v != "delta")
-            {
+
+            if catalog_relation.file_format != Some("delta".to_string()) {
                 return Err(AdapterError::new(
                     AdapterErrorKind::Configuration,
                     "When table_format is 'iceberg', file_format must be 'delta'.",
@@ -464,20 +472,24 @@ impl TypedBaseAdapter for DatabricksAdapter {
                 )
             })?;
 
+            // TODO(versusfacit): support snapshot
             if materialized != DbtMaterialization::Incremental
                 && materialized != DbtMaterialization::Table
+                && materialized != DbtMaterialization::Seed
             {
                 return Err(AdapterError::new(
                     AdapterErrorKind::Configuration,
-                    "When table_format is 'iceberg', materialized must be 'incremental', 'table', or 'snapshot'.",
+                    "When table_format is 'iceberg', materialized must be 'incremental', 'table', or 'seed'.",
                 ));
             }
 
-            tblproperties.insert("delta.enableIcebergCompatV2".to_string(), Value::from(true));
-            tblproperties.insert(
-                "delta.universalFormat.enabledFormats".to_string(),
-                Value::from("iceberg"),
-            );
+            tblproperties
+                .entry("delta.enableIcebergCompatV2".to_string())
+                .or_insert_with(|| Value::from(true));
+
+            tblproperties
+                .entry("delta.universalFormat.enabledFormats".to_string())
+                .or_insert_with(|| Value::from("iceberg"));
         }
         Ok(())
     }
@@ -530,6 +542,16 @@ impl TypedBaseAdapter for DatabricksAdapter {
             }
         };
         Ok(result)
+    }
+
+    fn build_catalog_relation(&self, model_config: &Value) -> AdapterResult<Value> {
+        Ok(Value::from_object(
+            CatalogRelation::from_model_config_and_catalogs(
+                &self.adapter_type(),
+                model_config,
+                load_catalogs::fetch_catalogs(),
+            )?,
+        ))
     }
 
     /// Given a model, parse and build its configurations

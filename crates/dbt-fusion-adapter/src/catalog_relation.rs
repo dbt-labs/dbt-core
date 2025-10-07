@@ -1,5 +1,7 @@
+use dbt_common::adapter::AdapterType;
 use dbt_schemas::schemas::dbt_catalogs::CatalogType;
 use dbt_schemas::schemas::dbt_catalogs::DbtCatalogs;
+
 use dbt_serde_yaml::{Mapping as YmlMapping, Span, Value as YmlValue};
 use minijinja::{
     Value,
@@ -7,9 +9,21 @@ use minijinja::{
 };
 use std::collections::BTreeMap;
 use std::fmt::Formatter;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
+
+const DBX_DEFAULT_TABLE_FORMAT: &str = "default";
+const DBX_ICEBERG_TABLE_FORMAT: &str = "iceberg";
+
+const DELTA_TABLE_FORMAT: &str = "delta";
+const DATABRICKS_UNITY_CATALOG: &str = "unity";
+const DATABRICKS_HIVE_METASTORE: &str = "hive_metastore";
+
+const ALLOWED_TABLE_FORMATS_DATABRICKS: [&str; 2] =
+    [DBX_DEFAULT_TABLE_FORMAT, DBX_ICEBERG_TABLE_FORMAT];
+const ALLOWED_TABLE_FORMATS_DISPLAY_DATABRICKS: &str = "default|iceberg";
 
 // Jinja DDL tends to have comparisons against uppercase strings
 // TODO(versufacit): dbt core currently has a notion of the default store as a catalog.
@@ -17,18 +31,21 @@ use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
 // https://github.com/dbt-labs/dbt-adapters/blob/c16cc7047e8678f8bb88ae294f43da2c68e9f5cc/dbt-snowflake/src/dbt/include/snowflake/macros/relations/table/create.sql#L8
 const SNOWFLAKE_RELATION_STORE: &str = "INFO_SCHEMA";
 const ICEBERG_BUILT_IN_CATALOG: &str = "BUILT_IN";
-const DEFAULT_TABLE_FORMAT: &str = "DEFAULT";
-const ICEBERG_TABLE_FORMAT: &str = "ICEBERG";
 
 const LEGACY_CONFIG_ICEBERG_ATTRIBUTE_ERR: &str = "The external_volume and base_location_* model attributes are not able to \
     be specified on table_format=default models (includes models without an explicit \
     table_format). For other table formats, use catalogs.yml write integrations.";
 
-const ALLOWED_CATALOG_TYPE_FORMATS: [&str; 2] = [DEFAULT_TABLE_FORMAT, ICEBERG_TABLE_FORMAT];
-const ALLOWED_TABLE_FORMATS_DISPLAY: &str = "DEFAULT|ICEBERG";
+const DEFAULT_TABLE_FORMAT: &str = "DEFAULT";
+const ICEBERG_TABLE_FORMAT: &str = "ICEBERG";
+
+const ALLOWED_TABLE_FORMATS_SNOWFLAKE: [&str; 2] = [DEFAULT_TABLE_FORMAT, ICEBERG_TABLE_FORMAT];
+const ALLOWED_TABLE_FORMATS_DISPLAY_SNOWFLAKE: &str = "DEFAULT|ICEBERG";
 
 #[derive(Debug, serde::Serialize)]
 pub struct CatalogRelation {
+    pub adapter_type: AdapterType,
+
     // identity / routing
     pub catalog_name: Option<String>,
     pub integration_name: Option<String>,
@@ -37,22 +54,305 @@ pub struct CatalogRelation {
     pub catalog_type: String,
     pub table_format: String,
 
-    // common
-    pub external_volume: Option<String>,
-
-    // built_in only
-    // synthesized base_location_root and base_location_subpath model attributes
-    pub base_location: Option<String>,
-
     // normalized SQL options
     pub adapter_properties: BTreeMap<String, String>,
 
     // metadata helper
-    pub is_transient: bool,
+    pub is_transient: Option<bool>,
+
+    // Snowflake uses directly
+    // Databricks uses as a catalog_relation notion for location_root
+    pub external_volume: Option<String>,
+
+    // === Snowflake
+    // built_in only: synthesized base_location_root and base_location_subpath model attributes
+    pub base_location: Option<String>,
+
+    // === Databricks
+    pub file_format: Option<String>,
+    // TODO: be the owner of tblproperties for model config resolution
 }
 
 impl CatalogRelation {
     pub fn from_model_config_and_catalogs(
+        adapter_type: &AdapterType,
+        model_config: &Value,
+        catalogs: Option<Arc<DbtCatalogs>>,
+    ) -> AdapterResult<Self> {
+        match adapter_type {
+            AdapterType::Databricks => {
+                Self::from_model_config_and_catalogs_databricks(model_config, catalogs)
+            }
+            AdapterType::Snowflake => {
+                Self::from_model_config_and_catalogs_snowflake(model_config, catalogs)
+            }
+            _ => Err(AdapterError::new(
+                AdapterErrorKind::Internal,
+                format!("build_relation_catalog cannot be invoked by an adapter {adapter_type:?}"),
+            )),
+        }
+    }
+
+    // ==========
+    // Databricks
+    // ==========
+
+    fn from_model_config_and_catalogs_databricks(
+        model_config: &Value,
+        catalogs: Option<Arc<DbtCatalogs>>,
+    ) -> AdapterResult<CatalogRelation> {
+        debug_assert!(
+            model_config.kind() != ValueKind::String,
+            "Databricks adapter received a bare string model config; this is unsupported and indicates a parser bug."
+        );
+
+        let model_catalog_name = Self::get_model_config_value(model_config, "catalog_name")
+            .and_then(|s| {
+                let t = s.trim();
+                if t.eq_ignore_ascii_case("none") {
+                    None
+                } else {
+                    Some(t.to_string())
+                }
+            });
+
+        let wants_iceberg = Self::get_model_config_value(model_config, "table_format")
+            .as_deref()
+            .map(|s| s.eq_ignore_ascii_case(DBX_ICEBERG_TABLE_FORMAT))
+            .unwrap_or(false);
+
+        match (model_catalog_name.as_deref(), catalogs.as_ref()) {
+            (None, None) if !wants_iceberg => Ok(Self::default_catalog_relation_databricks()),
+            (None, None) => Err(AdapterError::new(
+                AdapterErrorKind::Configuration,
+                "On Databricks, table_format=iceberg requires catalogs.yml and a `catalog_name` that selects a write integration.",
+            )),
+
+            (None, Some(_)) if !wants_iceberg => Ok(Self::default_catalog_relation_databricks()),
+            (None, Some(_)) => Err(AdapterError::new(
+                AdapterErrorKind::Configuration,
+                "On Databricks, table_format=iceberg requires a `catalog_name` to select a write integration (unity or hive_metastore). Ensure the catalog_name you select points to a catalog in your project's catalogs.yml.",
+            )),
+
+            (Some(catalog_name), None) => Err(AdapterError::new(
+                AdapterErrorKind::Configuration,
+                format!(
+                    "Model specifies catalog_name '{catalog_name}', but catalogs.yml was not found"
+                ),
+            )),
+
+            (Some(catalog_name), Some(catalogs)) => {
+                Self::build_databricks_with_catalogs(model_config, catalogs.mapping(), catalog_name)
+            }
+        }
+    }
+
+    // https://github.com/databricks/dbt-databricks/blob/ba47ba15fb194e048866f4ce396a7eda71db2596/dbt/adapters/databricks/constants.py
+    fn default_catalog_relation_databricks() -> CatalogRelation {
+        CatalogRelation {
+            adapter_type: AdapterType::Databricks,
+            catalog_name: None,
+            integration_name: None,
+            catalog_type: DATABRICKS_UNITY_CATALOG.to_string(),
+            table_format: DBX_DEFAULT_TABLE_FORMAT.to_string(),
+            file_format: Some(DELTA_TABLE_FORMAT.to_string()),
+            external_volume: None,
+            base_location: None,
+            adapter_properties: BTreeMap::new(),
+            is_transient: None,
+        }
+    }
+
+    fn build_databricks_with_catalogs(
+        model_config: &Value,
+        catalogs: &YmlMapping,
+        catalog_name: &str,
+    ) -> AdapterResult<CatalogRelation> {
+        let catalog = find_catalog(catalogs, catalog_name).ok_or_else(|| {
+            AdapterError::new(
+                AdapterErrorKind::Configuration,
+                format!("Catalog '{catalog_name}' not found in catalogs.yml"),
+            )
+        })?;
+
+        // 1) active integration name
+        let integration_name =
+            lookup_integration_name(catalogs, catalog_name).ok_or_else(|| {
+                AdapterError::new(
+                    AdapterErrorKind::Configuration,
+                    format!("Catalog '{catalog_name}' missing 'active_write_integration'"),
+                )
+            })?;
+
+        // 2) resolve the selected write_integration mapping
+        let write_integration = Self::lookup_write_integration(catalog, &integration_name);
+
+        // 3) catalog_type must be in YAML (no model override)
+        if Self::get_model_config_value(model_config, "catalog_type").is_some() {
+            return Err(AdapterError::new(
+                AdapterErrorKind::Configuration,
+                "catalog_type may only be specified in write integration entries of catalogs.yml",
+            ));
+        }
+
+        let raw_catalog_type = Self::yml_str(write_integration, "catalog_type".to_owned())
+            .ok_or_else(|| {
+                AdapterError::new(
+                    AdapterErrorKind::Configuration,
+                    "catalog_type missing from catalogs.yml (should be impossible by schema)",
+                )
+            })?;
+
+        let catalog_type = if raw_catalog_type.eq_ignore_ascii_case("unity") {
+            DATABRICKS_UNITY_CATALOG
+        } else if raw_catalog_type.eq_ignore_ascii_case("hive_metastore") {
+            DATABRICKS_HIVE_METASTORE
+        } else {
+            return Err(AdapterError::new(
+                AdapterErrorKind::Configuration,
+                format!("Invalid Databricks catalog_type '{raw_catalog_type}'"),
+            ));
+        };
+
+        // 4) table_format: DEFAULT|ICEBERG (model > YAML > DEFAULT)
+        let table_format_raw = Self::get_model_config_value(model_config, "table_format")
+            .or_else(|| Self::yml_str(write_integration, "table_format".to_string()))
+            .unwrap_or_else(|| DBX_DEFAULT_TABLE_FORMAT.to_string());
+        if !ALLOWED_TABLE_FORMATS_DATABRICKS
+            .iter()
+            .any(|a| table_format_raw.eq_ignore_ascii_case(a))
+        {
+            return Err(AdapterError::new(
+                AdapterErrorKind::Configuration,
+                format!(
+                    "Unsupported table_format '{table_format_raw}' in catalog '{catalog_name}'. \
+                     Must be one of ({ALLOWED_TABLE_FORMATS_DISPLAY_DATABRICKS}) case insensitive."
+                ),
+            ));
+        }
+        let table_format = if table_format_raw.eq_ignore_ascii_case(DBX_ICEBERG_TABLE_FORMAT) {
+            DBX_ICEBERG_TABLE_FORMAT
+        } else {
+            DBX_DEFAULT_TABLE_FORMAT
+        };
+
+        // 5) file_format: model > YAML > default(delta)
+        let mut file_format = Self::get_model_config_value(model_config, "file_format")
+            .or_else(|| Self::yml_str(write_integration, "file_format".to_string()))
+            .unwrap_or_else(|| String::from(DBX_DEFAULT_TABLE_FORMAT));
+        file_format.make_ascii_lowercase();
+        let file_format = file_format;
+
+        // 6) adapter_properties:
+        //    - UNITY: allow only location_root (optional; non-blank)
+        //    - HMS: disallow adapter_properties entirely
+        let adapter_properties = Self::merged_adapter_properties(model_config, write_integration);
+        let mut external_volume = None;
+
+        let location_root = model_config
+            .get_attr("__warehouse_specific_config__")
+            .ok()
+            .and_then(|wsc| wsc.get_attr("location_root").ok())
+            .filter(|v| v.kind() == ValueKind::String)
+            .map(|v| v.to_string())
+            .or_else(|| {
+                write_integration
+                    .as_ref()
+                    .and_then(|wi| {
+                        wi.get(key("adapter_properties".to_string()))
+                            .and_then(|v| v.as_mapping())
+                    })
+                    .and_then(|ap_map| Self::yml_str(Some(ap_map), "location_root".to_string()))
+            });
+
+        if raw_catalog_type.eq_ignore_ascii_case(DATABRICKS_UNITY_CATALOG)
+            && let Some(location_root) = location_root
+        {
+            if location_root.trim().is_empty() {
+                return Err(AdapterError::new(
+                    AdapterErrorKind::Configuration,
+                    "adapter_properties.location_root cannot be blank or whitespace",
+                ));
+            }
+            external_volume =
+                Self::dbx_build_external_volume_for_location(model_config, &location_root);
+        } else if raw_catalog_type.eq_ignore_ascii_case(DATABRICKS_HIVE_METASTORE) {
+            if !adapter_properties.is_empty() {
+                return Err(AdapterError::new(
+                    AdapterErrorKind::Configuration,
+                    "adapter_properties not allowed for hive_metastore",
+                ));
+            }
+        };
+        let external_volume = external_volume;
+
+        Ok(CatalogRelation {
+            adapter_type: AdapterType::Databricks,
+            // TODO support model database here
+            // https://github.com/databricks/dbt-databricks/blob/53cd1a2c1fcb245ef25ecf2e41249335fd4c8e4b/dbt/adapters/databricks/catalogs/_hive_metastore.py#L38
+            catalog_name: Some(catalog_name.to_string()),
+            integration_name: Some(integration_name),
+            catalog_type: catalog_type.to_string(),
+            table_format: table_format.to_string(),
+            file_format: Some(file_format),
+            external_volume,
+            base_location: None,
+            adapter_properties,
+            is_transient: None,
+        })
+    }
+
+    // centralized reimplementation of https://github.com/databricks/dbt-databricks/blob/53cd1a2c1fcb245ef25ecf2e41249335fd4c8e4b/dbt/adapters/databricks/catalogs/_relation.py#L33
+    pub fn dbx_build_external_volume_for_location(
+        model: &Value,
+        location_root: &str,
+    ) -> Option<String> {
+        let get_str = |k: &str| -> Option<String> {
+            model.get_attr(k).ok().and_then(|v| {
+                (v.kind() == ValueKind::String)
+                    .then(|| v.to_string().trim().to_owned())
+                    .filter(|s| !s.is_empty())
+            })
+        };
+
+        let include_full_name = model
+            .get_attr("include_full_name_in_path")
+            .ok()
+            .map(|v| match v.kind() {
+                ValueKind::Bool => v.is_true(),
+                ValueKind::String => v.to_string().trim().eq_ignore_ascii_case("true"),
+                _ => false,
+            })
+            .unwrap_or(false);
+
+        let mut rel = PathBuf::new();
+
+        if let Some(id) = get_str("identifier") {
+            rel.push(id);
+        }
+
+        if include_full_name {
+            if let Some(db) = get_str("database") {
+                rel.push(db);
+            }
+            if let Some(sc) = get_str("schema") {
+                rel.push(sc);
+            }
+        }
+
+        Some(
+            PathBuf::from(location_root.trim_end_matches('/'))
+                .join(rel)
+                .to_string_lossy()
+                .replace('\\', "/"),
+        )
+    }
+
+    // =========
+    // Snowflake
+    // =========
+
+    pub fn from_model_config_and_catalogs_snowflake(
         model_config: &Value,
         catalogs: Option<Arc<DbtCatalogs>>,
     ) -> AdapterResult<Self> {
@@ -69,7 +369,7 @@ impl CatalogRelation {
             {
                 Self::build_for_cld_only(model_config)
             } else {
-                Ok(Self::empty_catalog_relation())
+                Ok(Self::default_catalog_relation_snowflake())
             };
         }
 
@@ -116,14 +416,16 @@ impl CatalogRelation {
         adapter_properties.insert("catalog_linked_database".to_string(), db_name.to_string());
 
         Ok(CatalogRelation {
+            adapter_type: AdapterType::Snowflake,
             catalog_name: None,
             integration_name: None,
-            catalog_type: CatalogType::IcebergRest.as_str().to_string(),
+            catalog_type: CatalogType::SnowflakeIcebergRest.as_str().to_string(),
             table_format: "iceberg".to_string(),
             external_volume: None,
             base_location: None,
             adapter_properties,
-            is_transient: false,
+            is_transient: Some(false),
+            file_format: None,
         })
     }
 
@@ -176,6 +478,7 @@ impl CatalogRelation {
                 }
 
                 Ok(CatalogRelation {
+                    adapter_type: AdapterType::Snowflake,
                     catalog_name: None,
                     integration_name: None,
                     table_format: DEFAULT_TABLE_FORMAT.to_string(),
@@ -183,7 +486,8 @@ impl CatalogRelation {
                     external_volume: None,
                     base_location: None,
                     adapter_properties: BTreeMap::new(),
-                    is_transient: transient_parsed.unwrap_or(true),
+                    is_transient: Some(transient_parsed.unwrap_or(true)),
+                    file_format: None,
                 })
             }
 
@@ -208,6 +512,7 @@ impl CatalogRelation {
                 }
 
                 Ok(CatalogRelation {
+                    adapter_type: AdapterType::Snowflake,
                     catalog_name: None,
                     integration_name: None,
                     table_format: DEFAULT_TABLE_FORMAT.to_string(),
@@ -215,7 +520,8 @@ impl CatalogRelation {
                     external_volume: None,
                     base_location: None,
                     adapter_properties: BTreeMap::new(),
-                    is_transient: transient_parsed.unwrap_or(true),
+                    is_transient: Some(transient_parsed.unwrap_or(true)),
+                    file_format: None,
                 })
             }
 
@@ -247,6 +553,7 @@ impl CatalogRelation {
                 );
 
                 Ok(CatalogRelation {
+                    adapter_type: AdapterType::Snowflake,
                     catalog_name: None,
                     integration_name: None,
                     table_format,
@@ -254,7 +561,8 @@ impl CatalogRelation {
                     external_volume,
                     base_location: Some(base_location),
                     adapter_properties: BTreeMap::new(),
-                    is_transient: false, // always FALSE for ICEBERG
+                    is_transient: Some(false), // always FALSE for ICEBERG
+                    file_format: None,
                 })
             }
 
@@ -265,7 +573,7 @@ impl CatalogRelation {
                 AdapterErrorKind::Configuration,
                 format!(
                     "Unsupported table_format='{table_format}'. Must be one of \
-                    ({ALLOWED_TABLE_FORMATS_DISPLAY}) case insensitive. \
+                    ({ALLOWED_TABLE_FORMATS_DISPLAY_SNOWFLAKE}) case insensitive. \
                      For other table formats, use catalogs.yml write integrations."
                 ),
             )),
@@ -330,7 +638,7 @@ impl CatalogRelation {
                 )
             })?;
 
-        if !ALLOWED_CATALOG_TYPE_FORMATS
+        if !ALLOWED_TABLE_FORMATS_SNOWFLAKE
             .iter()
             .any(|a| table_format.eq_ignore_ascii_case(a))
         {
@@ -338,7 +646,7 @@ impl CatalogRelation {
                 AdapterErrorKind::Configuration,
                 format!(
                     "Unsupported table_format '{table_format}' in catalog '{catalog_name}'. \
-                     Must be one of ({ALLOWED_TABLE_FORMATS_DISPLAY}) case insensitive."
+                     Must be one of ({ALLOWED_TABLE_FORMATS_DISPLAY_SNOWFLAKE}) case insensitive."
                 ),
             ));
         }
@@ -379,6 +687,7 @@ impl CatalogRelation {
         }
 
         Ok(CatalogRelation {
+            adapter_type: AdapterType::Snowflake,
             catalog_name: Some(catalog_name.to_string()),
             integration_name: Some(integration_name),
             catalog_type: catalog_type.to_string(),
@@ -386,7 +695,8 @@ impl CatalogRelation {
             external_volume,
             base_location: Some(base_location),
             adapter_properties,
-            is_transient: false, // catalogs.yml hardcoded to iceberg table_format => always false
+            is_transient: Some(false), // catalogs.yml hardcoded to iceberg table_format => always false
+            file_format: None,
         })
     }
 
@@ -551,7 +861,13 @@ impl CatalogRelation {
         })
     }
 
-    // === Value extraction helpers
+    fn map_opt_bool(v: Option<bool>) -> Value {
+        match v {
+            Some(b) => Value::from(b),
+            None => Value::from(()),
+        }
+    }
+
     fn map_opt_str(v: Option<String>) -> Value {
         match v.as_deref().map(|s| s.trim()).filter(|t| !t.is_empty()) {
             Some(t) => Value::from(t),
@@ -564,7 +880,6 @@ impl CatalogRelation {
         Value::from(v)
     }
 
-    // === from adapter_properties
     fn map_properties_str(m: &BTreeMap<String, String>, k: &str) -> Value {
         match m.get(k).map(|s| s.trim()).filter(|t| !t.is_empty()) {
             Some(t) => Value::from(t),
@@ -630,8 +945,9 @@ impl CatalogRelation {
 
     /// Build an "empty" catalog relation: everything None/empty, falling back
     /// to the INFO_SCHEMA store and DEFAULT table format.
-    pub fn empty_catalog_relation() -> Self {
+    pub fn default_catalog_relation_snowflake() -> Self {
         CatalogRelation {
+            adapter_type: AdapterType::Snowflake,
             catalog_name: None,
             integration_name: None,
             catalog_type: SNOWFLAKE_RELATION_STORE.to_string(),
@@ -639,11 +955,21 @@ impl CatalogRelation {
             external_volume: None,
             base_location: None,
             adapter_properties: BTreeMap::new(),
-            is_transient: true, // default transient for DEFAULT table format
+            is_transient: Some(true), // default transient for DEFAULT table format
+            file_format: None,
         }
     }
 
     // === end HACK
+
+    // helper for get_value in impl Object
+    fn gate_by_adapter(&self, adapter_type: AdapterType, value_fetch: impl Fn() -> Value) -> Value {
+        if self.adapter_type == adapter_type {
+            value_fetch()
+        } else {
+            Value::from(())
+        }
+    }
 }
 
 #[inline]
@@ -685,7 +1011,6 @@ impl Object for CatalogRelation {
             "table_format" => Self::map_str_val(self.table_format.as_str()),
 
             // common optional
-            "external_volume" => Self::map_opt_str(self.external_volume.clone()),
             "base_location" => Self::map_opt_str(self.base_location.clone()),
 
             // expose full map
@@ -719,8 +1044,21 @@ impl Object for CatalogRelation {
                 Self::map_properties_str(&self.adapter_properties, "target_file_size")
             }
 
-            // HELPER
-            "is_transient" => Value::from(self.is_transient),
+            // === Snowflake
+            "is_transient" => self.gate_by_adapter(AdapterType::Snowflake, || {
+                Self::map_opt_bool(self.is_transient)
+            }),
+            "external_volume" => self.gate_by_adapter(AdapterType::Snowflake, || {
+                Self::map_opt_str(self.external_volume.clone())
+            }),
+
+            // === Databricks
+            "file_format" => self.gate_by_adapter(AdapterType::Databricks, || {
+                Self::map_opt_str(self.file_format.clone())
+            }),
+            "location" => self.gate_by_adapter(AdapterType::Databricks, || {
+                Self::map_opt_str(self.external_volume.clone())
+            }),
 
             _ => Value::from(()),
         })
@@ -866,7 +1204,7 @@ mod tests {
         let m = model(json!({ "table_format": "PARQUET" }));
         let err = CatalogRelation::build_without_catalogs_yml(&m).unwrap_err();
         assert!(format!("{err}").contains("Unsupported table_format='PARQUET'"));
-        assert!(format!("{err}").contains(ALLOWED_TABLE_FORMATS_DISPLAY));
+        assert!(format!("{err}").contains(ALLOWED_TABLE_FORMATS_DISPLAY_SNOWFLAKE));
     }
 
     #[test]
@@ -928,13 +1266,14 @@ mod tests {
     }
 
     //
-    // --- from_model_config_and_catalogs orchestration ---
+    // --- from_model_config_and_catalogs orchestration
     //
 
     #[test]
     fn from_model_no_catalog_name_uses_legacy_path() {
         let m = model(json!({}));
-        let r = CatalogRelation::from_model_config_and_catalogs(&m, None).unwrap();
+        let r = CatalogRelation::from_model_config_and_catalogs(&AdapterType::Snowflake, &m, None)
+            .unwrap();
         assert_eq!(r.table_format, DEFAULT_TABLE_FORMAT);
         assert_eq!(r.catalog_type, SNOWFLAKE_RELATION_STORE);
     }
@@ -942,7 +1281,9 @@ mod tests {
     #[test]
     fn from_model_catalog_name_without_catalogs_errors() {
         let m = model(json!({ "catalog_name": "CAT" }));
-        let err = CatalogRelation::from_model_config_and_catalogs(&m, None).unwrap_err();
+        let err =
+            CatalogRelation::from_model_config_and_catalogs(&AdapterType::Snowflake, &m, None)
+                .unwrap_err();
         assert!(format!("{err}").contains("catalog_name 'CAT'"));
         assert!(format!("{err}").contains("catalogs.yml was not found"));
     }
@@ -951,7 +1292,8 @@ mod tests {
     fn from_model_catalog_name_string_none_is_treated_as_absent() {
         // "none" (any case) treated as not provided -> legacy
         let m = model(json!({ "catalog_name": "None" }));
-        let r = CatalogRelation::from_model_config_and_catalogs(&m, None).unwrap();
+        let r = CatalogRelation::from_model_config_and_catalogs(&AdapterType::Snowflake, &m, None)
+            .unwrap();
         assert_eq!(r.table_format, DEFAULT_TABLE_FORMAT);
         assert!(r.catalog_name.is_none());
     }
@@ -1051,7 +1393,7 @@ mod tests {
         let m = model(json!({ "catalog_name": "CAT", "table_format": "FANCY" }));
         let err = CatalogRelation::build_with_catalogs(&m, &cats, "CAT").unwrap_err();
         assert!(format!("{err}").contains("Unsupported table_format 'FANCY'"));
-        assert!(format!("{err}").contains(ALLOWED_TABLE_FORMATS_DISPLAY));
+        assert!(format!("{err}").contains(ALLOWED_TABLE_FORMATS_DISPLAY_SNOWFLAKE));
     }
 
     #[test]
@@ -1110,21 +1452,21 @@ mod tests {
     fn legacy_default_transient_unspecified_defaults_true() {
         let m = model(json!({ "table_format": "DEFAULT" }));
         let r = CatalogRelation::build_without_catalogs_yml(&m).unwrap();
-        assert!(r.is_transient);
+        assert!(r.is_transient.unwrap());
     }
 
     #[test]
     fn legacy_default_transient_false_explicit() {
         let m = model(json!({ "table_format": "DEFAULT", "transient": false }));
         let r = CatalogRelation::build_without_catalogs_yml(&m).unwrap();
-        assert!(!r.is_transient);
+        assert!(!r.is_transient.unwrap());
     }
 
     #[test]
     fn legacy_default_transient_true_explicit() {
         let m = model(json!({ "table_format": "DEFAULT", "transient": true }));
         let r = CatalogRelation::build_without_catalogs_yml(&m).unwrap();
-        assert!(r.is_transient);
+        assert!(r.is_transient.unwrap());
     }
 
     #[test]
@@ -1138,7 +1480,7 @@ mod tests {
     fn legacy_iceberg_unspecified_transient_defaults_false() {
         let m = model(json!({ "table_format": "ICEBERG" }));
         let r = CatalogRelation::build_without_catalogs_yml(&m).unwrap();
-        assert!(!r.is_transient);
+        assert!(!r.is_transient.unwrap());
     }
 
     #[test]
@@ -1146,7 +1488,7 @@ mod tests {
         let cats = catalogs_yaml_one("CAT", "WIN", "BUILT_IN", "ICEBERG", &[]);
         let m = model(json!({ "catalog_name": "CAT" }));
         let r = CatalogRelation::build_with_catalogs(&m, &cats, "CAT").unwrap();
-        assert!(!r.is_transient);
+        assert!(!r.is_transient.unwrap());
     }
 
     #[test]
@@ -1155,5 +1497,326 @@ mod tests {
         let m = model(json!({ "catalog_name": "CAT", "transient": true }));
         let err = CatalogRelation::build_with_catalogs(&m, &cats, "CAT").unwrap_err();
         assert!(format!("{err}").contains("transient may not be specified for ICEBERG"));
+    }
+
+    #[test]
+    fn dbx_default_relation_without_catalogs_ok() {
+        let m = model(json!({}));
+        let r = CatalogRelation::from_model_config_and_catalogs(&AdapterType::Databricks, &m, None)
+            .unwrap();
+
+        assert_eq!(r.table_format, DBX_DEFAULT_TABLE_FORMAT);
+        assert_eq!(r.catalog_type, "unity");
+        assert_eq!(r.file_format.as_deref(), Some("delta"));
+        assert!(r.adapter_properties.is_empty());
+        assert!(r.catalog_name.is_none());
+        assert!(r.integration_name.is_none());
+        assert!(r.is_transient.is_none());
+    }
+
+    #[test]
+    fn dbx_iceberg_without_catalogs_errors() {
+        let m = model(json!({ "table_format": "ICEBERG" }));
+        let err =
+            CatalogRelation::from_model_config_and_catalogs(&AdapterType::Databricks, &m, None)
+                .unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("table_format=iceberg"));
+        assert!(msg.contains("requires catalogs.yml"));
+    }
+
+    #[test]
+    fn dbx_with_catalogs_but_no_catalog_name_defaults_when_not_iceberg() {
+        let cats = catalogs_yaml_one(
+            "CAT",
+            "WIN",
+            "unity",
+            "DEFAULT",
+            &[("file_format", s("delta"))],
+        );
+        let m = model(json!({}));
+        let r = CatalogRelation::from_model_config_and_catalogs(
+            &AdapterType::Databricks,
+            &m,
+            Some(Arc::new(DbtCatalogs { repr: cats })),
+        )
+        .unwrap();
+
+        assert_eq!(r.table_format, DBX_DEFAULT_TABLE_FORMAT);
+        assert_eq!(r.catalog_type, "unity");
+        assert_eq!(r.file_format.as_deref(), Some("delta"));
+        assert!(r.is_transient.is_none());
+    }
+
+    #[test]
+    fn dbx_with_catalogs_but_no_catalog_name_iceberg_errors() {
+        let cats = catalogs_yaml_one(
+            "CAT",
+            "WIN",
+            "unity",
+            "ICEBERG",
+            &[("file_format", s("delta"))],
+        );
+        let m = model(json!({ "table_format": "ICEBERG" }));
+        let err = CatalogRelation::from_model_config_and_catalogs(
+            &AdapterType::Databricks,
+            &m,
+            Some(Arc::new(DbtCatalogs { repr: cats })),
+        )
+        .unwrap_err();
+        let msg = format!("{err}");
+        assert!(msg.contains("table_format=iceberg"));
+        assert!(msg.contains("requires a `catalog_name`"));
+    }
+
+    #[test]
+    fn dbx_unity_minimal_iceberg_ok() {
+        let cats = catalogs_yaml_one(
+            "UC",
+            "WIN",
+            "unity",
+            "ICEBERG",
+            &[
+                ("file_format", s("delta")),
+                (
+                    "adapter_properties",
+                    map(&[("location_root", s("/Volumes/org/lake"))]),
+                ),
+            ],
+        );
+        let m = model(json!({ "catalog_name": "UC" }));
+
+        let r = CatalogRelation::from_model_config_and_catalogs(
+            &AdapterType::Databricks,
+            &m,
+            Some(Arc::new(DbtCatalogs { repr: cats })),
+        )
+        .unwrap();
+
+        assert_eq!(r.catalog_name.as_deref(), Some("UC"));
+        assert_eq!(r.integration_name.as_deref(), Some("WIN"));
+        assert_eq!(r.catalog_type, "unity");
+        assert_eq!(r.table_format, "iceberg");
+        assert_eq!(r.file_format.as_deref(), Some("delta"));
+        assert_eq!(
+            r.adapter_properties
+                .get("location_root")
+                .map(|s| s.as_str()),
+            Some("/Volumes/org/lake")
+        );
+        assert!(r.is_transient.is_none());
+    }
+
+    #[test]
+    fn dbx_unity_location_root_blank_rejected() {
+        let cats = catalogs_yaml_one(
+            "UC",
+            "WIN",
+            "unity",
+            "ICEBERG",
+            &[
+                ("file_format", s("delta")),
+                ("adapter_properties", map(&[("location_root", s("   "))])),
+            ],
+        );
+        let m = model(json!({ "catalog_name": "UC" }));
+
+        let err = CatalogRelation::from_model_config_and_catalogs(
+            &AdapterType::Databricks,
+            &m,
+            Some(Arc::new(DbtCatalogs { repr: cats })),
+        )
+        .unwrap_err();
+
+        assert!(format!("{err}").contains("location_root cannot be blank"));
+    }
+
+    #[test]
+    fn dbx_unity_model_can_set_file_format_delta_when_yaml_omits() {
+        let cats = catalogs_yaml_one("UC", "WIN", "unity", "ICEBERG", &[]);
+        let m = model(json!({ "catalog_name": "UC", "file_format": "delta" }));
+
+        let r = CatalogRelation::from_model_config_and_catalogs(
+            &AdapterType::Databricks,
+            &m,
+            Some(Arc::new(DbtCatalogs { repr: cats })),
+        )
+        .unwrap();
+
+        assert_eq!(r.file_format.as_deref(), Some("delta"));
+        assert_eq!(r.table_format, "iceberg");
+    }
+
+    #[test]
+    fn dbx_hms_iceberg_delta_ok_per_adapter_surface() {
+        let cats = catalogs_yaml_one(
+            "HMS",
+            "WIN",
+            "hive_metastore",
+            "ICEBERG",
+            &[("file_format", s("delta"))],
+        );
+        let m = model(json!({ "catalog_name": "HMS" }));
+
+        let r = CatalogRelation::from_model_config_and_catalogs(
+            &AdapterType::Databricks,
+            &m,
+            Some(Arc::new(DbtCatalogs { repr: cats })),
+        )
+        .unwrap();
+
+        assert_eq!(r.catalog_type, "hive_metastore");
+        assert_eq!(r.table_format, "iceberg");
+        assert_eq!(r.file_format.as_deref(), Some("delta"));
+        assert!(r.adapter_properties.is_empty());
+        assert!(r.is_transient.is_none());
+    }
+
+    #[test]
+    fn dbx_hms_forbids_adapter_properties() {
+        let cats = catalogs_yaml_one(
+            "HMS",
+            "WIN",
+            "hive_metastore",
+            "ICEBERG",
+            &[
+                ("file_format", s("delta")),
+                (
+                    "adapter_properties",
+                    map(&[("location_root", s("/mnt/should_not_be_here"))]),
+                ),
+            ],
+        );
+        let m = model(json!({ "catalog_name": "HMS" }));
+
+        let err = CatalogRelation::from_model_config_and_catalogs(
+            &AdapterType::Databricks,
+            &m,
+            Some(Arc::new(DbtCatalogs { repr: cats })),
+        )
+        .unwrap_err();
+
+        assert!(format!("{err}").contains("adapter_properties not allowed for hive_metastore"));
+    }
+
+    #[test]
+    fn dbx_hms_default_hudi_ok() {
+        let cats = catalogs_yaml_one(
+            "HMS",
+            "WIN",
+            "hive_metastore",
+            "DEFAULT",
+            &[("file_format", s("hudi"))],
+        );
+        let m = model(json!({ "catalog_name": "HMS" }));
+
+        let r = CatalogRelation::from_model_config_and_catalogs(
+            &AdapterType::Databricks,
+            &m,
+            Some(Arc::new(DbtCatalogs { repr: cats })),
+        )
+        .unwrap();
+
+        assert_eq!(r.catalog_type, "hive_metastore");
+        assert_eq!(r.table_format, "default");
+        assert_eq!(r.file_format.as_deref(), Some("hudi"));
+        assert!(r.adapter_properties.is_empty());
+        assert!(r.is_transient.is_none());
+    }
+
+    #[test]
+    fn dbx_hms_default_parquet_ok() {
+        let cats = catalogs_yaml_one(
+            "HMS",
+            "WIN",
+            "hive_metastore",
+            "DEFAULT",
+            &[("file_format", s("parquet"))],
+        );
+        let m = model(json!({ "catalog_name": "HMS" }));
+
+        let r = CatalogRelation::from_model_config_and_catalogs(
+            &AdapterType::Databricks,
+            &m,
+            Some(Arc::new(DbtCatalogs { repr: cats })),
+        )
+        .unwrap();
+
+        assert_eq!(r.catalog_type, "hive_metastore");
+        assert_eq!(r.table_format, "default");
+        assert_eq!(r.file_format.as_deref(), Some("parquet"));
+        assert!(r.adapter_properties.is_empty());
+        assert!(r.is_transient.is_none());
+    }
+
+    #[test]
+    fn dbx_hms_model_overrides_integration_file_format_ok() {
+        let cats = catalogs_yaml_one(
+            "HMS",
+            "WIN",
+            "hive_metastore",
+            "DEFAULT",
+            &[("file_format", s("delta"))],
+        );
+        let m = model(json!({ "catalog_name": "HMS", "file_format": "parquet" }));
+
+        let r = CatalogRelation::from_model_config_and_catalogs(
+            &AdapterType::Databricks,
+            &m,
+            Some(Arc::new(DbtCatalogs { repr: cats })),
+        )
+        .unwrap();
+
+        assert_eq!(r.catalog_type, "hive_metastore");
+        assert_eq!(r.table_format, "default");
+        assert_eq!(r.file_format.as_deref(), Some("parquet"));
+    }
+
+    #[test]
+    fn dbx_unity_does_not_clobber_model_file_format_when_valid_delta() {
+        let cats = catalogs_yaml_one(
+            "UC",
+            "WIN",
+            "unity",
+            "ICEBERG",
+            &[("file_format", s("parquet"))],
+        );
+        let m = model(json!({ "catalog_name": "UC", "file_format": "DELTA" }));
+
+        let r = CatalogRelation::from_model_config_and_catalogs(
+            &AdapterType::Databricks,
+            &m,
+            Some(Arc::new(DbtCatalogs { repr: cats })),
+        )
+        .unwrap();
+
+        assert_eq!(r.catalog_type, "unity");
+        assert_eq!(r.table_format, "iceberg");
+        assert_eq!(r.file_format.as_deref(), Some("delta"));
+    }
+
+    #[test]
+    fn dbx_model_cannot_override_catalog_type_unity_to_hms() {
+        let cats = catalogs_yaml_one(
+            "UC",
+            "WIN",
+            "unity",
+            "DEFAULT",
+            &[("file_format", s("delta"))],
+        );
+        let m = model(json!({
+            "catalog_name": "UC",
+            "catalog_type": "hive_metastore"
+        }));
+
+        let err = CatalogRelation::from_model_config_and_catalogs(
+            &AdapterType::Databricks,
+            &m,
+            Some(Arc::new(DbtCatalogs { repr: cats })),
+        )
+        .unwrap_err();
+
+        let msg = format!("{err}");
+        assert!(msg.contains("catalog_type"));
     }
 }

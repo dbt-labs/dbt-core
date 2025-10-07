@@ -14,8 +14,9 @@ pub mod schemas {
     pub mod dbt_column;
 
     pub use dbt_catalogs::{
-        AdapterPropsView, BuiltInPropsView, CatalogSpecView, CatalogType, DbtCatalogsView,
-        RestPropsView, SerializationPolicy, TableFormat, TargetFileSize, WriteIntegrationView,
+        AdapterPropsView, CatalogSpecView, CatalogType, DatabricksFileFormat,
+        DatabricksUnityPropsView, DbtCatalogsView, SerializationPolicy, SnowflakeBuiltInPropsView,
+        SnowflakeRestPropsView, TableFormat, TargetFileSize, WriteIntegrationView,
         validate_catalogs,
     };
     pub mod macros;

@@ -4,6 +4,8 @@
 //!   catalogs:
 //!     - name|catalog_name: <string, non-empty>
 //!       active_write_integration: <string, non-empty>
+//!
+//!       ## ==== Snowflake
 //!       write_integrations:
 //!         - name|integration_name: <string, non-empty>
 //!           // TODO: catalog type info schema and DDL
@@ -23,6 +25,21 @@
 //!             catalog_linked_database: <string, if present non-empty> // REST write-support gate
 //!             max_data_extension_time_in_days: <u32 in 0..=90>
 //!             target_file_size: 'AUTO'|'16MB'|'32MB'|'64MB'|'128MB'   // case-insensitive
+//!
+//!       ## ==== Databricks
+//!       write_integrations:                                           // used as a stronger answer to DatabricksRelation::is_hive_metastore()
+//!         - name: <non-empty>
+//!           catalog_type: hive_metastore
+//!           table_format: default
+//!           file_format: delta|hudi|parquet
+//!
+//!       write_integrations:
+//!         - name: <non-empty>
+//!           catalog_type: unity
+//!           table_format: iceberg
+//!           file_format: delta                                        // required with table_format=iceberg
+//!           adapter_properties:
+//!             location: <string>                                      // optional; if present, non-empty -- will be external_volume under the hood
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -66,8 +83,10 @@ impl DbtCatalogs {
 // If adding a new enum type, also add the expected string to match it
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CatalogType {
-    BuiltIn,
-    IcebergRest,
+    SnowflakeBuiltIn,
+    SnowflakeIcebergRest,
+    DatabricksHiveMetastore,
+    DatabricksUnity,
 }
 
 impl CatalogType {
@@ -87,28 +106,76 @@ impl CatalogType {
 
     pub fn as_str(&self) -> &'static str {
         match self {
-            CatalogType::BuiltIn => "BUILT_IN",
-            CatalogType::IcebergRest => "ICEBERG_REST",
+            CatalogType::SnowflakeBuiltIn => "BUILT_IN",
+            CatalogType::SnowflakeIcebergRest => "ICEBERG_REST",
+            CatalogType::DatabricksHiveMetastore => "hive_metastore",
+            CatalogType::DatabricksUnity => "unity",
         }
     }
 }
 
-const CATALOG_TYPES: [(&str, CatalogType); 4] = [
-    ("built_in", CatalogType::BuiltIn),
-    ("snowflake", CatalogType::BuiltIn),
-    ("rest", CatalogType::IcebergRest),
-    ("iceberg_rest", CatalogType::IcebergRest),
+const CATALOG_TYPES: [(&str, CatalogType); 6] = [
+    ("built_in", CatalogType::SnowflakeBuiltIn),
+    ("snowflake", CatalogType::SnowflakeBuiltIn),
+    ("rest", CatalogType::SnowflakeIcebergRest),
+    ("iceberg_rest", CatalogType::SnowflakeIcebergRest),
+    ("hive_metastore", CatalogType::DatabricksHiveMetastore),
+    ("unity", CatalogType::DatabricksUnity),
 ];
 
-const CATALOG_TYPE_OPTS: &str = "built_in|snowflake|rest|iceberg_rest";
+const CATALOG_TYPE_OPTS: &str = "built_in|snowflake|rest|iceberg_rest|unity|hive_metastore";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TableFormat {
+    Default, // dbx hive_metastore
     Iceberg,
 }
 
+impl TableFormat {
+    fn parse(raw: &str) -> FsResult<Self> {
+        if raw.eq_ignore_ascii_case("iceberg") {
+            Ok(TableFormat::Iceberg)
+        } else if raw.eq_ignore_ascii_case("default") {
+            Ok(TableFormat::Default)
+        } else {
+            err!(
+                ErrorCode::InvalidConfig,
+                "table_format '{}' invalid (DEFAULT|ICEBERG)",
+                raw
+            )
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum DatabricksFileFormat {
+    Delta,
+    Hudi,
+    Parquet,
+}
+
+impl DatabricksFileFormat {
+    fn parse_file_format(s: &str) -> FsResult<DatabricksFileFormat> {
+        if s.eq_ignore_ascii_case("delta") {
+            Ok(DatabricksFileFormat::Delta)
+        } else if s.eq_ignore_ascii_case("hudi") {
+            Ok(DatabricksFileFormat::Hudi)
+        } else if s.eq_ignore_ascii_case("parquet") {
+            Ok(DatabricksFileFormat::Parquet)
+        } else {
+            err!(
+                ErrorCode::InvalidConfig,
+                "file_format '{}' invalid (delta|hudi|parquet)",
+                s
+            )
+        }
+    }
+}
+
+// Snowflake Properties
+
 #[derive(Debug, Default)]
-pub struct BuiltInPropsView {
+pub struct SnowflakeBuiltInPropsView {
     pub change_tracking: Option<bool>,
     pub data_retention_time_in_days: Option<u32>,
     pub max_data_extension_time_in_days: Option<u32>,
@@ -116,7 +183,7 @@ pub struct BuiltInPropsView {
 }
 
 #[derive(Debug, Default)]
-pub struct RestPropsView<'a> {
+pub struct SnowflakeRestPropsView<'a> {
     pub auto_refresh: Option<bool>,
     pub catalog_linked_database: Option<&'a str>,
     pub max_data_extension_time_in_days: Option<u32>,
@@ -139,10 +206,18 @@ pub enum TargetFileSize {
     _128MB,
 }
 
+// Databricks Properties
+#[derive(Debug)]
+pub struct DatabricksUnityPropsView<'a> {
+    pub location_root: Option<&'a str>,
+}
+
 #[derive(Debug)]
 pub enum AdapterPropsView<'a> {
-    BuiltIn(BuiltInPropsView),
-    Rest(RestPropsView<'a>),
+    SnowflakeBuiltIn(SnowflakeBuiltInPropsView),
+    SnowflakeRest(SnowflakeRestPropsView<'a>),
+    DatabricksUnity(DatabricksUnityPropsView<'a>),
+    Empty,
 }
 
 fn get_str<'a>(m: &'a yml::Mapping, k: &str) -> Option<&'a str> {
@@ -217,9 +292,13 @@ pub struct WriteIntegrationView<'a> {
     pub table_format: TableFormat,
     pub external_volume: Option<&'a str>,
 
+    // == Snowflake (top-level)
     // built_in only
     pub base_location_root: Option<&'a str>,
     pub base_location_subpath: Option<&'a str>,
+
+    // == Databricks (top-level)
+    pub file_format: Option<DatabricksFileFormat>,
 
     pub adapter_properties: Option<AdapterPropsView<'a>>,
 }
@@ -252,6 +331,7 @@ impl<'a> DbtCatalogsView<'a> {
             })?;
             catalogs.push(CatalogSpecView::from_mapping(m)?);
         }
+
         Ok(Self { catalogs })
     }
 }
@@ -307,21 +387,6 @@ impl<'a> CatalogSpecView<'a> {
 
 impl<'a> WriteIntegrationView<'a> {
     pub fn from_mapping(map: &'a yml::Mapping) -> FsResult<Self> {
-        check_unknown_keys(
-            map,
-            &[
-                "integration_name",
-                "name",
-                "catalog_type",
-                "table_format",
-                "external_volume",
-                "base_location_root",
-                "base_location_subpath",
-                "adapter_properties",
-            ],
-            "write_integration",
-        )?;
-
         if get_str(map, "integration_name").is_some() && get_str(map, "name").is_some() {
             return err!(
                 ErrorCode::InvalidConfig,
@@ -356,67 +421,274 @@ impl<'a> WriteIntegrationView<'a> {
                 )
             })?;
 
-        let table_format_raw =
-            get_str(map, "table_format").ok_or_else(|| key_err("table_format"))?;
-        let table_format = if table_format_raw.eq_ignore_ascii_case("iceberg") {
-            TableFormat::Iceberg
-        } else {
+        match catalog_type {
+            CatalogType::SnowflakeBuiltIn => Self::from_snowflake_built_in(map, integration_name),
+            CatalogType::SnowflakeIcebergRest => {
+                Self::from_snowflake_iceberg_rest(map, integration_name)
+            }
+            CatalogType::DatabricksUnity => Self::from_databricks_unity(map, integration_name),
+            CatalogType::DatabricksHiveMetastore => {
+                Self::from_databricks_hms(map, integration_name)
+            }
+        }
+    }
+
+    // Snowflake BUILT_IN
+    fn from_snowflake_built_in(map: &'a yml::Mapping, integration_name: &'a str) -> FsResult<Self> {
+        check_unknown_keys(
+            map,
+            &[
+                "integration_name",
+                "name",
+                "catalog_type",
+                "table_format",
+                "external_volume",
+                "base_location_root",
+                "base_location_subpath",
+                "adapter_properties",
+            ],
+            "write_integration(Snowflake built_in)",
+        )?;
+
+        let table_format = match get_str(map, "table_format") {
+            Some(s) => TableFormat::parse(s)?,
+            None => return Err(key_err("table_format")),
+        };
+        if table_format != TableFormat::Iceberg {
             return err!(
                 ErrorCode::InvalidConfig,
-                "table_format '{}' invalid (only 'iceberg' supported)",
-                table_format_raw
+                "integration '{}': Snowflake built_in requires table_format=iceberg",
+                integration_name
             );
-        };
+        }
 
-        // External volume currently invalid for Rest catalog
-        let external_volume: Option<&str> = match catalog_type {
-            CatalogType::BuiltIn => {
-                let v = get_str(map, "external_volume").ok_or_else(|| {
-                    fs_err!(
+        let external_volume = {
+            Some(match get_str(map, "external_volume") {
+                None => {
+                    return err!(
                         ErrorCode::InvalidConfig,
                         "integration '{}': 'external_volume' is required for BUILT_IN catalogs.",
                         integration_name
-                    )
-                })?;
-                if v.is_empty() {
+                    );
+                }
+                Some("") => {
                     return err!(
                         ErrorCode::InvalidConfig,
                         "integration '{}': 'external_volume' is required for BUILT_IN catalogs and cannot be blank.",
                         integration_name
                     );
                 }
-                Some(v)
-            }
-
-            CatalogType::IcebergRest => {
-                // must be absent or empty string; non-empty is invalid
-                match get_str(map, "external_volume") {
-                    None | Some("") => None,
-                    Some(_) => {
-                        return err!(
-                            ErrorCode::InvalidConfig,
-                            "integration '{}': 'external_volume' is not supported for Iceberg REST with catalog-linked databases.",
-                            integration_name
-                        );
-                    }
-                }
-            }
+                Some(s) => s,
+            })
         };
 
         let base_location_root = get_str(map, "base_location_root");
         let base_location_subpath = get_str(map, "base_location_subpath");
 
-        let adapter_properties = get_map(map, "adapter_properties")
-            .map(|properties| parse_adapter_properties(properties, catalog_type))
-            .transpose()?;
+        let adapter_properties = {
+            if let Some(props) = get_map(map, "adapter_properties") {
+                Some(parse_adapter_properties(
+                    props,
+                    CatalogType::SnowflakeBuiltIn,
+                )?)
+            } else {
+                None
+            }
+        };
 
         Ok(Self {
             integration_name,
-            catalog_type,
+            catalog_type: CatalogType::SnowflakeBuiltIn,
             table_format,
             external_volume,
             base_location_root,
             base_location_subpath,
+            file_format: None,
+            adapter_properties,
+        })
+    }
+
+    fn from_snowflake_iceberg_rest(
+        map: &'a yml::Mapping,
+        integration_name: &'a str,
+    ) -> FsResult<Self> {
+        check_unknown_keys(
+            map,
+            &[
+                "integration_name",
+                "name",
+                "catalog_type",
+                "table_format",
+                "adapter_properties",
+            ],
+            "write_integration(Snowflake iceberg_rest)",
+        )?;
+
+        let table_format = match get_str(map, "table_format") {
+            Some(s) => TableFormat::parse(s)?,
+            None => return Err(key_err("table_format")),
+        };
+        if table_format != TableFormat::Iceberg {
+            return err!(
+                ErrorCode::InvalidConfig,
+                "integration '{}': Snowflake iceberg_rest requires table_format=iceberg",
+                integration_name
+            );
+        }
+
+        let adapter_properties = {
+            if let Some(props) = get_map(map, "adapter_properties") {
+                Some(parse_adapter_properties(
+                    props,
+                    CatalogType::SnowflakeIcebergRest,
+                )?)
+            } else {
+                None
+            }
+        };
+
+        Ok(Self {
+            integration_name,
+            catalog_type: CatalogType::SnowflakeIcebergRest,
+            table_format,
+            external_volume: None,
+            base_location_root: None,
+            base_location_subpath: None,
+            file_format: None,
+            adapter_properties,
+        })
+    }
+
+    fn from_databricks_unity(map: &'a yml::Mapping, integration_name: &'a str) -> FsResult<Self> {
+        check_unknown_keys(
+            map,
+            &[
+                "integration_name",
+                "name",
+                "catalog_type",
+                "table_format",
+                "file_format",
+                "adapter_properties",
+            ],
+            "write_integration(Databricks unity)",
+        )?;
+
+        let table_format = {
+            let raw = match get_str(map, "table_format") {
+                Some(s) => s,
+                None => return Err(key_err("table_format")),
+            };
+            TableFormat::parse(raw)?
+        };
+        if table_format != TableFormat::Iceberg {
+            return err!(
+                ErrorCode::InvalidConfig,
+                "integration '{}': Databricks 'unity' requires table_format=iceberg",
+                integration_name
+            );
+        }
+
+        let file_format = {
+            let parsed = match get_str(map, "file_format") {
+                Some(s) => DatabricksFileFormat::parse_file_format(s)?,
+                None => {
+                    return err!(
+                        ErrorCode::InvalidConfig,
+                        "integration '{}': Databricks 'unity' requires file_format (must be 'delta')",
+                        integration_name
+                    );
+                }
+            };
+            match parsed {
+                DatabricksFileFormat::Delta => Some(parsed),
+                _ => {
+                    return err!(
+                        ErrorCode::InvalidConfig,
+                        "integration '{}': when table_format=iceberg, file_format must be 'delta'",
+                        integration_name
+                    );
+                }
+            }
+        };
+
+        let adapter_properties = {
+            if let Some(props) = get_map(map, "adapter_properties") {
+                Some(parse_adapter_properties(
+                    props,
+                    CatalogType::DatabricksUnity,
+                )?)
+            } else {
+                None
+            }
+        };
+
+        Ok(Self {
+            integration_name,
+            catalog_type: CatalogType::DatabricksUnity,
+            table_format,
+            external_volume: None,
+            base_location_root: None,
+            base_location_subpath: None,
+            file_format,
+            adapter_properties,
+        })
+    }
+
+    fn from_databricks_hms(map: &'a yml::Mapping, integration_name: &'a str) -> FsResult<Self> {
+        check_unknown_keys(
+            map,
+            &[
+                "integration_name",
+                "name",
+                "catalog_type",
+                "table_format",
+                "file_format",
+            ],
+            "write_integration(Databricks hive_metastore)",
+        )?;
+
+        let table_format = match get_str(map, "table_format") {
+            Some(s) => TableFormat::parse(s)?,
+            None => return Err(key_err("table_format")),
+        };
+        if table_format != TableFormat::Default {
+            return err!(
+                ErrorCode::InvalidConfig,
+                "integration '{}': Databricks 'hive_metastore' requires table_format=DEFAULT",
+                integration_name
+            );
+        }
+
+        let file_format = match get_str(map, "file_format") {
+            Some(s) => Some(DatabricksFileFormat::parse_file_format(s)?),
+            None => {
+                return err!(
+                    ErrorCode::InvalidConfig,
+                    "integration '{}': file_format required for Databricks hive_metastore and must be one of (delta|parquet|hudi)",
+                    integration_name
+                );
+            }
+        };
+
+        let adapter_properties = {
+            if let Some(props) = get_map(map, "adapter_properties") {
+                Some(parse_adapter_properties(
+                    props,
+                    CatalogType::DatabricksHiveMetastore,
+                )?)
+            } else {
+                None
+            }
+        };
+
+        Ok(Self {
+            integration_name,
+            catalog_type: CatalogType::DatabricksHiveMetastore,
+            table_format,
+            external_volume: None,
+            base_location_root: None,
+            base_location_subpath: None,
+            file_format,
             adapter_properties,
         })
     }
@@ -427,7 +699,7 @@ fn parse_adapter_properties<'a>(
     catalog_type: CatalogType,
 ) -> FsResult<AdapterPropsView<'a>> {
     match catalog_type {
-        CatalogType::BuiltIn => {
+        CatalogType::SnowflakeBuiltIn => {
             check_unknown_keys(
                 properties,
                 &[
@@ -438,8 +710,12 @@ fn parse_adapter_properties<'a>(
                 ],
                 "adapter_properties(built_in)",
             )?;
-            Ok(AdapterPropsView::BuiltIn(BuiltInPropsView {
-                storage_serialization_policy: get_str(properties, "storage_serialization_policy")
+            Ok(AdapterPropsView::SnowflakeBuiltIn(
+                SnowflakeBuiltInPropsView {
+                    storage_serialization_policy: get_str(
+                        properties,
+                        "storage_serialization_policy",
+                    )
                     .filter(|s| !s.is_empty())
                     .map(|s| {
                         if s.eq_ignore_ascii_case("compatible") {
@@ -455,15 +731,19 @@ fn parse_adapter_properties<'a>(
                         }
                     })
                     .transpose()?,
-                max_data_extension_time_in_days: get_u32(
-                    properties,
-                    "max_data_extension_time_in_days",
-                )?,
-                data_retention_time_in_days: get_u32(properties, "data_retention_time_in_days")?,
-                change_tracking: get_bool(properties, "change_tracking")?,
-            }))
+                    max_data_extension_time_in_days: get_u32(
+                        properties,
+                        "max_data_extension_time_in_days",
+                    )?,
+                    data_retention_time_in_days: get_u32(
+                        properties,
+                        "data_retention_time_in_days",
+                    )?,
+                    change_tracking: get_bool(properties, "change_tracking")?,
+                },
+            ))
         }
-        CatalogType::IcebergRest => {
+        CatalogType::SnowflakeIcebergRest => {
             check_unknown_keys(
                 properties,
                 &[
@@ -474,7 +754,7 @@ fn parse_adapter_properties<'a>(
                 ],
                 "adapter_properties(iceberg_rest)",
             )?;
-            Ok(AdapterPropsView::Rest(RestPropsView {
+            Ok(AdapterPropsView::SnowflakeRest(SnowflakeRestPropsView {
                 target_file_size: target_file_size(get_str(properties, "target_file_size"))?,
                 auto_refresh: get_bool(properties, "auto_refresh")?,
                 max_data_extension_time_in_days: get_u32(
@@ -483,6 +763,33 @@ fn parse_adapter_properties<'a>(
                 )?,
                 catalog_linked_database: get_str(properties, "catalog_linked_database"),
             }))
+        }
+        CatalogType::DatabricksUnity => {
+            check_unknown_keys(properties, &["location_root"], "adapter_properties(unity)")?;
+            if let Some(loc) = get_str(properties, "location_root") {
+                if loc.trim().is_empty() {
+                    return err!(
+                        ErrorCode::InvalidConfig,
+                        "adapter_properties.location_root cannot be blank"
+                    );
+                }
+            }
+            Ok(AdapterPropsView::DatabricksUnity(
+                DatabricksUnityPropsView {
+                    location_root: get_str(properties, "location_root")
+                        .filter(|s| !s.trim().is_empty()),
+                },
+            ))
+        }
+        CatalogType::DatabricksHiveMetastore => {
+            if !properties.is_empty() {
+                return err!(
+                    ErrorCode::InvalidConfig,
+                    "adapter_properties not allowed for hive_metastore"
+                );
+            }
+            // unreachable in practice because caller only invokes this if adapter_properties exists
+            Ok(AdapterPropsView::Empty)
         }
     }
 }
@@ -604,10 +911,10 @@ pub fn validate_catalogs(spec: &DbtCatalogsView<'_>, path: &Path) -> FsResult<()
             // === 6. Validate other write integration fields modulo catalog type
             match write_integration.catalog_type {
                 // === 6a. built in catalog type
-                CatalogType::BuiltIn => { /* no non-structural constraints */ }
+                CatalogType::SnowflakeBuiltIn => { /* no non-structural constraints */ }
 
                 // === 6b. iceberg rest catalog type
-                CatalogType::IcebergRest => {
+                CatalogType::SnowflakeIcebergRest => {
                     // REST forbids base_location_* fields
                     if write_integration.base_location_root.is_some()
                         || write_integration.base_location_subpath.is_some()
@@ -621,17 +928,19 @@ pub fn validate_catalogs(spec: &DbtCatalogsView<'_>, path: &Path) -> FsResult<()
                     }
 
                     match &write_integration.adapter_properties {
-                        Some(AdapterPropsView::Rest(rest)) => match rest.catalog_linked_database {
-                            Some(name) if !name.is_empty() => {}
-                            _ => {
-                                return err!(
-                                    code => ErrorCode::InvalidConfig,
-                                    loc  => err_loc(),
-                                    "integration '{}': 'catalog_linked_database' is required and cannot be blank for Iceberg REST",
-                                    write_integration.integration_name
-                                );
+                        Some(AdapterPropsView::SnowflakeRest(rest)) => {
+                            match rest.catalog_linked_database {
+                                Some(name) if !name.is_empty() => {}
+                                _ => {
+                                    return err!(
+                                        code => ErrorCode::InvalidConfig,
+                                        loc  => err_loc(),
+                                        "integration '{}': 'catalog_linked_database' is required and cannot be blank for Iceberg REST",
+                                        write_integration.integration_name
+                                    );
+                                }
                             }
-                        },
+                        }
                         _ => {
                             return err!(
                                 code => ErrorCode::InvalidConfig,
@@ -640,6 +949,55 @@ pub fn validate_catalogs(spec: &DbtCatalogsView<'_>, path: &Path) -> FsResult<()
                                 write_integration.integration_name
                             );
                         }
+                    }
+                }
+                CatalogType::DatabricksUnity => {
+                    if write_integration.base_location_root.is_some()
+                        || write_integration.base_location_subpath.is_some()
+                    {
+                        return err!(code => ErrorCode::InvalidConfig, loc => err_loc(),
+                            "Catalog '{}' integration '{}': base_location_* not valid for Databricks (unity)",
+                            catalog.catalog_name, write_integration.integration_name);
+                    }
+
+                    if let Some(AdapterPropsView::DatabricksUnity(properties)) =
+                        &write_integration.adapter_properties
+                    {
+                        if let Some(loc) = properties.location_root {
+                            if loc.trim().is_empty() {
+                                return err!(code => ErrorCode::InvalidConfig, loc => err_loc(),
+                                    "integration '{}': adapter_properties.location_root cannot be blank",
+                                    write_integration.integration_name);
+                            }
+                        }
+                    } else if write_integration.adapter_properties.is_some() {
+                        return err!(code => ErrorCode::InvalidConfig, loc => err_loc(),
+                            "integration '{}': only adapter_properties.location_root is allowed for unity",
+                            write_integration.integration_name);
+                    }
+
+                    if let Some(file_format) = &write_integration.file_format {
+                        if *file_format != DatabricksFileFormat::Delta {
+                            return err!(code => ErrorCode::InvalidConfig, loc => err_loc(),
+                                "integration '{}': when table_format=iceberg, file_format must be 'delta'",
+                                write_integration.integration_name);
+                        }
+                    }
+                }
+
+                CatalogType::DatabricksHiveMetastore => {
+                    if write_integration.base_location_root.is_some()
+                        || write_integration.base_location_subpath.is_some()
+                    {
+                        return err!(code => ErrorCode::InvalidConfig, loc => err_loc(),
+                            "Catalog '{}' integration '{}': base_location_* not valid for Databricks (hive_metastore)",
+                            catalog.catalog_name, write_integration.integration_name);
+                    }
+
+                    if write_integration.adapter_properties.is_some() {
+                        return err!(code => ErrorCode::InvalidConfig, loc => err_loc(),
+                            "integration '{}': adapter_properties not allowed for hive_metastore",
+                            write_integration.integration_name);
                     }
                 }
             }
@@ -660,6 +1018,16 @@ mod tests {
         let m = v.as_mapping().expect("top-level YAML must be a mapping");
         let view = DbtCatalogsView::from_mapping(m)?;
         validate_catalogs(&view, Path::new("<test>"))
+    }
+
+    fn assert_err_contains(yaml: &str, needle: &str) {
+        let res = parse_view_and_validate(yaml);
+        let msg = format!("{res:?}");
+        assert!(res.is_err(), "expected error but got Ok(())");
+        assert!(
+            msg.contains(needle),
+            "error did not contain '{needle}', got: {msg}"
+        );
     }
 
     #[test]
@@ -943,11 +1311,10 @@ catalogs:
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
-        let v = DbtCatalogsView::from_mapping(m).unwrap();
-        let res = validate_catalogs(&v, Path::new("<test>"));
+        let v = DbtCatalogsView::from_mapping(m);
         assert!(
-            res.is_err(),
-            "rest with base_location_* must fail validation"
+            v.is_err(),
+            "Unknown key 'base_location_root' in write_integration(Snowflake iceberg_rest)"
         );
     }
 
@@ -1338,9 +1705,8 @@ catalogs:
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
-        let v = DbtCatalogsView::from_mapping(m).unwrap();
-        let res = validate_catalogs(&v, Path::new("<test>"));
-        assert!(res.is_err());
+        let v = DbtCatalogsView::from_mapping(m);
+        assert!(v.is_err());
     }
 
     #[test]
@@ -1485,5 +1851,197 @@ catalogs:
         let v = DbtCatalogsView::from_mapping(m).unwrap();
         let res = validate_catalogs(&v, Path::new("<test>"));
         assert!(res.is_err(), "duplicate catalog names must fail");
+    }
+
+    // === Databricks: UNITY
+
+    #[test]
+    fn databricks_unity_min_valid_with_location_root() {
+        let yaml = r#"
+catalogs:
+  - name: uc
+    active_write_integration: i
+    write_integrations:
+      - name: i
+        catalog_type: unity
+        table_format: iceberg
+        file_format: delta
+        adapter_properties:
+          location_root: /Volumes/org/area/lake
+"#;
+        let res = parse_view_and_validate(yaml);
+        assert!(res.is_ok(), "unity(min) should validate: {:?}", res.err());
+    }
+
+    #[test]
+    fn databricks_unity_min_valid_without_location_root() {
+        let yaml = r#"
+catalogs:
+  - name: uc
+    active_write_integration: i
+    write_integrations:
+      - name: i
+        catalog_type: unity
+        table_format: iceberg
+        file_format: delta
+"#;
+        let res = parse_view_and_validate(yaml);
+        assert!(
+            res.is_ok(),
+            "unity(no adapter_props) should validate: {:?}",
+            res.err()
+        );
+    }
+
+    #[test]
+    fn databricks_unity_rejects_non_delta_in_iceberg_mode() {
+        let yaml = r#"
+catalogs:
+  - name: uc
+    active_write_integration: i
+    write_integrations:
+      - name: i
+        catalog_type: unity
+        table_format: iceberg
+        file_format: parquet
+"#;
+        assert_err_contains(
+            yaml,
+            "when table_format=iceberg, file_format must be 'delta'",
+        );
+    }
+
+    #[test]
+    fn databricks_unity_rejects_external_volume() {
+        let yaml = r#"
+catalogs:
+  - name: uc
+    active_write_integration: i
+    write_integrations:
+      - name: i
+        catalog_type: unity
+        table_format: iceberg
+        file_format: delta
+        external_volume: some_volume
+"#;
+        assert_err_contains(
+            yaml,
+            "Unknown key 'external_volume' in write_integration(Databricks unity)",
+        );
+    }
+
+    #[test]
+    fn databricks_unity_rejects_unknown_adapter_property_keys() {
+        let yaml = r#"
+catalogs:
+  - name: uc
+    active_write_integration: i
+    write_integrations:
+      - name: i
+        catalog_type: unity
+        table_format: iceberg
+        file_format: delta
+        adapter_properties:
+          location_root: /Volumes/x
+          extra_key: nope
+"#;
+        assert_err_contains(yaml, "Unknown key 'extra_key' in adapter_properties(unity)");
+    }
+
+    #[test]
+    fn databricks_unity_rejects_blank_location_root() {
+        let yaml = r#"
+catalogs:
+  - name: uc
+    active_write_integration: i
+    write_integrations:
+      - name: i
+        catalog_type: unity
+        table_format: iceberg
+        file_format: delta
+        adapter_properties:
+          location_root: "   "
+"#;
+        assert_err_contains(yaml, "adapter_properties.location_root cannot be blank");
+    }
+
+    // === Databricks: HIVE_METASTORE
+
+    #[test]
+    fn databricks_hms_hudi_format() {
+        let yaml = r#"
+catalogs:
+  - name: hms
+    active_write_integration: i
+    write_integrations:
+      - name: i
+        catalog_type: hive_metastore
+        table_format: default
+        file_format: hudi
+"#;
+        assert!(parse_view_and_validate(yaml).is_ok());
+    }
+
+    #[test]
+    fn databricks_hms_rejects_iceberg_format() {
+        let yaml = r#"
+catalogs:
+  - name: hms
+    active_write_integration: i
+    write_integrations:
+      - name: i
+        catalog_type: hive_metastore
+        table_format: iceberg
+        file_format: hudi
+"#;
+        assert_err_contains(
+            yaml,
+            "Databricks 'hive_metastore' requires table_format=DEFAULT",
+        );
+    }
+
+    #[test]
+    fn databricks_hms_rejects_adapter_properties_entirely() {
+        let yaml = r#"
+catalogs:
+  - name: hms
+    active_write_integration: i
+    write_integrations:
+      - name: i
+        catalog_type: hive_metastore
+        table_format: iceberg
+        file_format: delta
+        adapter_properties:
+          location_root: /mnt/should_not_be_here
+"#;
+        assert_err_contains(
+            yaml,
+            "Unknown key 'adapter_properties' in write_integration",
+        );
+    }
+
+    #[test]
+    fn databricks_hms_rejects_external_volume() {
+        let yaml = r#"
+catalogs:
+  - name: hms
+    active_write_integration: i
+    write_integrations:
+      - name: i
+        catalog_type: hive_metastore
+        table_format: iceberg
+        file_format: delta
+        external_volume: anything
+"#;
+        // External volume error may trigger first depending on parse order; check for either.
+        let res = parse_view_and_validate(yaml);
+        let msg = format!("{res:?}");
+        assert!(res.is_err(), "expected error but got Ok");
+        assert!(
+            msg.contains(
+                "Unknown key 'external_volume' in write_integration(Databricks hive_metastore)"
+            ),
+            "unexpected error: {msg}"
+        );
     }
 }

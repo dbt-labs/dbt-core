@@ -403,7 +403,7 @@ impl From<ProjectModelConfig> for ModelConfig {
             alias: config.alias,
             batch_size: config.batch_size,
             begin: config.begin,
-            catalog_name: config.catalog_name,
+            catalog_name: config.catalog_name.clone(),
             column_types: config.column_types,
             concurrent_batches: config.concurrent_batches,
             contract: config.contract,
@@ -471,6 +471,7 @@ impl From<ProjectModelConfig> for ModelConfig {
                 max_staleness: config.max_staleness,
 
                 file_format: config.file_format,
+                catalog_name: config.catalog_name,
                 location_root: config.location_root,
                 tblproperties: config.tblproperties,
                 include_full_name_in_path: config.include_full_name_in_path,

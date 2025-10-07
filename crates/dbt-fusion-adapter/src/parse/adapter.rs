@@ -332,7 +332,11 @@ impl BaseAdapter for ParseAdapter {
 
     fn build_catalog_relation(&self, model_config: &Value) -> Result<Value, MinijinjaError> {
         Ok(Value::from_object(
-            CatalogRelation::from_model_config_and_catalogs(model_config, self.catalogs.clone())?,
+            CatalogRelation::from_model_config_and_catalogs(
+                &self.adapter_type,
+                model_config,
+                self.catalogs.clone(),
+            )?,
         ))
     }
 

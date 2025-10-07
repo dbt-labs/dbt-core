@@ -60,6 +60,9 @@
 {% endmacro %}
 
 {% macro create_or_replace_csv_table(model, agate_table, replace=False) %}
+
+  {%- set catalog_relation = adapter.build_catalog_relation(config.model) -%}
+
   {%- set column_override = model['config'].get('column_types', {}) -%}
   {%- set quote_seed_column = model['config'].get('quote_columns', None) -%}
   {%- set column_comment = config.persist_column_docs() and model.columns %}
@@ -86,10 +89,10 @@
             {{ adapter.quote_seed_column(column_name, quote_seed_column) }} {{ type }} {{ column_comment_clause }}{%- if not loop.last -%}, {%- endif -%}
         {%- endfor -%}
     )
-    {{ file_format_clause() }}
+    {{ file_format_clause(catalog_relation) }}
     {{ partition_cols(label="partitioned by") }}
     {{ clustered_cols(label="clustered by") }}
-    {{ location_clause(relation) }}
+    {{ location_clause(catalog_relation) }}
     {{ comment_clause() }}
     {{ tblproperties_clause() }}
   {% endset %}

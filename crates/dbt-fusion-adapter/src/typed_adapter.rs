@@ -311,7 +311,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     /// In Fusion, we treat it as a Jinja accessible flat container of values
     /// needed for Iceberg ddl generation.
     fn build_catalog_relation(&self, _model_config: &Value) -> AdapterResult<Value> {
-        unimplemented!("only available with Snowflake adapter")
+        unimplemented!("only available with Databricks and Snowflake adapters")
     }
 
     /// Drop relation

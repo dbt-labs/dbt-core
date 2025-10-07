@@ -152,4 +152,68 @@ catalogs:
         assert_eq!(view.catalogs.len(), 1);
         assert_eq!(view.catalogs[0].catalog_name, "c1");
     }
+
+    #[test]
+    fn load_catalogs_sets_global_unity() {
+        let yaml = r#"
+catalogs:
+  - name: uc
+    active_write_integration: i
+    write_integrations:
+      - name: i
+        catalog_type: unity
+        table_format: iceberg
+        file_format: delta
+"#;
+        let path = Path::new("<test>/catalogs.yml");
+        load_catalogs(yaml, path).expect("global init should succeed for unity");
+        let holder = fetch_catalogs().expect("global should be initialized");
+        let view = holder.view().expect("view parses");
+        assert_eq!(view.catalogs.len(), 1);
+        assert_eq!(view.catalogs[0].catalog_name, "uc");
+    }
+
+    #[test]
+    fn load_catalogs_surfaces_hms_adapter_props_error_globally() {
+        let yaml = r#"
+catalogs:
+  - name: hms
+    active_write_integration: i
+    write_integrations:
+      - name: i
+        catalog_type: hive_metastore
+        table_format: default
+        file_format: hudi
+        adapter_properties:
+          location_root: /mnt/not_allowed
+"#;
+        let path = Path::new("<test>/catalogs.yml");
+        let err = load_catalogs(yaml, path).unwrap_err();
+        let msg = format!("{err:?}");
+        assert!(
+            msg.contains(
+                "Unknown key 'adapter_properties' in write_integration(Databricks hive_metastore)"
+            ),
+            "got: {msg}",
+        );
+    }
+
+    #[test]
+    fn databricks_unity_valid_minimal_via_loader() {
+        let yaml = r#"
+catalogs:
+  - name: uc
+    active_write_integration: i
+    write_integrations:
+      - name: i
+        catalog_type: unity
+        table_format: iceberg
+        file_format: delta
+"#;
+        let path = Path::new("<test>/catalogs.yml");
+        let holder = do_load_catalogs(yaml, path).expect("unity minimal should parse+validate");
+        let view = holder.view().unwrap();
+        assert_eq!(view.catalogs.len(), 1);
+        assert_eq!(view.catalogs[0].active_write_integration, "i");
+    }
 }
