@@ -487,6 +487,7 @@ class TestCustomOutputPathInSourceFreshnessDeprecation:
 
 class TestHappyPathProjectHasNoDeprecations:
     @mock.patch.dict(os.environ, {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": "True"})
+    @mock.patch("dbt.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
     def test_happy_path_project_has_no_deprecations(self, happy_path_project):
         event_cathcer = EventCatcher(DeprecationsSummary)
         run_dbt(
@@ -498,6 +499,7 @@ class TestHappyPathProjectHasNoDeprecations:
 
 class TestBaseProjectHasNoDeprecations:
     @mock.patch.dict(os.environ, {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": "True"})
+    @mock.patch("dbt.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
     def test_base_project_has_no_deprecations(self, project):
         event_cathcer = EventCatcher(DeprecationsSummary)
         run_dbt(
