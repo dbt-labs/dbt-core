@@ -42,10 +42,10 @@ use crate::pretty_string::{BLUE, CYAN};
 /// Format resource type with minimum width for alignment
 /// Minimum width is 5 characters (length of "model") but allows longer strings
 pub fn format_resource_type_fixed_width(resource_type: &str) -> String {
-    use crate::pretty_string::MAGENTA;
+    use crate::pretty_string::PLAIN;
     const MIN_WIDTH: usize = 5; // Length of "model"
 
-    let formatted = MAGENTA.apply_to(resource_type).to_string();
+    let formatted = PLAIN.apply_to(resource_type).to_string();
 
     // Pad if shorter than minimum width, otherwise return as-is
     if resource_type.len() < MIN_WIDTH {
