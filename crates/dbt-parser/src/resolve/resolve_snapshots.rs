@@ -3,7 +3,8 @@ use crate::dbt_project_config::{
     RootProjectConfigs, init_project_config, strip_resource_paths_from_ref_path,
 };
 use crate::renderer::{
-    RenderCtx, RenderCtxInner, SqlFileRenderResult, render_unresolved_sql_files,
+    RenderCtx, RenderCtxInner, SqlFileRenderResult, collect_adapter_identifiers_detect_unsafe,
+    render_unresolved_sql_files,
 };
 use crate::utils::{RelationComponents, get_node_fqn, update_node_relation_components};
 use dbt_common::adapter::AdapterType;
@@ -23,7 +24,9 @@ use dbt_schemas::schemas::nodes::AdapterAttr;
 use dbt_schemas::schemas::project::{DbtProject, SnapshotConfig};
 use dbt_schemas::schemas::properties::SnapshotProperties;
 use dbt_schemas::schemas::ref_and_source::{DbtRef, DbtSourceWrapper};
-use dbt_schemas::schemas::{CommonAttributes, DbtSnapshot, DbtSnapshotAttr, NodeBaseAttributes};
+use dbt_schemas::schemas::{
+    CommonAttributes, DbtSnapshot, DbtSnapshotAttr, IntrospectionKind, NodeBaseAttributes,
+};
 use dbt_schemas::state::{
     DbtAsset, DbtPackage, DbtRuntimeConfig, ModelStatus, NodeResolverTracker,
 };
@@ -60,6 +63,7 @@ pub async fn resolve_snapshots(
     let mut disabled_snapshots: HashMap<String, Arc<DbtSnapshot>> = HashMap::new();
     let jinja_type_checking_event_listener_factory =
         Arc::new(DefaultJinjaTypeCheckEventListenerFactory::default());
+    let mut snapshots_with_execute: HashMap<String, DbtSnapshot> = HashMap::new();
 
     let dependency_package_name = if package.dbt_project.name != root_project.name {
         Some(package.dbt_project.name.as_str())
@@ -92,6 +96,7 @@ pub async fn resolve_snapshots(
 
     // Save snapshots to the `snapshots` directory
     let mut snapshot_files = Vec::new();
+    let mut sql_defined_snapshots = Vec::new();
     for (macro_uid, macro_node) in macros {
         if macro_node.package_name == package_name && macro_uid.starts_with("snapshot.") {
             // Write the macro call to the `snapshots` directory
@@ -119,10 +124,11 @@ pub async fn resolve_snapshots(
             }
             stdfs::write(snapshot_path, macro_call)?;
             snapshot_files.push(DbtAsset {
-                path: target_path,
+                path: target_path.clone(),
                 package_name: package_name.clone(),
                 base_path: arg.io.out_dir.clone(),
             });
+            sql_defined_snapshots.push(target_path);
         }
     }
     // Save snapshot from yml to the `snapshots` directory
@@ -369,6 +375,11 @@ pub async fn resolve_snapshots(
                         .snapshot_meta_column_names
                         .clone()
                         .unwrap_or_default(),
+                    introspection: if sql_file_info.this {
+                        IntrospectionKind::This
+                    } else {
+                        IntrospectionKind::None
+                    },
                 },
                 __adapter_attr__: AdapterAttr::from_config_and_dialect(
                     &final_config.__warehouse_specific_config__,
@@ -424,7 +435,11 @@ pub async fn resolve_snapshots(
             }
             match status {
                 ModelStatus::Enabled => {
-                    snapshots.insert(unique_id, Arc::new(dbt_snapshot));
+                    if sql_file_info.execute && sql_defined_snapshots.contains(&dbt_asset.path) {
+                        snapshots_with_execute.insert(unique_id.to_owned(), dbt_snapshot);
+                    } else {
+                        snapshots.insert(unique_id, Arc::new(dbt_snapshot));
+                    }
                 }
                 ModelStatus::Disabled => {
                     disabled_snapshots.insert(unique_id, Arc::new(dbt_snapshot));
@@ -449,6 +464,27 @@ pub async fn resolve_snapshots(
             show_warning!(&arg.io, err);
         }
     }
+    // Second pass to capture all identifiers with the appropriate context
+    // `models_with_execute` should never have overlapping Arc pointers with `models` and `disabled_models`
+    // otherwise make_mut will clone the inner model, and the modifications inside this function call will be lost
+    let snapshots_rest = collect_adapter_identifiers_detect_unsafe(
+        arg,
+        snapshots_with_execute,
+        node_resolver,
+        jinja_env,
+        adapter_type,
+        package.dbt_project.name.as_str(),
+        &root_project.name,
+        runtime_config,
+        token,
+    )
+    .await?;
+
+    snapshots.extend(
+        snapshots_rest
+            .into_iter()
+            .map(|(k, _)| (k.__common_attr__.unique_id.clone(), Arc::new(k))),
+    );
 
     Ok((snapshots, disabled_snapshots))
 }

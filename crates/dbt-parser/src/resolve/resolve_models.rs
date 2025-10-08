@@ -93,7 +93,7 @@ pub async fn resolve_models(
     HashMap<String, Arc<DbtModel>>,
 )> {
     let mut models: HashMap<String, Arc<DbtModel>> = HashMap::new();
-    let mut models_with_execute = HashMap::new();
+    let mut models_with_execute: HashMap<String, DbtModel> = HashMap::new();
     let mut disabled_models: HashMap<String, Arc<DbtModel>> = HashMap::new();
     let mut node_names = HashSet::new();
     let mut rendering_results: HashMap<String, (String, MacroSpans)> = HashMap::new();
@@ -452,7 +452,11 @@ pub async fn resolve_models(
                 static_analysis,
             },
             __model_attr__: DbtModelAttr {
-                introspection: IntrospectionKind::None,
+                introspection: if sql_file_info.this {
+                    IntrospectionKind::This
+                } else {
+                    IntrospectionKind::None
+                },
                 version: maybe_version.map(|v| v.into()),
                 latest_version: maybe_latest_version.map(|v| v.into()),
                 constraints: model_constraints,
@@ -521,14 +525,13 @@ pub async fn resolve_models(
             }
         }
 
-        let model = Arc::new(dbt_model);
         match status {
             ModelStatus::Enabled => {
                 // merge them later for the returned models
                 if sql_file_info.execute {
-                    models_with_execute.insert(unique_id.to_owned(), model.clone());
+                    models_with_execute.insert(unique_id.to_owned(), dbt_model);
                 } else {
-                    models.insert(unique_id.to_owned(), model.clone());
+                    models.insert(unique_id.to_owned(), Arc::new(dbt_model));
                 }
                 node_names.insert(model_name.to_owned());
                 rendering_results.insert(unique_id, (rendered_sql.clone(), macro_spans.clone()));
@@ -543,7 +546,7 @@ pub async fn resolve_models(
                 )?;
             }
             ModelStatus::Disabled => {
-                disabled_models.insert(unique_id.to_owned(), model.clone());
+                disabled_models.insert(unique_id.to_owned(), Arc::new(dbt_model));
             }
             ModelStatus::ParsingFailed => {}
         }
@@ -594,9 +597,9 @@ pub async fn resolve_models(
     // Second pass to capture all identifiers with the appropriate context
     // `models_with_execute` should never have overlapping Arc pointers with `models` and `disabled_models`
     // otherwise make_mut will clone the inner model, and the modifications inside this function call will be lost
-    collect_adapter_identifiers_detect_unsafe(
+    let models_rest = collect_adapter_identifiers_detect_unsafe(
         arg,
-        &mut models_with_execute,
+        models_with_execute,
         node_resolver,
         env,
         adapter_type,
@@ -606,8 +609,12 @@ pub async fn resolve_models(
         token,
     )
     .await?;
-    models.extend(models_with_execute);
 
+    models.extend(
+        models_rest
+            .into_iter()
+            .map(|(v, _)| (v.__common_attr__.unique_id.to_string(), Arc::new(v))),
+    );
     Ok((models, rendering_results, disabled_models))
 }
 

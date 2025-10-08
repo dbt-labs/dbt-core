@@ -226,7 +226,7 @@ pub fn infer_and_apply_primary_keys(nodes: &mut Nodes, disabled_nodes: &Nodes) {
 mod tests {
     use super::*;
     use dbt_schemas::schemas::nodes::{DbtTestAttr, TestMetadata};
-    use dbt_schemas::schemas::{CommonAttributes, NodeBaseAttributes};
+    use dbt_schemas::schemas::{CommonAttributes, IntrospectionKind, NodeBaseAttributes};
 
     fn empty_nodes() -> Nodes {
         Nodes::default()
@@ -304,6 +304,7 @@ mod tests {
                     namespace: None,
                 }),
                 file_key_name: None,
+                introspection: IntrospectionKind::None,
             },
             ..Default::default()
         };
@@ -326,6 +327,7 @@ mod tests {
                     namespace: None,
                 }),
                 file_key_name: None,
+                introspection: IntrospectionKind::None,
             },
             ..Default::default()
         };

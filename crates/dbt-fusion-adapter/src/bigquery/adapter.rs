@@ -1109,6 +1109,7 @@ mod tests {
             AdapterConfig::new(config),
             DEFAULT_RESOLVED_QUOTING,
             Arc::new(NaiveStmtSplitter), // XXX: may cause bugs if these tests run SQL
+            None,
             QueryCommentConfig::from_query_comment(None, AdapterType::Bigquery, false),
             Box::new(NaiveTypeOpsImpl::new(AdapterType::Postgres)),
             never_cancels(),

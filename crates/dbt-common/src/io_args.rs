@@ -59,6 +59,7 @@ pub struct IoArgs {
     pub build_cache_url: Option<String>,
     pub build_cache_cas_url: Option<String>,
     pub build_cache_mode: Option<BuildCacheMode>,
+    pub beta_use_query_cache: bool,
 }
 impl IoArgs {
     pub fn is_generated_file(&self, rel_path: &Path) -> bool {

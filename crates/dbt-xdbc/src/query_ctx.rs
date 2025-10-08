@@ -1,7 +1,45 @@
 //! Query abstraction used to carry the query sources and associated
 //! metadata around adapter code.
 
+use std::fmt::Display;
+use std::str::FromStr;
+
 use chrono::{DateTime, Utc};
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ExecutionPhase {
+    Unspecified,
+    Render,
+    Analyze,
+    Run,
+}
+
+impl FromStr for ExecutionPhase {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "render" => Ok(ExecutionPhase::Render),
+            "analyze" => Ok(ExecutionPhase::Analyze),
+            "run" => Ok(ExecutionPhase::Run),
+            _ => Err("Invalid execution phase".to_string()),
+        }
+    }
+}
+
+impl Display for ExecutionPhase {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                ExecutionPhase::Unspecified => "unspecified",
+                ExecutionPhase::Render => "render",
+                ExecutionPhase::Analyze => "analyze",
+                ExecutionPhase::Run => "run",
+            }
+        )
+    }
+}
 
 /// Query source plus metadata.
 #[derive(Clone, Debug)]
@@ -10,6 +48,8 @@ pub struct QueryCtx {
     adapter_type: String,
     // Model executing this query
     node_unique_id: Option<String>,
+    // Execution Phase
+    phase: Option<ExecutionPhase>,
     // Actual query content
     sql: Option<String>,
     // Time this instance was created
@@ -22,12 +62,14 @@ impl QueryCtx {
     fn create(
         adapter_type: impl Into<String>,
         node_unique_id: Option<String>,
+        phase: Option<ExecutionPhase>,
         sql: Option<String>,
         desc: Option<String>,
     ) -> Self {
         Self {
             adapter_type: adapter_type.into(),
             node_unique_id,
+            phase,
             sql,
             created_at: Utc::now(),
             desc,
@@ -36,7 +78,7 @@ impl QueryCtx {
 
     /// Create a new query with the given adapter type.
     pub fn new(adapter_type: impl Into<String>) -> Self {
-        Self::create(adapter_type, None, None, None)
+        Self::create(adapter_type, None, None, None, None)
     }
 
     /// Creates a new context by keeping other fields same but
@@ -47,6 +89,7 @@ impl QueryCtx {
         Self::create(
             self.adapter_type.clone(),
             Some(node_unique_id.into()),
+            self.phase.clone(),
             self.sql.clone(),
             self.desc.clone(),
         )
@@ -59,6 +102,7 @@ impl QueryCtx {
         Self::create(
             self.adapter_type.clone(),
             self.node_unique_id.clone(),
+            self.phase.clone(),
             Some(sql.into()),
             self.desc.clone(),
         )
@@ -72,8 +116,21 @@ impl QueryCtx {
         Self::create(
             self.adapter_type.clone(),
             self.node_unique_id.clone(),
+            self.phase.clone(),
             self.sql.clone(),
             Some(desc.into()),
+        )
+    }
+
+    /// Creates a new context by keeping other fields same and setting
+    /// the given execution phase.
+    pub fn with_phase(&self, phase: ExecutionPhase) -> Self {
+        Self::create(
+            self.adapter_type.clone(),
+            self.node_unique_id.clone(),
+            Some(phase),
+            self.sql.clone(),
+            self.desc.clone(),
         )
     }
 
@@ -107,6 +164,11 @@ impl QueryCtx {
     /// context.
     pub fn desc(&self) -> Option<String> {
         self.desc.clone()
+    }
+
+    /// Returns the Execution Phase
+    pub fn phase(&self) -> Option<ExecutionPhase> {
+        self.phase.clone()
     }
 }
 

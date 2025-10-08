@@ -13,6 +13,7 @@ use dbt_schemas::schemas::{
 };
 use dbt_schemas::state::ResolverState;
 use dbt_schemas::stats::Stats;
+use dbt_xdbc::query_ctx::ExecutionPhase;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
@@ -51,16 +52,18 @@ pub trait MetadataAdapter: TypedBaseAdapter + Send + Sync {
     fn list_relations_schemas(
         &self,
         unique_id: Option<String>,
+        phase: Option<ExecutionPhase>,
         relations: &[Arc<dyn BaseRelation>],
     ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<Arc<Schema>>>>;
 
     fn list_relations_sdf_schemas<'a>(
         &'a self,
         unique_id: Option<String>,
+        phase: Option<ExecutionPhase>,
         relations: &'a [Arc<dyn BaseRelation>],
     ) -> AsyncAdapterResult<'a, HashMap<String, AdapterResult<SdfSchema>>> {
         let future = async move {
-            self.list_relations_schemas(unique_id, relations)
+            self.list_relations_schemas(unique_id, phase, relations)
                 .await
                 .map(|map| {
                     map.into_iter()

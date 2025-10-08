@@ -18,6 +18,7 @@ use dbt_schemas::schemas::legacy_catalog::{
     CatalogNodeStats, CatalogTable, ColumnMetadata, TableMetadata,
 };
 use dbt_schemas::schemas::relations::base::{BaseRelation, RelationPattern};
+use dbt_xdbc::query_ctx::ExecutionPhase;
 use dbt_xdbc::{Connection, MapReduce, QueryCtx};
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -189,6 +190,7 @@ impl MetadataAdapter for DatabricksAdapter {
     fn list_relations_schemas(
         &self,
         _unique_id: Option<String>,
+        _phase: Option<ExecutionPhase>,
         relations: &[Arc<dyn BaseRelation>],
     ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<Arc<Schema>>>> {
         type Acc = HashMap<String, AdapterResult<Arc<Schema>>>;

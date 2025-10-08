@@ -29,7 +29,8 @@ use dbt_jinja_utils::utils::render_sql;
 use dbt_schemas::schemas::common::{DbtChecksum, DbtQuoting, Hooks};
 use dbt_schemas::schemas::project::DefaultTo;
 use dbt_schemas::schemas::properties::GetConfig;
-use dbt_schemas::schemas::{DbtModel, InternalDbtNode, IntrospectionKind, Nodes};
+use dbt_schemas::schemas::telemetry::NodeType;
+use dbt_schemas::schemas::{InternalDbtNodeAttributes, IntrospectionKind, Nodes};
 use dbt_schemas::state::{DbtAsset, DbtRuntimeConfig, ModelStatus};
 use std::fmt::Debug;
 
@@ -804,9 +805,9 @@ pub async fn render_unresolved_sql_files<
 
 /// Collect the adapter identifiers for the given nodes and check if they are detected as unsafe
 #[allow(clippy::too_many_arguments)]
-pub async fn collect_adapter_identifiers_detect_unsafe(
+pub async fn collect_adapter_identifiers_detect_unsafe<T: InternalDbtNodeAttributes + 'static>(
     arg: &ResolveArgs,
-    models: &mut HashMap<String, Arc<DbtModel>>,
+    node_map: HashMap<String, T>,
     node_resolver: &NodeResolver,
     jinja_env: Arc<JinjaEnv>,
     adapter_type: AdapterType,
@@ -814,15 +815,12 @@ pub async fn collect_adapter_identifiers_detect_unsafe(
     root_project_name: &str,
     runtime_config: Arc<DbtRuntimeConfig>,
     token: &CancellationToken,
-) -> FsResult<()> {
-    if models.is_empty() {
-        return Ok(());
+) -> FsResult<Vec<(T, bool)>> {
+    if node_map.is_empty() {
+        return Ok(Vec::new());
     }
     // Prepare chunking
-    let model_vec: Vec<(String, Arc<DbtModel>)> = models
-        .iter()
-        .map(|(k, v)| (k.clone(), Arc::clone(v)))
-        .collect();
+    let model_vec: Vec<(String, T)> = node_map.into_iter().collect();
 
     let max_concurrency = arg
         .num_threads
@@ -835,7 +833,7 @@ pub async fn collect_adapter_identifiers_detect_unsafe(
         .expect("Adapter should be parse");
 
     // Use sequential processing if num_threads is 1, otherwise use parallel processing
-    let all_unsafe_ids = if max_concurrency == 1 {
+    let mut dbt_nodes = if max_concurrency == 1 {
         collect_adapter_identifiers_sequential(
             arg,
             model_vec,
@@ -867,21 +865,19 @@ pub async fn collect_adapter_identifiers_detect_unsafe(
         .await?
     };
 
-    // Now, update the models in the main thread
-    for unsafe_id in all_unsafe_ids {
-        if let Some(arc_model) = models.get_mut(&unsafe_id) {
-            let model = Arc::make_mut(arc_model);
-            model.set_detected_introspection(IntrospectionKind::Execute);
+    for (node, is_unsafe) in dbt_nodes.iter_mut() {
+        if *is_unsafe {
+            node.set_detected_introspection(IntrospectionKind::Execute);
         }
     }
 
-    Ok(())
+    Ok(dbt_nodes)
 }
 
 /// Processes a chunk of models to detect unsafe identifiers
 #[allow(clippy::too_many_arguments)]
-async fn process_model_chunk_for_unsafe_detection(
-    chunk: Vec<(String, Arc<DbtModel>)>,
+async fn process_model_chunk_for_unsafe_detection<T: InternalDbtNodeAttributes + 'static>(
+    chunk: Vec<(String, T)>,
     arg: ResolveArgs,
     node_resolver: NodeResolver,
     jinja_env: &JinjaEnv,
@@ -891,8 +887,8 @@ async fn process_model_chunk_for_unsafe_detection(
     runtime_config: Arc<DbtRuntimeConfig>,
     parse_adapter: Arc<dbt_fusion_adapter::ParseAdapter>,
     token: &CancellationToken,
-) -> FsResult<Vec<String>> {
-    let mut unsafe_ids = Vec::new();
+) -> FsResult<Vec<(T, bool)>> {
+    let mut nodes = Vec::new();
     let mut render_base_context = build_compile_and_run_base_context(
         Arc::new(node_resolver.clone()),
         &package_name,
@@ -901,11 +897,14 @@ async fn process_model_chunk_for_unsafe_detection(
     );
     silence_base_context(&mut render_base_context);
 
-    for (_key, arc_model) in chunk {
+    for (_key, model) in chunk {
         token.check_cancellation()?;
-        let model = (*arc_model).clone();
-
-        let absolute_path = arg.io.in_dir.join(&model.common().original_file_path);
+        // TODO: for snapshot, use target dir instead of in_dir
+        let absolute_path = if model.resource_type() == NodeType::Snapshot {
+            arg.io.out_dir.join(&model.common().original_file_path)
+        } else {
+            arg.io.in_dir.join(&model.common().original_file_path)
+        };
         let sql = read_to_string(&absolute_path).await?;
 
         render_base_context.insert(
@@ -953,21 +952,28 @@ async fn process_model_chunk_for_unsafe_detection(
             &DefaultRenderingEventListenerFactory::default(),
             &display_path,
         );
-        if parse_adapter
+        let is_unsafe = parse_adapter
             .unsafe_nodes()
-            .contains(&model.common().unique_id)
-        {
-            unsafe_ids.push(model.common().unique_id.clone());
-        }
+            .contains(&model.common().unique_id);
+        nodes.push((model, is_unsafe));
     }
-    Ok(unsafe_ids)
+    Ok(nodes)
+}
+
+fn chunk_vec<T>(mut v: Vec<T>, chunk_size: usize) -> Vec<Vec<T>> {
+    let mut chunks = Vec::new();
+    while !v.is_empty() {
+        let chunk: Vec<T> = v.drain(..chunk_size.min(v.len())).collect();
+        chunks.push(chunk);
+    }
+    chunks
 }
 
 /// Collect adapter identifiers sequentially (single-threaded)
 #[allow(clippy::too_many_arguments)]
-async fn collect_adapter_identifiers_sequential(
+async fn collect_adapter_identifiers_sequential<T: InternalDbtNodeAttributes + 'static>(
     arg: &ResolveArgs,
-    model_vec: Vec<(String, Arc<DbtModel>)>,
+    model_vec: Vec<(String, T)>,
     node_resolver: &NodeResolver,
     jinja_env: &JinjaEnv,
     adapter_type: AdapterType,
@@ -977,12 +983,13 @@ async fn collect_adapter_identifiers_sequential(
     parse_adapter: Arc<dbt_fusion_adapter::ParseAdapter>,
     chunk_size: usize,
     token: &CancellationToken,
-) -> FsResult<Vec<String>> {
-    let mut all_unsafe_ids = Vec::new();
+) -> FsResult<Vec<(T, bool)>> {
+    let mut all_unsafe_nodes = Vec::new();
 
-    for chunk in model_vec.chunks(chunk_size) {
-        let chunk = chunk.to_vec();
-        let unsafe_ids = process_model_chunk_for_unsafe_detection(
+    // Split the model_vec into owned chunks
+    for chunk in chunk_vec(model_vec, chunk_size) {
+        // Drain the chunk &mut [(String, T)] into owned Vec<(String, T)> (does not have drain method) without clone
+        let unsafe_nodes = process_model_chunk_for_unsafe_detection(
             chunk,
             arg.clone(),
             node_resolver.clone(),
@@ -995,17 +1002,17 @@ async fn collect_adapter_identifiers_sequential(
             token,
         )
         .await?;
-        all_unsafe_ids.extend(unsafe_ids);
+        all_unsafe_nodes.extend(unsafe_nodes);
     }
 
-    Ok(all_unsafe_ids)
+    Ok(all_unsafe_nodes)
 }
 
 /// Collect adapter identifiers in parallel using tokio::spawn
 #[allow(clippy::too_many_arguments)]
-async fn collect_adapter_identifiers_parallel(
+async fn collect_adapter_identifiers_parallel<T: InternalDbtNodeAttributes + 'static>(
     arg: &ResolveArgs,
-    model_vec: Vec<(String, Arc<DbtModel>)>,
+    model_vec: Vec<(String, T)>,
     node_resolver: &NodeResolver,
     jinja_env: Arc<JinjaEnv>,
     adapter_type: AdapterType,
@@ -1015,11 +1022,10 @@ async fn collect_adapter_identifiers_parallel(
     parse_adapter: Arc<dbt_fusion_adapter::ParseAdapter>,
     chunk_size: usize,
     token: &CancellationToken,
-) -> FsResult<Vec<String>> {
+) -> FsResult<Vec<(T, bool)>> {
     let mut tasks = Vec::new();
 
-    for chunk in model_vec.chunks(chunk_size) {
-        let chunk = chunk.to_vec();
+    for chunk in chunk_vec(model_vec, chunk_size) {
         let arg = arg.clone();
         let node_resolver_clone = node_resolver.clone();
         let jinja_env = jinja_env.clone();

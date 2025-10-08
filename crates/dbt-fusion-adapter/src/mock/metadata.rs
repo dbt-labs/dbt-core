@@ -4,6 +4,7 @@ use crate::mock::adapter::MockAdapter;
 use arrow_schema::Schema;
 
 use dbt_schemas::schemas::relations::base::{BaseRelation, RelationPattern};
+use dbt_xdbc::query_ctx::ExecutionPhase;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 
@@ -11,6 +12,7 @@ impl MetadataAdapter for MockAdapter {
     fn list_relations_schemas(
         &self,
         _unique_id: Option<String>,
+        _phase: Option<ExecutionPhase>,
         _relations: &[Arc<dyn BaseRelation>],
     ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<Arc<Schema>>>> {
         let schemas = HashMap::new();

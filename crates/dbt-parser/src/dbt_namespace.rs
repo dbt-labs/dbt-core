@@ -3,6 +3,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use dbt_fusion_adapter::ParseAdapter;
+use dbt_fusion_adapter::cast_util::downcast_value_to_dyn_base_relation;
 use minijinja::arg_utils::ArgsIter;
 use minijinja::listener::RenderingEventListener;
 use minijinja::value::Object;
@@ -49,15 +50,7 @@ impl Object for DbtNamespace {
                         "get_columns_in_relation requires one argument",
                     )
                 })?;
-                let relation = relation
-                    .downcast_object::<dbt_fusion_adapter::relation_object::RelationObject>()
-                    .ok_or_else(|| {
-                        MinijinjaError::new(
-                            MinijinjaErrorKind::InvalidOperation,
-                            "relation must be a BaseRelation object",
-                        )
-                    })?
-                    .inner();
+                let relation = downcast_value_to_dyn_base_relation(relation)?;
                 self.parse_adapter
                     .record_get_columns_in_relation_call(state, relation)?;
 

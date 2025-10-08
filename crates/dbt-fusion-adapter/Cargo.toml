@@ -37,6 +37,7 @@ minijinja = { workspace = true, features = ["loader", "deserialization"] }
 minijinja-contrib = { workspace = true, features = ["datetime", "timezone"] }
 once_cell = { workspace = true }
 regex = { workspace = true }
+scc = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }

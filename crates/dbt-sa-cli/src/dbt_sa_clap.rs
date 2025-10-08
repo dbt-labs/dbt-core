@@ -491,6 +491,7 @@ impl InitArgs {
                 build_cache_mode: arg.io.build_cache_mode,
                 build_cache_url: arg.io.build_cache_url,
                 build_cache_cas_url: arg.io.build_cache_cas_url,
+                beta_use_query_cache: arg.io.beta_use_query_cache,
             },
             ..Default::default()
         }
@@ -576,6 +577,7 @@ impl CommonArgs {
                 build_cache_mode: arg.io.build_cache_mode,
                 build_cache_url: arg.io.build_cache_url,
                 build_cache_cas_url: arg.io.build_cache_cas_url,
+                beta_use_query_cache: arg.io.beta_use_query_cache,
             },
             profiles_dir: self.profiles_dir.clone(),
             packages_install_path: self.packages_install_path.clone(),
@@ -669,6 +671,7 @@ pub fn from_main(cli: &Cli) -> SystemArgs {
             build_cache_mode: None,
             build_cache_url: None,
             build_cache_cas_url: None,
+            beta_use_query_cache: false,
         },
         from_main: true,
 
@@ -703,6 +706,7 @@ pub fn from_lib(cli: &Cli) -> SystemArgs {
             build_cache_mode: None,
             build_cache_url: None,
             build_cache_cas_url: None,
+            beta_use_query_cache: false,
         },
         from_main: false,
         target: cli.common_args().target,

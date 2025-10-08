@@ -14,6 +14,8 @@ pub enum SqlResource<T: DefaultTo<T>> {
     Source((String, String, CodeLocation)),
     /// A ref call (e.g. `{{ ref('a', 'b') }}`)
     Ref((String, Option<String>, Option<String>, CodeLocation)),
+    /// A this call (e.g. `{{ this }}`)
+    This,
     /// A function call (e.g. `{{ function('a', 'b') }}`)
     Function((String, Option<String>, CodeLocation)),
     /// A metric call (e.g. `{{ metric('a', 'b') }}`)
@@ -42,6 +44,7 @@ impl<T: DefaultTo<T>> std::fmt::Display for SqlResource<T> {
             SqlResource::Ref((a, b, c, location)) => {
                 write!(f, "Ref({a}, {b:?}, {c:?}, {location:?})")
             }
+            SqlResource::This => write!(f, "This"),
             SqlResource::Function((a, b, location)) => {
                 write!(f, "Function({a}, {b:?}, {location:?})")
             }

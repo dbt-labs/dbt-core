@@ -714,6 +714,8 @@ pub async fn resolve_inner(
         &base_ctx,
         runtime_config.clone(),
         &collected_generic_tests,
+        node_resolver,
+        jinja_env.clone(),
         token,
     )
     .await?;

@@ -117,6 +117,7 @@ impl ParseAdapter {
             adapter_config,
             quoting,
             stmt_splitter,
+            None,
             query_comment,
             type_ops,
             token.clone(),

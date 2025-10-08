@@ -13,6 +13,7 @@ use dbt_schemas::schemas::legacy_catalog::{
     CatalogNodeStats, CatalogTable, ColumnMetadata, TableMetadata,
 };
 use dbt_schemas::schemas::relations::base::{BaseRelation, RelationPattern};
+use dbt_xdbc::query_ctx::ExecutionPhase;
 use dbt_xdbc::{Connection, MapReduce, QueryCtx};
 
 use std::collections::btree_map::Entry;
@@ -396,6 +397,7 @@ impl MetadataAdapter for BigqueryAdapter {
     fn list_relations_schemas(
         &self,
         unique_id: Option<String>,
+        _phase: Option<ExecutionPhase>,
         relations: &[Arc<dyn BaseRelation>],
     ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<Arc<Schema>>>> {
         // All results are accumulated in an unordered map

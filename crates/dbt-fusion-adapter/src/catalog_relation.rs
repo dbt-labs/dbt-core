@@ -276,13 +276,13 @@ impl CatalogRelation {
             }
             external_volume =
                 Self::dbx_build_external_volume_for_location(model_config, &location_root);
-        } else if raw_catalog_type.eq_ignore_ascii_case(DATABRICKS_HIVE_METASTORE) {
-            if !adapter_properties.is_empty() {
-                return Err(AdapterError::new(
-                    AdapterErrorKind::Configuration,
-                    "adapter_properties not allowed for hive_metastore",
-                ));
-            }
+        } else if raw_catalog_type.eq_ignore_ascii_case(DATABRICKS_HIVE_METASTORE)
+            && !adapter_properties.is_empty()
+        {
+            return Err(AdapterError::new(
+                AdapterErrorKind::Configuration,
+                "adapter_properties not allowed for hive_metastore",
+            ));
         };
         let external_volume = external_volume;
 

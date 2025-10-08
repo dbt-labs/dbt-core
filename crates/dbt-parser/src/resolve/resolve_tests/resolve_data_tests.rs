@@ -4,6 +4,7 @@ use crate::dbt_project_config::init_project_config;
 use crate::renderer::RenderCtx;
 use crate::renderer::RenderCtxInner;
 use crate::renderer::SqlFileRenderResult;
+use crate::renderer::collect_adapter_identifiers_detect_unsafe;
 use crate::renderer::render_unresolved_sql_files;
 use crate::resolve::resolve_properties::MinimalPropertiesEntry;
 use crate::utils::RelationComponents;
@@ -26,8 +27,11 @@ use dbt_common::stdfs;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::listener::DefaultJinjaTypeCheckEventListenerFactory;
 use dbt_jinja_utils::listener::JinjaTypeCheckingEventListenerFactory;
+use dbt_jinja_utils::node_resolver::NodeResolver;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_schemas::schemas::DbtTestAttr;
+use dbt_schemas::schemas::InternalDbtNodeAttributes;
+use dbt_schemas::schemas::IntrospectionKind;
 use dbt_schemas::schemas::common::DbtChecksum;
 use dbt_schemas::schemas::common::DbtContract;
 use dbt_schemas::schemas::common::DbtMaterialization;
@@ -121,11 +125,14 @@ pub async fn resolve_data_tests(
     base_ctx: &BTreeMap<String, minijinja::Value>,
     runtime_config: Arc<DbtRuntimeConfig>,
     collected_generic_tests: &[GenericTestAsset],
+    node_resolver: &NodeResolver,
+    jinja_env: Arc<JinjaEnv>,
     token: &CancellationToken,
 ) -> FsResult<(HashMap<String, Arc<DbtTest>>, HashMap<String, Arc<DbtTest>>)> {
     let jinja_type_checking_event_listener_factory =
         Arc::new(DefaultJinjaTypeCheckEventListenerFactory::default());
     let mut nodes: HashMap<String, Arc<DbtTest>> = HashMap::new();
+    let mut nodes_with_execute: HashMap<String, DbtTest> = HashMap::new();
     let mut disabled_tests: HashMap<String, Arc<DbtTest>> = HashMap::new();
     let package_name = package.dbt_project.name.as_str();
 
@@ -433,6 +440,7 @@ pub async fn resolve_data_tests(
                     }),
                 test_metadata: inferred_test_metadata.clone(),
                 file_key_name: None,
+                introspection: IntrospectionKind::None,
             },
             deprecated_config: *test_config.clone(),
             __other__: BTreeMap::new(),
@@ -464,7 +472,11 @@ pub async fn resolve_data_tests(
 
         match status {
             ModelStatus::Enabled => {
-                nodes.insert(unique_id, Arc::new(dbt_test));
+                if sql_file_info.execute {
+                    nodes_with_execute.insert(unique_id.to_owned(), dbt_test);
+                } else {
+                    nodes.insert(unique_id, Arc::new(dbt_test));
+                }
             }
             ModelStatus::Disabled => {
                 disabled_tests.insert(unique_id, Arc::new(dbt_test));
@@ -472,6 +484,28 @@ pub async fn resolve_data_tests(
             ModelStatus::ParsingFailed => {}
         }
     }
+
+    // Second pass to capture all identifiers with the appropriate context
+    // `models_with_execute` should never have overlapping Arc pointers with `models` and `disabled_models`
+    // otherwise make_mut will clone the inner model, and the modifications inside this function call will be lost
+    let tests_rest = collect_adapter_identifiers_detect_unsafe(
+        arg,
+        nodes_with_execute,
+        node_resolver,
+        jinja_env,
+        adapter_type,
+        package.dbt_project.name.as_str(),
+        &root_project.name,
+        runtime_config,
+        token,
+    )
+    .await?;
+
+    nodes.extend(
+        tests_rest
+            .into_iter()
+            .map(|(k, _)| (k.__common_attr__.unique_id.clone(), Arc::new(k))),
+    );
 
     Ok((nodes, disabled_tests))
 }

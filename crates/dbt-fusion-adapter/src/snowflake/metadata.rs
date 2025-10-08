@@ -18,6 +18,7 @@ use dbt_schemas::schemas::legacy_catalog::{
     CatalogNodeStats, CatalogTable, ColumnMetadata, TableMetadata,
 };
 use dbt_schemas::schemas::relations::base::{BaseRelation, RelationPattern};
+use dbt_xdbc::query_ctx::ExecutionPhase;
 use dbt_xdbc::{Connection, MapReduce, QueryCtx};
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -352,7 +353,8 @@ impl MetadataAdapter for SnowflakeAdapter {
 
     fn list_relations_schemas(
         &self,
-        _unique_id: Option<String>,
+        unique_id: Option<String>,
+        phase: Option<ExecutionPhase>,
         relations: &[Arc<dyn BaseRelation>],
     ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<Arc<Schema>>>> {
         // All results are accumulated in an unordered map
@@ -375,9 +377,15 @@ impl MetadataAdapter for SnowflakeAdapter {
                           table_name: &String|
               -> AdapterResult<Arc<Schema>> {
             let sql = format!("describe table {};", &table_name);
-            let query_ctx = QueryCtx::new(adapter.adapter_type().to_string())
+            let mut query_ctx = QueryCtx::new(adapter.adapter_type().to_string())
                 .with_sql(sql)
                 .with_desc("Get table schema");
+            if let Some(node_id) = unique_id.clone() {
+                query_ctx = query_ctx.with_node_id(&node_id);
+            }
+            if let Some(phase) = phase.clone() {
+                query_ctx = query_ctx.with_phase(phase);
+            }
             let (_, table) = adapter.query(conn, &query_ctx, None)?;
             let batch = table.original_record_batch();
             let schema = build_schema_from_desc_table(batch, adapter.engine().type_ops())?;

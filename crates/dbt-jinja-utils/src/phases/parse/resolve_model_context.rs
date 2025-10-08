@@ -19,7 +19,9 @@ use dbt_common::{
     serde_utils::convert_yml_to_map,
 };
 use dbt_frontend_common::error::CodeLocation;
-use dbt_fusion_adapter::{load_store::ResultStore, relation_object::create_relation};
+use dbt_fusion_adapter::{
+    cast_util::THIS_RELATION_KEY, load_store::ResultStore, relation_object::create_relation,
+};
 use dbt_schemas::schemas::{
     DbtModelAttr, InternalDbtNode, IntrospectionKind,
     common::{Access, DbtMaterialization, ResolvedQuoting},
@@ -41,7 +43,8 @@ use minijinja::{
     listener::RenderingEventListener,
     machinery::Span,
     value::{
-        Object, ObjectRepr, Value as MinijinjaValue, ValueKind, function_object::FunctionObject,
+        Enumerator, Object, ObjectRepr, Value as MinijinjaValue, ValueKind,
+        function_object::FunctionObject,
     },
 };
 use minijinja_contrib::modules::{py_datetime::datetime::PyDateTime, pytz::PytzTimezone};
@@ -82,20 +85,25 @@ pub fn build_resolve_model_context<T: DefaultTo<T> + 'static>(
 ) -> BTreeMap<String, MinijinjaValue> {
     // Create a relation for 'this' using config values
     let mut context = BTreeMap::new();
-    let this_relation = create_relation(
-        adapter_type,
-        database.to_string(),
-        schema.to_string(),
-        Some(model_name.to_string()),
-        None,
-        package_quoting
-            .try_into()
-            .expect("Failed to convert quoting to resolved quoting"),
-    )
-    .unwrap()
-    .as_value();
+    let sql_resources_clone = sql_resources.clone();
+    let this_relation = ResolveThisFunction {
+        relation: create_relation(
+            adapter_type,
+            database.to_string(),
+            schema.to_string(),
+            Some(model_name.to_string()),
+            None,
+            package_quoting
+                .try_into()
+                .expect("Failed to convert quoting to resolved quoting"),
+        )
+        .unwrap()
+        .as_value(),
+        sql_resources: sql_resources_clone,
+    };
 
-    context.insert("this".to_owned(), this_relation);
+    let this_value = MinijinjaValue::from_object(this_relation);
+    context.insert("this".to_owned(), this_value);
 
     // Create a BTreeMap for builtins
     let mut builtins = BTreeMap::new();
@@ -761,6 +769,57 @@ impl<T: DefaultTo<T>> Object for ParseConfig<T> {
                 format!("Unknown method on parse: {name}"),
             )),
         }
+    }
+}
+
+#[derive(Debug)]
+struct ResolveThisFunction<T: DefaultTo<T> + 'static> {
+    relation: MinijinjaValue,
+    sql_resources: Arc<Mutex<Vec<SqlResource<T>>>>,
+}
+
+impl<T: DefaultTo<T>> Object for ResolveThisFunction<T> {
+    fn call_method(
+        self: &Arc<Self>,
+        state: &State<'_, '_>,
+        name: &str,
+        args: &[MinijinjaValue],
+        listeners: &[Rc<dyn RenderingEventListener>],
+    ) -> Result<MinijinjaValue, MinijinjaError> {
+        self.relation
+            .as_object()
+            .expect("Failed to convert relation to object")
+            .call_method(state, name, args, listeners)
+    }
+
+    fn get_value(self: &Arc<Self>, key: &MinijinjaValue) -> Option<MinijinjaValue> {
+        // This is a special case for the this relation macro to be able to downcast this to a RelationObject
+        if key.as_str() == Some(THIS_RELATION_KEY) {
+            return Some(self.relation.clone());
+        }
+        // TODO: This can be more fine-grained (i.e. if the user only asks for database etc.)
+        if key.as_str()? == "database" || key.as_str()? == "schema" {
+            self.sql_resources.lock().unwrap().push(SqlResource::This);
+        }
+        self.relation
+            .as_object()
+            .expect("Failed to convert relation to object")
+            .get_value(key)
+    }
+
+    fn enumerate(self: &Arc<Self>) -> Enumerator {
+        self.relation
+            .as_object()
+            .expect("Failed to convert relation to object")
+            .enumerate()
+    }
+
+    fn render(self: &Arc<Self>, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.sql_resources.lock().unwrap().push(SqlResource::This);
+        self.relation
+            .as_object()
+            .expect("Failed to convert relation to object")
+            .render(f)
     }
 }
 

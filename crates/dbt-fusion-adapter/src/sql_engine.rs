@@ -7,6 +7,7 @@ use crate::errors::{
     AdapterError, AdapterErrorKind, AdapterResult, adbc_error_to_adapter_error,
     arrow_error_to_adapter_error,
 };
+use crate::query_cache::QueryCache;
 use crate::query_comment::{EMPTY_CONFIG, QueryCommentConfig};
 use crate::record_and_replay::{RecordEngine, ReplayEngine};
 use crate::sql_types::{NaiveTypeOpsImpl, TypeOps};
@@ -148,6 +149,8 @@ pub struct ActualEngine {
     query_comment: QueryCommentConfig,
     /// Type operations (e.g. parsing, formatting) for the dilect this engine is for
     pub type_ops: Box<dyn TypeOps>,
+    /// Query cache
+    query_cache: Option<Arc<dyn QueryCache>>,
     /// Global CLI cancellation token
     cancellation_token: CancellationToken,
 }
@@ -162,6 +165,7 @@ impl ActualEngine {
         splitter: Arc<dyn StmtSplitter>,
         query_comment: QueryCommentConfig,
         type_ops: Box<dyn TypeOps>,
+        query_cache: Option<Arc<dyn QueryCache>>,
         token: CancellationToken,
     ) -> Self {
         let threads = config
@@ -189,7 +193,7 @@ impl ActualEngine {
             splitter,
             type_ops,
             query_comment,
-
+            query_cache,
             cancellation_token: token,
         }
     }
@@ -312,6 +316,7 @@ impl SqlEngine {
         config: AdapterConfig,
         quoting: ResolvedQuoting,
         stmt_splitter: Arc<dyn StmtSplitter>,
+        query_cache: Option<Arc<dyn QueryCache>>,
         query_comment: QueryCommentConfig,
         type_ops: Box<dyn TypeOps>,
         token: CancellationToken,
@@ -324,6 +329,7 @@ impl SqlEngine {
             stmt_splitter,
             query_comment,
             type_ops,
+            query_cache,
             token,
         );
         Arc::new(SqlEngine::Warehouse(Arc::new(engine)))
@@ -539,7 +545,13 @@ impl SqlEngine {
             use dbt_xdbc::statement::Statement as _;
 
             let mut stmt = conn.new_statement()?;
-            stmt.set_sql_query(query_ctx)?;
+            let mut stmt = match self.query_cache() {
+                Some(query_cache) => query_cache.new_statement(stmt, query_ctx.clone()),
+                None => {
+                    stmt.set_sql_query(query_ctx)?;
+                    stmt
+                }
+            };
 
             options
                 .into_iter()
@@ -693,6 +705,16 @@ impl SqlEngine {
             Self::Record(record_engine) => record_engine.get_config(),
             Self::Replay(replay_engine) => replay_engine.get_config(),
             Self::Mock(_) => unreachable!("Mock engine does not support get_config"),
+        }
+    }
+
+    // Get query cache
+    pub fn query_cache(&self) -> Option<&Arc<dyn QueryCache>> {
+        match self {
+            Self::Warehouse(actual_engine) => actual_engine.query_cache.as_ref(),
+            Self::Record(_record_engine) => None,
+            Self::Replay(_replay_engine) => None,
+            Self::Mock(_) => None,
         }
     }
 

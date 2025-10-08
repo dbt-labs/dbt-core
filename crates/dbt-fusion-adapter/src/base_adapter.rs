@@ -1,6 +1,7 @@
 use crate::cache::RelationCache;
 use crate::columns::StdColumnType;
 use crate::metadata::*;
+use crate::query_cache::QueryCache;
 use crate::sql_engine::SqlEngine;
 use crate::typed_adapter::{ReplayAdapter, TypedBaseAdapter};
 use crate::{AdapterResponse, AdapterResult};
@@ -732,6 +733,7 @@ pub trait AdapterFactory: Send + Sync {
         replay_mode: Option<ReplayMode>,
         flags: BTreeMap<String, Value>,
         db: Option<Arc<dyn SchemaRegistry>>,
+        query_cache: Option<Arc<dyn QueryCache>>,
         quoting: ResolvedQuoting,
         query_comment: Option<QueryComment>,
         token: CancellationToken,

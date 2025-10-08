@@ -766,13 +766,13 @@ fn parse_adapter_properties<'a>(
         }
         CatalogType::DatabricksUnity => {
             check_unknown_keys(properties, &["location_root"], "adapter_properties(unity)")?;
-            if let Some(loc) = get_str(properties, "location_root") {
-                if loc.trim().is_empty() {
-                    return err!(
-                        ErrorCode::InvalidConfig,
-                        "adapter_properties.location_root cannot be blank"
-                    );
-                }
+            if let Some(loc) = get_str(properties, "location_root")
+                && loc.trim().is_empty()
+            {
+                return err!(
+                    ErrorCode::InvalidConfig,
+                    "adapter_properties.location_root cannot be blank"
+                );
             }
             Ok(AdapterPropsView::DatabricksUnity(
                 DatabricksUnityPropsView {
@@ -963,12 +963,13 @@ pub fn validate_catalogs(spec: &DbtCatalogsView<'_>, path: &Path) -> FsResult<()
                     if let Some(AdapterPropsView::DatabricksUnity(properties)) =
                         &write_integration.adapter_properties
                     {
-                        if let Some(loc) = properties.location_root {
-                            if loc.trim().is_empty() {
-                                return err!(code => ErrorCode::InvalidConfig, loc => err_loc(),
+                        if let Some(loc) = properties.location_root
+                            && loc.trim().is_empty()
+                            && loc.trim().is_empty()
+                        {
+                            return err!(code => ErrorCode::InvalidConfig, loc => err_loc(),
                                     "integration '{}': adapter_properties.location_root cannot be blank",
                                     write_integration.integration_name);
-                            }
                         }
                     } else if write_integration.adapter_properties.is_some() {
                         return err!(code => ErrorCode::InvalidConfig, loc => err_loc(),
@@ -976,12 +977,12 @@ pub fn validate_catalogs(spec: &DbtCatalogsView<'_>, path: &Path) -> FsResult<()
                             write_integration.integration_name);
                     }
 
-                    if let Some(file_format) = &write_integration.file_format {
-                        if *file_format != DatabricksFileFormat::Delta {
-                            return err!(code => ErrorCode::InvalidConfig, loc => err_loc(),
+                    if let Some(file_format) = &write_integration.file_format
+                        && *file_format != DatabricksFileFormat::Delta
+                    {
+                        return err!(code => ErrorCode::InvalidConfig, loc => err_loc(),
                                 "integration '{}': when table_format=iceberg, file_format must be 'delta'",
                                 write_integration.integration_name);
-                        }
                     }
                 }
 

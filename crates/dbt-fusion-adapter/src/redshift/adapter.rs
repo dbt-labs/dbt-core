@@ -254,7 +254,8 @@ mod tests {
             auth.into(),
             AdapterConfig::new(config),
             DEFAULT_RESOLVED_QUOTING,
-            Arc::new(NaiveStmtSplitter), // XXX: NaiveStmtSplitter
+            Arc::new(NaiveStmtSplitter),
+            None,
             QueryCommentConfig::from_query_comment(None, AdapterType::Redshift, false),
             Box::new(NaiveTypeOpsImpl::new(AdapterType::Redshift)), // XXX: NaiveTypeOpsImpl
             never_cancels(),

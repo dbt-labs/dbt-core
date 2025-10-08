@@ -25,6 +25,8 @@ pub const DEFAULT_TEST_SCHEMA: &str = "dbt_test__audit";
 pub const CURRENT_PATH: &str = "__minijinja_current_path";
 /// The name of the current span
 pub const CURRENT_SPAN: &str = "__minijinja_current_span";
+/// The current execution phase
+pub const CURRENT_EXECUTION_PHASE: &str = "__minijinja_current_execution_phase";
 /// The name of the dbt packages directory
 pub const DBT_PACKAGES_DIR_NAME: &str = "dbt_packages";
 /// The name of the dbt internal packages directory

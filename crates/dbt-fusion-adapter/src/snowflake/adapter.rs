@@ -389,7 +389,8 @@ mod tests {
             auth.into(),
             AdapterConfig::new(config),
             SNOWFLAKE_RESOLVED_QUOTING,
-            Arc::new(NaiveStmtSplitter), // XXX: NaiveStmtSplitter
+            Arc::new(NaiveStmtSplitter),
+            None,
             QueryCommentConfig::from_query_comment(None, AdapterType::Snowflake, false),
             Box::new(NaiveTypeOpsImpl::new(AdapterType::Snowflake)), // XXX: NaiveTypeOpsImpl
             never_cancels(),
@@ -440,6 +441,7 @@ mod tests {
             config,
             SNOWFLAKE_RESOLVED_QUOTING,
             Arc::new(NaiveStmtSplitter),
+            None,
             QueryCommentConfig::from_query_comment(None, AdapterType::Snowflake, false),
             Box::new(NaiveTypeOpsImpl::new(AdapterType::Snowflake)),
             never_cancels(),

@@ -10,6 +10,7 @@ use dbt_schemas::schemas::{
     legacy_catalog::{CatalogNodeStats, CatalogTable, ColumnMetadata, TableMetadata},
     relations::base::{BaseRelation, RelationPattern},
 };
+use dbt_xdbc::query_ctx::ExecutionPhase;
 
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -128,6 +129,7 @@ impl MetadataAdapter for PostgresAdapter {
     fn list_relations_schemas(
         &self,
         _unique_id: Option<String>,
+        _phase: Option<ExecutionPhase>,
         _relations: &[Arc<dyn BaseRelation>],
     ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<Arc<Schema>>>> {
         let future = async move { todo!("PostgreSQL's list_relations_schemas") };

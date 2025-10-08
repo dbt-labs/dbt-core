@@ -45,6 +45,7 @@ pub enum IntrospectionKind {
     #[default]
     None,
     Execute,
+    This,
     UpstreamSchema,
     InternalSchema,
     ExternalSchema,
@@ -58,6 +59,7 @@ impl IntrospectionKind {
             IntrospectionKind::Execute
                 | IntrospectionKind::InternalSchema
                 | IntrospectionKind::ExternalSchema
+                | IntrospectionKind::This
                 | IntrospectionKind::Unknown
         )
     }
@@ -71,6 +73,7 @@ impl Display for IntrospectionKind {
             IntrospectionKind::UpstreamSchema => write!(f, "upstream_schema"),
             IntrospectionKind::InternalSchema => write!(f, "internal_schema"),
             IntrospectionKind::ExternalSchema => write!(f, "external_schema"),
+            IntrospectionKind::This => write!(f, "this"),
             IntrospectionKind::Unknown => write!(f, "unknown"),
         }
     }
@@ -86,6 +89,7 @@ impl FromStr for IntrospectionKind {
             "upstream_schema" => Ok(IntrospectionKind::UpstreamSchema),
             "internal_schema" => Ok(IntrospectionKind::InternalSchema),
             "external_schema" => Ok(IntrospectionKind::ExternalSchema),
+            "this" => Ok(IntrospectionKind::This),
             _ => Err(()),
         }
     }
@@ -631,8 +635,11 @@ impl InternalDbtNode for DbtTest {
         // TODO: test currently is not supported for state selector due to the difference of test name generation between fusion and dbt-mantle.
         true
     }
-    fn set_detected_introspection(&mut self, _introspection: IntrospectionKind) {
-        panic!("DbtTest does not support setting detected_unsafe");
+    fn set_detected_introspection(&mut self, introspection: IntrospectionKind) {
+        self.__test_attr__.introspection = introspection;
+    }
+    fn introspection(&self) -> IntrospectionKind {
+        self.__test_attr__.introspection
     }
 }
 
@@ -858,8 +865,12 @@ impl InternalDbtNode for DbtSnapshot {
         // }
     }
 
-    fn set_detected_introspection(&mut self, _introspection: IntrospectionKind) {
-        panic!("DbtSnapshot does not support setting detected_unsafe");
+    fn set_detected_introspection(&mut self, introspection: IntrospectionKind) {
+        self.__snapshot_attr__.introspection = introspection;
+    }
+
+    fn introspection(&self) -> IntrospectionKind {
+        self.__snapshot_attr__.introspection
     }
 }
 
@@ -1980,6 +1991,8 @@ pub struct DbtTestAttr {
     pub attached_node: Option<String>,
     pub test_metadata: Option<TestMetadata>,
     pub file_key_name: Option<String>,
+    #[serde(skip_serializing, default = "default_introspection")]
+    pub introspection: IntrospectionKind,
 }
 
 #[skip_serializing_none]
@@ -2016,6 +2029,8 @@ pub struct DbtSnapshot {
 #[serde(rename_all = "snake_case")]
 pub struct DbtSnapshotAttr {
     pub snapshot_meta_column_names: SnapshotMetaColumnNames,
+    #[serde(skip_serializing, default = "default_introspection")]
+    pub introspection: IntrospectionKind,
 }
 
 #[skip_serializing_none]

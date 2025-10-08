@@ -623,6 +623,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                             attached_node: test.attached_node,
                             test_metadata: test.test_metadata,
                             file_key_name: test.file_key_name,
+                            introspection: IntrospectionKind::None,
                         },
                         deprecated_config: test.config,
                         __other__: test.__other__,
@@ -693,6 +694,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                                 .snapshot_meta_column_names
                                 .clone()
                                 .unwrap_or_default(),
+                            introspection: IntrospectionKind::None,
                         },
                         __adapter_attr__: AdapterAttr::from_config_and_dialect(
                             &snapshot.config.__warehouse_specific_config__,

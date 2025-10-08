@@ -1,10 +1,15 @@
 //! Util methods for creating query context.
 
+use std::str::FromStr;
+
 use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
 
 use dbt_schemas::schemas::{DbtModel, DbtSeed, DbtSnapshot, DbtTest, DbtUnitTest};
-use dbt_xdbc::QueryCtx;
-use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State};
+use dbt_xdbc::{QueryCtx, query_ctx::ExecutionPhase};
+use minijinja::{
+    Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State,
+    constants::CURRENT_EXECUTION_PHASE,
+};
 use serde::Deserialize;
 
 /// Create a new instance from the current jinja state.
@@ -33,13 +38,15 @@ pub fn query_ctx_from_state(state: &State) -> AdapterResult<QueryCtx> {
     //AdapterErrorKind::Configuration,
     //"Missing model in the state",
     //));
-    let query = QueryCtx::new(dialect_str);
+    let mut query = QueryCtx::new(dialect_str);
     // TODO: use node_metadata_from_state
     if let Some(node_id) = node_id_from_state(state) {
-        Ok(query.with_node_id(node_id))
-    } else {
-        Ok(query)
+        query = query.with_node_id(node_id);
     }
+    if let Some(phase) = execution_phase_from_state(state) {
+        query = query.with_phase(phase);
+    }
+    Ok(query)
 }
 
 pub fn node_id_from_state(state: &State) -> Option<String> {
@@ -61,6 +68,16 @@ pub fn node_id_from_state(state: &State) -> Option<String> {
         Some(seed.__common_attr__.unique_id)
     } else if let Ok(unit_test) = DbtUnitTest::deserialize(&yaml_node) {
         Some(unit_test.__common_attr__.unique_id)
+    } else {
+        None
+    }
+}
+
+pub fn execution_phase_from_state(state: &State) -> Option<ExecutionPhase> {
+    let phase = state.lookup(CURRENT_EXECUTION_PHASE).as_ref()?.clone();
+    if let Some(phase) = phase.as_str() {
+        debug_assert!(ExecutionPhase::from_str(phase).is_ok());
+        ExecutionPhase::from_str(phase).ok()
     } else {
         None
     }

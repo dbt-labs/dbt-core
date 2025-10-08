@@ -1,11 +1,11 @@
 use crate::AdapterType;
 use crate::base_adapter::BaseAdapter;
+use crate::cast_util::downcast_value_to_dyn_base_relation;
 use crate::databricks::relation::DEFAULT_DATABRICKS_DATABASE;
 use crate::errors::AdapterResult;
 use crate::errors::{AdapterError, AdapterErrorKind};
 use crate::factory::create_static_relation;
 use crate::formatter::SqlLiteralFormatter;
-use crate::relation_object::RelationObject;
 use crate::response::ResultObject;
 
 use arrow::array::RecordBatch;
@@ -111,15 +111,7 @@ pub fn dispatch_adapter_calls(
             // relation: BaseRelation
             let iter = ArgsIter::new(name, &["relation"], args);
             let relation = iter.next_arg::<&Value>()?;
-            let relation = relation
-                .downcast_object::<RelationObject>()
-                .ok_or_else(|| {
-                    MinijinjaError::new(
-                        MinijinjaErrorKind::InvalidOperation,
-                        "relation must be a BaseRelation object",
-                    )
-                })?
-                .inner();
+            let relation = downcast_value_to_dyn_base_relation(relation)?;
             iter.finish()?;
 
             adapter.get_columns_in_relation(state, relation)
@@ -193,25 +185,9 @@ pub fn dispatch_adapter_calls(
             // from_relation: BaseRelation, to_relation: BaseRelation
             let iter = ArgsIter::new(name, &["from_relation", "to_relation"], args);
             let from_relation = iter.next_arg::<&Value>()?;
-            let from_relation = from_relation
-                .downcast_object::<RelationObject>()
-                .ok_or_else(|| {
-                    MinijinjaError::new(
-                        MinijinjaErrorKind::InvalidOperation,
-                        "from_relation must be a BaseRelation object",
-                    )
-                })?
-                .inner();
+            let from_relation = downcast_value_to_dyn_base_relation(from_relation)?;
             let to_relation = iter.next_arg::<&Value>()?;
-            let to_relation = to_relation
-                .downcast_object::<RelationObject>()
-                .ok_or_else(|| {
-                    MinijinjaError::new(
-                        MinijinjaErrorKind::InvalidOperation,
-                        "to_relation must be a BaseRelation object",
-                    )
-                })?
-                .inner();
+            let to_relation = downcast_value_to_dyn_base_relation(to_relation)?;
             iter.finish()?;
 
             adapter.expand_target_column_types(state, from_relation, to_relation)
@@ -290,15 +266,7 @@ pub fn dispatch_adapter_calls(
             // relation: BaseRelation
             let iter = ArgsIter::new(name, &["relation"], args);
             let relation = iter.next_arg::<&Value>()?;
-            let relation = relation
-                .downcast_object::<RelationObject>()
-                .ok_or_else(|| {
-                    MinijinjaError::new(
-                        MinijinjaErrorKind::InvalidOperation,
-                        "relation must be a BaseRelation object",
-                    )
-                })?
-                .inner();
+            let relation = downcast_value_to_dyn_base_relation(relation)?;
             iter.finish()?;
 
             adapter.describe_relation(state, relation)
