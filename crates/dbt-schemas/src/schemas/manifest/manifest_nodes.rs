@@ -681,7 +681,22 @@ impl From<DbtOperation> for ManifestOperation {
                 description: operation.__common_attr__.description,
                 ..Default::default()
             },
-            __base_attr__: ManifestNodeBaseAttributes::default(),
+            __base_attr__: ManifestNodeBaseAttributes {
+                alias: operation.__base_attr__.alias,
+                relation_name: operation.__base_attr__.relation_name,
+                columns: operation.__base_attr__.columns,
+                depends_on: operation.__base_attr__.depends_on,
+                refs: operation.__base_attr__.refs,
+                sources: operation.__base_attr__.sources,
+                functions: operation.__base_attr__.functions,
+                metrics: operation.__base_attr__.metrics,
+                raw_code: operation.__common_attr__.raw_code,
+                compiled: None,
+                compiled_code: None,
+                checksum: operation.__common_attr__.checksum,
+                language: operation.__common_attr__.language,
+                ..Default::default()
+            },
             __other__: operation.__other__,
         }
     }

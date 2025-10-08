@@ -31,9 +31,9 @@ use crate::resolve::resolve_groups::resolve_groups;
 use crate::resolve::resolve_operations::resolve_operations;
 use crate::resolve::resolve_query_comment::resolve_query_comment;
 use crate::utils::{self, clear_package_diagnostics};
+use dbt_schemas::schemas::common::DbtQuoting;
 use dbt_schemas::schemas::telemetry::{ExecutionPhase, NodeType, PhaseExecuted};
-use dbt_schemas::state::DbtState;
-use dbt_schemas::state::ResolverState;
+use dbt_schemas::state::{DbtState, ResolverState};
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -109,17 +109,6 @@ pub async fn resolve(
         macros.macros.extend(resolved_macros);
         let docs_macros = resolve_docs_macros(&arg.io, &package.docs_files)?;
         macros.docs_macros.extend(docs_macros);
-    }
-
-    let mut operations = Operations::default();
-    for package in &dbt_state.packages {
-        let (on_run_start, on_run_end) = resolve_operations(
-            &package.dbt_project,
-            &package.package_root_path,
-            &arg.io.in_dir,
-        );
-        operations.on_run_start.extend(on_run_start);
-        operations.on_run_end.extend(on_run_end);
     }
 
     let adapter_type = dbt_state
@@ -270,10 +259,44 @@ pub async fn resolve(
         .get(dbt_state.root_project_name())
         .unwrap();
 
+    // Resolve operations (on_run_start and on_run_end) with rendering and dependency extraction
+    let mut operations = Operations::default();
+    for package in &dbt_state.packages {
+        // Get the package-specific runtime config so operations can access package vars
+        let package_runtime_config = all_runtime_configs
+            .get(&package.dbt_project.name)
+            .unwrap_or(root_runtime_config);
+
+        let (on_run_start, on_run_end) = resolve_operations(
+            &package.dbt_project,
+            &package.package_root_path,
+            &arg.io.in_dir,
+            &jinja_env,
+            &arg.io,
+            adapter_type,
+            &dbt_state.dbt_profile.database,
+            &dbt_state.dbt_profile.schema,
+            DbtQuoting {
+                database: root_project_quoting.database,
+                schema: root_project_quoting.schema,
+                identifier: root_project_quoting.identifier,
+                snowflake_ignore_case: None,
+            },
+            package_runtime_config.clone(),
+        )?;
+        operations.on_run_start.extend(on_run_start);
+        operations.on_run_end.extend(on_run_end);
+    }
+
     // take refs and sources, resolve them to a unique_id and put in depends_on
     // This returns a set of node IDs that had resolution errors (unresolved refs/sources)
-    let nodes_with_resolution_errors =
-        resolve_dependencies(&arg.io, &mut nodes, &mut disabled_nodes, &node_resolver);
+    let nodes_with_resolution_errors = resolve_dependencies(
+        &arg.io,
+        &mut nodes,
+        &mut disabled_nodes,
+        &mut operations,
+        &node_resolver,
+    );
 
     // Check access
     check_access(arg, &nodes, &all_runtime_configs);
