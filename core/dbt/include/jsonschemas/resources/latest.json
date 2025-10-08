@@ -147,6 +147,15 @@
           "type": "null"
         }
       ]
+    },
+    "functions": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "object"
+      }
     }
   },
   "additionalProperties": false,
