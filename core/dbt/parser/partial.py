@@ -58,6 +58,7 @@ special_override_macros = [
     "generate_schema_name",
     "generate_database_name",
     "generate_alias_name",
+    "function",
 ]
 
 
@@ -295,6 +296,10 @@ class PartialParsing:
         if saved_source_file.parse_file_type == ParseFileType.Fixture:
             self.delete_fixture_node(saved_source_file)
 
+        # functions
+        if saved_source_file.parse_file_type == ParseFileType.Function:
+            self.delete_function_node(saved_source_file)
+
         fire_event(PartialParsingFile(operation="deleted", file_id=file_id))
 
     # Updates for non-schema files
@@ -310,6 +315,8 @@ class PartialParsing:
             self.update_doc_in_saved(new_source_file, old_source_file)
         elif new_source_file.parse_file_type == ParseFileType.Fixture:
             self.update_fixture_in_saved(new_source_file, old_source_file)
+        elif new_source_file.parse_file_type == ParseFileType.Function:
+            self.update_function_in_saved(new_source_file, old_source_file)
         else:
             raise Exception(f"Invalid parse_file_type in source_file {file_id}")
         fire_event(PartialParsingFile(operation="updated", file_id=file_id))
@@ -402,6 +409,15 @@ class PartialParsing:
         if self.already_scheduled_for_parsing(old_source_file):
             return
         self.delete_fixture_node(old_source_file)
+        self.saved_files[new_source_file.file_id] = deepcopy(new_source_file)
+        self.add_to_pp_files(new_source_file)
+
+    def update_function_in_saved(
+        self, new_source_file: SourceFile, old_source_file: SourceFile
+    ) -> None:
+        if self.already_scheduled_for_parsing(old_source_file):
+            return
+        self.delete_function_node(old_source_file)
         self.saved_files[new_source_file.file_id] = deepcopy(new_source_file)
         self.add_to_pp_files(new_source_file)
 
@@ -630,6 +646,31 @@ class PartialParsing:
             source_file.unit_tests.remove(unique_id)
         self.saved_manifest.files.pop(source_file.file_id)
 
+    def delete_function_node(self, source_file: SourceFile):
+        # There should always be a node for a Function file
+        if not isinstance(source_file, SourceFile) or not source_file.functions:
+            return
+
+        # There can only be one node of a function
+        function_unique_id = source_file.functions[0]
+
+        # Remove the function node from the saved manifest
+        function_node = self.saved_manifest.functions.pop(function_unique_id)
+
+        # Remove the function node from the source file so that it's not viewed as a
+        # duplicate when it's re-added
+        source_file.nodes.remove(function_unique_id)
+
+        # schedule function for parsing.
+        # Note: We _don't_ need to schedule referencing nodes for reparsing, because a change in a function changes nothing
+        # for the parsing/compilation of a node that references it. It only affects the referencer's execution in the data warehouse.
+        self._schedule_for_parsing(
+            "functions",
+            function_node,
+            function_node.name,
+            self.delete_schema_function,
+        )
+
     # Schema files -----------------------
     # Changed schema files
     def change_schema_file(self, file_id):
@@ -744,6 +785,7 @@ class PartialParsing:
         handle_change("unit_tests", self.delete_schema_unit_test)
         handle_change("saved_queries", self.delete_schema_saved_query)
         handle_change("data_tests", self.delete_schema_data_test_patch)
+        handle_change("functions", self.delete_schema_function)
 
     def _handle_element_change(
         self, schema_file, saved_yaml_dict, new_yaml_dict, env_var_changes, dict_key: str, delete
@@ -1079,6 +1121,16 @@ class PartialParsing:
                     self.saved_manifest.unit_tests.pop(unique_id)
                     schema_file.unit_tests.remove(unique_id)
             # No disabled unit tests yet
+
+    def delete_schema_function(self, schema_file: SchemaSourceFile, function_dict: dict):
+        function_name = function_dict["name"]
+        functions = schema_file.node_patches.copy()
+        for unique_id in functions:
+            if unique_id in self.saved_manifest.functions:
+                function = self.saved_manifest.functions[unique_id]
+                if function.name == function_name:
+                    self.saved_manifest.functions.pop(unique_id)
+                    schema_file.functions.remove(unique_id)
 
     def get_schema_element(self, elem_list, elem_name):
         for element in elem_list:

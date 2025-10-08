@@ -1714,9 +1714,10 @@ class Manifest(MacroMethods, dbtClassMixin):
         self.exposures[exposure.unique_id] = exposure
         source_file.exposures.append(exposure.unique_id)
 
-    def add_function(self, function: FunctionNode):
+    def add_function(self, source_file: SourceFile, function: FunctionNode):
         _check_duplicates(function, self.functions)
         self.functions[function.unique_id] = function
+        source_file.functions.append(function.unique_id)
 
     def add_metric(
         self, source_file: SchemaSourceFile, metric: Metric, generated_from: Optional[str] = None
