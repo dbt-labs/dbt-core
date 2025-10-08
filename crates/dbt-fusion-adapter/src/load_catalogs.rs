@@ -27,10 +27,12 @@ pub fn load_catalogs(text: &str, path: &Path) -> FsResult<()> {
 }
 
 pub fn do_load_catalogs(text: &str, path: &Path) -> FsResult<DbtCatalogs> {
+    let _guard = yml::with_filename(Some(path.to_path_buf()));
+
     let text_yml: yml::Value = yml::from_str(text).map_err(|e| yaml_to_fs_error(e, Some(path)))?;
 
-    let repr = match text_yml {
-        yml::Value::Mapping(mapping, _) => mapping,
+    let (repr, span) = match text_yml {
+        yml::Value::Mapping(mapping, span) => (mapping, span),
         _ => {
             return Err(fs_err!(
                 code => ErrorCode::InvalidConfig,
@@ -40,7 +42,7 @@ pub fn do_load_catalogs(text: &str, path: &Path) -> FsResult<DbtCatalogs> {
         }
     };
 
-    let catalogs = DbtCatalogs { repr };
+    let catalogs = DbtCatalogs { repr, span };
     let view = catalogs.view()?;
     validate_catalogs(&view, path)?;
     Ok(catalogs)
@@ -84,7 +86,7 @@ catalogs:
         let holder = do_load_catalogs(good_yaml(), path).expect("should parse and validate");
         let view = holder.view().expect("view parses");
         assert_eq!(view.catalogs.len(), 1);
-        assert_eq!(view.catalogs[0].catalog_name, "c1");
+        assert_eq!(view.catalogs[0].catalog_name.0, "c1");
     }
 
     #[test]
@@ -150,7 +152,7 @@ catalogs:
         let holder = fetch_catalogs().expect("global should be initialized");
         let view = holder.view().expect("view parses");
         assert_eq!(view.catalogs.len(), 1);
-        assert_eq!(view.catalogs[0].catalog_name, "c1");
+        assert_eq!(view.catalogs[0].catalog_name.0, "c1");
     }
 
     #[test]
@@ -170,7 +172,7 @@ catalogs:
         let holder = fetch_catalogs().expect("global should be initialized");
         let view = holder.view().expect("view parses");
         assert_eq!(view.catalogs.len(), 1);
-        assert_eq!(view.catalogs[0].catalog_name, "uc");
+        assert_eq!(view.catalogs[0].catalog_name.0, "uc");
     }
 
     #[test]
@@ -214,6 +216,6 @@ catalogs:
         let holder = do_load_catalogs(yaml, path).expect("unity minimal should parse+validate");
         let view = holder.view().unwrap();
         assert_eq!(view.catalogs.len(), 1);
-        assert_eq!(view.catalogs[0].active_write_integration, "i");
+        assert_eq!(view.catalogs[0].active_write_integration.0, "i");
     }
 }

@@ -42,10 +42,10 @@
 //!             location: <string>                                      // optional; if present, non-empty -- will be external_volume under the hood
 
 use std::collections::HashSet;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use dbt_common::{ErrorCode, FsResult, err, fs_err};
-use dbt_serde_yaml as yml;
+use dbt_serde_yaml::{self as yml};
 
 /// A validated catalogs.yml mapping.
 /// - Holds the raw YAML Mapping so external consumers can copy as needed.
@@ -53,6 +53,7 @@ use dbt_serde_yaml as yml;
 #[derive(Debug, Clone)]
 pub struct DbtCatalogs {
     pub repr: yml::Mapping,
+    pub span: yml::Span,
 }
 
 impl DbtCatalogs {
@@ -68,7 +69,7 @@ impl DbtCatalogs {
 
     /// Borrowed, zero-copy typed view (validated shape).
     pub fn view(&self) -> FsResult<DbtCatalogsView<'_>> {
-        DbtCatalogsView::from_mapping(&self.repr)
+        DbtCatalogsView::from_mapping(&self.repr, self.span.clone())
     }
 
     /// Ergonomic helper: return the `catalogs` sequence (validated presence).
@@ -220,64 +221,118 @@ pub enum AdapterPropsView<'a> {
     Empty,
 }
 
-fn get_str<'a>(m: &'a yml::Mapping, k: &str) -> Option<&'a str> {
+#[inline]
+fn get_str<'a>(m: &'a yml::Mapping, k: &str) -> FsResult<Option<(&'a str, yml::Span)>> {
+    match m.get(yml::Value::from(k)) {
+        Some(v) => match v {
+            yml::Value::String(s, span) => Ok(Some((s.trim(), span.clone()))),
+            _ => Err(fs_err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => Some(v.span()),
+                "Key '{}' must be a string",
+                k
+            )),
+        },
+        None => Ok(None),
+    }
+}
+
+#[inline]
+fn get_map<'a>(m: &'a yml::Mapping, k: &str) -> FsResult<Option<(&'a yml::Mapping, yml::Span)>> {
+    match m.get(yml::Value::from(k)) {
+        Some(v) => match v {
+            yml::Value::Mapping(map, span) => Ok(Some((map, span.clone()))),
+            _ => Err(fs_err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => Some(v.span()),
+                "Key '{}' must be a mapping",
+                k
+            )),
+        },
+        None => Ok(None),
+    }
+}
+
+#[inline]
+fn get_seq<'a>(m: &'a yml::Mapping, k: &str) -> FsResult<Option<(&'a yml::Sequence, yml::Span)>> {
+    match m.get(yml::Value::from(k)) {
+        Some(v) => match v {
+            yml::Value::Sequence(seq, span) => Ok(Some((seq, span.clone()))),
+            _ => Err(fs_err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => Some(v.span()),
+                "Key '{}' must be a sequence/list",
+                k
+            )),
+        },
+        None => Ok(None),
+    }
+}
+
+#[inline]
+fn get_bool(m: &yml::Mapping, k: &str) -> FsResult<Option<(bool, yml::Span)>> {
     m.get(yml::Value::from(k))
-        .and_then(|v| v.as_str())
-        .map(|s| s.trim())
-}
-
-fn get_map<'a>(m: &'a yml::Mapping, k: &str) -> Option<&'a yml::Mapping> {
-    m.get(yml::Value::from(k)).and_then(|v| v.as_mapping())
-}
-
-fn get_seq<'a>(m: &'a yml::Mapping, k: &str) -> Option<&'a yml::Sequence> {
-    m.get(yml::Value::from(k)).and_then(|v| v.as_sequence())
-}
-
-fn get_bool(m: &yml::Mapping, k: &str) -> FsResult<Option<bool>> {
-    m.get(yml::Value::from(k))
-        .map(|v| {
-            v.as_bool()
-                .ok_or_else(|| fs_err!(ErrorCode::InvalidConfig, "Key '{}' must be a boolean", k))
+        .map(|v| match v {
+            yml::Value::Bool(b, span) => Ok((*b, span.clone())),
+            _ => Err(fs_err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => Some(v.span()),
+                "Key '{}' must be a boolean",
+                k
+            )),
         })
         .transpose()
 }
 
-fn get_u32(m: &yml::Mapping, k: &str) -> FsResult<Option<u32>> {
+#[inline]
+fn get_u32(m: &yml::Mapping, k: &str) -> FsResult<Option<(u32, yml::Span)>> {
     m.get(yml::Value::from(k))
-        .map(|v| {
-            v.as_i64()
+        .map(|v| match v {
+            yml::Value::Number(n, span) => n
+                .as_i64()
                 .and_then(|i| u32::try_from(i).ok())
+                .map(|u| (u, span.clone()))
                 .ok_or_else(|| {
                     fs_err!(
-                        ErrorCode::InvalidConfig,
+                        code => ErrorCode::InvalidConfig,
+                        hacky_yml_loc => Some(span.clone()),
                         "Key '{}' must be a non-negative integer",
                         k
                     )
-                })
+                }),
+            _ => Err(fs_err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => Some(v.span()),
+                "Key '{}' must be a non-negative integer",
+                k
+            )),
         })
         .transpose()
 }
 
-fn key_err(key: &str) -> Box<dbt_common::FsError> {
+#[inline]
+fn key_err(key: &str, err_span: Option<yml::Span>) -> Box<dbt_common::FsError> {
     fs_err!(
-        ErrorCode::InvalidConfig,
+        code => ErrorCode::InvalidConfig,
+        hacky_yml_loc => err_span,
         "Missing required key '{}' in catalogs.yml",
         key
     )
 }
 
+#[inline]
 fn is_blank(s: &str) -> bool {
     s.trim().is_empty()
 }
 
 fn check_unknown_keys(m: &yml::Mapping, allowed: &[&str], ctx: &str) -> FsResult<()> {
     for k in m.keys() {
+        let span = k.span();
         let Some(ks) = k.as_str() else {
-            return err!(ErrorCode::InvalidConfig, "Non-string key in {}", ctx);
+            return err!(code => ErrorCode::InvalidConfig, hacky_yml_loc => Some(span), "Non-string key in {}", ctx);
         };
         if !allowed.iter().any(|a| a == &ks) {
-            return err!(ErrorCode::InvalidConfig, "Unknown key '{}' in {}", ks, ctx);
+            return err!(code => ErrorCode::InvalidConfig, hacky_yml_loc => Some(span), "Unknown key '{}' in {}", ks, ctx);
         }
     }
     Ok(())
@@ -305,39 +360,49 @@ pub struct WriteIntegrationView<'a> {
 
 #[derive(Debug)]
 pub struct CatalogSpecView<'a> {
-    pub catalog_name: &'a str, // alias: name
-    pub active_write_integration: &'a str,
-    pub write_integrations: Vec<WriteIntegrationView<'a>>,
+    pub span: yml::Span,
+    pub catalog_name: (&'a str, yml::Span), // alias: name
+    pub active_write_integration: (&'a str, yml::Span),
+    pub write_integrations: (Vec<WriteIntegrationView<'a>>, yml::Span),
 }
 
 #[derive(Debug)]
 pub struct DbtCatalogsView<'a> {
+    pub span: yml::Span,
     pub catalogs: Vec<CatalogSpecView<'a>>,
 }
 
 impl<'a> DbtCatalogsView<'a> {
-    pub fn from_mapping(map: &'a yml::Mapping) -> FsResult<Self> {
+    pub fn from_mapping(map: &'a yml::Mapping, span: yml::Span) -> FsResult<Self> {
         check_unknown_keys(map, &["catalogs"], "top-level catalogs.yml")?;
+        let catalog_entries = match get_seq(map, "catalogs")? {
+            Some(entries) => entries,
+            None => return Err(key_err("catalogs", Some(span))),
+        };
 
-        let catalog_entries = get_seq(map, "catalogs").ok_or_else(|| key_err("catalogs"))?;
+        let mut catalogs = Vec::with_capacity(catalog_entries.0.len());
 
-        let mut catalogs = Vec::with_capacity(catalog_entries.len());
-        for (idx, item) in catalog_entries.iter().enumerate() {
-            let m = item.as_mapping().ok_or_else(|| {
-                fs_err!(
-                    ErrorCode::InvalidConfig,
-                    "catalogs[{idx}] must be a mapping"
-                )
-            })?;
-            catalogs.push(CatalogSpecView::from_mapping(m)?);
+        for (idx, item) in catalog_entries.0.iter().enumerate() {
+            let item_span = item.span();
+            let m = match item.as_mapping() {
+                Some(m) => m,
+                None => {
+                    return err!(
+                        code => ErrorCode::InvalidConfig,
+                        hacky_yml_loc => Some(item_span),
+                        "catalogs[{idx}] must be a mapping"
+                    );
+                }
+            };
+            catalogs.push(CatalogSpecView::from_mapping(m, item_span)?);
         }
 
-        Ok(Self { catalogs })
+        Ok(Self { catalogs, span })
     }
 }
 
 impl<'a> CatalogSpecView<'a> {
-    pub fn from_mapping(map: &'a yml::Mapping) -> FsResult<Self> {
+    pub fn from_mapping(map: &'a yml::Mapping, span: yml::Span) -> FsResult<Self> {
         check_unknown_keys(
             map,
             &[
@@ -349,27 +414,36 @@ impl<'a> CatalogSpecView<'a> {
             "catalog specification",
         )?;
 
-        if get_str(map, "catalog_name").is_some() && get_str(map, "name").is_some() {
+        // Favor "catalog_name"
+        if let (Some((_, _span1)), Some((_, span2))) =
+            (get_str(map, "catalog_name")?, get_str(map, "name")?)
+        {
             return err!(
-                ErrorCode::InvalidConfig,
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => Some(span2),
                 "Both 'catalog_name' and 'name' provided in catalog specification; provide exactly one"
             );
         }
 
-        let catalog_name = get_str(map, "catalog_name")
-            .or_else(|| get_str(map, "name"))
-            .ok_or_else(|| key_err("catalog_name|name"))?;
+        let catalog_name = match get_str(map, "catalog_name")? {
+            Some(val) => val,
+            None => get_str(map, "name")?
+                .ok_or_else(|| key_err("catalog_name|name", Some(span.clone())))?,
+        };
 
-        let active = get_str(map, "active_write_integration")
-            .ok_or_else(|| key_err("active_write_integration"))?;
+        let active = get_str(map, "active_write_integration")?
+            .ok_or_else(|| key_err("active_write_integration", Some(span.clone())))?;
 
-        let write_integration_entries =
-            get_seq(map, "write_integrations").ok_or_else(|| key_err("write_integrations"))?;
-        let mut write_integrations = Vec::with_capacity(write_integration_entries.len());
-        for (idx, item) in write_integration_entries.iter().enumerate() {
+        let write_integration_entries = get_seq(map, "write_integrations")?
+            .ok_or_else(|| key_err("write_integrations", Some(span.clone())))?;
+
+        let mut write_integrations = Vec::with_capacity(write_integration_entries.0.len());
+        for (idx, item) in write_integration_entries.0.iter().enumerate() {
+            let item_span = item.span();
             let write_integration_mapping = item.as_mapping().ok_or_else(|| {
                 fs_err!(
-                    ErrorCode::InvalidConfig,
+                    code => ErrorCode::InvalidConfig,
+                    hacky_yml_loc => Some(item_span),
                     "write_integrations[{idx}] must be a mapping"
                 )
             })?;
@@ -378,57 +452,54 @@ impl<'a> CatalogSpecView<'a> {
             )?);
         }
         Ok(Self {
+            span,
             catalog_name,
             active_write_integration: active,
-            write_integrations,
+            write_integrations: (write_integrations, write_integration_entries.1),
         })
     }
 }
 
 impl<'a> WriteIntegrationView<'a> {
     pub fn from_mapping(map: &'a yml::Mapping) -> FsResult<Self> {
-        if get_str(map, "integration_name").is_some() && get_str(map, "name").is_some() {
+        if let (Some(_), Some((_, span2))) =
+            (get_str(map, "integration_name")?, get_str(map, "name")?)
+        {
             return err!(
-                ErrorCode::InvalidConfig,
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => Some(span2),
                 "Both 'integration_name' and 'name' provided in write_integration; provide exactly one"
             );
         }
 
-        if map.get(yml::Value::from("adapter_properties")).is_some()
-            && get_map(map, "adapter_properties").is_none()
-        {
-            return err!(
-                ErrorCode::InvalidConfig,
-                "adapter_properties must be a mapping"
-            );
-        }
-
-        let integration_name = get_str(map, "integration_name")
-            .or_else(|| get_str(map, "name"))
-            .ok_or_else(|| key_err("integration_name|name"))?;
+        let integration_name = match get_str(map, "integration_name")? {
+            Some(val) => val,
+            None => get_str(map, "name")?.ok_or_else(|| key_err("integration_name|name", None))?,
+        };
 
         let catalog_type_raw =
-            get_str(map, "catalog_type").ok_or_else(|| key_err("catalog_type"))?;
+            get_str(map, "catalog_type")?.ok_or_else(|| key_err("catalog_type", None))?;
         let catalog_type = CATALOG_TYPES
             .iter()
-            .find_map(|(name, v)| catalog_type_raw.eq_ignore_ascii_case(name).then_some(*v))
+            .find_map(|(name, v)| catalog_type_raw.0.eq_ignore_ascii_case(name).then_some(*v))
             .ok_or_else(|| {
                 fs_err!(
-                    ErrorCode::InvalidConfig,
+                    code => ErrorCode::InvalidConfig,
+                    hacky_yml_loc => Some(catalog_type_raw.1),
                     "catalog_type '{}' invalid. choose one of ({})",
-                    catalog_type_raw,
+                    catalog_type_raw.0,
                     CATALOG_TYPE_OPTS
                 )
             })?;
 
         match catalog_type {
-            CatalogType::SnowflakeBuiltIn => Self::from_snowflake_built_in(map, integration_name),
+            CatalogType::SnowflakeBuiltIn => Self::from_snowflake_built_in(map, integration_name.0),
             CatalogType::SnowflakeIcebergRest => {
-                Self::from_snowflake_iceberg_rest(map, integration_name)
+                Self::from_snowflake_iceberg_rest(map, integration_name.0)
             }
-            CatalogType::DatabricksUnity => Self::from_databricks_unity(map, integration_name),
+            CatalogType::DatabricksUnity => Self::from_databricks_unity(map, integration_name.0),
             CatalogType::DatabricksHiveMetastore => {
-                Self::from_databricks_hms(map, integration_name)
+                Self::from_databricks_hms(map, integration_name.0)
             }
         }
     }
@@ -450,43 +521,49 @@ impl<'a> WriteIntegrationView<'a> {
             "write_integration(Snowflake built_in)",
         )?;
 
-        let table_format = match get_str(map, "table_format") {
-            Some(s) => TableFormat::parse(s)?,
-            None => return Err(key_err("table_format")),
+        let (table_format, table_format_span) = match get_str(map, "table_format")? {
+            Some((s, span)) => (
+                TableFormat::parse(s).map_err(|e| e.with_hacky_yml_location(Some(span.clone())))?,
+                span,
+            ),
+            None => return Err(key_err("table_format", None)),
         };
         if table_format != TableFormat::Iceberg {
             return err!(
-                ErrorCode::InvalidConfig,
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => Some(table_format_span),
                 "integration '{}': Snowflake built_in requires table_format=iceberg",
                 integration_name
             );
         }
 
         let external_volume = {
-            Some(match get_str(map, "external_volume") {
+            Some(match get_str(map, "external_volume")? {
                 None => {
                     return err!(
-                        ErrorCode::InvalidConfig,
+                        code => ErrorCode::InvalidConfig,
+                        hacky_yml_loc => None::<yml::Span>,
                         "integration '{}': 'external_volume' is required for BUILT_IN catalogs.",
                         integration_name
                     );
                 }
-                Some("") => {
+                Some(("", span)) => {
                     return err!(
-                        ErrorCode::InvalidConfig,
+                        code => ErrorCode::InvalidConfig,
+                        hacky_yml_loc => Some(span),
                         "integration '{}': 'external_volume' is required for BUILT_IN catalogs and cannot be blank.",
                         integration_name
                     );
                 }
-                Some(s) => s,
+                Some((s, _)) => s,
             })
         };
 
-        let base_location_root = get_str(map, "base_location_root");
-        let base_location_subpath = get_str(map, "base_location_subpath");
+        let base_location_root = get_str(map, "base_location_root")?.map(|(s, _)| s);
+        let base_location_subpath = get_str(map, "base_location_subpath")?.map(|(s, _)| s);
 
         let adapter_properties = {
-            if let Some(props) = get_map(map, "adapter_properties") {
+            if let Some((props, _span)) = get_map(map, "adapter_properties")? {
                 Some(parse_adapter_properties(
                     props,
                     CatalogType::SnowflakeBuiltIn,
@@ -524,20 +601,24 @@ impl<'a> WriteIntegrationView<'a> {
             "write_integration(Snowflake iceberg_rest)",
         )?;
 
-        let table_format = match get_str(map, "table_format") {
-            Some(s) => TableFormat::parse(s)?,
-            None => return Err(key_err("table_format")),
+        let (table_format, table_format_span) = match get_str(map, "table_format")? {
+            Some((s, span)) => (
+                TableFormat::parse(s).map_err(|e| e.with_hacky_yml_location(Some(span.clone())))?,
+                span,
+            ),
+            None => return Err(key_err("table_format", None)),
         };
         if table_format != TableFormat::Iceberg {
             return err!(
-                ErrorCode::InvalidConfig,
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => Some(table_format_span),
                 "integration '{}': Snowflake iceberg_rest requires table_format=iceberg",
                 integration_name
             );
         }
 
         let adapter_properties = {
-            if let Some(props) = get_map(map, "adapter_properties") {
+            if let Some((props, _span)) = get_map(map, "adapter_properties")? {
                 Some(parse_adapter_properties(
                     props,
                     CatalogType::SnowflakeIcebergRest,
@@ -573,27 +654,34 @@ impl<'a> WriteIntegrationView<'a> {
             "write_integration(Databricks unity)",
         )?;
 
-        let table_format = {
-            let raw = match get_str(map, "table_format") {
-                Some(s) => s,
-                None => return Err(key_err("table_format")),
+        let (table_format, table_format_span) = {
+            let (raw, span) = match get_str(map, "table_format")? {
+                Some((s, span)) => (s, span),
+                None => return Err(key_err("table_format", None)),
             };
-            TableFormat::parse(raw)?
+            (
+                TableFormat::parse(raw)
+                    .map_err(|e| e.with_hacky_yml_location(Some(span.clone())))?,
+                span,
+            )
         };
         if table_format != TableFormat::Iceberg {
             return err!(
-                ErrorCode::InvalidConfig,
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => Some(table_format_span),
                 "integration '{}': Databricks 'unity' requires table_format=iceberg",
                 integration_name
             );
         }
 
         let file_format = {
-            let parsed = match get_str(map, "file_format") {
-                Some(s) => DatabricksFileFormat::parse_file_format(s)?,
+            let parsed = match get_str(map, "file_format")? {
+                Some((s, span)) => DatabricksFileFormat::parse_file_format(s)
+                    .map_err(|e| e.with_hacky_yml_location(Some(span.clone())))?,
                 None => {
                     return err!(
-                        ErrorCode::InvalidConfig,
+                        code => ErrorCode::InvalidConfig,
+                        hacky_yml_loc => None::<yml::Span>,
                         "integration '{}': Databricks 'unity' requires file_format (must be 'delta')",
                         integration_name
                     );
@@ -603,7 +691,8 @@ impl<'a> WriteIntegrationView<'a> {
                 DatabricksFileFormat::Delta => Some(parsed),
                 _ => {
                     return err!(
-                        ErrorCode::InvalidConfig,
+                        code => ErrorCode::InvalidConfig,
+                        hacky_yml_loc => Some(table_format_span),
                         "integration '{}': when table_format=iceberg, file_format must be 'delta'",
                         integration_name
                     );
@@ -612,7 +701,7 @@ impl<'a> WriteIntegrationView<'a> {
         };
 
         let adapter_properties = {
-            if let Some(props) = get_map(map, "adapter_properties") {
+            if let Some((props, _span)) = get_map(map, "adapter_properties")? {
                 Some(parse_adapter_properties(
                     props,
                     CatalogType::DatabricksUnity,
@@ -647,23 +736,31 @@ impl<'a> WriteIntegrationView<'a> {
             "write_integration(Databricks hive_metastore)",
         )?;
 
-        let table_format = match get_str(map, "table_format") {
-            Some(s) => TableFormat::parse(s)?,
-            None => return Err(key_err("table_format")),
+        let (table_format, table_format_span) = match get_str(map, "table_format")? {
+            Some((s, span)) => (
+                TableFormat::parse(s).map_err(|e| e.with_hacky_yml_location(Some(span.clone())))?,
+                span,
+            ),
+            None => return Err(key_err("table_format", None)),
         };
         if table_format != TableFormat::Default {
             return err!(
-                ErrorCode::InvalidConfig,
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => Some(table_format_span),
                 "integration '{}': Databricks 'hive_metastore' requires table_format=DEFAULT",
                 integration_name
             );
         }
 
-        let file_format = match get_str(map, "file_format") {
-            Some(s) => Some(DatabricksFileFormat::parse_file_format(s)?),
+        let file_format = match get_str(map, "file_format")? {
+            Some((s, span)) => Some(
+                DatabricksFileFormat::parse_file_format(s)
+                    .map_err(|e| e.with_hacky_yml_location(Some(span)))?,
+            ),
             None => {
                 return err!(
-                    ErrorCode::InvalidConfig,
+                    code => ErrorCode::InvalidConfig,
+                    hacky_yml_loc => None::<yml::Span>,
                     "integration '{}': file_format required for Databricks hive_metastore and must be one of (delta|parquet|hudi)",
                     integration_name
                 );
@@ -671,7 +768,7 @@ impl<'a> WriteIntegrationView<'a> {
         };
 
         let adapter_properties = {
-            if let Some(props) = get_map(map, "adapter_properties") {
+            if let Some((props, _span)) = get_map(map, "adapter_properties")? {
                 Some(parse_adapter_properties(
                     props,
                     CatalogType::DatabricksHiveMetastore,
@@ -715,16 +812,17 @@ fn parse_adapter_properties<'a>(
                     storage_serialization_policy: get_str(
                         properties,
                         "storage_serialization_policy",
-                    )
-                    .filter(|s| !s.is_empty())
-                    .map(|s| {
+                    )?
+                    .filter(|(s, _)| !s.is_empty())
+                    .map(|(s, span)| {
                         if s.eq_ignore_ascii_case("compatible") {
                             Ok(SerializationPolicy::COMPATIBLE)
                         } else if s.eq_ignore_ascii_case("optimized") {
                             Ok(SerializationPolicy::OPTIMIZED)
                         } else {
                             err!(
-                                ErrorCode::InvalidConfig,
+                                code => ErrorCode::InvalidConfig,
+                                hacky_yml_loc => Some(span),
                                 "storage_serialization_policy '{}' invalid (COMPATIBLE|OPTIMIZED)",
                                 s
                             )
@@ -734,12 +832,14 @@ fn parse_adapter_properties<'a>(
                     max_data_extension_time_in_days: get_u32(
                         properties,
                         "max_data_extension_time_in_days",
-                    )?,
+                    )?
+                    .map(|(v, _)| v),
                     data_retention_time_in_days: get_u32(
                         properties,
                         "data_retention_time_in_days",
-                    )?,
-                    change_tracking: get_bool(properties, "change_tracking")?,
+                    )?
+                    .map(|(v, _)| v),
+                    change_tracking: get_bool(properties, "change_tracking")?.map(|(v, _)| v),
                 },
             ))
         }
@@ -755,36 +855,42 @@ fn parse_adapter_properties<'a>(
                 "adapter_properties(iceberg_rest)",
             )?;
             Ok(AdapterPropsView::SnowflakeRest(SnowflakeRestPropsView {
-                target_file_size: target_file_size(get_str(properties, "target_file_size"))?,
-                auto_refresh: get_bool(properties, "auto_refresh")?,
+                target_file_size: target_file_size(get_str(properties, "target_file_size")?)?,
+                auto_refresh: get_bool(properties, "auto_refresh")?.map(|(v, _)| v),
                 max_data_extension_time_in_days: get_u32(
                     properties,
                     "max_data_extension_time_in_days",
-                )?,
-                catalog_linked_database: get_str(properties, "catalog_linked_database"),
+                )?
+                .map(|(v, _)| v),
+                catalog_linked_database: get_str(properties, "catalog_linked_database")?
+                    .map(|(s, _)| s),
             }))
         }
         CatalogType::DatabricksUnity => {
             check_unknown_keys(properties, &["location_root"], "adapter_properties(unity)")?;
-            if let Some(loc) = get_str(properties, "location_root")
+            if let Some((loc, span)) = get_str(properties, "location_root")?
                 && loc.trim().is_empty()
             {
                 return err!(
-                    ErrorCode::InvalidConfig,
+                    code => ErrorCode::InvalidConfig,
+                    hacky_yml_loc => Some(span),
                     "adapter_properties.location_root cannot be blank"
                 );
             }
             Ok(AdapterPropsView::DatabricksUnity(
                 DatabricksUnityPropsView {
-                    location_root: get_str(properties, "location_root")
-                        .filter(|s| !s.trim().is_empty()),
+                    location_root: get_str(properties, "location_root")?
+                        .filter(|(s, _)| !s.trim().is_empty())
+                        .map(|(s, _)| s),
                 },
             ))
         }
         CatalogType::DatabricksHiveMetastore => {
             if !properties.is_empty() {
+                let first_key_span = properties.keys().next().map(|k| k.span());
                 return err!(
-                    ErrorCode::InvalidConfig,
+                    code => ErrorCode::InvalidConfig,
+                    hacky_yml_loc => first_key_span,
                     "adapter_properties not allowed for hive_metastore"
                 );
             }
@@ -794,11 +900,13 @@ fn parse_adapter_properties<'a>(
     }
 }
 
-fn target_file_size(maybe_target_file_size: Option<&str>) -> FsResult<Option<TargetFileSize>> {
+fn target_file_size(
+    maybe_target_file_size: Option<(&str, yml::Span)>,
+) -> FsResult<Option<TargetFileSize>> {
     maybe_target_file_size
-        .map(str::trim)
-        .filter(|v| !v.is_empty())
-        .map(|v| {
+        .map(|(v, span)| (v.trim(), span))
+        .filter(|(v, _)| !v.is_empty())
+        .map(|(v, span)| {
             if v.eq_ignore_ascii_case("AUTO") {
                 Ok(TargetFileSize::AUTO)
             } else if v.eq_ignore_ascii_case("16MB") {
@@ -811,7 +919,8 @@ fn target_file_size(maybe_target_file_size: Option<&str>) -> FsResult<Option<Tar
                 Ok(TargetFileSize::_128MB)
             } else {
                 err!(
-                    ErrorCode::InvalidConfig,
+                    code => ErrorCode::InvalidConfig,
+                    hacky_yml_loc => Some(span),
                     "target_file_size '{}' invalid (AUTO|16MB|32MB|64MB|128MB)",
                     v
                 )
@@ -821,36 +930,34 @@ fn target_file_size(maybe_target_file_size: Option<&str>) -> FsResult<Option<Tar
 }
 
 // Structurally recursive down the struct of a catalog entry and validate
-pub fn validate_catalogs(spec: &DbtCatalogsView<'_>, path: &Path) -> FsResult<()> {
-    let err_loc = || PathBuf::from(path);
-
+pub fn validate_catalogs(spec: &DbtCatalogsView<'_>, _path: &Path) -> FsResult<()> {
     // === 1. Ensure no duplicate-name catalogs, ensure no blanks. One pass.
     let mut seen_catalogs = HashSet::new();
     for catalog in &spec.catalogs {
-        if is_blank(catalog.catalog_name) {
+        if is_blank(catalog.catalog_name.0) {
             return err!(
                 code => ErrorCode::InvalidConfig,
-                loc  => err_loc(),
+                hacky_yml_loc => Some(catalog.catalog_name.1.clone()),
                 "Catalog field 'name' or 'catalog_name' must be non-empty"
             );
         }
-        if !seen_catalogs.insert(catalog.catalog_name) {
+        if !seen_catalogs.insert(catalog.catalog_name.0) {
             return err!(
                 code => ErrorCode::InvalidConfig,
-                loc  => err_loc(),
-                "Duplicate catalog name '{}'", catalog.catalog_name
+                hacky_yml_loc => Some(catalog.catalog_name.1.clone()),
+                "Duplicate catalog name '{}'", catalog.catalog_name.0
             );
         }
     }
 
     for catalog in &spec.catalogs {
         // === 2. Every catalog requires an active write integration
-        if is_blank(catalog.active_write_integration) {
+        if is_blank(catalog.active_write_integration.0) {
             return err!(
                 code => ErrorCode::InvalidConfig,
-                loc  => err_loc(),
+                hacky_yml_loc => Some(catalog.active_write_integration.1.clone()),
                 "In catalog '{}', 'active_write_integration' must be non-empty",
-                catalog.catalog_name
+                catalog.catalog_name.0
             );
         }
 
@@ -858,6 +965,7 @@ pub fn validate_catalogs(spec: &DbtCatalogsView<'_>, path: &Path) -> FsResult<()
         let mut seen = HashSet::new();
         catalog
             .write_integrations
+            .0
             .iter()
             .try_for_each(|write_integration| {
                 seen.insert(write_integration.integration_name)
@@ -865,9 +973,9 @@ pub fn validate_catalogs(spec: &DbtCatalogsView<'_>, path: &Path) -> FsResult<()
                     .ok_or_else(|| {
                         fs_err!(
                             code => ErrorCode::InvalidConfig,
-                            loc  => err_loc(),
+                            hacky_yml_loc => Some(catalog.write_integrations.1.clone()),
                             "Duplicate write_integration name '{}' in catalog '{}'",
-                            write_integration.integration_name, catalog.catalog_name
+                            write_integration.integration_name, catalog.catalog_name.0
                         )
                     })
             })?;
@@ -875,14 +983,16 @@ pub fn validate_catalogs(spec: &DbtCatalogsView<'_>, path: &Path) -> FsResult<()
         // === 4. Ensure named write integration actually exists
         if catalog
             .write_integrations
+            .0
             .iter()
-            .all(|w| w.integration_name != catalog.active_write_integration)
+            .all(|w| w.integration_name != catalog.active_write_integration.0)
         {
-            let choices = if catalog.write_integrations.is_empty() {
+            let choices = if catalog.write_integrations.0.is_empty() {
                 "<none>".to_string()
             } else {
                 catalog
                     .write_integrations
+                    .0
                     .iter()
                     .map(|w| w.integration_name)
                     .collect::<Vec<_>>()
@@ -890,21 +1000,21 @@ pub fn validate_catalogs(spec: &DbtCatalogsView<'_>, path: &Path) -> FsResult<()
             };
             return err!(
                 code => ErrorCode::InvalidConfig,
-                loc  => err_loc(),
+                hacky_yml_loc => Some(catalog.active_write_integration.1.clone()),
                 "In catalog '{}', active_write_integration '{}' not found. Available: {}",
-                catalog.catalog_name, catalog.active_write_integration, choices
+                catalog.catalog_name.0, catalog.active_write_integration.0, choices
             );
         }
 
         // === 5. Validate write integration entries
-        for write_integration in &catalog.write_integrations {
+        for write_integration in &catalog.write_integrations.0 {
             // must have a name
             if is_blank(write_integration.integration_name) {
                 return err!(
                     code => ErrorCode::InvalidConfig,
-                    loc  => err_loc(),
+                    hacky_yml_loc => Some(catalog.write_integrations.1.clone()),
                     "Catalog '{}' integration has no field 'name' or 'integration_name'",
-                    catalog.catalog_name
+                    catalog.catalog_name.0
                 );
             }
 
@@ -921,9 +1031,9 @@ pub fn validate_catalogs(spec: &DbtCatalogsView<'_>, path: &Path) -> FsResult<()
                     {
                         return err!(
                             code => ErrorCode::InvalidConfig,
-                            loc  => err_loc(),
+                            hacky_yml_loc => Some(catalog.write_integrations.1.clone()),
                             "Catalog '{}' integration '{}': base_location_* not valid for iceberg_rest",
-                            catalog.catalog_name, write_integration.integration_name
+                            catalog.catalog_name.0, write_integration.integration_name
                         );
                     }
 
@@ -934,7 +1044,7 @@ pub fn validate_catalogs(spec: &DbtCatalogsView<'_>, path: &Path) -> FsResult<()
                                 _ => {
                                     return err!(
                                         code => ErrorCode::InvalidConfig,
-                                        loc  => err_loc(),
+                                        hacky_yml_loc => Some(catalog.write_integrations.1.clone()),
                                         "integration '{}': 'catalog_linked_database' is required and cannot be blank for Iceberg REST",
                                         write_integration.integration_name
                                     );
@@ -944,7 +1054,7 @@ pub fn validate_catalogs(spec: &DbtCatalogsView<'_>, path: &Path) -> FsResult<()
                         _ => {
                             return err!(
                                 code => ErrorCode::InvalidConfig,
-                                loc  => err_loc(),
+                                hacky_yml_loc => Some(catalog.write_integrations.1.clone()),
                                 "integration '{}': only REST adapter_properties are valid for Iceberg REST",
                                 write_integration.integration_name
                             );
@@ -955,9 +1065,9 @@ pub fn validate_catalogs(spec: &DbtCatalogsView<'_>, path: &Path) -> FsResult<()
                     if write_integration.base_location_root.is_some()
                         || write_integration.base_location_subpath.is_some()
                     {
-                        return err!(code => ErrorCode::InvalidConfig, loc => err_loc(),
+                        return err!(code => ErrorCode::InvalidConfig, hacky_yml_loc => Some(catalog.write_integrations.1.clone()),
                             "Catalog '{}' integration '{}': base_location_* not valid for Databricks (unity)",
-                            catalog.catalog_name, write_integration.integration_name);
+                            catalog.catalog_name.0, write_integration.integration_name);
                     }
 
                     if let Some(AdapterPropsView::DatabricksUnity(properties)) =
@@ -965,14 +1075,13 @@ pub fn validate_catalogs(spec: &DbtCatalogsView<'_>, path: &Path) -> FsResult<()
                     {
                         if let Some(loc) = properties.location_root
                             && loc.trim().is_empty()
-                            && loc.trim().is_empty()
                         {
-                            return err!(code => ErrorCode::InvalidConfig, loc => err_loc(),
+                            return err!(code => ErrorCode::InvalidConfig, hacky_yml_loc => Some(catalog.write_integrations.1.clone()),
                                     "integration '{}': adapter_properties.location_root cannot be blank",
                                     write_integration.integration_name);
                         }
                     } else if write_integration.adapter_properties.is_some() {
-                        return err!(code => ErrorCode::InvalidConfig, loc => err_loc(),
+                        return err!(code => ErrorCode::InvalidConfig, hacky_yml_loc => Some(catalog.write_integrations.1.clone()),
                             "integration '{}': only adapter_properties.location_root is allowed for unity",
                             write_integration.integration_name);
                     }
@@ -980,7 +1089,7 @@ pub fn validate_catalogs(spec: &DbtCatalogsView<'_>, path: &Path) -> FsResult<()
                     if let Some(file_format) = &write_integration.file_format
                         && *file_format != DatabricksFileFormat::Delta
                     {
-                        return err!(code => ErrorCode::InvalidConfig, loc => err_loc(),
+                        return err!(code => ErrorCode::InvalidConfig, hacky_yml_loc => Some(catalog.write_integrations.1.clone()),
                                 "integration '{}': when table_format=iceberg, file_format must be 'delta'",
                                 write_integration.integration_name);
                     }
@@ -990,13 +1099,13 @@ pub fn validate_catalogs(spec: &DbtCatalogsView<'_>, path: &Path) -> FsResult<()
                     if write_integration.base_location_root.is_some()
                         || write_integration.base_location_subpath.is_some()
                     {
-                        return err!(code => ErrorCode::InvalidConfig, loc => err_loc(),
+                        return err!(code => ErrorCode::InvalidConfig, hacky_yml_loc => Some(catalog.write_integrations.1.clone()),
                             "Catalog '{}' integration '{}': base_location_* not valid for Databricks (hive_metastore)",
-                            catalog.catalog_name, write_integration.integration_name);
+                            catalog.catalog_name.0, write_integration.integration_name);
                     }
 
                     if write_integration.adapter_properties.is_some() {
-                        return err!(code => ErrorCode::InvalidConfig, loc => err_loc(),
+                        return err!(code => ErrorCode::InvalidConfig, hacky_yml_loc => Some(catalog.write_integrations.1.clone()),
                             "integration '{}': adapter_properties not allowed for hive_metastore",
                             write_integration.integration_name);
                     }
@@ -1016,8 +1125,9 @@ mod tests {
 
     fn parse_view_and_validate(yaml: &str) -> FsResult<()> {
         let v: yml::Value = yml::from_str(yaml).unwrap();
+        let v_span = v.span();
         let m = v.as_mapping().expect("top-level YAML must be a mapping");
-        let view = DbtCatalogsView::from_mapping(m)?;
+        let view = DbtCatalogsView::from_mapping(m, v_span)?;
         validate_catalogs(&view, Path::new("<test>"))
     }
 
@@ -1125,10 +1235,11 @@ catalogs:
             catalog_linked_database: cld
 "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
+        let yml_span = yml_val.span();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
-        let v = DbtCatalogsView::from_mapping(m);
+        let v = DbtCatalogsView::from_mapping(m, yml_span);
         assert!(
             v.is_ok(),
             "alias `name` for catalog should parse: {:?}",
@@ -1136,7 +1247,7 @@ catalogs:
         );
         let v = v.unwrap();
         assert_eq!(v.catalogs.len(), 1);
-        assert_eq!(v.catalogs[0].catalog_name, "c1");
+        assert_eq!(v.catalogs[0].catalog_name.0, "c1");
         let res = validate_catalogs(&v, Path::new("<test>"));
         assert!(res.is_ok(), "alias case should validate: {:?}", res.err());
     }
@@ -1150,10 +1261,11 @@ catalogs:
     write_integrations: [42]
 "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
+        let yml_span = yml_val.span();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
-        let v = DbtCatalogsView::from_mapping(m);
+        let v = DbtCatalogsView::from_mapping(m, yml_span);
         assert!(
             v.is_err(),
             "non-mapping write_integration element must fail"
@@ -1166,10 +1278,11 @@ catalogs:
 not_catalogs: []
 "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
+        let yml_span = yml_val.span();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
-        let v = DbtCatalogsView::from_mapping(m);
+        let v = DbtCatalogsView::from_mapping(m, yml_span);
         assert!(v.is_err(), "missing top-level 'catalogs' must fail");
     }
 
@@ -1184,10 +1297,11 @@ not_catalogs: []
             external_volume: ev
     "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
+        let yml_span = yml_val.span();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
-        let v = DbtCatalogsView::from_mapping(m);
+        let v = DbtCatalogsView::from_mapping(m, yml_span);
         assert!(v.is_err(), "missing required key should fail parse");
     }
 
@@ -1202,10 +1316,11 @@ catalogs:
         catalog_type: mango
 "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
+        let yml_span = yml_val.span();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
-        let v = DbtCatalogsView::from_mapping(m);
+        let v = DbtCatalogsView::from_mapping(m, yml_span);
         assert!(v.is_err(), "invalid catalog_type must fail parse");
     }
 
@@ -1222,10 +1337,11 @@ catalogs:
         external_volume: ev
 "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
+        let yml_span = yml_val.span();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
-        let v = DbtCatalogsView::from_mapping(m);
+        let v = DbtCatalogsView::from_mapping(m, yml_span);
         assert!(v.is_err(), "invalid table_format must fail parse");
     }
 
@@ -1243,10 +1359,11 @@ catalogs:
           storage_serialization_policy: FASTEST
 "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
+        let yml_span = yml_val.span();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
-        let v = DbtCatalogsView::from_mapping(m);
+        let v = DbtCatalogsView::from_mapping(m, yml_span);
         assert!(
             v.is_err(),
             "invalid storage_serialization_policy must fail parse"
@@ -1266,10 +1383,11 @@ catalogs:
           target_file_size: "1MB"
 "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
+        let yml_span = yml_val.span();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
-        let v = DbtCatalogsView::from_mapping(m);
+        let v = DbtCatalogsView::from_mapping(m, yml_span);
         assert!(v.is_err(), "invalid target_file_size must fail parse");
     }
 
@@ -1286,10 +1404,11 @@ catalogs:
         table_format: iceberg
 "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
+        let yml_span = yml_val.span();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
-        let res = DbtCatalogsView::from_mapping(m);
+        let res = DbtCatalogsView::from_mapping(m, yml_span);
         assert!(
             res.is_err(),
             "built_in without external_volume must fail validation"
@@ -1309,10 +1428,11 @@ catalogs:
         table_format: iceberg
 "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
+        let yml_span = yml_val.span();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
-        let v = DbtCatalogsView::from_mapping(m);
+        let v = DbtCatalogsView::from_mapping(m, yml_span);
         assert!(
             v.is_err(),
             "Unknown key 'base_location_root' in write_integration(Snowflake iceberg_rest)"
@@ -1331,10 +1451,11 @@ catalogs:
         table_format: iceberg
 "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
+        let yml_span = yml_val.span();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
-        let v = DbtCatalogsView::from_mapping(m).unwrap();
+        let v = DbtCatalogsView::from_mapping(m, yml_span).unwrap();
         let res = validate_catalogs(&v, Path::new("<test>"));
         assert!(
             res.is_err(),
@@ -1520,10 +1641,11 @@ catalogs:
           storage_serialisation_policy: COMPATIBLE   # typo (s/z)
 "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
+        let yml_span = yml_val.span();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
-        let v = DbtCatalogsView::from_mapping(m);
+        let v = DbtCatalogsView::from_mapping(m, yml_span);
         assert!(
             v.is_err(),
             "unknown key in built_in adapter_properties must fail parse/validation"
@@ -1577,10 +1699,11 @@ catalogs:
     extra_top_level: true
     "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
+        let yml_span = yml_val.span();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
-        let v = DbtCatalogsView::from_mapping(m);
+        let v = DbtCatalogsView::from_mapping(m, yml_span);
         assert!(v.is_err(), "unknown key at top-level must fail parse");
     }
 
@@ -1594,10 +1717,11 @@ catalogs:
         unexpected: 42
     "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
+        let yml_span = yml_val.span();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
-        let v = DbtCatalogsView::from_mapping(m);
+        let v = DbtCatalogsView::from_mapping(m, yml_span);
         assert!(v.is_err(), "unknown key in catalog spec must fail parse");
     }
 
@@ -1613,10 +1737,11 @@ catalogs:
             oops: true
     "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
+        let yml_span = yml_val.span();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
-        let v = DbtCatalogsView::from_mapping(m);
+        let v = DbtCatalogsView::from_mapping(m, yml_span);
         assert!(
             v.is_err(),
             "unknown key in write_integration must fail parse"
@@ -1635,10 +1760,11 @@ catalogs:
             catalog_type: iceberg_rest
     "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
+        let yml_span = yml_val.span();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
-        let v = DbtCatalogsView::from_mapping(m);
+        let v = DbtCatalogsView::from_mapping(m, yml_span);
         assert!(
             v.is_err(),
             "providing both catalog_name and name must fail parse"
@@ -1657,10 +1783,11 @@ catalogs:
             catalog_type: iceberg_rest
     "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
+        let yml_span = yml_val.span();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
-        let v = DbtCatalogsView::from_mapping(m);
+        let v = DbtCatalogsView::from_mapping(m, yml_span);
         assert!(
             v.is_err(),
             "providing both integration_name and name must fail parse"
@@ -1680,10 +1807,11 @@ catalogs:
         table_format: iceberg
 "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
+        let yml_span = yml_val.span();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
-        let res = DbtCatalogsView::from_mapping(m);
+        let res = DbtCatalogsView::from_mapping(m, yml_span);
         assert!(
             res.is_err(),
             "'external_volume' is required for BUILT_IN catalogs"
@@ -1703,10 +1831,11 @@ catalogs:
         table_format: iceberg
 "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
+        let yml_span = yml_val.span();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
-        let v = DbtCatalogsView::from_mapping(m);
+        let v = DbtCatalogsView::from_mapping(m, yml_span);
         assert!(v.is_err());
     }
 
@@ -1724,10 +1853,11 @@ catalogs:
           data_retention_time_in_days: -1
 "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
+        let yml_span = yml_val.span();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
-        let v = DbtCatalogsView::from_mapping(m);
+        let v = DbtCatalogsView::from_mapping(m, yml_span);
         assert!(v.is_err(), "negative u32 must fail parse");
     }
 
@@ -1745,10 +1875,11 @@ catalogs:
           change_tracking: "yes"
 "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
+        let yml_span = yml_val.span();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
-        let v = DbtCatalogsView::from_mapping(m);
+        let v = DbtCatalogsView::from_mapping(m, yml_span);
         assert!(v.is_err(), "non-bool change_tracking must fail");
     }
 
@@ -1764,10 +1895,11 @@ catalogs:
         adapter_properties: []
 "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
+        let yml_span = yml_val.span();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
-        let v = DbtCatalogsView::from_mapping(m);
+        let v = DbtCatalogsView::from_mapping(m, yml_span);
         assert!(v.is_err(), "adapter_properties must be a mapping");
     }
 
@@ -1826,10 +1958,11 @@ catalogs:
         external_volume: ev
 "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
+        let yml_span = yml_val.span();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
-        let v = DbtCatalogsView::from_mapping(m).unwrap();
+        let v = DbtCatalogsView::from_mapping(m, yml_span).unwrap();
         let res = validate_catalogs(&v, Path::new("<test>"));
         assert!(res.is_err(), "duplicate integration names must fail");
     }
@@ -1846,10 +1979,11 @@ catalogs:
     write_integrations: [{ name: j1, catalog_type: built_in, external_volume: ev, table_format: iceberg}]
 "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
+        let yml_span = yml_val.span();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
-        let v = DbtCatalogsView::from_mapping(m).unwrap();
+        let v = DbtCatalogsView::from_mapping(m, yml_span).unwrap();
         let res = validate_catalogs(&v, Path::new("<test>"));
         assert!(res.is_err(), "duplicate catalog names must fail");
     }

@@ -1538,7 +1538,10 @@ mod tests {
         let r = CatalogRelation::from_model_config_and_catalogs(
             &AdapterType::Databricks,
             &m,
-            Some(Arc::new(DbtCatalogs { repr: cats })),
+            Some(Arc::new(DbtCatalogs {
+                repr: cats,
+                span: Default::default(),
+            })),
         )
         .unwrap();
 
@@ -1561,7 +1564,10 @@ mod tests {
         let err = CatalogRelation::from_model_config_and_catalogs(
             &AdapterType::Databricks,
             &m,
-            Some(Arc::new(DbtCatalogs { repr: cats })),
+            Some(Arc::new(DbtCatalogs {
+                repr: cats,
+                span: Default::default(),
+            })),
         )
         .unwrap_err();
         let msg = format!("{err}");
@@ -1589,7 +1595,10 @@ mod tests {
         let r = CatalogRelation::from_model_config_and_catalogs(
             &AdapterType::Databricks,
             &m,
-            Some(Arc::new(DbtCatalogs { repr: cats })),
+            Some(Arc::new(DbtCatalogs {
+                repr: cats,
+                span: Default::default(),
+            })),
         )
         .unwrap();
 
@@ -1624,7 +1633,10 @@ mod tests {
         let err = CatalogRelation::from_model_config_and_catalogs(
             &AdapterType::Databricks,
             &m,
-            Some(Arc::new(DbtCatalogs { repr: cats })),
+            Some(Arc::new(DbtCatalogs {
+                repr: cats,
+                span: Default::default(),
+            })),
         )
         .unwrap_err();
 
@@ -1639,7 +1651,10 @@ mod tests {
         let r = CatalogRelation::from_model_config_and_catalogs(
             &AdapterType::Databricks,
             &m,
-            Some(Arc::new(DbtCatalogs { repr: cats })),
+            Some(Arc::new(DbtCatalogs {
+                repr: cats,
+                span: Default::default(),
+            })),
         )
         .unwrap();
 
@@ -1661,7 +1676,10 @@ mod tests {
         let r = CatalogRelation::from_model_config_and_catalogs(
             &AdapterType::Databricks,
             &m,
-            Some(Arc::new(DbtCatalogs { repr: cats })),
+            Some(Arc::new(DbtCatalogs {
+                repr: cats,
+                span: Default::default(),
+            })),
         )
         .unwrap();
 
@@ -1692,7 +1710,10 @@ mod tests {
         let err = CatalogRelation::from_model_config_and_catalogs(
             &AdapterType::Databricks,
             &m,
-            Some(Arc::new(DbtCatalogs { repr: cats })),
+            Some(Arc::new(DbtCatalogs {
+                repr: cats,
+                span: Default::default(),
+            })),
         )
         .unwrap_err();
 
@@ -1713,7 +1734,10 @@ mod tests {
         let r = CatalogRelation::from_model_config_and_catalogs(
             &AdapterType::Databricks,
             &m,
-            Some(Arc::new(DbtCatalogs { repr: cats })),
+            Some(Arc::new(DbtCatalogs {
+                repr: cats,
+                span: Default::default(),
+            })),
         )
         .unwrap();
 
@@ -1738,7 +1762,10 @@ mod tests {
         let r = CatalogRelation::from_model_config_and_catalogs(
             &AdapterType::Databricks,
             &m,
-            Some(Arc::new(DbtCatalogs { repr: cats })),
+            Some(Arc::new(DbtCatalogs {
+                repr: cats,
+                span: Default::default(),
+            })),
         )
         .unwrap();
 
@@ -1763,7 +1790,10 @@ mod tests {
         let r = CatalogRelation::from_model_config_and_catalogs(
             &AdapterType::Databricks,
             &m,
-            Some(Arc::new(DbtCatalogs { repr: cats })),
+            Some(Arc::new(DbtCatalogs {
+                repr: cats,
+                span: Default::default(),
+            })),
         )
         .unwrap();
 
@@ -1786,7 +1816,10 @@ mod tests {
         let r = CatalogRelation::from_model_config_and_catalogs(
             &AdapterType::Databricks,
             &m,
-            Some(Arc::new(DbtCatalogs { repr: cats })),
+            Some(Arc::new(DbtCatalogs {
+                repr: cats,
+                span: Default::default(),
+            })),
         )
         .unwrap();
 
@@ -1812,7 +1845,10 @@ mod tests {
         let err = CatalogRelation::from_model_config_and_catalogs(
             &AdapterType::Databricks,
             &m,
-            Some(Arc::new(DbtCatalogs { repr: cats })),
+            Some(Arc::new(DbtCatalogs {
+                repr: cats,
+                span: Default::default(),
+            })),
         )
         .unwrap_err();
 
