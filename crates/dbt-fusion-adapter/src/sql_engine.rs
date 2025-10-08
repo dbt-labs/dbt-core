@@ -1,5 +1,6 @@
 use crate::auth::Auth;
 use crate::base_adapter::backend_of;
+use crate::bigquery::adapter::ADBC_EXECUTE_INVOCATION_OPTION;
 use crate::config::AdapterConfig;
 use crate::databricks::databricks_compute_from_state;
 use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
@@ -32,7 +33,7 @@ use serde_json::json;
 use std::borrow::Cow;
 use tracy_client::span;
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt::Write;
 use std::hash::{BuildHasher, Hasher};
 use std::path::PathBuf;
@@ -488,14 +489,32 @@ impl SqlEngine {
             };
 
         let mut options = options;
-        let job_label_option = maybe_query_comment.as_ref().and_then(|comment| {
-            self.query_comment()
-                .get_job_labels_from_query_comment(comment)
-        });
-        if let Some(job_label_option) = job_label_option
+        if let Some(state) = state
             && self.adapter_type() == AdapterType::Bigquery
         {
-            options.push((QUERY_LABELS.to_owned(), job_label_option));
+            let mut job_labels =
+                maybe_query_comment
+                    .as_ref()
+                    .map_or_else(BTreeMap::new, |comment| {
+                        self.query_comment()
+                            .get_job_labels_from_query_comment(comment)
+                    });
+            if let Some(invocation_id_label) = state
+                .lookup("invocation_id")
+                .and_then(|value| value.as_str().map(|label| label.to_owned()))
+            {
+                job_labels.insert(
+                    ADBC_EXECUTE_INVOCATION_OPTION.to_owned(),
+                    invocation_id_label,
+                );
+            }
+
+            let job_label_option =
+                serde_json::to_string(&job_labels).expect("Should be able to serialize job labels");
+            options.push((
+                QUERY_LABELS.to_owned(),
+                OptionValue::String(job_label_option),
+            ));
         }
 
         Self::log_query_ctx_for_execution(query_ctx);

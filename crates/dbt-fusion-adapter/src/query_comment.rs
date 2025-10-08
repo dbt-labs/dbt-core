@@ -1,6 +1,6 @@
+use std::collections::BTreeMap;
 use std::{fmt::Debug, sync::LazyLock};
 
-use adbc_core::options::OptionValue;
 use dbt_common::adapter::AdapterType;
 use dbt_schemas::schemas::project::QueryComment;
 use minijinja::{Error, State};
@@ -110,16 +110,24 @@ impl QueryCommentConfig {
 
     /// Reference: https://github.com/dbt-labs/dbt-adapters/blob/b0223a88d67012bcc4c6cce5449c4fe10c6ed198/dbt-bigquery/src/dbt/adapters/bigquery/connections.py#L629
     /// Return job labels from query comment
-    pub fn get_job_labels_from_query_comment(&self, resolved_comment: &str) -> Option<OptionValue> {
+    pub fn get_job_labels_from_query_comment(
+        &self,
+        resolved_comment: &str,
+    ) -> BTreeMap<String, String> {
         if !self.job_label {
-            return None;
+            return BTreeMap::new();
         }
 
         let job_labels = match serde_json::from_str::<JsonMap<String, JsonValue>>(resolved_comment)
         {
             Ok(json) => json
                 .into_iter()
-                .map(|(key, value)| (sanitize_label(&key), sanitize_label(&value.to_string())))
+                .map(|(key, value)| {
+                    (
+                        sanitize_label(&key),
+                        sanitize_label(value.as_str().expect("Expected job label to be a string")),
+                    )
+                })
                 .collect(),
             Err(_) => vec![(
                 "query_comment".to_string(),
@@ -127,10 +135,7 @@ impl QueryCommentConfig {
             )],
         };
 
-        let labels_json =
-            serde_json::to_string(&job_labels).expect("This should be able to serialize");
-
-        Some(OptionValue::String(labels_json))
+        BTreeMap::from_iter(job_labels)
     }
 }
 

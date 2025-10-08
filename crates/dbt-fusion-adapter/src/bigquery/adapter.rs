@@ -47,6 +47,8 @@ use std::collections::BTreeMap;
 use std::fmt::{self, Debug};
 use std::sync::{Arc, LazyLock};
 
+pub const ADBC_EXECUTE_INVOCATION_OPTION: &str = "dbt_invocation_id";
+
 /// An adapter for interacting with Bigquery.
 #[derive(Clone)]
 pub struct BigqueryAdapter {
