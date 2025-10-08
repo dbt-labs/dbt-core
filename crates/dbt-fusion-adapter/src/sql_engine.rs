@@ -3,7 +3,10 @@ use crate::base_adapter::backend_of;
 use crate::bigquery::adapter::ADBC_EXECUTE_INVOCATION_OPTION;
 use crate::config::AdapterConfig;
 use crate::databricks::databricks_compute_from_state;
-use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
+use crate::errors::{
+    AdapterError, AdapterErrorKind, AdapterResult, adbc_error_to_adapter_error,
+    arrow_error_to_adapter_error,
+};
 use crate::query_comment::{EMPTY_CONFIG, QueryCommentConfig};
 use crate::record_and_replay::{RecordEngine, ReplayEngine};
 use crate::sql_types::{NaiveTypeOpsImpl, TypeOps};
@@ -200,12 +203,16 @@ impl ActualEngine {
         config: &AdapterConfig,
     ) -> AdapterResult<Box<dyn Database>> {
         // Delegate the configuration of the database::Builder to the Auth implementation.
-        let builder = self.auth.configure(config)?;
+        let builder = self
+            .auth
+            .configure(config)
+            .map_err(crate::errors::auth_error_to_adapter_error)?;
 
         // The driver is loaded only once even if this runs multiple times.
         let mut driver = driver::Builder::new(self.auth.backend())
             .with_semaphore(self.semaphore.clone())
-            .try_load()?;
+            .try_load()
+            .map_err(adbc_error_to_adapter_error)?;
 
         // builder.with_named_option(
         //     snowflake::LOG_TRACING,
@@ -229,7 +236,9 @@ impl ActualEngine {
                 let database: Box<dyn Database> = database.clone();
                 Ok(database)
             } else {
-                let database = driver.new_database_with_opts(opts)?;
+                let database = driver
+                    .new_database_with_opts(opts)
+                    .map_err(adbc_error_to_adapter_error)?;
                 write_guard.inner.insert(fingerprint, database.clone());
                 Ok(database)
             }
@@ -242,7 +251,10 @@ impl ActualEngine {
     ) -> AdapterResult<Box<dyn Connection>> {
         let mut database = self.load_driver_and_configure_database(config)?;
         let connection_builder = connection::Builder::default();
-        let conn = connection_builder.build(&mut database)?;
+        let conn = match connection_builder.build(&mut database) {
+            Ok(conn) => conn,
+            Err(e) => return Err(adbc_error_to_adapter_error(e)),
+        };
         Ok(conn)
     }
 
@@ -604,10 +616,11 @@ impl SqlEngine {
                     }
                 });
 
-                return Err(e.into());
+                return Err(adbc_error_to_adapter_error(e));
             }
         };
-        let total_batch = concat_batches(&schema, &batches)?;
+        let total_batch =
+            concat_batches(&schema, &batches).map_err(arrow_error_to_adapter_error)?;
 
         record_current_span_status_from_attrs(|attrs| {
             if let Some(attrs) = attrs.downcast_mut::<QueryExecuted>() {

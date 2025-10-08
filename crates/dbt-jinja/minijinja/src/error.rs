@@ -151,6 +151,8 @@ pub enum ErrorKind {
     DisabledModel,
     /// Error for typecheck
     TypeError,
+    /// Execution error
+    Execution,
 }
 
 impl ErrorKind {
@@ -200,6 +202,7 @@ impl ErrorKind {
             ErrorKind::RegexError => "regex error",
             ErrorKind::DisabledModel => "model is disabled",
             ErrorKind::TypeError => "type error",
+            ErrorKind::Execution => "execution error",
         }
     }
 }
@@ -217,7 +220,26 @@ impl fmt::Display for Error {
         } else {
             ok!(write!(f, "{}", self.kind()));
         }
-        if !self.repr.stack.is_empty() {
+        self.stack_trace(f)
+    }
+}
+
+impl Error {
+    /// Creates a new error with kind and detail.
+    pub fn new<D: Into<Cow<'static, str>>>(kind: ErrorKind, detail: D) -> Error {
+        Error {
+            repr: Box::new(ErrorRepr {
+                kind,
+                detail: Some(detail.into()),
+                stack: Vec::new(),
+                source: None,
+            }),
+        }
+    }
+
+    /// Writes out the stack trace for an error if the stack is not empty
+    pub fn stack_trace(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if !self.is_stack_empty() {
             ok!(write!(
                 f,
                 "{}",
@@ -234,20 +256,6 @@ impl fmt::Display for Error {
             ));
         }
         Ok(())
-    }
-}
-
-impl Error {
-    /// Creates a new error with kind and detail.
-    pub fn new<D: Into<Cow<'static, str>>>(kind: ErrorKind, detail: D) -> Error {
-        Error {
-            repr: Box::new(ErrorRepr {
-                kind,
-                detail: Some(detail.into()),
-                stack: Vec::new(),
-                source: None,
-            }),
-        }
     }
 
     pub(crate) fn internal_clone(&self) -> Error {

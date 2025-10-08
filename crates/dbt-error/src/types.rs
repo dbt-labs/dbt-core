@@ -6,6 +6,7 @@ use itertools::Itertools as _;
 use regex::Regex;
 use std::{
     backtrace::Backtrace,
+    error::Error,
     fmt::{self, Debug, Display, Formatter},
     io, panic,
     path::{Path, PathBuf},
@@ -18,6 +19,16 @@ use crate::code_location::{AbstractLocation, MiniJinjaErrorWrapper};
 use crate::utils::{find_enclosed_substring, is_sdf_debug};
 
 pub type FsResult<T, E = Box<FsError>> = Result<T, E>;
+
+// Helper struct to format just the stack trace from a minijinja::Error
+// TODO(jasonlin45): Report stack trace on CodeLocation
+struct StackTraceFormatter<'a>(&'a minijinja::Error);
+
+impl<'a> Display for StackTraceFormatter<'a> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        self.0.stack_trace(f)
+    }
+}
 
 pub struct FsError {
     pub code: ErrorCode,
@@ -96,9 +107,9 @@ impl Display for FsError {
     }
 }
 
-impl std::error::Error for FsError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        self.cause.as_ref().map(|e| e as &dyn std::error::Error)
+impl Error for FsError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        self.cause.as_ref().map(|e| e as &dyn Error)
     }
 }
 
@@ -184,6 +195,21 @@ impl FsError {
         let err_code = match err.kind() {
             minijinja::ErrorKind::SyntaxError => ErrorCode::MacroSyntaxError,
             minijinja::ErrorKind::DisabledModel => ErrorCode::DisabledModel,
+            minijinja::ErrorKind::Execution => {
+                if let Some(adapter_err) = err.source().and_then(|err_source| {
+                    err_source.downcast_ref::<super::adapter_errors::AdapterError>()
+                }) {
+                    // Grab stack trace from the Jinja error and append it to the adapter error context
+                    let mut fs_err = Box::<FsError>::from(adapter_err.clone());
+                    if !err.is_stack_empty() {
+                        let stack_trace = format!("{}", StackTraceFormatter(&err));
+                        fs_err.context.push_str(&stack_trace);
+                    }
+                    return fs_err.with_location(MiniJinjaErrorWrapper(err));
+                } else {
+                    ErrorCode::ExecutionError
+                }
+            }
             _ => ErrorCode::JinjaError,
         };
         FsError::new(err_code, format!("{context} {err}")).with_location(MiniJinjaErrorWrapper(err))
@@ -556,6 +582,7 @@ pub enum WrappedError {
     SerdeJson(serde_json::Error),
     NameError(NameError),
     Jinja(minijinja::Error),
+    Adapter(super::adapter_errors::AdapterError),
     // Preprocessor(sdf_preprocessor::error::PreprocError),
     Io(io::Error),
     Fmt(fmt::Error),
@@ -577,6 +604,7 @@ impl Display for WrappedError {
             WrappedError::Cli(e) => write!(f, "{e}"),
             WrappedError::SerdeYml(e) => write!(f, "{e}"),
             WrappedError::Jinja(e) => write!(f, "{e}"),
+            WrappedError::Adapter(e) => write!(f, "{e}"),
             // WrappedError::Preprocessor(e) => write!(f, "{}", e),
             WrappedError::SerdeJson(e) => write!(f, "{e}"),
             WrappedError::Parquet(e) => write!(f, "{e}"),
@@ -588,8 +616,8 @@ impl Display for WrappedError {
     }
 }
 
-impl std::error::Error for WrappedError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+impl Error for WrappedError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             WrappedError::Datafusion(e) => Some(e),
             WrappedError::Arrow(e) => Some(e),
@@ -707,8 +735,8 @@ impl From<parquet::errors::ParquetError> for WrappedError {
     }
 }
 
-impl From<Box<dyn std::error::Error>> for Box<FsError> {
-    fn from(value: Box<dyn std::error::Error>) -> Self {
+impl From<Box<dyn Error>> for Box<FsError> {
+    fn from(value: Box<dyn Error>) -> Self {
         Box::new(FsError::new(ErrorCode::Generic, format!("{value}")))
     }
 }
@@ -843,6 +871,12 @@ impl From<serde_json::Error> for WrappedError {
 impl From<minijinja::Error> for WrappedError {
     fn from(e: minijinja::Error) -> Self {
         WrappedError::Jinja(e)
+    }
+}
+
+impl From<super::adapter_errors::AdapterError> for WrappedError {
+    fn from(e: super::adapter_errors::AdapterError) -> Self {
+        WrappedError::Adapter(e)
     }
 }
 

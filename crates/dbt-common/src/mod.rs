@@ -18,8 +18,9 @@ pub mod tokiofs;
 #[macro_use]
 pub extern crate dbt_error as error;
 pub use dbt_error::{
-    CodeLocation, ErrContext, ErrorCode, FsError, FsResult, LiftableResult, MacroSpan, Span, ectx,
-    err, fs_err, not_implemented_err, unexpected_err, unexpected_fs_err,
+    AdapterError, AdapterErrorKind, AdapterResult, AsyncAdapterResult, Cancellable, CodeLocation,
+    ErrContext, ErrorCode, FsError, FsResult, LiftableResult, MacroSpan, Span, ectx, err, fs_err,
+    into_fs_error, not_implemented_err, unexpected_err, unexpected_fs_err,
 };
 pub mod behavior_flags;
 pub mod embedded_install_scripts;

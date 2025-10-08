@@ -1,6 +1,8 @@
 use crate::bigquery::adapter::BigqueryAdapter;
 
-use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult, AsyncAdapterResult};
+use crate::errors::{
+    AdapterError, AdapterErrorKind, AdapterResult, AsyncAdapterResult, adbc_error_to_adapter_error,
+};
 use crate::metadata::*;
 use crate::record_batch_utils::get_column_values;
 use crate::{AdapterTyping, TypedBaseAdapter};
@@ -453,9 +455,7 @@ impl MetadataAdapter for BigqueryAdapter {
             } else {
                 let schema = conn
                     .get_table_schema(Some(&project), Some(&dataset), &table)
-                    .map_err(|e| {
-                        AdapterError::new(AdapterErrorKind::Xdbc(e.status), e.to_string())
-                    })?;
+                    .map_err(adbc_error_to_adapter_error)?;
                 let mut schema_builder = SchemaBuilder::from(schema.fields());
 
                 if let Some(time_partitioning_type) = schema.metadata().get("TimePartitioning.Type")

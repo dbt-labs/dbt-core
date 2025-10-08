@@ -178,7 +178,7 @@ impl TypedBaseAdapter for PostgresAdapter {
                 Err(AdapterError::new(
                     AdapterErrorKind::UnexpectedDbReference,
                     format!(
-                        "Cross-db references not allowed in {} ({} vs {})",
+                        "Cross-db references not allowed in the {} adapter ({} vs {})",
                         self.adapter_type(),
                         database,
                         configured_database

@@ -8,7 +8,10 @@ use crate::bigquery::relation_config::{
 use crate::cast_util::downcast_value_to_dyn_base_relation;
 use crate::column::ColumnBuilder;
 use crate::columns::{BigqueryColumnMode, StdColumn};
-use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
+use crate::errors::{
+    AdapterError, AdapterErrorKind, AdapterResult, adbc_error_to_adapter_error,
+    arrow_error_to_adapter_error,
+};
 use crate::funcs::{execute_macro, none_value};
 use crate::metadata::*;
 use crate::query_ctx::{query_ctx_from_state, query_ctx_from_state_with_sql};
@@ -17,7 +20,6 @@ use crate::relation_object::RelationObject;
 use crate::render_constraint::render_column_constraint;
 use crate::sql_engine::SqlEngine;
 use crate::typed_adapter::TypedBaseAdapter;
-use adbc_core::error::Status;
 use adbc_core::options::OptionValue;
 use arrow::array::StringArray;
 use arrow_ipc::writer::StreamWriter;
@@ -274,7 +276,7 @@ impl TypedBaseAdapter for BigqueryAdapter {
             Ok(result) => result,
             Err(err) => {
                 // Handle NotFound errors
-                if err.kind() == AdapterErrorKind::Xdbc(Status::NotFound)
+                if err.kind() == AdapterErrorKind::NotFound
                     || (err.kind() == AdapterErrorKind::UnexpectedResult
                         && err.message().contains("Error 404: Not found"))
                 {
@@ -356,8 +358,9 @@ impl TypedBaseAdapter for BigqueryAdapter {
             let mut w = StreamWriter::try_new(
                 &mut buf,
                 agate_table.original_record_batch().schema().as_ref(),
-            )?;
-            w.finish()?;
+            )
+            .map_err(arrow_error_to_adapter_error)?;
+            w.finish().map_err(arrow_error_to_adapter_error)?;
         }
 
         self.engine.execute_with_options(
@@ -943,7 +946,7 @@ impl TypedBaseAdapter for BigqueryAdapter {
                 Ok(is_partition_match && is_cluster_match)
             }
             Err(e) => {
-                if e.kind() == AdapterErrorKind::Xdbc(Status::NotFound) {
+                if e.kind() == AdapterErrorKind::NotFound {
                     Ok(true)
                 } else {
                     Err(e)
@@ -969,11 +972,12 @@ fn get_table_schema(
     conn: &'_ mut dyn Connection,
     relation: Arc<dyn BaseRelation>,
 ) -> AdapterResult<Schema> {
-    Ok(conn.get_table_schema(
+    conn.get_table_schema(
         Some(&relation.database_as_str()?),
         Some(&relation.schema_as_str()?),
         &relation.identifier_as_str()?,
-    )?)
+    )
+    .map_err(adbc_error_to_adapter_error)
 }
 
 /// Represent nested data types (struct/array) for BigQuery
