@@ -15,8 +15,6 @@ mod tests {
     #[cfg(feature = "odbc")]
     use arrow_array::Array as _;
     use arrow_array::{cast::AsArray, types::*};
-    #[cfg(feature = "odbc")]
-    use dbt_test_primitives::assert_contains;
     use dbt_xdbc::{
         Backend, Connection, Database, Driver, QueryCtx, Statement, bigquery, connection,
         database::{self, LogLevel},
@@ -544,10 +542,10 @@ mod tests {
         let conn_res = connection::Builder::default().build(&mut database);
         assert!(conn_res.is_err());
         let err = conn_res.unwrap_err();
-        assert_contains!(err.message, "nonexistent_driver");
-        assert_contains!(
-            err.message,
-            "The Databricks ODBC driver can be downloaded from"
+        assert!(err.message.contains("nonexistent_driver"));
+        assert!(
+            err.message
+                .contains("The Databricks ODBC driver can be downloaded from")
         );
         Ok(())
     }

@@ -52,7 +52,6 @@ url = { workspace = true }
 zstd-safe = { workspace = true }
 
 [dev-dependencies]
-dbt-test-primitives = { workspace = true }
 test-with = { version = "0.14.7", default-features = false }
 
 [[bin]]
