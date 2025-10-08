@@ -27,7 +27,7 @@ use dbt_xdbc::{Connection, MapReduce, QueryCtx};
 
 use std::collections::btree_map::Entry;
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, HashMap},
     sync::Arc,
 };
 
@@ -641,7 +641,7 @@ impl MetadataAdapter for RedshiftAdapter {
     fn create_schemas_if_not_exists(
         &self,
         state: &minijinja::State<'_, '_>,
-        catalog_schemas: &BTreeMap<String, BTreeSet<String>>,
+        catalog_schemas: Vec<Arc<dyn BaseRelation>>,
     ) -> AdapterResult<Vec<(String, String, AdapterResult<()>)>> {
         create_schemas_if_not_exists(Arc::new(self.clone()), state, catalog_schemas)
     }
