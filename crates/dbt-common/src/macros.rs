@@ -1126,10 +1126,7 @@ macro_rules! checkpoint_maybe_exit {
 #[macro_export]
 macro_rules! checkpoint_maybe_interactive_or_exit {
     ( $phase:expr, $arg:expr, $resolver_state:expr, $db:expr, $map_compiled_sql:expr, $jinja_env:expr, $cancel_token:expr) => {
-        if $arg.phase <= $phase
-            || $crate::error_counter::get_error_counter($arg.io.invocation_id.to_string().as_str())
-                > 0
-        {
+        if $arg.phase <= $phase {
             return maybe_interactive_or_exit!(
                 $arg,
                 $resolver_state,
