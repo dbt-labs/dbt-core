@@ -209,6 +209,8 @@ impl<'env> Vm<'env> {
                 closure_tracker: state.closure_tracker.clone(),
                 #[cfg(feature = "fuel")]
                 fuel_tracker: state.fuel_tracker.clone(),
+
+                pc,
             },
             Stack::from(args),
             pc,
@@ -326,6 +328,7 @@ impl<'env> Vm<'env> {
                     continue;
                 }
             };
+            state.pc = pc;
 
             macro_rules! func_binop {
                 ($method:ident, $obj_method:expr, $span:expr) => {{

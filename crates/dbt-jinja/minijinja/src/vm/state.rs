@@ -58,6 +58,10 @@ pub struct State<'template, 'env> {
     pub(crate) closure_tracker: std::sync::Arc<crate::vm::closure_object::ClosureTracker>,
     #[cfg(feature = "fuel")]
     pub(crate) fuel_tracker: Option<std::sync::Arc<FuelTracker>>,
+
+    // current program counter, updated by the vm eval loop, is only used for
+    // error reporting in filters/functions:
+    pub(crate) pc: usize,
 }
 
 impl fmt::Debug for State<'_, '_> {
@@ -97,6 +101,8 @@ impl<'template, 'env> State<'template, 'env> {
             closure_tracker: Default::default(),
             #[cfg(feature = "fuel")]
             fuel_tracker: env.fuel().map(FuelTracker::new),
+
+            pc: 0,
         }
     }
 
@@ -108,6 +114,14 @@ impl<'template, 'env> State<'template, 'env> {
         error.with_span(
             &self.ctx.current_path.clone(),
             &span.with_offset(&self.ctx.current_span),
+        )
+    }
+
+    /// Returns a [Span] corresponding to the current instruction.
+    pub fn current_span(&self) -> Span {
+        self.instructions.get_span(self.pc).map_or_else(
+            || self.ctx.current_span,
+            |s| s.with_offset(&self.ctx.current_span),
         )
     }
 

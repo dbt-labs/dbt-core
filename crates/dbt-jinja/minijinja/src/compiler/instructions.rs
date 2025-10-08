@@ -273,7 +273,6 @@ struct LineInfo {
     line: u32,
 }
 
-#[cfg(feature = "debug")]
 #[derive(Clone)]
 struct SpanInfo {
     first_instruction: u32,
@@ -284,7 +283,6 @@ struct SpanInfo {
 pub struct Instructions<'source> {
     pub(crate) instructions: Vec<Instruction<'source>>,
     line_infos: Vec<LineInfo>,
-    #[cfg(feature = "debug")]
     span_infos: Vec<SpanInfo>,
     name: &'source str,
     source: &'source str,
@@ -294,7 +292,6 @@ pub struct Instructions<'source> {
 pub(crate) static EMPTY_INSTRUCTIONS: Instructions<'static> = Instructions {
     instructions: Vec::new(),
     line_infos: Vec::new(),
-    #[cfg(feature = "debug")]
     span_infos: Vec::new(),
     name: "<unknown>",
     source: "",
@@ -311,7 +308,6 @@ impl<'source> Instructions<'source> {
         Instructions {
             instructions: Vec::with_capacity(128),
             line_infos: Vec::with_capacity(128),
-            #[cfg(feature = "debug")]
             span_infos: Vec::with_capacity(128),
             name,
             source,
@@ -373,7 +369,6 @@ impl<'source> Instructions<'source> {
         self.add_line_record(rv, line);
 
         // if we follow up to a valid span with no more span, clear it out
-        #[cfg(feature = "debug")]
         {
             if self.span_infos.last().is_some_and(|x| x.span.is_some()) {
                 self.span_infos.push(SpanInfo {
@@ -388,7 +383,6 @@ impl<'source> Instructions<'source> {
     /// Adds a new instruction with span.
     pub fn add_with_span(&mut self, instr: Instruction<'source>, span: Span) -> usize {
         let rv = self.add(instr);
-        #[cfg(feature = "debug")]
         {
             let same_loc = self
                 .span_infos
@@ -420,23 +414,15 @@ impl<'source> Instructions<'source> {
 
     /// Looks up a span for an instruction.
     pub fn get_span(&self, idx: usize) -> Option<Span> {
-        #[cfg(feature = "debug")]
+        let loc = match self
+            .span_infos
+            .binary_search_by_key(&idx, |x| x.first_instruction as usize)
         {
-            let loc = match self
-                .span_infos
-                .binary_search_by_key(&idx, |x| x.first_instruction as usize)
-            {
-                Ok(idx) => &self.span_infos[idx],
-                Err(0) => return None,
-                Err(idx) => &self.span_infos[idx - 1],
-            };
-            loc.span
-        }
-        #[cfg(not(feature = "debug"))]
-        {
-            let _ = idx;
-            None
-        }
+            Ok(idx) => &self.span_infos[idx],
+            Err(0) => return None,
+            Err(idx) => &self.span_infos[idx - 1],
+        };
+        loc.span
     }
 
     /// Returns a list of all names referenced in the current block backwards

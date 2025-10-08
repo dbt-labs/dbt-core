@@ -641,13 +641,13 @@ impl<T: DefaultTo<T>> Object for ParseConfig<T> {
     /// Implement the call method on the config object
     fn call(
         self: &Arc<Self>,
-        _state: &State<'_, '_>,
+        state: &State<'_, '_>,
         args: &[MinijinjaValue],
         _listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<MinijinjaValue, MinijinjaError> {
         let mut args = ArgParser::new(args, None);
         // If there is a positional argument, it must be a map
-        let kwargs = if args.positional_len() == 1 {
+        let mut kwargs = if args.positional_len() == 1 {
             let positional_val: MinijinjaValue = args.next_positional::<MinijinjaValue>()?;
             if positional_val.kind() != ValueKind::Map {
                 return Err(MinijinjaError::new(
@@ -676,9 +676,39 @@ impl<T: DefaultTo<T>> Object for ParseConfig<T> {
             args.drain_kwargs()
         };
 
-        let mut result = BTreeMap::new();
-        for key in kwargs.keys() {
-            let value: &MinijinjaValue = kwargs.get(key).unwrap();
+        let enabled = if !kwargs.contains_key("enabled") {
+            kwargs.insert("enabled".to_string(), MinijinjaValue::from(self.enabled));
+            self.enabled
+        } else {
+            kwargs.get("enabled").unwrap().is_true()
+        };
+        // TODO: propgate span info for individual args
+        let span = {
+            let Span {
+                start_line,
+                start_col,
+                start_offset,
+                end_line,
+                end_col,
+                end_offset,
+            } = state.current_span();
+            dbt_serde_yaml::Span {
+                start: dbt_serde_yaml::Marker::new(
+                    start_offset as usize,
+                    start_line as usize,
+                    start_col as usize,
+                ),
+                end: dbt_serde_yaml::Marker::new(
+                    end_offset as usize,
+                    end_line as usize,
+                    end_col as usize,
+                ),
+                filename: self.error_path.as_ref().map(|p| Arc::new(p.to_path_buf())),
+            }
+        };
+
+        let mut mapping = dbt_serde_yaml::Mapping::with_capacity(kwargs.len());
+        for (key, value) in kwargs.into_iter() {
             if value.is_undefined() {
                 return Err(minijinja::Error::new(
                     minijinja::ErrorKind::InvalidOperation,
@@ -686,31 +716,25 @@ impl<T: DefaultTo<T>> Object for ParseConfig<T> {
                 ));
             }
 
-            let value = if let Some(dyn_obj) = value.as_object() {
-                if let Some(pydatetime) = dyn_obj.downcast::<PyDateTime>() {
-                    MinijinjaValue::from_serialize(pydatetime.chrono_dt())
-                } else {
-                    value.clone()
-                }
+            let value = if let Some(dyn_obj) = value.as_object()
+                && let Some(pydatetime) = dyn_obj.downcast::<PyDateTime>()
+            {
+                dbt_serde_yaml::to_value(pydatetime.chrono_dt())
             } else {
-                value.clone()
-            };
+                dbt_serde_yaml::to_value(value)
+            }
+            .map_err(|e| {
+                MinijinjaError::new(
+                    MinijinjaErrorKind::InvalidOperation,
+                    format!("Failed to serialize config into yaml: {e}"),
+                )
+            })?
+            .with_span(span.clone());
 
-            result.insert(key.to_string(), value);
+            mapping.insert(dbt_serde_yaml::Value::String(key, span.clone()), value);
         }
 
-        // Get or insert enabled
-        let enabled = result
-            .remove("enabled")
-            .unwrap_or_else(|| MinijinjaValue::from(self.enabled));
-        result.insert("enabled".to_string(), enabled.clone());
-
-        let yaml_value = dbt_serde_yaml::to_value(result).map_err(|e| {
-            MinijinjaError::new(
-                MinijinjaErrorKind::InvalidOperation,
-                format!("Failed to serialize config into yaml: {e}"),
-            )
-        })?;
+        let yaml_value = dbt_serde_yaml::Value::Mapping(mapping, span);
         let config: T = into_typed_with_error(
             &self.io_args,
             yaml_value,
@@ -728,7 +752,7 @@ impl<T: DefaultTo<T>> Object for ParseConfig<T> {
             .lock()
             .unwrap()
             .push(SqlResource::Config(Box::new(config)));
-        if !enabled.is_true() {
+        if !enabled {
             return Err(MinijinjaError::new(
                 MinijinjaErrorKind::DisabledModel,
                 "Model is disabled".to_string(),
