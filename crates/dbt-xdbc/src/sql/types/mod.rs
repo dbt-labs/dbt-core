@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fmt;
 use std::num::ParseIntError;
+use std::sync::Arc;
 
 use arrow_schema::{DataType, Field, IntervalUnit, TimeUnit};
 
@@ -194,6 +195,46 @@ Avoid constructing Snowflake TIME/TIMESTAMP types without an explicit time zone 
     }
 }
 
+pub fn default_time_unit(backend: Backend) -> TimeUnit {
+    use Backend::*;
+    use TimeUnit::*;
+    match backend {
+        Postgres => todo!("Postgres default time unit"),
+        Salesforce => todo!("Salesforce default time unit"),
+        Snowflake | Databricks | DatabricksODBC => Nanosecond,
+        BigQuery | Redshift | RedshiftODBC => Microsecond,
+        Generic { .. } => Microsecond, // a reasonable default
+    }
+}
+
+pub const fn time_unit_to_precision(time_unit: TimeUnit) -> u8 {
+    use TimeUnit::*;
+    match time_unit {
+        Second => 0,
+        Millisecond => 3,
+        Microsecond => 6,
+        Nanosecond => 9,
+    }
+}
+
+/// Returns the [TimeUnit] that can represent the given precision.
+///
+/// The unit should allow the representation of `n**(-precision)` seconds
+/// for any `n <= 9` without being unnecessarily more precise than that.
+pub fn suitable_time_unit(precision: u8) -> TimeUnit {
+    use TimeUnit::*;
+    match precision {
+        0 => Second,
+        1..=3 => Millisecond,
+        4..=6 => Microsecond,
+        7..=9 => Nanosecond,
+        _ => {
+            debug_assert!(false, "invalid time precision: {precision}");
+            Nanosecond
+        }
+    }
+}
+
 /// Additional attributes for string types.
 #[derive(Debug, Clone, Default)]
 pub struct StringAttrs {
@@ -343,7 +384,7 @@ impl SqlType {
     /// It encodes the SQL type as metadata in the Arrow field and picks the best
     /// Arrow `DataType` that matches for the SQL type.
     pub fn to_field(&self, backend: Backend, name: String, nullable: bool) -> Field {
-        let data_type = self._pick_best_arrow_type(backend);
+        let data_type = self.pick_best_arrow_type(backend);
         let mut metadata = HashMap::new();
         metadata.insert(metadata_key(backend).to_string(), self.to_string(backend));
         Field::new(name, data_type, nullable).with_metadata(metadata)
@@ -826,8 +867,278 @@ impl SqlType {
         }
     }
 
-    fn _pick_best_arrow_type(&self, _backend: Backend) -> DataType {
-        todo!()
+    /// DON'T USE THIS. Try to approximate the best Arrow [DataType] for this SQL type.
+    ///
+    /// Going from SQL types to Arrow types is lossy because SQL types are more expressive
+    /// than Arrow types. This function tries to pick the best matching Arrow type for a
+    /// given SQL type. But there are many SQL types that don't have an isomorphic mapping
+    /// in Arrow.
+    ///
+    /// # SQL Timestamps and Apache Arrow types
+    ///
+    /// ## TIMESTAMP WITH LOCAL TIME ZONE
+    ///
+    /// *Meaning:* a point in time that is *displayed* and *processed* in the local time zone of
+    /// the database client's session.
+    ///
+    /// *Example:* the scheduled time of a meeting in a calendar app. Each user sees the time
+    /// of the meeting in their own time zone, but the meeting happens at a single point in
+    /// time.
+    ///
+    /// *Also known as:* `TIMESTAMP_LTZ`.
+    ///
+    /// ### Storage
+    ///
+    /// `Timestamp(Second | Millisecond | Microsecond | Nanosecond, "UTC")` is sufficient to
+    /// store a local-tz timestamp because the actual point in time is stored in UTC. But the
+    /// type does not capture the fact that the timestamp is supposed to be displayed in the
+    /// local time zone of the user. This information has to be conveyed separately, e.g. in
+    /// the metadata of an Arrow `Field`.
+    ///
+    /// ## TIMESTAMP WITH TIME ZONE
+    ///
+    /// *Meaning:* a point in time that is stored along with a time zone offset. The time zone
+    /// offset is used to convert the timestamp to UTC for storage, and to convert it back
+    /// to the original time zone when displaying it.
+    ///
+    /// *Example:* a flight departure and arrival time in an airline reservation system. Both
+    /// timestamps are stored along with the local time zone of the airport, so they can be
+    /// displayed correctly to users.
+    ///
+    /// *Also known as:* `TIMESTAMP_TZ`.
+    ///
+    /// ### Storage
+    ///
+    /// Most systems store the timestamp in UTC and the time zone offset (in minutes) as
+    /// a signed integer. To render the timestamp in the local time zone, the offset is
+    /// added to the UTC timestamp. If the system chooses to store the timestamp pre-added
+    /// to the offset, it needs to subtract the offset to get the UTC timestamp back.
+    ///
+    /// When inserting data into the database, we can push a `Timestamp(_, UTC)` along
+    /// and the database will store the offset=0 for us. If we push a `Timestamp(_, Some(tz))`
+    /// with a non-UTC time zone, the database should convert the timestamp to UTC and resolve
+    /// the offset for us. Storing the same offset for all the values we are inserting.
+    ///
+    /// The situation is more complicated when reading data from the database [1]. Since each
+    /// value of the column can have a different offset, we can't represent the data as a simple
+    /// `Timestamp(_, Some(tz))` because that assumes a single time zone for the whole column.
+    ///
+    /// For these situations, we are going to propose and Arrow Extension type [2] that dbt
+    /// Fusion and ADBC drivers can adopt:
+    ///
+    ///     name: "arrow.timestamp_with_offsets"
+    ///     storage_type:
+    ///         struct<
+    ///             timestamp: timestamp[s | ms | us | ns, tz=UTC],
+    ///             offset_minutes: int16
+    ///         >
+    ///
+    /// The `timestamp` field stores the point in time in UTC. We recommend always setting the
+    /// timezone explicitly to UTC to avoid ambiguity. If not provided, UTC is assumed. Anything
+    /// else should be considered an error.
+    ///
+    /// The `offset_minutes` field stores the time zone offset in minutes that was used to
+    /// convert the original timestamp to UTC. This allows reconstructing the original
+    /// timestamp in the local time zone by adding the offset to the UTC timestamp.
+    ///
+    /// ## TIMESTAMP WITHOUT TIME ZONE
+    ///
+    /// *Meaning:* a data and time literal that is not associated with any time zone.
+    /// It represents a calendar date and time that is the same for all users, regardless
+    /// of their time zone.
+    ///
+    /// *Example:* a birth date and time in a user profile. The timestamp is stored
+    /// as-is without any conversion or time zone information.
+    ///
+    /// *Also known as:* `TIMESTAMP_NTZ`, `DATETIME`.
+    ///
+    /// ### Storage
+    ///
+    /// `Timestamp(Second | Millisecond | Microsecond | Nanosecond, None)` is sufficient.
+    /// The lack of a time zone indicates that the timestamp is to be interpreted as a literal.
+    /// So to render it in YYYY-MM-DD HH:MM:SS format, the system just needs to format the
+    /// timestamp assuming it is in the UTC time zone, but the resulting string does not
+    /// mean the point in time represented by that UTC timestamp.
+    ///
+    /// [1] Trying to insert a column with different offsets for each value would also not work
+    ///     with a `Timestamp(_, Some(tz))` because that assumes a single time zone for the
+    ///     whole column.
+    /// [2] https://arrow.apache.org/docs/format/Columnar.html#format-metadata-extension-types
+    pub fn pick_best_arrow_type(&self, backend: Backend) -> DataType {
+        use Backend::*;
+        use SqlType::*;
+        use TimeZoneSpec::*;
+
+        let arrow_timestamp = |precision: Option<u8>, arrow_tz: Option<Arc<str>>| {
+            let time_unit = precision
+                .map(suitable_time_unit)
+                .unwrap_or_else(|| default_time_unit(backend));
+            DataType::Timestamp(time_unit, arrow_tz)
+        };
+        let arrow_timestamp_with_local_tz =
+            |precision: Option<u8>| arrow_timestamp(precision, Some("UTC".into()));
+
+        let data_type: DataType = match (backend, self) {
+            (_, Boolean) => DataType::Boolean,
+
+            // Snowflake {{{
+            (Snowflake, TinyInt | SmallInt | Integer | BigInt) => DataType::Decimal128(38, 0),
+            (Snowflake, Real | Float(_) | Double) => DataType::Float64,
+            // "NUMBER" in Snowflake is an alias for "DECIMAL(38,0)"
+            (Snowflake, Numeric(None) | BigNumeric(None)) => DataType::Decimal128(38, 0),
+
+            (Snowflake, DateTime) => arrow_timestamp(Some(9), None),
+            // }}}
+
+            // BigQuery {{{
+            (BigQuery, TinyInt | SmallInt | Integer | BigInt) => DataType::Int64,
+            (BigQuery, Numeric(None)) => DataType::Decimal128(38, 9),
+            (BigQuery, BigNumeric(None)) => DataType::Decimal256(76, 38),
+
+            // BigQuery's DATETIME has microsecond precision
+            // https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#datetime_type
+            (BigQuery, DateTime) => arrow_timestamp(Some(6), None),
+            // }}}
+
+            // Databricks {{{
+            // https://docs.databricks.com/aws/en/sql/language-manual/data-types/decimal-type
+            (Databricks, Numeric(None) | BigNumeric(None)) => DataType::Decimal128(10, 0),
+            // }}}
+
+            // Redshift {{{
+            (Redshift, Numeric(None) | BigNumeric(None)) => {
+                // The default precision, if not specified, is 18. The maximum precision is 38.
+                // The default scale, if not specified, is 0. The maximum scale is 37.
+                // https://docs.aws.amazon.com/redshift/latest/dg/r_Numeric_types201.html#r_Numeric_types201-decimal-or-numeric-type
+                DataType::Decimal128(18, 0)
+            }
+            // }}}
+
+            // PostgreSQL {{{
+            (Postgres | Salesforce, Numeric(None) | BigNumeric(None)) => {
+                // PostgreSQL's NUMERIC type is truly arbitrary (precision can go to a 1000!). When
+                // precision and scale are not specified, it's truly unconstrained. We pick the max
+                // precision that fits in Decimal128 with a scale of 9 as a reasonable default,
+                // but it doesn't reflect the full range supported by PostgreSQL.
+                //
+                // For more portability, PostgreSQL docs recommend users to always specify
+                // precision and scale explicitly.
+                //
+                // https://www.postgresql.org/docs/current/datatype-numeric.html#DATATYPE-NUMERIC-DECIMAL
+                DataType::Decimal128(38, 0)
+            }
+            // }}}
+            (_, TinyInt) => DataType::Int8,
+            (_, SmallInt) => DataType::Int16,
+            (_, Integer) => DataType::Int32,
+            (_, BigInt) => DataType::Int64,
+
+            (_, Real) => DataType::Float32,
+            (_, Float(_)) => DataType::Float32,
+            (_, Double) => DataType::Float64,
+
+            (_, Numeric(Some((p, s))) | BigNumeric(Some((p, s)))) => {
+                let (p, s) = (*p, s.unwrap_or(0));
+                if p <= 38 {
+                    DataType::Decimal128(p, s)
+                } else {
+                    DataType::Decimal256(p, s)
+                }
+            }
+
+            (_, Numeric(None) | BigNumeric(None)) => {
+                unimplemented!("defaults for DECIMAL on {backend:?}")
+            }
+
+            (_, Char(_)) => DataType::Utf8,
+            (_, Varchar(..)) => DataType::Utf8,
+            (_, Text) => DataType::Utf8,
+            (_, Clob) => DataType::Utf8,
+            (_, Blob) => DataType::Binary,
+            (_, Binary(_)) => DataType::Binary,
+            (_, Date) => DataType::Date32,
+            (
+                backend,
+                Time {
+                    precision,
+                    time_zone_spec: _, // TODO: handle timezones in TIME type
+                },
+            ) => {
+                let time_unit = match (backend, precision) {
+                    (_, Some(precision)) => suitable_time_unit(*precision),
+                    // TIME's default precision on Snowflake is 9 (nanoseconds)
+                    // https://docs.snowflake.com/en/sql-reference/data-types-datetime#time
+                    (Snowflake, None) => TimeUnit::Nanosecond,
+                    // TIME's default precision on BigQuery is 6 (microseconds)
+                    // https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#time_type
+                    (BigQuery, None) => TimeUnit::Microsecond,
+                    // Databricks doesn't have the TIME type, so we use the precision of its
+                    // TIMESTAMP type as the default here, which is 6 (microseconds).
+                    // https://docs.databricks.com/aws/en/sql/language-manual/data-types/timestamp-type
+                    (Databricks | DatabricksODBC, None) => TimeUnit::Microsecond,
+                    // TIME's default precision on Redshift is assumed to matche PostgreSQL's but
+                    // nothing is mentioned in the docs page
+                    // https://docs.aws.amazon.com/redshift/latest/dg/r_Date_and_time_literals.html#r_Date_and_time_literals-times
+                    (Redshift | RedshiftODBC, None) => TimeUnit::Microsecond,
+                    // TIME's default precision on PostgreSQL is 6 (microseconds)
+                    // https://www.postgresql.org/docs/current/datatype-datetime.html
+                    (Postgres | Salesforce, None) => TimeUnit::Microsecond,
+                    (Generic { .. }, None) => {
+                        // we pick microseconds as a reasonable default
+                        TimeUnit::Microsecond
+                    }
+                };
+                match time_unit {
+                    TimeUnit::Second | TimeUnit::Millisecond => DataType::Time32(time_unit),
+                    TimeUnit::Microsecond | TimeUnit::Nanosecond => DataType::Time64(time_unit),
+                }
+            }
+            (
+                backend,
+                Timestamp {
+                    precision,
+                    time_zone_spec,
+                },
+            ) => {
+                match (backend, time_zone_spec) {
+                    (_, Local) => arrow_timestamp_with_local_tz(*precision),
+                    // TODO: use an extension type for `TIMESTAMP WITH TIME ZONE` becaues SQL
+                    // timestamps with time zone can have one offset per row, while Arrow's
+                    // `Timestamp(_, Some(tz))` assumes a single time zone for the whole column.
+                    (_, With) => arrow_timestamp(*precision, None),
+
+                    // Databricks TIMESTAMP and TIMESTAMP_LTZ are both local-tz timestamps
+                    (Databricks, Without | Unspecified) => {
+                        arrow_timestamp_with_local_tz(*precision)
+                    }
+                    // This is configuration on Snowflake (!), but the default for TIMESTAMP
+                    // is to be an alias for TIMESTAMP_NTZ which is what we assume here.
+                    (Snowflake, Unspecified) => arrow_timestamp(*precision, None),
+
+                    (_, Without | Unspecified) => arrow_timestamp(*precision, None),
+                }
+            }
+            (_, DateTime) => unimplemented!("{}", self.to_string(backend)),
+
+            (BigQuery, Interval(_)) => DataType::Interval(IntervalUnit::MonthDayNano),
+            (_, Interval(_)) => unimplemented!("{}", self.to_string(backend)),
+
+            (_, Json) => unimplemented!("{}", self.to_string(backend)),
+            (_, Jsonb) => unimplemented!("{}", self.to_string(backend)),
+            (_, Geometry) => unimplemented!("{}", self.to_string(backend)),
+            (_, Geography) => unimplemented!("{}", self.to_string(backend)),
+            (_, Array(Some(sql_type))) => {
+                let inner_ty = sql_type.pick_best_arrow_type(backend);
+                DataType::List(Arc::new(Field::new("item", inner_ty, true)))
+            }
+            (_, Array(None)) => unimplemented!("{}", self.to_string(backend)),
+            (_, Struct(_)) => unimplemented!("{}", self.to_string(backend)),
+            (_, Map(_)) => unimplemented!("{}", self.to_string(backend)),
+            (_, Variant) => unimplemented!("{}", self.to_string(backend)),
+            (_, Void) => unimplemented!("{}", self.to_string(backend)),
+            (_, Other(_)) => unimplemented!("{}", self.to_string(backend)),
+        };
+        data_type
     }
 }
 
@@ -1386,6 +1697,8 @@ impl<'source> Parser<'source> {
                     || eqi(w, "NUMERIC")
                     // Snowflake uses NUMBER as an alias for DECIMAL and NUMERIC
                     || eqi(w, "NUMBER")
+                    // Snowflake and Databricks support DEC
+                    || eqi(w, "DEC")
                 {
                     let precision_and_scale = self.precision_and_scale()?;
                     SqlType::Numeric(precision_and_scale)
@@ -1435,11 +1748,22 @@ impl<'source> Parser<'source> {
                     if self.match_word("LARGE") {
                         self.expect(Token::Word("OBJECT"))?;
                         SqlType::Blob // BINARY LARGE OBJECT
+                    } else if self.match_word("VARYING") {
+                        // BINARY VARYING (Redshift)
+                        let len = self.precision()?;
+                        SqlType::Binary(len)
                     } else {
                         let len = self.precision()?;
                         SqlType::Binary(len)
                     }
-                } else if eqi(w, "VARBINARY") || eqi(w, "BYTES") || eqi(w, "BYTEA") {
+                } else if eqi(w, "VARBINARY")
+                    // BigQuery uses BYTES
+                    || eqi(w, "BYTES")
+                    // PostgreSQL uses BYTEA
+                    || eqi(w, "BYTEA")
+                    // Redshift also uses VARBYTE and VARBINARY
+                    || eqi(w, "VARBYTE")
+                {
                     let len = self.precision()?;
                     SqlType::Binary(len)
                 } else if eqi(w, "DATE") {

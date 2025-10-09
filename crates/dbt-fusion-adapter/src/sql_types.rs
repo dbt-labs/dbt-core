@@ -122,6 +122,7 @@ impl TypeOps for NaiveTypeOpsImpl {
 }
 
 /// Replacement for `new_arrow_field_with_metadata` that fuses parsing and `Field` creation.
+#[inline]
 pub fn make_arrow_field(
     type_ops: &dyn TypeOps,
     col_name: String,
@@ -129,46 +130,88 @@ pub fn make_arrow_field(
     nullable_override: Option<bool>,
     comment: Option<String>,
 ) -> Result<Field, AdapterError> {
-    let mut metadata = HashMap::new();
+    make_arrow_field_v1(type_ops, col_name, sql_type_str, nullable_override, comment)
+}
+
+/// Implementation of [make_arrow_field] that is currently in use.
+pub fn make_arrow_field_v1(
+    type_ops: &dyn TypeOps,
+    col_name: String,
+    sql_type_str: &str,
+    nullable_override: Option<bool>,
+    comment: Option<String>,
+) -> Result<Field, AdapterError> {
+    use SqlType::*;
+
+    let (data_type, nullable) = type_ops.parse_into_nullable_arrow_type(sql_type_str)?;
+    let field = Field::new(col_name, data_type, nullable_override.unwrap_or(nullable));
+
     let adapter_type = type_ops.adapter_type();
+    let mut metadata = HashMap::new();
+    metadata.insert(
+        ARROW_FIELD_ORIGINAL_TYPE_METADATA_KEY.to_string(),
+        sql_type_str.to_string(),
+    );
+    if let Some(comment) = comment {
+        metadata.insert(ARROW_FIELD_COMMENT_METADATA_KEY.to_string(), comment);
+    }
+
     // HACK: Insert the width of the field as its own value
     // Special handling for Snowflake char width fields
     // because these are given to the user as separate types
-    let normalized_type_str: Cow<str> = if adapter_type == AdapterType::Snowflake {
-        let maybe_parsed = SqlType::parse(backend_of(adapter_type), sql_type_str);
-        match maybe_parsed {
-            Ok((SqlType::Varchar(maybe_max_len, _), _)) => {
-                if let Some(max_len) = maybe_max_len {
-                    metadata.insert(
-                        ARROW_FIELD_SNOWFLAKE_FIELD_WIDTH_METADATA_KEY.to_string(),
-                        max_len.to_string(),
-                    );
-                }
-                // HACK: Clean up collation
-                Cow::Owned(SqlType::varchar(maybe_max_len).to_string(backend_of(adapter_type)))
-            }
-            Ok((SqlType::Binary(Some(max_len)), _)) => {
+    if adapter_type == AdapterType::Snowflake {
+        let sql_type_res = SqlType::parse(backend_of(adapter_type), sql_type_str).map(|(ty, _)| ty);
+        match sql_type_res {
+            Ok(Binary(Some(max_len))) | Ok(Varchar(Some(max_len), _)) => {
                 metadata.insert(
                     ARROW_FIELD_SNOWFLAKE_FIELD_WIDTH_METADATA_KEY.to_string(),
                     max_len.to_string(),
                 );
-                Cow::Borrowed(sql_type_str)
             }
-            _ => Cow::Borrowed(sql_type_str),
+            _ => (),
         }
-    } else {
-        Cow::Borrowed(sql_type_str)
-    };
+    }
 
-    let (data_type, nullable) = type_ops.parse_into_nullable_arrow_type(&normalized_type_str)?;
+    let field = field.with_metadata(metadata);
+
+    Ok(field)
+}
+
+/// The version we want to standardize on as we move away from using Arrow types
+/// with SDF-isms encoded in them (e.g. FixedSizeList for timestamps).
+pub fn make_arrow_field_v2(
+    type_ops: &dyn TypeOps,
+    col_name: String,
+    sql_type_str: &str,
+    nullable_override: Option<bool>,
+    comment: Option<String>,
+) -> Result<Field, AdapterError> {
+    use AdapterType::*;
+    use SqlType::*;
+    let adapter_type = type_ops.adapter_type();
+    let backend = backend_of(adapter_type);
+    let (sql_type, nullable) = parse_nullable_sql_type(sql_type_str, adapter_type)?;
+    let data_type = sql_type.pick_best_arrow_type(backend);
+
     let field = Field::new(col_name, data_type, nullable_override.unwrap_or(nullable));
 
+    let mut metadata = HashMap::new();
     metadata.insert(
         ARROW_FIELD_ORIGINAL_TYPE_METADATA_KEY.to_string(),
-        normalized_type_str.to_string(),
+        sql_type_str.to_string(),
     );
     if let Some(comment) = comment {
         metadata.insert(ARROW_FIELD_COMMENT_METADATA_KEY.to_string(), comment);
+    }
+
+    match (adapter_type, &sql_type) {
+        (Snowflake, Varchar(Some(max_len), _)) | (Snowflake, Binary(Some(max_len))) => {
+            metadata.insert(
+                ARROW_FIELD_SNOWFLAKE_FIELD_WIDTH_METADATA_KEY.to_string(),
+                max_len.to_string(),
+            );
+        }
+        _ => {}
     }
 
     let field = field.with_metadata(metadata);
