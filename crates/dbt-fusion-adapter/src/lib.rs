@@ -25,6 +25,8 @@ pub mod record_and_replay;
 pub mod render_constraint;
 pub mod response;
 pub mod snapshots;
+/// Tokenizing and fuzzy diffing of SQL strings
+pub mod sql;
 pub mod sql_engine;
 pub mod sql_types;
 pub mod stmt_splitter;

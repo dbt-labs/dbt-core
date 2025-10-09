@@ -33,6 +33,7 @@ crossbeam-skiplist = { workspace = true }
 dashmap = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 log = { workspace = true, features = ["serde"] }
+md5 = { workspace = true }
 minijinja = { workspace = true, features = ["loader", "deserialization"] }
 minijinja-contrib = { workspace = true, features = ["datetime", "timezone"] }
 once_cell = { workspace = true }
@@ -40,6 +41,7 @@ regex = { workspace = true }
 scc = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+similar = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracy-client = { workspace = true }
