@@ -611,7 +611,8 @@ pub fn resolve_minimal_properties(
                         arg.io,
                         fs_err!(
                             ErrorCode::SchemaError,
-                            "This project defines semantic models and metrics using the legacy YAML. Please migrate to the new YAML to use the semantic layer with dbt Fusion.",
+                            "The package '{}' defines semantic models and metrics using the legacy YAML. Please migrate to the new YAML to use the semantic layer with dbt Fusion.",
+                            &package.dbt_project.name,
                         )
                     );
                     minimal_resolved_properties.semantic_layer_spec_is_legacy = true;
