@@ -43,25 +43,25 @@ const fn node_type_to_order(node_type: NodeType) -> u8 {
     }
 }
 
-fn pluralize(word: &str) -> String {
-    if word.ends_with("y")
-        && !word.ends_with("ay")
-        && !word.ends_with("ey")
-        && !word.ends_with("iy")
-        && !word.ends_with("oy")
-        && !word.ends_with("uy")
-    {
-        let prefix = &word[..word.len() - 1];
-        format!("{}ies", prefix)
-    } else if word.ends_with('s')
-        || word.ends_with("sh")
-        || word.ends_with("ch")
-        || word.ends_with('x')
-        || word.ends_with('z')
-    {
-        format!("{}es", word)
-    } else {
-        format!("{}s", word)
+/// Get the plural name of a NodeType
+pub fn node_type_plural(node: NodeType) -> &'static str {
+    match node {
+        NodeType::Unspecified => "unspecified",
+        NodeType::Model => "models",
+        NodeType::Seed => "seeds",
+        NodeType::Snapshot => "snapshots",
+        NodeType::Source => "sources",
+        NodeType::Test => "tests",
+        NodeType::UnitTest => "unit tests",
+        NodeType::Macro => "macros",
+        NodeType::DocsMacro => "doc macros",
+        NodeType::Analysis => "analyses",
+        NodeType::Operation => "operations",
+        NodeType::Exposure => "exposures",
+        NodeType::Metric => "metrics",
+        NodeType::SavedQuery => "saved queries",
+        NodeType::SemanticModel => "semantic models",
+        NodeType::Function => "functions",
     }
 }
 
@@ -323,9 +323,9 @@ fn format_evaluated_line(data_provider: &DataProvider<'_>, _colorize: bool) -> O
         }
 
         let word = if *count > 1 {
-            pluralize(node_type.pretty())
+            node_type_plural(node_type)
         } else {
-            node_type.pretty().to_string()
+            node_type.pretty()
         };
 
         parts.push(format!("{} {}", count, word));
