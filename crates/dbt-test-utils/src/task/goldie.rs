@@ -67,6 +67,7 @@ fn postprocess_golden(content: String, sort_output: bool) -> String {
 pub(super) fn diff_goldie<P: Fn(String) -> String>(
     goldie_type: &str,
     postprocessed_actual: String,
+    normalize_slashes_in_actual: bool,
     goldie_path: &Path,
     goldie_post_processor: P,
 ) -> Option<TextualPatch> {
@@ -83,7 +84,11 @@ pub(super) fn diff_goldie<P: Fn(String) -> String>(
         "".to_string()
     };
     let golden = goldie_post_processor(golden);
-    let actual = maybe_normalize_slashes(postprocessed_actual);
+    let actual = if normalize_slashes_in_actual {
+        maybe_normalize_slashes(postprocessed_actual)
+    } else {
+        postprocessed_actual
+    };
 
     if goldie_exists && golden == actual {
         return None;
@@ -255,13 +260,18 @@ pub fn compare_or_update(
         Ok(vec![])
     } else {
         // Compare the generated files to the golden files
-        let patches = diff_goldie("stderr", stderr_content, &goldie_stderr_path, |golden| {
-            postprocess_golden(golden, sort_output)
-        })
+        let patches = diff_goldie(
+            "stderr",
+            stderr_content,
+            true,
+            &goldie_stderr_path,
+            |golden| postprocess_golden(golden, sort_output),
+        )
         .into_iter()
         .chain(diff_goldie(
             "stdout",
             stdout_content,
+            true,
             &goldie_stdout_path,
             |golden| postprocess_golden(golden, sort_output),
         ))

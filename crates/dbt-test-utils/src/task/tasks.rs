@@ -1,8 +1,6 @@
 //! Core tasks.
 
 use std::{
-    collections::{BTreeMap, BTreeSet},
-    fmt,
     io::Write,
     path::{Path, PathBuf},
     process::Command,
@@ -15,7 +13,6 @@ use dbt_common::{ErrorCode, FsResult, constants::DBT_INTERNAL_PACKAGES_DIR_NAME,
 use dbt_telemetry::TelemetryRecord;
 use dbt_test_primitives::is_update_golden_files_mode;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
-use uuid::Uuid;
 
 use crate::task::{
     goldie::{TextualPatch, diff_goldie},
@@ -371,6 +368,8 @@ impl ExecuteAndCompareTelemetry {
         }
     }
 
+    /// Compare telemetry outputs (JSONL and parquet formats) against golden snapshots.
+    /// Processes both telemetry formats and returns any differences found.
     fn compare_telemetry(
         &self,
         cmd_vec: &[String],
@@ -378,6 +377,7 @@ impl ExecuteAndCompareTelemetry {
         test_env: &TestEnv,
         task_index: usize,
     ) -> FsResult<Vec<TextualPatch>> {
+        // Resolve actual output directories from command flags or defaults
         let log_dir = Self::resolve_path(
             Self::extract_flag_value(cmd_vec, "--log-path"),
             &project_env.absolute_project_dir,
@@ -390,17 +390,23 @@ impl ExecuteAndCompareTelemetry {
         );
 
         let task_suffix = Self::task_suffix(task_index);
+
+        // Path to native JSONL telemetry output (written directly by the CLI)
         let actual_jsonl_path = log_dir.join(Self::OTEL_JSONL_FILE_NAME);
+        // Path to parquet telemetry output (written to target/metadata by the CLI)
         let actual_parquet_path = target_dir
             .join("metadata")
             .join(Self::OTEL_PARQUET_FILE_NAME);
+
+        // Golden snapshot paths: separate files for native JSONL and parquet-derived JSONL
         let golden_jsonl_path = test_env
             .golden_dir
             .join(format!("{}{}.otel.jsonl", self.name, task_suffix));
-        let golden_parquet_path = test_env
+        let golden_parquet_jsonl_path = test_env
             .golden_dir
-            .join(format!("{}{}.otel.parquet", self.name, task_suffix));
+            .join(format!("{}{}.otel.parquet.jsonl", self.name, task_suffix));
 
+        // Verify native JSONL output exists
         if !actual_jsonl_path.exists() {
             return err!(
                 ErrorCode::FileNotFound,
@@ -409,9 +415,11 @@ impl ExecuteAndCompareTelemetry {
             );
         }
 
+        // Read and postprocess native JSONL telemetry
         let actual_jsonl_content =
             Self::postprocess_jsonl(stdfs::read_to_string(&actual_jsonl_path)?);
 
+        // Verify parquet output exists
         if !actual_parquet_path.exists() {
             return err!(
                 ErrorCode::FileNotFound,
@@ -420,35 +428,106 @@ impl ExecuteAndCompareTelemetry {
             );
         }
 
-        let actual_parquet_content = stdfs::read(&actual_parquet_path)?;
+        // Deserialize parquet to records, then serialize to JSONL with postprocessing
+        let actual_parquet_bytes = stdfs::read(&actual_parquet_path)?;
+        let actual_parquet_as_jsonl = self.parquet_to_jsonl(actual_parquet_bytes)?;
 
         if is_update_golden_files_mode() {
-            // Copy to goldie
-            // Note: we can't use move here because the source and target files may not be on
-            // the same filesystem
+            // Update golden snapshots: native JSONL and parquet-derived JSONL
             stdfs::write(&golden_jsonl_path, actual_jsonl_content)?;
-            stdfs::write(&golden_parquet_path, actual_parquet_content)?;
+            stdfs::write(&golden_parquet_jsonl_path, actual_parquet_as_jsonl)?;
             return Ok(vec![]);
         }
 
-        // Diff jsonl using shared textual diffing logic
-        let mut patches = diff_goldie(
+        // Compare native JSONL telemetry against its snapshot
+        let patches = diff_goldie(
             "jsonl telemetry",
             actual_jsonl_content,
+            false, // single backslash is JSON is not a path separator, so avoid the default normalization
             &golden_jsonl_path,
             Self::postprocess_jsonl,
         )
         .into_iter()
+        // Compare parquet-derived JSONL against its snapshot
+        .chain(diff_goldie(
+            "parquet telemetry",
+            actual_parquet_as_jsonl,
+            false, // single backslash is JSON is not a path separator, so avoid the default normalization
+            &golden_parquet_jsonl_path,
+            Self::postprocess_jsonl,
+        ))
         .collect::<Vec<_>>();
-
-        // Diff parquet using specialized logic
-        if let Some(patch) = self.diff_parquet(actual_parquet_content, &golden_parquet_path)? {
-            patches.push(patch);
-        }
 
         Ok(patches)
     }
 
+    /// Convert parquet bytes to JSONL format with postprocessing applied.
+    /// Deserializes parquet to telemetry records, serializes each to JSON, and applies normalization.
+    fn parquet_to_jsonl(&self, parquet_bytes: Vec<u8>) -> FsResult<String> {
+        // Deserialize parquet to telemetry records
+        let records = Self::read_parquet_to_records(parquet_bytes, self.telemetry_deserializer)?;
+
+        // Convert each record to a JSON line
+        let jsonl_lines: Result<Vec<String>, _> = records
+            .into_iter()
+            .map(|record| {
+                serde_json::to_string(&record).map_err(|err| {
+                    Box::new(dbt_common::FsError::new(
+                        ErrorCode::SerializationError,
+                        format!("failed to serialize telemetry record to json: {err}"),
+                    ))
+                })
+            })
+            .collect();
+        let jsonl_lines = jsonl_lines?;
+
+        // Join lines and apply postprocessing to normalize volatile fields
+        let jsonl = jsonl_lines.join("\n");
+        Ok(Self::postprocess_jsonl(jsonl))
+    }
+
+    /// Read and deserialize parquet bytes into telemetry records using the provided deserializer.
+    fn read_parquet_to_records(
+        parquet_bytes: Vec<u8>,
+        deserializer: TelemetryArrowDeserializer,
+    ) -> FsResult<Vec<TelemetryRecord>> {
+        let reader =
+            ParquetRecordBatchReaderBuilder::try_new(bytes::Bytes::from_owner(parquet_bytes))
+                .map_err(|err| {
+                    dbt_common::FsError::new(
+                        ErrorCode::ParquetError,
+                        format!("failed to construct parquet reader: {err}"),
+                    )
+                })?
+                .build()
+                .map_err(|err| {
+                    dbt_common::FsError::new(
+                        ErrorCode::ParquetError,
+                        format!("failed to build parquet batch reader: {err}"),
+                    )
+                })?;
+
+        let mut records = Vec::new();
+        for batch in reader {
+            let batch = batch.map_err(|err| {
+                dbt_common::FsError::new(
+                    ErrorCode::ParquetError,
+                    format!("failed to read parquet batch: {err}"),
+                )
+            })?;
+            let mut batch_records = deserializer(&batch).map_err(|err| {
+                dbt_common::FsError::new(
+                    ErrorCode::ParquetError,
+                    format!("failed to deserialize telemetry records: {err}"),
+                )
+            })?;
+            records.append(&mut batch_records);
+        }
+
+        Ok(records)
+    }
+
+    /// Resolve a path from command flag value, making it absolute if relative to project dir.
     fn resolve_path(maybe_path: Option<String>, project_dir: &Path, default: PathBuf) -> PathBuf {
         match maybe_path {
             Some(value) => {
@@ -463,6 +542,7 @@ impl ExecuteAndCompareTelemetry {
         }
     }
 
+    /// Generate a suffix string for golden file names based on task index (e.g., "_1" or "").
     fn task_suffix(task_index: usize) -> String {
         if task_index > 0 {
             format!("_{task_index}")
@@ -471,6 +551,7 @@ impl ExecuteAndCompareTelemetry {
         }
     }
 
+    /// Extract the value of a command-line flag from the command vector.
     fn extract_flag_value(cmd_vec: &[String], flag: &str) -> Option<String> {
         let prefix = format!("{flag}=");
         let iter = cmd_vec.iter().enumerate();
@@ -485,6 +566,7 @@ impl ExecuteAndCompareTelemetry {
         None
     }
 
+    /// Normalize environment-dependent keys in JSONL content to make tests reproducible.
     fn normalize_volatile_keys(content: String) -> String {
         const KEYS: &[&str] = &[
             // Keys that contain timestamps in nanoseconds since epoch
@@ -554,6 +636,7 @@ impl ExecuteAndCompareTelemetry {
             .join("\n")
     }
 
+    /// Remove keys from JSONL that cannot be replayed (e.g., query_id from warehouse responses).
     fn strip_non_replayable_keys(content: String) -> String {
         // Keys whose values we strip because the replay mechanism cannot reproduce them
         const KEYS: &[&str] = &["attributes.query_id"];
@@ -592,11 +675,8 @@ impl ExecuteAndCompareTelemetry {
             .join("\n")
     }
 
-    /// On Windows, this normalizes forward/backward slashes to '|' so as to ignore
-    /// the difference in path separators. Since we apply this to json,
-    /// we need to be careful to not replace slashes that escape quotes.
-    ///
-    /// On other platforms, this is a no-op.
+    /// Normalize path separators in JSON strings to make Windows/Unix tests compatible.
+    /// On Windows, replaces slashes with '|' to ignore separator differences; no-op on other platforms.
     fn json_safe_normalize_slashes(output: String) -> String {
         #[cfg(windows)]
         {
@@ -608,6 +688,7 @@ impl ExecuteAndCompareTelemetry {
         }
     }
 
+    /// Apply all normalization transforms to JSONL content for stable golden file comparison.
     fn postprocess_jsonl(content: String) -> String {
         [
             maybe_normalize_schema_name,
@@ -620,137 +701,6 @@ impl ExecuteAndCompareTelemetry {
         ]
         .iter()
         .fold(content, |acc, transform| transform(acc))
-    }
-
-    fn diff_parquet(&self, actual: Vec<u8>, golden: &Path) -> TestResult<Option<TextualPatch>> {
-        let actual_records =
-            Self::read_parquet_records("new file", actual, self.telemetry_deserializer)?;
-        let golden_records = if golden.exists() {
-            let golden_content = stdfs::read(golden)?;
-            Self::read_parquet_records("goldie file", golden_content, self.telemetry_deserializer)?
-        } else {
-            Vec::new()
-        };
-
-        let actual_map = Self::build_record_index("new file", actual_records)?;
-        let golden_map = Self::build_record_index("goldie file", golden_records)?;
-
-        if actual_map == golden_map {
-            return Ok(None);
-        }
-
-        let all_keys: BTreeSet<_> = actual_map
-            .keys()
-            .cloned()
-            .chain(golden_map.keys().cloned())
-            .collect();
-
-        let mut patches = Vec::new();
-
-        for key in all_keys.iter() {
-            let actual_as_jsonl = if let Some(record) = actual_map.get(key) {
-                Some(Self::postprocess_jsonl(Self::render_record(key, record)?))
-            } else {
-                None
-            };
-
-            let golden_as_jsonl = if let Some(record) = golden_map.get(key) {
-                Some(Self::postprocess_jsonl(Self::render_record(key, record)?))
-            } else {
-                None
-            };
-
-            match (actual_as_jsonl, golden_as_jsonl) {
-                (Some(actual), Some(golden)) => {
-                    if actual != golden {
-                        patches.push(format!(
-                            "telemetry record {key} differs.\nActual:\n{actual}\nGoldie\n{golden}"
-                        ));
-                    }
-                }
-                (Some(actual), None) => {
-                    patches.push(format!("unexpected new telemetry record {key}:\n{actual}"));
-                }
-                (None, Some(golden)) => {
-                    patches.push(format!(
-                        "missing expected telemetry record {key}:\n{golden}"
-                    ));
-                }
-                (None, None) => unreachable!(), // Cannot happen since key is from union of keys
-            }
-        }
-
-        if patches.is_empty() {
-            Ok(None)
-        } else {
-            Ok(Some(patches.join("\n\n")))
-        }
-    }
-
-    fn read_parquet_records(
-        source: &str,
-        content: Vec<u8>,
-        deserializer: TelemetryArrowDeserializer,
-    ) -> TestResult<Vec<TelemetryRecord>> {
-        let reader = ParquetRecordBatchReaderBuilder::try_new(bytes::Bytes::from_owner(content))
-            .map_err(|err| {
-                TestError::new(format!(
-                    "failed to construct parquet reader for {}: {err}",
-                    source
-                ))
-            })?
-            .build()
-            .map_err(|err| {
-                TestError::new(format!(
-                    "failed to build parquet batch reader for {}: {err}",
-                    source
-                ))
-            })?;
-
-        let mut records = Vec::new();
-        for batch in reader {
-            let batch = batch.map_err(|err| {
-                TestError::new(format!(
-                    "failed to read parquet batch from {}: {err}",
-                    source
-                ))
-            })?;
-            let mut batch_records = deserializer(&batch).map_err(|err| {
-                TestError::new(format!(
-                    "failed to deserialize telemetry records from {}: {err}",
-                    source
-                ))
-            })?;
-            records.append(&mut batch_records);
-        }
-
-        Ok(records)
-    }
-
-    fn build_record_index(
-        source: &str,
-        records: Vec<TelemetryRecord>,
-    ) -> TestResult<BTreeMap<TelemetryComparisonKey, TelemetryRecord>> {
-        let mut index = BTreeMap::new();
-        for record in records {
-            let key = TelemetryComparisonKey::from_record(&record)?;
-            if index.insert(key.clone(), record).is_some() {
-                return Err(TestError::new(format!(
-                    "duplicate telemetry record detected for key {} in {}",
-                    key, source
-                )));
-            }
-        }
-        Ok(index)
-    }
-
-    fn render_record(key: &TelemetryComparisonKey, record: &TelemetryRecord) -> TestResult<String> {
-        serde_json::to_string(record).map_err(|err| {
-            TestError::new(format!(
-                "failed to serialize telemetry record {} to json: {err}",
-                key
-            ))
-        })
     }
 }
 
@@ -809,67 +759,6 @@ impl Task for Arc<ExecuteAndCompareTelemetry> {
 
     fn is_counted(&self) -> bool {
         true
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
-enum TelemetryComparisonKind {
-    SpanStart,
-    SpanEnd,
-    LogRecord,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
-enum TelemetryComparisonUniqueId {
-    Span(u64),
-    Log(Uuid),
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
-struct TelemetryComparisonKey {
-    kind: TelemetryComparisonKind,
-    trace_id: u128,
-    unique: TelemetryComparisonUniqueId,
-}
-
-impl TelemetryComparisonKey {
-    fn from_record(record: &TelemetryRecord) -> TestResult<Self> {
-        match record {
-            TelemetryRecord::SpanStart(info) => Ok(Self {
-                kind: TelemetryComparisonKind::SpanStart,
-                trace_id: info.trace_id,
-                unique: TelemetryComparisonUniqueId::Span(info.span_id),
-            }),
-            TelemetryRecord::SpanEnd(info) => Ok(Self {
-                kind: TelemetryComparisonKind::SpanEnd,
-                trace_id: info.trace_id,
-                unique: TelemetryComparisonUniqueId::Span(info.span_id),
-            }),
-            TelemetryRecord::LogRecord(info) => Ok(Self {
-                kind: TelemetryComparisonKind::LogRecord,
-                trace_id: info.trace_id,
-                unique: TelemetryComparisonUniqueId::Log(info.event_id),
-            }),
-        }
-    }
-}
-
-impl fmt::Display for TelemetryComparisonKey {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let kind = match self.kind {
-            TelemetryComparisonKind::SpanStart => "SpanStart",
-            TelemetryComparisonKind::SpanEnd => "SpanEnd",
-            TelemetryComparisonKind::LogRecord => "LogRecord",
-        };
-        let trace_id = format!("{:032x}", self.trace_id);
-        match &self.unique {
-            TelemetryComparisonUniqueId::Span(span_id) => {
-                write!(f, "[{kind}] trace_id={trace_id} span_id={span_id:016x}")
-            }
-            TelemetryComparisonUniqueId::Log(event_id) => {
-                write!(f, "[{kind}] trace_id={trace_id} event_id={event_id}")
-            }
-        }
     }
 }
 
