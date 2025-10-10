@@ -35,7 +35,7 @@ use crate::schemas::serde::{f64_or_string_f64, u64_or_string_u64};
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct ProjectSeedConfig {
     #[serde(rename = "+column_types")]
-    pub column_types: Option<BTreeMap<String, String>>,
+    pub column_types: Option<BTreeMap<Spanned<String>, String>>,
     #[serde(rename = "+copy_grants")]
     pub copy_grants: Option<bool>,
     #[serde(rename = "+database", alias = "+project", alias = "+data_space")]
@@ -273,7 +273,7 @@ impl IterChildren<ProjectSeedConfig> for ProjectSeedConfig {
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Default, PartialEq, Clone, JsonSchema)]
 pub struct SeedConfig {
-    pub column_types: Option<BTreeMap<String, String>>,
+    pub column_types: Option<BTreeMap<Spanned<String>, String>>,
     #[serde(alias = "project", alias = "data_space")]
     pub database: Option<String>,
     #[serde(alias = "dataset")]

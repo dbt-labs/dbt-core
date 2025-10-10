@@ -1,4 +1,5 @@
 use dbt_serde_yaml::JsonSchema;
+use dbt_serde_yaml::Spanned;
 use dbt_serde_yaml::Verbatim;
 use serde::{Deserialize, Serialize};
 // Type aliases for clarity
@@ -70,8 +71,8 @@ pub fn default_meta_and_tags(
 /// Helper function to handle default_to logic for column_types
 /// Column types should be merged, with parent values filling in missing keys
 pub fn default_column_types(
-    child_column_types: &mut Option<BTreeMap<String, String>>,
-    parent_column_types: &Option<BTreeMap<String, String>>,
+    child_column_types: &mut Option<BTreeMap<Spanned<String>, String>>,
+    parent_column_types: &Option<BTreeMap<Spanned<String>, String>>,
 ) {
     match (child_column_types, parent_column_types) {
         (Some(inner_column_types), Some(parent_column_types)) => {

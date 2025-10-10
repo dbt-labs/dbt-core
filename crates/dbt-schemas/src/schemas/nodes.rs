@@ -35,7 +35,7 @@ use crate::schemas::{
     ref_and_source::{DbtRef, DbtSourceWrapper},
     serde::StringOrInteger,
 };
-use dbt_serde_yaml::UntaggedEnumDeserialize;
+use dbt_serde_yaml::{Spanned, UntaggedEnumDeserialize};
 
 #[derive(
     Default, Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd, Serialize, Deserialize,
@@ -1875,7 +1875,7 @@ pub struct DbtSeed {
 pub struct DbtSeedAttr {
     #[serde(default, skip_serializing_if = "is_false")]
     pub quote_columns: bool,
-    pub column_types: Option<BTreeMap<String, String>>,
+    pub column_types: Option<BTreeMap<Spanned<String>, String>>,
     pub delimiter: Option<String>,
     pub root_path: Option<PathBuf>,
 }

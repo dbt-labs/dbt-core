@@ -1,6 +1,7 @@
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::serde_utils::Omissible;
 use dbt_serde_yaml::JsonSchema;
+use dbt_serde_yaml::Spanned;
 use dbt_serde_yaml::Verbatim;
 use serde::{Deserialize, Serialize};
 // Type aliases for clarity
@@ -89,7 +90,7 @@ pub struct ProjectModelConfig {
     #[serde(rename = "+clustered_by")]
     pub clustered_by: Option<String>,
     #[serde(rename = "+column_types")]
-    pub column_types: Option<BTreeMap<String, String>>,
+    pub column_types: Option<BTreeMap<Spanned<String>, String>>,
     #[serde(
         default,
         rename = "+concurrent_batches",
@@ -369,7 +370,7 @@ pub struct ModelConfig {
     pub post_hook: Verbatim<Option<Hooks>>,
     pub pre_hook: Verbatim<Option<Hooks>>,
     pub quoting: Option<DbtQuoting>,
-    pub column_types: Option<BTreeMap<String, String>>,
+    pub column_types: Option<BTreeMap<Spanned<String>, String>>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub full_refresh: Option<bool>,
     pub unique_key: Option<DbtUniqueKey>,
@@ -951,8 +952,8 @@ fn meta_eq(a: &Option<BTreeMap<String, YmlValue>>, b: &Option<BTreeMap<String, Y
 
 // Helper function to compare column_types fields, treating None and empty BTreeMap as equivalent
 fn column_types_eq(
-    a: &Option<BTreeMap<String, String>>,
-    b: &Option<BTreeMap<String, String>>,
+    a: &Option<BTreeMap<Spanned<String>, String>>,
+    b: &Option<BTreeMap<Spanned<String>, String>>,
 ) -> bool {
     match (a, b) {
         // Both None

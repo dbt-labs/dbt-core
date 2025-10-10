@@ -130,15 +130,16 @@ pub fn resolve_seeds(
                 .map(|(k, v)| {
                     Ok((
                         Dialect::Snowflake
-                            .parse_identifier(k)
+                            .parse_identifier(k.as_str())
                             .map_err(|e| {
                                 fs_err!(
-                                    ErrorCode::InvalidColumnReference,
-                                    "Invalid identifier: {}",
-                                    e
+                                    code => ErrorCode::InvalidColumnReference,
+                                    loc => k.span().clone(),
+                                    "Invalid identifier: {e}",
                                 )
                             })?
-                            .to_value(),
+                            .to_value()
+                            .into(),
                         v.to_owned(),
                     ))
                 })
