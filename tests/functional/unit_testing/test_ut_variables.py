@@ -12,20 +12,17 @@ vars:
     - column_c
 """
 
-
 my_model_one_variable_sql = """
 {{ config(materialized='table') }}
 -- {{ get_columns(include=var('columns_list_one'))}}
 select 1 as id
 """
 
-
 my_model_two_variables_sql = """
 {{ config(materialized='table') }}
 -- {{ get_columns(include=var('columns_list_one') + var('columns_list_two'))}}
 select 1 as id
 """
-
 
 my_macro_sql = """
 {%- macro get_columns(include=[]) -%}
@@ -34,7 +31,6 @@ my_macro_sql = """
     {%- endfor -%}
 {%- endmacro -%}
 """
-
 
 my_unit_test_yml = """
 unit_tests:
