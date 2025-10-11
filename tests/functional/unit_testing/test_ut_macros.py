@@ -1,6 +1,6 @@
 import pytest
 
-from dbt.tests.util import run_dbt_and_capture
+from dbt.tests.util import run_dbt, run_dbt_and_capture
 
 my_model_without_composition_sql = """
 {{ config(materialized='table') }}
@@ -73,5 +73,9 @@ class TestMacroComposition:
         return {"my_macros.sql": my_macro_sql}
 
     def test_macro_composition_in_unit_test(self, project):
+        # Verify model works fine outside of unit testing
+        results = run_dbt(["run"])
+        assert len(results) == 1
+
         # Test that a model with macro composition properly resolves macro names in unit tests
         run_dbt_and_capture(["test"], expect_pass=True)
