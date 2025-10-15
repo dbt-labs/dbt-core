@@ -112,3 +112,24 @@
         from {{ source }}
     )
 {% endmacro %}
+
+
+{% macro _update_predicates(target, incremental_predicates) %}
+
+    {%- set predicates = [] -%}
+    {% if incremental_predicates is not none %}
+        {%- set incremental_predicates_list = [] + incremental_predicates -%}
+        {%- for pred in incremental_predicates_list -%}
+            {% if "DBT_INTERNAL_DEST." in pred %}
+                {%- set pred =  pred | replace("DBT_INTERNAL_DEST.", target ~ "." ) -%}
+            {% endif %}
+            {% if "dbt_internal_dest." in pred %}
+                {%- set pred =  pred | replace("dbt_internal_dest.", target ~ "." ) -%}
+            {% endif %}
+            {% do predicates.append(pred) %}
+        {% endfor %}
+    {% endif %}
+
+    {%- do return(predicates) -%}
+
+{% endmacro %}
