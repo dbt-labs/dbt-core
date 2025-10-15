@@ -51,7 +51,7 @@ pub struct ProjectFunctionConfig {
     #[serde(rename = "+quoting")]
     pub quoting: Option<DbtQuoting>,
     #[serde(rename = "+schema")]
-    pub schema: Option<String>,
+    pub schema: Omissible<Option<String>>,
     #[serde(rename = "+static_analysis")]
     pub static_analysis: Option<StaticAnalysisKind>,
     #[serde(rename = "+tags")]
@@ -76,7 +76,7 @@ impl Default for ProjectFunctionConfig {
             meta: None,
             on_configuration_change: None,
             quoting: None,
-            schema: None,
+            schema: Omissible::Omitted,
             static_analysis: None,
             tags: None,
             __additional_properties__: BTreeMap::new(),
@@ -110,6 +110,7 @@ impl DefaultTo<ProjectFunctionConfig> for ProjectFunctionConfig {
         default_meta_and_tags(meta, &parent.meta, tags, &parent.tags);
         default_to_grants(grants, &parent.grants);
         handle_omissible_override(database, &parent.database);
+        handle_omissible_override(schema, &parent.schema);
 
         default_to!(
             parent,
@@ -122,7 +123,6 @@ impl DefaultTo<ProjectFunctionConfig> for ProjectFunctionConfig {
                 group,
                 language,
                 on_configuration_change,
-                schema,
                 static_analysis,
             ]
         );
@@ -144,7 +144,7 @@ pub struct FunctionConfig {
     pub enabled: Option<bool>,
     pub alias: Option<String>,
     pub database: Omissible<Option<String>>,
-    pub schema: Option<String>,
+    pub schema: Omissible<Option<String>>,
     pub tags: Option<StringOrArrayOfStrings>,
     // need default to ensure None if field is not set
     #[serde(default, deserialize_with = "default_type")]
@@ -162,6 +162,22 @@ pub struct FunctionConfig {
 }
 
 impl DefaultTo<FunctionConfig> for FunctionConfig {
+    fn get_enabled(&self) -> Option<bool> {
+        self.enabled
+    }
+
+    fn database(&self) -> Option<String> {
+        self.database.clone().into_inner().unwrap_or(None)
+    }
+
+    fn schema(&self) -> Option<String> {
+        self.schema.clone().into_inner().unwrap_or(None)
+    }
+
+    fn alias(&self) -> Option<String> {
+        self.alias.clone()
+    }
+
     fn default_to(&mut self, parent: &FunctionConfig) {
         let FunctionConfig {
             access,
@@ -184,8 +200,9 @@ impl DefaultTo<FunctionConfig> for FunctionConfig {
         // Handle warehouse config
         warehouse_config.default_to(&parent.__warehouse_specific_config__);
 
-        // Handle omissible database field separately
+        // Handle omissible database and schema fields separately
         handle_omissible_override(database, &parent.database);
+        handle_omissible_override(schema, &parent.schema);
 
         default_to!(
             parent,
@@ -193,7 +210,6 @@ impl DefaultTo<FunctionConfig> for FunctionConfig {
                 access,
                 enabled,
                 alias,
-                schema,
                 tags,
                 meta,
                 group,
@@ -205,5 +221,27 @@ impl DefaultTo<FunctionConfig> for FunctionConfig {
                 static_analysis,
             ]
         );
+    }
+}
+
+impl From<ProjectFunctionConfig> for FunctionConfig {
+    fn from(config: ProjectFunctionConfig) -> Self {
+        Self {
+            access: config.access,
+            enabled: config.enabled,
+            alias: config.alias,
+            database: config.database,
+            schema: config.schema,
+            tags: config.tags,
+            meta: config.meta,
+            group: config.group,
+            docs: config.docs,
+            grants: config.grants,
+            quoting: config.quoting,
+            language: config.language,
+            on_configuration_change: config.on_configuration_change,
+            static_analysis: config.static_analysis,
+            __warehouse_specific_config__: WarehouseSpecificNodeConfig::default(),
+        }
     }
 }

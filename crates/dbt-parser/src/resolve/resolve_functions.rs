@@ -59,12 +59,12 @@ pub async fn resolve_functions(
     let mut rendering_results: HashMap<String, (String, MacroSpans)> = HashMap::new();
 
     let local_project_config = if package.dbt_project.name == root_project.name {
-        root_project_configs.models.clone()
+        root_project_configs.functions.clone()
     } else {
         init_project_config(
             &arg.io,
-            &package.dbt_project.models,
-            dbt_schemas::schemas::project::ModelConfig {
+            &package.dbt_project.functions,
+            FunctionConfig {
                 enabled: Some(true),
                 quoting: Some(package_quoting),
                 ..Default::default()
@@ -77,7 +77,7 @@ pub async fn resolve_functions(
         inner: Arc::new(RenderCtxInner {
             args: arg.clone(),
             root_project_name: root_project.name.clone(),
-            root_project_config: root_project_configs.models.clone(),
+            root_project_config: root_project_configs.functions.clone(),
             package_quoting,
             base_ctx: base_ctx.clone(),
             package_name: package_name.to_string(),
@@ -96,17 +96,15 @@ pub async fn resolve_functions(
         runtime_config: runtime_config.clone(),
     };
 
-    let mut function_sql_resources_map = render_unresolved_sql_files::<
-        dbt_schemas::schemas::project::ModelConfig,
-        FunctionProperties,
-    >(
-        &render_ctx,
-        &package.function_sql_files,
-        function_properties,
-        token,
-        Arc::new(DefaultJinjaTypeCheckEventListenerFactory::default()),
-    )
-    .await?;
+    let mut function_sql_resources_map =
+        render_unresolved_sql_files::<FunctionConfig, FunctionProperties>(
+            &render_ctx,
+            &package.function_sql_files,
+            function_properties,
+            token,
+            Arc::new(DefaultJinjaTypeCheckEventListenerFactory::default()),
+        )
+        .await?;
     // make deterministic
     function_sql_resources_map.sort_by(|a, b| {
         a.asset
