@@ -22,6 +22,7 @@ const REQUIRED_PARAMS: [&str; 7] = [
 ];
 
 const DEFAULT_CONNECT_TIMEOUT: &str = "10s";
+const DEFAULT_REQUEST_TIMEOUT: &str = "600s";
 
 /// dbt Core expects durations in seconds only so this utility appends that s
 /// https://pkg.go.dev/time#ParseDuration for permitted units
@@ -344,6 +345,12 @@ impl SnowflakeAuth {
             .map(postfix_seconds_unit)
             .unwrap_or_else(|| DEFAULT_CONNECT_TIMEOUT.to_string());
         builder.with_named_option(snowflake::LOGIN_TIMEOUT, connect_timeout_duration)?;
+        let request_timeout_duration = config
+            .get_string("request_timeout")
+            .as_deref()
+            .map(postfix_seconds_unit)
+            .unwrap_or_else(|| DEFAULT_REQUEST_TIMEOUT.to_string());
+        builder.with_named_option(snowflake::REQUEST_TIMEOUT, request_timeout_duration)?;
 
         AuthMethod::new(config, &method)?.configure(builder)
     }
@@ -496,6 +503,13 @@ impl SnowflakeAuth {
             .unwrap_or_else(|| DEFAULT_CONNECT_TIMEOUT.to_string());
         builder.with_named_option(snowflake::LOGIN_TIMEOUT, connect_timeout_duration)?;
 
+        let request_timeout_duration = config
+            .get_string("request_timeout")
+            .as_deref()
+            .map(postfix_seconds_unit)
+            .unwrap_or_else(|| DEFAULT_REQUEST_TIMEOUT.to_string());
+        builder.with_named_option(snowflake::REQUEST_TIMEOUT, request_timeout_duration)?;
+
         builder.with_named_option(snowflake::APPLICATION_NAME, "dbt")?;
         Ok(builder)
     }
@@ -622,6 +636,7 @@ mod tests {
             (snowflake::APPLICATION_NAME, APP_NAME),
             (snowflake::LOG_TRACING, "fatal"),
             (snowflake::LOGIN_TIMEOUT, DEFAULT_CONNECT_TIMEOUT),
+            (snowflake::REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT),
         ];
         run_config_test(config, &expected);
     }
@@ -639,6 +654,7 @@ mod tests {
             (snowflake::APPLICATION_NAME, APP_NAME),
             (snowflake::LOG_TRACING, "fatal"),
             (snowflake::LOGIN_TIMEOUT, "100s"),
+            (snowflake::REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT),
         ];
         run_config_test(config, &expected);
     }
@@ -656,6 +672,43 @@ mod tests {
             (snowflake::APPLICATION_NAME, APP_NAME),
             (snowflake::LOG_TRACING, "fatal"),
             (snowflake::LOGIN_TIMEOUT, "0s"),
+            (snowflake::REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT),
+        ];
+        run_config_test(config, &expected);
+    }
+
+    #[test]
+    fn test_simple_pass_with_custom_request_timeout_a() {
+        let mut config = base_config();
+        config.insert("request_timeout".into(), "100".into());
+        let expected = [
+            ("user", "U"),
+            ("password", "P"),
+            (snowflake::ACCOUNT, "A"),
+            (snowflake::ROLE, "role"),
+            (snowflake::WAREHOUSE, "warehouse"),
+            (snowflake::APPLICATION_NAME, APP_NAME),
+            (snowflake::LOG_TRACING, "fatal"),
+            (snowflake::LOGIN_TIMEOUT, DEFAULT_CONNECT_TIMEOUT),
+            (snowflake::REQUEST_TIMEOUT, "100s"),
+        ];
+        run_config_test(config, &expected);
+    }
+
+    #[test]
+    fn test_simple_pass_with_custom_request_timeout_b() {
+        let mut config = base_config();
+        config.insert("request_timeout".into(), "0".into());
+        let expected = [
+            ("user", "U"),
+            ("password", "P"),
+            (snowflake::ACCOUNT, "A"),
+            (snowflake::ROLE, "role"),
+            (snowflake::WAREHOUSE, "warehouse"),
+            (snowflake::APPLICATION_NAME, APP_NAME),
+            (snowflake::LOG_TRACING, "fatal"),
+            (snowflake::LOGIN_TIMEOUT, DEFAULT_CONNECT_TIMEOUT),
+            (snowflake::REQUEST_TIMEOUT, "0s"),
         ];
         run_config_test(config, &expected);
     }
@@ -673,6 +726,7 @@ mod tests {
             (snowflake::APPLICATION_NAME, APP_NAME),
             (snowflake::LOG_TRACING, "fatal"),
             (snowflake::LOGIN_TIMEOUT, DEFAULT_CONNECT_TIMEOUT),
+            (snowflake::REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT),
         ];
         run_config_test(config, &expected);
     }
@@ -703,6 +757,7 @@ mod tests {
             (snowflake::APPLICATION_NAME, APP_NAME),
             (snowflake::LOG_TRACING, "fatal"),
             (snowflake::LOGIN_TIMEOUT, DEFAULT_CONNECT_TIMEOUT),
+            (snowflake::REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT),
         ];
         run_config_test(config, &expected);
     }
@@ -723,6 +778,7 @@ mod tests {
             (snowflake::APPLICATION_NAME, APP_NAME),
             (snowflake::LOG_TRACING, "fatal"),
             (snowflake::LOGIN_TIMEOUT, DEFAULT_CONNECT_TIMEOUT),
+            (snowflake::REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT),
         ];
         run_config_test(config, &expected);
     }
@@ -759,6 +815,7 @@ mod tests {
             (snowflake::APPLICATION_NAME, APP_NAME),
             (snowflake::LOG_TRACING, "fatal"),
             (snowflake::LOGIN_TIMEOUT, DEFAULT_CONNECT_TIMEOUT),
+            (snowflake::REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT),
         ];
         run_config_test(config, &expected);
     }
@@ -792,6 +849,7 @@ mod tests {
             (snowflake::AUTH_TYPE, "auth_jwt"),
             (snowflake::LOG_TRACING, "fatal"),
             (snowflake::LOGIN_TIMEOUT, DEFAULT_CONNECT_TIMEOUT),
+            (snowflake::REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT),
         ];
         run_config_test(config, &expected);
     }
@@ -810,6 +868,7 @@ mod tests {
             (snowflake::AUTH_TYPE, snowflake::auth_type::EXTERNAL_BROWSER),
             (snowflake::LOG_TRACING, "fatal"),
             (snowflake::LOGIN_TIMEOUT, DEFAULT_CONNECT_TIMEOUT),
+            (snowflake::REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT),
             (snowflake::CLIENT_STORE_TEMP_CREDS, "true"),
         ];
         run_config_test(config, &expected);
@@ -829,6 +888,7 @@ mod tests {
             (snowflake::AUTH_TYPE, snowflake::auth_type::EXTERNAL_BROWSER),
             (snowflake::LOG_TRACING, "fatal"),
             (snowflake::LOGIN_TIMEOUT, DEFAULT_CONNECT_TIMEOUT),
+            (snowflake::REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT),
             (snowflake::CLIENT_STORE_TEMP_CREDS, "true"),
         ];
         run_config_test(config, &expected);
@@ -855,6 +915,7 @@ mod tests {
             (snowflake::CLIENT_STORE_TEMP_CREDS, "true"),
             (snowflake::LOG_TRACING, "fatal"),
             (snowflake::LOGIN_TIMEOUT, DEFAULT_CONNECT_TIMEOUT),
+            (snowflake::REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT),
         ];
         run_config_test(config, &expected);
     }
@@ -880,6 +941,7 @@ mod tests {
             (snowflake::CLIENT_STORE_TEMP_CREDS, "true"),
             (snowflake::LOG_TRACING, "fatal"),
             (snowflake::LOGIN_TIMEOUT, DEFAULT_CONNECT_TIMEOUT),
+            (snowflake::REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT),
         ];
         run_config_test(config, &expected);
     }
@@ -976,6 +1038,7 @@ mod tests {
             (snowflake::CLIENT_CACHE_MFA_TOKEN, "true"),
             (snowflake::LOG_TRACING, "fatal"),
             (snowflake::LOGIN_TIMEOUT, DEFAULT_CONNECT_TIMEOUT),
+            (snowflake::REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT),
         ];
         run_config_test(config, &expected);
     }
@@ -998,6 +1061,7 @@ mod tests {
             (snowflake::CLIENT_CACHE_MFA_TOKEN, "true"),
             (snowflake::LOG_TRACING, "fatal"),
             (snowflake::LOGIN_TIMEOUT, DEFAULT_CONNECT_TIMEOUT),
+            (snowflake::REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT),
         ];
         run_config_test(config, &expected);
     }
@@ -1048,6 +1112,7 @@ mod tests {
             (snowflake::CLIENT_STORE_TEMP_CREDS, "true"),
             (snowflake::LOG_TRACING, "fatal"),
             (snowflake::LOGIN_TIMEOUT, DEFAULT_CONNECT_TIMEOUT),
+            (snowflake::REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT),
         ];
 
         run_config_test(config, &expected);
@@ -1119,6 +1184,7 @@ mod tests {
             ),
             (snowflake::LOG_TRACING, "fatal"),
             (snowflake::LOGIN_TIMEOUT, DEFAULT_CONNECT_TIMEOUT),
+            (snowflake::REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT),
         ];
         run_config_test(config, &expected);
     }
@@ -1144,6 +1210,7 @@ mod tests {
             ),
             (snowflake::LOG_TRACING, "fatal"),
             (snowflake::LOGIN_TIMEOUT, DEFAULT_CONNECT_TIMEOUT),
+            (snowflake::REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT),
         ];
         run_config_test(config, &expected);
     }
@@ -1165,6 +1232,7 @@ mod tests {
             (snowflake::QUERY_TAG_PARAM_KEY, "custom-query-tag"),
             (snowflake::LOG_TRACING, "fatal"),
             (snowflake::LOGIN_TIMEOUT, DEFAULT_CONNECT_TIMEOUT),
+            (snowflake::REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT),
         ];
         run_config_test(config, &expected);
     }
@@ -1188,6 +1256,7 @@ mod tests {
             (snowflake::QUERY_TAG_PARAM_KEY, "custom-query-tag"),
             (snowflake::LOG_TRACING, "fatal"),
             (snowflake::LOGIN_TIMEOUT, DEFAULT_CONNECT_TIMEOUT),
+            (snowflake::REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT),
         ];
         run_config_test(config, &expected);
     }

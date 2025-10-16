@@ -487,6 +487,8 @@ pub struct SnowflakeDbConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub connect_timeout: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub request_timeout: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub reuse_connections: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub authenticator: Option<String>,
@@ -805,6 +807,7 @@ pub struct SnowflakeTargetEnv {
     pub insecure_mode: bool,  // Default: false
     pub connect_retries: i64, // Default: 1
     pub connect_timeout: Option<i64>,
+    pub request_timeout: Option<i64>,
     pub retry_on_database_errors: bool, // Default: false
     pub retry_all: bool,                // Default: false
     pub reuse_connections: Option<bool>,
@@ -917,6 +920,7 @@ impl TryFrom<DbConfig> for TargetContext {
                     protocol: config.protocol,
                     connect_retries: config.connect_retries.unwrap_or(1),
                     connect_timeout: config.connect_timeout,
+                    request_timeout: config.request_timeout,
                     retry_on_database_errors: config.retry_on_database_errors.unwrap_or(false),
                     retry_all: config.retry_all.unwrap_or(false),
                     reuse_connections: config.reuse_connections,
