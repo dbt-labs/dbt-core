@@ -806,7 +806,9 @@ impl BaseAdapter for BridgeAdapter {
             if !is_current_relation {
                 let schema = db.get_schema(&relation.get_fqn().unwrap_or_default());
                 if let Some(schema) = &schema {
-                    let from_local = self.typed_adapter.schema_to_columns(schema)?;
+                    let from_local = self
+                        .typed_adapter
+                        .schema_to_columns(schema.original.as_ref(), &schema.schema)?;
 
                     #[cfg(debug_assertions)]
                     {

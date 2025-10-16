@@ -19,7 +19,10 @@ pub const SNOWFLAKE_METADATA_SQL_TYPE_KEY: &str = "DATA_TYPE";
 
 /// An Arrow schema containing SDF types
 #[derive(Clone)]
-pub struct SdfSchema(Arc<Schema>);
+pub struct SdfSchema {
+    original: Option<Arc<Schema>>,
+    schema: Arc<Schema>,
+}
 
 impl SdfSchema {
     /// Creates a new SdfSchema from a transformed Arrow schema.
@@ -28,16 +31,20 @@ impl SdfSchema {
     /// All types have been converted to types that static analysis expects
     /// and all the canonicalization steps have been applied (e.g. the
     /// `FixedSizeList` hack for Snowflake timestamps)
-    pub fn from_sdf_arrow_schema(schema: Arc<Schema>) -> Self {
-        SdfSchema(schema)
+    pub fn from_sdf_arrow_schema(original: Option<Arc<Schema>>, schema: Arc<Schema>) -> Self {
+        SdfSchema { original, schema }
     }
 
     pub fn inner(&self) -> &Arc<Schema> {
-        &self.0
+        &self.schema
     }
 
     pub fn into_inner(self) -> Arc<Schema> {
-        self.0
+        self.schema
+    }
+
+    pub fn original(&self) -> Option<&Arc<Schema>> {
+        self.original.as_ref()
     }
 }
 
@@ -230,22 +237,23 @@ pub const fn get_field_sql_type_metadata_key(adapter_type: AdapterType) -> &'sta
     }
 }
 
-/// Converts a regular Arrow Schema into an SDF Arrow Schema.
-///
-/// A regular Arrow Schema is one that may come from drivers or internal adapter
-/// logic. It's free of any SDF-specific type encoding rules (e.g. `FixedSizeList`
-/// hack for timestamps) which we can't expect to be present in these contexts.
-///
-/// Applies SDF-specific type encoding rules (e.g. `FixedSizeList` hack for timestamps).
-pub fn arrow_schema_to_sdf_schema(
-    src_schema: Arc<Schema>,
-    type_ops: &dyn TypeOps,
-) -> AdapterResult<SdfSchema> {
-    use AdapterType::*;
-    match type_ops.adapter_type() {
-        Bigquery => {
-            let mut fields = Vec::with_capacity(src_schema.fields().len());
-            for field in src_schema.fields() {
+struct SdfSchemaBuilder {
+    adapter_type: AdapterType,
+    original: Arc<Schema>,
+}
+
+impl SdfSchemaBuilder {
+    pub fn new(adapter_type: AdapterType, original: Arc<Schema>) -> Self {
+        Self {
+            adapter_type,
+            original,
+        }
+    }
+
+    fn convert_field(&self, type_ops: &dyn TypeOps, field: &Field) -> AdapterResult<Arc<Field>> {
+        use AdapterType::*;
+        match self.adapter_type {
+            Bigquery => {
                 let metadata = field.metadata();
                 let current_type = field.data_type();
                 let nullable = field.is_nullable();
@@ -271,21 +279,61 @@ pub fn arrow_schema_to_sdf_schema(
                     maybe_original_type_text,
                     comment,
                 );
-                fields.push(field);
+                Ok(Arc::new(field))
             }
-            let new_schema = Schema::new(fields);
-            let sdf_schema = SdfSchema::from_sdf_arrow_schema(Arc::new(new_schema));
-            Ok(sdf_schema)
-        }
-        Postgres | Snowflake | Databricks | Redshift | Salesforce => {
-            // NOTE(felipecrv): this is not correct, but it's a temporary fallback
-            // that allows us to call [to_sdf_arrow_schema] from anywhere.
-            //
-            // TODO: move conversion logic for other adapters here
-            let sdf_schema = SdfSchema::from_sdf_arrow_schema(src_schema);
-            Ok(sdf_schema)
+            // More adapters will be handled here when build_sdf_schema()
+            // delegates to this function for more adapters.
+            _ => unreachable!(),
         }
     }
+
+    pub fn build_sdf_schema(self, type_ops: &dyn TypeOps) -> AdapterResult<SdfSchema> {
+        use AdapterType::*;
+        match self.adapter_type {
+            Bigquery => {
+                let original_fields = self.original.fields();
+                let mut sdf_fields = Vec::with_capacity(original_fields.len());
+                for field in original_fields {
+                    let sdf_field = self.convert_field(type_ops, field)?;
+                    sdf_fields.push(sdf_field);
+                }
+                // preserve original metadata
+                let schema_metadata = self.original.metadata().clone();
+                let sdf_arrow_schema =
+                    Arc::new(Schema::new_with_metadata(sdf_fields, schema_metadata));
+                // build the SdfSchema
+                let sdf_schema =
+                    SdfSchema::from_sdf_arrow_schema(Some(self.original), sdf_arrow_schema);
+                Ok(sdf_schema)
+            }
+            Postgres | Snowflake | Databricks | Redshift | Salesforce => {
+                // NOTE(felipecrv): this is not correct, but it's a temporary fallback
+                // that allows us to call [to_sdf_arrow_schema] from anywhere.
+                //
+                // TODO: move conversion logic for other adapters here
+                let sdf_arrow_schema = Arc::clone(&self.original);
+                // build the SdfSchema
+                let sdf_schema =
+                    SdfSchema::from_sdf_arrow_schema(Some(self.original), sdf_arrow_schema);
+                Ok(sdf_schema)
+            }
+        }
+    }
+}
+
+/// Converts a regular Arrow Schema into an SDF Arrow Schema.
+///
+/// A regular Arrow Schema is one that may come from drivers or internal adapter
+/// logic. It's free of any SDF-specific type encoding rules (e.g. `FixedSizeList`
+/// hack for timestamps) which we can't expect to be present in these contexts.
+///
+/// Applies SDF-specific type encoding rules (e.g. `FixedSizeList` hack for timestamps).
+pub fn arrow_schema_to_sdf_schema(
+    src_schema: Arc<Schema>,
+    type_ops: &dyn TypeOps,
+) -> AdapterResult<SdfSchema> {
+    let builder = SdfSchemaBuilder::new(type_ops.adapter_type(), src_schema);
+    builder.build_sdf_schema(type_ops)
 }
 
 pub enum SqlTypeHint {

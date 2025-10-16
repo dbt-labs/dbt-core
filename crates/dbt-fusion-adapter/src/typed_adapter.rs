@@ -767,7 +767,11 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     ///
     /// NOTE(felipecrv): we are working on making it easy to not confuse
     /// driver-generated schemas versus canonicalized sdf frontend schemas
-    fn schema_to_columns(&self, schema: &Arc<Schema>) -> AdapterResult<Vec<StdColumn>> {
+    fn schema_to_columns(
+        &self,
+        _original: Option<&Arc<Schema>>,
+        schema: &Arc<Schema>,
+    ) -> AdapterResult<Vec<StdColumn>> {
         let engine = self.engine();
         let type_formatter = engine.type_ops();
         let builder = ColumnBuilder::new(self.adapter_type());
@@ -792,7 +796,9 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             return replay_adapter.replay_get_column_schema_from_query(state, conn, query_ctx);
         }
         let batch = self.engine().execute(Some(state), conn, query_ctx)?;
-        self.schema_to_columns(&batch.schema())
+        let original_schema = Some(batch.schema());
+        let sdf_arrow_schema = batch.schema(); // XXX: this is not a SDF schema
+        self.schema_to_columns(original_schema.as_ref(), &sdf_arrow_schema)
     }
 
     /// Get columns in select sql

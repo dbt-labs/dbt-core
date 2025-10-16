@@ -353,15 +353,17 @@ impl TypedBaseAdapter for BigqueryAdapter {
         file_path: &str,
         field_delimiter: &str,
     ) -> AdapterResult<Value> {
-        let mut buf = Vec::<u8>::new();
-        {
-            let mut w = StreamWriter::try_new(
+        let serialized_ingest_schema: Vec<u8> = {
+            // serialize the Arrow schema as an Arrow IPC byte blob
+            let mut buf = Vec::<u8>::new();
+            let () = StreamWriter::try_new(
                 &mut buf,
                 agate_table.original_record_batch().schema().as_ref(),
             )
+            .and_then(|mut w| w.finish())
             .map_err(arrow_error_to_adapter_error)?;
-            w.finish().map_err(arrow_error_to_adapter_error)?;
-        }
+            Ok(buf) as AdapterResult<Vec<u8>>
+        }?;
 
         self.engine.execute_with_options(
             None,
@@ -380,7 +382,10 @@ impl TypedBaseAdapter for BigqueryAdapter {
                     INGEST_PATH.to_string(),
                     OptionValue::String(file_path.to_string()),
                 ),
-                (INGEST_SCHEMA.to_string(), OptionValue::Bytes(buf)),
+                (
+                    INGEST_SCHEMA.to_string(),
+                    OptionValue::Bytes(serialized_ingest_schema),
+                ),
             ],
             false,
         )?;
