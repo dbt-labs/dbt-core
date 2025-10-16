@@ -242,7 +242,7 @@ mod tests {
                 enabled: true,
                 extended_model: false,
                 persist_docs: None,
-                columns: BTreeMap::new(),
+                columns: vec![],
                 refs: vec![],
                 sources: vec![],
                 functions: vec![],

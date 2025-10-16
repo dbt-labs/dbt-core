@@ -13,7 +13,7 @@ use crate::schemas::{
         Access, DbtChecksum, DbtContract, DbtMaterialization, DbtQuoting, Expect,
         FreshnessDefinition, Given, IncludeExclude, NodeDependsOn, PersistDocsConfig,
     },
-    dbt_column::DbtColumnRef,
+    dbt_column::{DbtColumnRef, deserialize_dbt_columns, serialize_dbt_columns},
     manifest::{
         DbtMetric, DbtOperation, DbtSavedQuery, DbtSemanticModel,
         common::{DbtOwner, SourceFileMetadata, WhereFilterIntersection},
@@ -116,8 +116,12 @@ pub struct ManifestNodeBaseAttributes {
     pub build_path: Option<String>,
 
     // Derived
-    #[serde(default)]
-    pub columns: BTreeMap<String, DbtColumnRef>,
+    #[serde(
+        default,
+        serialize_with = "serialize_dbt_columns",
+        deserialize_with = "deserialize_dbt_columns"
+    )]
+    pub columns: Vec<DbtColumnRef>,
     pub depends_on: NodeDependsOn,
     #[serde(default)]
     pub refs: Vec<DbtRef>,
@@ -436,7 +440,11 @@ pub struct ManifestSource {
     pub relation_name: Option<String>,
     pub identifier: String,
     pub source_name: String,
-    pub columns: BTreeMap<String, DbtColumnRef>,
+    #[serde(
+        serialize_with = "serialize_dbt_columns",
+        deserialize_with = "deserialize_dbt_columns"
+    )]
+    pub columns: Vec<DbtColumnRef>,
     pub config: SourceConfig,
     pub quoting: Option<DbtQuoting>,
     pub source_description: String,
@@ -746,7 +754,7 @@ impl From<DbtFunction> for ManifestFunction {
                 relation_name: function.__base_attr__.relation_name,
                 compiled_path: None,
                 build_path: None,
-                columns: BTreeMap::new(),
+                columns: Vec::new(),
                 depends_on: function.__base_attr__.depends_on,
                 refs: function.__base_attr__.refs,
                 sources: function.__base_attr__.sources,

@@ -930,6 +930,7 @@ mod preserve_order_impls {
     use indexmap::IndexMap;
 
     impl_value_map!(IndexMap, mapped_rev_enumerator);
+    impl_str_map!(IndexMap, mapped_rev_enumerator);
 }
 
 /// This module contains a mutable vector implementation that can be used as a

@@ -214,7 +214,7 @@ pub fn resolve_sources(
                     .map(|tags| tags.into()),
             )?
         } else {
-            BTreeMap::new()
+            vec![]
         };
 
         if let Some(freshness) = merged_freshness.as_ref() {

@@ -175,7 +175,7 @@ pub async fn resolve_exposures(
                     enabled: true,
                     extended_model: false,
                     persist_docs: None,
-                    columns: BTreeMap::new(),
+                    columns: vec![],
                     refs,
                     sources,
                     functions: vec![],

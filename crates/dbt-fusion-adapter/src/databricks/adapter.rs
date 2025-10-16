@@ -35,6 +35,7 @@ use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::relations::base::BaseRelation;
 use dbt_schemas::schemas::{BaseRelationConfig, InternalDbtNodeAttributes};
 use dbt_xdbc::{Connection, QueryCtx};
+use indexmap::IndexMap;
 use minijinja::{State, Value};
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -591,10 +592,10 @@ impl TypedBaseAdapter for DatabricksAdapter {
     fn get_persist_doc_columns(
         &self,
         existing_columns: Vec<StdColumn>,
-        model_columns: BTreeMap<String, dbt_schemas::schemas::dbt_column::DbtColumnRef>,
-    ) -> AdapterResult<BTreeMap<String, dbt_schemas::schemas::dbt_column::DbtColumnRef>> {
+        model_columns: IndexMap<String, dbt_schemas::schemas::dbt_column::DbtColumnRef>,
+    ) -> AdapterResult<IndexMap<String, dbt_schemas::schemas::dbt_column::DbtColumnRef>> {
         // TODO(jasonlin45): grab comment info as well - we should avoid persisting for comments that are the same for performance reasons
-        let mut result = BTreeMap::new();
+        let mut result = IndexMap::new();
         // Intersection of existing columns and model columns that have descriptions
         for existing_col in existing_columns {
             if let Some(model_col) = model_columns.get(existing_col.name())

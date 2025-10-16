@@ -94,7 +94,6 @@ mod tests {
     use crate::databricks::relation_configs::base::DatabricksRelationResultsBuilder;
     use dbt_agate::AgateTable;
     use dbt_schemas::schemas::{common::*, nodes::*, project::*};
-    use std::collections::BTreeMap;
 
     fn create_mock_describe_extended_table(comment: Option<&str>) -> AgateTable {
         use arrow::csv::ReaderBuilder;
@@ -157,7 +156,7 @@ mod tests {
                 enabled: true,
                 extended_model: false,
                 persist_docs: None,
-                columns: BTreeMap::new(),
+                columns: vec![],
                 refs: vec![],
                 sources: vec![],
                 functions: vec![],

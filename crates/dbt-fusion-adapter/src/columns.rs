@@ -718,7 +718,7 @@ impl StdColumn {
                     //  Note that this would not be dbt core compatible behavior, but a more correct one.
                     //  Otherwise we may create/alter a table to a wrong type.
                     //  See also https://github.com/dbt-labs/fs/pull/3585#discussion_r2112390711
-                    self.dtype.to_string()
+                    self.dtype().to_string()
                 }
             }
         }

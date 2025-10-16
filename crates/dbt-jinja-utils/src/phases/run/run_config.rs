@@ -1,5 +1,6 @@
 //! Module for the parse config object to be used during parsing
 
+use indexmap::IndexMap;
 use std::{collections::BTreeMap, rc::Rc, sync::Arc};
 
 use minijinja::{
@@ -10,12 +11,13 @@ use minijinja::{
 };
 
 /// A struct that represents a runtime config object to be used during runtime
+// TODO(anna): I would like this to be an IndexMap<String, Value>, which requires a change to dbt-jinja
 #[derive(Debug, Clone)]
 pub struct RunConfig {
     /// The `config` entry from `model` (converted from a ManifestModelConfig value)
-    pub model_config: BTreeMap<String, Value>,
+    pub model_config: IndexMap<String, Value>,
     /// A model's attributes/config values (converted from a DbtModel value)
-    pub model: BTreeMap<String, Value>,
+    pub model: IndexMap<String, Value>,
 }
 
 impl Object for RunConfig {

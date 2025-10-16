@@ -492,7 +492,7 @@ fk_composite,parent_type,main,default,parents,type
         AgateTable::from_record_batch(Arc::new(batch))
     }
 
-    fn create_mock_dbt_model_with_constraints(columns: BTreeMap<String, DbtColumnRef>) -> DbtModel {
+    fn create_mock_dbt_model_with_constraints(columns: Vec<DbtColumnRef>) -> DbtModel {
         let base_attrs = NodeBaseAttributes {
             database: "test_db".to_string(),
             schema: "test_schema".to_string(),
@@ -770,9 +770,7 @@ fk_composite,parent_type,main,default,parents,type
     fn test_from_relation_config_with_column_constraints() {
         let processor = ConstraintsProcessor;
 
-        let mut columns = BTreeMap::new();
-        columns.insert(
-            "id".to_string(),
+        let columns = vec![
             Arc::new(DbtColumn {
                 name: "id".to_string(),
                 constraints: vec![Constraint {
@@ -786,9 +784,6 @@ fk_composite,parent_type,main,default,parents,type
                 }],
                 ..Default::default()
             }),
-        );
-        columns.insert(
-            "name".to_string(),
             Arc::new(DbtColumn {
                 name: "name".to_string(),
                 constraints: vec![Constraint {
@@ -802,7 +797,7 @@ fk_composite,parent_type,main,default,parents,type
                 }],
                 ..Default::default()
             }),
-        );
+        ];
 
         let mock_node = create_mock_dbt_model_with_constraints(columns);
         let result = processor.from_relation_config(&mock_node);
@@ -826,7 +821,7 @@ fk_composite,parent_type,main,default,parents,type
     fn test_from_relation_config_no_constraints() {
         let processor = ConstraintsProcessor;
 
-        let columns = BTreeMap::new();
+        let columns = vec![];
         let mock_node = create_mock_dbt_model_with_constraints(columns);
         let result = processor.from_relation_config(&mock_node);
 
@@ -845,25 +840,20 @@ fk_composite,parent_type,main,default,parents,type
     #[test]
     fn test_parse_constraints_function() {
         use crate::databricks::constraints::parse_constraints;
-        use std::collections::BTreeMap;
 
-        let mut columns = BTreeMap::new();
-        columns.insert(
-            "id".to_string(),
-            Arc::new(DbtColumn {
-                name: "id".to_string(),
-                constraints: vec![Constraint {
-                    type_: ConstraintType::NotNull,
-                    name: None,
-                    expression: None,
-                    to: None,
-                    to_columns: None,
-                    warn_unsupported: None,
-                    warn_unenforced: None,
-                }],
-                ..Default::default()
-            }),
-        );
+        let columns = vec![Arc::new(DbtColumn {
+            name: "id".to_string(),
+            constraints: vec![Constraint {
+                type_: ConstraintType::NotNull,
+                name: None,
+                expression: None,
+                to: None,
+                to_columns: None,
+                warn_unsupported: None,
+                warn_unenforced: None,
+            }],
+            ..Default::default()
+        })];
 
         let model_constraints = vec![
             ModelConstraint {

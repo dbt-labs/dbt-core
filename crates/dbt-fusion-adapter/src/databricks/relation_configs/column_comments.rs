@@ -122,16 +122,16 @@ impl DatabricksComponentProcessor for ColumnCommentsProcessor {
         let mut comments = BTreeMap::new();
         let mut quoted = BTreeMap::new();
 
-        for (column_name, column) in columns {
+        for column in columns {
             comments.insert(
-                column_name.clone(),
+                column.name.clone(),
                 column
                     .description
                     .as_ref()
                     .unwrap_or(&String::new())
                     .clone(),
             );
-            quoted.insert(column_name.clone(), column.quote.unwrap_or(false));
+            quoted.insert(column.name.clone(), column.quote.unwrap_or(false));
         }
 
         Ok(Some(DatabricksComponentConfig::ColumnComments(
@@ -186,7 +186,7 @@ email,string,\n\
     }
 
     fn create_mock_dbt_model(
-        columns: BTreeMap<String, dbt_schemas::schemas::dbt_column::DbtColumnRef>,
+        columns: Vec<dbt_schemas::schemas::dbt_column::DbtColumnRef>,
         meta: BTreeMap<String, serde_json::Value>,
     ) -> DbtModel {
         use dbt_schemas::schemas::project::*;
@@ -464,25 +464,20 @@ name,string,User name\n\
 
         let processor = ColumnCommentsProcessor;
 
-        let mut columns = BTreeMap::new();
-        columns.insert(
-            "id".to_string(),
-            Arc::new(DbtColumn {
+        let columns = vec![
+            (Arc::new(DbtColumn {
                 name: "id".to_string(),
                 description: Some("Primary key".to_string()),
                 quote: Some(false),
                 ..Default::default()
-            }),
-        );
-        columns.insert(
-            "name".to_string(),
-            Arc::new(DbtColumn {
+            })),
+            (Arc::new(DbtColumn {
                 name: "name".to_string(),
                 description: Some("User name".to_string()),
                 quote: Some(true),
                 ..Default::default()
-            }),
-        );
+            })),
+        ];
 
         let mut meta = BTreeMap::new();
         meta.insert(
@@ -517,16 +512,12 @@ name,string,User name\n\
 
         let processor = ColumnCommentsProcessor;
 
-        let mut columns = BTreeMap::new();
-        columns.insert(
-            "id".to_string(),
-            Arc::new(DbtColumn {
-                name: "id".to_string(),
-                description: Some("Primary key".to_string()),
-                quote: Some(false),
-                ..Default::default()
-            }),
-        );
+        let columns = vec![Arc::new(DbtColumn {
+            name: "id".to_string(),
+            description: Some("Primary key".to_string()),
+            quote: Some(false),
+            ..Default::default()
+        })];
 
         let meta = BTreeMap::new(); // No persist_docs
 
@@ -553,16 +544,12 @@ name,string,User name\n\
 
         let processor = ColumnCommentsProcessor;
 
-        let mut columns = BTreeMap::new();
-        columns.insert(
-            "id".to_string(),
-            Arc::new(DbtColumn {
-                name: "id".to_string(),
-                description: Some("Primary key".to_string()),
-                quote: Some(false),
-                ..Default::default()
-            }),
-        );
+        let columns = vec![Arc::new(DbtColumn {
+            name: "id".to_string(),
+            description: Some("Primary key".to_string()),
+            quote: Some(false),
+            ..Default::default()
+        })];
 
         let mut meta = BTreeMap::new();
         meta.insert(

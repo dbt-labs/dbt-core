@@ -16,7 +16,7 @@ use chrono_tz::{Europe::London, Tz};
 use dbt_common::{
     adapter::AdapterType,
     io_args::{IoArgs, StaticAnalysisKind},
-    serde_utils::convert_yml_to_map,
+    serde_utils::convert_yml_to_value_map,
 };
 use dbt_frontend_common::error::CodeLocation;
 use dbt_fusion_adapter::{
@@ -245,7 +245,7 @@ pub fn build_resolve_model_context<T: DefaultTo<T> + 'static>(
             persist_docs: None,
             quoting: ResolvedQuoting::trues(),
             quoting_ignore_case: false,
-            columns: BTreeMap::new(),
+            columns: vec![],
             depends_on: NodeDependsOn {
                 macros: vec![],
                 nodes: vec![],
@@ -276,9 +276,9 @@ pub fn build_resolve_model_context<T: DefaultTo<T> + 'static>(
         deprecated_config: ModelConfig::default(),
     };
 
-    let mut model_map = convert_yml_to_map(model.serialize());
+    let mut model_map = convert_yml_to_value_map(model.serialize());
     model_map.insert(
-        "batch".to_string(),
+        "batch".to_owned(),
         MinijinjaValue::from_object(init_batch_context()),
     );
 

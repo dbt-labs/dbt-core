@@ -29,6 +29,7 @@ use dbt_schemas::schemas::relations::relation_configs::BaseRelationConfig;
 use dbt_schemas::schemas::{CommonAttributes, InternalDbtNodeAttributes};
 use dbt_xdbc::salesforce::DATA_TRANSFORM_RUN_TIMEOUT;
 use dbt_xdbc::{Connection, QueryCtx};
+use indexmap::IndexMap;
 use minijinja::{State, Value, args};
 
 use std::borrow::Cow;
@@ -523,7 +524,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         _state: &State,
         _conn: &'_ mut dyn Connection,
         _relation: Value,
-        _columns: BTreeMap<String, DbtColumn>,
+        _columns: IndexMap<String, DbtColumn>,
     ) -> AdapterResult<Value> {
         unimplemented!("only available with BigQuery adapter")
     }
@@ -532,7 +533,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1783
     fn render_raw_columns_constraints(
         &self,
-        columns_map: BTreeMap<String, DbtColumn>,
+        columns_map: IndexMap<String, DbtColumn>,
     ) -> AdapterResult<Vec<String>> {
         let mut result = vec![];
         for (_, column) in columns_map {
@@ -616,8 +617,8 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     fn get_persist_doc_columns(
         &self,
         _existing_columns: Vec<StdColumn>,
-        _model_columns: BTreeMap<String, DbtColumnRef>,
-    ) -> AdapterResult<BTreeMap<String, DbtColumnRef>> {
+        _model_columns: IndexMap<String, DbtColumnRef>,
+    ) -> AdapterResult<IndexMap<String, DbtColumnRef>> {
         unimplemented!("Only available for Databricks Adapter")
     }
 
@@ -651,9 +652,9 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     /// Docs see the impl of this method from bigquery/adapter.rs
     fn nest_column_data_types(
         &self,
-        _columns: BTreeMap<String, DbtColumn>,
+        _columns: IndexMap<String, DbtColumn>,
         _constraints: Option<BTreeMap<String, String>>,
-    ) -> AdapterResult<BTreeMap<String, DbtColumn>> {
+    ) -> AdapterResult<IndexMap<String, DbtColumn>> {
         unimplemented!("only available with BigQuery adapter")
     }
 

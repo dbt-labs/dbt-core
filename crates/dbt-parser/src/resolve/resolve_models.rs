@@ -622,8 +622,8 @@ fn process_versioned_columns(
     model_config: &ModelConfig,
     maybe_version: Option<&String>,
     versions: &[Versions],
-    columns: BTreeMap<String, DbtColumnRef>,
-) -> Result<BTreeMap<String, DbtColumnRef>, Box<dbt_common::FsError>> {
+    columns: Vec<DbtColumnRef>,
+) -> Result<Vec<DbtColumnRef>, Box<dbt_common::FsError>> {
     for version in versions.iter() {
         if maybe_version.is_some_and(|v| Some(v) == version.get_version().as_ref())
             && let Some(column_props) = version.__additional_properties__.get("columns")
@@ -650,9 +650,9 @@ fn process_versioned_columns(
             if let Some(rules) = ColumnInheritanceRules::from_version_columns(column_props) {
                 columns
                     .iter()
-                    .filter(|(name, _)| rules.should_include_column(name))
-                    .for_each(|(name, col)| {
-                        versioned_columns.insert(name.clone(), col.clone());
+                    .filter(|col| rules.should_include_column(&col.name))
+                    .for_each(|col| {
+                        versioned_columns.push(col.clone());
                     });
             }
             return Ok(versioned_columns);

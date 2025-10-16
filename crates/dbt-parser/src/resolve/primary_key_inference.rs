@@ -41,12 +41,12 @@ fn infer_from_constraints(model: &DbtModel) -> Option<Vec<String>> {
         }
     }
 
-    if let Some((col_name, _)) = model.__base_attr__.columns.iter().find(|(_, col)| {
+    if let Some(col) = model.__base_attr__.columns.iter().find(|col| {
         col.constraints
             .iter()
             .any(|cc| cc.type_ == ConstraintType::PrimaryKey)
     }) {
-        return Some(vec![col_name.clone()]);
+        return Some(vec![col.name.clone()]);
     }
 
     None

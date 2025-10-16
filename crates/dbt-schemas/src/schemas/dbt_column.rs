@@ -2,7 +2,9 @@ use std::{collections::BTreeMap, sync::Arc};
 
 use dbt_common::FsResult;
 use dbt_serde_yaml::{JsonSchema, UntaggedEnumDeserialize};
-use serde::{Deserialize, Serialize, Serializer};
+use serde::de::{MapAccess, Visitor};
+use serde::ser::SerializeMap;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_with::skip_serializing_none;
 use strum::Display;
 
@@ -55,6 +57,48 @@ where
 }
 
 pub type DbtColumnRef = Arc<DbtColumn>;
+
+/// Serialize and deserialize as a map to maintain Jinja behavior
+pub fn serialize_dbt_columns<S>(columns: &Vec<DbtColumnRef>, s: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let mut map = s.serialize_map(Some(columns.len()))?;
+    for col in columns {
+        map.serialize_entry(&col.name.clone(), col)?;
+    }
+    map.end()
+}
+
+pub fn deserialize_dbt_columns<'de, D>(deserializer: D) -> Result<Vec<DbtColumnRef>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    struct DbtColumnVisitor;
+
+    impl<'de> Visitor<'de> for DbtColumnVisitor {
+        type Value = Vec<DbtColumnRef>;
+
+        fn visit_map<M>(self, mut map: M) -> Result<Self::Value, M::Error>
+        where
+            M: MapAccess<'de>,
+        {
+            let mut columns = Vec::new();
+            while let Some((_key, value)) =
+                map.next_entry::<serde::de::IgnoredAny, DbtColumnRef>()?
+            {
+                columns.push(value)
+            }
+            Ok(columns)
+        }
+
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(f, "a map of column names to columns")
+        }
+    }
+
+    deserializer.deserialize_map(DbtColumnVisitor)
+}
 
 #[skip_serializing_none]
 #[derive(Default, Deserialize, Serialize, Debug, Clone, JsonSchema)]
@@ -177,7 +221,7 @@ pub fn process_columns(
     columns: Option<&Vec<ColumnProperties>>,
     meta: Option<BTreeMap<String, YmlValue>>,
     tags: Option<Vec<String>>,
-) -> FsResult<BTreeMap<String, DbtColumnRef>> {
+) -> FsResult<Vec<DbtColumnRef>> {
     Ok(columns
         .map(|cols| {
             cols.iter()
@@ -206,11 +250,6 @@ pub fn process_columns(
                 .collect::<Result<Vec<DbtColumnRef>, Box<dyn std::error::Error>>>()
         })
         .transpose()?
-        .map(|cols| {
-            cols.into_iter()
-                .map(|c| (c.name.clone(), c))
-                .collect::<BTreeMap<_, _>>()
-        })
         .unwrap_or_default())
 }
 

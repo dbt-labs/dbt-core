@@ -24,6 +24,7 @@ md5 = { workspace = true }
 
 clap = { workspace = true, features = ["derive", "env"] }
 counter = { workspace = true }
+indexmap = { workspace = true, features = ["serde"] }
 itertools = { workspace = true }
 rand = { workspace = true }
 regex = { workspace = true }

@@ -41,6 +41,7 @@ use dbt_xdbc::bigquery::{
     UPDATE_DATASET_AUTHORIZE_VIEW_TO_DATASETS, UPDATE_TABLE_COLUMNS_DESCRIPTION,
 };
 use dbt_xdbc::{Connection, QueryCtx};
+use indexmap::IndexMap;
 use minijinja::value::mutable_vec::MutableVec;
 use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State, Value};
 use serde::{Deserialize, Serialize};
@@ -403,7 +404,7 @@ impl TypedBaseAdapter for BigqueryAdapter {
         state: &State,
         conn: &'_ mut dyn Connection,
         relation: Value,
-        columns: BTreeMap<String, DbtColumn>,
+        columns: IndexMap<String, DbtColumn>,
     ) -> AdapterResult<Value> {
         let relation = downcast_value_to_dyn_base_relation(&relation)?;
         let database = relation.database_as_str()?;
@@ -446,7 +447,7 @@ impl TypedBaseAdapter for BigqueryAdapter {
     /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L924
     fn render_raw_columns_constraints(
         &self,
-        columns_map: BTreeMap<String, DbtColumn>,
+        columns_map: IndexMap<String, DbtColumn>,
     ) -> AdapterResult<Vec<String>> {
         let mut rendered_constraints: BTreeMap<String, String> = BTreeMap::new();
         for (_, column) in columns_map.iter() {
@@ -489,15 +490,15 @@ impl TypedBaseAdapter for BigqueryAdapter {
     /// TODO: support constraints
     fn nest_column_data_types(
         &self,
-        columns: BTreeMap<String, DbtColumn>,
+        columns: IndexMap<String, DbtColumn>,
         _constraints: Option<BTreeMap<String, String>>,
-    ) -> AdapterResult<BTreeMap<String, DbtColumn>> {
+    ) -> AdapterResult<IndexMap<String, DbtColumn>> {
         let mut result = NestedColumnDataTypes::default();
         for (column_name, column) in &columns {
             result.insert(column_name, column.data_type.as_ref())
         }
         let column_to_data_type = result.format_top_level_columns_data_types();
-        let mut result = BTreeMap::new();
+        let mut result = IndexMap::new();
         for (column_name, data_type) in &column_to_data_type {
             match columns.get(column_name) {
                 Some(column) => result.insert(
@@ -1000,7 +1001,7 @@ struct NestedColumnDataTypes {
 
 #[derive(Debug, Default)]
 struct TrieNode {
-    pub children: BTreeMap<String, TrieNode>,
+    pub children: IndexMap<String, TrieNode>,
     pub data_type: Option<String>,
 }
 
@@ -1014,8 +1015,8 @@ impl NestedColumnDataTypes {
         node.data_type = column_type.map(String::from);
     }
 
-    fn format_top_level_columns_data_types(&self) -> BTreeMap<String, String> {
-        let mut result = BTreeMap::new();
+    fn format_top_level_columns_data_types(&self) -> IndexMap<String, String> {
+        let mut result = IndexMap::new();
         for (column_name, node) in &self.root.children {
             let data_type = match &node.data_type {
                 None => {
@@ -1165,7 +1166,7 @@ mod tests {
             let result = nested.format_top_level_columns_data_types();
             assert_eq!(
                 result.get("addresses").unwrap(),
-                "array<struct<city string, street string>>"
+                "array<struct<street string, city string>>"
             );
         }
 
@@ -1181,7 +1182,7 @@ mod tests {
             assert_eq!(result.get("id").unwrap(), "integer");
             assert_eq!(
                 result.get("user").unwrap(),
-                "struct<contact struct<email string, phone string>, name string>"
+                "struct<name string, contact struct<email string, phone string>>"
             );
         }
 

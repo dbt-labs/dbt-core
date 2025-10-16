@@ -193,7 +193,7 @@ pub async fn resolve_functions(
                 enabled: model_config.enabled.unwrap_or(true),
                 extended_model: false,
                 persist_docs: None,
-                columns: BTreeMap::new(),
+                columns: vec![],
                 depends_on,
                 refs: sql_file_info
                     .refs

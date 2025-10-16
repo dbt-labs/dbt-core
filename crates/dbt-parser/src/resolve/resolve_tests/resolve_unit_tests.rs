@@ -254,7 +254,7 @@ pub fn resolve_unit_tests(
                 static_analysis_off_reason: matches!(static_analysis, StaticAnalysisKind::Off)
                     .then(|| StaticAnalysisOffReason::ConfiguredOff),
                 static_analysis,
-                columns: BTreeMap::new(),
+                columns: vec![],
                 metrics: vec![],
             },
             __unit_test_attr__: DbtUnitTestAttr {

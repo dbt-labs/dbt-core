@@ -333,7 +333,7 @@ impl From<&TypedConstraint> for ModelConstraint {
 ///
 /// Reference: https://github.com/databricks/dbt-databricks/blob/e7099a2c75a92fa5240989b19d246a0ca8a313ef/dbt/adapters/databricks/constraints.py#L184-L190
 pub fn parse_constraints(
-    columns: &std::collections::BTreeMap<String, dbt_schemas::schemas::dbt_column::DbtColumnRef>,
+    columns: &Vec<dbt_schemas::schemas::dbt_column::DbtColumnRef>,
     model_constraints: &[ModelConstraint],
 ) -> Result<(std::collections::BTreeSet<String>, Vec<TypedConstraint>), String> {
     let (not_nulls_from_columns, constraints_from_columns) = parse_column_constraints(columns)?;
@@ -354,12 +354,13 @@ pub fn parse_constraints(
 ///
 /// Reference: https://github.com/databricks/dbt-databricks/blob/e7099a2c75a92fa5240989b19d246a0ca8a313ef/dbt/adapters/databricks/constraints.py#L193-L208
 pub fn parse_column_constraints(
-    columns: &std::collections::BTreeMap<String, dbt_schemas::schemas::dbt_column::DbtColumnRef>,
+    columns: &Vec<dbt_schemas::schemas::dbt_column::DbtColumnRef>,
 ) -> Result<(std::collections::BTreeSet<String>, Vec<TypedConstraint>), String> {
     let mut column_names = std::collections::BTreeSet::new();
     let mut constraints = Vec::new();
 
-    for (column_name, column) in columns {
+    for column in columns {
+        let column_name = &column.name;
         for constraint in &column.constraints {
             // Validate unique constraints are not supported
             if constraint.type_ == ConstraintType::Unique {
@@ -509,13 +510,8 @@ mod tests {
 
     #[test]
     fn test_parse_constraints_unique_validation() {
-        use std::collections::BTreeMap;
-
-        let mut columns = BTreeMap::new();
-        columns.insert(
-            "id".to_string(),
-            Arc::new(dbt_schemas::schemas::dbt_column::DbtColumn {
-                name: "id".to_string(),
+        let columns = vec![
+            (Arc::new(dbt_schemas::schemas::dbt_column::DbtColumn {
                 constraints: vec![dbt_schemas::schemas::common::Constraint {
                     type_: ConstraintType::Unique,
                     name: None,
@@ -526,8 +522,8 @@ mod tests {
                     warn_unenforced: None,
                 }],
                 ..Default::default()
-            }),
-        );
+            })),
+        ];
 
         let result = parse_constraints(&columns, &[]);
         assert!(result.is_err());
@@ -539,12 +535,8 @@ mod tests {
 
     #[test]
     fn test_parse_constraints_column_quoting() {
-        use std::collections::BTreeMap;
-
-        let mut columns = BTreeMap::new();
-        columns.insert(
-            "special column".to_string(),
-            Arc::new(dbt_schemas::schemas::dbt_column::DbtColumn {
+        let columns = vec![
+            (Arc::new(dbt_schemas::schemas::dbt_column::DbtColumn {
                 name: "special column".to_string(),
                 quote: Some(true),
                 constraints: vec![dbt_schemas::schemas::common::Constraint {
@@ -557,8 +549,8 @@ mod tests {
                     warn_unenforced: None,
                 }],
                 ..Default::default()
-            }),
-        );
+            })),
+        ];
 
         let (not_nulls, constraints) = parse_constraints(&columns, &[]).unwrap();
         assert!(not_nulls.is_empty());

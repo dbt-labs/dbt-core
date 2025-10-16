@@ -2,6 +2,8 @@ use std::collections::BTreeMap;
 use std::{fmt, marker::PhantomData};
 
 use dashmap::DashMap;
+use indexmap::IndexMap;
+use minijinja::value::ValueMap;
 use serde::{
     Deserialize, Deserializer, Serialize,
     de::{Visitor, value::UnitDeserializer},
@@ -10,7 +12,7 @@ use serde::{
 type YmlValue = dbt_serde_yaml::Value;
 type MinijinjaValue = minijinja::Value;
 
-/// Converts a serde_json::Value to a minijinja::Value
+/// Converts a [dbt_serde_yaml::Value] to a [minijinja::Value]
 fn convert_yml_value(yml: YmlValue) -> MinijinjaValue {
     match yml {
         YmlValue::Mapping(map, _) => {
@@ -30,7 +32,7 @@ fn convert_yml_value(yml: YmlValue) -> MinijinjaValue {
     }
 }
 
-/// Converts a serde_json::Value to a BTreeMap<String, Value>, only converting the first level to a map
+/// Converts a [dbt_serde_yaml::Value] to a [BTreeMap<String, Value>]
 pub fn convert_yml_to_map(yml: YmlValue) -> BTreeMap<String, MinijinjaValue> {
     match yml {
         YmlValue::Mapping(map, _) => {
@@ -51,7 +53,7 @@ pub fn convert_yml_to_map(yml: YmlValue) -> BTreeMap<String, MinijinjaValue> {
     }
 }
 
-/// Converts a serde_json::Value to a DashMap<String, Value>, only converting the first level to a map
+/// Converts a [dbt_serde_yaml::Value] to a [DashMap<String, Value>]
 pub fn convert_yml_to_dash_map(yml: YmlValue) -> DashMap<String, MinijinjaValue> {
     match yml {
         YmlValue::Mapping(map, _) => {
@@ -67,6 +69,52 @@ pub fn convert_yml_to_dash_map(yml: YmlValue) -> DashMap<String, MinijinjaValue>
         _ => {
             let map = DashMap::new();
             map.insert("value".to_string(), convert_yml_value(yml));
+            map
+        }
+    }
+}
+
+/// Converts a [dbt_serde_yaml::Value] to a [minijinja::Value], preserving order of keys if the value is a mapping
+// TODO(anna): This now converts to an ordered map by using `ValueMap`, with the assertion that the key is a string.
+// But as I mentioned below, if we implement Object for IndexMap<String, MinijinjaValue>, then we don't have to wrap the
+// key in a value.
+// TODO: We are losing span info for error reporting
+fn convert_yml_value_ordered(yml: YmlValue) -> MinijinjaValue {
+    match yml {
+        YmlValue::Mapping(map, _) => {
+            let mut value_map = ValueMap::new();
+            for (k, v) in map {
+                value_map.insert(
+                    MinijinjaValue::from(k.as_str().expect("key is not a string").to_string()),
+                    convert_yml_value(v),
+                );
+            }
+            MinijinjaValue::from_object(value_map)
+        }
+        YmlValue::Sequence(arr, _) => {
+            MinijinjaValue::from_iter(arr.into_iter().map(convert_yml_value))
+        }
+        _ => MinijinjaValue::from_serialize(yml),
+    }
+}
+
+/// Converts a dbt_serde_yaml::Value to an order-preserving minijinja::ValueMap, only converting the first level to a map
+// See: https://docs.rs/minijinja/2.5.0/minijinja/value/trait.Object.html#foreign-impls
+pub fn convert_yml_to_value_map(yml: YmlValue) -> IndexMap<String, MinijinjaValue> {
+    match yml {
+        YmlValue::Mapping(map, _) => {
+            let mut value_map = IndexMap::with_capacity(map.len());
+            for (k, v) in map {
+                value_map.insert(
+                    k.as_str().expect("key is not a string").to_string(),
+                    convert_yml_value_ordered(v),
+                );
+            }
+            value_map
+        }
+        _ => {
+            let mut map = IndexMap::new();
+            map.insert("value".to_string(), convert_yml_value_ordered(yml));
             map
         }
     }

@@ -32,6 +32,7 @@ chrono = { workspace = true }
 crossbeam-skiplist = { workspace = true }
 dashmap = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
+indexmap = { workspace = true, features = ["serde"] }
 log = { workspace = true, features = ["serde"] }
 md5 = { workspace = true }
 minijinja = { workspace = true, features = ["loader", "deserialization"] }

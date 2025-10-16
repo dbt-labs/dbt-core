@@ -33,6 +33,7 @@ use dbt_schemas::schemas::properties::ModelConstraint;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
 use dbt_schemas::schemas::serde::{minijinja_value_to_typed_struct, yml_value_to_minijinja};
 use dbt_xdbc::Connection;
+use indexmap::IndexMap;
 use minijinja::arg_utils::{ArgParser, ArgsIter, check_num_args};
 use minijinja::dispatch_object::DispatchObject;
 use minijinja::listener::RenderingEventListener;
@@ -395,13 +396,13 @@ impl BaseAdapter for BridgeAdapter {
 
         let raw_columns = parser.get::<Value>("raw_columns")?;
 
-        let columns_map =
-            minijinja_value_to_typed_struct::<BTreeMap<String, DbtColumn>>(raw_columns).map_err(
-                |e| MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string()),
-            )?;
-        let result = self
-            .typed_adapter
-            .render_raw_columns_constraints(columns_map)?;
+        let columns = minijinja_value_to_typed_struct::<IndexMap<String, DbtColumn>>(raw_columns)
+            .map_err(|e| {
+            MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
+        })?;
+
+        let result = self.typed_adapter.render_raw_columns_constraints(columns)?;
+
         Ok(Value::from(result))
     }
 
@@ -1007,15 +1008,20 @@ impl BaseAdapter for BridgeAdapter {
 
         // TODO: 'constraints' arg are ignored; didn't find an usage example, implement later
         let columns = parser.get::<Value>("columns")?;
-        let columns_map = minijinja_value_to_typed_struct::<BTreeMap<String, DbtColumn>>(columns)
-            .map_err(|e| {
-            MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
-        })?;
 
-        let result = self
-            .typed_adapter
-            .nest_column_data_types(columns_map, None)?;
-        Ok(Value::from_serialize(&result))
+        let columns = minijinja_value_to_typed_struct::<IndexMap<String, DbtColumn>>(columns)
+            .map_err(|e| {
+                MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
+            })?;
+
+        let nested_columns = self.typed_adapter.nest_column_data_types(columns, None)?;
+        let result = IndexMap::<String, Value>::from_iter(
+            nested_columns
+                .into_iter()
+                .map(|(col_name, col)| (col_name, Value::from_serialize(col))),
+        );
+
+        Ok(Value::from_object(result))
     }
 
     #[tracing::instrument(skip(self, _state), level = "trace")]
@@ -1297,17 +1303,17 @@ impl BaseAdapter for BridgeAdapter {
 
         let relation = parser.get::<Value>("relation")?;
         let columns = parser.get::<Value>("columns")?;
-        let columns_map = minijinja_value_to_typed_struct::<BTreeMap<String, DbtColumn>>(columns)
+        let columns = minijinja_value_to_typed_struct::<IndexMap<String, DbtColumn>>(columns)
             .map_err(|e| {
-            MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
-        })?;
+                MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
+            })?;
 
         let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
         let result = self.typed_adapter.update_columns_descriptions(
             state,
             conn.as_mut(),
             relation,
-            columns_map,
+            columns,
         )?;
         Ok(result)
     }
@@ -1549,15 +1555,22 @@ impl BaseAdapter for BridgeAdapter {
                 |e| MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string()),
             )?;
         let model_columns =
-            minijinja_value_to_typed_struct::<BTreeMap<String, DbtColumnRef>>(model_columns)
+            minijinja_value_to_typed_struct::<IndexMap<String, DbtColumnRef>>(model_columns)
                 .map_err(|e| {
                     MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
                 })?;
 
-        Ok(Value::from_serialize(
-            self.typed_adapter
-                .get_persist_doc_columns(existing_columns, model_columns)?,
-        ))
+        let persist_doc_columns = self
+            .typed_adapter
+            .get_persist_doc_columns(existing_columns, model_columns)?;
+
+        let result = IndexMap::from_iter(
+            persist_doc_columns
+                .into_iter()
+                .map(|(col_name, col)| (col_name, Value::from_serialize(col))),
+        );
+
+        Ok(Value::from_object(result))
     }
 
     #[tracing::instrument(skip_all, level = "trace")]

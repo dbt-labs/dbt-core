@@ -390,7 +390,7 @@ pub async fn resolve_data_tests(
                 enabled: test_config.enabled.unwrap_or(true),
                 extended_model: false,
                 persist_docs: None,
-                columns: BTreeMap::new(),
+                columns: vec![],
                 depends_on: NodeDependsOn {
                     macros: macro_depends_on,
                     nodes: vec![],

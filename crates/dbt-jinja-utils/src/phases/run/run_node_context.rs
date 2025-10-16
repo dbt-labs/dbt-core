@@ -15,7 +15,7 @@ use dbt_common::constants::DBT_COMPILED_DIR_NAME;
 use dbt_common::constants::DBT_RUN_DIR_NAME;
 use dbt_common::fs_err;
 use dbt_common::io_args::IoArgs;
-use dbt_common::serde_utils::convert_yml_to_map;
+use dbt_common::serde_utils::convert_yml_to_value_map;
 use dbt_common::show_warning;
 use dbt_common::tokiofs;
 use dbt_fusion_adapter::load_store::ResultStore;
@@ -128,12 +128,12 @@ async fn extend_with_model_context<S: Serialize>(
         base_context.insert("post_hooks".to_owned(), post_hooks_vals);
     }
 
-    let mut config_map = convert_yml_to_map(config_yml);
+    let mut config_map = convert_yml_to_value_map(config_yml);
     if let Some(sql_header) = sql_header {
         config_map.insert("sql_header".to_string(), sql_header);
     }
 
-    let mut model_map = convert_yml_to_map(model);
+    let mut model_map = convert_yml_to_value_map(model);
 
     // We are reading the raw_sql here for snapshots and models
     let raw_sql_path = match resource_type {

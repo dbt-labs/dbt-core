@@ -86,7 +86,7 @@ pub async fn resolve_groups(
                     enabled: true,
                     extended_model: false,
                     persist_docs: None,
-                    columns: BTreeMap::new(),
+                    columns: vec![],
                     depends_on: NodeDependsOn::default(),
                     quoting_ignore_case: false,
                     refs: vec![],

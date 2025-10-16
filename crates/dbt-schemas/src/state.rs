@@ -794,13 +794,14 @@ impl DbtRuntimeConfig {
             args: InvocationArgs::default(),
         };
 
+        // TODO(anna): Look into whether this should also be Index map
         let mut runtime_config = Self {
-            runtime_config: convert_yml_to_map(
+            runtime_config: BTreeMap::from_iter(convert_yml_to_map(
                 dbt_serde_yaml::to_value(&runtime_config_inner).unwrap(),
-            ),
+            )),
             dependencies: BTreeMap::new(),
-            vars: minijinja::Value::from_object(VarProvider::new(convert_yml_to_map(
-                dbt_serde_yaml::to_value(&runtime_config_inner.vars).unwrap(),
+            vars: minijinja::Value::from_object(VarProvider::new(BTreeMap::from_iter(
+                convert_yml_to_map(dbt_serde_yaml::to_value(&runtime_config_inner.vars).unwrap()),
             ))),
             inner: runtime_config_inner,
         };
