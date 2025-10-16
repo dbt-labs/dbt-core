@@ -13,7 +13,7 @@ use crate::{AdapterResult, AdapterTyping};
 
 pub fn list_relations(
     adapter: &dyn AdapterTyping,
-    query_ctx: &QueryCtx,
+    ctx: &QueryCtx,
     conn: &'_ mut dyn Connection,
     db_schema: &CatalogAndSchema,
 ) -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
@@ -27,8 +27,7 @@ FROM
     {db_schema}.INFORMATION_SCHEMA.TABLES"
     );
 
-    let query_ctx = query_ctx.with_sql(sql);
-    let batch = adapter.engine().execute(None, conn, &query_ctx)?;
+    let batch = adapter.engine().execute(None, conn, ctx, &sql)?;
     let table_names = get_column_values::<StringArray>(&batch, "table_name")?;
     let table_schemas = get_column_values::<StringArray>(&batch, "table_schema")?;
     let table_catalogs = get_column_values::<StringArray>(&batch, "table_catalog")?;

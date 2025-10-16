@@ -477,34 +477,35 @@ impl SqlEngine {
         &self,
         state: Option<&State>,
         conn: &'_ mut dyn Connection,
-        query_ctx: &QueryCtx,
+        ctx: &QueryCtx,
+        sql: &str,
     ) -> AdapterResult<RecordBatch> {
-        self.execute_with_options(state, query_ctx, conn, Options::new(), true)
+        self.execute_with_options(state, ctx, conn, sql, Options::new(), true)
     }
 
     /// Execute the given SQL query or statement.
     pub fn execute_with_options(
         &self,
         state: Option<&State>,
-        query_ctx: &QueryCtx,
+        ctx: &QueryCtx,
         conn: &'_ mut dyn Connection,
+        sql: &str,
         options: Options,
         fetch: bool,
     ) -> AdapterResult<RecordBatch> {
-        assert!(query_ctx.sql().is_some() || !options.is_empty());
+        assert!(!sql.is_empty() || !options.is_empty());
 
-        let maybe_query_comment = if let Some(state) = state {
-            Some(self.query_comment().resolve_comment(state)?)
-        } else {
-            None
+        let maybe_query_comment = state
+            .map(|s| self.query_comment().resolve_comment(s))
+            .transpose()?;
+
+        let sql = match &maybe_query_comment {
+            Some(comment) => {
+                let sql = self.query_comment().add_comment(sql, comment);
+                Cow::Owned(sql)
+            }
+            None => Cow::Borrowed(sql),
         };
-
-        let query_ctx =
-            if let (Some(sql), Some(comment)) = (query_ctx.sql(), maybe_query_comment.as_ref()) {
-                &query_ctx.with_sql(self.query_comment().add_comment(&sql, comment))
-            } else {
-                query_ctx
-            };
 
         let mut options = options;
         if let Some(state) = state
@@ -535,7 +536,7 @@ impl SqlEngine {
             ));
         }
 
-        Self::log_query_ctx_for_execution(query_ctx);
+        Self::log_query_ctx_for_execution(ctx, Some(sql.as_ref()));
 
         let token = self.cancellation_token();
         let do_execute = |conn: &'_ mut dyn Connection| -> Result<
@@ -546,9 +547,9 @@ impl SqlEngine {
 
             let mut stmt = conn.new_statement()?;
             let mut stmt = match self.query_cache() {
-                Some(query_cache) => query_cache.new_statement(stmt, query_ctx.clone()),
+                Some(query_cache) => query_cache.new_statement(stmt, ctx.clone(), sql.to_string()),
                 None => {
-                    stmt.set_sql_query(query_ctx)?;
+                    stmt.set_sql_query(ctx, sql.as_ref())?;
                     stmt
                 }
             };
@@ -581,16 +582,15 @@ impl SqlEngine {
         };
         let _span = span!("SqlEngine::execute");
 
-        let sql = query_ctx.sql().unwrap_or_default();
         let sql_hash = code_hash(sql.as_ref());
         let adapter_type = self.adapter_type();
         let _query_span_guard = create_debug_span!(
             QueryExecuted::start(
-                sql,
+                sql.to_string(),
                 sql_hash,
                 adapter_type.as_ref().to_owned(),
-                query_ctx.node_id(),
-                query_ctx.desc()
+                ctx.node_id().cloned(),
+                ctx.desc().cloned()
             )
             .into()
         )
@@ -648,7 +648,7 @@ impl SqlEngine {
 
     // TODO: kill this when telemtry starts writing dbt.log
     /// Format query context as we want to see it in a log file and log it in query_log
-    pub fn log_query_ctx_for_execution(ctx: &QueryCtx) {
+    pub fn log_query_ctx_for_execution(ctx: &QueryCtx, sql: Option<&str>) {
         let mut buf = String::new();
 
         writeln!(&mut buf, "-- created_at: {}", ctx.created_at_as_str()).unwrap();
@@ -656,7 +656,7 @@ impl SqlEngine {
 
         let node_id = match ctx.node_id() {
             Some(id) => id,
-            None => "not available".to_string(),
+            None => "not available",
         };
         writeln!(&mut buf, "-- node_id: {node_id}").unwrap();
 
@@ -665,7 +665,7 @@ impl SqlEngine {
             None => writeln!(&mut buf, "-- desc: not provided").unwrap(),
         }
 
-        if let Some(sql) = ctx.sql() {
+        if let Some(sql) = sql {
             write!(&mut buf, "{sql}").unwrap();
             if !sql.ends_with(";") {
                 write!(&mut buf, ";").unwrap();
@@ -732,11 +732,13 @@ impl SqlEngine {
 /// the given limit) regardless of the error encountered.
 ///
 /// https://github.com/dbt-labs/dbt-adapters/blob/996a302fa9107369eb30d733dadfaf307023f33d/dbt-adapters/src/dbt/adapters/sql/connections.py#L84
+#[allow(clippy::too_many_arguments)]
 pub fn execute_query_with_retry(
     engine: Arc<SqlEngine>,
     state: Option<&State>,
     conn: &'_ mut dyn Connection,
-    query_ctx: &QueryCtx,
+    ctx: &QueryCtx,
+    sql: &str,
     retry_limit: u32,
     options: &Options,
     fetch: bool,
@@ -745,7 +747,7 @@ pub fn execute_query_with_retry(
     let mut last_error = None;
 
     while attempt < retry_limit {
-        match engine.execute_with_options(state, query_ctx, conn, options.clone(), fetch) {
+        match engine.execute_with_options(state, ctx, conn, sql, options.clone(), fetch) {
             Ok(result) => return Ok(result),
             Err(err) => {
                 last_error = Some(err.clone());
@@ -770,12 +772,11 @@ mod tests {
 
     #[test]
     fn test_log_for_execution() {
-        let query_ctx = QueryCtx::new("test_adapter")
+        let ctx = QueryCtx::new("test_adapter")
             .with_node_id("test_node_123")
-            .with_sql("SELECT * FROM test_table")
             .with_desc("Test query for logging");
 
         // Should not panic
-        SqlEngine::log_query_ctx_for_execution(&query_ctx);
+        SqlEngine::log_query_ctx_for_execution(&ctx, Some("SELECT * FROM test_table"));
     }
 }

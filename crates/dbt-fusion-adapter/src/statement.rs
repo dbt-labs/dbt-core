@@ -210,8 +210,8 @@ impl Statement for TrackedStatement {
     fn prepare(&mut self) -> Result<()> {
         self.inner_mut().prepare()
     }
-    fn set_sql_query(&mut self, query: &QueryCtx) -> Result<()> {
-        self.inner_mut().set_sql_query(query)
+    fn set_sql_query(&mut self, ctx: &QueryCtx, sql: &str) -> Result<()> {
+        self.inner_mut().set_sql_query(ctx, sql)
     }
     fn set_substrait_plan(&mut self, plan: &[u8]) -> Result<()> {
         self.inner_mut().set_substrait_plan(plan)

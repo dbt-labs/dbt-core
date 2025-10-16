@@ -14,7 +14,7 @@ use crate::errors::{
 };
 use crate::funcs::{execute_macro, none_value};
 use crate::metadata::*;
-use crate::query_ctx::{query_ctx_from_state, query_ctx_from_state_with_sql};
+use crate::query_ctx::query_ctx_from_state;
 use crate::record_batch_utils::get_column_values;
 use crate::relation_object::RelationObject;
 use crate::render_constraint::render_column_constraint;
@@ -157,8 +157,9 @@ impl TypedBaseAdapter for BigqueryAdapter {
     #[allow(clippy::too_many_arguments)]
     fn add_query(
         &self,
+        _ctx: &QueryCtx,
         _conn: &'_ mut dyn Connection,
-        _query_ctx: &QueryCtx,
+        _sql: &str,
         _auto_begin: bool,
         _bindings: Option<&Value>,
         _abridge_sql_log: bool,
@@ -190,7 +191,7 @@ impl TypedBaseAdapter for BigqueryAdapter {
     fn get_relation(
         &self,
         state: &State,
-        query_ctx: &QueryCtx,
+        ctx: &QueryCtx,
         conn: &'_ mut dyn Connection,
         database: &str,
         schema: &str,
@@ -222,8 +223,7 @@ impl TypedBaseAdapter for BigqueryAdapter {
                 WHERE table_name = '{query_identifier}';",
         );
 
-        let query_ctx = query_ctx.with_sql(sql);
-        let result = self.engine.execute(Some(state), conn, &query_ctx);
+        let result = self.engine.execute(Some(state), conn, ctx, &sql);
         let batch = match result {
             Ok(batch) => batch,
             Err(err) => {
@@ -325,12 +325,12 @@ impl TypedBaseAdapter for BigqueryAdapter {
             {}",
             add_columns.join("\n,")
         );
-        let query_ctx = query_ctx_from_state_with_sql(state, sql)?
-            .with_desc("alter_table_add_columns adapter call");
+        let ctx = query_ctx_from_state(state)?.with_desc("alter_table_add_columns adapter call");
         self.engine.execute_with_options(
             Some(state),
-            &query_ctx,
+            &ctx,
             conn,
+            &sql,
             self.get_adbc_execute_options(state),
             false,
         )?;
@@ -345,8 +345,9 @@ impl TypedBaseAdapter for BigqueryAdapter {
     // migration.
     fn load_dataframe(
         &self,
-        query_ctx: &QueryCtx,
+        ctx: &QueryCtx,
         conn: &'_ mut dyn Connection,
+        sql: &str,
         database: &str,
         schema: &str,
         table_name: &str,
@@ -368,8 +369,9 @@ impl TypedBaseAdapter for BigqueryAdapter {
 
         self.engine.execute_with_options(
             None,
-            query_ctx,
+            ctx,
             conn,
+            sql,
             vec![
                 (
                     QUERY_DESTINATION_TABLE.to_string(),
@@ -438,9 +440,10 @@ impl TypedBaseAdapter for BigqueryAdapter {
             ),
         ];
 
-        let query_ctx = query_ctx_from_state(state)?;
+        let ctx = query_ctx_from_state(state)?;
+        let sql = "none";
         self.engine
-            .execute_with_options(Some(state), &query_ctx, conn, options, false)?;
+            .execute_with_options(Some(state), &ctx, conn, sql, options, false)?;
         Ok(none_value())
     }
 
@@ -539,9 +542,10 @@ impl TypedBaseAdapter for BigqueryAdapter {
         &self,
         state: &State,
         conn: &mut dyn Connection,
-        query_ctx: &QueryCtx,
+        ctx: &QueryCtx,
+        sql: &str,
     ) -> AdapterResult<Vec<StdColumn>> {
-        let batch = self.engine().execute(Some(state), conn, query_ctx)?;
+        let batch = self.engine().execute(Some(state), conn, ctx, sql)?;
         let schema = batch.schema();
 
         let type_ops = self.engine.type_ops();
@@ -609,11 +613,13 @@ impl TypedBaseAdapter for BigqueryAdapter {
             .entry(format!("{database}.{schema}"))
             .or_insert_with(|| true);
 
-        let query_ctx = query_ctx_from_state(state)?;
+        let ctx = query_ctx_from_state(state)?;
+        let sql = "none"; // empty sql that won't really be executed
         self.engine.execute_with_options(
             Some(state),
-            &query_ctx,
+            &ctx,
             conn,
+            sql,
             vec![(
                 UPDATE_DATASET_AUTHORIZE_VIEW_TO_DATASETS.to_string(),
                 OptionValue::String(serde_json::to_string(&payload)?),
@@ -641,9 +647,8 @@ impl TypedBaseAdapter for BigqueryAdapter {
             relation.schema_as_str()?
         );
 
-        let query_ctx = query_ctx_from_state_with_sql(state, sql)?
-            .with_desc("get_dataset_location adapter call");
-        let batch = self.engine.execute(Some(state), conn, &query_ctx)?;
+        let ctx = query_ctx_from_state(state)?.with_desc("get_dataset_location adapter call");
+        let batch = self.engine.execute(Some(state), conn, &ctx, &sql)?;
 
         let location = get_column_values::<StringArray>(&batch, "location")?;
         debug_assert!(batch.num_rows() <= 1);
@@ -671,12 +676,12 @@ impl TypedBaseAdapter for BigqueryAdapter {
              SET OPTIONS (description = '{description}')"
         );
 
-        let query_ctx = query_ctx_from_state_with_sql(state, sql)?
-            .with_desc("update_table_description adapter call");
+        let ctx = query_ctx_from_state(state)?.with_desc("update_table_description adapter call");
         self.engine.execute_with_options(
             Some(state),
-            &query_ctx,
+            &ctx,
             conn,
+            &sql,
             self.get_adbc_execute_options(state),
             false,
         )?;
@@ -872,12 +877,12 @@ impl TypedBaseAdapter for BigqueryAdapter {
             )
         };
 
-        let query_ctx =
-            query_ctx_from_state_with_sql(state, sql)?.with_desc("copy_table adapter call");
+        let ctx = query_ctx_from_state(state)?.with_desc("copy_table adapter call");
         self.engine.execute_with_options(
             Some(state),
-            &query_ctx,
+            &ctx,
             conn,
+            &sql,
             self.get_adbc_execute_options(state),
             false,
         )?;

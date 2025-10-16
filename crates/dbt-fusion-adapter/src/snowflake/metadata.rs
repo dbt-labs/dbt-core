@@ -273,10 +273,9 @@ impl MetadataAdapter for SnowflakeAdapter {
         let adapter = self.clone();
         let map_f =
             move |conn: &'_ mut dyn Connection, sql: &String| -> AdapterResult<Arc<RecordBatch>> {
-                let query_ctx = QueryCtx::new(adapter.adapter_type().to_string())
-                    .with_sql(sql)
+                let ctx = QueryCtx::new(adapter.adapter_type().to_string())
                     .with_desc("List user functions");
-                let (_, table) = adapter.query(conn, &query_ctx, None)?;
+                let (_, table) = adapter.query(&ctx, conn, sql, None)?;
                 let batch = table.original_record_batch();
                 Ok(batch)
             };
@@ -377,16 +376,15 @@ impl MetadataAdapter for SnowflakeAdapter {
                           table_name: &String|
               -> AdapterResult<Arc<Schema>> {
             let sql = format!("describe table {};", &table_name);
-            let mut query_ctx = QueryCtx::new(adapter.adapter_type().to_string())
-                .with_sql(sql)
-                .with_desc("Get table schema");
+            let mut ctx =
+                QueryCtx::new(adapter.adapter_type().to_string()).with_desc("Get table schema");
             if let Some(node_id) = unique_id.clone() {
-                query_ctx = query_ctx.with_node_id(&node_id);
+                ctx = ctx.with_node_id(&node_id);
             }
-            if let Some(phase) = phase.clone() {
-                query_ctx = query_ctx.with_phase(phase);
+            if let Some(phase) = phase {
+                ctx = ctx.with_phase(phase);
             }
-            let (_, table) = adapter.query(conn, &query_ctx, None)?;
+            let (_, table) = adapter.query(&ctx, conn, &sql, None)?;
             let batch = table.original_record_batch();
             let schema = build_schema_from_desc_table(batch, adapter.engine().type_ops())?;
             Ok(schema)
@@ -468,10 +466,9 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
         let adapter = self.clone();
         let map_f =
             move |conn: &'_ mut dyn Connection, sql: &String| -> AdapterResult<Arc<RecordBatch>> {
-                let query_ctx = QueryCtx::new(adapter.adapter_type().to_string())
-                    .with_sql(sql)
+                let ctx = QueryCtx::new(adapter.adapter_type().to_string())
                     .with_desc("Get schema by pattern");
-                let (_, table) = adapter.query(conn, &query_ctx, None)?;
+                let (_, table) = adapter.query(&ctx, conn, sql, None)?;
                 let batch = table.original_record_batch();
                 Ok(batch)
             };
@@ -549,10 +546,9 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
                 where_clauses.join(" OR ")
             );
 
-            let query_ctx = QueryCtx::new(adapter.adapter_type().to_string())
-                .with_sql(sql)
+            let ctx = QueryCtx::new(adapter.adapter_type().to_string())
                 .with_desc("Extracting freshness from information schema");
-            let (_adapter_response, agate_table) = adapter.query(&mut *conn, &query_ctx, None)?;
+            let (_adapter_response, agate_table) = adapter.query(&ctx, &mut *conn, &sql, None)?;
             let batch = agate_table.original_record_batch();
             Ok(batch)
         };

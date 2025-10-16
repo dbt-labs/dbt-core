@@ -65,11 +65,11 @@ fn checksum8(input: &str) -> String {
 // queries thus far. However, for pre-compile we do not have node id
 // and only sql content that we checksum and then append to it a
 // sequence number.
-fn compute_file_name(query_ctx: &QueryCtx) -> AdbcResult<String> {
+fn compute_file_name(query_ctx: &QueryCtx, sql: Option<&str>) -> AdbcResult<String> {
     let id = match query_ctx.node_id() {
-        Some(node_id) => node_id,
-        None => match query_ctx.sql() {
-            Some(sql) => checksum8(&sql),
+        Some(node_id) => node_id.to_owned(),
+        None => match sql {
+            Some(sql) => checksum8(sql),
             None => {
                 return Err(AdbcError::with_message_and_status(
                     "Neither node id nor sql was set in the query context",
@@ -308,6 +308,7 @@ struct RecordEngineStatement {
     record_engine: Arc<RecordEngineInner>,
     inner_stmt: Box<dyn Statement>,
     query_ctx: Option<QueryCtx>,
+    sql: Option<String>,
 }
 
 impl RecordEngineStatement {
@@ -319,6 +320,7 @@ impl RecordEngineStatement {
             record_engine,
             inner_stmt,
             query_ctx: None,
+            sql: None,
         }
     }
 }
@@ -336,11 +338,11 @@ impl Statement for RecordEngineStatement {
         let query_ctx = self
             .query_ctx
             .clone()
-            .expect("query has to be set before executing a statement");
+            .expect("query ctx has to be set before executing a statement");
 
-        let sql = match query_ctx.sql() {
+        let sql = match &self.sql {
             Some(sql) => sql,
-            None => "none".to_string(),
+            None => "none",
         };
 
         // Execute on the actual engine's Statement
@@ -349,7 +351,7 @@ impl Statement for RecordEngineStatement {
         let path = self.record_engine.path.clone();
         create_dir_all(&path).map_err(|e| from_io_error(e, Some(&path)))?;
 
-        let file_name = compute_file_name(&query_ctx)?;
+        let file_name = compute_file_name(&query_ctx, Some(sql))?;
         let sql_path = path.join(format!("{file_name}.sql"));
         let err_path = path.join(format!("{file_name}.err"));
         let parquet_path = path.join(format!("{file_name}.parquet"));
@@ -412,9 +414,10 @@ impl Statement for RecordEngineStatement {
         self.inner_stmt.prepare()
     }
 
-    fn set_sql_query(&mut self, query_ctx: &QueryCtx) -> AdbcResult<()> {
-        self.inner_stmt.set_sql_query(query_ctx)?;
-        self.query_ctx = Some(query_ctx.clone());
+    fn set_sql_query(&mut self, ctx: &QueryCtx, sql: &str) -> AdbcResult<()> {
+        self.inner_stmt.set_sql_query(ctx, sql)?;
+        self.query_ctx = Some(ctx.clone());
+        self.sql = Some(sql.to_string());
         Ok(())
     }
 
@@ -607,6 +610,7 @@ impl Connection for ReplayEngineConnection {
 struct ReplayEngineStatement {
     replay_engine: Arc<ReplayEngineInner>,
     query_ctx: Option<QueryCtx>,
+    sql: Option<String>,
 }
 
 impl ReplayEngineStatement {
@@ -614,6 +618,7 @@ impl ReplayEngineStatement {
         ReplayEngineStatement {
             replay_engine,
             query_ctx: None,
+            sql: None,
         }
     }
 }
@@ -658,13 +663,13 @@ impl Statement for ReplayEngineStatement {
             .clone()
             .expect("query has to be set before executing a statement");
 
-        let replay_sql = match query_ctx.sql() {
+        let replay_sql = match &self.sql {
             Some(sql) => sql,
-            None => "none".to_string(),
+            None => "none",
         };
 
         let path = self.replay_engine.full_path();
-        let file_name = compute_file_name(&query_ctx)?;
+        let file_name = compute_file_name(&query_ctx, Some(replay_sql))?;
         let parquet_path = path.join(format!("{file_name}.parquet"));
         let sql_path = path.join(format!("{file_name}.sql"));
         let err_path = path.join(format!("{file_name}.err"));
@@ -674,14 +679,13 @@ impl Statement for ReplayEngineStatement {
         if !fs::exists(&sql_path).map_err(|e| from_io_error(e, Some(&sql_path)))? {
             panic!(
                 "Missing query file ({:?}) during replay. Query: {}",
-                &sql_path,
-                replay_sql.as_str()
+                &sql_path, replay_sql,
             );
         }
         // dbt_tmp_800c2fb4_a0ba_4708_a0b1_813316032bfb
         let record_sql =
             fs::read_to_string(&sql_path).map_err(|e| from_io_error(e, Some(&sql_path)))?;
-        if normalize_dbt_tmp_name(&record_sql) != normalize_dbt_tmp_name(&replay_sql) {
+        if normalize_dbt_tmp_name(&record_sql) != normalize_dbt_tmp_name(replay_sql) {
             panic!(
                 "Recorded query ({record_sql}) and actual query ({replay_sql}) do not match ({sql_path:?})"
             );
@@ -742,8 +746,9 @@ impl Statement for ReplayEngineStatement {
         todo!("ReplayEngineStatement::prepare")
     }
 
-    fn set_sql_query(&mut self, query_ctx: &QueryCtx) -> AdbcResult<()> {
-        self.query_ctx = Some(query_ctx.clone());
+    fn set_sql_query(&mut self, ctx: &QueryCtx, sql: &str) -> AdbcResult<()> {
+        self.query_ctx = Some(ctx.clone());
+        self.sql = Some(sql.to_string());
         Ok(())
     }
 

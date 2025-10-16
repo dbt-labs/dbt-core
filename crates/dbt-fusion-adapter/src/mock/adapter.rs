@@ -101,19 +101,16 @@ impl TypedBaseAdapter for MockAdapter {
         &self,
         _state: Option<&State>,
         _conn: &'_ mut dyn Connection,
-        query_ctx: &QueryCtx,
+        _ctx: &QueryCtx,
+        sql: &str,
         _auto_begin: bool,
         _fetch: bool,
         _limit: Option<i64>,
         _options: Option<HashMap<String, String>>,
     ) -> AdapterResult<(AdapterResponse, AgateTable)> {
-        let sql = query_ctx.sql().ok_or_else(|| {
-            AdapterError::new(AdapterErrorKind::Internal, "Missing query in the context")
-        })?;
-
         let response = AdapterResponse {
             message: "execute".to_string(),
-            code: sql,
+            code: sql.to_string(),
             rows_affected: 1,
             query_id: None,
         };
@@ -134,8 +131,9 @@ impl TypedBaseAdapter for MockAdapter {
     #[allow(clippy::too_many_arguments)]
     fn add_query(
         &self,
-        _conn: &'_ mut dyn Connection,
         _query_ctx: &QueryCtx,
+        _conn: &'_ mut dyn Connection,
+        _sql: &str,
         _auto_begin: bool,
         _bindings: Option<&Value>,
         _abridge_sql_log: bool,

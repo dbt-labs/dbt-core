@@ -247,10 +247,9 @@ impl MetadataAdapter for DatabricksAdapter {
                 format!("DESCRIBE TABLE EXTENDED {database}.{schema}.{identifier} AS JSON;")
             };
 
-            let query_ctx = QueryCtx::new(adapter.adapter_type().to_string())
-                .with_sql(sql)
-                .with_desc("Get table schema");
-            let (_, table) = adapter.query(conn, &query_ctx, None)?;
+            let ctx =
+                QueryCtx::new(adapter.adapter_type().to_string()).with_desc("Get table schema");
+            let (_, table) = adapter.query(&ctx, conn, &sql, None)?;
             let batch = table.original_record_batch();
 
             let schema = if as_json_unsupported {
@@ -326,10 +325,9 @@ impl MetadataAdapter for DatabricksAdapter {
                 where_clauses.join(" OR ")
             );
 
-            let query_ctx = QueryCtx::new(adapter.adapter_type().to_string())
-                .with_sql(sql)
+            let ctx = QueryCtx::new(adapter.adapter_type().to_string())
                 .with_desc("Extracting freshness from information schema");
-            let (_adapter_response, agate_table) = adapter.query(&mut *conn, &query_ctx, None)?;
+            let (_adapter_response, agate_table) = adapter.query(&ctx, &mut *conn, &sql, None)?;
             let batch = agate_table.original_record_batch();
             Ok(batch)
         };

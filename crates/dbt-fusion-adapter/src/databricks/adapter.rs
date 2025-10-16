@@ -91,7 +91,7 @@ impl DatabricksAdapter {
     /// Get the Databricks Runtime version without caching.
     fn get_dbr_version(
         &self,
-        query_ctx: &QueryCtx,
+        ctx: &QueryCtx,
         conn: &mut dyn Connection,
     ) -> AdapterResult<DbrVersion> {
         // https://docs.databricks.com/aws/en/sql/language-manual/functions/current_version
@@ -100,9 +100,12 @@ impl DatabricksAdapter {
         // It appears that this is a divergence from the dbt-databricks implementation,
         // which uses `SET spark.databricks.clusterUsageTags.sparkVersion` to read out the version instead.
         // They only do this if `is_cluster` is True, otherwise it would error.
-        let query_ctx = query_ctx.with_sql("select current_version().dbr_version as dbr_version");
-
-        let batch = self.engine.execute(None, conn, &query_ctx)?;
+        let batch = self.engine.execute(
+            None,
+            conn,
+            ctx,
+            "select current_version().dbr_version as dbr_version",
+        )?;
 
         let dbr_version = get_column_values::<StringArray>(&batch, "dbr_version")?;
         debug_assert_eq!(dbr_version.len(), 1);
@@ -193,8 +196,9 @@ impl TypedBaseAdapter for DatabricksAdapter {
     #[allow(clippy::too_many_arguments)]
     fn add_query(
         &self,
+        ctx: &QueryCtx,
         conn: &'_ mut dyn Connection,
-        query_ctx: &QueryCtx,
+        sql: &str,
         auto_begin: bool,
         _bindings: Option<&Value>,
         _abridge_sql_log: bool,
@@ -204,7 +208,8 @@ impl TypedBaseAdapter for DatabricksAdapter {
             self.engine.clone(),
             None,
             conn,
-            query_ctx,
+            ctx,
+            sql,
             auto_begin,
             false, // default for fetch as in dispatch_adapter_calls()
             None,
@@ -236,7 +241,7 @@ impl TypedBaseAdapter for DatabricksAdapter {
     fn get_relation(
         &self,
         state: &State,
-        query_ctx: &QueryCtx,
+        ctx: &QueryCtx,
         conn: &mut dyn Connection,
         database: &str,
         schema: &str,
@@ -275,8 +280,7 @@ impl TypedBaseAdapter for DatabricksAdapter {
             "DESCRIBE TABLE EXTENDED {query_catalog}.{query_schema}.{query_identifier} AS JSON"
         );
 
-        let query_ctx = query_ctx.with_sql(sql);
-        let batch = self.engine.execute(Some(state), conn, &query_ctx);
+        let batch = self.engine.execute(Some(state), conn, ctx, &sql);
         if let Err(e) = &batch
             && (e.to_string().contains("cannot be found")
                 || e.to_string().contains("TABLE_OR_VIEW_NOT_FOUND"))

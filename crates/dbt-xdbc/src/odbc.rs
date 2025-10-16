@@ -303,8 +303,8 @@ impl ManagedOdbcStatement {
         self.inner.cancel()
     }
 
-    pub fn set_sql_query(&self, query: &str) -> Result<()> {
-        self.inner.set_sql_query(query)
+    pub fn set_sql_query(&self, sql: &str) -> Result<()> {
+        self.inner.set_sql_query(sql)
     }
 
     pub fn prepare(&self) -> Result<()> {

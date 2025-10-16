@@ -12,7 +12,7 @@ use crate::{AdapterResult, AdapterTyping};
 /// Reference: https://github.com/dbt-labs/dbt-adapters/blob/87e81a47baa11c312003377091a9efc0ab72d88e/dbt-redshift/src/dbt/include/redshift/macros/adapters.sql#L226
 pub fn list_relations(
     adapter: &dyn AdapterTyping,
-    query_ctx: &QueryCtx,
+    ctx: &QueryCtx,
     conn: &'_ mut dyn Connection,
     db_schema: &super::CatalogAndSchema,
 ) -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
@@ -40,9 +40,7 @@ where table_schema ilike '{}'",
         &db_schema.resolved_schema, &db_schema.resolved_schema
     );
 
-    let query_ctx = query_ctx.with_sql(sql);
-
-    let batch = adapter.engine().execute(None, conn, &query_ctx)?;
+    let batch = adapter.engine().execute(None, conn, ctx, &sql)?;
 
     if batch.num_rows() == 0 {
         return Ok(Vec::new());

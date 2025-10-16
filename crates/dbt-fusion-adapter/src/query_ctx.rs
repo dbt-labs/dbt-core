@@ -82,15 +82,3 @@ pub fn execution_phase_from_state(state: &State) -> Option<ExecutionPhase> {
         None
     }
 }
-
-/// Create a new instance from the current jinja state and given
-/// sql.
-pub fn query_ctx_from_state_with_sql(
-    state: &State,
-    sql: impl Into<String>,
-) -> AdapterResult<QueryCtx> {
-    match query_ctx_from_state(state) {
-        Ok(query_ctx) => Ok(query_ctx.with_sql(sql)),
-        Err(err) => Err(err),
-    }
-}

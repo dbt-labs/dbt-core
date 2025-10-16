@@ -101,26 +101,23 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         engine: Arc<SqlEngine>,
         state: Option<&State>,
         conn: &'_ mut dyn Connection,
-        query_ctx: &QueryCtx,
+        ctx: &QueryCtx,
+        sql: &str,
         _auto_begin: bool,
         fetch: bool,
         _limit: Option<i64>,
         options: Option<HashMap<String, String>>,
     ) -> AdapterResult<(AdapterResponse, AgateTable)> {
-        let sql = query_ctx.sql().ok_or_else(|| {
-            AdapterError::new(AdapterErrorKind::Internal, "Missing query in the context")
-        })?;
-
         // BigQuery API supports multi-statement
         // https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language
         let statements = if self.adapter_type() == AdapterType::Bigquery {
-            if engine.splitter().is_empty(&sql, dialect) {
+            if engine.splitter().is_empty(sql, dialect) {
                 vec![]
             } else {
-                vec![sql]
+                vec![sql.to_owned()]
             }
         } else {
-            engine.split_and_filter_statements(&sql, dialect)
+            engine.split_and_filter_statements(sql, dialect)
         };
         if statements.is_empty() {
             return Ok((AdapterResponse::default(), AgateTable::default()));
@@ -156,12 +153,13 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         }
 
         let mut last_batch = None;
-        for statement in statements {
+        for sql in statements {
             last_batch = Some(execute_query_with_retry(
                 engine.clone(),
                 state,
                 conn,
-                &query_ctx.with_sql(statement),
+                ctx,
+                &sql,
                 1,
                 &options,
                 fetch,
@@ -182,7 +180,8 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         &self,
         state: Option<&State>,
         conn: &'_ mut dyn Connection,
-        query_ctx: &QueryCtx,
+        ctx: &QueryCtx,
+        sql: &str,
         auto_begin: bool,
         fetch: bool,
         limit: Option<i64>,
@@ -190,14 +189,15 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     ) -> AdapterResult<(AdapterResponse, AgateTable)> {
         if let Some(replay_adapter) = self.as_replay() {
             return replay_adapter
-                .replay_execute(state, conn, query_ctx, auto_begin, fetch, limit, options);
+                .replay_execute(state, conn, ctx, sql, auto_begin, fetch, limit, options);
         }
         self.execute_inner(
             self.adapter_type().into(),
             Arc::clone(self.engine()),
             state,
             conn,
-            query_ctx,
+            ctx,
+            sql,
             auto_begin,
             fetch,
             limit,
@@ -208,15 +208,17 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     /// Execute a statement, expect no results.
     fn exec_stmt(
         &self,
+        ctx: &QueryCtx,
         conn: &'_ mut dyn Connection,
-        query_ctx: &QueryCtx,
+        sql: &str,
         auto_begin: bool,
     ) -> AdapterResult<AdapterResponse> {
         // default values are the same as in dispatch_adapter_calls()
         let (response, _) = self.execute(
             None,       // empty state
             conn,       // connection
-            query_ctx,  // sql string wrapper
+            ctx,        // context around the SQL string
+            sql,        // the SQL string
             auto_begin, // auto_begin
             false,      // fetch
             None,       // limit
@@ -228,31 +230,34 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     /// Execute a query and get results in an [AgateTable].
     fn query(
         &self,
+        ctx: &QueryCtx,
         conn: &'_ mut dyn Connection,
-        query_ctx: &QueryCtx,
+        sql: &str,
         limit: Option<i64>,
     ) -> AdapterResult<(AdapterResponse, AgateTable)> {
         self.execute(
-            None,      // state
-            conn,      // connection
-            query_ctx, // sql string wrapper
-            false,     // auto_begin
-            true,      // fetch
-            limit,     // limit
-            None,      // options
+            None,  // state
+            conn,  // connection
+            ctx,   // context around the SQL string
+            sql,   // the SQL string
+            false, // auto_begin
+            true,  // fetch
+            limit, // limit
+            None,  // options
         )
     }
 
     /// Execute a query with a new connection
     fn execute_with_new_connection(
         &self,
-        query_ctx: &QueryCtx,
+        ctx: &QueryCtx,
+        sql: &str,
         auto_begin: bool,
         fetch: bool,
         limit: Option<i64>,
     ) -> AdapterResult<(AdapterResponse, AgateTable)> {
         let mut conn = self.new_connection(None, None)?;
-        self.execute(None, &mut *conn, query_ctx, auto_begin, fetch, limit, None)
+        self.execute(None, &mut *conn, ctx, sql, auto_begin, fetch, limit, None)
     }
 
     /// Add a query to run.
@@ -263,8 +268,9 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     #[allow(clippy::too_many_arguments)]
     fn add_query(
         &self,
+        ctx: &QueryCtx,
         conn: &'_ mut dyn Connection,
-        query_ctx: &QueryCtx,
+        sql: &str,
         auto_begin: bool,
         _bindings: Option<&Value>,
         abridge_sql_log: bool,
@@ -301,7 +307,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     fn get_relation(
         &self,
         state: &State,
-        query_ctx: &QueryCtx,
+        ctx: &QueryCtx,
         conn: &'_ mut dyn Connection,
         database: &str,
         schema: &str,
@@ -700,8 +706,9 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     #[allow(clippy::too_many_arguments)]
     fn load_dataframe(
         &self,
-        _query_ctx: &QueryCtx,
+        _ctx: &QueryCtx,
         _conn: &'_ mut dyn Connection,
+        _sql: &str,
         _database: &str,
         _schema: &str,
         _table_name: &str,
@@ -791,12 +798,13 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         &self,
         state: &State,
         conn: &mut dyn Connection,
-        query_ctx: &QueryCtx,
+        ctx: &QueryCtx,
+        sql: &str,
     ) -> AdapterResult<Vec<StdColumn>> {
         if let Some(replay_adapter) = self.as_replay() {
-            return replay_adapter.replay_get_column_schema_from_query(state, conn, query_ctx);
+            return replay_adapter.replay_get_column_schema_from_query(state, conn, ctx);
         }
-        let batch = self.engine().execute(Some(state), conn, query_ctx)?;
+        let batch = self.engine().execute(Some(state), conn, ctx, sql)?;
         let original_schema = Some(batch.schema());
         let sdf_arrow_schema = batch.schema(); // XXX: this is not a SDF schema
         self.schema_to_columns(original_schema.as_ref(), &sdf_arrow_schema)
@@ -1114,7 +1122,8 @@ pub trait ReplayAdapter: TypedBaseAdapter {
         &self,
         state: Option<&State>,
         conn: &'_ mut dyn Connection,
-        query_ctx: &QueryCtx,
+        ctx: &QueryCtx,
+        sql: &str,
         auto_begin: bool,
         fetch: bool,
         limit: Option<i64>,

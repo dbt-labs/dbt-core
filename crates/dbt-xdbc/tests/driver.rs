@@ -210,6 +210,10 @@ mod tests {
         })
     }
 
+    fn unknown() -> QueryCtx {
+        QueryCtx::new("unknown")
+    }
+
     /// Check the returned info by the driver using the database methods.
     #[test_with::env(ADBC_DRIVER_TESTS)]
     #[test]
@@ -241,7 +245,7 @@ mod tests {
     /// Check execute of statement with `SELECT 21 + 21` query.
     fn execute_statement(backend: Backend) -> Result<()> {
         with_empty_statement(backend, |mut statement| {
-            statement.set_sql_query(&QueryCtx::new("unknown").with_sql("SELECT 21 + 21"))?;
+            statement.set_sql_query(&unknown(), "SELECT 21 + 21")?;
             let batch = statement
                 .execute()?
                 .next()
@@ -323,9 +327,7 @@ mod tests {
             // SqlExecute() returns SQL_SUCCESS on this statement instead of SQL_NO_DATA,
             // so we detect that no rows were returned by treating an error from SqlFetch()
             // as an indication that no rows were returned.
-            statement.set_sql_query(
-                &QueryCtx::new("unknown").with_sql("CREATE TABLE IF NOT EXISTS my_table"),
-            )?;
+            statement.set_sql_query(&unknown(), "CREATE TABLE IF NOT EXISTS my_table")?;
             let mut batch_reader = statement.execute()?; // succeeds
             let batch = batch_reader.next(); // returns None
             assert!(batch.is_none());
@@ -338,10 +340,10 @@ mod tests {
     #[test]
     fn statement_execute_databricks_empty() -> Result<()> {
         with_empty_statement(Backend::DatabricksODBC, |mut statement| {
+            let ctx = QueryCtx::new("unknown");
             // SqlExecute() returns SQL_NO_DATA on this query making it very easy
             // to detect that no rows were returned but the query ran successfully.
-            statement
-                .set_sql_query(&QueryCtx::new("unknown").with_sql("SELECT 1 AS one WHERE 1 = 0"))?;
+            statement.set_sql_query(&ctx, "SELECT 1 AS one WHERE 1 = 0")?;
             let mut batch_reader = statement.execute()?; // succeeds
             let batch = batch_reader.next(); // returns None
             assert!(batch.is_none());
@@ -354,13 +356,15 @@ mod tests {
     #[test]
     fn statement_execute_databricks_bool() -> Result<()> {
         with_empty_statement(Backend::DatabricksODBC, |mut statement| {
-            statement.set_sql_query(&QueryCtx::new("unknown").with_sql(
+            let ctx = QueryCtx::new("unknown");
+            statement.set_sql_query(
+                &ctx,
                 r#"SELECT * FROM (
-                    VALUES
-                      (true, false, NULL),
-                      (false, true, true)
-                    ) AS tbl(bool_a, bool_b, bool_c)"#,
-            ))?;
+                     VALUES
+                     (true, false, NULL),
+                     (false, true, true)
+                   ) AS tbl(bool_a, bool_b, bool_c)"#,
+            )?;
             let batch = statement
                 .execute()?
                 .next()
@@ -394,14 +398,13 @@ mod tests {
     #[test]
     fn statement_execute_databricks_integer() -> Result<()> {
         with_empty_statement(Backend::DatabricksODBC, |mut statement| {
-            statement.set_sql_query(&QueryCtx::new("unknown").with_sql(
-                r#"SELECT * FROM (
+            statement.set_sql_query(&unknown(), r#"SELECT * FROM (
                     VALUES
-                      (16::smallint,     32,                  64,                    32,                 64),
-                      (NULL,             32,                  NULL,                  32,                 NULL),
-                      ( 32767::smallint, 2147483647::integer, power(10, 18)::bigint, power(10, 6)::real, power(10, 18)::double)
-                    ) AS tbl(i16, i32, i64, f32, f64)"#,
-            ))?;
+                    (16::smallint,     32,                  64,                    32,                 64),
+                    (NULL,             32,                  NULL,                  32,                 NULL),
+                    ( 32767::smallint, 2147483647::integer, power(10, 18)::bigint, power(10, 6)::real, power(10, 18)::double)
+            ) AS tbl(i16, i32, i64, f32, f64)"#,
+            )?;
             let batch = statement
                 .execute()?
                 .next()
@@ -449,14 +452,13 @@ mod tests {
     fn statement_execute_databricks_string() -> Result<()> {
         with_empty_statement(Backend::DatabricksODBC, |mut statement| {
             const REPEAT: usize = 16;
-            statement.set_sql_query(&QueryCtx::new("unknown").with_sql(
-                format!(r#"SELECT * FROM (
-                     VALUES
-                       (21 + 21, 'Snowman ☃'),
-                       (43, NULL),
-                       (NULL, REPEAT('A string that is longer than 64 characters because it goes on and on about nothing in particular ☃', {REPEAT}))
-                   ) AS tbl(id, name)"#).as_str(),
-            ))?;
+            statement.set_sql_query(&unknown(), format!(r#"SELECT * FROM (
+                VALUES
+                    (21 + 21, 'Snowman ☃'),
+                    (43, NULL),
+                    (NULL, REPEAT('A string that is longer than 64 characters because it goes on and on about nothing in particular ☃', {REPEAT}))
+            ) AS tbl(id, name)"#).as_str(),
+            )?;
             let batch = statement
                 .execute()?
                 .next()
@@ -500,14 +502,15 @@ mod tests {
     fn statement_execute_databricks_binary() -> Result<()> {
         with_empty_statement(Backend::DatabricksODBC, |mut statement| {
             use std::str;
-            statement.set_sql_query(&QueryCtx::new("unknown").with_sql(
+            statement.set_sql_query(
+                &unknown(),
                 r#"SELECT * FROM (
                     VALUES
-                      (X'68656C6C6F', NULL),
-                      (NULL, X'68656C6C6F'),
-                      (X'776F726C64', X'44617461627269636B73')
-                    ) AS tbl(bin_a, bin_b)"#,
-            ))?;
+                    (X'68656C6C6F', NULL),
+                    (NULL, X'68656C6C6F'),
+                    (X'776F726C64', X'44617461627269636B73')
+                ) AS tbl(bin_a, bin_b)"#,
+            )?;
             let batch = statement
                 .execute()?
                 .next()
@@ -556,22 +559,21 @@ mod tests {
     fn statement_execute_redshift_wchar() -> Result<()> {
         with_connection(Backend::RedshiftODBC, |conn| {
             let mut stmt = conn.new_statement()?;
-            stmt.set_sql_query(&QueryCtx::new("unknown").with_sql(
-                r#"CREATE TABLE IF NOT EXISTS "special_ユーザー" (id BIGINT PRIMARY KEY, name TEXT NOT NULL)"#,
-            ))?;
+            stmt.set_sql_query(&unknown(), r#"CREATE TABLE IF NOT EXISTS "special_ユーザー" (id BIGINT PRIMARY KEY, name TEXT NOT NULL)"#,
+            )?;
             let _ = stmt.execute()?;
             let mut stmt = conn.new_statement()?;
-            stmt.set_sql_query(&QueryCtx::new("unknown").with_sql(
-                r#"CREATE TABLE IF NOT EXISTS "special_Usuário@Info" (id BIGINT PRIMARY KEY, name TEXT NOT NULL)"#,
-            ))?;
+            stmt.set_sql_query(&unknown(), r#"CREATE TABLE IF NOT EXISTS "special_Usuário@Info" (id BIGINT PRIMARY KEY, name TEXT NOT NULL)"#,
+            )?;
             let _ = stmt.execute()?;
 
             let mut stmt = conn.new_statement()?;
-            stmt.set_sql_query(&QueryCtx::new("unknown").with_sql(
+            stmt.set_sql_query(
+                &unknown(),
                 r#"SELECT schemaname AS schema, tablename AS object_name
-FROM pg_catalog.pg_tables
-WHERE tablename LIKE 'special_%'"#,
-            ))?;
+                FROM pg_catalog.pg_tables
+                WHERE tablename LIKE 'special_%'"#,
+            )?;
             let batch = stmt.execute()?.next().expect("a record batch")?;
             let names = batch.column(1).as_string::<i32>();
             assert_eq!(names.len(), 2);
@@ -588,9 +590,7 @@ WHERE tablename LIKE 'special_%'"#,
         with_connection(Backend::Snowflake, |conn| {
             conn.set_option(OptionConnection::AutoCommit, "false".into())?;
             let mut stmt = conn.new_statement()?;
-            stmt.set_sql_query(
-                &QueryCtx::new("unknown").with_sql("SELECT 'could be an insert statement'"),
-            )?;
+            stmt.set_sql_query(&unknown(), "SELECT 'could be an insert statement'")?;
             let batch = stmt
                 .execute()?
                 .next()
@@ -610,7 +610,7 @@ WHERE tablename LIKE 'special_%'"#,
     fn statement_execute_schema() -> Result<()> {
         let backend = Backend::Snowflake;
         with_empty_statement(backend, |mut statement| {
-            statement.set_sql_query(&QueryCtx::new("unknown").with_sql("SHOW WAREHOUSES"))?;
+            statement.set_sql_query(&unknown(), "SHOW WAREHOUSES")?;
             let schema = statement.execute_schema()?;
             let field_names = schema
                 .fields()

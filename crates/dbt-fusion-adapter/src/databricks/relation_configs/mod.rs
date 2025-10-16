@@ -169,11 +169,12 @@ impl DatabricksAdapter {
         desc: &str,
         conn: &mut dyn Connection,
     ) -> AdapterResult<(AdapterResponse, AgateTable)> {
-        let query_ctx = query_ctx_from_state(state)?.with_sql(sql).with_desc(desc);
+        let ctx = query_ctx_from_state(state)?.with_desc(desc);
         self.execute(
             Some(state),
             conn,
-            &query_ctx,
+            &ctx,
+            sql,
             false, // auto_begin
             true,  // fetch
             None,  // limit

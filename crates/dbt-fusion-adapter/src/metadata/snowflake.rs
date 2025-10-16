@@ -80,7 +80,7 @@ fn build_relations_from_show_objects(
 
 pub fn list_relations(
     adapter: &dyn AdapterTyping,
-    query_ctx: &QueryCtx,
+    ctx: &QueryCtx,
     conn: &'_ mut dyn Connection,
     db_schema: &crate::metadata::CatalogAndSchema,
 ) -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
@@ -97,9 +97,7 @@ pub fn list_relations(
                 .map(|name| format!(" FROM '{name}'"))
                 .unwrap_or_default()
         );
-        let query_ctx = query_ctx.with_sql(sql);
-
-        let batch = adapter.engine().execute(None, conn, &query_ctx)?;
+        let batch = adapter.engine().execute(None, conn, ctx, &sql)?;
 
         // From the RecordBatch, get the last row of the vector of name 'name'
         let names = get_column_values::<StringArray>(&batch, "name")?;

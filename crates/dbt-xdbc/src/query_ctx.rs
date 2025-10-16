@@ -1,12 +1,9 @@
-//! Query abstraction used to carry the query sources and associated
-//! metadata around adapter code.
-
-use std::fmt::Display;
+use std::fmt;
 use std::str::FromStr;
 
 use chrono::{DateTime, Utc};
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ExecutionPhase {
     Unspecified,
     Render,
@@ -26,22 +23,19 @@ impl FromStr for ExecutionPhase {
     }
 }
 
-impl Display for ExecutionPhase {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                ExecutionPhase::Unspecified => "unspecified",
-                ExecutionPhase::Render => "render",
-                ExecutionPhase::Analyze => "analyze",
-                ExecutionPhase::Run => "run",
-            }
-        )
+impl fmt::Display for ExecutionPhase {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let s = match self {
+            ExecutionPhase::Unspecified => "unspecified",
+            ExecutionPhase::Render => "render",
+            ExecutionPhase::Analyze => "analyze",
+            ExecutionPhase::Run => "run",
+        };
+        s.fmt(f)
     }
 }
 
-/// Query source plus metadata.
+/// Context carrying metadata associated with a query.
 #[derive(Clone, Debug)]
 pub struct QueryCtx {
     // Adapter type executing this query
@@ -50,8 +44,6 @@ pub struct QueryCtx {
     node_unique_id: Option<String>,
     // Execution Phase
     phase: Option<ExecutionPhase>,
-    // Actual query content
-    sql: Option<String>,
     // Time this instance was created
     created_at: DateTime<Utc>,
     // Description (abribrary string) associated with the query
@@ -63,14 +55,12 @@ impl QueryCtx {
         adapter_type: impl Into<String>,
         node_unique_id: Option<String>,
         phase: Option<ExecutionPhase>,
-        sql: Option<String>,
         desc: Option<String>,
     ) -> Self {
         Self {
             adapter_type: adapter_type.into(),
             node_unique_id,
             phase,
-            sql,
             created_at: Utc::now(),
             desc,
         }
@@ -78,70 +68,55 @@ impl QueryCtx {
 
     /// Create a new query with the given adapter type.
     pub fn new(adapter_type: impl Into<String>) -> Self {
-        Self::create(adapter_type, None, None, None, None)
+        Self::create(adapter_type, None, None, None)
     }
 
     /// Creates a new context by keeping other fields same but
     /// updating unique node id.
-    pub fn with_node_id(&self, node_unique_id: impl Into<String>) -> Self {
+    pub fn with_node_id(self, node_unique_id: impl Into<String>) -> Self {
         // We never allow unique id to be reassigned
         assert!(self.node_unique_id.is_none());
         Self::create(
-            self.adapter_type.clone(),
+            self.adapter_type,
             Some(node_unique_id.into()),
-            self.phase.clone(),
-            self.sql.clone(),
-            self.desc.clone(),
-        )
-    }
-
-    /// Creates a new context by keeping other fields same and setting
-    /// the given sql query.
-    pub fn with_sql(&self, sql: impl Into<String>) -> Self {
-        // We allow creating new queries by replacing sql
-        Self::create(
-            self.adapter_type.clone(),
-            self.node_unique_id.clone(),
-            self.phase.clone(),
-            Some(sql.into()),
-            self.desc.clone(),
+            self.phase,
+            self.desc,
         )
     }
 
     /// Create a new context by keeping other fields same and using
     /// the given description.
-    pub fn with_desc(&self, desc: impl Into<String>) -> Self {
+    pub fn with_desc(self, desc: impl Into<String>) -> Self {
+        let mut ctx = self;
+        ctx.set_desc(desc.into());
+        ctx
+    }
+
+    pub fn set_desc(&mut self, desc: impl Into<String>) {
         // We never allow one to reassign description
         assert!(self.desc.is_none());
-        Self::create(
-            self.adapter_type.clone(),
-            self.node_unique_id.clone(),
-            self.phase.clone(),
-            self.sql.clone(),
-            Some(desc.into()),
-        )
+        self.desc = Some(desc.into());
     }
 
     /// Creates a new context by keeping other fields same and setting
     /// the given execution phase.
-    pub fn with_phase(&self, phase: ExecutionPhase) -> Self {
+    pub fn with_phase(self, phase: ExecutionPhase) -> Self {
         Self::create(
-            self.adapter_type.clone(),
-            self.node_unique_id.clone(),
+            self.adapter_type,
+            self.node_unique_id,
             Some(phase),
-            self.sql.clone(),
-            self.desc.clone(),
+            self.desc,
         )
     }
 
     /// Return unique node id associated with this context
-    pub fn node_id(&self) -> Option<String> {
-        self.node_unique_id.clone()
+    pub fn node_id(&self) -> Option<&String> {
+        self.node_unique_id.as_ref()
     }
 
     /// Returns adapter type in this context.
-    pub fn adapter_type(&self) -> String {
-        self.adapter_type.clone()
+    pub fn adapter_type(&self) -> &String {
+        &self.adapter_type
     }
 
     /// Returns time this instance was created.
@@ -154,21 +129,15 @@ impl QueryCtx {
         self.created_at.to_rfc3339()
     }
 
-    /// Returns a clone of the actual sql code carried by this
-    /// instance.
-    pub fn sql(&self) -> Option<String> {
-        self.sql.clone()
-    }
-
     /// Returns a clone of the description associated with the
     /// context.
-    pub fn desc(&self) -> Option<String> {
-        self.desc.clone()
+    pub fn desc(&self) -> Option<&String> {
+        self.desc.as_ref()
     }
 
     /// Returns the Execution Phase
     pub fn phase(&self) -> Option<ExecutionPhase> {
-        self.phase.clone()
+        self.phase
     }
 }
 
@@ -200,11 +169,5 @@ mod tests {
         QueryCtx::new("fake")
             .with_node_id("123")
             .with_node_id("abc");
-    }
-
-    #[test]
-    fn test_sql() {
-        let query_ctx = QueryCtx::new("fake").with_sql("select 1");
-        assert_eq!(query_ctx.sql().unwrap(), "select 1");
     }
 }

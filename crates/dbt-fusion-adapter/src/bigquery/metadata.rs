@@ -439,10 +439,9 @@ impl MetadataAdapter for BigqueryAdapter {
                     generate_system_table_fqn(&project, &table, user_preferred_region.as_deref());
                 let sql = format!("SELECT * FROM {table_fqn} LIMIT 0");
 
-                let query_ctx = QueryCtx::new(adapter.adapter_type().to_string())
-                    .with_sql(sql)
-                    .with_desc("Get table schema");
-                let (_, agate_table) = adapter.query(&mut *conn, &query_ctx, None)?;
+                let ctx =
+                    QueryCtx::new(adapter.adapter_type().to_string()).with_desc("Get table schema");
+                let (_, agate_table) = adapter.query(&ctx, &mut *conn, &sql, None)?;
                 let batch = agate_table.original_record_batch();
 
                 let schema = batch.schema();

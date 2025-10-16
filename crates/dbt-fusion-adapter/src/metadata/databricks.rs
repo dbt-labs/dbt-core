@@ -14,7 +14,7 @@ use crate::{AdapterResult, AdapterTyping};
 // Reference: https://github.com/databricks/dbt-databricks/blob/92f1442faabe0fce6f0375b95e46ebcbfcea4c67/dbt/include/databricks/macros/adapters/metadata.sql
 pub fn list_relations(
     adapter: &dyn AdapterTyping,
-    query_ctx: &QueryCtx,
+    ctx: &QueryCtx,
     conn: &'_ mut dyn Connection,
     db_schema: &CatalogAndSchema,
 ) -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
@@ -42,9 +42,7 @@ WHERE table_catalog = '{}'
                             &db_schema.resolved_catalog,
                             &db_schema.resolved_schema);
 
-    let query_ctx = query_ctx.with_sql(sql);
-
-    let batch = adapter.engine().execute(None, conn, &query_ctx)?;
+    let batch = adapter.engine().execute(None, conn, ctx, &sql)?;
 
     if batch.num_rows() == 0 {
         return Ok(Vec::new());

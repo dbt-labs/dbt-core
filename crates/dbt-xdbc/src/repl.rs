@@ -124,9 +124,10 @@ impl ReplState {
             return Ok((0, 0));
         }
 
+        let ctx = QueryCtx::new("repl");
         let conn = self.connection.as_mut();
         let mut stmt = conn.new_statement()?;
-        stmt.set_sql_query(&QueryCtx::new("repl").with_sql(query))?;
+        stmt.set_sql_query(&ctx, query)?;
         let reader = stmt.execute()?;
 
         let num_cols = reader.schema().fields().len();

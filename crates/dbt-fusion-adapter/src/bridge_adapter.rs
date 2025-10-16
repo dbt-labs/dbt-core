@@ -9,7 +9,7 @@ use crate::funcs::{
 use crate::funcs::{execute_macro_wrapper_with_package, format_sql_with_bindings};
 use crate::information_schema::InformationSchema;
 use crate::metadata::*;
-use crate::query_ctx::{node_id_from_state, query_ctx_from_state, query_ctx_from_state_with_sql};
+use crate::query_ctx::{node_id_from_state, query_ctx_from_state};
 use crate::record_batch_utils::extract_first_value_as_i64;
 use crate::relation_object::RelationObject;
 use crate::render_constraint::render_model_constraint;
@@ -417,12 +417,12 @@ impl BaseAdapter for BridgeAdapter {
         options: Option<HashMap<String, String>>,
     ) -> AdapterResult<(AdapterResponse, AgateTable)> {
         let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
-        let query_ctx =
-            query_ctx_from_state_with_sql(state, sql)?.with_desc("execute adapter call");
+        let ctx = query_ctx_from_state(state)?.with_desc("execute adapter call");
         let (response, table) = self.typed_adapter.execute(
             Some(state),
             conn.as_mut(),
-            &query_ctx,
+            &ctx,
+            sql,
             auto_begin,
             fetch,
             limit,
@@ -448,12 +448,12 @@ impl BaseAdapter for BridgeAdapter {
         };
 
         let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
-        let query_ctx = query_ctx_from_state_with_sql(state, formatted_sql)?
-            .with_desc("add_query adapter call");
+        let ctx = query_ctx_from_state(state)?.with_desc("add_query adapter call");
 
         self.typed_adapter.add_query(
+            &ctx,
             conn.as_mut(),
-            &query_ctx,
+            &formatted_sql,
             auto_begin,
             bindings,
             abridge_sql_log,
@@ -966,12 +966,12 @@ impl BaseAdapter for BridgeAdapter {
         check_num_args(current_function_name!(), &parser, 1, 1)?;
         let sql = parser.get::<String>("sql")?;
 
-        let query_ctx = query_ctx_from_state_with_sql(state, sql)?
-            .with_desc("get_column_schema_from_query adapter call");
+        let ctx =
+            query_ctx_from_state(state)?.with_desc("get_column_schema_from_query adapter call");
         let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
         let result =
             self.typed_adapter
-                .get_column_schema_from_query(state, conn.as_mut(), &query_ctx)?;
+                .get_column_schema_from_query(state, conn.as_mut(), &ctx, &sql)?;
         Ok(Value::from(result))
     }
 
@@ -1675,10 +1675,12 @@ impl BaseAdapter for BridgeAdapter {
         field_delimiter: &str,
     ) -> Result<Value, MinijinjaError> {
         let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
-        let query_ctx = query_ctx_from_state(state)?.with_desc("load_dataframe");
+        let ctx = query_ctx_from_state(state)?.with_desc("load_dataframe");
+        let sql = "";
         let result = self.typed_adapter.load_dataframe(
-            &query_ctx,
+            &ctx,
             conn.as_mut(),
+            sql,
             database,
             schema,
             table_name,

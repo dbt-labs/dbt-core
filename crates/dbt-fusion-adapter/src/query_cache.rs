@@ -28,7 +28,12 @@ pub enum QueryCacheMode {
 }
 
 pub trait QueryCache: Send + Sync {
-    fn new_statement(&self, stmt: Box<dyn Statement>, query_ctx: QueryCtx) -> Box<dyn Statement>;
+    fn new_statement(
+        &self,
+        stmt: Box<dyn Statement>,
+        ctx: QueryCtx,
+        sql: String,
+    ) -> Box<dyn Statement>;
 }
 
 pub struct QueryCacheStatement {
@@ -36,6 +41,7 @@ pub struct QueryCacheStatement {
     counters: Arc<SccHashMap<String, usize>>,
     inner_stmt: Box<dyn Statement>,
     query_ctx: QueryCtx,
+    sql: String,
 }
 
 impl QueryCacheStatement {
@@ -49,10 +55,12 @@ impl QueryCacheStatement {
     }
 
     fn compute_sql_hash(&self) -> String {
-        let sql = match self.query_ctx.sql() {
-            Some(sql) => normalize_sql_for_comparison(&sql),
-            None => "none".to_string(),
+        let sql = if self.sql.is_empty() {
+            "none"
+        } else {
+            &self.sql
         };
+        let sql = normalize_sql_for_comparison(sql);
         let mut hasher = DefaultHasher::new();
         sql.hash(&mut hasher);
         let hash = hasher.finish();
@@ -171,7 +179,7 @@ impl Statement for QueryCacheStatement {
     }
 
     fn execute<'a>(&'a mut self) -> AdbcResult<Box<dyn RecordBatchReader + Send + 'a>> {
-        self.inner_stmt.set_sql_query(&self.query_ctx)?;
+        self.inner_stmt.set_sql_query(&self.query_ctx, &self.sql)?;
         let (node_id, phase) = if let Some(node_id) = self.query_ctx.node_id()
             && let Some(phase) = self.query_ctx.phase()
             && self.query_cache_config.phases.contains(&phase)
@@ -188,8 +196,8 @@ impl Statement for QueryCacheStatement {
             QueryCacheMode::ReadWrite => {
                 // First, compute the file name by hashing the query and suffixing the index
                 let sql_hash = self.compute_sql_hash();
-                let index = self.compute_file_index(&node_id, &phase, &sql_hash);
-                let path = self.construct_output_file_name(&node_id, &sql_hash, index);
+                let index = self.compute_file_index(node_id, &phase, &sql_hash);
+                let path = self.construct_output_file_name(node_id, &sql_hash, index);
                 if path.exists() {
                     if self.check_ttl(&path)? {
                         let cache_read = self.read_cache(&path);
@@ -236,8 +244,9 @@ impl Statement for QueryCacheStatement {
         self.inner_stmt.prepare()
     }
 
-    fn set_sql_query(&mut self, query_ctx: &QueryCtx) -> AdbcResult<()> {
-        self.query_ctx = query_ctx.clone();
+    fn set_sql_query(&mut self, ctx: &QueryCtx, sql: &str) -> AdbcResult<()> {
+        self.query_ctx = ctx.clone();
+        self.sql = sql.to_string();
         Ok(())
     }
 
@@ -294,12 +303,18 @@ impl QueryCacheImpl {
 }
 
 impl QueryCache for QueryCacheImpl {
-    fn new_statement(&self, stmt: Box<dyn Statement>, query_ctx: QueryCtx) -> Box<dyn Statement> {
+    fn new_statement(
+        &self,
+        stmt: Box<dyn Statement>,
+        ctx: QueryCtx,
+        sql: String,
+    ) -> Box<dyn Statement> {
         Box::new(QueryCacheStatement {
             query_cache_config: self.config.clone(),
             counters: self.counters.clone(),
             inner_stmt: stmt,
-            query_ctx,
+            query_ctx: ctx,
+            sql,
         })
     }
 }

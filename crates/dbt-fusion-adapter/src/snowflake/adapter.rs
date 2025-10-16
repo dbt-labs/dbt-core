@@ -63,10 +63,9 @@ impl TypedBaseAdapter for SnowflakeAdapter {
         warehouse: String,
         node_id: &str,
     ) -> FsResult<()> {
-        let query_ctx = QueryCtx::new(AdapterType::Snowflake.to_string())
-            .with_sql(format!("use warehouse {warehouse}"))
-            .with_node_id(node_id);
-        self.exec_stmt(conn, &query_ctx, false)?;
+        let ctx = QueryCtx::new(AdapterType::Snowflake.to_string()).with_node_id(node_id);
+        let sql = format!("use warehouse {warehouse}");
+        self.exec_stmt(&ctx, conn, &sql, false)?;
         Ok(())
     }
 
@@ -74,10 +73,9 @@ impl TypedBaseAdapter for SnowflakeAdapter {
         let warehouse = self
             .get_db_config("warehouse")
             .ok_or_else(|| unexpected_fs_err!("'warehouse' not found in Snowflake DB config"))?;
-        let query_ctx = QueryCtx::new(AdapterType::Snowflake.to_string())
-            .with_sql(format!("use warehouse {warehouse}"))
-            .with_node_id(node_id);
-        self.exec_stmt(conn, &query_ctx, false)?;
+        let ctx = QueryCtx::new(AdapterType::Snowflake.to_string()).with_node_id(node_id);
+        let sql = format!("use warehouse {warehouse}");
+        self.exec_stmt(&ctx, conn, &sql, false)?;
         Ok(())
     }
 
@@ -107,8 +105,9 @@ prevent unnecessary latency for other users."#,
     #[allow(clippy::too_many_arguments)]
     fn add_query(
         &self,
+        ctx: &QueryCtx,
         conn: &'_ mut dyn Connection,
-        query_ctx: &QueryCtx,
+        sql: &str,
         auto_begin: bool,
         _bindings: Option<&Value>,
         _abridge_sql_log: bool,
@@ -118,7 +117,8 @@ prevent unnecessary latency for other users."#,
             self.engine.clone(),
             None,
             conn,
-            query_ctx,
+            ctx,
+            sql,
             auto_begin,
             false, // fetch
             None,
@@ -136,7 +136,7 @@ prevent unnecessary latency for other users."#,
     fn get_relation(
         &self,
         state: &State,
-        query_ctx: &QueryCtx,
+        ctx: &QueryCtx,
         conn: &'_ mut dyn Connection,
         database: &str,
         schema: &str,
@@ -162,10 +162,7 @@ prevent unnecessary latency for other users."#,
             "show objects like '{quoted_identifier}' in schema {quoted_database}.{quoted_schema}"
         );
 
-        let batch = match self
-            .engine
-            .execute(Some(state), conn, &query_ctx.with_sql(sql))
-        {
+        let batch = match self.engine.execute(Some(state), conn, ctx, &sql) {
             Ok(b) => b,
             Err(e) => {
                 // Previous versions of this code [1] checked the prefix of the error message

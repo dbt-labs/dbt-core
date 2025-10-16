@@ -69,8 +69,9 @@ impl TypedBaseAdapter for RedshiftAdapter {
     #[allow(clippy::too_many_arguments)]
     fn add_query(
         &self,
+        ctx: &QueryCtx,
         conn: &'_ mut dyn Connection,
-        query_ctx: &QueryCtx,
+        sql: &str,
         auto_begin: bool,
         _bindings: Option<&Value>,
         _abridge_sql_log: bool,
@@ -80,7 +81,8 @@ impl TypedBaseAdapter for RedshiftAdapter {
             self.engine.clone(),
             None,
             conn,
-            query_ctx,
+            ctx,
+            sql,
             auto_begin,
             false,
             None,
@@ -127,7 +129,7 @@ impl TypedBaseAdapter for RedshiftAdapter {
     fn get_relation(
         &self,
         state: &State,
-        query_ctx: &QueryCtx,
+        ctx: &QueryCtx,
         conn: &mut dyn Connection,
         database: &str,
         schema: &str,
@@ -166,8 +168,7 @@ LEFT JOIN materialized_views mv
     ON ao.object_name = mv.object_name"
         );
 
-        let query_ctx = query_ctx.with_sql(sql);
-        let batch = self.engine.execute(Some(state), conn, &query_ctx)?;
+        let batch = self.engine.execute(Some(state), conn, ctx, &sql)?;
 
         if batch.num_rows() == 0 {
             // If there are no rows, then we did not find the object

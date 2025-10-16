@@ -91,7 +91,7 @@ pub trait Statement: Send {
     ///
     /// The query can then be executed with [Statement::execute]. For queries
     /// expected to be executed repeatedly, call [Statement::prepare] first.
-    fn set_sql_query(&mut self, query: &QueryCtx) -> Result<()>;
+    fn set_sql_query(&mut self, ctx: &QueryCtx, sql: &str) -> Result<()>;
 
     /// Set the Substrait plan to execute.
     ///
@@ -195,11 +195,11 @@ impl Statement for AdbcStatement {
         self.1.prepare()
     }
 
-    fn set_sql_query(&mut self, query: &QueryCtx) -> Result<()> {
-        // Because context might hot have sql (e.g., ingest)
-        match query.sql() {
-            Some(sql) => self.1.set_sql_query(sql),
-            None => Ok(()),
+    fn set_sql_query(&mut self, _ctx: &QueryCtx, sql: &str) -> Result<()> {
+        // Because caller might hot have sql (e.g., ingest)
+        match sql {
+            "" => Ok(()),
+            sql => self.1.set_sql_query(sql),
         }
     }
 
@@ -282,9 +282,8 @@ impl Statement for OdbcStatement {
         self.1.prepare()
     }
 
-    fn set_sql_query(&mut self, query: &QueryCtx) -> Result<()> {
-        assert!(query.sql().is_some());
-        self.1.set_sql_query(&query.sql().unwrap())
+    fn set_sql_query(&mut self, _ctx: &QueryCtx, sql: &str) -> Result<()> {
+        self.1.set_sql_query(sql)
     }
 
     fn set_substrait_plan(&mut self, _plan: &[u8]) -> Result<()> {
