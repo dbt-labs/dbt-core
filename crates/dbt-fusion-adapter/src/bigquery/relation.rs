@@ -223,8 +223,11 @@ impl BaseRelation for BigqueryRelation {
         Ok(self.as_value())
     }
 
+    /// In BigQuery, we don't normalize since quoting doesn't decide case sensitivity
+    /// object names are case sensitive by default unless explicitly turned off via the is_case_insensitive option
+    /// https://cloud.google.com/bigquery/docs/reference/standard-sql/data-definition-language#schema_option_list
     fn normalize_component(&self, component: &str) -> String {
-        component.to_lowercase()
+        component.to_string()
     }
 
     fn create_relation(
