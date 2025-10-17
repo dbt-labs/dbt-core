@@ -5,7 +5,7 @@ use arrow_schema::Schema;
 
 use dbt_schemas::schemas::relations::base::{BaseRelation, RelationPattern};
 use dbt_xdbc::query_ctx::ExecutionPhase;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 
 impl MetadataAdapter for MockAdapter {
@@ -39,7 +39,7 @@ impl MetadataAdapter for MockAdapter {
     fn create_schemas_if_not_exists(
         &self,
         _state: &minijinja::State<'_, '_>,
-        _catalog_schemas: Vec<Arc<dyn BaseRelation>>,
+        _catalog_schemas: &BTreeMap<String, BTreeSet<String>>,
     ) -> AdapterResult<Vec<(String, String, AdapterResult<()>)>> {
         Ok(Vec::new())
     }

@@ -13,7 +13,7 @@ use dbt_schemas::schemas::{
 use dbt_xdbc::query_ctx::ExecutionPhase;
 
 use std::collections::btree_map::Entry;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 
 impl MetadataAdapter for PostgresAdapter {
@@ -153,7 +153,7 @@ impl MetadataAdapter for PostgresAdapter {
     fn create_schemas_if_not_exists(
         &self,
         _state: &minijinja::State<'_, '_>,
-        _catalog_schemas: Vec<Arc<dyn BaseRelation>>,
+        _catalog_schemas: &BTreeMap<String, BTreeSet<String>>,
     ) -> AdapterResult<Vec<(String, String, AdapterResult<()>)>> {
         todo!("PostgresAdapter::create_schemas_if_not_exists")
     }

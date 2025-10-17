@@ -17,7 +17,7 @@ use dbt_xdbc::query_ctx::ExecutionPhase;
 use dbt_xdbc::{Connection, MapReduce, QueryCtx};
 
 use std::collections::btree_map::Entry;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 
 // The following views always need to be qualified with a dataset or a region (but not both!)
@@ -510,7 +510,7 @@ impl MetadataAdapter for BigqueryAdapter {
     fn create_schemas_if_not_exists(
         &self,
         state: &minijinja::State<'_, '_>,
-        catalog_schemas: Vec<Arc<dyn BaseRelation>>,
+        catalog_schemas: &BTreeMap<String, BTreeSet<String>>,
     ) -> AdapterResult<Vec<(String, String, AdapterResult<()>)>> {
         create_schemas_if_not_exists(Arc::new(self.clone()), state, catalog_schemas)
     }

@@ -21,7 +21,7 @@ use dbt_schemas::schemas::relations::base::{BaseRelation, RelationPattern};
 use dbt_xdbc::query_ctx::ExecutionPhase;
 use dbt_xdbc::{Connection, MapReduce, QueryCtx};
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::future;
 use std::sync::Arc;
 
@@ -372,7 +372,7 @@ impl MetadataAdapter for DatabricksAdapter {
     fn create_schemas_if_not_exists(
         &self,
         state: &minijinja::State<'_, '_>,
-        catalog_schemas: Vec<Arc<dyn BaseRelation>>,
+        catalog_schemas: &BTreeMap<String, BTreeSet<String>>,
     ) -> AdapterResult<Vec<(String, String, AdapterResult<()>)>> {
         create_schemas_if_not_exists(Arc::new(self.clone()), state, catalog_schemas)
     }

@@ -1,7 +1,7 @@
 use crate::errors::{AdapterError, AdapterResult, AsyncAdapterResult};
 use crate::funcs::execute_macro;
 use crate::metadata::*;
-use crate::relation_object::create_relation_internal;
+use crate::relation_object::{create_relation, create_relation_internal};
 use crate::sql_types::{SdfSchema, arrow_schema_to_sdf_schema};
 use crate::typed_adapter::TypedBaseAdapter;
 
@@ -91,7 +91,7 @@ pub trait MetadataAdapter: TypedBaseAdapter + Send + Sync {
     fn create_schemas_if_not_exists(
         &self,
         state: &State<'_, '_>,
-        catalog_schemas: Vec<Arc<dyn BaseRelation>>,
+        catalog_schemas: &BTreeMap<String, BTreeSet<String>>,
     ) -> AdapterResult<Vec<(String, String, AdapterResult<()>)>>;
 
     /// Get freshness of relations
@@ -219,10 +219,21 @@ pub trait MetadataAdapter: TypedBaseAdapter + Send + Sync {
 pub fn create_schemas_if_not_exists(
     adapter: Arc<dyn MetadataAdapter>,
     state: &State,
-    catalog_schemas: Vec<Arc<dyn BaseRelation>>,
+    catalog_schemas: &BTreeMap<String, BTreeSet<String>>,
 ) -> AdapterResult<Vec<(String, String, AdapterResult<()>)>> {
-    let map_f = |mock_relation: Arc<dyn BaseRelation>| -> AdapterResult<(String, String, AdapterResult<()>)> {
-        let res = match execute_macro(state, &[mock_relation.as_value()], "create_schema") {
+    let catalog_schemas = flatten_catalog_schemas(catalog_schemas);
+
+    let map_f = |(catalog, schema): (String, String)| -> AdapterResult<(String, String, AdapterResult<()>)> {
+        let mock_relation = create_relation(
+            adapter.adapter_type(),
+            catalog.clone(),
+            schema.clone(),
+            None,
+            None,
+            adapter.quoting()
+        )?;
+        let res =
+        match execute_macro(state, &[mock_relation.as_value()], "create_schema") {
             Ok(_) => Ok(()),
             Err(e) => {
                 if adapter.is_permission_error(&e) {
@@ -234,8 +245,6 @@ pub fn create_schemas_if_not_exists(
                 }
             }
         };
-        let catalog = mock_relation.database_as_str()?;
-        let schema = mock_relation.schema_as_str()?;
         Ok((catalog, schema, res))
     };
 
