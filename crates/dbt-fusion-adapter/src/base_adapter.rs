@@ -115,17 +115,58 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
     ) -> Result<Box<dyn Connection>, MinijinjaError>;
 
     /// Cache added
-    fn cache_added(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L644
+    ///
+    /// ```python
+    /// def cache_added(
+    ///     self,
+    ///     relation: Optional[BaseRelation]
+    /// ) -> None
+    /// ```
+    fn cache_added(
+        &self,
+        _state: &State,
+        _relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, MinijinjaError> {
         unimplemented!("cache_added")
     }
 
     /// Cache dropped
-    fn cache_dropped(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L655
+    ///
+    /// ```python
+    /// def cache_dropped(
+    ///     self,
+    ///     relation: Optional[BaseRelation]
+    /// ) -> None
+    /// ```
+    fn cache_dropped(
+        &self,
+        _state: &State,
+        _relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, MinijinjaError> {
         unimplemented!("cache_dropped")
     }
 
     /// Cache renamed
-    fn cache_renamed(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L667
+    ///
+    /// ```python
+    /// def cache_renamed(
+    ///     self,
+    ///     from_relation: Optional[BaseRelation],
+    ///     to_relation: Optional[BaseRelation]
+    /// ) -> None
+    /// ```
+    fn cache_renamed(
+        &self,
+        _state: &State,
+        _from_relation: Arc<dyn BaseRelation>,
+        _to_relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, MinijinjaError> {
         unimplemented!("cache_renamed")
     }
 

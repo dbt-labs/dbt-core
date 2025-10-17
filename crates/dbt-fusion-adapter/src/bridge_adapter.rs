@@ -251,35 +251,34 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip_all, level = "trace")]
-    fn cache_added(&self, _state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
-        let iter = ArgsIter::new(current_function_name!(), &["relation"], args);
-        let relation = iter.next_arg::<&RelationObject>()?;
-        iter.finish()?;
-        self.relation_cache.insert_relation(relation.inner(), None);
+    fn cache_added(
+        &self,
+        _state: &State,
+        relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, MinijinjaError> {
+        self.relation_cache.insert_relation(relation, None);
         Ok(none_value())
     }
 
-    #[tracing::instrument(skip(self, _state, args))]
-    fn cache_dropped(&self, _state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
-        let iter = ArgsIter::new(current_function_name!(), &["relation"], args);
-        let relation = iter.next_arg::<&RelationObject>()?;
-        iter.finish()?;
-        self.relation_cache.evict_relation(&relation.inner());
+    #[tracing::instrument(skip(self, _state))]
+    fn cache_dropped(
+        &self,
+        _state: &State,
+        relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, MinijinjaError> {
+        self.relation_cache.evict_relation(&relation);
         Ok(none_value())
     }
 
-    #[tracing::instrument(skip(self, _state, args))]
-    fn cache_renamed(&self, _state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
-        let iter = ArgsIter::new(
-            current_function_name!(),
-            &["old_relation", "new_relation"],
-            args,
-        );
-        let old_relation = iter.next_arg::<&RelationObject>()?;
-        let new_relation = iter.next_arg::<&RelationObject>()?;
-        iter.finish()?;
+    #[tracing::instrument(skip(self, _state))]
+    fn cache_renamed(
+        &self,
+        _state: &State,
+        from_relation: Arc<dyn BaseRelation>,
+        to_relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, MinijinjaError> {
         self.relation_cache
-            .rename_relation(&old_relation.inner(), new_relation.inner());
+            .rename_relation(&from_relation, to_relation);
         Ok(none_value())
     }
 
@@ -484,19 +483,22 @@ impl BaseAdapter for BridgeAdapter {
 
     #[tracing::instrument(skip(self, state), level = "trace")]
     fn rename_relation(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
-        self.cache_renamed(state, args)?;
+        // Extract relations for cache_renamed call
+        let iter = ArgsIter::new(
+            current_function_name!(),
+            &["from_relation", "to_relation"],
+            args,
+        );
+        let from_relation_obj = iter.next_arg::<&RelationObject>()?;
+        let to_relation_obj = iter.next_arg::<&RelationObject>()?;
+        let from_relation = from_relation_obj.inner();
+        let to_relation = to_relation_obj.inner();
+        iter.finish()?;
+
+        self.cache_renamed(state, from_relation.clone(), to_relation.clone())?;
+
         if self.typed_adapter.as_replay().is_some() {
             // TODO: move this logic to the [ReplayAdapter]
-            let iter = ArgsIter::new(
-                current_function_name!(),
-                &["from_relation", "to_relation"],
-                args,
-            );
-            let from_relation_obj = iter.next_arg::<&RelationObject>()?;
-            let to_relation_obj = iter.next_arg::<&RelationObject>()?;
-            let from_relation = from_relation_obj.inner();
-            let to_relation = to_relation_obj.inner();
-            iter.finish()?;
             let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
             self.typed_adapter
                 .rename_relation(conn.as_mut(), from_relation, to_relation)?;

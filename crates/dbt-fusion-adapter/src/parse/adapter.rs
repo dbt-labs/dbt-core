@@ -786,15 +786,28 @@ impl BaseAdapter for ParseAdapter {
 
     // TODO(jason): We should probably capture any manual user engagement with the cache
     // and use this knowledge for our cache hydration
-    fn cache_added(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn cache_added(
+        &self,
+        _state: &State,
+        _relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, MinijinjaError> {
         Ok(none_value())
     }
 
-    fn cache_dropped(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn cache_dropped(
+        &self,
+        _state: &State,
+        _relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, MinijinjaError> {
         Ok(none_value())
     }
 
-    fn cache_renamed(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn cache_renamed(
+        &self,
+        _state: &State,
+        _from_relation: Arc<dyn BaseRelation>,
+        _to_relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, MinijinjaError> {
         Ok(none_value())
     }
 }

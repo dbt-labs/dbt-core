@@ -142,9 +142,35 @@ pub fn dispatch_adapter_calls(
         "get_catalog_integration" => adapter.get_catalog_integration(state, args),
         "type" => Ok(Value::from(adapter.adapter_type().to_string())),
         "get_hard_deletes_behavior" => adapter.get_hard_deletes_behavior(state, args),
-        "cache_added" => adapter.cache_added(state, args),
-        "cache_dropped" => adapter.cache_dropped(state, args),
-        "cache_renamed" => adapter.cache_renamed(state, args),
+        "cache_added" => {
+            // relation: BaseRelation
+            let iter = ArgsIter::new(name, &["relation"], args);
+            let relation = iter.next_arg::<&Value>()?;
+            let relation = downcast_value_to_dyn_base_relation(relation)?;
+            iter.finish()?;
+
+            adapter.cache_added(state, relation)
+        }
+        "cache_dropped" => {
+            // relation: BaseRelation
+            let iter = ArgsIter::new(name, &["relation"], args);
+            let relation = iter.next_arg::<&Value>()?;
+            let relation = downcast_value_to_dyn_base_relation(relation)?;
+            iter.finish()?;
+
+            adapter.cache_dropped(state, relation)
+        }
+        "cache_renamed" => {
+            // from_relation: BaseRelation, to_relation: BaseRelation
+            let iter = ArgsIter::new(name, &["from_relation", "to_relation"], args);
+            let from_relation = iter.next_arg::<&Value>()?;
+            let from_relation = downcast_value_to_dyn_base_relation(from_relation)?;
+            let to_relation = iter.next_arg::<&Value>()?;
+            let to_relation = downcast_value_to_dyn_base_relation(to_relation)?;
+            iter.finish()?;
+
+            adapter.cache_renamed(state, from_relation, to_relation)
+        }
         "quote" => {
             // identifier: str
             let iter = ArgsIter::new(name, &["identifier"], args);
