@@ -16,7 +16,7 @@ use crate::{
 use arrow::array::{RecordBatch, StringArray, TimestampMicrosecondArray};
 use arrow::datatypes::GenericStringType;
 use arrow_array::{Array, BooleanArray, Decimal128Array, GenericByteArray, Int32Array, Int64Array};
-use arrow_schema::{Field, Schema};
+use arrow_schema::Schema;
 use dbt_common::cancellation::Cancellable;
 use dbt_schemas::schemas::legacy_catalog::{
     CatalogNodeStats, CatalogTable, ColumnMetadata, TableMetadata,
@@ -25,12 +25,12 @@ use dbt_schemas::schemas::relations::base::{BaseRelation, RelationPattern};
 use dbt_xdbc::query_ctx::ExecutionPhase;
 use dbt_xdbc::{Connection, MapReduce, QueryCtx};
 
+use crate::sql_types::make_arrow_field_v2;
 use std::collections::btree_map::Entry;
 use std::{
     collections::{BTreeMap, HashMap},
     sync::Arc,
 };
-
 // TODO: see if this can be shared for other adapters
 
 /// Builds and returns ([WhereClausesByDb], [RelationsByDb]) from a list of [BaseRelation]
@@ -571,7 +571,7 @@ impl MetadataAdapter for RedshiftAdapter {
             let identifier = relation.identifier_as_str()?;
 
             let sql = format!(
-                "SELECT column_name, data_type, is_nullable
+                "SELECT column_name, data_type, is_nullable, remarks
     FROM SVV_ALL_COLUMNS
     WHERE database_name = '{catalog}'
     AND schema_name = '{schema}'
@@ -586,19 +586,27 @@ impl MetadataAdapter for RedshiftAdapter {
             let column_names = get_column_values::<StringArray>(&batch, "column_name")?;
             let data_types = get_column_values::<StringArray>(&batch, "data_type")?;
             let is_nullables = get_column_values::<StringArray>(&batch, "is_nullable")?;
+            let comments = get_column_values::<StringArray>(&batch, "remarks")?;
 
             let table_schema = {
                 for i in 0..batch.num_rows() {
                     let name = column_names.value(i);
                     let data_type = data_types.value(i);
                     let is_nullable = is_nullables.value(i) == "YES";
+                    let comment = match comments.value(i) {
+                        "" => None,
+                        c => Some(c.to_string()),
+                    };
 
-                    let arrow_type = adapter
-                        .engine()
-                        .type_ops()
-                        .parse_into_arrow_type(data_type)?;
+                    let field = make_arrow_field_v2(
+                        adapter.engine().type_ops(),
+                        String::from(name),
+                        data_type,
+                        Some(is_nullable),
+                        comment,
+                    )?;
 
-                    fields.push(Field::new(name, arrow_type, is_nullable));
+                    fields.push(field);
                 }
                 Arc::new(Schema::new(fields))
             };

@@ -281,6 +281,30 @@ impl SdfSchemaBuilder {
                 );
                 Ok(Arc::new(field))
             }
+            Redshift => {
+                let metadata = field.metadata();
+                let current_type = field.data_type();
+                let nullable = field.is_nullable();
+                let original_type_text = metadata.get(ARROW_FIELD_ORIGINAL_TYPE_METADATA_KEY);
+                let comment = metadata
+                    .get(ARROW_FIELD_COMMENT_METADATA_KEY)
+                    .map(|s| s.to_string());
+                let resolved_type = if let Some(original_type_text) = original_type_text {
+                    type_ops
+                        .parse_into_arrow_type(original_type_text)
+                        .unwrap_or_else(|_| current_type.clone())
+                } else {
+                    current_type.clone()
+                };
+                let field = new_arrow_field_with_metadata(
+                    field.name(),
+                    resolved_type,
+                    nullable,
+                    original_type_text.cloned(),
+                    comment,
+                );
+                Ok(Arc::new(field))
+            }
             // More adapters will be handled here when build_sdf_schema()
             // delegates to this function for more adapters.
             _ => unreachable!(),
@@ -290,7 +314,7 @@ impl SdfSchemaBuilder {
     pub fn build_sdf_schema(self, type_ops: &dyn TypeOps) -> AdapterResult<SdfSchema> {
         use AdapterType::*;
         match self.adapter_type {
-            Bigquery => {
+            Bigquery | Redshift => {
                 let original_fields = self.original.fields();
                 let mut sdf_fields = Vec::with_capacity(original_fields.len());
                 for field in original_fields {
@@ -306,7 +330,7 @@ impl SdfSchemaBuilder {
                     SdfSchema::from_sdf_arrow_schema(Some(self.original), sdf_arrow_schema);
                 Ok(sdf_schema)
             }
-            Postgres | Snowflake | Databricks | Redshift | Salesforce => {
+            Postgres | Snowflake | Databricks | Salesforce => {
                 // NOTE(felipecrv): this is not correct, but it's a temporary fallback
                 // that allows us to call [to_sdf_arrow_schema] from anywhere.
                 //
