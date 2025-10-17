@@ -578,8 +578,7 @@ impl MetadataAdapter for RedshiftAdapter {
     AND table_name = '{identifier}'"
             );
 
-            let ctx =
-                QueryCtx::new(adapter.adapter_type().to_string()).with_desc("Get table schema");
+            let ctx = QueryCtx::default().with_desc("Get table schema");
             let (_, table) = adapter.query(&ctx, &mut *conn, &sql, None)?;
             let batch = table.original_record_batch();
             // Build fields from the response
@@ -699,8 +698,7 @@ impl MetadataAdapter for RedshiftAdapter {
                 where_clauses.join(" OR ")
             );
 
-            let ctx = QueryCtx::new(adapter.adapter_type().to_string())
-                .with_desc("Extracting freshness from information schema");
+            let ctx = QueryCtx::default().with_desc("Extracting freshness from information schema");
             let (_adapter_response, agate_table) = adapter.query(&ctx, &mut *conn, &sql, None)?;
             let batch = agate_table.original_record_batch();
             Ok(batch)
@@ -762,8 +760,7 @@ impl MetadataAdapter for RedshiftAdapter {
         let map_f = move |conn: &'_ mut dyn Connection,
                           db_schema: &CatalogAndSchema|
               -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
-            let query_ctx = QueryCtx::new(adapter.adapter_type().to_string())
-                .with_desc("list_relations_in_parallel");
+            let query_ctx = QueryCtx::default().with_desc("list_relations_in_parallel");
             adapter.list_relations(&query_ctx, conn, db_schema)
         };
 

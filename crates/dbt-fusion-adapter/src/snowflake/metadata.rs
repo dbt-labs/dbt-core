@@ -273,8 +273,7 @@ impl MetadataAdapter for SnowflakeAdapter {
         let adapter = self.clone();
         let map_f =
             move |conn: &'_ mut dyn Connection, sql: &String| -> AdapterResult<Arc<RecordBatch>> {
-                let ctx = QueryCtx::new(adapter.adapter_type().to_string())
-                    .with_desc("List user functions");
+                let ctx = QueryCtx::default().with_desc("List user functions");
                 let (_, table) = adapter.query(&ctx, conn, sql, None)?;
                 let batch = table.original_record_batch();
                 Ok(batch)
@@ -376,8 +375,7 @@ impl MetadataAdapter for SnowflakeAdapter {
                           table_name: &String|
               -> AdapterResult<Arc<Schema>> {
             let sql = format!("describe table {};", &table_name);
-            let mut ctx =
-                QueryCtx::new(adapter.adapter_type().to_string()).with_desc("Get table schema");
+            let mut ctx = QueryCtx::default().with_desc("Get table schema");
             if let Some(node_id) = unique_id.clone() {
                 ctx = ctx.with_node_id(&node_id);
             }
@@ -466,8 +464,7 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
         let adapter = self.clone();
         let map_f =
             move |conn: &'_ mut dyn Connection, sql: &String| -> AdapterResult<Arc<RecordBatch>> {
-                let ctx = QueryCtx::new(adapter.adapter_type().to_string())
-                    .with_desc("Get schema by pattern");
+                let ctx = QueryCtx::default().with_desc("Get schema by pattern");
                 let (_, table) = adapter.query(&ctx, conn, sql, None)?;
                 let batch = table.original_record_batch();
                 Ok(batch)
@@ -546,8 +543,7 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
                 where_clauses.join(" OR ")
             );
 
-            let ctx = QueryCtx::new(adapter.adapter_type().to_string())
-                .with_desc("Extracting freshness from information schema");
+            let ctx = QueryCtx::default().with_desc("Extracting freshness from information schema");
             let (_adapter_response, agate_table) = adapter.query(&ctx, &mut *conn, &sql, None)?;
             let batch = agate_table.original_record_batch();
             Ok(batch)
@@ -611,8 +607,7 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
         let map_f = move |conn: &'_ mut dyn Connection,
                           db_schema: &CatalogAndSchema|
               -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
-            let query_ctx = QueryCtx::new(adapter.adapter_type().to_string())
-                .with_desc("list_relations_in_parallel");
+            let query_ctx = QueryCtx::default().with_desc("list_relations_in_parallel");
             adapter.list_relations(&query_ctx, conn, db_schema)
         };
 

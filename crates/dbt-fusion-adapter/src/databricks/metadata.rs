@@ -247,8 +247,7 @@ impl MetadataAdapter for DatabricksAdapter {
                 format!("DESCRIBE TABLE EXTENDED {database}.{schema}.{identifier} AS JSON;")
             };
 
-            let ctx =
-                QueryCtx::new(adapter.adapter_type().to_string()).with_desc("Get table schema");
+            let ctx = QueryCtx::default().with_desc("Get table schema");
             let (_, table) = adapter.query(&ctx, conn, &sql, None)?;
             let batch = table.original_record_batch();
 
@@ -325,8 +324,7 @@ impl MetadataAdapter for DatabricksAdapter {
                 where_clauses.join(" OR ")
             );
 
-            let ctx = QueryCtx::new(adapter.adapter_type().to_string())
-                .with_desc("Extracting freshness from information schema");
+            let ctx = QueryCtx::default().with_desc("Extracting freshness from information schema");
             let (_adapter_response, agate_table) = adapter.query(&ctx, &mut *conn, &sql, None)?;
             let batch = agate_table.original_record_batch();
             Ok(batch)
@@ -396,8 +394,7 @@ impl MetadataAdapter for DatabricksAdapter {
         let map_f = move |conn: &'_ mut dyn Connection,
                           db_schema: &CatalogAndSchema|
               -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
-            let query_ctx = QueryCtx::new(adapter.adapter_type().to_string())
-                .with_desc("list_relations_in_parallel (UC)");
+            let query_ctx = QueryCtx::default().with_desc("list_relations_in_parallel (UC)");
             adapter.list_relations(&query_ctx, conn, db_schema)
         };
 

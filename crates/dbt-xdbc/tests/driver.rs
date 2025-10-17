@@ -211,7 +211,7 @@ mod tests {
     }
 
     fn unknown() -> QueryCtx {
-        QueryCtx::new("unknown")
+        QueryCtx::default()
     }
 
     /// Check the returned info by the driver using the database methods.
@@ -340,7 +340,7 @@ mod tests {
     #[test]
     fn statement_execute_databricks_empty() -> Result<()> {
         with_empty_statement(Backend::DatabricksODBC, |mut statement| {
-            let ctx = QueryCtx::new("unknown");
+            let ctx = QueryCtx::default();
             // SqlExecute() returns SQL_NO_DATA on this query making it very easy
             // to detect that no rows were returned but the query ran successfully.
             statement.set_sql_query(&ctx, "SELECT 1 AS one WHERE 1 = 0")?;
@@ -356,7 +356,7 @@ mod tests {
     #[test]
     fn statement_execute_databricks_bool() -> Result<()> {
         with_empty_statement(Backend::DatabricksODBC, |mut statement| {
-            let ctx = QueryCtx::new("unknown");
+            let ctx = QueryCtx::default();
             statement.set_sql_query(
                 &ctx,
                 r#"SELECT * FROM (

@@ -80,8 +80,7 @@ impl DatabricksAdapter {
 
         CACHED_DBR_VERSION
             .get_or_init(|| {
-                let query_ctx = QueryCtx::new(self.adapter_type().to_string())
-                    .with_desc("get_dbr_version adapter call");
+                let query_ctx = QueryCtx::default().with_desc("get_dbr_version adapter call");
                 let mut conn = self.engine.new_connection(None, None)?;
                 self.get_dbr_version(&query_ctx, conn.deref_mut())
             })

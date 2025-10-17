@@ -2,7 +2,7 @@
 
 use std::str::FromStr;
 
-use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
+use crate::errors::AdapterResult;
 
 use dbt_schemas::schemas::{DbtModel, DbtSeed, DbtSnapshot, DbtTest, DbtUnitTest};
 use dbt_xdbc::{QueryCtx, query_ctx::ExecutionPhase};
@@ -14,20 +14,6 @@ use serde::Deserialize;
 
 /// Create a new instance from the current jinja state.
 pub fn query_ctx_from_state(state: &State) -> AdapterResult<QueryCtx> {
-    let dialect_val = state.lookup("dialect").ok_or_else(|| {
-        AdapterError::new(
-            AdapterErrorKind::Configuration,
-            "Missing dialect in the state",
-        )
-    })?;
-
-    let dialect_str = dialect_val.as_str().ok_or_else(|| {
-        AdapterError::new(
-            AdapterErrorKind::Configuration,
-            "Cannot cast dialect to a string",
-        )
-    })?;
-
     // TODO: The following should really be an error, but
     // our tests (functional tests in particular) do not
     // set anything about model in the state.
@@ -38,7 +24,7 @@ pub fn query_ctx_from_state(state: &State) -> AdapterResult<QueryCtx> {
     //AdapterErrorKind::Configuration,
     //"Missing model in the state",
     //));
-    let mut query = QueryCtx::new(dialect_str);
+    let mut query = QueryCtx::default();
     // TODO: use node_metadata_from_state
     if let Some(node_id) = node_id_from_state(state) {
         query = query.with_node_id(node_id);

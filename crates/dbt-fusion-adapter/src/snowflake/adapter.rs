@@ -63,7 +63,7 @@ impl TypedBaseAdapter for SnowflakeAdapter {
         warehouse: String,
         node_id: &str,
     ) -> FsResult<()> {
-        let ctx = QueryCtx::new(AdapterType::Snowflake.to_string()).with_node_id(node_id);
+        let ctx = QueryCtx::default().with_node_id(node_id);
         let sql = format!("use warehouse {warehouse}");
         self.exec_stmt(&ctx, conn, &sql, false)?;
         Ok(())
@@ -73,7 +73,7 @@ impl TypedBaseAdapter for SnowflakeAdapter {
         let warehouse = self
             .get_db_config("warehouse")
             .ok_or_else(|| unexpected_fs_err!("'warehouse' not found in Snowflake DB config"))?;
-        let ctx = QueryCtx::new(AdapterType::Snowflake.to_string()).with_node_id(node_id);
+        let ctx = QueryCtx::default().with_node_id(node_id);
         let sql = format!("use warehouse {warehouse}");
         self.exec_stmt(&ctx, conn, &sql, false)?;
         Ok(())

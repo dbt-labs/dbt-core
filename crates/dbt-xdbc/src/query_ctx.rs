@@ -38,8 +38,6 @@ impl fmt::Display for ExecutionPhase {
 /// Context carrying metadata associated with a query.
 #[derive(Clone, Debug)]
 pub struct QueryCtx {
-    // Adapter type executing this query
-    adapter_type: String,
     // Model executing this query
     node_unique_id: Option<String>,
     // Execution Phase
@@ -50,15 +48,19 @@ pub struct QueryCtx {
     desc: Option<String>,
 }
 
+impl Default for QueryCtx {
+    fn default() -> Self {
+        QueryCtx::create(None, None, None)
+    }
+}
+
 impl QueryCtx {
     fn create(
-        adapter_type: impl Into<String>,
         node_unique_id: Option<String>,
         phase: Option<ExecutionPhase>,
         desc: Option<String>,
     ) -> Self {
         Self {
-            adapter_type: adapter_type.into(),
             node_unique_id,
             phase,
             created_at: Utc::now(),
@@ -66,22 +68,12 @@ impl QueryCtx {
         }
     }
 
-    /// Create a new query with the given adapter type.
-    pub fn new(adapter_type: impl Into<String>) -> Self {
-        Self::create(adapter_type, None, None, None)
-    }
-
     /// Creates a new context by keeping other fields same but
     /// updating unique node id.
     pub fn with_node_id(self, node_unique_id: impl Into<String>) -> Self {
         // We never allow unique id to be reassigned
         assert!(self.node_unique_id.is_none());
-        Self::create(
-            self.adapter_type,
-            Some(node_unique_id.into()),
-            self.phase,
-            self.desc,
-        )
+        Self::create(Some(node_unique_id.into()), self.phase, self.desc)
     }
 
     /// Create a new context by keeping other fields same and using
@@ -101,22 +93,12 @@ impl QueryCtx {
     /// Creates a new context by keeping other fields same and setting
     /// the given execution phase.
     pub fn with_phase(self, phase: ExecutionPhase) -> Self {
-        Self::create(
-            self.adapter_type,
-            self.node_unique_id,
-            Some(phase),
-            self.desc,
-        )
+        Self::create(self.node_unique_id, Some(phase), self.desc)
     }
 
     /// Return unique node id associated with this context
     pub fn node_id(&self) -> Option<&String> {
         self.node_unique_id.as_ref()
-    }
-
-    /// Returns adapter type in this context.
-    pub fn adapter_type(&self) -> &String {
-        &self.adapter_type
     }
 
     /// Returns time this instance was created.
@@ -147,27 +129,25 @@ mod tests {
 
     #[test]
     fn test_desc() {
-        let query_ctx = QueryCtx::new("fake").with_desc("this is a really good query");
+        let query_ctx = QueryCtx::default().with_desc("this is a really good query");
         assert_eq!(query_ctx.desc().unwrap(), "this is a really good query");
     }
 
     #[test]
     #[should_panic]
     fn test_desc_twice() {
-        QueryCtx::new("fake").with_desc("abc").with_desc("123");
+        QueryCtx::default().with_desc("abc").with_desc("123");
     }
 
     #[test]
     fn test_unique_id() {
-        let query_ctx = QueryCtx::new("fake").with_node_id("123");
+        let query_ctx = QueryCtx::default().with_node_id("123");
         assert_eq!(query_ctx.node_id().unwrap(), "123");
     }
 
     #[test]
     #[should_panic]
     fn test_unique_id_twice() {
-        QueryCtx::new("fake")
-            .with_node_id("123")
-            .with_node_id("abc");
+        QueryCtx::default().with_node_id("123").with_node_id("abc");
     }
 }

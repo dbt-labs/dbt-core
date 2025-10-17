@@ -536,7 +536,7 @@ impl SqlEngine {
             ));
         }
 
-        Self::log_query_ctx_for_execution(ctx, Some(sql.as_ref()));
+        self.log_query_ctx_for_execution(ctx, Some(sql.as_ref()));
 
         let token = self.cancellation_token();
         let do_execute = |conn: &'_ mut dyn Connection| -> Result<
@@ -646,13 +646,21 @@ impl SqlEngine {
         Ok(total_batch)
     }
 
+    pub fn log_query_ctx_for_execution(&self, ctx: &QueryCtx, sql: Option<&str>) {
+        Self::do_log_query_ctx_for_execution(self.adapter_type(), ctx, sql)
+    }
+
     // TODO: kill this when telemtry starts writing dbt.log
     /// Format query context as we want to see it in a log file and log it in query_log
-    pub fn log_query_ctx_for_execution(ctx: &QueryCtx, sql: Option<&str>) {
+    pub fn do_log_query_ctx_for_execution(
+        adapter_type: AdapterType,
+        ctx: &QueryCtx,
+        sql: Option<&str>,
+    ) {
         let mut buf = String::new();
 
         writeln!(&mut buf, "-- created_at: {}", ctx.created_at_as_str()).unwrap();
-        writeln!(&mut buf, "-- dialect: {}", ctx.adapter_type()).unwrap();
+        writeln!(&mut buf, "-- dialect: {}", adapter_type.as_ref()).unwrap();
 
         let node_id = match ctx.node_id() {
             Some(id) => id,
@@ -761,22 +769,5 @@ pub fn execute_query_with_retry(
         Err(err)
     } else {
         unreachable!("last_error should not be None if we exit the loop")
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use dbt_xdbc::QueryCtx;
-
-    use super::SqlEngine;
-
-    #[test]
-    fn test_log_for_execution() {
-        let ctx = QueryCtx::new("test_adapter")
-            .with_node_id("test_node_123")
-            .with_desc("Test query for logging");
-
-        // Should not panic
-        SqlEngine::log_query_ctx_for_execution(&ctx, Some("SELECT * FROM test_table"));
     }
 }

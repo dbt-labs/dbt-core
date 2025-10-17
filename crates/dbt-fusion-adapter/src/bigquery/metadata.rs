@@ -439,8 +439,7 @@ impl MetadataAdapter for BigqueryAdapter {
                     generate_system_table_fqn(&project, &table, user_preferred_region.as_deref());
                 let sql = format!("SELECT * FROM {table_fqn} LIMIT 0");
 
-                let ctx =
-                    QueryCtx::new(adapter.adapter_type().to_string()).with_desc("Get table schema");
+                let ctx = QueryCtx::default().with_desc("Get table schema");
                 let (_, agate_table) = adapter.query(&ctx, &mut *conn, &sql, None)?;
                 let batch = agate_table.original_record_batch();
 
@@ -535,8 +534,7 @@ impl MetadataAdapter for BigqueryAdapter {
               -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
             // Deviation from core: we cannot use `list_tables` as this is not supported from ADBC
             // Pagination is handled in the ADBC driver
-            let query_ctx = QueryCtx::new(adapter.adapter_type().to_string())
-                .with_desc("list_relations_in_parallel");
+            let query_ctx = QueryCtx::default().with_desc("list_relations_in_parallel");
             adapter.list_relations(&query_ctx, conn, db_schema)
         };
 

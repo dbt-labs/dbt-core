@@ -41,7 +41,7 @@ pub fn use_warehouse_inner(
         .borrow_tlocal_connection(None, Some(node_id.to_string()))
         .map_err(|e| FsError::from_jinja_err(e, "Failed to create a connection"))?;
 
-    let ctx = QueryCtx::new(adapter.adapter_type().to_string()).with_node_id(node_id);
+    let ctx = QueryCtx::default().with_node_id(node_id);
     let sql = format!("use warehouse {warehouse}");
     adapter
         .typed_adapter
