@@ -1075,6 +1075,15 @@ pub fn _normalize_quote(quoting: bool, dialect: &Dialect, name: &str) -> (String
     }
 }
 
+/// Normalize SQL by removing all whitespace and converting to lowercase.
+/// This ensures consistent checksums regardless of formatting differences.
+pub fn normalize_sql(sql: &str) -> String {
+    sql.chars()
+        .filter(|c| !c.is_whitespace())
+        .collect::<String>()
+        .to_lowercase()
+}
+
 /// Merge two meta maps, with the second map's values taking precedence on key conflicts.
 pub fn merge_meta(
     base_meta: Option<BTreeMap<String, YmlValue>>,

@@ -12,7 +12,9 @@ use crate::{
         CommonAttributes, DbtFunction, DbtFunctionAttr, DbtModel, DbtModelAttr, DbtSeed,
         DbtSnapshot, DbtSource, DbtTest, DbtUnitTest, DbtUnitTestAttr, IntrospectionKind,
         NodeBaseAttributes, Nodes, TimeSpine, TimeSpinePrimaryColumn,
-        common::{Access, DbtChecksum, DbtMaterialization, DbtQuoting, NodeDependsOn},
+        common::{
+            Access, DbtChecksum, DbtMaterialization, DbtQuoting, NodeDependsOn, normalize_sql,
+        },
         manifest::{
             ManifestExposure, ManifestGroup, ManifestSavedQuery, ManifestUnitTest,
             manifest_nodes::{
@@ -631,6 +633,17 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                 );
             }
             DbtNode::Snapshot(snapshot) => {
+                // Recalculate checksum that eliminates whitespace and case differences.
+                let normalized_raw_code = snapshot
+                    .__base_attr__
+                    .raw_code
+                    .clone()
+                    .map(|raw_code| normalize_sql(&raw_code));
+                let recalculated_checksum = recalculate_checksum(
+                    normalized_raw_code.as_deref(),
+                    snapshot.__base_attr__.checksum.clone(),
+                );
+
                 nodes.snapshots.insert(
                     unique_id,
                     Arc::new(DbtSnapshot {
@@ -645,7 +658,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                             fqn: snapshot.__common_attr__.fqn,
                             description: snapshot.__common_attr__.description,
                             raw_code: snapshot.__base_attr__.raw_code,
-                            checksum: snapshot.__base_attr__.checksum,
+                            checksum: recalculated_checksum,
                             language: snapshot.__base_attr__.language,
                             tags: snapshot
                                 .config
@@ -841,6 +854,15 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     .map(|tags| tags.into())
                     .unwrap_or_default();
                 let meta = config.meta.clone().unwrap_or_default();
+                let normalized_raw_code = analysis
+                    .__base_attr__
+                    .raw_code
+                    .clone()
+                    .map(|raw_code| normalize_sql(&raw_code));
+                let recalculated_checksum = recalculate_checksum(
+                    normalized_raw_code.as_deref(),
+                    analysis.__base_attr__.checksum.clone(),
+                );
                 nodes.analyses.insert(
                     unique_id,
                     Arc::new(DbtAnalysis {
@@ -855,7 +877,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                             fqn: analysis.__common_attr__.fqn,
                             description: analysis.__common_attr__.description,
                             raw_code: analysis.__base_attr__.raw_code,
-                            checksum: analysis.__base_attr__.checksum,
+                            checksum: recalculated_checksum,
                             language: analysis.__base_attr__.language,
                             tags,
                             meta,
@@ -1270,6 +1292,16 @@ pub fn manifest_model_to_dbt_model(
         custom_granularities: ts.custom_granularities.unwrap_or_default(),
     });
 
+    let normalized_raw_code = model
+        .__base_attr__
+        .raw_code
+        .clone()
+        .map(|raw_code| normalize_sql(&raw_code));
+    let recalculated_checksum = recalculate_checksum(
+        normalized_raw_code.as_deref(),
+        model.__base_attr__.checksum.clone(),
+    );
+
     DbtModel {
         __common_attr__: CommonAttributes {
             unique_id: model.__common_attr__.unique_id,
@@ -1282,7 +1314,7 @@ pub fn manifest_model_to_dbt_model(
             fqn: model.__common_attr__.fqn,
             description: model.__common_attr__.description,
             raw_code: model.__base_attr__.raw_code,
-            checksum: model.__base_attr__.checksum,
+            checksum: recalculated_checksum,
             language: model.__base_attr__.language,
             tags: model
                 .config
@@ -1347,6 +1379,20 @@ pub fn manifest_model_to_dbt_model(
         ),
         deprecated_config: model.config,
         __other__: model.__other__,
+    }
+}
+
+/// Recalculate checksum for a snapshot/model based on normalized raw code.
+/// If the normalized code is the placeholder, use the original checksum.
+/// Otherwise, hash the normalized code.
+pub fn recalculate_checksum(
+    normalized_raw_code: Option<&str>,
+    original_checksum: DbtChecksum,
+) -> DbtChecksum {
+    match normalized_raw_code {
+        Some("--placeholder--") => original_checksum,
+        Some(code) => DbtChecksum::hash(code.as_bytes()),
+        None => original_checksum,
     }
 }
 

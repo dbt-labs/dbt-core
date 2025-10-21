@@ -6,19 +6,21 @@ use crate::renderer::{
     RenderCtx, RenderCtxInner, SqlFileRenderResult, collect_adapter_identifiers_detect_unsafe,
     render_unresolved_sql_files,
 };
+use crate::sql_file_info::SqlFileInfo;
 use crate::utils::{RelationComponents, get_node_fqn, update_node_relation_components};
 use dbt_common::adapter::AdapterType;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::DBT_SNAPSHOTS_DIR_NAME;
 use dbt_common::error::AbstractLocation;
 use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
+use dbt_common::tokiofs;
 use dbt_common::tracing::emit::{emit_error_log_from_fs_error, emit_warn_log_from_fs_error};
 use dbt_common::{ErrorCode, FsResult, fs_err, stdfs, unexpected_fs_err};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::listener::DefaultJinjaTypeCheckEventListenerFactory;
 use dbt_jinja_utils::node_resolver::NodeResolver;
 use dbt_jinja_utils::serde::into_typed_with_jinja;
-use dbt_schemas::schemas::common::{DbtMaterialization, DbtQuoting, NodeDependsOn};
+use dbt_schemas::schemas::common::{DbtChecksum, DbtMaterialization, DbtQuoting, NodeDependsOn};
 use dbt_schemas::schemas::dbt_column::process_columns;
 use dbt_schemas::schemas::macros::DbtMacro;
 use dbt_schemas::schemas::nodes::AdapterAttr;
@@ -98,6 +100,9 @@ pub async fn resolve_snapshots(
     // Save snapshots to the `snapshots` directory
     let mut snapshot_files = Vec::new();
     let mut sql_defined_snapshots = Vec::new();
+    // Map target path to original macro path for checksum recalculation
+    let mut snapshot_original_paths: HashMap<PathBuf, PathBuf> = HashMap::new();
+
     for (macro_uid, macro_node) in macros {
         if macro_node.package_name == package_name && macro_uid.starts_with("snapshot.") {
             // Write the macro call to the `snapshots` directory
@@ -124,6 +129,10 @@ pub async fn resolve_snapshots(
                 stdfs::create_dir_all(parent)?;
             }
             stdfs::write(snapshot_path, macro_call)?;
+
+            // Track original path for checksum recalculation
+            snapshot_original_paths.insert(target_path.clone(), macro_node.path.clone());
+
             snapshot_files.push(DbtAsset {
                 path: target_path.clone(),
                 package_name: package_name.clone(),
@@ -240,8 +249,21 @@ pub async fn resolve_snapshots(
     } in snapshot_sql_resources_map.into_iter()
     {
         {
-            let mut final_config = *sql_file_info.config;
             let snapshot_name = dbt_asset.path.file_stem().unwrap().to_str().unwrap();
+
+            // Recalculate checksum from original snapshot file.
+            // Without doing this, the checksum will be different from the one from mantle since fusion
+            // creates a new file for the snapshot that only contains a function call
+            // to the original macro instead of the original macro itself.
+            let recalculated_checksum =
+                if let Some(original_path) = snapshot_original_paths.get(&dbt_asset.path) {
+                    recalculate_snapshot_checksum(arg, original_path, &sql_file_info).await
+                } else {
+                    // Not a macro-based snapshot, use the checksum from sql_file_info
+                    sql_file_info.checksum.clone()
+                };
+
+            let mut final_config = *sql_file_info.config;
 
             let properties = if let Some(properties) = maybe_properties {
                 properties
@@ -301,7 +323,7 @@ pub async fn resolve_snapshots(
                     fqn,
                     description: properties.description.to_owned(),
                     patch_path,
-                    checksum: sql_file_info.checksum,
+                    checksum: recalculated_checksum,
                     language: Some("sql".to_string()),
                     tags: final_config
                         .tags
@@ -489,4 +511,63 @@ pub async fn resolve_snapshots(
     );
 
     Ok((snapshots, disabled_snapshots))
+}
+
+async fn recalculate_snapshot_checksum(
+    arg: &ResolveArgs,
+    original_path: &PathBuf,
+    sql_file_info: &SqlFileInfo<SnapshotConfig>,
+) -> DbtChecksum {
+    // Read original snapshot file
+    let original_absolute_path = arg.io.in_dir.join(original_path);
+    match tokiofs::read_to_string(&original_absolute_path).await {
+        Ok(original_sql) => {
+            // First normalize: remove all whitespace and lowercase
+            let normalized_full = original_sql
+                .chars()
+                .filter(|c| !c.is_whitespace())
+                .collect::<String>()
+                .to_lowercase();
+
+            // Strip snapshot tags to match dbt-mantle behavior
+            // Remove everything before and including {%snapshot name%} or {%-snapshot name-%}
+            let sql_without_opening = normalized_full
+                .find("{%-snapshot")
+                .or_else(|| normalized_full.find("{%snapshot"))
+                .and_then(|start_pos| {
+                    // Found the opening tag, now find where it ends
+                    let after_tag_start = &normalized_full[start_pos..];
+                    after_tag_start
+                        .find("-%}")
+                        .or_else(|| after_tag_start.find("%}"))
+                        .map(|end_offset| {
+                            let tag_end = if after_tag_start[end_offset..].starts_with("-%}") {
+                                end_offset + 3
+                            } else {
+                                end_offset + 2
+                            };
+                            &normalized_full[start_pos + tag_end..]
+                        })
+                })
+                .unwrap_or(&normalized_full);
+
+            // Strip the closing endsnapshot tag ({%endsnapshot%} or {%-endsnapshot-%})
+            let normalized_sql = sql_without_opening
+                .strip_suffix("-%}")
+                .or_else(|| sql_without_opening.strip_suffix("%}"))
+                .and_then(|s| {
+                    // Find the start of the closing tag ({%- or {%)
+                    s.rfind("{%-endsnapshot")
+                        .or_else(|| s.rfind("{%endsnapshot"))
+                        .map(|pos| &s[..pos])
+                })
+                .unwrap_or(sql_without_opening);
+            DbtChecksum::hash(normalized_sql.as_bytes())
+        }
+        Err(e) => {
+            // Fallback to sql_file_info checksum if original file can't be read
+            emit_warn_log_from_fs_error(&e, &arg.io);
+            sql_file_info.checksum.clone()
+        }
+    }
 }
