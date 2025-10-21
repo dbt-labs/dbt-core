@@ -4,11 +4,16 @@ import agate
 import pytest
 
 from dbt.artifacts.resources import FunctionReturns
-from dbt.artifacts.resources.types import FunctionType
+from dbt.artifacts.resources.types import FunctionType, FunctionVolatility
 from dbt.contracts.graph.nodes import FunctionNode
-from dbt.tests.util import run_dbt
+from dbt.tests.util import run_dbt, write_file
 
 double_it_sql = """
+SELECT value * 2
+"""
+
+double_it_deterministic_sql = """
+{{ config(volatility='deterministic') }}
 SELECT value * 2
 """
 
@@ -16,6 +21,20 @@ double_it_yml = """
 functions:
   - name: double_it
     description: Doubles whatever number is passed in
+    arguments:
+      - name: value
+        data_type: float
+        description: A number to be doubled
+    returns:
+      data_type: float
+"""
+
+double_it_non_deterministic_yml = """
+functions:
+  - name: double_it
+    description: Doubles whatever number is passed in
+    config:
+      volatility: non-deterministic
     arguments:
       - name: value
         data_type: float
@@ -56,6 +75,8 @@ class BasicUDFSetup:
 
 class TestBasicSQLUDF(BasicUDFSetup):
     def test_basic_sql_udf_parsing(self, project):
+
+        # Simple parsing
         manifest = run_dbt(["parse"])
         assert len(manifest.functions) == 1
         assert "function.test.double_it" in manifest.functions
@@ -63,12 +84,32 @@ class TestBasicSQLUDF(BasicUDFSetup):
         assert isinstance(function_node, FunctionNode)
         assert function_node.type == FunctionType.Scalar
         assert function_node.description == "Doubles whatever number is passed in"
+        assert function_node.config.volatility is None
         assert len(function_node.arguments) == 1
         argument = function_node.arguments[0]
         assert argument.name == "value"
         assert argument.data_type == "float"
         assert argument.description == "A number to be doubled"
         assert function_node.returns == FunctionReturns(data_type="float")
+
+        # Update with volatility specified in sql
+        write_file(double_it_deterministic_sql, project.project_root, "functions", "double_it.sql")
+        manifest = run_dbt(["parse", "--no-partial-parse"])
+        assert len(manifest.functions) == 1
+        assert "function.test.double_it" in manifest.functions
+        function_node = manifest.functions["function.test.double_it"]
+        assert function_node.config.volatility == FunctionVolatility.Deterministic
+
+        # Update with volatility specified in yml
+        write_file(
+            double_it_non_deterministic_yml, project.project_root, "functions", "double_it.yml"
+        )
+        write_file(double_it_sql, project.project_root, "functions", "double_it.sql")
+        manifest = run_dbt(["parse", "--no-partial-parse"])
+        assert len(manifest.functions) == 1
+        assert "function.test.double_it" in manifest.functions
+        function_node = manifest.functions["function.test.double_it"]
+        assert function_node.config.volatility == FunctionVolatility.NonDeterministic
 
 
 class TestCreationOfUDFs(BasicUDFSetup):
