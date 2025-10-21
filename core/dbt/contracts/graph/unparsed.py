@@ -31,7 +31,6 @@ from dbt.artifacts.resources import (
     list_str,
     metas,
 )
-from dbt.artifacts.resources.types import FunctionType
 from dbt.exceptions import ParsingError
 from dbt.node_types import NodeType
 from dbt_common.contracts.config.base import CompareBehavior, MergeBehavior
@@ -671,7 +670,6 @@ class UnparsedFunctionReturns(dbtClassMixin):
 class UnparsedFunctionUpdate(HasConfig, HasColumnProps, HasYamlMetadata, UnparsedFunctionReturns):
     access: Optional[str] = None
     arguments: List[FunctionArgument] = field(default_factory=list)
-    type: FunctionType = FunctionType.Scalar
 
 
 #

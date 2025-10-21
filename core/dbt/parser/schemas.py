@@ -1292,7 +1292,6 @@ class FunctionPatchParser(NodePatchParser[UnparsedFunctionUpdate]):
 
         node.arguments = patch.arguments
         node.returns = patch.returns
-        node.type = patch.type
 
     def _get_node_patch(self, block: TargetBlock[NodeTarget], refs: ParserRef) -> ParsedNodePatch:
         target = block.target
@@ -1316,7 +1315,6 @@ class FunctionPatchParser(NodePatchParser[UnparsedFunctionUpdate]):
             time_spine=None,
             arguments=target.arguments,
             returns=target.returns,
-            type=target.type,
         )
 
 
