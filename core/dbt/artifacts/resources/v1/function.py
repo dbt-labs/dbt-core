@@ -16,6 +16,7 @@ class FunctionConfig(NodeConfig):
     # The fact that this is a property, that can be changed, seems wrong.
     # A function's materialization should never be changed, so why allow for it?
     materialized: str = "function"
+    type: FunctionType = FunctionType.Scalar
     volatility: Optional[FunctionVolatility] = None
 
 
@@ -47,4 +48,3 @@ class Function(CompiledResource, FunctionMandatory):
     resource_type: Literal[NodeType.Function]
     config: FunctionConfig
     arguments: List[FunctionArgument] = field(default_factory=list)
-    type: FunctionType = FunctionType.Scalar
