@@ -100,8 +100,8 @@ class TestBasicSQLUDF(BasicUDFSetup):
         assert "function.test.double_it" in manifest.functions
         function_node = manifest.functions["function.test.double_it"]
         assert isinstance(function_node, FunctionNode)
-        assert function_node.type == FunctionType.Scalar
         assert function_node.description == "Doubles whatever number is passed in"
+        assert function_node.config.type == FunctionType.Scalar
         assert function_node.config.volatility is None
         assert len(function_node.arguments) == 1
         argument = function_node.arguments[0]
