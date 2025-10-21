@@ -12,7 +12,7 @@ use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::node_resolver::NodeResolver;
 use dbt_jinja_utils::serde::into_typed_with_jinja;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
-use dbt_schemas::dbt_utils::validate_delimeter;
+use dbt_schemas::dbt_utils::validate_delimiter;
 use dbt_schemas::schemas::common::{DbtChecksum, DbtMaterialization, DbtQuoting, NodeDependsOn};
 use dbt_schemas::schemas::dbt_column::process_columns;
 use dbt_schemas::schemas::project::DefaultTo;
@@ -163,7 +163,7 @@ pub fn resolve_seeds(
             properties_config.tags.clone().map(|tags| tags.into()),
         )?;
 
-        validate_delimeter(&properties_config.delimiter)?;
+        validate_delimiter(&properties_config.delimiter)?;
 
         // Calculate original file path first so we can use it for the checksum
         // if necessary for large seeds

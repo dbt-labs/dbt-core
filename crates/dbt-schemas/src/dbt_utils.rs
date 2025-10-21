@@ -60,7 +60,7 @@ pub fn resolve_package_quoting(
 }
 
 /// Validate a delimiter
-pub fn validate_delimeter(spanned_delimiter: &Option<Spanned<String>>) -> FsResult<Option<String>> {
+pub fn validate_delimiter(spanned_delimiter: &Option<Spanned<String>>) -> FsResult<Option<String>> {
     if let Some(delimiter) = spanned_delimiter.as_ref() {
         if delimiter.is_empty() {
             return Ok(None);
@@ -68,7 +68,7 @@ pub fn validate_delimeter(spanned_delimiter: &Option<Spanned<String>>) -> FsResu
             return err!(
                 code => ErrorCode::InvalidConfig,
                 loc => delimiter.span().clone(),
-                "Delimeter '{}' must be exactly one ascii character",
+                "Delimiter '{}' must be exactly one ascii character",
                 delimiter.as_ref()
             );
         } else {
