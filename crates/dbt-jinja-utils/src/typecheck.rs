@@ -1,5 +1,7 @@
 use crate::{jinja_environment::JinjaEnv, listener};
-use dbt_common::{ErrorCode, FsError, FsResult, fs_err, io_args::IoArgs, show_error};
+use dbt_common::{
+    ErrorCode, FsError, FsResult, io_args::IoArgs, tracing::emit::emit_error_log_message,
+};
 use minijinja::{Value, compiler::codegen::CodeGenerationProfile, load_builtins};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -65,9 +67,10 @@ pub fn typecheck(
     let tmpl = match jinja_typecheck_env.template_from_str(&source) {
         Ok(tmpl) => tmpl,
         Err(e) => {
-            show_error!(
-                &arg_io,
-                fs_err!(ErrorCode::Generic, "Failed to create template: {}", e)
+            emit_error_log_message(
+                ErrorCode::Generic,
+                format!("Failed to create template: {}", e),
+                arg_io,
             );
             return Ok(());
         }
@@ -84,14 +87,15 @@ pub fn typecheck(
         }
         Err(e) => {
             listener.flush();
-            show_error!(
-                &arg_io,
-                fs_err!(
-                    ErrorCode::Generic,
+
+            emit_error_log_message(
+                ErrorCode::Generic,
+                format!(
                     "Type checking failed for file {}: {}",
                     absolute_file_path.display(),
                     e
-                )
+                ),
+                arg_io,
             );
         }
     }

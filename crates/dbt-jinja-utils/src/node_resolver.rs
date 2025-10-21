@@ -6,7 +6,7 @@ use std::{
 
 use dbt_common::{
     CodeLocation, ErrorCode, FsResult, adapter::AdapterType, err, fs_err, io_args::IoArgs,
-    show_error, unexpected_err,
+    tracing::emit::emit_error_log_from_fs_error, unexpected_err,
 };
 use dbt_fusion_adapter::relation_object::{
     RelationObject, create_relation_from_node, create_relation_internal,
@@ -756,15 +756,13 @@ pub fn resolve_dependencies(
                 Ok((dependency_id, _, _, _)) => {
                     // Check for self-reference
                     if dependency_id == node_unique_id {
-                        show_error!(
-                            io,
-                            fs_err!(
-                                ErrorCode::CyclicDependency,
-                                "Model '{}' cannot reference itself",
-                                name
-                            )
-                            .with_location(location)
-                        );
+                        let err_with_loc = fs_err!(
+                            ErrorCode::CyclicDependency,
+                            "Model '{}' cannot reference itself",
+                            name
+                        )
+                        .with_location(location);
+                        emit_error_log_from_fs_error(&err_with_loc, io);
                     } else {
                         node_base.depends_on.nodes.push(dependency_id.clone());
                         node_base
@@ -780,7 +778,8 @@ pub fn resolve_dependencies(
                     } else {
                         // Track this node as having an error (unresolved ref/source)
                         nodes_with_errors.insert(node_unique_id.clone());
-                        show_error!(io, e.with_location(location));
+                        let err_with_loc = e.with_location(location);
+                        emit_error_log_from_fs_error(&err_with_loc, io);
                     }
                 }
             };
@@ -813,7 +812,8 @@ pub fn resolve_dependencies(
                     } else {
                         // Track this node as having an error (unresolved ref/source)
                         nodes_with_errors.insert(node_unique_id.clone());
-                        show_error!(io, e.with_location(location));
+                        let err_with_loc = e.with_location(location);
+                        emit_error_log_from_fs_error(&err_with_loc, io);
                     }
                 }
             };
@@ -848,7 +848,8 @@ pub fn resolve_dependencies(
                     } else {
                         // Track this node as having an error (unresolved function)
                         nodes_with_errors.insert(node_unique_id.clone());
-                        show_error!(io, e.with_location(location));
+                        let err_with_loc = e.with_location(location);
+                        emit_error_log_from_fs_error(&err_with_loc, io);
                     }
                 }
             };
@@ -904,7 +905,8 @@ pub fn resolve_dependencies(
                         }
                         Err(e) => {
                             nodes_with_errors.insert(operation_unique_id.clone());
-                            show_error!(io, e.with_location(location));
+                            let err_with_loc = e.with_location(location);
+                            emit_error_log_from_fs_error(&err_with_loc, io);
                         }
                     }
                 });
@@ -935,7 +937,8 @@ pub fn resolve_dependencies(
                             }
                             Err(e) => {
                                 nodes_with_errors.insert(operation_unique_id.clone());
-                                show_error!(io, e.with_location(location));
+                                let err_with_loc = e.with_location(location);
+                                emit_error_log_from_fs_error(&err_with_loc, io);
                             }
                         }
                     });

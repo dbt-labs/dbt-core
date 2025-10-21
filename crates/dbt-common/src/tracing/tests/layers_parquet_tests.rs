@@ -1,12 +1,16 @@
-use crate::tracing::layers::{
-    data_layer::TelemetryDataLayer, parquet_writer::build_parquet_writer_layer,
-};
 use crate::tracing::{
-    event_info::store_event_attributes, init::create_tracing_subcriber_with_layer, span_info,
+    emit::{create_info_span_with_parent, emit_info_event},
+    event_info::store_event_attributes,
+    init::create_tracing_subcriber_with_layer,
+    layers::{
+        data_layer::{TelemetryDataLayer, get_span_start_info_from_span},
+        parquet_writer::build_parquet_writer_layer,
+    },
+    span_info,
 };
 use dbt_telemetry::{
     CallTrace, LogMessage, LogRecordInfo, PackageUpdate, RecordCodeLocation, SeverityNumber,
-    SpanEndInfo, SpanStartInfo, TelemetryAttributes, TelemetryEventTypeRegistry, TelemetryRecord,
+    SpanEndInfo, TelemetryAttributes, TelemetryEventTypeRegistry, TelemetryRecord,
     serialize::arrow::deserialize_from_arrow,
 };
 use std::{collections::BTreeMap, fs, panic::Location, time::SystemTime};
@@ -43,6 +47,7 @@ fn test_tracing_parquet_filtering() {
         dbt_core_event_code: Some("test_code".to_string()),
         original_severity_number: SeverityNumber::Warn as i32,
         original_severity_text: "WARN".to_string(),
+        package_name: None,
         unique_id: None,
         phase: None,
         file: None,
@@ -80,24 +85,22 @@ fn test_tracing_parquet_filtering() {
         let _sp = dev_span.enter();
 
         span_info::with_span(&dev_span, |span_ref| {
-            let span_ext = span_ref.extensions();
-            expected_span_id = span_ext.get::<SpanStartInfo>().unwrap().span_id;
+            expected_span_id = get_span_start_info_from_span(&span_ref).unwrap().span_id;
         });
 
         // Emit a log with Log attributes (should be included) & save the location (almost, one line off)
         test_log_location = Location::caller();
-        emit_tracing_event!(test_log_attrs.clone(), "Valid log message");
+        emit_info_event(test_log_attrs.clone(), Some("Valid log message"));
 
         // Emit package update event, should be filtered out as it is marked as
         // non-exportable via parquet
-        create_info_span!(
-            parent: &dev_span,
+        create_info_span_with_parent(
+            dev_span.id(),
             PackageUpdate {
                 version: "1.0.0".to_string(),
                 package: "test_package".to_string(),
                 exe_path: None,
-            }
-            .into()
+            },
         );
     });
 

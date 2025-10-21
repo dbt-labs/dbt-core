@@ -156,28 +156,16 @@ fn collect_outcome_totals(data_provider: &DataProvider<'_>) -> InvocationOutcome
 }
 
 /// Collects invocation-level metrics exposed through the data provider for the Invocation span.
-fn collect_invocation_metrics(
-    data_provider: &DataProvider<'_>,
-    invocation_id: &str,
-) -> InvocationMetricsSnapshot {
-    // TODO: remove this and uncommment the data_provider lines once all the warning/error/autofix-es
-    // are captured by metric_aggregator
-    use crate::error_counter::{
-        get_autofix_suggestion_counter, get_error_counter, get_warning_counter,
-    };
-    let warnings = get_warning_counter(invocation_id) as u64;
-    let errors = get_error_counter(invocation_id) as u64;
-    let autofix = get_autofix_suggestion_counter(invocation_id) as u64;
-
-    // let warnings = data_provider.get_metric(MetricKey::InvocationMetric(
-    //     InvocationMetricKey::TotalWarnings,
-    // ));
-    // let errors = data_provider.get_metric(MetricKey::InvocationMetric(
-    //     InvocationMetricKey::TotalErrors,
-    // ));
-    // let autofix = data_provider.get_metric(MetricKey::InvocationMetric(
-    //     InvocationMetricKey::AutoFixSuggestions,
-    // ));
+fn collect_invocation_metrics(data_provider: &DataProvider<'_>) -> InvocationMetricsSnapshot {
+    let warnings = data_provider.get_metric(MetricKey::InvocationMetric(
+        InvocationMetricKey::TotalWarnings,
+    ));
+    let errors = data_provider.get_metric(MetricKey::InvocationMetric(
+        InvocationMetricKey::TotalErrors,
+    ));
+    let autofix = data_provider.get_metric(MetricKey::InvocationMetric(
+        InvocationMetricKey::AutoFixSuggestions,
+    ));
 
     let outcomes = collect_outcome_totals(data_provider);
 
@@ -210,8 +198,7 @@ pub fn format_invocation_summary(
         };
     }
 
-    let metrics: InvocationMetricsSnapshot =
-        collect_invocation_metrics(data_provider, invocation.invocation_id.as_ref());
+    let metrics: InvocationMetricsSnapshot = collect_invocation_metrics(data_provider);
     let elapsed = span
         .end_time_unix_nano
         .duration_since(span.start_time_unix_nano)

@@ -4,7 +4,8 @@ use std::{collections::BTreeMap, sync::Arc};
 use dbt_common::adapter::AdapterType;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_args::StaticAnalysisKind;
-use dbt_common::{FsResult, error::AbstractLocation, show_error};
+use dbt_common::tracing::emit::emit_error_log_from_fs_error;
+use dbt_common::{FsResult, error::AbstractLocation};
 use dbt_jinja_utils::listener::DefaultJinjaTypeCheckEventListenerFactory;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_jinja_utils::{jinja_environment::JinjaEnv, node_resolver::NodeResolver};
@@ -272,7 +273,8 @@ pub async fn resolve_functions(
         match node_resolver.insert_function(&function, adapter_type, status) {
             Ok(_) => (),
             Err(e) => {
-                show_error!(&arg.io, e.with_location(dbt_asset.path.clone()));
+                let err_with_loc = e.with_location(dbt_asset.path.clone());
+                emit_error_log_from_fs_error(&err_with_loc, &arg.io);
             }
         }
 

@@ -13,11 +13,11 @@ use dbt_common::ErrorCode;
 use dbt_common::adapter::AdapterType;
 use dbt_common::constants::DBT_COMPILED_DIR_NAME;
 use dbt_common::constants::DBT_RUN_DIR_NAME;
-use dbt_common::fs_err;
 use dbt_common::io_args::IoArgs;
 use dbt_common::serde_utils::convert_yml_to_value_map;
-use dbt_common::show_warning;
+
 use dbt_common::tokiofs;
+use dbt_common::tracing::emit::emit_warn_log_message;
 use dbt_fusion_adapter::load_store::ResultStore;
 use dbt_fusion_adapter::relation_object::create_relation;
 use dbt_schemas::schemas::CommonAttributes;
@@ -87,10 +87,12 @@ async fn extend_with_model_context<S: Serialize>(
             YmlValue::Sequence(arr, _) => arr.iter().filter_map(parse_hook_item).collect(),
             YmlValue::Null(_) => vec![],
             _ => {
-                show_warning!(
+                emit_warn_log_message(
+                    ErrorCode::Generic,
+                    format!("Unknown pre-hook type: {:?}", pre_hook),
                     io_args,
-                    fs_err!(ErrorCode::Generic, "Unknown pre-hook type: {:?}", pre_hook)
                 );
+
                 vec![]
             }
         };
@@ -109,14 +111,12 @@ async fn extend_with_model_context<S: Serialize>(
             YmlValue::Sequence(arr, _) => arr.iter().filter_map(parse_hook_item).collect(),
             YmlValue::Null(_) => vec![],
             _ => {
-                show_warning!(
+                emit_warn_log_message(
+                    ErrorCode::Generic,
+                    format!("Unknown post-hook type: {:?}", post_hook),
                     io_args,
-                    fs_err!(
-                        ErrorCode::Generic,
-                        "Unknown post-hook type: {:?}",
-                        post_hook
-                    )
                 );
+
                 vec![]
             }
         };
@@ -145,13 +145,10 @@ async fn extend_with_model_context<S: Serialize>(
         if let Ok(raw_sql) = tokiofs::read_to_string(&raw_sql_path).await {
             model_map.insert("raw_sql".to_owned(), MinijinjaValue::from(raw_sql));
         } else {
-            show_warning!(
+            emit_warn_log_message(
+                ErrorCode::Generic,
+                format!("Failed to read raw_sql: {}", raw_sql_path.display()),
                 io_args,
-                fs_err!(
-                    ErrorCode::Generic,
-                    "Failed to read raw_sql: {}",
-                    raw_sql_path.display()
-                )
             );
         };
     }

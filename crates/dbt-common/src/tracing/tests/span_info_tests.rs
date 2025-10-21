@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use crate::tracing::{
+    emit::{create_info_span, create_root_info_span},
     init::create_tracing_subcriber_with_layer,
     layer::ConsumerLayer,
     layers::data_layer::TelemetryDataLayer,
@@ -110,18 +111,18 @@ fn test_record_span_attrs_and_status() {
     );
 
     tracing::subscriber::with_default(subscriber, || {
-        let root_span = create_root_info_span!(TestStatusEvent::new("root").into());
+        let root_span = create_root_info_span(TestStatusEvent::new("root"));
         {
             let _root_scope = root_span.enter();
 
-            let child_status = create_info_span!(TestStatusEvent::new("child_status").into());
+            let child_status = create_info_span(TestStatusEvent::new("child_status"));
             {
                 let _child_scope = child_status.enter();
                 record_span_status(&child_status, Some(CHILD_STATUS_ERR));
             }
             drop(child_status);
 
-            let child_attrs = create_info_span!(TestStatusEvent::new("child_attrs").into());
+            let child_attrs = create_info_span(TestStatusEvent::new("child_attrs"));
             {
                 let _child_scope = child_attrs.enter();
                 record_span_status_with_attrs(
@@ -137,7 +138,7 @@ fn test_record_span_attrs_and_status() {
                 );
 
                 let grandchild_from_attrs =
-                    create_info_span!(TestStatusEvent::new("grandchild_from_attrs").into());
+                    create_info_span(TestStatusEvent::new("grandchild_from_attrs"));
                 {
                     let _gc_scope = grandchild_from_attrs.enter();
                     record_span_status_from_attrs(&grandchild_from_attrs, |attrs| {
@@ -151,7 +152,7 @@ fn test_record_span_attrs_and_status() {
                 drop(grandchild_from_attrs);
 
                 let grandchild_current =
-                    create_info_span!(TestStatusEvent::new("grandchild_current").into());
+                    create_info_span(TestStatusEvent::new("grandchild_current"));
                 {
                     let _gc_scope = grandchild_current.enter();
 

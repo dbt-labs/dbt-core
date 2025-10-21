@@ -7,7 +7,7 @@ use std::{
 };
 
 use dbt_agate::{AgateTable, print_table};
-use dbt_common::{ErrorCode, fs_err, io_args::IoArgs, show_warning};
+use dbt_common::{ErrorCode, io_args::IoArgs, tracing::emit::emit_warn_log_message};
 use dbt_schemas::schemas::{InternalDbtNode, Nodes};
 use minijinja::{
     arg_utils::ArgsIter,
@@ -972,10 +972,9 @@ impl Object for Exceptions {
             "warn" => {
                 let mut args = ArgParser::new(args, None);
                 let warn_string = args.get::<String>("").unwrap_or_else(|_| "".to_string());
-                show_warning!(
-                    self.io_args,
-                    fs_err!(ErrorCode::Generic, "{}", warn_string.as_str(),)
-                );
+
+                emit_warn_log_message(ErrorCode::Generic, warn_string, &self.io_args);
+
                 Ok(Value::UNDEFINED)
             }
             // (msg, node=None)
@@ -1152,10 +1151,9 @@ impl Object for Exceptions {
                 let warning = format!(
                     "Data type of snapshot table timestamp columns ({snapshot_time_data_type}) doesn't match derived column 'updated_at' ({updated_at_data_type}). Please update snapshot config 'updated_at'."
                 );
-                show_warning!(
-                    self.io_args,
-                    fs_err!(ErrorCode::Generic, "{}", warning.as_str())
-                );
+
+                emit_warn_log_message(ErrorCode::Generic, warning, &self.io_args);
+
                 Ok(Value::UNDEFINED)
             }
             _ => Err(Error::new(

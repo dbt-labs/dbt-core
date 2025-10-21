@@ -245,6 +245,23 @@ impl FsError {
         s
     }
 
+    /// Returns the error message without the error code prefix.
+    /// Includes file location and backtrace if present.
+    /// This is used by tracing layers where the code prefix is added by formatters.
+    pub fn message(&self) -> String {
+        let mut s = self.to_string();
+        if let Some(location) = &self.location {
+            s.push_str(&format!("\n  --> {location}"));
+        }
+        if is_sdf_debug() && self.cause.is_some() {
+            s.push_str(&format!("\n{:#?}", self.cause.as_ref().unwrap()));
+        }
+        if let Some(backtrace) = self.get_backtrace() {
+            s.push_str(&format!("\n{backtrace}"));
+        }
+        s
+    }
+
     /// True if this error contains multiple errors.
     pub fn is_multiple_errors(&self) -> bool {
         self.next.is_some()

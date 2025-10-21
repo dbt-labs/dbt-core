@@ -215,23 +215,23 @@ let consumer = MyConsumer::new()
 use dbt_common::create_info_span;
 
 // Create a structured span with attributes
-let _sp = create_info_span!(
+let _sp = create_info_span(
     ArtifactWritten {
         artifact_type: artifact_type as i32,
         relative_path: rel_path,
-    }.into()
+    }
 ).entered();
 ```
 
 #### Creating Log Events
 
 ```rust
-use dbt_common::emit_tracing_event;
+use dbt_common::tracing::emit::emit_trace_event;
 use dbt_telemetry::LogMessage;
 use tracing::Level as TracingLevel;
 
 // Emit a log event with structured attributes
-emit_tracing_event!(
+emit_trace_event(
     level: TracingLevel::WARN,
     LogMessage {
         code: Some(err.code as u16 as u32),
@@ -249,8 +249,8 @@ emit_tracing_event!(
 );
 
 // Or without a message (defaults to INFO level)
-emit_tracing_event!(
-    MyLogAttributes { /* ... */ }.into()
+emit_trace_event(
+    MyLogAttributes { /* ... */ }
 );
 ```
 
@@ -263,9 +263,18 @@ emit_tracing_event!(
 #### Async Functions
 
 ```rust
-use tracing::Instrument;
+use tracing::Instrument as _;
 
-#[tracing::instrument(skip_all, level = "trace")]
+// Async function itself can be instrumented and then all calls to it
+// will be in the correct span context
+#[tracing::instrument(
+    skip_all,
+    fields(
+        // `The name of _e` is irrelevant, but just a convention to avoid collisions.
+        // `= ?` is not a typo, it should be used (see doc comment for details)
+        _e = ?store_event_attributes(PhaseExecuted::start_general(ExecutionPhase::LoadProject)),
+    )
+)]
 async fn parent_function() {
     // Automatically runs in the function's span
     let result = child_function().await;

@@ -231,13 +231,13 @@ impl TelemetryParquetWriterLayer {
 }
 
 impl TelemetryConsumer for TelemetryParquetWriterLayer {
-    fn is_span_enabled(&self, span: &SpanStartInfo, _meta: &tracing::Metadata) -> bool {
+    fn is_span_enabled(&self, span: &SpanStartInfo) -> bool {
         span.attributes
             .output_flags()
             .contains(TelemetryOutputFlags::EXPORT_PARQUET)
     }
 
-    fn is_log_enabled(&self, log_record: &LogRecordInfo, _meta: &tracing::Metadata) -> bool {
+    fn is_log_enabled(&self, log_record: &LogRecordInfo) -> bool {
         log_record
             .attributes
             .output_flags()
@@ -245,13 +245,13 @@ impl TelemetryConsumer for TelemetryParquetWriterLayer {
     }
 
     // Only include SpanEnd records, not SpanStart
-    fn on_span_end(&self, span: &SpanEndInfo, _: &DataProvider<'_>) {
+    fn on_span_end(&self, span: &SpanEndInfo, _: &mut DataProvider<'_>) {
         let telemetry_record = TelemetryRecord::SpanEnd(span.clone());
 
         let _ = self.write_record(telemetry_record);
     }
 
-    fn on_log_record(&self, record: &LogRecordInfo, _: &DataProvider<'_>) {
+    fn on_log_record(&self, record: &LogRecordInfo, _: &mut DataProvider<'_>) {
         let telemetry_record = TelemetryRecord::LogRecord(record.clone());
 
         let _ = self.write_record(telemetry_record);
@@ -397,6 +397,7 @@ mod tests {
                 dbt_core_event_code: Some(format!("test_code_{i}")),
                 original_severity_number: SeverityNumber::Info as i32,
                 original_severity_text: "INFO".to_string(),
+                package_name: None,
                 unique_id: Some(format!("unique_{i}")),
                 phase: None,
                 file: None,

@@ -1,12 +1,12 @@
 use dbt_telemetry::{
-    LogMessage, LogRecordInfo, NodeOutcome, NodeSkipReason, SeverityNumber, SpanEndInfo,
-    TestOutcome,
+    Invocation, InvocationMetrics, LogMessage, LogRecordInfo, NodeOutcome, NodeSkipReason,
+    SeverityNumber, SpanEndInfo, TestOutcome,
 };
 
-use crate::tracing::metrics::InvocationMetricKey;
-
 use super::super::{
-    data_provider::DataProviderMut, layer::TelemetryMiddleware, metrics::MetricKey,
+    data_provider::DataProvider,
+    layer::TelemetryMiddleware,
+    metrics::{InvocationMetricKey, MetricKey},
 };
 
 /// Middleware that aggregates telemetry metrics from span and log records.
@@ -15,12 +15,16 @@ pub struct TelemetryMetricAggregator;
 impl TelemetryMiddleware for TelemetryMetricAggregator {
     fn on_span_end(
         &self,
-        span: SpanEndInfo,
-        data_provider: &mut DataProviderMut<'_>,
+        mut span: SpanEndInfo,
+        data_provider: &mut DataProvider<'_>,
     ) -> Option<SpanEndInfo> {
-        // We could have checked for Invocation here, but check for root makes it
-        // more generic in case other root spans are added in the future
-        if span.parent_span_id.is_none() {
+        if let Some(invocation) = span.attributes.downcast_mut::<Invocation>() {
+            debug_assert!(
+                span.parent_span_id.is_none(),
+                "Expected Invocation span to be root, found paren id: {:?}",
+                span.parent_span_id
+            );
+
             // Aggregate node outcome metrics into top-level metrics on invocation end
             let mut success = 0u64;
             let mut warning = 0u64;
@@ -83,6 +87,19 @@ impl TelemetryMiddleware for TelemetryMetricAggregator {
                 MetricKey::InvocationMetric(InvocationMetricKey::NodeTotalsCanceled),
                 canceled,
             );
+
+            // Store totals in invocation attributes
+            invocation.metrics = Some(InvocationMetrics {
+                total_errors: Some(data_provider.get_metric(MetricKey::InvocationMetric(
+                    InvocationMetricKey::TotalErrors,
+                ))),
+                total_warnings: Some(data_provider.get_metric(MetricKey::InvocationMetric(
+                    InvocationMetricKey::TotalWarnings,
+                ))),
+                autofix_suggestions: Some(data_provider.get_metric(MetricKey::InvocationMetric(
+                    InvocationMetricKey::AutoFixSuggestions,
+                ))),
+            });
         }
 
         Some(span)
@@ -91,7 +108,7 @@ impl TelemetryMiddleware for TelemetryMetricAggregator {
     fn on_log_record(
         &self,
         log_record: LogRecordInfo,
-        data_provider: &mut DataProviderMut<'_>,
+        data_provider: &mut DataProvider<'_>,
     ) -> Option<LogRecordInfo> {
         if log_record.attributes.is::<LogMessage>() {
             match log_record.severity_number {

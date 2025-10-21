@@ -1,5 +1,6 @@
 use super::mocks::{TestLayer, TestWriter};
 use crate::tracing::{
+    emit::{create_root_info_span, emit_info_event},
     init::create_tracing_subcriber_with_layer,
     layer::{ConsumerLayer, TelemetryConsumer},
     layers::{data_layer::TelemetryDataLayer, pretty_writer::TelemetryPrettyWriterLayer},
@@ -36,10 +37,10 @@ fn pretty_layer_applies_filter_and_formatting() {
 
     let file_layer =
         TelemetryPrettyWriterLayer::new(file_writer.clone(), mock_format_telemetry_record)
-            .with_span_filter(|span, _| span.span_name.contains("keep"));
+            .with_span_filter(|span| span.span_name.contains("keep"));
     let tty_layer =
         TelemetryPrettyWriterLayer::new(tty_writer.clone(), mock_format_telemetry_record)
-            .with_span_filter(|span, _| span.span_name.contains("keep"));
+            .with_span_filter(|span| span.span_name.contains("keep"));
 
     // Init telemetry using internal API allowing to set thread local subscriber.
     // This avoids collisions with other unit tests
@@ -59,43 +60,35 @@ fn pretty_layer_applies_filter_and_formatting() {
     );
 
     tracing::subscriber::with_default(subscriber, || {
-        let span = create_root_info_span!(
-            MockDynSpanEvent {
-                name: "span-keep".into(),
-                flags: TelemetryOutputFlags::OUTPUT_LOG_FILE,
-                ..Default::default()
-            }
-            .into()
-        );
+        let span = create_root_info_span(MockDynSpanEvent {
+            name: "span-keep".into(),
+            flags: TelemetryOutputFlags::OUTPUT_LOG_FILE,
+            ..Default::default()
+        });
 
         span.in_scope(|| {
-            create_root_info_span!(
-                MockDynSpanEvent {
-                    name: "span-drop".into(),
-                    flags: TelemetryOutputFlags::ALL,
-                    ..Default::default()
-                }
-                .into()
-            )
+            create_root_info_span(MockDynSpanEvent {
+                name: "span-drop".into(),
+                flags: TelemetryOutputFlags::ALL,
+                ..Default::default()
+            })
             .in_scope(|| {
-                emit_tracing_event!(
+                emit_info_event(
                     MockDynLogEvent {
                         code: 1,
                         flags: TelemetryOutputFlags::OUTPUT_LOG_FILE,
                         ..Default::default()
-                    }
-                    .into(),
-                    "file only"
+                    },
+                    Some("file only"),
                 );
 
-                emit_tracing_event!(
+                emit_info_event(
                     MockDynLogEvent {
                         code: 2,
                         flags: TelemetryOutputFlags::OUTPUT_CONSOLE,
                         ..Default::default()
-                    }
-                    .into(),
-                    "console only"
+                    },
+                    Some("console only"),
                 );
             });
         });

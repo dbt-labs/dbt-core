@@ -127,6 +127,9 @@ message TestEvaluationDetail {
 
   // Number of failing rows for this test.
   int32 failing_rows = 2;
+
+  // Pretty printed table diff if available.
+  optional string diff_table = 4;
 }
 
 // Freshness-specific outcome details (only for SOURCE nodes with freshness checks).

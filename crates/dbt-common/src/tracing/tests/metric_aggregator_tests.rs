@@ -1,6 +1,7 @@
 use crate::tracing::metrics::InvocationMetricKey;
 
 use super::super::{
+    emit::create_root_info_span,
     init::create_tracing_subcriber_with_layer,
     layer::{ConsumerLayer, MiddlewareLayer},
     layers::data_layer::TelemetryDataLayer,
@@ -29,14 +30,11 @@ fn warning_logs_increment_warning_metric() {
     let test_metric_key = MetricKey::InvocationMetric(InvocationMetricKey::TotalWarnings);
 
     tracing::subscriber::with_default(subscriber, || {
-        let root_span_guard = create_root_info_span!(
-            MockDynSpanEvent {
-                name: "root".to_string(),
-                flags: TelemetryOutputFlags::empty(),
-                ..Default::default()
-            }
-            .into()
-        )
+        let root_span_guard = create_root_info_span(MockDynSpanEvent {
+            name: "root".to_string(),
+            flags: TelemetryOutputFlags::empty(),
+            ..Default::default()
+        })
         .entered();
 
         assert_eq!(get_metric(test_metric_key), 0);

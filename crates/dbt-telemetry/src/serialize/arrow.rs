@@ -115,6 +115,7 @@ pub struct ArrowAttributes<'a> {
     pub code: Option<u32>,
     pub original_severity_number: Option<i32>,
     pub original_severity_text: Option<Cow<'a, str>>,
+    pub package_name: Option<Cow<'a, str>>,
     // Artifact paths
     pub relative_path: Option<Cow<'a, str>>,
     pub artifact_type: Option<ArtifactType>,
@@ -415,13 +416,14 @@ fn create_arrow_schema() -> (Vec<FieldRef>, Vec<FieldRef>) {
         dict_utf8_field("node_skip_reason", true),
         // CallTrace/Unknown fields
         dict_utf8_field("dev_name", true),
-        // Code location fields
+        // Fusion origin code location fields (debug only)
         dict_utf8_field("file", true),
         Field::new("line", DataType::UInt32, true),
         // Log fields
         Field::new("code", DataType::UInt32, true),
         Field::new("original_severity_number", DataType::Int32, true),
         dict_utf8_field("original_severity_text", true),
+        dict_utf8_field("package_name", true),
         // Artifact paths
         large_utf8_field("relative_path", true),
         dict_utf8_field("artifact_type", true),

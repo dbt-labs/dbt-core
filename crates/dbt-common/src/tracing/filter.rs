@@ -1,52 +1,10 @@
 use super::{data_provider::DataProvider, layer::TelemetryConsumer};
 use dbt_telemetry::{LogRecordInfo, SpanEndInfo, SpanStartInfo};
-use tracing::Metadata;
-
-/// A bitmask used to represent which consumers are not interested in a given
-/// telemetry span. Consumers are indexed by their position in the consumer list
-/// of a TelemetryDataLayer.
-#[derive(Debug, Default, Clone, Copy)]
-pub(super) struct FilterMask(u64);
-
-impl FilterMask {
-    /// Returns an empty filter mask (meaning no consumers are disabled)
-    pub(super) fn empty() -> Self {
-        Self::default()
-    }
-
-    /// Returns a full filter mask (meaning all consumers are disabled)
-    pub(super) fn disabled() -> Self {
-        Self(u64::MAX)
-    }
-
-    /// Returns true if this is a filter mask that disables all consumers
-    pub(super) fn is_disabled(&self) -> bool {
-        self.0 == u64::MAX
-    }
-
-    pub(super) fn set_filtered(&mut self, index: usize) {
-        // Shift would panic in debug if index >= 64, but we add a nice message via debug_assert
-        debug_assert!(
-            index < 64,
-            "Exceeding mask length. Index must be less than 64"
-        );
-        self.0 |= 1 << index;
-    }
-
-    pub(super) fn is_filtered(&self, index: usize) -> bool {
-        // Shift would panic in debug if index >= 64, but we add a nice message via debug_assert
-        debug_assert!(
-            index < 64,
-            "Exceeding mask length. Index must be less than 64"
-        );
-        self.0 & (1 << index) != 0
-    }
-}
 
 pub trait TelemetryFilter {
-    fn is_span_enabled(&self, span: &SpanStartInfo, meta: &Metadata) -> bool;
+    fn is_span_enabled(&self, span: &SpanStartInfo) -> bool;
 
-    fn is_log_enabled(&self, span: &LogRecordInfo, meta: &Metadata) -> bool;
+    fn is_log_enabled(&self, span: &LogRecordInfo) -> bool;
 }
 
 pub struct FilteredTelemetryConsumer<C, F>
@@ -76,23 +34,23 @@ where
     C: TelemetryConsumer,
     F: TelemetryFilter,
 {
-    fn is_span_enabled(&self, span: &SpanStartInfo, meta: &Metadata) -> bool {
-        self.filter.is_span_enabled(span, meta) && self.inner.is_span_enabled(span, meta)
+    fn is_span_enabled(&self, span: &SpanStartInfo) -> bool {
+        self.filter.is_span_enabled(span) && self.inner.is_span_enabled(span)
     }
 
-    fn is_log_enabled(&self, span: &LogRecordInfo, meta: &Metadata) -> bool {
-        self.filter.is_log_enabled(span, meta) && self.inner.is_log_enabled(span, meta)
+    fn is_log_enabled(&self, span: &LogRecordInfo) -> bool {
+        self.filter.is_log_enabled(span) && self.inner.is_log_enabled(span)
     }
 
-    fn on_span_start(&self, span: &SpanStartInfo, data_provider: &DataProvider<'_>) {
+    fn on_span_start(&self, span: &SpanStartInfo, data_provider: &mut DataProvider<'_>) {
         self.inner.on_span_start(span, data_provider);
     }
 
-    fn on_span_end(&self, span: &SpanEndInfo, data_provider: &DataProvider<'_>) {
+    fn on_span_end(&self, span: &SpanEndInfo, data_provider: &mut DataProvider<'_>) {
         self.inner.on_span_end(span, data_provider);
     }
 
-    fn on_log_record(&self, event: &LogRecordInfo, data_provider: &DataProvider<'_>) {
+    fn on_log_record(&self, event: &LogRecordInfo, data_provider: &mut DataProvider<'_>) {
         self.inner.on_log_record(event, data_provider);
     }
 }
@@ -116,8 +74,8 @@ where
 /// directly as it implements the filter trait.
 pub struct TelemetryFilterFn<S, L>
 where
-    S: Fn(&SpanStartInfo, &Metadata) -> bool,
-    L: Fn(&LogRecordInfo, &Metadata) -> bool,
+    S: Fn(&SpanStartInfo) -> bool,
+    L: Fn(&LogRecordInfo) -> bool,
 {
     is_span_enabled: S,
     is_log_enabled: L,
@@ -125,8 +83,8 @@ where
 
 impl<S, L> TelemetryFilterFn<S, L>
 where
-    S: Fn(&SpanStartInfo, &Metadata) -> bool,
-    L: Fn(&LogRecordInfo, &Metadata) -> bool,
+    S: Fn(&SpanStartInfo) -> bool,
+    L: Fn(&LogRecordInfo) -> bool,
 {
     /// Creates a [`TelemetryFilterFn`] with optional span and log filters.
     pub fn new(is_span_enabled: S, is_log_enabled: L) -> Self {
@@ -138,81 +96,47 @@ where
 }
 
 // Convenience functions for common cases
-pub fn disable_all_spans(_span: &SpanStartInfo, _meta: &Metadata) -> bool {
+pub fn disable_all_spans(_span: &SpanStartInfo) -> bool {
     false
 }
 
-pub fn enable_all_spans(_span: &SpanStartInfo, _meta: &Metadata) -> bool {
+pub fn enable_all_spans(_span: &SpanStartInfo) -> bool {
     true
 }
 
-pub fn disable_all_logs(_log: &LogRecordInfo, _meta: &Metadata) -> bool {
+pub fn disable_all_logs(_log: &LogRecordInfo) -> bool {
     false
 }
 
-pub fn enable_all_logs(_log: &LogRecordInfo, _meta: &Metadata) -> bool {
+pub fn enable_all_logs(_log: &LogRecordInfo) -> bool {
     true
 }
 
 impl<S, L> TelemetryFilter for TelemetryFilterFn<S, L>
 where
-    S: Fn(&SpanStartInfo, &Metadata) -> bool,
-    L: Fn(&LogRecordInfo, &Metadata) -> bool,
+    S: Fn(&SpanStartInfo) -> bool,
+    L: Fn(&LogRecordInfo) -> bool,
 {
-    fn is_span_enabled(&self, span: &SpanStartInfo, meta: &Metadata) -> bool {
-        (self.is_span_enabled)(span, meta)
+    fn is_span_enabled(&self, span: &SpanStartInfo) -> bool {
+        (self.is_span_enabled)(span)
     }
 
-    fn is_log_enabled(&self, span: &LogRecordInfo, meta: &Metadata) -> bool {
-        (self.is_log_enabled)(span, meta)
+    fn is_log_enabled(&self, span: &LogRecordInfo) -> bool {
+        (self.is_log_enabled)(span)
     }
 }
 
 impl TelemetryFilter for tracing::level_filters::LevelFilter {
-    fn is_span_enabled(&self, _span: &SpanStartInfo, meta: &Metadata) -> bool {
-        meta.level() <= self
+    fn is_span_enabled(&self, span: &SpanStartInfo) -> bool {
+        span.severity_number
+            .try_into()
+            .is_ok_and(|level: tracing::Level| level <= *self)
     }
 
-    fn is_log_enabled(&self, _span: &LogRecordInfo, meta: &Metadata) -> bool {
-        meta.level() <= self
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::FilterMask;
-
-    #[test]
-    fn empty_mask_reports_empty() {
-        let mask = FilterMask::empty();
-
-        for i in 0..64 {
-            assert!(!mask.is_filtered(i));
-        }
-    }
-
-    #[test]
-    fn full_mask_reports_full() {
-        let mask = FilterMask::disabled();
-
-        assert!(mask.is_disabled());
-        for i in 0..64 {
-            assert!(mask.is_filtered(i));
-        }
-    }
-
-    #[test]
-    fn set_filtered_marks_bits() {
-        let mut mask = FilterMask::empty();
-
-        assert!(!mask.is_filtered(1));
-        assert!(!mask.is_filtered(63));
-
-        mask.set_filtered(1);
-        mask.set_filtered(63);
-
-        assert!(mask.is_filtered(1));
-        assert!(mask.is_filtered(63));
-        assert!(!mask.is_filtered(0));
+    fn is_log_enabled(&self, log_record: &LogRecordInfo) -> bool {
+        log_record
+            .severity_number
+            .try_into()
+            .is_ok_and(|level: tracing::Level| level <= *self)
     }
 }

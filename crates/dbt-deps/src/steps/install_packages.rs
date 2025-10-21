@@ -2,12 +2,13 @@ use dbt_common::fsinfo;
 use dbt_common::io_args::IoArgs;
 use dbt_common::pretty_string::{GREEN, RED};
 use dbt_common::stdfs::File;
+use dbt_common::tracing::emit::{emit_info_log_message, emit_warn_log_message};
 use dbt_common::{
     ErrorCode, FsResult,
     constants::{DBT_PACKAGES_LOCK_FILE, INSTALLING},
     err, fs_err,
     pretty_string::BLUE,
-    show_autofix_suggestion, show_progress, show_warning, stdfs,
+    show_progress, stdfs,
 };
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_schemas::schemas::packages::DbtPackagesLock;
@@ -81,15 +82,15 @@ pub async fn install_packages(
                         || (std::env::var("NEXTEST").is_ok()
                             && std::env::var("TEST_DEPS_LATEST_VERSION").is_ok()))
                 {
-                    show_warning!(
-                        io_args,
-                        fs_err!(
-                            ErrorCode::DependencyWarning,
+                    emit_warn_log_message(
+                        ErrorCode::DependencyWarning,
+                        format!(
                             "Updated version available for {}@{}: {}",
                             pinned_package.name,
                             pinned_package.version,
                             pinned_package.version_latest,
-                        )
+                        ),
+                        io_args,
                     );
                 }
 
@@ -333,6 +334,9 @@ pub async fn install_packages(
 
     // Display fusion-schema-compat upgrade suggestions at the end
     if !fusion_compat_suggestions.is_empty() {
+        // TODO: we should not apply color at the site where we emit event. The "proper"
+        // way would be to introduce a dedicated event type or error code and apply formatting
+        // in tracing formatters.
         let suggestions: Vec<String> = fusion_compat_suggestions
             .iter()
             .map(|(name, current_version, latest_version)| {
@@ -350,7 +354,7 @@ pub async fn install_packages(
             suggestions.join("\n"),
         );
 
-        show_autofix_suggestion!(io_args, msg);
+        emit_info_log_message(msg);
     }
 
     Ok(())

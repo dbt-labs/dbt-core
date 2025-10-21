@@ -23,7 +23,7 @@ pub fn build_query_log_layer_with_background_writer<W: Write + Send + 'static>(
 
     let layer = TelemetryPrettyWriterLayer::new(writer, format_query_log_event).with_filter(
         TelemetryFilterFn::new(
-            |span: &SpanStartInfo, _| span.attributes.is::<QueryExecuted>(),
+            |span: &SpanStartInfo| span.attributes.is::<QueryExecuted>(),
             disable_all_logs,
         ),
     );

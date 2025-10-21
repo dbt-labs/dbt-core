@@ -1,6 +1,7 @@
 use crate::{
     io_args::EvalArgs,
     tracing::{
+        emit::{create_root_info_span, emit_info_event},
         init::create_tracing_subcriber_with_layer,
         invocation::create_invocation_attributes,
         layers::{
@@ -43,7 +44,7 @@ fn file_log_layer_creates_invocation_and_log_stub() {
 
     tracing::subscriber::with_default(subscriber, || {
         let invocation_span =
-            create_root_info_span!(create_invocation_attributes("dbt-test", &eval_args).into());
+            create_root_info_span(create_invocation_attributes("dbt-test", &eval_args));
 
         invocation_span.in_scope(|| {
             let log_message = LogMessage {
@@ -54,7 +55,7 @@ fn file_log_layer_creates_invocation_and_log_stub() {
                 ..Default::default()
             };
 
-            emit_tracing_event!(log_message.into(), "file log layer stub log");
+            emit_info_event(log_message, Some("file log layer stub log"));
         });
     });
 

@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use super::shared::Recordable;
-use dbt_telemetry::{DebugValue, SpanStatus, TelemetryAttributes};
+use dbt_telemetry::{AnyTelemetryEvent, DebugValue, SpanStatus, TelemetryAttributes};
 
 use tracing::Span;
 use tracing_subscriber::{
@@ -152,6 +152,32 @@ pub fn record_span_status(span: &Span, error_message: Option<&str>) {
     });
 }
 
+/// Records the status of a span for the closest span with the expected
+/// `TelemetryAttributes` type starting from the current span and going up.
+///
+/// If no such span is found, this is a no-op.
+pub fn find_and_record_span_status<A: AnyTelemetryEvent>(error_message: Option<&str>) {
+    with_current_span(|span_ref| {
+        // Find the closest span with the expected TelemetryAttributes type.
+        // Scope iterator starts from the current span and goes up to the root.
+        for span_ref in span_ref.scope() {
+            let mut span_ext_mut = span_ref.extensions_mut();
+
+            if span_ext_mut
+                // Get the current attributes
+                .get_mut::<TelemetryAttributes>()
+                .expect("Telemetry hasn't been properly initialized. Missing span event attributes")
+                // Try downcasting to the expected type
+                .is::<A>()
+            {
+                // Found the expected attributes, call the updater and return
+                record_span_status_on_ref(&mut span_ext_mut, error_message);
+                return;
+            }
+        }
+    });
+}
+
 /// Records the status and attributes of the given span.
 ///
 /// If `error_message` is `None`, the status code will be set to `Ok`,
@@ -177,6 +203,47 @@ pub fn record_span_status_with_attrs<F>(
             .get_mut::<TelemetryAttributes>()
             .expect("Telemetry hasn't been properly initialized. Missing span event attributes");
         attrs_updater(attrs);
+    });
+}
+
+/// Records the status and attributes for the closest span with the expected
+/// `TelemetryAttributes` type starting from the current span and going up.
+///
+/// If `error_message` is `None`, the status code will be set to `Ok`,
+/// otherwise it will be set to `Error`.
+///
+/// The `attrs_updater` closure receives a mutable reference to the current
+/// attributes and should modify them in place.
+///
+/// If no such span is found, this is a no-op.
+pub fn find_and_record_span_status_with_attrs<F, A: AnyTelemetryEvent>(
+    mut attrs_updater: F,
+    error_message: Option<&str>,
+) where
+    F: FnMut(&mut A),
+{
+    with_current_span(|span_ref| {
+        // Find the closest span with the expected TelemetryAttributes type.
+        // Scope iterator starts from the current span and goes up to the root.
+        for span_ref in span_ref.scope() {
+            let mut span_ext_mut = span_ref.extensions_mut();
+
+            if let Some(attrs) = span_ext_mut
+                // Get the current attributes
+                .get_mut::<TelemetryAttributes>()
+                .expect("Telemetry hasn't been properly initialized. Missing span event attributes")
+                // Try downcasting to the expected type
+                .downcast_mut::<A>()
+            {
+                // Found the expected attributes, call the updater and return
+                attrs_updater(attrs);
+
+                // Record the status of the span
+                record_span_status_on_ref(&mut span_ext_mut, error_message);
+
+                return;
+            }
+        }
     });
 }
 
@@ -230,6 +297,47 @@ where
         // Record the status of the span from the attrs themselves
         if let Some(status) = attrs.get_span_status() {
             span_ext_mut.replace(status);
+        }
+    });
+}
+
+/// Records the status and attributes for the closest span with the expected
+/// `TelemetryAttributes` type starting from the current span and going up.
+///
+/// Uses event `get_span_status` method to determine the status. If the event
+/// doesn't support inferring status, use `record_span_status_with_attrs` instead.
+///
+/// The `attrs_updater` closure receives a mutable reference to the current
+/// attributes and should modify them in place.
+///
+/// If no such span is found, this is a no-op.
+pub fn find_and_record_span_status_from_attrs<F, A: AnyTelemetryEvent>(mut attrs_updater: F)
+where
+    F: FnMut(&mut A),
+{
+    with_current_span(|span_ref| {
+        // Find the closest span with the expected TelemetryAttributes type.
+        // Scope iterator starts from the current span and goes up to the root.
+        for span_ref in span_ref.scope() {
+            let mut span_ext_mut = span_ref.extensions_mut();
+
+            if let Some(attrs) = span_ext_mut
+                // Get the current attributes
+                .get_mut::<TelemetryAttributes>()
+                .expect("Telemetry hasn't been properly initialized. Missing span event attributes")
+                // Try downcasting to the expected type
+                .downcast_mut::<A>()
+            {
+                // Found the expected attributes, call the updater and return
+                attrs_updater(attrs);
+
+                // Record the status of the span from the attrs themselves
+                if let Some(status) = attrs.get_span_status() {
+                    span_ext_mut.replace(status);
+                }
+
+                return;
+            }
         }
     });
 }

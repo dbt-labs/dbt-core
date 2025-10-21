@@ -12,7 +12,8 @@ use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::DBT_SNAPSHOTS_DIR_NAME;
 use dbt_common::error::AbstractLocation;
 use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
-use dbt_common::{ErrorCode, FsResult, fs_err, show_error, show_warning, stdfs, unexpected_fs_err};
+use dbt_common::tracing::emit::{emit_error_log_from_fs_error, emit_warn_log_from_fs_error};
+use dbt_common::{ErrorCode, FsResult, fs_err, stdfs, unexpected_fs_err};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::listener::DefaultJinjaTypeCheckEventListenerFactory;
 use dbt_jinja_utils::node_resolver::NodeResolver;
@@ -420,7 +421,8 @@ pub async fn resolve_snapshots(
             match node_resolver.insert_ref(&dbt_snapshot, adapter_type, status, false) {
                 Ok(_) => (),
                 Err(e) => {
-                    show_error!(&arg.io, e.with_location(dbt_asset.path.clone()));
+                    let err_with_loc = e.with_location(dbt_asset.path.clone());
+                    emit_error_log_from_fs_error(&err_with_loc, &arg.io);
                 }
             }
 
@@ -431,7 +433,7 @@ pub async fn resolve_snapshots(
                     "Snapshot '{}' must be configured with a 'strategy' and 'unique_key'",
                     snapshot_name
                 );
-                show_error!(&arg.io, e);
+                emit_error_log_from_fs_error(&e, &arg.io);
             }
             match status {
                 ModelStatus::Enabled => {
@@ -461,7 +463,7 @@ pub async fn resolve_snapshots(
                 "Unused schema.yml entry for snapshot '{}'",
                 snapshot_name,
             );
-            show_warning!(&arg.io, err);
+            emit_warn_log_from_fs_error(&err, &arg.io);
         }
     }
     // Second pass to capture all identifiers with the appropriate context

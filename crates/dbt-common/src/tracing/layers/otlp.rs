@@ -154,13 +154,13 @@ impl TelemetryShutdown for SdkLoggerProvider {
 }
 
 impl TelemetryConsumer for OTLPExporterLayer {
-    fn is_span_enabled(&self, span: &SpanStartInfo, _meta: &tracing::Metadata) -> bool {
+    fn is_span_enabled(&self, span: &SpanStartInfo) -> bool {
         span.attributes
             .output_flags()
             .contains(TelemetryOutputFlags::EXPORT_OTLP)
     }
 
-    fn is_log_enabled(&self, log_record: &LogRecordInfo, _meta: &tracing::Metadata) -> bool {
+    fn is_log_enabled(&self, log_record: &LogRecordInfo) -> bool {
         log_record
             .attributes
             .output_flags()
@@ -168,11 +168,11 @@ impl TelemetryConsumer for OTLPExporterLayer {
     }
 
     // We record spans to OTLP only when they are closed, so we don't need to do anything on new span
-    fn on_span_end(&self, span: &SpanEndInfo, _: &DataProvider<'_>) {
+    fn on_span_end(&self, span: &SpanEndInfo, _: &mut DataProvider<'_>) {
         export_span(&self.tracer, span);
     }
 
-    fn on_log_record(&self, record: &LogRecordInfo, _: &DataProvider<'_>) {
+    fn on_log_record(&self, record: &LogRecordInfo, _: &mut DataProvider<'_>) {
         export_log(&self.logger, record);
     }
 }

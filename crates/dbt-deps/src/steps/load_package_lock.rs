@@ -1,10 +1,11 @@
 use dbt_common::io_args::IoArgs;
+use dbt_common::tracing::emit::emit_warn_log_message;
 use dbt_common::{
     ErrorCode, FsResult,
     constants::{DBT_PACKAGES_LOCK_FILE, DBT_PROJECT_YML},
     err, fs_err,
     io_utils::try_read_yml_to_str,
-    show_warning, stdfs,
+    stdfs,
 };
 use dbt_jinja_utils::serde::from_yaml_raw;
 use dbt_schemas::schemas::project::DbtProjectNameOnly;
@@ -68,21 +69,19 @@ fn try_load_from_deprecated_dbt_packages_lock(
             packages: deprecated_packages,
             sha1_hash,
         }) => {
-            show_warning!(
+            emit_warn_log_message(
+                ErrorCode::FmtError,
+                "Found package-lock.yml file with out of date formatting, ignoring...",
                 io,
-                fs_err!(
-                    ErrorCode::FmtError,
-                    "Found package-lock.yml file with out of date formatting, ignoring..."
-                )
             );
+
             if !dbt_packages_dir.exists() {
-                show_warning!(
+                emit_warn_log_message(
+                    ErrorCode::FmtError,
+                    "Attempted to infer package name from package-lock.yml, but no packages directory found, skipping...",
                     io,
-                    fs_err!(
-                        ErrorCode::FmtError,
-                        "Attempted to infer package name from package-lock.yml, but no packages directory found, skipping...",
-                    )
                 );
+
                 return Ok(None);
             }
 
@@ -96,15 +95,16 @@ fn try_load_from_deprecated_dbt_packages_lock(
                     )
                 })?,
                 Err(e) => {
-                    show_warning!(
-                        io,
-                        fs_err!(
-                            ErrorCode::IoError,
+                    emit_warn_log_message(
+                        ErrorCode::IoError,
+                        format!(
                             "Failed to read packages directory at {}: {}",
                             dbt_packages_dir.display(),
                             e
-                        )
+                        ),
+                        io,
                     );
+
                     return Ok(None);
                 }
             };
@@ -131,15 +131,16 @@ fn try_load_from_deprecated_dbt_packages_lock(
                                 version,
                             }));
                         } else {
-                            show_warning!(
-                                io,
-                                fs_err!(
-                                    ErrorCode::FmtError,
+                            emit_warn_log_message(
+                                ErrorCode::FmtError,
+                                format!(
                                     "Attempted to infer package name from package-lock.yml, but package {} not found in '{}', skipping...",
                                     package,
                                     dbt_packages_dir.display()
-                                )
+                                ),
+                                io,
                             );
+
                             return Ok(None);
                         }
                     }
@@ -162,15 +163,16 @@ fn try_load_from_deprecated_dbt_packages_lock(
                                 __unrendered__: unrendered,
                             }));
                         } else {
-                            show_warning!(
-                                io,
-                                fs_err!(
-                                    ErrorCode::FmtError,
+                            emit_warn_log_message(
+                                ErrorCode::FmtError,
+                                format!(
                                     "Attempted to infer package name from package-lock.yml, but package {} not found in '{}', skipping...",
                                     git,
                                     dbt_packages_dir.display()
-                                )
+                                ),
+                                io,
                             );
+
                             return Ok(None);
                         }
                     }

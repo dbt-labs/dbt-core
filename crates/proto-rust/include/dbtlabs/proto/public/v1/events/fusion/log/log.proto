@@ -22,12 +22,15 @@ message LogMessage {
   // this field should be set to the node's unique FQN.
   optional string unique_id = 5;
 
-  // File name where the span was created.
+  // Fusion source code file name where the log was created. Only available in debug builds.
   optional string file = 6;
 
-  // Line number in the file where the span was created.
+  // Fusion source code file line number where the log was created. Only available in debug builds.
   optional uint32 line = 7;
 
-  // Execution phase context (if known) where this log was emitted.
+  // Execution phase (if known) during which this log was emitted.
   optional v1.public.events.fusion.phase.ExecutionPhase phase = 8;
+
+  // Package name of the project dependency for which this log was emitted. Not set for the root project.
+  optional string package_name = 9;
 }

@@ -46,13 +46,13 @@ pub struct LogMessage {
     /// this field should be set to the node's unique FQN.
     #[prost(string, optional, tag = "5")]
     pub unique_id: ::core::option::Option<::prost::alloc::string::String>,
-    /// File name where the span was created.
+    /// Fusion source code file name where the log was created. Only available in debug builds.
     #[prost(string, optional, tag = "6")]
     pub file: ::core::option::Option<::prost::alloc::string::String>,
-    /// Line number in the file where the span was created.
+    /// Fusion source code file line number where the log was created. Only available in debug builds.
     #[prost(uint32, optional, tag = "7")]
     pub line: ::core::option::Option<u32>,
-    /// Execution phase context (if known) where this log was emitted.
+    /// Execution phase (if known) during which this log was emitted.
     #[prost(enumeration = "super::phase::ExecutionPhase", optional, tag = "8")]
     #[serde(
         serialize_with = "super::phase::ExecutionPhase::serialize_optional",
@@ -65,6 +65,9 @@ pub struct LogMessage {
         )
     )]
     pub phase: ::core::option::Option<i32>,
+    /// Package name of the project dependency for which this log was emitted. Not set for the root project.
+    #[prost(string, optional, tag = "9")]
+    pub package_name: ::core::option::Option<::prost::alloc::string::String>,
 }
 impl crate::StaticName for LogMessage {
     const FULL_NAME: &'static str = "v1.public.events.fusion.log.LogMessage";

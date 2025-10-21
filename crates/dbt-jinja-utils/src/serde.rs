@@ -76,8 +76,7 @@ use std::{
 
 use dbt_common::{
     CodeLocation, ErrorCode, FsError, FsResult, fs_err, io_args::IoArgs,
-    io_utils::try_read_yml_to_str, show_error, show_package_error, show_strict_error,
-    show_warning_soon_to_be_error,
+    io_utils::try_read_yml_to_str, tracing::emit::emit_strict_parse_error,
 };
 use dbt_schemas::schemas::serde::yaml_to_fs_error;
 use dbt_serde_yaml::Value;
@@ -134,15 +133,7 @@ where
 
     if show_errors_or_warnings {
         for error in errors {
-            if let Some(package_name) = dependency_package_name
-                && !io_args.show_all_deprecations
-            {
-                // If we are parsing a dependency package, we use a special macros
-                // that ensures at most one error is shown per package.
-                show_package_error!(io_args, package_name);
-            } else {
-                show_strict_error!(io_args, error, dependency_package_name);
-            }
+            emit_strict_parse_error(&error, dependency_package_name, io_args);
         }
     }
 
@@ -177,15 +168,7 @@ where
         for error in errors {
             let context = error_context(&error);
             let error = error.with_context(context);
-            if let Some(package_name) = dependency_package_name
-                && !io_args.show_all_deprecations
-            {
-                // If we are parsing a dependency package, we use a special macros
-                // that ensures at most one error is shown per package.
-                show_package_error!(io_args, package_name);
-            } else {
-                show_strict_error!(io_args, error, dependency_package_name);
-            }
+            emit_strict_parse_error(&error, dependency_package_name, io_args);
         }
     }
 
@@ -209,15 +192,7 @@ where
         for error in errors {
             let error =
                 error.with_location(CodeLocation::from(error_path.clone().unwrap_or_default()));
-            if let Some(package_name) = dependency_package_name
-                && !io_args.show_all_deprecations
-            {
-                // If we are parsing a dependency package, we use a special macros
-                // that ensures at most one error is shown per package.
-                show_package_error!(io_args, package_name);
-            } else {
-                show_strict_error!(io_args, error, dependency_package_name);
-            }
+            emit_strict_parse_error(&error, dependency_package_name, io_args);
         }
     }
 
@@ -252,15 +227,7 @@ where
 
     if show_errors_or_warnings {
         for error in errors {
-            if let Some(package_name) = dependency_package_name
-                && !io_args.show_all_deprecations
-            {
-                // If we are parsing a dependency package, we use a special macros
-                // that ensures at most one error is shown per package.
-                show_package_error!(io_args, package_name);
-            } else {
-                show_strict_error!(io_args, error, dependency_package_name);
-            }
+            emit_strict_parse_error(&error, dependency_package_name, io_args);
         }
     }
 
@@ -350,15 +317,7 @@ fn value_from_str(
         );
 
         if show_errors_or_warnings {
-            if let Some(package_name) = dependency_package_name
-                && !io_args.show_all_deprecations
-            {
-                // If we are parsing a dependency package, we use a special macros
-                // that ensures at most one error is shown per package.
-                show_package_error!(io_args, package_name);
-            } else {
-                show_strict_error!(io_args, duplicate_key_error, dependency_package_name);
-            }
+            emit_strict_parse_error(&duplicate_key_error, dependency_package_name, io_args);
         }
         // last key wins:
         dbt_serde_yaml::mapping::DuplicateKey::Overwrite

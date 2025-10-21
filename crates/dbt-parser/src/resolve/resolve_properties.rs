@@ -2,11 +2,8 @@ use crate::args::ResolveArgs;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_args::IoArgs;
 use dbt_common::io_utils::try_read_yml_to_str;
-use dbt_common::{
-    ErrorCode, FsResult, constants::PARSING, fs_err, fsinfo, show_error, show_progress,
-    show_warning,
-};
-use dbt_common::{show_package_error, show_strict_error};
+use dbt_common::tracing::emit::{emit_strict_parse_error, emit_warn_log_message};
+use dbt_common::{ErrorCode, FsResult, constants::PARSING, fs_err, fsinfo, show_progress};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::serde::{from_yaml_raw, into_typed_with_jinja};
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
@@ -176,16 +173,16 @@ impl MinimalProperties {
                                 .duplicate_paths
                                 .push(properties_path.to_path_buf());
 
-                            show_warning!(
-                                io_args,
-                                fs_err!(
-                                    ErrorCode::SchemaError,
+                            emit_warn_log_message(
+                                ErrorCode::SchemaError,
+                                format!(
                                     "Duplicate definition for table '{}' in source '{}' found in file '{}'. Using definition from '{}'.",
                                     minimum_table_value.name.clone().into_inner(),
                                     source.name,
                                     properties_path.display(),
                                     existing_entry.relative_path.display()
-                                )
+                                ),
+                                io_args,
                             );
                         } else {
                             self.source_tables.insert(
@@ -203,14 +200,14 @@ impl MinimalProperties {
                         }
                     }
                 } else {
-                    show_warning!(
-                        io_args,
-                        fs_err!(
-                            ErrorCode::SchemaError,
+                    emit_warn_log_message(
+                        ErrorCode::SchemaError,
+                        format!(
                             "No tables defined for source '{}' in file '{}'.",
                             source.name,
                             properties_path.display()
-                        )
+                        ),
+                        io_args,
                     );
                 }
             }
@@ -607,27 +604,21 @@ pub fn resolve_minimal_properties(
                 {
                     // Top level semantic models are not allowed anymore
                     // TODO: edit copy to encourage user to use auto-fix.
-                    show_warning!(
-                        arg.io,
-                        fs_err!(
-                            ErrorCode::SchemaError,
+
+                    emit_warn_log_message(
+                        ErrorCode::SchemaError,
+                        format!(
                             "The package '{}' defines semantic models and metrics using the legacy YAML. Please migrate to the new YAML to use the semantic layer with dbt Fusion.",
                             &package.dbt_project.name,
-                        )
+                        ),
+                        &arg.io,
                     );
+
                     minimal_resolved_properties.semantic_layer_spec_is_legacy = true;
                 }
             }
             Err(e) => {
-                if let Some(package_name) = dependency_package_name
-                    && !&arg.io.show_all_deprecations
-                {
-                    // If we are parsing a dependency package, we use a special macros
-                    // that ensures at most one error is shown per package.
-                    show_package_error!(&arg.io, package_name);
-                } else {
-                    show_strict_error!(arg.io, e, dependency_package_name);
-                }
+                emit_strict_parse_error(&e, dependency_package_name, &arg.io);
                 continue; // processing other files
             }
         }

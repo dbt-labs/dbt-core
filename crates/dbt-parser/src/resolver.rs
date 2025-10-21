@@ -5,9 +5,10 @@ use dbt_common::adapter::AdapterType;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::{DBT_GENERIC_TESTS_DIR_NAME, RESOLVING};
 use dbt_common::once_cell_vars::DISPATCH_CONFIG;
+use dbt_common::stdfs;
+use dbt_common::tracing::emit::{emit_error_log_from_fs_error, emit_warn_log_from_fs_error};
 use dbt_common::tracing::event_info::store_event_attributes;
-use dbt_common::{ErrorCode, FsResult, err, fs_err, show_error, with_progress};
-use dbt_common::{show_warning, stdfs};
+use dbt_common::{ErrorCode, FsResult, err, fs_err, with_progress};
 use dbt_jinja_utils::invocation_args::InvocationArgs;
 use dbt_jinja_utils::listener::JinjaTypeCheckingEventListenerFactory;
 use dbt_jinja_utils::node_resolver::{NodeResolver, resolve_dependencies};
@@ -24,6 +25,7 @@ use dbt_schemas::schemas::{InternalDbtNode, Nodes};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_schemas::state::{DbtAsset, DbtPackage, GenericTestAsset, Macros, RenderResults};
 use dbt_schemas::state::{DbtRuntimeConfig, Operations};
+use tracing::Instrument as _;
 
 use crate::args::ResolveArgs;
 use crate::dbt_project_config::{RootProjectConfigs, build_root_project_configs};
@@ -71,7 +73,7 @@ use dbt_serde_yaml::Value as YmlValue;
 #[tracing::instrument(
     skip_all,
     fields(
-        _e = ?store_event_attributes(PhaseExecuted::start_general(ExecutionPhase::Parse).into()),
+        _e = ?store_event_attributes(PhaseExecuted::start_general(ExecutionPhase::Parse)),
     )
 )]
 pub async fn resolve(
@@ -245,7 +247,7 @@ pub async fn resolve(
     match nodes.warn_on_microbatch() {
         Ok(_) => {}
         Err(e) => {
-            show_warning!(arg.io, e);
+            emit_warn_log_from_fs_error(e.as_ref(), &arg.io);
         }
     }
 
@@ -400,7 +402,7 @@ fn check_node_access<F>(
                     target_unique_id,
                     target_node.__model_attr__.group.as_deref().unwrap_or(""),
                 );
-                show_error!(arg.io, err);
+                emit_error_log_from_fs_error(&err, &arg.io);
             } else if target_node.__model_attr__.access == Access::Protected && diffent_packages {
                 let err = fs_err!(
                     code => ErrorCode::AccessDenied,
@@ -410,7 +412,7 @@ fn check_node_access<F>(
                     target_unique_id,
                     target_node.common().package_name,
                 );
-                show_error!(arg.io, err);
+                emit_error_log_from_fs_error(&err, &arg.io);
             }
         }
     }
@@ -1004,24 +1006,27 @@ async fn resolve_packages_parallel(
             let token = token.clone();
             let jinja_type_checking_event_listener_factory =
                 jinja_type_checking_event_listener_factory.clone();
-            handles.push(tokio::spawn(async move {
-                resolve_package(
-                    package_name,
-                    arg,
-                    dbt_state,
-                    root_project_name,
-                    root_project_configs,
-                    adapter_type,
-                    macros,
-                    jinja_env,
-                    node_resolver,
-                    all_runtime_configs,
-                    &token,
-                    jinja_type_checking_event_listener_factory,
-                )
-                .await
-                .map_err(|e| *e)
-            }));
+            handles.push(tokio::spawn(
+                async move {
+                    resolve_package(
+                        package_name,
+                        arg,
+                        dbt_state,
+                        root_project_name,
+                        root_project_configs,
+                        adapter_type,
+                        macros,
+                        jinja_env,
+                        node_resolver,
+                        all_runtime_configs,
+                        &token,
+                        jinja_type_checking_event_listener_factory,
+                    )
+                    .await
+                    .map_err(|e| *e)
+                }
+                .in_current_span(),
+            ));
         }
 
         // Wait for all packages in this wave to finish, then merge results and update configs

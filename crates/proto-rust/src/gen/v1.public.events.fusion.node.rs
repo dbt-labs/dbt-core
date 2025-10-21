@@ -3,7 +3,7 @@
 #[cfg_attr(any(test, feature = "test-utils"), derive(::fake::Dummy))]
 #[::serde_with::skip_serializing_none]
 #[derive(::serde::Serialize, ::serde::Deserialize)]
-#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct TestEvaluationDetail {
     #[prost(enumeration = "TestOutcome", tag = "1")]
     #[serde(
@@ -18,6 +18,9 @@ pub struct TestEvaluationDetail {
     /// Number of failing rows for this test.
     #[prost(int32, tag = "2")]
     pub failing_rows: i32,
+    /// Pretty printed table diff if available.
+    #[prost(string, optional, tag = "4")]
+    pub diff_table: ::core::option::Option<::prost::alloc::string::String>,
 }
 impl crate::StaticName for TestEvaluationDetail {
     const FULL_NAME: &'static str = "v1.public.events.fusion.node.TestEvaluationDetail";

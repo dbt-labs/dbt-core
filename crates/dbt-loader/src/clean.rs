@@ -11,7 +11,8 @@ use dbt_common::{
     constants::{DBT_PROJECT_YML, REMOVING},
     err, fs_err, fsinfo,
     io_args::{EvalArgs, IoArgs},
-    show_error, show_progress, show_progress_exit, stdfs,
+    show_progress, stdfs,
+    tracing::{emit::emit_error_log_from_fs_error, metrics::get_exit_code_from_error_counter},
 };
 use dbt_jinja_utils::{
     invocation_args::InvocationArgs, phases::load::init::initialize_load_jinja_environment,
@@ -93,29 +94,25 @@ pub async fn execute_clean_command(
         })?;
     }
 
-    show_progress_exit!(arg)
+    Ok(get_exit_code_from_error_counter())
 }
 
 fn unrelated_paths<P: AsRef<Path>, Q: AsRef<Path>>(io: &IoArgs, to: P, from: Q) -> bool {
-    match stdfs::diff_paths(&to, &from) {
-        Ok(diff) => {
+    stdfs::diff_paths(&to, &from)
+        .and_then(|diff| {
             // It is safe to delete a directory if the only way to get to a protected directory is to navigate to the parent.
             if diff.components().next() == Some(std::path::Component::ParentDir) {
                 Ok(true)
             } else {
-                let e = fs_err!(
+                Err(fs_err!(
                     ErrorCode::InvalidPath,
                     "The target directory is protected: {}",
                     from.as_ref().display()
-                );
-                show_error!(io, &e);
-                Err(e)
+                ))
             }
-        }
-        Err(e) => {
-            show_error!(io, &e);
-            Err(e)
-        }
-    }
-    .is_ok()
+        })
+        .inspect_err(|e| {
+            emit_error_log_from_fs_error(e, io);
+        })
+        .is_ok()
 }

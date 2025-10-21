@@ -9,7 +9,6 @@ use opentelemetry::{
 };
 use opentelemetry_sdk::{logs::SdkLogger, trace::SdkTracer};
 use opentelemetry_semantic_conventions::attribute::{CODE_FILE_PATH, CODE_LINE_NUMBER};
-use proto_rust::impls::compat::level_to_otel_severity_text;
 use std::collections::HashMap;
 
 use crate::{
@@ -77,7 +76,7 @@ pub fn export_log(logger: &SdkLogger, log_record: &LogRecordInfo) {
     // Set the log basic attributes
     otel_log_record.set_severity_number(level_to_otel_severity(&log_record.severity_number));
 
-    otel_log_record.set_severity_text(level_to_otel_severity_text(&log_record.severity_number));
+    otel_log_record.set_severity_text(log_record.severity_number.as_str());
 
     // Message
     otel_log_record.set_body(AnyValue::from(log_record.body.clone()));
@@ -111,6 +110,8 @@ fn span_status_to_otel(status: Option<&SpanStatus>) -> Option<OtelStatus> {
     })
 }
 
+/// Convert our proto defined severity level to OpenTelemetry severity number.
+/// Panics if `SeverityNumber::Unspecified` is provided.
 const fn level_to_otel_severity(severity_number: &SeverityNumber) -> OtelSeverity {
     match severity_number {
         SeverityNumber::Unspecified => panic!("Do not use unspecified severity level!"),

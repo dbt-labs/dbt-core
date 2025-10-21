@@ -1,5 +1,6 @@
 use dbt_common::adapter::AdapterType;
 use dbt_common::cancellation::CancellationToken;
+use dbt_common::tracing::emit::emit_warn_log_message;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 
 use std::collections::BTreeMap;
@@ -9,8 +10,8 @@ use dbt_common::constants::DBT_PROJECT_YML;
 
 use dbt_common::stdfs;
 
+use dbt_common::err;
 use dbt_common::{ErrorCode, FsResult};
-use dbt_common::{err, fs_err, show_warning};
 use dbt_schemas::state::{DbtPackage, DbtProfile, DbtVars};
 
 use crate::args::LoadArgs;
@@ -179,13 +180,13 @@ async fn collect_packages(
                 .await?;
                 packages.push(package);
             } else {
-                show_warning!(
-                    arg.io,
-                    fs_err!(
-                        ErrorCode::InvalidConfig,
+                emit_warn_log_message(
+                    ErrorCode::InvalidConfig,
+                    format!(
                         "Package {} does not contain a dbt_project.yml file",
                         package_path.file_name().unwrap().to_str().unwrap()
-                    )
+                    ),
+                    &arg.io,
                 );
             }
         }

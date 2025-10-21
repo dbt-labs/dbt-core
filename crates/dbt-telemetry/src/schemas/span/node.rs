@@ -36,9 +36,27 @@ impl ProtoTelemetryEvent for NodeEvaluated {
     }
 
     fn has_sensitive_data(&self) -> bool {
+        true
+    }
+
+    fn clone_without_sensitive_data(&self) -> Option<Box<dyn crate::AnyTelemetryEvent>> {
         // TODO: theoretically we may want to use a consistent scrambling/hashing of
         // identifiers as some may consider this sensitive
-        false
+        let new_outcome_detail = match self.node_outcome_detail.as_ref() {
+            Some(NodeOutcomeDetail::NodeTestDetail(test_detail)) => {
+                Some(NodeOutcomeDetail::NodeTestDetail(TestEvaluationDetail {
+                    // Scrub diff_table as it may contain sensitive data
+                    diff_table: None,
+                    ..test_detail.clone()
+                }))
+            }
+            _ => self.node_outcome_detail.clone(),
+        };
+
+        Some(Box::new(Self {
+            node_outcome_detail: new_outcome_detail,
+            ..self.clone()
+        }))
     }
 
     fn context(&self) -> Option<TelemetryContext> {

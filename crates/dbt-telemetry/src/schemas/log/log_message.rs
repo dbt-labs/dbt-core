@@ -70,6 +70,7 @@ impl ArrowSerializableTelemetryEvent for LogMessage {
             phase: self.phase.map(|_| self.phase()),
             file: self.file.as_deref().map(Cow::Borrowed),
             line: self.line,
+            package_name: self.package_name.as_deref().map(Cow::Borrowed),
             ..Default::default()
         }
     }
@@ -98,6 +99,7 @@ impl ArrowSerializableTelemetryEvent for LogMessage {
             phase: record.phase.map(|v| v as i32),
             file: record.file.as_deref().map(str::to_string),
             line: record.line,
+            package_name: record.package_name.as_deref().map(str::to_string),
         })
     }
 }

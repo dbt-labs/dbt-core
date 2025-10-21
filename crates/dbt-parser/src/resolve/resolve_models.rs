@@ -20,8 +20,8 @@ use dbt_common::error::AbstractLocation;
 use dbt_common::fs_err;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::io_args::StaticAnalysisOffReason;
-use dbt_common::show_error;
-use dbt_common::show_warning;
+use dbt_common::tracing::emit::emit_error_log_from_fs_error;
+use dbt_common::tracing::emit::emit_warn_log_from_fs_error;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::listener::JinjaTypeCheckingEventListenerFactory;
 use dbt_jinja_utils::node_resolver::NodeResolver;
@@ -281,13 +281,14 @@ pub async fn resolve_models(
                 if !errors.is_empty() {
                     // Show each error individually
                     for error in errors {
-                        show_error!(&arg.io, Box::new(error));
+                        emit_error_log_from_fs_error(&error, &arg.io);
                     }
                     continue;
                 }
             }
             Err(e) => {
-                show_error!(&arg.io, e);
+                emit_error_log_from_fs_error(&e, &arg.io);
+
                 continue;
             }
         }
@@ -521,7 +522,8 @@ pub async fn resolve_models(
         match node_resolver.insert_ref(&dbt_model, adapter_type, status, false) {
             Ok(_) => (),
             Err(e) => {
-                show_error!(&arg.io, e.with_location(dbt_asset.path.clone()));
+                let err_with_loc = e.with_location(dbt_asset.path.clone());
+                emit_error_log_from_fs_error(&err_with_loc, &arg.io);
             }
         }
 
@@ -565,7 +567,7 @@ pub async fn resolve_models(
                 "Unused schema.yml entry for model '{}'",
                 model_name,
             );
-            show_warning!(&arg.io, err);
+            emit_warn_log_from_fs_error(&err, &arg.io);
         }
     }
 
@@ -590,7 +592,7 @@ pub async fn resolve_models(
             if errs.is_empty() {
                 return Err(err);
             }
-            show_error!(&arg.io, err);
+            emit_error_log_from_fs_error(&err, &arg.io);
         }
     }
 

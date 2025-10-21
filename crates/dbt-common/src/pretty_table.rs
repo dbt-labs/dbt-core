@@ -183,7 +183,9 @@ pub fn pretty_data_table(
             let converted_batches = stringify_types_for_show(record_batches);
 
             // print title and subtitle
-            out.push_str(&format!("{}\n", &title));
+            if !title.is_empty() {
+                out.push_str(&format!("{title}\n"));
+            }
             if !subtitle.is_empty() {
                 out.push_str(&format!("{subtitle}\n"));
             }

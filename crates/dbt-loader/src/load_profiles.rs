@@ -1,8 +1,9 @@
+use dbt_common::tracing::emit::emit_warn_log_message;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 
 use dbt_common::constants::{DBT_PROFILES_YML, LOADING};
 use dbt_common::stdfs::canonicalize;
-use dbt_common::{ErrorCode, FsResult, err, fs_err, fsinfo, show_progress, show_warning};
+use dbt_common::{ErrorCode, FsResult, err, fs_err, fsinfo, show_progress};
 
 use pathdiff::diff_paths;
 use std::path::PathBuf;
@@ -119,13 +120,12 @@ fn get_profile_string(
             )
         }
         (None, Some(prof)) => {
-            show_warning!(
-                &io_args,
-                fs_err!(
-                    ErrorCode::InvalidConfig,
-                    "No profile specified in dbt_project.yml"
-                )
+            emit_warn_log_message(
+                ErrorCode::InvalidConfig,
+                "No profile specified in dbt_project.yml",
+                io_args,
             );
+
             Ok(prof.to_string())
         }
         (Some(proj_prof), None) => Ok(proj_prof.to_string()),

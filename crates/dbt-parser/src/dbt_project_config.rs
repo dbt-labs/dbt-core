@@ -8,7 +8,7 @@ use std::{
 };
 
 use dbt_common::{
-    ErrorCode, FsResult, fs_err, io_args::IoArgs, show_error, show_package_error, show_strict_error,
+    ErrorCode, FsResult, fs_err, io_args::IoArgs, tracing::emit::emit_strict_parse_error,
 };
 use dbt_schemas::schemas::project::{
     AnalysesConfig, DataTestConfig, DefaultTo, ExposureConfig, FunctionConfig, IterChildren,
@@ -134,15 +134,7 @@ pub fn recur_build_dbt_project_config<T: DefaultTo<T>, S: Into<T> + IterChildren
                     loc => raw.as_ref().map(|r| r.span()).unwrap_or_default(),
                     "Ignored unexpected key '{trimmed_key}'.{suggestion} YAML path: '{key_path}'."
                 );
-                if let Some(package_name) = dependency_package_name
-                    && !io.show_all_deprecations
-                {
-                    // If we are parsing a dependency package, we use a special macros
-                    // that ensures at most one error is shown per package.
-                    show_package_error!(io, package_name);
-                } else {
-                    show_strict_error!(io, err, dependency_package_name);
-                }
+                emit_strict_parse_error(&err, dependency_package_name, io);
                 continue;
             }
         };

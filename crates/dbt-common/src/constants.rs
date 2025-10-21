@@ -67,11 +67,6 @@ pub const WARNING: &str = "warning:";
 pub const PANIC: &str = "panic:";
 
 // ----------------------------------------------------------------------------------------------
-// test verdicts
-pub const VERDICT_PASS: &str = "[Pass]";
-pub const VERDICT_FAIL: &str = "[Fail]";
-pub const VERDICT_WARN: &str = "[Warn]";
-// ----------------------------------------------------------------------------------------------
 // actions in order of appearance
 
 pub const ANALYZING: &str = " Analyzing";

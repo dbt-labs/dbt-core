@@ -5,7 +5,8 @@ use crate::utils::get_node_fqn;
 
 use dbt_common::adapter::AdapterType;
 use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
-use dbt_common::{ErrorCode, FsResult, err, show_error};
+use dbt_common::tracing::emit::emit_error_log_from_fs_error;
+use dbt_common::{ErrorCode, FsResult, err};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::node_resolver::NodeResolver;
 use dbt_jinja_utils::serde::{Omissible, into_typed_with_jinja};
@@ -302,7 +303,8 @@ pub fn resolve_sources(
         match node_resolver.insert_source(package_name, &dbt_source, adapter_type, status) {
             Ok(_) => (),
             Err(e) => {
-                show_error!(&io_args, e.with_location(mpe.relative_path.clone()));
+                let err_with_loc = e.with_location(mpe.relative_path.clone());
+                emit_error_log_from_fs_error(&err_with_loc, io_args);
             }
         }
 

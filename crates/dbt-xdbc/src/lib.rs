@@ -17,6 +17,7 @@ use futures::stream::{FuturesUnordered, StreamExt};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::error::SendError;
 use tokio::task::JoinError;
+use tracing::Span;
 use tracy_client::span;
 
 use std::ffi::c_char;
@@ -247,10 +248,16 @@ where
     #[allow(clippy::type_complexity)]
     pub fn new_connection(
         &self,
+        cur_span: Span,
     ) -> Pin<Box<dyn Future<Output = Result<Box<dyn Connection>, Cancellable<E>>> + Send>> {
         let inner = self.inner.clone(); // clone needed to move it into lambda
         let future = async move {
-            match tokio::task::spawn_blocking(move || inner.new_connection()).await {
+            match tokio::task::spawn_blocking(move || {
+                let _sp = cur_span.entered();
+                inner.new_connection()
+            })
+            .await
+            {
                 Ok(res) => res,
                 Err(join_err) => Err(cancellable_from_join_error(join_err)),
             }
@@ -266,6 +273,7 @@ where
         tx: mpsc::UnboundedSender<(K, V)>,
         keys: Arc<Vec<K>>,
         token: &CancellationToken,
+        cur_span: Span,
     ) -> Pin<Box<dyn Future<Output = Result<(), CancelledError>> + Send>> {
         let inner = self.inner.clone(); // clone needed to move it into lambda
         let token = token.clone(); // clone needed to move it into lambda
@@ -278,7 +286,9 @@ where
                 if i >= keys.len() {
                     return Ok(());
                 }
+                let cur_span = cur_span.clone();
                 let handle = tokio::task::spawn_blocking(move || {
+                    let _sp = cur_span.entered();
                     let key = &keys_for_task[i];
                     let value = inner.map(&mut *conn, key);
                     (conn, value)
@@ -336,12 +346,14 @@ where
         let mut conn_futures = FuturesUnordered::new();
         let mut workers = FuturesUnordered::new();
 
+        let cur_span = Span::current();
+
         let mut n_conns = {
-            conn_futures.push(self.new_connection());
+            conn_futures.push(self.new_connection(cur_span.clone()));
             if max_conns > 1 {
                 // If we have more than one task, we can start a second
                 // connection before knowing how long the tasks will take.
-                conn_futures.push(self.new_connection());
+                conn_futures.push(self.new_connection(cur_span.clone()));
                 2
             } else {
                 1
@@ -351,12 +363,19 @@ where
         // Even if all the other connections fail, we can still keep making progress by
         // reusing the first connection.
         let conn = conn_futures.next().await.unwrap()?;
-        let worker = tokio::spawn(self.worker(conn, tx.clone(), keys.clone(), &token));
+        let worker =
+            tokio::spawn(self.worker(conn, tx.clone(), keys.clone(), &token, cur_span.clone()));
         workers.push(worker);
 
         while self.inner.key_counter.load(Ordering::SeqCst) < keys.len() {
             if let Some(Ok(conn)) = conn_futures.next().await {
-                let worker = tokio::spawn(self.worker(conn, tx.clone(), keys.clone(), &token));
+                let worker = tokio::spawn(self.worker(
+                    conn,
+                    tx.clone(),
+                    keys.clone(),
+                    &token,
+                    cur_span.clone(),
+                ));
                 workers.push(worker);
             }
             if n_conns < max_conns {
@@ -373,7 +392,7 @@ where
                 if (remaining_keys as f64 * self.inner.avg_task_time_us()) / (n_conns as f64)
                     > (self.inner.avg_conn_time_us() * K)
                 {
-                    conn_futures.push(self.new_connection());
+                    conn_futures.push(self.new_connection(cur_span.clone()));
                     n_conns += 1;
                     continue;
                 }

@@ -5,7 +5,10 @@ use strum_macros::EnumIter;
 use strum_macros::{EnumCount, FromRepr};
 use tracing_subscriber::registry::Extensions;
 
-use super::span_info::{SpanAccess, with_root_span};
+use super::{
+    constants::ROOT_SPAN_NAME,
+    span_info::{SpanAccess, with_root_span},
+};
 use std::sync::atomic::AtomicU64;
 
 #[repr(u8)]
@@ -49,8 +52,12 @@ pub enum MetricKey {
     NodeOutcomeCounts(NodeOutcomeCountsKey),
 }
 
+/// A private struct holding all metric counters.
+///
+/// Keep it private, this ensures no middleware or consumer can accidentally
+/// replace or remove the metrics storage from the span extensions.
 #[derive(Debug)]
-pub(super) struct MetricCounters {
+struct MetricCounters {
     // Using AtomicU64 for invocation metrics
     invocation_counters: [AtomicU64; InvocationMetricKey::COUNT],
     // Other metrics with complex keys stored in a map
@@ -58,7 +65,7 @@ pub(super) struct MetricCounters {
 }
 
 impl MetricCounters {
-    pub(super) fn new() -> Self {
+    fn new() -> Self {
         Self {
             invocation_counters: std::array::from_fn(|_| AtomicU64::new(0)),
             metrics: scc::HashMap::new(),
@@ -71,7 +78,7 @@ impl MetricCounters {
                 // SAFETY: arry size is statically defined by enum count and pre-allocated on creation.
                 // Enum discriminant is u8 starting from 0, so index is always valid. Also we do exhaustive testing,
                 self.invocation_counters[im as usize]
-                    .fetch_add(value, std::sync::atomic::Ordering::Relaxed);
+                    .fetch_add(value, std::sync::atomic::Ordering::AcqRel);
             }
             _ => {
                 self.metrics
@@ -87,7 +94,7 @@ impl MetricCounters {
             MetricKey::InvocationMetric(im) => {
                 // SAFETY: arry size is statically defined by enum count and pre-allocated on creation.
                 // Enum discriminant is u8 starting from 0, so index is always valid. Also we do exhaustive testing,
-                self.invocation_counters[im as usize].load(std::sync::atomic::Ordering::Relaxed)
+                self.invocation_counters[im as usize].load(std::sync::atomic::Ordering::Acquire)
             }
             _ => self.metrics.read_sync(&key, |_, v| *v).unwrap_or_default(),
         }
@@ -112,9 +119,27 @@ impl MetricCounters {
     }
 }
 
+/// Initializes the metrics storage in root span extensions.
+///
+/// This should be called once when a root span is created to initialize
+/// the metrics storage. Returns the initialized MetricCounters.
+///
+/// Panics if the MetricCounters is already initialized.
+pub(super) fn init_metrics_storage_on_root_span(root_span: &dyn SpanAccess) {
+    root_span.extensions_mut().insert(MetricCounters::new());
+}
+
 /// Increments an invocation metric counter
 pub fn increment_metric(key: MetricKey, value: u64) {
     with_root_span(|root_span| {
+        debug_assert_eq!(
+            root_span.name(),
+            ROOT_SPAN_NAME,
+            "Expected root span created via `create_root_info_span` in increment metrics. Got: {}.
+            Are you running code not instrumented under an invocation span tree?",
+            root_span.name()
+        );
+
         increment_metric_on_span(&root_span as &dyn SpanAccess, key, value);
     });
 }
@@ -144,8 +169,17 @@ pub(super) fn get_metric_from_span_extension(span_ext: &Extensions<'_>, key: Met
 
 /// Gets a specific invocation totals metrics (stored in the root invocation span).
 pub fn get_metric(key: MetricKey) -> u64 {
-    with_root_span(|root_span| get_metric_from_span_extension(&root_span.extensions(), key))
-        .unwrap_or_default()
+    with_root_span(|root_span| {
+        debug_assert_eq!(
+            root_span.name(),
+            ROOT_SPAN_NAME,
+            "Expected root span created via `create_root_info_span` in get metrics. Got: {}.
+            Are you running code not instrumented under an invocation span tree?",
+            root_span.name()
+        );
+        get_metric_from_span_extension(&root_span.extensions(), key)
+    })
+    .unwrap_or_default()
 }
 
 pub(super) fn get_all_metrics_from_span_extension(
@@ -155,6 +189,14 @@ pub(super) fn get_all_metrics_from_span_extension(
         .get::<MetricCounters>()
         .map(|counters| counters.iter().collect())
         .unwrap_or_default()
+}
+
+/// Returns 1 if there were any errors recorded, 0 otherwise.
+pub fn get_exit_code_from_error_counter() -> i32 {
+    let error_count = get_metric(MetricKey::InvocationMetric(
+        InvocationMetricKey::TotalErrors,
+    ));
+    if error_count > 0 { 1 } else { 0 }
 }
 
 #[cfg(test)]
@@ -167,14 +209,19 @@ mod tests {
     fn test_increment_and_get_all_metrics() {
         let metrics = MetricCounters::new();
 
-        // Test invocation metrics
-        for key in InvocationMetricKey::iter() {
+        // Test invocation metrics. First store distinct values on each then check expected
+        for (i, key) in InvocationMetricKey::iter().enumerate() {
             let key = MetricKey::InvocationMetric(key);
             assert_eq!(metrics.get(key), 0);
-            metrics.increment(key, 5);
-            assert_eq!(metrics.get(key), 5);
+            metrics.increment(key, i as u64);
+            assert_eq!(metrics.get(key), i as u64);
+        }
+
+        for (i, key) in InvocationMetricKey::iter().enumerate() {
+            let key = MetricKey::InvocationMetric(key);
+            assert_eq!(metrics.get(key), i as u64);
             metrics.increment(key, 3);
-            assert_eq!(metrics.get(key), 8);
+            assert_eq!(metrics.get(key), (i as u64) + 3);
         }
 
         // Test NodeType metrics

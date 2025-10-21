@@ -2,7 +2,8 @@ use crate::args::ResolveArgs;
 use crate::dbt_project_config::{RootProjectConfigs, init_project_config};
 use crate::utils::{get_node_fqn, get_original_file_path, get_unique_id};
 
-use dbt_common::{ErrorCode, FsResult, fs_err, show_error};
+use dbt_common::tracing::emit::emit_error_log_from_fs_error;
+use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::serde::into_typed_with_jinja;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
@@ -69,7 +70,8 @@ pub async fn resolve_saved_queries(
                     "Saved query name '{}' can only contain letters, numbers, and underscores.",
                     saved_query_name
                 );
-                show_error!(&arg.io, e);
+                emit_error_log_from_fs_error(&e, &arg.io);
+
                 continue;
             }
 

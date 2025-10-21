@@ -17,40 +17,48 @@
 //!   but provide all the capabilities we need, and in a more performant way to boot.
 
 use super::{
-    data_provider::{DataProvider, DataProviderMut},
+    data_provider::DataProvider,
     filter::{
         FilteredTelemetryConsumer, TelemetryFilter, TelemetryFilterFn, enable_all_logs,
         enable_all_spans,
     },
 };
 use dbt_telemetry::{LogRecordInfo, SpanEndInfo, SpanStartInfo};
-use tracing::Metadata;
 
-/// A read-only consumer of telemetry data.
+/// A consumer of telemetry data.
+///
+/// Implementing types are expected to ingest prepared telemetry data
+/// and export/output it in some way.
+///
+/// Consumer have access to a `DataProvider` that allows safe access
+/// to metics and thread-safe efficient per-invocation storage.
+///
+/// Note that consumers are not expected to modify metrics even though
+/// API allows it. Metrics should be modified by middleware or in app code.
 pub trait TelemetryConsumer {
     /// Should return true if the consumer is interested in the span.
     #[allow(unused_variables)]
-    fn is_span_enabled(&self, span: &SpanStartInfo, meta: &Metadata) -> bool {
+    fn is_span_enabled(&self, span: &SpanStartInfo) -> bool {
         true
     }
 
     /// Should return true if the consumer is interested in the log record.
     #[allow(unused_variables)]
-    fn is_log_enabled(&self, log_record: &LogRecordInfo, meta: &Metadata) -> bool {
+    fn is_log_enabled(&self, log_record: &LogRecordInfo) -> bool {
         true
     }
 
     /// Callback invoked when a span starts.
     #[allow(unused_variables)]
-    fn on_span_start(&self, span: &SpanStartInfo, data_provider: &DataProvider<'_>) {}
+    fn on_span_start(&self, span: &SpanStartInfo, data_provider: &mut DataProvider<'_>) {}
 
     /// Callback invoked when a span ends.
     #[allow(unused_variables)]
-    fn on_span_end(&self, span: &SpanEndInfo, data_provider: &DataProvider<'_>) {}
+    fn on_span_end(&self, span: &SpanEndInfo, data_provider: &mut DataProvider<'_>) {}
 
     /// Callback invoked when a log record is created.
     #[allow(unused_variables)]
-    fn on_log_record(&self, log_record: &LogRecordInfo, data_provider: &DataProvider<'_>) {}
+    fn on_log_record(&self, log_record: &LogRecordInfo, data_provider: &mut DataProvider<'_>) {}
 
     // Non dispatchable
 
@@ -58,7 +66,7 @@ pub trait TelemetryConsumer {
     fn with_span_filter<S>(self, f: S) -> impl TelemetryConsumer
     where
         Self: Sized,
-        S: Fn(&SpanStartInfo, &Metadata) -> bool + 'static,
+        S: Fn(&SpanStartInfo) -> bool + 'static,
     {
         FilteredTelemetryConsumer::new(self, TelemetryFilterFn::new(f, enable_all_logs))
     }
@@ -67,7 +75,7 @@ pub trait TelemetryConsumer {
     fn with_log_filter<L>(self, f: L) -> impl TelemetryConsumer
     where
         Self: Sized,
-        L: Fn(&LogRecordInfo, &Metadata) -> bool + 'static,
+        L: Fn(&LogRecordInfo) -> bool + 'static,
     {
         FilteredTelemetryConsumer::new(self, TelemetryFilterFn::new(enable_all_spans, f))
     }
@@ -85,6 +93,10 @@ pub trait TelemetryConsumer {
 pub type ConsumerLayer = Box<dyn TelemetryConsumer + Send + Sync + 'static>;
 
 /// A middleware that can modify telemetry data as it passes through the system.
+///
+/// All middleware's operate before any consumers see the data and have a global
+/// effect on all consumers. So be mindful that changes you make will be
+/// visible to all consumers.
 pub trait TelemetryMiddleware {
     /// Callback invoked when a span starts. Return None to drop the span for all consumers.
     ///
@@ -94,7 +106,7 @@ pub trait TelemetryMiddleware {
     fn on_span_start(
         &self,
         span: SpanStartInfo,
-        data_provider: &mut DataProviderMut<'_>,
+        data_provider: &mut DataProvider<'_>,
     ) -> Option<SpanStartInfo> {
         Some(span)
     }
@@ -105,7 +117,7 @@ pub trait TelemetryMiddleware {
     fn on_span_end(
         &self,
         span: SpanEndInfo,
-        data_provider: &mut DataProviderMut<'_>,
+        data_provider: &mut DataProvider<'_>,
     ) -> Option<SpanEndInfo> {
         Some(span)
     }
@@ -116,7 +128,7 @@ pub trait TelemetryMiddleware {
     fn on_log_record(
         &self,
         record: LogRecordInfo,
-        data_provider: &mut DataProviderMut<'_>,
+        data_provider: &mut DataProvider<'_>,
     ) -> Option<LogRecordInfo> {
         Some(record)
     }

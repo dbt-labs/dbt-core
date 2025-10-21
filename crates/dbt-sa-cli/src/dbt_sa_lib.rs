@@ -1,7 +1,9 @@
 use crate::dbt_sa_clap::{Cli, Commands, ProjectTemplate};
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::create_root_info_span;
+use dbt_common::tracing::emit::emit_error_log_from_fs_error;
 use dbt_common::tracing::invocation::create_invocation_attributes;
+use dbt_common::tracing::metrics::get_exit_code_from_error_counter;
 use dbt_init::init;
 use dbt_jinja_utils::invocation_args::InvocationArgs;
 use dbt_jinja_utils::listener::DefaultJinjaTypeCheckEventListenerFactory;
@@ -16,7 +18,7 @@ use dbt_common::{
     io_args::{Phases, SystemArgs},
     logging::init_logger,
     pretty_string::GREEN,
-    show_error, show_progress, show_progress_exit, show_result_with_default_title, stdfs,
+    show_progress, show_result_with_default_title, stdfs,
     tracing::span_info::record_span_status,
 };
 
@@ -49,8 +51,7 @@ pub async fn execute_fs(
     init_logger((&eval_arg.io).into()).expect("Failed to initialize logger");
 
     // Create the Invocation span as a new root
-    let invocation_span =
-        create_root_info_span!(create_invocation_attributes("dbt-sa", &eval_arg).into());
+    let invocation_span = create_root_info_span(create_invocation_attributes("dbt-sa", &eval_arg));
 
     let result = do_execute_fs(&eval_arg, cli, token)
         .instrument(invocation_span.clone())
@@ -72,7 +73,8 @@ async fn do_execute_fs(eval_arg: &EvalArgs, cli: Cli, token: CancellationToken) 
         return match execute_man_command(eval_arg).await {
             Ok(code) => Ok(code),
             Err(e) => {
-                show_error!(&eval_arg.io, e);
+                emit_error_log_from_fs_error(&e, &eval_arg.io);
+
                 Ok(1)
             }
         };
@@ -120,7 +122,8 @@ async fn do_execute_fs(eval_arg: &EvalArgs, cli: Cli, token: CancellationToken) 
                 log::info!(""); // Add empty line for spacing
             }
             Err(e) => {
-                show_error!(&eval_arg.io, e);
+                emit_error_log_from_fs_error(&e, &eval_arg.io);
+
                 return Ok(1);
             }
         }
@@ -130,8 +133,9 @@ async fn do_execute_fs(eval_arg: &EvalArgs, cli: Cli, token: CancellationToken) 
     match execute_setup_and_all_phases(eval_arg, cli, &token).await {
         Ok(code) => Ok(code),
         Err(e) => {
-            show_error!(&eval_arg.io, e);
-            show_progress_exit!(eval_arg)
+            emit_error_log_from_fs_error(&e, &eval_arg.io);
+
+            Ok(1)
         }
     }
 }
@@ -177,8 +181,9 @@ async fn execute_setup_and_all_phases(
         match execute_clean_command(eval_arg, &clean_args.files, token).await {
             Ok(code) => Ok(code),
             Err(e) => {
-                show_error!(&eval_arg.io, e);
-                show_progress_exit!(eval_arg)
+                emit_error_log_from_fs_error(&e, &eval_arg.io);
+
+                Ok(1)
             }
         }
     } else {
@@ -186,8 +191,9 @@ async fn execute_setup_and_all_phases(
         match execute_all_phases(eval_arg, &cli, token).await {
             Ok(code) => Ok(code),
             Err(e) => {
-                show_error!(&eval_arg.io, e);
-                show_progress_exit!(eval_arg)
+                emit_error_log_from_fs_error(&e, &eval_arg.io);
+
+                Ok(1)
             }
         }
     }
@@ -241,5 +247,5 @@ async fn execute_all_phases(
         to_string_pretty(&dbt_manifest)?
     );
 
-    show_progress_exit!(&arg)
+    Ok(get_exit_code_from_error_counter())
 }

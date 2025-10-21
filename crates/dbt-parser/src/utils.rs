@@ -3,7 +3,8 @@ use crate::dbt_project_config::strip_resource_paths_from_ref_path;
 use crate::resolve::resolve_properties::MinimalPropertiesEntry;
 use dbt_common::adapter::AdapterType;
 use dbt_common::io_args::IoArgs;
-use dbt_common::{ErrorCode, FsError, FsResult, fs_err, show_error, stdfs};
+use dbt_common::tracing::emit::emit_error_log_from_fs_error;
+use dbt_common::{ErrorCode, FsError, FsResult, fs_err, stdfs};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::phases::parse::sql_resource::SqlResource;
 use dbt_jinja_utils::utils::{generate_component_name, generate_relation_name};
@@ -190,11 +191,11 @@ pub fn register_duplicate_resource(
 /// Trigger duplicate errors
 pub fn trigger_duplicate_errors(io: &IoArgs, duplicate_errors: &mut Vec<FsError>) -> FsResult<()> {
     if !duplicate_errors.is_empty() {
-        while let Some(err_msg) = duplicate_errors.pop() {
+        while let Some(err) = duplicate_errors.pop() {
             if duplicate_errors.is_empty() {
-                return Err(Box::new(err_msg));
+                return Err(Box::new(err));
             } else {
-                show_error!(io, Box::new(err_msg));
+                emit_error_log_from_fs_error(&err, io);
             }
         }
     }

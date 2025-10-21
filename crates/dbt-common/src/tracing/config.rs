@@ -25,6 +25,7 @@ use crate::{
     io_args::{IoArgs, ShowOptions},
     io_utils::determine_project_dir,
     logging::LogFormat,
+    tracing::middlewares::parse_error_filter::TelemetryParsingErrorFilter,
 };
 use dbt_error::{ErrorCode, FsResult};
 use tracing::level_filters::LevelFilter;
@@ -65,6 +66,8 @@ pub struct FsTraceConfig {
     pub(super) enable_query_log: bool,
     /// Show options controlling terminal/file output visibility
     pub(super) show_options: HashSet<ShowOptions>,
+    /// Show all deprecations warnings/errors instead of one per package
+    pub(super) show_all_deprecations: bool,
 }
 
 impl Default for FsTraceConfig {
@@ -81,6 +84,7 @@ impl Default for FsTraceConfig {
             log_format: LogFormat::Default,
             enable_query_log: false,
             show_options: HashSet::new(),
+            show_all_deprecations: false,
         }
     }
 }
@@ -135,6 +139,7 @@ impl FsTraceConfig {
     /// * `log_format` - The log format being used
     /// * `enable_query_log` - If true, enables writing a separate query log file
     /// * `show_options` - Set of ShowOptions controlling terminal/file output visibility
+    /// * `show_all_deprecations` - If true, show all deprecation warnings/errors instead of one per package
     ///
     /// # Path Resolution
     ///
@@ -182,6 +187,7 @@ impl FsTraceConfig {
         log_format: LogFormat,
         enable_query_log: bool,
         show_options: HashSet<ShowOptions>,
+        show_all_deprecations: bool,
     ) -> Self {
         let (in_dir, out_dir) = calculate_trace_dirs(project_dir, target_path);
 
@@ -210,6 +216,7 @@ impl FsTraceConfig {
             log_format,
             enable_query_log,
             show_options,
+            show_all_deprecations,
         }
     }
 
@@ -245,6 +252,7 @@ impl FsTraceConfig {
             io_args.log_format,
             true, // Always enable query log for now
             io_args.show.clone(),
+            io_args.show_all_deprecations,
         )
     }
 
@@ -408,7 +416,11 @@ impl FsTraceConfig {
         };
 
         Ok((
-            vec![Box::new(TelemetryMetricAggregator)],
+            vec![
+                // Order important! First handle parsing errors, which may filter, only then aggregate metrics
+                Box::new(TelemetryParsingErrorFilter::new(self.show_all_deprecations)),
+                Box::new(TelemetryMetricAggregator),
+            ],
             consumer_layers,
             shutdown_items,
         ))

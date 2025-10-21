@@ -1,12 +1,12 @@
 use crate::tracing::{
-    data_provider::DataProviderMut,
+    data_provider::DataProvider,
+    emit::{create_info_span, create_root_info_span, emit_info_event},
     init::create_tracing_subcriber_with_layer,
     layer::{ConsumerLayer, MiddlewareLayer, TelemetryMiddleware},
     layers::data_layer::TelemetryDataLayer,
     metrics::{InvocationMetricKey, MetricKey, get_metric},
     tests::mocks::{MockDynLogEvent, MockDynSpanEvent, MockMiddleware, TestLayer},
 };
-use crate::{create_info_span, create_root_info_span, emit_tracing_event};
 
 use dbt_telemetry::{LogRecordInfo, TelemetryOutputFlags};
 use std::thread;
@@ -71,62 +71,50 @@ fn middleware_modifies_drops_and_updates_metrics() {
     let subscriber = create_tracing_subcriber_with_layer(LevelFilter::TRACE, data_layer);
 
     let recorded_metric = tracing::subscriber::with_default(subscriber, || {
-        let _root_guard = create_root_info_span!(
-            MockDynSpanEvent {
-                name: "root".to_string(),
-                flags: TelemetryOutputFlags::ALL,
-                ..Default::default()
-            }
-            .into()
-        )
+        let _root_guard = create_root_info_span(MockDynSpanEvent {
+            name: "root".to_string(),
+            flags: TelemetryOutputFlags::ALL,
+            ..Default::default()
+        })
         .entered();
 
-        create_info_span!(
-            MockDynSpanEvent {
-                name: "child".to_string(),
-                flags: TelemetryOutputFlags::ALL,
-                ..Default::default()
-            }
-            .into()
-        )
+        create_info_span(MockDynSpanEvent {
+            name: "child".to_string(),
+            flags: TelemetryOutputFlags::ALL,
+            ..Default::default()
+        })
         .in_scope(|| {
-            emit_tracing_event!(
+            emit_info_event(
                 MockDynLogEvent {
                     code: 1,
                     flags: TelemetryOutputFlags::ALL,
                     ..Default::default()
-                }
-                .into(),
-                "keep me"
+                },
+                Some("keep me"),
             );
-            emit_tracing_event!(
+            emit_info_event(
                 MockDynLogEvent {
                     code: 2,
                     flags: TelemetryOutputFlags::ALL,
                     ..Default::default()
-                }
-                .into(),
-                "drop me"
+                },
+                Some("drop me"),
             );
         });
 
-        create_info_span!(
-            MockDynSpanEvent {
-                name: "drop-me".to_string(),
-                flags: TelemetryOutputFlags::ALL,
-                ..Default::default()
-            }
-            .into()
-        )
+        create_info_span(MockDynSpanEvent {
+            name: "drop-me".to_string(),
+            flags: TelemetryOutputFlags::ALL,
+            ..Default::default()
+        })
         .in_scope(|| {
-            emit_tracing_event!(
+            emit_info_event(
                 MockDynLogEvent {
                     code: 3,
                     flags: TelemetryOutputFlags::ALL,
                     ..Default::default()
-                }
-                .into(),
-                "should vanish"
+                },
+                Some("should vanish"),
             );
         });
 
@@ -253,7 +241,7 @@ impl TelemetryMiddleware for CooperativeMiddleware {
     fn on_log_record(
         &self,
         record: LogRecordInfo,
-        _data_provider: &mut DataProviderMut<'_>,
+        _data_provider: &mut DataProvider<'_>,
     ) -> Option<LogRecordInfo> {
         self.shared.record_entry();
         self.shared.wait_for_other();
@@ -282,14 +270,11 @@ fn middleware_invocations_do_not_block_across_threads() {
     let disptcher = Dispatch::new(subscriber);
 
     tracing::dispatcher::with_default(&disptcher, || {
-        let root_span = create_root_info_span!(
-            MockDynSpanEvent {
-                name: "shared-root".to_string(),
-                flags: TelemetryOutputFlags::ALL,
-                ..Default::default()
-            }
-            .into()
-        );
+        let root_span = create_root_info_span(MockDynSpanEvent {
+            name: "shared-root".to_string(),
+            flags: TelemetryOutputFlags::ALL,
+            ..Default::default()
+        });
         let _root_guard = root_span.enter();
 
         const NUM_THREADS: usize = 2;
@@ -301,14 +286,13 @@ fn middleware_invocations_do_not_block_across_threads() {
                         let _thread_guard = root_span.enter();
                         start_barrier.wait();
 
-                        emit_tracing_event!(
+                        emit_info_event(
                             MockDynLogEvent {
                                 code: 42i32,
                                 flags: TelemetryOutputFlags::ALL,
                                 ..Default::default()
-                            }
-                            .into(),
-                            "middleware concurrency check"
+                            },
+                            Some("middleware concurrency check"),
                         );
                     });
                 });

@@ -46,6 +46,7 @@ serde = { workspace = true }
 sha2 = { workspace = true }
 siphasher = { workspace = true }
 tokio = { workspace = true }
+tracing = { workspace = true }
 tracy-client = { workspace = true }
 ureq = { workspace = true }
 url = { workspace = true }

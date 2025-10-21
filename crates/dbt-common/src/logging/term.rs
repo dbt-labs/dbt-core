@@ -4,6 +4,7 @@ use std::ops::Sub;
 use std::sync::Arc;
 use std::sync::Condvar;
 use std::sync::Mutex;
+use std::sync::OnceLock;
 use std::sync::RwLock;
 use std::time::Duration;
 use std::time::Instant;
@@ -20,6 +21,29 @@ use unicode_segmentation::UnicodeSegmentation as _;
 use crate::logging::events::StatEvent;
 use crate::logging::events::TermEvent;
 use crate::pretty_string::{DIM, GREEN, RED, YELLOW};
+
+/// Type alias for the hook function that suspends progress bars.
+type SuspendHook = Box<dyn Fn(&mut dyn FnMut()) + Send + Sync>;
+
+/// Global hook for suspending progress bars during log emission.
+/// This allows new tracing-based layers to suspend the indicatif progress bars
+/// managed by FancyLogger. This will go away once we migrate fully to tracing.
+static PROGRESS_BAR_SUSPEND_HOOK: OnceLock<SuspendHook> = OnceLock::new();
+
+/// Register a callback that will be invoked to suspend progress bars during log emission.
+pub fn register_progress_bar_suspend_hook(hook: impl Fn(&mut dyn FnMut()) + Send + Sync + 'static) {
+    let _ = PROGRESS_BAR_SUSPEND_HOOK.set(Box::new(hook));
+}
+
+/// Suspend progress bars while executing the provided closure.
+/// If no hook is registered, the closure is executed immediately.
+pub fn with_suspended_progress_bars<F: FnMut()>(mut f: F) {
+    if let Some(hook) = PROGRESS_BAR_SUSPEND_HOOK.get() {
+        hook(&mut f);
+    } else {
+        f()
+    }
+}
 
 const SLOW_CONTEXT_THRESHOLD: Duration = Duration::from_secs(300);
 
@@ -94,14 +118,23 @@ impl FancyLogger {
     pub fn new(child_loggers: Vec<Box<dyn log::Log>>) -> Self {
         let shutdown = Arc::new((Mutex::new(false), Condvar::new()));
 
-        FancyLogger {
+        let logger = FancyLogger {
             controller: MultiProgress::new(),
             spinners: Arc::new(DashMap::new()),
             bars: Arc::new(DashMap::new()),
             children: child_loggers,
             shutdown,
             ticker: None,
-        }
+        };
+
+        // Register progress bar suspension hook for tracing layers
+        let controller = logger.controller.clone();
+
+        register_progress_bar_suspend_hook(move |f| {
+            controller.suspend(f);
+        });
+
+        logger
     }
 
     /// Starts the ticker thread that will periodically tick all active spinners

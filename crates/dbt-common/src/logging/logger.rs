@@ -526,8 +526,7 @@ pub fn init_logger(log_config: FsLogConfig) -> FsResult<()> {
     let file = Arc::new(Mutex::new(Box::new(
         std::fs::OpenOptions::new()
             .create(true)
-            .truncate(true)
-            .write(true)
+            .append(true)
             .open(&log_config.file_log_path)
             .unwrap_or_else(|_| panic!("Failed to open log file {:?}, do you have sufficient disk space or permissions?", &log_config.file_log_path)),
     ) as Box<dyn Write + Send>));

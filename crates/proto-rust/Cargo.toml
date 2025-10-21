@@ -24,6 +24,7 @@ proto-rust-macros = { workspace = true }
 serde = { workspace = true }
 serde_repr = { workspace = true }
 serde_with = { workspace = true }
+tracing = { workspace = true }
 
 [dev-dependencies]
 fake = { workspace = true }

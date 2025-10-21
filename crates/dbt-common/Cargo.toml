@@ -21,6 +21,7 @@ blake3 = { workspace = true }
 dbt-cancel = { workspace = true }
 hex = { workspace = true }
 md5 = { workspace = true }
+once_cell = { workspace = true }
 
 clap = { workspace = true, features = ["derive", "env"] }
 counter = { workspace = true }

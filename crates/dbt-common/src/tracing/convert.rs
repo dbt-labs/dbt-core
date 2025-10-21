@@ -1,15 +1,5 @@
 use dbt_telemetry::SeverityNumber;
 
-pub fn tracing_level_to_severity(level: &tracing::Level) -> (SeverityNumber, &'static str) {
-    match *level {
-        tracing::Level::ERROR => (SeverityNumber::Error, "ERROR"),
-        tracing::Level::WARN => (SeverityNumber::Warn, "WARN"),
-        tracing::Level::INFO => (SeverityNumber::Info, "INFO"),
-        tracing::Level::DEBUG => (SeverityNumber::Debug, "DEBUG"),
-        tracing::Level::TRACE => (SeverityNumber::Trace, "TRACE"),
-    }
-}
-
 pub fn log_level_filter_to_tracing(
     level_filter: &log::LevelFilter,
 ) -> tracing::level_filters::LevelFilter {

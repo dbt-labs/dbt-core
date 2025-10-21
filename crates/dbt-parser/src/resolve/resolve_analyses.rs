@@ -4,7 +4,8 @@ use std::{collections::BTreeMap, sync::Arc};
 use dbt_common::adapter::AdapterType;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_args::StaticAnalysisKind;
-use dbt_common::{ErrorCode, FsResult, error::AbstractLocation, fs_err, show_warning};
+use dbt_common::tracing::emit::emit_warn_log_from_fs_error;
+use dbt_common::{ErrorCode, FsResult, error::AbstractLocation, fs_err};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::listener::DefaultJinjaTypeCheckEventListenerFactory;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
@@ -297,7 +298,7 @@ pub async fn resolve_analyses(
                 "Unused schema.yml entry for analysis '{}'",
                 analysis_name,
             );
-            show_warning!(&arg.io, err);
+            emit_warn_log_from_fs_error(&err, &arg.io);
         }
     }
 

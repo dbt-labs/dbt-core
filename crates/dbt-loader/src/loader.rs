@@ -5,7 +5,7 @@ use dbt_common::constants::{
     DBT_CATALOGS_YML, DBT_DEPENDENCIES_YML, DBT_PACKAGES_LOCK_FILE, DBT_PACKAGES_YML,
 };
 use dbt_common::once_cell_vars::DISPATCH_CONFIG;
-use dbt_common::show_warning;
+use dbt_common::tracing::emit::emit_warn_log_from_fs_error;
 use dbt_fusion_adapter::load_catalogs;
 use dbt_jinja_utils::invocation_args::InvocationArgs;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
@@ -56,7 +56,7 @@ use dbt_common::tracing::event_info::store_event_attributes;
 #[tracing::instrument(
     skip_all,
     fields(
-        _e = ?store_event_attributes(PhaseExecuted::start_general(ExecutionPhase::LoadProject).into()),
+        _e = ?store_event_attributes(PhaseExecuted::start_general(ExecutionPhase::LoadProject)),
     )
 )]
 pub async fn load(
@@ -439,14 +439,12 @@ pub async fn load_inner(
 
     if !python_files.is_empty() {
         for file in python_files {
-            show_warning!(
-                &arg.io,
-                *fs_err!(
-                    code => ErrorCode::UnsupportedFileExtension,
-                    loc => file.path.clone(),
-                    "Python models are not currently supported"
-                )
+            let err = fs_err!(
+                code => ErrorCode::UnsupportedFileExtension,
+                loc => file.path.clone(),
+                "Python models are not currently supported"
             );
+            emit_warn_log_from_fs_error(&err, &arg.io);
         }
     }
 

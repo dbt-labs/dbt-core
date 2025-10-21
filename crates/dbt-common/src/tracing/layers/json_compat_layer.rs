@@ -1,14 +1,14 @@
 use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
-use dbt_telemetry::{Invocation, SpanEndInfo};
+use dbt_telemetry::{Invocation, LogMessage, LogRecordInfo, SpanEndInfo};
 use serde_json::json;
 use tracing::level_filters::LevelFilter;
 
 use super::super::{
     background_writer::BackgroundWriter,
     data_provider::DataProvider,
-    formatters::invocation::format_invocation_summary,
+    formatters::{invocation::format_invocation_summary, log_message::format_log_message},
     layer::{ConsumerLayer, TelemetryConsumer},
     metrics::{InvocationMetricKey, MetricKey},
     shared_writer::SharedWriter,
@@ -83,7 +83,7 @@ impl JsonCompatLayer {
 }
 
 impl TelemetryConsumer for JsonCompatLayer {
-    fn on_span_end(&self, span: &SpanEndInfo, data_provider: &DataProvider<'_>) {
+    fn on_span_end(&self, span: &SpanEndInfo, data_provider: &mut DataProvider<'_>) {
         let Some(invocation) = span.attributes.downcast_ref::<Invocation>() else {
             return;
         };
@@ -152,5 +152,33 @@ impl TelemetryConsumer for JsonCompatLayer {
         .to_string();
 
         let _ = self.writer.writeln(value.as_str());
+    }
+
+    fn on_log_record(&self, log_record: &LogRecordInfo, _data_provider: &mut DataProvider<'_>) {
+        // Check if this is a LogMessage (error/warning)
+        if let Some(log_msg) = log_record.attributes.downcast_ref::<LogMessage>() {
+            // Format the message
+            let formatted_message =
+                format_log_message(log_msg, &log_record.body, log_record.severity_number, false);
+
+            let info_json = serde_json::to_value(self.build_core_event_info(
+                None,
+                None,
+                &log_record.severity_text,
+                formatted_message,
+            ))
+            .expect("Failed to serialize core event info to JSON");
+
+            let value = json!({
+                "info": info_json,
+                "data": {
+                    "log_version": 3,
+                    "version": env!("CARGO_PKG_VERSION"),
+                }
+            })
+            .to_string();
+
+            let _ = self.writer.writeln(value.as_str());
+        }
     }
 }

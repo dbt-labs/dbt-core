@@ -1,5 +1,6 @@
 use dbt_common::io_args::IoArgs;
-use dbt_common::{ErrorCode, FsResult, fs_err, fsinfo, show_progress, show_warning};
+use dbt_common::tracing::emit::emit_warn_log_message;
+use dbt_common::{ErrorCode, FsResult, fs_err, fsinfo, show_progress};
 use dbt_schemas::schemas::project::ProjectDbtCloudConfig;
 use flate2::read::GzDecoder;
 use reqwest_middleware::ClientBuilder;
@@ -160,16 +161,16 @@ pub async fn hydrate_or_download_manifest_from_cloud(
         Ok(response) => response,
         Err(e) => {
             // Don't fail the entire operation if API request fails
-            show_warning!(
-                io,
-                fs_err!(
-                    ErrorCode::Generic,
+
+            emit_warn_log_message(
+                ErrorCode::Generic,
+                format!(
                     "Failed to request deferral manifest from the dbt platform for project {}, continuing without deferral. URL: {}, Error: {}",
-                    project_id,
-                    url,
-                    e
-                )
+                    project_id, url, e
+                ),
+                io,
             );
+
             return Ok(None);
         }
     };
@@ -191,16 +192,15 @@ pub async fn hydrate_or_download_manifest_from_cloud(
             "".to_string()
         };
 
-        show_warning!(
-            io,
-            fs_err!(
-                ErrorCode::Generic,
+        emit_warn_log_message(
+            ErrorCode::Generic,
+            format!(
                 "Failed to request deferral manifest from the dbt platform for project {}, continuing without deferral. HTTP status {}{}",
-                project_id,
-                status,
-                error_message
-            )
+                project_id, status, error_message
+            ),
+            io,
         );
+
         return Ok(None);
     }
 
@@ -232,34 +232,34 @@ pub async fn hydrate_or_download_manifest_from_cloud(
             } else {
                 String::new()
             };
-            show_warning!(
+
+            emit_warn_log_message(
+                ErrorCode::Generic,
+                format!("Failed to download manifest: {}{}", e, source_error),
                 io,
-                fs_err!(
-                    ErrorCode::Generic,
-                    "Failed to download manifest: {}{}",
-                    e,
-                    source_error
-                )
             );
+
             return Ok(None);
         }
     };
 
     if !manifest_response.status().is_success() {
-        show_warning!(
-            io,
-            fs_err!(
-                ErrorCode::Generic,
+        let status = manifest_response.status();
+        let status_text = if let Ok(text) = manifest_response.text().await {
+            format!(" - {text}")
+        } else {
+            "".to_string()
+        };
+
+        emit_warn_log_message(
+            ErrorCode::Generic,
+            format!(
                 "Failed to download deferral manifest from the dbt platform for project {}, continuing without deferral. HTTP status {}{}",
-                project_id,
-                manifest_response.status(),
-                if let Ok(text) = manifest_response.text().await {
-                    format!(" - {text}")
-                } else {
-                    "".to_string()
-                }
-            )
+                project_id, status, status_text
+            ),
+            io,
         );
+
         return Ok(None);
     }
 
@@ -286,13 +286,13 @@ pub async fn hydrate_or_download_manifest_from_cloud(
         }
         None => {
             // Invalid manifest data, fail gracefully
-            show_warning!(
+
+            emit_warn_log_message(
+                ErrorCode::Generic,
+                "Downloaded manifest is neither valid JSON nor gzip-compressed JSON. Continuing without deferral.",
                 io,
-                fs_err!(
-                    ErrorCode::Generic,
-                    "Downloaded manifest is neither valid JSON nor gzip-compressed JSON. Continuing without deferral."
-                )
             );
+
             return Ok(None);
         }
     };

@@ -5,7 +5,8 @@ use crate::utils::{
     update_node_relation_components,
 };
 use dbt_common::adapter::AdapterType;
-use dbt_common::{ErrorCode, FsResult, fs_err, show_error, stdfs};
+use dbt_common::tracing::emit::emit_error_log_from_fs_error;
+use dbt_common::{ErrorCode, FsResult, fs_err, stdfs};
 use dbt_frontend_common::Dialect;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::node_resolver::NodeResolver;
@@ -249,7 +250,8 @@ pub fn resolve_seeds(
         match node_resolver.insert_ref(&dbt_seed, adapter_type, status, false) {
             Ok(_) => (),
             Err(e) => {
-                show_error!(&io_args, e.with_location(path.clone()));
+                let err_with_loc = e.with_location(path.clone());
+                emit_error_log_from_fs_error(&err_with_loc, io_args);
             }
         }
 

@@ -48,9 +48,9 @@ thread_local! {
 /// actually use it's side effect of storing the attributes in thread-local storage.
 ///
 /// ALso note that `?` is necessary due to `tracing` macro limitations.
-pub fn store_event_attributes(attrs: TelemetryAttributes) {
+pub fn store_event_attributes(attrs: impl Into<TelemetryAttributes>) {
     CURRENT_EVENT_ATTRIBUTES.with(|cell| {
-        *cell.borrow_mut() = Some(attrs);
+        *cell.borrow_mut() = Some(attrs.into());
     });
 }
 

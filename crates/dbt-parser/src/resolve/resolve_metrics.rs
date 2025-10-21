@@ -1,7 +1,8 @@
 use crate::args::ResolveArgs;
 use crate::dbt_project_config::{RootProjectConfigs, init_project_config};
 use crate::utils::{get_node_fqn, get_original_file_path, get_unique_id};
-use dbt_common::{ErrorCode, FsResult, fs_err, show_error};
+use dbt_common::tracing::emit::{emit_error_log_from_fs_error, emit_error_log_message};
+use dbt_common::{ErrorCode, FsResult};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::serde::into_typed_with_error;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
@@ -151,19 +152,21 @@ pub fn resolve_nested_model_metrics(
 
                 // Validate metric (name and window)
                 if let Err(e) = validate_metric(metric_props) {
-                    show_error!(&arg.io, e);
+                    emit_error_log_from_fs_error(&e, &arg.io);
+
                     continue;
                 }
 
                 // Check for duplicate metric names
                 if !seen_metric_names.insert(metric_name.clone()) {
-                    let duplicate_error = fs_err!(
+                    emit_error_log_message(
                         ErrorCode::SchemaError,
-                        "Duplicate metric name '{}' found in package '{}'",
-                        metric_name,
-                        package_name
+                        format!(
+                            "Duplicate metric name '{}' found in package '{}'",
+                            metric_name, package_name
+                        ),
+                        &arg.io,
                     );
-                    show_error!(&arg.io, duplicate_error);
                     continue;
                 }
 
@@ -325,19 +328,21 @@ pub fn resolve_top_level_metrics(
 
         // Validate metric (name and window)
         if let Err(e) = validate_metric(&metric_props) {
-            show_error!(&arg.io, e);
+            emit_error_log_from_fs_error(&e, &arg.io);
+
             continue;
         }
 
         // Check for duplicate metric names
         if !seen_metric_names.insert(metric_name.clone()) {
-            let duplicate_error = fs_err!(
+            emit_error_log_message(
                 ErrorCode::SchemaError,
-                "Duplicate metric name '{}' found in package '{}'",
-                metric_name,
-                package_name
+                format!(
+                    "Duplicate metric name '{}' found in package '{}'",
+                    metric_name, package_name
+                ),
+                &arg.io,
             );
-            show_error!(&arg.io, duplicate_error);
             continue;
         }
 

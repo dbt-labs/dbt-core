@@ -1,5 +1,6 @@
 use crate::tracing::{
-    data_provider::{DataProvider, DataProviderMut},
+    data_provider::DataProvider,
+    emit::{create_info_span, create_root_info_span},
     init::create_tracing_subcriber_with_layer,
     layer::ConsumerLayer,
     layers::data_layer::TelemetryDataLayer,
@@ -29,25 +30,19 @@ fn metrics_are_scoped_to_root_span() {
     );
 
     tracing::subscriber::with_default(subscriber, || {
-        let first_root = create_root_info_span!(
-            MockDynSpanEvent {
-                name: "first_root".to_string(),
-                flags: TelemetryOutputFlags::empty(),
-                ..Default::default()
-            }
-            .into()
-        );
+        let first_root = create_root_info_span(MockDynSpanEvent {
+            name: "first_root".to_string(),
+            flags: TelemetryOutputFlags::empty(),
+            ..Default::default()
+        });
         {
             let _root_scope = first_root.enter();
 
-            let first_child = create_info_span!(
-                MockDynSpanEvent {
-                    name: "first_child".to_string(),
-                    flags: TelemetryOutputFlags::empty(),
-                    ..Default::default()
-                }
-                .into()
-            );
+            let first_child = create_info_span(MockDynSpanEvent {
+                name: "first_child".to_string(),
+                flags: TelemetryOutputFlags::empty(),
+                ..Default::default()
+            });
             {
                 let _child_scope = first_child.enter();
                 increment_metric(
@@ -67,7 +62,7 @@ fn metrics_are_scoped_to_root_span() {
 
                     assert_eq!(first_root.id().expect("must exist"), root_span.id());
 
-                    DataProviderMut::new(&root_span).increment_metric(
+                    DataProvider::new(&root_span).increment_metric(
                         MetricKey::InvocationMetric(InvocationMetricKey::TotalWarnings),
                         2,
                     );
@@ -130,25 +125,19 @@ fn metrics_are_scoped_to_root_span() {
             0
         );
 
-        let second_root = create_root_info_span!(
-            MockDynSpanEvent {
-                name: "second_root".to_string(),
-                flags: TelemetryOutputFlags::empty(),
-                ..Default::default()
-            }
-            .into()
-        );
+        let second_root = create_root_info_span(MockDynSpanEvent {
+            name: "second_root".to_string(),
+            flags: TelemetryOutputFlags::empty(),
+            ..Default::default()
+        });
         {
             let _root_scope = second_root.enter();
 
-            let second_child = create_info_span!(
-                MockDynSpanEvent {
-                    name: "second_child".to_string(),
-                    flags: TelemetryOutputFlags::empty(),
-                    ..Default::default()
-                }
-                .into()
-            );
+            let second_child = create_info_span(MockDynSpanEvent {
+                name: "second_child".to_string(),
+                flags: TelemetryOutputFlags::empty(),
+                ..Default::default()
+            });
             {
                 let _child_scope = second_child.enter();
                 increment_metric(

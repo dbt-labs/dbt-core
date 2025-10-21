@@ -5,12 +5,11 @@ use std::{
 };
 
 use crate::utils::get_original_file_path;
-use dbt_common::adapter::AdapterType;
 use dbt_common::{
     CodeLocation, ErrorCode, FsResult, fs_err,
     io_args::{IoArgs, StaticAnalysisKind},
-    show_warning,
 };
+use dbt_common::{adapter::AdapterType, tracing::emit::emit_warn_log_from_fs_error};
 use dbt_jinja_utils::{
     jinja_environment::JinjaEnv,
     listener::DefaultRenderingEventListenerFactory,
@@ -240,16 +239,14 @@ fn new_operation(
                 }
                 Err(err) => {
                     // Log rendering error but don't fail the build
-                    show_warning!(
-                        io,
-                        fs_err!(
-                            ErrorCode::Generic,
-                            "Operation '{}' failed to render: {}",
-                            operation.__common_attr__.name,
-                            err.to_string()
-                        )
-                        .with_location(operation.__common_attr__.original_file_path.clone())
-                    );
+                    let err = fs_err!(
+                        ErrorCode::Generic,
+                        "Operation '{}' failed to render: {}",
+                        operation.__common_attr__.name,
+                        err.to_string()
+                    )
+                    .with_location(operation.__common_attr__.original_file_path.clone());
+                    emit_warn_log_from_fs_error(&err, io);
                 }
             }
         }

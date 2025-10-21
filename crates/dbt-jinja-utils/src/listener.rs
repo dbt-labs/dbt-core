@@ -11,7 +11,7 @@ use minijinja::{
     listener::{DefaultRenderingEventListener, RenderingEventListener},
 };
 
-use dbt_common::{ErrorCode, fs_err, io_args::IoArgs, show_warning};
+use dbt_common::{ErrorCode, io_args::IoArgs, tracing::emit::emit_warn_log_message};
 
 /// Trait for creating and destroying rendering event listeners
 pub trait RenderingEventListenerFactory: Send + Sync {
@@ -275,9 +275,10 @@ impl TypecheckingEventListener for WarningPrinter {
             (loc1.line, loc1.col, msg1).cmp(&(loc2.line, loc2.col, msg2))
         });
         warnings.iter().for_each(|(location, message)| {
-            show_warning!(
+            emit_warn_log_message(
+                ErrorCode::Generic,
+                format!("{}\n  --> {}", message, location),
                 &self.args,
-                fs_err!(ErrorCode::Generic, "{}\n  --> {}", message, location)
             );
         });
     }

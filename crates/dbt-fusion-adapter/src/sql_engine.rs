@@ -584,16 +584,13 @@ impl SqlEngine {
 
         let sql_hash = code_hash(sql.as_ref());
         let adapter_type = self.adapter_type();
-        let _query_span_guard = create_debug_span!(
-            QueryExecuted::start(
-                sql.to_string(),
-                sql_hash,
-                adapter_type.as_ref().to_owned(),
-                ctx.node_id().cloned(),
-                ctx.desc().cloned()
-            )
-            .into()
-        )
+        let _query_span_guard = create_debug_span(QueryExecuted::start(
+            sql.to_string(),
+            sql_hash,
+            adapter_type.as_ref().to_owned(),
+            ctx.node_id().cloned(),
+            ctx.desc().cloned(),
+        ))
         .entered();
 
         let (schema, batches) = match do_execute(conn) {

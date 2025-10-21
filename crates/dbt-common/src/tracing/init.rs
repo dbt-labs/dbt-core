@@ -10,7 +10,7 @@ use tracing_subscriber::{
 };
 
 use super::{
-    config::FsTraceConfig, event_info::store_event_attributes,
+    config::FsTraceConfig, constants::PROCESS_SPAN_NAME, event_info::store_event_attributes,
     layers::data_layer::TelemetryDataLayer, shutdown::TelemetryShutdownItem,
 };
 use dbt_error::{FsError, FsResult};
@@ -149,8 +149,8 @@ pub fn init_tracing_with_consumer_layer<D: Layer<BaseSubscriber> + Send + Sync +
         .map_err(|_| unexpected_fs_err!("Failed to set-up tracing"))?;
 
     // Create the process span and store it in the global PROCESS_SPAN
-    store_event_attributes(create_process_event_data(package).into());
-    let process_span = tracing::info_span!("Process");
+    store_event_attributes(create_process_event_data(package));
+    let process_span = tracing::info_span!(PROCESS_SPAN_NAME);
 
     PROCESS_SPAN
         .set(process_span.id().expect("Process span must have an ID"))

@@ -1,12 +1,10 @@
 use std::sync::{Arc, Mutex};
 
-use crate::{
-    create_root_info_span, emit_tracing_event,
-    tracing::{
-        init::create_tracing_subcriber_with_layer,
-        layer::ConsumerLayer,
-        layers::{data_layer::TelemetryDataLayer, otlp::OTLPExporterLayer},
-    },
+use crate::tracing::{
+    emit::{create_root_info_span, emit_info_event},
+    init::create_tracing_subcriber_with_layer,
+    layer::ConsumerLayer,
+    layers::{data_layer::TelemetryDataLayer, otlp::OTLPExporterLayer},
 };
 
 use super::mocks::{MockDynLogEvent, MockDynSpanEvent};
@@ -106,45 +104,37 @@ fn test_otlp_layer_exports_only_marked_records() {
 
     // Emit events under the thread-local subscriber
     tracing::subscriber::with_default(subscriber, || {
-        let exportable_span = create_root_info_span!(
-            MockDynSpanEvent {
-                name: "exportable".to_string(),
-                flags: TelemetryOutputFlags::EXPORT_OTLP,
-                ..Default::default()
-            }
-            .into()
-        );
+        let exportable_span = create_root_info_span(MockDynSpanEvent {
+            name: "exportable".to_string(),
+            flags: TelemetryOutputFlags::EXPORT_OTLP,
+            ..Default::default()
+        });
 
         exportable_span.in_scope(|| {
-            emit_tracing_event!(
+            emit_info_event(
                 MockDynLogEvent {
                     code: 1,
                     flags: TelemetryOutputFlags::EXPORT_OTLP,
                     ..Default::default()
-                }
-                .into(),
-                "included log"
+                },
+                Some("included log"),
             );
-            emit_tracing_event!(
+            emit_info_event(
                 MockDynLogEvent {
                     code: 2,
                     flags: TelemetryOutputFlags::EXPORT_JSONL, // Not OTLP-exportable
                     ..Default::default()
-                }
-                .into(),
-                "excluded log"
+                },
+                Some("excluded log"),
             );
         });
 
         // This span should not be exported to OTLP
-        let _non_exportable_span = create_root_info_span!(
-            MockDynSpanEvent {
-                name: "non_exportable".to_string(),
-                flags: TelemetryOutputFlags::EXPORT_JSONL, // Not OTLP-exportable
-                ..Default::default()
-            }
-            .into()
-        );
+        let _non_exportable_span = create_root_info_span(MockDynSpanEvent {
+            name: "non_exportable".to_string(),
+            flags: TelemetryOutputFlags::EXPORT_JSONL, // Not OTLP-exportable
+            ..Default::default()
+        });
     });
 
     // Shutdown telemetry to ensure all data is flushed to the file

@@ -1,4 +1,5 @@
-use dbt_common::{ErrorCode, FsResult, err, fs_err, io_args::IoArgs, show_warning};
+use dbt_common::tracing::emit::emit_warn_log_message;
+use dbt_common::{ErrorCode, FsResult, err, fs_err, io_args::IoArgs};
 use dbt_schemas::schemas::packages::DbtPackageEntry;
 use reqwest::{Client, StatusCode};
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
@@ -152,48 +153,44 @@ impl HubClient {
         // Check for package redirect
         if let Some(redirect_namespace) = &hub_package.redirectnamespace {
             if let Some(redirect_name) = &hub_package.redirectname {
-                show_warning!(
-                    io,
-                    fs_err!(
-                        ErrorCode::DependencyWarning,
+                emit_warn_log_message(
+                    ErrorCode::DependencyWarning,
+                    format!(
                         "Package '{}' has been moved to '{}/{}'. Please update your package reference.",
-                        hub_package.name,
-                        redirect_namespace,
-                        redirect_name
-                    )
+                        hub_package.name, redirect_namespace, redirect_name
+                    ),
+                    io,
                 );
             } else {
-                show_warning!(
-                    io,
-                    fs_err!(
-                        ErrorCode::DependencyWarning,
+                emit_warn_log_message(
+                    ErrorCode::DependencyWarning,
+                    format!(
                         "Package '{}' has been moved to namespace '{}'. Please update your package reference.",
-                        hub_package.name,
-                        redirect_namespace
-                    )
+                        hub_package.name, redirect_namespace
+                    ),
+                    io,
                 );
             }
         } else if let Some(redirect_name) = &hub_package.redirectname {
-            show_warning!(
-                io,
-                fs_err!(
-                    ErrorCode::DependencyWarning,
+            emit_warn_log_message(
+                ErrorCode::DependencyWarning,
+                format!(
                     "Package '{}' has been renamed to '{}'. Please update your package reference.",
-                    hub_package.name,
-                    redirect_name
-                )
+                    hub_package.name, redirect_name
+                ),
+                io,
             );
         }
 
         // Check for deprecation
         if hub_package.deprecated {
-            show_warning!(
-                io,
-                fs_err!(
-                    ErrorCode::DependencyWarning,
+            emit_warn_log_message(
+                ErrorCode::DependencyWarning,
+                format!(
                     "Package '{}' has been deprecated. Consider finding an alternative package.",
                     hub_package.name
-                )
+                ),
+                io,
             );
         }
     }

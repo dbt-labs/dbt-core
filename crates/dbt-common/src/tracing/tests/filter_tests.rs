@@ -1,15 +1,18 @@
 use crate::tracing::{
     data_provider::DataProvider,
+    emit::{
+        create_debug_span, create_info_span, create_root_info_span, emit_debug_event,
+        emit_info_event,
+    },
     filter::TelemetryFilterFn,
     init::create_tracing_subcriber_with_layer,
     layer::{ConsumerLayer, TelemetryConsumer},
     layers::data_layer::TelemetryDataLayer,
 };
-use crate::{create_debug_span, create_info_span, create_root_info_span, emit_tracing_event};
 
 use super::mocks::{MockDynLogEvent, MockDynSpanEvent, TestLayer};
 use dbt_telemetry::TelemetryOutputFlags;
-use tracing::{Metadata, level_filters::LevelFilter};
+use tracing::level_filters::LevelFilter;
 
 fn find_span_by_event_name<'a>(
     records: &'a [dbt_telemetry::SpanStartInfo],
@@ -44,29 +47,33 @@ impl TokenFilteringConsumer {
 }
 
 impl TelemetryConsumer for TokenFilteringConsumer {
-    fn is_span_enabled(&self, span: &dbt_telemetry::SpanStartInfo, _: &Metadata) -> bool {
+    fn is_span_enabled(&self, span: &dbt_telemetry::SpanStartInfo) -> bool {
         span.attributes
             .downcast_ref::<MockDynSpanEvent>()
             .map(|event| event.name.contains(&self.span_token))
             .unwrap_or(false)
     }
 
-    fn is_log_enabled(&self, log: &dbt_telemetry::LogRecordInfo, _: &Metadata) -> bool {
+    fn is_log_enabled(&self, log: &dbt_telemetry::LogRecordInfo) -> bool {
         log.body.contains(&self.log_token)
     }
 
-    fn on_span_start(&self, span: &dbt_telemetry::SpanStartInfo, data_provider: &DataProvider<'_>) {
+    fn on_span_start(
+        &self,
+        span: &dbt_telemetry::SpanStartInfo,
+        data_provider: &mut DataProvider<'_>,
+    ) {
         self.inner.on_span_start(span, data_provider);
     }
 
-    fn on_span_end(&self, span: &dbt_telemetry::SpanEndInfo, data_provider: &DataProvider<'_>) {
+    fn on_span_end(&self, span: &dbt_telemetry::SpanEndInfo, data_provider: &mut DataProvider<'_>) {
         self.inner.on_span_end(span, data_provider);
     }
 
     fn on_log_record(
         &self,
         record: &dbt_telemetry::LogRecordInfo,
-        data_provider: &DataProvider<'_>,
+        data_provider: &mut DataProvider<'_>,
     ) {
         self.inner.on_log_record(record, data_provider);
     }
@@ -81,7 +88,7 @@ fn filtered_middle_span_reparents_grandchild() {
 
     const FILTERED_CHILD_NAME: &str = "filtered-child";
 
-    let filtered_consumer = filtered_layer.with_span_filter(|span, _meta| {
+    let filtered_consumer = filtered_layer.with_span_filter(|span| {
         span.attributes
             .downcast_ref::<MockDynSpanEvent>()
             .map(|event| event.name.as_str() != FILTERED_CHILD_NAME)
@@ -97,33 +104,24 @@ fn filtered_middle_span_reparents_grandchild() {
     let subscriber = create_tracing_subcriber_with_layer(LevelFilter::TRACE, data_layer);
 
     tracing::subscriber::with_default(subscriber, || {
-        let _root_guard = create_root_info_span!(
-            MockDynSpanEvent {
-                name: "root".to_string(),
-                flags: TelemetryOutputFlags::ALL,
-                ..Default::default()
-            }
-            .into()
-        )
+        let _root_guard = create_root_info_span(MockDynSpanEvent {
+            name: "root".to_string(),
+            flags: TelemetryOutputFlags::ALL,
+            ..Default::default()
+        })
         .entered();
 
-        create_info_span!(
-            MockDynSpanEvent {
-                name: FILTERED_CHILD_NAME.to_string(),
+        create_info_span(MockDynSpanEvent {
+            name: FILTERED_CHILD_NAME.to_string(),
+            flags: TelemetryOutputFlags::ALL,
+            ..Default::default()
+        })
+        .in_scope(|| {
+            create_info_span(MockDynSpanEvent {
+                name: "grandchild".to_string(),
                 flags: TelemetryOutputFlags::ALL,
                 ..Default::default()
-            }
-            .into()
-        )
-        .in_scope(|| {
-            create_info_span!(
-                MockDynSpanEvent {
-                    name: "grandchild".to_string(),
-                    flags: TelemetryOutputFlags::ALL,
-                    ..Default::default()
-                }
-                .into()
-            )
+            })
             .in_scope(|| {});
         });
     });
@@ -193,45 +191,36 @@ fn level_filter_respects_span_and_log_levels() {
     let subscriber = create_tracing_subcriber_with_layer(LevelFilter::TRACE, data_layer);
 
     tracing::subscriber::with_default(subscriber, || {
-        let _root_guard = create_root_info_span!(
-            MockDynSpanEvent {
-                name: "info-root".to_string(),
-                flags: TelemetryOutputFlags::ALL,
-                ..Default::default()
-            }
-            .into()
-        )
+        let _root_guard = create_root_info_span(MockDynSpanEvent {
+            name: "info-root".to_string(),
+            flags: TelemetryOutputFlags::ALL,
+            ..Default::default()
+        })
         .entered();
 
-        create_debug_span!(
-            MockDynSpanEvent {
-                name: "debug-child".to_string(),
-                flags: TelemetryOutputFlags::ALL,
-                ..Default::default()
-            }
-            .into()
-        )
+        create_debug_span(MockDynSpanEvent {
+            name: "debug-child".to_string(),
+            flags: TelemetryOutputFlags::ALL,
+            ..Default::default()
+        })
         .in_scope(|| {});
 
-        emit_tracing_event!(
+        emit_info_event(
             MockDynLogEvent {
                 code: 1,
                 flags: TelemetryOutputFlags::ALL,
                 ..Default::default()
-            }
-            .into(),
-            "info-log"
+            },
+            Some("info-log"),
         );
 
-        emit_tracing_event!(
-            level: tracing::Level::DEBUG,
+        emit_debug_event(
             MockDynLogEvent {
                 code: 2,
                 flags: TelemetryOutputFlags::ALL,
                 ..Default::default()
-            }
-            .into(),
-            "debug-log"
+            },
+            Some("debug-log"),
         );
     });
 
@@ -292,13 +281,13 @@ fn filter_combines_with_consumer_predicates() {
     let span_filter_token = FILTER_TOKEN.to_string();
     let log_filter_token = FILTER_TOKEN.to_string();
     let telemetry_filter = TelemetryFilterFn::new(
-        move |span, _| {
+        move |span| {
             span.attributes
                 .downcast_ref::<MockDynSpanEvent>()
                 .map(|event| event.name.contains(&span_filter_token))
                 .unwrap_or(false)
         },
-        move |log, _| log.body.contains(&log_filter_token),
+        move |log| log.body.contains(&log_filter_token),
     );
 
     let filtered_consumer = consumer.with_filter(telemetry_filter);
@@ -311,79 +300,61 @@ fn filter_combines_with_consumer_predicates() {
     let subscriber = create_tracing_subcriber_with_layer(LevelFilter::TRACE, data_layer);
 
     tracing::subscriber::with_default(subscriber, || {
-        let _root_guard = create_root_info_span!(
-            MockDynSpanEvent {
-                name: format!("root {FILTER_TOKEN} {CONSUMER_TOKEN}"),
-                flags: TelemetryOutputFlags::ALL,
-                ..Default::default()
-            }
-            .into()
-        )
+        let _root_guard = create_root_info_span(MockDynSpanEvent {
+            name: format!("root {FILTER_TOKEN} {CONSUMER_TOKEN}"),
+            flags: TelemetryOutputFlags::ALL,
+            ..Default::default()
+        })
         .entered();
 
-        create_info_span!(
-            MockDynSpanEvent {
-                name: format!("allowed-span {FILTER_TOKEN} {CONSUMER_TOKEN}"),
-                flags: TelemetryOutputFlags::ALL,
-                ..Default::default()
-            }
-            .into()
-        )
+        create_info_span(MockDynSpanEvent {
+            name: format!("allowed-span {FILTER_TOKEN} {CONSUMER_TOKEN}"),
+            flags: TelemetryOutputFlags::ALL,
+            ..Default::default()
+        })
         .in_scope(|| {
             let allowed_body = format!("allowed-log {FILTER_TOKEN} {CONSUMER_TOKEN}");
-            emit_tracing_event!(
+            emit_info_event(
                 MockDynLogEvent {
                     code: 1,
                     flags: TelemetryOutputFlags::ALL,
                     ..Default::default()
-                }
-                .into(),
-                "{}",
-                allowed_body
+                },
+                Some(&allowed_body),
             );
         });
 
-        create_info_span!(
-            MockDynSpanEvent {
-                name: format!("consumer-filtered-span {FILTER_TOKEN}"),
-                flags: TelemetryOutputFlags::ALL,
-                ..Default::default()
-            }
-            .into()
-        )
+        create_info_span(MockDynSpanEvent {
+            name: format!("consumer-filtered-span {FILTER_TOKEN}"),
+            flags: TelemetryOutputFlags::ALL,
+            ..Default::default()
+        })
         .in_scope(|| {
             let filter_only_body = format!("filter-only-log {FILTER_TOKEN}");
-            emit_tracing_event!(
+            emit_info_event(
                 MockDynLogEvent {
                     code: 2,
                     flags: TelemetryOutputFlags::ALL,
                     ..Default::default()
-                }
-                .into(),
-                "{}",
-                filter_only_body
+                },
+                Some(&filter_only_body),
             );
         });
 
-        create_info_span!(
-            MockDynSpanEvent {
-                name: format!("filter-filtered-span {CONSUMER_TOKEN}"),
-                flags: TelemetryOutputFlags::ALL,
-                ..Default::default()
-            }
-            .into()
-        )
+        create_info_span(MockDynSpanEvent {
+            name: format!("filter-filtered-span {CONSUMER_TOKEN}"),
+            flags: TelemetryOutputFlags::ALL,
+            ..Default::default()
+        })
         .in_scope(|| {
             let consumer_only_body = format!("consumer-only-log {CONSUMER_TOKEN}");
-            emit_tracing_event!(
+            emit_info_event(
                 MockDynLogEvent {
                     code: 3,
                     flags: TelemetryOutputFlags::ALL,
                     ..Default::default()
-                }
-                .into(),
-                "{}",
-                consumer_only_body
+                },
+                Some(&consumer_only_body),
             );
         });
     });

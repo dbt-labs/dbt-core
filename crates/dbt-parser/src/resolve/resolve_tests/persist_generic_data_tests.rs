@@ -6,9 +6,7 @@ use dbt_common::adapter::AdapterType;
 use dbt_common::constants::DBT_GENERIC_TESTS_DIR_NAME;
 use dbt_common::io_args;
 use dbt_common::io_args::IoArgs;
-use dbt_common::show_error;
-use dbt_common::show_package_error;
-use dbt_common::show_strict_error;
+use dbt_common::tracing::emit::emit_strict_parse_error;
 use dbt_common::{ErrorCode, err};
 use dbt_common::{fs_err, stdfs};
 use dbt_frontend_common::Dialect;
@@ -401,15 +399,7 @@ fn extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
             message
         );
 
-        if let Some(package_name) = dependency_package_name
-            && !io_args.show_all_deprecations
-        {
-            // If we are parsing a dependency package, we use a special macros
-            // that ensures at most one error is shown per package.
-            show_package_error!(io_args, package_name);
-        } else {
-            show_strict_error!(io_args, schema_error, dependency_package_name);
-        }
+        emit_strict_parse_error(&schema_error, dependency_package_name, io_args);
     }
     for (key, value) in deprecated.clone() {
         let json_value = serde_json::to_value(value.clone()).unwrap_or(Value::Null);

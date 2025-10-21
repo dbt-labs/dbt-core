@@ -11,7 +11,7 @@ use dbt_common::{
     node_selector::{
         IndirectSelection, MethodName, SelectExpression, SelectionCriteria, parse_model_specifiers,
     },
-    show_warning,
+    tracing::emit::emit_warn_log_message,
 };
 
 use dbt_schemas::schemas::selectors::{
@@ -129,11 +129,11 @@ impl<'a> SelectorParser<'a> {
                         || expr.parents_depth.is_some()
                         || expr.children_depth.is_some()
                     {
-                        let warning = fs_err!(
+                        emit_warn_log_message(
                             ErrorCode::SelectorError,
-                            "Graph operators (parents, children, etc.) are not supported with selector inheritance and will be ignored"
+                            "Graph operators (parents, children, etc.) are not supported with selector inheritance and will be ignored",
+                            self.io_args,
                         );
-                        show_warning!(self.io_args, warning);
                     }
 
                     // Return the referenced selector's include expression
