@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import List, Literal, Optional
 
-from dbt.artifacts.resources.types import FunctionType, NodeType
+from dbt.artifacts.resources.types import FunctionType, FunctionVolatility, NodeType
 from dbt.artifacts.resources.v1.components import CompiledResource
 from dbt.artifacts.resources.v1.config import NodeConfig
 from dbt_common.dataclass_schema import dbtClassMixin
@@ -16,6 +16,7 @@ class FunctionConfig(NodeConfig):
     # The fact that this is a property, that can be changed, seems wrong.
     # A function's materialization should never be changed, so why allow for it?
     materialized: str = "function"
+    volatility: Optional[FunctionVolatility] = None
 
 
 # =============
