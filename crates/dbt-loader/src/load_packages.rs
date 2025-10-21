@@ -101,7 +101,7 @@ pub async fn load_internal_packages(
 pub fn persist_internal_packages(
     internal_packages_install_path: &Path,
     adapter_type: AdapterType,
-    command: &str,
+    #[allow(unused)] command: &str,
 ) -> FsResult<()> {
     // Remove existing folders in the internal_packages_install_path
     // to prevent user from modifying them
@@ -147,7 +147,6 @@ pub fn persist_internal_packages(
             );
         }
     }
-
 
     Ok(())
 }

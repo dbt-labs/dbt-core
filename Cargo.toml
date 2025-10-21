@@ -58,27 +58,8 @@ version = "2.0.0-preview.45"
 # However, note that we declare dependencies in our crates with the same version
 # numbers as crates.io / the upstream repository.
 # See https://doc.rust-lang.org/cargo/reference/overriding-dependencies.html#the-patch-section
-datafusion = { git = "https://github.com/sdf-labs/datafusion", rev = "489f45d5e2241b30d8af6ebf8ac38982fc77e92c" } # @ sdf/48
 datafusion-common = { git = "https://github.com/sdf-labs/datafusion", rev = "489f45d5e2241b30d8af6ebf8ac38982fc77e92c" } # @ sdf/48
-datafusion-catalog = { git = "https://github.com/sdf-labs/datafusion", rev = "489f45d5e2241b30d8af6ebf8ac38982fc77e92c" } # @ sdf/48
 datafusion-expr = { git = "https://github.com/sdf-labs/datafusion", rev = "489f45d5e2241b30d8af6ebf8ac38982fc77e92c" } # @ sdf/48
-datafusion-functions = { git = "https://github.com/sdf-labs/datafusion", rev = "489f45d5e2241b30d8af6ebf8ac38982fc77e92c" } # @ sdf/48
-datafusion-functions-aggregate = { git = "https://github.com/sdf-labs/datafusion", rev = "489f45d5e2241b30d8af6ebf8ac38982fc77e92c" } # @ sdf/48
-datafusion-functions-nested = { git = "https://github.com/sdf-labs/datafusion", rev = "489f45d5e2241b30d8af6ebf8ac38982fc77e92c" } # @ sdf/48
-datafusion-functions-window = { git = "https://github.com/sdf-labs/datafusion", rev = "489f45d5e2241b30d8af6ebf8ac38982fc77e92c" } # @ sdf/48
-datafusion-physical-expr = { git = "https://github.com/sdf-labs/datafusion", rev = "489f45d5e2241b30d8af6ebf8ac38982fc77e92c" } # @ sdf/48
-datafusion-physical-plan = { git = "https://github.com/sdf-labs/datafusion", rev = "489f45d5e2241b30d8af6ebf8ac38982fc77e92c" } # @ sdf/48
-# OR, when working locally
-#datafusion = { path = "../datafusion/datafusion/core" }
-#datafusion-common = { path = "../datafusion/datafusion/common" }
-#datafusion-catalog = { path = "../datafusion/datafusion/catalog" }
-#datafusion-expr = { path = "../datafusion/datafusion/expr" }
-#datafusion-functions = { path = "../datafusion/datafusion/functions" }
-#datafusion-functions-aggregate = { path = "../datafusion/datafusion/functions-aggregate" }
-#datafusion-functions-nested = { path = "../datafusion/datafusion/functions-nested" }
-#datafusion-functions-window = { path = "../datafusion/datafusion/functions-window" }
-#datafusion-physical-expr = { path = "../datafusion/datafusion/physical-expr" }
-#datafusion-physical-plan = { path = "../datafusion/datafusion/physical-plan" }
 
 # All arrow dependencies (run `cargo tree --prefix none | grep ^arrow | cut -d ' ' -f1 | sort -u` to get this list)
 arrow = { git = "https://github.com/sdf-labs/arrow-rs", rev = "63a95c7060cb22b620ea60caadf5251f4ddcd6e0" } # @ sdf/55.1.0
