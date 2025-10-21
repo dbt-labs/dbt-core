@@ -278,7 +278,7 @@ check_version_exists() {
     target="$2"
     url="https://public.cdn.getdbt.com/fs/cli/fs-v$version-$target.tar.gz"
     log_debug "Checking if version $version exists on CDN: $url"
-    if ! curl -sL -f -o /dev/null "$url"; then
+    if ! curl -sLI -f "$url" >/dev/null 2>&1; then
         err_and_exit "Version $version not found on CDN. Please check available versions and try again."
     fi
     return 0
@@ -546,12 +546,7 @@ install_package() {
     esac
 
     log_debug "Downloading: $url"
-    # Check if URL exists and returns valid content
-    if ! curl -sL -f -o /dev/null "$url"; then
-        err_and_exit "Failed to download package from $url. Verify you are requesting a valid version on a supported platform."
-    fi
-
-    # Now download and extract
+    # Download and extract
     if ! curl -sL "$url" | tar -C "$td" -xz; then
         err_and_exit "Failed to extract package. The downloaded archive appears to be invalid."
     fi
