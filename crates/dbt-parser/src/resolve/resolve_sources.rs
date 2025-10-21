@@ -205,6 +205,11 @@ pub fn resolve_sources(
             table_config.meta.clone(),
         );
 
+        let merged_event_time = merge_event_time(
+            source_properties_config.event_time.clone(),
+            table_config.event_time.clone(),
+        );
+
         let columns = if let Some(ref cols) = table.columns {
             process_columns(
                 Some(cols),
@@ -237,6 +242,20 @@ pub fn resolve_sources(
         let static_analysis = source_properties_config
             .static_analysis
             .unwrap_or(StaticAnalysisKind::On);
+        // Create a config that respects the table-level overrides of
+        // the source-level config.
+        // See: https://github.com/dbt-labs/dbt-fusion/issues/767
+        // In resolve_sources method, merging is done which is basically
+        // overriding the source-level config with the table-level config.
+        // The overriden members are scattered across the DbtSource struct
+        // and we need to merge them back into the config that will be
+        // serialized in the manifest.
+        let mut merged_configs = source_properties_config.clone();
+        merged_configs.enabled = Some(is_enabled);
+        merged_configs.freshness = merged_freshness.clone();
+        merged_configs.loaded_at_field = merged_loaded_at_field.clone();
+        merged_configs.loaded_at_query = merged_loaded_at_query.clone();
+        merged_configs.event_time = merged_event_time.clone();
 
         let dbt_source = DbtSource {
             __common_attr__: CommonAttributes {
@@ -291,7 +310,7 @@ pub fn resolve_sources(
                 loaded_at_field: merged_loaded_at_field.clone(),
                 loaded_at_query: merged_loaded_at_query.clone(),
             },
-            deprecated_config: source_properties_config.clone(),
+            deprecated_config: merged_configs,
             __other__: other,
         };
         let status = if is_enabled {
@@ -335,6 +354,15 @@ pub fn resolve_sources(
     Ok((sources, disabled_sources))
 }
 
+fn merge_event_time(
+    source_event_time: Option<String>,
+    table_event_time: Option<String>,
+) -> Option<String> {
+    // If table_config.event_time is set (Some), use it regardless of its value
+    // Only use source_event_time if table_event_time is None
+    table_event_time.or(source_event_time)
+}
+
 fn merge_freshness(
     base: Option<&FreshnessDefinition>,
     update: &Omissible<Option<FreshnessDefinition>>,
@@ -345,9 +373,7 @@ fn merge_freshness(
             .as_ref()
             .and_then(|update| merge_freshness_unwrapped(base, Some(update))),
         // If there is no freshness present in the update then it is inherited (merged) from the base.
-        Omissible::Omitted => {
-            merge_freshness_unwrapped(base, Some(&FreshnessDefinition::default()))
-        }
+        Omissible::Omitted => merge_freshness_unwrapped(base, None),
     }
 }
 
@@ -356,30 +382,233 @@ fn merge_freshness_unwrapped(
     update: Option<&FreshnessDefinition>,
 ) -> Option<FreshnessDefinition> {
     match (base, update) {
-        (Some(base), Some(update)) => {
-            // First create a merged base
-            let mut merged = FreshnessDefinition {
-                error_after: base.error_after.clone(),
-                warn_after: base.warn_after.clone(),
-                filter: base.filter.clone(),
-            };
-
-            // Apply updates from the update object
-            if update.error_after.is_some() {
-                merged.error_after = update.error_after.clone();
-            }
-            if update.warn_after.is_some() {
-                merged.warn_after = update.warn_after.clone();
-            }
-
-            if update.filter.is_some() {
-                merged.filter = update.filter.clone();
-            }
-
-            Some(merged)
-        }
-        (None, Some(update)) => Some(update.clone()),
+        // As long as a single element is present in update, override all of the elements in the base
+        // with the elements in the update.
+        // See mantle logic: https://github.com/dbt-labs/dbt-mantle/blob/847ab93f830d745c1c3d6609ead642b2bd07139a/core/dbt/parser/sources.py#L532-L542
+        // The mantle logic looks complicated but it is basically doing the same thing as the first
+        // statement of this comment. Especially look at the merge_freshness_time_thresholds function,
+        // which states that if an element of update is None, just return None for the specific element.
+        (_, Some(update)) => Some(update.clone()),
         (Some(base), None) => Some(base.clone()),
-        (None, None) => None,
+        (None, None) => Some(FreshnessDefinition::default()), // Provide default value if user never defined freshness https://dbtlabs.atlassian.net/browse/META-5461
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dbt_jinja_utils::serde::Omissible;
+    use dbt_schemas::schemas::common::{FreshnessDefinition, FreshnessPeriod, FreshnessRules};
+
+    #[test]
+    fn test_merge_event_time_table_overrides_source() {
+        // When table_event_time is Some, it should always be used
+        let source_event_time = Some("source_timestamp".to_string());
+        let table_event_time = Some("table_timestamp".to_string());
+        let result = merge_event_time(source_event_time, table_event_time);
+        assert_eq!(result, Some("table_timestamp".to_string()));
+    }
+
+    #[test]
+    fn test_merge_event_time_uses_source_when_table_none() {
+        // When table_event_time is None, source_event_time should be used
+        let source_event_time = Some("source_timestamp".to_string());
+        let table_event_time = None;
+        let result = merge_event_time(source_event_time, table_event_time);
+        assert_eq!(result, Some("source_timestamp".to_string()));
+    }
+
+    #[test]
+    fn test_merge_event_time_both_none() {
+        // When both are None, result should be None
+        let source_event_time = None;
+        let table_event_time = None;
+        let result = merge_event_time(source_event_time, table_event_time);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_merge_event_time_empty_table_overrides() {
+        // Even empty string in table_event_time should override source
+        let source_event_time = Some("source_timestamp".to_string());
+        let table_event_time = Some("".to_string());
+        let result = merge_event_time(source_event_time, table_event_time);
+        assert_eq!(result, Some("".to_string()));
+    }
+
+    #[test]
+    fn test_merge_freshness_unwrapped_update_overrides_base() {
+        // When both base and update have values, update should override completely
+        let base = FreshnessDefinition {
+            error_after: Some(FreshnessRules {
+                count: Some(5),
+                period: Some(FreshnessPeriod::hour),
+            }),
+            warn_after: Some(FreshnessRules {
+                count: Some(3),
+                period: Some(FreshnessPeriod::hour),
+            }),
+            filter: Some("base_filter".to_string()),
+        };
+        let update = FreshnessDefinition {
+            error_after: Some(FreshnessRules {
+                count: Some(10),
+                period: Some(FreshnessPeriod::day),
+            }),
+            warn_after: None,
+            filter: None,
+        };
+
+        let result = merge_freshness_unwrapped(Some(&base), Some(&update));
+        assert_eq!(result, Some(update));
+    }
+
+    #[test]
+    fn test_merge_freshness_unwrapped_inherit_from_base() {
+        // When update is None, base should be inherited
+        let base = FreshnessDefinition {
+            error_after: Some(FreshnessRules {
+                count: Some(5),
+                period: Some(FreshnessPeriod::hour),
+            }),
+            warn_after: Some(FreshnessRules {
+                count: Some(3),
+                period: Some(FreshnessPeriod::hour),
+            }),
+            filter: None,
+        };
+
+        let result = merge_freshness_unwrapped(Some(&base), None);
+        assert_eq!(result, Some(base));
+    }
+
+    #[test]
+    fn test_merge_freshness_unwrapped_no_base() {
+        // When base is None but update has value, use update
+        let update = FreshnessDefinition {
+            error_after: Some(FreshnessRules {
+                count: Some(10),
+                period: Some(FreshnessPeriod::day),
+            }),
+            warn_after: None,
+            filter: None,
+        };
+
+        let result = merge_freshness_unwrapped(None, Some(&update));
+        assert_eq!(result, Some(update));
+    }
+
+    #[test]
+    fn test_merge_freshness_unwrapped_both_none() {
+        // When both are None, result should be None
+        let result = merge_freshness_unwrapped(None, None);
+        assert_eq!(result, Some(FreshnessDefinition::default()));
+    }
+
+    #[test]
+    fn test_merge_freshness_present_null_inhibits() {
+        // Present but null freshness should return None (inhibits freshness)
+        let base = FreshnessDefinition {
+            error_after: Some(FreshnessRules {
+                count: Some(5),
+                period: Some(FreshnessPeriod::hour),
+            }),
+            warn_after: None,
+            filter: None,
+        };
+
+        let update = Omissible::Present(None);
+        let result = merge_freshness(Some(&base), &update);
+        assert_eq!(result, None);
+    }
+
+    #[test]
+    fn test_merge_freshness_present_with_value() {
+        // Present with value should use the value
+        let base = FreshnessDefinition {
+            error_after: Some(FreshnessRules {
+                count: Some(5),
+                period: Some(FreshnessPeriod::hour),
+            }),
+            warn_after: None,
+            filter: None,
+        };
+
+        let update_value = FreshnessDefinition {
+            error_after: Some(FreshnessRules {
+                count: Some(10),
+                period: Some(FreshnessPeriod::day),
+            }),
+            warn_after: Some(FreshnessRules {
+                count: Some(5),
+                period: Some(FreshnessPeriod::day),
+            }),
+            filter: None,
+        };
+
+        let update = Omissible::Present(Some(update_value.clone()));
+        let result = merge_freshness(Some(&base), &update);
+        assert_eq!(result, Some(update_value));
+    }
+
+    #[test]
+    fn test_merge_freshness_omitted_inherits_base() {
+        // Omitted freshness should inherit from base
+        let base = FreshnessDefinition {
+            error_after: Some(FreshnessRules {
+                count: Some(5),
+                period: Some(FreshnessPeriod::hour),
+            }),
+            warn_after: None,
+            filter: None,
+        };
+
+        let update = Omissible::Omitted;
+        let result = merge_freshness(Some(&base), &update);
+        assert_eq!(result, Some(base));
+    }
+
+    #[test]
+    fn test_merge_freshness_omitted_no_base() {
+        // Omitted freshness with no base should return None
+        let update = Omissible::Omitted;
+        let result = merge_freshness(None, &update);
+        assert_eq!(result, Some(FreshnessDefinition::default()));
+    }
+
+    #[test]
+    fn test_merge_freshness_partial_update_overrides_completely() {
+        // Test that partial updates in the update completely override base
+        // This validates the comment about mantle logic
+        let base = FreshnessDefinition {
+            error_after: Some(FreshnessRules {
+                count: Some(5),
+                period: Some(FreshnessPeriod::hour),
+            }),
+            warn_after: Some(FreshnessRules {
+                count: Some(3),
+                period: Some(FreshnessPeriod::hour),
+            }),
+            filter: Some("base_filter".to_string()),
+        };
+
+        // Update only has error_after, but it should still completely replace base
+        let update_value = FreshnessDefinition {
+            error_after: Some(FreshnessRules {
+                count: Some(10),
+                period: Some(FreshnessPeriod::day),
+            }),
+            warn_after: None,
+            filter: None,
+        };
+
+        let update = Omissible::Present(Some(update_value.clone()));
+        let result = merge_freshness(Some(&base), &update);
+
+        // The result should be exactly the update, not a merge
+        assert_eq!(result, Some(update_value));
+        // Specifically verify that warn_after and filter are None, not inherited from base
+        assert!(result.as_ref().unwrap().warn_after.is_none());
+        assert!(result.as_ref().unwrap().filter.is_none());
     }
 }

@@ -44,6 +44,10 @@ impl FreshnessRules {
         }
         Ok(())
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.count.is_none() && self.period.is_none()
+    }
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq, Eq, Default)]
