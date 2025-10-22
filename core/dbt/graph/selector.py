@@ -164,8 +164,6 @@ class NodeSelector(MethodManager):
         if unique_id in self.manifest.sources:
             source = self.manifest.sources[unique_id]
             return source.config.enabled
-        elif unique_id in self.manifest.exposures:
-            return True
         elif unique_id in self.manifest.functions:
             function = self.manifest.functions[unique_id]
             return function.config.enabled
