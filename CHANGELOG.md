@@ -28,10 +28,6 @@ All notable changes to this project will be documented in this file.
 
 ## 2.0.0-preview.47 - October 21, 2025
 
-
-
-## 2.0.0-preview.46 - October 21, 2025
-
 ### Fixes
 
 - [dbt-fusion] Fix merging of frehsness and event_time configs for sources. ([#767](https://github.com/dbt-labs/dbt-fusion/issues/767))
