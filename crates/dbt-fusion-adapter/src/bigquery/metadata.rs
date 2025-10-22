@@ -269,7 +269,7 @@ impl MetadataAdapter for BigqueryAdapter {
                         CatalogNodeStats {
                             id: "num_rows".to_string(),
                             label: num_rows_label_i.to_string(),
-                            value: serde_json::Value::String(num_rows_value_i.to_string()),
+                            value: serde_json::Value::Number(num_rows_value_i.into()),
                             description: Some(num_rows_description_i.to_string()),
                             include: num_rows_include_i,
                         },
@@ -281,7 +281,7 @@ impl MetadataAdapter for BigqueryAdapter {
                         CatalogNodeStats {
                             id: "bytes".to_string(),
                             label: bytes_label_i.to_string(),
-                            value: serde_json::Value::String(bytes_value_i.to_string()),
+                            value: serde_json::Value::Number(bytes_value_i.into()),
                             description: Some(bytes_description_i.to_string()),
                             include: bytes_include_i,
                         },
@@ -311,27 +311,29 @@ impl MetadataAdapter for BigqueryAdapter {
                         },
                     );
                 }
-                if stats.is_empty() {
-                    stats.insert(
-                        "has_stats".to_string(),
-                        CatalogNodeStats {
-                            id: "has_stats".to_string(),
-                            label: "Has Stats?".to_string(),
-                            value: serde_json::Value::Bool(false),
-                            description: Some(
-                                "Indicates whether there are statistics for this table".to_string(),
-                            ),
-                            include: false,
-                        },
-                    );
-                }
+
+                stats.insert(
+                    "has_stats".to_string(),
+                    CatalogNodeStats {
+                        id: "has_stats".to_string(),
+                        label: "Has Stats?".to_string(),
+                        value: serde_json::Value::Bool(stats.is_empty()),
+                        description: Some(
+                            "Indicates whether there are statistics for this table".to_string(),
+                        ),
+                        include: false,
+                    },
+                );
 
                 let node_metadata = TableMetadata {
                     materialization_type: data_type.to_string(),
                     schema: schema.to_string(),
                     name: table.to_string(),
                     database: Some(catalog.to_string()),
-                    comment: Some(comment.to_string()),
+                    comment: match comment {
+                        "" => None,
+                        _ => Some(comment.to_string()),
+                    },
                     owner: None,
                 };
                 let node = CatalogTable {
@@ -383,7 +385,10 @@ impl MetadataAdapter for BigqueryAdapter {
                 name: column_name.to_string(),
                 index: column_index as i128,
                 data_type: column_type.to_string(),
-                comment: Some(column_comment.to_string()),
+                comment: match column_comment {
+                    "" => None,
+                    _ => Some(column_comment.to_string()),
+                },
             };
 
             columns_by_relation

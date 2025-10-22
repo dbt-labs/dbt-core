@@ -106,25 +106,28 @@ impl MetadataAdapter for DatabricksAdapter {
                             include: last_modified_include.value(i),
                         },
                     );
-                } else {
-                    stats.insert(
-                        "has_stats".to_string(),
-                        CatalogNodeStats {
-                            id: "has_stats".to_string(),
-                            label: "has_stats".to_string(),
-                            value: serde_json::Value::Bool(false),
-                            description: Some("Has stats".to_string()),
-                            include: last_modified_include.value(i),
-                        },
-                    );
                 }
+
+                stats.insert(
+                    "has_stats".to_string(),
+                    CatalogNodeStats {
+                        id: "has_stats".to_string(),
+                        label: "has_stats".to_string(),
+                        value: serde_json::Value::Bool(stats.is_empty()),
+                        description: Some("Has stats".to_string()),
+                        include: last_modified_include.value(i),
+                    },
+                );
 
                 let node_metadata = TableMetadata {
                     materialization_type: data_type.to_string(),
                     schema: schema.to_string(),
                     name: table.to_string(),
                     database: Some(catalog.to_string()),
-                    comment: Some(comment.to_string()),
+                    comment: match comment {
+                        "" => None,
+                        _ => Some(comment.to_string()),
+                    },
                     owner: Some(owner.to_string()),
                 };
 
@@ -176,7 +179,10 @@ impl MetadataAdapter for DatabricksAdapter {
                 name: column_name.to_string(),
                 index: column_index as i128,
                 data_type: column_type.to_string(),
-                comment: Some(column_comment.to_string()),
+                comment: match column_comment {
+                    "" => None,
+                    _ => Some(column_comment.to_string()),
+                },
             };
 
             columns_by_relation

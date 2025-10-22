@@ -311,7 +311,7 @@ impl MetadataAdapter for RedshiftAdapter {
                         CatalogNodeStats {
                             id: "diststyle".to_string(),
                             label: diststyle_label_i.to_string(),
-                            value: serde_json::Value::String(diststyle_value_i.to_string()),
+                            value: serde_json::Number::from_i128(diststyle_value_i).into(),
                             description: Some(diststyle_description_i.to_string()),
                             include: diststyle_include_i,
                         },
@@ -324,7 +324,7 @@ impl MetadataAdapter for RedshiftAdapter {
                         CatalogNodeStats {
                             id: "sortkey1".to_string(),
                             label: sortkey1_label_i.to_string(),
-                            value: serde_json::Value::String(sortkey1_value_i.to_string()),
+                            value: serde_json::Number::from_i128(sortkey1_value_i).into(),
                             description: Some(sortkey1_description_i.to_string()),
                             include: sortkey1_include_i,
                         },
@@ -337,7 +337,7 @@ impl MetadataAdapter for RedshiftAdapter {
                         CatalogNodeStats {
                             id: "max_varchar".to_string(),
                             label: max_varchar_label_i.to_string(),
-                            value: serde_json::Value::String(max_varchar_value_i.to_string()),
+                            value: serde_json::Value::Number(max_varchar_value_i.into()),
                             description: Some(max_varchar_description_i.to_string()),
                             include: max_varchar_include_i,
                         },
@@ -363,7 +363,7 @@ impl MetadataAdapter for RedshiftAdapter {
                         CatalogNodeStats {
                             id: "sortkey_num".to_string(),
                             label: sortkey_num_label_i.to_string(),
-                            value: serde_json::Value::String(sortkey_num_value_i.to_string()),
+                            value: serde_json::Value::Number(sortkey_num_value_i.into()),
                             description: Some(sortkey_num_description_i.to_string()),
                             include: sortkey_num_include_i,
                         },
@@ -376,7 +376,7 @@ impl MetadataAdapter for RedshiftAdapter {
                         CatalogNodeStats {
                             id: "size".to_string(),
                             label: size_label_i.to_string(),
-                            value: serde_json::Value::String(size_value_i.to_string()),
+                            value: serde_json::Value::Number(size_value_i.into()),
                             description: Some(size_description_i.to_string()),
                             include: size_include_i,
                         },
@@ -389,7 +389,7 @@ impl MetadataAdapter for RedshiftAdapter {
                         CatalogNodeStats {
                             id: "pct_used".to_string(),
                             label: pct_used_label_i.to_string(),
-                            value: serde_json::Value::String(pct_used_value_i.to_string()),
+                            value: serde_json::Number::from_i128(pct_used_value_i).into(),
                             description: Some(pct_used_description_i.to_string()),
                             include: pct_used_include_i,
                         },
@@ -402,7 +402,7 @@ impl MetadataAdapter for RedshiftAdapter {
                         CatalogNodeStats {
                             id: "unsorted".to_string(),
                             label: unsorted_label_i.to_string(),
-                            value: serde_json::Value::String(unsorted_value_i.to_string()),
+                            value: serde_json::Number::from_i128(unsorted_value_i).into(),
                             description: Some(unsorted_description_i.to_string()),
                             include: unsorted_include_i,
                         },
@@ -415,7 +415,7 @@ impl MetadataAdapter for RedshiftAdapter {
                         CatalogNodeStats {
                             id: "stats_off".to_string(),
                             label: stats_off_label_i.to_string(),
-                            value: serde_json::Value::String(stats_off_value_i.to_string()),
+                            value: serde_json::Number::from_i128(stats_off_value_i).into(),
                             description: Some(stats_off_description_i.to_string()),
                             include: stats_off_include_i,
                         },
@@ -428,7 +428,7 @@ impl MetadataAdapter for RedshiftAdapter {
                         CatalogNodeStats {
                             id: "rows".to_string(),
                             label: rows_label_i.to_string(),
-                            value: serde_json::Value::String(rows_value_i.to_string()),
+                            value: serde_json::Number::from_i128(rows_value_i).into(),
                             description: Some(rows_description_i.to_string()),
                             include: rows_include_i,
                         },
@@ -441,7 +441,7 @@ impl MetadataAdapter for RedshiftAdapter {
                         CatalogNodeStats {
                             id: "skew_sortkey1".to_string(),
                             label: skew_sortkey1_label_i.to_string(),
-                            value: serde_json::Value::String(skew_sortkey1_value_i.to_string()),
+                            value: serde_json::Number::from_i128(skew_sortkey1_value_i).into(),
                             description: Some(skew_sortkey1_description_i.to_string()),
                             include: skew_sortkey1_include_i,
                         },
@@ -454,35 +454,35 @@ impl MetadataAdapter for RedshiftAdapter {
                         CatalogNodeStats {
                             id: "skew_rows".to_string(),
                             label: skew_rows_label_i.to_string(),
-                            value: serde_json::Value::String(skew_rows_value_i.to_string()),
+                            value: serde_json::Number::from_i128(skew_rows_value_i).into(),
                             description: Some(skew_rows_description_i.to_string()),
                             include: skew_rows_include_i,
                         },
                     );
                 }
 
-                if stats.is_empty() {
-                    stats.insert(
-                        "has_stats".to_string(),
-                        CatalogNodeStats {
-                            id: "has_stats".to_string(),
-                            label: "has_stats".to_string(),
-                            value: serde_json::Value::Bool(false),
-                            description: Some(
-                                "Indicates whether there are any statistics for this table"
-                                    .to_string(),
-                            ),
-                            include: false,
-                        },
-                    );
-                }
+                stats.insert(
+                    "has_stats".to_string(),
+                    CatalogNodeStats {
+                        id: "has_stats".to_string(),
+                        label: "has_stats".to_string(),
+                        value: serde_json::Value::Bool(stats.is_empty()),
+                        description: Some(
+                            "Indicates whether there are any statistics for this table".to_string(),
+                        ),
+                        include: false,
+                    },
+                );
 
                 let node_metadata = TableMetadata {
                     materialization_type: data_type.to_string(),
                     schema: schema.to_string(),
                     name: table.to_string(),
                     database: Some(catalog.to_string()),
-                    comment: Some(comment.to_string()),
+                    comment: match comment {
+                        "" => None,
+                        _ => Some(comment.to_string()),
+                    },
                     owner: Some(owner.to_string()),
                 };
 
@@ -536,7 +536,10 @@ impl MetadataAdapter for RedshiftAdapter {
                 name: column_name.to_string(),
                 index: column_index as i128,
                 data_type: column_type.to_string(),
-                comment: Some(column_comment.to_string()),
+                comment: match column_comment {
+                    "" => None,
+                    _ => Some(column_comment.to_string()),
+                },
             };
 
             columns_by_relation

@@ -84,7 +84,7 @@ impl MetadataAdapter for SnowflakeAdapter {
             let schema = table_schemas.value(i).to_string();
             let table = table_names.value(i).to_string();
             let data_type = data_types.value(i).to_string();
-            let comment = comments.value(i).to_string();
+            let comment = comments.value(i);
             let owner = table_owners.value(i).to_string();
 
             let fully_qualified_name = format!("{catalog}.{schema}.{table}").to_lowercase();
@@ -129,7 +129,7 @@ impl MetadataAdapter for SnowflakeAdapter {
                         CatalogNodeStats {
                             id: "bytes".to_string(),
                             label: bytes_label_i.to_string(),
-                            value: serde_json::Value::String(bytes_value_i.to_string()),
+                            value: serde_json::Number::from_i128(bytes_value_i).into(),
                             description: Some(bytes_description_i.to_string()),
                             include: bytes_include_i,
                         },
@@ -141,7 +141,7 @@ impl MetadataAdapter for SnowflakeAdapter {
                         CatalogNodeStats {
                             id: "row_count".to_string(),
                             label: row_count_label_i.to_string(),
-                            value: serde_json::Value::String(row_count_value_i.to_string()),
+                            value: serde_json::Number::from_i128(row_count_value_i).into(),
                             description: Some(row_count_description_i.to_string()),
                             include: row_count_include_i,
                         },
@@ -160,26 +160,28 @@ impl MetadataAdapter for SnowflakeAdapter {
                     );
                 }
 
-                if stats.is_empty() {
-                    stats.insert(
-                        "has_stats".to_string(),
-                        CatalogNodeStats {
-                            id: "has_stats".to_string(),
-                            label: "Has Stats?".to_string(),
-                            value: serde_json::Value::Bool(false),
-                            description: Some(
-                                "Indicates whether there are statistics for this table".to_string(),
-                            ),
-                            include: false,
-                        },
-                    );
-                }
+                stats.insert(
+                    "has_stats".to_string(),
+                    CatalogNodeStats {
+                        id: "has_stats".to_string(),
+                        label: "Has Stats?".to_string(),
+                        value: serde_json::Value::Bool(!stats.is_empty()),
+                        description: Some(
+                            "Indicates whether there are statistics for this table".to_string(),
+                        ),
+                        include: false,
+                    },
+                );
+
                 let node_metadata = TableMetadata {
                     materialization_type: data_type.to_string(),
                     schema: schema.to_string(),
                     name: table.to_string(),
                     database: Some(catalog.to_string()),
-                    comment: Some(comment.to_string()),
+                    comment: match comment {
+                        "" => None,
+                        _ => Some(comment.to_string()),
+                    },
                     owner: Some(owner.to_string()),
                 };
 
@@ -234,7 +236,10 @@ impl MetadataAdapter for SnowflakeAdapter {
                 name: column_name_i.to_string(),
                 index: column_index_i,
                 data_type: column_type_i.to_string(),
-                comment: Some(column_comment_i.to_string()),
+                comment: match column_comment_i {
+                    "" => None,
+                    _ => Some(column_comment_i.to_string()),
+                },
             };
 
             columns_by_relation
