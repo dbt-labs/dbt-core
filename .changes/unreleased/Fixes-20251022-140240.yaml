@@ -1,0 +1,6 @@
+kind: Fixes
+body: Don't return true for exposures being part of graph if they are disabled
+time: 2025-10-22T14:02:40.764424-05:00
+custom:
+  Author: QMalcolm
+  Issue: N/A
