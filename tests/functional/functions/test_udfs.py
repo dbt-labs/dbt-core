@@ -263,3 +263,34 @@ class TestCanUseSourceInUDF:
         assert isinstance(agate_table, agate.Table)
         assert agate_table.column_names == ("summed_numbers",)
         assert agate_table.rows == [(6,)]
+
+
+class TestCanConfigFunctionsFromProjectConfig:
+    @pytest.fixture(scope="class")
+    def functions(self) -> Dict[str, str]:
+        return {
+            "double_it.sql": double_it_sql,
+            "double_it.yml": double_it_yml,
+        }
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "functions": {"+volatility": "stable"},
+        }
+
+    def test_can_config_functions_from_project_config(self, project):
+        manifest = run_dbt(["parse"])
+        assert len(manifest.functions) == 1
+        assert "function.test.double_it" in manifest.functions
+        function_node = manifest.functions["function.test.double_it"]
+        assert function_node.config.volatility == FunctionVolatility.Stable
+
+        # Update with volatility specified in sql
+        write_file(double_it_deterministic_sql, project.project_root, "functions", "double_it.sql")
+        manifest = run_dbt(["parse", "--no-partial-parse"])
+        assert len(manifest.functions) == 1
+        assert "function.test.double_it" in manifest.functions
+        function_node = manifest.functions["function.test.double_it"]
+        # Volatility from sql should take precedence over the project config
+        assert function_node.config.volatility == FunctionVolatility.Deterministic
