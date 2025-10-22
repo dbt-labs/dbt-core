@@ -516,6 +516,7 @@ class ManifestTest(unittest.TestCase):
             set(
                 [
                     "exposures",
+                    "functions",
                     "groups",
                     "nodes",
                     "sources",
@@ -1034,6 +1035,7 @@ class MixedManifestTest(unittest.TestCase):
             set(
                 [
                     "exposures",
+                    "functions",
                     "groups",
                     "metrics",
                     "nodes",

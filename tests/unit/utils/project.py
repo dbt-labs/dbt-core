@@ -60,6 +60,7 @@ def project(selector_config: SelectorConfig) -> Project:
         semantic_models={},
         saved_queries={},
         exposures={},
+        functions={},
         vars=VarProvider({}),
         dbt_version=[VersionSpecifier.from_version_string("0.0.0")],
         packages=PackageConfig([]),
