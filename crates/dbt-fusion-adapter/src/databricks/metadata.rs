@@ -6,7 +6,7 @@ use crate::errors::{AdapterError, AdapterResult, AsyncAdapterResult};
 use crate::metadata::*;
 use crate::metadata::{build_relation_clauses, find_matching_relation};
 use crate::record_batch_utils::get_column_values;
-use crate::sql_types::{TypeOps, make_arrow_field};
+use crate::sql_types::{TypeOps, make_arrow_field_v2};
 use crate::{AdapterTyping, TypedBaseAdapter};
 use arrow_array::{
     Array, BooleanArray, Int32Array, RecordBatch, StringArray, TimestampMicrosecondArray,
@@ -441,7 +441,7 @@ fn build_schema_from_basic_describe_table(
         let type_str = data_type.value(i).to_string();
         let comment = comments.value(i).to_string();
 
-        let field = make_arrow_field(type_ops, name, &type_str, None, Some(comment))?;
+        let field = make_arrow_field_v2(type_ops, name, &type_str, None, Some(comment))?;
         fields.push(field);
     }
 

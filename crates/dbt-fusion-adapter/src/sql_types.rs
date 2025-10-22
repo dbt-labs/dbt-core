@@ -281,7 +281,7 @@ impl SdfSchemaBuilder {
                 );
                 Ok(Arc::new(field))
             }
-            Redshift => {
+            Redshift | Databricks => {
                 let metadata = field.metadata();
                 let current_type = field.data_type();
                 let nullable = field.is_nullable();
@@ -314,7 +314,7 @@ impl SdfSchemaBuilder {
     pub fn build_sdf_schema(self, type_ops: &dyn TypeOps) -> AdapterResult<SdfSchema> {
         use AdapterType::*;
         match self.adapter_type {
-            Bigquery | Redshift => {
+            Bigquery | Redshift | Databricks => {
                 let original_fields = self.original.fields();
                 let mut sdf_fields = Vec::with_capacity(original_fields.len());
                 for field in original_fields {
@@ -330,7 +330,7 @@ impl SdfSchemaBuilder {
                     SdfSchema::from_sdf_arrow_schema(Some(self.original), sdf_arrow_schema);
                 Ok(sdf_schema)
             }
-            Postgres | Snowflake | Databricks | Salesforce => {
+            Postgres | Snowflake | Salesforce => {
                 // NOTE(felipecrv): this is not correct, but it's a temporary fallback
                 // that allows us to call [to_sdf_arrow_schema] from anywhere.
                 //

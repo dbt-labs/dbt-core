@@ -2,7 +2,7 @@ use crate::AdapterResult;
 use crate::databricks::schemas::DatabricksDescribeTableExtended;
 use crate::metadata::*;
 use crate::record_batch_utils::get_column_values;
-use crate::sql_types::{TypeOps, make_arrow_field};
+use crate::sql_types::{TypeOps, make_arrow_field_v2};
 use arrow::array::{RecordBatch, StringArray};
 use arrow_schema::{Field, Schema};
 
@@ -57,7 +57,7 @@ impl MetadataProcessor for DatabricksTableMetadata {
     fn to_arrow_schema(&self, type_ops: &'_ dyn TypeOps) -> AdapterResult<Arc<Schema>> {
         let mut fields: Vec<Field> = Vec::with_capacity(self.columns.len());
         for col_info in &self.columns {
-            let field = make_arrow_field(
+            let field = make_arrow_field_v2(
                 type_ops,
                 col_info.name.clone(),
                 &col_info.type_.sql_type(),

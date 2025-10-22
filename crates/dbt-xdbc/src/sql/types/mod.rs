@@ -4,7 +4,7 @@ use std::fmt;
 use std::num::ParseIntError;
 use std::sync::Arc;
 
-use arrow_schema::{DataType, Field, IntervalUnit, TimeUnit};
+use arrow_schema::{DataType, Field, Fields, IntervalUnit, TimeUnit};
 
 use crate::Backend;
 
@@ -1121,6 +1121,21 @@ impl SqlType {
             (_, DateTime) => unimplemented!("{}", self.to_string(backend)),
 
             (BigQuery, Interval(_)) => DataType::Interval(IntervalUnit::MonthDayNano),
+            (Databricks, Interval(i)) => match i {
+                Some((DateTimeField::Year, _)) | Some((DateTimeField::Month, _)) => {
+                    DataType::Interval(IntervalUnit::YearMonth)
+                }
+
+                Some((DateTimeField::Day, _))
+                | Some((DateTimeField::Hour, _))
+                | Some((DateTimeField::Minute, _))
+                | Some((DateTimeField::Second, _))
+                | Some((DateTimeField::Millisecond, _))
+                | Some((DateTimeField::Microsecond, _))
+                | Some((DateTimeField::Nanosecond, _)) => DataType::Interval(IntervalUnit::DayTime),
+
+                None => DataType::Interval(IntervalUnit::DayTime),
+            },
             (_, Interval(_)) => unimplemented!("{}", self.to_string(backend)),
 
             (_, Json) => unimplemented!("{}", self.to_string(backend)),
@@ -1132,7 +1147,58 @@ impl SqlType {
                 DataType::List(Arc::new(Field::new("item", inner_ty, true)))
             }
             (_, Array(None)) => unimplemented!("{}", self.to_string(backend)),
+            (Databricks, Struct(inner)) => {
+                let fields: Vec<Arc<Field>> = match inner {
+                    Some(struct_fields) => struct_fields
+                        .iter()
+                        .map(|sf| {
+                            Arc::new(Field::new(
+                                sf.name.display(backend).to_string(),
+                                sf.sql_type.pick_best_arrow_type(backend),
+                                sf.nullable,
+                            ))
+                        })
+                        .collect(),
+                    None => vec![],
+                };
+
+                let struct_fields: Fields = fields.into();
+
+                DataType::Struct(struct_fields)
+            }
             (_, Struct(_)) => unimplemented!("{}", self.to_string(backend)),
+            (Databricks, Map(inner)) => {
+                let (key_type, value_type) = match inner {
+                    Some((key, value)) => (key.as_ref(), value.as_ref()),
+                    None => {
+                        // fallback if unknown; default to Utf8
+                        (
+                            &Varchar(None, StringAttrs::default()),
+                            &Varchar(None, StringAttrs::default()),
+                        )
+                    }
+                };
+
+                let key_field = Field::new(
+                    "key",
+                    key_type.pick_best_arrow_type(backend),
+                    false, // keys must be non-nullable in Arrow
+                );
+
+                let value_field = Field::new(
+                    "value",
+                    value_type.pick_best_arrow_type(backend),
+                    true, // values are nullable
+                );
+
+                let entries_struct = Field::new(
+                    "entries",
+                    DataType::Struct(Fields::from(vec![key_field, value_field])),
+                    true,
+                );
+
+                DataType::Map(Arc::new(entries_struct), false)
+            }
             (_, Map(_)) => unimplemented!("{}", self.to_string(backend)),
             (_, Variant) => unimplemented!("{}", self.to_string(backend)),
             (_, Void) => unimplemented!("{}", self.to_string(backend)),
