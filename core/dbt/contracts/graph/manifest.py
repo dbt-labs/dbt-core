@@ -558,7 +558,7 @@ def _packages_to_search(
     elif current_project == node_package:
         return [current_project, None]
     else:
-        return [current_project, node_package, None]
+        return [node_package, current_project, None]
 
 
 def _sort_values(dct):
