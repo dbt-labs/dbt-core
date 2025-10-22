@@ -12,8 +12,18 @@
  * limitations under the License.
  */
 
-grammar Bigquery;
+/* 
+ * This is dbt's Antlr grammar file for Bigquery SQL.
+ *
+ * NOTE: This file is currently released as a public preview *only* -- it is a
+ * read-only mirror of our internal grammar file, and is subject to change.
+ * Please do NOT submit PRs against this file as we are currently unable to
+ * accept them. We are actively working on the necessary infrastructures to 
+ * accept contributions to this file in the future.
+ *
+ */
 
+grammar Bigquery;
 
 @tokenfactory{
 pub type LocalTokenFactory<'input> = antlr_rust::token_factory::ArenaCommonFactory<'input>;
