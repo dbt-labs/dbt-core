@@ -128,7 +128,7 @@ impl BigqueryAuth {
                 ))
             })?;
         // Replace escaped newlines with a single newline
-        keyfile_json.private_key = keyfile_json.private_key.replace("\\\\n", "\\n");
+        keyfile_json.private_key = keyfile_json.private_key.replace("\\n", "\n");
 
         // Turn it into a JSON string again so we can pass it to the ADBC driver
         let keyfile_json_string: String = serde_json::to_value(keyfile_json)
