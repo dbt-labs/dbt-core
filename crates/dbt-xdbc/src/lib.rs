@@ -84,7 +84,7 @@ pub fn str_from_sqlstate(sqlstate: &[c_char; 5]) -> &str {
 
 // XXX: if needed, rollback to 0.17.0+dbt0.0.8 because 0.0.9 is broken on Windows
 pub const SNOWFLAKE_DRIVER_VERSION: &str = "0.18.0+dbt0.0.17";
-pub const BIGQUERY_DRIVER_VERSION: &str = "0.18.0+dbt0.0.18";
+pub const BIGQUERY_DRIVER_VERSION: &str = "0.18.0+dbt0.0.19";
 pub const POSTGRES_DRIVER_VERSION: &str = "0.18.0+dbt0.0.3";
 pub const DATABRICKS_DRIVER_VERSION: &str = "0.18.0+dbt0.0.6";
 pub const REDSHIFT_DRIVER_VERSION: &str = "0.18.0+dbt0.18.2";
