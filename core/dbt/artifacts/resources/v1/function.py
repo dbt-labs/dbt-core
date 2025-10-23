@@ -18,6 +18,8 @@ class FunctionConfig(NodeConfig):
     materialized: str = "function"
     type: FunctionType = FunctionType.Scalar
     volatility: Optional[FunctionVolatility] = None
+    runtime_version: Optional[str] = None
+    entry_point: Optional[str] = None
 
 
 # =============

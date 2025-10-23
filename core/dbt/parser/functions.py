@@ -1,10 +1,10 @@
 from dbt.artifacts.resources.types import NodeType
 from dbt.contracts.graph.nodes import FunctionNode, ManifestNode
-from dbt.parser.base import SimpleSQLParser
+from dbt.parser.base import SimpleParser
 from dbt.parser.search import FileBlock
 
 
-class FunctionParser(SimpleSQLParser[FunctionNode]):
+class FunctionParser(SimpleParser[FileBlock, FunctionNode]):
     def parse_from_dict(self, dct, validate=True) -> FunctionNode:
         if validate:
             FunctionNode.validate(dct)
@@ -25,3 +25,6 @@ class FunctionParser(SimpleSQLParser[FunctionNode]):
             self.manifest.add_function(node)
         else:
             self.manifest.add_disabled(block.file, node)
+
+    def parse_file(self, file_block: FileBlock) -> None:
+        self.parse_node(file_block)
