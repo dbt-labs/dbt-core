@@ -161,6 +161,7 @@ class SourceFile(BaseSourceFile):
     docs: List[str] = field(default_factory=list)
     macros: List[str] = field(default_factory=list)
     env_vars: List[str] = field(default_factory=list)
+    functions: List[str] = field(default_factory=list)
 
     @classmethod
     def big_seed(cls, path: FilePath) -> "SourceFile":
