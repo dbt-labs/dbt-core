@@ -455,7 +455,8 @@ impl ::prost::Name for Onboarding {
         "/v1.public.events.fusion.Onboarding".into()
     }
 }
-#[derive(::serde::Serialize)]
+#[derive(::serde::Serialize, ::serde::Deserialize)]
+#[cfg_attr(any(test, feature = "test-utils"), derive(::fake::Dummy))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
 pub enum OnboardingScreen {
