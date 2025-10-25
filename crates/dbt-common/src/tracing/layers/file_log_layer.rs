@@ -42,16 +42,15 @@ impl FileLogLayer {
 impl TelemetryConsumer for FileLogLayer {
     fn on_span_end(&self, span: &SpanEndInfo, data_provider: &mut DataProvider<'_>) {
         // Print unit test summary messages
-        if let Some(ne) = span.attributes.downcast_ref::<NodeEvaluated>() {
-            if (ne.node_type() == NodeType::Test || ne.node_type() == NodeType::UnitTest)
-                && ne.node_outcome() == NodeOutcome::Success
-                && let Some(NodeOutcomeDetail::NodeTestDetail(t_outcome)) = &ne.node_outcome_detail
-                && let Some(diff_table) = t_outcome.diff_table.as_ref()
-            {
-                let _ = self
-                    .writer
-                    .write(format!("\nFAIL {}\n{diff_table}\n", ne.name).as_str());
-            }
+        if let Some(ne) = span.attributes.downcast_ref::<NodeEvaluated>()
+            && (ne.node_type() == NodeType::Test || ne.node_type() == NodeType::UnitTest)
+            && ne.node_outcome() == NodeOutcome::Success
+            && let Some(NodeOutcomeDetail::NodeTestDetail(t_outcome)) = &ne.node_outcome_detail
+            && let Some(diff_table) = t_outcome.diff_table.as_ref()
+        {
+            let _ = self
+                .writer
+                .write(format!("\nFAIL {}\n{diff_table}\n", ne.name).as_str());
         }
 
         // Invocation end

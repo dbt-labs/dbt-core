@@ -178,20 +178,19 @@ impl TelemetryConsumer for TuiLayer {
         }
 
         // Capture and delay unit test summary messages
-        if let Some(ne) = span.attributes.downcast_ref::<NodeEvaluated>() {
-            if (ne.node_type() == NodeType::Test || ne.node_type() == NodeType::UnitTest)
-                && ne.node_outcome() == NodeOutcome::Success
-                && let Some(NodeOutcomeDetail::NodeTestDetail(t_outcome)) = &ne.node_outcome_detail
-                && let Some(diff_table) = t_outcome.diff_table.as_ref()
-            {
-                // This is a failed test, capture its summary diff table to be printed on stdout later
-                data_provider.with_mut::<DelayedMessages>(|delayed_messages| {
-                    delayed_messages.0.push(DelayedMessage {
-                        on_stderr: false,
-                        message: format!("\nFAIL {}\n{diff_table}\n", ne.name),
-                    });
+        if let Some(ne) = span.attributes.downcast_ref::<NodeEvaluated>()
+            && (ne.node_type() == NodeType::Test || ne.node_type() == NodeType::UnitTest)
+            && ne.node_outcome() == NodeOutcome::Success
+            && let Some(NodeOutcomeDetail::NodeTestDetail(t_outcome)) = &ne.node_outcome_detail
+            && let Some(diff_table) = t_outcome.diff_table.as_ref()
+        {
+            // This is a failed test, capture its summary diff table to be printed on stdout later
+            data_provider.with_mut::<DelayedMessages>(|delayed_messages| {
+                delayed_messages.0.push(DelayedMessage {
+                    on_stderr: false,
+                    message: format!("\nFAIL {}\n{diff_table}\n", ne.name),
                 });
-            }
+            });
         }
 
         if !self.is_interactive {

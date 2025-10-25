@@ -78,10 +78,10 @@ impl<'a> DataProvider<'a> {
     where
         T: Send + Sync + 'static,
     {
-        if let Some(root_span) = self.root_span {
-            if let Some(ext) = root_span.extensions_mut().get_mut::<T>() {
-                f(ext)
-            }
+        if let Some(root_span) = self.root_span
+            && let Some(ext) = root_span.extensions_mut().get_mut::<T>()
+        {
+            f(ext)
         };
     }
 
