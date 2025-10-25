@@ -38,11 +38,11 @@ members = [
   "crates/dbt-test-utils",
   "crates/dbt-sample",
 
-  "crates/dbt-parser-bigquery",
-  "crates/dbt-parser-databricks",
-  "crates/dbt-parser-redshift",
-  "crates/dbt-parser-snowflake",
-  "crates/dbt-parser-trino",
+  "crates/dbt-sql/dbt-parser-bigquery",
+  "crates/dbt-sql/dbt-parser-databricks",
+  "crates/dbt-sql/dbt-parser-redshift",
+  "crates/dbt-sql/dbt-parser-snowflake",
+  "crates/dbt-sql/dbt-parser-trino",
 ]
 
 resolver = "2"
@@ -171,11 +171,11 @@ proto-rust-macros = { path = "crates/proto-rust-macros" }
 vortex-client = { path = "crates/vortex-client" }
 vortex-events = { path = "crates/vortex-events" }
 
-dbt-parser-bigquery = { path = "crates/dbt-parser-bigquery" }
-dbt-parser-databricks = { path = "crates/dbt-parser-databricks" }
-dbt-parser-redshift = { path = "crates/dbt-parser-redshift" }
-dbt-parser-snowflake = { path = "crates/dbt-parser-snowflake" }
-dbt-parser-trino = { path = "crates/dbt-parser-trino" }
+dbt-parser-bigquery = { path = "crates/dbt-sql/dbt-parser-bigquery" }
+dbt-parser-databricks = { path = "crates/dbt-sql/dbt-parser-databricks" }
+dbt-parser-redshift = { path = "crates/dbt-sql/dbt-parser-redshift" }
+dbt-parser-snowflake = { path = "crates/dbt-sql/dbt-parser-snowflake" }
+dbt-parser-trino = { path = "crates/dbt-sql/dbt-parser-trino" }
 
 # jinja dependencies
 minijinja-typecheck-builtins = { path = "crates/minijinja-typecheck-builtins" }
