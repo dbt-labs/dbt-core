@@ -155,6 +155,36 @@
           "$ref": "#/definitions/SpannedStringOrArrayOfStrings"
         },
         {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "sql": {
+                    "type": "string"
+                  },
+                  "priority": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "sql"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "type": "null"
         }
       ]
@@ -163,6 +193,36 @@
       "anyOf": [
         {
           "$ref": "#/definitions/SpannedStringOrArrayOfStrings"
+        },
+        {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "sql": {
+                    "type": "string"
+                  },
+                  "priority": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "sql"
+                ]
+              }
+            }
+          ]
         },
         {
           "type": "null"

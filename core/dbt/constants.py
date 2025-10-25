@@ -26,3 +26,7 @@ CATALOGS_FILE_NAME = "catalogs.yml"
 RUN_RESULTS_FILE_NAME = "run_results.json"
 CATALOG_FILENAME = "catalog.json"
 SOURCE_RESULT_FILE_NAME = "sources.json"
+
+# Hook priority constants
+DEFAULT_HOOK_PRIORITY = 50
+PROJECT_HOOK_PRIORITY = 100

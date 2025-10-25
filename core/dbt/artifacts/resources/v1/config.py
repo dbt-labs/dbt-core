@@ -41,6 +41,7 @@ class Hook(dbtClassMixin):
     sql: str
     transaction: bool = True
     index: Optional[int] = None
+    priority: Optional[int] = None
 
 
 @dataclass

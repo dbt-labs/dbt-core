@@ -486,8 +486,8 @@ class PartialProject(RenderComponents):
         vars_value = VarProvider(vars_dict)
         # There will never be any project_env_vars when it's first created
         project_env_vars: Dict[str, Any] = {}
-        on_run_start: List[str] = value_or(cfg.on_run_start, [])
-        on_run_end: List[str] = value_or(cfg.on_run_end, [])
+        on_run_start: List[Union[str, Dict[str, int]]] = value_or(cfg.on_run_start, [])
+        on_run_end: List[Union[str, Dict[str, int]]] = value_or(cfg.on_run_end, [])
 
         query_comment = _query_comment_from_cfg(cfg.query_comment)
         packages: PackageConfig = package_config_from_data(
@@ -644,8 +644,8 @@ class Project:
     packages_specified_path: str
     quoting: Dict[str, Any]
     models: Dict[str, Any]
-    on_run_start: List[str]
-    on_run_end: List[str]
+    on_run_start: List[Union[str, Dict[str, int]]]
+    on_run_end: List[Union[str, Dict[str, int]]]
     dispatch: List[Dict[str, Any]]
     seeds: Dict[str, Any]
     snapshots: Dict[str, Any]

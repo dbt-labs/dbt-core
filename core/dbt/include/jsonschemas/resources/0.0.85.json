@@ -497,8 +497,16 @@
             "boolean",
             "null"
           ]
+        },
+        "priority": {
+          "type": [
+            "integer",
+            "null"
+          ]
         }
-      }
+      },
+      "additionalProperties": false,
+      "required": ["sql", "transaction"]
     },
     "Hooks": {
       "anyOf": [
