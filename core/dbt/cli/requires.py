@@ -119,8 +119,8 @@ def preflight(func):
         if flags.RECORD_TIMING_INFO:
             ctx.with_resource(profiler(enable=True, outfile=flags.RECORD_TIMING_INFO))
 
-        # Adapter management
-        ctx.with_resource(adapter_management())
+        if not flags.KEEP_CONNECTIONS_ALIVE:
+            ctx.with_resource(adapter_management())
 
         # Validate engine env var restricted name space
         validate_engine_env_vars()
