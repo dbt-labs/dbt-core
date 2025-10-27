@@ -201,19 +201,43 @@ fn test_parser() {
             (line!(), "geoMETRY", Geometry),
             (line!(), "geoGRAPHy", Geography),
             (line!(), "arrAY", Array(None)),
-            (line!(), "arrAY<INTeger>", Array(Some(Box::new(Integer)))),
             (
                 line!(),
-                "arrAY<Array<CHARACTER VARYING>>",
+                if backend == Snowflake {
+                    "arrAY(INTeger)"
+                } else {
+                    "arrAY<INTeger>"
+                },
+                Array(Some(Box::new(Integer))),
+            ),
+            (
+                line!(),
+                if backend == Snowflake {
+                    "arrAY(Array(CHARACTER VARYING))"
+                } else {
+                    "arrAY<Array<CHARACTER VARYING>>"
+                },
                 Array(Some(Box::new(Array(Some(Box::new(SqlType::varchar(
                     None,
                 ))))))),
             ),
             (line!(), "struct", Struct(None)),
-            (line!(), "struct<>", Struct(Some(vec![]))),
             (
                 line!(),
-                "STRUCT<name varchar, age int NOT NULL>",
+                if backend == Snowflake {
+                    "object()"
+                } else {
+                    "struct<>"
+                },
+                Struct(Some(vec![])),
+            ),
+            (
+                line!(),
+                if backend == Snowflake {
+                    "OBJECT(name varchar, age int NOT NULL)"
+                } else {
+                    "STRUCT<name VARchar, age int NOT NULL>"
+                },
                 Struct(Some(vec![
                     StructField::new(Ident::new("name", backend), SqlType::varchar(None), true),
                     StructField::new(Ident::new("age", backend), Integer, false),
@@ -221,7 +245,11 @@ fn test_parser() {
             ),
             (
                 line!(),
-                r#"strUCT<name VARchar, age int NULLABLE>"#,
+                if backend == Snowflake {
+                    r#"objECT(name VARchar, age int NULLABLE)"#
+                } else {
+                    r#"strUCT<name VARchar, age int NULLABLE>"#
+                },
                 Struct(Some(vec![
                     StructField::new(Ident::new("name", backend), SqlType::varchar(None), true),
                     StructField::new(Ident::new("age", backend), Integer, true),
@@ -229,7 +257,11 @@ fn test_parser() {
             ),
             (
                 line!(),
-                "STRUCT<name STRING COLLATE UNICODE_CI NOT NULL COMMENT 'the comment', age int>",
+                if backend == Snowflake {
+                    r#"OBJECT(name VARCHAR COLLATE UNICODE_CI NOT NULL COMMENT 'the comment', age int)"#
+                } else {
+                    "STRUCT<name STRING COLLATE UNICODE_CI NOT NULL COMMENT 'the comment', age int>"
+                },
                 Struct(Some(vec![
                     StructField::new(
                         Ident::new("name", backend),
@@ -247,7 +279,11 @@ fn test_parser() {
             ),
             (
                 line!(),
-                "struct<name varchar, info struct<id int, value varchar>>",
+                if backend == Snowflake {
+                    "object(name varchar, info object(id int, value varchar))"
+                } else {
+                    "struct<name varchar, info struct<id int, value varchar>>"
+                },
                 Struct(Some(vec![
                     StructField::new(Ident::new("name", backend), SqlType::varchar(None), true),
                     StructField::new(
@@ -791,7 +827,7 @@ fn expected_type_rendering_for(backend: Backend) -> Vec<(u32, SqlType, &'static 
             line!(),
             Array(Some(Box::new(Json))),
             "ARRAY<JSON>",
-            "ARRAY<JSON>",
+            "ARRAY(JSON)",
             "JSON[]",
             "ARRAY<JSON>",
             "ARRAY<JSON>",
@@ -804,7 +840,7 @@ fn expected_type_rendering_for(backend: Backend) -> Vec<(u32, SqlType, &'static 
                 true,
             )])),
             "STRUCT<a FLOAT64>",
-            "STRUCT<a FLOAT>",
+            "OBJECT(a FLOAT)",
             "(a REAL)",
             "STRUCT<a: FLOAT>",
             "STRUCT<a FLOAT>",
@@ -816,7 +852,7 @@ fn expected_type_rendering_for(backend: Backend) -> Vec<(u32, SqlType, &'static 
                 StructField::new(Ident::plain("age"), Integer, false),
             ])),
             "STRUCT<name STRING, age INT64 NOT NULL>",
-            "STRUCT<name VARCHAR, age INT NOT NULL>",
+            "OBJECT(name VARCHAR, age INT NOT NULL)",
             "(name VARCHAR, age INT NOT NULL)",
             "STRUCT<name: STRING, age: INT NOT NULL>",
             "STRUCT<name VARCHAR, age INT NOT NULL>",
@@ -851,7 +887,7 @@ fn expected_type_rendering_for(backend: Backend) -> Vec<(u32, SqlType, &'static 
                 ),
             ])),
             "STRUCT<last_completion_time TIMESTAMP, error_time TIMESTAMP, error STRUCT<reason STRING, location STRING, message STRING>>",
-            "STRUCT<last_completion_time TIMESTAMP_NTZ, error_time TIMESTAMP_NTZ, error STRUCT<reason VARCHAR, location VARCHAR, message VARCHAR>>",
+            "OBJECT(last_completion_time TIMESTAMP_NTZ, error_time TIMESTAMP_NTZ, error OBJECT(reason VARCHAR, location VARCHAR, message VARCHAR))",
             "(last_completion_time TIMESTAMP, error_time TIMESTAMP, error (reason VARCHAR, location VARCHAR, message VARCHAR))",
             "STRUCT<last_completion_time: TIMESTAMP_NTZ, error_time: TIMESTAMP_NTZ, error: STRUCT<reason: STRING, location: STRING, message: STRING>>",
             "STRUCT<last_completion_time TIMESTAMP WITHOUT TIME ZONE, error_time TIMESTAMP WITHOUT TIME ZONE, error STRUCT<reason VARCHAR, location VARCHAR, message VARCHAR>>",
@@ -863,7 +899,7 @@ fn expected_type_rendering_for(backend: Backend) -> Vec<(u32, SqlType, &'static 
                 StructField::new(Ident::plain("value"), SqlType::varchar(None), true),
             ]))))),
             "ARRAY<STRUCT<date DATE, value STRING>>",
-            "ARRAY<STRUCT<date DATE, value VARCHAR>>",
+            "ARRAY(OBJECT(date DATE, value VARCHAR))",
             "(date DATE, value VARCHAR)[]",
             "ARRAY<STRUCT<date: DATE, value: STRING>>",
             "ARRAY<STRUCT<date DATE, value VARCHAR>>",
@@ -879,7 +915,7 @@ fn expected_type_rendering_for(backend: Backend) -> Vec<(u32, SqlType, &'static 
                 true,
             )])),
             "STRUCT<elements ARRAY<STRUCT<date DATE, value STRING>>>",
-            "STRUCT<elements ARRAY<STRUCT<date DATE, value VARCHAR>>>",
+            "OBJECT(elements ARRAY(OBJECT(date DATE, value VARCHAR)))",
             "(elements (date DATE, value VARCHAR)[])",
             "STRUCT<elements: ARRAY<STRUCT<date: DATE, value: STRING>>>",
             "STRUCT<elements ARRAY<STRUCT<date DATE, value VARCHAR>>>",
@@ -953,7 +989,7 @@ fn test_roundtrip_struct_with_quoted_field() {
     };
     let table = vec![
         (line!(), BigQuery, r#"STRUCT<name VARCHAR, `age` INT>"#),
-        (line!(), Snowflake, r#"STRUCT<name VARCHAR, "age" INT>"#),
+        (line!(), Snowflake, r#"OBJECT(name VARCHAR, "age" INT)"#),
         (line!(), Postgres, r#"STRUCT<name VARCHAR, "age" INT>"#),
         (line!(), Databricks, r#"STRUCT<name VARCHAR, `age` INT>"#),
     ];
@@ -979,7 +1015,7 @@ fn test_timestamp_on_databricks() {
 /// a specific function call compared to `test_string_roundtrip_for_all_types_on_all_backends`.
 #[test]
 fn test_struct_on_snowflake() {
-    let s = r#"STRUCT<name VARCHAR, "age" INT>"#;
+    let s = r#"OBJECT(name VARCHAR, "age" INT)"#;
     let t = Struct(Some(vec![
         StructField::new(Ident::new("name", Snowflake), SqlType::varchar(None), true),
         StructField::new(
@@ -989,4 +1025,36 @@ fn test_struct_on_snowflake() {
         ),
     ]));
     assert_roundtrip(line!(), &t, s, Snowflake);
+}
+
+#[test]
+fn test_struct_on_databricks() {
+    let s = "STRUCT<`name`: STRING, `age`: INT, `active`: BOOLEAN>";
+    let t = Struct(Some(vec![
+        StructField::new(
+            Ident::unquoted(canonical_quote(Databricks), "name"),
+            SqlType::varchar(None),
+            true,
+        ),
+        StructField::new(
+            Ident::unquoted(canonical_quote(Databricks), "age"),
+            Integer,
+            true,
+        ),
+        StructField::new(
+            Ident::unquoted(canonical_quote(Databricks), "active"),
+            Boolean,
+            true,
+        ),
+    ]));
+    assert_roundtrip(line!(), &t, s, Databricks);
+
+    let dt = t.pick_best_arrow_type(Databricks);
+    assert!(matches!(dt, DataType::Struct(_)));
+    if let DataType::Struct(fields) = dt {
+        assert_eq!(fields.len(), 3);
+        assert_eq!(fields[0].name(), "name");
+        assert_eq!(fields[1].name(), "age");
+        assert_eq!(fields[2].name(), "active");
+    }
 }

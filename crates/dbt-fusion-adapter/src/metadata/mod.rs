@@ -31,7 +31,7 @@ pub mod snowflake; // XXX: temporarily pub before the refactor is complete
 pub use metadata_adapter::*;
 
 pub const ARROW_FIELD_COMMENT_METADATA_KEY: &str = "comment";
-// TODO(jason): This needs to be updated to match the driver convention once available
+// XXX: use original_type_string() instead of querying for this constant
 pub const ARROW_FIELD_ORIGINAL_TYPE_METADATA_KEY: &str = "type_text";
 
 pub type WhereClausesByDb = BTreeMap<String, Vec<String>>;

@@ -9,7 +9,7 @@ use crate::metadata::snowflake::ARROW_FIELD_SNOWFLAKE_FIELD_WIDTH_METADATA_KEY;
 use crate::metadata::*;
 use arrow_schema::{DataType, Field, Schema, TimeUnit};
 use dbt_common::adapter::AdapterType;
-use dbt_xdbc::sql::types::SqlType;
+use dbt_xdbc::sql::types::{SqlType, metadata_sql_type_key};
 
 // TODO: Add keys here as necessary
 pub const REDSHIFT_METADATA_SQL_TYPE_KEY: &str = "Type";
@@ -204,7 +204,7 @@ pub fn make_arrow_field_v2(
 
     let mut metadata = HashMap::new();
     metadata.insert(
-        ARROW_FIELD_ORIGINAL_TYPE_METADATA_KEY.to_string(),
+        metadata_sql_type_key(backend).to_string(),
         sql_type_str.to_string(),
     );
     if let Some(comment) = comment {

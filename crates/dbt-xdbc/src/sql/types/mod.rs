@@ -199,10 +199,9 @@ pub fn default_time_unit(backend: Backend) -> TimeUnit {
     use Backend::*;
     use TimeUnit::*;
     match backend {
-        Postgres => todo!("Postgres default time unit"),
-        Salesforce => todo!("Salesforce default time unit"),
         Snowflake | Databricks | DatabricksODBC => Nanosecond,
         BigQuery | Redshift | RedshiftODBC => Microsecond,
+        Postgres | Salesforce => Microsecond,
         Generic { .. } => Microsecond, // a reasonable default
     }
 }
@@ -365,7 +364,7 @@ impl SqlType {
     /// Arrow field metadata. If the SQL type is not present, it will try
     /// to come up with a best-effort conversion from the Arrow DataType.
     pub fn from_field(backend: Backend, field: &Field) -> Result<(Self, bool), String> {
-        let type_string = type_string_from_field(backend, field);
+        let type_string = original_type_string(backend, field);
         match type_string {
             Some(type_str) => {
                 let (sql_type, nullable) = Self::parse(backend, type_str)?;
@@ -386,7 +385,10 @@ impl SqlType {
     pub fn to_field(&self, backend: Backend, name: String, nullable: bool) -> Field {
         let data_type = self.pick_best_arrow_type(backend);
         let mut metadata = HashMap::new();
-        metadata.insert(metadata_key(backend).to_string(), self.to_string(backend));
+        metadata.insert(
+            metadata_sql_type_key(backend).to_string(),
+            self.to_string(backend),
+        );
         Field::new(name, data_type, nullable).with_metadata(metadata)
     }
 
@@ -506,7 +508,7 @@ impl SqlType {
             },
             (Postgres | Redshift | RedshiftODBC, Float(_)) => write!(out, "REAL"),
             (Postgres | Redshift | RedshiftODBC, Clob) => write!(out, "TEXT"),
-            (Postgres | Redshift | RedshiftODBC, Array(Some(inner))) => {
+            (Postgres | Redshift | RedshiftODBC | Salesforce, Array(Some(inner))) => {
                 inner.write(backend, out)?;
                 write!(out, "[]")
             }
@@ -648,17 +650,26 @@ impl SqlType {
             (_, Geometry) => write!(out, "GEOMETRY"),
             (_, Geography) => write!(out, "GEOGRAPHY"),
             (_, Array(None)) => write!(out, "ARRAY"),
-            (_, Array(Some(inner))) => {
-                write!(out, "ARRAY<")?;
+            (backend, Array(Some(inner))) => {
+                match backend {
+                    Snowflake => write!(out, "ARRAY(")?,
+                    _ => write!(out, "ARRAY<")?,
+                }
                 inner.write(backend, out)?;
-                write!(out, ">")
+                match backend {
+                    Snowflake => write!(out, ")"),
+                    _ => write!(out, ">"),
+                }
             }
             (_, Struct(None)) => write!(out, "STRUCT"),
             (_, Struct(Some(fields))) => {
-                if matches!(backend, Postgres | Redshift | RedshiftODBC) {
-                    write!(out, "(")?;
-                } else {
-                    write!(out, "STRUCT<")?;
+                match backend {
+                    Snowflake => write!(out, "OBJECT(")?,
+                    BigQuery | Databricks | DatabricksODBC => write!(out, "STRUCT<")?,
+                    Postgres | Salesforce => write!(out, "(")?,
+                    // Redshift doesn't support object/struct types
+                    Redshift | RedshiftODBC => write!(out, "(")?,
+                    Generic { .. } => write!(out, "STRUCT<")?,
                 }
                 for (i, field) in fields.iter().enumerate() {
                     let StructField {
@@ -690,10 +701,12 @@ impl SqlType {
                         write!(out, " COMMENT {tok}")?;
                     }
                 }
-                if matches!(backend, Postgres | Redshift | RedshiftODBC) {
-                    write!(out, ")")
-                } else {
-                    write!(out, ">")
+                match backend {
+                    Snowflake => write!(out, ")"),
+                    BigQuery | Databricks | DatabricksODBC => write!(out, ">"),
+                    Postgres | Salesforce => write!(out, ")"),
+                    Redshift | RedshiftODBC => write!(out, ")"),
+                    Generic { .. } => write!(out, ">"),
                 }
             }
             (_, Map(None)) => write!(out, "MAP"),
@@ -977,6 +990,23 @@ impl SqlType {
         };
         let arrow_timestamp_with_local_tz =
             |precision: Option<u8>| arrow_timestamp(precision, Some("UTC".into()));
+        // TODO: use an extension type for `TIMESTAMP WITH TIME ZONE` becaues SQL
+        // timestamps with time zone can have one offset per row, while Arrow's
+        // `Timestamp(_, Some(tz))` assumes a single time zone for the whole column.
+        let arrow_timestamp_tz = |precision: Option<u8>| {
+            let time_unit = precision
+                .map(suitable_time_unit)
+                .unwrap_or_else(|| default_time_unit(backend));
+            let fields = Fields::from(vec![
+                Field::new(
+                    "timestamp",
+                    DataType::Timestamp(time_unit, Some("UTC".into())),
+                    false,
+                ),
+                Field::new("offset_minutes", DataType::Int16, false),
+            ]);
+            DataType::Struct(fields)
+        };
 
         let data_type: DataType = match (backend, self) {
             (_, Boolean) => DataType::Boolean,
@@ -998,6 +1028,20 @@ impl SqlType {
             // BigQuery's DATETIME has microsecond precision
             // https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#datetime_type
             (BigQuery, DateTime) => arrow_timestamp(Some(6), None),
+
+            // BigQuery's TIME always has microsecond precision and no time zone
+            // https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#time_type
+            (
+                BigQuery,
+                Time {
+                    precision: _,
+                    time_zone_spec: _,
+                },
+            ) => DataType::Time64(TimeUnit::Microsecond),
+
+            // BigQuery floats are 64-bit
+            // https://cloud.google.com/bigquery/docs/reference/standard-sql/data-types#floating_point_types
+            (BigQuery, Real | Float(_) | Double) => DataType::Float64,
             // }}}
 
             // Databricks {{{
@@ -1102,10 +1146,7 @@ impl SqlType {
             ) => {
                 match (backend, time_zone_spec) {
                     (_, Local) => arrow_timestamp_with_local_tz(*precision),
-                    // TODO: use an extension type for `TIMESTAMP WITH TIME ZONE` becaues SQL
-                    // timestamps with time zone can have one offset per row, while Arrow's
-                    // `Timestamp(_, Some(tz))` assumes a single time zone for the whole column.
-                    (_, With) => arrow_timestamp(*precision, None),
+                    (_, With) => arrow_timestamp_tz(*precision),
 
                     // Databricks TIMESTAMP and TIMESTAMP_LTZ are both local-tz timestamps
                     (Databricks, Without | Unspecified) => {
@@ -1118,88 +1159,202 @@ impl SqlType {
                     (_, Without | Unspecified) => arrow_timestamp(*precision, None),
                 }
             }
-            (_, DateTime) => unimplemented!("{}", self.to_string(backend)),
+            // A DATETIME is a timestamp without time zone information
+            (backend, DateTime) => DataType::Timestamp(default_time_unit(backend), None),
 
-            (BigQuery, Interval(_)) => DataType::Interval(IntervalUnit::MonthDayNano),
-            (Databricks, Interval(i)) => match i {
-                Some((DateTimeField::Year, _)) | Some((DateTimeField::Month, _)) => {
-                    DataType::Interval(IntervalUnit::YearMonth)
-                }
+            (backend, Interval(fields)) => {
+                use DateTimeField::*;
+                use IntervalUnit::*;
+                let interval_unit = match backend {
+                    Snowflake => MonthDayNano, // XXX: intervals types are not supported on Snowflake, only value literals
+                    Databricks | DatabricksODBC | Redshift | RedshiftODBC => {
+                        // ## Databricks
+                        //
+                        //     INTERVAL { yearMonthIntervalQualifier | dayTimeIntervalQualifier }
+                        //
+                        // ## Redshift
+                        //
+                        //       INTERVAL year_to_month_qualifier
+                        //     | INTERVAL day_to_second_qualifier [ (fractional_precision) ]
+                        //
+                        //  The maximum value of `fractional_precision` is 6 and it only appears
+                        //  after SECOND in day_to_second_qualifier. This parser turns `SECOND(3)`
+                        //  into `DateTimeField::Millisecond` simplifying the processing below.
+                        //
+                        // https://docs.databricks.com/aws/en/sql/language-manual/data-types/interval-type
+                        // https://docs.aws.amazon.com/redshift/latest/dg/r_interval_data_types.html
+                        fields
+                            .map(|range| match range {
+                                // yearMonthIntervalQualifier: { YEAR [TO MONTH] | MONTH }
+                                //
+                                // YEAR
+                                // MONTH
+                                // YEAR TO MONTH
+                                (Year, None) | (Year, Some(Month)) | (Month, None) => YearMonth,
 
-                Some((DateTimeField::Day, _))
-                | Some((DateTimeField::Hour, _))
-                | Some((DateTimeField::Minute, _))
-                | Some((DateTimeField::Second, _))
-                | Some((DateTimeField::Millisecond, _))
-                | Some((DateTimeField::Microsecond, _))
-                | Some((DateTimeField::Nanosecond, _)) => DataType::Interval(IntervalUnit::DayTime),
+                                // ## Databricks
+                                //
+                                //     dayTimeIntervalQualifier:
+                                //       { DAY    [TO { HOUR | MINUTE | SECOND } ] |
+                                //         HOUR   [TO {        MINUTE | SECOND } ] |
+                                //         MINUTE [TO                   SECOND] |
+                                //         SECOND }
+                                //
+                                // ## Redshift (`INTERVAL day_to_second_qualifier [ (fractional_precision) ]`)
+                                //
+                                //       DAY
+                                //     | HOUR
+                                //     | MINUTE
+                                //     | SECOND [ (fractional_precision) ]
+                                //     | DAY TO HOUR
+                                //     | DAY TO MINUTE
+                                //     | DAY TO SECOND [ (fractional_precision) ]
+                                //     | HOUR TO MINUTE
+                                //     | HOUR TO SECOND [ (fractional_precision) ]
+                                //     | MINUTE TO SECOND [ (fractional_precision) ]
+                                (Day, None | Some(Hour | Minute | Second))
+                                | (Hour, None | Some(Minute | Second))
+                                | (Minute, None | Some(Second))
+                                | (Second, None) => DayTime,
+                                // -- Redshift-specific
+                                (Day | Hour | Minute | Second, Some(Millisecond)) => DayTime,
+                                (Day | Hour | Minute | Second, Some(Microsecond)) => MonthDayNano,
 
-                None => DataType::Interval(IntervalUnit::DayTime),
-            },
-            (_, Interval(_)) => unimplemented!("{}", self.to_string(backend)),
+                                // not supported directly, but we map it in some reasonable way
+                                (Year, Some(Year)) | (Month, Some(Month)) => {
+                                    YearMonth
+                                }
+                                (Day, Some(Day))
+                                | (Hour, Some(Hour))
+                                | (Minute, Some(Minute))
+                                | (Second, Some(Second))
+                                | (Millisecond, None | Some(Millisecond)) => DayTime,
+                                // -- anything more precise than millis, requires MonthDayNano
+                                (Microsecond, _)
+                                | (Nanosecond, _)
+                                | (_, Some(Microsecond))
+                                | (_, Some(Nanosecond))
+                                // -- anything outside of Year-Month or Day-Time ranges
+                                | (
+                                    Year | Month,
+                                    Some(Day | Hour | Minute | Second | Millisecond),
+                                )
+                                // -- inverted patterns (here so we can rely on exhaustiveness checking)
+                                | (
+                                    Month | Day | Hour | Minute | Second | Millisecond,
+                                    Some(Year),
+                                )
+                                | (Day | Hour | Minute | Second | Millisecond, Some(Month))
+                                | (Hour | Minute | Second | Millisecond, Some(Day))
+                                | (Minute | Second | Millisecond, Some(Hour))
+                                | (Second | Millisecond, Some(Minute))
+                                | (Millisecond, Some(Second)) => MonthDayNano,
+                            })
+                            .unwrap_or(
+                                // INTERVAL in Databricks must have fields specified, but if not,
+                                // we pick `MonthDayNano` as a reasonable default that can represent
+                                // all possible values.
+                                MonthDayNano,
+                            )
+                    }
+                    BigQuery | Postgres => MonthDayNano, // MonthDayNano is exactly what BQ and PG use internally
+                    Salesforce => MonthDayNano,          // Salesforce seems to follow PostgreSQL
+                    Generic { .. } => MonthDayNano,      // Reasonable default
+                };
+                DataType::Interval(interval_unit)
+            }
 
-            (_, Json) => unimplemented!("{}", self.to_string(backend)),
+            (_, Json) => DataType::Utf8,
             (_, Jsonb) => unimplemented!("{}", self.to_string(backend)),
             (_, Geometry) => unimplemented!("{}", self.to_string(backend)),
-            (_, Geography) => unimplemented!("{}", self.to_string(backend)),
-            (_, Array(Some(sql_type))) => {
-                let inner_ty = sql_type.pick_best_arrow_type(backend);
-                DataType::List(Arc::new(Field::new("item", inner_ty, true)))
-            }
-            (_, Array(None)) => unimplemented!("{}", self.to_string(backend)),
-            (Databricks, Struct(inner)) => {
-                let fields: Vec<Arc<Field>> = match inner {
-                    Some(struct_fields) => struct_fields
-                        .iter()
-                        .map(|sf| {
-                            Arc::new(Field::new(
-                                sf.name.display(backend).to_string(),
-                                sf.sql_type.pick_best_arrow_type(backend),
-                                sf.nullable,
-                            ))
-                        })
-                        .collect(),
-                    None => vec![],
+            (_, Geography) => DataType::Utf8,
+            (_, Array(Some(inner_sql_type))) => {
+                let inner_sql_type_string = inner_sql_type.to_string(backend);
+                let inner_ty = inner_sql_type.pick_best_arrow_type(backend);
+                let inner_metadata = {
+                    let mut metadata = HashMap::new();
+                    metadata.insert(
+                        metadata_sql_type_key(backend).to_string(),
+                        inner_sql_type_string,
+                    );
+                    metadata
                 };
-
-                let struct_fields: Fields = fields.into();
-
-                DataType::Struct(struct_fields)
+                let inner_field = Field::new("item", inner_ty, true).with_metadata(inner_metadata);
+                DataType::List(Arc::new(inner_field))
             }
-            (_, Struct(_)) => unimplemented!("{}", self.to_string(backend)),
-            (Databricks, Map(inner)) => {
-                let (key_type, value_type) = match inner {
-                    Some((key, value)) => (key.as_ref(), value.as_ref()),
-                    None => {
-                        // fallback if unknown; default to Utf8
-                        (
-                            &Varchar(None, StringAttrs::default()),
-                            &Varchar(None, StringAttrs::default()),
-                        )
+            (_, Array(None)) => DataType::List(Arc::new(Field::new("item", DataType::Utf8, true))),
+            (_, Struct(fields)) => {
+                let arrow_fields = match fields {
+                    Some(struct_fields) => {
+                        let arrow_fields_vec = struct_fields
+                            .iter()
+                            .map(
+                                |StructField {
+                                     name,
+                                     sql_type,
+                                     nullable,
+                                     comment_tok,
+                                 }| {
+                                    let inner_ty = sql_type.pick_best_arrow_type(backend);
+
+                                    // XXX: can't preserve the original quotes here because an
+                                    // Arrow `Field` is meant to keep a name w/o quotes.
+                                    //
+                                    // TODO(felipecrv): figure out how to preserve quoting status of
+                                    // identifiers through Arrow types (e.g. using metadata)
+                                    //
+                                    // `name.display(backend)` can't be used because it might
+                                    // render quotes which are not desired in Arrow field names.
+                                    let name = name.to_string_lossy();
+                                    // render the SQL type according to the backend-specific syntax
+                                    let sql_type_string = sql_type.to_string(backend);
+
+                                    let metadata = {
+                                        let mut metadata = HashMap::new();
+                                        metadata.insert(
+                                            metadata_sql_type_key(backend).to_string(),
+                                            sql_type_string,
+                                        );
+                                        if let Some(tok) = comment_tok {
+                                            metadata.insert("comment".to_string(), tok.clone());
+                                        }
+                                        metadata
+                                    };
+                                    Field::new(name, inner_ty, *nullable).with_metadata(metadata)
+                                },
+                            )
+                            .collect::<Vec<_>>();
+                        Fields::from(arrow_fields_vec)
                     }
+                    None => Fields::empty(),
                 };
-
-                let key_field = Field::new(
-                    "key",
-                    key_type.pick_best_arrow_type(backend),
-                    false, // keys must be non-nullable in Arrow
-                );
-
-                let value_field = Field::new(
-                    "value",
-                    value_type.pick_best_arrow_type(backend),
-                    true, // values are nullable
-                );
-
-                let entries_struct = Field::new(
-                    "entries",
-                    DataType::Struct(Fields::from(vec![key_field, value_field])),
-                    true,
-                );
-
-                DataType::Map(Arc::new(entries_struct), false)
+                DataType::Struct(arrow_fields)
             }
-            (_, Map(_)) => unimplemented!("{}", self.to_string(backend)),
+            (backend, Map(inner)) => {
+                let fallback = Varchar(None, Default::default());
+                let (key_type, value_type) = inner
+                    .as_ref()
+                    .map(|(k, v)| (k.as_ref(), v.as_ref()))
+                    .unwrap_or_else(|| (&fallback, &fallback));
+                let entries_struct = Struct(Some(vec![
+                    StructField::new(
+                        Ident::Plain("key".to_string()),
+                        key_type.clone(),
+                        false, // keys must be non-nullable in Arrow
+                    ),
+                    StructField::new(
+                        Ident::Plain("value".to_string()),
+                        value_type.clone(),
+                        true, // values are nullable
+                    ),
+                ]));
+                let entries = Field::new(
+                    "entries",
+                    entries_struct.pick_best_arrow_type(backend),
+                    false,
+                );
+                DataType::Map(Arc::new(entries), false)
+            }
             (_, Variant) => unimplemented!("{}", self.to_string(backend)),
             (_, Void) => unimplemented!("{}", self.to_string(backend)),
             (_, Other(_)) => unimplemented!("{}", self.to_string(backend)),
@@ -1216,12 +1371,12 @@ impl SqlType {
 // The first one is the one we use when writing the Arrow schema, but when
 // reading we check all of them in order to be compatible with existing
 // schemas that might have been written using different metadata keys.
-const POSTGRES_KEYS: [&str; 2] = ["POSTGRES:type", "type"];
-const SNOWFLAKE_KEYS: [&str; 2] = ["SNOWFLAKE:type", "type"];
-const BIGQUERY_KEYS: [&str; 2] = ["BIGQUERY:type", "type"];
-const DATABRICKS_KEYS: [&str; 3] = ["DBX:type", "type_text", "type"];
-const REDSHIFT_KEYS: [&str; 2] = ["REDSHIFT:type", "type"];
-const GENERIC_KEYS: [&str; 2] = ["SQL:type", "type"];
+const POSTGRES_KEYS: [&str; 2] = ["POSTGRES:type", "type_text"];
+const SNOWFLAKE_KEYS: [&str; 2] = ["SNOWFLAKE:type", "type_text"];
+const BIGQUERY_KEYS: [&str; 4] = ["BIGQUERY:type", "type_text", "Type", "type"];
+const DATABRICKS_KEYS: [&str; 2] = ["DBX:type", "type_text"];
+const REDSHIFT_KEYS: [&str; 2] = ["REDSHIFT:type", "type_text"];
+const GENERIC_KEYS: [&str; 2] = ["SQL:type", "type_text"];
 
 fn metadata_type_candidate_keys(backend: Backend) -> &'static [&'static str] {
     match backend {
@@ -1235,12 +1390,12 @@ fn metadata_type_candidate_keys(backend: Backend) -> &'static [&'static str] {
     }
 }
 
-fn metadata_key(backend: Backend) -> &'static str {
+pub fn metadata_sql_type_key(backend: Backend) -> &'static str {
     metadata_type_candidate_keys(backend)[0]
 }
 
 /// Get the type string metadata from an Arrow `Field` for a given backend.
-fn type_string_from_field(backend: Backend, field: &Field) -> Option<&String> {
+pub fn original_type_string(backend: Backend, field: &Field) -> Option<&String> {
     metadata_type_candidate_keys(backend)
         .iter()
         .find_map(|&k| field.metadata().get(k))
@@ -1947,16 +2102,28 @@ impl<'source> Parser<'source> {
                 } else if eqi(w, "GEOGRAPHY") {
                     SqlType::Geography
                 } else if eqi(w, "ARRAY") {
-                    if self.match_(Token::LAngle) {
+                    let (left, right) = match backend {
+                        Snowflake => (Token::LParen, Token::RParen),
+                        _ => (Token::LAngle, Token::RAngle),
+                    };
+                    if self.match_(left) {
                         let inner_type = self.parse_unconstrained_type(backend)?;
-                        self.expect(Token::RAngle)?;
+                        self.expect(right)?;
                         SqlType::Array(Some(Box::new(inner_type)))
                     } else {
                         SqlType::Array(None)
                     }
-                } else if eqi(w, "STRUCT") {
-                    let inner_fields = if self.match_(Token::LAngle) {
-                        let fields = self.struct_fields(backend, Token::RAngle)?;
+                } else if eqi(w, "RECORD") {
+                    // In some scenarios, we get "RECORD" as a type from BigQuery.
+                    // That just means a generic struct.
+                    SqlType::Struct(None)
+                } else if eqi(w, "OBJECT") || eqi(w, "STRUCT") {
+                    let (left, right) = match backend {
+                        Snowflake => (Token::LParen, Token::RParen),
+                        _ => (Token::LAngle, Token::RAngle),
+                    };
+                    let inner_fields = if self.match_(left) {
+                        let fields = self.struct_fields(backend, right)?;
                         Some(fields)
                     } else {
                         None

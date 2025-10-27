@@ -61,6 +61,19 @@ impl Ident {
     pub fn display(&self, backend: Backend) -> IdentDisplay<'_> {
         IdentDisplay(self, backend)
     }
+
+    /// Converts the identifier to a string losing any quoting information.
+    ///
+    /// This is bad because quoting governs how an identifier is interpreted
+    /// regarding case-sensitivity and allowed characters, so you should worry
+    /// every time you use this method. [Ident::display] will render the identifier
+    /// with quotes if necessary according to the backend's dialect rules.
+    pub(crate) fn to_string_lossy(&self) -> &String {
+        match self {
+            Ident::Unquoted(_, s) => s,
+            Ident::Plain(s) => s,
+        }
+    }
 }
 
 pub struct IdentDisplay<'a>(&'a Ident, Backend);

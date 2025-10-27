@@ -6,6 +6,8 @@ use crate::metadata;
 use crate::sql_types::{self, TypeOps};
 use arrow_schema::{DataType, FieldRef};
 use dbt_common::adapter::AdapterType;
+use dbt_xdbc::Backend;
+use dbt_xdbc::sql::types::original_type_string;
 use regex::Regex;
 
 pub struct ColumnBuilder {
@@ -234,10 +236,7 @@ impl ColumnBuilder {
     fn build_databricks(field: &FieldRef, type_ops: &dyn TypeOps) -> StdColumn {
         let name = field.name().to_string();
         let type_text = {
-            // TODO(jason): This needs to be updated to match the driver convention once available
-            let type_text = field
-                .metadata()
-                .get(metadata::ARROW_FIELD_ORIGINAL_TYPE_METADATA_KEY);
+            let type_text = original_type_string(Backend::Databricks, field);
             if let Some(type_text) = type_text {
                 type_text.to_owned()
             } else {
