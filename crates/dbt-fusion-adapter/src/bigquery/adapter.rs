@@ -426,7 +426,8 @@ impl TypedBaseAdapter for BigqueryAdapter {
 
         // The heavy lift is delegated to the driver via googleapi Table.update
         // since ALTER TABLE ... ALTER COLUMNS doesn't support updating a view
-        let options = vec![
+        let mut options = self.get_adbc_execute_options(state);
+        options.extend(vec![
             (
                 QUERY_DESTINATION_TABLE.to_string(),
                 OptionValue::String(format!("{database}.{schema}.{table}")),
@@ -438,7 +439,7 @@ impl TypedBaseAdapter for BigqueryAdapter {
                         .expect("Failed to serialize column_to_description"),
                 ),
             ),
-        ];
+        ]);
 
         let ctx = query_ctx_from_state(state)?;
         let sql = "none";
@@ -615,17 +616,13 @@ impl TypedBaseAdapter for BigqueryAdapter {
 
         let ctx = query_ctx_from_state(state)?;
         let sql = "none"; // empty sql that won't really be executed
-        self.engine.execute_with_options(
-            Some(state),
-            &ctx,
-            conn,
-            sql,
-            vec![(
-                UPDATE_DATASET_AUTHORIZE_VIEW_TO_DATASETS.to_string(),
-                OptionValue::String(serde_json::to_string(&payload)?),
-            )],
-            false,
-        )?;
+        let mut options = self.get_adbc_execute_options(state);
+        options.push((
+            UPDATE_DATASET_AUTHORIZE_VIEW_TO_DATASETS.to_string(),
+            OptionValue::String(serde_json::to_string(&payload)?),
+        ));
+        self.engine
+            .execute_with_options(Some(state), &ctx, conn, sql, options, false)?;
         Ok(none_value())
     }
 

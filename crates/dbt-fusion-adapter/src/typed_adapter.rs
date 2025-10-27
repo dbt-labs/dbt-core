@@ -27,6 +27,7 @@ use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
 use dbt_schemas::schemas::relations::relation_configs::BaseRelationConfig;
 use dbt_schemas::schemas::{CommonAttributes, InternalDbtNodeAttributes};
+use dbt_xdbc::bigquery::QUERY_LINK_FAILED_JOB;
 use dbt_xdbc::salesforce::DATA_TRANSFORM_RUN_TIMEOUT;
 use dbt_xdbc::{Connection, QueryCtx};
 use indexmap::IndexMap;
@@ -1103,7 +1104,13 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
 
     /// Get the default ADBC statement options
     fn get_adbc_execute_options(&self, _state: &State) -> ExecuteOptions {
-        Vec::new()
+        match self.adapter_type() {
+            AdapterType::Bigquery => vec![(
+                QUERY_LINK_FAILED_JOB.to_string(),
+                OptionValue::String("true".to_string()),
+            )],
+            _ => Vec::new(),
+        }
     }
 }
 
