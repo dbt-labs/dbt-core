@@ -19,7 +19,7 @@ from dbt.deprecations import (
 )
 from dbt.events.types import GenericJSONSchemaValidationDeprecation
 from dbt.flags import set_from_args
-from dbt.jsonschemas import project_schema
+from dbt.jsonschemas.jsonschemas import project_schema
 from dbt.node_types import NodeType
 from dbt.tests.util import safe_set_invocation_context
 from dbt_common.events.event_manager_client import get_event_manager
@@ -624,7 +624,7 @@ class TestDeprecations:
 
     @mock.patch.dict(os.environ, {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": "True"})
     def test_jsonschema_validate(self) -> None:
-        from dbt.jsonschemas import jsonschema_validate
+        from dbt.jsonschemas.jsonschemas import jsonschema_validate
 
         project_dict: Dict[str, Any] = {}
 

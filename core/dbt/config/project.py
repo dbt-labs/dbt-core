@@ -206,7 +206,7 @@ def load_raw_project(project_root: str, validate: bool = False) -> Dict[str, Any
     project_dict = _load_yaml(project_yaml_filepath, validate=validate)
 
     if validate:
-        from dbt.jsonschemas import jsonschema_validate, project_schema
+        from dbt.jsonschemas.jsonschemas import jsonschema_validate, project_schema
 
         jsonschema_validate(
             schema=project_schema(), json=project_dict, file_path=project_yaml_filepath
