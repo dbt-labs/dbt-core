@@ -1,0 +1,5 @@
+kind: Features
+body: Add Openlineage to dbt-core
+time: 2025-06-10T11:30:00+02:00
+custom:
+  Author: MassyB

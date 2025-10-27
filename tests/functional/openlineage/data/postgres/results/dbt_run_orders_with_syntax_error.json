@@ -1,0 +1,513 @@
+[
+  {
+    "eventTime": "{{ .* }}",
+    "producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+    "schemaURL": "https://openlineage.io/spec/{{ .* }}/OpenLineage.json#/$defs/RunEvent",
+    "run": {
+      "runId": "{{ .* }}",
+      "facets": {
+        "dbt_version": {
+          "_producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL": "https://github.com/OpenLineage/OpenLineage/tree/main/integration/common/openlineage/schema/dbt-version-run-facet.json",
+          "version": "{{ .* }}"
+        }
+      }
+    },
+    "job": {
+      "namespace": "dbt",
+      "name": "dbt-run--project=jaffle_shop--profile=test--select=orders_with_syntax_error",
+      "facets": {
+        "jobType": {
+          "_producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+          "_schemaURL": "https://openlineage.io/spec/facets/{{ .* }}/JobTypeJobFacet.json#/$defs/JobTypeJobFacet",
+          "_deleted": null,
+          "processingType": "BATCH",
+          "integration": "DBT",
+          "jobType": "JOB"
+        }
+      }
+    },
+    "eventType": "START",
+    "inputs": [],
+    "outputs": []
+  },
+  {
+    "eventTime": "{{ .* }}",
+    "producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+    "schemaURL": "https://openlineage.io/spec/{{ .* }}/OpenLineage.json#/$defs/RunEvent",
+    "run": {
+      "runId": "{{ .* }}",
+      "facets": {
+        "parent": {
+          "_producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL": "https://openlineage.io/spec/facets/{{ .* }}/ParentRunFacet.json#/$defs/ParentRunFacet",
+          "run": {
+            "runId": "{{ .* }}"
+          },
+          "job": {
+            "namespace": "dbt",
+            "name": "dbt-run--project=jaffle_shop--profile=test--select=orders_with_syntax_error"
+          }
+        },
+        "dbt_version": {
+          "_producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL": "https://github.com/OpenLineage/OpenLineage/tree/main/integration/common/openlineage/schema/dbt-version-run-facet.json",
+          "version": "{{ .* }}"
+        }
+      }
+    },
+    "job": {
+      "namespace": "dbt",
+      "name": "model.jaffle_shop.orders_with_syntax_error",
+      "facets": {
+        "jobType": {
+          "_producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+          "_schemaURL": "https://openlineage.io/spec/facets/{{ .* }}/JobTypeJobFacet.json#/$defs/JobTypeJobFacet",
+          "_deleted": null,
+          "processingType": "BATCH",
+          "integration": "DBT",
+          "jobType": "MODEL"
+        }
+      }
+    },
+    "eventType": "START",
+    "inputs": [
+      {
+        "namespace": "postgres://localhost:5432",
+        "name": "jaffle_shop.staging.stg_orders",
+        "facets": {
+          "dataSource": {
+            "_producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+            "_schemaURL": "https://openlineage.io/spec/facets/{{ .* }}/DatasourceDatasetFacet.json#/$defs/DatasourceDatasetFacet",
+            "_deleted": null,
+            "name": "postgres://localhost:5432",
+            "uri": "postgres://localhost:5432"
+          },
+          "schema": {
+            "_producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+            "_schemaURL": "https://openlineage.io/spec/facets/1-1-1/SchemaDatasetFacet.json#/$defs/SchemaDatasetFacet",
+            "_deleted": null,
+            "fields": [
+              {
+                "name": "order_id",
+                "type": "integer",
+                "description": "",
+                "fields": []
+              },
+              {
+                "name": "status",
+                "type": "string",
+                "description": "",
+                "fields": []
+              }
+            ]
+          },
+          "documentation": {
+            "_producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+            "_schemaURL": "https://openlineage.io/spec/facets/{{ .* }}/DocumentationDatasetFacet.json#/$defs/DocumentationDatasetFacet",
+            "_deleted": null,
+            "description": ""
+          }
+        }
+      }
+    ],
+    "outputs": [
+      {
+        "namespace": "postgres://localhost:5432",
+        "name": "jaffle_shop.orders_with_syntax_error",
+        "facets": {
+          "dataSource": {
+            "_producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+            "_schemaURL": "https://openlineage.io/spec/facets/{{ .* }}/DatasourceDatasetFacet.json#/$defs/DatasourceDatasetFacet",
+            "_deleted": null,
+            "name": "postgres://localhost:5432",
+            "uri": "postgres://localhost:5432"
+          },
+          "schema": {
+            "_producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+            "_schemaURL": "https://openlineage.io/spec/facets/1-1-1/SchemaDatasetFacet.json#/$defs/SchemaDatasetFacet",
+            "_deleted": null,
+            "fields": [
+              {
+                "name": "order_id",
+                "type": "integer",
+                "description": "This is a unique identifier for an order",
+                "fields": []
+              }
+            ]
+          },
+          "documentation": {
+            "_producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+            "_schemaURL": "https://openlineage.io/spec/facets/{{ .* }}/DocumentationDatasetFacet.json#/$defs/DocumentationDatasetFacet",
+            "_deleted": null,
+            "description": "dummy model that has SQL syntax error"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "eventTime": "{{ .* }}",
+    "producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+    "schemaURL": "https://openlineage.io/spec/{{ .* }}/OpenLineage.json#/$defs/RunEvent",
+    "run": {
+      "runId": "{{ .* }}",
+      "facets": {
+        "parent": {
+          "_producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL": "https://openlineage.io/spec/facets/{{ .* }}/ParentRunFacet.json#/$defs/ParentRunFacet",
+          "run": {
+            "runId": "{{ .* }}"
+          },
+          "job": {
+            "namespace": "dbt",
+            "name": "model.jaffle_shop.orders_with_syntax_error"
+          }
+        },
+        "dbt_version": {
+          "_producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL": "https://github.com/OpenLineage/OpenLineage/tree/main/integration/common/openlineage/schema/dbt-version-run-facet.json",
+          "version": "{{ .* }}"
+        }
+      }
+    },
+    "job": {
+      "namespace": "dbt",
+      "name": "model.jaffle_shop.orders_with_syntax_error.sql#1",
+      "facets": {
+        "jobType": {
+          "_producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+          "_schemaURL": "https://openlineage.io/spec/facets/{{ .* }}/JobTypeJobFacet.json#/$defs/JobTypeJobFacet",
+          "_deleted": null,
+          "processingType": "BATCH",
+          "integration": "DBT",
+          "jobType": "SQL"
+        },
+        "sql": {
+          "_producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL": "https://openlineage.io/spec/facets/{{ .* }}/SQLJobFacet.json#/$defs/SQLJobFacet",
+          "_deleted": null,
+          "query": "BEGIN"
+        }
+      }
+    },
+    "eventType": "START",
+    "inputs": [],
+    "outputs": []
+  },
+  {
+    "eventTime": "{{ .* }}",
+    "producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+    "schemaURL": "https://openlineage.io/spec/{{ .* }}/OpenLineage.json#/$defs/RunEvent",
+    "run": {
+      "runId": "{{ .* }}",
+      "facets": {
+        "parent": {
+          "_producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL": "https://openlineage.io/spec/facets/{{ .* }}/ParentRunFacet.json#/$defs/ParentRunFacet",
+          "run": {
+            "runId": "{{ .* }}"
+          },
+          "job": {
+            "namespace": "dbt",
+            "name": "model.jaffle_shop.orders_with_syntax_error"
+          }
+        },
+        "dbt_version": {
+          "_producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL": "https://github.com/OpenLineage/OpenLineage/tree/main/integration/common/openlineage/schema/dbt-version-run-facet.json",
+          "version": "{{ .* }}"
+        }
+      }
+    },
+    "job": {
+      "namespace": "dbt",
+      "name": "model.jaffle_shop.orders_with_syntax_error.sql#1",
+      "facets": {
+        "jobType": {
+          "_producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+          "_schemaURL": "https://openlineage.io/spec/facets/{{ .* }}/JobTypeJobFacet.json#/$defs/JobTypeJobFacet",
+          "_deleted": null,
+          "processingType": "BATCH",
+          "integration": "DBT",
+          "jobType": "SQL"
+        },
+        "sql": {
+          "_producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL": "https://openlineage.io/spec/facets/{{ .* }}/SQLJobFacet.json#/$defs/SQLJobFacet",
+          "_deleted": null,
+          "query": "BEGIN"
+        }
+      }
+    },
+    "eventType": "COMPLETE",
+    "inputs": [],
+    "outputs": []
+  },
+  {
+    "eventTime": "{{ .* }}",
+    "producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+    "schemaURL": "https://openlineage.io/spec/{{ .* }}/OpenLineage.json#/$defs/RunEvent",
+    "run": {
+      "runId": "{{ .* }}",
+      "facets": {
+        "parent": {
+          "_producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL": "https://openlineage.io/spec/facets/{{ .* }}/ParentRunFacet.json#/$defs/ParentRunFacet",
+          "run": {
+            "runId": "{{ .* }}"
+          },
+          "job": {
+            "namespace": "dbt",
+            "name": "model.jaffle_shop.orders_with_syntax_error"
+          }
+        },
+        "dbt_version": {
+          "_producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL": "https://github.com/OpenLineage/OpenLineage/tree/main/integration/common/openlineage/schema/dbt-version-run-facet.json",
+          "version": "{{ .* }}"
+        }
+      }
+    },
+    "job": {
+      "namespace": "dbt",
+      "name": "model.jaffle_shop.orders_with_syntax_error.sql#2",
+      "facets": {
+        "jobType": {
+          "_producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+          "_schemaURL": "https://openlineage.io/spec/facets/{{ .* }}/JobTypeJobFacet.json#/$defs/JobTypeJobFacet",
+          "_deleted": null,
+          "processingType": "BATCH",
+          "integration": "DBT",
+          "jobType": "SQL"
+        },
+        "sql": {
+          "_producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL": "https://openlineage.io/spec/facets/{{ .* }}/SQLJobFacet.json#/$defs/SQLJobFacet",
+          "_deleted": null,
+          "query": "/* {\"app\": \"dbt\", \"dbt_version\": \"{{ .* }}\", \"profile_name\": \"test\", \"target_name\": \"default\", \"node_id\": \"model.jaffle_shop.orders_with_syntax_error\"} */\n\n  \n    \n\n  create  table \"dbt\".\"{{ .* }}_openlineage_project\".\"orders_with_syntax_error__dbt_tmp\"\n  \n  \n    as\n  \n  (\n    \n\nwith orders as (\n\n        select * from \"dbt\".\"{{ .* }}_openlineage_project\".\"stg_orders\"\n\n),\n\nSELECT order_id,\nFROM orders\n\nSQL Syntax Error here\n  );\n  "
+        }
+      }
+    },
+    "eventType": "START",
+    "inputs": [],
+    "outputs": []
+  },
+  {
+    "eventTime": "{{ .* }}",
+    "producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+    "schemaURL": "https://openlineage.io/spec/{{ .* }}/OpenLineage.json#/$defs/RunEvent",
+    "run": {
+      "runId": "{{ .* }}",
+      "facets": {
+        "parent": {
+          "_producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL": "https://openlineage.io/spec/facets/{{ .* }}/ParentRunFacet.json#/$defs/ParentRunFacet",
+          "run": {
+            "runId": "{{ .* }}"
+          },
+          "job": {
+            "namespace": "dbt",
+            "name": "model.jaffle_shop.orders_with_syntax_error"
+          }
+        },
+        "dbt_version": {
+          "_producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL": "https://github.com/OpenLineage/OpenLineage/tree/main/integration/common/openlineage/schema/dbt-version-run-facet.json",
+          "version": "{{ .* }}"
+        },
+        "errorMessage": {
+          "_producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL": "https://openlineage.io/spec/facets/{{ .* }}/ErrorMessageRunFacet.json#/$defs/ErrorMessageRunFacet",
+          "message": "Database Error in model orders_with_syntax_error (models/orders_with_syntax_error.sql)\n  syntax error at or near \"SELECT\"\n  LINE 20: SELECT order_id,\n           ^\n  compiled code at target/run/jaffle_shop/models/orders_with_syntax_error.sql",
+          "programmingLanguage": "sql",
+          "stackTrace": "Traceback (most recent call last):\n{{ .* }}"
+        }
+      }
+    },
+    "job": {
+      "namespace": "dbt",
+      "name": "model.jaffle_shop.orders_with_syntax_error.sql#2",
+      "facets": {
+        "jobType": {
+          "_producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+          "_schemaURL": "https://openlineage.io/spec/facets/{{ .* }}/JobTypeJobFacet.json#/$defs/JobTypeJobFacet",
+          "_deleted": null,
+          "processingType": "BATCH",
+          "integration": "DBT",
+          "jobType": "SQL"
+        },
+        "sql": {
+          "_producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL": "https://openlineage.io/spec/facets/{{ .* }}/SQLJobFacet.json#/$defs/SQLJobFacet",
+          "_deleted": null,
+          "query": "/* {\"app\": \"dbt\", \"dbt_version\": \"{{ .* }}\", \"profile_name\": \"test\", \"target_name\": \"default\", \"node_id\": \"model.jaffle_shop.orders_with_syntax_error\"} */\n\n  \n    \n\n  create  table \"dbt\".\"{{ .* }}_openlineage_project\".\"orders_with_syntax_error__dbt_tmp\"\n  \n  \n    as\n  \n  (\n    \n\nwith orders as (\n\n        select * from \"dbt\".\"{{ .* }}_openlineage_project\".\"stg_orders\"\n\n),\n\nSELECT order_id,\nFROM orders\n\nSQL Syntax Error here\n  );\n  "
+        }
+      }
+    },
+    "eventType": "FAIL",
+    "inputs": [],
+    "outputs": []
+  },
+  {
+    "eventTime": "{{ .* }}",
+    "producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+    "schemaURL": "https://openlineage.io/spec/{{ .* }}/OpenLineage.json#/$defs/RunEvent",
+    "run": {
+      "runId": "{{ .* }}",
+      "facets": {
+        "parent": {
+          "_producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL": "https://openlineage.io/spec/facets/{{ .* }}/ParentRunFacet.json#/$defs/ParentRunFacet",
+          "run": {
+            "runId": "{{ .* }}"
+          },
+          "job": {
+            "namespace": "dbt",
+            "name": "dbt-run--project=jaffle_shop--profile=test--select=orders_with_syntax_error"
+          }
+        },
+        "dbt_version": {
+          "_producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL": "https://github.com/OpenLineage/OpenLineage/tree/main/integration/common/openlineage/schema/dbt-version-run-facet.json",
+          "version": "{{ .* }}"
+        },
+        "errorMessage": {
+          "_producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL": "https://openlineage.io/spec/facets/{{ .* }}/ErrorMessageRunFacet.json#/$defs/ErrorMessageRunFacet",
+          "message": "Database Error in model orders_with_syntax_error (models/orders_with_syntax_error.sql)\n  syntax error at or near \"SELECT\"\n  LINE 20: SELECT order_id,\n           ^\n  compiled code at target/run/jaffle_shop/models/orders_with_syntax_error.sql",
+          "programmingLanguage": "sql",
+          "stackTrace": null
+        }
+      }
+    },
+    "job": {
+      "namespace": "dbt",
+      "name": "model.jaffle_shop.orders_with_syntax_error",
+      "facets": {
+        "jobType": {
+          "_producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+          "_schemaURL": "https://openlineage.io/spec/facets/{{ .* }}/JobTypeJobFacet.json#/$defs/JobTypeJobFacet",
+          "_deleted": null,
+          "processingType": "BATCH",
+          "integration": "DBT",
+          "jobType": "MODEL"
+        }
+      }
+    },
+    "eventType": "FAIL",
+    "inputs": [
+      {
+        "namespace": "postgres://localhost:5432",
+        "name": "jaffle_shop.staging.stg_orders",
+        "facets": {
+          "dataSource": {
+            "_producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+            "_schemaURL": "https://openlineage.io/spec/facets/{{ .* }}/DatasourceDatasetFacet.json#/$defs/DatasourceDatasetFacet",
+            "_deleted": null,
+            "name": "postgres://localhost:5432",
+            "uri": "postgres://localhost:5432"
+          },
+          "schema": {
+            "_producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+            "_schemaURL": "https://openlineage.io/spec/facets/1-1-1/SchemaDatasetFacet.json#/$defs/SchemaDatasetFacet",
+            "_deleted": null,
+            "fields": [
+              {
+                "name": "order_id",
+                "type": "integer",
+                "description": "",
+                "fields": []
+              },
+              {
+                "name": "status",
+                "type": "string",
+                "description": "",
+                "fields": []
+              }
+            ]
+          },
+          "documentation": {
+            "_producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+            "_schemaURL": "https://openlineage.io/spec/facets/{{ .* }}/DocumentationDatasetFacet.json#/$defs/DocumentationDatasetFacet",
+            "_deleted": null,
+            "description": ""
+          }
+        }
+      }
+    ],
+    "outputs": [
+      {
+        "namespace": "postgres://localhost:5432",
+        "name": "jaffle_shop.orders_with_syntax_error",
+        "facets": {
+          "dataSource": {
+            "_producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+            "_schemaURL": "https://openlineage.io/spec/facets/{{ .* }}/DatasourceDatasetFacet.json#/$defs/DatasourceDatasetFacet",
+            "_deleted": null,
+            "name": "postgres://localhost:5432",
+            "uri": "postgres://localhost:5432"
+          },
+          "schema": {
+            "_producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+            "_schemaURL": "https://openlineage.io/spec/facets/1-1-1/SchemaDatasetFacet.json#/$defs/SchemaDatasetFacet",
+            "_deleted": null,
+            "fields": [
+              {
+                "name": "order_id",
+                "type": "integer",
+                "description": "This is a unique identifier for an order",
+                "fields": []
+              }
+            ]
+          },
+          "documentation": {
+            "_producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+            "_schemaURL": "https://openlineage.io/spec/facets/{{ .* }}/DocumentationDatasetFacet.json#/$defs/DocumentationDatasetFacet",
+            "_deleted": null,
+            "description": "dummy model that has SQL syntax error"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "eventTime": "{{ .* }}",
+    "producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+    "schemaURL": "https://openlineage.io/spec/{{ .* }}/OpenLineage.json#/$defs/RunEvent",
+    "run": {
+      "runId": "{{ .* }}",
+      "facets": {
+        "dbt_version": {
+          "_producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL": "https://github.com/OpenLineage/OpenLineage/tree/main/integration/common/openlineage/schema/dbt-version-run-facet.json",
+          "version": "{{ .* }}"
+        },
+        "errorMessage": {
+          "_producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/client/python",
+          "_schemaURL": "https://openlineage.io/spec/facets/{{ .* }}/ErrorMessageRunFacet.json#/$defs/ErrorMessageRunFacet",
+          "message": "Command `cli run` failed at {{ .* }}",
+          "programmingLanguage": "sql",
+          "stackTrace": null
+        }
+      }
+    },
+    "job": {
+      "namespace": "dbt",
+      "name": "dbt-run--project=jaffle_shop--profile=test--select=orders_with_syntax_error",
+      "facets": {
+        "jobType": {
+          "_producer": "https://github.com/OpenLineage/OpenLineage/tree/{{ .* }}/integration/dbt",
+          "_schemaURL": "https://openlineage.io/spec/facets/{{ .* }}/JobTypeJobFacet.json#/$defs/JobTypeJobFacet",
+          "_deleted": null,
+          "processingType": "BATCH",
+          "integration": "DBT",
+          "jobType": "JOB"
+        }
+      }
+    },
+    "eventType": "FAIL",
+    "inputs": [],
+    "outputs": []
+  }
+]

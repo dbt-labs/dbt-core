@@ -32,6 +32,8 @@ from dbt.events.types import (
 from dbt.exceptions import DbtProjectError, FailFastError
 from dbt.flags import get_flag_dict, get_flags, set_flags
 from dbt.mp_context import get_mp_context
+from dbt.openlineage.common.utils import is_runnable_dbt_command
+from dbt.openlineage.handler import OpenLineageHandler
 from dbt.parser.manifest import parse_manifest
 from dbt.plugins import set_up_plugin_manager
 from dbt.profiler import profiler
@@ -96,8 +98,13 @@ def preflight(func):
         # Reset invocation_id for each 'invocation' of a dbt command (can happen multiple times in a single process)
         reset_invocation_id()
 
-        # Logging
+        # OpenLineage
+        ol_handler = OpenLineageHandler(ctx)
         callbacks = ctx.obj.get("callbacks", [])
+        if is_runnable_dbt_command(flags):
+            callbacks.append(ol_handler.handle)
+
+        # Logging
         setup_event_logger(flags=flags, callbacks=callbacks)
 
         # Tracking
