@@ -150,7 +150,7 @@ jobs:
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3.9"
+          python-version: "3.10"
 
       - name: Install dbt
         run: pip install dbt-postgres==${{ needs.set-variables.outputs.release_id }}
