@@ -56,7 +56,7 @@ body:
       description: |
         examples:
           - **OS**: Ubuntu 24.04
-          - **Python**: 3.9.12 (`python3 --version`)
+          - **Python**: 3.10.12 (`python3 --version`)
           - **dbt-core (working version)**: 1.1.1 (`dbt --version`)
           - **dbt-core (regression version)**: 1.2.0 (`dbt --version`)
       value: |
