@@ -1,5 +1,5 @@
 use dbt_common::io_args::StaticAnalysisKind;
-use dbt_serde_yaml::{JsonSchema, ShouldBe};
+use dbt_serde_yaml::{JsonSchema, ShouldBe, Spanned};
 use serde::{Deserialize, Serialize};
 // Type aliases for clarity
 type YmlValue = dbt_serde_yaml::Value;
@@ -39,7 +39,7 @@ pub struct ProjectSourceConfig {
     #[serde(rename = "+loaded_at_field")]
     pub loaded_at_field: Option<String>,
     #[serde(rename = "+static_analysis")]
-    pub static_analysis: Option<StaticAnalysisKind>,
+    pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
 
     // Snowflake specific fields
     #[serde(rename = "+adapter_properties")]
@@ -267,7 +267,7 @@ pub struct SourceConfig {
     pub quoting: Option<DbtQuoting>,
     pub loaded_at_field: Option<String>,
     pub loaded_at_query: Option<String>,
-    pub static_analysis: Option<StaticAnalysisKind>,
+    pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
     pub description: Option<String>,
     // Adapter specific configs
     pub __warehouse_specific_config__: WarehouseSpecificNodeConfig,

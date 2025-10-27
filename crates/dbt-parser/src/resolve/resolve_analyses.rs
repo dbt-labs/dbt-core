@@ -69,7 +69,7 @@ pub async fn resolve_analyses(
             &package.dbt_project.analyses,
             AnalysesConfig {
                 enabled: Some(true),
-                static_analysis: Some(StaticAnalysisKind::Off),
+                static_analysis: Some(StaticAnalysisKind::Off.into()),
                 ..Default::default()
             },
             dependency_package_name_from_ctx(&env, base_ctx),
@@ -220,7 +220,8 @@ pub async fn resolve_analyses(
                 quoting_ignore_case: false,
                 static_analysis: analysis_config
                     .static_analysis
-                    .unwrap_or(StaticAnalysisKind::Unsafe),
+                    .clone()
+                    .unwrap_or_else(|| StaticAnalysisKind::Unsafe.into()),
                 static_analysis_off_reason: None,
                 columns,
                 depends_on: NodeDependsOn {

@@ -39,6 +39,7 @@ use dbt_schemas::schemas::{CommonAttributes, DbtUnitTest, NodeBaseAttributes};
 use dbt_schemas::state::DbtPackage;
 use dbt_schemas::state::DbtRuntimeConfig;
 use dbt_schemas::state::ResourcePathKind;
+use dbt_serde_yaml::Spanned;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
@@ -213,7 +214,8 @@ pub fn resolve_unit_tests(
 
         let static_analysis = properties_config
             .static_analysis
-            .unwrap_or(StaticAnalysisKind::On);
+            .clone()
+            .unwrap_or_else(|| StaticAnalysisKind::On.into());
 
         let base_unit_test = DbtUnitTest {
             __common_attr__: CommonAttributes {
@@ -251,8 +253,9 @@ pub fn resolve_unit_tests(
                 quoting: package_quoting.try_into()?,
                 quoting_ignore_case: package_quoting.snowflake_ignore_case.unwrap_or(false),
                 materialized: DbtMaterialization::Unit,
-                static_analysis_off_reason: matches!(static_analysis, StaticAnalysisKind::Off)
-                    .then(|| StaticAnalysisOffReason::ConfiguredOff),
+                static_analysis_off_reason: (static_analysis.clone().into_inner()
+                    == StaticAnalysisKind::Off)
+                    .then_some(StaticAnalysisOffReason::ConfiguredOff),
                 static_analysis,
                 columns: vec![],
                 metrics: vec![],

@@ -235,7 +235,7 @@ fn new_operation(
                     }
 
                     // Mark operation with static_analysis: Unsafe so it will always defer
-                    operation.__base_attr__.static_analysis = StaticAnalysisKind::Unsafe;
+                    operation.__base_attr__.static_analysis = StaticAnalysisKind::Unsafe.into();
                 }
                 Err(err) => {
                     // Log rendering error but don't fail the build

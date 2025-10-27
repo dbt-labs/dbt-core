@@ -1,6 +1,7 @@
 use crate::io_args::StaticAnalysisOffReason;
 use crate::stdfs::File;
 use crate::{ErrorCode, FsError, FsResult, err, fs_err, stdfs::canonicalize};
+use dbt_serde_yaml::Span;
 use dbt_telemetry::{ExecutionPhase, NodeOutcome};
 use pathdiff::diff_paths;
 use std::{
@@ -23,7 +24,7 @@ pub trait StatusReporter: Any + Send + Sync {
         execution_phase: ExecutionPhase,
         node_outcome: NodeOutcome,
         upstream_target: Option<(String, String, bool)>,
-        static_analysis_off_reason: Option<StaticAnalysisOffReason>,
+        static_analysis_off_reason: (Option<StaticAnalysisOffReason>, Span),
     );
     /// Called to show progress in the UI
     fn show_progress(&self, action: &str, target: &str, description: Option<&str>);

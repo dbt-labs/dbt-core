@@ -52,6 +52,7 @@ use dbt_schemas::state::DbtRuntimeConfig;
 use dbt_schemas::state::GenericTestAsset;
 use dbt_schemas::state::ModelStatus;
 use dbt_schemas::state::{DbtAsset, DbtPackage};
+use dbt_serde_yaml::Spanned;
 use dbt_serde_yaml::Value as YmlValue;
 use md5;
 use minijinja::Value;
@@ -299,7 +300,8 @@ pub async fn resolve_data_tests(
 
         let static_analysis = test_config
             .static_analysis
-            .unwrap_or(StaticAnalysisKind::On);
+            .clone()
+            .unwrap_or_else(|| StaticAnalysisKind::On.into());
 
         let macro_depends_on = all_depends_on
             .get(&format!("{package_name}.{test_name}"))
@@ -373,8 +375,9 @@ pub async fn resolve_data_tests(
                 schema: schema.to_owned(),
                 alias: "will_be_updated_below".to_owned(),
                 relation_name: None,
-                static_analysis_off_reason: matches!(static_analysis, StaticAnalysisKind::Off)
-                    .then(|| StaticAnalysisOffReason::ConfiguredOff),
+                static_analysis_off_reason: (static_analysis.clone().into_inner()
+                    == StaticAnalysisKind::Off)
+                    .then_some(StaticAnalysisOffReason::ConfiguredOff),
                 static_analysis,
                 quoting: test_config
                     .quoting

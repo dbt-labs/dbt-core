@@ -341,13 +341,15 @@ pub trait InternalDbtNodeAttributes: InternalDbtNode {
         self.common().meta.clone()
     }
 
-    fn static_analysis(&self) -> StaticAnalysisKind {
-        self.base().static_analysis
+    fn static_analysis(&self) -> Spanned<StaticAnalysisKind> {
+        self.base().static_analysis.clone()
     }
 
-    fn static_analysis_enabled(&self) -> bool {
-        self.static_analysis() == StaticAnalysisKind::On
-            || self.static_analysis() == StaticAnalysisKind::Unsafe
+    fn static_analysis_enabled(&self) -> Spanned<bool> {
+        self.static_analysis().map(|static_analysis| {
+            static_analysis == StaticAnalysisKind::On
+                || static_analysis == StaticAnalysisKind::Unsafe
+        })
     }
 
     fn static_analysis_off_reason(&self) -> Option<StaticAnalysisOffReason> {
@@ -359,7 +361,7 @@ pub trait InternalDbtNodeAttributes: InternalDbtNode {
         self.base_mut().quoting = quoting;
     }
 
-    fn set_static_analysis(&mut self, static_analysis: StaticAnalysisKind) {
+    fn set_static_analysis(&mut self, static_analysis: Spanned<StaticAnalysisKind>) {
         self.base_mut().static_analysis = static_analysis;
     }
 
@@ -565,7 +567,7 @@ impl InternalDbtNode for DbtSeed {
 }
 
 impl InternalDbtNodeAttributes for DbtSeed {
-    fn set_static_analysis(&mut self, _static_analysis: StaticAnalysisKind) {
+    fn set_static_analysis(&mut self, _static_analysis: Spanned<StaticAnalysisKind>) {
         unimplemented!("static analysis metadata setting for schema nodes")
     }
 
@@ -1170,15 +1172,15 @@ impl InternalDbtNode for DbtFunction {
 }
 
 impl InternalDbtNodeAttributes for DbtFunction {
-    fn static_analysis(&self) -> StaticAnalysisKind {
-        self.__base_attr__.static_analysis
+    fn static_analysis(&self) -> Spanned<StaticAnalysisKind> {
+        self.__base_attr__.static_analysis.clone()
     }
 
     fn set_quoting(&mut self, quoting: ResolvedQuoting) {
         self.__base_attr__.quoting = quoting;
     }
 
-    fn set_static_analysis(&mut self, static_analysis: StaticAnalysisKind) {
+    fn set_static_analysis(&mut self, static_analysis: Spanned<StaticAnalysisKind>) {
         self.__base_attr__.static_analysis = static_analysis;
     }
 
@@ -1824,7 +1826,7 @@ pub struct NodeBaseAttributes {
     // TODO: Potentially add ignore_case to ResolvedQuoting
     pub quoting_ignore_case: bool,
     pub materialized: DbtMaterialization,
-    pub static_analysis: StaticAnalysisKind,
+    pub static_analysis: Spanned<StaticAnalysisKind>,
     #[serde(skip_serializing, default)]
     pub static_analysis_off_reason: Option<StaticAnalysisOffReason>,
     pub enabled: bool,
@@ -2572,15 +2574,15 @@ impl InternalDbtNode for DbtAnalysis {
 }
 
 impl InternalDbtNodeAttributes for DbtAnalysis {
-    fn static_analysis(&self) -> StaticAnalysisKind {
-        self.__base_attr__.static_analysis
+    fn static_analysis(&self) -> Spanned<StaticAnalysisKind> {
+        self.__base_attr__.static_analysis.clone()
     }
 
     fn set_quoting(&mut self, quoting: ResolvedQuoting) {
         self.__base_attr__.quoting = quoting;
     }
 
-    fn set_static_analysis(&mut self, static_analysis: StaticAnalysisKind) {
+    fn set_static_analysis(&mut self, static_analysis: Spanned<StaticAnalysisKind>) {
         self.__base_attr__.static_analysis = static_analysis;
     }
 

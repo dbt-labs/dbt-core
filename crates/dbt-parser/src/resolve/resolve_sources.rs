@@ -240,8 +240,9 @@ pub fn resolve_sources(
         };
 
         let static_analysis = source_properties_config
+            .clone()
             .static_analysis
-            .unwrap_or(StaticAnalysisKind::On);
+            .unwrap_or_else(|| StaticAnalysisKind::On.into());
         // Create a config that respects the table-level overrides of
         // the source-level config.
         // See: https://github.com/dbt-labs/dbt-fusion/issues/767
@@ -291,8 +292,9 @@ pub fn resolve_sources(
                 extended_model: false,
                 persist_docs: None,
                 materialized: DbtMaterialization::External,
-                static_analysis_off_reason: matches!(static_analysis, StaticAnalysisKind::Off)
-                    .then(|| StaticAnalysisOffReason::ConfiguredOff),
+                static_analysis_off_reason: (static_analysis.clone().into_inner()
+                    == StaticAnalysisKind::Off)
+                    .then_some(StaticAnalysisOffReason::ConfiguredOff),
                 static_analysis,
                 columns,
                 refs: vec![],

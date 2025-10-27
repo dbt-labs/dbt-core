@@ -13,6 +13,7 @@ use dbt_schemas::{
     schemas::{InternalDbtNodeAttributes, telemetry::NodeType},
     state::{DbtRuntimeConfig, NodeResolverTracker, ResolverState},
 };
+use dbt_serde_yaml::Spanned;
 use minijinja::{
     Value as MinijinjaValue,
     constants::{
@@ -36,7 +37,7 @@ pub fn build_compile_node_context<T>(
     model: &T,
     resolver_state: &ResolverState,
     base_context: &BTreeMap<String, MinijinjaValue>,
-    global_static_analysis: StaticAnalysisKind,
+    global_static_analysis: Spanned<StaticAnalysisKind>,
     skip_ref_validation: bool,
 ) -> (
     BTreeMap<String, MinijinjaValue>,
@@ -67,7 +68,7 @@ pub fn build_compile_node_context_inner<T>(
     root_project_name: &str,
     node_resolver: Arc<dyn NodeResolverTracker>,
     runtime_config: Arc<DbtRuntimeConfig>,
-    global_static_analysis: StaticAnalysisKind,
+    global_static_analysis: Spanned<StaticAnalysisKind>,
     skip_ref_validation: bool,
 ) -> (
     BTreeMap<String, MinijinjaValue>,
@@ -132,8 +133,11 @@ where
                     .expect("Ref must exist");
 
                 if let Some(deferred_relation_value) = deferred_relation
-                    && (matches!(model.base().static_analysis, StaticAnalysisKind::Unsafe)
-                        || global_static_analysis == StaticAnalysisKind::Unsafe
+                    && (matches!(
+                        model.base().static_analysis.clone().into_inner(),
+                        StaticAnalysisKind::Unsafe
+                    ) || global_static_analysis.clone().into_inner()
+                        == StaticAnalysisKind::Unsafe
                         || model.introspection().is_unsafe())
                 {
                     deferred_relation_value
@@ -192,8 +196,10 @@ where
         allowed_dependencies.clone(),
         skip_ref_validation,
         // Update to use introspection kind
-        (matches!(model.base().static_analysis, StaticAnalysisKind::Unsafe)
-            || global_static_analysis == StaticAnalysisKind::Unsafe)
+        (matches!(
+            model.base().static_analysis.clone().into_inner(),
+            StaticAnalysisKind::Unsafe
+        ) || global_static_analysis.into_inner() == StaticAnalysisKind::Unsafe)
             || model.introspection().is_unsafe(),
     );
 

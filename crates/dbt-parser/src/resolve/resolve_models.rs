@@ -328,7 +328,8 @@ pub async fn resolve_models(
 
         let static_analysis = model_config
             .static_analysis
-            .unwrap_or(StaticAnalysisKind::On);
+            .clone()
+            .unwrap_or_else(|| StaticAnalysisKind::On.into());
 
         // Hydrate time_spine from model properties
         let mut time_spine: Option<TimeSpine> = None;
@@ -448,8 +449,9 @@ pub async fn resolve_models(
                     .unwrap_or_default()
                     .snowflake_ignore_case
                     .unwrap_or(false),
-                static_analysis_off_reason: matches!(static_analysis, StaticAnalysisKind::Off)
-                    .then(|| StaticAnalysisOffReason::ConfiguredOff),
+                static_analysis_off_reason: (static_analysis.clone().into_inner()
+                    == StaticAnalysisKind::Off)
+                    .then_some(StaticAnalysisOffReason::ConfiguredOff),
                 static_analysis,
             },
             __model_attr__: DbtModelAttr {

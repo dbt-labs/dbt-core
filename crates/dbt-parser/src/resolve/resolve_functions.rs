@@ -185,7 +185,7 @@ pub async fn resolve_functions(
                 alias: "".to_owned(),           // will be updated below
                 relation_name: None,            // will be updated below
                 materialized: dbt_schemas::schemas::common::DbtMaterialization::Function,
-                static_analysis: StaticAnalysisKind::On,
+                static_analysis: StaticAnalysisKind::On.into(),
                 static_analysis_off_reason: None,
                 quoting: package_quoting
                     .try_into()

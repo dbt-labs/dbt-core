@@ -1,4 +1,4 @@
-use dbt_serde_yaml::JsonSchema;
+use dbt_serde_yaml::{JsonSchema, Spanned};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
@@ -19,7 +19,7 @@ pub struct ProjectAnalysisConfig {
     #[serde(default, rename = "+enabled", deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
     #[serde(rename = "+static_analysis")]
-    pub static_analysis: Option<StaticAnalysisKind>,
+    pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
     #[serde(rename = "+meta")]
     pub meta: Option<BTreeMap<String, YmlValue>>,
     #[serde(rename = "+tags")]
@@ -33,7 +33,7 @@ impl Default for ProjectAnalysisConfig {
     fn default() -> Self {
         Self {
             enabled: Some(true),
-            static_analysis: Some(StaticAnalysisKind::Off),
+            static_analysis: Some(StaticAnalysisKind::Off.into()),
             meta: None,
             tags: None,
             docs: None,
@@ -53,7 +53,7 @@ impl IterChildren<ProjectAnalysisConfig> for ProjectAnalysisConfig {
 pub struct AnalysesConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
-    pub static_analysis: Option<StaticAnalysisKind>,
+    pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
     pub meta: Option<BTreeMap<String, YmlValue>>,
     pub tags: Option<StringOrArrayOfStrings>,
     pub description: Option<String>,
@@ -79,7 +79,7 @@ impl DefaultTo<AnalysesConfig> for AnalysesConfig {
             self.enabled = other.enabled;
         }
         if self.static_analysis.is_none() {
-            self.static_analysis = other.static_analysis;
+            self.static_analysis = other.static_analysis.clone();
         }
         if self.meta.is_none() {
             self.meta = other.meta.clone();

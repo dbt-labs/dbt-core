@@ -1,5 +1,5 @@
 use dbt_common::io_args::StaticAnalysisKind;
-use dbt_serde_yaml::{JsonSchema, ShouldBe};
+use dbt_serde_yaml::{JsonSchema, ShouldBe, Spanned};
 use serde::{Deserialize, Serialize};
 // Type aliases for clarity
 type YmlValue = dbt_serde_yaml::Value;
@@ -62,7 +62,7 @@ pub struct ProjectDataTestConfig {
     #[serde(rename = "+quoting")]
     pub quoting: Option<DbtQuoting>,
     #[serde(rename = "+static_analysis")]
-    pub static_analysis: Option<StaticAnalysisKind>,
+    pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
 
     // Snowflake specific fields
     #[serde(rename = "+adapter_properties")]
@@ -299,7 +299,7 @@ pub struct DataTestConfig {
     pub tags: Option<StringOrArrayOfStrings>,
     pub warn_if: Option<String>,
     pub quoting: Option<DbtQuoting>,
-    pub static_analysis: Option<StaticAnalysisKind>,
+    pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
     #[serde(rename = "where")]
     pub where_: Option<String>,
     pub description: Option<String>,

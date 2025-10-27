@@ -1,6 +1,7 @@
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_serde_yaml::JsonSchema;
 use dbt_serde_yaml::ShouldBe;
+use dbt_serde_yaml::Spanned;
 use dbt_serde_yaml::Verbatim;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
@@ -82,7 +83,7 @@ pub struct ProjectSnapshotConfig {
     #[serde(rename = "+quoting")]
     pub quoting: Option<DbtQuoting>,
     #[serde(rename = "+static_analysis")]
-    pub static_analysis: Option<StaticAnalysisKind>,
+    pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
     #[serde(rename = "+meta")]
     pub meta: Option<BTreeMap<String, YmlValue>>,
     #[serde(rename = "+group")]
@@ -338,7 +339,7 @@ pub struct SnapshotConfig {
     pub grants: Option<BTreeMap<String, StringOrArrayOfStrings>>,
     pub event_time: Option<String>,
     pub quoting: Option<DbtQuoting>,
-    pub static_analysis: Option<StaticAnalysisKind>,
+    pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
     pub meta: Option<BTreeMap<String, YmlValue>>,
     pub group: Option<String>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]

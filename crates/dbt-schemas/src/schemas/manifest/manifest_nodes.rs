@@ -648,7 +648,7 @@ impl From<DbtAnalysis> for ManifestAnalysis {
                 functions: analysis.__base_attr__.functions,
             },
             materialized: analysis.__base_attr__.materialized,
-            static_analysis: analysis.__base_attr__.static_analysis,
+            static_analysis: analysis.__base_attr__.static_analysis.into_inner(),
             enabled: analysis.__base_attr__.enabled,
             quoting: Some(DbtQuoting {
                 database: Some(analysis.__base_attr__.quoting.database),

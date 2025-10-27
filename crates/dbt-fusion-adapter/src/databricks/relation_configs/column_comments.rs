@@ -152,6 +152,7 @@ mod tests {
     use dbt_agate::AgateTable;
     use dbt_schemas::schemas::DbtModel;
     use dbt_schemas::schemas::relations::relation_configs::{ComponentConfig, RelationChangeSet};
+    use dbt_serde_yaml::Spanned;
     use regex::Regex;
     use std::collections::BTreeMap;
     use std::io;
@@ -206,7 +207,7 @@ email,string,\n\
             quoting: dbt_schemas::schemas::relations::DEFAULT_RESOLVED_QUOTING,
             quoting_ignore_case: false,
             materialized: DbtMaterialization::Table,
-            static_analysis: dbt_common::io_args::StaticAnalysisKind::On,
+            static_analysis: Spanned::new(dbt_common::io_args::StaticAnalysisKind::On),
             static_analysis_off_reason: None,
             enabled: true,
             extended_model: false,

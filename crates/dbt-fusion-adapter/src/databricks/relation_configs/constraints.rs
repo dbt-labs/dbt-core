@@ -417,6 +417,7 @@ mod tests {
         properties::ModelConstraint,
         relations::relation_configs::{ComponentConfig, RelationChangeSet},
     };
+    use dbt_serde_yaml::Spanned;
     use dbt_test_primitives::assert_contains;
     use std::collections::{BTreeMap, BTreeSet};
     use std::io;
@@ -501,7 +502,7 @@ fk_composite,parent_type,main,default,parents,type
             quoting: dbt_schemas::schemas::relations::DEFAULT_RESOLVED_QUOTING,
             quoting_ignore_case: false,
             materialized: DbtMaterialization::Table,
-            static_analysis: dbt_common::io_args::StaticAnalysisKind::On,
+            static_analysis: Spanned::new(dbt_common::io_args::StaticAnalysisKind::On),
             static_analysis_off_reason: None,
             enabled: true,
             extended_model: false,

@@ -282,7 +282,7 @@ pub struct ProjectModelConfig {
     #[serde(rename = "+sql_header")]
     pub sql_header: Option<String>,
     #[serde(rename = "+static_analysis")]
-    pub static_analysis: Option<StaticAnalysisKind>,
+    pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
     #[serde(rename = "+table_format")]
     pub table_format: Option<String>,
     #[serde(rename = "+tags")]
@@ -387,7 +387,7 @@ pub struct ModelConfig {
     pub merge_exclude_columns: Option<StringOrArrayOfStrings>,
     pub access: Option<Access>,
     pub table_format: Option<String>,
-    pub static_analysis: Option<StaticAnalysisKind>,
+    pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
     pub freshness: Option<ModelFreshness>,
     pub sql_header: Option<String>,
     pub location: Option<String>,

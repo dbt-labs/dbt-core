@@ -162,6 +162,7 @@ mod tests {
     use crate::databricks::relation_configs::base::DatabricksRelationResultsBuilder;
     use dbt_agate::AgateTable;
     use dbt_schemas::schemas::{common::*, nodes::*, project::*};
+    use dbt_serde_yaml::Spanned;
     use serde_json::json;
     use std::collections::BTreeMap;
 
@@ -237,7 +238,7 @@ mod tests {
                 quoting: dbt_schemas::schemas::relations::DEFAULT_RESOLVED_QUOTING,
                 quoting_ignore_case: false,
                 materialized: DbtMaterialization::StreamingTable,
-                static_analysis: dbt_common::io_args::StaticAnalysisKind::On,
+                static_analysis: Spanned::new(dbt_common::io_args::StaticAnalysisKind::On),
                 static_analysis_off_reason: None,
                 enabled: true,
                 extended_model: false,

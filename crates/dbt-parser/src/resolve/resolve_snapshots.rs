@@ -298,7 +298,8 @@ pub async fn resolve_snapshots(
 
             let static_analysis = final_config
                 .static_analysis
-                .unwrap_or(StaticAnalysisKind::On);
+                .clone()
+                .unwrap_or_else(|| StaticAnalysisKind::On.into());
 
             let macro_depends_on = all_depends_on
                 .get(&format!("{package_name}.{snapshot_name}"))
@@ -360,8 +361,9 @@ pub async fn resolve_snapshots(
                         .unwrap_or_default()
                         .snowflake_ignore_case
                         .unwrap_or(false),
-                    static_analysis_off_reason: matches!(static_analysis, StaticAnalysisKind::Off)
-                        .then(|| StaticAnalysisOffReason::ConfiguredOff),
+                    static_analysis_off_reason: (static_analysis.clone().into_inner()
+                        == StaticAnalysisKind::Off)
+                        .then_some(StaticAnalysisOffReason::ConfiguredOff),
                     static_analysis,
                     refs: sql_file_info
                         .refs
