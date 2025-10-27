@@ -49,7 +49,7 @@ impl BackgroundWriter {
         let shutdown_err_clone = shutdown_err.clone();
 
         let writer_thread = thread::spawn(move || {
-            while let Ok(message) = receiver.recv() {
+            'write_loop: while let Ok(message) = receiver.recv() {
                 match message {
                     TelemetryMessage::Write(data) => {
                         // Write the data
@@ -75,11 +75,24 @@ impl BackgroundWriter {
                     TelemetryMessage::Shutdown => {
                         // Process any remaining messages in the channel
                         while let Ok(TelemetryMessage::Write(data)) = receiver.try_recv() {
-                            let _ = writer.write_all(&data);
+                            if let Err(e) = writer.write_all(&data) {
+                                // Save the error for later reporting
+                                let mut err_lock =
+                                    shutdown_err_clone.lock().expect("Mutex poisoned");
+                                *err_lock = Some(e);
+
+                                // Avoid further attempts to write, assume fatal
+                                break 'write_loop;
+                            }
                         }
 
                         // Final flush before shutdown
-                        let _ = writer.flush();
+                        if let Err(e) = writer.flush() {
+                            // Save the error for later reporting
+                            let mut err_lock = shutdown_err_clone.lock().expect("Mutex poisoned");
+                            *err_lock = Some(e);
+                        }
+
                         break;
                     }
                 }
@@ -109,7 +122,7 @@ impl BackgroundWriter {
             // Writer thread has shut down
             return err!(
                 ErrorCode::IoError,
-                "Telemetry writer thread has terminated unexpectedly",
+                "Attempt to write to telemetry writer after shutdown",
             );
         }
 
@@ -132,22 +145,26 @@ impl BackgroundWriter {
 }
 
 impl SharedWriter for BackgroundWriter {
-    fn write(&self, data: &str) -> io::Result<()> {
-        self.write_bytes(data.as_bytes(), false)
-            .map_err(|e| io::Error::other(e.to_string()))
+    fn write(&self, data: &str) {
+        // Errors are stored internally and reported during shutdown.
+        // If the writer has already failed, this will return an error
+        // but we can safely ignore it as the failure will be reported on shutdown.
+        self.write_bytes(data.as_bytes(), false).ok();
     }
 
-    fn writeln(&self, data: &str) -> io::Result<()> {
-        self.write_bytes(data.as_bytes(), true)
-            .map_err(|e| io::Error::other(e.to_string()))
+    fn writeln(&self, data: &str) {
+        // Errors are stored internally and reported during shutdown.
+        // If the writer has already failed, this will return an error
+        // but we can safely ignore it as the failure will be reported on shutdown.
+        self.write_bytes(data.as_bytes(), true).ok();
     }
 }
 
 impl TelemetryShutdown for BackgroundWriterShutdownHandle {
     fn shutdown(&mut self) -> FsResult<()> {
         if !self.shutdown_flag.swap(true, Ordering::AcqRel) {
-            // Send shutdown message
-            let _ = self.sender.send(TelemetryMessage::Shutdown);
+            // Send shutdown message. Ignore error if the channel is already closed.
+            self.sender.send(TelemetryMessage::Shutdown).ok();
         }
 
         // Wait for the writer thread to finish
@@ -179,7 +196,7 @@ impl TelemetryShutdown for BackgroundWriterShutdownHandle {
 impl Drop for BackgroundWriterShutdownHandle {
     fn drop(&mut self) {
         // Discard any error, as we can't return it from drop
-        let _ = self.shutdown();
+        self.shutdown().ok();
     }
 }
 

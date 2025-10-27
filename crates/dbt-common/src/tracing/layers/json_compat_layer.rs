@@ -108,7 +108,7 @@ impl TelemetryConsumer for JsonCompatLayer {
             })
             .to_string();
 
-            let _ = self.writer.writeln(value.as_str());
+            self.writer.writeln(value.as_str());
         }
 
         let message = formatted
@@ -151,7 +151,7 @@ impl TelemetryConsumer for JsonCompatLayer {
         })
         .to_string();
 
-        let _ = self.writer.writeln(value.as_str());
+        self.writer.writeln(value.as_str());
     }
 
     fn on_log_record(&self, log_record: &LogRecordInfo, _data_provider: &mut DataProvider<'_>) {
@@ -178,7 +178,7 @@ impl TelemetryConsumer for JsonCompatLayer {
             })
             .to_string();
 
-            let _ = self.writer.writeln(value.as_str());
+            self.writer.writeln(value.as_str());
         }
     }
 }

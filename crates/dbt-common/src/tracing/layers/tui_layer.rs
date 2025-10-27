@@ -159,16 +159,28 @@ impl TelemetryConsumer for TuiLayer {
             data_provider.with::<DelayedMessages>(|delayed_messages| {
                 for msg in &delayed_messages.0 {
                     if msg.on_stderr {
-                        let _ = io::stderr().lock().write_all(msg.message.as_bytes());
+                        io::stderr()
+                            .lock()
+                            .write_all(msg.message.as_bytes())
+                            .expect("failed to write to stderr");
                     } else {
-                        let _ = io::stdout().lock().write_all(msg.message.as_bytes());
+                        io::stdout()
+                            .lock()
+                            .write_all(msg.message.as_bytes())
+                            .expect("failed to write to stdout");
                     };
                 }
 
                 // If we had at least one message, flush the streams
                 if !delayed_messages.0.is_empty() {
-                    let _ = io::stderr().lock().flush();
-                    let _ = io::stdout().lock().flush();
+                    io::stderr()
+                        .lock()
+                        .flush()
+                        .expect("failed to write to stderr");
+                    io::stdout()
+                        .lock()
+                        .flush()
+                        .expect("failed to write to stdout");
                 }
             });
 
@@ -245,15 +257,17 @@ impl TelemetryConsumer for TuiLayer {
             // Write to appropriate stream with progress bars suspended
             if log_record.severity_number > SeverityNumber::Info {
                 with_suspended_progress_bars(|| {
-                    let _ = io::stderr()
+                    io::stderr()
                         .lock()
-                        .write_fmt(format_args!("{}\n", formatted_message));
+                        .write_fmt(format_args!("{}\n", formatted_message))
+                        .expect("failed to write to stderr");
                 });
             } else {
                 with_suspended_progress_bars(|| {
-                    let _ = io::stdout()
+                    io::stdout()
                         .lock()
-                        .write_fmt(format_args!("{}\n", formatted_message));
+                        .write_fmt(format_args!("{}\n", formatted_message))
+                        .expect("failed to write to stdout");
                 });
             };
         }
@@ -279,7 +293,9 @@ impl TuiLayer {
 
         // Per pre-migration logic, autofix line were always printed ignoring show options
         if let Some(line) = formatted.autofix_line() {
-            let _ = stdout.write_fmt(format_args!("{}\n", line));
+            stdout
+                .write_fmt(format_args!("{}\n", line))
+                .expect("failed to write to stdout");
         }
 
         if !self.show_options.contains(&ShowOptions::Completed)
@@ -290,7 +306,9 @@ impl TuiLayer {
 
         if let Some(summary_lines) = formatted.summary_lines() {
             for line in summary_lines {
-                let _ = stdout.write_fmt(format_args!("{}\n", line));
+                stdout
+                    .write_fmt(format_args!("{}\n", line))
+                    .expect("failed to write to stdout");
             }
         }
     }

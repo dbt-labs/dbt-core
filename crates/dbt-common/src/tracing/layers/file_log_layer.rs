@@ -48,8 +48,7 @@ impl TelemetryConsumer for FileLogLayer {
             && let Some(NodeOutcomeDetail::NodeTestDetail(t_outcome)) = &ne.node_outcome_detail
             && let Some(diff_table) = t_outcome.diff_table.as_ref()
         {
-            let _ = self
-                .writer
+            self.writer
                 .write(format!("\nFAIL {}\n{diff_table}\n", ne.name).as_str());
         }
 
@@ -62,12 +61,12 @@ impl TelemetryConsumer for FileLogLayer {
 
         // Per pre-migration logic, autofix line were always printed ignoring show options
         if let Some(line) = formatted.autofix_line() {
-            let _ = self.writer.writeln(line);
+            self.writer.writeln(line);
         }
 
         if let Some(summary_lines) = formatted.summary_lines() {
             for line in summary_lines {
-                let _ = self.writer.writeln(line.as_str());
+                self.writer.writeln(line.as_str());
             }
         }
     }
@@ -79,8 +78,7 @@ impl TelemetryConsumer for FileLogLayer {
             let formatted_message =
                 format_log_message(log_msg, &log_record.body, log_record.severity_number, false);
 
-            // Write to file
-            let _ = self.writer.writeln(&formatted_message);
+            self.writer.writeln(&formatted_message);
         }
     }
 }

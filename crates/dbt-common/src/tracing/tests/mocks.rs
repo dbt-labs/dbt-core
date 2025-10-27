@@ -6,10 +6,7 @@ use super::super::{
 use dbt_telemetry::{AnyTelemetryEvent, TelemetryEventRecType, TelemetryOutputFlags};
 use dbt_telemetry::{LogRecordInfo, SpanEndInfo, SpanStartInfo};
 use serde::Serialize;
-use std::{
-    io,
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 
 fn serialize_flags<S>(flags: &TelemetryOutputFlags, serializer: S) -> Result<S::Ok, S::Error>
 where
@@ -170,20 +167,18 @@ impl TestWriter {
 }
 
 impl SharedWriter for TestWriter {
-    fn write(&self, data: &str) -> io::Result<()> {
+    fn write(&self, data: &str) {
         self.lines
             .lock()
             .expect("writer mutex poisoned")
             .push(data.to_string());
-        Ok(())
     }
 
-    fn writeln(&self, data: &str) -> io::Result<()> {
+    fn writeln(&self, data: &str) {
         self.lines
             .lock()
             .expect("writer mutex poisoned")
             .push(format!("{data}\n"));
-        Ok(())
     }
 
     fn is_terminal(&self) -> bool {

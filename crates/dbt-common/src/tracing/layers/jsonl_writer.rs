@@ -66,28 +66,19 @@ impl TelemetryConsumer for TelemetryJsonlWriterLayer {
 
     fn on_span_start(&self, span: &SpanStartInfo, _: &mut DataProvider<'_>) {
         if let Ok(json) = serde_json::to_string(&TelemetryRecordRef::SpanStart(span)) {
-            // Currently we silently ignore write errors. We expect writers to be
-            // smart enough to avoid trying to write after fatal errors and report
-            // them during shutdown.
-            let _ = self.writer.writeln(json.as_str());
+            self.writer.writeln(json.as_str());
         }
     }
 
     fn on_span_end(&self, span: &SpanEndInfo, _: &mut DataProvider<'_>) {
         if let Ok(json) = serde_json::to_string(&TelemetryRecordRef::SpanEnd(span)) {
-            // Currently we silently ignore write errors. We expect writers to be
-            // smart enough to avoid trying to write after fatal errors and report
-            // them during shutdown.
-            let _ = self.writer.writeln(json.as_str());
+            self.writer.writeln(json.as_str());
         }
     }
 
     fn on_log_record(&self, record: &LogRecordInfo, _: &mut DataProvider<'_>) {
         if let Ok(json) = serde_json::to_string(&TelemetryRecordRef::LogRecord(record)) {
-            // Currently we silently ignore write errors. We expect writers to be
-            // smart enough to avoid trying to write after fatal errors and report
-            // them during shutdown.
-            let _ = self.writer.writeln(json.as_str());
+            self.writer.writeln(json.as_str());
         }
     }
 }

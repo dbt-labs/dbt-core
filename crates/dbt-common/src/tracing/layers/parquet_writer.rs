@@ -173,7 +173,16 @@ impl TelemetryParquetWriterLayer {
                     ParquetMessage::Shutdown => {
                         // Process any remaining messages in the channel
                         while let Ok(ParquetMessage::Write(record)) = receiver.try_recv() {
-                            let _ = parquet_writer.write_record(*record);
+                            if let Err(e) = parquet_writer.write_record(*record) {
+                                // Save the error for later reporting
+                                let mut err_lock =
+                                    shutdown_err_clone.lock().expect("Mutex poisoned");
+                                *err_lock = Some(io::Error::other(e.to_string()));
+
+                                // Avoid further attempts to write, but do not break out of outer loop yet
+                                // we may still be able to finalize
+                                break;
+                            }
                         }
 
                         // Finalize and close the parquet writer
@@ -213,7 +222,7 @@ impl TelemetryParquetWriterLayer {
             // Writer thread has shut down
             return err!(
                 ErrorCode::IoError,
-                "Telemetry parquet writer thread has terminated unexpectedly",
+                "Attempt to write to telemetry parquet writer after shutdown",
             );
         }
 
@@ -248,13 +257,19 @@ impl TelemetryConsumer for TelemetryParquetWriterLayer {
     fn on_span_end(&self, span: &SpanEndInfo, _: &mut DataProvider<'_>) {
         let telemetry_record = TelemetryRecord::SpanEnd(span.clone());
 
-        let _ = self.write_record(telemetry_record);
+        // Errors are stored internally and reported during shutdown.
+        // If the writer has already failed, this will return an error
+        // but we can safely ignore it as the failure will be reported on shutdown.
+        self.write_record(telemetry_record).ok();
     }
 
     fn on_log_record(&self, record: &LogRecordInfo, _: &mut DataProvider<'_>) {
         let telemetry_record = TelemetryRecord::LogRecord(record.clone());
 
-        let _ = self.write_record(telemetry_record);
+        // Errors are stored internally and reported during shutdown.
+        // If the writer has already failed, this will return an error
+        // but we can safely ignore it as the failure will be reported on shutdown.
+        self.write_record(telemetry_record).ok();
     }
 }
 
@@ -269,8 +284,8 @@ pub struct TelemetryParquetWriterHandle {
 impl TelemetryShutdown for TelemetryParquetWriterHandle {
     fn shutdown(&mut self) -> FsResult<()> {
         if !self.shutdown_flag.swap(true, Ordering::AcqRel) {
-            // Send shutdown message
-            let _ = self.sender.send(ParquetMessage::Shutdown);
+            // Send shutdown message. Ignore error if the channel is already closed.
+            self.sender.send(ParquetMessage::Shutdown).ok();
         }
 
         // Wait for the writer thread to finish
@@ -302,7 +317,7 @@ impl TelemetryShutdown for TelemetryParquetWriterHandle {
 impl Drop for TelemetryParquetWriterHandle {
     fn drop(&mut self) {
         // Discard any error, as we can't return it from drop
-        let _ = self.shutdown();
+        self.shutdown().ok();
     }
 }
 
