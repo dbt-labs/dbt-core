@@ -183,6 +183,17 @@ pub enum FreshnessStatus {
     Error,
 }
 
+impl std::fmt::Display for FreshnessStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
+            Self::Pass => "pass",
+            Self::Warn => "warn",
+            Self::Error => "error",
+        };
+        write!(f, "{s}")
+    }
+}
+
 /// Trait for types that can be merged, taking the last non-None value
 pub trait Merge<T> {
     /// Merge with another instance, where the other's non-None values overwrite self

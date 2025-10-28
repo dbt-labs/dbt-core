@@ -1,4 +1,4 @@
-use super::{RunResultsArtifact, manifest::DbtManifest};
+use super::{RunResultsArtifact, manifest::DbtManifest, sources::FreshnessResultsArtifact};
 use crate::schemas::common::{DbtQuoting, ResolvedQuoting};
 use crate::schemas::manifest::nodes_from_dbt_manifest;
 use crate::schemas::serde::typed_struct_from_json_file;
@@ -9,8 +9,9 @@ use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone)]
 pub struct PreviousState {
-    pub nodes: Nodes,
+    pub nodes: Option<Nodes>,
     pub run_results: Option<RunResultsArtifact>,
+    pub source_freshness_results: Option<FreshnessResultsArtifact>,
     pub state_path: PathBuf,
 }
 
@@ -32,24 +33,32 @@ impl fmt::Display for PreviousState {
 }
 impl PreviousState {
     pub fn try_new(state_path: &Path, root_project_quoting: ResolvedQuoting) -> FsResult<Self> {
-        let manifest: DbtManifest =
-            typed_struct_from_json_file(&state_path.join(DBT_MANIFEST_JSON))?;
-        let dbt_quoting = DbtQuoting {
-            database: Some(root_project_quoting.database),
-            schema: Some(root_project_quoting.schema),
-            identifier: Some(root_project_quoting.identifier),
-            snowflake_ignore_case: None,
-        };
-        let quoting = if let Some(mut mantle_quoting) = manifest.metadata.quoting {
-            mantle_quoting.default_to(&dbt_quoting);
-            mantle_quoting
+        // Try to load manifest.json, but make it optional
+        let nodes = if let Ok(manifest) =
+            typed_struct_from_json_file::<DbtManifest>(&state_path.join(DBT_MANIFEST_JSON))
+        {
+            let dbt_quoting = DbtQuoting {
+                database: Some(root_project_quoting.database),
+                schema: Some(root_project_quoting.schema),
+                identifier: Some(root_project_quoting.identifier),
+                snowflake_ignore_case: None,
+            };
+            let quoting = if let Some(mut mantle_quoting) = manifest.metadata.quoting {
+                mantle_quoting.default_to(&dbt_quoting);
+                mantle_quoting
+            } else {
+                dbt_quoting
+            };
+            Some(nodes_from_dbt_manifest(manifest, quoting))
         } else {
-            dbt_quoting
+            None
         };
 
         Ok(Self {
-            nodes: nodes_from_dbt_manifest(manifest, quoting),
+            nodes,
             run_results: RunResultsArtifact::from_file(&state_path.join("run_results.json")).ok(),
+            source_freshness_results: typed_struct_from_json_file(&state_path.join("sources.json"))
+                .ok(),
             state_path: state_path.to_path_buf(),
         })
     }
@@ -60,7 +69,8 @@ impl PreviousState {
             true
         } else {
             self.nodes
-                .get_node(node.common().unique_id.as_str())
+                .as_ref()
+                .and_then(|nodes| nodes.get_node(node.common().unique_id.as_str()))
                 .is_some()
         }
     }
@@ -108,7 +118,8 @@ impl PreviousState {
         // Get the previous node from the manifest
         let previous_node = match self
             .nodes
-            .get_node(current_node.common().unique_id.as_str())
+            .as_ref()
+            .and_then(|nodes| nodes.get_node(current_node.common().unique_id.as_str()))
         {
             Some(node) => node,
             // TODO test is currently ignored in the state selector because fusion generate test name different from dbt-mantle.
@@ -122,7 +133,8 @@ impl PreviousState {
         // Get the previous node from the manifest
         let previous_node = match self
             .nodes
-            .get_node(current_node.common().unique_id.as_str())
+            .as_ref()
+            .and_then(|nodes| nodes.get_node(current_node.common().unique_id.as_str()))
         {
             Some(node) => node,
             None => return true, // If previous node doesn't exist, consider it modified
