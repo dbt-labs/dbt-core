@@ -68,7 +68,9 @@ class Profile(HasCredentials):
         threads: int,
         credentials: Credentials,
     ) -> None:
-        """Explicitly defining `__init__` to work around bug in Python 3.9.7
+        """
+        TODO: Is this no longer needed now that 3.9 is no longer supported?
+        Explicitly defining `__init__` to work around bug in Python 3.9.7
         https://bugs.python.org/issue45081
         """
         self.profile_name = profile_name

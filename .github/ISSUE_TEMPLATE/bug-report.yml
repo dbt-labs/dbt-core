@@ -62,7 +62,7 @@ body:
       description: |
         examples:
           - **OS**: Ubuntu 24.04
-          - **Python**: 3.9.12 (`python3 --version`)
+          - **Python**: 3.10.12 (`python3 --version`)
           - **dbt-core**: 1.1.1 (`dbt --version`)
       value: |
         - OS:
