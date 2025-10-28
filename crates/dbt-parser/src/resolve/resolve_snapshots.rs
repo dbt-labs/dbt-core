@@ -417,8 +417,17 @@ pub async fn resolve_snapshots(
             };
 
             let components = RelationComponents {
-                database: final_config.database.clone(),
-                schema: final_config.schema.clone(),
+                // For backwards compatibility with target_schema and target_database configs
+                database: if final_config.target_database.is_some() {
+                    final_config.target_database.clone()
+                } else {
+                    final_config.database.clone()
+                },
+                schema: if final_config.target_schema.is_some() {
+                    final_config.target_schema.clone()
+                } else {
+                    final_config.schema.clone()
+                },
                 alias: final_config.alias.clone(),
                 store_failures: None,
             };
@@ -433,14 +442,6 @@ pub async fn resolve_snapshots(
                 &components,
                 adapter_type,
             )?;
-
-            // For backwards compatibility with target_schema and target_database configs
-            if let Some(target_database) = &final_config.target_database {
-                dbt_snapshot.__base_attr__.database = target_database.clone();
-            }
-            if let Some(target_schema) = &final_config.target_schema {
-                dbt_snapshot.__base_attr__.schema = target_schema.clone();
-            }
 
             match node_resolver.insert_ref(&dbt_snapshot, adapter_type, status, false) {
                 Ok(_) => (),
