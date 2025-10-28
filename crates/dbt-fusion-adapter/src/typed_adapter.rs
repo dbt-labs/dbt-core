@@ -62,17 +62,26 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         self.engine().config(key)
     }
 
-    /// The set of standard builtin strategies which this adapter supports out-of-the-box.
-    /// Not used to validate custom strategies defined by end users.
-    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1684-L1685
-    /// default, so far only used by BigQuery
-    fn valid_incremental_strategies(&self) -> Vec<DbtIncrementalStrategy> {
-        vec![DbtIncrementalStrategy::Append]
-    }
+    fn valid_incremental_strategies(&self) -> &[DbtIncrementalStrategy] {
+        use DbtIncrementalStrategy::*;
+        static POSTGRES: [DbtIncrementalStrategy; 4] = [Append, DeleteInsert, Merge, Microbatch];
+        static SNOWFLAKE: [DbtIncrementalStrategy; 5] =
+            [Append, DeleteInsert, InsertOverwrite, Merge, Microbatch];
+        static BIGQUERY: [DbtIncrementalStrategy; 1] = [Append];
+        static DATABRICKS: [DbtIncrementalStrategy; 4] =
+            [Append, Merge, InsertOverwrite, ReplaceWhere];
+        static REDSHIFT: [DbtIncrementalStrategy; 4] = [Append, DeleteInsert, Merge, Microbatch];
 
-    /// The set of standard builtin strategies which this adapter supports out-of-the-box.
-    fn valid_incremental_strategies_as_values(&self) -> Value {
-        unimplemented!("Only available with Databricks adapter")
+        match self.adapter_type() {
+            AdapterType::Postgres => &POSTGRES,
+            AdapterType::Snowflake => &SNOWFLAKE,
+            AdapterType::Bigquery => &BIGQUERY,
+            AdapterType::Databricks => &DATABRICKS,
+            AdapterType::Redshift => &REDSHIFT,
+            AdapterType::Salesforce => {
+                unimplemented!("Salesforce valid_incremental_strategies not implemented")
+            }
+        }
     }
 
     /// Redact credentials expressions from DDL statements

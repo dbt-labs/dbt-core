@@ -10,7 +10,7 @@ use crate::typed_adapter::TypedBaseAdapter;
 use arrow::array::{Array, StringArray};
 use dbt_common::adapter::AdapterType;
 use dbt_schemas::dbt_types::RelationType;
-use dbt_schemas::schemas::common::{ConstraintSupport, ConstraintType, DbtIncrementalStrategy};
+use dbt_schemas::schemas::common::{ConstraintSupport, ConstraintType};
 use dbt_schemas::schemas::relations::base::BaseRelation;
 use dbt_xdbc::{Connection, QueryCtx};
 use minijinja::{State, Value};
@@ -54,16 +54,6 @@ impl AdapterTyping for RedshiftAdapter {
 }
 
 impl TypedBaseAdapter for RedshiftAdapter {
-    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-redshift/src/dbt/adapters/redshift/impl.py#L129-L130
-    fn valid_incremental_strategies(&self) -> Vec<DbtIncrementalStrategy> {
-        vec![
-            DbtIncrementalStrategy::Append,
-            DbtIncrementalStrategy::DeleteInsert,
-            DbtIncrementalStrategy::Merge,
-            DbtIncrementalStrategy::Microbatch,
-        ]
-    }
-
     // TODO: add_query does not appear to be necessary (few uses in
     // macros) and should be removed and replaced with `execute`.
     #[allow(clippy::too_many_arguments)]

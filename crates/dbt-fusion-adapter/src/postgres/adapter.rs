@@ -9,7 +9,7 @@ use crate::sql_engine::SqlEngine;
 use crate::typed_adapter::TypedBaseAdapter;
 use arrow::array::{Array, StringArray};
 use dbt_schemas::dbt_types::RelationType;
-use dbt_schemas::schemas::common::{ConstraintSupport, ConstraintType, DbtIncrementalStrategy};
+use dbt_schemas::schemas::common::{ConstraintSupport, ConstraintType};
 use dbt_schemas::schemas::relations::base::BaseRelation;
 use dbt_xdbc::{Connection, QueryCtx};
 
@@ -192,15 +192,6 @@ impl TypedBaseAdapter for PostgresAdapter {
             // Replay engine does not have a configured database
             Ok(Value::from(()))
         }
-    }
-
-    fn valid_incremental_strategies(&self) -> Vec<DbtIncrementalStrategy> {
-        vec![
-            DbtIncrementalStrategy::Append,
-            DbtIncrementalStrategy::DeleteInsert,
-            DbtIncrementalStrategy::Merge,
-            DbtIncrementalStrategy::Microbatch,
-        ]
     }
 
     fn get_constraint_support(&self, ct: ConstraintType) -> ConstraintSupport {

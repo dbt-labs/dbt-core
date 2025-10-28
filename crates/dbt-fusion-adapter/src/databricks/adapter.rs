@@ -28,9 +28,7 @@ use dbt_agate::AgateTable;
 use dbt_common::behavior_flags::BehaviorFlag;
 
 use dbt_schemas::dbt_types::RelationType;
-use dbt_schemas::schemas::common::{
-    ConstraintSupport, ConstraintType, DbtIncrementalStrategy, DbtMaterialization,
-};
+use dbt_schemas::schemas::common::{ConstraintSupport, ConstraintType, DbtMaterialization};
 use dbt_schemas::schemas::nodes::AdapterAttr;
 use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::relations::base::BaseRelation;
@@ -139,21 +137,6 @@ impl AdapterTyping for DatabricksAdapter {
 }
 
 impl TypedBaseAdapter for DatabricksAdapter {
-    /// https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/impl.py#L661-L662
-    /// TODO: microbatch support is version dependent
-    fn valid_incremental_strategies(&self) -> Vec<DbtIncrementalStrategy> {
-        vec![
-            DbtIncrementalStrategy::Append,
-            DbtIncrementalStrategy::Merge,
-            DbtIncrementalStrategy::InsertOverwrite,
-            DbtIncrementalStrategy::ReplaceWhere,
-        ]
-    }
-
-    fn valid_incremental_strategies_as_values(&self) -> Value {
-        Value::from_serialize(self.valid_incremental_strategies())
-    }
-
     /// https://github.com/databricks/dbt-databricks/blob/822b105b15e644676d9e1f47cbfd765cd4c1541f/dbt/adapters/databricks/impl.py#L87
     fn behavior(&self) -> Vec<BehaviorFlag> {
         let use_info_schema_for_columns = BehaviorFlag::new(

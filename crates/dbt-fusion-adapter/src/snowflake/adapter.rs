@@ -16,7 +16,7 @@ use dbt_common::adapter::AdapterType;
 use dbt_common::behavior_flags::BehaviorFlag;
 use dbt_common::unexpected_fs_err;
 use dbt_schemas::dbt_types::RelationType;
-use dbt_schemas::schemas::common::{ConstraintSupport, ConstraintType, DbtIncrementalStrategy};
+use dbt_schemas::schemas::common::{ConstraintSupport, ConstraintType};
 use dbt_schemas::schemas::relations::base::{BaseRelation, TableFormat};
 use dbt_xdbc::{Connection, QueryCtx};
 use minijinja::{State, Value};
@@ -324,16 +324,6 @@ prevent unnecessary latency for other users."#,
         } else {
             Ok(column.to_string())
         }
-    }
-
-    fn valid_incremental_strategies(&self) -> Vec<DbtIncrementalStrategy> {
-        vec![
-            DbtIncrementalStrategy::Append,
-            DbtIncrementalStrategy::Merge,
-            DbtIncrementalStrategy::DeleteInsert,
-            DbtIncrementalStrategy::Microbatch,
-            DbtIncrementalStrategy::InsertOverwrite,
-        ]
     }
 
     /// https://github.com/dbt-labs/dbt-adapters/blob/aa1de3d16267a456326a36045701fb48a61a6b6c/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L74

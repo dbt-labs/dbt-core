@@ -581,7 +581,7 @@ impl BaseAdapter for BridgeAdapter {
             let strategy_ = DbtIncrementalStrategy::from_str(&strategy)
                 .map_err(|e| invalid_argument_inner!("Invalid strategy value {}", e))?;
             if !self
-                .typed_adapter
+                .typed_adapter()
                 .valid_incremental_strategies()
                 .contains(&strategy_)
                 && builtin_incremental_strategies(false).contains(&strategy_)
@@ -1516,7 +1516,9 @@ impl BaseAdapter for BridgeAdapter {
         _state: &State,
         args: &[Value],
     ) -> Result<Value, MinijinjaError> {
-        Ok(self.typed_adapter.valid_incremental_strategies_as_values())
+        Ok(Value::from_serialize(
+            self.typed_adapter.valid_incremental_strategies(),
+        ))
     }
 
     #[tracing::instrument(skip(self, _state), level = "trace")]
