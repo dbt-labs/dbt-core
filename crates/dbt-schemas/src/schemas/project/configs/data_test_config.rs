@@ -41,7 +41,7 @@ pub struct ProjectDataTestConfig {
     pub limit: Option<i32>,
     #[serde(rename = "+meta")]
     pub meta: Option<BTreeMap<String, YmlValue>>,
-    #[serde(rename = "+schema")]
+    #[serde(rename = "+schema", alias = "+dataset")]
     pub schema: Option<String>,
     #[serde(rename = "+severity")]
     pub severity: Option<Severity>,
