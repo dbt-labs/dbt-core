@@ -796,15 +796,23 @@ impl BaseAdapter for BridgeAdapter {
             // Check if the relation being queried is the same as the one currently being rendered
             // Skip local compilation results for the current relation since the compiled sql
             // may represent a schema that the model will have when the run is done, not the current state
-            let is_current_relation = if let (relation_fqn, Some(current_relation_name)) = (
-                relation.render_self_as_str(),
-                state.relation_name_from_state(),
-            ) {
-                // This might cause false positive, but fine since we just make one more remote call.
-                relation_fqn.to_lowercase() == current_relation_name.to_lowercase()
-            } else {
-                false
-            };
+            let is_current_relation =
+                if let Some((database, schema, alias)) = state.database_schema_alias_from_state() {
+                    // Lowercase name comparison because relation names from the local project
+                    // are user specified, whereas the input relation may have been a normalized name
+                    // from the warehouse
+                    relation
+                        .database_as_str()
+                        .is_ok_and(|s| s.eq_ignore_ascii_case(&database))
+                        && relation
+                            .schema_as_str()
+                            .is_ok_and(|s| s.eq_ignore_ascii_case(&schema))
+                        && relation
+                            .identifier_as_str()
+                            .is_ok_and(|s| s.eq_ignore_ascii_case(&alias))
+                } else {
+                    false
+                };
 
             if !is_current_relation {
                 let schema = db.get_schema(&relation.get_fqn().unwrap_or_default());

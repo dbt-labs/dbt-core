@@ -151,12 +151,12 @@ impl<'template, 'env> State<'template, 'env> {
     }
 
     /// Returns the relation name for current node from the state.
-    pub fn relation_name_from_state(&self) -> Option<String> {
+    pub fn database_schema_alias_from_state(&self) -> Option<(String, String, String)> {
         let model = self.lookup("model")?;
-        if let Some(relation_name) = model.get_attr_fast("relation_name") {
-            return relation_name.as_str().map(|s| s.to_string());
-        }
-        None
+        let database = model.get_attr_fast("database")?.as_str()?.to_string();
+        let schema = model.get_attr_fast("schema")?.as_str()?.to_string();
+        let alias = model.get_attr_fast("alias")?.as_str()?.to_string();
+        Some((database, schema, alias))
     }
 
     /// Returns the base context of the state and add file_stack to it.
