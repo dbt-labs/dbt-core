@@ -6,7 +6,7 @@ from dbt.deprecations import (
     CustomKeyInObjectDeprecation,
     GenericJSONSchemaValidationDeprecation,
 )
-from dbt.jsonschemas import validate_model_config
+from dbt.jsonschemas.jsonschemas import validate_model_config
 from dbt.tests.util import safe_set_invocation_context
 from dbt_common.context import get_invocation_context
 from dbt_common.events.event_manager_client import add_callback_to_manager
