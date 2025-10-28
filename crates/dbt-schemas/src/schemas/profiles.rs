@@ -592,6 +592,8 @@ pub struct BigqueryDbConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub priority: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub quota_project: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub method: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub maximum_bytes_billed: Option<i64>,
@@ -836,6 +838,7 @@ pub struct BigqueryTargetEnv {
     pub maximum_bytes_billed: Option<i64>,
     pub method: Option<String>,
     pub priority: Option<String>,
+    pub quota_project: Option<String>,
     pub retries: Option<i64>,
     pub target_name: Option<String>,
     pub timeout_seconds: Option<i64>,
@@ -1029,6 +1032,7 @@ impl TryFrom<DbConfig> for TargetContext {
                     maximum_bytes_billed: config.maximum_bytes_billed,
                     method: config.method.clone(),
                     priority: config.priority.clone(),
+                    quota_project: config.quota_project.clone(),
                     retries: config.retries,
                     target_name: config.target_name.clone(),
                     timeout_seconds: config.timeout_seconds,

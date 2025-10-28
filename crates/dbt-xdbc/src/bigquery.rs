@@ -23,6 +23,7 @@ pub const AUTH_CLIENT_SECRET: &str = "adbc.bigquery.sql.auth.client_secret";
 pub const AUTH_REFRESH_TOKEN: &str = "adbc.bigquery.sql.auth.refresh_token";
 pub const AUTH_ACCESS_TOKEN_ENDPOINT: &str = "adbc.bigquery.sql.auth.access_token_endpoint";
 pub const AUTH_ACCESS_TOKEN_SERVER_NAME: &str = "adbc.bigquery.sql.auth.access_token_server_name";
+pub const AUTH_QUOTA_PROJECT: &str = "adbc.bigquery.sql.auth.quota_project";
 
 pub const IMPERSONATE_TARGET_PRINCIPAL: &str = "adbc.bigquery.sql.impersonate.target_principal";
 pub const IMPERSONATE_SCOPES: &str = "adbc.bigquery.sql.impersonate.scopes";

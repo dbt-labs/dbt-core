@@ -120,6 +120,7 @@ pub fn setup_bigquery_profile(
         token_uri: None,
         token: None,
         keyfile: None,
+        quota_project: None,
         retries: None,
         location: None,
         scopes: None,

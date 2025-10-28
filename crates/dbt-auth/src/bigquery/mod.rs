@@ -217,6 +217,10 @@ impl Auth for BigqueryAuth {
             builder.with_named_option(bigquery::PROJECT_ID, project_id)?;
         }
 
+        if let Some(quota_project) = config.get_string("quota_project") {
+            builder.with_named_option(bigquery::AUTH_QUOTA_PROJECT, quota_project)?;
+        }
+
         let dataset_id = Self::dataset_id(config)?;
         builder.with_named_option(bigquery::DATASET_ID, dataset_id)?;
 
