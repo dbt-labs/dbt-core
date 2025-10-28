@@ -283,3 +283,35 @@
     {% endif %}
   {%- endcall %}
 {% endmacro %}
+
+-- funcsign: () -> bool
+{% macro is_glue_catalog_linked_database() -%}
+  {#- Check if the current model is using a Glue catalog-linked database -#}
+  {% if config and config.model %}
+    {%- set catalog_relation = adapter.build_catalog_relation(config.model) -%}
+    {% if catalog_relation and (catalog_relation|attr('catalog_linked_database_type') | lower == 'glue') %}
+      {{ return(true) }}
+    {% endif %}
+  {% endif %}
+  {{ return(false) }}
+{%- endmacro %}
+
+-- funcsign: (relation) -> relation
+{% macro make_glue_compatible_relation(relation) -%}
+  {#-
+    AWS Glue requires:
+    1. Lowercase identifiers only
+    2. Double-quoted identifiers
+    
+    This macro creates a new relation with lowercased identifiers
+    and enabled quoting policy.
+  -#}
+  {% set lowercase_relation = api.Relation.create(
+      database=relation.database | lower,
+      schema=relation.schema | lower,
+      identifier=relation.identifier | lower,
+      type=relation.type,
+      quote_policy={'database': false, 'schema': true, 'identifier': true}
+  ) %}
+  {{ return(lowercase_relation) }}
+{%- endmacro %}

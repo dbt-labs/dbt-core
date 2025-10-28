@@ -216,6 +216,68 @@ alter iceberg table {{ relation }} resume recluster;
 {%- endmacro %}
 
 
+{% macro snowflake__create_table_iceberg_rest_with_glue(relation, compiled_code, catalog_relation) -%}
+{#-
+    Creates an Iceberg table for Catalog Linked Databases (e.g., AWS Glue) with explicit column definitions.
+    This is used when CTAS is not supported.
+
+    This macro is specifically for CLD where we need to create the table with an explicit schema
+    because CTAS is not available.
+-#}
+
+{# Step 0: Create a Glue-compatible relation (lowercase + double-quoted) #}
+{% set glue_relation = make_glue_compatible_relation(relation) %}
+
+{# Step 1: Get the schema from the compiled query #}
+{% set sql_columns = get_column_schema_from_query(compiled_code) %}
+
+{# Step 2: Create the iceberg table in the CLD with explicit column definitions #}
+
+{%- set copy_grants = config.get('copy_grants', default=false) -%}
+{%- set row_access_policy = config.get('row_access_policy', default=none) -%}
+{%- set table_tag = config.get('table_tag', default=none) -%}
+
+{%- set sql_header = config.get('sql_header', none) -%}
+{{ sql_header if sql_header is not none }}
+
+{# Step 2a: Check if relation exists and drop if necessary (CLD doesn't support CREATE OR REPLACE) #}
+{% set existing_relation = adapter.get_relation(database=glue_relation.database, schema=glue_relation.schema, identifier=glue_relation.identifier) %}
+{% if existing_relation %}
+    drop table if exists {{ existing_relation }};
+{% endif %}
+
+{# Step 2b: Create the table with explicit column definitions #}
+create iceberg table {{ glue_relation }} (
+    {%- for column in sql_columns -%}
+        {% if column.data_type == "FIXED" %}
+            {%- set data_type = "INT" -%}
+        {% elif "character varying" in column.data_type %}
+            {%- set data_type = "STRING" -%}
+        {% elif "timestamp" in column.data_type %}
+            {%- set data_type = "TIMESTAMP" -%}
+        {% else %}
+            {%- set data_type = column.data_type -%}
+        {% endif %}
+        {{ adapter.quote(column.name.lower()) }} {{ data_type }}
+        {%- if not loop.last %}, {% endif -%}
+    {% endfor -%}
+)
+{{ optional('external_volume', catalog_relation.external_volume, "'") }}
+{{ optional('target_file_size', catalog_relation.target_file_size, "'") }}
+{{ optional('auto_refresh', catalog_relation.auto_refresh) }}
+{{ optional('max_data_extension_time_in_days', catalog_relation.max_data_extension_time_in_days)}}
+{% if row_access_policy -%} with row access policy {{ row_access_policy }} {%- endif %}
+{% if table_tag -%} with tag ({{ table_tag }}) {%- endif %}
+{% if copy_grants -%} copy grants {%- endif %}
+;
+
+{# Step 3: Insert data from the view (in regular DB) into the table (in CLD) #}
+insert into {{ glue_relation }}
+    {{ compiled_code }};
+
+{%- endmacro %}
+
+
 {% macro snowflake__create_table_iceberg_rest_sql(relation, compiled_code) -%}
 {#-
     Implements CREATE ICEBERG TABLE ... CATALOG('catalog_name') (external REST catalog):
@@ -244,35 +306,41 @@ alter iceberg table {{ relation }} resume recluster;
 {%- set sql_header = config.get('sql_header', none) -%}
 {{ sql_header if sql_header }}
 
-{# Check if relation exists #}
-{% set existing_relation = adapter.get_relation(database=relation.database, schema=relation.schema, identifier=relation.identifier) %}
+{# Check if this is a Glue catalog-linked database - Glue doesn't support CTAS #}
+{%- set is_glue_cld = (catalog_relation|attr('catalog_linked_database_type') | lower == 'glue') -%}
 
-{% if existing_relation %}
-    {# Iceberg catalogs don't support table renaming, so we must drop first #}
-    {# This is less safe but the only option for Iceberg REST catalogs #}
-    drop table if exists {{ existing_relation }};
+{%- if is_glue_cld -%}
+    {# Delegate to Glue-specific macro (handles its own drop logic) #}
+    {{ snowflake__create_table_iceberg_rest_with_glue(relation, compiled_code, catalog_relation) }}
 
-{% endif %}
-
-{# Create the table (works for both new and replacement scenarios) #}
-create iceberg table {{ relation }}
-    {%- if contract_config.enforced %}
-    {{ get_table_columns_and_constraints() }}
-    {%- endif %}
-    {%- if not catalog_relation|attr('catalog_linked_database') -%}
-    {{ optional('external_volume', catalog_relation.external_volume, "'") }}
-    catalog = '{{ catalog_relation.catalog_name }}'  -- external REST catalog name
-    {{ optional('base_location', catalog_relation.base_location, "'") }}
-    {%- endif %}
-    {{ optional('target_file_size', catalog_relation.target_file_size, "'") }}
-    {{ optional('auto_refresh', catalog_relation.auto_refresh) }}
-    {{ optional('max_data_extension_time_in_days', catalog_relation.max_data_extension_time_in_days)}}
-    {% if row_access_policy -%} with row access policy {{ row_access_policy }} {%- endif %}
-    {% if table_tag -%} with tag ({{ table_tag }}) {%- endif %}
-    {% if copy_grants -%} copy grants {%- endif %}
-as (
-    {{ compiled_code }}
-);
+{%- else -%}
+    {# Standard Iceberg REST catalog - supports CTAS #}
+    
+    {# Check if relation exists and drop if necessary #}
+    {% set existing_relation = adapter.get_relation(database=relation.database, schema=relation.schema, identifier=relation.identifier) %}
+    {% if existing_relation %}
+        {# Iceberg catalogs don't support table renaming, so we must drop first #}
+        drop table if exists {{ existing_relation }};
+    {% endif %}
+    create iceberg table {{ relation }}
+        {%- if contract_config.enforced %}
+        {{ get_table_columns_and_constraints() }}
+        {%- endif %}
+        {%- if not catalog_relation|attr('catalog_linked_database') -%}
+        {{ optional('external_volume', catalog_relation.external_volume, "'") }}
+        catalog = '{{ catalog_relation.catalog_name }}'  -- external REST catalog name
+        {{ optional('base_location', catalog_relation.base_location, "'") }}
+        {%- endif %}
+        {{ optional('target_file_size', catalog_relation.target_file_size, "'") }}
+        {{ optional('auto_refresh', catalog_relation.auto_refresh) }}
+        {{ optional('max_data_extension_time_in_days', catalog_relation.max_data_extension_time_in_days)}}
+        {% if row_access_policy -%} with row access policy {{ row_access_policy }} {%- endif %}
+        {% if table_tag -%} with tag ({{ table_tag }}) {%- endif %}
+        {% if copy_grants -%} copy grants {%- endif %}
+    as (
+        {{ compiled_code }}
+    );
+{%- endif -%}
 
 {%- endmacro %}
 

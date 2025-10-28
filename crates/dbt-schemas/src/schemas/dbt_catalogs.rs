@@ -23,6 +23,7 @@
 //!             // REST:
 //!             auto_refresh: <bool>
 //!             catalog_linked_database: <string, if present non-empty> // REST write-support gate
+//!             catalog_linked_database_type: <string, if present non-empty> // "glue" for AWS Glue
 //!             max_data_extension_time_in_days: <u32 in 0..=90>
 //!             target_file_size: 'AUTO'|'16MB'|'32MB'|'64MB'|'128MB'   // case-insensitive
 //!
@@ -224,6 +225,7 @@ pub struct SnowflakeBuiltInPropsView {
 pub struct SnowflakeRestPropsView<'a> {
     pub auto_refresh: Option<bool>,
     pub catalog_linked_database: Option<&'a str>,
+    pub catalog_linked_database_type: Option<&'a str>,
     pub max_data_extension_time_in_days: Option<u32>,
     pub target_file_size: Option<TargetFileSize>,
 }
@@ -1027,6 +1029,7 @@ fn parse_adapter_properties<'a>(
                 &[
                     "auto_refresh",
                     "catalog_linked_database",
+                    "catalog_linked_database_type",
                     "max_data_extension_time_in_days",
                     "target_file_size",
                 ],
@@ -1041,6 +1044,8 @@ fn parse_adapter_properties<'a>(
                 )?
                 .map(|(v, _)| v),
                 catalog_linked_database: get_str(properties, "catalog_linked_database")?
+                    .map(|(s, _)| s),
+                catalog_linked_database_type: get_str(properties, "catalog_linked_database_type")?
                     .map(|(s, _)| s),
             }))
         }

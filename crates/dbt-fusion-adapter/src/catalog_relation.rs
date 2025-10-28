@@ -1320,6 +1320,9 @@ impl Object for CatalogRelation {
             "catalog_linked_database" => {
                 Self::map_properties_str(&self.adapter_properties, "catalog_linked_database")
             }
+            "catalog_linked_database_type" => {
+                Self::map_properties_str(&self.adapter_properties, "catalog_linked_database_type")
+            }
             "target_file_size" => {
                 Self::map_properties_str(&self.adapter_properties, "target_file_size")
             }
