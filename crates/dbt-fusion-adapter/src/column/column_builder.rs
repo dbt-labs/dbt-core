@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::sync::LazyLock;
 
 use crate::AdapterResult;
@@ -6,8 +7,8 @@ use crate::metadata;
 use crate::sql_types::{self, TypeOps};
 use arrow_schema::{DataType, FieldRef};
 use dbt_common::adapter::AdapterType;
-use dbt_xdbc::Backend;
 use dbt_xdbc::sql::types::original_type_string;
+use dbt_xdbc::{Backend, sql::types::SqlType};
 use regex::Regex;
 
 pub struct ColumnBuilder {
@@ -180,28 +181,35 @@ impl ColumnBuilder {
     ///
     /// [1] https://github.com/dbt-labs/dbt-adapters/blob/c16cc7047e8678f8bb88ae294f43da2c68e9f5cc/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L444
     fn build_bigquery(field: &FieldRef, type_ops: &dyn TypeOps) -> StdColumn {
-        let mut data_type = String::new();
-        if type_ops
-            .format_arrow_type_as_sql(field.data_type(), &mut data_type)
-            .is_err()
-        {
-            // desperate fallback
-            data_type = field.data_type().to_string();
-        }
-        let mode = match field.is_nullable() {
+        let original_type_str = type_ops
+            .get_original_sql_type_from_field(field)
+            // FIXME: whats a good fallback here? This should technically never fail unless the
+            // warehouse produces a very weird arrow type.
+            .unwrap_or_else(|_| Cow::Owned(field.data_type().to_string()));
+        let sql_type = SqlType::parse(Backend::BigQuery, original_type_str.as_ref()).ok();
+
+        // NOTE: In dbt Core, if a column is both REPEATED and NULLABLE,
+        // REPEATED takes precedence.
+        let non_repeated_mode = match field.is_nullable() {
             true => BigqueryColumnMode::Nullable,
-            false => {
-                if matches!(
-                    field.data_type(),
+            false => BigqueryColumnMode::Required,
+        };
+
+        let mode = match sql_type {
+            Some((sql_type, _nullable)) => match sql_type {
+                SqlType::Array(_) => BigqueryColumnMode::Repeated,
+                _ => non_repeated_mode,
+            },
+            None => {
+                // FIXME(serramatutu): desperate fallback to arrow in case SqlType fails to parse whatever comes
+                // from the warehouse
+                match field.data_type() {
                     DataType::List(..)
-                        | DataType::ListView(..)
-                        | DataType::FixedSizeList(..)
-                        | DataType::LargeList(..)
-                        | DataType::LargeListView(..)
-                ) {
-                    BigqueryColumnMode::Repeated
-                } else {
-                    BigqueryColumnMode::Required
+                    | DataType::ListView(..)
+                    | DataType::FixedSizeList(..)
+                    | DataType::LargeList(..)
+                    | DataType::LargeListView(..) => BigqueryColumnMode::Repeated,
+                    _ => non_repeated_mode,
                 }
             }
         };
@@ -230,7 +238,12 @@ impl ColumnBuilder {
             _ => Vec::new(),
         };
 
-        StdColumn::new_bigquery(field.name().to_string(), data_type, inner_columns, mode)
+        StdColumn::new_bigquery(
+            field.name().to_string(),
+            original_type_str.to_string(),
+            inner_columns,
+            mode,
+        )
     }
 
     fn build_databricks(field: &FieldRef, type_ops: &dyn TypeOps) -> StdColumn {

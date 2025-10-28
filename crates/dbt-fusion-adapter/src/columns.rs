@@ -1,3 +1,4 @@
+use dbt_xdbc::sql::types::{SqlType, StructField};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use std::sync::Arc;
@@ -13,6 +14,8 @@ use minijinja::{
 };
 
 use dbt_schemas::schemas::dbt_column::DbtColumn;
+
+use crate::base_adapter::backend_of;
 
 static LOG_RE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"([^(]+)(\([^)]+\))?").expect("A valid regex"));
@@ -254,7 +257,7 @@ impl StdColumnType {
 
         Ok(columns
             .iter()
-            .map(|c| format!("{} {}", c.quoted(), c.dtype))
+            .map(|c| format!("{} {}", c.quoted(), c.core_dtype))
             .collect::<Vec<String>>()
             .join(", "))
     }
@@ -347,9 +350,19 @@ pub struct StdColumn {
     #[allow(clippy::used_underscore_binding)]
     _fields: Vec<Self>,
 
+    /// The original data type string as used during instantiation.
+    #[allow(clippy::used_underscore_binding)]
+    _original_sql_str: Option<String>,
+
     /// Name of the column. Confusingly named `column` in dbt-adapters.
     name: String,
-    dtype: String,
+
+    /// dbt Core's degenerate representation of dtype, derived from _original_sql_str
+    core_dtype: String,
+
+    /// dbt Core's slightly less degenerate representation of data type, derived from _original_sql_str
+    core_data_type: String,
+
     /// The size of the column in characters (u32 is enough to hold) var char of max length
     /// Postgres is 65536 (2^16 - 1)
     /// Snowflake is 16777216 (2^24)
@@ -371,26 +384,138 @@ impl StdColumn {
                 .zip(other._fields.iter())
                 .all(|(a, b)| a.cmp_column(b))
             && self.name == other.name
-            && self.dtype == other.dtype
+            && self.core_dtype == other.core_dtype
+            && self.core_data_type == other.core_data_type
             && self.char_size == other.char_size
             && self.numeric_precision == other.numeric_precision
             && self.numeric_scale == other.numeric_scale
     }
+
+    fn make_degenerate_data_type_from_parsed_struct_fields(
+        adapter_type: AdapterType,
+        fields: &[StructField],
+    ) -> String {
+        let backend = backend_of(adapter_type);
+
+        let fields_str = fields
+            .iter()
+            .map(|f| {
+                let (_, inner_data_type) =
+                    Self::make_degenerate_types_from_parsed_sqltype(adapter_type, &f.sql_type);
+                format!("{} {inner_data_type}", f.name.display(backend))
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        format!("STRUCT<{}>", fields_str)
+    }
+
+    fn make_degenerate_types_from_parsed_sqltype(
+        adapter_type: AdapterType,
+        sql_type: &SqlType,
+    ) -> (String, String) {
+        let backend = backend_of(adapter_type);
+
+        match (adapter_type, sql_type) {
+            (AdapterType::Bigquery, SqlType::Boolean) => {
+                ("BOOLEAN".to_string(), "BOOLEAN".to_string())
+            }
+            (AdapterType::Bigquery, sql_type) => {
+                match sql_type {
+                    SqlType::Array(Some(inner)) => match inner.as_ref() {
+                        SqlType::Struct(Some(fields)) => (
+                            "RECORD".to_string(),
+                            format!(
+                                "ARRAY<{}>",
+                                Self::make_degenerate_data_type_from_parsed_struct_fields(
+                                    adapter_type,
+                                    fields.as_slice()
+                                )
+                            ),
+                        ),
+                        SqlType::Array(_) => unreachable!(
+                            "ARRAY of ARRAY is not allowed in BigQuery. This is a bug."
+                        ),
+                        _ => {
+                            let (dtype, data_type) =
+                                Self::make_degenerate_types_from_parsed_sqltype(
+                                    adapter_type,
+                                    inner.as_ref(),
+                                );
+
+                            (dtype, format!("ARRAY<{}>", data_type))
+                        }
+                    },
+                    SqlType::Struct(Some(fields)) => (
+                        "RECORD".to_string(),
+                        Self::make_degenerate_data_type_from_parsed_struct_fields(
+                            adapter_type,
+                            fields.as_slice(),
+                        ),
+                    ),
+                    // TODO: is Array(None) possible? How does Core represent that?
+                    _ => {
+                        let s = sql_type.to_string(backend);
+                        (s.clone(), s)
+                    }
+                }
+            }
+            _ => {
+                let dtype = sql_type.to_string(backend);
+
+                // FIXME: the implementation of data_type() is wrong anyways
+                (dtype.clone(), dtype)
+            }
+        }
+    }
+
+    /// Normalize the original_sql_str to dbt Core's canonical representations, which might lose some
+    /// information.
+    ///
+    /// Some types can be represented in different ways. For example, a boolean in BigQuery
+    /// can be `BOOL` or `BOOLEAN`. However, dbt Core always represents them consistently with
+    /// an opinionated choice. This method normalizes dtype names to this consistent
+    /// representation.
+    ///
+    /// Returns (dtype, data_type).
+    fn make_degenerate_types(
+        adapter_type: AdapterType,
+        original_sql_str: &str,
+    ) -> (String, String) {
+        match adapter_type {
+            AdapterType::Bigquery => {
+                let Ok((sql_type, _nullable)) =
+                    SqlType::parse(dbt_xdbc::Backend::BigQuery, original_sql_str)
+                else {
+                    return (original_sql_str.to_string(), original_sql_str.to_string());
+                };
+
+                Self::make_degenerate_types_from_parsed_sqltype(adapter_type, &sql_type)
+            }
+            _ => (original_sql_str.to_string(), original_sql_str.to_string()),
+        }
+    }
+
     pub fn new(
         adapter_type: AdapterType,
         name: String,
-        dtype: String,
+        original_sql_str: String,
         char_size: Option<u32>,
         numeric_precision: Option<u64>,
         numeric_scale: Option<u64>,
     ) -> Self {
+        let (core_dtype, core_data_type) =
+            Self::make_degenerate_types(adapter_type, &original_sql_str);
+
         Self {
             _adapter_type: adapter_type,
             _nullable: None,
             _repeated: None,
             _fields: Vec::new(),
+            _original_sql_str: Some(original_sql_str),
             name,
-            dtype,
+            core_dtype,
+            core_data_type,
             char_size,
             numeric_precision,
             numeric_scale,
@@ -404,8 +529,12 @@ impl StdColumn {
             _nullable: None,
             _repeated: None,
             _fields: Vec::new(),
+            // TODO(serramatutu): figure out a way to not lose the original dtype information
+            // while roundtripping from Jinja
+            _original_sql_str: None,
             name: col.name,
-            dtype: col.dtype,
+            core_dtype: col.dtype.clone(),
+            core_data_type: col.dtype,
             char_size: col.char_size,
             numeric_precision: col.numeric_precision,
             numeric_scale: col.numeric_scale,
@@ -430,15 +559,30 @@ impl StdColumn {
         adapter_type: AdapterType,
         value: Value,
     ) -> Result<Vec<Self>, minijinja::Error> {
-        let result = minijinja_value_to_typed_struct::<Vec<DbtCoreBaseColumn>>(value)
-            .map_err(|e| {
-                minijinja::Error::new(minijinja::ErrorKind::SerdeDeserializeError, e.to_string())
-            })?
-            .into_iter()
-            // TODO(serramatutu): figure out a way to derive non-standard config here
-            .map(|col| Self::from_dbt_core(adapter_type, col))
-            .collect();
-        Ok(result)
+        // First, we attempt to convert the jinja value as a proper StdColumn object so that we
+        // carry the private fields. If that's not possible, that means the object came from a
+        // macro or some other thing that serializes the column. In this case, fall back to
+        // dbt Core's column spec.
+        value
+            .downcast_object_ref::<Vec<Self>>()
+            .map(|r| Ok(r.clone()))
+            .unwrap_or_else(|| {
+                // TODO(serramatutu): purge this fallback once we know 100% we can always roundtrip information
+                // to-from Jinja. This will only be done after we get rid of all the macros
+                Ok(
+                    minijinja_value_to_typed_struct::<Vec<DbtCoreBaseColumn>>(value)
+                        .map_err(|e| {
+                            minijinja::Error::new(
+                                minijinja::ErrorKind::SerdeDeserializeError,
+                                e.to_string(),
+                            )
+                        })?
+                        .into_iter()
+                        // TODO(serramatutu): figure out a way to derive non-standard config here
+                        .map(|col| Self::from_dbt_core(adapter_type, col))
+                        .collect(),
+                )
+            })
     }
 
     /// Create a new BigQuery column
@@ -446,7 +590,7 @@ impl StdColumn {
     /// `mode` ias a field is seen in BQ (https://cloud.google.com/bigquery/docs/schemas#modes)
     pub fn new_bigquery(
         name: String,
-        dtype: String,
+        original_sql_str: String,
         fields: impl Into<Vec<Self>>,
         mode: BigqueryColumnMode,
     ) -> Self {
@@ -456,13 +600,17 @@ impl StdColumn {
             Required => (Some(false), None),
             Repeated => (None, Some(true)),
         };
+        let (core_dtype, core_data_type) =
+            Self::make_degenerate_types(AdapterType::Bigquery, &original_sql_str);
         Self {
             _adapter_type: AdapterType::Bigquery,
             _nullable: nullable,
             _repeated: repeated,
             _fields: fields.into(),
+            _original_sql_str: Some(original_sql_str),
             name,
-            dtype,
+            core_dtype,
+            core_data_type,
             char_size: None,
             numeric_precision: None,
             numeric_scale: None,
@@ -485,13 +633,18 @@ impl StdColumn {
             || raw_data_type_trimmed.starts_with("map")
             || raw_data_type_trimmed.starts_with("vector")
         {
+            let (core_dtype, core_data_type) =
+                Self::make_degenerate_types(AdapterType::Snowflake, raw_data_type);
+
             return Ok(StdColumn {
                 _adapter_type: AdapterType::Snowflake,
                 _nullable: None,
                 _repeated: None,
                 _fields: Vec::new(),
+                _original_sql_str: Some(raw_data_type.to_string()),
                 name: name.to_string(),
-                dtype: raw_data_type.to_string(),
+                core_dtype,
+                core_data_type,
                 char_size: None,
                 numeric_precision: None,
                 numeric_scale: None,
@@ -552,8 +705,10 @@ impl StdColumn {
             _nullable: None,
             _repeated: None,
             _fields: Vec::new(),
+            _original_sql_str: Some(raw_data_type.to_string()),
             name: name.to_string(),
-            dtype: data_type,
+            core_dtype: data_type.clone(),
+            core_data_type: data_type,
             char_size,
             numeric_precision,
             numeric_scale,
@@ -584,8 +739,8 @@ impl StdColumn {
             return Err("Called string_size() on non-string field".to_string());
         }
 
-        // FIXME: why self.dtype == "text" instead of is_string()? This is probably a bug...
-        if self.dtype == "text" || self.char_size.is_none() {
+        // FIXME: why self.core_dtype == "text" instead of is_string()? This is probably a bug...
+        if self.core_dtype == "text" || self.char_size.is_none() {
             let size = match self._adapter_type {
                 AdapterType::Snowflake => 16777216,
                 _ => 256,
@@ -603,11 +758,11 @@ impl StdColumn {
     fn is_numeric(&self) -> bool {
         match self._adapter_type {
             AdapterType::Bigquery => {
-                matches!(self.dtype.to_lowercase().as_str(), "numeric")
+                matches!(self.core_dtype.to_lowercase().as_str(), "numeric")
             }
             AdapterType::Snowflake => {
                 matches!(
-                    self.dtype.to_lowercase().as_str(),
+                    self.core_dtype.to_lowercase().as_str(),
                     "int"
                         | "integer"
                         | "bigint"
@@ -620,7 +775,10 @@ impl StdColumn {
                 )
             }
             _ => {
-                matches!(self.dtype.to_lowercase().as_str(), "numeric" | "decimal")
+                matches!(
+                    self.core_dtype.to_lowercase().as_str(),
+                    "numeric" | "decimal"
+                )
             }
         }
     }
@@ -628,12 +786,12 @@ impl StdColumn {
     fn is_integer(&self) -> bool {
         match self._adapter_type {
             AdapterType::Bigquery => {
-                matches!(self.dtype.to_lowercase().as_str(), "int64")
+                matches!(self.core_dtype.to_lowercase().as_str(), "int64")
             }
             AdapterType::Snowflake => false,
             _ => {
                 matches!(
-                    self.dtype.to_lowercase().as_str(),
+                    self.core_dtype.to_lowercase().as_str(),
                     "smallint"
                         | "integer"
                         | "bigint"
@@ -654,17 +812,17 @@ impl StdColumn {
     fn is_float(&self) -> bool {
         match self._adapter_type {
             AdapterType::Bigquery => {
-                matches!(self.dtype.to_lowercase().as_str(), "float64")
+                matches!(self.core_dtype.to_lowercase().as_str(), "float64")
             }
             AdapterType::Snowflake => {
                 matches!(
-                    self.dtype.to_lowercase().as_str(),
+                    self.core_dtype.to_lowercase().as_str(),
                     "float" | "float4" | "float8" | "double" | "double precision" | "real"
                 )
             }
             _ => {
                 matches!(
-                    self.dtype.to_lowercase().as_str(),
+                    self.core_dtype.to_lowercase().as_str(),
                     "real" | "float4" | "float" | "double precision" | "float8" | "double"
                 )
             }
@@ -678,11 +836,11 @@ impl StdColumn {
     fn is_string(&self) -> bool {
         match self._adapter_type {
             AdapterType::Bigquery => {
-                matches!(self.dtype.to_lowercase().as_str(), "string")
+                matches!(self.core_dtype.to_lowercase().as_str(), "string")
             }
             _ => {
                 matches!(
-                    self.dtype.to_lowercase().as_str(),
+                    self.core_dtype.to_lowercase().as_str(),
                     "text" | "character varying" | "character" | "varchar"
                 )
             }
@@ -694,14 +852,15 @@ impl StdColumn {
     }
 
     pub fn dtype(&self) -> &str {
-        &self.dtype
+        &self.core_dtype
     }
 
     // TODO: impl data_type - need to handle nested types
     // https://github.com/dbt-labs/dbt-adapters/blob/6f2aae13e39c5df1c93e5d514678914142d71768/dbt-bigquery/src/dbt/adapters/bigquery/column.py#L80
     pub fn data_type(&self) -> String {
+        // FIXME: replace all implementations with core_data_type
         match self._adapter_type {
-            AdapterType::Bigquery => self.dtype.to_lowercase(),
+            AdapterType::Bigquery => self.core_data_type.clone(),
             _ => {
                 if self.is_string() {
                     self.as_static().string_type(Some(
@@ -709,7 +868,7 @@ impl StdColumn {
                     ))
                 } else if self.is_numeric() {
                     self.as_static().numeric_type(
-                        &self.dtype,
+                        &self.core_dtype,
                         self.numeric_precision,
                         self.numeric_scale,
                     )
@@ -718,7 +877,7 @@ impl StdColumn {
                     //  Note that this would not be dbt core compatible behavior, but a more correct one.
                     //  Otherwise we may create/alter a table to a wrong type.
                     //  See also https://github.com/dbt-labs/fs/pull/3585#discussion_r2112390711
-                    self.dtype().to_string()
+                    self.core_dtype.to_string()
                 }
             }
         }
@@ -763,7 +922,7 @@ impl StdColumn {
         if self._fields.is_empty() {
             Vec::from([Self::new_bigquery(
                 new_prefix,
-                self.dtype.clone(),
+                self.core_dtype.clone(),
                 &[],
                 self.mode(),
             )])
@@ -784,6 +943,10 @@ impl StdColumn {
         }
 
         self._bq_flatten_inner("")
+    }
+
+    pub fn fields(&self) -> &[Self] {
+        &self._fields
     }
 }
 
@@ -829,7 +992,7 @@ impl Object for StdColumn {
             Some("quoted") => Some(Value::from(self.quoted())),
             Some("data_type") => Some(Value::from(self.data_type())),
             // direct fields
-            Some("dtype") => Some(Value::from(&self.dtype)),
+            Some("dtype") => Some(Value::from(&self.core_dtype)),
             Some("char_size") => Some(Value::from(self.char_size)),
             Some("numeric_precision") => Some(Value::from(self.numeric_precision)),
             Some("numeric_scale") => Some(Value::from(self.numeric_scale)),
@@ -885,7 +1048,7 @@ mod tests {
 
         let column = result.unwrap();
         assert_eq!(column.name, "test_col");
-        assert_eq!(column.dtype, "OBJECT(name VARCHAR, age NUMBER)");
+        assert_eq!(column.dtype(), "OBJECT(name VARCHAR, age NUMBER)");
         assert_eq!(column._adapter_type, AdapterType::Snowflake);
         assert_eq!(column.char_size, None);
         assert_eq!(column.numeric_precision, None);
@@ -899,7 +1062,7 @@ mod tests {
 
         let column = result.unwrap();
         assert_eq!(column.name, "test_col");
-        assert_eq!(column.dtype, "NUMERIC");
+        assert_eq!(column.dtype(), "NUMERIC");
         assert_eq!(column._adapter_type, AdapterType::Snowflake);
         assert_eq!(column.char_size, None);
         assert_eq!(column.numeric_precision, Some(10));
@@ -913,7 +1076,7 @@ mod tests {
 
         let column = result.unwrap();
         assert_eq!(column.name, "test_col");
-        assert_eq!(column.dtype, "NUMERIC");
+        assert_eq!(column.dtype(), "NUMERIC");
         assert_eq!(column._adapter_type, AdapterType::Snowflake);
         assert_eq!(column.char_size, Some(18));
         assert_eq!(column.numeric_precision, None);

@@ -268,6 +268,8 @@ impl TypedBaseAdapter for BigqueryAdapter {
         state: &State,
         relation: Arc<dyn BaseRelation>,
     ) -> AdapterResult<Vec<StdColumn>> {
+        // TODO(serramatutu): once this is moved over to Arrow, let's remove the fallback to DbtCoreBaseColumn
+        // from StdColumn::vec_from_jinja_value for BigQuery
         // FIXME(harry): the Python version uses googleapi GetTable, that doesn't return pseudocolumn like _PARTITIONDATE or _PARTITIONTIME
         let result = match execute_macro(
             state,
