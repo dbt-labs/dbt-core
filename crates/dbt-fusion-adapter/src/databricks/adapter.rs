@@ -31,9 +31,12 @@ use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::common::{
     ConstraintSupport, ConstraintType, DbtIncrementalStrategy, DbtMaterialization,
 };
+use dbt_schemas::schemas::nodes::AdapterAttr;
 use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::relations::base::BaseRelation;
-use dbt_schemas::schemas::{BaseRelationConfig, InternalDbtNodeAttributes};
+use dbt_schemas::schemas::{
+    BaseRelationConfig, DbtModel, DbtModelAttr, InternalDbtNodeAttributes, InternalDbtNodeWrapper,
+};
 use dbt_xdbc::{Connection, QueryCtx};
 use indexmap::IndexMap;
 use minijinja::{State, Value};
@@ -444,9 +447,26 @@ impl TypedBaseAdapter for DatabricksAdapter {
         config: ModelConfig,
         tblproperties: &mut BTreeMap<String, Value>,
     ) -> AdapterResult<()> {
+        // TODO(anna): For now, we treat the model as something of type InternalDbtNode/DbtModel, but serialize it to Jinja the same way we'd do when inserting into context.
+        // And since we serialized the `RunConfig` as a `ModelConfig`, we create a dummy model here.
+        let model = DbtModel {
+            __model_attr__: DbtModelAttr {
+                catalog_name: config.catalog_name,
+                table_format: config.table_format,
+                ..Default::default()
+            },
+            __adapter_attr__: AdapterAttr::from_config_and_dialect(
+                &config.__warehouse_specific_config__,
+                AdapterType::Databricks,
+            ),
+            ..Default::default()
+        };
+        let node_yml = InternalDbtNodeWrapper::Model(Box::new(model))
+            .as_internal_node()
+            .serialize();
         let catalog_relation = CatalogRelation::from_model_config_and_catalogs(
             &self.adapter_type(),
-            &Value::from_serialize(config.clone()),
+            &Value::from_object(dbt_common::serde_utils::convert_yml_to_value_map(node_yml)),
             load_catalogs::fetch_catalogs(),
         )?;
         if catalog_relation.table_format == "iceberg" {
@@ -548,11 +568,11 @@ impl TypedBaseAdapter for DatabricksAdapter {
         Ok(result)
     }
 
-    fn build_catalog_relation(&self, model_config: &Value) -> AdapterResult<Value> {
+    fn build_catalog_relation(&self, model: &Value) -> AdapterResult<Value> {
         Ok(Value::from_object(
             CatalogRelation::from_model_config_and_catalogs(
                 &self.adapter_type(),
-                model_config,
+                model,
                 load_catalogs::fetch_catalogs(),
             )?,
         ))

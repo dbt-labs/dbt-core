@@ -1371,6 +1371,8 @@ pub fn manifest_model_to_dbt_model(
             primary_key: model.primary_key.unwrap_or_default(),
             time_spine,
             event_time: model.config.event_time.clone(),
+            catalog_name: model.config.catalog_name.clone(),
+            table_format: model.config.table_format.clone(),
         },
         __adapter_attr__: AdapterAttr::from_config_and_dialect(
             &model.config.__warehouse_specific_config__,

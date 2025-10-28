@@ -167,6 +167,7 @@ pub fn default_to_grants(
 pub struct WarehouseSpecificNodeConfig {
     // Shared
     pub partition_by: Option<PartitionConfig>,
+    pub adapter_properties: Option<BTreeMap<String, YmlValue>>,
 
     // BigQuery
     pub cluster_by: Option<BigqueryClusterConfig>,
@@ -188,8 +189,10 @@ pub struct WarehouseSpecificNodeConfig {
     pub refresh_interval_minutes: Option<f64>,
     pub max_staleness: Option<String>,
 
-    // Databricks
+    // Used by both Databricks and Bigquery
     pub file_format: Option<String>,
+
+    // Databricks
     pub catalog_name: Option<String>,
     pub location_root: Option<String>,
     pub tblproperties: Option<BTreeMap<String, YmlValue>>,
@@ -220,7 +223,6 @@ pub struct WarehouseSpecificNodeConfig {
     pub schedule: Option<ScheduleConfig>,
 
     // Snowflake
-    pub adapter_properties: Option<BTreeMap<String, YmlValue>>,
     pub table_tag: Option<String>,
     pub row_access_policy: Option<String>,
     pub external_volume: Option<String>,

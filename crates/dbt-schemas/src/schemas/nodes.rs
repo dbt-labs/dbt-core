@@ -2192,6 +2192,11 @@ impl AdapterAttr {
             AdapterType::Postgres => AdapterAttr::default(),
             AdapterType::Bigquery => {
                 AdapterAttr::default().with_bigquery_attr(Some(Box::new(BigQueryAttr {
+                    adapter_properties: config.adapter_properties.clone(),
+                    external_volume: config.external_volume.clone(),
+                    base_location_root: config.base_location_root.clone(),
+                    base_location_subpath: config.base_location_subpath.clone(),
+                    file_format: config.file_format.clone(),
                     partition_by: config.partition_by.clone(),
                     cluster_by: config.cluster_by.clone(),
                     hours_to_expiration: config.hours_to_expiration,
@@ -2219,6 +2224,7 @@ impl AdapterAttr {
             }
             AdapterType::Databricks => {
                 AdapterAttr::default().with_databricks_attr(Some(Box::new(DatabricksAttr {
+                    adapter_properties: config.adapter_properties.clone(),
                     partition_by: config.partition_by.clone(),
                     file_format: config.file_format.clone(),
                     location_root: config.location_root.clone(),
@@ -2266,6 +2272,11 @@ impl AdapterAttr {
                         transient: config.transient,
                     })))
                     .with_bigquery_attr(Some(Box::new(BigQueryAttr {
+                        adapter_properties: config.adapter_properties.clone(),
+                        external_volume: config.external_volume.clone(),
+                        base_location_root: config.base_location_root.clone(),
+                        base_location_subpath: config.base_location_subpath.clone(),
+                        file_format: config.file_format.clone(),
                         partition_by: config.partition_by.clone(),
                         cluster_by: config.cluster_by.clone(),
                         hours_to_expiration: config.hours_to_expiration,
@@ -2289,6 +2300,7 @@ impl AdapterAttr {
                         sort_type: config.sort_type.clone(),
                     })))
                     .with_databricks_attr(Some(Box::new(DatabricksAttr {
+                        adapter_properties: config.adapter_properties.clone(),
                         partition_by: config.partition_by.clone(),
                         file_format: config.file_format.clone(),
                         location_root: config.location_root.clone(),
@@ -2324,9 +2336,9 @@ impl AdapterAttr {
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SnowflakeAttr {
+    pub adapter_properties: Option<BTreeMap<String, YmlValue>>,
     pub table_tag: Option<String>,
     pub row_access_policy: Option<String>,
-    pub adapter_properties: Option<BTreeMap<String, YmlValue>>,
     pub external_volume: Option<String>,
     pub base_location_root: Option<String>,
     pub base_location_subpath: Option<String>,
@@ -2346,6 +2358,7 @@ pub struct SnowflakeAttr {
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct DatabricksAttr {
+    pub adapter_properties: Option<BTreeMap<String, YmlValue>>,
     pub partition_by: Option<PartitionConfig>,
     pub file_format: Option<String>,
     pub location_root: Option<String>,
@@ -2375,6 +2388,11 @@ pub struct DatabricksAttr {
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct BigQueryAttr {
+    pub adapter_properties: Option<BTreeMap<String, YmlValue>>,
+    pub external_volume: Option<String>,
+    pub file_format: Option<String>,
+    pub base_location_root: Option<String>,
+    pub base_location_subpath: Option<String>,
     pub partition_by: Option<PartitionConfig>,
     pub cluster_by: Option<BigqueryClusterConfig>,
     pub hours_to_expiration: Option<u64>,
@@ -2423,6 +2441,9 @@ pub struct DbtModelAttr {
     pub primary_key: Vec<String>,
     pub time_spine: Option<TimeSpine>,
     pub event_time: Option<String>,
+    // TODO(anna): See if we _need_ to put these here, or if they can somehow be added to AdapterAttr.
+    pub catalog_name: Option<String>,
+    pub table_format: Option<String>,
 }
 
 #[skip_serializing_none]

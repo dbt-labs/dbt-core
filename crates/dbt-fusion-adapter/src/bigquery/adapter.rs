@@ -6,6 +6,7 @@ use crate::bigquery::relation_config::{
     partitions_match,
 };
 use crate::cast_util::downcast_value_to_dyn_base_relation;
+use crate::catalog_relation::CatalogRelation;
 use crate::column::ColumnBuilder;
 use crate::columns::{BigqueryColumnMode, StdColumn};
 use crate::errors::{
@@ -13,6 +14,7 @@ use crate::errors::{
     arrow_error_to_adapter_error,
 };
 use crate::funcs::{execute_macro, none_value};
+use crate::load_catalogs;
 use crate::metadata::*;
 use crate::query_ctx::query_ctx_from_state;
 use crate::record_batch_utils::get_column_values;
@@ -26,8 +28,8 @@ use arrow_ipc::writer::StreamWriter;
 use arrow_schema::Schema;
 use dashmap::DashMap;
 use dbt_agate::AgateTable;
+use dbt_common::serde_utils::convert_yml_to_value_map;
 use dbt_schemas::dbt_types::RelationType;
-use dbt_schemas::schemas::CommonAttributes;
 use dbt_schemas::schemas::common::{ConstraintSupport, ConstraintType};
 use dbt_schemas::schemas::dbt_column::DbtColumn;
 use dbt_schemas::schemas::manifest::{
@@ -36,6 +38,7 @@ use dbt_schemas::schemas::manifest::{
 use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::relations::base::BaseRelation;
 use dbt_schemas::schemas::serde::minijinja_value_to_typed_struct;
+use dbt_schemas::schemas::{CommonAttributes, InternalDbtNodeWrapper};
 use dbt_xdbc::bigquery::{
     INGEST_FILE_DELIMITER, INGEST_PATH, INGEST_SCHEMA, QUERY_DESTINATION_TABLE,
     UPDATE_DATASET_AUTHORIZE_VIEW_TO_DATASETS, UPDATE_TABLE_COLUMNS_DESCRIPTION,
@@ -729,11 +732,20 @@ impl TypedBaseAdapter for BigqueryAdapter {
         &self,
         state: &State,
         config: ModelConfig,
-        common_attr: &CommonAttributes,
+        node: &InternalDbtNodeWrapper,
         temporary: bool,
     ) -> AdapterResult<BTreeMap<String, Value>> {
         // Get common options first
+        let common_attr = node.as_internal_node().common();
         let mut opts = self.get_common_table_options(state, config.clone(), common_attr, temporary);
+
+        // TODO(anna): For now, we treat the model as something of type InternalDbtNode/DbtModel, but serialize it to Jinja the same way we'd do when inserting into context.
+        let node_yml = node.as_internal_node().serialize();
+        let catalog_relation = CatalogRelation::from_model_config_and_catalogs(
+            &self.adapter_type(),
+            &Value::from_object(convert_yml_to_value_map(node_yml)),
+            load_catalogs::fetch_catalogs(),
+        )?;
 
         // Handle KMS key name if present
         if let Some(kms_key_name) = config.__warehouse_specific_config__.kms_key_name {
@@ -764,6 +776,36 @@ impl TypedBaseAdapter for BigqueryAdapter {
                             .__warehouse_specific_config__
                             .require_partition_filter,
                     ),
+                );
+            }
+
+            if catalog_relation.table_format == "iceberg" {
+                opts.insert(
+                    "table_format".to_string(),
+                    Value::from(format!("'{}'", catalog_relation.table_format)),
+                );
+                let file_format = catalog_relation.file_format.ok_or_else(|| {
+                    AdapterError::new(
+                        AdapterErrorKind::Internal,
+                        "file_format is not set in catalog",
+                    )
+                })?;
+                opts.insert(
+                    "file_format".to_string(),
+                    Value::from(format!("'{}'", file_format)),
+                );
+                let storage_uri = catalog_relation
+                    .adapter_properties
+                    .get("storage_uri")
+                    .ok_or_else(|| {
+                        AdapterError::new(
+                            AdapterErrorKind::Internal,
+                            "storage_uri is not set in catalog",
+                        )
+                    })?;
+                opts.insert(
+                    "storage_uri".to_string(),
+                    Value::from(format!("'{}'", storage_uri)),
                 );
             }
         }
@@ -975,6 +1017,16 @@ impl TypedBaseAdapter for BigqueryAdapter {
             }
             _ => ConstraintSupport::NotSupported,
         }
+    }
+
+    fn build_catalog_relation(&self, model_config: &Value) -> AdapterResult<Value> {
+        Ok(Value::from_object(
+            CatalogRelation::from_model_config_and_catalogs(
+                &self.adapter_type(),
+                model_config,
+                load_catalogs::fetch_catalogs(),
+            )?,
+        ))
     }
 }
 

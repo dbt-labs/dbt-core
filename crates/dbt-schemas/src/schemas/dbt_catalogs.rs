@@ -40,6 +40,19 @@
 //!           file_format: delta                                        // required with table_format=iceberg
 //!           adapter_properties:
 //!             location: <string>                                      // optional; if present, non-empty -- will be external_volume under the hood
+//!
+//!       ## ==== Bigquery
+//!       write_integrations:
+//!         - name: <non-empty>
+//!           external_volume: <string>                                 // required & non-empty; used to generate storage_uri
+//!           table_format: iceberg
+//!           file_format: parquet
+//!           catalog_type: biglake_metastore
+//!           adapter_properties:
+//!             base_location_root: <string>                            // optional; if present, non-empty
+//!             base_location_subpath: <string>                         // model config only; optional; if present, non-empty
+//!             storage_uri: <string>                                   // model config only; optional; if present, non-empty
+//!
 
 use std::collections::HashSet;
 use std::path::Path;
@@ -88,6 +101,7 @@ pub enum CatalogType {
     SnowflakeIcebergRest,
     DatabricksHiveMetastore,
     DatabricksUnity,
+    BigqueryBuiltIn,
 }
 
 impl CatalogType {
@@ -111,20 +125,23 @@ impl CatalogType {
             CatalogType::SnowflakeIcebergRest => "ICEBERG_REST",
             CatalogType::DatabricksHiveMetastore => "hive_metastore",
             CatalogType::DatabricksUnity => "unity",
+            CatalogType::BigqueryBuiltIn => "biglake_metastore",
         }
     }
 }
 
-const CATALOG_TYPES: [(&str, CatalogType); 6] = [
+const CATALOG_TYPES: [(&str, CatalogType); 7] = [
     ("built_in", CatalogType::SnowflakeBuiltIn),
     ("snowflake", CatalogType::SnowflakeBuiltIn),
     ("rest", CatalogType::SnowflakeIcebergRest),
     ("iceberg_rest", CatalogType::SnowflakeIcebergRest),
     ("hive_metastore", CatalogType::DatabricksHiveMetastore),
     ("unity", CatalogType::DatabricksUnity),
+    ("biglake_metastore", CatalogType::BigqueryBuiltIn),
 ];
 
-const CATALOG_TYPE_OPTS: &str = "built_in|snowflake|rest|iceberg_rest|unity|hive_metastore";
+const CATALOG_TYPE_OPTS: &str =
+    "built_in|snowflake|rest|iceberg_rest|unity|hive_metastore|biglake_metastore";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TableFormat {
@@ -149,26 +166,46 @@ impl TableFormat {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum DatabricksFileFormat {
+pub enum FileFormat {
     Delta,
     Hudi,
     Parquet,
 }
 
-impl DatabricksFileFormat {
-    fn parse_file_format(s: &str) -> FsResult<DatabricksFileFormat> {
-        if s.eq_ignore_ascii_case("delta") {
-            Ok(DatabricksFileFormat::Delta)
-        } else if s.eq_ignore_ascii_case("hudi") {
-            Ok(DatabricksFileFormat::Hudi)
-        } else if s.eq_ignore_ascii_case("parquet") {
-            Ok(DatabricksFileFormat::Parquet)
-        } else {
-            err!(
+impl FileFormat {
+    fn parse_file_format(s: &str, catalog_type: CatalogType) -> FsResult<FileFormat> {
+        match catalog_type {
+            CatalogType::DatabricksHiveMetastore | CatalogType::DatabricksUnity => {
+                if s.eq_ignore_ascii_case("delta") {
+                    Ok(FileFormat::Delta)
+                } else if s.eq_ignore_ascii_case("hudi") {
+                    Ok(FileFormat::Hudi)
+                } else if s.eq_ignore_ascii_case("parquet") {
+                    Ok(FileFormat::Parquet)
+                } else {
+                    err!(
+                        ErrorCode::InvalidConfig,
+                        "file_format '{}' invalid. choose one of (delta|hudi|parquet)",
+                        s
+                    )
+                }
+            }
+            CatalogType::BigqueryBuiltIn => {
+                if s.eq_ignore_ascii_case("parquet") {
+                    Ok(FileFormat::Delta)
+                } else {
+                    err!(
+                        ErrorCode::InvalidConfig,
+                        "file_format '{}' invalid. choose one of (parquet)",
+                        s
+                    )
+                }
+            }
+            CatalogType::SnowflakeBuiltIn | CatalogType::SnowflakeIcebergRest => err!(
                 ErrorCode::InvalidConfig,
-                "file_format '{}' invalid (delta|hudi|parquet)",
-                s
-            )
+                "'file_format' is not supported for catalog type '{}'",
+                catalog_type.as_str()
+            ),
         }
     }
 }
@@ -207,6 +244,12 @@ pub enum TargetFileSize {
     _128MB,
 }
 
+// Bigquery Properties
+#[derive(Debug)]
+pub struct BigqueryBuiltInPropsView<'a> {
+    pub base_location_root: Option<&'a str>,
+}
+
 // Databricks Properties
 #[derive(Debug)]
 pub struct DatabricksUnityPropsView<'a> {
@@ -217,6 +260,7 @@ pub struct DatabricksUnityPropsView<'a> {
 pub enum AdapterPropsView<'a> {
     SnowflakeBuiltIn(SnowflakeBuiltInPropsView),
     SnowflakeRest(SnowflakeRestPropsView<'a>),
+    BigqueryBuiltIn(BigqueryBuiltInPropsView<'a>),
     DatabricksUnity(DatabricksUnityPropsView<'a>),
     Empty,
 }
@@ -347,13 +391,14 @@ pub struct WriteIntegrationView<'a> {
     pub table_format: TableFormat,
     pub external_volume: Option<&'a str>,
 
+    // TODO(anna): These will be removed to match the Bigquery catalog spec
     // == Snowflake (top-level)
     // built_in only
     pub base_location_root: Option<&'a str>,
     pub base_location_subpath: Option<&'a str>,
 
-    // == Databricks (top-level)
-    pub file_format: Option<DatabricksFileFormat>,
+    // == Databricks and Bigquery (top-level)
+    pub file_format: Option<FileFormat>,
 
     pub adapter_properties: Option<AdapterPropsView<'a>>,
 }
@@ -501,6 +546,7 @@ impl<'a> WriteIntegrationView<'a> {
             CatalogType::DatabricksHiveMetastore => {
                 Self::from_databricks_hms(map, integration_name.0)
             }
+            CatalogType::BigqueryBuiltIn => Self::from_bigquery_built_in(map, integration_name.0),
         }
     }
 
@@ -676,7 +722,7 @@ impl<'a> WriteIntegrationView<'a> {
 
         let file_format = {
             let parsed = match get_str(map, "file_format")? {
-                Some((s, span)) => DatabricksFileFormat::parse_file_format(s)
+                Some((s, span)) => FileFormat::parse_file_format(s, CatalogType::DatabricksUnity)
                     .map_err(|e| e.with_hacky_yml_location(Some(span.clone())))?,
                 None => {
                     return err!(
@@ -688,7 +734,7 @@ impl<'a> WriteIntegrationView<'a> {
                 }
             };
             match parsed {
-                DatabricksFileFormat::Delta => Some(parsed),
+                FileFormat::Delta => Some(parsed),
                 _ => {
                     return err!(
                         code => ErrorCode::InvalidConfig,
@@ -754,7 +800,7 @@ impl<'a> WriteIntegrationView<'a> {
 
         let file_format = match get_str(map, "file_format")? {
             Some((s, span)) => Some(
-                DatabricksFileFormat::parse_file_format(s)
+                FileFormat::parse_file_format(s, CatalogType::DatabricksHiveMetastore)
                     .map_err(|e| e.with_hacky_yml_location(Some(span)))?,
             ),
             None => {
@@ -783,6 +829,138 @@ impl<'a> WriteIntegrationView<'a> {
             catalog_type: CatalogType::DatabricksHiveMetastore,
             table_format,
             external_volume: None,
+            base_location_root: None,
+            base_location_subpath: None,
+            file_format,
+            adapter_properties,
+        })
+    }
+
+    fn from_bigquery_built_in(map: &'a yml::Mapping, integration_name: &'a str) -> FsResult<Self> {
+        check_unknown_keys(
+            map,
+            &[
+                "integration_name",
+                "name",
+                "catalog_type",
+                "table_format",
+                "file_format",
+                "external_volume",
+                "adapter_properties",
+                // These keys are adapter properties, allowed only to throw an explicit error message
+                "base_location_root",
+                "base_location_subpath",
+            ],
+            "write_integration(Bigquery biglake_metastore)",
+        )?;
+
+        let (table_format, table_format_span) = match get_str(map, "table_format")? {
+            Some((s, span)) => (
+                TableFormat::parse(s).map_err(|e| e.with_hacky_yml_location(Some(span.clone())))?,
+                span,
+            ),
+            None => {
+                return err!(
+                    code => ErrorCode::InvalidConfig,
+                    hacky_yml_loc => None::<yml::Span>,
+                    "integration '{}': table_format required for Bigquery biglake_metastore (must be iceberg)",
+                    integration_name
+                );
+            }
+        };
+        if table_format != TableFormat::Iceberg {
+            return err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => Some(table_format_span),
+                "integration '{}': Bigquery biglake_metastore requires table_format=iceberg",
+                integration_name
+            );
+        }
+
+        let file_format = match get_str(map, "file_format")? {
+            Some((s, span)) => Some(
+                FileFormat::parse_file_format(s, CatalogType::BigqueryBuiltIn)
+                    .map_err(|e| e.with_hacky_yml_location(Some(span.clone())))?,
+            ),
+            None => {
+                return err!(
+                    code => ErrorCode::InvalidConfig,
+                    hacky_yml_loc => None::<yml::Span>,
+                    "integration '{}': file_format required for Bigquery biglake_metastore (must be parquet)",
+                    integration_name
+                );
+            }
+        };
+
+        let external_volume = {
+            Some(match get_str(map, "external_volume")? {
+                None => {
+                    return err!(
+                        code => ErrorCode::InvalidConfig,
+                        hacky_yml_loc => None::<yml::Span>,
+                        "integration '{}': 'external_volume' is required for biglake_metastore catalogs.",
+                        integration_name
+                    );
+                }
+                Some(("", span)) => {
+                    return err!(
+                        code => ErrorCode::InvalidConfig,
+                        hacky_yml_loc => Some(span),
+                        "integration '{}': 'external_volume' is required for biglake_metastore catalogs and cannot be blank.",
+                        integration_name
+                    );
+                }
+                Some((s, span)) => {
+                    if !s.starts_with("gs://") {
+                        return err!(
+                            code => ErrorCode::InvalidConfig,
+                            hacky_yml_loc => Some(span),
+                            "integration '{}': 'external_volume' is required for biglake_metastore catalogs \
+                             and must be a path to a Cloud Storage bucket (gs://<bucket_name>).",
+                            integration_name
+                        );
+                    }
+                    s
+                }
+            })
+        };
+
+        // Intentional deviation from Core: Explicitly disallow base_location_{root, subpath}
+        // TODO(anna): These are good candidates to add to the autofix script.
+        // If we do, we should print warnings instead of throwing one error at a time.
+        if let Some((_, span)) = get_str(map, "base_location_root")? {
+            return err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => Some(span),
+                "integration '{}': 'base_location_root' must be set under 'adapter_properties', not at the top level.",
+                integration_name
+            );
+        }
+        if let Some((_, span)) = get_str(map, "base_location_subpath")? {
+            return err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => Some(span),
+                "integration '{}': 'base_location_subpath' must be set under 'adapter_properties' in model configs.",
+                integration_name
+            );
+        }
+
+        let adapter_properties = {
+            if let Some((props, _span)) = get_map(map, "adapter_properties")? {
+                Some(parse_adapter_properties(
+                    props,
+                    CatalogType::BigqueryBuiltIn,
+                )?)
+            } else {
+                None
+            }
+        };
+
+        Ok(Self {
+            integration_name,
+            catalog_type: CatalogType::BigqueryBuiltIn,
+            table_format,
+            external_volume,
             base_location_root: None,
             base_location_subpath: None,
             file_format,
@@ -866,6 +1044,44 @@ fn parse_adapter_properties<'a>(
                     .map(|(s, _)| s),
             }))
         }
+        CatalogType::BigqueryBuiltIn => {
+            check_unknown_keys(
+                properties,
+                &["base_location_root", "base_location_subpath", "storage_uri"],
+                "adapter_properties(biglake_metastore)",
+            )?;
+            // Throw explicit errors for model-config-only keys 'base_location_subpath' and 'storage_uri'
+            if let Some((_, span)) = get_str(properties, "base_location_subpath")? {
+                return err!(
+                    code => ErrorCode::InvalidConfig,
+                    hacky_yml_loc => Some(span),
+                    "'base_location_subpath' must be set under 'adapter_properties' in a model config, not in the write integration config."
+                );
+            }
+            if let Some((_, span)) = get_str(properties, "storage_uri")? {
+                return err!(
+                    code => ErrorCode::InvalidConfig,
+                    hacky_yml_loc => Some(span),
+                    "'storage_uri' must be set under 'adapter_properties' in a model config, not in the write integration config."
+                );
+            }
+            if let Some((loc, span)) = get_str(properties, "base_location_root")?
+                && loc.trim().is_empty()
+            {
+                return err!(
+                    code => ErrorCode::InvalidConfig,
+                    hacky_yml_loc => Some(span),
+                    "adapter_properties.base_location_root cannot be blank"
+                );
+            }
+            Ok(AdapterPropsView::BigqueryBuiltIn(
+                BigqueryBuiltInPropsView {
+                    base_location_root: get_str(properties, "base_location_root")?
+                        .filter(|(s, _)| !s.trim().is_empty())
+                        .map(|(s, _)| s),
+                },
+            ))
+        }
         CatalogType::DatabricksUnity => {
             check_unknown_keys(properties, &["location_root"], "adapter_properties(unity)")?;
             if let Some((loc, span)) = get_str(properties, "location_root")?
@@ -891,7 +1107,7 @@ fn parse_adapter_properties<'a>(
                 return err!(
                     code => ErrorCode::InvalidConfig,
                     hacky_yml_loc => first_key_span,
-                    "adapter_properties not allowed for hive_metastore"
+                    "adapter_properties not allowed for {}", catalog_type.as_str()
                 );
             }
             // unreachable in practice because caller only invokes this if adapter_properties exists
@@ -1087,7 +1303,7 @@ pub fn validate_catalogs(spec: &DbtCatalogsView<'_>, _path: &Path) -> FsResult<(
                     }
 
                     if let Some(file_format) = &write_integration.file_format
-                        && *file_format != DatabricksFileFormat::Delta
+                        && *file_format != FileFormat::Delta
                     {
                         return err!(code => ErrorCode::InvalidConfig, hacky_yml_loc => Some(catalog.write_integrations.1.clone()),
                                 "integration '{}': when table_format=iceberg, file_format must be 'delta'",
@@ -1110,6 +1326,8 @@ pub fn validate_catalogs(spec: &DbtCatalogsView<'_>, _path: &Path) -> FsResult<(
                             write_integration.integration_name);
                     }
                 }
+
+                CatalogType::BigqueryBuiltIn => { /* no non-structural constraints */ }
             }
         }
     }
@@ -2177,6 +2395,310 @@ catalogs:
                 "Unknown key 'external_volume' in write_integration(Databricks hive_metastore)"
             ),
             "unexpected error: {msg}"
+        );
+    }
+
+    // === Bigquery: BIGLAKE_METASTORE
+
+    #[test]
+    fn bigquery_builtin_min_valid() {
+        let yaml = r#"
+catalogs:
+  - name: bq
+    active_write_integration: biglake
+    write_integrations:
+      - name: biglake
+        external_volume: "gs://bucket"
+        table_format: iceberg
+        file_format: parquet
+        catalog_type: biglake_metastore
+"#;
+        let res = parse_view_and_validate(yaml);
+        assert!(
+            res.is_ok(),
+            "biglake_metastore(min) should validate: {:?}",
+            res.err()
+        );
+    }
+
+    #[test]
+    fn bigquery_builtin_with_base_location_root_adapter_property() {
+        let yaml = r#"
+catalogs:
+  - name: bq
+    active_write_integration: biglake
+    write_integrations:
+      - name: biglake
+        external_volume: "gs://bucket"
+        table_format: iceberg
+        file_format: parquet
+        catalog_type: biglake_metastore
+        adapter_properties:
+            base_location_root: _not_dbt
+"#;
+        let res = parse_view_and_validate(yaml);
+        assert!(
+            res.is_ok(),
+            "biglake_metastore(min) should validate: {:?}",
+            res.err()
+        );
+    }
+
+    #[test]
+    fn bigquery_builtin_rejects_blank_base_location_root() {
+        let yaml = r#"
+catalogs:
+  - name: bq
+    active_write_integration: biglake
+    write_integrations:
+      - name: biglake
+        external_volume: "gs://bucket"
+        table_format: iceberg
+        file_format: parquet
+        catalog_type: biglake_metastore
+        adapter_properties:
+            base_location_root: ""
+"#;
+        let res = parse_view_and_validate(yaml);
+        let msg = format!("{res:?}");
+        assert!(res.is_err(), "expected error but got OK");
+        assert!(msg.contains("cannot be blank"), "unexpected error: {msg}");
+    }
+
+    #[test]
+    fn bigquery_builtin_rejects_base_location_root_at_top_level() {
+        let yaml = r#"
+catalogs:
+  - name: bq
+    active_write_integration: biglake
+    write_integrations:
+      - name: biglake
+        external_volume: "gs://bucket"
+        table_format: iceberg
+        file_format: parquet
+        base_location_root: _not_dbt
+        catalog_type: biglake_metastore
+"#;
+        let res = parse_view_and_validate(yaml);
+        let msg = format!("{res:?}");
+        assert!(res.is_err(), "expected error but got OK");
+        assert!(
+            msg.contains(
+                "'base_location_root' must be set under 'adapter_properties', not at the top level."
+            ),
+            "unexpected error: {msg}"
+        );
+    }
+
+    #[test]
+    fn bigquery_builtin_rejects_base_location_subpath_at_top_level() {
+        let yaml = r#"
+catalogs:
+  - name: bq
+    active_write_integration: biglake
+    write_integrations:
+      - name: biglake
+        external_volume: "gs://bucket"
+        table_format: iceberg
+        file_format: parquet
+        base_location_subpath: sub/path
+        catalog_type: biglake_metastore
+"#;
+        let res = parse_view_and_validate(yaml);
+        let msg = format!("{res:?}");
+        assert!(res.is_err(), "expected error but got OK");
+        assert!(
+            msg.contains("'base_location_subpath' must be set under 'adapter_properties'"),
+            "unexpected error: {msg}"
+        );
+    }
+
+    #[test]
+    fn bigquery_builtin_rejects_base_location_subpath_adapter_property() {
+        let yaml = r#"
+catalogs:
+  - name: bq
+    active_write_integration: biglake
+    write_integrations:
+      - name: biglake
+        external_volume: "gs://bucket"
+        table_format: iceberg
+        file_format: parquet
+        catalog_type: biglake_metastore
+        adapter_properties:
+            base_location_root: _not_dbt
+            base_location_subpath: sub/path
+"#;
+        let res = parse_view_and_validate(yaml);
+        let msg = format!("{res:?}");
+        assert!(res.is_err(), "expected error but got OK");
+        assert!(
+            msg.contains(
+                "'base_location_subpath' must be set under 'adapter_properties' in a model config"
+            ),
+            "unexpected error: {msg}"
+        );
+    }
+
+    #[test]
+    fn bigquery_builtin_rejects_storage_uri_adapter_property() {
+        let yaml = r#"
+catalogs:
+  - name: bq
+    active_write_integration: biglake
+    write_integrations:
+      - name: biglake
+        external_volume: "gs://bucket"
+        table_format: iceberg
+        file_format: parquet
+        catalog_type: biglake_metastore
+        adapter_properties:
+            storage_uri: "gs://bucket/cool/path"
+"#;
+        let res = parse_view_and_validate(yaml);
+        let msg = format!("{res:?}");
+        assert!(res.is_err(), "expected error but got OK");
+        assert!(
+            msg.contains("'storage_uri' must be set under 'adapter_properties' in a model config"),
+            "unexpected error: {msg}"
+        );
+    }
+
+    #[test]
+    fn bigquery_builtin_rejects_blank_external_volume() {
+        let yaml = r#"
+catalogs:
+  - name: bq
+    active_write_integration: biglake
+    write_integrations:
+      - name: biglake
+        external_volume: ""
+        table_format: iceberg
+        file_format: parquet
+        catalog_type: biglake_metastore
+"#;
+        let res = parse_view_and_validate(yaml);
+        let msg = format!("{res:?}");
+        assert!(res.is_err(), "expected error but got OK");
+        assert!(
+            msg.contains(
+                "'external_volume' is required for biglake_metastore catalogs and cannot be blank."
+            ),
+            "unexpected error: {msg}"
+        );
+    }
+
+    #[test]
+    fn bigquery_builtin_rejects_invalid_gs_path() {
+        let yaml = r#"
+catalogs:
+  - name: bq
+    active_write_integration: biglake
+    write_integrations:
+      - name: biglake
+        external_volume: "bucket"
+        table_format: iceberg
+        file_format: parquet
+        catalog_type: biglake_metastore
+"#;
+        let res = parse_view_and_validate(yaml);
+        let msg = format!("{res:?}");
+        assert!(res.is_err(), "expected error but got OK");
+        assert!(
+            msg.contains("must be a path to a Cloud Storage bucket"),
+            "unexpected error: {msg}"
+        );
+    }
+
+    #[test]
+    fn bigquery_builtin_rejects_unknown_adapter_property_keys() {
+        let yaml = r#"
+catalogs:
+  - name: bq
+    active_write_integration: biglake
+    write_integrations:
+      - name: biglake
+        external_volume: "gs://bucket"
+        table_format: iceberg
+        file_format: parquet
+        catalog_type: biglake_metastore
+        adapter_properties:
+          auto_refresh: true
+"#;
+        assert_err_contains(
+            yaml,
+            "Unknown key 'auto_refresh' in adapter_properties(biglake_metastore)",
+        );
+    }
+
+    #[test]
+    fn bigquery_builtin_missing_file_format_fails() {
+        let yaml = r#"
+catalogs:
+  - name: bq
+    active_write_integration: biglake
+    write_integrations:
+      - name: biglake
+        external_volume: "gs://bucket"
+        table_format: iceberg
+        catalog_type: biglake_metastore
+"#;
+        assert_err_contains(
+            yaml,
+            "file_format required for Bigquery biglake_metastore (must be parquet)",
+        );
+    }
+
+    #[test]
+    fn bigquery_builtin_unsupported_file_format_fails() {
+        let yaml = r#"
+catalogs:
+  - name: bq
+    active_write_integration: biglake
+    write_integrations:
+      - name: biglake
+        external_volume: "gs://bucket"
+        table_format: iceberg
+        file_format: delta
+        catalog_type: biglake_metastore
+"#;
+        assert_err_contains(yaml, "file_format 'delta' invalid. choose one of (parquet)");
+    }
+
+    #[test]
+    fn bigquery_builtin_missing_table_format_fails() {
+        let yaml = r#"
+catalogs:
+  - name: bq
+    active_write_integration: biglake
+    write_integrations:
+      - name: biglake
+        external_volume: "gs://bucket"
+        file_format: parquet
+        catalog_type: biglake_metastore
+"#;
+        assert_err_contains(
+            yaml,
+            "table_format required for Bigquery biglake_metastore (must be iceberg)",
+        );
+    }
+
+    #[test]
+    fn bigquery_builtin_invalid_table_format_fails() {
+        let yaml = r#"
+catalogs:
+  - name: bq
+    active_write_integration: biglake
+    write_integrations:
+      - name: biglake
+        external_volume: "gs://bucket"
+        table_format: default
+        file_format: parquet
+        catalog_type: biglake_metastore
+"#;
+        assert_err_contains(
+            yaml,
+            "Bigquery biglake_metastore requires table_format=iceberg",
         );
     }
 }

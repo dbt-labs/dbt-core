@@ -331,11 +331,11 @@ impl BaseAdapter for ParseAdapter {
         Ok(RelationObject::new(Arc::new(EmptyRelation {})).into_value())
     }
 
-    fn build_catalog_relation(&self, model_config: &Value) -> Result<Value, MinijinjaError> {
+    fn build_catalog_relation(&self, model: &Value) -> Result<Value, MinijinjaError> {
         Ok(Value::from_object(
             CatalogRelation::from_model_config_and_catalogs(
                 &self.adapter_type,
-                model_config,
+                model,
                 self.catalogs.clone(),
             )?,
         ))

@@ -766,8 +766,8 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self), level = "trace")]
-    fn build_catalog_relation(&self, model_config: &Value) -> Result<Value, MinijinjaError> {
-        Ok(self.typed_adapter.build_catalog_relation(model_config)?)
+    fn build_catalog_relation(&self, model: &Value) -> Result<Value, MinijinjaError> {
+        Ok(self.typed_adapter.build_catalog_relation(model)?)
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
@@ -1110,13 +1110,6 @@ impl BaseAdapter for BridgeAdapter {
             .unwrap_or_default()
             .is_true();
 
-        let config = minijinja_value_to_typed_struct::<ModelConfig>(config).map_err(|e| {
-            MinijinjaError::new(
-                MinijinjaErrorKind::SerdeDeserializeError,
-                format!("get_table_options: Failed to deserialize config: {e}"),
-            )
-        })?;
-
         let node_wrapper = minijinja_value_to_typed_struct::<InternalDbtNodeWrapper>(node)
             .map_err(|e| {
                 MinijinjaError::new(
@@ -1124,11 +1117,18 @@ impl BaseAdapter for BridgeAdapter {
                     format!("get_table_options: Failed to deserialize InternalDbtNodeWrapper: {e}"),
                 )
             })?;
-        let node = node_wrapper.as_internal_node();
+
+        // TODO(anna): The value passed in to `get_table_options` is not actually a `ModelConfig`. It is a `RunConfig`. We should fix this.
+        let config = minijinja_value_to_typed_struct::<ModelConfig>(config).map_err(|e| {
+            MinijinjaError::new(
+                MinijinjaErrorKind::SerdeDeserializeError,
+                format!("get_table_options: Failed to deserialize config: {e}"),
+            )
+        })?;
 
         let options =
             self.typed_adapter
-                .get_table_options(state, config, node.common(), temporary)?;
+                .get_table_options(state, config, &node_wrapper, temporary)?;
         Ok(Value::from_serialize(options))
     }
 
@@ -1425,6 +1425,7 @@ impl BaseAdapter for BridgeAdapter {
         let mut parser = ArgParser::new(args, None);
         check_num_args(current_function_name!(), &parser, 1, 2)?;
 
+        // TODO(anna): The value passed in to `update_tblproperties_for_iceberg` is not actually a `ModelConfig`. It is a `RunConfig`. We should fix this.
         let config = parser.get::<Value>("config")?;
         let config = minijinja_value_to_typed_struct::<ModelConfig>(config).map_err(|e| {
             MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())

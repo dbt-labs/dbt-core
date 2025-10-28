@@ -270,6 +270,8 @@ pub fn build_resolve_model_context<T: DefaultTo<T> + 'static>(
             freshness: None,
             contract: None,
             event_time: None,
+            catalog_name: None,
+            table_format: None,
         },
         __adapter_attr__: AdapterAttr::default(),
         __other__: BTreeMap::new(),

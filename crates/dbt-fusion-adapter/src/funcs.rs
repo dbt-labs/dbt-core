@@ -118,26 +118,21 @@ pub fn dispatch_adapter_calls(
         }
         "build_catalog_relation" => {
             let iter = ArgsIter::new(name, &["model"], args);
-            let full_model_config = iter.next_arg::<&Value>()?;
+            let model = iter.next_arg::<&Value>()?;
             iter.finish()?;
 
             // Case 1: caller passed a plain string (CLD name) -- this is a hack for
             // incremental polaris model. TODO: remove this when catalog_relation is
             // fully engineered to no longer require runtime attribute shim-based solutions
-            if full_model_config.kind() == ValueKind::String {
-                return adapter.build_catalog_relation(full_model_config);
+            if model.kind() == ValueKind::String {
+                return adapter.build_catalog_relation(model);
             }
 
-            // Case 2: caller passed a model object with a config attribute
-            let model_config = full_model_config.get_item(&Value::from("config"))?;
-            if model_config.is_undefined() {
-                return Err(MinijinjaError::new(
-                    MinijinjaErrorKind::InvalidOperation,
-                    "model is missing 'config' field",
-                ));
-            }
+            // Case 2: caller passed a model object
+            // TODO: When we remove case 1, we can serialize this as an InternalDbtNode (and add the necessary attributes to their respective resource-type specific attribute structs)
+            // Ex: minijinja_value_to_typed_struct::<DbtModel>(model.clone()).is_ok();
 
-            adapter.build_catalog_relation(&model_config)
+            adapter.build_catalog_relation(model)
         }
         "get_catalog_integration" => adapter.get_catalog_integration(state, args),
         "type" => Ok(Value::from(adapter.adapter_type().to_string())),

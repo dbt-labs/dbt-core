@@ -26,7 +26,7 @@ use dbt_schemas::schemas::manifest::{BigqueryClusterConfig, BigqueryPartitionCon
 use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
 use dbt_schemas::schemas::relations::relation_configs::BaseRelationConfig;
-use dbt_schemas::schemas::{CommonAttributes, InternalDbtNodeAttributes};
+use dbt_schemas::schemas::{CommonAttributes, InternalDbtNodeAttributes, InternalDbtNodeWrapper};
 use dbt_xdbc::bigquery::QUERY_LINK_FAILED_JOB;
 use dbt_xdbc::salesforce::DATA_TRANSFORM_RUN_TIMEOUT;
 use dbt_xdbc::{Connection, QueryCtx};
@@ -318,8 +318,8 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     /// Get a catalog relation, which in Core is a serialized type.
     /// In Fusion, we treat it as a Jinja accessible flat container of values
     /// needed for Iceberg ddl generation.
-    fn build_catalog_relation(&self, _model_config: &Value) -> AdapterResult<Value> {
-        unimplemented!("only available with Databricks and Snowflake adapters")
+    fn build_catalog_relation(&self, _model: &Value) -> AdapterResult<Value> {
+        unimplemented!("only available with Bigquery, Databricks, and Snowflake adapters")
     }
 
     /// Drop relation
@@ -846,7 +846,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         &self,
         _state: &State,
         _config: ModelConfig,
-        _node: &CommonAttributes,
+        _node: &InternalDbtNodeWrapper,
         _temporary: bool,
     ) -> AdapterResult<BTreeMap<String, Value>> {
         unimplemented!("only available with BigQuery adapter")
