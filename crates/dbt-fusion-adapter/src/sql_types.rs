@@ -9,7 +9,7 @@ use crate::metadata::snowflake::ARROW_FIELD_SNOWFLAKE_FIELD_WIDTH_METADATA_KEY;
 use crate::metadata::*;
 use arrow_schema::{DataType, Field, Schema, TimeUnit};
 use dbt_common::adapter::AdapterType;
-use dbt_xdbc::sql::types::{SqlType, metadata_sql_type_key};
+use dbt_xdbc::sql::types::{SqlType, metadata_sql_type_key, original_type_string};
 
 // TODO: Add keys here as necessary
 pub const REDSHIFT_METADATA_SQL_TYPE_KEY: &str = "Type";
@@ -67,6 +67,20 @@ pub trait TypeOps: Send + Sync {
 
     fn parse_into_arrow_type(&self, s: &str) -> AdapterResult<DataType> {
         self.parse_into_nullable_arrow_type(s).map(|(dt, _)| dt)
+    }
+
+    fn get_original_sql_type_from_field<'f>(
+        &self,
+        field: &'f Field,
+    ) -> AdapterResult<Cow<'f, str>> {
+        let backend = backend_of(self.adapter_type());
+        original_type_string(backend, field)
+            .map(|v| Ok(Cow::Borrowed(v.as_str())))
+            .unwrap_or_else(|| {
+                let mut out = String::new();
+                self.format_arrow_type_as_sql(field.data_type(), &mut out)
+                    .map(|_| Cow::Owned(out))
+            })
     }
 }
 
