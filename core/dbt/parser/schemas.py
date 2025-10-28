@@ -137,7 +137,10 @@ def yaml_from_file(
                 failures=failures, file=source_file.path.original_file_path
             )
             if contents is not None:
-                from dbt.jsonschemas import jsonschema_validate, resources_schema
+                from dbt.jsonschemas.jsonschemas import (
+                    jsonschema_validate,
+                    resources_schema,
+                )
 
                 # Validate the yaml against the jsonschema to raise deprecation warnings
                 # for invalid fields.

@@ -11,7 +11,7 @@ from jsonschema._keywords import type as type_rule
 from jsonschema.validators import Draft7Validator, extend
 
 from dbt import deprecations
-from dbt.include.jsonschemas import JSONSCHEMAS_PATH
+from dbt.jsonschemas import JSONSCHEMAS_PATH
 from dbt_common.context import get_invocation_context
 
 _PROJECT_SCHEMA: Optional[Dict[str, Any]] = None
