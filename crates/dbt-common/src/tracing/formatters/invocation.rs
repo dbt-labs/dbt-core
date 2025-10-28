@@ -9,7 +9,7 @@ use crate::{
     pretty_string::{BLUE, DIM, GREEN, MAGENTA, RED, WHITE, YELLOW},
     tracing::{
         data_provider::DataProvider,
-        formatters::color::maybe_apply_color,
+        formatters::{color::maybe_apply_color, format_delimiter},
         metrics::{InvocationMetricKey, MetricKey},
     },
 };
@@ -217,9 +217,7 @@ pub fn format_invocation_summary(
     lines.push(String::new());
 
     // Insert a centered execution summary delimiter line
-    let max_line_width = max_line_width.unwrap_or(60);
-    let header_raw = format!("{:=^width$}", " Execution Summary ", width = max_line_width);
-    let header = maybe_apply_color(&DIM, &header_raw, colorize);
+    let header = format_delimiter(" Execution Summary ", max_line_width, colorize);
     lines.push(header);
 
     lines.push(format_status_line(&summary, colorize));

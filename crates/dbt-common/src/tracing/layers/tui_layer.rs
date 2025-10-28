@@ -15,10 +15,13 @@ use tracing::level_filters::LevelFilter;
 use crate::{
     constants::{ANALYZING, RENDERING, RUNNING},
     io_args::ShowOptions,
-    logging::{LogFormat, StatEvent, TermEvent, with_suspended_progress_bars},
+    logging::{LogFormat, StatEvent, TermEvent},
     tracing::{
         data_provider::DataProvider,
-        formatters::{invocation::format_invocation_summary, log_message::format_log_message},
+        formatters::{
+            format_delimiter, invocation::format_invocation_summary,
+            log_message::format_log_message, test_result::format_test_failure,
+        },
         layer::{ConsumerLayer, TelemetryConsumer},
     },
 };
@@ -39,11 +42,13 @@ pub fn build_tui_layer(
 /// This is used to delay printing of unit test failure tables and errors/warning messages
 /// towards the end, right before the invocation summary
 struct DelayedMessage {
-    on_stderr: bool,
     message: String,
 }
 
-struct DelayedMessages(Vec<DelayedMessage>);
+struct DelayedMessages {
+    test_failures: Vec<DelayedMessage>,
+    errors_and_warnings: Vec<DelayedMessage>,
+}
 
 /// A tracing layer that handles all terminal user interface on stdout and stderr, including progress bars.
 ///
@@ -119,7 +124,10 @@ impl TelemetryConsumer for TuiLayer {
         // Init delayed messages storage on root span start
         if span.parent_span_id.is_none() {
             // Root span
-            data_provider.init(DelayedMessages(Vec::new()));
+            data_provider.init(DelayedMessages {
+                test_failures: Vec::new(),
+                errors_and_warnings: Vec::new(),
+            });
         }
 
         if !self.is_interactive {
@@ -157,30 +165,56 @@ impl TelemetryConsumer for TuiLayer {
         if let Some(invocation) = span.attributes.downcast_ref::<Invocation>() {
             // Print any delayed messages first
             data_provider.with::<DelayedMessages>(|delayed_messages| {
-                for msg in &delayed_messages.0 {
-                    if msg.on_stderr {
-                        io::stderr()
-                            .lock()
-                            .write_all(msg.message.as_bytes())
-                            .expect("failed to write to stderr");
-                    } else {
-                        io::stdout()
-                            .lock()
+                let mut stdout = io::stdout().lock();
+                let mut stderr = io::stderr().lock();
+
+                // Print test failures with header if any exist (historically on stdout)
+                if !delayed_messages.test_failures.is_empty() {
+                    stdout
+                        .write_all(
+                            format!(
+                                "\n{}\n",
+                                format_delimiter(" Test Failures ", self.max_term_line_width, true)
+                            )
+                            .as_bytes(),
+                        )
+                        .expect("failed to write to stdout");
+                    for msg in &delayed_messages.test_failures {
+                        stdout
                             .write_all(msg.message.as_bytes())
                             .expect("failed to write to stdout");
-                    };
+                    }
                 }
 
-                // If we had at least one message, flush the streams
-                if !delayed_messages.0.is_empty() {
-                    io::stderr()
-                        .lock()
-                        .flush()
+                // Print errors and warnings with header if any exist (on stderr)
+                if !delayed_messages.errors_and_warnings.is_empty() {
+                    stderr
+                        .write_all(
+                            format!(
+                                "\n{}\n",
+                                format_delimiter(
+                                    " Errors and Warnings ",
+                                    self.max_term_line_width,
+                                    true
+                                )
+                            )
+                            .as_bytes(),
+                        )
                         .expect("failed to write to stderr");
-                    io::stdout()
-                        .lock()
-                        .flush()
-                        .expect("failed to write to stdout");
+
+                    for msg in &delayed_messages.errors_and_warnings {
+                        stderr
+                            .write_all(msg.message.as_bytes())
+                            .expect("failed to write to stderr");
+                    }
+                }
+
+                // Flush streams if we had any messages
+                if !delayed_messages.test_failures.is_empty()
+                    || !delayed_messages.errors_and_warnings.is_empty()
+                {
+                    stderr.flush().expect("failed to write to stderr");
+                    stdout.flush().expect("failed to write to stdout");
                 }
             });
 
@@ -198,9 +232,8 @@ impl TelemetryConsumer for TuiLayer {
         {
             // This is a failed test, capture its summary diff table to be printed on stdout later
             data_provider.with_mut::<DelayedMessages>(|delayed_messages| {
-                delayed_messages.0.push(DelayedMessage {
-                    on_stderr: false,
-                    message: format!("\nFAIL {}\n{diff_table}\n", ne.name),
+                delayed_messages.test_failures.push(DelayedMessage {
+                    message: format!("{}\n", format_test_failure(&ne.name, diff_table, true)),
                 });
             });
         }
@@ -247,29 +280,27 @@ impl TelemetryConsumer for TuiLayer {
         }
     }
 
-    fn on_log_record(&self, log_record: &LogRecordInfo, _: &mut DataProvider<'_>) {
+    fn on_log_record(&self, log_record: &LogRecordInfo, data_provider: &mut DataProvider<'_>) {
         // Check if this is a LogMessage (error/warning)
         if let Some(log_msg) = log_record.attributes.downcast_ref::<LogMessage>() {
             // Format the message
             let formatted_message =
                 format_log_message(log_msg, &log_record.body, log_record.severity_number, true);
 
-            // Write to appropriate stream with progress bars suspended
+            // Delay errors and warnings to be printed at the end
             if log_record.severity_number > SeverityNumber::Info {
-                with_suspended_progress_bars(|| {
-                    io::stderr()
-                        .lock()
-                        .write_fmt(format_args!("{}\n", formatted_message))
-                        .expect("failed to write to stderr");
+                data_provider.with_mut::<DelayedMessages>(|delayed_messages| {
+                    delayed_messages.errors_and_warnings.push(DelayedMessage {
+                        message: format!("{}\n", formatted_message),
+                    });
                 });
             } else {
-                with_suspended_progress_bars(|| {
-                    io::stdout()
-                        .lock()
-                        .write_fmt(format_args!("{}\n", formatted_message))
-                        .expect("failed to write to stdout");
-                });
-            };
+                // Print info and below messages immediately
+                io::stdout()
+                    .lock()
+                    .write_all(format!("{}\n", formatted_message).as_bytes())
+                    .expect("failed to write to stdout");
+            }
         }
     }
 }

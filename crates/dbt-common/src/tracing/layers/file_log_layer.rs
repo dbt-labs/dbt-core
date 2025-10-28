@@ -7,7 +7,10 @@ use tracing::level_filters::LevelFilter;
 use super::super::{
     background_writer::BackgroundWriter,
     data_provider::DataProvider,
-    formatters::{invocation::format_invocation_summary, log_message::format_log_message},
+    formatters::{
+        invocation::format_invocation_summary, log_message::format_log_message,
+        test_result::format_test_failure,
+    },
     layer::{ConsumerLayer, TelemetryConsumer},
     shared_writer::SharedWriter,
     shutdown::TelemetryShutdownItem,
@@ -49,7 +52,7 @@ impl TelemetryConsumer for FileLogLayer {
             && let Some(diff_table) = t_outcome.diff_table.as_ref()
         {
             self.writer
-                .write(format!("\nFAIL {}\n{diff_table}\n", ne.name).as_str());
+                .writeln(format_test_failure(&ne.name, diff_table, false).as_str());
         }
 
         // Invocation end
