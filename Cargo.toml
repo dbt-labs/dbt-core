@@ -391,7 +391,7 @@ dashmap = "6.1.0"
 fancy-regex = "0.14.0"
 hex = { version = "0.4.3" }
 humantime = "2.1.0"
-iana-time-zone = { version = "0.1.10" }
+iana-time-zone = { version = "0.1.62" }
 im = "15.1.0"
 indexmap = "2.2.3"
 ini = "1.3.0"
