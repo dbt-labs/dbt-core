@@ -1473,13 +1473,30 @@ fn get_type_constraints<'source>(expr: &ast::Expr<'source>) -> Result<Vec<TypeCo
             operation: TypeConstraintOperation::NotNull(true),
         }]),
         ast::Expr::Test(spanned) => {
-            let test_name = spanned.name.to_string();
-            (&spanned.expr).try_into().map(|variable| {
-                vec![TypeConstraint {
-                    name: variable,
-                    operation: TypeConstraintOperation::Is(test_name, true),
-                }]
-            })
+            let test_name = if spanned.name.to_lowercase() == "sameas" {
+                spanned.args.first().and_then(|arg| match arg {
+                    ast::CallArg::Pos(expr) => {
+                        if let ast::Expr::Const(c) = expr {
+                            Some(c.value.to_string().to_lowercase())
+                        } else {
+                            None
+                        }
+                    }
+                    _ => None,
+                })
+            } else {
+                Some(spanned.name.to_string())
+            };
+            if let Some(test_name) = test_name {
+                (&spanned.expr).try_into().map(|variable| {
+                    vec![TypeConstraint {
+                        name: variable,
+                        operation: TypeConstraintOperation::Is(test_name, true),
+                    }]
+                })
+            } else {
+                Ok(vec![])
+            }
         }
         ast::Expr::BinOp(bin_op) => match bin_op.op {
             ast::BinOpKind::ScAnd | ast::BinOpKind::ScOr => {
