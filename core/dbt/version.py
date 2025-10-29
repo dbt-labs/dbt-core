@@ -3,6 +3,9 @@ import importlib
 import importlib.util
 import json
 import os
+import re
+from importlib import metadata as importlib_metadata
+from pathlib import Path
 from typing import Iterator, List, Optional, Tuple
 
 import requests
@@ -226,5 +229,21 @@ def _get_adapter_plugin_names() -> Iterator[str]:
             yield plugin_name
 
 
-__version__ = "1.11.0b4"
+def _resolve_version() -> str:
+    try:
+        return importlib_metadata.version("dbt-core")
+    except importlib_metadata.PackageNotFoundError:
+        pyproject_path = Path(__file__).resolve().parents[2] / "pyproject.toml"
+        if not pyproject_path.exists():
+            raise RuntimeError("Unable to locate pyproject.toml to determine dbt-core version")
+
+        text = pyproject_path.read_text(encoding="utf-8")
+        match = re.search(r'^version\s*=\s*"(?P<version>[^"]+)"', text, re.MULTILINE)
+        if match:
+            return match.group("version")
+
+        raise RuntimeError("Unable to determine dbt-core version from pyproject.toml")
+
+
+__version__ = _resolve_version()
 installed = get_installed_version()

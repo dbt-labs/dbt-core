@@ -9,12 +9,9 @@ include = [
     "dbt.*",
 ]
 
-[tool.setuptools.dynamic]
-version = { attr = "dbt.version.__version__" }
-
 [project]
 name = "dbt-core"
-dynamic = ["version"]
+version = "1.11.0b4"
 description = "With dbt, data analysts and engineers can build analytics the way engineers build applications."
 readme = "core/README.md"
 requires-python = ">=3.10"
@@ -95,6 +92,7 @@ dev = [
     "isort==5.13.2",
     # mypy must match what's in .pre-commit-config.yaml to be sure local env matches CI
     "mypy==1.4.1",
+    "build",
     "pip-tools",
     "pre-commit",
     "protobuf>=6.0,<7.0",

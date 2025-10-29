@@ -14,11 +14,9 @@ rm -rf "$DBT_PATH"/dist
 rm -rf "$DBT_PATH"/build
 mkdir -p "$DBT_PATH"/dist
 
-rm -rf "$DBT_PATH"/core/dist
-rm -rf "$DBT_PATH"core/build
-cd "$DBT_PATH"/core
-$PYTHON_BIN setup.py sdist bdist_wheel
-cp -r "$DBT_PATH"/"core"/dist/* "$DBT_PATH"/dist/
+cd "$DBT_PATH"
+$PYTHON_BIN -m pip install --upgrade build
+$PYTHON_BIN -m build
 
 
 set +x
