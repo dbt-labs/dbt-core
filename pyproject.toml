@@ -9,6 +9,22 @@ include = [
     "dbt.*",
 ]
 
+# this needs to match MANIFEST.in for the wheels
+[tool.setuptools.package-data]
+"dbt" = [
+    "include/**/*",
+    "task/docs/**/*.html",
+    "jsonschemas/**/*.json",
+    "py.typed",
+]
+
+[tool.setuptools.exclude-package-data]
+"dbt" = [
+    "include/__pycache__/*",
+    "include/**/*.pyc",
+    "include/**/*.pyo",
+]
+
 [project]
 name = "dbt-core"
 version = "1.11.0b4"
