@@ -1,6 +1,7 @@
 git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-adapters
 git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-tests-adapter
-git+https://github.com/dbt-labs/dbt-common.git@main
+# Pinning to 1.34.latest to maintain Python 3.9 compatibility
+git+https://github.com/dbt-labs/dbt-common.git@1.34.latest
 git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-postgres
 # black must match what's in .pre-commit-config.yaml to be sure local env matches CI
 black==24.3.0
