@@ -14,6 +14,7 @@ pub static BOLD: LazyLock<Style> = LazyLock::new(|| Style::new().bold());
 pub static MAGENTA: LazyLock<Style> = LazyLock::new(|| Style::new().magenta().bold());
 pub static DIM: LazyLock<Style> = LazyLock::new(|| Style::new().dim());
 pub static WHITE: LazyLock<Style> = LazyLock::new(|| Style::new().white().bold());
+pub static ITALIC: LazyLock<Style> = LazyLock::new(|| Style::new().italic());
 pub static PLAIN: LazyLock<Style> = LazyLock::new(Style::default);
 
 #[derive(PartialEq, Clone, Debug, Eq)]

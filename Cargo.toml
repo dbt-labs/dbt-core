@@ -66,6 +66,11 @@ version = "2.0.0-preview.52"
 datafusion-common = { git = "https://github.com/sdf-labs/datafusion", rev = "c0627e28fdd64ad1e33e3e8f3d6515c7ecb886ed" } # @ sdf/50
 datafusion-expr = { git = "https://github.com/sdf-labs/datafusion", rev = "c0627e28fdd64ad1e33e3e8f3d6515c7ecb886ed" } # @ sdf/50
 
+# sqlparser
+sqlparser = { git = "https://github.com/sdf-labs/datafusion-sqlparser-rs", rev = "9a411603d86978ddc2f08740f070c606dbeb8f23" } # @ sdf/0.58.0
+# OR, when working locally
+# sqlparser = { path = "../datafusion-sqlparser-rs" }
+
 # All arrow dependencies (run `cargo tree --prefix none | grep ^arrow | cut -d ' ' -f1 | sort -u` to get this list)
 arrow = { git = "https://github.com/sdf-labs/arrow-rs", rev = "e4924d7d6d07bb12ba6628e595f9f58c2c02c9a1" } # @ sdf/56.0.0
 arrow-arith = { git = "https://github.com/sdf-labs/arrow-rs", rev = "e4924d7d6d07bb12ba6628e595f9f58c2c02c9a1" } # @ sdf/56.0.0
@@ -82,20 +87,20 @@ arrow-schema = { git = "https://github.com/sdf-labs/arrow-rs", rev = "e4924d7d6d
 arrow-select = { git = "https://github.com/sdf-labs/arrow-rs", rev = "e4924d7d6d07bb12ba6628e595f9f58c2c02c9a1" } # @ sdf/56.0.0
 arrow-string = { git = "https://github.com/sdf-labs/arrow-rs", rev = "e4924d7d6d07bb12ba6628e595f9f58c2c02c9a1" } # @ sdf/56.0.0
 # OR, when working locally
-#arrow = { path = "../arrow-rs/arrow" }
-#arrow-arith = { path = "../arrow-rs/arrow-arith" }
-#arrow-array = { path = "../arrow-rs/arrow-array" }
-#arrow-buffer = { path = "../arrow-rs/arrow-buffer" }
-#arrow-cast = { path = "../arrow-rs/arrow-cast" }
-#arrow-csv = { path = "../arrow-rs/arrow-csv" }
-#arrow-data = { path = "../arrow-rs/arrow-data" }
-#arrow-ipc = { path = "../arrow-rs/arrow-ipc" }
-#arrow-json = { path = "../arrow-rs/arrow-json" }
-#arrow-ord = { path = "../arrow-rs/arrow-ord" }
-#arrow-row = { path = "../arrow-rs/arrow-row" }
-#arrow-schema = { path = "../arrow-rs/arrow-schema" }
-#arrow-select = { path = "../arrow-rs/arrow-select" }
-#arrow-string = { path = "../arrow-rs/arrow-string" }
+# arrow = { path = "../arrow-rs/arrow" }
+# arrow-arith = { path = "../arrow-rs/arrow-arith" }
+# arrow-array = { path = "../arrow-rs/arrow-array" }
+# arrow-buffer = { path = "../arrow-rs/arrow-buffer" }
+# arrow-cast = { path = "../arrow-rs/arrow-cast" }
+# arrow-csv = { path = "../arrow-rs/arrow-csv" }
+# arrow-data = { path = "../arrow-rs/arrow-data" }
+# arrow-ipc = { path = "../arrow-rs/arrow-ipc" }
+# arrow-json = { path = "../arrow-rs/arrow-json" }
+# arrow-ord = { path = "../arrow-rs/arrow-ord" }
+# arrow-row = { path = "../arrow-rs/arrow-row" }
+# arrow-schema = { path = "../arrow-rs/arrow-schema" }
+# arrow-select = { path = "../arrow-rs/arrow-select" }
+# arrow-string = { path = "../arrow-rs/arrow-string" }
 
 [profile.dev.package."*"]
 # Enable basic optimizations for all non-member dependencies. This greatly
@@ -270,6 +275,8 @@ datafusion-functions-nested = { version = "50.3.0" }
 datafusion-functions-window = { version = "50.3.0" }
 datafusion-physical-expr = { version = "50.3.0" }
 datafusion-physical-plan = { version = "50.3.0" }
+datafusion-sql = { version = "50.3.0" }
+sqlparser = { version = "0.58.0" }
 
 # uuid
 uuid = { version = "1.16.0", features = ["v4", "serde"] }
@@ -482,6 +489,9 @@ opentelemetry_sdk = "0.30.0"
 # Compile with --features "tracy-client/enable" to enable integration with the
 # Tracy profiler: https://github.com/wolfpld/tracy
 tracy-client = { version = "0.18.0", default-features = false }
+
+# duckdb
+duckdb = { version = "1.4.0", features = ["bundled"] }
 
 [workspace.lints.rust]
 # When updating these lints mind that some crates may not inherit form workspace

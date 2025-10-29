@@ -17,6 +17,16 @@ use strum_macros::Display;
 
 use log::LevelFilter;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum LocalExecutionBackendKind {
+    #[default]
+    /// Run models in the current process
+    Inline,
+    /// Run models in a separate worker process
+    Worker,
+    // Eventually Service
+}
+
 use crate::{
     constants::{DBT_GENERIC_TESTS_DIR_NAME, DBT_SNAPSHOTS_DIR_NAME},
     io_utils::StatusReporter,
@@ -275,6 +285,7 @@ pub struct EvalArgs {
     pub check_all: bool,
     // todo: temporary, until Sampling is public, maps (source) unique_id to renamed (database, schema, table)
     pub sample_renaming: BTreeMap<String, (String, String, String)>,
+    pub local_execution_backend: LocalExecutionBackendKind,
 }
 impl fmt::Debug for EvalArgs {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
