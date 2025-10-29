@@ -178,6 +178,13 @@ pub(crate) fn abstract_tokenize(tokens: Vec<Token>) -> Vec<AbstractToken> {
             assert!(tokens.get(index + 3).unwrap().matches("from"));
             assert!(tokens.get(index + 4).unwrap().matches("("));
             index += 5;
+            if tokens.get(index).unwrap().matches("with") {
+                index += 1;
+                abstract_tokens.push(AbstractToken::Token(Token {
+                    value: ",".to_string(),
+                    maybe_hash: false,
+                }));
+            }
         } else if token.matches("--EPHEMERAL-SELECT-WRAPPER-END") {
             assert!(tokens.get(index + 1).unwrap().matches(")"));
             index += 2;

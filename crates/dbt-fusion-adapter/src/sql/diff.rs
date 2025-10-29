@@ -600,4 +600,53 @@ mod tests {
             "Should ignore difference for timestamp value difference"
         );
     }
+
+    #[test]
+    fn test_compare_ephemeral_model() {
+        let sql1 = r#"
+create or replace transient table x.y.z
+    as (with u as (
+with
+v as (
+    select 1
+from w
+),
+select *
+from unioned
+)
+--EPHEMERAL-SELECT-WRAPPER-START
+select * from (
+with base as (
+    select *
+    from u
+)
+select *
+from aggregated
+--EPHEMERAL-SELECT-WRAPPER-END
+)
+    )
+;
+"#;
+        let sql2 = r#"
+create or replace transient table x.y.z
+    as (with u as (
+with
+v as (
+    select 1
+from w
+),
+select *
+from unioned
+)
+, base as (
+    select *
+    from u
+)
+select *
+from aggregated
+    )
+;"#;
+        let result = compare_sql(sql1, sql2);
+        assert!(result.is_ok(), "Should match");
+    }
 }
