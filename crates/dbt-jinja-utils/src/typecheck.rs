@@ -54,7 +54,7 @@ pub fn typecheck(
         typecheck_resolved_context.clone(),
     );
 
-    let absolute_file_path = arg_io.in_dir.join(relative_file_path);
+    let _absolute_file_path = arg_io.in_dir.join(relative_file_path);
 
     let listener = jinja_typechecking_listener_factory.create_listener(
         arg_io,
@@ -85,18 +85,18 @@ pub fn typecheck(
         Ok(_) => {
             listener.flush();
         }
-        Err(e) => {
+        Err(_e) => {
             listener.flush();
 
-            emit_error_log_message(
-                ErrorCode::Generic,
-                format!(
-                    "Type checking failed for file {}: {}",
-                    absolute_file_path.display(),
-                    e
-                ),
-                arg_io,
-            );
+            // emit_error_log_message(
+            //     ErrorCode::Generic,
+            //     format!(
+            //         "Type checking failed for file {}: {}",
+            //         absolute_file_path.display(),
+            //         e
+            //     ),
+            //     arg_io,
+            // );
         }
     }
     jinja_typechecking_listener_factory.destroy_listener(relative_file_path, listener);
