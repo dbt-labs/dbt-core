@@ -1,9 +1,8 @@
 use dbt_common::io_args::IoArgs;
 use dbt_common::{ErrorCode, FsResult, fs_err, fsinfo, show_progress};
-use dbt_schemas::schemas::{packages::UpstreamProject, project::ProjectDbtCloudConfig};
+use dbt_schemas::schemas::DbtCloudProjectConfig;
+use dbt_schemas::schemas::packages::UpstreamProject;
 use std::time::SystemTime;
-
-use crate::utils::load_raw_yml;
 
 const DOWNLOAD_INTERVAL: u64 = 3600; // 1 hour
 
@@ -16,7 +15,7 @@ const DOWNLOAD_INTERVAL: u64 = 3600; // 1 hour
 ///
 pub(crate) async fn download_publication_artifacts(
     upstream_projects: &Vec<UpstreamProject>,
-    dbt_cloud_config: &Option<ProjectDbtCloudConfig>,
+    dbt_cloud_config: &Option<DbtCloudProjectConfig>,
     io: &IoArgs,
 ) -> FsResult<()> {
     // Skip if environment variable is set or no upstream projects
@@ -71,14 +70,13 @@ pub(crate) async fn download_publication_artifacts(
     std::fs::remove_dir_all(&default_dir)?;
     std::fs::create_dir_all(&default_dir)?;
 
-    // Get dbt cloud project ID
-    let project_id = match dbt_cloud_config {
-        Some(config) => match &config.project_id {
-            Some(id) => id,
+    let current_project = match dbt_cloud_config {
+        Some(config) => match &config.project {
+            Some(project) => project,
             None => {
                 return Err(fs_err!(
                     ErrorCode::IoError,
-                    "Trying to download publication artifacts but project_id not found in dbt_cloud configuration"
+                    "Trying to download publication artifacts but project not found in dbt_cloud configuration"
                 ));
             }
         },
@@ -90,44 +88,11 @@ pub(crate) async fn download_publication_artifacts(
         }
     };
 
-    // Get home directory
-    let home_dir = match dirs::home_dir() {
-        Some(dir) => dir,
-        None => {
-            return Err(fs_err!(
-                ErrorCode::IoError,
-                "Could not determine home directory"
-            ));
-        }
-    };
-
-    // Load dbt cloud configuration
-    let dbt_cloud_config_path = home_dir.join(".dbt").join("dbt_cloud.yml");
-    let (account_id, account_host, token) = if dbt_cloud_config_path.exists() {
-        let dbt_cloud_config: dbt_schemas::schemas::DbtCloudConfig =
-            load_raw_yml(io, &dbt_cloud_config_path, None)?;
-
-        let project = match dbt_cloud_config.get_project_by_id(project_id.to_string().as_str()) {
-            Some(p) => p,
-            None => {
-                return Err(fs_err!(
-                    ErrorCode::IoError,
-                    "Trying to download publication artifacts but project_id not found in dbt_cloud.yml"
-                ));
-            }
-        };
-
-        (
-            project.account_id.clone(),
-            project.account_host.clone(),
-            project.token_value.clone(),
-        )
-    } else {
-        return Err(fs_err!(
-            ErrorCode::IoError,
-            "Trying to download publication artifacts but dbt_cloud.yml not found"
-        ));
-    };
+    let (account_id, account_host, token) = (
+        current_project.account_id.clone(),
+        current_project.account_host.clone(),
+        current_project.token_value.clone(),
+    );
 
     // Download artifacts for each upstream project
     for upstream_project in upstream_projects {
@@ -149,7 +114,7 @@ pub(crate) async fn download_publication_artifacts(
             })?;
 
             // Check if more than an hour has passed
-            now - last_download_time > 3600
+            now - last_download_time > DOWNLOAD_INTERVAL
         } else {
             true
         };
@@ -161,7 +126,7 @@ pub(crate) async fn download_publication_artifacts(
         // Construct API URL
         let url = format!(
             "https://{}/api/private/accounts/{}/projects/{}/artifacts/publication/?dbt_project_name={}",
-            account_host, account_id, project_id, upstream_project.name
+            account_host, account_id, current_project.project_id, upstream_project.name
         );
 
         // Log download attempt

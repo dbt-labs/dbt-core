@@ -475,21 +475,15 @@ fn build_parent_and_child_maps(
     }
 
     for (id, semantic_model) in &nodes.semantic_models {
-        all_nodes.push((
-            id.clone(),
-            semantic_model.__semantic_model_attr__.depends_on.clone(),
-        ));
+        all_nodes.push((id.clone(), semantic_model.__base_attr__.depends_on.clone()));
     }
 
     for (id, metric) in &nodes.metrics {
-        all_nodes.push((id.clone(), metric.__metric_attr__.depends_on.clone()));
+        all_nodes.push((id.clone(), metric.__base_attr__.depends_on.clone()));
     }
 
     for (id, saved_query) in &nodes.saved_queries {
-        all_nodes.push((
-            id.clone(),
-            saved_query.__saved_query_attr__.depends_on.clone(),
-        ));
+        all_nodes.push((id.clone(), saved_query.__base_attr__.depends_on.clone()));
     }
 
     for (id, function) in &nodes.functions {
@@ -1130,14 +1124,32 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                         .unwrap_or_default(),
                     meta: saved_query.config.meta.clone().unwrap_or_default(),
                 },
+                __base_attr__: NodeBaseAttributes {
+                    database: "".to_string(),
+                    schema: "".to_string(),
+                    alias: "".to_string(),
+                    relation_name: None,
+                    quoting: Default::default(),
+                    materialized: Default::default(),
+                    static_analysis: Default::default(),
+                    static_analysis_off_reason: None,
+                    enabled: true,
+                    extended_model: false,
+                    persist_docs: None,
+                    columns: Default::default(),
+                    refs: saved_query.__base_attr__.refs,
+                    sources: vec![],
+                    functions: vec![],
+                    metrics: vec![],
+                    depends_on: saved_query.__base_attr__.depends_on,
+                    quoting_ignore_case: false,
+                },
                 __saved_query_attr__: DbtSavedQueryAttr {
                     query_params: saved_query.query_params,
                     exports: saved_query.exports,
                     label: saved_query.label,
                     metadata: saved_query.metadata,
                     unrendered_config: saved_query.__base_attr__.unrendered_config,
-                    depends_on: saved_query.__base_attr__.depends_on,
-                    refs: saved_query.__base_attr__.refs,
                     created_at: saved_query.__base_attr__.created_at,
                     group: saved_query.group,
                 },

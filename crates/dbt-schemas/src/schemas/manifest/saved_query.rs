@@ -6,11 +6,9 @@ use std::collections::BTreeMap;
 type YmlValue = dbt_serde_yaml::Value;
 
 use crate::schemas::{
-    CommonAttributes,
-    common::NodeDependsOn,
+    CommonAttributes, NodeBaseAttributes,
     manifest::common::SourceFileMetadata,
     project::{ExportConfigExportAs, SavedQueryConfig},
-    ref_and_source::DbtRef,
 };
 
 use super::common::WhereFilterIntersection;
@@ -19,6 +17,7 @@ use super::common::WhereFilterIntersection;
 #[serde(rename_all = "snake_case")]
 pub struct DbtSavedQuery {
     pub __common_attr__: CommonAttributes,
+    pub __base_attr__: NodeBaseAttributes,
     pub __saved_query_attr__: DbtSavedQueryAttr,
 
     // To be deprecated
@@ -34,8 +33,6 @@ pub struct DbtSavedQueryAttr {
     pub label: Option<String>,
     pub metadata: Option<SourceFileMetadata>,
     pub unrendered_config: BTreeMap<String, YmlValue>,
-    pub depends_on: NodeDependsOn,
-    pub refs: Vec<DbtRef>,
     pub created_at: f64,
     pub group: Option<String>,
 }

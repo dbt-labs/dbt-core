@@ -40,6 +40,10 @@ use super::ProjectUnitTestConfig;
 pub struct ProjectDbtCloudConfig {
     #[serde(rename = "project-id")]
     pub project_id: Option<StringOrInteger>,
+    #[serde(rename = "defer-env-id")]
+    pub defer_env_id: Option<StringOrInteger>,
+
+    // unsure if any of these other keys are actually used or expected
     pub account_id: Option<StringOrInteger>,
     #[serde(rename = "account-host")]
     pub account_host: Option<String>,
@@ -47,8 +51,6 @@ pub struct ProjectDbtCloudConfig {
     pub job_id: Option<StringOrInteger>,
     #[serde(rename = "run-id")]
     pub run_id: Option<StringOrInteger>,
-    #[serde(rename = "defer-env-id")]
-    pub defer_env_id: Option<StringOrInteger>,
     pub api_key: Option<StringOrInteger>,
     pub application: Option<StringOrInteger>,
     pub environment: Option<StringOrInteger>,

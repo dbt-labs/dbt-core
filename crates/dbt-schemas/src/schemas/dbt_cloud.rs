@@ -47,3 +47,11 @@ impl DbtCloudConfig {
         self.projects.iter().find(|p| p.project_id == project_id)
     }
 }
+
+/// This is a helper object to combine values from dbt_project and dbt_cloud that are
+/// related to the dbt Cloud config.
+#[derive(Debug, Clone)]
+pub struct DbtCloudProjectConfig {
+    pub defer_env_id: Option<String>,
+    pub project: Option<DbtCloudProject>,
+}

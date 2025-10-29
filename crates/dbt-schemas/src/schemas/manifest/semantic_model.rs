@@ -1,6 +1,6 @@
 use crate::schemas::{
-    CommonAttributes,
-    common::{Dimension, NodeDependsOn},
+    CommonAttributes, NodeBaseAttributes,
+    common::Dimension,
     dbt_column::ColumnPropertiesEntityType,
     manifest::{
         common::SourceFileMetadata,
@@ -8,7 +8,6 @@ use crate::schemas::{
     },
     project::SemanticModelConfig,
     properties::metrics_properties::AggregationType,
-    ref_and_source::DbtRef,
     semantic_layer::semantic_manifest::SemanticLayerElementConfig,
 };
 use serde::{Deserialize, Serialize};
@@ -23,6 +22,7 @@ type YmlValue = dbt_serde_yaml::Value;
 #[serde(rename_all = "snake_case")]
 pub struct DbtSemanticModel {
     pub __common_attr__: CommonAttributes,
+    pub __base_attr__: NodeBaseAttributes,
     pub __semantic_model_attr__: DbtSemanticModelAttr,
 
     // yaml path is `models.$.semantic_model`
@@ -50,9 +50,6 @@ pub struct DbtSemanticModelAttr {
     // hydrated by `.models.$.metrics`
     pub measures: Vec<SemanticMeasure>,
 
-    // Node dependencies and references
-    pub depends_on: NodeDependsOn,
-    pub refs: Vec<DbtRef>,
     pub created_at: f64,
     pub unrendered_config: BTreeMap<String, YmlValue>,
     pub group: Option<String>,

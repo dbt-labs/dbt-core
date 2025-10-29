@@ -6,8 +6,7 @@ use serde::{Deserialize, Serialize};
 type YmlValue = dbt_serde_yaml::Value;
 
 use crate::schemas::{
-    CommonAttributes,
-    common::NodeDependsOn,
+    CommonAttributes, NodeBaseAttributes,
     dbt_column::Granularity,
     manifest::common::{SourceFileMetadata, WhereFilter, WhereFilterIntersection},
     project::MetricConfig,
@@ -19,13 +18,13 @@ use crate::schemas::{
             PeriodAggregationType, StringOrMetricPropertiesMetricInput, WindowChoice,
         },
     },
-    ref_and_source::DbtRef,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct DbtMetric {
     pub __common_attr__: CommonAttributes,
+    pub __base_attr__: NodeBaseAttributes,
     pub __metric_attr__: DbtMetricAttr,
 
     // To be deprecated
@@ -43,9 +42,6 @@ pub struct DbtMetricAttr {
     pub metadata: Option<SourceFileMetadata>,
     pub time_granularity: Option<String>,
     pub unrendered_config: BTreeMap<String, YmlValue>,
-    pub depends_on: NodeDependsOn,
-    pub refs: Vec<DbtRef>,
-    pub sources: Vec<Vec<String>>,
     pub metrics: Vec<MetricInput>,
     pub created_at: f64,
     pub group: Option<String>,

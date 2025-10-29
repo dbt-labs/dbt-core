@@ -103,7 +103,7 @@ pub mod schemas {
         pub use v12::DbtManifestV12;
     }
     mod dbt_cloud;
-    pub use dbt_cloud::{DbtCloudConfig, DbtCloudContext, DbtCloudProject};
+    pub use dbt_cloud::{DbtCloudConfig, DbtCloudContext, DbtCloudProject, DbtCloudProjectConfig};
 
     pub mod semantic_layer {
         pub mod metric;

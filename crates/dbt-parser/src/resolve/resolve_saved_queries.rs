@@ -2,18 +2,19 @@ use crate::args::ResolveArgs;
 use crate::dbt_project_config::{RootProjectConfigs, init_project_config};
 use crate::utils::{get_node_fqn, get_original_file_path, get_unique_id};
 
+use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
 use dbt_common::tracing::emit::emit_error_log_from_fs_error;
 use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::serde::into_typed_with_jinja;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
-use dbt_schemas::schemas::CommonAttributes;
-use dbt_schemas::schemas::common::{DbtChecksum, NodeDependsOn};
+use dbt_schemas::schemas::common::{DbtChecksum, DbtMaterialization, NodeDependsOn};
 use dbt_schemas::schemas::manifest::saved_query::{
     self, DbtSavedQuery, DbtSavedQueryAttr, SavedQueryExportConfig, SavedQueryParams,
 };
 use dbt_schemas::schemas::project::{DefaultTo, SavedQueryConfig};
 use dbt_schemas::schemas::properties::SavedQueriesProperties;
+use dbt_schemas::schemas::{CommonAttributes, NodeBaseAttributes};
 use dbt_schemas::state::DbtPackage;
 use minijinja::value::Value as MinijinjaValue;
 use regex::Regex;
@@ -134,11 +135,19 @@ pub async fn resolve_saved_queries(
                 .map(|name| get_unique_id(name, package_name, None, "metric"))
                 .collect();
 
+            // TODO: we should probably also try to resolve semantic_models for dimensions,
             let depends_on = NodeDependsOn {
                 macros: vec![],
                 nodes: unique_ids_of_nodes_depends_on,
                 nodes_with_ref_location: vec![],
             };
+
+            // schema can be overriden from either Export config or Saved Query config
+            // TODO: we should also allow overriding the database in the same manner
+            let saved_query_schema = saved_query_config
+                .schema
+                .clone()
+                .unwrap_or_else(|| schema.to_string());
 
             let exports = saved_query_props
                 .exports
@@ -151,7 +160,11 @@ pub async fn resolve_saved_queries(
                         name: export.name.clone(),
                         config: SavedQueryExportConfig {
                             export_as: config.export_as.unwrap_or_default(),
-                            schema_name: Some(config.schema.unwrap_or_else(|| schema.to_string())), // TODO: verify
+                            schema_name: Some(
+                                config
+                                    .schema
+                                    .unwrap_or_else(|| saved_query_schema.to_string()),
+                            ),
                             alias: Some(config.alias.unwrap_or_else(|| export.name.clone())),
                             database: Some(database.to_string()),
                         },
@@ -159,6 +172,22 @@ pub async fn resolve_saved_queries(
                     }
                 })
                 .collect::<Vec<saved_query::SavedQueryExport>>();
+
+            // FIXME: this is likely not completely correct, we should figure out the "right" solution
+            // use the first export destination for the saved query values,
+            // if there's no exports then the saved query doesn't technially materialize
+            let schema = exports
+                .first()
+                .map(|export| export.config.schema_name.clone())
+                .unwrap_or_default();
+            let database = exports
+                .first()
+                .map(|export| export.config.database.clone())
+                .unwrap_or_default();
+            let alias = exports
+                .first()
+                .map(|export| export.config.alias.clone())
+                .unwrap_or_default();
 
             let dbt_saved_query = DbtSavedQuery {
                 __common_attr__: CommonAttributes {
@@ -188,14 +217,32 @@ pub async fn resolve_saved_queries(
                         .unwrap_or_default(),
                     meta: saved_query_config.meta.clone().unwrap_or_default(),
                 },
+                __base_attr__: NodeBaseAttributes {
+                    database: database.unwrap_or_default(),
+                    schema: schema.unwrap_or_default(),
+                    alias: alias.unwrap_or_default(),
+                    relation_name: None,         // TODO: what should this be?
+                    quoting: Default::default(), // TODO: what should this be?
+                    materialized: DbtMaterialization::Unknown("export".to_string()),
+                    static_analysis: StaticAnalysisKind::Off.into(),
+                    static_analysis_off_reason: Some(StaticAnalysisOffReason::UnableToFetchSchema),
+                    enabled: true,
+                    extended_model: false,
+                    persist_docs: None,
+                    columns: Default::default(),
+                    refs: vec![],
+                    sources: vec![],
+                    functions: vec![],
+                    metrics: vec![],
+                    depends_on,
+                    quoting_ignore_case: false,
+                },
                 __saved_query_attr__: DbtSavedQueryAttr {
                     query_params,
                     exports,
                     label: saved_query_props.label,
                     metadata: None,
                     unrendered_config: BTreeMap::new(),
-                    depends_on,
-                    refs: vec![],
                     group: saved_query_config.group.clone(),
                     created_at: chrono::Utc::now().timestamp() as f64,
                 },

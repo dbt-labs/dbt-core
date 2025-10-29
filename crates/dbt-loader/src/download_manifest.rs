@@ -1,7 +1,8 @@
+use dbt_common::constants::{DBT_MANIFEST_INFO, DBT_MANIFEST_JSON};
 use dbt_common::io_args::IoArgs;
 use dbt_common::tracing::emit::emit_warn_log_message;
 use dbt_common::{ErrorCode, FsResult, fs_err, fsinfo, show_progress};
-use dbt_schemas::schemas::project::ProjectDbtCloudConfig;
+use dbt_schemas::schemas::DbtCloudProjectConfig;
 use flate2::read::GzDecoder;
 use reqwest_middleware::ClientBuilder;
 use reqwest_retry::{
@@ -11,8 +12,6 @@ use std::error::Error;
 use std::io::Read;
 use std::path::PathBuf;
 use std::time::SystemTime;
-
-use crate::utils::load_raw_yml;
 
 const DOWNLOAD_INTERVAL: u64 = 3600; // 1 hour
 const MAX_CLIENT_RETRIES: u32 = 3;
@@ -49,24 +48,27 @@ fn process_manifest_bytes(bytes: &[u8]) -> Option<Vec<u8>> {
 /// Downloads manifest from dbt Cloud if available and not recently cached
 #[allow(clippy::cognitive_complexity)]
 pub async fn hydrate_or_download_manifest_from_cloud(
-    dbt_cloud_config: &Option<ProjectDbtCloudConfig>,
+    dbt_cloud_config: &Option<DbtCloudProjectConfig>,
     io: &IoArgs,
 ) -> FsResult<Option<PathBuf>> {
-    // Check if dbt cloud config exists and has project_id
-    let project_id = match dbt_cloud_config {
-        Some(config) => match &config.project_id {
-            Some(id) => id,
-            None => return Ok(None),
-        },
+    let dbt_cloud_config = match dbt_cloud_config {
+        Some(config) => config,
         None => return Ok(None),
     };
+
+    let current_project = match &dbt_cloud_config.project {
+        Some(project) => project,
+        None => return Ok(None),
+    };
+
+    let project_id = &current_project.project_id;
 
     // Create directory for manifest
     let default_dir = io.out_dir.join("dbt_cloud_defer");
     std::fs::create_dir_all(&default_dir)?;
 
-    let manifest_path = default_dir.join("manifest.json");
-    let info_path = default_dir.join("manifest.info");
+    let manifest_path = default_dir.join(DBT_MANIFEST_JSON);
+    let info_path = default_dir.join(DBT_MANIFEST_INFO);
 
     // Check if manifest already exists and is recent (less than an hour old)
     let now = SystemTime::now()
@@ -86,30 +88,10 @@ pub async fn hydrate_or_download_manifest_from_cloud(
         }
     }
 
-    // Get home directory
-    let home_dir = match dirs::home_dir() {
-        Some(dir) => dir,
-        None => {
-            return Err(fs_err!(
-                ErrorCode::IoError,
-                "Could not determine home directory"
-            ));
-        }
-    };
-
-    // Check if dbt_cloud.yml exists
-    let dbt_cloud_config_path = home_dir.join(".dbt").join("dbt_cloud.yml");
-    if !dbt_cloud_config_path.exists() {
-        return Ok(None);
-    }
-
-    // Load dbt cloud configuration
-    let dbt_cloud_config: dbt_schemas::schemas::DbtCloudConfig =
-        load_raw_yml(io, &dbt_cloud_config_path, None)?;
     // Determine which manifest path to use based on defer_env_id
     // If defer_env_id is specified, use the manifest/{env_id}/ path
     // Otherwise, use the manifest/latest/ path which will use the default staging > prod precedence
-    let manifest_path_suffix = match &dbt_cloud_config.context.defer_env_id {
+    let manifest_path_suffix = match &dbt_cloud_config.defer_env_id {
         Some(env_id) => {
             show_progress!(
                 io,
@@ -123,15 +105,10 @@ pub async fn hydrate_or_download_manifest_from_cloud(
         None => "manifest/latest/".to_string(),
     };
 
-    let project = match dbt_cloud_config.get_project_by_id(project_id.to_string().as_str()) {
-        Some(p) => p,
-        None => return Ok(None), // Project not found in dbt_cloud.yml, skip download
-    };
-
     let (account_id, account_host, token) = (
-        project.account_id.clone(),
-        project.account_host.clone(),
-        project.token_value.clone(),
+        current_project.account_id.clone(),
+        current_project.account_host.clone(),
+        current_project.token_value.clone(),
     );
 
     // Construct API URL to get presigned link

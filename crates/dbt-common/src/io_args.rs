@@ -248,7 +248,8 @@ pub struct EvalArgs {
     pub static_analysis: StaticAnalysisKind,
     pub interactive: bool,
     pub check_conformance: bool,
-    pub validate_semantic_manifest: bool,
+    pub skip_semantic_manifest_validation: bool,
+    pub export_saved_queries: bool,
     pub task_cache_url: String,
     pub run_cache_mode: RunCacheMode,
     pub show_scans: bool,
@@ -401,6 +402,9 @@ pub enum ClapResourceType {
     UnitTest,
     Analysis,
     Function,
+    SemanticModel,
+    Metric,
+    SavedQuery,
 }
 
 impl Display for ClapResourceType {
@@ -414,6 +418,9 @@ impl Display for ClapResourceType {
             ClapResourceType::UnitTest => "unit_test",
             ClapResourceType::Analysis => "analysis",
             ClapResourceType::Function => "function",
+            ClapResourceType::SemanticModel => "semantic_model",
+            ClapResourceType::Metric => "metric",
+            ClapResourceType::SavedQuery => "saved_query",
         };
         write!(f, "{s}")
     }
@@ -430,6 +437,9 @@ impl From<&ClapResourceType> for NodeType {
             ClapResourceType::UnitTest => NodeType::UnitTest,
             ClapResourceType::Analysis => NodeType::Analysis,
             ClapResourceType::Function => NodeType::Function,
+            ClapResourceType::SemanticModel => NodeType::SemanticModel,
+            ClapResourceType::Metric => NodeType::Metric,
+            ClapResourceType::SavedQuery => NodeType::SavedQuery,
         }
     }
 }

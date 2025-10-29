@@ -922,53 +922,6 @@ impl InternalDbtNodeAttributes for DbtSnapshot {
     }
 }
 
-impl InternalDbtNode for DbtSemanticModel {
-    fn common(&self) -> &CommonAttributes {
-        unimplemented!("semantic model common attributes access")
-    }
-
-    fn base(&self) -> &NodeBaseAttributes {
-        unimplemented!("semantic model base attributes access")
-    }
-
-    fn base_mut(&mut self) -> &mut NodeBaseAttributes {
-        unimplemented!("semantic model base attributes mutation")
-    }
-
-    fn common_mut(&mut self) -> &mut CommonAttributes {
-        unimplemented!("semantic model common attributes mutation")
-    }
-
-    fn resource_type(&self) -> NodeType {
-        NodeType::SemanticModel
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-
-    fn serialize_inner(&self) -> YmlValue {
-        dbt_serde_yaml::to_value(self).expect("Failed to serialize to YAML")
-    }
-
-    fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
-        if let Some(_other_semantic_model) = other.as_any().downcast_ref::<DbtSemanticModel>() {
-            // TODO: implement proper config comparison when needed
-            true
-        } else {
-            false
-        }
-    }
-
-    fn has_same_content(&self, _other: &dyn InternalDbtNode) -> bool {
-        unimplemented!("semantic model content comparison")
-    }
-
-    fn set_detected_introspection(&mut self, _introspection: IntrospectionKind) {
-        panic!("DbtSemanticModel does not support setting detected_unsafe");
-    }
-}
-
 impl InternalDbtNode for DbtExposure {
     fn common(&self) -> &CommonAttributes {
         &self.__common_attr__
@@ -998,7 +951,6 @@ impl InternalDbtNode for DbtExposure {
             false
         }
     }
-
     fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(other_exposure) = other.as_any().downcast_ref::<DbtExposure>() {
             self.__common_attr__.name == other_exposure.__common_attr__.name
@@ -1036,21 +988,21 @@ impl InternalDbtNodeAttributes for DbtExposure {
     }
 }
 
-impl InternalDbtNode for DbtSavedQuery {
+impl InternalDbtNode for DbtSemanticModel {
     fn common(&self) -> &CommonAttributes {
-        unimplemented!("saved query common attributes access")
+        &self.__common_attr__
     }
     fn base(&self) -> &NodeBaseAttributes {
-        unimplemented!("saved query base attributes access")
+        &self.__base_attr__
     }
     fn base_mut(&mut self) -> &mut NodeBaseAttributes {
-        unimplemented!("saved query base attributes mutation")
+        &mut self.__base_attr__
     }
     fn common_mut(&mut self) -> &mut CommonAttributes {
-        unimplemented!("saved query common attributes mutation")
+        &mut self.__common_attr__
     }
     fn resource_type(&self) -> NodeType {
-        NodeType::SavedQuery
+        NodeType::SemanticModel
     }
     fn as_any(&self) -> &dyn Any {
         self
@@ -1059,8 +1011,9 @@ impl InternalDbtNode for DbtSavedQuery {
         dbt_serde_yaml::to_value(self).expect("Failed to serialize to YAML")
     }
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
-        if let Some(other_saved_query) = other.as_any().downcast_ref::<DbtSavedQuery>() {
-            self.deprecated_config == other_saved_query.deprecated_config
+        if let Some(_other_semantic_model) = other.as_any().downcast_ref::<DbtSemanticModel>() {
+            // TODO: implement proper config comparison when needed
+            true
         } else {
             false
         }
@@ -1069,7 +1022,29 @@ impl InternalDbtNode for DbtSavedQuery {
         unimplemented!("semantic model content comparison")
     }
     fn set_detected_introspection(&mut self, _introspection: IntrospectionKind) {
-        panic!("DbtSavedQuery does not support setting detected_unsafe");
+        panic!("DbtSemanticModel does not support setting detected_unsafe");
+    }
+}
+
+impl InternalDbtNodeAttributes for DbtSemanticModel {
+    fn set_quoting(&mut self, _quoting: ResolvedQuoting) {
+        unimplemented!("")
+    }
+    fn set_static_analysis(&mut self, _static_analysis: Spanned<StaticAnalysisKind>) {
+        unimplemented!("")
+    }
+    fn search_name(&self) -> String {
+        self.name()
+    }
+    fn selector_string(&self) -> String {
+        format!(
+            "semantic_model:{}.{}",
+            self.package_name(),
+            self.search_name()
+        )
+    }
+    fn serialized_config(&self) -> YmlValue {
+        dbt_serde_yaml::to_value(&self.deprecated_config).expect("Failed to serialize to YAML")
     }
 }
 
@@ -1080,18 +1055,12 @@ impl InternalDbtNode for DbtMetric {
     fn common_mut(&mut self) -> &mut CommonAttributes {
         &mut self.__common_attr__
     }
-
-    // TODO: do we have to use NodeBaseAttributes if we're missing so much of it?
-    // DbtExposure has similar characteristics, but resolve_exposures sets many default values for NodeBaseAttributes...
     fn base(&self) -> &NodeBaseAttributes {
-        // Metrics don't have base attributes - they don't have database/schema/alias
-        panic!("DbtMetric does not have base attributes - use common() instead")
+        &self.__base_attr__
     }
     fn base_mut(&mut self) -> &mut NodeBaseAttributes {
-        // Metrics don't have base attributes - they don't have database/schema/alias
-        panic!("DbtMetric does not have base attributes - use common_mut() instead")
+        &mut self.__base_attr__
     }
-
     fn resource_type(&self) -> NodeType {
         NodeType::Metric
     }
@@ -1117,6 +1086,79 @@ impl InternalDbtNode for DbtMetric {
     }
     fn set_detected_introspection(&mut self, _introspection: IntrospectionKind) {
         panic!("DbtMetric does not support setting detected_unsafe");
+    }
+}
+
+impl InternalDbtNodeAttributes for DbtMetric {
+    fn set_quoting(&mut self, _quoting: ResolvedQuoting) {
+        unimplemented!("")
+    }
+    fn set_static_analysis(&mut self, _static_analysis: Spanned<StaticAnalysisKind>) {
+        unimplemented!("")
+    }
+    fn search_name(&self) -> String {
+        self.name()
+    }
+    fn selector_string(&self) -> String {
+        format!("metric:{}.{}", self.package_name(), self.search_name())
+    }
+    fn serialized_config(&self) -> YmlValue {
+        dbt_serde_yaml::to_value(&self.deprecated_config).expect("Failed to serialize to YAML")
+    }
+}
+
+impl InternalDbtNode for DbtSavedQuery {
+    fn common(&self) -> &CommonAttributes {
+        &self.__common_attr__
+    }
+    fn base(&self) -> &NodeBaseAttributes {
+        &self.__base_attr__
+    }
+    fn common_mut(&mut self) -> &mut CommonAttributes {
+        &mut self.__common_attr__
+    }
+    fn base_mut(&mut self) -> &mut NodeBaseAttributes {
+        &mut self.__base_attr__
+    }
+    fn resource_type(&self) -> NodeType {
+        NodeType::SavedQuery
+    }
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+    fn serialize_inner(&self) -> YmlValue {
+        dbt_serde_yaml::to_value(self).expect("Failed to serialize to YAML")
+    }
+    fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
+        if let Some(other_saved_query) = other.as_any().downcast_ref::<DbtSavedQuery>() {
+            self.deprecated_config == other_saved_query.deprecated_config
+        } else {
+            false
+        }
+    }
+    fn has_same_content(&self, _other: &dyn InternalDbtNode) -> bool {
+        unimplemented!("semantic model content comparison")
+    }
+    fn set_detected_introspection(&mut self, _introspection: IntrospectionKind) {
+        panic!("DbtSavedQuery does not support setting detected_unsafe");
+    }
+}
+
+impl InternalDbtNodeAttributes for DbtSavedQuery {
+    fn set_quoting(&mut self, _quoting: ResolvedQuoting) {
+        unimplemented!("")
+    }
+    fn set_static_analysis(&mut self, _static_analysis: Spanned<StaticAnalysisKind>) {
+        unimplemented!("")
+    }
+    fn search_name(&self) -> String {
+        self.name()
+    }
+    fn selector_string(&self) -> String {
+        format!("saved_query:{}.{}", self.package_name(), self.search_name())
+    }
+    fn serialized_config(&self) -> YmlValue {
+        dbt_serde_yaml::to_value(&self.deprecated_config).expect("Failed to serialize to YAML")
     }
 }
 
@@ -1351,6 +1393,9 @@ impl Nodes {
             .chain(self.analyses.keys())
             .chain(self.exposures.keys())
             .chain(self.functions.keys())
+            .chain(self.semantic_models.keys())
+            .chain(self.metrics.keys())
+            .chain(self.saved_queries.keys())
     }
 
     pub fn get_node(&self, unique_id: &str) -> Option<&dyn InternalDbtNodeAttributes> {
@@ -1394,6 +1439,21 @@ impl Nodes {
             })
             .or_else(|| {
                 self.functions
+                    .get(unique_id)
+                    .map(|n| Arc::as_ref(n) as &dyn InternalDbtNodeAttributes)
+            })
+            .or_else(|| {
+                self.semantic_models
+                    .get(unique_id)
+                    .map(|n| Arc::as_ref(n) as &dyn InternalDbtNodeAttributes)
+            })
+            .or_else(|| {
+                self.metrics
+                    .get(unique_id)
+                    .map(|n| Arc::as_ref(n) as &dyn InternalDbtNodeAttributes)
+            })
+            .or_else(|| {
+                self.saved_queries
                     .get(unique_id)
                     .map(|n| Arc::as_ref(n) as &dyn InternalDbtNodeAttributes)
             })
@@ -1443,6 +1503,21 @@ impl Nodes {
                     .get(unique_id)
                     .map(|n| n.clone() as Arc<dyn InternalDbtNodeAttributes>)
             })
+            .or_else(|| {
+                self.semantic_models
+                    .get(unique_id)
+                    .map(|n| n.clone() as Arc<dyn InternalDbtNodeAttributes>)
+            })
+            .or_else(|| {
+                self.metrics
+                    .get(unique_id)
+                    .map(|n| n.clone() as Arc<dyn InternalDbtNodeAttributes>)
+            })
+            .or_else(|| {
+                self.saved_queries
+                    .get(unique_id)
+                    .map(|n| n.clone() as Arc<dyn InternalDbtNodeAttributes>)
+            })
     }
 
     /// Check if a node exists in the graph.
@@ -1457,8 +1532,10 @@ impl Nodes {
             || self.snapshots.contains_key(unique_id)
             || self.analyses.contains_key(unique_id)
             || self.exposures.contains_key(unique_id)
+            || self.semantic_models.contains_key(unique_id)
             || self.metrics.contains_key(unique_id)
             || self.functions.contains_key(unique_id)
+            || self.saved_queries.contains_key(unique_id)
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (&String, &dyn InternalDbtNodeAttributes)> + '_ {
@@ -1505,6 +1582,21 @@ impl Nodes {
                     .iter()
                     .map(|(id, node)| (id, Arc::as_ref(node) as &dyn InternalDbtNodeAttributes)),
             )
+            .chain(
+                self.semantic_models
+                    .iter()
+                    .map(|(id, node)| (id, Arc::as_ref(node) as &dyn InternalDbtNodeAttributes)),
+            )
+            .chain(
+                self.metrics
+                    .iter()
+                    .map(|(id, node)| (id, Arc::as_ref(node) as &dyn InternalDbtNodeAttributes)),
+            )
+            .chain(
+                self.saved_queries
+                    .iter()
+                    .map(|(id, node)| (id, Arc::as_ref(node) as &dyn InternalDbtNodeAttributes)),
+            )
     }
 
     pub fn into_iter(
@@ -1546,6 +1638,18 @@ impl Nodes {
             .functions
             .iter()
             .map(|(id, node)| (id.clone(), upcast(node.clone())));
+        let semantic_models = self
+            .semantic_models
+            .iter()
+            .map(|(id, node)| (id.clone(), upcast(node.clone())));
+        let metrics = self
+            .metrics
+            .iter()
+            .map(|(id, node)| (id.clone(), upcast(node.clone())));
+        let saved_queries = self
+            .saved_queries
+            .iter()
+            .map(|(id, node)| (id.clone(), upcast(node.clone())));
 
         models
             .chain(seeds)
@@ -1556,6 +1660,9 @@ impl Nodes {
             .chain(analyses)
             .chain(exposures)
             .chain(functions)
+            .chain(semantic_models)
+            .chain(metrics)
+            .chain(saved_queries)
     }
 
     pub fn iter_values_mut(
@@ -1597,6 +1704,18 @@ impl Nodes {
             .functions
             .values_mut()
             .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNodeAttributes);
+        let map_semantic_models = self
+            .semantic_models
+            .values_mut()
+            .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNodeAttributes);
+        let map_metrics = self
+            .metrics
+            .values_mut()
+            .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNodeAttributes);
+        let map_saved_queries = self
+            .saved_queries
+            .values_mut()
+            .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNodeAttributes);
 
         map_models
             .chain(map_seeds)
@@ -1607,6 +1726,9 @@ impl Nodes {
             .chain(map_analyses)
             .chain(map_exposures)
             .chain(map_functions)
+            .chain(map_semantic_models)
+            .chain(map_metrics)
+            .chain(map_saved_queries)
     }
 
     pub fn get_value_mut(&mut self, unique_id: &str) -> Option<&mut dyn InternalDbtNodeAttributes> {
@@ -1650,6 +1772,21 @@ impl Nodes {
             })
             .or_else(|| {
                 self.functions
+                    .get_mut(unique_id)
+                    .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNodeAttributes)
+            })
+            .or_else(|| {
+                self.semantic_models
+                    .get_mut(unique_id)
+                    .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNodeAttributes)
+            })
+            .or_else(|| {
+                self.metrics
+                    .get_mut(unique_id)
+                    .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNodeAttributes)
+            })
+            .or_else(|| {
+                self.saved_queries
                     .get_mut(unique_id)
                     .map(|arc| Arc::make_mut(arc) as &mut dyn InternalDbtNodeAttributes)
             })
@@ -1718,6 +1855,28 @@ impl Nodes {
                     .values()
                     .find(|function| {
                         function.base().relation_name == Some(relation_name.to_string())
+                    })
+                    .map(|arc| Arc::as_ref(arc) as &dyn InternalDbtNodeAttributes)
+            })
+            .or_else(|| {
+                self.semantic_models
+                    .values()
+                    .find(|semantic_model| {
+                        semantic_model.base().relation_name == Some(relation_name.to_string())
+                    })
+                    .map(|arc| Arc::as_ref(arc) as &dyn InternalDbtNodeAttributes)
+            })
+            .or_else(|| {
+                self.metrics
+                    .values()
+                    .find(|metric| metric.base().relation_name == Some(relation_name.to_string()))
+                    .map(|arc| Arc::as_ref(arc) as &dyn InternalDbtNodeAttributes)
+            })
+            .or_else(|| {
+                self.saved_queries
+                    .values()
+                    .find(|saved_query| {
+                        saved_query.base().relation_name == Some(relation_name.to_string())
                     })
                     .map(|arc| Arc::as_ref(arc) as &dyn InternalDbtNodeAttributes)
             })

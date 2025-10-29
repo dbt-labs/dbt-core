@@ -1,16 +1,17 @@
 use crate::args::ResolveArgs;
 use crate::dbt_project_config::{RootProjectConfigs, init_project_config};
 use crate::utils::{get_node_fqn, get_original_file_path, get_unique_id};
+use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
 use dbt_common::tracing::emit::{emit_error_log_from_fs_error, emit_error_log_message};
 use dbt_common::{ErrorCode, FsResult};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::serde::into_typed_with_error;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
-use dbt_schemas::schemas::CommonAttributes;
 use dbt_schemas::schemas::common::{DbtChecksum, NodeDependsOn};
 use dbt_schemas::schemas::project::{DefaultTo, MetricConfig};
 use dbt_schemas::schemas::properties::metrics_properties::{MetricType, PercentileType};
 use dbt_schemas::schemas::properties::{MetricsProperties, ModelProperties};
+use dbt_schemas::schemas::{CommonAttributes, NodeBaseAttributes};
 use dbt_schemas::state::DbtPackage;
 use minijinja::value::Value as MinijinjaValue;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -223,24 +224,43 @@ pub fn resolve_nested_model_metrics(
                             .unwrap_or_default(),
                         meta: metric_config.meta.clone().unwrap_or_default(),
                     },
-                    __metric_attr__: DbtMetricAttr {
-                        unrendered_config: BTreeMap::new(), // TODO: do we need to hydrate?
+                    __base_attr__: NodeBaseAttributes {
+                        database: "".to_string(),
+                        schema: "".to_string(),
+                        alias: "".to_string(),
+                        relation_name: None,
+                        quoting: Default::default(),
+                        materialized: Default::default(),
+                        static_analysis: StaticAnalysisKind::Off.into(),
+                        static_analysis_off_reason: Some(
+                            StaticAnalysisOffReason::UnableToFetchSchema,
+                        ),
+                        enabled: true,
+                        extended_model: false,
+                        persist_docs: None,
+                        columns: Default::default(),
+                        refs: vec![],
+                        sources: vec![],
+                        functions: vec![],
+                        metrics: vec![],
                         depends_on: NodeDependsOn {
                             macros: vec![],
                             nodes: vec![semantic_model_unique_id.clone()],
                             nodes_with_ref_location: vec![],
                         },
+                        quoting_ignore_case: false,
+                    },
+                    __metric_attr__: DbtMetricAttr {
+                        unrendered_config: BTreeMap::new(), // TODO: do we need to hydrate?
                         group: metric_config.group.clone(),
                         created_at: chrono::Utc::now().timestamp() as f64,
                         metadata: None,
-                        refs: vec![], // empty because we don't call ref()
                         label: metric_props.label.clone(),
                         metric_type: metric_props.type_.clone().unwrap_or_default(),
                         type_params,
                         filter: metric_props.filter.clone().map(|f| vec![f].into()),
                         time_granularity: None, // this is always None, hydrated in type_params.grain_to_date instead
-                        sources: vec![],
-                        metrics: vec![], // always empty, hydrated in type_params.metrics
+                        metrics: vec![],        // always empty, hydrated in type_params.metrics
                     },
                     deprecated_config: MetricConfig {
                         enabled: metric_config.enabled,
@@ -470,19 +490,36 @@ pub fn resolve_top_level_metrics(
                     .unwrap_or_default(),
                 meta: metric_metric_config.meta.clone().unwrap_or_default(),
             },
+            __base_attr__: NodeBaseAttributes {
+                database: "".to_string(),
+                schema: "".to_string(),
+                alias: "".to_string(),
+                relation_name: None,
+                quoting: Default::default(),
+                materialized: Default::default(),
+                static_analysis: StaticAnalysisKind::Off.into(),
+                static_analysis_off_reason: Some(StaticAnalysisOffReason::UnableToFetchSchema),
+                enabled: true,
+                extended_model: false,
+                persist_docs: None,
+                columns: Default::default(),
+                refs: vec![],
+                sources: vec![],
+                functions: vec![],
+                metrics: vec![],
+                depends_on,
+                quoting_ignore_case: false,
+            },
             __metric_attr__: DbtMetricAttr {
                 unrendered_config: BTreeMap::new(), // TODO: do we need to hydrate?
-                depends_on,
                 group: metric_metric_config.group.clone(),
                 created_at: chrono::Utc::now().timestamp() as f64,
                 metadata: None,
-                refs: vec![], // empty because we don't call ref()
                 label: metric_props.label.clone(),
                 metric_type,
                 type_params,
                 filter: metric_props.filter.clone().map(|f| vec![f].into()),
                 time_granularity: None, // this is always None, hydrated in type_params.grain_to_date instead
-                sources: vec![],
                 metrics: vec![],
             },
             deprecated_config: MetricConfig {

@@ -860,7 +860,7 @@ pub struct ManifestMetricNodeBaseAttributes {
     pub refs: Vec<DbtRef>,
 
     #[serde(default)]
-    pub sources: Vec<Vec<String>>,
+    pub sources: Vec<DbtSourceWrapper>,
 
     #[serde(default)]
     pub unrendered_config: BTreeMap<String, YmlValue>,
@@ -908,9 +908,9 @@ impl From<DbtMetric> for ManifestMetric {
                 meta: metric.__common_attr__.meta,
             },
             __base_attr__: ManifestMetricNodeBaseAttributes {
-                depends_on: metric.__metric_attr__.depends_on,
-                refs: metric.__metric_attr__.refs,
-                sources: metric.__metric_attr__.sources,
+                depends_on: metric.__base_attr__.depends_on,
+                refs: metric.__base_attr__.refs,
+                sources: metric.__base_attr__.sources,
                 unrendered_config: metric.__metric_attr__.unrendered_config,
                 created_at: metric.__metric_attr__.created_at,
             },
@@ -1029,8 +1029,8 @@ impl From<DbtSemanticModel> for ManifestSemanticModel {
                 meta: semantic_model.__common_attr__.meta,
             },
             __base_attr__: ManifestSemanticModelNodeBaseAttributes {
-                depends_on: semantic_model.__semantic_model_attr__.depends_on,
-                refs: semantic_model.__semantic_model_attr__.refs,
+                depends_on: semantic_model.__base_attr__.depends_on,
+                refs: semantic_model.__base_attr__.refs,
                 unrendered_config: semantic_model.__semantic_model_attr__.unrendered_config,
                 created_at: semantic_model.__semantic_model_attr__.created_at,
             },
@@ -1138,8 +1138,8 @@ impl From<DbtSavedQuery> for ManifestSavedQuery {
                 meta: saved_query.__common_attr__.meta,
             },
             __base_attr__: ManifestSavedQueryNodeBaseAttributes {
-                depends_on: saved_query.__saved_query_attr__.depends_on,
-                refs: saved_query.__saved_query_attr__.refs,
+                depends_on: saved_query.__base_attr__.depends_on,
+                refs: saved_query.__base_attr__.refs,
                 unrendered_config: saved_query.__saved_query_attr__.unrendered_config,
                 created_at: saved_query.__saved_query_attr__.created_at,
             },

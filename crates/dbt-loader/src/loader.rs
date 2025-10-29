@@ -13,6 +13,7 @@ use dbt_jinja_utils::phases::load::init::initialize_load_jinja_environment;
 use dbt_jinja_utils::phases::load::init::initialize_load_profile_jinja_environment;
 use dbt_schemas::schemas::serde::{StringOrInteger, yaml_to_fs_error};
 use dbt_schemas::schemas::telemetry::{ExecutionPhase, PhaseExecuted};
+use dbt_schemas::schemas::{DbtCloudConfig, DbtCloudProjectConfig};
 use dbt_schemas::state::DbtProfile;
 use fs_deps::get_or_install_packages;
 use pathdiff::diff_paths;
@@ -28,7 +29,8 @@ use std::{fs, io};
 use ignore::gitignore::{Gitignore, GitignoreBuilder};
 
 use dbt_common::constants::{
-    DBT_INTERNAL_PACKAGES_DIR_NAME, DBT_PACKAGES_DIR_NAME, DBT_PROJECT_YML, LOADING,
+    DBT_CLOUD_YML, DBT_CONFIG_DIR, DBT_INTERNAL_PACKAGES_DIR_NAME, DBT_PACKAGES_DIR_NAME,
+    DBT_PROJECT_YML, LOADING,
 };
 use dbt_common::error::LiftableResult;
 use project::DbtProject;
@@ -63,11 +65,16 @@ pub async fn load(
     arg: &LoadArgs,
     iarg: &InvocationArgs,
     token: &CancellationToken,
-) -> FsResult<(DbtState, Option<usize>, Option<ProjectDbtCloudConfig>)> {
+) -> FsResult<(DbtState, Option<usize>, Option<DbtCloudProjectConfig>)> {
     let _pb = with_progress!(arg.io, spinner => LOADING);
 
     let (simplified_dbt_project, mut dbt_profile) =
         load_simplified_project_and_profiles(arg).await?;
+
+    let dbt_cloud_project = match &simplified_dbt_project.dbt_cloud {
+        Some(project_cloud) => load_cloud_project_config(project_cloud),
+        None => None,
+    };
 
     // Check if .gitignore exists and add dbt_internal_packages/ if not present
     let gitignore_path = arg.io.in_dir.join(".gitignore");
@@ -141,7 +148,7 @@ pub async fn load(
 
     // If we are running `dbt debug` we don't need to collect dbt_project.yml files
     if arg.debug_profile {
-        return Ok((dbt_state, final_threads, simplified_dbt_project.dbt_cloud));
+        return Ok((dbt_state, final_threads, dbt_cloud_project));
     }
 
     let flags: BTreeMap<String, minijinja::Value> = iarg.to_dict();
@@ -198,7 +205,7 @@ pub async fn load(
         dbt_state.packages.extend(packages);
         dbt_state.packages[0] = new_root_package;
 
-        return Ok((dbt_state, final_threads, simplified_dbt_project.dbt_cloud));
+        return Ok((dbt_state, final_threads, dbt_cloud_project));
     }
 
     // Load the packages.yml file, if it exists and install the packages if arg.install_deps is true
@@ -223,16 +230,12 @@ pub async fn load(
         token,
     )
     .await?;
+
     // get publication artifact for each upstream project
-    download_publication_artifacts(
-        &upstream_projects,
-        &simplified_dbt_project.dbt_cloud,
-        &arg.io,
-    )
-    .await?;
+    download_publication_artifacts(&upstream_projects, &dbt_cloud_project, &arg.io).await?;
     // If we are running `dbt deps` we don't need to collect files
     if arg.install_deps {
-        return Ok((dbt_state, final_threads, simplified_dbt_project.dbt_cloud));
+        return Ok((dbt_state, final_threads, dbt_cloud_project));
     }
 
     let lookup_map = packages_lock.lookup_map();
@@ -267,7 +270,8 @@ pub async fn load(
         dbt_state.packages.extend(packages);
         dbt_state.vars = collected_vars.into_iter().collect();
     }
-    Ok((dbt_state, final_threads, simplified_dbt_project.dbt_cloud))
+
+    Ok((dbt_state, final_threads, dbt_cloud_project))
 }
 
 pub async fn load_simplified_project_and_profiles(
@@ -334,6 +338,41 @@ pub async fn load_simplified_project_and_profiles(
     let dbt_profile = load_profiles(arg, &simplified_dbt_project, &env, &ctx)?;
 
     Ok((simplified_dbt_project, dbt_profile))
+}
+
+pub fn load_cloud_project_config(
+    project_dbt_cloud: &ProjectDbtCloudConfig,
+) -> Option<DbtCloudProjectConfig> {
+    // Get home directory
+    let home_dir = dirs::home_dir()?;
+
+    // Check if dbt_cloud.yml exists
+    let dbt_cloud_config_path = home_dir.join(DBT_CONFIG_DIR).join(DBT_CLOUD_YML);
+    if !dbt_cloud_config_path.exists() {
+        return None;
+    }
+
+    // Read and parse the dbt_cloud.yml file
+    let content = fs::read_to_string(&dbt_cloud_config_path).ok()?;
+    let cloud_config: DbtCloudConfig = dbt_serde_yaml::from_str(&content).ok()?;
+
+    // TODO: unsure if we should exit early if the project_id is not set in dbt_project.yml
+    // or if we should fall back to the active_project in dbt_cloud.yml
+    let project = match &project_dbt_cloud.project_id {
+        Some(project_id) => cloud_config.get_project_by_id(project_id.to_string().as_str()),
+        None => cloud_config.get_project_by_id(&cloud_config.context.active_project),
+    };
+
+    let defer_env_id = project_dbt_cloud
+        .defer_env_id
+        .clone()
+        .map(|env_id| env_id.to_string())
+        .or_else(|| cloud_config.context.defer_env_id.clone());
+
+    Some(DbtCloudProjectConfig {
+        defer_env_id,
+        project: project.cloned(),
+    })
 }
 
 #[allow(clippy::too_many_arguments)]
