@@ -3,14 +3,12 @@
 import inspect
 import json
 from dataclasses import dataclass
-from typing import List, Optional, Iterable, Union, Dict, Any
-from dbt_common.dataclass_schema import dbtClassMixin
-
+from typing import Any, Dict, Iterable, List, Optional, Union
 
 from dbt.context.base import BaseContext
+from dbt.context.providers import MacroContext, ModelContext
 from dbt.context.target import TargetContext
-from dbt.context.providers import ModelContext, MacroContext
-
+from dbt_common.dataclass_schema import dbtClassMixin
 
 CONTEXTS_MAP = {
     "base": BaseContext,

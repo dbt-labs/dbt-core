@@ -1,15 +1,15 @@
 #!/usr/bin/env python
-from dataclasses import dataclass
-from argparse import ArgumentParser
-from pathlib import Path
 import json
-from typing import Type, Dict, Any
+from argparse import ArgumentParser
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Dict, Type
 
-from dbt.contracts.graph.manifest import WritableManifest
-from dbt.artifacts.schemas.catalog import CatalogArtifact
-from dbt.artifacts.schemas.run import RunResultsArtifact
-from dbt.artifacts.schemas.freshness import FreshnessExecutionResultArtifact
 from dbt.artifacts.schemas.base import VersionedSchema
+from dbt.artifacts.schemas.catalog import CatalogArtifact
+from dbt.artifacts.schemas.freshness import FreshnessExecutionResultArtifact
+from dbt.artifacts.schemas.run import RunResultsArtifact
+from dbt.contracts.graph.manifest import WritableManifest
 from dbt_common.clients.system import write_file
 
 

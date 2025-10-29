@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 try:
-    from yaml import CLoader as Loader, CSafeLoader as SafeLoader, CDumper as Dumper  # noqa: F401
+    from yaml import CDumper as Dumper
+    from yaml import CLoader as Loader  # noqa: F401
+    from yaml import CSafeLoader as SafeLoader
 except ImportError:
-    from yaml import Loader, SafeLoader, Dumper  # noqa: F401
+    from yaml import Dumper, Loader, SafeLoader  # noqa: F401
 
 if Loader.__name__ == "CLoader":
     print("libyaml is working")
