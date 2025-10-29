@@ -775,7 +775,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                             delimiter: seed.config.delimiter.clone().map(|d| d.into_inner()),
                             root_path: seed.root_path,
                         },
-                        deprecated_config: seed.config,
+                        deprecated_config: seed.config.into(),
                         __other__: seed.__other__,
                     }),
                 );
@@ -1391,7 +1391,7 @@ pub fn manifest_model_to_dbt_model(
             AdapterType::from_str(&manifest.metadata.adapter_type)
                 .expect("Unknown or unsupported adapter type"),
         ),
-        deprecated_config: model.config,
+        deprecated_config: model.config.into(),
         __other__: model.__other__,
     }
 }

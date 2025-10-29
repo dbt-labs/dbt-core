@@ -3,6 +3,21 @@ use std::{collections::BTreeMap, path::PathBuf};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 
+use dbt_common::serde_utils::Omissible;
+use dbt_serde_yaml::JsonSchema;
+use dbt_serde_yaml::Spanned;
+use dbt_serde_yaml::Verbatim;
+
+use crate::schemas::common::DbtBatchSize;
+use crate::schemas::common::DbtIncrementalStrategy;
+use crate::schemas::common::DbtUniqueKey;
+use crate::schemas::common::{DocsConfig, OnConfigurationChange};
+use crate::schemas::common::{Hooks, OnSchemaChange};
+use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
+use crate::schemas::properties::ModelFreshness;
+
+use crate::schemas::serde::{bool_or_string_bool, default_type};
+
 // Type aliases for clarity
 type YmlValue = dbt_serde_yaml::Value;
 
@@ -159,7 +174,7 @@ pub struct ManifestSeed {
     pub __base_attr__: ManifestNodeBaseAttributes,
 
     // Test Specific Attributes
-    pub config: SeedConfig,
+    pub config: ManifestSeedConfig,
     pub root_path: Option<PathBuf>,
 
     pub __other__: BTreeMap<String, YmlValue>,
@@ -205,7 +220,7 @@ impl From<DbtSeed> for ManifestSeed {
                 build_path: Default::default(),
                 contract: Default::default(),
             },
-            config: seed.deprecated_config,
+            config: seed.deprecated_config.into(),
             root_path: seed.__seed_attr__.root_path,
             __other__: seed.__other__,
         }
@@ -514,7 +529,7 @@ pub struct ManifestModel {
     // Model Specific Attributes
     pub access: Option<Access>,
     pub group: Option<String>,
-    pub config: ModelConfig,
+    pub config: ManifestModelConfig,
     pub version: Option<StringOrInteger>,
     pub latest_version: Option<StringOrInteger>,
     pub constraints: Option<Vec<ModelConstraint>>,
@@ -523,6 +538,242 @@ pub struct ManifestModel {
     pub time_spine: Option<ModelPropertiesTimeSpine>,
 
     pub __other__: BTreeMap<String, YmlValue>,
+}
+#[derive(Deserialize, Serialize, Debug, Default, Clone, PartialEq, JsonSchema)]
+pub struct ManifestModelConfig {
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub enabled: Option<bool>,
+    pub alias: Option<String>,
+    #[serde(alias = "project", alias = "data_space")]
+    pub database: Omissible<Option<String>>,
+    #[serde(alias = "dataset")]
+    pub schema: Omissible<Option<String>>,
+    pub tags: Option<StringOrArrayOfStrings>,
+    pub catalog_name: Option<String>,
+    // need default to ensure None if field is not set
+    #[serde(default, deserialize_with = "default_type")]
+    pub meta: Option<BTreeMap<String, YmlValue>>,
+    pub group: Option<String>,
+    pub materialized: Option<DbtMaterialization>,
+    pub incremental_strategy: Option<DbtIncrementalStrategy>,
+    pub incremental_predicates: Option<Vec<String>>,
+    pub batch_size: Option<DbtBatchSize>,
+    pub lookback: Option<i32>,
+    pub begin: Option<String>,
+    pub persist_docs: Option<PersistDocsConfig>,
+    #[serde(alias = "post-hook")]
+    pub post_hook: Verbatim<Option<Hooks>>,
+    #[serde(alias = "pre-hook")]
+    pub pre_hook: Verbatim<Option<Hooks>>,
+    pub quoting: Option<DbtQuoting>,
+    pub column_types: Option<BTreeMap<Spanned<String>, String>>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub full_refresh: Option<bool>,
+    pub unique_key: Option<DbtUniqueKey>,
+    pub on_schema_change: Option<OnSchemaChange>,
+    pub on_configuration_change: Option<OnConfigurationChange>,
+    pub grants: Option<BTreeMap<String, StringOrArrayOfStrings>>,
+    pub packages: Option<StringOrArrayOfStrings>,
+    pub docs: Option<DocsConfig>,
+    pub contract: Option<DbtContract>,
+    pub event_time: Option<String>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub concurrent_batches: Option<bool>,
+    pub merge_update_columns: Option<StringOrArrayOfStrings>,
+    pub merge_exclude_columns: Option<StringOrArrayOfStrings>,
+    pub access: Option<Access>,
+    pub table_format: Option<String>,
+    pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
+    pub freshness: Option<ModelFreshness>,
+    pub sql_header: Option<String>,
+    pub location: Option<String>,
+    pub predicates: Option<Vec<String>>,
+    pub description: Option<String>,
+    // Adapter specific configs
+    pub __warehouse_specific_config__: WarehouseSpecificNodeConfig,
+}
+
+#[skip_serializing_none]
+#[derive(Deserialize, Serialize, Debug, Default, PartialEq, Clone, JsonSchema)]
+pub struct ManifestSeedConfig {
+    pub column_types: Option<BTreeMap<Spanned<String>, String>>,
+    #[serde(alias = "project", alias = "data_space")]
+    pub database: Option<String>,
+    #[serde(alias = "dataset")]
+    pub schema: Option<String>,
+    pub alias: Option<String>,
+    pub docs: Option<DocsConfig>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub enabled: Option<bool>,
+    pub grants: Option<BTreeMap<String, StringOrArrayOfStrings>>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub quote_columns: Option<bool>,
+    pub delimiter: Option<Spanned<String>>,
+    pub event_time: Option<String>,
+    pub full_refresh: Option<bool>,
+    pub group: Option<String>,
+    pub meta: Option<BTreeMap<String, YmlValue>>,
+    pub persist_docs: Option<PersistDocsConfig>,
+    #[serde(alias = "post-hook")]
+    pub post_hook: Verbatim<Option<Hooks>>,
+    #[serde(alias = "pre-hook")]
+    pub pre_hook: Verbatim<Option<Hooks>>,
+    pub tags: Option<StringOrArrayOfStrings>,
+    pub quoting: Option<DbtQuoting>,
+    pub description: Option<String>,
+    pub materialized: Option<DbtMaterialization>,
+    // Adapter specific configs
+    pub __warehouse_specific_config__: WarehouseSpecificNodeConfig,
+}
+
+impl From<SeedConfig> for ManifestSeedConfig {
+    fn from(config: SeedConfig) -> Self {
+        Self {
+            column_types: config.column_types,
+            enabled: config.enabled,
+            alias: config.alias,
+            database: config.database,
+            schema: config.schema,
+            docs: config.docs,
+            grants: config.grants,
+            quote_columns: config.quote_columns,
+            delimiter: config.delimiter,
+            event_time: config.event_time,
+            full_refresh: config.full_refresh,
+            group: config.group,
+            meta: config.meta,
+            persist_docs: config.persist_docs,
+            post_hook: config.post_hook,
+            pre_hook: config.pre_hook,
+            tags: config.tags,
+            quoting: config.quoting,
+            description: config.description,
+            materialized: config.materialized,
+            __warehouse_specific_config__: config.__warehouse_specific_config__,
+        }
+    }
+}
+
+impl From<ManifestSeedConfig> for SeedConfig {
+    fn from(config: ManifestSeedConfig) -> Self {
+        Self {
+            column_types: config.column_types,
+            enabled: config.enabled,
+            alias: config.alias,
+            database: config.database,
+            schema: config.schema,
+            docs: config.docs,
+            grants: config.grants,
+            quote_columns: config.quote_columns,
+            delimiter: config.delimiter,
+            event_time: config.event_time,
+            full_refresh: config.full_refresh,
+            group: config.group,
+            meta: config.meta,
+            persist_docs: config.persist_docs,
+            post_hook: config.post_hook,
+            pre_hook: config.pre_hook,
+            tags: config.tags,
+            quoting: config.quoting,
+            description: config.description,
+            materialized: config.materialized,
+            __warehouse_specific_config__: config.__warehouse_specific_config__,
+        }
+    }
+}
+
+impl From<ModelConfig> for ManifestModelConfig {
+    fn from(config: ModelConfig) -> Self {
+        Self {
+            enabled: config.enabled,
+            alias: config.alias,
+            database: config.database,
+            schema: config.schema,
+            tags: config.tags,
+            catalog_name: config.catalog_name,
+            meta: config.meta,
+            group: config.group,
+            materialized: config.materialized,
+            incremental_strategy: config.incremental_strategy,
+            incremental_predicates: config.incremental_predicates,
+            batch_size: config.batch_size,
+            lookback: config.lookback,
+            begin: config.begin,
+            persist_docs: config.persist_docs,
+            post_hook: config.post_hook,
+            pre_hook: config.pre_hook,
+            quoting: config.quoting,
+            column_types: config.column_types,
+            full_refresh: config.full_refresh,
+            unique_key: config.unique_key,
+            on_schema_change: config.on_schema_change,
+            on_configuration_change: config.on_configuration_change,
+            grants: config.grants,
+            packages: config.packages,
+            docs: config.docs,
+            contract: config.contract,
+            event_time: config.event_time,
+            concurrent_batches: config.concurrent_batches,
+            merge_update_columns: config.merge_update_columns,
+            merge_exclude_columns: config.merge_exclude_columns,
+            access: config.access,
+            table_format: config.table_format,
+            static_analysis: config.static_analysis,
+            freshness: config.freshness,
+            sql_header: config.sql_header,
+            location: config.location,
+            predicates: config.predicates,
+            description: config.description,
+            __warehouse_specific_config__: config.__warehouse_specific_config__,
+        }
+    }
+}
+
+impl From<ManifestModelConfig> for ModelConfig {
+    fn from(config: ManifestModelConfig) -> Self {
+        Self {
+            enabled: config.enabled,
+            alias: config.alias,
+            database: config.database,
+            schema: config.schema,
+            tags: config.tags,
+            catalog_name: config.catalog_name,
+            meta: config.meta,
+            group: config.group,
+            materialized: config.materialized,
+            incremental_strategy: config.incremental_strategy,
+            incremental_predicates: config.incremental_predicates,
+            batch_size: config.batch_size,
+            lookback: config.lookback,
+            begin: config.begin,
+            persist_docs: config.persist_docs,
+            post_hook: config.post_hook,
+            pre_hook: config.pre_hook,
+            quoting: config.quoting,
+            column_types: config.column_types,
+            full_refresh: config.full_refresh,
+            unique_key: config.unique_key,
+            on_schema_change: config.on_schema_change,
+            on_configuration_change: config.on_configuration_change,
+            grants: config.grants,
+            packages: config.packages,
+            docs: config.docs,
+            contract: config.contract,
+            event_time: config.event_time,
+            concurrent_batches: config.concurrent_batches,
+            merge_update_columns: config.merge_update_columns,
+            merge_exclude_columns: config.merge_exclude_columns,
+            access: config.access,
+            table_format: config.table_format,
+            static_analysis: config.static_analysis,
+            freshness: config.freshness,
+            sql_header: config.sql_header,
+            location: config.location,
+            predicates: config.predicates,
+            description: config.description,
+            __warehouse_specific_config__: config.__warehouse_specific_config__,
+        }
+    }
 }
 
 impl From<DbtModel> for ManifestModel {
@@ -567,7 +818,7 @@ impl From<DbtModel> for ManifestModel {
             },
             access: Some(model.__model_attr__.access),
             group: model.__model_attr__.group,
-            config: model.deprecated_config,
+            config: model.deprecated_config.into(),
             version: model.__model_attr__.version,
             latest_version: model.__model_attr__.latest_version,
             constraints: Some(model.__model_attr__.constraints),
