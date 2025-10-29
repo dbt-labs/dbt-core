@@ -79,7 +79,6 @@ pub async fn resolve_semantic_models(
         return Ok((semantic_models, disabled_semantic_models));
     }
 
-    // TODO: what is the difference between 'package_name' and 'dependency_package_name'?
     let dependency_package_name = dependency_package_name_from_ctx(env, base_ctx);
     let _local_model_project_config = init_project_config(
         &args.io,
@@ -94,7 +93,7 @@ pub async fn resolve_semantic_models(
         &args.io,
         &package.dbt_project.semantic_models,
         SemanticModelConfig {
-            enabled: Some(false),
+            enabled: Some(true),
             ..Default::default()
         },
         dependency_package_name,
@@ -323,7 +322,7 @@ pub fn model_props_to_semantic_entities(model_props: ModelProperties) -> Vec<Sem
                 name: column_entity_config.name.unwrap_or_default(),
                 entity_type: column_entity_config.type_,
                 description: column_entity_config.description,
-                expr: None, // only applicable for derived_semantics
+                expr: Some(column.name.clone()),
                 label: column_entity_config.label,
                 config: column_entity_config.config,
                 // fields below are always null (for now)
@@ -396,7 +395,7 @@ pub fn model_props_to_dimensions(model_props: ModelProperties) -> Vec<Dimension>
                 column_name: Some(column.name.clone()),
                 dimension_type: column_dimension_config.type_.clone(),
                 description: column_dimension_config.description,
-                expr: None, // only applicable for derived_semantics
+                expr: Some(column.name.clone()),
                 label: column_dimension_config.label,
                 is_partition: column_dimension_config.is_partition.unwrap_or(false),
                 type_params,

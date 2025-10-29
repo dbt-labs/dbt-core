@@ -1,3 +1,4 @@
+use crate::schemas::serde::bool_or_string_bool;
 use dbt_serde_yaml::{JsonSchema, ShouldBe};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
@@ -17,11 +18,15 @@ use crate::{
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct ProjectSemanticModelConfig {
+    #[serde(default, rename = "+enabled", deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
+    #[serde(rename = "+group")]
     pub group: Option<String>,
+    #[serde(rename = "+meta")]
     pub meta: Option<BTreeMap<String, YmlValue>>,
     #[serde(rename = "+tags")]
     pub tags: Option<StringOrArrayOfStrings>,
+
     pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectSemanticModelConfig>>,
 }
 

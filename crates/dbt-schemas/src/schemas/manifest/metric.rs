@@ -62,6 +62,8 @@ pub struct MetricTypeParams {
     #[serde(default = "default_join_to_timespine")]
     pub join_to_timespine: Option<bool>,
     pub fill_nulls_with: Option<i32>,
+    #[serde(skip_deserializing)]
+    pub is_private: bool,
     pub metric_aggregation_params: Option<MetricAggregationParameters>,
 }
 
@@ -316,10 +318,6 @@ impl From<MetricsProperties> for MetricTypeParams {
             .input_metrics
             .clone()
             .map(|input_metrics| input_metrics.into_iter().map(MetricInput::from).collect());
-        let metrics = props
-            .metrics
-            .clone()
-            .map(|metrics| metrics.into_iter().map(MetricInput::from).collect());
 
         // we infer conversion type from other fields, since type is optional
         let conversion_type_params: Option<ConversionTypeParams> =
@@ -345,8 +343,9 @@ impl From<MetricsProperties> for MetricTypeParams {
             conversion_type_params,
             expr,
             window,
-            metrics: metrics.or(input_metrics), // TODO: confirm which ones take precedence
+            metrics: input_metrics,
             input_measures: Some(vec![]),
+            is_private: props.hidden.unwrap_or(false),
             ..Default::default()
         };
 

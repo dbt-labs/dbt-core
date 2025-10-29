@@ -9,6 +9,8 @@ use serde_with::skip_serializing_none;
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, Default)]
 pub struct MetricsProperties {
     pub name: String,
+    #[serde(default = "default_hidden")]
+    pub hidden: Option<bool>,
     pub description: Option<String>,
     pub label: Option<String>,
     #[serde(rename = "type")]
@@ -30,13 +32,16 @@ pub struct MetricsProperties {
     pub input_metric: Option<StringOrMetricPropertiesMetricInput>,
     pub numerator: Option<StringOrMetricPropertiesMetricInput>,
     pub denominator: Option<StringOrMetricPropertiesMetricInput>,
-    pub metrics: Option<Vec<StringOrMetricPropertiesMetricInput>>,
     pub input_metrics: Option<Vec<MetricPropertiesMetricInput>>,
     pub entity: Option<String>,
     pub calculation: Option<ConversionCalculationType>,
     pub base_metric: Option<StringOrMetricPropertiesMetricInput>,
     pub conversion_metric: Option<StringOrMetricPropertiesMetricInput>,
     pub constant_properties: Option<Vec<ConstantProperty>>,
+}
+
+pub fn default_hidden() -> Option<bool> {
+    Some(false)
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, JsonSchema)]
