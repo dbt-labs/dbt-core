@@ -20,22 +20,22 @@ repos:
         exclude_types:
           - "markdown"
       - id: check-case-conflict
+  # local hooks are used to run the hooks in the local environment instead of a pre-commit isolated one.
+  # This ensures that the hooks are run with the same version of the dependencies as the local environment
+  # without having to manually keeo them in sync.
   - repo: local
     hooks:
       # Formatter/linter/type-checker pins live in the pyproject.dev optional dependency.
-      # isort must match what's in dev-requirements.txt to be sure local env matches CI
       - id: isort
         name: isort
         entry: python -m isort
         language: system
         types: [python]
-      # black must match what's in dev-requirements.txt to be sure local env matches CI
       - id: black
         name: black
         entry: python -m black
         language: system
         types: [python]
-      # black must match what's in dev-requirements.txt to be sure local env matches CI
       - id: black-check
         name: black-check
         entry: python -m black
@@ -45,13 +45,11 @@ repos:
         language: system
         stages: [manual]
         types: [python]
-      # flake8 must match what's in dev-requirements.txt to be sure local env matches CI
       - id: flake8
         name: flake8
         entry: python -m flake8
         language: system
         types: [python]
-      # flake8 must match what's in dev-requirements.txt to be sure local env matches CI
       - id: flake8-check
         name: flake8-check
         entry: python -m flake8
@@ -69,7 +67,6 @@ repos:
       # mix.  Unfortunately, there's nothing we can do about per pre-commit's
       # author.
       # See https://github.com/pre-commit/pre-commit/issues/730 for details.
-      # mypy must match what's in dev-requirements.txt to be sure local env matches CI
       - id: mypy
         name: mypy
         entry: python -m mypy
@@ -77,7 +74,6 @@ repos:
         files: ^core/dbt/
         language: system
         types: [python]
-      # mypy must match what's in dev-requirements.txt to be sure local env matches CI
       - id: mypy-check
         name: mypy-check
         entry: python -m mypy
