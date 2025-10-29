@@ -24,7 +24,7 @@ from dbt.exceptions import (
     InvalidAccessTypeError,
 )
 from dbt.flags import get_flags
-from dbt.jsonschemas import validate_model_config
+from dbt.jsonschemas.jsonschemas import validate_model_config
 from dbt.node_types import AccessType, ModelLanguage, NodeType
 from dbt.parser.common import resource_types_to_schema_file_keys
 from dbt.parser.search import FileBlock
