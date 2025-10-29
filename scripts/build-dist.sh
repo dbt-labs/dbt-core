@@ -12,11 +12,20 @@ set -x
 
 rm -rf "$DBT_PATH"/dist
 rm -rf "$DBT_PATH"/build
+rm -rf "$DBT_PATH"/core/dist
+rm -rf "$DBT_PATH"/core/build
 mkdir -p "$DBT_PATH"/dist
 
-cd "$DBT_PATH"
+# Copy License.md to core/ for inclusion in distribution (required by Apache 2.0)
+# The license-files in pyproject.toml references it relative to core/
+cp "$DBT_PATH"/License.md "$DBT_PATH"/core/License.md
+
+cd "$DBT_PATH"/core
 $PYTHON_BIN -m pip install --upgrade build
-$PYTHON_BIN -m build
+$PYTHON_BIN -m build --outdir "$DBT_PATH/dist"
+
+# Clean up License.md that was copied to core/ for build
+rm -f "$DBT_PATH/core/License.md"
 
 
 set +x

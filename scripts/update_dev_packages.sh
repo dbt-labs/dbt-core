@@ -5,7 +5,7 @@ set -e
 
 repo=$1
 ref=$2
-target_file="pyproject.toml"
+target_file="core/pyproject.toml"
 
 req_sed_pattern="s|${repo}.git@main|${repo}.git@${ref}|g"
 if [[ "$OSTYPE" == darwin* ]]; then
