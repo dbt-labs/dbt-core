@@ -154,6 +154,8 @@ impl FlattenRecordBatchState {
             | DataType::Float16
             | DataType::Float32
             | DataType::Float64
+            | DataType::Decimal32(_, _)
+            | DataType::Decimal64(_, _)
             | DataType::Decimal128(_, _)
             | DataType::Decimal256(_, _) => {
                 self.emit_flat_col(field, Some("Number"), column.clone())
@@ -244,6 +246,8 @@ impl FlattenRecordBatchState {
             | DataType::Float16
             | DataType::Float32
             | DataType::Float64
+            | DataType::Decimal32(_, _)
+            | DataType::Decimal64(_, _)
             | DataType::Decimal128(_, _)
             | DataType::Decimal256(_, _) => {
                 self.emit_flat_col(field, Some("Number"), column.clone())

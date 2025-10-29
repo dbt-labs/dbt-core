@@ -589,8 +589,8 @@ impl Display for NameError {
 #[non_exhaustive]
 pub enum WrappedError {
     Antlr(String),
-    Arrow(arrow::error::ArrowError),
-    Parquet(parquet::errors::ParquetError),
+    Arrow(Box<arrow::error::ArrowError>),
+    Parquet(Box<parquet::errors::ParquetError>),
     Datafusion(DataFusionError),
     Frontend(FrontendError),
     FrontendInternal(dbt_frontend_common::error::InternalError),
@@ -718,7 +718,8 @@ impl From<JoinError> for Box<FsError> {
 
 impl From<arrow::error::ArrowError> for FsError {
     fn from(e: arrow::error::ArrowError) -> Self {
-        FsError::new(ErrorCode::default(), "Arrow error").with_cause(WrappedError::Arrow(e))
+        FsError::new(ErrorCode::default(), "Arrow error")
+            .with_cause(WrappedError::Arrow(Box::new(e)))
     }
 }
 
@@ -730,13 +731,14 @@ impl From<arrow::error::ArrowError> for Box<FsError> {
 
 impl From<arrow::error::ArrowError> for WrappedError {
     fn from(e: arrow::error::ArrowError) -> Self {
-        WrappedError::Arrow(e)
+        WrappedError::Arrow(Box::new(e))
     }
 }
 
 impl From<parquet::errors::ParquetError> for FsError {
     fn from(e: parquet::errors::ParquetError) -> Self {
-        FsError::new(ErrorCode::ParquetError, "Parquet error").with_cause(WrappedError::Parquet(e))
+        FsError::new(ErrorCode::ParquetError, "Parquet error")
+            .with_cause(WrappedError::Parquet(Box::new(e)))
     }
 }
 
@@ -748,7 +750,7 @@ impl From<parquet::errors::ParquetError> for Box<FsError> {
 
 impl From<parquet::errors::ParquetError> for WrappedError {
     fn from(e: parquet::errors::ParquetError) -> Self {
-        WrappedError::Parquet(e)
+        WrappedError::Parquet(Box::new(e))
     }
 }
 
@@ -942,7 +944,7 @@ impl From<DataFusionError> for FsError {
                 .with_cause(WrappedError::Generic(s)),
             DataFusionError::SchemaError(se, _) => {
                 FsError::new(ErrorCode::LogicalPlanError, "Schema error")
-                    .with_cause(WrappedError::NameError(NameError::Datafusion(se)))
+                    .with_cause(WrappedError::NameError(NameError::Datafusion(*se)))
             }
             DataFusionError::ResourcesExhausted(s) => {
                 FsError::new(ErrorCode::ResourceError, "Resource error")

@@ -63,24 +63,24 @@ version = "2.0.0-preview.51"
 # However, note that we declare dependencies in our crates with the same version
 # numbers as crates.io / the upstream repository.
 # See https://doc.rust-lang.org/cargo/reference/overriding-dependencies.html#the-patch-section
-datafusion-common = { git = "https://github.com/sdf-labs/datafusion", rev = "489f45d5e2241b30d8af6ebf8ac38982fc77e92c" } # @ sdf/48
-datafusion-expr = { git = "https://github.com/sdf-labs/datafusion", rev = "489f45d5e2241b30d8af6ebf8ac38982fc77e92c" } # @ sdf/48
+datafusion-common = { git = "https://github.com/sdf-labs/datafusion", rev = "c0627e28fdd64ad1e33e3e8f3d6515c7ecb886ed" } # @ sdf/50
+datafusion-expr = { git = "https://github.com/sdf-labs/datafusion", rev = "c0627e28fdd64ad1e33e3e8f3d6515c7ecb886ed" } # @ sdf/50
 
 # All arrow dependencies (run `cargo tree --prefix none | grep ^arrow | cut -d ' ' -f1 | sort -u` to get this list)
-arrow = { git = "https://github.com/sdf-labs/arrow-rs", rev = "63a95c7060cb22b620ea60caadf5251f4ddcd6e0" } # @ sdf/55.1.0
-arrow-arith = { git = "https://github.com/sdf-labs/arrow-rs", rev = "63a95c7060cb22b620ea60caadf5251f4ddcd6e0" } # @ sdf/55.1.0
-arrow-array = { git = "https://github.com/sdf-labs/arrow-rs", rev = "63a95c7060cb22b620ea60caadf5251f4ddcd6e0" } # @ sdf/55.1.0
-arrow-buffer = { git = "https://github.com/sdf-labs/arrow-rs", rev = "63a95c7060cb22b620ea60caadf5251f4ddcd6e0" } # @ sdf/55.1.0
-arrow-cast = { git = "https://github.com/sdf-labs/arrow-rs", rev = "63a95c7060cb22b620ea60caadf5251f4ddcd6e0" } # @ sdf/55.1.0
-arrow-csv = { git = "https://github.com/sdf-labs/arrow-rs", rev = "63a95c7060cb22b620ea60caadf5251f4ddcd6e0" } # @ sdf/55.1.0
-arrow-data = { git = "https://github.com/sdf-labs/arrow-rs", rev = "63a95c7060cb22b620ea60caadf5251f4ddcd6e0" } # @ sdf/55.1.0
-arrow-ipc = { git = "https://github.com/sdf-labs/arrow-rs", rev = "63a95c7060cb22b620ea60caadf5251f4ddcd6e0" } # @ sdf/55.1.0
-arrow-json = { git = "https://github.com/sdf-labs/arrow-rs", rev = "63a95c7060cb22b620ea60caadf5251f4ddcd6e0" } # @ sdf/55.1.0
-arrow-ord = { git = "https://github.com/sdf-labs/arrow-rs", rev = "63a95c7060cb22b620ea60caadf5251f4ddcd6e0" } # @ sdf/55.1.0
-arrow-row = { git = "https://github.com/sdf-labs/arrow-rs", rev = "63a95c7060cb22b620ea60caadf5251f4ddcd6e0" } # @ sdf/55.1.0
-arrow-schema = { git = "https://github.com/sdf-labs/arrow-rs", rev = "63a95c7060cb22b620ea60caadf5251f4ddcd6e0" } # @ sdf/55.1.0
-arrow-select = { git = "https://github.com/sdf-labs/arrow-rs", rev = "63a95c7060cb22b620ea60caadf5251f4ddcd6e0" } # @ sdf/55.1.0
-arrow-string = { git = "https://github.com/sdf-labs/arrow-rs", rev = "63a95c7060cb22b620ea60caadf5251f4ddcd6e0" } # @ sdf/55.1.0
+arrow = { git = "https://github.com/sdf-labs/arrow-rs", rev = "e4924d7d6d07bb12ba6628e595f9f58c2c02c9a1" } # @ sdf/56.0.0
+arrow-arith = { git = "https://github.com/sdf-labs/arrow-rs", rev = "e4924d7d6d07bb12ba6628e595f9f58c2c02c9a1" } # @ sdf/56.0.0
+arrow-array = { git = "https://github.com/sdf-labs/arrow-rs", rev = "e4924d7d6d07bb12ba6628e595f9f58c2c02c9a1" } # @ sdf/56.0.0
+arrow-buffer = { git = "https://github.com/sdf-labs/arrow-rs", rev = "e4924d7d6d07bb12ba6628e595f9f58c2c02c9a1" } # @ sdf/56.0.0
+arrow-cast = { git = "https://github.com/sdf-labs/arrow-rs", rev = "e4924d7d6d07bb12ba6628e595f9f58c2c02c9a1" } # @ sdf/56.0.0
+arrow-csv = { git = "https://github.com/sdf-labs/arrow-rs", rev = "e4924d7d6d07bb12ba6628e595f9f58c2c02c9a1" } # @ sdf/56.0.0
+arrow-data = { git = "https://github.com/sdf-labs/arrow-rs", rev = "e4924d7d6d07bb12ba6628e595f9f58c2c02c9a1" } # @ sdf/56.0.0
+arrow-ipc = { git = "https://github.com/sdf-labs/arrow-rs", rev = "e4924d7d6d07bb12ba6628e595f9f58c2c02c9a1" } # @ sdf/56.0.0
+arrow-json = { git = "https://github.com/sdf-labs/arrow-rs", rev = "e4924d7d6d07bb12ba6628e595f9f58c2c02c9a1" } # @ sdf/56.0.0
+arrow-ord = { git = "https://github.com/sdf-labs/arrow-rs", rev = "e4924d7d6d07bb12ba6628e595f9f58c2c02c9a1" } # @ sdf/56.0.0
+arrow-row = { git = "https://github.com/sdf-labs/arrow-rs", rev = "e4924d7d6d07bb12ba6628e595f9f58c2c02c9a1" } # @ sdf/56.0.0
+arrow-schema = { git = "https://github.com/sdf-labs/arrow-rs", rev = "e4924d7d6d07bb12ba6628e595f9f58c2c02c9a1" } # @ sdf/56.0.0
+arrow-select = { git = "https://github.com/sdf-labs/arrow-rs", rev = "e4924d7d6d07bb12ba6628e595f9f58c2c02c9a1" } # @ sdf/56.0.0
+arrow-string = { git = "https://github.com/sdf-labs/arrow-rs", rev = "e4924d7d6d07bb12ba6628e595f9f58c2c02c9a1" } # @ sdf/56.0.0
 # OR, when working locally
 #arrow = { path = "../arrow-rs/arrow" }
 #arrow-arith = { path = "../arrow-rs/arrow-arith" }
@@ -125,9 +125,9 @@ codegen-units = 16
 
 # Used for Linux builds. Symbols are extracted by the CI build script.
 [profile.relwithdebinfo]
+debug = true
 inherits = "release"
 strip = false
-debug = true
 
 # Profile for CI runs
 [profile.ci]
@@ -215,16 +215,16 @@ aws-config = { version = "1.1.7", features = ["behavior-version-latest"] }
 aws-sdk-s3 = "1.78.0"
 
 # arrow + parquet
-arrow = { version = "=55.1.0", features = ["prettyprint"] }
-arrow-array = { version = "=55.1.0" }
-arrow-buffer = { version = "=55.1.0" }
-arrow-csv = { version = "=55.1.0" }
-arrow-data = { version = "=55.1.0" }
-arrow-ipc = { version = "=55.1.0" }
-arrow-json = { version = "=55.1.0" }
-arrow-schema = { version = "=55.1.0", features = ["serde"] }
-parquet = { version = "=55.1.0" }
-serde_arrow = { version = "0.13.4", features = ["arrow-55"] }
+arrow = { version = "=56.0.0", features = ["prettyprint"] }
+arrow-array = { version = "=56.0.0" }
+arrow-buffer = { version = "=56.0.0" }
+arrow-csv = { version = "=56.0.0" }
+arrow-data = { version = "=56.0.0" }
+arrow-ipc = { version = "=56.0.0" }
+arrow-json = { version = "=56.0.0" }
+arrow-schema = { version = "=56.0.0", features = ["serde"] }
+parquet = { version = "=56.0.0" }
+serde_arrow = { version = "0.13.6", features = ["arrow-56"] }
 
 # xdbc
 adbc-core = { git = "https://github.com/dbt-labs/arrow-adbc", package = "adbc_core", version = "0.20.0", rev = "6aa8ce231ad9145733c8b6a844223ffff57bf1ea" } # @ apache-arrow-adbc-20-rust
@@ -249,14 +249,14 @@ antlr-rust = { git = "https://github.com/sdf-labs/antlr4", rev = "b8179d265532a5
 # other crates, you should prefer using the individual datafusion-xxx crates
 # directly whenever possible.
 
-datafusion = { version = "48.0.1", default-features = false }
-datafusion-catalog = { version = "48.0.1" }
-datafusion-common = { version = "48.0.1", default-features = false, features = [
+datafusion = { version = "50.3.0", default-features = false }
+datafusion-catalog = { version = "50.3.0" }
+datafusion-common = { version = "50.3.0", default-features = false, features = [
   "object_store",
   "parquet",
 ] }
-datafusion-expr = { version = "48.0.1" }
-datafusion-functions = { version = "48.0.1", default-features = false, features = [
+datafusion-expr = { version = "50.3.0" }
+datafusion-functions = { version = "50.3.0", default-features = false, features = [
   "crypto_expressions",
   "datetime_expressions",
   "encoding_expressions",
@@ -265,11 +265,11 @@ datafusion-functions = { version = "48.0.1", default-features = false, features 
   "string_expressions",
   "unicode_expressions",
 ] }
-datafusion-functions-aggregate = { version = "48.0.1" }
-datafusion-functions-nested = { version = "48.0.1" }
-datafusion-functions-window = { version = "48.0.1" }
-datafusion-physical-expr = { version = "48.0.1" }
-datafusion-physical-plan = { version = "48.0.1" }
+datafusion-functions-aggregate = { version = "50.3.0" }
+datafusion-functions-nested = { version = "50.3.0" }
+datafusion-functions-window = { version = "50.3.0" }
+datafusion-physical-expr = { version = "50.3.0" }
+datafusion-physical-plan = { version = "50.3.0" }
 
 # uuid
 uuid = { version = "1.16.0", features = ["v4", "serde"] }

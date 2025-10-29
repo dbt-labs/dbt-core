@@ -491,7 +491,7 @@ impl std::fmt::Display for AliasedExprsError {
 pub enum WrappedError {
     Frontend(FrontendError),
     Antlr(String),
-    Arrow(arrow::error::ArrowError),
+    Arrow(Box<arrow::error::ArrowError>),
     Datafusion(DataFusionError),
     ParseFloat(std::num::ParseFloatError),
     ParseInt(std::num::ParseIntError),
@@ -685,7 +685,7 @@ impl From<ANTLRError> for Box<InternalError> {
 impl From<arrow::error::ArrowError> for InternalError {
     fn from(e: arrow::error::ArrowError) -> Self {
         InternalError {
-            error: WrappedError::Arrow(e),
+            error: WrappedError::Arrow(Box::new(e)),
             location: None,
             backtrace: Backtrace::capture(),
         }

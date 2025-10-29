@@ -740,7 +740,10 @@ impl SqlType {
             DataType::UInt32 | DataType::Int64 | DataType::UInt64 => SqlType::BigInt,
             DataType::Float16 | DataType::Float32 => SqlType::Real,
             DataType::Float64 => SqlType::Double,
-            DataType::Decimal128(p, s) | DataType::Decimal256(p, s) => {
+            DataType::Decimal32(p, s)
+            | DataType::Decimal64(p, s)
+            | DataType::Decimal128(p, s)
+            | DataType::Decimal256(p, s) => {
                 // XXX: make these more succinct by looking up the defaults
                 // for each different backend.
                 SqlType::Numeric(Some((*p, Some(*s))))
