@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-"""Legacy setuptools shim retained for compatibility with existing workflows."""
+"""Legacy setuptools shim retained for compatibility with existing workflows.  Will be removed in a future version."""
 
 from setuptools import setup
 
