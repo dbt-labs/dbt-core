@@ -717,6 +717,7 @@ impl SqlType {
                 value.write(backend, out)?;
                 write!(out, ">")
             }
+            (Redshift | RedshiftODBC, Variant) => write!(out, "SUPER"),
             (_, Variant) => write!(out, "VARIANT"),
             (_, Void) => write!(out, "VOID"),
             (_, Other(s)) => write!(out, "{s}"),
@@ -1266,6 +1267,7 @@ impl SqlType {
 
             (_, Json) => DataType::Utf8,
             (_, Jsonb) => unimplemented!("{}", self.to_string(backend)),
+            (_, Variant) => DataType::Utf8,
             (_, Geometry) => unimplemented!("{}", self.to_string(backend)),
             (_, Geography) => DataType::Utf8,
             (_, Array(Some(inner_sql_type))) => {
@@ -1355,7 +1357,6 @@ impl SqlType {
                 );
                 DataType::Map(Arc::new(entries), false)
             }
-            (_, Variant) => unimplemented!("{}", self.to_string(backend)),
             (_, Void) => unimplemented!("{}", self.to_string(backend)),
             (_, Other(_)) => unimplemented!("{}", self.to_string(backend)),
         };
@@ -2140,6 +2141,8 @@ impl<'source> Parser<'source> {
                         None
                     };
                     SqlType::Map(kv)
+                } else if eqi(w, "SUPER") {
+                    SqlType::Variant
                 } else if eqi(w, "VARIANT") {
                     SqlType::Variant
                 } else if eqi(w, "VOID") {

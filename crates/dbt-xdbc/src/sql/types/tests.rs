@@ -306,6 +306,7 @@ fn test_parser() {
                 Map(Some((Box::new(SqlType::varchar(None)), Box::new(Integer)))),
             ),
             (line!(), "Variant", Variant),
+            (line!(), "SUPER", Variant),
             (line!(), " void  ", Void),
             (line!(), "other", Other("other".to_string())),
             (
@@ -958,6 +959,13 @@ fn expected_type_rendering_for(backend: Backend) -> Vec<(u32, SqlType, &'static 
                 Postgres | Redshift | RedshiftODBC | Salesforce => pq,
                 Databricks | DatabricksODBC => dbx,
                 Generic { .. } => generic,
+            };
+            // Special case: Redshift renders Variant as "SUPER"
+            // https://docs.aws.amazon.com/redshift/latest/dg/r_SUPER_type.html
+            let s = if matches!(backend, Redshift | RedshiftODBC) && matches!(t, Variant) {
+                "SUPER"
+            } else {
+                s
             };
             (line, t, s)
         })
