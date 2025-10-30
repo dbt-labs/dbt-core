@@ -769,56 +769,6 @@ macro_rules! this_crate_path {
     };
 }
 
-#[macro_export]
-macro_rules! maybe_interactive_or_exit {
-    ( $arg:expr, $resolver_state:expr, $db:expr, $map_compiled_sql:expr, $jinja_env:expr, $token:expr) => {
-        if !$arg.interactive {
-            use $crate::tracing::metrics::get_exit_code_from_error_counter;
-
-            Ok(get_exit_code_from_error_counter())
-        } else {
-            repl::run(
-                $resolver_state,
-                &$arg,
-                $db,
-                $map_compiled_sql,
-                $jinja_env,
-                $token,
-            )
-            .await
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! checkpoint_maybe_exit {
-    ( $phase:expr, $arg:expr ) => {{
-        use $crate::tracing::metrics::get_exit_code_from_error_counter;
-
-        let exit_code = get_exit_code_from_error_counter();
-
-        if $arg.phase <= $phase || exit_code > 0 {
-            return Ok(exit_code);
-        }
-    }};
-}
-
-#[macro_export]
-macro_rules! checkpoint_maybe_interactive_or_exit {
-    ( $phase:expr, $arg:expr, $resolver_state:expr, $db:expr, $map_compiled_sql:expr, $jinja_env:expr, $cancel_token:expr) => {
-        if $arg.phase <= $phase {
-            return maybe_interactive_or_exit!(
-                $arg,
-                $resolver_state,
-                $db,
-                $map_compiled_sql,
-                $jinja_env,
-                $cancel_token
-            );
-        }
-    };
-}
-
 #[cfg(test)]
 mod tests {
     // top-level function test

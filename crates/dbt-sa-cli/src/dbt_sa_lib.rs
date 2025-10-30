@@ -1,6 +1,7 @@
 use crate::dbt_sa_clap::{Cli, Commands, ProjectTemplate};
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::create_root_info_span;
+use dbt_common::io_utils::checkpoint_maybe_exit;
 use dbt_common::tracing::emit::emit_error_log_from_fs_error;
 use dbt_common::tracing::invocation::create_invocation_attributes;
 use dbt_common::tracing::metrics::get_exit_code_from_error_counter;
@@ -12,7 +13,7 @@ use dbt_schemas::man::execute_man_command;
 
 use dbt_common::io_args::{EvalArgs, EvalArgsBuilder};
 use dbt_common::{
-    ErrorCode, FsResult, checkpoint_maybe_exit,
+    ErrorCode, FsResult,
     constants::{DBT_MANIFEST_JSON, INSTALLING, VALIDATING},
     fs_err, fsinfo,
     io_args::{Phases, SystemArgs},
@@ -222,8 +223,12 @@ async fn execute_all_phases(
     show_result_with_default_title!(&arg.io, ShowOptions::InputFiles, &dbt_state.to_string());
 
     // This also exits the init command b/c init `to_eval_args` sets the phase to debug
-    checkpoint_maybe_exit!(Phases::Debug, &arg);
-    checkpoint_maybe_exit!(Phases::Deps, &arg);
+    if let Some(exit_code) = checkpoint_maybe_exit(&arg, Phases::Debug) {
+        return Ok(exit_code);
+    }
+    if let Some(exit_code) = checkpoint_maybe_exit(&arg, Phases::Deps) {
+        return Ok(exit_code);
+    }
 
     // Parses (dbt parses) all .sql files with execute == false
     let resolve_args = ResolveArgs::try_from_eval_args(&arg)?;
