@@ -309,15 +309,22 @@ pub fn fromjson(_state: &State, args: &[Value]) -> Result<Value, Error> {
     let default = iter.next_kwarg::<Option<Value>>("default")?;
     iter.finish()?;
 
+    // Try strict JSON first
     match serde_json::from_str::<serde_json::Value>(string) {
         Ok(value) => Ok(Value::from_serialize(value)),
-        Err(err) => match default {
-            Some(default_value) => Ok(default_value),
-            None => Err(Error::new(
-                ErrorKind::InvalidOperation,
-                format!("Failed to parse JSON: {err}"),
-            )),
-        },
+        Err(json_err) => {
+            // Fall back to YAML to support unquoted scalars or simple mappings
+            match dbt_serde_yaml::from_str::<dbt_serde_yaml::Value>(string) {
+                Ok(yaml_value) => Ok(Value::from_serialize(yaml_value)),
+                Err(_) => match default {
+                    Some(default_value) => Ok(default_value),
+                    None => Err(Error::new(
+                        ErrorKind::InvalidOperation,
+                        format!("Failed to parse JSON: {json_err}"),
+                    )),
+                },
+            }
+        }
     }
 }
 
@@ -1382,5 +1389,18 @@ mod tests {
         let tmpl = env.template_from_str(template_source).unwrap();
         let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
         assert_eq!(output.trim(), "a: 1\nb: 2");
+    }
+
+    #[test]
+    fn test_fromjson_parses_plain_string_via_yaml_fallback() {
+        let mut env = Environment::new();
+        env.add_func_func("fromjson", fromjson);
+
+        // Should parse as a string via YAML fallback when JSON parsing fails
+        let tmpl = env
+            .template_from_str("{{ fromjson('i_am_string') }}")
+            .unwrap();
+        let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
+        assert_eq!(output.trim(), "i_am_string");
     }
 }
