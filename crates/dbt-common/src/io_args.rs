@@ -27,6 +27,7 @@ pub enum LocalExecutionBackendKind {
     // Eventually Service
 }
 
+use crate::adapter::AdapterType;
 use crate::{
     constants::{DBT_GENERIC_TESTS_DIR_NAME, DBT_SNAPSHOTS_DIR_NAME},
     io_utils::StatusReporter,
@@ -312,9 +313,30 @@ impl fmt::Debug for EvalArgs {
     }
 }
 
-impl EvalArgs {
-    // todo: switch to using a builder pattern that doesn't clone...
-    pub fn with_target(&self, target: String) -> Self {
+pub struct EvalArgsBuilder {
+    pub args: EvalArgs,
+}
+
+impl EvalArgsBuilder {
+    pub fn from_eval_args(args: &EvalArgs) -> Self {
+        Self { args: args.clone() }
+    }
+}
+
+impl EvalArgsBuilder {
+    /// Configure additional arguments
+    pub fn with_additional(
+        self,
+        target: String,
+        threads: Option<usize>,
+        adapter_type: Option<AdapterType>,
+    ) -> Self {
+        self.with_target(target)
+            .with_threads(threads)
+            .disable_static_analysis_if_not_supported(adapter_type)
+    }
+
+    fn with_target(mut self, target: String) -> Self {
         // Update span info as it is used in telemetry & TUI
         with_invocation_mut(|invocation| {
             if let Some(args) = invocation.eval_args.as_mut() {
@@ -322,12 +344,11 @@ impl EvalArgs {
             };
         });
 
-        let mut new_args = self.clone();
-        new_args.target = Some(target);
-
-        new_args
+        self.args.target = Some(target);
+        self
     }
-    pub fn with_threads(&self, num_threads: Option<usize>) -> Self {
+
+    pub fn with_threads(mut self, num_threads: Option<usize>) -> Self {
         // Update span info as it is used in telemetry & TUI
         with_invocation_mut(|invocation| {
             if let Some(args) = invocation.eval_args.as_mut() {
@@ -335,63 +356,83 @@ impl EvalArgs {
             };
         });
 
-        let mut new_args = self.clone();
-        new_args.num_threads = num_threads;
-        new_args
-    }
-    pub fn without_show(&self, option: ShowOptions) -> Self {
-        let mut new_args = self.clone();
-        new_args.io.show.remove(&option);
-        new_args
+        self.args.num_threads = num_threads;
+        self
     }
 
-    // this could accept a SelectExpression incase we want to join more complex selections together.
-    pub fn with_refined_node_selectors(&self, predicate: Option<SelectionCriteria>) -> EvalArgs {
-        let mut res = self.clone();
+    /// Disable the static analysis for a specific adapter if the relevant dialect is unsupported.
+    /// Otherwise, it's a noop
+    pub fn disable_static_analysis_if_not_supported(
+        mut self,
+        adapter_type: Option<AdapterType>,
+    ) -> Self {
+        match adapter_type {
+            // include adapters that don't support static analysis here
+            Some(AdapterType::Salesforce) | None => {
+                #[cfg(debug_assertions)]
+                {
+                    println!(
+                        "debug:warning=static analysis for adapter: {:?} is disabled",
+                        adapter_type
+                    );
+                }
+                self.args.static_analysis = StaticAnalysisKind::Off;
+            }
+            _ => {}
+        }
+        self
+    }
+
+    pub fn with_show_scans(mut self, show_scans: bool) -> Self {
+        self.args.show_scans = show_scans;
+        self
+    }
+
+    pub fn with_max_depth(mut self, max_depth: usize) -> Self {
+        self.args.max_depth = max_depth;
+        self
+    }
+
+    pub fn with_use_fqtn(mut self, use_fqtn: bool) -> Self {
+        self.args.use_fqtn = use_fqtn;
+        self
+    }
+
+    pub fn build(self) -> EvalArgs {
+        self.args
+    }
+}
+
+impl EvalArgs {
+    // this could accept a SelectExpression in case we want to join more complex selections together.
+    pub fn set_refined_node_selectors(mut self, predicate: Option<SelectionCriteria>) -> EvalArgs {
         // Convert SelectionCriteria to SelectExpression::Atom first
         let predicate_expr = predicate.map(SelectExpression::Atom);
 
-        res.select = conjoin_expression(self.select.clone(), predicate_expr.clone());
-        if res.exclude.is_some() {
-            res.exclude = conjoin_expression(self.exclude.clone(), predicate_expr);
+        self.select = conjoin_expression(self.select.clone(), predicate_expr.clone());
+        if self.exclude.is_some() {
+            self.exclude = conjoin_expression(self.exclude.clone(), predicate_expr);
         }
 
         // Update span info as it is used in telemetry & TUI
         with_invocation_mut(|invocation| {
             if let Some(args) = invocation.eval_args.as_mut() {
-                args.select = res.select.iter().map(|s| s.to_string()).collect();
-                args.exclude = res.exclude.iter().map(|s| s.to_string()).collect();
+                args.select = self.select.iter().map(|s| s.to_string()).collect();
+                args.exclude = self.exclude.iter().map(|s| s.to_string()).collect();
             };
         });
 
-        res
+        self
     }
 
-    pub fn with_schema(&self, schema: Vec<JsonSchemaTypes>) -> Self {
-        let mut res = self.clone();
-        res.schema = schema;
-        res
+    pub fn set_schema(mut self, schema: Vec<JsonSchemaTypes>) -> Self {
+        self.schema = schema;
+        self
     }
 
-    pub fn with_show_scans(&self, show_scans: bool) -> Self {
-        let mut res = self.clone();
-        res.show_scans = show_scans;
-        res
-    }
-    pub fn with_max_depth(&self, max_depth: usize) -> Self {
-        let mut res = self.clone();
-        res.max_depth = max_depth;
-        res
-    }
-    pub fn with_use_fqtn(&self, use_fqtn: bool) -> Self {
-        let mut res = self.clone();
-        res.use_fqtn = use_fqtn;
-        res
-    }
-    pub fn with_connection(&self, connection: bool) -> Self {
-        let mut res = self.clone();
-        res.connection = connection;
-        res
+    pub fn set_connection(mut self, connection: bool) -> Self {
+        self.connection = connection;
+        self
     }
 }
 

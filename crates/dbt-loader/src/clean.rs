@@ -10,7 +10,7 @@ use dbt_common::{
     cancellation::CancellationToken,
     constants::{DBT_PROJECT_YML, REMOVING},
     err, fs_err, fsinfo,
-    io_args::{EvalArgs, IoArgs},
+    io_args::{EvalArgs, EvalArgsBuilder, IoArgs},
     show_progress, stdfs,
     tracing::{emit::emit_error_log_from_fs_error, metrics::get_exit_code_from_error_counter},
 };
@@ -29,7 +29,9 @@ pub async fn execute_clean_command(
         load(&load_args, &invocation_args, token).await?;
     let flags: BTreeMap<String, minijinja::Value> = invocation_args.to_dict();
 
-    let arg = arg.with_threads(num_threads);
+    let arg = EvalArgsBuilder::from_eval_args(arg)
+        .with_threads(num_threads)
+        .build();
 
     let env = initialize_load_jinja_environment(
         &dbt_state.dbt_profile.profile,

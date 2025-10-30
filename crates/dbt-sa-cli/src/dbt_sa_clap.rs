@@ -455,7 +455,7 @@ impl ListArgs {
 impl ManArgs {
     pub fn to_eval_args(&self, arg: SystemArgs, in_dir: &Path, out_dir: &Path) -> EvalArgs {
         let eval_args = self.common_args.to_eval_args(arg, in_dir, out_dir);
-        eval_args.with_schema(self.schema.clone())
+        eval_args.set_schema(self.schema.clone())
     }
 }
 impl InitArgs {

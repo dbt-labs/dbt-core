@@ -10,7 +10,7 @@ use dbt_jinja_utils::listener::DefaultJinjaTypeCheckEventListenerFactory;
 use dbt_loader::clean::execute_clean_command;
 use dbt_schemas::man::execute_man_command;
 
-use dbt_common::io_args::EvalArgs;
+use dbt_common::io_args::{EvalArgs, EvalArgsBuilder};
 use dbt_common::{
     ErrorCode, FsResult, checkpoint_maybe_exit,
     constants::{DBT_MANIFEST_JSON, INSTALLING, VALIDATING},
@@ -211,9 +211,14 @@ async fn execute_all_phases(
     let (dbt_state, num_threads, _dbt_cloud_config) =
         load(&load_args, &invocation_args, token).await?;
 
-    let arg = arg
-        .with_target(dbt_state.dbt_profile.target.to_string())
-        .with_threads(num_threads);
+    let arg = EvalArgsBuilder::from_eval_args(arg)
+        .with_additional(
+            dbt_state.dbt_profile.target.to_string(),
+            num_threads,
+            dbt_state.dbt_profile.db_config.adapter_type_if_supported(),
+        )
+        .build();
+
     show_result_with_default_title!(&arg.io, ShowOptions::InputFiles, &dbt_state.to_string());
 
     // This also exits the init command b/c init `to_eval_args` sets the phase to debug
