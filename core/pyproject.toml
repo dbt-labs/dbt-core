@@ -1,6 +1,7 @@
 [tool.setuptools]
 package-dir = {"" = "."}
 include-package-data = true
+# License file is included via MANIFEST.in
 
 [tool.setuptools.packages.find]
 where = ["."]
@@ -31,7 +32,7 @@ version = "1.11.0b4"
 description = "With dbt, data analysts and engineers can build analytics the way engineers build applications."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { file = "../License.md" }
+license = { text = "Apache-2.0" }
 keywords = []
 authors = [
     { name = "dbt Labs", email = "info@dbtlabs.com" },
@@ -140,39 +141,3 @@ requires = [
     "wheel",
 ]
 build-backend = "setuptools.build_meta"
-
-[tool.mypy]
-# TODO: widen range of files as we fix issues
-files = 'dbt'
-mypy_path = "../third-party-stubs/"
-namespace_packages = true
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = [
-    "dbtlabs.*",
-    "dbt_semantic_interfaces.*",
-    "dbt_common.*",
-    "click.parser",
-]
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-# Mirror legacy mypy behaviour by excluding modules previously unchecked in the pre-commit mirror environment.
-module = [
-    "dbt.events.types",
-    "dbt.events.core_types_pb2",
-    "dbt.jsonschemas.jsonschemas",
-    "dbt.cli.option_types",
-    "dbt.cli.options",
-    "dbt.cli.flags",
-    "dbt.utils.utils",
-    "dbt.env_vars",
-    "dbt.context.providers",
-    "dbt.artifacts.resources.v1.semantic_layer_components",
-]
-ignore_errors = true
-
-[tool.black]
-line-length = 99
-target-version = ['py38']
