@@ -39,14 +39,14 @@ pub fn load_project_yml(
     )?;
 
     // Set default model paths if not specified
-    fill_default(&mut dbt_project.analysis_paths, "analyses");
-    fill_default(&mut dbt_project.asset_paths, "assets");
-    fill_default(&mut dbt_project.function_paths, "functions");
-    fill_default(&mut dbt_project.macro_paths, "macros");
-    fill_default(&mut dbt_project.model_paths, "models");
-    fill_default(&mut dbt_project.seed_paths, "seeds");
-    fill_default(&mut dbt_project.snapshot_paths, "snapshots");
-    fill_default(&mut dbt_project.test_paths, "tests");
+    fill_default(&mut dbt_project.analysis_paths, &["analysis", "analyses"]);
+    fill_default(&mut dbt_project.asset_paths, &["assets"]);
+    fill_default(&mut dbt_project.function_paths, &["functions"]);
+    fill_default(&mut dbt_project.macro_paths, &["macros"]);
+    fill_default(&mut dbt_project.model_paths, &["models"]);
+    fill_default(&mut dbt_project.seed_paths, &["seeds"]);
+    fill_default(&mut dbt_project.snapshot_paths, &["snapshots"]);
+    fill_default(&mut dbt_project.test_paths, &["tests"]);
 
     // We need to add the generic test paths for each test path defined in the project
     for test_path in dbt_project.test_paths.as_deref().unwrap_or_default() {
@@ -65,9 +65,9 @@ pub fn load_project_yml(
     Ok(dbt_project)
 }
 
-fn fill_default(paths: &mut Option<Vec<String>>, default: &str) {
+fn fill_default(paths: &mut Option<Vec<String>>, defaults: &[&str]) {
     if paths.as_ref().is_none_or(|v| v.is_empty()) {
-        *paths = Some(vec![default.to_string()]);
+        *paths = Some(defaults.iter().map(|value| (*value).to_string()).collect());
     }
 }
 
