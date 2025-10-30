@@ -284,6 +284,11 @@ fn trim_beginning_whitespace_for_first_line_with_content(input: &str) -> String 
     input.to_string()
 }
 
+/// Strips the UTF-8 BOM from the beginning of the input string.
+fn strip_utf8_bom(input: &str) -> &str {
+    input.strip_prefix('\u{feff}').unwrap_or(input)
+}
+
 /// Internal function that deserializes a YAML string into a `Value`.
 /// The error_display_path should be an absolute, canonicalized path.
 ///
@@ -298,8 +303,9 @@ fn value_from_str(
 ) -> FsResult<Value> {
     let _f = dbt_serde_yaml::with_filename(error_display_path.map(PathBuf::from));
 
-    // replace tabs with spaces
+    // strip utf8 bom and replace tabs with spaces
     // trim beginning whitespace for the first line with content
+    let input = strip_utf8_bom(input);
     let input = replace_tabs_with_spaces(input);
     let input = trim_beginning_whitespace_for_first_line_with_content(&input);
     let mut value = Value::from_str(&input, |path, key, existing_key| {
@@ -450,6 +456,8 @@ pub fn check_single_expression_without_whitepsace_control(input: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use dbt_common::io_args::IoArgs;
+    use dbt_serde_yaml::Value;
 
     #[test]
     fn test_check_single_expression_without_whitepsace_control() {
@@ -459,5 +467,23 @@ mod tests {
         assert!(!check_single_expression_without_whitepsace_control(
             "{{- config(enabled=true) -}}"
         ));
+    }
+
+    #[test]
+    fn test_value_from_str_strips_utf8_bom_and_parses_ok() {
+        // \u{feff} is the UTF-8 BOM. BOM at start should be ignored and parsing should succeed.
+        let io = IoArgs::default();
+        let input = "\u{feff}version: 2\nmodels:\n  - name: dim_bom_test\n";
+        let res = value_from_str(&io, input, None, false, None);
+        assert!(
+            res.is_ok(),
+            "Expected BOM-prefixed YAML to parse successfully, got: {:?}",
+            res.err()
+        );
+        let val: Value = res.unwrap();
+        match val {
+            Value::Mapping(_, _) => {} // minimal structural check
+            other => panic!("Expected top-level mapping, got: {:?}", other),
+        }
     }
 }
