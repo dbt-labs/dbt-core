@@ -1,5 +1,5 @@
 use crate::FsResult;
-use crate::constants::{CACHE_LOG, DBT_DEAFULT_LOG_FILE_NAME, DBT_LOG_DIR_NAME, EXECUTING};
+use crate::constants::{CACHE_LOG, DBT_DEAFULT_LOG_FILE_NAME, DBT_LOG_DIR_NAME};
 use crate::io_args::IoArgs;
 use crate::pretty_string::remove_ansi_codes;
 use clap::ValueEnum;
@@ -382,7 +382,7 @@ impl MultiLoggerBuilder {
             min_level: None,
             max_level: Some(LevelFilter::Warn),
             includes: None,
-            excludes: Some(vec![EXECUTING.to_string()]),
+            excludes: None,
         };
 
         let logger = Logger::new("stderr", LogTarget::Stderr, config, self.invocation_id);

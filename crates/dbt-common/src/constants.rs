@@ -127,7 +127,6 @@ pub const NOOP: &str = "noop";
 pub const SAMPLING: &str = "  Sampling";
 
 // log targets
-pub const EXECUTING: &str = " ExecutingSql";
 pub const CACHE_LOG: &str = "CacheLogging";
 
 // cas/node read/write

@@ -1,14 +1,17 @@
 use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
-use dbt_telemetry::{Invocation, LogMessage, LogRecordInfo, SpanEndInfo};
+use dbt_telemetry::{Invocation, LogMessage, LogRecordInfo, QueryExecuted, SpanEndInfo};
 use serde_json::json;
 use tracing::level_filters::LevelFilter;
 
 use super::super::{
     background_writer::BackgroundWriter,
     data_provider::DataProvider,
-    formatters::{invocation::format_invocation_summary, log_message::format_log_message},
+    formatters::{
+        invocation::format_invocation_summary, log_message::format_log_message,
+        query_log::format_query_log,
+    },
     layer::{ConsumerLayer, TelemetryConsumer},
     metrics::{InvocationMetricKey, MetricKey},
     shared_writer::SharedWriter,
@@ -84,6 +87,50 @@ impl JsonCompatLayer {
 
 impl TelemetryConsumer for JsonCompatLayer {
     fn on_span_end(&self, span: &SpanEndInfo, data_provider: &mut DataProvider<'_>) {
+        // Handle query log events
+        if let Some(query_data) = span.attributes.downcast_ref::<QueryExecuted>() {
+            // Format the query log using the shared formatter
+            let formatted_query = format_query_log(
+                query_data,
+                span.start_time_unix_nano,
+                span.end_time_unix_nano,
+            );
+
+            let info_json = serde_json::to_value(self.build_core_event_info(
+                query_data.dbt_core_event_code.as_str().into(),
+                Some("SQLQuery"),
+                &span.severity_text,
+                formatted_query,
+            ))
+            .expect("Failed to serialize core event info to JSON");
+
+            let value = if let Some(unique_id) = query_data.unique_id.as_deref() {
+                json!({
+                    "info": info_json,
+                    "data": {
+                        "log_version": 3,
+                        "version": env!("CARGO_PKG_VERSION"),
+                        "sql": query_data.sql,
+                        "node_info": {
+                            "unique_id": unique_id
+                        }
+                    }
+                })
+            } else {
+                json!({
+                    "info": info_json,
+                    "data": {
+                        "log_version": 3,
+                        "version": env!("CARGO_PKG_VERSION"),
+                        "sql": query_data.sql,
+                    }
+                })
+            };
+
+            self.writer.writeln(value.to_string().as_str());
+            return;
+        }
+
         let Some(invocation) = span.attributes.downcast_ref::<Invocation>() else {
             return;
         };

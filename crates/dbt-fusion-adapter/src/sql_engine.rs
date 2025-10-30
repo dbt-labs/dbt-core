@@ -21,7 +21,6 @@ use arrow_schema::Schema;
 use core::result::Result;
 use dbt_common::adapter::AdapterType;
 use dbt_common::cancellation::{Cancellable, CancellationToken, never_cancels};
-use dbt_common::constants::EXECUTING;
 use dbt_common::create_debug_span;
 use dbt_common::hashing::code_hash;
 use dbt_common::tracing::span_info::record_current_span_status_from_attrs;
@@ -31,14 +30,11 @@ use dbt_schemas::schemas::telemetry::{QueryExecuted, QueryOutcome};
 use dbt_xdbc::bigquery::QUERY_LABELS;
 use dbt_xdbc::semaphore::Semaphore;
 use dbt_xdbc::{Backend, Connection, Database, QueryCtx, Statement, connection, database, driver};
-use log;
 use minijinja::State;
-use serde_json::json;
 use std::borrow::Cow;
 use tracy_client::span;
 
 use std::collections::{BTreeMap, HashMap};
-use std::fmt::Write;
 use std::hash::{BuildHasher, Hasher};
 use std::path::PathBuf;
 use std::sync::RwLock;
@@ -538,8 +534,6 @@ impl SqlEngine {
             ));
         }
 
-        self.log_query_ctx_for_execution(ctx, Some(sql.as_ref()));
-
         let token = self.cancellation_token();
         let do_execute = |conn: &'_ mut dyn Connection| -> Result<
             (Arc<Schema>, Vec<RecordBatch>),
@@ -643,47 +637,6 @@ impl SqlEngine {
         });
 
         Ok(total_batch)
-    }
-
-    pub fn log_query_ctx_for_execution(&self, ctx: &QueryCtx, sql: Option<&str>) {
-        Self::do_log_query_ctx_for_execution(self.adapter_type(), ctx, sql)
-    }
-
-    // TODO: kill this when telemtry starts writing dbt.log
-    /// Format query context as we want to see it in a log file and log it in query_log
-    pub fn do_log_query_ctx_for_execution(
-        adapter_type: AdapterType,
-        ctx: &QueryCtx,
-        sql: Option<&str>,
-    ) {
-        let mut buf = String::new();
-
-        writeln!(&mut buf, "-- created_at: {}", ctx.created_at_as_str()).unwrap();
-        writeln!(&mut buf, "-- dialect: {}", adapter_type.as_ref()).unwrap();
-
-        let node_id = match ctx.node_id() {
-            Some(id) => id,
-            None => "not available",
-        };
-        writeln!(&mut buf, "-- node_id: {node_id}").unwrap();
-
-        match ctx.desc() {
-            Some(desc) => writeln!(&mut buf, "-- desc: {desc}").unwrap(),
-            None => writeln!(&mut buf, "-- desc: not provided").unwrap(),
-        }
-
-        if let Some(sql) = sql {
-            write!(&mut buf, "{sql}").unwrap();
-            if !sql.ends_with(";") {
-                write!(&mut buf, ";").unwrap();
-            }
-        }
-
-        if node_id != "not available" {
-            log::debug!(target: EXECUTING, name = "SQLQuery", data:serde = json!({ "node_info": { "unique_id": node_id } }); "{buf}");
-        } else {
-            log::debug!(target: EXECUTING, name = "SQLQuery"; "{buf}");
-        }
     }
 
     /// Get the configured database name. Used by

@@ -1,6 +1,6 @@
 use dbt_telemetry::{
     Invocation, LogMessage, LogRecordInfo, NodeEvaluated, NodeOutcome, NodeOutcomeDetail, NodeType,
-    SpanEndInfo,
+    QueryExecuted, SpanEndInfo,
 };
 use tracing::level_filters::LevelFilter;
 
@@ -44,6 +44,15 @@ impl FileLogLayer {
 
 impl TelemetryConsumer for FileLogLayer {
     fn on_span_end(&self, span: &SpanEndInfo, data_provider: &mut DataProvider<'_>) {
+        // Query log (it has a separate layer, a dedicated sql file, but also goes to dbt.log as of today)
+        if let Some(query_data) = span.attributes.downcast_ref::<QueryExecuted>() {
+            let node_id = query_data.unique_id.as_deref().unwrap_or("unknown");
+            let formatted_query =
+                format!("Query executed on node {}:\n{}", node_id, query_data.sql);
+            self.writer.writeln(&formatted_query);
+            return;
+        }
+
         // Print unit test summary messages
         if let Some(ne) = span.attributes.downcast_ref::<NodeEvaluated>()
             && (ne.node_type() == NodeType::Test || ne.node_type() == NodeType::UnitTest)
