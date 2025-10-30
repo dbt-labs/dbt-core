@@ -254,24 +254,15 @@ impl CatalogRelation {
         //    - base_location_root (optional)
         //    - base_location_subpath (optional)
         //    - storage_uri
-        let mut adapter_properties = BTreeMap::new();
-        let yaml_adapter_props =
-            match write_integration.and_then(|m| m.get(key("adapter_properties".to_string()))) {
-                Some(YmlValue::Mapping(adapter_props, _)) => Some(adapter_props),
-                _ => None,
-            };
+        let yaml_adapter_props = Self::get_yaml_adapter_properties(write_integration);
         let model_adapter_props = Self::get_model_adapter_properties(model_config);
 
         // base_location_root: model(adapter_properties) > model (legacy) > YAML > default
         let base_location_root =
-            Self::get_model_adapter_property(model_adapter_props.as_ref(), "base_location_root")
+            Self::get_adapter_property(model_adapter_props.as_ref(), "base_location_root")
                 .or_else(|| Self::get_model_config_value(model_config, "base_location_root"))
                 .or_else(|| {
-                    yaml_adapter_props.and_then(|props| {
-                        props
-                            .get(key("base_location_root".to_owned()))
-                            .and_then(Self::yaml_scalar_to_string)
-                    })
+                    Self::get_adapter_property(yaml_adapter_props.as_ref(), "base_location_root")
                 });
 
         // base_location_subpath: model (adapter_properties) > model (legacy) > default
@@ -282,7 +273,7 @@ impl CatalogRelation {
             ));
         }
         let base_location_subpath =
-            Self::get_model_adapter_property(model_adapter_props.as_ref(), "base_location_subpath")
+            Self::get_adapter_property(model_adapter_props.as_ref(), "base_location_subpath")
                 .or_else(|| Self::get_model_config_value(model_config, "base_location_subpath"));
 
         let schema = Self::get_model_config_value(model, "schema");
@@ -312,12 +303,15 @@ impl CatalogRelation {
                 )
             })?;
 
-        // storage_uri: model (adapter_properties) > TODO: model (legacy) > default
-        let storage_uri =
-            Self::get_model_adapter_property(model_adapter_props.as_ref(), "storage_uri")
-                .or_else(|| Self::get_model_config_value(model_config, "storage_uri"))
-                .unwrap_or_else(|| format!("{external_volume}/{base_location}"));
-        adapter_properties.insert("storage_uri".to_string(), storage_uri);
+        // storage_uri: model (adapter_properties) > model (legacy) > default
+        let storage_uri = Self::get_adapter_property(model_adapter_props.as_ref(), "storage_uri")
+            .or_else(|| Self::get_model_config_value(model_config, "storage_uri"))
+            .unwrap_or_else(|| format!("{external_volume}/{base_location}"));
+
+        let mut adapter_properties =
+            Self::merged_adapter_properties(yaml_adapter_props, model_adapter_props);
+
+        adapter_properties.insert("storage_uri".to_owned(), storage_uri);
 
         Ok(CatalogRelation {
             adapter_type: AdapterType::Bigquery,
@@ -495,24 +489,17 @@ impl CatalogRelation {
         // 6) adapter_properties:
         //    - UNITY: allow only location_root (optional; non-blank)
         //    - HMS: disallow adapter_properties entirely
-        let adapter_properties = Self::merged_adapter_properties(model_config, write_integration);
+        let yaml_adapter_props = Self::get_yaml_adapter_properties(write_integration);
+        let model_adapter_props = Self::get_model_adapter_properties(model_config);
         let mut external_volume = None;
 
-        let location_root = model_config
-            .get_attr("__warehouse_specific_config__")
-            .ok()
-            .and_then(|wsc| wsc.get_attr("location_root").ok())
-            .filter(|v| v.kind() == ValueKind::String)
-            .map(|v| v.to_string())
-            .or_else(|| {
-                write_integration
-                    .as_ref()
-                    .and_then(|wi| {
-                        wi.get(key("adapter_properties".to_string()))
-                            .and_then(|v| v.as_mapping())
-                    })
-                    .and_then(|ap_map| Self::yml_str(Some(ap_map), "location_root".to_string()))
-            });
+        // location_root: model(adapter_properties) > model (legacy) > YAML > default
+        let location_root = Self::get_model_config_value(model_config, "location_root")
+            .or_else(|| Self::get_adapter_property(model_adapter_props.as_ref(), "location_root"))
+            .or_else(|| Self::get_adapter_property(yaml_adapter_props.as_ref(), "location_root"));
+
+        let adapter_properties =
+            Self::merged_adapter_properties(yaml_adapter_props, model_adapter_props);
 
         if raw_catalog_type.eq_ignore_ascii_case(DATABRICKS_UNITY_CATALOG)
             && let Some(location_root) = location_root
@@ -924,12 +911,27 @@ impl CatalogRelation {
             .or_else(|| Self::yml_str(write_integration, "external_volume".to_string()));
 
         // === Build up base location
-        let base_location_root = Self::get_model_config_value(model_config, "base_location_root")
-            .or_else(|| Self::yml_str(write_integration, "base_location_root".to_string()));
+        let yaml_adapter_props = Self::get_yaml_adapter_properties(write_integration);
+        let model_adapter_props = Self::get_model_adapter_properties(model_config);
 
+        // base_location_root: model(adapter_properties) > model (legacy) > YAML > default
+        let base_location_root =
+            Self::get_adapter_property(model_adapter_props.as_ref(), "base_location_root")
+                .or_else(|| Self::get_model_config_value(model_config, "base_location_root"))
+                .or_else(|| {
+                    Self::get_adapter_property(yaml_adapter_props.as_ref(), "base_location_root")
+                });
+
+        // base_location_subpath: model (adapter_properties) > model (legacy) > default
+        if Self::yml_str(write_integration, "base_location_subpath".to_string()).is_some() {
+            return Err(AdapterError::new(
+                AdapterErrorKind::Configuration,
+                "base_location_subpath is not allowed in catalogs.yml (should be impossible by schema)",
+            ));
+        }
         let base_location_subpath =
-            Self::get_model_config_value(model_config, "base_location_subpath")
-                .or_else(|| Self::yml_str(write_integration, "base_location_subpath".to_string()));
+            Self::get_adapter_property(model_adapter_props.as_ref(), "base_location_subpath")
+                .or_else(|| Self::get_model_config_value(model_config, "base_location_subpath"));
 
         let schema = Self::get_model_config_value(model, "schema");
         let identifier = Self::get_model_config_value(model, "alias")
@@ -943,7 +945,8 @@ impl CatalogRelation {
         );
 
         // 4) adapter_properties from YAML write_integration.adapter_properties and model config overrides
-        let adapter_properties = Self::merged_adapter_properties(model_config, write_integration);
+        let adapter_properties =
+            Self::merged_adapter_properties(yaml_adapter_props, model_adapter_props);
 
         // 5) transient handling
         let transient_spec = Self::get_model_config_value(model_config, "transient");
@@ -1013,27 +1016,21 @@ impl CatalogRelation {
     /// The precedence is:
     ///     model_config > catalogs.yml
     fn merged_adapter_properties(
-        model_config: &Value,
-        write_integration: Option<&YmlMapping>,
+        yaml_adapter_props: Option<BTreeMap<String, String>>,
+        model_adapter_props: Option<BTreeMap<String, String>>,
     ) -> BTreeMap<String, String> {
         let mut merged = BTreeMap::new();
 
         // 1) seed from catalogs.yml
-        if let Some(YmlValue::Mapping(adapter_props, _)) =
-            write_integration.and_then(|m| m.get(key("adapter_properties".to_string())))
-        {
+        if let Some(adapter_props) = yaml_adapter_props {
             for (k, v) in adapter_props {
-                if let Some(name) = k.as_str()
-                    && let Some(s) = Self::yaml_scalar_to_string(v)
-                {
-                    merged.insert(name.to_string(), s);
-                }
+                merged.insert(k, v);
             }
         }
 
         // 2) overlay model adapter_properties if present
-        if let Some(model_props) = Self::get_model_adapter_properties(model_config) {
-            for (k, v) in model_props {
+        if let Some(adapter_props) = model_adapter_props {
+            for (k, v) in adapter_props {
                 merged.insert(k, v);
             }
         }
@@ -1107,17 +1104,38 @@ impl CatalogRelation {
         }
     }
 
-    fn get_model_adapter_property(
-        adapter_properties: Option<&BTreeMap<String, String>>,
-        key: &str,
-    ) -> Option<String> {
-        adapter_properties.and_then(|props| props.get(key).map(|s| s.to_owned()))
+    fn get_yaml_adapter_properties(
+        write_integration: Option<&YmlMapping>,
+    ) -> Option<BTreeMap<String, String>> {
+        if let Some(YmlValue::Mapping(adapter_props, _)) =
+            write_integration.and_then(|m| m.get(key("adapter_properties".to_string())))
+        {
+            let mut map = BTreeMap::new();
+            for (k, v) in adapter_props {
+                if let Some(name) = k.as_str()
+                    && let Some(s) = Self::yaml_scalar_to_string(v)
+                {
+                    map.insert(name.to_string(), s);
+                }
+            }
+            Some(map)
+        } else {
+            None
+        }
     }
 
     fn yml_str(m: Option<&YmlMapping>, k: String) -> Option<String> {
         m.and_then(|mm| mm.get(key(k)))
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
+    }
+
+    #[inline]
+    fn get_adapter_property(
+        adapter_properties: Option<&BTreeMap<String, String>>,
+        key: &str,
+    ) -> Option<String> {
+        adapter_properties.and_then(|props| props.get(key).cloned())
     }
 
     #[inline]
@@ -1737,14 +1755,13 @@ mod tests {
             "ICEBERG",
             &[
                 ("external_volume", s("EV_YAML")),
-                ("base_location_root", s("_root_yaml")),
-                ("base_location_subpath", s("sub_yaml")),
                 (
                     "adapter_properties",
                     map(&[
                         ("change_tracking", boolv(true)),
                         ("target_file_size", u64v(128)),
                         ("storage_serialization_policy", s("SNAPPY")),
+                        ("base_location_root", s("_root_yaml")),
                     ]),
                 ),
             ],
@@ -1806,11 +1823,13 @@ mod tests {
             "ICEBERG",
             &[
                 ("external_volume", s("EV")),
-                ("base_location_root", s("_root")),
-                ("base_location_subpath", s("sub")),
+                (
+                    "adapter_properties",
+                    map(&[("base_location_root", s("_root"))]),
+                ),
             ],
         );
-        let conf = json!({ "catalog_name": "CAT", "schema": "S", "identifier": "I" });
+        let conf = json!({ "catalog_name": "CAT", "schema": "S", "identifier": "I", "base_location_subpath": "sub" });
 
         let ms = [
             model(AdapterType::Snowflake, conf.clone()),

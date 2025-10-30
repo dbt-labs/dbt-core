@@ -12,10 +12,10 @@
 //!           catalog_type: built_in | snowflake | rest | iceberg_rest  // case-insensitive
 //!           table_format: iceberg                                     // default; case-insensitive
 //!           external_volume: <string>                                 // required & non-empty for built_in; forbidden for REST write-support
-//!           base_location_root: <string>                              // built_in only; if present, non-empty
-//!           base_location_subpath: <string>                           // built_in only; if present, non-empty
 //!           adapter_properties:                                       // variant-specific; strict keys
 //!             // built_in:
+//!             base_location_root: <string>                            // optional; if present, non-empty
+//!             base_location_subpath: <string>                         // model config only; optional; if present, non-empty
 //!             change_tracking: <bool>
 //!             data_retention_time_in_days: <u32 in 0..=90>
 //!             max_data_extension_time_in_days: <u32 in 0..=90>
@@ -214,7 +214,8 @@ impl FileFormat {
 // Snowflake Properties
 
 #[derive(Debug, Default)]
-pub struct SnowflakeBuiltInPropsView {
+pub struct SnowflakeBuiltInPropsView<'a> {
+    pub base_location_root: Option<&'a str>,
     pub change_tracking: Option<bool>,
     pub data_retention_time_in_days: Option<u32>,
     pub max_data_extension_time_in_days: Option<u32>,
@@ -260,7 +261,7 @@ pub struct DatabricksUnityPropsView<'a> {
 
 #[derive(Debug)]
 pub enum AdapterPropsView<'a> {
-    SnowflakeBuiltIn(SnowflakeBuiltInPropsView),
+    SnowflakeBuiltIn(SnowflakeBuiltInPropsView<'a>),
     SnowflakeRest(SnowflakeRestPropsView<'a>),
     BigqueryBuiltIn(BigqueryBuiltInPropsView<'a>),
     DatabricksUnity(DatabricksUnityPropsView<'a>),
@@ -392,12 +393,6 @@ pub struct WriteIntegrationView<'a> {
     // concept we do not have
     pub table_format: TableFormat,
     pub external_volume: Option<&'a str>,
-
-    // TODO(anna): These will be removed to match the Bigquery catalog spec
-    // == Snowflake (top-level)
-    // built_in only
-    pub base_location_root: Option<&'a str>,
-    pub base_location_subpath: Option<&'a str>,
 
     // == Databricks and Bigquery (top-level)
     pub file_format: Option<FileFormat>,
@@ -562,9 +557,10 @@ impl<'a> WriteIntegrationView<'a> {
                 "catalog_type",
                 "table_format",
                 "external_volume",
+                "adapter_properties",
+                // These keys are adapter properties, allowed only to throw an explicit error message
                 "base_location_root",
                 "base_location_subpath",
-                "adapter_properties",
             ],
             "write_integration(Snowflake built_in)",
         )?;
@@ -607,8 +603,25 @@ impl<'a> WriteIntegrationView<'a> {
             })
         };
 
-        let base_location_root = get_str(map, "base_location_root")?.map(|(s, _)| s);
-        let base_location_subpath = get_str(map, "base_location_subpath")?.map(|(s, _)| s);
+        // Intentional deviation from Core: Explicitly disallow base_location_{root, subpath}
+        // TODO(anna): These are good candidates to add to the autofix script.
+        // If we do, we should print warnings instead of throwing one error at a time.
+        if let Some((_, span)) = get_str(map, "base_location_root")? {
+            return err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => Some(span),
+                "integration '{}': 'base_location_root' must be set under 'adapter_properties', not at the top level.",
+                integration_name
+            );
+        }
+        if let Some((_, span)) = get_str(map, "base_location_subpath")? {
+            return err!(
+                code => ErrorCode::InvalidConfig,
+                hacky_yml_loc => Some(span),
+                "integration '{}': 'base_location_subpath' must be set under 'adapter_properties' in model configs.",
+                integration_name
+            );
+        }
 
         let adapter_properties = {
             if let Some((props, _span)) = get_map(map, "adapter_properties")? {
@@ -626,8 +639,6 @@ impl<'a> WriteIntegrationView<'a> {
             catalog_type: CatalogType::SnowflakeBuiltIn,
             table_format,
             external_volume,
-            base_location_root,
-            base_location_subpath,
             file_format: None,
             adapter_properties,
         })
@@ -681,8 +692,6 @@ impl<'a> WriteIntegrationView<'a> {
             catalog_type: CatalogType::SnowflakeIcebergRest,
             table_format,
             external_volume: None,
-            base_location_root: None,
-            base_location_subpath: None,
             file_format: None,
             adapter_properties,
         })
@@ -764,8 +773,6 @@ impl<'a> WriteIntegrationView<'a> {
             catalog_type: CatalogType::DatabricksUnity,
             table_format,
             external_volume: None,
-            base_location_root: None,
-            base_location_subpath: None,
             file_format,
             adapter_properties,
         })
@@ -831,8 +838,6 @@ impl<'a> WriteIntegrationView<'a> {
             catalog_type: CatalogType::DatabricksHiveMetastore,
             table_format,
             external_volume: None,
-            base_location_root: None,
-            base_location_subpath: None,
             file_format,
             adapter_properties,
         })
@@ -963,8 +968,6 @@ impl<'a> WriteIntegrationView<'a> {
             catalog_type: CatalogType::BigqueryBuiltIn,
             table_format,
             external_volume,
-            base_location_root: None,
-            base_location_subpath: None,
             file_format,
             adapter_properties,
         })
@@ -984,11 +987,33 @@ fn parse_adapter_properties<'a>(
                     "data_retention_time_in_days",
                     "max_data_extension_time_in_days",
                     "storage_serialization_policy",
+                    "base_location_root",
+                    "base_location_subpath",
                 ],
                 "adapter_properties(built_in)",
             )?;
+            // Throw explicit error for model-config-only key 'base_location_subpath'
+            if let Some((_, span)) = get_str(properties, "base_location_subpath")? {
+                return err!(
+                    code => ErrorCode::InvalidConfig,
+                    hacky_yml_loc => Some(span),
+                    "'base_location_subpath' must be set under 'adapter_properties' in a model config, not in the write integration config."
+                );
+            }
+            if let Some((loc, span)) = get_str(properties, "base_location_root")?
+                && loc.trim().is_empty()
+            {
+                return err!(
+                    code => ErrorCode::InvalidConfig,
+                    hacky_yml_loc => Some(span),
+                    "adapter_properties.base_location_root cannot be blank"
+                );
+            }
             Ok(AdapterPropsView::SnowflakeBuiltIn(
                 SnowflakeBuiltInPropsView {
+                    base_location_root: get_str(properties, "base_location_root")?
+                        .filter(|(s, _)| !s.trim().is_empty())
+                        .map(|(s, _)| s),
                     storage_serialization_policy: get_str(
                         properties,
                         "storage_serialization_policy",
@@ -1245,52 +1270,30 @@ pub fn validate_catalogs(spec: &DbtCatalogsView<'_>, _path: &Path) -> FsResult<(
                 CatalogType::SnowflakeBuiltIn => { /* no non-structural constraints */ }
 
                 // === 6b. iceberg rest catalog type
-                CatalogType::SnowflakeIcebergRest => {
-                    // REST forbids base_location_* fields
-                    if write_integration.base_location_root.is_some()
-                        || write_integration.base_location_subpath.is_some()
-                    {
+                CatalogType::SnowflakeIcebergRest => match &write_integration.adapter_properties {
+                    Some(AdapterPropsView::SnowflakeRest(rest)) => {
+                        match rest.catalog_linked_database {
+                            Some(name) if !name.is_empty() => {}
+                            _ => {
+                                return err!(
+                                    code => ErrorCode::InvalidConfig,
+                                    hacky_yml_loc => Some(catalog.write_integrations.1.clone()),
+                                    "integration '{}': 'catalog_linked_database' is required and cannot be blank for Iceberg REST",
+                                    write_integration.integration_name
+                                );
+                            }
+                        }
+                    }
+                    _ => {
                         return err!(
                             code => ErrorCode::InvalidConfig,
                             hacky_yml_loc => Some(catalog.write_integrations.1.clone()),
-                            "Catalog '{}' integration '{}': base_location_* not valid for iceberg_rest",
-                            catalog.catalog_name.0, write_integration.integration_name
+                            "integration '{}': only REST adapter_properties are valid for Iceberg REST",
+                            write_integration.integration_name
                         );
                     }
-
-                    match &write_integration.adapter_properties {
-                        Some(AdapterPropsView::SnowflakeRest(rest)) => {
-                            match rest.catalog_linked_database {
-                                Some(name) if !name.is_empty() => {}
-                                _ => {
-                                    return err!(
-                                        code => ErrorCode::InvalidConfig,
-                                        hacky_yml_loc => Some(catalog.write_integrations.1.clone()),
-                                        "integration '{}': 'catalog_linked_database' is required and cannot be blank for Iceberg REST",
-                                        write_integration.integration_name
-                                    );
-                                }
-                            }
-                        }
-                        _ => {
-                            return err!(
-                                code => ErrorCode::InvalidConfig,
-                                hacky_yml_loc => Some(catalog.write_integrations.1.clone()),
-                                "integration '{}': only REST adapter_properties are valid for Iceberg REST",
-                                write_integration.integration_name
-                            );
-                        }
-                    }
-                }
+                },
                 CatalogType::DatabricksUnity => {
-                    if write_integration.base_location_root.is_some()
-                        || write_integration.base_location_subpath.is_some()
-                    {
-                        return err!(code => ErrorCode::InvalidConfig, hacky_yml_loc => Some(catalog.write_integrations.1.clone()),
-                            "Catalog '{}' integration '{}': base_location_* not valid for Databricks (unity)",
-                            catalog.catalog_name.0, write_integration.integration_name);
-                    }
-
                     if let Some(AdapterPropsView::DatabricksUnity(properties)) =
                         &write_integration.adapter_properties
                     {
@@ -1317,14 +1320,6 @@ pub fn validate_catalogs(spec: &DbtCatalogsView<'_>, _path: &Path) -> FsResult<(
                 }
 
                 CatalogType::DatabricksHiveMetastore => {
-                    if write_integration.base_location_root.is_some()
-                        || write_integration.base_location_subpath.is_some()
-                    {
-                        return err!(code => ErrorCode::InvalidConfig, hacky_yml_loc => Some(catalog.write_integrations.1.clone()),
-                            "Catalog '{}' integration '{}': base_location_* not valid for Databricks (hive_metastore)",
-                            catalog.catalog_name.0, write_integration.integration_name);
-                    }
-
                     if write_integration.adapter_properties.is_some() {
                         return err!(code => ErrorCode::InvalidConfig, hacky_yml_loc => Some(catalog.write_integrations.1.clone()),
                             "integration '{}': adapter_properties not allowed for hive_metastore",
@@ -1375,9 +1370,8 @@ catalogs:
         catalog_type: built_in
         table_format: iceberg
         external_volume: dbt_external_volume
-        base_location_root: analytics/iceberg/dbt
-        base_location_subpath: team_a/warehouse
         adapter_properties:
+          base_location_root: analytics/iceberg/dbt
           storage_serialization_policy: COMPATIBLE
           data_retention_time_in_days: 1
           max_data_extension_time_in_days: 14
@@ -1659,6 +1653,55 @@ catalogs:
         assert!(
             v.is_err(),
             "Unknown key 'base_location_root' in write_integration(Snowflake iceberg_rest)"
+        );
+    }
+
+    #[test]
+    fn built_in_rejects_base_location_keys_at_top_level() {
+        let yaml = r#"
+catalogs:
+  - catalog_name: sf_native
+    active_write_integration: sf_native_int
+    write_integrations:
+      - name: sf_native_int
+        catalog_type: built_in
+        external_volume: dbt_external_volume
+        table_format: iceberg
+        base_location_root: invalid
+"#;
+        assert_err_contains(yaml, "must be set under 'adapter_properties'");
+        let yaml = r#"
+catalogs:
+  - catalog_name: sf_native
+    active_write_integration: sf_native_int
+    write_integrations:
+      - name: sf_native_int
+        catalog_type: built_in
+        external_volume: dbt_external_volume
+        table_format: iceberg
+        base_location_subpath: invalid
+"#;
+        assert_err_contains(yaml, "must be set under 'adapter_properties'");
+    }
+
+    #[test]
+    fn built_in_rejects_base_location_subpath_adapter_property() {
+        let yaml = r#"
+catalogs:
+  - catalog_name: sf_native
+    active_write_integration: sf_native_int
+    write_integrations:
+      - name: sf_native_int
+        catalog_type: built_in
+        external_volume: dbt_external_volume
+        table_format: iceberg
+        adapter_properties:
+          base_location_root: analytics/iceberg/dbt
+          base_location_subpath: invalid
+"#;
+        assert_err_contains(
+            yaml,
+            "must be set under 'adapter_properties' in a model config",
         );
     }
 
