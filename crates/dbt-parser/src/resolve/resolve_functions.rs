@@ -240,13 +240,13 @@ pub async fn resolve_functions(
                     .and_then(|c| c.on_configuration_change.clone()),
                 returns: properties.returns.clone(),
                 arguments: properties.arguments.clone(),
-                function_kind: properties.function_kind.clone().unwrap_or_default(),
             },
             deprecated_config: FunctionConfig {
                 enabled: model_config.enabled,
                 group: model_config.group.clone(),
                 tags: model_config.tags.clone(),
                 meta: model_config.meta.clone(),
+                function_kind: model_config.function_kind.clone(),
                 ..Default::default()
             },
             __other__: BTreeMap::new(),

@@ -17,6 +17,22 @@ pub enum FunctionKind {
     Table,
 }
 
+/// Function volatility enum - defines the function's eligibility for certain optimizations
+/// Matches the Python Volatility enum from dbt-core
+#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq, Eq, Hash)]
+#[serde(rename_all = "lowercase")]
+pub enum Volatility {
+    /// Deterministic - An deterministic function will always return the same output when given the same input.
+    #[serde(rename = "deterministic")]
+    Deterministic,
+    /// NonDeterministic - A non-deterministic function may change the return value from evaluation to evaluation.
+    /// Multiple invocations of a non-deterministic function may return different results when used in the same query.
+    #[serde(rename = "non-deterministic")]
+    NonDeterministic,
+    #[serde(rename = "stable")]
+    Stable,
+}
+
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct FunctionArgument {

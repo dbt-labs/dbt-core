@@ -20,6 +20,7 @@ use crate::schemas::project::configs::common::{
 };
 use crate::schemas::project::dbt_project::DefaultTo;
 use crate::schemas::project::dbt_project::IterChildren;
+use crate::schemas::properties::{FunctionKind, Volatility};
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::{bool_or_string_bool, default_type};
 
@@ -56,6 +57,10 @@ pub struct ProjectFunctionConfig {
     pub static_analysis: Option<StaticAnalysisKind>,
     #[serde(rename = "+tags")]
     pub tags: Option<StringOrArrayOfStrings>,
+    #[serde(rename = "+type")]
+    pub function_kind: Option<FunctionKind>,
+    #[serde(rename = "+volatility")]
+    pub volatility: Option<Volatility>,
 
     // Additional properties for directory structure
     pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectFunctionConfig>>,
@@ -79,6 +84,8 @@ impl Default for ProjectFunctionConfig {
             schema: Omissible::Omitted,
             static_analysis: None,
             tags: None,
+            function_kind: None,
+            volatility: None,
             __additional_properties__: BTreeMap::new(),
         }
     }
@@ -102,6 +109,8 @@ impl DefaultTo<ProjectFunctionConfig> for ProjectFunctionConfig {
             schema,
             static_analysis,
             tags,
+            function_kind,
+            volatility,
             __additional_properties__: _,
         } = self;
 
@@ -124,6 +133,8 @@ impl DefaultTo<ProjectFunctionConfig> for ProjectFunctionConfig {
                 language,
                 on_configuration_change,
                 static_analysis,
+                function_kind,
+                volatility,
             ]
         );
     }
@@ -156,6 +167,9 @@ pub struct FunctionConfig {
     pub language: Option<String>,
     pub on_configuration_change: Option<String>,
     pub static_analysis: Option<StaticAnalysisKind>,
+    #[serde(rename = "type")]
+    pub function_kind: Option<FunctionKind>,
+    pub volatility: Option<Volatility>,
 
     // Warehouse-specific configurations
     pub __warehouse_specific_config__: WarehouseSpecificNodeConfig,
@@ -194,6 +208,8 @@ impl DefaultTo<FunctionConfig> for FunctionConfig {
             language,
             on_configuration_change,
             static_analysis,
+            function_kind,
+            volatility,
             __warehouse_specific_config__: warehouse_config,
         } = self;
 
@@ -219,6 +235,8 @@ impl DefaultTo<FunctionConfig> for FunctionConfig {
                 language,
                 on_configuration_change,
                 static_analysis,
+                function_kind,
+                volatility,
             ]
         );
     }
@@ -241,6 +259,8 @@ impl From<ProjectFunctionConfig> for FunctionConfig {
             language: config.language,
             on_configuration_change: config.on_configuration_change,
             static_analysis: config.static_analysis,
+            function_kind: config.function_kind,
+            volatility: config.volatility,
             __warehouse_specific_config__: WarehouseSpecificNodeConfig::default(),
         }
     }

@@ -977,8 +977,6 @@ pub struct ManifestFunction {
     pub on_configuration_change: Option<String>,
     pub returns: Option<crate::schemas::properties::FunctionReturnType>,
     pub arguments: Option<Vec<crate::schemas::properties::FunctionArgument>>,
-    #[serde(rename = "type")]
-    pub function_kind: Option<crate::schemas::properties::FunctionKind>,
 
     pub __other__: BTreeMap<String, YmlValue>,
 }
@@ -1020,7 +1018,6 @@ impl From<DbtFunction> for ManifestFunction {
             on_configuration_change: function.__function_attr__.on_configuration_change,
             returns: function.__function_attr__.returns,
             arguments: function.__function_attr__.arguments,
-            function_kind: Some(function.__function_attr__.function_kind),
             __other__: function.__other__,
         }
     }

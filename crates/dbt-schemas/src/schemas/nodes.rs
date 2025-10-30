@@ -29,8 +29,7 @@ use crate::schemas::{
         SnapshotMetaColumnNames, SourceConfig, UnitTestConfig,
     },
     properties::{
-        FunctionArgument, FunctionKind, FunctionReturnType, ModelConstraint, ModelFreshness,
-        UnitTestOverrides,
+        FunctionArgument, FunctionReturnType, ModelConstraint, ModelFreshness, UnitTestOverrides,
     },
     ref_and_source::{DbtRef, DbtSourceWrapper},
     serde::StringOrInteger,
@@ -2632,8 +2631,6 @@ pub struct DbtFunctionAttr {
     pub on_configuration_change: Option<String>,
     pub returns: Option<FunctionReturnType>,
     pub arguments: Option<Vec<FunctionArgument>>,
-    #[serde(rename = "type")]
-    pub function_kind: FunctionKind,
 }
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]

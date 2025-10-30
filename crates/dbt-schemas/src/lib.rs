@@ -174,7 +174,7 @@ pub mod schemas {
         pub use data_test_properties::DataTestProperties;
         pub use exposure_properties::ExposureProperties;
         pub use function_properties::{
-            FunctionArgument, FunctionKind, FunctionProperties, FunctionReturnType,
+            FunctionArgument, FunctionKind, FunctionProperties, FunctionReturnType, Volatility,
         };
         pub use metrics_properties::MetricsProperties;
         pub use model_properties::ModelConstraint;
