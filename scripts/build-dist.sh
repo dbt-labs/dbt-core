@@ -12,11 +12,13 @@ set -x
 
 rm -rf "$DBT_PATH"/dist
 rm -rf "$DBT_PATH"/build
+rm -rf "$DBT_PATH"/core/dist
+rm -rf "$DBT_PATH"/core/build
 mkdir -p "$DBT_PATH"/dist
 
-cd "$DBT_PATH"
+cd "$DBT_PATH"/core
 $PYTHON_BIN -m pip install --upgrade build
-$PYTHON_BIN -m build
+$PYTHON_BIN -m build --outdir "$DBT_PATH/dist"
 
 
 set +x

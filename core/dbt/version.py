@@ -233,7 +233,7 @@ def _resolve_version() -> str:
     try:
         return importlib_metadata.version("dbt-core")
     except importlib_metadata.PackageNotFoundError:
-        pyproject_path = Path(__file__).resolve().parents[2] / "pyproject.toml"
+        pyproject_path = Path(__file__).resolve().parents[1] / "pyproject.toml"
         if not pyproject_path.exists():
             raise RuntimeError("Unable to locate pyproject.toml to determine dbt-core version")
 

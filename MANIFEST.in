@@ -1,5 +1,0 @@
-recursive-include core/dbt/include *
-recursive-exclude core/dbt/include __pycache__ *.pyc *.pyo
-include core/dbt/py.typed
-recursive-include core/dbt/task/docs *.html
-recursive-include core/dbt/jsonschemas *.json

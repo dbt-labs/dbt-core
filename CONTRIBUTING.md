@@ -124,7 +124,7 @@ or, alternatively:
 pip install -r dev-requirements.txt
 pre-commit install
 ```
-The `dev` extra now pins the versions that pre-commit runs locally. When installing directly (outside this requirements file), be sure to quote the extra in shells like `zsh`, for example: `pip install -e '.[dev]'`.
+The `dev` extra now pins the versions that pre-commit runs locally. When installing directly (outside this requirements file), be sure to quote the extra in shells like `zsh`, for example: `pip install -e 'core[dev]'`.
 
 When installed in this way, any changes you make to your local copy of the source code will be reflected immediately in your next `dbt` run.
 
