@@ -806,7 +806,9 @@ impl SqlType {
                     TimeZoneSpec::Without
                 },
             },
-            DataType::Duration(..) => todo!(),
+            DataType::Duration(..) => {
+                todo!("conversion from Arrow duration to a SQL type for {backend:?}")
+            }
             // Proposal for extending Arrow to support more SQL interval types:
             // https://docs.google.com/document/d/12ghQxWxyAhSQeZyy0IWiwJ02gTqFOgfYm8x851HZFLk/edit
             DataType::Interval(interval_unit) => match interval_unit {
@@ -1012,6 +1014,21 @@ impl SqlType {
             DataType::Struct(fields)
         };
 
+        // Generate a debug_assert!(false, ...) call for a SQL type string that is
+        // not explicitly handled yet. Meaning that a conscious decision should be
+        // made about what Arrow type to pick for that SQL type on the given backend
+        // if we ever encounter it.
+        macro_rules! not_explicitly_handled {
+            ($sql_type:expr) => {
+                debug_assert!(
+                    false,
+                    "SQL type '{}' is not explicitly handled in pick_best_arrow_type() for backend '{:?}'. This is a debug-only assertion.",
+                    $sql_type.to_string(backend),
+                    backend
+                );
+            };
+        }
+
         let data_type: DataType = match (backend, self) {
             (_, Boolean) => DataType::Boolean,
 
@@ -1050,11 +1067,13 @@ impl SqlType {
 
             // Databricks {{{
             // https://docs.databricks.com/aws/en/sql/language-manual/data-types/decimal-type
-            (Databricks, Numeric(None) | BigNumeric(None)) => DataType::Decimal128(10, 0),
+            (Databricks | DatabricksODBC, Numeric(None) | BigNumeric(None)) => {
+                DataType::Decimal128(10, 0)
+            }
             // }}}
 
             // Redshift {{{
-            (Redshift, Numeric(None) | BigNumeric(None)) => {
+            (Redshift | RedshiftODBC, Numeric(None) | BigNumeric(None)) => {
                 // The default precision, if not specified, is 18. The maximum precision is 38.
                 // The default scale, if not specified, is 0. The maximum scale is 37.
                 // https://docs.aws.amazon.com/redshift/latest/dg/r_Numeric_types201.html#r_Numeric_types201-decimal-or-numeric-type
@@ -1063,7 +1082,7 @@ impl SqlType {
             // }}}
 
             // PostgreSQL {{{
-            (Postgres | Salesforce, Numeric(None) | BigNumeric(None)) => {
+            (Postgres | Salesforce | Generic { .. }, Numeric(None) | BigNumeric(None)) => {
                 // PostgreSQL's NUMERIC type is truly arbitrary (precision can go to a 1000!). When
                 // precision and scale are not specified, it's truly unconstrained. We pick the max
                 // precision that fits in Decimal128 with a scale of 9 as a reasonable default,
@@ -1092,10 +1111,6 @@ impl SqlType {
                 } else {
                     DataType::Decimal256(p, s)
                 }
-            }
-
-            (_, Numeric(None) | BigNumeric(None)) => {
-                unimplemented!("defaults for DECIMAL on {backend:?}")
             }
 
             (_, Char(_)) => DataType::Utf8,
@@ -1269,9 +1284,13 @@ impl SqlType {
             }
 
             (_, Json) => DataType::Utf8,
-            (_, Jsonb) => unimplemented!("{}", self.to_string(backend)),
+            (_, Jsonb) => {
+                not_explicitly_handled!(self);
+                DataType::Utf8
+            }
+            (Snowflake, Variant) => DataType::Binary,
             (_, Variant) => DataType::Utf8,
-            (_, Geometry) => unimplemented!("{}", self.to_string(backend)),
+            (_, Geometry) => DataType::Utf8,
             (_, Geography) => DataType::Utf8,
             (_, Array(Some(inner_sql_type))) => {
                 let inner_sql_type_string = inner_sql_type.to_string(backend);
@@ -1360,8 +1379,11 @@ impl SqlType {
                 );
                 DataType::Map(Arc::new(entries), false)
             }
-            (_, Void) => unimplemented!("{}", self.to_string(backend)),
-            (_, Other(_)) => unimplemented!("{}", self.to_string(backend)),
+            (_, Void) => DataType::Null,
+            (_, Other(_)) => {
+                not_explicitly_handled!(self);
+                DataType::Utf8
+            }
         };
         data_type
     }
@@ -2144,9 +2166,8 @@ impl<'source> Parser<'source> {
                         None
                     };
                     SqlType::Map(kv)
-                } else if eqi(w, "SUPER") {
-                    SqlType::Variant
-                } else if eqi(w, "VARIANT") {
+                } else if eqi(w, "VARIANT") || eqi(w, "SUPER") {
+                    // Redshift uses "SUPER"
                     SqlType::Variant
                 } else if eqi(w, "VOID") {
                     SqlType::Void
