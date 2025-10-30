@@ -147,7 +147,7 @@ statement options
         SECURE? MATERIALIZED
         VIEW (IF NOT EXISTS)?
             dest=qualifiedName (IF NOT EXISTS)?
-            (COPY GRANT)?
+            (COPY GRANTS)?
             (LPAREN columnDefinitionForView (COMMA columnDefinitionForView)* tail+=COMMA? RPAREN)?
             (COMMENT EQ string)?
             (WITH? ROW ACCESS POLICY identifier ON LPAREN identifier (COMMA identifier)* RPAREN)?
@@ -162,7 +162,7 @@ statement options
         (LPAREN columnDefinitionForView (COMMA columnDefinitionForView)* tail+=COMMA? RPAREN)?
         (WITH? ROW ACCESS POLICY identifier ON LPAREN identifier (COMMA identifier)* RPAREN)?
         (WITH? TAG properties)?
-        (COPY GRANT)?
+        (COPY GRANTS)?
         (COMMENT EQ comment=string)?
         AS (LPAREN query RPAREN | query )               #createView
     | <logical='Option<TargetName>,Vec<FunctionRegistration>'>

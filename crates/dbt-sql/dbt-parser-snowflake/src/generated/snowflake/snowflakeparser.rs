@@ -8602,10 +8602,10 @@ pub trait CreateMaterializedViewContextAttrs<'input>: SnowflakeParserContext<'in
 	fn COPY(&self) -> Option<Rc<TerminalNode<'input,SnowflakeParserContextType>>> where Self:Sized{
 		self.get_token(COPY, 0)
 	}
-	/// Retrieves first TerminalNode corresponding to token GRANT
-	/// Returns `None` if there is no child corresponding to token GRANT
-	fn GRANT(&self) -> Option<Rc<TerminalNode<'input,SnowflakeParserContextType>>> where Self:Sized{
-		self.get_token(GRANT, 0)
+	/// Retrieves first TerminalNode corresponding to token GRANTS
+	/// Returns `None` if there is no child corresponding to token GRANTS
+	fn GRANTS(&self) -> Option<Rc<TerminalNode<'input,SnowflakeParserContextType>>> where Self:Sized{
+		self.get_token(GRANTS, 0)
 	}
 	fn columnDefinitionForView_all(&self) ->  Vec<Rc<ColumnDefinitionForViewContextAll<'input>>> where Self:Sized{
 		self.children_of_type()
@@ -8893,10 +8893,10 @@ pub trait CreateViewContextAttrs<'input>: SnowflakeParserContext<'input>{
 	fn COPY(&self) -> Option<Rc<TerminalNode<'input,SnowflakeParserContextType>>> where Self:Sized{
 		self.get_token(COPY, 0)
 	}
-	/// Retrieves first TerminalNode corresponding to token GRANT
-	/// Returns `None` if there is no child corresponding to token GRANT
-	fn GRANT(&self) -> Option<Rc<TerminalNode<'input,SnowflakeParserContextType>>> where Self:Sized{
-		self.get_token(GRANT, 0)
+	/// Retrieves first TerminalNode corresponding to token GRANTS
+	/// Returns `None` if there is no child corresponding to token GRANTS
+	fn GRANTS(&self) -> Option<Rc<TerminalNode<'input,SnowflakeParserContextType>>> where Self:Sized{
+		self.get_token(GRANTS, 0)
 	}
 	/// Retrieves first TerminalNode corresponding to token COMMENT
 	/// Returns `None` if there is no child corresponding to token COMMENT
@@ -12692,7 +12692,7 @@ where
 						recog.base.match_token(COPY,&mut recog.err_handler)?;
 
 						recog.base.set_state(784);
-						recog.base.match_token(GRANT,&mut recog.err_handler)?;
+						recog.base.match_token(GRANTS,&mut recog.err_handler)?;
 
 						}
 					}
@@ -13206,7 +13206,7 @@ where
 						recog.base.match_token(COPY,&mut recog.err_handler)?;
 
 						recog.base.set_state(930);
-						recog.base.match_token(GRANT,&mut recog.err_handler)?;
+						recog.base.match_token(GRANTS,&mut recog.err_handler)?;
 
 						}
 					}
@@ -76174,7 +76174,7 @@ const _serializedATN:&'static str =
 	\u{30d}\x07\u{ab}\x02\x02\u{30d}\u{30e}\x07\u{100}\x02\x02\u{30e}\u{310}\
 	\x07\u{83}\x02\x02\u{30f}\u{30c}\x03\x02\x02\x02\u{30f}\u{310}\x03\x02\x02\
 	\x02\u{310}\u{313}\x03\x02\x02\x02\u{311}\u{312}\x07\x4e\x02\x02\u{312}\
-	\u{314}\x07\u{9d}\x02\x02\u{313}\u{311}\x03\x02\x02\x02\u{313}\u{314}\x03\
+	\u{314}\x07\u{9f}\x02\x02\u{313}\u{311}\x03\x02\x02\x02\u{313}\u{314}\x03\
 	\x02\x02\x02\u{314}\u{323}\x03\x02\x02\x02\u{315}\u{316}\x07\u{1bc}\x02\
 	\x02\u{316}\u{31b}\x05\x34\x1b\x02\u{317}\u{318}\x07\x42\x02\x02\u{318}\
 	\u{31a}\x05\x34\x1b\x02\u{319}\u{317}\x03\x02\x02\x02\u{31a}\u{31d}\x03\
@@ -76247,7 +76247,7 @@ const _serializedATN:&'static str =
 	\x02\x02\x02\u{39d}\u{39e}\x03\x02\x02\x02\u{39e}\u{39f}\x03\x02\x02\x02\
 	\u{39f}\u{3a0}\x07\u{178}\x02\x02\u{3a0}\u{3a2}\x05\x46\x24\x02\u{3a1}\u{39d}\
 	\x03\x02\x02\x02\u{3a1}\u{3a2}\x03\x02\x02\x02\u{3a2}\u{3a5}\x03\x02\x02\
-	\x02\u{3a3}\u{3a4}\x07\x4e\x02\x02\u{3a4}\u{3a6}\x07\u{9d}\x02\x02\u{3a5}\
+	\x02\u{3a3}\u{3a4}\x07\x4e\x02\x02\u{3a4}\u{3a6}\x07\u{9f}\x02\x02\u{3a5}\
 	\u{3a3}\x03\x02\x02\x02\u{3a5}\u{3a6}\x03\x02\x02\x02\u{3a6}\u{3aa}\x03\
 	\x02\x02\x02\u{3a7}\u{3a8}\x07\x43\x02\x02\u{3a8}\u{3a9}\x07\u{1c1}\x02\
 	\x02\u{3a9}\u{3ab}\x05\u{122}\u{92}\x02\u{3aa}\u{3a7}\x03\x02\x02\x02\u{3aa}\
