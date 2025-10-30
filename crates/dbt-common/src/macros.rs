@@ -288,7 +288,7 @@ macro_rules! show_completed {
     // Generic completion for node materializations (model/seed/snapshot)
     (
         $io:expr,
-        $task:expr,
+        $node:expr,
         $node_info:expr,
         $node_status:expr,
         $display_path:expr,
@@ -306,20 +306,23 @@ macro_rules! show_completed {
         use chrono::Utc;
 
         if !matches!($node_status, &NodeStatus::NoOp) {
+            let node = $node;
             let log_event: LogEvent = $node_status.clone().into();
             let duration = $end_time
                 .signed_duration_since($start_time)
                 .to_std()
                 .unwrap_or_default();
-            let resource_type_str = $task.resource_type();
-            let materialization = $task.base().materialized.to_string();
+            let resource_type_str = node.resource_type();
+            let base = node.base();
+            let common = node.common();
+            let materialization = base.materialized.to_string();
             // Default schema/alias
-            let mut schema = $task.base().schema.clone();
-            let mut alias = $task.base().alias.clone();
+            let mut schema = base.schema.clone();
+            let mut alias = base.alias.clone();
             // For unit tests: display test schema + unit test name
-            if resource_type_str == NodeType::UnitTest {
+            if resource_type_str == dbt_telemetry::NodeType::UnitTest {
                 schema = format!("{}_dbt_test__audit", schema);
-                alias = $task.common().name.clone();
+                alias = common.name.clone();
             }
 
             let desc = if matches!($node_status, NodeStatus::Succeeded) {
