@@ -35,7 +35,7 @@ class MultiOption(click.Option):
         else:
             assert isinstance(option_type, ChoiceTuple), msg
 
-    def add_to_parser(self, parser: "_OptionParser", ctx: Context):
+    def add_to_parser(self, parser: "_OptionParser", ctx: "Context"):
         def parser_process(value: str, state: "_ParsingState"):
             # method to hook to the parser.process
             done = False
