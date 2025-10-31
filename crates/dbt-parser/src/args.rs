@@ -34,8 +34,6 @@ pub struct ResolveArgs {
     pub replay: Option<dbt_common::io_args::ReplayMode>,
     /// Sample config
     pub sample_config: RunFilter,
-    /// Inline SQL to compile (from --inline flag)
-    pub inline_sql: Option<String>,
     /// For remapping unique_is to (database, schema, table) when sampling is enabled
     pub sample_renaming: BTreeMap<String, (String, String, String)>,
 }
@@ -55,14 +53,7 @@ impl ResolveArgs {
             indirect_selection: arg.indirect_selection,
             replay: arg.replay.clone(),
             sample_config: RunFilter::try_from(arg.empty, arg.sample.clone())?,
-            inline_sql: None, // Will be set separately when needed
             sample_renaming: arg.sample_renaming.clone(),
         })
-    }
-
-    /// Set the inline SQL for compilation
-    pub fn with_inline_sql(mut self, inline_sql: Option<String>) -> Self {
-        self.inline_sql = inline_sql;
-        self
     }
 }

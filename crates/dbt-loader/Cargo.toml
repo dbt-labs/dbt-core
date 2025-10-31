@@ -36,6 +36,7 @@ rust-embed = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
+uuid = { workspace = true }
 walkdir = { workspace = true }
 
 

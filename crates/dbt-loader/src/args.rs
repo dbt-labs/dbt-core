@@ -37,6 +37,8 @@ pub struct LoadArgs {
     pub lock: bool,
     // Whether to load only profiles
     pub debug_profile: bool,
+    /// Inline SQL to compile (from --inline flag)
+    pub inline_sql: Option<String>,
     /// This is for incremental.
     /// The [DbtState] of the previouis compile.
     /// Setting this will cause the 'load' phase to skip a lot of work
@@ -63,7 +65,14 @@ impl LoadArgs {
             threads: arg.num_threads,
             install_deps: arg.phase == Phases::Deps,
             debug_profile: arg.phase == Phases::Debug,
+            inline_sql: None, // Will be set separately when needed
             prev_dbt_state: None,
         }
+    }
+
+    /// Set the inline SQL for compilation
+    pub fn with_inline_sql(mut self, inline_sql: Option<String>) -> Self {
+        self.inline_sql = inline_sql;
+        self
     }
 }

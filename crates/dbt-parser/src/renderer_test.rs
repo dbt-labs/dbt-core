@@ -80,7 +80,6 @@ mod tests {
             exclude: None,
             replay: None,
             sample_config: RunFilter::default(),
-            inline_sql: None,
             sample_renaming: BTreeMap::new(),
         };
 
