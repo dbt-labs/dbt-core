@@ -299,7 +299,7 @@ impl SdfSchemaBuilder {
                 let metadata = field.metadata();
                 let current_type = field.data_type();
                 let nullable = field.is_nullable();
-                let original_type_text = metadata.get(ARROW_FIELD_ORIGINAL_TYPE_METADATA_KEY);
+                let original_type_text = original_type_string(backend_of(self.adapter_type), field);
                 let comment = metadata
                     .get(ARROW_FIELD_COMMENT_METADATA_KEY)
                     .map(|s| s.to_string());
