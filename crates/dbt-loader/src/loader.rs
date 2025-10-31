@@ -569,7 +569,7 @@ pub async fn load_inner(
                 loc => file.path.clone(),
                 "Python models are not currently supported"
             );
-            emit_warn_log_from_fs_error(&err, &arg.io);
+            emit_warn_log_from_fs_error(&err, arg.io.status_reporter.as_ref());
         }
     }
     let function_sql_files = find_files_by_kind_and_extension(

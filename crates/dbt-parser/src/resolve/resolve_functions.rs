@@ -274,7 +274,7 @@ pub async fn resolve_functions(
             Ok(_) => (),
             Err(e) => {
                 let err_with_loc = e.with_location(dbt_asset.path.clone());
-                emit_error_log_from_fs_error(&err_with_loc, &arg.io);
+                emit_error_log_from_fs_error(&err_with_loc, arg.io.status_reporter.as_ref());
             }
         }
 

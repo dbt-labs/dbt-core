@@ -11,7 +11,11 @@ use minijinja::{
     listener::{DefaultRenderingEventListener, RenderingEventListener},
 };
 
-use dbt_common::{ErrorCode, io_args::IoArgs, tracing::emit::emit_warn_log_message};
+use dbt_common::{
+    ErrorCode,
+    io_args::IoArgs,
+    tracing::emit::{emit_error_log_message, emit_warn_log_message},
+};
 
 /// Trait for creating and destroying rendering event listeners
 pub trait RenderingEventListenerFactory: Send + Sync {
@@ -55,7 +59,11 @@ impl RenderingEventListenerFactory for DefaultRenderingEventListenerFactory {
             if let Ok(mut macro_spans) = self.macro_spans.write() {
                 macro_spans.insert(filename.to_path_buf(), new_macro_spans);
             } else {
-                log::error!("Failed to acquire write lock on macro_spans");
+                emit_error_log_message(
+                    ErrorCode::Generic,
+                    "Failed to acquire write lock on macro_spans",
+                    None,
+                );
             }
         }
     }
@@ -64,7 +72,11 @@ impl RenderingEventListenerFactory for DefaultRenderingEventListenerFactory {
         if let Ok(mut spans) = self.macro_spans.write() {
             spans.remove(filename).unwrap_or_default()
         } else {
-            log::error!("Failed to acquire write lock on macro_spans");
+            emit_error_log_message(
+                ErrorCode::Generic,
+                "Failed to acquire write lock on macro_spans",
+                None,
+            );
             MacroSpans::default()
         }
     }
@@ -278,7 +290,7 @@ impl TypecheckingEventListener for WarningPrinter {
             emit_warn_log_message(
                 ErrorCode::Generic,
                 format!("{}\n  --> {}", message, location),
-                &self.args,
+                self.args.status_reporter.as_ref(),
             );
         });
     }

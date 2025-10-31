@@ -980,7 +980,11 @@ impl Object for Exceptions {
                 let mut args = ArgParser::new(args, None);
                 let warn_string = args.get::<String>("").unwrap_or_else(|_| "".to_string());
 
-                emit_warn_log_message(ErrorCode::Generic, warn_string, &self.io_args);
+                emit_warn_log_message(
+                    ErrorCode::Generic,
+                    warn_string,
+                    self.io_args.status_reporter.as_ref(),
+                );
 
                 Ok(Value::UNDEFINED)
             }
@@ -1159,7 +1163,11 @@ impl Object for Exceptions {
                     "Data type of snapshot table timestamp columns ({snapshot_time_data_type}) doesn't match derived column 'updated_at' ({updated_at_data_type}). Please update snapshot config 'updated_at'."
                 );
 
-                emit_warn_log_message(ErrorCode::Generic, warning, &self.io_args);
+                emit_warn_log_message(
+                    ErrorCode::Generic,
+                    warning,
+                    self.io_args.status_reporter.as_ref(),
+                );
 
                 Ok(Value::UNDEFINED)
             }

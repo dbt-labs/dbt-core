@@ -15,7 +15,7 @@ use tracing::level_filters::LevelFilter;
 use crate::{
     constants::{ANALYZING, RENDERING, RUNNING},
     io_args::ShowOptions,
-    logging::{LogFormat, StatEvent, TermEvent},
+    logging::{LogFormat, StatEvent, TermEvent, with_suspended_progress_bars},
     tracing::{
         data_provider::DataProvider,
         formatters::{
@@ -23,6 +23,7 @@ use crate::{
             log_message::format_log_message, test_result::format_test_failure,
         },
         layer::{ConsumerLayer, TelemetryConsumer},
+        private_events::print_event::StdoutMessage,
     },
 };
 
@@ -301,11 +302,23 @@ impl TelemetryConsumer for TuiLayer {
                 });
             } else {
                 // Print info and below messages immediately
+                with_suspended_progress_bars(|| {
+                    io::stdout()
+                        .lock()
+                        .write_all(format!("{}\n", formatted_message).as_bytes())
+                        .expect("failed to write to stdout");
+                });
+            }
+        }
+
+        // Handle StdoutMessage events
+        if log_record.attributes.is::<StdoutMessage>() {
+            with_suspended_progress_bars(|| {
                 io::stdout()
                     .lock()
-                    .write_all(format!("{}\n", formatted_message).as_bytes())
+                    .write_all(format!("{}\n", log_record.body).as_bytes())
                     .expect("failed to write to stdout");
-            }
+            });
         }
     }
 }

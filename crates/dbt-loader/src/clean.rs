@@ -12,7 +12,10 @@ use dbt_common::{
     err, fs_err, fsinfo,
     io_args::{EvalArgs, EvalArgsBuilder, IoArgs},
     show_progress, stdfs,
-    tracing::{emit::emit_error_log_from_fs_error, metrics::get_exit_code_from_error_counter},
+    tracing::{
+        emit::{emit_error_log_from_fs_error, emit_trace_log_message},
+        metrics::get_exit_code_from_error_counter,
+    },
 };
 use dbt_jinja_utils::{
     invocation_args::InvocationArgs, phases::load::init::initialize_load_jinja_environment,
@@ -91,7 +94,9 @@ pub async fn execute_clean_command(
                 show_progress!(&arg.io, info);
                 stdfs::remove_dir_all(path)
             } else {
-                log::trace!("The target directory does not exist: {}", path.display());
+                emit_trace_log_message(|| {
+                    format!("The target directory does not exist: {}", path.display())
+                });
                 Ok(())
             }
         })?;
@@ -115,7 +120,7 @@ fn unrelated_paths<P: AsRef<Path>, Q: AsRef<Path>>(io: &IoArgs, to: P, from: Q) 
             }
         })
         .inspect_err(|e| {
-            emit_error_log_from_fs_error(e, io);
+            emit_error_log_from_fs_error(e, io.status_reporter.as_ref());
         })
         .is_ok()
 }

@@ -71,7 +71,7 @@ pub async fn resolve_saved_queries(
                     "Saved query name '{}' can only contain letters, numbers, and underscores.",
                     saved_query_name
                 );
-                emit_error_log_from_fs_error(&e, &arg.io);
+                emit_error_log_from_fs_error(&e, arg.io.status_reporter.as_ref());
 
                 continue;
             }

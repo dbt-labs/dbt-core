@@ -313,13 +313,13 @@ pub async fn resolve_models(
                 if !errors.is_empty() {
                     // Show each error individually
                     for error in errors {
-                        emit_error_log_from_fs_error(&error, &arg.io);
+                        emit_error_log_from_fs_error(&error, arg.io.status_reporter.as_ref());
                     }
                     continue;
                 }
             }
             Err(e) => {
-                emit_error_log_from_fs_error(&e, &arg.io);
+                emit_error_log_from_fs_error(&e, arg.io.status_reporter.as_ref());
 
                 continue;
             }
@@ -563,7 +563,7 @@ pub async fn resolve_models(
             Ok(_) => (),
             Err(e) => {
                 let err_with_loc = e.with_location(dbt_asset.path.clone());
-                emit_error_log_from_fs_error(&err_with_loc, &arg.io);
+                emit_error_log_from_fs_error(&err_with_loc, arg.io.status_reporter.as_ref());
             }
         }
 
@@ -607,7 +607,7 @@ pub async fn resolve_models(
                 "Unused schema.yml entry for model '{}'",
                 model_name,
             );
-            emit_warn_log_from_fs_error(&err, &arg.io);
+            emit_warn_log_from_fs_error(&err, arg.io.status_reporter.as_ref());
         }
     }
 
@@ -632,7 +632,7 @@ pub async fn resolve_models(
             if errs.is_empty() {
                 return Err(err);
             }
-            emit_error_log_from_fs_error(&err, &arg.io);
+            emit_error_log_from_fs_error(&err, arg.io.status_reporter.as_ref());
         }
     }
 
@@ -747,14 +747,14 @@ fn process_python_models(
         let stmts = match parse_python(&source, &python_asset.path) {
             Ok(stmts) => stmts,
             Err(e) => {
-                emit_error_log_from_fs_error(&e, &arg.io);
+                emit_error_log_from_fs_error(&e, arg.io.status_reporter.as_ref());
                 continue;
             }
         };
 
         // Validate Python model structure (def model(dbt, session): ...)
         if let Err(e) = validate_python_model(&python_asset.path, &stmts) {
-            emit_error_log_from_fs_error(&e, &arg.io);
+            emit_error_log_from_fs_error(&e, arg.io.status_reporter.as_ref());
             continue;
         }
 
@@ -771,7 +771,7 @@ fn process_python_models(
         ) {
             Ok(info) => info,
             Err(e) => {
-                emit_error_log_from_fs_error(&e, &arg.io);
+                emit_error_log_from_fs_error(&e, arg.io.status_reporter.as_ref());
                 continue;
             }
         };
@@ -920,7 +920,7 @@ fn merge_python_config(
                 "Python model '{}' has static_analysis set to 'on', but static analysis is not supported for Python models. Setting will be ignored.",
                 python_asset.path.display()
             ),
-            &arg.io,
+            arg.io.status_reporter.as_ref(),
         );
     }
 

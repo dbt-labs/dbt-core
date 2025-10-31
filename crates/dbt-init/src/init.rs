@@ -3,6 +3,7 @@
 
 use crate::profile_setup::ProfileSetup;
 use dbt_common::pretty_string::{GREEN, YELLOW};
+use dbt_common::tracing::emit::emit_info_log_message;
 use dbt_common::{ErrorCode, FsResult, fs_err};
 use std::env;
 use std::fs;
@@ -103,15 +104,15 @@ fn create_or_update_vscode_extensions(target_dir: &Path) -> FsResult<()> {
             })?;
             fs::write(&extensions_file, updated_content)?;
 
-            log::info!(
+            emit_info_log_message(format!(
                 "{} Added dbt extension recommendation to existing .vscode/extensions.json",
                 GREEN.apply_to("Info")
-            );
+            ));
         } else {
-            log::info!(
+            emit_info_log_message(format!(
                 "{} dbt extension already recommended in .vscode/extensions.json, skipping",
                 YELLOW.apply_to("Info")
-            );
+            ));
         }
     } else {
         // File doesn't exist, create it with our extension
@@ -129,10 +130,10 @@ fn create_or_update_vscode_extensions(target_dir: &Path) -> FsResult<()> {
         })?;
         fs::write(&extensions_file, extensions_content)?;
 
-        log::info!(
+        emit_info_log_message(format!(
             "{} Created .vscode/extensions.json with dbt extension recommendation",
             GREEN.apply_to("Info")
-        );
+        ));
     }
 
     Ok(())
@@ -267,11 +268,11 @@ fn update_dbt_project_profile(profile_name: &str) -> FsResult<()> {
         fs::write("dbt_project.yml", updated_content)?;
     }
 
-    log::info!(
+    emit_info_log_message(format!(
         "{} Added profile '{}' to dbt_project.yml",
         GREEN.apply_to("Success"),
         profile_name
-    );
+    ));
 
     Ok(())
 }
@@ -318,10 +319,10 @@ pub async fn run_init_workflow(
             ));
         }
 
-        log::info!(
+        emit_info_log_message(format!(
             "{} A dbt_project.yml already exists in this directory; skipping sample project creation.",
             YELLOW.apply_to("Warning")
-        );
+        ));
 
         // Create or update .vscode/extensions.json even when skipping project creation
         create_or_update_vscode_extensions(Path::new("."))?;
@@ -341,12 +342,12 @@ pub async fn run_init_workflow(
         // If the chosen project directory already exists, find the next available
         if Path::new(&project_name).exists() {
             let unique_name = next_available_dir_name(&project_name);
-            log::info!(
+            emit_info_log_message(format!(
                 "{} Directory '{}' already exists, using '{}' instead",
                 YELLOW.apply_to("Warning"),
                 project_name,
                 YELLOW.apply_to(&unique_name)
-            );
+            ));
             project_name = unique_name;
         }
 
@@ -371,16 +372,20 @@ pub async fn run_init_workflow(
         // Change to project directory
         env::set_current_dir(&project_name)?;
 
-        log::info!(
+        emit_info_log_message(format!(
             "{} Project created successfully!",
             GREEN.apply_to("Success")
-        );
-        log::info!("{} Project name: {}", GREEN.apply_to("Info"), project_name);
-        log::info!(
+        ));
+        emit_info_log_message(format!(
+            "{} Project name: {}",
+            GREEN.apply_to("Info"),
+            project_name
+        ));
+        emit_info_log_message(format!(
             "{} Project directory: {}",
             GREEN.apply_to("Info"),
             project_dir.display()
-        );
+        ));
 
         // Setup profile if not skipped
         if !skip_profile_setup {

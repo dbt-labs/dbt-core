@@ -325,7 +325,7 @@ pub fn resolve_sources(
             Ok(_) => (),
             Err(e) => {
                 let err_with_loc = e.with_location(mpe.relative_path.clone());
-                emit_error_log_from_fs_error(&err_with_loc, io_args);
+                emit_error_log_from_fs_error(&err_with_loc, io_args.status_reporter.as_ref());
             }
         }
 

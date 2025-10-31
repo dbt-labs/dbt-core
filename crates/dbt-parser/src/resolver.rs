@@ -239,7 +239,7 @@ pub async fn resolve(
     match nodes.warn_on_microbatch() {
         Ok(_) => {}
         Err(e) => {
-            emit_warn_log_from_fs_error(e.as_ref(), &arg.io);
+            emit_warn_log_from_fs_error(e.as_ref(), arg.io.status_reporter.as_ref());
         }
     }
 
@@ -394,7 +394,7 @@ fn check_node_access<F>(
                     target_unique_id,
                     target_node.__model_attr__.group.as_deref().unwrap_or(""),
                 );
-                emit_error_log_from_fs_error(&err, &arg.io);
+                emit_error_log_from_fs_error(&err, arg.io.status_reporter.as_ref());
             } else if target_node.__model_attr__.access == Access::Protected && diffent_packages {
                 let err = fs_err!(
                     code => ErrorCode::AccessDenied,
@@ -404,7 +404,7 @@ fn check_node_access<F>(
                     target_unique_id,
                     target_node.common().package_name,
                 );
-                emit_error_log_from_fs_error(&err, &arg.io);
+                emit_error_log_from_fs_error(&err, arg.io.status_reporter.as_ref());
             }
         }
     }

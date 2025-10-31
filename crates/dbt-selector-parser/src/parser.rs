@@ -132,7 +132,7 @@ impl<'a> SelectorParser<'a> {
                         emit_warn_log_message(
                             ErrorCode::SelectorError,
                             "Graph operators (parents, children, etc.) are not supported with selector inheritance and will be ignored",
-                            self.io_args,
+                            self.io_args.status_reporter.as_ref(),
                         );
                     }
 

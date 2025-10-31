@@ -182,7 +182,7 @@ impl MinimalProperties {
                                     properties_path.display(),
                                     existing_entry.relative_path.display()
                                 ),
-                                io_args,
+                                io_args.status_reporter.as_ref(),
                             );
                         } else {
                             self.source_tables.insert(
@@ -207,7 +207,7 @@ impl MinimalProperties {
                             source.name,
                             properties_path.display()
                         ),
-                        io_args,
+                        io_args.status_reporter.as_ref(),
                     );
                 }
             }
@@ -611,7 +611,7 @@ pub fn resolve_minimal_properties(
                             "The package '{}' defines semantic models and metrics using the legacy YAML. Please migrate to the new YAML to use the semantic layer with dbt Fusion.",
                             &package.dbt_project.name,
                         ),
-                        &arg.io,
+                        arg.io.status_reporter.as_ref(),
                     );
 
                     minimal_resolved_properties.semantic_layer_spec_is_legacy = true;

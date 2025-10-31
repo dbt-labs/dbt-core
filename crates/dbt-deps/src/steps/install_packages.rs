@@ -90,7 +90,7 @@ pub async fn install_packages(
                             pinned_package.version,
                             pinned_package.version_latest,
                         ),
-                        io_args,
+                        io_args.status_reporter.as_ref(),
                     );
                 }
 

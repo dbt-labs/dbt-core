@@ -153,7 +153,7 @@ pub fn resolve_nested_model_metrics(
 
                 // Validate metric (name and window)
                 if let Err(e) = validate_metric(metric_props) {
-                    emit_error_log_from_fs_error(&e, &arg.io);
+                    emit_error_log_from_fs_error(&e, arg.io.status_reporter.as_ref());
 
                     continue;
                 }
@@ -166,7 +166,7 @@ pub fn resolve_nested_model_metrics(
                             "Duplicate metric name '{}' found in package '{}'",
                             metric_name, package_name
                         ),
-                        &arg.io,
+                        arg.io.status_reporter.as_ref(),
                     );
                     continue;
                 }
@@ -348,7 +348,7 @@ pub fn resolve_top_level_metrics(
 
         // Validate metric (name and window)
         if let Err(e) = validate_metric(&metric_props) {
-            emit_error_log_from_fs_error(&e, &arg.io);
+            emit_error_log_from_fs_error(&e, arg.io.status_reporter.as_ref());
 
             continue;
         }
@@ -361,7 +361,7 @@ pub fn resolve_top_level_metrics(
                     "Duplicate metric name '{}' found in package '{}'",
                     metric_name, package_name
                 ),
-                &arg.io,
+                arg.io.status_reporter.as_ref(),
             );
             continue;
         }

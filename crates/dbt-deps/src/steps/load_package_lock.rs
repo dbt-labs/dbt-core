@@ -72,14 +72,14 @@ fn try_load_from_deprecated_dbt_packages_lock(
             emit_warn_log_message(
                 ErrorCode::FmtError,
                 "Found package-lock.yml file with out of date formatting, ignoring...",
-                io,
+                io.status_reporter.as_ref(),
             );
 
             if !dbt_packages_dir.exists() {
                 emit_warn_log_message(
                     ErrorCode::FmtError,
                     "Attempted to infer package name from package-lock.yml, but no packages directory found, skipping...",
-                    io,
+                    io.status_reporter.as_ref(),
                 );
 
                 return Ok(None);
@@ -102,7 +102,7 @@ fn try_load_from_deprecated_dbt_packages_lock(
                             dbt_packages_dir.display(),
                             e
                         ),
-                        io,
+                        io.status_reporter.as_ref(),
                     );
 
                     return Ok(None);
@@ -138,7 +138,7 @@ fn try_load_from_deprecated_dbt_packages_lock(
                                     package,
                                     dbt_packages_dir.display()
                                 ),
-                                io,
+                                io.status_reporter.as_ref(),
                             );
 
                             return Ok(None);
@@ -170,7 +170,7 @@ fn try_load_from_deprecated_dbt_packages_lock(
                                     git,
                                     dbt_packages_dir.display()
                                 ),
-                                io,
+                                io.status_reporter.as_ref(),
                             );
 
                             return Ok(None);

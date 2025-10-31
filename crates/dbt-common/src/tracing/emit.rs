@@ -6,12 +6,12 @@
 //! (rather than the macro invocation site) and also efficiently pass telemetry attributes
 //! into the tracing pipeline via thread-local storage.
 
-use std::panic::Location;
+use std::{panic::Location, sync::Arc};
 
 use dbt_error::{ErrorCode, FsError, fs_err};
 use dbt_telemetry::{LogMessage, TelemetryAttributes, TelemetryEventRecType};
 
-use crate::io_args::IoArgs;
+use crate::{io_args::IoArgs, io_utils::StatusReporter};
 
 use super::{constants::ROOT_SPAN_NAME, event_info::store_event_attributes, shared::Recordable};
 
@@ -175,28 +175,30 @@ pub fn emit_debug_event(attrs: impl Into<TelemetryAttributes>, message: Option<&
 /// NOTE: Trace level events are intended for fusion developer debugging and
 /// turned off by default in production optional builds.
 #[track_caller]
-pub fn emit_trace_event(attrs: impl Into<TelemetryAttributes>, message: Option<&str>) {
-    let attrs: TelemetryAttributes = attrs.into();
+pub fn emit_trace_event(attrs_and_msg: impl FnOnce() -> (TelemetryAttributes, Option<String>)) {
+    if tracing::event_enabled!(tracing::Level::TRACE) {
+        let (attrs, message) = attrs_and_msg();
 
-    debug_assert_eq!(
-        attrs.record_category(),
-        TelemetryEventRecType::Log,
-        "Do not emit events of span type as logs!"
-    );
+        debug_assert_eq!(
+            attrs.record_category(),
+            TelemetryEventRecType::Log,
+            "Do not emit events of span type as logs!"
+        );
 
-    // Get the real code location
-    let loc = Location::caller();
+        // Get the real code location
+        let loc = Location::caller();
 
-    // Save attributes to thread-local storage for the data layer to pick up
-    store_event_attributes(attrs);
+        // Save attributes to thread-local storage for the data layer to pick up
+        store_event_attributes(attrs);
 
-    // Emit event into tracing pipeline
-    tracing::event!(
-        tracing::Level::TRACE,
-        message,
-        { FILE_FIELD } = loc.file(),
-        { LINE_FIELD } = loc.line()
-    );
+        // Emit event into tracing pipeline
+        tracing::event!(
+            tracing::Level::TRACE,
+            message,
+            { FILE_FIELD } = loc.file(),
+            { LINE_FIELD } = loc.line()
+        );
+    }
 }
 
 /// Create a root info-level span with no parent.
@@ -359,20 +361,44 @@ pub fn emit_info_log_message(message: impl AsRef<str>) {
     )
 }
 
+/// Emit a plain log message without error code at DEBUG level.
+#[track_caller]
+pub fn emit_debug_log_message(message: impl AsRef<str>) {
+    emit_debug_event(
+        LogMessage::new_from_level(tracing::Level::DEBUG),
+        Some(message.as_ref()),
+    )
+}
+
+/// Emit a plain log message without error code at TRACE level.
+///
+/// NOTE: Trace level events are intended for fusion developer debugging and
+/// turned off by default.
+#[track_caller]
+pub fn emit_trace_log_message(message: impl FnOnce() -> String) {
+    emit_trace_event(|| {
+        (
+            LogMessage::new_from_level(tracing::Level::TRACE).into(),
+            Some(message()),
+        )
+    })
+}
+
 /// Emit a log message event at ERROR level with the given code and message.
+///
+/// This will also report the error to the provided status reporter, if any.
 #[track_caller]
 pub fn emit_error_log_message(
     code: ErrorCode,
     message: impl AsRef<str>,
-    io: &IoArgs, // TODO: remove when lsp will switch to tracing layer instead of status_reporter
+    status_reporter: Option<&Arc<dyn StatusReporter + 'static>>,
 ) {
     emit_error_event(
         LogMessage::new_from_level_and_code(code as u32, tracing::Level::ERROR),
         Some(message.as_ref()),
     );
 
-    // TODO: remove everything below this when lsp will switch to tracing layer instead of status_reporter
-    let Some(status_reporter) = io.status_reporter.as_ref() else {
+    let Some(status_reporter) = status_reporter else {
         // No status reporter, nothing more to do
         return;
     };
@@ -381,18 +407,19 @@ pub fn emit_error_log_message(
 }
 
 /// Emit a log message event at ERROR level based on the given FsError.
+///
+/// This will also report the error to the provided status reporter, if any.
 #[track_caller]
 pub fn emit_error_log_from_fs_error(
     error: &FsError,
-    io: &IoArgs, // TODO: remove when lsp will switch to tracing layer instead of status_reporter
+    status_reporter: Option<&Arc<dyn StatusReporter + 'static>>,
 ) {
     emit_error_event(
         LogMessage::new_from_level_and_code(error.code as u32, tracing::Level::ERROR),
         Some(error.message().as_str()),
     );
 
-    // TODO: remove everything below this when lsp will switch to tracing layer instead of status_reporter
-    let Some(status_reporter) = io.status_reporter.as_ref() else {
+    let Some(status_reporter) = status_reporter else {
         // No status reporter, nothing more to do
         return;
     };
@@ -401,19 +428,20 @@ pub fn emit_error_log_from_fs_error(
 }
 
 /// Emit a log message event at WARN level with the given code and message.
+///
+/// This will also report the warning to the provided status reporter, if any.
 #[track_caller]
 pub fn emit_warn_log_message(
     code: ErrorCode,
     message: impl AsRef<str>,
-    io: &IoArgs, // TODO: remove when lsp will switch to tracing layer instead of status_reporter
+    status_reporter: Option<&Arc<dyn StatusReporter + 'static>>,
 ) {
     emit_warn_event(
         LogMessage::new_from_level_and_code(code as u32, tracing::Level::WARN),
         Some(message.as_ref()),
     );
 
-    // TODO: remove everything below this when lsp will switch to tracing layer instead of status_reporter
-    let Some(status_reporter) = io.status_reporter.as_ref() else {
+    let Some(status_reporter) = status_reporter else {
         // No status reporter, nothing more to do
         return;
     };
@@ -422,18 +450,19 @@ pub fn emit_warn_log_message(
 }
 
 /// Emit a log message event at WARN level based on the given FsError.
+///
+/// This will also report the warning to the provided status reporter, if any.
 #[track_caller]
 pub fn emit_warn_log_from_fs_error(
     warning: &FsError,
-    io: &IoArgs, // TODO: remove when lsp will switch to tracing layer instead of status_reporter
+    status_reporter: Option<&Arc<dyn StatusReporter + 'static>>,
 ) {
     emit_warn_event(
         LogMessage::new_from_level_and_code(warning.code as u32, tracing::Level::WARN),
         Some(warning.message().as_str()),
     );
 
-    // TODO: remove everything below this when lsp will switch to tracing layer instead of status_reporter
-    let Some(status_reporter) = io.status_reporter.as_ref() else {
+    let Some(status_reporter) = status_reporter else {
         // No status reporter, nothing more to do
         return;
     };
@@ -442,6 +471,9 @@ pub fn emit_warn_log_from_fs_error(
 }
 
 /// Emit a log message related to parsing error based on the given FsError.
+///
+/// This will also report the error/warning to the provided status reporter, if any.
+///
 /// TODO: This should be removed when `ParsingErrorMessage` is no longer needed,
 /// see `parse_error_filter` middleware docs why it is used currently.
 #[track_caller]
@@ -461,7 +493,14 @@ pub fn emit_strict_parse_error(
         Some(error.message().as_str()),
     );
 
-    // TODO: remove everything below this when lsp will switch to tracing layer instead of status_reporter
+    // Unfortunately, the logic for downgrading parsing errors to warnings, as well
+    // as filtering repeated deprecations from packages is fully replicated here.
+    //
+    // This is a consequence of LSP (status_reporter) not being a tracing layer and
+    // thus not being able to leverage the existing `parse_error_filter` middleware.
+    //
+    // TODO: It is ugly, and inefficient, but as of time of writing the agreement was to keep
+    // the existing architecture. This should be revisited in the future.
     use dashmap::DashMap;
     use once_cell::sync::Lazy;
     use std::collections::HashSet;
@@ -545,4 +584,12 @@ pub fn emit_strict_parse_error(
     } else {
         status_reporter.collect_error(error);
     }
+}
+
+/// Print a message to stdout only. This should be used instead of `println!`.
+#[track_caller]
+pub fn print(message: impl AsRef<str>) {
+    use super::private_events::print_event::StdoutMessage;
+
+    emit_info_event(StdoutMessage, Some(message.as_ref()));
 }

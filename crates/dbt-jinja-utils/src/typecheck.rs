@@ -70,7 +70,7 @@ pub fn typecheck(
             emit_error_log_message(
                 ErrorCode::Generic,
                 format!("Failed to create template: {}", e),
-                arg_io,
+                arg_io.status_reporter.as_ref(),
             );
             return Ok(());
         }
@@ -95,7 +95,7 @@ pub fn typecheck(
             //         absolute_file_path.display(),
             //         e
             //     ),
-            //     arg_io,
+            //     arg_io.status_reporter.as_ref(),
             // );
         }
     }

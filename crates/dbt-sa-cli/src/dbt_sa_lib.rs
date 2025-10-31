@@ -2,7 +2,7 @@ use crate::dbt_sa_clap::{Cli, Commands, ProjectTemplate};
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::create_root_info_span;
 use dbt_common::io_utils::checkpoint_maybe_exit;
-use dbt_common::tracing::emit::emit_error_log_from_fs_error;
+use dbt_common::tracing::emit::{emit_error_log_from_fs_error, emit_info_log_message};
 use dbt_common::tracing::invocation::create_invocation_attributes;
 use dbt_common::tracing::metrics::get_exit_code_from_error_counter;
 use dbt_init::init;
@@ -74,7 +74,7 @@ async fn do_execute_fs(eval_arg: &EvalArgs, cli: Cli, token: CancellationToken) 
         return match execute_man_command(eval_arg).await {
             Ok(code) => Ok(code),
             Err(e) => {
-                emit_error_log_from_fs_error(&e, &eval_arg.io);
+                emit_error_log_from_fs_error(&e, eval_arg.io.status_reporter.as_ref());
 
                 Ok(1)
             }
@@ -116,14 +116,13 @@ async fn do_execute_fs(eval_arg: &EvalArgs, cli: Cli, token: CancellationToken) 
                     return Ok(0);
                 }
 
-                log::info!(
-                    "{} profile inputs, adapters, and connection",
+                emit_info_log_message(format!(
+                    "{} profile inputs, adapters, and connection\n", // Add empty line for spacing
                     GREEN.apply_to(VALIDATING)
-                );
-                log::info!(""); // Add empty line for spacing
+                ));
             }
             Err(e) => {
-                emit_error_log_from_fs_error(&e, &eval_arg.io);
+                emit_error_log_from_fs_error(&e, eval_arg.io.status_reporter.as_ref());
 
                 return Ok(1);
             }
@@ -134,7 +133,7 @@ async fn do_execute_fs(eval_arg: &EvalArgs, cli: Cli, token: CancellationToken) 
     match execute_setup_and_all_phases(eval_arg, cli, &token).await {
         Ok(code) => Ok(code),
         Err(e) => {
-            emit_error_log_from_fs_error(&e, &eval_arg.io);
+            emit_error_log_from_fs_error(&e, eval_arg.io.status_reporter.as_ref());
 
             Ok(1)
         }
@@ -182,7 +181,7 @@ async fn execute_setup_and_all_phases(
         match execute_clean_command(eval_arg, &clean_args.files, token).await {
             Ok(code) => Ok(code),
             Err(e) => {
-                emit_error_log_from_fs_error(&e, &eval_arg.io);
+                emit_error_log_from_fs_error(&e, eval_arg.io.status_reporter.as_ref());
 
                 Ok(1)
             }
@@ -192,7 +191,7 @@ async fn execute_setup_and_all_phases(
         match execute_all_phases(eval_arg, &cli, token).await {
             Ok(code) => Ok(code),
             Err(e) => {
-                emit_error_log_from_fs_error(&e, &eval_arg.io);
+                emit_error_log_from_fs_error(&e, eval_arg.io.status_reporter.as_ref());
 
                 Ok(1)
             }

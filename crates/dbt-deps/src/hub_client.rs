@@ -159,7 +159,7 @@ impl HubClient {
                         "Package '{}' has been moved to '{}/{}'. Please update your package reference.",
                         hub_package.name, redirect_namespace, redirect_name
                     ),
-                    io,
+                    io.status_reporter.as_ref(),
                 );
             } else {
                 emit_warn_log_message(
@@ -168,7 +168,7 @@ impl HubClient {
                         "Package '{}' has been moved to namespace '{}'. Please update your package reference.",
                         hub_package.name, redirect_namespace
                     ),
-                    io,
+                    io.status_reporter.as_ref(),
                 );
             }
         } else if let Some(redirect_name) = &hub_package.redirectname {
@@ -178,7 +178,7 @@ impl HubClient {
                     "Package '{}' has been renamed to '{}'. Please update your package reference.",
                     hub_package.name, redirect_name
                 ),
-                io,
+                io.status_reporter.as_ref(),
             );
         }
 
@@ -190,7 +190,7 @@ impl HubClient {
                     "Package '{}' has been deprecated. Consider finding an alternative package.",
                     hub_package.name
                 ),
-                io,
+                io.status_reporter.as_ref(),
             );
         }
     }

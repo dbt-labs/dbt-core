@@ -73,7 +73,7 @@ pub async fn resolve_exposures(
                     "Exposure name '{}' can only contain letters, numbers, and underscores.",
                     exposure_name
                 );
-                emit_error_log_from_fs_error(&e, &args.io);
+                emit_error_log_from_fs_error(&e, args.io.status_reporter.as_ref());
             }
 
             let unique_id = format!("exposure.{}.{}", &package_name, exposure_name);

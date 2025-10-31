@@ -123,7 +123,7 @@ fn get_profile_string(
             emit_warn_log_message(
                 ErrorCode::InvalidConfig,
                 "No profile specified in dbt_project.yml",
-                io_args,
+                io_args.status_reporter.as_ref(),
             );
 
             Ok(prof.to_string())

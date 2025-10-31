@@ -90,7 +90,7 @@ async fn extend_with_model_context<S: Serialize>(
                 emit_warn_log_message(
                     ErrorCode::Generic,
                     format!("Unknown pre-hook type: {:?}", pre_hook),
-                    io_args,
+                    io_args.status_reporter.as_ref(),
                 );
 
                 vec![]
@@ -114,7 +114,7 @@ async fn extend_with_model_context<S: Serialize>(
                 emit_warn_log_message(
                     ErrorCode::Generic,
                     format!("Unknown post-hook type: {:?}", post_hook),
-                    io_args,
+                    io_args.status_reporter.as_ref(),
                 );
 
                 vec![]
@@ -148,7 +148,7 @@ async fn extend_with_model_context<S: Serialize>(
             emit_warn_log_message(
                 ErrorCode::Generic,
                 format!("Failed to read raw_sql: {}", raw_sql_path.display()),
-                io_args,
+                io_args.status_reporter.as_ref(),
             );
         };
     }

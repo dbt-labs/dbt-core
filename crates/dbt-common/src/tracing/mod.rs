@@ -13,6 +13,7 @@ pub mod layer;
 pub mod layers;
 pub mod metrics;
 pub mod middlewares;
+mod private_events;
 pub mod reload;
 mod shared;
 mod shared_writer;

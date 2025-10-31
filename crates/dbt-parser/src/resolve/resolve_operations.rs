@@ -246,7 +246,7 @@ fn new_operation(
                         err.to_string()
                     )
                     .with_location(operation.__common_attr__.original_file_path.clone());
-                    emit_warn_log_from_fs_error(&err, io);
+                    emit_warn_log_from_fs_error(&err, io.status_reporter.as_ref());
                 }
             }
         }

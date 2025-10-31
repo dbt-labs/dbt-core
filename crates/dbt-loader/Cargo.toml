@@ -25,7 +25,6 @@ dbt-serde_yaml = { workspace = true }
 dirs = { workspace = true }
 flate2 = { workspace = true }
 ignore = { workspace = true }
-log = { workspace = true }
 minijinja = { workspace = true }
 once_cell = { workspace = true }
 pathdiff = { workspace = true }

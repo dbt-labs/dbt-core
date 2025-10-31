@@ -145,7 +145,7 @@ pub async fn hydrate_or_download_manifest_from_cloud(
                     "Failed to request deferral manifest from the dbt platform for project {}, continuing without deferral. URL: {}, Error: {}",
                     project_id, url, e
                 ),
-                io,
+                io.status_reporter.as_ref(),
             );
 
             return Ok(None);
@@ -175,7 +175,7 @@ pub async fn hydrate_or_download_manifest_from_cloud(
                 "Failed to request deferral manifest from the dbt platform for project {}, continuing without deferral. HTTP status {}{}",
                 project_id, status, error_message
             ),
-            io,
+            io.status_reporter.as_ref(),
         );
 
         return Ok(None);
@@ -213,7 +213,7 @@ pub async fn hydrate_or_download_manifest_from_cloud(
             emit_warn_log_message(
                 ErrorCode::Generic,
                 format!("Failed to download manifest: {}{}", e, source_error),
-                io,
+                io.status_reporter.as_ref(),
             );
 
             return Ok(None);
@@ -234,7 +234,7 @@ pub async fn hydrate_or_download_manifest_from_cloud(
                 "Failed to download deferral manifest from the dbt platform for project {}, continuing without deferral. HTTP status {}{}",
                 project_id, status, status_text
             ),
-            io,
+            io.status_reporter.as_ref(),
         );
 
         return Ok(None);
@@ -267,7 +267,7 @@ pub async fn hydrate_or_download_manifest_from_cloud(
             emit_warn_log_message(
                 ErrorCode::Generic,
                 "Downloaded manifest is neither valid JSON nor gzip-compressed JSON. Continuing without deferral.",
-                io,
+                io.status_reporter.as_ref(),
             );
 
             return Ok(None);

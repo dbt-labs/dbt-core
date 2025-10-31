@@ -367,7 +367,10 @@ pub async fn render_unresolved_sql_files_sequentially<
                     ErrorCode::MacroSyntaxError => {
                         status = ModelStatus::ParsingFailed;
                         let err_with_loc = err.with_location(dbt_asset.path.clone());
-                        emit_error_log_from_fs_error(&err_with_loc, &args.io);
+                        emit_error_log_from_fs_error(
+                            &err_with_loc,
+                            args.io.status_reporter.as_ref(),
+                        );
                     }
                     _ => {
                         if sql_file_info
@@ -377,7 +380,10 @@ pub async fn render_unresolved_sql_files_sequentially<
                         {
                             status = ModelStatus::ParsingFailed;
                             let err_with_loc = err.with_location(dbt_asset.path.clone());
-                            emit_error_log_from_fs_error(&err_with_loc, &args.io);
+                            emit_error_log_from_fs_error(
+                                &err_with_loc,
+                                args.io.status_reporter.as_ref(),
+                            );
                         } else {
                             status = ModelStatus::Disabled;
                         }
@@ -754,7 +760,10 @@ pub async fn render_unresolved_sql_files<
                                 ErrorCode::MacroSyntaxError => {
                                     status = ModelStatus::ParsingFailed;
                                     let err_with_loc = err.with_location(dbt_asset.path.clone());
-                                    emit_error_log_from_fs_error(&err_with_loc, &args.io);
+                                    emit_error_log_from_fs_error(
+                                        &err_with_loc,
+                                        args.io.status_reporter.as_ref(),
+                                    );
                                 }
                                 _ => {
                                     if sql_file_info
@@ -765,7 +774,10 @@ pub async fn render_unresolved_sql_files<
                                         status = ModelStatus::ParsingFailed;
                                         let err_with_loc =
                                             err.with_location(dbt_asset.path.clone());
-                                        emit_error_log_from_fs_error(&err_with_loc, &args.io);
+                                        emit_error_log_from_fs_error(
+                                            &err_with_loc,
+                                            args.io.status_reporter.as_ref(),
+                                        );
                                     } else {
                                         // Model is disabled and template fails to compile for a non-syntax/non-disabled error
                                         status = ModelStatus::Disabled;
@@ -804,7 +816,10 @@ pub async fn render_unresolved_sql_files<
                 merged_node_properties.extend(chunk_node_properties);
             }
             Ok(Err(err)) => {
-                emit_error_log_from_fs_error(&err, &render_ctx.inner.args.io);
+                emit_error_log_from_fs_error(
+                    &err,
+                    render_ctx.inner.args.io.status_reporter.as_ref(),
+                );
 
                 continue;
             }
@@ -812,7 +827,7 @@ pub async fn render_unresolved_sql_files<
                 emit_error_log_message(
                     ErrorCode::Unexpected,
                     err.to_string(),
-                    &render_ctx.inner.args.io,
+                    render_ctx.inner.args.io.status_reporter.as_ref(),
                 );
                 continue;
             }
@@ -1173,7 +1188,7 @@ pub fn collect_hook_dependencies_from_config<T: DefaultTo<T> + 'static>(
                     err.to_string()
                 )
                 .with_location(resource_path.to_path_buf());
-                emit_warn_log_from_fs_error(&err, &io);
+                emit_warn_log_from_fs_error(&err, io.status_reporter.as_ref());
 
                 Ok(()) // Return Ok to avoid breaking the build
             }

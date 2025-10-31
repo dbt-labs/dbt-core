@@ -258,7 +258,12 @@ fn test_emit_level_functions() {
         emit_debug_event(LogMessage::default(), Some("Debug message"));
 
         trace_location = Location::caller();
-        emit_trace_event(LogMessage::default(), Some("Trace message"));
+        emit_trace_event(|| {
+            (
+                LogMessage::default().into(),
+                Some("Trace message".to_string()),
+            )
+        });
 
         // Test empty message
         emit_info_event(LogMessage::default(), None);
@@ -389,18 +394,10 @@ fn test_convenience_log_message_functions() {
         .entered();
 
         error_location = Location::caller();
-        emit_error_log_message(
-            ErrorCode::Generic,
-            "Test error log message",
-            &crate::io_args::IoArgs::default(), // TODO: remove when lsp migration is done
-        );
+        emit_error_log_message(ErrorCode::Generic, "Test error log message", None);
 
         warn_location = Location::caller();
-        emit_warn_log_message(
-            ErrorCode::AccessDenied,
-            "Test warn log message",
-            &crate::io_args::IoArgs::default(), // TODO: remove when lsp migration is done
-        );
+        emit_warn_log_message(ErrorCode::AccessDenied, "Test warn log message", None);
     });
 
     let log_records = {
