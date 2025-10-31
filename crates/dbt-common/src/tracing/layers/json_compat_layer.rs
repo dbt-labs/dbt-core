@@ -205,8 +205,13 @@ impl TelemetryConsumer for JsonCompatLayer {
         // Check if this is a LogMessage (error/warning)
         if let Some(log_msg) = log_record.attributes.downcast_ref::<LogMessage>() {
             // Format the message
-            let formatted_message =
-                format_log_message(log_msg, &log_record.body, log_record.severity_number, false);
+            let formatted_message = format_log_message(
+                log_msg,
+                &log_record.body,
+                log_record.severity_number,
+                false,
+                true,
+            );
 
             let info_json = serde_json::to_value(self.build_core_event_info(
                 None,

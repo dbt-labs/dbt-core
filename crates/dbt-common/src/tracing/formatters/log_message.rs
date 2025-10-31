@@ -28,6 +28,7 @@ pub fn severity_to_prefix(severity_number: SeverityNumber) -> Option<&'static st
 /// * `message` - The error message text
 /// * `message_severity` - The severity level of the message
 /// * `colorize` - If true, applies red color to the prefix
+/// * `include_level_prefix` - If true, includes the severity level prefix (ERROR, WARNING, etc.)
 ///
 /// # Returns
 /// Formatted string like "dbt1000: message text" or colored version
@@ -36,6 +37,7 @@ pub fn format_log_message(
     message: &str,
     message_severity: SeverityNumber,
     colorize: bool,
+    include_level_prefix: bool,
 ) -> String {
     // Extract error code from the message
     let code_prefix = message_attributes
@@ -45,12 +47,13 @@ pub fn format_log_message(
         .map(|c| format!("dbt{c}: "))
         .unwrap_or_default();
 
-    let prefix = if let Some(prefix_text) = severity_to_prefix(message_severity) {
-        let color_style = severity_to_color_style(message_severity);
-        maybe_apply_color(color_style, &format!("{prefix_text} "), colorize)
-    } else {
-        "".to_string()
-    };
+    let prefix =
+        if include_level_prefix && let Some(prefix_text) = severity_to_prefix(message_severity) {
+            let color_style = severity_to_color_style(message_severity);
+            maybe_apply_color(color_style, &format!("{prefix_text} "), colorize)
+        } else {
+            "".to_string()
+        };
 
     format!("{prefix}{code_prefix}{}", color_quotes(message))
 }

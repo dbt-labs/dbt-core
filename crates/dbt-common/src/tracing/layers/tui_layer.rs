@@ -284,8 +284,13 @@ impl TelemetryConsumer for TuiLayer {
         // Check if this is a LogMessage (error/warning)
         if let Some(log_msg) = log_record.attributes.downcast_ref::<LogMessage>() {
             // Format the message
-            let formatted_message =
-                format_log_message(log_msg, &log_record.body, log_record.severity_number, true);
+            let formatted_message = format_log_message(
+                log_msg,
+                &log_record.body,
+                log_record.severity_number,
+                true,
+                true,
+            );
 
             // Delay errors and warnings to be printed at the end
             if log_record.severity_number > SeverityNumber::Info {
