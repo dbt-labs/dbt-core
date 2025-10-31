@@ -286,6 +286,27 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         abridge_sql_log: bool,
     ) -> AdapterResult<()>;
 
+    /// Submit Python job
+    ///
+    /// Executes Python code in the warehouse's Python runtime.
+    /// Default implementation raises Internal error.
+    fn submit_python_job(
+        &self,
+        _ctx: &QueryCtx,
+        _conn: &'_ mut dyn Connection,
+        _state: &State,
+        _model: &Value,
+        _compiled_code: &str,
+    ) -> AdapterResult<AdapterResponse> {
+        Err(AdapterError::new(
+            AdapterErrorKind::Internal,
+            format!(
+                "Python models are not supported for {} adapter",
+                self.adapter_type()
+            ),
+        ))
+    }
+
     /// Quote
     fn quote(&self, state: &State, identifier: &str) -> AdapterResult<String>;
 

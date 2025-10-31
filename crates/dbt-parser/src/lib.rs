@@ -13,6 +13,14 @@ pub mod args;
 /// DbtNamespace for intercepting dbt macro calls during parse phase
 pub mod dbt_namespace;
 pub mod dbt_project_config;
+/// Python AST parsing utilities
+pub mod python_ast;
+/// Python file information collection
+pub mod python_file_info;
+/// Python model validation
+pub mod python_validation;
+/// Python AST visitor for extracting dbt function calls
+pub mod python_visitor;
 pub mod renderer;
 #[cfg(test)]
 mod renderer_test;

@@ -30,6 +30,9 @@ md5 = { workspace = true }
 minijinja = { workspace = true }
 num_cpus = { workspace = true }
 regex = { workspace = true }
+ruff_python_ast = { git = "https://github.com/astral-sh/ruff", tag = "0.8.4" }
+ruff_python_parser = { git = "https://github.com/astral-sh/ruff", tag = "0.8.4" }
+ruff_text_size = { git = "https://github.com/astral-sh/ruff", tag = "0.8.4" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }

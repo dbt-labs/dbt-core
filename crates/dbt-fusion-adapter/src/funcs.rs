@@ -88,6 +88,16 @@ pub fn dispatch_adapter_calls(
             )?;
             Ok(Value::from(()))
         }
+        "submit_python_job" => {
+            // model: dict, compiled_code: str
+            let iter = ArgsIter::new(name, &["model", "compiled_code"], args);
+            let model = iter.next_arg::<&Value>()?;
+            let compiled_code = iter.next_arg::<&str>()?;
+            iter.finish()?;
+
+            let response = adapter.submit_python_job(state, model, compiled_code)?;
+            Ok(Value::from_object(response))
+        }
         "get_relation" => {
             // database: str
             // schema: str

@@ -1,6 +1,10 @@
 use crate::args::ResolveArgs;
 use crate::dbt_project_config::RootProjectConfigs;
 use crate::dbt_project_config::init_project_config;
+use crate::python_ast::parse_python;
+use crate::python_file_info::PythonFileInfo;
+use crate::python_validation::validate_python_model;
+use crate::python_visitor::analyze_python_file;
 use crate::renderer::RenderCtx;
 use crate::renderer::RenderCtxInner;
 use crate::renderer::SqlFileRenderResult;
@@ -22,6 +26,7 @@ use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::io_args::StaticAnalysisOffReason;
 use dbt_common::tracing::emit::emit_error_log_from_fs_error;
 use dbt_common::tracing::emit::emit_warn_log_from_fs_error;
+use dbt_common::tracing::emit::emit_warn_log_message;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::listener::JinjaTypeCheckingEventListenerFactory;
 use dbt_jinja_utils::node_resolver::NodeResolver;
@@ -46,6 +51,7 @@ use dbt_schemas::schemas::dbt_column::process_columns;
 use dbt_schemas::schemas::manifest::semantic_model::NodeRelation;
 use dbt_schemas::schemas::nodes::AdapterAttr;
 use dbt_schemas::schemas::project::DbtProject;
+use dbt_schemas::schemas::project::DefaultTo;
 use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::properties::ModelProperties;
 use dbt_schemas::schemas::ref_and_source::{DbtRef, DbtSourceWrapper};
@@ -57,7 +63,7 @@ use dbt_schemas::state::NodeResolverTracker;
 use minijinja::MacroSpans;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use super::resolve_properties::MinimalPropertiesEntry;
@@ -157,17 +163,43 @@ pub async fn resolve_models(
         models_properties_sans_semantics.insert(model_key.clone(), v);
     });
 
+    // Split SQL and Python models for different processing paths
+    let (sql_files, python_files): (Vec<_>, Vec<_>) =
+        package.model_sql_files.iter().cloned().partition(|asset| {
+            asset
+                .path
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .map(|ext| ext.eq_ignore_ascii_case("sql"))
+                .unwrap_or(true)
+        });
+
+    // Process SQL models through Jinja rendering
     let mut model_sql_resources_map: Vec<SqlFileRenderResult<ModelConfig, ModelProperties>> =
         // FIXME -- this attempts to deserialize the model properties
         // and renders jinja but we shouldn't be doing so with metrics.filter
         render_unresolved_sql_files::<ModelConfig, ModelProperties>(
             &render_ctx,
-            &package.model_sql_files,
+            &sql_files,
             &mut models_properties_sans_semantics,
             token,
             jinja_type_checking_event_listener_factory.clone(),
         )
         .await?;
+
+    // Process Python models through AST analysis (no Jinja rendering)
+    let python_results = process_python_models(
+        arg,
+        &env,
+        base_ctx,
+        package_name,
+        &package.dbt_project,
+        &local_project_config,
+        python_files,
+        &mut models_properties_sans_semantics,
+    )?;
+    model_sql_resources_map.extend(python_results);
+
     // make deterministic
     model_sql_resources_map.sort_by(|a, b| {
         a.asset
@@ -384,7 +416,11 @@ pub async fn resolve_models(
                 // NOTE: raw_code has to be this value for dbt-evaluator to return truthy
                 // hydrating it with get_original_file_contents would actually break dbt-evaluator
                 raw_code: Some("--placeholder--".to_string()),
-                language: Some("sql".to_string()), // TODO: are python models supported?
+                language: if is_python_model(&dbt_asset) {
+                    Some("python".to_string())
+                } else {
+                    Some("sql".to_string())
+                },
                 tags: model_config
                     .tags
                     .clone()
@@ -678,4 +714,229 @@ pub fn validate_merge_update_columns_xor(model_config: &ModelConfig, path: &Path
         return Err(err);
     }
     Ok(())
+}
+
+/// Process Python model files through AST analysis
+///
+/// Unlike SQL models which go through Jinja rendering, Python models are:
+/// 1. Parsed with a Python AST parser
+/// 2. Validated for correct structure (model function signature)
+/// 3. Analyzed to extract dbt.ref(), dbt.source(), dbt.config() calls
+/// 4. Merged with project/properties configs
+///
+/// Returns SqlFileRenderResult for uniform downstream processing with SQL models
+#[allow(clippy::too_many_arguments)]
+fn process_python_models(
+    arg: &ResolveArgs,
+    env: &Arc<JinjaEnv>,
+    base_ctx: &BTreeMap<String, minijinja::Value>,
+    package_name: &str,
+    dbt_project: &DbtProject,
+    local_project_config: &crate::dbt_project_config::DbtProjectConfig<ModelConfig>,
+    python_files: Vec<dbt_schemas::state::DbtAsset>,
+    models_properties: &mut BTreeMap<String, MinimalPropertiesEntry>,
+) -> FsResult<Vec<SqlFileRenderResult<ModelConfig, ModelProperties>>> {
+    let mut results = Vec::new();
+    let dependency_package_name = dependency_package_name_from_ctx(env.as_ref(), base_ctx);
+
+    for python_asset in python_files {
+        // Read and parse Python source
+        let absolute_path = python_asset.base_path.join(&python_asset.path);
+        let source = std::fs::read_to_string(&absolute_path)?;
+
+        let stmts = match parse_python(&source, &python_asset.path) {
+            Ok(stmts) => stmts,
+            Err(e) => {
+                emit_error_log_from_fs_error(&e, &arg.io);
+                continue;
+            }
+        };
+
+        // Validate Python model structure (def model(dbt, session): ...)
+        if let Err(e) = validate_python_model(&python_asset.path, &stmts) {
+            emit_error_log_from_fs_error(&e, &arg.io);
+            continue;
+        }
+
+        // Analyze Python AST to extract dbt function calls
+        let checksum = dbt_schemas::schemas::common::DbtChecksum::default(); // TODO: compute actual checksum
+        let python_file_info: PythonFileInfo<ModelConfig> = match analyze_python_file(
+            &python_asset.path,
+            &source,
+            &stmts,
+            checksum,
+            &arg.io,
+            dependency_package_name,
+            Some(python_asset.path.clone()),
+        ) {
+            Ok(info) => info,
+            Err(e) => {
+                emit_error_log_from_fs_error(&e, &arg.io);
+                continue;
+            }
+        };
+
+        // Extract and parse properties from YAML if they exist
+        let ref_name = python_asset.path.file_stem().unwrap().to_str().unwrap();
+        let (maybe_properties, patch_path) =
+            extract_model_properties(arg, env, base_ctx, models_properties, ref_name)?;
+
+        // Merge Python model config with project config and schema.yml properties
+        let merged_config = merge_python_config(
+            &python_file_info,
+            &python_asset,
+            package_name,
+            dbt_project,
+            local_project_config,
+            maybe_properties.as_ref(),
+            arg,
+        );
+
+        // Convert to SqlFileRenderResult for uniform downstream processing
+        let python_result = SqlFileRenderResult {
+            asset: python_asset.clone(),
+            sql_file_info: crate::sql_file_info::SqlFileInfo {
+                sources: python_file_info.sources,
+                refs: python_file_info.refs,
+                this: false,
+                metrics: vec![],
+                config: Box::new(merged_config),
+                tests: vec![],
+                macros: vec![],
+                materializations: vec![],
+                docs: vec![],
+                snapshots: vec![],
+                functions: vec![],
+                checksum: python_file_info.checksum,
+                execute: false,
+            },
+            rendered_sql: source.clone(),
+            macro_spans: Default::default(),
+            properties: maybe_properties,
+            status: ModelStatus::Enabled,
+            patch_path,
+        };
+
+        results.push(python_result);
+    }
+
+    Ok(results)
+}
+
+/// Extract model properties from YAML schema files
+///
+/// Consumes the schema_value from models_properties to mark it as "used"
+/// and prevent "Unused schema.yml entry" warnings
+fn extract_model_properties(
+    arg: &ResolveArgs,
+    env: &Arc<JinjaEnv>,
+    base_ctx: &BTreeMap<String, minijinja::Value>,
+    models_properties: &mut BTreeMap<String, MinimalPropertiesEntry>,
+    ref_name: &str,
+) -> FsResult<(Option<ModelProperties>, Option<PathBuf>)> {
+    if let Some(mpe) = models_properties.get_mut(ref_name)
+        && !mpe.schema_value.is_null()
+    {
+        // Consume the schema_value by replacing it with null
+        // This marks the entry as "used" to prevent unused warnings
+        let schema_value = std::mem::replace(&mut mpe.schema_value, dbt_serde_yaml::Value::null());
+        let properties = dbt_jinja_utils::serde::into_typed_with_jinja::<ModelProperties, _>(
+            &arg.io,
+            schema_value,
+            false,
+            env,
+            base_ctx,
+            &[],
+            dependency_package_name_from_ctx(env, base_ctx),
+            true,
+        )?;
+        return Ok((Some(properties), Some(mpe.relative_path.clone())));
+    }
+    Ok((None, None))
+}
+
+/// Merge Python model config with project config and schema.yml properties
+///
+/// Python models collect config from dbt.config() calls during AST analysis.
+/// These need to be merged with:
+/// 1. Project-level config (from dbt_project.yml)
+/// 2. Schema.yml properties config (if present)
+fn merge_python_config(
+    python_file_info: &PythonFileInfo<ModelConfig>,
+    python_asset: &dbt_schemas::state::DbtAsset,
+    package_name: &str,
+    dbt_project: &DbtProject,
+    local_project_config: &crate::dbt_project_config::DbtProjectConfig<ModelConfig>,
+    maybe_properties: Option<&ModelProperties>,
+    arg: &ResolveArgs,
+) -> ModelConfig {
+    let model_name = python_asset
+        .path
+        .file_stem()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
+
+    let fqn = get_node_fqn(
+        package_name,
+        python_asset.path.clone(),
+        vec![model_name],
+        dbt_project.model_paths.as_ref().unwrap_or(&vec![]),
+    );
+
+    // Config precedence (highest to lowest):
+    // 1. dbt.config() in Python file
+    // 2. config: in schema.yml
+    // 3. dbt_project.yml
+    //
+    // Build up config from lowest to highest priority, matching SQL model behavior
+    // where later configs override earlier ones (see sql_file_info.rs:85-88)
+
+    let project_config = local_project_config.get_config_for_fqn(&fqn);
+
+    // Start with project config (lowest priority)
+    let mut merged_config = project_config.clone();
+
+    // Apply schema.yml config on top (medium priority)
+    if let Some(properties) = maybe_properties
+        && let Some(mut properties_config) = properties.config.clone()
+    {
+        properties_config.default_to(&merged_config);
+        merged_config = properties_config;
+    }
+
+    // Apply Python file config on top (highest priority)
+    let mut python_config = *python_file_info.config.clone();
+    python_config.default_to(&merged_config);
+    merged_config = python_config;
+
+    // Warn if user explicitly enabled static_analysis for a Python model
+    // This check happens after all config sources are merged
+    if merged_config.static_analysis == Some(StaticAnalysisKind::On.into()) {
+        emit_warn_log_message(
+            ErrorCode::InvalidConfig,
+            format!(
+                "Python model '{}' has static_analysis set to 'on', but static analysis is not supported for Python models. Setting will be ignored.",
+                python_asset.path.display()
+            ),
+            &arg.io,
+        );
+    }
+
+    // Python models always have static_analysis turned off
+    // SQL analysis is not applicable to Python code
+    merged_config.static_analysis = Some(StaticAnalysisKind::Off.into());
+
+    merged_config
+}
+
+/// Determine if a DbtAsset is a Python model based on file extension
+fn is_python_model(asset: &dbt_schemas::state::DbtAsset) -> bool {
+    asset
+        .path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| ext == "py")
+        .unwrap_or(false)
 }

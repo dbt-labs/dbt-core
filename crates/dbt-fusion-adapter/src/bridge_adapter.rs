@@ -460,6 +460,19 @@ impl BaseAdapter for BridgeAdapter {
         Ok(())
     }
 
+    fn submit_python_job(
+        &self,
+        state: &State,
+        model: &Value,
+        compiled_code: &str,
+    ) -> AdapterResult<AdapterResponse> {
+        let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
+        let ctx = query_ctx_from_state(state)?.with_desc("submit_python_job adapter call");
+
+        self.typed_adapter
+            .submit_python_job(&ctx, conn.as_mut(), state, model, compiled_code)
+    }
+
     #[tracing::instrument(skip(self, state), level = "trace")]
     fn drop_relation(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
         let mut parser = ArgParser::new(args, None);

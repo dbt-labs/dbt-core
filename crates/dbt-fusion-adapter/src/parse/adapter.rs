@@ -1,6 +1,7 @@
 use crate::base_adapter::{AdapterType, AdapterTyping, BaseAdapter, backend_of};
 use crate::cast_util::downcast_value_to_dyn_base_relation;
 use crate::catalog_relation::CatalogRelation;
+use crate::errors::{AdapterError, AdapterErrorKind};
 use crate::funcs::{
     dispatch_adapter_calls, empty_map_value, empty_mutable_vec_value, empty_string_value,
     empty_vec_value, none_value,
@@ -318,6 +319,19 @@ impl BaseAdapter for ParseAdapter {
         _abridge_sql_log: bool,
     ) -> AdapterResult<()> {
         Ok(())
+    }
+
+    fn submit_python_job(
+        &self,
+        _state: &State,
+        _model: &Value,
+        _compiled_code: &str,
+    ) -> AdapterResult<AdapterResponse> {
+        // Python models cannot be executed during parse phase
+        Err(AdapterError::new(
+            AdapterErrorKind::NotSupported,
+            "submit_python_job can only be called in materialization macros",
+        ))
     }
 
     fn get_relation(

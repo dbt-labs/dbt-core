@@ -191,6 +191,12 @@ pub fn extend_base_context_stateful_fn(
         MinijinjaValue::from_function(result_store.store_raw_result()),
     );
 
+    // Add submit_python_job context function using a separate helper
+    base_context.insert(
+        "submit_python_job".to_owned(),
+        MinijinjaValue::from_function(submit_python_job_context_fn()),
+    );
+
     let mut packages = packages;
     packages.insert(root_project_name.to_string());
 
@@ -445,5 +451,46 @@ fn write_file(
             ErrorKind::InvalidOperation,
             format!("Failed to write to {}: {}", full_path.display(), e),
         )),
+    }
+}
+
+/// Returns the function used for the submit_python_job context.
+fn submit_python_job_context_fn()
+-> impl Fn(&State, &[MinijinjaValue]) -> Result<MinijinjaValue, Error> + Copy {
+    |state: &State, args: &[MinijinjaValue]| {
+        // Parse arguments: submit_python_job(parsed_model, compiled_code)
+        if args.len() != 2 {
+            return Err(Error::new(
+                ErrorKind::InvalidOperation,
+                format!("submit_python_job expects 2 arguments, got {}", args.len()),
+            ));
+        }
+        let parsed_model = &args[0];
+        let compiled_code = args[1].as_str().ok_or_else(|| {
+            Error::new(
+                ErrorKind::InvalidOperation,
+                "compiled_code must be a string",
+            )
+        })?;
+
+        // Note(Ani):
+        // dbt-core validates:
+        //   - macro_stack.depth == 2
+        //   - call_stack[1] == "macro.dbt.statement"
+        //   - "materialization" in call_stack[0]
+        //
+        // In fusion, we shouldn't need to do this because this funciton is only registered in the run node context
+        // so if a user tries to use it outside of a statement.sql macro, in a materialization macro, it will fail earlier due to an unrecongized function call.
+
+        // Get adapter from context and call submit_python_job
+        let adapter = state
+            .lookup("adapter")
+            .ok_or_else(|| Error::new(ErrorKind::UndefinedError, "adapter not found in context"))?;
+        adapter.call_method(
+            state,
+            "submit_python_job",
+            &[parsed_model.clone(), MinijinjaValue::from(compiled_code)],
+            &[],
+        )
     }
 }

@@ -49,6 +49,9 @@ use crate::{
     load_internal_packages, load_packages, load_profiles, load_vars, persist_internal_packages,
 };
 
+// Temporary opt-in switch for unreleased Python model support.
+const PYTHON_MODELS_ENV_VAR: &str = "DBT_ENABLE_BETA_PYTHON_MODELS";
+
 use dbt_jinja_utils::phases::load::secret_renderer::secret_context_env_var;
 use dbt_jinja_utils::serde::{into_typed_with_jinja, value_from_file};
 use dbt_jinja_utils::var_fn;
@@ -468,25 +471,6 @@ pub async fn load_inner(
         files.sort_by(|a, b| a.0.cmp(&b.0));
     }
 
-    let python_files = find_files_by_kind_and_extension(
-        package_path,
-        &dbt_project.name,
-        &ResourcePathKind::ModelPaths,
-        &["py"],
-        &all_files,
-    );
-
-    if !python_files.is_empty() {
-        for file in python_files {
-            let err = fs_err!(
-                code => ErrorCode::UnsupportedFileExtension,
-                loc => file.path.clone(),
-                "Python models are not currently supported"
-            );
-            emit_warn_log_from_fs_error(&err, &arg.io);
-        }
-    }
-
     // todo: we could optimize here, but for now just take everything,...
     let mut dbt_properties = find_files_by_kind_and_extension(
         package_path,
@@ -554,13 +538,35 @@ pub async fn load_inner(
         &["sql"],
         &all_files,
     );
-    let model_sql_files = find_files_by_kind_and_extension(
+    let mut model_sql_files = find_files_by_kind_and_extension(
         package_path,
         &dbt_project.name,
         &ResourcePathKind::ModelPaths,
         &["sql"],
         &all_files,
     );
+    let python_model_files = find_files_by_kind_and_extension(
+        package_path,
+        &dbt_project.name,
+        &ResourcePathKind::ModelPaths,
+        &["py"],
+        &all_files,
+    );
+    if python_models_feature_enabled() {
+        if !python_model_files.is_empty() {
+            model_sql_files.extend(python_model_files);
+            model_sql_files.sort_by(|a, b| a.path.cmp(&b.path));
+        }
+    } else if !python_model_files.is_empty() {
+        for file in python_model_files {
+            let err = fs_err!(
+                code => ErrorCode::UnsupportedFileExtension,
+                loc => file.path.clone(),
+                "Python models are not currently supported"
+            );
+            emit_warn_log_from_fs_error(&err, &arg.io);
+        }
+    }
     let function_sql_files = find_files_by_kind_and_extension(
         package_path,
         &dbt_project.name,
@@ -700,6 +706,18 @@ fn find_files_by_kind_and_extension(
         .collect::<Vec<_>>();
     paths.sort_by(|a, b| a.path.cmp(&b.path));
     paths
+}
+
+fn python_models_feature_enabled() -> bool {
+    std::env::var(PYTHON_MODELS_ENV_VAR)
+        .map(|value| {
+            let trimmed = value.trim();
+            trimmed == "1"
+                || trimmed.eq_ignore_ascii_case("true")
+                || trimmed.eq_ignore_ascii_case("yes")
+                || trimmed.eq_ignore_ascii_case("on")
+        })
+        .unwrap_or(false)
 }
 
 /// Loads the .dbtignore file if it exists in the given path

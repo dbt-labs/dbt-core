@@ -358,6 +358,23 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
         abridge_sql_log: bool,
     ) -> AdapterResult<()>;
 
+    /// Submit Python job
+    ///
+    /// Executes Python code in the warehouse's Python runtime.
+    /// For Snowflake, this wraps the Python code in a stored procedure.
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1603
+    ///
+    /// ```python
+    /// def submit_python_job(self, parsed_model: dict, compiled_code: str) -> AdapterResponse:
+    /// ```
+    fn submit_python_job(
+        &self,
+        state: &State,
+        model: &Value,
+        compiled_code: &str,
+    ) -> AdapterResult<AdapterResponse>;
+
     /// Drop relation.
     fn drop_relation(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError>;
 
