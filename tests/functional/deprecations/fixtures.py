@@ -10,6 +10,17 @@ models_trivial__model_sql = """
 select 1 as id
 """
 
+models_custom_key_in_config_sql = """
+{{ config(my_custom_key="my_custom_value") }}
+select 1 as id
+"""
+
+models_custom_key_in_config_non_static_parser_sql = """
+{{ config(my_custom_key="my_custom_value") }}
+
+select {{ dbt.current_timestamp() }} as my_timestamp
+"""
+
 macros__custom_test_sql = """
 {% test custom(model) %}
   select * from {{ model }}

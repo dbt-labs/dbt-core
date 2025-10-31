@@ -2,15 +2,34 @@
 
 `dbt-core` is open source software. It is what it is today because community members have opened issues, provided feedback, and [contributed to the knowledge loop](https://www.getdbt.com/dbt-labs/values/). Whether you are a seasoned open source contributor or a first-time committer, we welcome and encourage you to contribute code, documentation, ideas, or problem statements to this project.
 
-1. [About this document](#about-this-document)
-2. [Getting the code](#getting-the-code)
-3. [Setting up an environment](#setting-up-an-environment)
-4. [Running dbt-core in development](#running-dbt-core-in-development)
-5. [Testing dbt-core](#testing)
-6. [Debugging](#debugging)
-7. [Adding or modifying a changelog entry](#adding-or-modifying-a-changelog-entry)
-8. [Submitting a Pull Request](#submitting-a-pull-request)
-9. [Troubleshooting Tips](#troubleshooting-tips)
+- [Contributing to `dbt-core`](#contributing-to-dbt-core)
+  - [About this document](#about-this-document)
+    - [Notes](#notes)
+  - [Getting the code](#getting-the-code)
+    - [Installing git](#installing-git)
+    - [External contributors](#external-contributors)
+    - [dbt Labs contributors](#dbt-labs-contributors)
+  - [Setting up an environment](#setting-up-an-environment)
+    - [Tools](#tools)
+      - [Virtual environments](#virtual-environments)
+      - [Docker and `docker-compose`](#docker-and-docker-compose)
+      - [Postgres (optional)](#postgres-optional)
+  - [Running `dbt-core` in development](#running-dbt-core-in-development)
+    - [Installation](#installation)
+    - [Running `dbt-core`](#running-dbt-core)
+  - [Testing](#testing)
+    - [Initial setup](#initial-setup)
+    - [Test commands](#test-commands)
+      - [Makefile](#makefile)
+      - [`pre-commit`](#pre-commit)
+      - [`tox`](#tox)
+      - [`pytest`](#pytest)
+    - [Unit, Integration, Functional?](#unit-integration-functional)
+  - [Debugging](#debugging)
+    - [Assorted development tips](#assorted-development-tips)
+  - [Adding or modifying a CHANGELOG Entry](#adding-or-modifying-a-changelog-entry)
+  - [Submitting a Pull Request](#submitting-a-pull-request)
+  - [Troubleshooting Tips](#troubleshooting-tips)
 
 ## About this document
 
@@ -55,7 +74,7 @@ There are some tools that will be helpful to you in developing locally. While th
 
 These are the tools used in `dbt-core` development and testing:
 
-- [`tox`](https://tox.readthedocs.io/en/latest/) to manage virtualenvs across python versions. We currently target the latest patch releases for Python 3.8, 3.9, 3.10 and 3.11
+- [`tox`](https://tox.readthedocs.io/en/latest/) to manage virtualenvs across python versions. We currently target the latest patch releases for Python 3.10, 3.11, 3.12, and 3.13
 - [`pytest`](https://docs.pytest.org/en/latest/) to define, discover, and run tests
 - [`flake8`](https://flake8.pycqa.org/en/latest/) for code linting
 - [`black`](https://github.com/psf/black) for code formatting

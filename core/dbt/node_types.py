@@ -18,6 +18,7 @@ EXECUTABLE_NODE_TYPES: List["NodeType"] = [
     NodeType.Documentation,
     NodeType.RPCCall,
     NodeType.SqlOperation,
+    NodeType.Function,
 ]
 
 REFABLE_NODE_TYPES: List["NodeType"] = [

@@ -1,0 +1,6 @@
+kind: Fixes
+body: Move function node `type` into it's config
+time: 2025-10-21T14:30:01.07439-05:00
+custom:
+  Author: QMalcolm
+  Issue: "12101"

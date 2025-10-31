@@ -33,9 +33,6 @@ RUN apt-get update \
     python-is-python3 \
     python-dev-is-python3 \
     python3-pip \
-    python3.9 \
-    python3.9-dev \
-    python3.9-venv \
     python3.10 \
     python3.10-dev \
     python3.10-venv \

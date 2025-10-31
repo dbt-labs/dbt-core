@@ -1,0 +1,6 @@
+kind: Features
+body: Support UDFs by allowing user definition of `function` nodes
+time: 2025-08-26T13:27:00.607953-05:00
+custom:
+  Author: QMalcolm
+  Issue: "11923"

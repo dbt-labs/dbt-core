@@ -186,6 +186,12 @@ class UnitTestManifestLoader:
             # Add unique ids of input_nodes to depends_on
             unit_test_node.depends_on.nodes.append(input_node.unique_id)
 
+        # Add functions to the manifest and depends_on
+        for unique_id in tested_node.depends_on.nodes:
+            if unique_id in self.manifest.functions:
+                unit_test_node.depends_on.nodes.append(unique_id)
+                self.unit_test_manifest.functions[unique_id] = self.manifest.functions[unique_id]
+
     def _build_fixture_raw_code(self, rows, column_name_to_data_types, fixture_format) -> str:
         # We're not currently using column_name_to_data_types, but leaving here for
         # possible future use.

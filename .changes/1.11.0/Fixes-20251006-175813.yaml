@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix `ref` support in function nodes
+time: 2025-10-06T17:58:13.853195-05:00
+custom:
+  Author: QMalcolm
+  Issue: "12076"

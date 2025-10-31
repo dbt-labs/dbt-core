@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix property names of function nodes (arguments.data_type, returns, returns.data_type)
+time: 2025-10-02T12:14:27.305546-05:00
+custom:
+  Author: QMalcolm
+  Issue: "12064"

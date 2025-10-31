@@ -1,11 +1,14 @@
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, Union
 from uuid import UUID
 
+from dbt import tracking
 from dbt.artifacts.resources import (
     Analysis,
     Documentation,
     Exposure,
+    Function,
     GenericTest,
     Group,
     HookNode,
@@ -39,14 +42,7 @@ from dbt_common.exceptions import DbtInternalError
 NodeEdgeMap = Dict[str, List[str]]
 UniqueID = str
 ManifestResource = Union[
-    Seed,
-    Analysis,
-    SingularTest,
-    HookNode,
-    Model,
-    SqlOperation,
-    GenericTest,
-    Snapshot,
+    Seed, Analysis, SingularTest, HookNode, Model, SqlOperation, GenericTest, Snapshot, Function
 ]
 DisabledManifestResource = Union[
     ManifestResource,
@@ -97,6 +93,10 @@ class ManifestMetadata(BaseArtifactMetadata):
     quoting: Optional[Quoting] = field(
         default_factory=Quoting,
         metadata=dict(description="The quoting configuration for the project"),
+    )
+    run_started_at: Optional[datetime] = field(
+        default=tracking.active_user.run_started_at if tracking.active_user is not None else None,
+        metadata=dict(description="The timestamp when the run started"),
     )
 
     @classmethod
@@ -168,6 +168,10 @@ class WritableManifest(ArtifactMixin):
         metadata=dict(
             description="The unit tests defined in the project",
         )
+    )
+    functions: Mapping[UniqueID, Function] = field(
+        default_factory=dict,
+        metadata=dict(description=("The functions defined in the dbt project")),
     )
 
     @classmethod

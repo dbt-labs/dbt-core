@@ -37,6 +37,7 @@ class ListTask(GraphRunnableTask):
             NodeType.SavedQuery,
             NodeType.SemanticModel,
             NodeType.Unit,
+            NodeType.Function,
         )
     )
     ALL_RESOURCE_VALUES = DEFAULT_RESOURCE_VALUES | frozenset((NodeType.Analysis,))
@@ -89,6 +90,8 @@ class ListTask(GraphRunnableTask):
                 yield self.manifest.unit_tests[unique_id]
             elif unique_id in self.manifest.saved_queries:
                 yield self.manifest.saved_queries[unique_id]
+            elif unique_id in self.manifest.functions:
+                yield self.manifest.functions[unique_id]
             else:
                 raise DbtRuntimeError(
                     f'Got an unexpected result from node selection: "{unique_id}"'

@@ -155,6 +155,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             analysis_paths=project.analysis_paths,
             docs_paths=project.docs_paths,
             asset_paths=project.asset_paths,
+            function_paths=project.function_paths,
             target_path=project.target_path,
             snapshot_paths=project.snapshot_paths,
             clean_targets=project.clean_targets,
@@ -180,6 +181,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             semantic_models=project.semantic_models,
             saved_queries=project.saved_queries,
             exposures=project.exposures,
+            functions=project.functions,
             vars=project.vars,
             config_version=project.config_version,
             unrendered=project.unrendered,
@@ -303,6 +305,9 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
                 identifier=self.quoting.get("identifier", None),
                 column=self.quoting.get("column", None),
             ),
+            run_started_at=(
+                tracking.active_user.run_started_at if tracking.active_user is not None else None
+            ),
         )
 
     def _get_v2_config_paths(
@@ -350,6 +355,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             "semantic_models": self._get_config_paths(self.semantic_models),
             "saved_queries": self._get_config_paths(self.saved_queries),
             "exposures": self._get_config_paths(self.exposures),
+            "functions": self._get_config_paths(self.functions),
         }
 
     def warn_for_unused_resource_config_paths(

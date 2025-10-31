@@ -35,6 +35,7 @@ class NodeType(StrEnum):
     SemanticModel = "semantic_model"
     Unit = "unit_test"
     Fixture = "fixture"
+    Function = "function"
 
     def pluralize(self) -> str:
         if self is self.Analysis:
@@ -78,3 +79,15 @@ class BatchSize(StrEnum):
 
     def plural(self) -> str:
         return str(self) + "s"
+
+
+class FunctionType(StrEnum):
+    Scalar = "scalar"
+    Aggregate = "aggregate"
+    Table = "table"
+
+
+class FunctionVolatility(StrEnum):
+    Deterministic = "deterministic"
+    Stable = "stable"
+    NonDeterministic = "non-deterministic"

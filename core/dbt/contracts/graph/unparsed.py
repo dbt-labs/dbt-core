@@ -15,6 +15,8 @@ from dbt.artifacts.resources import (
     ExposureType,
     ExternalTable,
     FreshnessThreshold,
+    FunctionArgument,
+    FunctionReturns,
     MacroArgument,
     MaturityType,
     MeasureAggregationParameters,
@@ -657,6 +659,17 @@ class UnparsedGroup(dbtClassMixin):
         super(UnparsedGroup, cls).validate(data)
         if data["owner"].get("name") is None and data["owner"].get("email") is None:
             raise ValidationError("Group owner must have at least one of 'name' or 'email'.")
+
+
+@dataclass
+class UnparsedFunctionReturns(dbtClassMixin):
+    returns: FunctionReturns
+
+
+@dataclass
+class UnparsedFunctionUpdate(HasConfig, HasColumnProps, HasYamlMetadata, UnparsedFunctionReturns):
+    access: Optional[str] = None
+    arguments: List[FunctionArgument] = field(default_factory=list)
 
 
 #

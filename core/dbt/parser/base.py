@@ -24,7 +24,7 @@ from dbt.exceptions import (
     InvalidAccessTypeError,
 )
 from dbt.flags import get_flags
-from dbt.jsonschemas import validate_model_config
+from dbt.jsonschemas.jsonschemas import validate_model_config
 from dbt.node_types import AccessType, ModelLanguage, NodeType
 from dbt.parser.common import resource_types_to_schema_file_keys
 from dbt.parser.search import FileBlock
@@ -252,6 +252,12 @@ class ConfiguredParser(
         }
         dct.update(kwargs)
 
+        # TODO: we're doing this becaus return type is _required_ for the FunctionNode
+        # but we don't get the return type until we patch the node with the yml definition
+        # so we need to set it to a default value here.
+        if self.resource_type == NodeType.Function:
+            dct["returns"] = {"data_type": "INVALID_TYPE"}
+
         try:
             return self.parse_from_dict(dct, validate=True)
         except ValidationError as exc:
@@ -474,10 +480,14 @@ class ConfiguredParser(
         self._mangle_hooks(config_dict)
         return config_dict
 
-    def render_update(self, node: FinalNode, config: ContextConfig) -> None:
+    def render_update(
+        self, node: FinalNode, config: ContextConfig, validate_config_call_dict: bool = False
+    ) -> None:
         try:
             context = self.render_with_context(node, config)
-            self.update_parsed_node_config(node, config, context=context)
+            self.update_parsed_node_config(
+                node, config, context=context, validate_config_call_dict=validate_config_call_dict
+            )
         except ValidationError as exc:
             # we got a ValidationError - probably bad types in config()
             raise ConfigUpdateError(exc, node=node) from exc
