@@ -198,8 +198,20 @@ fn test_parser() {
             (line!(), "interval minute", Interval(Some((Minute, None)))),
             (line!(), "jSON", Json),
             (line!(), "jSONb", Jsonb),
-            (line!(), "geoMETRY", Geometry),
-            (line!(), "geoGRAPHy", Geography),
+            (line!(), "geoMETRY", Geometry(None)),
+            (line!(), "geoGRAPHy", Geography(None)),
+            (line!(), "geoMETRY(ANy)", Geometry(Some("ANY".to_string()))),
+            (
+                line!(),
+                "geoGRAPHy(ANy)",
+                Geography(Some("ANY".to_string())),
+            ),
+            (line!(), "geoMETRY(123)", Geometry(Some("123".to_string()))),
+            (
+                line!(),
+                "geoGRAPHy(123)",
+                Geography(Some("123".to_string())),
+            ),
             (line!(), "arrAY", Array(None)),
             (
                 line!(),

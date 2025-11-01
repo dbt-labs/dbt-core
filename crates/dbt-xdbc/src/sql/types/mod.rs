@@ -330,10 +330,10 @@ pub enum SqlType {
     Json,
     /// JSONB
     Jsonb,
-    /// GEOMETRY
-    Geometry,
-    /// GEOGRAPHY
-    Geography,
+    /// GEOMETRY [ '(' srid | 'ANY' ')' ]
+    Geometry(Option<String>),
+    /// GEOGRAPHY [ '(' srid | 'ANY' ')' ]
+    Geography(Option<String>),
     /// ARRAY
     Array(Option<Box<SqlType>>),
     /// STRUCT, STRUCT<>, STRUCT<...>
@@ -647,8 +647,20 @@ impl SqlType {
 
             (_, Json) => write!(out, "JSON"),
             (_, Jsonb) => write!(out, "JSONB"),
-            (_, Geometry) => write!(out, "GEOMETRY"),
-            (_, Geography) => write!(out, "GEOGRAPHY"),
+            (_, Geometry(srid)) => {
+                write!(out, "GEOMETRY")?;
+                if let Some(srid) = srid {
+                    write!(out, "({})", srid)?;
+                }
+                Ok(())
+            }
+            (_, Geography(srid)) => {
+                write!(out, "GEOGRAPHY")?;
+                if let Some(srid) = srid {
+                    write!(out, "({})", srid)?;
+                }
+                Ok(())
+            }
             (_, Array(None)) => write!(out, "ARRAY"),
             (backend, Array(Some(inner))) => {
                 match backend {
@@ -1290,8 +1302,8 @@ impl SqlType {
             }
             (Snowflake, Variant) => DataType::Binary,
             (_, Variant) => DataType::Utf8,
-            (_, Geometry) => DataType::Utf8,
-            (_, Geography) => DataType::Utf8,
+            (_, Geometry(_)) => DataType::Utf8,
+            (_, Geography(_)) => DataType::Utf8,
             (_, Array(Some(inner_sql_type))) => {
                 let inner_sql_type_string = inner_sql_type.to_string(backend);
                 let inner_ty = inner_sql_type.pick_best_arrow_type(backend);
@@ -1677,6 +1689,34 @@ impl<'source> Parser<'source> {
                 }
             }
             Ok(Some((start, None)))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// SRID for Geography type for some backends (e.g. Databricks [1]).
+    ///
+    ///     [ '(' \d+ | 'ANY' ')' ]
+    ///
+    /// [1] https://docs.databricks.com/aws/en/sql/language-manual/data-types/geography-type
+    fn srid(&mut self) -> Result<Option<&str>, ParseError<'source>> {
+        if self.match_(Token::LParen) {
+            let srid = self.tokenizer.peek_and_then(move |tok| match tok {
+                Token::Word(any) if eqi(any, "ANY") => Some("ANY"),
+                Token::Word(word) => {
+                    if word.chars().all(|c| c.is_ascii_digit()) {
+                        Some(word)
+                    } else {
+                        None
+                    }
+                }
+                _ => None,
+            });
+            if srid.is_none() {
+                return Err(ParseError::Unexpected(self.next()?));
+            }
+            self.expect(Token::RParen)?;
+            Ok(srid)
         } else {
             Ok(None)
         }
@@ -2124,9 +2164,11 @@ impl<'source> Parser<'source> {
                 } else if eqi(w, "JSONB") {
                     SqlType::Jsonb
                 } else if eqi(w, "GEOMETRY") {
-                    SqlType::Geometry
+                    let srid = self.srid()?;
+                    SqlType::Geometry(srid.map(str::to_string))
                 } else if eqi(w, "GEOGRAPHY") {
-                    SqlType::Geography
+                    let srid = self.srid()?;
+                    SqlType::Geography(srid.map(str::to_string))
                 } else if eqi(w, "ARRAY") {
                     let (left, right) = match backend {
                         Snowflake => (Token::LParen, Token::RParen),
