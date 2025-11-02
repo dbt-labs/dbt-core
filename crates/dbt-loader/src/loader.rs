@@ -15,6 +15,7 @@ use dbt_schemas::schemas::serde::{StringOrInteger, yaml_to_fs_error};
 use dbt_schemas::schemas::telemetry::{ExecutionPhase, PhaseExecuted};
 use dbt_schemas::schemas::{DbtCloudConfig, DbtCloudProjectConfig};
 use dbt_schemas::state::DbtProfile;
+use dbt_serde_yaml;
 use fs_deps::get_or_install_packages;
 use pathdiff::diff_paths;
 use serde::Deserialize;
@@ -94,16 +95,8 @@ pub async fn load(
     }
 
     // initialize loader into a crate accessible static location
-    let catalogs_yml_path = arg.io.in_dir.join(DBT_CATALOGS_YML);
-    match fs::read_to_string(&catalogs_yml_path) {
-        Ok(text) => load_catalogs::load_catalogs(&text, &catalogs_yml_path),
-        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
-        Err(e) => Err(fs_err!(
-            code => ErrorCode::InvalidConfig,
-            loc  => PathBuf::from(&catalogs_yml_path),
-            "Failed to read '{}': {}", DBT_CATALOGS_YML, e
-        )),
-    }?;
+    let env = initialize_load_profile_jinja_environment();
+    load_catalogs(arg, &env).await?;
 
     let final_threads = if iarg.num_threads.is_none() {
         if let Some(threads) = dbt_profile.db_config.get_threads() {
@@ -280,6 +273,35 @@ pub async fn load(
     }
 
     Ok((dbt_state, final_threads, dbt_cloud_project))
+}
+
+pub async fn load_catalogs(arg: &LoadArgs, env: &JinjaEnv) -> FsResult<()> {
+    let ctx: BTreeMap<String, minijinja::Value> = BTreeMap::from([
+        (
+            "env_var".to_owned(),
+            minijinja::Value::from_func_func("env_var", secret_context_env_var),
+        ),
+        (
+            "var".to_owned(),
+            minijinja::Value::from_function(var_fn(arg.vars.clone())),
+        ),
+    ]);
+    let catalogs_yml_path = arg.io.in_dir.join(DBT_CATALOGS_YML);
+    match fs::read_to_string(&catalogs_yml_path) {
+        Ok(raw_text) => {
+            let raw_text_yml: dbt_serde_yaml::Value = dbt_serde_yaml::from_str(&raw_text)
+                .map_err(|e| yaml_to_fs_error(e, Some(&catalogs_yml_path)))?;
+            let text: dbt_serde_yaml::Value =
+                into_typed_with_jinja(&arg.io, raw_text_yml, true, env, &ctx, &[], None, true)?;
+            load_catalogs::load_catalogs(text, &catalogs_yml_path)
+        }
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(fs_err!(
+            code => ErrorCode::InvalidConfig,
+            loc  => PathBuf::from(&catalogs_yml_path),
+            "Failed to read '{}': {}", DBT_CATALOGS_YML, e
+        )),
+    }
 }
 
 pub async fn load_simplified_project_and_profiles(

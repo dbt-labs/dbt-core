@@ -1,5 +1,4 @@
 use dbt_common::{ErrorCode, FsResult, fs_err};
-use dbt_schemas::schemas::serde::yaml_to_fs_error;
 use dbt_schemas::schemas::{dbt_catalogs::DbtCatalogs, validate_catalogs};
 use dbt_serde_yaml as yml;
 use std::path::Path;
@@ -16,8 +15,8 @@ pub fn fetch_catalogs() -> Option<Arc<DbtCatalogs>> {
 }
 
 /// Load <project_root>/catalogs.yml, validate, and return a validated mapping holder.
-pub fn load_catalogs(text: &str, path: &Path) -> FsResult<()> {
-    let validated = do_load_catalogs(text, path)?;
+pub fn load_catalogs(text_yml: yml::Value, path: &Path) -> FsResult<()> {
+    let validated = do_load_catalogs(text_yml, path)?;
     let mut write_guard = match CATALOGS.write() {
         Ok(g) => g,
         Err(p) => p.into_inner(),
@@ -26,10 +25,8 @@ pub fn load_catalogs(text: &str, path: &Path) -> FsResult<()> {
     Ok(())
 }
 
-pub fn do_load_catalogs(text: &str, path: &Path) -> FsResult<DbtCatalogs> {
+pub fn do_load_catalogs(text_yml: yml::Value, path: &Path) -> FsResult<DbtCatalogs> {
     let _guard = yml::with_filename(Some(path.to_path_buf()));
-
-    let text_yml: yml::Value = yml::from_str(text).map_err(|e| yaml_to_fs_error(e, Some(path)))?;
 
     let (repr, span) = match text_yml {
         yml::Value::Mapping(mapping, span) => (mapping, span),
