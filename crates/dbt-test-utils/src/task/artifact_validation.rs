@@ -35,6 +35,14 @@ fn remove_json_path_parts(value: &mut Value, parts: &[&str]) {
             remove_json_path_parts(next, &parts[1..]);
         }
     }
+    if let Value::Array(arr) = value {
+        if parts[0] == "*" && parts.len() > 1 {
+            let field_to_remove = &parts[1..].join(".");
+            for item in arr.iter_mut() {
+                remove_json_path(item, field_to_remove);
+            }
+        }
+    }
 }
 
 /// Generic task for comparing artifacts by deserializing and comparing JSON values
@@ -46,6 +54,7 @@ where
     pub expected: T,
     /// . separated paths to ignore
     pub ignored_field_paths: Vec<String>,
+    pub use_test_env_path: bool,
 }
 
 impl<T> ArtifactComparisonTask<T>
@@ -56,16 +65,18 @@ where
         rel_artifact_path: impl Into<PathBuf>,
         expected: T,
         ignored_field_paths: Vec<String>,
+        use_test_env_path: bool,
     ) -> Self {
         Self {
             rel_artifact_path: rel_artifact_path.into(),
             expected,
             ignored_field_paths,
+            use_test_env_path,
         }
     }
 
     pub fn new_simple(rel_artifact_path: impl Into<PathBuf>, expected: T) -> Self {
-        Self::new(rel_artifact_path, expected, vec![])
+        Self::new(rel_artifact_path, expected, vec![], false)
     }
 }
 
@@ -77,12 +88,16 @@ where
     async fn run(
         &self,
         project_env: &ProjectEnv,
-        _test_env: &TestEnv,
+        test_env: &TestEnv,
         _task_index: usize,
     ) -> TestResult<()> {
-        let artifact_file = project_env
-            .absolute_project_dir
-            .join(&self.rel_artifact_path);
+        let artifact_file = if self.use_test_env_path {
+            test_env.temp_dir.join(&self.rel_artifact_path)
+        } else {
+            project_env
+                .absolute_project_dir
+                .join(&self.rel_artifact_path)
+        };
 
         let contents = std::fs::read_to_string(&artifact_file)?;
         let yml_val: dbt_serde_yaml::Value = serde_json::from_str(&contents)?;
