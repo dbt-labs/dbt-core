@@ -84,14 +84,14 @@ class ModelConfig(NodeConfig):
         if (
             self.freshness
             and self.freshness.build_after.period
-            and not self.freshness.build_after.count
+            and self.freshness.build_after.count is None
         ):
             raise ValidationError(
                 "`freshness.build_after` must have a value for `count` if a `period` is provided"
             )
         elif (
             self.freshness
-            and self.freshness.build_after.count
+            and self.freshness.build_after.count is not None
             and not self.freshness.build_after.period
         ):
             raise ValidationError(
