@@ -919,10 +919,16 @@ impl StdColumn {
             format!("{prefix}.{}", self.name)
         };
 
+        let original_sql_str = if let Some(s) = self._original_sql_str.as_ref() {
+            s.clone()
+        } else {
+            self.core_data_type.clone()
+        };
+
         if self._fields.is_empty() {
             Vec::from([Self::new_bigquery(
                 new_prefix,
-                self.core_dtype.clone(),
+                original_sql_str,
                 &[],
                 self.mode(),
             )])
