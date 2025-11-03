@@ -110,6 +110,7 @@ pub enum ErrorCode {
     AccessDenied = 1066,
 
     GenericExecError = 1067,
+    LicenseError = 1068,
     // --------------------------------------------------------------------------------------------
     // Jinja
     MacroUnsupportedValueType = 1500,
