@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use dbt_telemetry::{
     Invocation, LogMessage, LogRecordInfo, NodeEvaluated, NodeOutcome, NodeOutcomeDetail, NodeType,
-    QueryExecuted, SeverityNumber, SpanEndInfo, SpanStartInfo,
+    QueryExecuted, SeverityNumber, SpanEndInfo, SpanStartInfo, UserLogMessage,
 };
 use std::time::SystemTime;
 use tracing::level_filters::LevelFilter;
@@ -172,6 +172,18 @@ impl TelemetryConsumer for FileLogLayer {
                 log_record.time_unix_nano,
                 log_record.severity_number,
                 &[formatted_message],
+            );
+
+            return;
+        }
+
+        // Handle UserLogMessage events (from Jinja print() and log() functions)
+        if log_record.attributes.is::<UserLogMessage>() {
+            // Write user log messages to file log
+            self.write_log_lines(
+                log_record.time_unix_nano,
+                log_record.severity_number,
+                std::slice::from_ref(&log_record.body),
             );
         }
     }

@@ -15,6 +15,7 @@ use crate::vm::context::Context;
 use crate::vm::fuel::FuelTracker;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
+use std::path::PathBuf;
 use std::rc::Rc;
 
 /// When macros are used, the state carries an `id` counter.  Whenever a state is
@@ -123,6 +124,11 @@ impl<'template, 'env> State<'template, 'env> {
             || self.ctx.current_span,
             |s| s.with_offset(&self.ctx.current_span),
         )
+    }
+
+    /// Returns the current path of the template being rendered.
+    pub fn current_path(&self) -> &PathBuf {
+        &self.ctx.current_path
     }
 
     /// Creates an empty state for an environment.

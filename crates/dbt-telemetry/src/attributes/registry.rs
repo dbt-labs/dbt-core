@@ -1,6 +1,6 @@
 //! Registry for telemetry attribute types.
 
-use proto_rust::StaticName;
+use proto_rust::{StaticName, v1::public::events::fusion::log::UserLogMessage};
 use std::{collections::HashMap, sync::LazyLock};
 
 use super::traits::AnyTelemetryEvent;
@@ -132,6 +132,12 @@ static PUBLIC_TELEMETRY_EVENT_REGISTRY: LazyLock<TelemetryEventTypeRegistry> =
             arrow_deserialize_for_type::<LogMessage>,
             #[cfg(any(test, feature = "test-utils"))]
             faker_for_type::<LogMessage>,
+        );
+        registry.register(
+            UserLogMessage::FULL_NAME,
+            arrow_deserialize_for_type::<UserLogMessage>,
+            #[cfg(any(test, feature = "test-utils"))]
+            faker_for_type::<UserLogMessage>,
         );
         registry.register(
             CompiledCodeInline::FULL_NAME,

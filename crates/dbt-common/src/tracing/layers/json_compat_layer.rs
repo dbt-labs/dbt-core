@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
-use dbt_telemetry::{Invocation, LogMessage, LogRecordInfo, QueryExecuted, SpanEndInfo};
+use dbt_telemetry::{
+    Invocation, LogMessage, LogRecordInfo, QueryExecuted, SeverityNumber, SpanEndInfo,
+    UserLogMessage,
+};
 use serde_json::json;
 use tracing::level_filters::LevelFilter;
 
@@ -226,6 +229,50 @@ impl TelemetryConsumer for JsonCompatLayer {
                 "data": {
                     "log_version": 3,
                     "version": env!("CARGO_PKG_VERSION"),
+                }
+            })
+            .to_string();
+
+            self.writer.writeln(value.as_str());
+
+            return;
+        }
+
+        // Handle UserLogMessage events (from Jinja print() and log() functions)
+        // These map to dbt-core's JinjaLogInfo (I062), JinjaDebugInfo (I063) and PrintEvent ("Z052") events
+        if let Some(user_log_msg) = log_record.attributes.downcast_ref::<UserLogMessage>() {
+            let (event_name, event_code) = match (user_log_msg.is_print, log_record.severity_number)
+            {
+                (true, _) => {
+                    // print() maps to PrintEvent (Z052)
+                    ("PrintEvent", "Z052")
+                }
+                (false, SeverityNumber::Info) => {
+                    // log(..., info=true) maps to JinjaLogInfo (I062)
+                    ("JinjaLogInfo", "I062")
+                }
+                (false, SeverityNumber::Debug) => {
+                    // log(..., info=false) maps to JinjaDebugInfo (I063)
+                    ("JinjaDebugInfo", "I063")
+                }
+                _ => {
+                    // Unknown combination, skip
+                    return;
+                }
+            };
+
+            let info_json = serde_json::to_value(self.build_core_event_info(
+                Some(event_code),
+                Some(event_name),
+                &log_record.severity_text,
+                log_record.body.clone(),
+            ))
+            .expect("Failed to serialize core event info to JSON");
+
+            let value = json!({
+                "info": info_json,
+                "data": {
+                    "msg": log_record.body, // Yes, duplicate the message here as well
                 }
             })
             .to_string();

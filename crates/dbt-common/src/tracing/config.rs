@@ -290,7 +290,7 @@ impl FsTraceConfig {
                 })?;
 
             let (layer, handle) =
-                build_jsonl_layer_with_background_writer(file, self.max_log_verbosity);
+                build_jsonl_layer_with_background_writer(file, self.max_file_log_verbosity);
 
             // Keep a handle for shutdown
             shutdown_items.push(handle);

@@ -7,10 +7,16 @@ use std::{
 };
 
 use dbt_agate::{AgateTable, print_table};
-use dbt_common::{ErrorCode, io_args::IoArgs, tracing::emit::emit_warn_log_message};
+use dbt_common::{
+    ErrorCode,
+    io_args::IoArgs,
+    tracing::emit::{emit_debug_event, emit_info_event, emit_warn_log_message},
+};
 use dbt_schemas::schemas::{InternalDbtNode, Nodes};
+use dbt_telemetry::UserLogMessage;
 use minijinja::{
     arg_utils::ArgsIter,
+    constants::TARGET_PACKAGE_NAME,
     value::{ValueMap, mutable_map::MutableMap},
 };
 
@@ -850,8 +856,8 @@ pub fn thread_id_fn() -> impl Fn() -> Result<Value, Error> {
 /// ```jinja
 /// {{ print("Hello world!") }}
 /// ```
-pub fn print_fn() -> impl Fn(&[Value], Kwargs) -> Result<Value, Error> {
-    move |args: &[Value], _kwargs: Kwargs| -> Result<Value, Error> {
+pub fn print_fn() -> impl Fn(&State<'_, '_>, &[Value], Kwargs) -> Result<Value, Error> {
+    move |state: &State<'_, '_>, args: &[Value], _kwargs: Kwargs| -> Result<Value, Error> {
         if args.is_empty() {
             return Err(Error::new(
                 ErrorKind::InvalidOperation,
@@ -869,8 +875,29 @@ pub fn print_fn() -> impl Fn(&[Value], Kwargs) -> Result<Value, Error> {
         // for example print('string')
         // fusion: 'string' // things are always wrapped in single quotes
         // dbt: string
-        // changed to log::info!("{}", args[0]); if we have to make them consistent
-        log::info!("{:?}", args[0]);
+        // changed to format!("{}", args[0]); if we have to make them consistent
+        // Format the message
+        let msg = format!("{:?}", args[0]);
+
+        // Get metadata for the event
+        let current_package_name = state
+            .lookup(TARGET_PACKAGE_NAME)
+            .and_then(|v| v.as_str().map(|s| s.to_string()));
+        let line = state.current_span().start_line;
+        let column = state.current_span().start_col;
+        let cur_file_path = state.current_path().to_str().map(str::to_string);
+
+        // Emit UserLogMessage event for print
+        emit_info_event(
+            UserLogMessage::print(
+                current_package_name,
+                Some(line),
+                Some(column),
+                cur_file_path,
+            ),
+            Some(&msg),
+        );
+
         Ok(Value::from(""))
     }
 }
@@ -879,20 +906,50 @@ pub fn print_fn() -> impl Fn(&[Value], Kwargs) -> Result<Value, Error> {
 ///
 /// Args:
 ///     msg: Message to print
+///     info: If true, log at info level. If False emit at debug level.
 ///
 /// Example:
 /// ```jinja
-/// {{ log("Hello world!") }}
+/// {{ log("Hello world!", info=true) }}
 /// ```
-pub fn log_fn() -> impl Fn(&[Value], Kwargs) -> Result<Value, Error> {
-    move |args: &[Value], kwargs: Kwargs| -> Result<Value, Error> {
+pub fn log_fn() -> impl Fn(&State<'_, '_>, &[Value], Kwargs) -> Result<Value, Error> {
+    move |state: &State<'_, '_>, args: &[Value], kwargs: Kwargs| -> Result<Value, Error> {
         let mut args = ArgParser::new(args, Some(kwargs));
-        let msg = args.get::<Value>("msg")?;
+        let msg = args.get::<Value>("msg")?.to_string();
         let info = args.get::<Value>("info").ok();
-        // todo: print should go to log, or not?
+
+        // Get metadata for the event
+        let current_package_name = state
+            .lookup(TARGET_PACKAGE_NAME)
+            .and_then(|v| v.as_str().map(|s| s.to_string()));
+        let line = state.current_span().start_line;
+        let column = state.current_span().start_col;
+        let cur_file_path = state.current_path().to_str().map(str::to_string);
+
         if info.is_some() && info.unwrap().is_true() {
-            log::info!("{msg}");
+            // Emit UserLogMessage event for log
+            emit_info_event(
+                UserLogMessage::log_info(
+                    current_package_name,
+                    Some(line),
+                    Some(column),
+                    cur_file_path,
+                ),
+                Some(&msg),
+            );
+        } else {
+            // Emit UserLogMessage event for debug log
+            emit_debug_event(
+                UserLogMessage::log_debug(
+                    current_package_name,
+                    Some(line),
+                    Some(column),
+                    cur_file_path,
+                ),
+                Some(&msg),
+            );
         }
+
         Ok(Value::from(""))
     }
 }

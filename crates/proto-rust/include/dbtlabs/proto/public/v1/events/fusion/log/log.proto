@@ -34,3 +34,37 @@ message LogMessage {
   // Package name of the project dependency for which this log was emitted. Not set for the root project.
   optional string package_name = 9;
 }
+
+// Event emitted when user explicitly logs messages via jinja's print() or log() functions.
+// This event maps to dbt-core's JinjaLogInfo (I061-I063) events.
+message UserLogMessage {
+  // True if this message was emitted via print(), false if via log()
+  bool is_print = 1;
+
+  // Legacy dbt-core event code:
+  // - "I062" (JinjaLogInfo) for log info level
+  // - "I063" (JinjaLogDebug) for log debug level
+  // - "I061" (JinjaLogWarning) for log warning level
+  // - "Z052" (PrintEvent) for print statements
+  string dbt_core_event_code = 2;
+
+  // If this log message is emitted in the context of a specific node,
+  // this field should be set to the node's unique FQN.
+  optional string unique_id = 3;
+
+  // Execution phase (if known) during which this log was emitted.
+  optional v1.public.events.fusion.phase.ExecutionPhase phase = 4;
+
+  // Package name (project or dependency) from which this log was emitted.
+  optional string package_name = 5;
+
+  // Location within the SQL/Jinja file where print() or log() was called.
+  // Line number (1-indexed) of the print/log call in the SQL file.
+  optional uint32 line = 6;
+
+  // Column number (0-indexed) of the print/log call in the SQL file.
+  optional uint32 column = 7;
+
+  // Relative path to the SQL file containing the print/log call.
+  optional string relative_path = 8;
+}

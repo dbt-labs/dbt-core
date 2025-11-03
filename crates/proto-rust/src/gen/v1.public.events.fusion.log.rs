@@ -75,3 +75,54 @@ impl ::prost::Name for LogMessage {
         "/v1.public.events.fusion.log.LogMessage".into()
     }
 }
+/// Event emitted when user explicitly logs messages via jinja's print() or log() functions.
+/// This event maps to dbt-core's JinjaLogInfo (I061-I063) events.
+#[cfg_attr(any(test, feature = "test-utils"), derive(::fake::Dummy))]
+#[derive(crate::macros::ProtoNew)]
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct UserLogMessage {
+    /// True if this message was emitted via print(), false if via log()
+    #[prost(bool, tag = "1")]
+    pub is_print: bool,
+    /// Legacy dbt-core event code:
+    /// - "I062" (JinjaLogInfo) for log info level
+    /// - "I063" (JinjaLogDebug) for log debug level
+    /// - "I061" (JinjaLogWarning) for log warning level
+    /// - "Z052" (PrintEvent) for print statements
+    #[prost(string, tag = "2")]
+    pub dbt_core_event_code: ::prost::alloc::string::String,
+    /// If this log message is emitted in the context of a specific node,
+    /// this field should be set to the node's unique FQN.
+    #[prost(string, optional, tag = "3")]
+    pub unique_id: ::core::option::Option<::prost::alloc::string::String>,
+    /// Execution phase (if known) during which this log was emitted.
+    #[prost(enumeration = "super::phase::ExecutionPhase", optional, tag = "4")]
+    pub phase: ::core::option::Option<i32>,
+    /// Package name (project or dependency) from which this log was emitted.
+    #[prost(string, optional, tag = "5")]
+    pub package_name: ::core::option::Option<::prost::alloc::string::String>,
+    /// Location within the SQL/Jinja file where print() or log() was called.
+    /// Line number (1-indexed) of the print/log call in the SQL file.
+    #[prost(uint32, optional, tag = "6")]
+    pub line: ::core::option::Option<u32>,
+    /// Column number (0-indexed) of the print/log call in the SQL file.
+    #[prost(uint32, optional, tag = "7")]
+    pub column: ::core::option::Option<u32>,
+    /// Relative path to the SQL file containing the print/log call.
+    #[prost(string, optional, tag = "8")]
+    pub relative_path: ::core::option::Option<::prost::alloc::string::String>,
+}
+impl crate::StaticName for UserLogMessage {
+    const FULL_NAME: &'static str = "v1.public.events.fusion.log.UserLogMessage";
+    const TYPE_URL: &'static str = "/v1.public.events.fusion.log.UserLogMessage";
+}
+impl ::prost::Name for UserLogMessage {
+    const NAME: &'static str = "UserLogMessage";
+    const PACKAGE: &'static str = "v1.public.events.fusion.log";
+    fn full_name() -> ::prost::alloc::string::String {
+        "v1.public.events.fusion.log.UserLogMessage".into()
+    }
+    fn type_url() -> ::prost::alloc::string::String {
+        "/v1.public.events.fusion.log.UserLogMessage".into()
+    }
+}

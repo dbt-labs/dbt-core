@@ -1,15 +1,11 @@
 use crate::{
-    TelemetryOutputFlags,
-    attributes::{
-        ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryContext,
-        TelemetryEventRecType,
-    },
-    schemas::RecordCodeLocation,
-    serialize::arrow::ArrowAttributes,
+    ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryContext, TelemetryEventRecType,
+    TelemetryOutputFlags, schemas::RecordCodeLocation, serialize::arrow::ArrowAttributes,
 };
 use prost::Name;
 pub use proto_rust::v1::public::events::fusion::compat::SeverityNumber;
-pub use proto_rust::v1::public::events::fusion::log::LogMessage;
+pub use proto_rust::v1::public::events::fusion::log::{LogMessage, UserLogMessage};
+use serde_with::skip_serializing_none;
 use std::borrow::Cow;
 
 impl ProtoTelemetryEvent for LogMessage {
@@ -100,6 +96,112 @@ impl ArrowSerializableTelemetryEvent for LogMessage {
             file: record.file.as_deref().map(str::to_string),
             line: record.line,
             package_name: record.package_name.as_deref().map(str::to_string),
+        })
+    }
+}
+
+impl ProtoTelemetryEvent for UserLogMessage {
+    const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Log;
+    const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
+
+    fn event_display_name(&self) -> String {
+        format!(
+            "User LogMessage ({})",
+            if self.is_print { "print" } else { "log" }
+        )
+    }
+
+    fn has_sensitive_data(&self) -> bool {
+        // None of the structured data is sensitive. Message itself can be,
+        // but that's not part of this struct.
+        false
+    }
+
+    fn with_context(&mut self, context: &TelemetryContext) {
+        // Inject unique_id if not set and provided by context
+        if self.unique_id.is_none() {
+            self.unique_id = context.unique_id.clone();
+        }
+
+        // Inject phase if not set and provided by context
+        if self.phase.is_none()
+            && let Some(p) = context.phase
+        {
+            self.phase = Some(p as i32);
+        }
+    }
+}
+
+/// Internal struct used for serializing/deserializing subset of
+/// UserLogMessage fields as JSON payload in ArrowAttributes.
+#[skip_serializing_none]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Debug)]
+struct UserLogMessageJsonPayload {
+    pub is_print: bool,
+    pub line: Option<u32>,
+    pub column: Option<u32>,
+    pub relative_path: Option<String>,
+}
+
+impl ArrowSerializableTelemetryEvent for UserLogMessage {
+    fn to_arrow_record(&self) -> ArrowAttributes<'_> {
+        ArrowAttributes {
+            dbt_core_event_code: Some(Cow::Borrowed(self.dbt_core_event_code.as_str())),
+            unique_id: self.unique_id.as_deref().map(Cow::Borrowed),
+            phase: self.phase.map(|_| self.phase()),
+            package_name: self.package_name.as_deref().map(Cow::Borrowed),
+            // The rest of the data is serialized as JSON payload
+            json_payload: serde_json::to_string(&UserLogMessageJsonPayload {
+                is_print: self.is_print,
+                line: self.line,
+                column: self.column,
+                relative_path: self.relative_path.clone(),
+            })
+            .unwrap_or_else(|_| {
+                panic!(
+                    "Failed to serialize data in event type \"{}\" to JSON",
+                    Self::full_name()
+                )
+            })
+            .into(),
+            ..Default::default()
+        }
+    }
+
+    fn from_arrow_record(record: &ArrowAttributes) -> Result<Self, String> {
+        let json_payload: UserLogMessageJsonPayload =
+            serde_json::from_str(record.json_payload.as_ref().ok_or_else(|| {
+                format!(
+                    "Missing json payload for event type \"{}\"",
+                    Self::full_name()
+                )
+            })?)
+            .map_err(|e| {
+                format!(
+                    "Failed to deserialize data of event type \"{}\" from JSON payload: {}",
+                    Self::full_name(),
+                    e
+                )
+            })?;
+
+        Ok(Self {
+            is_print: json_payload.is_print,
+            dbt_core_event_code: record
+                .dbt_core_event_code
+                .as_deref()
+                .map(str::to_string)
+                .ok_or_else(|| {
+                    format!(
+                        "Missing `dbt_core_event_code` for event type \"{}\"",
+                        Self::full_name()
+                    )
+                })?,
+            unique_id: record.unique_id.as_deref().map(str::to_string),
+            phase: record.phase.map(|v| v as i32),
+            package_name: record.package_name.as_deref().map(str::to_string),
+            line: json_payload.line,
+            column: json_payload.column,
+            relative_path: json_payload.relative_path,
         })
     }
 }

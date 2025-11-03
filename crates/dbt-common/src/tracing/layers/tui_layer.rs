@@ -7,7 +7,7 @@ use console::Term;
 use dbt_telemetry::{
     ExecutionPhase, Invocation, LogMessage, LogRecordInfo, NodeEvaluated, NodeOutcome,
     NodeOutcomeDetail, NodeType, PhaseExecuted, SeverityNumber, SpanEndInfo, SpanStartInfo,
-    SpanStatus, StatusCode, TelemetryAttributes,
+    SpanStatus, StatusCode, TelemetryAttributes, UserLogMessage,
 };
 
 use tracing::level_filters::LevelFilter;
@@ -311,8 +311,11 @@ impl TelemetryConsumer for TuiLayer {
             }
         }
 
-        // Handle StdoutMessage events
-        if log_record.attributes.is::<StdoutMessage>() {
+        // Handle simple events that print jsut the body: StdoutMessage & UserLogMessage
+        if log_record.attributes.is::<StdoutMessage>()
+            || log_record.attributes.is::<UserLogMessage>()
+        {
+            // Print user log messages immediately to stdout
             with_suspended_progress_bars(|| {
                 io::stdout()
                     .lock()
