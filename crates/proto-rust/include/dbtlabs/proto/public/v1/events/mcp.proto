@@ -5,6 +5,7 @@ option go_package = "github.com/dbt-labs/proto-golang/v1/public/events/mcp";
 
 import "dbtlabs/proto/public/v1/common/vortex_options.proto";
 import "dbtlabs/proto/public/v1/events/vortex.proto";
+import "dbtlabs/proto/public/v1/common/vortex_telemetry_contexts.proto";
 
 import "google/protobuf/struct.proto";
 
@@ -49,4 +50,25 @@ message ToolCalled {
 
   // The multicell account prefix that the user configured: https://docs.getdbt.com/docs/cloud/about-cloud/access-regions-ip-addresses
   string multicell_account_prefix = 13;
+
+  // Common dbt Platform context
+  v1.public.common.vortex_telemetry_contexts.VortexTelemetryDbtCloudContext ctx = 14;
+
+  // The version of dbt_mcp being used (e.g. 0.8.2)
+  string dbt_mcp_version = 15;
+
+  // How the instance of dbt-mcp was authenticated. Only applicable to local MCP (e.g. env-vars, oauth, null)
+  string authentication_method = 16;
+
+  // The trace that this tool call is associated with, i.e., the tools it is called with for a single user message. Only applicable to tool calls within an agent run in the dbt Platform.
+  string trace_id = 17;
+
+  // The list of disabled toolsets from the DISABLE_* environment variables or x-dbt-disable-toolsets header.
+  repeated string disabled_toolsets = 18;
+
+  // This list of disabled tools from the DISABLE_TOOLS environment variable or x-dbt-disable-tools header.
+  repeated string disabled_tools = 19;
+
+  // Indicates where this request is coming from with the user_agent header. This is only relevant for remote MCP. For local MCP, the user_agent can be attained from the enrichment field.
+  string user_agent = 20;
 }

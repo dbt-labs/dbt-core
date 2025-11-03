@@ -47,6 +47,12 @@ message ExtensionActivated {
     // the anonymous user id stored at ~/.dbt/.user.yml
     string dbt_local_cookie_user_id = 13;
 
+    // project models count
+    int32 models_count = 14;
+
+    // the type of adapter used in the project (snowflake, bigquery, etc)
+    string adapter_type = 15;
+
 }
 
 message ExtensionLspCompile {
@@ -230,6 +236,89 @@ message ExtensionGetSupportClicked {
     v1.public.fields.vscode_types.User user = 3;
 
     // the type of support that was clicked
+    string support_type = 4;
+
+    // the anonymous user id stored at ~/.dbt/.user.yml
+    string dbt_local_cookie_user_id = 5;
+}
+
+message ExtensionGetSupportFormShown {
+    option (v1.public.common.vortex_enabled) = true;
+    option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+
+    v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+    v1.public.fields.vscode_types.Editor editor = 2;
+    v1.public.fields.vscode_types.User user = 3;
+
+    // the type of support being offered
+    string support_type = 4;
+
+    // the anonymous user id stored at ~/.dbt/.user.yml
+    string dbt_local_cookie_user_id = 5;
+}
+
+message ExtensionGetSupportUnverifiedNoticeShown {
+    option (v1.public.common.vortex_enabled) = true;
+    option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+
+    v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+    v1.public.fields.vscode_types.Editor editor = 2;
+    v1.public.fields.vscode_types.User user = 3;
+
+    // the type of support being offered
+    string support_type = 4;
+
+    // the anonymous user id stored at ~/.dbt/.user.yml
+    string dbt_local_cookie_user_id = 5;
+}
+
+message ExtensionGetSupportFormSubmitted {
+    option (v1.public.common.vortex_enabled) = true;
+    option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+
+    v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+    v1.public.fields.vscode_types.Editor editor = 2;
+    v1.public.fields.vscode_types.User user = 3;
+
+    // the type of support that was submitted
+    string support_type = 4;
+
+    // whether the submission was successful
+    bool success = 5;
+
+    // the anonymous user id stored at ~/.dbt/.user.yml
+    string dbt_local_cookie_user_id = 6;
+}
+
+message ExtensionGetSupportFormCancelled {
+    option (v1.public.common.vortex_enabled) = true;
+    option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+
+    v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+    v1.public.fields.vscode_types.Editor editor = 2;
+    v1.public.fields.vscode_types.User user = 3;
+
+    // the type of support being cancelled
+    string support_type = 4;
+
+    // the anonymous user id stored at ~/.dbt/.user.yml
+    string dbt_local_cookie_user_id = 5;
+}
+
+message ExtensionGetSupportPanelClosed {
+    option (v1.public.common.vortex_enabled) = true;
+    option (v1.public.common.vortex_namespace) = VORTEX_ICEBERG_NAMESPACE_TELEMETRY;
+
+    v1.events.vortex.VortexMessageEnrichment enrichment = 1;
+
+    v1.public.fields.vscode_types.Editor editor = 2;
+    v1.public.fields.vscode_types.User user = 3;
+
+    // the type of support panel that was closed
     string support_type = 4;
 
     // the anonymous user id stored at ~/.dbt/.user.yml

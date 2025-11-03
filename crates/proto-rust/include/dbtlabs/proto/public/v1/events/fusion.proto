@@ -384,6 +384,9 @@ enum OnboardingScreen {
   COMPILE            = 12;
   COMPILE_FAIL       = 13;
   SUCCESS            = 14;
+  AGENTIC_AUTOFIX    = 15;
+  TRY_AGENTIC_AUTOFIX = 16;
+  DOWNLOAD_AGENTS_MD = 17;
 }
 
 enum OnboardingAction {
