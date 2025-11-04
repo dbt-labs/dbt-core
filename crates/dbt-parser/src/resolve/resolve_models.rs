@@ -782,7 +782,7 @@ fn process_python_models(
             extract_model_properties(arg, env, base_ctx, models_properties, ref_name)?;
 
         // Merge Python model config with project config and schema.yml properties
-        let merged_config = merge_python_config(
+        let merged_config = match merge_python_config(
             &python_file_info,
             &python_asset,
             package_name,
@@ -790,7 +790,13 @@ fn process_python_models(
             local_project_config,
             maybe_properties.as_ref(),
             arg,
-        );
+        ) {
+            Ok(config) => config,
+            Err(err) => {
+                emit_error_log_from_fs_error(&err, arg.io.status_reporter.as_ref());
+                continue;
+            }
+        };
 
         // Convert to SqlFileRenderResult for uniform downstream processing
         let python_result = SqlFileRenderResult {
@@ -869,7 +875,7 @@ fn merge_python_config(
     local_project_config: &crate::dbt_project_config::DbtProjectConfig<ModelConfig>,
     maybe_properties: Option<&ModelProperties>,
     arg: &ResolveArgs,
-) -> ModelConfig {
+) -> FsResult<ModelConfig> {
     let model_name = python_asset
         .path
         .file_stem()
@@ -924,11 +930,25 @@ fn merge_python_config(
         );
     }
 
+    if let Some(ref mat) = merged_config.materialized {
+        if *mat != DbtMaterialization::Table && *mat != DbtMaterialization::Incremental {
+            let err = fs_err!(
+                code => ErrorCode::InvalidConfig,
+                loc => python_asset.path.to_path_buf(),
+                "Invalid materialization '{}' for Python model. Only 'table' or 'incremental' are allowed.",
+                mat,
+            );
+            return Err(err);
+        }
+    } else {
+        merged_config.materialized = Some(DbtMaterialization::Table);
+    }
+
     // Python models always have static_analysis turned off
     // SQL analysis is not applicable to Python code
     merged_config.static_analysis = Some(StaticAnalysisKind::Off.into());
 
-    merged_config
+    Ok(merged_config)
 }
 
 /// Determine if a DbtAsset is a Python model based on file extension
