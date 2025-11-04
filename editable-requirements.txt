@@ -1,1 +1,1 @@
--e core
+-e ./core

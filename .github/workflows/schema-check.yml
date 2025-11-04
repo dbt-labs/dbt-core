@@ -22,7 +22,7 @@ on:
       target_branch:
         description: "The branch to check against"
         type: string
-        default: "main"
+        default: 'main'
         required: true
 
 # no special access is needed
@@ -48,8 +48,8 @@ jobs:
       - name: Checkout dbt repo
         uses: actions/checkout@v4
         with:
-          path: ${{ env.DBT_REPO_DIRECTORY }}
-          ref: ${{ inputs.target_branch }}
+            path: ${{ env.DBT_REPO_DIRECTORY }}
+            ref: ${{ inputs.target_branch }}
 
       - name: Check for changes in core/dbt/artifacts
         # https://github.com/marketplace/actions/paths-changes-filter
@@ -72,7 +72,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: dbt-labs/schemas.getdbt.com
-          ref: "main"
+          ref: 'main'
           path: ${{ env.SCHEMA_REPO_DIRECTORY }}
 
       - name: Generate current schema
@@ -82,7 +82,7 @@ jobs:
           python3 -m venv env
           source env/bin/activate
           pip install --upgrade pip
-          pip install -r dev-requirements.txt
+          pip install -r dev-requirements.txt -r editable-requirements.txt
           python scripts/collect-artifact-schema.py --path ${{ env.LATEST_SCHEMA_PATH }}
 
       # Copy generated schema files into the schemas.getdbt.com repo
@@ -99,5 +99,5 @@ jobs:
         uses: actions/upload-artifact@v4
         if: ${{ failure() && steps.check_artifact_changes.outputs.artifacts_changed == 'true' }}
         with:
-          name: "schema_changes.txt"
-          path: "${{ env.SCHEMA_DIFF_ARTIFACT }}"
+          name: 'schema_changes.txt'
+          path: '${{ env.SCHEMA_DIFF_ARTIFACT }}'

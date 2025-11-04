@@ -1,9 +1,7 @@
-# Dev dependencies with git URLs (excluded from package METADATA to avoid PyPI rejection)
-dbt-adapters @ git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-adapters
-dbt-tests-adapter @ git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-tests-adapter
-dbt-common @ git+https://github.com/dbt-labs/dbt-common.git@main
-dbt-postgres @ git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-postgres
-# black must match what's in .pre-commit-config.yaml to be sure local env matches CI
+git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-adapters
+git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-tests-adapter
+git+https://github.com/dbt-labs/dbt-common.git@main
+git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-postgres
 black==24.3.0
 bumpversion
 ddtrace==2.21.3

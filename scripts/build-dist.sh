@@ -14,6 +14,7 @@ rm -rf "$DBT_PATH"/dist
 rm -rf "$DBT_PATH"/build
 rm -rf "$DBT_PATH"/core/dist
 rm -rf "$DBT_PATH"/core/build
+
 mkdir -p "$DBT_PATH"/dist
 
 # Copy License.md to core/ for inclusion in distribution (required by Apache 2.0)
@@ -26,6 +27,5 @@ $PYTHON_BIN -m build --outdir "$DBT_PATH/dist"
 
 # Clean up License.md that was copied to core/ for build
 rm -f "$DBT_PATH/core/License.md"
-
 
 set +x

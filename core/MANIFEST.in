@@ -1,5 +1,4 @@
-recursive-include dbt/include *
-recursive-exclude dbt/include __pycache__ *.pyc *.pyo
+recursive-include dbt/include *.py *.sql *.yml *.html *.md .gitkeep .gitignore
 include dbt/py.typed
 recursive-include dbt/task/docs *.html
 recursive-include dbt/jsonschemas *.json

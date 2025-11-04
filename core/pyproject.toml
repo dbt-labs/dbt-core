@@ -13,17 +13,16 @@ include = [
 # this needs to match MANIFEST.in for the wheels
 [tool.setuptools.package-data]
 "dbt" = [
-    "include/**/*",
+    "include/**/*.py",
+    "include/**/*.sql",
+    "include/**/*.yml",
+    "include/**/*.html",
+    "include/**/*.md",
+    "include/**/.gitkeep",
+    "include/**/.gitignore",
     "task/docs/**/*.html",
     "jsonschemas/**/*.json",
     "py.typed",
-]
-
-[tool.setuptools.exclude-package-data]
-"dbt" = [
-    "include/__pycache__/*",
-    "include/**/*.pyc",
-    "include/**/*.pyo",
 ]
 
 [project]

@@ -7,32 +7,6 @@
 files = 'core/dbt'
 mypy_path = "third-party-stubs/"
 namespace_packages = true
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = [
-    "dbtlabs.*",
-    "dbt_semantic_interfaces.*",
-    "dbt_common.*",
-    "click.parser",
-]
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-# Mirror legacy mypy behaviour by excluding modules previously unchecked in the pre-commit mirror environment.
-module = [
-    "dbt.events.types",
-    "dbt.events.core_types_pb2",
-    "dbt.jsonschemas.jsonschemas",
-    "dbt.cli.option_types",
-    "dbt.cli.options",
-    "dbt.cli.flags",
-    "dbt.utils.utils",
-    "dbt.env_vars",
-    "dbt.context.providers",
-    "dbt.artifacts.resources.v1.semantic_layer_components",
-]
-ignore_errors = true
 
 [tool.black]
 line-length = 99
