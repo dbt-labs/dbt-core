@@ -474,49 +474,48 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn drop_relation(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
-        let mut parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 1, 1)?;
-
-        let relation = parser.get::<Value>("relation")?;
-        let relation = downcast_value_to_dyn_base_relation(&relation)?;
+    fn drop_relation(
+        &self,
+        state: &State,
+        relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, MinijinjaError> {
         self.relation_cache.evict_relation(&relation);
         Ok(self.typed_adapter.drop_relation(state, relation)?)
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn truncate_relation(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
-        let mut parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 1, 1)?;
-
-        let relation = parser.get::<Value>("relation")?;
-        let relation = downcast_value_to_dyn_base_relation(&relation)?;
+    fn truncate_relation(
+        &self,
+        state: &State,
+        relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, MinijinjaError> {
         Ok(self.typed_adapter.truncate_relation(state, relation)?)
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn rename_relation(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
-        // Extract relations for cache_renamed call
-        let iter = ArgsIter::new(
-            current_function_name!(),
-            &["from_relation", "to_relation"],
-            args,
-        );
-        let from_relation_obj = iter.next_arg::<&RelationObject>()?;
-        let to_relation_obj = iter.next_arg::<&RelationObject>()?;
-        let from_relation = from_relation_obj.inner();
-        let to_relation = to_relation_obj.inner();
-        iter.finish()?;
-
+    fn rename_relation(
+        &self,
+        state: &State,
+        from_relation: Arc<dyn BaseRelation>,
+        to_relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, MinijinjaError> {
+        // Update cache
         self.cache_renamed(state, from_relation.clone(), to_relation.clone())?;
-
         if self.typed_adapter.as_replay().is_some() {
             // TODO: move this logic to the [ReplayAdapter]
             let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
-            self.typed_adapter
-                .rename_relation(conn.as_mut(), from_relation, to_relation)?;
+            self.typed_adapter.rename_relation(
+                conn.as_mut(),
+                from_relation.clone(),
+                to_relation.clone(),
+            )?;
         }
-        execute_macro(state, args, "rename_relation")?;
+        // Execute the macro with the relation objects
+        let args = vec![
+            RelationObject::new(from_relation).as_value(),
+            RelationObject::new(to_relation).as_value(),
+        ];
+        execute_macro(state, &args, "rename_relation")?;
         Ok(none_value())
     }
 

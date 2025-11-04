@@ -209,9 +209,35 @@ pub fn dispatch_adapter_calls(
 
             adapter.quote_seed_column(state, column, quote_config)
         }
-        "drop_relation" => adapter.drop_relation(state, args),
-        "truncate_relation" => adapter.truncate_relation(state, args),
-        "rename_relation" => adapter.rename_relation(state, args),
+        "drop_relation" => {
+            // relation: BaseRelation
+            let iter = ArgsIter::new(name, &["relation"], args);
+            let relation = iter.next_arg::<&Value>()?;
+            let relation = downcast_value_to_dyn_base_relation(relation)?;
+            iter.finish()?;
+
+            adapter.drop_relation(state, relation)
+        }
+        "truncate_relation" => {
+            // relation: BaseRelation
+            let iter = ArgsIter::new(name, &["relation"], args);
+            let relation = iter.next_arg::<&Value>()?;
+            let relation = downcast_value_to_dyn_base_relation(relation)?;
+            iter.finish()?;
+
+            adapter.truncate_relation(state, relation)
+        }
+        "rename_relation" => {
+            // from_relation: BaseRelation, to_relation: BaseRelation
+            let iter = ArgsIter::new(name, &["from_relation", "to_relation"], args);
+            let from_relation = iter.next_arg::<&Value>()?;
+            let from_relation = downcast_value_to_dyn_base_relation(from_relation)?;
+            let to_relation = iter.next_arg::<&Value>()?;
+            let to_relation = downcast_value_to_dyn_base_relation(to_relation)?;
+            iter.finish()?;
+
+            adapter.rename_relation(state, from_relation, to_relation)
+        }
         "expand_target_column_types" => {
             // from_relation: BaseRelation, to_relation: BaseRelation
             let iter = ArgsIter::new(name, &["from_relation", "to_relation"], args);

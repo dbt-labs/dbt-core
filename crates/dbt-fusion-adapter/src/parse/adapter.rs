@@ -373,31 +373,21 @@ impl BaseAdapter for ParseAdapter {
         Ok(none_value())
     }
 
-    fn truncate_relation(&self, _state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
-        let parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 1, 1)?;
-
-        let _ = args
-            .first()
-            .expect("truncate_relation requires one argument");
-        // TODO: check that the argument is a relation
-
+    fn truncate_relation(
+        &self,
+        _state: &State,
+        _relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, MinijinjaError> {
         Ok(none_value())
     }
 
     // https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/include/global_project/macros/relations/rename.sql
-    fn rename_relation(&self, _state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
-        let parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 2, 2)?;
-
-        let _ = args
-            .first()
-            .expect("rename_relation requires two arguments");
-        // TODO: check that the argument is actually a relation
-
-        let _ = args.last().expect("rename_relation requires two arguments");
-        // TODO: check that the argument is actually a relation
-
+    fn rename_relation(
+        &self,
+        _state: &State,
+        _from_relation: Arc<dyn BaseRelation>,
+        _to_relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, MinijinjaError> {
         Ok(none_value())
     }
 
@@ -422,13 +412,11 @@ impl BaseAdapter for ParseAdapter {
         Ok(none_value())
     }
 
-    fn drop_relation(&self, _state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
-        let parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 1, 1)?;
-
-        let _ = args.first().expect("drop_relation requires one argument");
-        // TODO: check that the argument is a relation
-
+    fn drop_relation(
+        &self,
+        _state: &State,
+        _relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, MinijinjaError> {
         Ok(none_value())
     }
 

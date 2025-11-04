@@ -376,13 +376,54 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
     ) -> AdapterResult<AdapterResponse>;
 
     /// Drop relation.
-    fn drop_relation(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError>;
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/sql/impl.py#L145
+    ///
+    /// ```python
+    /// def drop_relation(
+    ///     self,
+    ///     relation: BaseRelation
+    /// ) -> None
+    /// ```
+    fn drop_relation(
+        &self,
+        state: &State,
+        relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, MinijinjaError>;
 
     /// Truncate relation.
-    fn truncate_relation(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError>;
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/sql/impl.py#L152
+    ///
+    /// ```python
+    /// def truncate_relation(
+    ///     self,
+    ///     relation: BaseRelation
+    /// ) -> None
+    /// ```
+    fn truncate_relation(
+        &self,
+        state: &State,
+        relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, MinijinjaError>;
 
     /// Rename relation.
-    fn rename_relation(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError>;
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/sql/impl.py#L155
+    ///
+    /// ```python
+    /// def rename_relation(
+    ///     self,
+    ///     from_relation: BaseRelation,
+    ///     to_relation: BaseRelation
+    /// ) -> None
+    /// ```
+    fn rename_relation(
+        &self,
+        state: &State,
+        from_relation: Arc<dyn BaseRelation>,
+        to_relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, MinijinjaError>;
 
     /// Expand target column types.
     ///
