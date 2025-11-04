@@ -465,7 +465,11 @@ impl Default for VortexProducerClient {
 impl VortexProducerClient {
     fn new(agent: Box<dyn SenderAgent>, dev_mode_output_path: Option<PathBuf>) -> Self {
         let dev_mode_output_writer = if let Some(path) = &dev_mode_output_path {
-            match fs::OpenOptions::new().append(true).create(true).open(path) {
+            match fs::OpenOptions::new()
+                .truncate(true)
+                .create(true)
+                .open(path)
+            {
                 Ok(file) => {
                     let writer = io::BufWriter::new(file);
                     Mutex::new(Ok(writer))

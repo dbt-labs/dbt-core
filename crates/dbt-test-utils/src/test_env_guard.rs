@@ -53,6 +53,9 @@ impl TestEnvGuard {
         "USER",
         // This is to allow locally testing if a driver change breaks any test
         "DISABLE_CDN_DRIVER_CACHE",
+        // Used to force vortex client into dev mode for testing
+        "VORTEX_DEV_MODE",
+        "VORTEX_DEV_MODE_OUTPUT_PATH",
     ];
 
     /// Windows-specific environment variables required for system operations and DNS resolution
