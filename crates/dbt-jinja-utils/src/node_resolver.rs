@@ -5,8 +5,12 @@ use std::{
 };
 
 use dbt_common::{
-    CodeLocation, ErrorCode, FsResult, adapter::AdapterType, err, fs_err, io_args::IoArgs,
-    tracing::emit::emit_error_log_from_fs_error, unexpected_err,
+    CodeLocation, ErrorCode, FsResult,
+    adapter::AdapterType,
+    err, fs_err,
+    io_args::IoArgs,
+    tracing::emit::{emit_error_log_from_fs_error, emit_warn_log_from_fs_error},
+    unexpected_err,
 };
 use dbt_fusion_adapter::relation_object::{
     RelationObject, create_relation_from_node, create_relation_internal,
@@ -772,9 +776,17 @@ pub fn resolve_dependencies(
                     }
                 }
                 Err(e) => {
-                    // Check if this is a disabled dependency error
-                    if is_test && e.code == ErrorCode::DisabledDependency {
-                        has_disabled_dependency = true;
+                    // For tests, warn on missing or disabled dependencies instead of erroring
+                    if is_test
+                        && (e.code == ErrorCode::DisabledDependency
+                            || e.code == ErrorCode::InvalidConfig)
+                    {
+                        // Only set has_disabled_dependency for disabled deps (not missing deps)
+                        if e.code == ErrorCode::DisabledDependency {
+                            has_disabled_dependency = true;
+                        }
+                        let err_with_loc = e.with_location(location);
+                        emit_warn_log_from_fs_error(&err_with_loc, io.status_reporter.as_ref());
                     } else {
                         // Track this node as having an error (unresolved ref/source)
                         nodes_with_errors.insert(node_unique_id.clone());
@@ -806,9 +818,17 @@ pub fn resolve_dependencies(
                         .push((dependency_id, location));
                 }
                 Err(e) => {
-                    // Check if this is a disabled dependency error
-                    if is_test && e.code == ErrorCode::DisabledDependency {
-                        has_disabled_dependency = true;
+                    // For tests, warn on missing or disabled dependencies instead of erroring
+                    if is_test
+                        && (e.code == ErrorCode::DisabledDependency
+                            || e.code == ErrorCode::InvalidConfig)
+                    {
+                        // Only set has_disabled_dependency for disabled deps (not missing deps)
+                        if e.code == ErrorCode::DisabledDependency {
+                            has_disabled_dependency = true;
+                        }
+                        let err_with_loc = e.with_location(location);
+                        emit_warn_log_from_fs_error(&err_with_loc, io.status_reporter.as_ref());
                     } else {
                         // Track this node as having an error (unresolved ref/source)
                         nodes_with_errors.insert(node_unique_id.clone());
