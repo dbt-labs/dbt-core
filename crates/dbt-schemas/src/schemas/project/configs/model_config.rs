@@ -200,7 +200,7 @@ pub struct ProjectModelConfig {
     )]
     pub merge_with_schema_evolution: Option<bool>,
     #[serde(rename = "+meta")]
-    pub meta: Option<BTreeMap<String, YmlValue>>,
+    pub meta: Verbatim<Option<BTreeMap<String, YmlValue>>>,
     #[serde(rename = "+not_matched_by_source_action")]
     pub not_matched_by_source_action: Option<String>,
     #[serde(rename = "+not_matched_by_source_condition")]
@@ -423,7 +423,7 @@ impl From<ProjectModelConfig> for ModelConfig {
             materialized: config.materialized,
             merge_exclude_columns: config.merge_exclude_columns,
             merge_update_columns: config.merge_update_columns,
-            meta: config.meta,
+            meta: (*config.meta).clone(),
             on_configuration_change: config.on_configuration_change,
             on_schema_change: config.on_schema_change,
             packages: config.packages,
@@ -543,7 +543,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             materialized: config.materialized,
             merge_exclude_columns: config.merge_exclude_columns,
             merge_update_columns: config.merge_update_columns,
-            meta: config.meta,
+            meta: Verbatim::from(config.meta),
             on_configuration_change: config.on_configuration_change,
             on_schema_change: config.on_schema_change,
             packages: config.packages,

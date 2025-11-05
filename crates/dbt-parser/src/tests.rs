@@ -16,6 +16,7 @@ mod tests {
     use dbt_jinja_utils::phases::parse::sql_resource::SqlResource;
     use dbt_jinja_utils::utils::render_sql;
     use dbt_schemas::schemas::profiles::PostgresDbConfig;
+    use dbt_schemas::schemas::project::ProjectModelConfig;
     use dbt_schemas::schemas::project::{DefaultTo, ModelConfig};
     use dbt_schemas::schemas::relations::DEFAULT_DBT_QUOTING;
     use dbt_schemas::schemas::serde::StringOrInteger;
@@ -32,6 +33,7 @@ mod tests {
     use chrono_tz::Tz;
     use std::collections::BTreeSet;
     use std::path::Path;
+    use std::rc::Rc;
     use std::sync::atomic::AtomicBool;
     use std::sync::{Arc, Mutex};
     use std::{collections::BTreeMap, path::PathBuf};
@@ -111,6 +113,53 @@ mod tests {
         let sql_resources = Arc::new(Mutex::new(Vec::new()));
 
         (env, sql_resources, init_config)
+    }
+
+    #[test]
+    fn test_meta_field_defers_jinja_expansion() {
+        // Build a minimal ProjectModelConfig YAML with +meta containing a Jinja expression,
+        // and a regular field (+description) that should be eagerly rendered.
+        let yaml = r#"
+        +meta:
+          demo: "{{ 1 + 2 }}"
+        +description: "prefix {{ 1 + 2 }}"
+        "#;
+
+        // Parse YAML to Value first, then render with into_typed_with_jinja
+        let val: dbt_serde_yaml::Value = dbt_serde_yaml::from_str(yaml).unwrap();
+
+        // Reuse the existing test env setup for a valid Jinja environment
+        let (env, _sql_resources, _init_cfg) = setup_test_env();
+
+        // Empty context and listeners for rendering
+        let ctx: BTreeMap<String, Value> = BTreeMap::new();
+        let listeners: Vec<Rc<dyn minijinja::listener::RenderingEventListener>> = Vec::new();
+
+        // Perform typed deserialization with Jinja rendering enabled
+        let cfg: ProjectModelConfig = dbt_jinja_utils::serde::into_typed_with_jinja(
+            &IoArgs::default(),
+            val,
+            false,
+            &env,
+            &ctx,
+            &listeners,
+            None,
+            true,
+        )
+        .unwrap();
+
+        // Assert: +meta is Verbatim -> inner string should NOT be rendered
+        let meta_opt = (*cfg.meta).as_ref();
+        assert!(meta_opt.is_some(), "+meta should be present");
+        let meta = meta_opt.unwrap();
+        let demo_val = meta.get("demo").expect("demo key in +meta");
+        match demo_val {
+            dbt_serde_yaml::Value::String(s, _) => assert_eq!(s, "{{ 1 + 2 }}"),
+            other => panic!("expected string in +meta.demo, got {other:?}"),
+        }
+
+        // Assert: +description is a normal string -> should be rendered to "3"
+        assert_eq!(cfg.description.as_deref(), Some("prefix 3"));
     }
 
     #[tokio::test]
