@@ -24,7 +24,8 @@ pub enum LocalExecutionBackendKind {
     Inline,
     /// Run models in a separate worker process
     Worker,
-    // Eventually Service
+    /// Run models in a service
+    Service,
 }
 
 use crate::adapter::AdapterType;

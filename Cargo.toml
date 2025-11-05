@@ -309,6 +309,7 @@ gcloud-auth = { version = "1.1.1", default-features = false, features = [
 http = { version = "1.2.0", default-features = false }
 reqwest-middleware = { version = "0.4.2" }
 reqwest-retry = { version = "0.7.0" }
+reqwest-sse = { version = "0.1.0" }
 token-source = "1.0.0"
 ureq = { version = "3.0.11", default-features = false, features = [
   "gzip",
@@ -374,6 +375,7 @@ tokio = { version = "1.41.1", features = [
   "sync",
   "time",
 ] }
+tokio-stream = "0.1.17"
 
 # atomic
 arc-swap = { version = "1.7.1" }
@@ -494,6 +496,10 @@ tracy-client = { version = "0.18.0", default-features = false }
 
 # duckdb
 duckdb = { version = "1.4.0", features = ["bundled"] }
+
+# axum dependency
+axum = "0.8.5"
+tower-http = { version = "0.6", features = ["trace"] }
 
 [workspace.lints.rust]
 # When updating these lints mind that some crates may not inherit form workspace
