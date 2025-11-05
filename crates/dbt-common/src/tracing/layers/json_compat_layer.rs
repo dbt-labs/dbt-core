@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
+use dbt_error::ErrorCode;
 use dbt_telemetry::{
     Invocation, LogMessage, LogRecordInfo, QueryExecuted, SeverityNumber, SpanEndInfo,
     UserLogMessage,
@@ -209,7 +210,10 @@ impl TelemetryConsumer for JsonCompatLayer {
         if let Some(log_msg) = log_record.attributes.downcast_ref::<LogMessage>() {
             // Format the message
             let formatted_message = format_log_message(
-                log_msg,
+                log_msg
+                    .code
+                    .and_then(|c| u16::try_from(c).ok())
+                    .and_then(|c| ErrorCode::try_from(c).ok()),
                 &log_record.body,
                 log_record.severity_number,
                 false,

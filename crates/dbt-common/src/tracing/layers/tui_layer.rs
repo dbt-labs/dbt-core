@@ -10,6 +10,7 @@ use dbt_telemetry::{
     SpanStatus, StatusCode, TelemetryAttributes, UserLogMessage,
 };
 
+use dbt_error::ErrorCode;
 use tracing::level_filters::LevelFilter;
 
 use crate::{
@@ -23,7 +24,7 @@ use crate::{
             log_message::format_log_message, test_result::format_test_failure,
         },
         layer::{ConsumerLayer, TelemetryConsumer},
-        private_events::print_event::StdoutMessage,
+        private_events::print_event::{StderrMessage, StdoutMessage},
     },
 };
 
@@ -286,7 +287,10 @@ impl TelemetryConsumer for TuiLayer {
         if let Some(log_msg) = log_record.attributes.downcast_ref::<LogMessage>() {
             // Format the message
             let formatted_message = format_log_message(
-                log_msg,
+                log_msg
+                    .code
+                    .and_then(|c| u16::try_from(c).ok())
+                    .and_then(|c| ErrorCode::try_from(c).ok()),
                 &log_record.body,
                 log_record.severity_number,
                 true,
@@ -309,18 +313,53 @@ impl TelemetryConsumer for TuiLayer {
                         .expect("failed to write to stdout");
                 });
             }
+
+            return;
         }
 
-        // Handle simple events that print jsut the body: StdoutMessage & UserLogMessage
-        if log_record.attributes.is::<StdoutMessage>()
-            || log_record.attributes.is::<UserLogMessage>()
-        {
+        // Handle simple events that print just the body on it's own line: UserLogMessage
+        if log_record.attributes.is::<UserLogMessage>() {
             // Print user log messages immediately to stdout
             with_suspended_progress_bars(|| {
                 io::stdout()
                     .lock()
                     .write_all(format!("{}\n", log_record.body).as_bytes())
                     .expect("failed to write to stdout");
+            });
+
+            return;
+        }
+
+        // Handle simple events that print just the body: StdoutMessage
+        if log_record.attributes.is::<StdoutMessage>() {
+            // Print immediately to stdout
+            with_suspended_progress_bars(|| {
+                io::stdout()
+                    .lock()
+                    .write_all(log_record.body.as_bytes())
+                    .expect("failed to write to stdout");
+            });
+
+            return;
+        }
+
+        // Handle StderrMessage
+        if let Some(stderr_message) = log_record.attributes.downcast_ref::<StderrMessage>() {
+            // Format the message
+            let formatted_message = format_log_message(
+                stderr_message.error_code(),
+                &log_record.body,
+                log_record.severity_number,
+                true,
+                true,
+            );
+
+            // Print user log messages immediately to stdout
+            with_suspended_progress_bars(|| {
+                io::stderr()
+                    .lock()
+                    .write_all(format!("{formatted_message}\n").as_bytes())
+                    .expect("failed to write to stderr");
             });
         }
     }

@@ -726,18 +726,26 @@ where
             .as_ref()
             .map(|ps| ps.scope().from_root().next().expect("Root span must exist"));
 
-        // If tracing is set up correctly, all event's should be under a span tree rooted with our special root
+        // Unlike spans, where we expect that they are set-up corerctly and rooted under our special root span,
+        // there are multiple valid use-cases for events being logged outside of any span context:
+        // 1. Third-party libraries may log events on worker threads
+        // 2. Worker threads that emit traces not tied to the main invocation (e.g. vortex client)
+        // 3. Apps using this infrastructure that do not have a concept of invocation
+        // 4. Errors during initialization before invocation span is created
+        //
+        // In order to accommodate these use-cases, we allow events as long as at least process
+        // span is present as a fallback. The lack of process span would indicate that a worker
+        // thread is logging events after tracing has been shutdown, which is likely a bug and
+        // will cause unexpected behavior in consumers.
+        //
+        // The main downside of a lax check here, is that middlewares that rely on data_provider
+        // scoped to invocation context will instead get a process-level data provider, which will
+        // lead to incorrect behavior. E.g. error metric counts and related exit code calculation will
+        // ignore such events. These scenarios should be covered by tests to avoid regressions.
         debug_assert!(
-            root_span
-                .as_ref()
-                .is_some_and(|s| s.name() == ROOT_SPAN_NAME)
-                || cfg!(test),
-            "Expected root span created via `create_root_info_span`. Got: {}.
-            Are you running code not instrumented under an invocation span tree?",
-            root_span
-                .as_ref()
-                .map(|s| s.name())
-                .unwrap_or("<no root span>")
+            root_span.is_some() || cfg!(test),
+            "Event logged outside of span context. Expected root span created via `create_root_info_span` 
+            or a process span. Are you logging events after tracing has been shutdown?",
         );
 
         let mut data_provider = root_span

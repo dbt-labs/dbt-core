@@ -24,10 +24,10 @@ use pbjson_types::Timestamp;
 use prost::Message;
 use proto_rust::v1::events::vortex::{VortexMessage, VortexMessageBatch};
 
-#[cfg(not(test))]
-use log::debug;
 #[cfg(test)]
-use std::println as debug;
+use std::println as trace;
+#[cfg(not(test))]
+use tracing::trace;
 
 const DEFAULT_FLUSH_INTERVAL: Duration = Duration::from_millis(500);
 const DEFAULT_TARGET_BATCH_SIZE_BYTES: usize = 1024; // 1kb batches
@@ -302,10 +302,10 @@ impl Batch {
     fn on_response(&mut self, status: http::StatusCode, text: String) {
         if status.is_success() {
             self.clear_after_success();
-            debug!("Successfully sent telemetry batch.");
+            trace!("Successfully sent telemetry batch.");
         } else {
             self.backoff();
-            debug!("Failed to send batch of messages: {status}: {text}");
+            trace!("Failed to send batch of messages: {status}: {text}");
             self.last_error = Some(ureq::Error::StatusCode(status.as_u16()));
         }
     }
@@ -466,8 +466,9 @@ impl VortexProducerClient {
     fn new(agent: Box<dyn SenderAgent>, dev_mode_output_path: Option<PathBuf>) -> Self {
         let dev_mode_output_writer = if let Some(path) = &dev_mode_output_path {
             match fs::OpenOptions::new()
-                .truncate(true)
+                .write(true)
                 .create(true)
+                .truncate(true)
                 .open(path)
             {
                 Ok(file) => {

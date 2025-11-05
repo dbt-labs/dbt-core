@@ -8,7 +8,7 @@ use dbt_common::FsResult;
 use dbt_common::err;
 use dbt_common::io_args::EvalArgs;
 use dbt_common::io_args::JsonSchemaTypes;
-use dbt_common::tracing::emit::print;
+use dbt_common::tracing::emit::println;
 
 use strum::IntoEnumIterator;
 
@@ -37,34 +37,34 @@ pub async fn execute_man_command(arg: &EvalArgs) -> FsResult<i32> {
                 let generator = settings.into_generator();
                 let mut schema = generator.into_root_schema_for::<DbtProfiles>();
                 deny_additional_properties_in_root(&mut schema);
-                print(to_string_pretty(&schema)?);
+                println(to_string_pretty(&schema)?);
             }
             JsonSchemaTypes::Project => {
                 let settings = SchemaSettings::default();
                 let generator = settings.into_generator();
                 let mut schema = generator.into_root_schema_for::<DbtProject>();
                 deny_additional_properties_in_root(&mut schema);
-                print(to_string_pretty(&schema)?);
+                println(to_string_pretty(&schema)?);
             }
             JsonSchemaTypes::Selector => {
                 let settings = SchemaSettings::default();
                 let generator = settings.into_generator();
                 let mut schema = generator.into_root_schema_for::<SelectorFile>();
                 deny_additional_properties_in_root(&mut schema);
-                print(to_string_pretty(&schema)?);
+                println(to_string_pretty(&schema)?);
             }
             JsonSchemaTypes::Schema => {
                 let settings = SchemaSettings::default();
                 let generator = settings.into_generator();
                 let mut schema = generator.into_root_schema_for::<DbtPropertiesFile>();
                 deny_additional_properties_in_root(&mut schema);
-                print(to_string_pretty(&schema)?);
+                println(to_string_pretty(&schema)?);
             }
             JsonSchemaTypes::Telemetry => {
                 let settings = SchemaSettings::draft07();
                 let generator = settings.into_generator();
                 let schema = generator.into_root_schema_for::<TelemetryRecord>();
-                print(to_string_pretty(&schema)?);
+                println(to_string_pretty(&schema)?);
             }
         }
     }

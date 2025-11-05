@@ -525,7 +525,7 @@ impl ContextualProgressBar {
 
     fn format_counters(&self, writer: &'_ mut dyn fmt::Write) {
         let Ok(counters) = self.counters.read() else {
-            // debug!("Poisoned 'counters' read lock in console");
+            // emit_trace_log_message(|| "Poisoned 'counters' read lock in console".to_string());
             let _ = writer.write_str("<N/A>");
             return;
         };
@@ -589,7 +589,7 @@ impl ContextualProgressBar {
                 match writer.write_str(shortmsg.as_str()) {
                     Ok(_) => (),
                     Err(_) => {
-                        // debug!("Failed to write context message");
+                        // emit_trace_log_message(|| "Failed to write context message".to_string());
                     }
                 }
                 // items.iter().take(5).for_each(|item| {
@@ -598,7 +598,7 @@ impl ContextualProgressBar {
                 // });
             }
             Err(_) => {
-                // debug!("Poisoned 'context_slots' read lock in console");
+                // emit_trace_log_message(|| "Poisoned 'context_slots' read lock in console".to_string());
                 let _ = writer.write_str("<N/A>");
             }
         }
@@ -654,7 +654,7 @@ impl ContextualProgressBar {
                 slots.push(ContextItem::new(item.to_string()));
             }
             Err(_) => {
-                // debug!("Poisoned 'context_slots' write lock in console");
+                // emit_trace_log_message(|| "Poisoned 'context_slots' write lock in console".to_string());
             }
         }
     }
@@ -667,7 +667,7 @@ impl ContextualProgressBar {
                 }
             }
             Err(_) => {
-                // debug!("Poisoned 'context_slots' write lock in console");
+                // emit_trace_log_message(|| "Poisoned 'context_slots' write lock in console".to_string());
             }
         }
     }

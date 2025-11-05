@@ -586,10 +586,38 @@ pub fn emit_strict_parse_error(
     }
 }
 
-/// Print a message to stdout only. This should be used instead of `println!`.
+/// Print a message on a separate line to stdout only. This should be used instead of `println!`.
+#[track_caller]
+pub fn println(message: impl AsRef<str>) {
+    use super::private_events::print_event::StdoutMessage;
+
+    emit_info_event(
+        StdoutMessage,
+        Some(format!("{}\n", message.as_ref()).as_str()),
+    );
+}
+
+/// Print a message to stdout only. This should be used instead of `print!`.
 #[track_caller]
 pub fn print(message: impl AsRef<str>) {
     use super::private_events::print_event::StdoutMessage;
 
     emit_info_event(StdoutMessage, Some(message.as_ref()));
+}
+
+/// Print an error to stderr only. This should be used instead of `eprintln!`.
+///
+/// Takes a mandatory error code. The message will be formatted similarly
+/// to how error logs are formatted: `error: code: <message>`, error colored in red.
+#[track_caller]
+pub fn print_err(error_code: ErrorCode, message: impl AsRef<str>) {
+    use super::private_events::print_event::StderrMessage;
+
+    emit_error_event(StderrMessage::new(Some(error_code)), Some(message.as_ref()));
+}
+
+/// Print an error to stderr only. This should be used instead of `eprintln!`.
+#[track_caller]
+pub fn print_err_from_fs_error(error: &FsError) {
+    print_err(error.code, error.message().as_str());
 }

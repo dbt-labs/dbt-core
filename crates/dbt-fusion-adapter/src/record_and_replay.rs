@@ -11,8 +11,10 @@ use adbc_core::options::{OptionStatement, OptionValue};
 use arrow::array::{RecordBatch, RecordBatchIterator, RecordBatchReader};
 use arrow_schema::{ArrowError, DataType, Field, Schema, SchemaBuilder};
 use dashmap::DashMap;
+use dbt_common::ErrorCode;
 use dbt_common::adapter::AdapterType;
 use dbt_common::cancellation::CancellationToken;
+use dbt_common::tracing::emit::emit_warn_log_message;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_xdbc::{Backend, Connection, QueryCtx, Statement};
 use minijinja::State;
@@ -30,7 +32,6 @@ use std::fs::{self, File, create_dir_all, metadata};
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use tracing::warn;
 
 // The reason this is global is that we might have multiple adapters
 // (we do not limit the number of adapters people can instantiate) and
@@ -113,17 +114,25 @@ fn fix_decimal_precision_in_field(field: &Field) -> Field {
     let fixed_data_type = match field.data_type() {
         DataType::Decimal128(precision, scale) if *precision == 0 => {
             // BigQuery NUMERIC defaults: precision=38, scale=9
-            warn!(
-                "Found DECIMAL128 with invalid precision=0, using defaults (38, 9) for field '{}'",
-                field.name()
+            emit_warn_log_message(
+                ErrorCode::InvalidType,
+                format!(
+                    "Found DECIMAL128 with invalid precision=0, using defaults (38, 9) for field '{}'",
+                    field.name()
+                ),
+                None,
             );
             DataType::Decimal128(38, *scale)
         }
         DataType::Decimal256(precision, scale) if *precision == 0 => {
             // BigQuery BIGNUMERIC defaults: precision=76, scale=38
-            warn!(
-                "Found DECIMAL256 with invalid precision=0, using defaults (76, 38) for field '{}'",
-                field.name()
+            emit_warn_log_message(
+                ErrorCode::InvalidType,
+                format!(
+                    "Found DECIMAL256 with invalid precision=0, using defaults (76, 38) for field '{}'",
+                    field.name()
+                ),
+                None,
             );
             DataType::Decimal256(76, *scale)
         }
