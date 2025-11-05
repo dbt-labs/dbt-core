@@ -55,6 +55,8 @@ pub struct FsTraceConfig {
     /// Fully resolved path to the directory where log-related files
     /// (e.g. dbt.log, query log) should be written.
     pub(super) log_path: PathBuf,
+    /// Optional custom name for the log file. If None, defaults to `dbt.log`.
+    pub(super) log_file_name: Option<String>,
     /// Invocation ID. Used as trace ID for correlation
     pub(super) invocation_id: uuid::Uuid,
     /// If True, traces will be forwarded to OTLP endpoints, if any
@@ -68,6 +70,9 @@ pub struct FsTraceConfig {
     pub(super) show_options: HashSet<ShowOptions>,
     /// Show all deprecations warnings/errors instead of one per package
     pub(super) show_all_deprecations: bool,
+    /// If True, disables stdout/console output even when using Text/Default format.
+    /// Useful for long-running services like LSP that only want file logging.
+    pub(super) disable_console_output: bool,
 }
 
 impl Default for FsTraceConfig {
@@ -79,12 +84,14 @@ impl Default for FsTraceConfig {
             otel_file_path: None,
             otel_parquet_file_path: None,
             log_path: PathBuf::new(),
+            log_file_name: None,
             invocation_id: uuid::Uuid::now_v7(),
             export_to_otlp: false,
             log_format: LogFormat::Default,
             enable_query_log: false,
             show_options: HashSet::new(),
             show_all_deprecations: false,
+            disable_console_output: false,
         }
     }
 }
@@ -140,6 +147,9 @@ impl FsTraceConfig {
     /// * `enable_query_log` - If true, enables writing a separate query log file
     /// * `show_options` - Set of ShowOptions controlling terminal/file output visibility
     /// * `show_all_deprecations` - If true, show all deprecation warnings/errors instead of one per package
+    /// * `log_file_name` - Optional custom name for the log file. If None, defaults to `dbt.log`.
+    ///   If Some, creates log file at `{log_path}/{log_file_name}`
+    /// * `disable_console_output` - If true, disables stdout/console output even when using Text/Default format
     ///
     /// # Path Resolution
     ///
@@ -188,6 +198,8 @@ impl FsTraceConfig {
         enable_query_log: bool,
         show_options: HashSet<ShowOptions>,
         show_all_deprecations: bool,
+        log_file_name: Option<&str>,
+        disable_console_output: bool,
     ) -> Self {
         let (in_dir, out_dir) = calculate_trace_dirs(project_dir, target_path);
 
@@ -211,12 +223,14 @@ impl FsTraceConfig {
             otel_parquet_file_path: otel_parquet_file_name
                 .map(|file_name| out_dir.join(DBT_METADATA_DIR_NAME).join(file_name)),
             log_path: log_dir_path,
+            log_file_name: log_file_name.map(|s| s.to_string()),
             invocation_id,
             export_to_otlp,
             log_format,
             enable_query_log,
             show_options,
             show_all_deprecations,
+            disable_console_output,
         }
     }
 
@@ -253,6 +267,8 @@ impl FsTraceConfig {
             true, // Always enable query log for now
             io_args.show.clone(),
             io_args.show_all_deprecations,
+            None,  // log_file_name - use default dbt.log
+            false, // disable_console_output defaults to false for CLI
         )
     }
 
@@ -329,25 +345,27 @@ impl FsTraceConfig {
             consumer_layers.push(parquet_layer)
         };
 
-        // Create console layer based on log format
-        match self.log_format {
-            LogFormat::Default | LogFormat::Text => {
-                // Create layer and apply user specified filtering
-                consumer_layers.push(build_tui_layer(
-                    self.max_log_verbosity,
-                    self.log_format,
-                    self.show_options.clone(),
-                ))
+        // Create console layer based on log format (unless disabled)
+        if !self.disable_console_output {
+            match self.log_format {
+                LogFormat::Default | LogFormat::Text => {
+                    // Create layer and apply user specified filtering
+                    consumer_layers.push(build_tui_layer(
+                        self.max_log_verbosity,
+                        self.log_format,
+                        self.show_options.clone(),
+                    ))
+                }
+                LogFormat::Json => {
+                    // Create layer and apply user specified filtering
+                    consumer_layers.push(build_json_compat_layer(
+                        std::io::stdout(),
+                        self.max_log_verbosity,
+                        self.invocation_id,
+                    ))
+                }
+                LogFormat::Otel => {}
             }
-            LogFormat::Json => {
-                // Create layer and apply user specified filtering
-                consumer_layers.push(build_json_compat_layer(
-                    std::io::stdout(),
-                    self.max_log_verbosity,
-                    self.invocation_id,
-                ))
-            }
-            LogFormat::Otel => {}
         };
 
         // If any of the file logs are enabled - create the log directory
@@ -357,7 +375,11 @@ impl FsTraceConfig {
         }
 
         if self.max_file_log_verbosity != LevelFilter::OFF {
-            let file_log_path = self.log_path.join(DBT_DEAFULT_LOG_FILE_NAME);
+            let log_file_name = self
+                .log_file_name
+                .as_deref()
+                .unwrap_or(DBT_DEAFULT_LOG_FILE_NAME);
+            let file_log_path = self.log_path.join(log_file_name);
 
             // Open file in append mode, same as dbt core.
             // NOTE: legacy logger based onfra also opens this file with `truncate` as of today.
