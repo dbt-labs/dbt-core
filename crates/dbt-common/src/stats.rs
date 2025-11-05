@@ -70,6 +70,7 @@ pub struct Stat {
     pub end_time: SystemTime,
     pub status: NodeStatus,
     pub thread_id: String,
+    pub message: Option<String>,
 }
 
 impl Stat {
@@ -78,6 +79,7 @@ impl Stat {
         start_time: SystemTime,
         num_rows: Option<usize>,
         status: NodeStatus,
+        message: Option<String>,
     ) -> Self {
         let end_time = SystemTime::now();
         Stat {
@@ -92,6 +94,7 @@ impl Stat {
                     .trim_start_matches("ThreadId(")
                     .trim_end_matches(")")
             ),
+            message,
         }
     }
 
