@@ -3,6 +3,7 @@ use crate::columns::StdColumn;
 use crate::errors::{AdapterError, AdapterErrorKind};
 use crate::funcs::{execute_macro, none_value};
 use crate::metadata::CatalogAndSchema;
+use crate::python;
 use crate::record_batch_utils::get_column_values;
 use crate::relation_object::RelationObject;
 use crate::response::{AdapterResponse, ResultObject};
@@ -292,19 +293,35 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     /// Default implementation raises Internal error.
     fn submit_python_job(
         &self,
-        _ctx: &QueryCtx,
-        _conn: &'_ mut dyn Connection,
-        _state: &State,
-        _model: &Value,
-        _compiled_code: &str,
+        ctx: &QueryCtx,
+        conn: &'_ mut dyn Connection,
+        state: &State,
+        model: &Value,
+        compiled_code: &str,
     ) -> AdapterResult<AdapterResponse> {
-        Err(AdapterError::new(
-            AdapterErrorKind::Internal,
-            format!(
-                "Python models are not supported for {} adapter",
-                self.adapter_type()
+        let typed_adapter = self.as_typed_base_adapter();
+        match self.adapter_type() {
+            AdapterType::Snowflake => python::snowflake::submit_python_job(
+                typed_adapter,
+                ctx,
+                conn,
+                state,
+                model,
+                compiled_code,
             ),
-        ))
+            // TODO: add support for BigQuery and Databricks
+            // https://docs.getdbt.com/docs/core/connect-data-platform/bigquery-setup#running-python-models-on-bigquery-dataframes
+            // https://docs.getdbt.com/reference/resource-configs/bigquery-configs#python-model-configuration
+            //
+            // https://docs.getdbt.com/reference/resource-configs/databricks-configs
+            _ => Err(AdapterError::new(
+                AdapterErrorKind::Internal,
+                format!(
+                    "Python models are not supported for {} adapter",
+                    self.adapter_type()
+                ),
+            )),
+        }
     }
 
     /// Quote
