@@ -187,6 +187,7 @@ pub struct WarehouseSpecificNodeConfig {
     pub enable_refresh: Option<bool>,
     #[serde(default, deserialize_with = "f64_or_string_f64")]
     pub refresh_interval_minutes: Option<f64>,
+    pub resource_tags: Option<BTreeMap<String, String>>,
     pub max_staleness: Option<String>,
 
     // Used by both Databricks and Bigquery
@@ -292,6 +293,7 @@ impl DefaultTo<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConfig {
             partitions,
             enable_refresh,
             refresh_interval_minutes,
+            resource_tags,
             max_staleness,
 
             // Databricks
@@ -376,6 +378,7 @@ impl DefaultTo<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConfig {
                 partitions,
                 enable_refresh,
                 refresh_interval_minutes,
+                resource_tags,
                 max_staleness,
                 // Databricks
                 file_format,

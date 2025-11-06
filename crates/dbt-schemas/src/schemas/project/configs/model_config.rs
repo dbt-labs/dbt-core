@@ -251,6 +251,8 @@ pub struct ProjectModelConfig {
         deserialize_with = "f64_or_string_f64"
     )]
     pub refresh_interval_minutes: Option<f64>,
+    #[serde(rename = "+resource_tags")]
+    pub resource_tags: Option<BTreeMap<String, String>>,
     #[serde(
         default,
         rename = "+require_partition_filter",
@@ -468,6 +470,7 @@ impl From<ProjectModelConfig> for ModelConfig {
                 grant_access_to: config.grant_access_to,
                 partitions: config.partitions,
                 enable_refresh: config.enable_refresh,
+                resource_tags: config.resource_tags,
                 refresh_interval_minutes: config.refresh_interval_minutes,
                 max_staleness: config.max_staleness,
 
@@ -579,6 +582,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             hours_to_expiration: config.__warehouse_specific_config__.hours_to_expiration,
             labels: config.__warehouse_specific_config__.labels,
             labels_from_meta: config.__warehouse_specific_config__.labels_from_meta,
+            resource_tags: config.__warehouse_specific_config__.resource_tags,
             kms_key_name: config.__warehouse_specific_config__.kms_key_name,
             require_partition_filter: config
                 .__warehouse_specific_config__

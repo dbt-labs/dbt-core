@@ -354,6 +354,7 @@ impl From<ProjectSeedConfig> for SeedConfig {
                 partitions: config.partitions,
                 enable_refresh: config.enable_refresh,
                 refresh_interval_minutes: config.refresh_interval_minutes,
+                resource_tags: None,
                 max_staleness: config.max_staleness,
 
                 file_format: config.file_format,

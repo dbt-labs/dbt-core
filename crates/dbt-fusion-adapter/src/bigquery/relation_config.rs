@@ -335,6 +335,10 @@ impl BigqueryMaterializedViewConfigObject {
             "labels".to_string(),
             MinijinjaValue::from_serialize(self.0.labels().iter().collect::<Vec<_>>()),
         );
+        hm.insert(
+            "tags".to_string(),
+            MinijinjaValue::from_serialize(self.0.tags().iter().collect::<Vec<_>>()),
+        );
 
         let expiration_timestamp_ns = self.0.expiration_timestamp_ns();
         if expiration_timestamp_ns > 0 {
@@ -536,8 +540,10 @@ impl BigqueryMaterializedViewConfig for BigqueryMaterializedViewConfigFromDbtMod
     }
 
     fn tags(&self) -> &BTreeMap<String, String> {
-        // TODO(serramatutu): add `resource_tags` to BigQuery config
-        &EMPTY_BTREEMAP
+        self.attr()
+            .resource_tags
+            .as_ref()
+            .unwrap_or(&EMPTY_BTREEMAP)
     }
 
     fn labels(&self) -> &BTreeMap<String, String> {

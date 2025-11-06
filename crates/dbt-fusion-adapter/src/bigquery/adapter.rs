@@ -135,6 +135,22 @@ impl BigqueryAdapter {
             );
         }
 
+        let resource_tags = config
+            .__warehouse_specific_config__
+            .resource_tags
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(key, value)| Value::from_iter(vec![Value::from(key), Value::from(value)]))
+            .collect::<Vec<_>>();
+
+        // Add resource_tags to opts if any exist
+        if !resource_tags.is_empty() {
+            result.insert(
+                "tags".to_string(),
+                Value::from_object(MutableVec::from_iter(resource_tags)),
+            );
+        }
+
         result
     }
 }
