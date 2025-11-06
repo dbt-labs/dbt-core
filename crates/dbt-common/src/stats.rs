@@ -123,18 +123,30 @@ impl Stat {
     }
     pub fn result_status_string(&self) -> String {
         match self.status {
-            NodeStatus::Succeeded | NodeStatus::TestWarned | NodeStatus::TestPassed => {
-                if self.unique_id.starts_with("test.") || self.unique_id.starts_with("unit_test.") {
-                    match self.num_rows {
-                        Some(0) => "pass".to_string(),
-                        Some(_) => "fail".to_string(),
-                        // Using "success" as fallback, though tests should have pass/fail
-                        None => "success".to_string(),
-                    }
-                } else {
-                    "success".to_string()
+            NodeStatus::Succeeded
+                if self.unique_id.starts_with("test.")
+                    || self.unique_id.starts_with("unit_test.") =>
+            {
+                match self.num_rows {
+                    Some(0) => "pass".to_string(),
+                    Some(_) => "fail".to_string(),
+                    // Using "pass" as fallback, though tests should have pass/fail
+                    None => "pass".to_string(),
                 }
             }
+            NodeStatus::Errored
+                if self.unique_id.starts_with("test.")
+                    || self.unique_id.starts_with("unit_test.") =>
+            {
+                match self.num_rows {
+                    Some(0) => "error".to_string(),
+                    Some(_) => "fail".to_string(),
+                    None => "error".to_string(),
+                }
+            }
+            NodeStatus::Succeeded => "success".to_string(),
+            NodeStatus::TestWarned => "warn".to_string(),
+            NodeStatus::TestPassed => "pass".to_string(),
             NodeStatus::Errored => "error".to_string(),
             NodeStatus::SkippedUpstreamFailed => "skipped".to_string(),
             NodeStatus::ReusedNoChanges(_) => "reused".to_string(),
