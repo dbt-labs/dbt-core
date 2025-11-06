@@ -1,0 +1,6 @@
+kind: Fixes
+body: Stop compiling python udfs like python models
+time: 2025-11-06T16:35:14.735442-06:00
+custom:
+  Author: QMalcolm
+  Issue: "12153"
