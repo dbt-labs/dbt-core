@@ -17,6 +17,16 @@ def entry(value):
     return value * 2
 """
 
+double_it_py_with_jinja = """
+def entry(value):
+    {% if 1 == 1 %}
+    return value * 2
+    {% else %}
+    {# this should never happen #}
+    return value * 3
+    {% endif %}
+"""
+
 double_it_deterministic_sql = """
 {{ config(volatility='deterministic') }}
 SELECT value * 2
@@ -131,6 +141,13 @@ class BasicUDFSetup:
             "double_it.sql": double_it_sql,
             "double_it.yml": double_it_yml,
         }
+
+
+scalar_function_python_macro = """
+{% macro postgres__scalar_function_python(target_relation) %}
+  SELECT 1;
+{% endmacro %}
+"""
 
 
 class TestBasicSQLUDF(BasicUDFSetup):
@@ -387,3 +404,48 @@ class TestCanConfigFunctionsFromProjectConfig:
         function_node = manifest.functions["function.test.double_it"]
         # Volatility from sql should take precedence over the project config
         assert function_node.config.volatility == FunctionVolatility.Deterministic
+
+
+class TestPythonFunctionWithoutJinjaHasEquivalentRawCodeAndCompiledCode:
+    @pytest.fixture(scope="class")
+    def functions(self) -> Dict[str, str]:
+        return {
+            "double_it.py": double_it_py,
+            "double_it.yml": double_it_python_yml,
+        }
+
+    @pytest.fixture(scope="class")
+    def macros(self) -> Dict[str, str]:
+        return {
+            "postgres__scalar_function_python.sql": scalar_function_python_macro,
+        }
+
+    def test_udfs(self, project):
+        run_dbt(["build"])
+        result = run_dbt(["compile"])
+        assert len(result.results) == 1
+        node = result.results[0].node
+        assert isinstance(node, FunctionNode)
+        assert node.raw_code == node.compiled_code
+
+
+class TestPythonFunctionWithJinjaHasCorrectCompiledCode:
+    @pytest.fixture(scope="class")
+    def functions(self) -> Dict[str, str]:
+        return {
+            "double_it.py": double_it_py_with_jinja,
+            "double_it.yml": double_it_python_yml,
+        }
+
+    @pytest.fixture(scope="class")
+    def macros(self) -> Dict[str, str]:
+        return {
+            "postgres__scalar_function_python.sql": scalar_function_python_macro,
+        }
+
+    def test_udfs(self, project):
+        result = run_dbt(["compile"])
+        assert len(result.results) == 1
+        node = result.results[0].node
+        assert isinstance(node, FunctionNode)
+        assert node.compiled_code == "def entry(value):\n    \n    return value * 2\n    "
