@@ -599,7 +599,7 @@ class Compiler:
         if extra_context is None:
             extra_context = {}
 
-        if node.language == ModelLanguage.python:
+        if node.language == ModelLanguage.python and node.resource_type == NodeType.Model:
             context = self._create_node_context(node, manifest, extra_context)
 
             postfix = jinja.get_rendered(
