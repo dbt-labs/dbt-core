@@ -33,6 +33,7 @@ url = { workspace = true }
 vortex-events = { workspace = true }
 
 [dev-dependencies]
+dbt-telemetry = { workspace = true }
 
 [lib]
 name = "fs_deps"

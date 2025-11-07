@@ -1,6 +1,8 @@
+use crate::semver::{Version, VersionSpecifier, versions_compatible};
 use dbt_common::tracing::emit::emit_warn_log_message;
 use dbt_common::{ErrorCode, FsResult, err, fs_err, io_args::IoArgs};
 use dbt_schemas::schemas::packages::DbtPackageEntry;
+use dbt_schemas::schemas::serde::StringOrArrayOfStrings;
 use reqwest::{Client, StatusCode};
 use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
 use reqwest_retry::{
@@ -8,26 +10,29 @@ use reqwest_retry::{
 };
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
+use std::str::FromStr;
 
 pub const DBT_HUB_URL: &str = "https://hub.getdbt.com";
 pub const DBT_CORE_FIXED_VERSION: &str = "1.8.7";
 const MAX_CLIENT_RETRIES: u32 = 3;
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Debug)]
 pub struct HubPackageDownloads {
     pub tarball: String,
 }
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Debug)]
 pub struct HubPackageVersion {
     pub name: String,
     pub packages: Vec<DbtPackageEntry>,
     pub downloads: HubPackageDownloads,
     #[serde(rename = "fusion-schema-compat")]
     pub fusion_schema_compat: Option<bool>,
+    #[serde(default)]
+    pub require_dbt_version: Option<StringOrArrayOfStrings>,
 }
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Debug)]
 pub struct HubPackageJson {
     pub name: String,
     pub versions: HashMap<String, HubPackageVersion>,
@@ -144,8 +149,76 @@ impl HubClient {
         _dbt_version: &str,
         _should_version_check: bool,
     ) -> FsResult<Vec<String>> {
-        // TODO: Implement version checking
+        // TODO: Implement version filtering. This should be done
+        // once most of the regularly used hub packages have a
+        // fusion compatible version in require_dbt_version.
         Ok(hub_package.versions.keys().cloned().collect())
+    }
+
+    /// Checks if the current dbt version satisfies the package's require_dbt_version constraint
+    /// and issues a warning if it doesn't.
+    ///
+    /// Uses CARGO_PKG_VERSION as the current dbt version.
+    ///
+    /// # Arguments
+    /// * `io` - IO arguments for emitting warnings
+    /// * `package_name` - The name of the package being checked
+    /// * `package_version` - The specific version metadata from the hub
+    pub fn check_require_dbt_version(
+        &self,
+        io: &IoArgs,
+        package_name: &str,
+        package_version: &HubPackageVersion,
+    ) {
+        let current_version = env!("CARGO_PKG_VERSION");
+        // Check if package has version requirements
+        if let Some(ref required_versions) = package_version.require_dbt_version {
+            // Convert StringOrArrayOfStrings to Vec<String>
+            let version_strings: Vec<String> = match required_versions {
+                StringOrArrayOfStrings::String(s) => vec![s.clone()],
+                StringOrArrayOfStrings::ArrayOfStrings(arr) => arr.clone(),
+            };
+
+            // Parse required versions
+            let mut all_versions = Vec::new();
+            for version_str in &version_strings {
+                match VersionSpecifier::from_str(version_str) {
+                    Ok(spec) => all_versions.push(Version::Spec(spec)),
+                    Err(_) => {
+                        // If we can't parse a version requirement, skip validation
+                        return;
+                    }
+                }
+            }
+
+            // Add current version as exact match
+            match VersionSpecifier::from_str(&format!("={}", current_version)) {
+                Ok(current_spec) => all_versions.push(Version::Spec(current_spec)),
+                Err(_) => {
+                    // If we can't parse current version, skip validation
+                    return;
+                }
+            }
+
+            // Check if versions are compatible
+            if !versions_compatible(&all_versions) {
+                let version_display = if version_strings.len() == 1 {
+                    version_strings[0].clone()
+                } else {
+                    format!("[{}]", version_strings.join(", "))
+                };
+
+                emit_warn_log_message(
+                    ErrorCode::DependencyWarning,
+                    format!(
+                        "Package '{}' requires dbt version {}, but current version is {}. \
+                         This package may not be compatible with your dbt version.",
+                        package_name, version_display, current_version
+                    ),
+                    io.status_reporter.as_ref(),
+                );
+            }
+        }
     }
 
     /// Checks if a package is deprecated or redirected and shows appropriate warnings
@@ -199,12 +272,73 @@ impl HubClient {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use dbt_common::io_args::IoArgs;
+    use dbt_common::FsError;
+    use dbt_common::io_args::{IoArgs, StaticAnalysisOffReason};
+    use dbt_common::io_utils::StatusReporter;
     use std::collections::HashMap;
+    use std::path::PathBuf;
+    use std::sync::{Arc, Mutex};
+
+    // Mock status reporter for testing
+    #[derive(Default)]
+    struct MockStatusReporter {
+        warnings: Arc<Mutex<Vec<String>>>,
+    }
+
+    impl MockStatusReporter {
+        fn new() -> Self {
+            Self {
+                warnings: Arc::new(Mutex::new(Vec::new())),
+            }
+        }
+
+        fn get_warnings(&self) -> Vec<String> {
+            self.warnings.lock().unwrap().clone()
+        }
+
+        fn warning_count(&self) -> usize {
+            self.warnings.lock().unwrap().len()
+        }
+    }
+
+    impl StatusReporter for MockStatusReporter {
+        fn collect_error(&self, _error: &FsError) {}
+
+        fn collect_warning(&self, warning: &FsError) {
+            self.warnings.lock().unwrap().push(warning.message());
+        }
+
+        fn collect_node_evaluation(
+            &self,
+            _file_path: PathBuf,
+            _execution_phase: dbt_telemetry::ExecutionPhase,
+            _node_outcome: dbt_telemetry::NodeOutcome,
+            _upstream_target: Option<(String, String, bool)>,
+            _static_analysis_off_reason: (Option<StaticAnalysisOffReason>, dbt_serde_yaml::Span),
+        ) {
+        }
+
+        fn show_progress(&self, _action: &str, _target: &str, _description: Option<&str>) {}
+
+        fn bulk_publish_empty(&self, _file_paths: Vec<PathBuf>) {}
+    }
 
     // Helper function to create a test IoArgs
     fn create_test_io_args() -> IoArgs {
         IoArgs::default()
+    }
+
+    // Helper function to create a test IoArgs with mock status reporter
+    #[allow(clippy::field_reassign_with_default)]
+    fn create_test_io_args_with_reporter() -> (IoArgs, Arc<MockStatusReporter>) {
+        let reporter = Arc::new(MockStatusReporter::new());
+        let mut io_args = IoArgs::default();
+        io_args.status_reporter = Some(reporter.clone());
+        //let io_args = IoArgs {
+        //    status_reporter: Some(reporter.clone()),
+        //    ..Default::default()
+        //};
+        (io_args, reporter)
     }
 
     // Helper function to create a test HubPackageJson with deprecated flag
@@ -219,6 +353,7 @@ mod tests {
                     tarball: "https://example.com/tarball.tar.gz".to_string(),
                 },
                 fusion_schema_compat: None,
+                require_dbt_version: None,
             },
         );
 
@@ -244,6 +379,7 @@ mod tests {
                     tarball: "https://example.com/tarball.tar.gz".to_string(),
                 },
                 fusion_schema_compat: None,
+                require_dbt_version: None,
             },
         );
 
@@ -269,6 +405,7 @@ mod tests {
                     tarball: "https://example.com/tarball.tar.gz".to_string(),
                 },
                 fusion_schema_compat: None,
+                require_dbt_version: None,
             },
         );
 
@@ -294,6 +431,7 @@ mod tests {
                     tarball: "https://example.com/tarball.tar.gz".to_string(),
                 },
                 fusion_schema_compat: None,
+                require_dbt_version: None,
             },
         );
 
@@ -471,5 +609,250 @@ mod tests {
 
         // This would trigger the deprecation warning in a real scenario
         client.check_package_deprecation(&io_args, &package);
+    }
+
+    #[test]
+    fn test_deserialize_package_with_require_dbt_version_string() {
+        let json = r#"
+        {
+            "name": "some-org/versioned_package",
+            "versions": {
+                "1.0.0": {
+                    "name": "versioned_package",
+                    "packages": [],
+                    "downloads": {
+                        "tarball": "https://example.com/tarball.tar.gz"
+                    },
+                    "require_dbt_version": ">=1.5.0"
+                }
+            }
+        }
+        "#;
+
+        let package: HubPackageJson = serde_json::from_str(json).unwrap();
+        assert_eq!(package.name, "some-org/versioned_package");
+
+        let version = package.versions.get("1.0.0").unwrap();
+        assert!(version.require_dbt_version.is_some());
+
+        // Verify it's a string variant
+        if let Some(StringOrArrayOfStrings::String(version_req)) = &version.require_dbt_version {
+            assert_eq!(version_req, ">=1.5.0");
+        } else {
+            panic!("Expected StringOrArrayOfStrings::String variant");
+        }
+    }
+
+    #[test]
+    fn test_deserialize_package_with_require_dbt_version_array() {
+        let json = r#"
+        {
+            "name": "some-org/versioned_package",
+            "versions": {
+                "1.0.0": {
+                    "name": "versioned_package",
+                    "packages": [],
+                    "downloads": {
+                        "tarball": "https://example.com/tarball.tar.gz"
+                    },
+                    "require_dbt_version": [">=1.5.0", "<2.0.0"]
+                }
+            }
+        }
+        "#;
+
+        let package: HubPackageJson = serde_json::from_str(json).unwrap();
+        assert_eq!(package.name, "some-org/versioned_package");
+
+        let version = package.versions.get("1.0.0").unwrap();
+        assert!(version.require_dbt_version.is_some());
+
+        // Verify it's an array variant
+        if let Some(StringOrArrayOfStrings::ArrayOfStrings(versions)) = &version.require_dbt_version
+        {
+            assert_eq!(versions.len(), 2);
+            assert_eq!(versions[0], ">=1.5.0");
+            assert_eq!(versions[1], "<2.0.0");
+        } else {
+            panic!("Expected StringOrArrayOfStrings::ArrayOfStrings variant");
+        }
+    }
+
+    #[test]
+    fn test_deserialize_package_without_require_dbt_version() {
+        let json = r#"
+        {
+            "name": "some-org/unversioned_package",
+            "versions": {
+                "1.0.0": {
+                    "name": "unversioned_package",
+                    "packages": [],
+                    "downloads": {
+                        "tarball": "https://example.com/tarball.tar.gz"
+                    }
+                }
+            }
+        }
+        "#;
+
+        let package: HubPackageJson = serde_json::from_str(json).unwrap();
+        assert_eq!(package.name, "some-org/unversioned_package");
+
+        let version = package.versions.get("1.0.0").unwrap();
+        assert!(version.require_dbt_version.is_none());
+    }
+
+    #[test]
+    fn test_check_require_dbt_version_compatible() {
+        let client = HubClient::new("https://test.example.com");
+        let version = HubPackageVersion {
+            name: "test_package".to_string(),
+            packages: vec![],
+            downloads: HubPackageDownloads {
+                tarball: "https://example.com/tarball.tar.gz".to_string(),
+            },
+            fusion_schema_compat: None,
+            require_dbt_version: Some(StringOrArrayOfStrings::String(">=1.5.0".to_string())),
+        };
+
+        let (io_args, reporter) = create_test_io_args_with_reporter();
+
+        // This should NOT trigger a warning since CARGO_PKG_VERSION >= 1.5.0
+        client.check_require_dbt_version(&io_args, "test-org/test_package", &version);
+
+        // Verify no warnings were issued
+        assert_eq!(
+            reporter.warning_count(),
+            0,
+            "Expected no warnings for compatible version"
+        );
+    }
+
+    #[test]
+    fn test_check_require_dbt_version_incompatible() {
+        let client = HubClient::new("https://test.example.com");
+        let version = HubPackageVersion {
+            name: "test_package".to_string(),
+            packages: vec![],
+            downloads: HubPackageDownloads {
+                tarball: "https://example.com/tarball.tar.gz".to_string(),
+            },
+            fusion_schema_compat: None,
+            require_dbt_version: Some(StringOrArrayOfStrings::String(">=100.0.0".to_string())),
+        };
+
+        let (io_args, reporter) = create_test_io_args_with_reporter();
+
+        // This SHOULD trigger a warning since CARGO_PKG_VERSION < 100.0.0
+        client.check_require_dbt_version(&io_args, "test-org/test_package", &version);
+
+        // Verify a warning was issued
+        assert_eq!(
+            reporter.warning_count(),
+            1,
+            "Expected one warning for incompatible version"
+        );
+        let warnings = reporter.get_warnings();
+        assert!(
+            warnings[0].contains("test-org/test_package"),
+            "Warning should mention package name"
+        );
+        assert!(
+            warnings[0].contains(">=100.0.0"),
+            "Warning should mention required version"
+        );
+    }
+
+    #[test]
+    fn test_check_require_dbt_version_range_compatible() {
+        let client = HubClient::new("https://test.example.com");
+        let version = HubPackageVersion {
+            name: "test_package".to_string(),
+            packages: vec![],
+            downloads: HubPackageDownloads {
+                tarball: "https://example.com/tarball.tar.gz".to_string(),
+            },
+            fusion_schema_compat: None,
+            require_dbt_version: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                ">=1.0.0".to_string(),
+                "<100.0.0".to_string(),
+            ])),
+        };
+
+        let (io_args, reporter) = create_test_io_args_with_reporter();
+
+        // This should NOT trigger a warning since 1.0.0 <= CARGO_PKG_VERSION < 100.0.0
+        client.check_require_dbt_version(&io_args, "test-org/test_package", &version);
+
+        // Verify no warnings were issued
+        assert_eq!(
+            reporter.warning_count(),
+            0,
+            "Expected no warnings for compatible version range"
+        );
+    }
+
+    #[test]
+    fn test_check_require_dbt_version_range_incompatible() {
+        let client = HubClient::new("https://test.example.com");
+        let version = HubPackageVersion {
+            name: "test_package".to_string(),
+            packages: vec![],
+            downloads: HubPackageDownloads {
+                tarball: "https://example.com/tarball.tar.gz".to_string(),
+            },
+            fusion_schema_compat: None,
+            require_dbt_version: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                ">=100.0.0".to_string(),
+                "<200.0.0".to_string(),
+            ])),
+        };
+
+        let (io_args, reporter) = create_test_io_args_with_reporter();
+
+        // This SHOULD trigger a warning since CARGO_PKG_VERSION < 100.0.0 (outside range)
+        client.check_require_dbt_version(&io_args, "test-org/test_package", &version);
+
+        // Verify a warning was issued
+        assert_eq!(
+            reporter.warning_count(),
+            1,
+            "Expected one warning for incompatible version range"
+        );
+        let warnings = reporter.get_warnings();
+        assert!(
+            warnings[0].contains("test-org/test_package"),
+            "Warning should mention package name"
+        );
+        assert!(
+            warnings[0].contains("[>=100.0.0, <200.0.0]"),
+            "Warning should mention required version range"
+        );
+    }
+
+    #[test]
+    fn test_check_require_dbt_version_no_requirement() {
+        let client = HubClient::new("https://test.example.com");
+        let version = HubPackageVersion {
+            name: "test_package".to_string(),
+            packages: vec![],
+            downloads: HubPackageDownloads {
+                tarball: "https://example.com/tarball.tar.gz".to_string(),
+            },
+            fusion_schema_compat: None,
+            require_dbt_version: None, // No version requirement
+        };
+
+        let (io_args, reporter) = create_test_io_args_with_reporter();
+
+        // This should NOT trigger any warning (no requirement = compatible)
+        client.check_require_dbt_version(&io_args, "test-org/test_package", &version);
+
+        // Verify no warnings were issued
+        assert_eq!(
+            reporter.warning_count(),
+            0,
+            "Expected no warnings when no version requirement exists"
+        );
     }
 }

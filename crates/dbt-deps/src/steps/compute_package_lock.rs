@@ -159,6 +159,14 @@ async fn resolve_packages(
                     .versions
                     .get(&pinned_package.version)
                     .expect("Version should exist in package metadata");
+
+                if std::env::var("NEXTEST").is_err() {
+                    hub_registry.check_require_dbt_version(
+                        &package_listing.io_args,
+                        &hub_package.name,
+                        metadata,
+                    );
+                }
                 next_listing.update_from(&metadata.packages, jinja_env)?;
             }
             UnpinnedPackage::Git(git_unpinned_package) => {
