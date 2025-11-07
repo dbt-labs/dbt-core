@@ -204,7 +204,7 @@ def statically_parse_unrendered_config(string: str) -> Optional[Dict[str, Any]]:
     "select 1 as id"
     returns: None
     """
-    # Return early to avoid creating jinja environemt if no config call in input string
+    # Return early to avoid creating jinja environment if no config call in input string
     if "config(" not in string:
         return None
 

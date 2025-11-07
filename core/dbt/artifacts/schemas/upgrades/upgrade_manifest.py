@@ -77,7 +77,7 @@ def _convert_dct_with_filter(v10_dct_with_opt_filter):
 def _convert_metric(v10_metric_dict):
     """Upgrades a v10 metric object to a v11 metric object.
 
-    Specifcally the following properties change
+    Specifically the following properties change
     1. metric.filter
     2. metric.type_params.measure.filter
     3. metric.type_params.input_measures[x].filter
