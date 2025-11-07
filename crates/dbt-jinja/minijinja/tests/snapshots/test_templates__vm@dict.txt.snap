@@ -12,3 +12,5 @@ input_file: fs/sa/crates/dbt-jinja/minijinja/tests/inputs/dict.txt
 {'a': 1, 'b': 2, 'c': 3}
 (('depth', 1), ('depth0', 0), ('extra', 2), ('first', true), ('index', 1), ('index0', 0), ('last', true), ('length', 1), ('nextitem', undefined), ('previtem', undefined), ('revindex', 1), ('revindex0', 0))
 {'a': 1, 'b': 2, 'c': 3}
+b
+b

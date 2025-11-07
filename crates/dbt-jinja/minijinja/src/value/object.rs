@@ -1551,16 +1551,17 @@ pub mod mutable_map {
     fn pop_impl(map: &Arc<MutableMap>, args: &[Value]) -> Result<Value, Error> {
         match args {
             [key] => Ok(map.remove(key).unwrap_or_default()),
-            _ if args.len() > 1 => Err(Error::new(
+            [key, default] => Ok(map.remove(key).unwrap_or_else(|| default.clone())),
+            _ if args.len() > 2 => Err(Error::new(
                 ErrorKind::TooManyArguments,
                 format!(
-                    "remove() takes exactly one argument, but {} were given",
+                    "pop() takes one or two arguments, but {} were given",
                     args.len()
                 ),
             )),
             _ => Err(Error::new(
                 ErrorKind::MissingArgument,
-                "remove() takes exactly one argument, but none were given",
+                "pop() takes one or two arguments, but none were given",
             )),
         }
     }
