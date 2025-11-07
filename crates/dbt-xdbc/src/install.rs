@@ -10,18 +10,15 @@ use percent_encoding::AsciiSet;
 use sha2::{Digest, Sha256};
 use ureq::tls::{RootCerts, TlsConfig, TlsProvider};
 
-use crate::checksums::SORTED_CDN_DRIVER_CHECKSUMS;
-use crate::{
-    BIGQUERY_DRIVER_VERSION, Backend, DATABRICKS_DRIVER_VERSION, POSTGRES_DRIVER_VERSION,
-    REDSHIFT_DRIVER_VERSION, SALESFORCE_DRIVER_VERSION, SNOWFLAKE_DRIVER_VERSION,
-};
+use crate::*;
 
-static INSTALLABLE_DRIVERS: &[Backend; 6] = &[
+static INSTALLABLE_DRIVERS: &[Backend; 7] = &[
     Backend::Snowflake,
     Backend::BigQuery,
     Backend::Postgres,
     Backend::Databricks,
     Backend::Redshift,
+    Backend::DuckDB,
     Backend::Salesforce,
 ];
 
@@ -296,7 +293,7 @@ fn find_expected_checksum_internal(
     os: &str,
     arch: &str,
 ) -> Option<&'static str> {
-    let checksums = SORTED_CDN_DRIVER_CHECKSUMS.as_ref();
+    let checksums = checksums::SORTED_CDN_DRIVER_CHECKSUMS.as_ref();
     for i in 0..checksums.len() - 1 {
         debug_assert!(
             checksums[i] < checksums[i + 1],
@@ -628,8 +625,9 @@ mod tests {
             ("bigquery", BIGQUERY_DRIVER_VERSION),
             ("postgresql", POSTGRES_DRIVER_VERSION),
             ("databricks", DATABRICKS_DRIVER_VERSION),
-            ("salesforce", SALESFORCE_DRIVER_VERSION),
             ("redshift", REDSHIFT_DRIVER_VERSION),
+            ("duckdb", DUCKDB_DRIVER_VERSION),
+            ("salesforce", SALESFORCE_DRIVER_VERSION),
         ];
         debug_assert!(
             backend_and_versions.len() == INSTALLABLE_DRIVERS.len(),

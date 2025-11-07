@@ -201,7 +201,7 @@ pub fn default_time_unit(backend: Backend) -> TimeUnit {
     match backend {
         Snowflake | Databricks | DatabricksODBC => Nanosecond,
         BigQuery | Redshift | RedshiftODBC => Microsecond,
-        Postgres | Salesforce => Microsecond,
+        Postgres | Salesforce | DuckDB => Microsecond,
         Generic { .. } => Microsecond, // a reasonable default
     }
 }
@@ -678,7 +678,7 @@ impl SqlType {
                 match backend {
                     Snowflake => write!(out, "OBJECT(")?,
                     BigQuery | Databricks | DatabricksODBC => write!(out, "STRUCT<")?,
-                    Postgres | Salesforce => write!(out, "(")?,
+                    Postgres | Salesforce | DuckDB => write!(out, "(")?,
                     // Redshift doesn't support object/struct types
                     Redshift | RedshiftODBC => write!(out, "(")?,
                     Generic { .. } => write!(out, "STRUCT<")?,
@@ -716,7 +716,7 @@ impl SqlType {
                 match backend {
                     Snowflake => write!(out, ")"),
                     BigQuery | Databricks | DatabricksODBC => write!(out, ">"),
-                    Postgres | Salesforce => write!(out, ")"),
+                    Postgres | Salesforce | DuckDB => write!(out, ")"),
                     Redshift | RedshiftODBC => write!(out, ")"),
                     Generic { .. } => write!(out, ">"),
                 }
@@ -1093,6 +1093,14 @@ impl SqlType {
             }
             // }}}
 
+            // DuckDB {{{
+            (DuckDB, Numeric(None) | BigNumeric(None)) => {
+                // DuckDB's DECIMAL type without precision/scale defaults to DECIMAL(18, 3)
+                // https://duckdb.org/docs/sql/data_types/numeric
+                DataType::Decimal128(18, 3)
+            }
+            // }}}
+
             // PostgreSQL {{{
             (Postgres | Salesforce | Generic { .. }, Numeric(None) | BigNumeric(None)) => {
                 // PostgreSQL's NUMERIC type is truly arbitrary (precision can go to a 1000!). When
@@ -1157,7 +1165,7 @@ impl SqlType {
                     (Redshift | RedshiftODBC, None) => TimeUnit::Microsecond,
                     // TIME's default precision on PostgreSQL is 6 (microseconds)
                     // https://www.postgresql.org/docs/current/datatype-datetime.html
-                    (Postgres | Salesforce, None) => TimeUnit::Microsecond,
+                    (Postgres | Salesforce | DuckDB, None) => TimeUnit::Microsecond,
                     (Generic { .. }, None) => {
                         // we pick microseconds as a reasonable default
                         TimeUnit::Microsecond
@@ -1288,9 +1296,9 @@ impl SqlType {
                                 MonthDayNano,
                             )
                     }
-                    BigQuery | Postgres => MonthDayNano, // MonthDayNano is exactly what BQ and PG use internally
-                    Salesforce => MonthDayNano,          // Salesforce seems to follow PostgreSQL
-                    Generic { .. } => MonthDayNano,      // Reasonable default
+                    BigQuery | Postgres | DuckDB => MonthDayNano, // MonthDayNano is exactly what BQ and PG use internally
+                    Salesforce => MonthDayNano, // Salesforce seems to follow PostgreSQL
+                    Generic { .. } => MonthDayNano, // Reasonable default
                 };
                 DataType::Interval(interval_unit)
             }
@@ -1418,7 +1426,7 @@ const GENERIC_KEYS: [&str; 2] = ["SQL:type", "type_text"];
 
 fn metadata_type_candidate_keys(backend: Backend) -> &'static [&'static str] {
     match backend {
-        Backend::Postgres | Backend::Salesforce => &POSTGRES_KEYS,
+        Backend::Postgres | Backend::Salesforce | Backend::DuckDB => &POSTGRES_KEYS,
         Backend::Snowflake => &SNOWFLAKE_KEYS,
         Backend::BigQuery => &BIGQUERY_KEYS,
         Backend::Databricks => &DATABRICKS_KEYS,

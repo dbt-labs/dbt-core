@@ -1079,6 +1079,7 @@ fn expected_type_rendering_for(backend: Backend) -> Vec<(u32, SqlType, &'static 
                 Postgres | Salesforce => pq,
                 Redshift | RedshiftODBC => rs,
                 Databricks | DatabricksODBC => dbx,
+                DuckDB => todo!("DuckDB tests not implemented yet"),
                 Generic { .. } => generic,
             };
             (line, t, s)

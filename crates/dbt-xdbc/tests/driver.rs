@@ -160,6 +160,7 @@ mod tests {
 
                 Ok(builder)
             }
+            Backend::DuckDB => unimplemented!("Database builder for DuckDB in tests"),
             Backend::Generic { .. } => unimplemented!("generic backend database builder in tests"),
         }?;
         if backend == Backend::Snowflake {
