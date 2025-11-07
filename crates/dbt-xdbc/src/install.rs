@@ -282,7 +282,10 @@ pub fn driver_parameters(
         Backend::Databricks => ("databricks", DATABRICKS_DRIVER_VERSION),
         Backend::Redshift => ("redshift", REDSHIFT_DRIVER_VERSION),
         Backend::Salesforce => ("salesforce", SALESFORCE_DRIVER_VERSION),
-        _ => unreachable!("driver_parameters() called with backend={:?}", backend),
+        Backend::DuckDB => ("duckdb", DUCKDB_DRIVER_VERSION),
+        Backend::DatabricksODBC | Backend::RedshiftODBC | Backend::Generic { .. } => {
+            unreachable!("driver_parameters() called with backend={:?}", backend)
+        }
     };
     (backend_name, version, OS)
 }
