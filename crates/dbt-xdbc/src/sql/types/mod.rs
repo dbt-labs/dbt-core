@@ -1422,16 +1422,18 @@ const SNOWFLAKE_KEYS: [&str; 2] = ["SNOWFLAKE:type", "type_text"];
 const BIGQUERY_KEYS: [&str; 4] = ["BIGQUERY:type", "type_text", "Type", "type"];
 const DATABRICKS_KEYS: [&str; 2] = ["DBX:type", "type_text"];
 const REDSHIFT_KEYS: [&str; 2] = ["REDSHIFT:type", "type_text"];
+const DUCKDB_KEYS: [&str; 2] = ["DUCKDB:type", "type_text"];
 const GENERIC_KEYS: [&str; 2] = ["SQL:type", "type_text"];
 
 fn metadata_type_candidate_keys(backend: Backend) -> &'static [&'static str] {
     match backend {
-        Backend::Postgres | Backend::Salesforce | Backend::DuckDB => &POSTGRES_KEYS,
+        Backend::Postgres | Backend::Salesforce => &POSTGRES_KEYS,
         Backend::Snowflake => &SNOWFLAKE_KEYS,
         Backend::BigQuery => &BIGQUERY_KEYS,
         Backend::Databricks => &DATABRICKS_KEYS,
         Backend::Redshift | Backend::RedshiftODBC => &REDSHIFT_KEYS,
         Backend::DatabricksODBC => &DATABRICKS_KEYS,
+        Backend::DuckDB => &DUCKDB_KEYS,
         Backend::Generic { .. } => &GENERIC_KEYS,
     }
 }
