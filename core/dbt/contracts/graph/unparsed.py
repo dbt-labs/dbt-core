@@ -638,11 +638,11 @@ class UnparsedMetric(dbtClassMixin):
                 errors.append("cannot contain more than 250 characters")
             if not (re.match(r"^[A-Za-z]", data["name"])):
                 errors.append("must begin with a letter")
-            if not (re.match(r"[\w-]+$", data["name"])):
+            if not (re.match(r"[\w]+$", data["name"])):
                 errors.append("must contain only letters, numbers and underscores")
 
             if errors:
-                raise ParsingError(
+                raise ValidationError(
                     f"The metric name '{data['name']}' is invalid.  It {', '.join(e for e in errors)}"
                 )
 
