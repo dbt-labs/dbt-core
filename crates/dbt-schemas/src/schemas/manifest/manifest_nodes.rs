@@ -1008,6 +1008,7 @@ impl From<DbtFunction> for ManifestFunction {
                 refs: function.__base_attr__.refs,
                 sources: function.__base_attr__.sources,
                 raw_code: function.__common_attr__.raw_code,
+                checksum: function.__common_attr__.checksum,
                 compiled: None,
                 ..Default::default()
             },

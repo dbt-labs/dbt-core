@@ -169,7 +169,9 @@ pub async fn resolve_functions(
                 patch_path,
                 fqn,
                 description: properties.description,
-                raw_code: Some(rendered_sql.clone()),
+                // NOTE: raw_code has to be this value for consistency with models
+                // The actual rendered SQL is stored in rendering_results
+                raw_code: Some("--placeholder--".to_string()),
                 checksum: sql_file_info.checksum,
                 language: properties.language.clone(),
                 tags: model_config
