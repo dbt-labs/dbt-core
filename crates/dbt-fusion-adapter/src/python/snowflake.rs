@@ -188,17 +188,32 @@ DROP PROCEDURE IF EXISTS {}();
     };
 
     // Execute the Python stored procedure
-    let (response, _) = adapter.execute_inner(
-        adapter.adapter_type().into(),
-        adapter.engine().clone(),
-        Some(state),
-        conn,
-        ctx,
-        &python_stored_procedure,
-        false, // auto_begin
-        false, // fetch
-        None,
-        None,
-    )?;
-    Ok(response)
+    if let Some(replay_adapter) = adapter.as_replay() {
+        // In DBT Replay mode, route through the replay adapter to consume recorded execute calls.
+        let (response, _) = replay_adapter.replay_execute(
+            Some(state),
+            conn,
+            ctx,
+            &python_stored_procedure,
+            false, // auto_begin
+            false, // fetch
+            None,
+            None,
+        )?;
+        Ok(response)
+    } else {
+        let (response, _) = adapter.execute_inner(
+            adapter.adapter_type().into(),
+            adapter.engine().clone(),
+            Some(state),
+            conn,
+            ctx,
+            &python_stored_procedure,
+            false, // auto_begin
+            false, // fetch
+            None,
+            None,
+        )?;
+        Ok(response)
+    }
 }

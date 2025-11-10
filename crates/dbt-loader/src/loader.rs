@@ -736,7 +736,7 @@ fn find_files_by_kind_and_extension(
 }
 
 fn python_models_feature_enabled() -> bool {
-    std::env::var(PYTHON_MODELS_ENV_VAR)
+    let is_on = std::env::var(PYTHON_MODELS_ENV_VAR)
         .map(|value| {
             let trimmed = value.trim();
             trimmed == "1"
@@ -744,7 +744,11 @@ fn python_models_feature_enabled() -> bool {
                 || trimmed.eq_ignore_ascii_case("yes")
                 || trimmed.eq_ignore_ascii_case("on")
         })
-        .unwrap_or(false)
+        .unwrap_or(false);
+    if is_on {
+        eprintln!("WARNING: Python models feature is enabled via environment variable");
+    }
+    is_on
 }
 
 /// Loads the .dbtignore file if it exists in the given path
