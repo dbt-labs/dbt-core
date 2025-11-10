@@ -196,6 +196,10 @@ impl NodeResolver {
 }
 
 impl NodeResolverTracker for NodeResolver {
+    fn deep_clone(&self) -> Box<dyn NodeResolverTracker> {
+        Box::new(self.clone())
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }

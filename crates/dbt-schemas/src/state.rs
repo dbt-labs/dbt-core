@@ -266,6 +266,7 @@ impl fmt::Display for DbtState {
 }
 
 pub trait NodeResolverTracker: fmt::Debug + Send + Sync {
+    fn deep_clone(&self) -> Box<dyn NodeResolverTracker>;
     fn as_any(&self) -> &dyn Any;
     fn insert_ref(
         &mut self,
@@ -316,10 +317,14 @@ pub trait NodeResolverTracker: fmt::Debug + Send + Sync {
 }
 
 // test only
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DummyNodeResolverTracker;
 
 impl NodeResolverTracker for DummyNodeResolverTracker {
+    fn deep_clone(&self) -> Box<dyn NodeResolverTracker> {
+        Box::new(self.clone())
+    }
+
     fn as_any(&self) -> &dyn Any {
         self
     }

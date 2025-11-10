@@ -177,6 +177,10 @@ pub fn and_n_others(n: usize, items: &[impl ToString]) -> String {
 }
 
 pub fn checkpoint_maybe_exit(arg: &EvalArgs, phase: Phases) -> Option<i32> {
+    if arg.skip_checkpoints {
+        return None;
+    }
+
     let exit_code = get_exit_code_from_error_counter();
 
     if arg.phase <= phase || exit_code > 0 {

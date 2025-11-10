@@ -290,6 +290,8 @@ pub struct EvalArgs {
     // todo: temporary, until Sampling is public, maps (source) unique_id to renamed (database, schema, table)
     pub sample_renaming: BTreeMap<String, (String, String, String)>,
     pub local_execution_backend: LocalExecutionBackendKind,
+    /// Does not apply to interactive checkpoints.
+    pub skip_checkpoints: bool,
 }
 impl fmt::Debug for EvalArgs {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
