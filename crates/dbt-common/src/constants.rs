@@ -126,9 +126,6 @@ pub const INLINE_NODE: &str = "sql_operation.inline";
 pub const NOOP: &str = "noop";
 pub const SAMPLING: &str = "  Sampling";
 
-// log targets
-pub const CACHE_LOG: &str = "CacheLogging";
-
 // cas/node read/write
 
 pub const CAS_RD: &str = "   Reading";
