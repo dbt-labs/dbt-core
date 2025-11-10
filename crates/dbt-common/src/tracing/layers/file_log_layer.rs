@@ -166,7 +166,9 @@ impl TelemetryConsumer for FileLogLayer {
                     .code
                     .and_then(|c| u16::try_from(c).ok())
                     .and_then(|c| ErrorCode::try_from(c).ok()),
-                &log_record.body,
+                // Unfortunately, we do not currently enforce log body to not contain ANSI codes,
+                // so we need to make sure to strip them
+                console::strip_ansi_codes(log_record.body.as_str()),
                 log_record.severity_number,
                 false,
                 false, // Don't include level prefix, we add it via write_log_lines

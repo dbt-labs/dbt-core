@@ -34,7 +34,7 @@ pub fn severity_to_prefix(severity_number: SeverityNumber) -> Option<&'static st
 /// Formatted string like "dbt1000: message text" or colored version
 pub fn format_log_message(
     error_code: Option<ErrorCode>,
-    message: &str,
+    message: impl AsRef<str>,
     message_severity: SeverityNumber,
     colorize: bool,
     include_level_prefix: bool,
@@ -50,5 +50,9 @@ pub fn format_log_message(
             "".to_string()
         };
 
-    format!("{prefix}{code_prefix}{}", color_quotes(message))
+    if colorize {
+        return format!("{prefix}{code_prefix}{}", color_quotes(message.as_ref()));
+    };
+
+    format!("{prefix}{code_prefix}{}", message.as_ref())
 }

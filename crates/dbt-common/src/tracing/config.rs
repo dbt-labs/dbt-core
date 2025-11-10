@@ -315,12 +315,6 @@ impl FsTraceConfig {
             consumer_layers.push(layer)
         };
 
-        // Create jsonl writer layer on stdout if log format is OTEL
-        if self.log_format == LogFormat::Otel {
-            // No shutdown logic as we flushing to stdout as we write anyway
-            consumer_layers.push(build_jsonl_layer(std::io::stdout(), self.max_log_verbosity));
-        };
-
         // Create parquet writer layer if file path provided
         if let Some(file_path) = &self.otel_parquet_file_path {
             // Create the file and initialize the Parquet layer
@@ -364,7 +358,12 @@ impl FsTraceConfig {
                         self.invocation_id,
                     ))
                 }
-                LogFormat::Otel => {}
+                LogFormat::Otel => {
+                    // Create jsonl writer layer on stdout if log format is OTEL
+                    // No shutdown logic as we flushing to stdout as we write anyway
+                    consumer_layers
+                        .push(build_jsonl_layer(std::io::stdout(), self.max_log_verbosity));
+                }
             }
         };
 

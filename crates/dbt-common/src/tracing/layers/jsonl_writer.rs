@@ -1,5 +1,7 @@
+use std::borrow::Cow;
+
 use dbt_telemetry::{
-    LogRecordInfo, SpanEndInfo, SpanStartInfo, TelemetryOutputFlags, TelemetryRecordRef,
+    LogMessage, LogRecordInfo, SpanEndInfo, SpanStartInfo, TelemetryOutputFlags, TelemetryRecordRef,
 };
 use tracing::level_filters::LevelFilter;
 
@@ -77,6 +79,24 @@ impl TelemetryConsumer for TelemetryJsonlWriterLayer {
     }
 
     fn on_log_record(&self, record: &LogRecordInfo, _: &mut DataProvider<'_>) {
+        // Unfortunately, we do not currently enforce log body to not contain ANSI codes,
+        // so we need to make sure to strip them
+        if record.attributes.is::<LogMessage>()
+            && let Cow::Owned(stripped) = console::strip_ansi_codes(record.body.as_str())
+        {
+            let stripped_record = LogRecordInfo {
+                body: stripped,
+                ..record.clone()
+            };
+
+            if let Ok(json) =
+                serde_json::to_string(&TelemetryRecordRef::LogRecord(&stripped_record))
+            {
+                self.writer.writeln(json.as_str());
+            }
+            return;
+        }
+
         if let Ok(json) = serde_json::to_string(&TelemetryRecordRef::LogRecord(record)) {
             self.writer.writeln(json.as_str());
         }
