@@ -7,7 +7,8 @@ use adbc_core::{
 };
 use arrow_array::RecordBatch;
 use arrow_schema::{Schema, SchemaRef};
-use dbt_common::pretty_table::{DisplayFormat, pretty_data_table};
+use dbt_common::io_args::DisplayFormat;
+use dbt_common::pretty_table::pretty_data_table;
 use dialoguer::{BasicHistory, Input, theme::ColorfulTheme};
 
 use crate::{

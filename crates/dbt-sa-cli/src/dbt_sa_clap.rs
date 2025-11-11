@@ -26,7 +26,7 @@ use clap::{ValueEnum, arg};
 use dbt_common::node_selector::{IndirectSelection, parse_model_specifiers};
 
 const DEFAULT_LIMIT: &str = "10";
-static DEFAULT_FORMAT: LazyLock<String> = LazyLock::new(|| DisplayFormat::Table.to_string());
+const DEFAULT_FORMAT: DisplayFormat = DisplayFormat::Table;
 
 // defined in pretty string, but copied here to avoid cycle...
 static BOLD: LazyLock<Style> = LazyLock::new(|| Style::new().bold());
@@ -443,11 +443,7 @@ impl ListArgs {
             eval_args.exclude_resource_types = vec![exclude_resource_type];
         }
         eval_args.limit = self.limit.into();
-        if let Some(output) = &self.output {
-            eval_args.format = output.to_string();
-        } else {
-            eval_args.format = DEFAULT_FORMAT.clone();
-        }
+        eval_args.format = self.output.unwrap_or(DEFAULT_FORMAT);
         eval_args
     }
 }
@@ -589,7 +585,7 @@ impl CommonArgs {
             target: self.target.clone(),
             vars: self.vars.clone().unwrap_or_default(),
             phase: Phases::All,
-            format: DEFAULT_FORMAT.clone(),
+            format: DEFAULT_FORMAT,
             limit: Some(10),
             debug: self.debug,
             num_threads: if self.single_threaded {

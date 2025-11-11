@@ -208,8 +208,8 @@ pub struct EvalArgs {
     pub vars: BTreeMap<String, Value>,
     // Stop as soon as this stage is reached
     pub phase: Phases,
-    // Display rows in different formats, this is .to_string on DisplayFormat; we use a string here to break dep. cycle
-    pub format: String,
+    // Display rows in different formats
+    pub format: DisplayFormat,
     /// Limiting number of shown rows. None means no limit, run with --limit -1 to remove limit
     pub limit: Option<usize>,
     /// called as bin or as library

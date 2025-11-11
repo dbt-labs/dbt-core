@@ -1,7 +1,5 @@
 use dbt_frontend_common::Dialect;
-use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use strum_macros::{Display, EnumString};
 
 use arrow::array::Array;
 use arrow::datatypes::DataType;
@@ -17,6 +15,7 @@ use term_size;
 
 use crate::FsResult;
 use crate::fs_err;
+use crate::io_args::DisplayFormat;
 
 pub fn make_table_name<T: AsRef<str>>(catalog: T, schema: T, table: T) -> String {
     [catalog.as_ref(), schema.as_ref(), table.as_ref()].join(".")
@@ -33,41 +32,6 @@ pub fn make_column_names(schema: &Schema) -> Vec<String> {
 const BORDER_PADDING_SIZE: usize = 3;
 const BORDER_SIZE: usize = 1;
 pub const ELLIPSIS: &str = "..";
-
-/// Display rows in different formats
-// Note there are two DisplayFormat enums, one in this file and one in clap_cli.rs
-// Both have the same values and can be translated by the DisplayFormat::from() function
-#[derive(
-    Debug,
-    Copy,
-    Clone,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Default,
-    Display,
-    Serialize,
-    Deserialize,
-    EnumString,
-)]
-#[serde(rename_all = "lowercase")]
-#[strum(serialize_all = "lowercase")]
-pub enum DisplayFormat {
-    #[default]
-    Table,
-    Csv,
-    Tsv,
-    Json,
-    NdJson,
-    Yml,
-    /// Output nodes as selector strings (e.g. "source:pkg.source_name.table_name")
-    Selector,
-    /// Output nodes as search names (node.search_name)
-    Name,
-    /// Output nodes as file paths (node.original_file_path)
-    Path,
-}
 
 // originally defined in print_data_format.rs
 macro_rules! batches_to_json {

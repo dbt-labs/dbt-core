@@ -3,7 +3,7 @@ use std::{
     fmt,
 };
 
-use dbt_common::{node_selector::SelectExpression, pretty_table::DisplayFormat};
+use dbt_common::{io_args::DisplayFormat, node_selector::SelectExpression};
 use dbt_schemas::schemas::Nodes;
 use serde_json::Map;
 
@@ -114,7 +114,7 @@ impl Schedule<String> {
     pub fn show_dbt_nodes(
         &self,
         nodes: &Nodes,
-        output_format: &DisplayFormat,
+        output_format: DisplayFormat,
         output_keys: &[String],
     ) -> Vec<String> {
         let mut res = Vec::new();
