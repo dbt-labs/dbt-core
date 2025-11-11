@@ -37,6 +37,8 @@ pub struct LoadArgs {
     pub lock: bool,
     // Whether to load only profiles
     pub debug_profile: bool,
+    /// Whether to check package version requirements
+    pub version_check: bool,
     /// Inline SQL to compile (from --inline flag)
     pub inline_sql: Option<String>,
     /// This is for incremental.
@@ -65,6 +67,7 @@ impl LoadArgs {
             threads: arg.num_threads,
             install_deps: arg.phase == Phases::Deps,
             debug_profile: arg.phase == Phases::Debug,
+            version_check: arg.version_check,
             inline_sql: None, // Will be set separately when needed
             prev_dbt_state: None,
         }

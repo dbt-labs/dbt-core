@@ -223,6 +223,7 @@ pub async fn load(
         arg.upgrade,
         arg.lock,
         arg.vars.clone(),
+        arg.version_check,
         token,
     )
     .await?;

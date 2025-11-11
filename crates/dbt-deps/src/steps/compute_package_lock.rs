@@ -25,6 +25,7 @@ pub async fn compute_package_lock(
     jinja_env: &JinjaEnv,
     hub_registry: &mut HubClient,
     dbt_packages: &DbtPackages,
+    version_check: bool,
     token: &CancellationToken,
 ) -> FsResult<DbtPackagesLock> {
     let sha1_hash = sha1_hash_packages(&dbt_packages.packages);
@@ -41,6 +42,7 @@ pub async fn compute_package_lock(
         &mut final_listing,
         &mut package_listing,
         jinja_env,
+        version_check,
         token,
     )
     .await?;
@@ -136,6 +138,7 @@ pub async fn compute_package_lock(
     Ok(dbt_packages_lock)
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn resolve_packages(
     io: &IoArgs,
     vars: &BTreeMap<String, dbt_serde_yaml::Value>,
@@ -143,6 +146,7 @@ async fn resolve_packages(
     final_listing: &mut PackageListing,
     package_listing: &mut PackageListing,
     jinja_env: &JinjaEnv,
+    version_check: bool,
     token: &CancellationToken,
 ) -> FsResult<()> {
     let mut next_listing = PackageListing::new(io.clone(), vars.clone());
@@ -160,7 +164,7 @@ async fn resolve_packages(
                     .get(&pinned_package.version)
                     .expect("Version should exist in package metadata");
 
-                if std::env::var("NEXTEST").is_err() {
+                if std::env::var("NEXTEST").is_err() && version_check {
                     hub_registry.check_require_dbt_version(
                         &package_listing.io_args,
                         &hub_package.name,
@@ -270,6 +274,7 @@ async fn resolve_packages(
             final_listing,
             &mut next_listing,
             jinja_env,
+            version_check,
             token,
         ))
         .await?;

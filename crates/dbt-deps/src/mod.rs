@@ -39,6 +39,7 @@ pub async fn get_or_install_packages(
     upgrade: bool,
     lock: bool,
     vars: BTreeMap<String, dbt_serde_yaml::Value>,
+    version_check: bool,
     token: &CancellationToken,
 ) -> FsResult<(DbtPackagesLock, Vec<UpstreamProject>)> {
     let hub_url_from_env = std::env::var("DBT_PACKAGE_HUB_URL");
@@ -80,7 +81,16 @@ pub async fn get_or_install_packages(
             dbt_packages_lock
         } else {
             show_progress!(io, fsinfo!(FETCHING.into(), package_yml_name.to_string()));
-            compute_package_lock(io, &vars, env, &mut hub_registry, dbt_packages, token).await?
+            compute_package_lock(
+                io,
+                &vars,
+                env,
+                &mut hub_registry,
+                dbt_packages,
+                version_check,
+                token,
+            )
+            .await?
         }
     } else {
         DbtPackagesLock::default()
