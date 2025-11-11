@@ -13,7 +13,11 @@ from tests.functional.semantic_models.fixtures import (
     multi_sm_schema_yml,
     schema_without_semantic_model_yml,
     schema_yml,
+    schema_yml_v2,
+    v2_metric_missing_agg,
 )
+
+# TODO ADD TESTS HERE FOR V2 Semantic Models
 
 
 class TestSemanticModelParsing:
@@ -48,7 +52,7 @@ class TestSemanticModelParsing:
         assert metric_with_label.label == "Transaction Revenue with label"
 
     def test_semantic_model_error(self, project):
-        # Next, modify the default schema.yml to remove the semantic model.
+        # Next, modify the default schema.yml to have two measures with the same name
         error_schema_yml = schema_yml.replace("sum_of_things", "has_revenue")
         write_file(error_schema_yml, project.project_root, "models", "schema.yml")
         events: List[BaseEvent] = []
@@ -58,6 +62,54 @@ class TestSemanticModelParsing:
 
         validation_errors = [e for e in events if e.info.name == "SemanticValidationFailure"]
         assert validation_errors
+
+
+class TestSemanticModelV2Parsing:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": schema_yml_v2,
+            "fct_revenue.sql": fct_revenue_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+        }
+
+    def test_semantic_model_parsing(self, project):
+        runner = dbtTestRunner()
+        result = runner.invoke(["parse"])
+        assert result.success
+        assert isinstance(result.result, Manifest)
+        manifest = result.result
+        assert len(manifest.semantic_models) == 1
+        semantic_model = manifest.semantic_models["semantic_model.test.revenue"]
+        assert semantic_model.node_relation.alias == "fct_revenue"
+        assert (
+            semantic_model.node_relation.relation_name
+            == f'"dbt"."{project.test_schema}"."fct_revenue"'
+        )
+        # New YAML doesn't include measures!
+        assert len(semantic_model.measures) == 0
+        # manifest should have one metric for now
+        assert len(manifest.metrics) == 1
+        print(manifest.metrics.keys())
+        metric = manifest.metrics["metric.test.simple_metric"]
+        assert metric.name == "simple_metric"
+        assert metric.label == "Simple Metric"
+
+        # TODO: basic assertions about the metric in this test!
+
+    def test_simple_metric_aggregation_params(self, project):
+        """Simple metrics should have aggregation params."""
+        pass
+
+    def test_metric_missing_agg_error(self, project):
+        """New-style metrics should always include an agg type param."""
+        bad_schema = schema_yml_v2 + v2_metric_missing_agg
+        write_file(bad_schema, project.project_root, "models", "schema.yml")
+
+        events: List[BaseEvent] = []
+        runner = dbtTestRunner(callbacks=[events.append])
+        result = runner.invoke(["parse"])
+        assert not result.success
 
 
 class TestSemanticModelPartialParsing:

@@ -1,8 +1,11 @@
 import datetime
 import re
 from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Sequence, Union
+
+from typing_extensions import override
 
 # trigger the PathEncoder
 import dbt_common.helper_types  # noqa:F401
@@ -580,14 +583,33 @@ class UnparsedMetricInput(dbtClassMixin):
 
 @dataclass
 class UnparsedConversionTypeParams(dbtClassMixin):
-    base_measure: Union[UnparsedMetricInputMeasure, str]
-    conversion_measure: Union[UnparsedMetricInputMeasure, str]
     entity: str
+
+    # *_measure params are for old-style YAML.
+    base_measure: Optional[Union[UnparsedMetricInputMeasure, str]] = None
+    conversion_measure: Optional[Union[UnparsedMetricInputMeasure, str]] = None
+    # *_metric params are for v2-style metrics.
+    base_metric: Optional[Union[UnparsedMetricInput, str]] = None
+    conversion_metric: Optional[Union[UnparsedMetricInput, str]] = None
+
     calculation: str = (
         ConversionCalculationType.CONVERSION_RATE.value
     )  # ConversionCalculationType Enum
     window: Optional[str] = None
     constant_properties: Optional[List[ConstantPropertyInput]] = None
+
+    @override
+    @classmethod
+    def validate(cls, data):
+        super().validate(data)
+        if data.get("base_measure") is None and data.get("base_metric") is None:
+            raise ValidationError(
+                "Conversion metrics must define a base_measure or base_metric parameter."
+            )
+        if data.get("conversion_measure") is None and data.get("conversion_metric") is None:
+            raise ValidationError(
+                "Conversion metrics must define a conversion_measure or conversion_metric parameter."
+            )
 
 
 @dataclass
@@ -674,7 +696,7 @@ class UnparsedMetricV2(UnparsedMetricBase):
 
     join_to_timespine: Optional[bool] = None
     fill_nulls_with: Optional[int] = None
-    expr: Optional[Union[str, int]] = None
+    expr: Optional[Union[str, bool]] = None
 
     non_additive_dimension: Optional[UnparsedNonAdditiveDimensionV2] = None
     agg_time_dimension: Optional[str] = None
@@ -682,22 +704,29 @@ class UnparsedMetricV2(UnparsedMetricBase):
     # For cumulative metrics
     window: Optional[str] = None
     grain_to_date: Optional[str] = None
-    period_agg: Optional[str] = None
+    period_agg: str = PeriodAggregation.FIRST.value
     input_metric: Optional[Union[str, Dict[str, Any]]] = None
 
     # For ratio metrics
-    numerator: Optional[Union[str, Dict[str, Any]]] = None
-    denominator: Optional[Union[str, Dict[str, Any]]] = None
+    numerator: Optional[Union[UnparsedMetricInput, str]] = None
+    denominator: Optional[Union[UnparsedMetricInput, str]] = None
 
     # For derived metrics
-    input_metrics: Optional[List[Dict[str, Any]]] = None
+    input_metrics: Optional[List[Union[UnparsedMetricInput, str]]] = None
 
     # For conversion metrics
     entity: Optional[str] = None
     calculation: Optional[str] = None
-    base_metric: Optional[Union[str, Dict[str, Any]]] = None
-    conversion_metric: Optional[Union[str, Dict[str, Any]]] = None
-    constant_properties: Optional[List[Dict[str, Any]]] = None
+    base_metric: Optional[Union[UnparsedMetricInput, str]] = None
+    conversion_metric: Optional[Union[UnparsedMetricInput, str]] = None
+    constant_properties: Optional[List[ConstantPropertyInput]] = None
+
+    @classmethod
+    @override
+    def validate(cls, data):
+        super().validate(data)
+        if data["type"] == "simple" and data.get("agg") is None:
+            raise ValidationError("Simple metrics must have an agg param.")
 
 
 @dataclass
@@ -712,6 +741,14 @@ class UnparsedGroup(dbtClassMixin):
         super(UnparsedGroup, cls).validate(data)
         if data["owner"].get("name") is None and data["owner"].get("email") is None:
             raise ValidationError("Group owner must have at least one of 'name' or 'email'.")
+        # TODO DI-4413: the following are not strictly necessary (they will be handled
+        #               in dsi validation), but they would be a better user experience
+        #               if we did it at parse time.
+        # TODO: validate that conversion metrics have base_metric, conversion_metric, and entity
+        # TODO: validate that cumulative metrics have all required inputs here
+        # TODO: validate that derived metrics have all required inputs here
+        # TODO: validate that ratio metrics have all required inputs here
+        # TODO: validate that simple metrics have all required inputs here
 
 
 @dataclass
@@ -746,6 +783,11 @@ class UnparsedNonAdditiveDimension(dbtClassMixin):
     name: str
     window_choice: str  # AggregationType enum
     window_groupings: List[str] = field(default_factory=list)
+
+
+class PercentileType(str, Enum):
+    DISCRETE = "discrete"
+    CONTINUOUS = "continuous"
 
 
 @dataclass

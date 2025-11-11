@@ -20,6 +20,7 @@ from dbt.contracts.graph.unparsed import (
     Docs,
     HasColumnTests,
     UnparsedColumn,
+    UnparsedConversionTypeParams,
     UnparsedDocumentationFile,
     UnparsedExposure,
     UnparsedMacro,
@@ -38,6 +39,9 @@ from dbt.contracts.graph.unparsed import (
 from dbt.exceptions import ParsingError
 from dbt.node_types import NodeType
 from dbt.parser.schemas import ParserRef
+from dbt_semantic_interfaces.type_enums.conversion_calculation_type import (
+    ConversionCalculationType,
+)
 from tests.unit.utils import ContractTestCase
 
 
@@ -887,6 +891,70 @@ class TestUnparsedExposure(ContractTestCase):
         self.assert_fails_validation(tst)
 
 
+class TestUnparsedConversionTypeParams(ContractTestCase):
+    ContractType = UnparsedConversionTypeParams
+
+    def get_old_style_ok_dict(self):
+        return {
+            "entity": "customers",
+            "base_measure": {
+                "name": "customers",
+                "filter": "is_new = true",
+                "join_to_timespine": False,
+            },
+            "conversion_measure": "orders",
+            "calculation": "conversion_rate",
+            "window": "7d",
+        }
+
+    def get_v2_ok_dict(self):
+        return {
+            "entity": "customers",
+            "base_metric": {
+                "name": "customers",
+                "filter": "is_new = true",
+                "alias": "customers_alias",
+            },
+            "conversion_metric": "orders",
+            "calculation": "conversion_rate",
+            "window": "7d",
+        }
+
+    def test_old_style_ok(self):
+        params = self.ContractType.from_dict(self.get_old_style_ok_dict())
+        assert params.base_measure is not None
+        assert params.conversion_measure is not None
+        assert params.calculation == ConversionCalculationType.CONVERSION_RATE.value
+        assert params.window == "7d"
+
+    def test_old_style_bad_no_base_measure(self):
+        tst = self.get_old_style_ok_dict()
+        del tst["base_measure"]
+        self.assert_fails_validation(tst)
+
+    def test_old_style_bad_no_conversion_measure(self):
+        tst = self.get_old_style_ok_dict()
+        del tst["conversion_measure"]
+        self.assert_fails_validation(tst)
+
+    def test_v2_ok(self):
+        params = self.ContractType.from_dict(self.get_v2_ok_dict())
+        assert params.base_metric is not None
+        assert params.conversion_metric is not None
+        assert params.calculation == ConversionCalculationType.CONVERSION_RATE.value
+        assert params.window == "7d"
+
+    def test_v2_bad_no_base_metric(self):
+        tst = self.get_v2_ok_dict()
+        del tst["base_metric"]
+        self.assert_fails_validation(tst)
+
+    def test_v2_bad_no_conversion_metric(self):
+        tst = self.get_v2_ok_dict()
+        del tst["conversion_metric"]
+        self.assert_fails_validation(tst)
+
+
 class BaseTestUnparsedMetric:
 
     @abstractmethod
@@ -1016,8 +1084,14 @@ class TestUnparsedMetricV2(BaseTestUnparsedMetric, ContractTestCase):
         dct = self.get_ok_dict()
         # add defaults:
         dct["hidden"] = False
+        dct["period_agg"] = "first"
         self.assert_symmetric(metric, dct)
         pickle.loads(pickle.dumps(metric))
+
+    def test_bad_metric_no_agg(self):
+        tst = self.get_ok_dict()
+        del tst["agg"]
+        self.assert_fails_validation(tst)
 
 
 class TestUnparsedVersion(ContractTestCase):
