@@ -13,7 +13,8 @@ use crate::{
         DbtSnapshot, DbtSource, DbtTest, DbtUnitTest, DbtUnitTestAttr, IntrospectionKind,
         NodeBaseAttributes, Nodes, TimeSpine, TimeSpinePrimaryColumn,
         common::{
-            Access, DbtChecksum, DbtMaterialization, DbtQuoting, NodeDependsOn, normalize_sql,
+            Access, DbtChecksum, DbtMaterialization, DbtQuoting, NodeDependsOn,
+            conform_normalized_snapshot_raw_code_to_mantle_format, normalize_sql,
         },
         manifest::{
             ManifestExposure, ManifestGroup, ManifestSavedQuery, ManifestUnitTest,
@@ -627,16 +628,21 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                 );
             }
             DbtNode::Snapshot(snapshot) => {
-                // Recalculate checksum that eliminates whitespace and case differences.
-                let normalized_raw_code = snapshot
-                    .__base_attr__
-                    .raw_code
-                    .clone()
-                    .map(|raw_code| normalize_sql(&raw_code));
-                let recalculated_checksum = recalculate_checksum(
-                    normalized_raw_code.as_deref(),
-                    snapshot.__base_attr__.checksum.clone(),
-                );
+                let recalculated_checksum = match snapshot.__base_attr__.raw_code.clone() {
+                    Some(raw_code) => {
+                        // Recalculate checksum that eliminates whitespace and case differences.
+                        let normalized_raw_code = normalize_sql(&raw_code);
+                        let normalized_mantle_conforming_raw_code =
+                            conform_normalized_snapshot_raw_code_to_mantle_format(
+                                normalized_raw_code.as_str(),
+                            );
+                        recalculate_checksum(
+                            Some(normalized_mantle_conforming_raw_code.as_str()),
+                            snapshot.__base_attr__.checksum.clone(),
+                        )
+                    }
+                    None => snapshot.__base_attr__.checksum.clone(),
+                };
 
                 nodes.snapshots.insert(
                     unique_id,
@@ -795,15 +801,17 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     .map(|tags| tags.into())
                     .unwrap_or_default();
                 let meta = config.meta.clone().unwrap_or_default();
-                let normalized_raw_code = analysis
-                    .__base_attr__
-                    .raw_code
-                    .clone()
-                    .map(|raw_code| normalize_sql(&raw_code));
-                let recalculated_checksum = recalculate_checksum(
-                    normalized_raw_code.as_deref(),
-                    analysis.__base_attr__.checksum.clone(),
-                );
+
+                let recalculated_checksum = match analysis.__base_attr__.raw_code.clone() {
+                    Some(raw_code) => {
+                        let normalized_raw_code = normalize_sql(&raw_code);
+                        recalculate_checksum(
+                            Some(normalized_raw_code.as_str()),
+                            analysis.__base_attr__.checksum.clone(),
+                        )
+                    }
+                    None => analysis.__base_attr__.checksum.clone(),
+                };
                 nodes.analyses.insert(
                     unique_id,
                     Arc::new(DbtAnalysis {
@@ -1189,15 +1197,16 @@ pub fn manifest_model_to_dbt_model(
         custom_granularities: ts.custom_granularities.unwrap_or_default(),
     });
 
-    let normalized_raw_code = model
-        .__base_attr__
-        .raw_code
-        .clone()
-        .map(|raw_code| normalize_sql(&raw_code));
-    let recalculated_checksum = recalculate_checksum(
-        normalized_raw_code.as_deref(),
-        model.__base_attr__.checksum.clone(),
-    );
+    let recalculated_checksum = match model.__base_attr__.raw_code.clone() {
+        Some(raw_code) => {
+            let normalized_raw_code = normalize_sql(&raw_code);
+            recalculate_checksum(
+                Some(normalized_raw_code.as_str()),
+                model.__base_attr__.checksum.clone(),
+            )
+        }
+        None => model.__base_attr__.checksum.clone(),
+    };
 
     DbtModel {
         __common_attr__: CommonAttributes {
@@ -1287,15 +1296,17 @@ pub fn manifest_function_to_dbt_function(
     function: ManifestFunction,
     dbt_quoting: DbtQuoting,
 ) -> DbtFunction {
-    let normalized_raw_code = function
-        .__base_attr__
-        .raw_code
-        .clone()
-        .map(|raw_code| normalize_sql(&raw_code));
-    let recalculated_checksum = recalculate_checksum(
-        normalized_raw_code.as_deref(),
-        function.__base_attr__.checksum.clone(),
-    );
+    let recalculated_checksum = match function.__base_attr__.raw_code.clone() {
+        Some(raw_code) => {
+            // Recalculate checksum that eliminates whitespace and case differences.
+            let normalized_raw_code = normalize_sql(&raw_code);
+            recalculate_checksum(
+                Some(normalized_raw_code.as_str()),
+                function.__base_attr__.checksum.clone(),
+            )
+        }
+        None => function.__base_attr__.checksum.clone(),
+    };
 
     DbtFunction {
         __common_attr__: CommonAttributes {

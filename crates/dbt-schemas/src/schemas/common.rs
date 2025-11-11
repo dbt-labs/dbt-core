@@ -1133,6 +1133,44 @@ pub fn merge_tags(
     }
 }
 
+pub fn conform_normalized_snapshot_raw_code_to_mantle_format(normalized_full: &str) -> String {
+    // Strip snapshot tags to match dbt-mantle behavior
+    // Remove everything before and including {%snapshot name%} or {%-snapshot name-%}
+    let sql_without_opening = normalized_full
+        .find("{%-snapshot")
+        .or_else(|| normalized_full.find("{%snapshot"))
+        .and_then(|start_pos| {
+            // Found the opening tag, now find where it ends
+            let after_tag_start = &normalized_full[start_pos..];
+            after_tag_start
+                .find("-%}")
+                .or_else(|| after_tag_start.find("%}"))
+                .map(|end_offset| {
+                    let tag_end = if after_tag_start[end_offset..].starts_with("-%}") {
+                        end_offset + 3
+                    } else {
+                        end_offset + 2
+                    };
+                    &normalized_full[start_pos + tag_end..]
+                })
+        })
+        .unwrap_or(normalized_full);
+
+    // Strip the closing endsnapshot tag ({%endsnapshot%} or {%-endsnapshot-%})
+    let normalized_sql = sql_without_opening
+        .strip_suffix("-%}")
+        .or_else(|| sql_without_opening.strip_suffix("%}"))
+        .and_then(|s| {
+            // Find the start of the closing tag ({%- or {%)
+            s.rfind("{%-endsnapshot")
+                .or_else(|| s.rfind("{%endsnapshot"))
+                .map(|pos| &s[..pos])
+        })
+        .unwrap_or(sql_without_opening);
+
+    normalized_sql.to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
