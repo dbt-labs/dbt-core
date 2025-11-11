@@ -1,12 +1,19 @@
 import pytest
 
 from dbt.contracts.graph.manifest import Manifest
-from dbt_semantic_interfaces.type_enums import DimensionType, EntityType
+from dbt_semantic_interfaces.type_enums import (
+    AggregationType,
+    DimensionType,
+    EntityType,
+    MetricType,
+)
 from tests.functional.assertions.test_runner import dbtTestRunner
 from tests.functional.semantic_models.fixtures import (
     base_schema_yml_v2,
     fct_revenue_sql,
     metricflow_time_spine_sql,
+    schema_yml_v2_metrics,
+    semantic_model_schema_yml_v2,
 )
 
 
@@ -14,12 +21,12 @@ class TestSemanticModelParsingWorks:
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "schema.yml": base_schema_yml_v2,
+            "schema.yml": semantic_model_schema_yml_v2,
             "fct_revenue.sql": fct_revenue_sql,
             "metricflow_time_spine.sql": metricflow_time_spine_sql,
         }
 
-    def test_semantic_model_parsing(self, project):
+    def test_semantic_model_parsing(self, project) -> None:
         runner = dbtTestRunner()
         result = runner.invoke(["parse"])
         assert result.success
@@ -102,5 +109,28 @@ class TestSemanticModelParsingWorks:
         # TODO: Dimensions are not parsed yet (for those defined in derived semantics)
 
 
-# TODO DI-4605: add enforcement and a testfor when there are validity params with no column granularity
+class TestStandaloneMetricParsingWorks:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": base_schema_yml_v2 + schema_yml_v2_metrics,
+            "fct_revenue.sql": fct_revenue_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+        }
+
+    def test_standalone_metric_parsing(self, project):
+        runner = dbtTestRunner()
+        result = runner.invoke(["parse"])
+        assert result.success
+        manifest = result.result
+        metrics = manifest.metrics
+        assert len(metrics) == 1
+        metric = metrics["metric.test.simple_metric"]
+        assert metric.name == "simple_metric"
+        assert metric.description == "This is our first simple metric."
+        assert metric.type == MetricType.SIMPLE
+        assert metric.type_params.metric_aggregation_params.agg == AggregationType.COUNT
+
+
+# TODO DI-4605: add enforcement and a test for when there are validity params with no column granularity
 # TODO DI-4603: add enforcement and a test for a TIME type dimension and a column that has no granularity set

@@ -1,0 +1,6 @@
+kind: Features
+body: Process semantic metrics in v2 YAML if they are not merged into a model.
+time: 2026-01-27T11:41:49.912438-08:00
+custom:
+    Author: theyostalservice
+    Issue: .
