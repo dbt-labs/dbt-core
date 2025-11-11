@@ -1,7 +1,10 @@
 import pickle
+from abc import abstractmethod
 from datetime import timedelta
+from typing import Any, Dict
 
 import pytest
+from typing_extensions import override
 
 from dbt.artifacts.resources import (
     ExposureType,
@@ -17,12 +20,14 @@ from dbt.contracts.graph.unparsed import (
     Docs,
     HasColumnTests,
     UnparsedColumn,
+    UnparsedConversionTypeParams,
     UnparsedDocumentationFile,
     UnparsedExposure,
     UnparsedMacro,
     UnparsedMetric,
     UnparsedMetricInputMeasure,
     UnparsedMetricTypeParams,
+    UnparsedMetricV2,
     UnparsedModelUpdate,
     UnparsedNode,
     UnparsedNodeUpdate,
@@ -34,6 +39,9 @@ from dbt.contracts.graph.unparsed import (
 from dbt.exceptions import ParsingError
 from dbt.node_types import NodeType
 from dbt.parser.schemas import ParserRef
+from dbt_semantic_interfaces.type_enums.conversion_calculation_type import (
+    ConversionCalculationType,
+)
 from tests.unit.utils import ContractTestCase
 
 
@@ -883,9 +891,93 @@ class TestUnparsedExposure(ContractTestCase):
         self.assert_fails_validation(tst)
 
 
-class TestUnparsedMetric(ContractTestCase):
+class TestUnparsedConversionTypeParams(ContractTestCase):
+    """Only Applies to v1 Semantic Metrics."""
+
+    ContractType = UnparsedConversionTypeParams
+
+    def get_old_style_ok_dict(self):
+        return {
+            "entity": "customers",
+            "base_measure": {
+                "name": "customers",
+                "filter": "is_new = true",
+                "join_to_timespine": False,
+            },
+            "conversion_measure": "orders",
+            "calculation": "conversion_rate",
+            "window": "7d",
+        }
+
+    def test_old_style_ok(self):
+        params = self.ContractType.from_dict(self.get_old_style_ok_dict())
+        assert params.base_measure is not None
+        assert params.conversion_measure is not None
+        assert params.calculation == ConversionCalculationType.CONVERSION_RATE.value
+        assert params.window == "7d"
+
+    def test_old_style_bad_no_base_measure(self):
+        tst = self.get_old_style_ok_dict()
+        del tst["base_measure"]
+        self.assert_fails_validation(tst)
+
+    def test_old_style_bad_no_conversion_measure(self):
+        tst = self.get_old_style_ok_dict()
+        del tst["conversion_measure"]
+        self.assert_fails_validation(tst)
+
+
+class BaseTestUnparsedMetric:
+
+    @abstractmethod
+    def get_ok_dict(self) -> Dict[str, Any]:
+        raise NotImplementedError()
+
+    def test_bad_tags(self):
+        tst = self.get_ok_dict()
+        tst["tags"] = [123]
+        self.assert_fails_validation(tst)
+
+    def test_bad_metric_name_with_spaces(self):
+        tst = self.get_ok_dict()
+        tst["name"] = "metric name with spaces"
+        self.assert_fails_validation(tst)
+
+    def test_bad_metric_name_too_long(self):
+        tst = self.get_ok_dict()
+        tst["name"] = "a" * 251
+        self.assert_fails_validation(tst)
+
+    def test_bad_metric_name_does_not_start_with_letter(self):
+        tst = self.get_ok_dict()
+        tst["name"] = "123metric"
+        self.assert_fails_validation(tst)
+
+        tst["name"] = "_metric"
+        self.assert_fails_validation(tst)
+
+    def test_bad_metric_name_contains_special_characters(self):
+        tst = self.get_ok_dict()
+        tst["name"] = "metric!name"
+        self.assert_fails_validation(tst)
+
+        tst["name"] = "metric@name"
+        self.assert_fails_validation(tst)
+
+        tst["name"] = "metric#name"
+        self.assert_fails_validation(tst)
+
+        tst["name"] = "metric$name"
+        self.assert_fails_validation(tst)
+
+        tst["name"] = "metric-name"
+        self.assert_fails_validation(tst)
+
+
+class TestUnparsedMetric(BaseTestUnparsedMetric, ContractTestCase):
     ContractType = UnparsedMetric
 
+    @override
     def get_ok_dict(self):
         return {
             "name": "new_customers",
@@ -928,45 +1020,67 @@ class TestUnparsedMetric(ContractTestCase):
         del tst["type_params"]
         self.assert_fails_validation(tst)
 
-    def test_bad_tags(self):
-        tst = self.get_ok_dict()
-        tst["tags"] = [123]
-        self.assert_fails_validation(tst)
 
-    def test_bad_metric_name_with_spaces(self):
-        tst = self.get_ok_dict()
-        tst["name"] = "metric name with spaces"
-        self.assert_fails_validation(tst)
+class TestUnparsedMetricV2(BaseTestUnparsedMetric, ContractTestCase):
+    ContractType = UnparsedMetricV2
 
-    def test_bad_metric_name_too_long(self):
-        tst = self.get_ok_dict()
-        tst["name"] = "a" * 251
-        self.assert_fails_validation(tst)
+    @override
+    def get_ok_dict(self):
+        return {
+            "name": "new_customers",
+            "label": "New Customers",
+            "description": "New customers",
+            "type": "simple",
+            "agg": "sum",
+            "filter": "is_new = true",
+            "join_to_timespine": False,
+            "config": {
+                "tags": [],
+                "meta": {"is_okr": True},
+            },
+        }
 
-    def test_bad_metric_name_does_not_start_with_letter(self):
-        tst = self.get_ok_dict()
-        tst["name"] = "123metric"
-        self.assert_fails_validation(tst)
+    def get_ok_dict_with_defaults(self):
+        dct = self.get_ok_dict()
+        dct["hidden"] = False
+        dct["period_agg"] = "first"
+        return dct
 
-        tst["name"] = "_metric"
-        self.assert_fails_validation(tst)
+    def test_ok(self):
+        metric = self.ContractType(
+            name="new_customers",
+            label="New Customers",
+            description="New customers",
+            agg="sum",
+            filter="is_new = true",
+            join_to_timespine=False,
+            config={
+                "tags": [],
+                "meta": {"is_okr": True},
+            },
+        )
+        dct = self.get_ok_dict()
+        # add defaults:
+        dct["hidden"] = False
+        dct["period_agg"] = "first"
+        self.assert_symmetric(metric, dct)
+        pickle.loads(pickle.dumps(metric))
 
-    def test_bad_metric_name_contains_special_characters(self):
-        tst = self.get_ok_dict()
-        tst["name"] = "metric!name"
-        self.assert_fails_validation(tst)
-
-        tst["name"] = "metric@name"
-        self.assert_fails_validation(tst)
-
-        tst["name"] = "metric#name"
-        self.assert_fails_validation(tst)
-
-        tst["name"] = "metric$name"
-        self.assert_fails_validation(tst)
-
-        tst["name"] = "metric-name"
-        self.assert_fails_validation(tst)
+    def test_metric_no_agg_still_good(self):
+        metric = self.ContractType(
+            name="new_customers",
+            label="New Customers",
+            description="New customers",
+            filter="is_new = true",
+            join_to_timespine=False,
+            config={
+                "tags": [],
+                "meta": {"is_okr": True},
+            },
+        )
+        tst = self.get_ok_dict_with_defaults()
+        del tst["agg"]
+        pickle.loads(pickle.dumps(metric))
 
 
 class TestUnparsedVersion(ContractTestCase):

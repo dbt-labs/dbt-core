@@ -641,6 +641,8 @@ class UnparsedCumulativeTypeParams(dbtClassMixin):
 
 @dataclass
 class UnparsedMetricTypeParams(dbtClassMixin):
+    """Used on v1 Semantic Metric YAML."""
+
     measure: Optional[Union[UnparsedMetricInputMeasure, str]] = None
     numerator: Optional[Union[UnparsedMetricInput, str]] = None
     denominator: Optional[Union[UnparsedMetricInput, str]] = None
@@ -652,24 +654,22 @@ class UnparsedMetricTypeParams(dbtClassMixin):
     cumulative_type_params: Optional[UnparsedCumulativeTypeParams] = None
 
 
-@dataclass
-class UnparsedMetric(dbtClassMixin):
+@dataclass(kw_only=True)
+class UnparsedMetricBase(dbtClassMixin):
+
     name: str
-    label: str
-    type: str
-    type_params: UnparsedMetricTypeParams
+    type: str = "simple"
+    label: Optional[str] = None
     description: str = ""
     # Note: `Union` must be the outermost part of the type annotation for serialization to work properly.
     filter: Union[str, List[str], None] = None
     time_granularity: Optional[str] = None
-    # metadata: Optional[Unparsedetadata] = None # TODO
-    meta: Dict[str, Any] = field(default_factory=dict)
-    tags: List[str] = field(default_factory=list)
+
     config: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def validate(cls, data):
-        super(UnparsedMetric, cls).validate(data)
+        super().validate(data)
         if "name" in data:
             errors = []
             if " " in data["name"]:
@@ -687,6 +687,61 @@ class UnparsedMetric(dbtClassMixin):
                 raise ValidationError(
                     f"The metric name '{data['name']}' is invalid.  It {', '.join(e for e in errors)}"
                 )
+
+
+@dataclass(kw_only=True)
+class UnparsedMetric(UnparsedMetricBase):
+    """Old-style YAML metric; prefer UnparsedMetricV2 instead as of late 2025."""
+
+    label: str  # TODO: follow up - v1 made this required, but in v2 it appears optional
+
+    type_params: UnparsedMetricTypeParams  # old-style YAML
+    # metadata: Optional[Unparsedetadata] = None # TODO
+    meta: Dict[str, Any] = field(default_factory=dict)
+    tags: List[str] = field(default_factory=list)
+
+
+@dataclass
+class UnparsedNonAdditiveDimensionV2(dbtClassMixin):
+    name: str
+    window_agg: str  # AggregationType enum
+    group_by: List[str] = field(default_factory=list)
+
+
+@dataclass
+class UnparsedMetricV2(UnparsedMetricBase):
+    hidden: bool = False
+    agg: Optional[str] = None
+
+    percentile: Optional[float] = None
+    percentile_type: Optional[str] = None
+
+    join_to_timespine: Optional[bool] = None
+    fill_nulls_with: Optional[int] = None
+    expr: Optional[Union[str, int]] = None
+
+    non_additive_dimension: Optional[UnparsedNonAdditiveDimensionV2] = None
+    agg_time_dimension: Optional[str] = None
+
+    # For cumulative metrics
+    window: Optional[str] = None
+    grain_to_date: Optional[str] = None
+    period_agg: str = PeriodAggregation.FIRST.value
+    input_metric: Optional[Union[str, Dict[str, Any]]] = None
+
+    # For ratio metrics
+    numerator: Optional[Union[str, Dict[str, Any]]] = None
+    denominator: Optional[Union[str, Dict[str, Any]]] = None
+
+    # For derived metrics
+    input_metrics: Optional[List[Dict[str, Any]]] = None
+
+    # For conversion metrics
+    entity: Optional[str] = None
+    calculation: Optional[str] = None
+    base_metric: Optional[Union[str, Dict[str, Any]]] = None
+    conversion_metric: Optional[Union[str, Dict[str, Any]]] = None
+    constant_properties: Optional[List[Dict[str, Any]]] = None
 
 
 @dataclass
