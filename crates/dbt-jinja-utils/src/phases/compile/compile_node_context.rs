@@ -6,9 +6,9 @@ use std::{
 };
 
 use dashmap::DashMap;
+use dbt_adapter::{AdapterType, load_store::ResultStore, relation_object::create_relation};
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::serde_utils::convert_yml_to_dash_map;
-use dbt_fusion_adapter::{AdapterType, load_store::ResultStore, relation_object::create_relation};
 use dbt_schemas::{
     schemas::{InternalDbtNodeAttributes, telemetry::NodeType},
     state::{DbtRuntimeConfig, NodeResolverTracker, ResolverState},

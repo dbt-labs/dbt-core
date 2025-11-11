@@ -13,10 +13,10 @@ version.workspace = true
 workspace = true
 
 [dependencies]
+dbt-adapter = { workspace = true }
 dbt-common = { workspace = true }
 dbt-dag = { workspace = true }
 dbt-frontend-common = { workspace = true }
-dbt-fusion-adapter = { workspace = true }
 dbt-jinja-utils = { workspace = true }
 dbt-schemas = { workspace = true }
 dbt-selector-parser = { workspace = true }

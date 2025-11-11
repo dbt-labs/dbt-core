@@ -4,6 +4,9 @@ use std::{
     iter::Iterator,
 };
 
+use dbt_adapter::relation_object::{
+    RelationObject, create_relation_from_node, create_relation_internal,
+};
 use dbt_common::{
     CodeLocation, ErrorCode, FsResult,
     adapter::AdapterType,
@@ -11,9 +14,6 @@ use dbt_common::{
     io_args::IoArgs,
     tracing::emit::{emit_error_log_from_fs_error, emit_warn_log_from_fs_error},
     unexpected_err,
-};
-use dbt_fusion_adapter::relation_object::{
-    RelationObject, create_relation_from_node, create_relation_internal,
 };
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::{

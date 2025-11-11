@@ -1,7 +1,5 @@
+use dbt_adapter::{BaseAdapter, BridgeAdapter, ParseAdapter, factory::create_static_relation};
 use dbt_common::{ErrorCode, FsError, FsResult, fs_err};
-use dbt_fusion_adapter::{
-    BaseAdapter, BridgeAdapter, ParseAdapter, factory::create_static_relation,
-};
 use minijinja::{
     Environment, Error as MinijinjaError, State, Template, UndefinedBehavior, Value,
     listener::RenderingEventListener,

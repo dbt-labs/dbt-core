@@ -1,12 +1,12 @@
 use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
+use dbt_adapter::load_catalogs;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::{
     DBT_CATALOGS_YML, DBT_DEPENDENCIES_YML, DBT_PACKAGES_LOCK_FILE, DBT_PACKAGES_YML,
 };
 use dbt_common::once_cell_vars::DISPATCH_CONFIG;
 use dbt_common::tracing::emit::emit_warn_log_from_fs_error;
-use dbt_fusion_adapter::load_catalogs;
 use dbt_jinja_utils::invocation_args::InvocationArgs;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::phases::load::init::initialize_load_jinja_environment;

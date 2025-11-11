@@ -18,10 +18,10 @@ doctest = false
 workspace = true
 
 [dependencies]
+dbt-adapter = { workspace = true }
 dbt-agate = { workspace = true }
 dbt-common = { workspace = true }
 dbt-frontend-common = { workspace = true }
-dbt-fusion-adapter = { workspace = true }
 dbt-schemas = { workspace = true }
 dbt-telemetry = { workspace = true }
 

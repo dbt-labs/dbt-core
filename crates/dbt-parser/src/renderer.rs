@@ -923,7 +923,7 @@ async fn process_model_chunk_for_unsafe_detection<T: InternalDbtNodeAttributes +
     package_name: String,
     root_project_name: String,
     runtime_config: Arc<DbtRuntimeConfig>,
-    parse_adapter: Arc<dbt_fusion_adapter::ParseAdapter>,
+    parse_adapter: Arc<dbt_adapter::ParseAdapter>,
     token: &CancellationToken,
 ) -> FsResult<Vec<(T, bool)>> {
     let mut nodes = Vec::new();
@@ -1018,7 +1018,7 @@ async fn collect_adapter_identifiers_sequential<T: InternalDbtNodeAttributes + '
     package_name: &str,
     root_project_name: &str,
     runtime_config: Arc<DbtRuntimeConfig>,
-    parse_adapter: Arc<dbt_fusion_adapter::ParseAdapter>,
+    parse_adapter: Arc<dbt_adapter::ParseAdapter>,
     chunk_size: usize,
     token: &CancellationToken,
 ) -> FsResult<Vec<(T, bool)>> {
@@ -1057,7 +1057,7 @@ async fn collect_adapter_identifiers_parallel<T: InternalDbtNodeAttributes + 'st
     package_name: &str,
     root_project_name: &str,
     runtime_config: Arc<DbtRuntimeConfig>,
-    parse_adapter: Arc<dbt_fusion_adapter::ParseAdapter>,
+    parse_adapter: Arc<dbt_adapter::ParseAdapter>,
     chunk_size: usize,
     token: &CancellationToken,
 ) -> FsResult<Vec<(T, bool)>> {

@@ -16,10 +16,10 @@ use dbt_common::constants::DBT_RUN_DIR_NAME;
 use dbt_common::io_args::IoArgs;
 use dbt_common::serde_utils::convert_yml_to_value_map;
 
+use dbt_adapter::load_store::ResultStore;
+use dbt_adapter::relation_object::create_relation;
 use dbt_common::tokiofs;
 use dbt_common::tracing::emit::emit_warn_log_message;
-use dbt_fusion_adapter::load_store::ResultStore;
-use dbt_fusion_adapter::relation_object::create_relation;
 use dbt_schemas::schemas::CommonAttributes;
 use dbt_schemas::schemas::NodeBaseAttributes;
 use dbt_schemas::schemas::telemetry::NodeType;

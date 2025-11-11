@@ -2,12 +2,12 @@
 #[cfg(test)]
 #[allow(clippy::module_inception)]
 mod tests {
+    use dbt_adapter::sql_types::NaiveTypeOpsImpl;
+    use dbt_adapter::{BaseAdapter, ParseAdapter};
     use dbt_common::adapter::AdapterType;
     use dbt_common::cancellation::never_cancels;
     use dbt_common::{FsResult, io_args::IoArgs};
     use dbt_frontend_common::error::CodeLocation;
-    use dbt_fusion_adapter::sql_types::NaiveTypeOpsImpl;
-    use dbt_fusion_adapter::{BaseAdapter, ParseAdapter};
     use dbt_jinja_utils::invocation_args::InvocationArgs;
     use dbt_jinja_utils::jinja_environment::JinjaEnv;
     use dbt_jinja_utils::listener::DefaultRenderingEventListenerFactory;

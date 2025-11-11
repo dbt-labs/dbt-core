@@ -1,8 +1,8 @@
+use dbt_adapter::relation_object::create_relation_internal;
+use dbt_adapter::{AdapterTyping, ParseAdapter};
 use dbt_common::{ErrorCode, FsError, fs_err, stdfs};
 use dbt_common::{FsResult, constants::DBT_CTE_PREFIX, error::MacroSpan, tokiofs};
 use dbt_frontend_common::{error::CodeLocation, span::Span};
-use dbt_fusion_adapter::relation_object::create_relation_internal;
-use dbt_fusion_adapter::{AdapterTyping, ParseAdapter};
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::project::DefaultTo;
 use dbt_schemas::schemas::{DbtModel, DbtSeed, DbtSnapshot, DbtTest, DbtUnitTest, InternalDbtNode};

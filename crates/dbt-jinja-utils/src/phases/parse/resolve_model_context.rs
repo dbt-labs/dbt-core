@@ -13,15 +13,15 @@ use std::{
 
 use chrono::TimeZone;
 use chrono_tz::{Europe::London, Tz};
+use dbt_adapter::{
+    cast_util::THIS_RELATION_KEY, load_store::ResultStore, relation_object::create_relation,
+};
 use dbt_common::{
     adapter::AdapterType,
     io_args::{IoArgs, StaticAnalysisKind},
     serde_utils::convert_yml_to_value_map,
 };
 use dbt_frontend_common::error::CodeLocation;
-use dbt_fusion_adapter::{
-    cast_util::THIS_RELATION_KEY, load_store::ResultStore, relation_object::create_relation,
-};
 use dbt_schemas::schemas::{
     DbtModelAttr, InternalDbtNode, IntrospectionKind,
     common::{Access, DbtMaterialization, ResolvedQuoting},

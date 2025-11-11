@@ -1,6 +1,6 @@
 [package]
-name = "dbt-fusion-adapter"
-description = "dbt fusion adapters"
+name = "dbt-adapter"
+description = "dbt Adapter Layer"
 version.workspace = true
 homepage.workspace = true
 repository.workspace = true
@@ -52,7 +52,7 @@ uuid = { workspace = true }
 dbt-test-primitives = { workspace = true }
 
 [lib]
-name = "dbt_fusion_adapter"
+name = "dbt_adapter"
 path = "src/lib.rs"
 doctest = false
 

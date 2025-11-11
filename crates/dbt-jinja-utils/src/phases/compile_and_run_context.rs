@@ -6,9 +6,9 @@ use std::sync::{Arc, OnceLock};
 
 use crate::functions::build_flat_graph;
 use crate::jinja_environment::JinjaEnv;
+use dbt_adapter::BaseAdapter;
+use dbt_adapter::load_store::ResultStore;
 use dbt_common::once_cell_vars::DISPATCH_CONFIG;
-use dbt_fusion_adapter::BaseAdapter;
-use dbt_fusion_adapter::load_store::ResultStore;
 use dbt_schemas::schemas::Nodes;
 use dbt_schemas::state::{DbtRuntimeConfig, NodeResolverTracker};
 use minijinja::arg_utils::{ArgParser, ArgsIter};

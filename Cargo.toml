@@ -24,7 +24,7 @@ members = [
   "crates/dbt-selector-parser",
   "crates/dbt-proc-macros",
 
-  "crates/dbt-fusion-adapter",
+  "crates/dbt-adapter",
   "crates/dbt-ident",
   "crates/dbt-jinja-utils",
   "crates/dbt-sa-cli",
@@ -147,6 +147,7 @@ opt-level = 3
 
 
 # fs source available dependencies
+dbt-adapter = { path = "crates/dbt-adapter" }
 dbt-agate = { path = "crates/dbt-agate" }
 dbt-auth = { path = "crates/dbt-auth" }
 dbt-cancel = { path = "crates/dbt-cancel" }
@@ -157,7 +158,6 @@ dbt-deps = { path = "crates/dbt-deps" }
 dbt-env = { path = "crates/dbt-env" }
 dbt-error = { path = "crates/dbt-error" }
 dbt-frontend-common = { path = "crates/dbt-frontend-common" }
-dbt-fusion-adapter = { path = "crates/dbt-fusion-adapter" }
 dbt-ident = { path = "crates/dbt-ident" }
 dbt-init = { path = "crates/dbt-init" }
 dbt-jinja-utils = { path = "crates/dbt-jinja-utils" }

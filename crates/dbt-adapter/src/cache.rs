@@ -50,7 +50,7 @@ struct SchemaEntry {
 /// ```rust
 /// use std::sync::Arc;
 /// use dbt_schemas::schemas::relations::base::BaseRelation;
-/// use dbt_fusion_adapter::cache::{RelationCache, RelationCacheEntry};
+/// use dbt_adapter::cache::{RelationCache, RelationCacheEntry};
 ///
 /// let cache = RelationCache::new();
 /// let relation: Arc<dyn BaseRelation> = // ... some relation

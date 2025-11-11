@@ -4,11 +4,11 @@ use std::{collections::BTreeMap, str::FromStr as _, sync::Arc};
 
 use chrono::DateTime;
 use chrono_tz::Tz;
+use dbt_adapter::{BaseAdapter, ParseAdapter, sql_types::NaiveTypeOpsImpl};
 use dbt_common::{
     ErrorCode, FsResult, adapter::AdapterType, cancellation::CancellationToken, fs_err,
     io_args::IoArgs,
 };
-use dbt_fusion_adapter::{BaseAdapter, ParseAdapter, sql_types::NaiveTypeOpsImpl};
 use dbt_schemas::{
     dbt_utils::resolve_package_quoting,
     schemas::dbt_catalogs::DbtCatalogs,

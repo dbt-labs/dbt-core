@@ -1,6 +1,6 @@
 use crate::{functions::register_base_functions, jinja_environment::JinjaEnv};
+use dbt_adapter::BaseAdapter;
 use dbt_common::{ErrorCode, FsError, FsResult, fs_err, io_args::IoArgs, unexpected_fs_err};
-use dbt_fusion_adapter::BaseAdapter;
 use minijinja::{
     AdapterDispatchFunction, Argument, DynTypeObject, Environment, Error as MinijinjaError,
     ErrorKind as MinijinjaErrorKind, UndefinedFunctionType, UserDefinedFunctionType, Value,
@@ -475,10 +475,10 @@ impl Default for JinjaEnvBuilder {
 mod tests {
     use std::{collections::BTreeSet, path::PathBuf, sync::Mutex};
 
+    use dbt_adapter::ParseAdapter;
+    use dbt_adapter::sql_types::NaiveTypeOpsImpl;
     use dbt_common::adapter::AdapterType;
     use dbt_common::cancellation::never_cancels;
-    use dbt_fusion_adapter::ParseAdapter;
-    use dbt_fusion_adapter::sql_types::NaiveTypeOpsImpl;
     use dbt_schemas::schemas::relations::DEFAULT_DBT_QUOTING;
     use minijinja::{
         constants::MACRO_DISPATCH_ORDER, context, dispatch_object::THREAD_LOCAL_DEPENDENCIES,
