@@ -602,6 +602,32 @@ mod tests {
     }
 
     #[test]
+    fn test_compare_sql_timestamp_ignore_t() {
+        let sql1 = r#"delete from ANALYTICS.intermediate.int_serp_trends 
+      where created_date >= '2025-09-10T18:07:45.449898'"#;
+        let sql2 = r#"delete from ANALYTICS.intermediate.int_serp_trends 
+      where created_date >= '2025-09-1014:16:52.500487'"#;
+        let result = compare_sql(sql1, sql2);
+        assert!(
+            result.is_ok(),
+            "Should ignore difference for timestamp value difference"
+        );
+    }
+
+    #[test]
+    fn test_compare_sql_timestamp_ignore_t2() {
+        let sql1 = r#"delete from ANALYTICS.intermediate.int_serp_trends 
+      where created_date >= '2025-09-10T18:07:45.449898'"#;
+        let sql2 = r#"delete from ANALYTICS.intermediate.int_serp_trends 
+      where created_date >= '2025-09-10 14:16:52.500487'"#;
+        let result = compare_sql(sql1, sql2);
+        assert!(
+            result.is_ok(),
+            "Should ignore difference for timestamp value difference"
+        );
+    }
+
+    #[test]
     fn test_compare_ephemeral_model() {
         let sql1 = r#"
 create or replace transient table x.y.z
