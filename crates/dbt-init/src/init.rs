@@ -7,7 +7,7 @@ use dbt_common::tracing::emit::emit_info_log_message;
 use dbt_common::{ErrorCode, FsResult, fs_err};
 use std::env;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub mod assets {
     #![allow(clippy::disallowed_methods)] // RustEmbed generates calls to std::path::Path::canonicalize
@@ -174,12 +174,11 @@ pub fn init_project(
     Ok(())
 }
 
-pub fn get_profiles_dir() -> String {
+pub fn get_profiles_dir() -> PathBuf {
     // Try environment variable first, then fall back to default
-    env::var("DBT_PROFILES_DIR").unwrap_or_else(|_| {
-        let home = env::var("HOME").unwrap_or_else(|_| ".".to_string());
-        format!("{home}/.dbt")
-    })
+    env::var("DBT_PROFILES_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| env::home_dir().unwrap_or_else(|| ".".into()).join(".dbt"))
 }
 
 /// Check if we're currently in a dbt project directory
@@ -278,8 +277,8 @@ fn update_dbt_project_profile(profile_name: &str) -> FsResult<()> {
 }
 
 /// Check if a profile exists in profiles.yml
-pub fn check_if_profile_exists(profile_name: &str, profiles_dir: &str) -> FsResult<bool> {
-    let profiles_file = Path::new(profiles_dir).join("profiles.yml");
+pub fn check_if_profile_exists(profile_name: &str, profiles_dir: &Path) -> FsResult<bool> {
+    let profiles_file = profiles_dir.join("profiles.yml");
     if !profiles_file.exists() {
         return Ok(false);
     }

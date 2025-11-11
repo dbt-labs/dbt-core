@@ -32,7 +32,7 @@ pub type Profiles = HashMap<String, ProfileTarget>;
 
 /// Load profile using the standard dbt-loader infrastructure
 fn load_profile_with_loader(
-    profiles_dir: Option<&str>,
+    profiles_dir: Option<&Path>,
     profile_name: &str,
     target: Option<&str>,
 ) -> FsResult<DbConfig> {
@@ -138,18 +138,18 @@ impl ProjectStore {
         format!("https://{}", self.config.context.active_host)
     }
 
-    pub fn try_load_profile(&self, profiles_dir: &str, profile_name: &str) -> Option<DbConfig> {
+    pub fn try_load_profile(&self, profiles_dir: &Path, profile_name: &str) -> Option<DbConfig> {
         load_profile_with_loader(Some(profiles_dir), profile_name, None).ok()
     }
 }
 
 pub struct ProfileSetup {
-    pub profiles_dir: String,
+    pub profiles_dir: PathBuf,
     pub project_store: Option<ProjectStore>,
 }
 
 impl ProfileSetup {
-    pub fn new(profiles_dir: String) -> Self {
+    pub fn new(profiles_dir: PathBuf) -> Self {
         let project_store = ProjectStore::from_dbt_cloud_yml().unwrap_or(None);
         Self {
             profiles_dir,
