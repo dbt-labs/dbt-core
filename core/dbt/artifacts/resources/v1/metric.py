@@ -83,9 +83,11 @@ class ConstantPropertyInput(dbtClassMixin):
 
 @dataclass
 class ConversionTypeParams(dbtClassMixin):
-    base_measure: MetricInputMeasure
-    conversion_measure: MetricInputMeasure
     entity: str
+    base_measure: Optional[MetricInputMeasure] = None
+    conversion_measure: Optional[MetricInputMeasure] = None
+    base_metric: Optional[MetricInput] = None
+    conversion_metric: Optional[MetricInput] = None
     calculation: ConversionCalculationType = ConversionCalculationType.CONVERSION_RATE
     window: Optional[MetricTimeWindow] = None
     constant_properties: Optional[List[ConstantPropertyInput]] = None
@@ -106,13 +108,15 @@ class MetricAggregationParams(dbtClassMixin):
     agg_params: Optional[MeasureAggregationParameters] = None
     agg_time_dimension: Optional[str] = None
     non_additive_dimension: Optional[NonAdditiveDimension] = None
-    expr: Optional[str] = None
 
 
 @dataclass
 class MetricTypeParams(dbtClassMixin):
+    # Only used in v1 Semantic YAML
     measure: Optional[MetricInputMeasure] = None
+    # Only used in v1 Semantic YAML
     input_measures: List[MetricInputMeasure] = field(default_factory=list)
+
     numerator: Optional[MetricInput] = None
     denominator: Optional[MetricInput] = None
     expr: Optional[str] = None
@@ -124,6 +128,11 @@ class MetricTypeParams(dbtClassMixin):
     conversion_type_params: Optional[ConversionTypeParams] = None
     cumulative_type_params: Optional[CumulativeTypeParams] = None
     metric_aggregation_params: Optional[MetricAggregationParams] = None
+
+    # Below this point, all fields are only used in v2 Semantic YAML
+    fill_nulls_with: Optional[int] = None
+    join_to_timespine: bool = False
+    is_private: Optional[bool] = None  # populated by "hidden" field in YAML
 
 
 @dataclass
@@ -148,8 +157,6 @@ class Metric(GraphResource):
     metadata: Optional[SourceFileMetadata] = None
     time_granularity: Optional[str] = None
     resource_type: Literal[NodeType.Metric]
-    meta: Dict[str, Any] = field(default_factory=dict, metadata=MergeBehavior.Update.meta())
-    tags: List[str] = field(default_factory=list)
     config: MetricConfig = field(default_factory=MetricConfig)
     unrendered_config: Dict[str, Any] = field(default_factory=dict)
     sources: List[List[str]] = field(default_factory=list)
@@ -159,6 +166,14 @@ class Metric(GraphResource):
     created_at: float = field(default_factory=lambda: time.time())
     group: Optional[str] = None
 
+    # These fields are only used in v1 metrics.
+    meta: Dict[str, Any] = field(default_factory=dict, metadata=MergeBehavior.Update.meta())
+    tags: List[str] = field(default_factory=list)
+
+    @property
+    def input_metrics(self) -> List[MetricInput]:
+        return self.type_params.metrics or []
+
     @property
     def input_measures(self) -> List[MetricInputMeasure]:
         return self.type_params.input_measures
@@ -166,7 +181,3 @@ class Metric(GraphResource):
     @property
     def measure_references(self) -> List[MeasureReference]:
         return [x.measure_reference() for x in self.input_measures]
-
-    @property
-    def input_metrics(self) -> List[MetricInput]:
-        return self.type_params.metrics or []
