@@ -15,8 +15,8 @@ use std::{
 use strum::{Display, IntoEnumIterator};
 
 use dbt_common::io_args::{
-    ClapResourceType, DisplayFormat, EvalArgs, IoArgs, JsonSchemaTypes, Phases, ShowOptions,
-    SystemArgs, check_selector, check_var,
+    ClapResourceType, DisplayFormat, EvalArgs, FsCommand, IoArgs, JsonSchemaTypes, Phases,
+    ShowOptions, SystemArgs, check_selector, check_var,
 };
 use dbt_common::row_limit::RowLimit;
 
@@ -391,16 +391,16 @@ impl Cli {
         self.common_args().target_path
     }
 
-    pub fn get_command_str(&self) -> &str {
+    pub fn as_command(&self) -> FsCommand {
         // generate the command string
         match &self.command {
-            Commands::Init(..) => "init",
-            Commands::Deps(..) => "deps",
-            Commands::Parse(..) => "parse",
-            Commands::List(..) => "list",
-            Commands::Ls(..) => "ls",
-            Commands::Clean(..) => "clean",
-            Commands::Man(..) => "man",
+            Commands::Init(..) => FsCommand::Init,
+            Commands::Deps(..) => FsCommand::Deps,
+            Commands::Parse(..) => FsCommand::Parse,
+            Commands::List(..) => FsCommand::List,
+            Commands::Ls(..) => FsCommand::List,
+            Commands::Clean(..) => FsCommand::Clean,
+            Commands::Man(..) => FsCommand::Man,
         }
     }
 }
@@ -464,13 +464,13 @@ impl InitArgs {
             arg.io.show.iter().cloned().collect()
         };
         EvalArgs {
-            command: arg.command.clone(),
+            command: arg.command,
             from_main: arg.from_main,
             io: IoArgs {
                 in_dir: in_dir.to_path_buf(),
                 out_dir: out_dir.to_path_buf(),
                 show,
-                command: arg.command.clone(),
+                command: arg.command,
                 debug: arg.io.debug,
                 invocation_id: arg.io.invocation_id,
                 send_anonymous_usage_stats: self.common_args.send_anonymous_usage_stats,
@@ -553,10 +553,10 @@ impl CommonArgs {
         }
 
         EvalArgs {
-            command: arg.command.clone(),
+            command: arg.command,
             io: IoArgs {
                 show,
-                command: arg.command.clone(),
+                command: arg.command,
                 debug: self.debug,
                 invocation_id: arg.io.invocation_id,
                 in_dir: in_dir.to_path_buf(),
@@ -638,10 +638,10 @@ impl CommonArgs {
 }
 
 pub fn from_main(cli: &Cli) -> SystemArgs {
-    let command = cli.get_command_str().to_string();
+    let command = cli.as_command();
 
     SystemArgs {
-        command: command.clone(),
+        command,
         io: IoArgs {
             invocation_id: uuid::Uuid::new_v4(),
             show: cli.common_args().show.iter().cloned().collect(),
@@ -683,10 +683,10 @@ pub fn from_main(cli: &Cli) -> SystemArgs {
 }
 
 pub fn from_lib(cli: &Cli) -> SystemArgs {
-    let command = cli.get_command_str().to_string();
+    let command = cli.as_command();
 
     SystemArgs {
-        command: command.clone(),
+        command,
         io: IoArgs {
             invocation_id: uuid::Uuid::new_v4(),
             show: cli.common_args().show.iter().cloned().collect(),

@@ -4,6 +4,7 @@ use dbt_common::FsError;
 use dbt_common::adapter::AdapterType;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::{DBT_GENERIC_TESTS_DIR_NAME, RESOLVING};
+use dbt_common::io_args::FsCommand;
 use dbt_common::once_cell_vars::DISPATCH_CONFIG;
 use dbt_common::stdfs;
 use dbt_common::tracing::emit::{emit_error_log_from_fs_error, emit_warn_log_from_fs_error};
@@ -166,7 +167,7 @@ pub async fn resolve(
         None,
         arg.sample_config.clone(),
         arg.sample_renaming.clone(),
-        arg.command == "compile" || arg.command == "test",
+        arg.command == FsCommand::Compile || arg.command == FsCommand::Test,
     )?;
     let mut collector = RenderResults {
         rendering_results: BTreeMap::new(),

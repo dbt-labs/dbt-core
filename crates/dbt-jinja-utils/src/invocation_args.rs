@@ -78,7 +78,7 @@ impl InvocationArgs {
         let log_format_file = arg.log_format_file.unwrap_or(log_format);
 
         InvocationArgs {
-            invocation_command: arg.command.clone(),
+            invocation_command: arg.command.as_str().to_string(),
             vars: arg
                 .vars
                 .iter()

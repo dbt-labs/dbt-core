@@ -26,7 +26,8 @@ use crate::schemas::{
 use blake3::Hasher;
 use chrono::{DateTime, Local, Utc};
 use dbt_common::{
-    ErrorCode, FsResult, adapter::AdapterType, fs_err, serde_utils::convert_yml_to_map,
+    ErrorCode, FsResult, adapter::AdapterType, fs_err, io_args::FsCommand,
+    serde_utils::convert_yml_to_map,
 };
 use minijinja::{MacroSpans, Value as MinijinjaValue, value::Object};
 use serde::Deserialize;
@@ -550,12 +551,16 @@ pub enum NodeExecutionState {
     Run,
 }
 impl NodeExecutionState {
-    /// Converts a command string to a NodeExecutionState
-    pub fn from_cmd(cmd: &str) -> Self {
+    /// Converts a command to a NodeExecutionState
+    pub fn from_cmd(cmd: FsCommand) -> Self {
         match cmd {
-            "parse" => NodeExecutionState::Parsed,
-            "compile" => NodeExecutionState::Compiled,
-            "run" | "build" | "test" | "snapshot" | "seed" => NodeExecutionState::Run,
+            FsCommand::Parse => NodeExecutionState::Parsed,
+            FsCommand::Compile => NodeExecutionState::Compiled,
+            FsCommand::Run
+            | FsCommand::Build
+            | FsCommand::Test
+            | FsCommand::Snapshot
+            | FsCommand::Seed => NodeExecutionState::Run,
             _ => NodeExecutionState::NotProcessed,
         }
     }

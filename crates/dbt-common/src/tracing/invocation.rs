@@ -6,7 +6,7 @@ use crate::{io_args::EvalArgs, tracing::span_info::with_root_span};
 
 fn create_invocation_eval_args(eval_arg: &EvalArgs) -> InvocationEvalArgs {
     InvocationEvalArgs {
-        command: eval_arg.command.clone(),
+        command: eval_arg.command.as_str().to_string(),
         profiles_dir: eval_arg
             .profiles_dir
             .as_ref()

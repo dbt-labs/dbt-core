@@ -2,12 +2,12 @@ use std::sync::Arc;
 use std::{collections::BTreeMap, path::PathBuf};
 
 pub use dbt_common::io_args::IoArgs;
-use dbt_common::io_args::{EvalArgs, Phases};
+use dbt_common::io_args::{EvalArgs, FsCommand, Phases};
 use dbt_schemas::state::DbtState;
 
 #[derive(Clone, Default)]
 pub struct LoadArgs {
-    pub command: String,
+    pub command: FsCommand,
     pub io: IoArgs,
     // The profile directory to load the profiles from
     pub profiles_dir: Option<PathBuf>,
@@ -49,7 +49,7 @@ pub struct LoadArgs {
 impl LoadArgs {
     pub fn from_eval_args(arg: &EvalArgs) -> Self {
         Self {
-            command: arg.command.clone(),
+            command: arg.command,
             io: arg.io.clone(),
             profile: arg.profile.clone(),
             profiles_dir: arg.profiles_dir.clone(),

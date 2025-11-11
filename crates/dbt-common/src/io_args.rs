@@ -41,13 +41,69 @@ use crate::{
     tracing::invocation::with_invocation_mut,
 };
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum FsCommand {
+    /// Special value indicating no command was provided.
+    /// Used in places where a command is optional to avoid using Option<>
+    #[default]
+    Unset,
+    /// Standard dbt commands
+    Build,
+    Clean,
+    Clone,
+    Compile,
+    Debug,
+    Deps,
+    Init,
+    List,
+    Man,
+    Parse,
+    Run,
+    RunOperation,
+    Seed,
+    Show,
+    Snapshot,
+    Source,
+    System,
+    Test,
+    /// All other commands provided by private cli's
+    Extension(&'static str),
+}
+
+impl FsCommand {
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            FsCommand::Unset => "",
+            FsCommand::Build => "build",
+            FsCommand::Clean => "clean",
+            FsCommand::Clone => "clone",
+            FsCommand::Compile => "compile",
+            FsCommand::Debug => "debug",
+            FsCommand::Deps => "deps",
+            FsCommand::Init => "init",
+            FsCommand::List => "list",
+            FsCommand::Man => "man",
+            FsCommand::Parse => "parse",
+            FsCommand::Run => "run",
+            FsCommand::RunOperation => "run-operation",
+            FsCommand::Seed => "seed",
+            FsCommand::Show => "show",
+            FsCommand::Snapshot => "snapshot",
+            FsCommand::Source => "freshness",
+            FsCommand::System => "system",
+            FsCommand::Test => "test",
+            FsCommand::Extension(s) => s,
+        }
+    }
+}
+
 // ----------------------------------------------------------------------------------------------
 // IO Args
 #[derive(Default, Clone)]
 pub struct IoArgs {
     pub invocation_id: uuid::Uuid,
     pub show: HashSet<ShowOptions>,
-    pub command: String,
+    pub command: FsCommand,
     pub in_dir: PathBuf,
     pub out_dir: PathBuf,
     pub log_path: Option<PathBuf>,
@@ -153,7 +209,7 @@ impl IoArgs {
             // TODO: temporary logic to avoid showing skipped nodes for compile.
             // Should be centralized across all commands, progress message types, and options.
             && (option != ShowOptions::Completed
-                || self.command.as_str() != "compile"
+                || self.command != FsCommand::Compile
                 || self.debug)
     }
 
@@ -175,7 +231,7 @@ impl IoArgs {
 // System Args
 #[derive(Clone, Debug)]
 pub struct SystemArgs {
-    pub command: String,
+    pub command: FsCommand,
     pub io: IoArgs,
     pub from_main: bool,
     pub num_threads: Option<usize>,
@@ -187,7 +243,7 @@ pub struct SystemArgs {
 #[derive(Clone, Default)]
 pub struct EvalArgs {
     // The command to run
-    pub command: String,
+    pub command: FsCommand,
     // io
     pub io: IoArgs,
     // The profile directory to load the profiles from

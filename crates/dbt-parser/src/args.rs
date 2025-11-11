@@ -3,7 +3,7 @@
 use dbt_common::FsResult;
 use dbt_common::io_args::IoArgs;
 use dbt_common::{
-    io_args::EvalArgs,
+    io_args::{EvalArgs, FsCommand},
     node_selector::{IndirectSelection, SelectExpression},
 };
 use dbt_schemas::filter::RunFilter;
@@ -13,7 +13,7 @@ use std::collections::BTreeMap;
 #[derive(Clone, Default, Debug)]
 pub struct ResolveArgs {
     /// The command to run
-    pub command: String,
+    pub command: FsCommand,
     /// All io args
     pub io: IoArgs,
     /// Vars to pass to the jinja environment
@@ -42,7 +42,7 @@ impl ResolveArgs {
     /// Produce [ResolveArgs] from a set of [EvalArgs]
     pub fn try_from_eval_args(arg: &EvalArgs) -> FsResult<Self> {
         Ok(ResolveArgs {
-            command: arg.command.clone(),
+            command: arg.command,
             io: arg.io.clone(),
             vars: arg.vars.clone(),
             from_main: arg.from_main,
