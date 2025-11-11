@@ -143,7 +143,7 @@ impl TaskSeq {
         set_env: &[(&'static str, &'static str)],
     ) -> TestResult<()> {
         // Try initializing tracing. It will succeed only once per process, because it
-        // sets global subscriber. We initalize with a special reloadable data layer
+        // sets global subscriber. We initialize with a special reloadable data layer
         // that can be populated with actual consumer layers by individual tasks.
         // We use fixed fallback trace ID of 1 for all tests for reproducibility.
         let (data_layer, reload_handle) = create_data_layer_for_tests(1u128, vec![], vec![]);
