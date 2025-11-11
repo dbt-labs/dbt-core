@@ -217,6 +217,8 @@ pub struct ProjectModelConfig {
     pub on_schema_change: Option<OnSchemaChange>,
     #[serde(rename = "+packages")]
     pub packages: Option<StringOrArrayOfStrings>,
+    #[serde(rename = "+imports")]
+    pub imports: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+partition_by")]
     pub partition_by: Option<PartitionConfig>,
     #[serde(
@@ -381,6 +383,7 @@ pub struct ModelConfig {
     pub grants: Option<BTreeMap<String, StringOrArrayOfStrings>>,
     pub packages: Option<StringOrArrayOfStrings>,
     pub docs: Option<DocsConfig>,
+    pub imports: Option<StringOrArrayOfStrings>,
     pub contract: Option<DbtContract>,
     pub event_time: Option<String>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
@@ -429,6 +432,7 @@ impl From<ProjectModelConfig> for ModelConfig {
             on_configuration_change: config.on_configuration_change,
             on_schema_change: config.on_schema_change,
             packages: config.packages,
+            imports: config.imports,
             persist_docs: config.persist_docs,
             post_hook: config.post_hook,
             pre_hook: config.pre_hook,
@@ -550,6 +554,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             on_configuration_change: config.on_configuration_change,
             on_schema_change: config.on_schema_change,
             packages: config.packages,
+            imports: config.imports,
             persist_docs: config.persist_docs,
             post_hook: config.post_hook,
             pre_hook: config.pre_hook,
@@ -683,6 +688,7 @@ impl DefaultTo<ModelConfig> for ModelConfig {
             on_configuration_change,
             grants,
             packages,
+            imports,
             docs,
             contract,
             event_time,
@@ -743,6 +749,7 @@ impl DefaultTo<ModelConfig> for ModelConfig {
                 on_schema_change,
                 on_configuration_change,
                 packages,
+                imports,
                 docs,
                 contract,
                 event_time,
@@ -815,7 +822,8 @@ impl ModelConfig {
             && on_schema_change_eq(&self.on_schema_change, &other.on_schema_change)  // Custom comparison for on_schema_change
             && on_configuration_change_eq(&self.on_configuration_change, &other.on_configuration_change)  // Custom comparison for on_configuration_change
             && grants_eq(&self.grants, &other.grants)  // Custom comparison for grants
-            && packages_eq(&self.packages, &other.packages)  // Custom comparison for packages
+            && packages_and_imports_eq(&self.packages, &other.packages)  // Custom comparison for packages
+            && packages_and_imports_eq(&self.imports, &other.imports)  // Custom comparison for imports (same function as packages)
             && docs_eq(&self.docs, &other.docs)  // Custom comparison for docs
             && self.event_time == other.event_time
             && self.concurrent_batches == other.concurrent_batches
@@ -986,8 +994,11 @@ fn grants_eq(
     }
 }
 
-// Helper function to compare packages fields, treating None and empty ArrayOfStrings as equivalent
-fn packages_eq(a: &Option<StringOrArrayOfStrings>, b: &Option<StringOrArrayOfStrings>) -> bool {
+// Helper function to compare packages and imports fields, treating None and empty ArrayOfStrings as equivalent
+fn packages_and_imports_eq(
+    a: &Option<StringOrArrayOfStrings>,
+    b: &Option<StringOrArrayOfStrings>,
+) -> bool {
     use crate::schemas::serde::StringOrArrayOfStrings;
 
     match (a, b) {
@@ -1003,6 +1014,7 @@ fn packages_eq(a: &Option<StringOrArrayOfStrings>, b: &Option<StringOrArrayOfStr
         (Some(StringOrArrayOfStrings::String(_)), None) => false,
     }
 }
+
 // Helper function to compare on_configuration_change fields, treating None and default OnConfigurationChange as equivalent
 fn on_configuration_change_eq(
     a: &Option<OnConfigurationChange>,
