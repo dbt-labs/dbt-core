@@ -292,6 +292,7 @@ impl From<TarballPackageLock> for TarballPackage {
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct DeprecatedDbtPackagesLock {
     pub packages: Vec<DeprecatedDbtPackageLock>,
+    #[serde(default)]
     pub sha1_hash: String,
 }
 

@@ -267,6 +267,12 @@ fn process_package_file(
     in_dir: &Path,
     dependency_package_name: Option<&str>,
 ) -> FsResult<BTreeSet<String>> {
+    // If the lookup map is empty, it means no packages were defined in the main project.
+    // We can't resolve any dependencies, so return an empty set.
+    if package_lookup_map.is_empty() {
+        return Ok(BTreeSet::new());
+    }
+
     let mut dependencies = BTreeSet::new();
     let dbt_packages: DbtPackages =
         load_raw_yml(io_args, package_file_path, dependency_package_name)?;
@@ -297,10 +303,18 @@ fn process_package_file(
         if let Some(entry_name) = package_lookup_map.get(&entry_name) {
             dependencies.insert(entry_name.to_string());
         } else {
-            return err!(
+            // Package not found in lookup map - this can happen when loading from package-lock.yml
+            // without packages.yml, and an installed package has dependencies not in the lock file.
+            // We skip this dependency rather than error out.
+            use dbt_common::tracing::emit::emit_warn_log_message;
+            emit_warn_log_message(
                 ErrorCode::InvalidConfig,
-                "Could not find package {} in the package lookup map",
-                entry_name
+                format!(
+                    "Package dependency '{}' not found in package-lock.yml. Skipping. \
+                     Run 'fs deps --upgrade' with a packages.yml to resolve all dependencies.",
+                    entry_name
+                ),
+                io_args.status_reporter.as_ref(),
             );
         }
     }

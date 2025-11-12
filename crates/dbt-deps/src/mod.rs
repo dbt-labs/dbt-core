@@ -25,7 +25,8 @@ use dbt_schemas::schemas::packages::{DbtPackagesLock, UpstreamProject};
 use hub_client::{DBT_HUB_URL, HubClient};
 use std::{collections::BTreeMap, path::Path};
 use steps::{
-    compute_package_lock, install_packages, load_dbt_packages, try_load_valid_dbt_packages_lock,
+    compute_package_lock, install_packages, load_dbt_packages,
+    load_dbt_packages_lock_without_validation, try_load_valid_dbt_packages_lock,
 };
 
 /// Loads and installs packages, and returns the packages lock and the dependencies map
@@ -93,7 +94,28 @@ pub async fn get_or_install_packages(
             .await?
         }
     } else {
-        DbtPackagesLock::default()
+        // No packages.yml defined - try to load from package-lock.yml if it exists
+        // This matches dbt-core behavior where the lock file can be used independently
+
+        // If upgrade flag is set but no packages.yml exists, we can't upgrade
+        if upgrade {
+            use dbt_common::tracing::emit::emit_warn_log_message;
+            emit_warn_log_message(
+                ErrorCode::InvalidConfig,
+                "Cannot upgrade packages without packages.yml or dependencies.yml. Using existing package-lock.yml.",
+                io.status_reporter.as_ref(),
+            );
+        }
+
+        if let Some(dbt_packages_lock) =
+            load_dbt_packages_lock_without_validation(io, packages_install_path)?
+        {
+            show_progress!(io, fsinfo!(LOADING.into(), "package-lock.yml".to_string()));
+            dbt_packages_lock
+        } else {
+            // No packages.yml and no valid package-lock.yml - return empty
+            DbtPackagesLock::default()
+        }
     };
 
     if install_deps && !lock && !dbt_packages_lock.packages.is_empty() {

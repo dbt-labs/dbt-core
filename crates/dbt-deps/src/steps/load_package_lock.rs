@@ -71,7 +71,7 @@ fn try_load_from_deprecated_dbt_packages_lock(
         }) => {
             emit_warn_log_message(
                 ErrorCode::FmtError,
-                "Found package-lock.yml file with out of date formatting, ignoring...",
+                "Old format package-lock.yml file found. Please provide package definitions.",
                 io.status_reporter.as_ref(),
             );
 
@@ -235,4 +235,44 @@ fn try_load_from_deprecated_dbt_packages_lock(
             )
         }
     }
+}
+
+/// Load package-lock.yml without validating against packages.yml
+/// Used when packages.yml doesn't exist but we want to install from the lock file
+/// This matches dbt-core behavior where the lock file can be used independently
+pub fn load_dbt_packages_lock_without_validation(
+    io: &IoArgs,
+    dbt_packages_dir: &Path,
+) -> FsResult<Option<DbtPackagesLock>> {
+    let packages_lock_path = io.in_dir.join(DBT_PACKAGES_LOCK_FILE);
+    if !packages_lock_path.exists() {
+        return Ok(None);
+    }
+
+    let yml_str = try_read_yml_to_str(&packages_lock_path)?;
+    let rendered_yml: DbtPackagesLock =
+        match from_yaml_raw(io, &yml_str, Some(&packages_lock_path), true, None) {
+            Ok(rendered_yml) => rendered_yml,
+            Err(e) => {
+                if e.to_string()
+                    .contains("not match any variant of untagged enum DbtPackageLock")
+                {
+                    // Try loading deprecated format
+                    // For deprecated format without packages.yml, we try to infer package names
+                    // from the installed packages directory
+                    return try_load_from_deprecated_dbt_packages_lock(
+                        io,
+                        dbt_packages_dir,
+                        &yml_str,
+                    );
+                }
+                return err!(
+                    ErrorCode::IoError,
+                    "Failed to parse package-lock.yml file: {}",
+                    e
+                );
+            }
+        };
+
+    Ok(Some(rendered_yml))
 }
