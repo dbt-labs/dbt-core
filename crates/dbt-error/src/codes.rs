@@ -11,7 +11,7 @@ use int_enum::IntEnum;
 #[include_frontend_error_codes]
 #[repr(u16)]
 #[non_exhaustive]
-#[derive(Debug, Copy, Clone, Eq, PartialEq, IntEnum)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, IntEnum, Default)]
 pub enum ErrorCode {
     // ----------------- Frontend errors [0, 999] -----------------------------
     //
@@ -31,6 +31,7 @@ pub enum ErrorCode {
     //
     // Define all CLI error codes here.
     /// Default catch-all code for when you're too lazy to specify a proper code
+    #[default]
     Generic = 1000,
     IoError = 1001,
     EncodingError = 1002,
@@ -179,12 +180,6 @@ pub enum ErrorCode {
 impl std::hash::Hash for ErrorCode {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         (*self as u16).hash(state)
-    }
-}
-
-impl Default for ErrorCode {
-    fn default() -> Self {
-        Self::Generic
     }
 }
 

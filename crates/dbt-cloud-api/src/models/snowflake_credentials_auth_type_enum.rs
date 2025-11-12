@@ -13,9 +13,12 @@ use serde::{Deserialize, Serialize};
 
 /// SnowflakeCredentialsAuthTypeEnum : * `password` - PASSWORD * `keypair` - KEYPAIR * `sso` - SSO * `external_oauth` - EXTERNAL_OAUTH
 /// * `password` - PASSWORD * `keypair` - KEYPAIR * `sso` - SSO * `external_oauth` - EXTERNAL_OAUTH
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
+#[derive(
+    Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize, Default,
+)]
 pub enum SnowflakeCredentialsAuthTypeEnum {
     #[serde(rename = "password")]
+    #[default]
     Password,
     #[serde(rename = "keypair")]
     Keypair,
@@ -33,11 +36,5 @@ impl std::fmt::Display for SnowflakeCredentialsAuthTypeEnum {
             Self::Sso => write!(f, "sso"),
             Self::ExternalOauth => write!(f, "external_oauth"),
         }
-    }
-}
-
-impl Default for SnowflakeCredentialsAuthTypeEnum {
-    fn default() -> SnowflakeCredentialsAuthTypeEnum {
-        Self::Password
     }
 }

@@ -13,9 +13,12 @@ use serde::{Deserialize, Serialize};
 
 /// RedshiftCredentialsAuthTypeEnum : * `password` - PASSWORD * `external_oauth` - OAUTH
 /// * `password` - PASSWORD * `external_oauth` - OAUTH
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
+#[derive(
+    Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize, Default,
+)]
 pub enum RedshiftCredentialsAuthTypeEnum {
     #[serde(rename = "password")]
+    #[default]
     Password,
     #[serde(rename = "external_oauth")]
     ExternalOauth,
@@ -27,11 +30,5 @@ impl std::fmt::Display for RedshiftCredentialsAuthTypeEnum {
             Self::Password => write!(f, "password"),
             Self::ExternalOauth => write!(f, "external_oauth"),
         }
-    }
-}
-
-impl Default for RedshiftCredentialsAuthTypeEnum {
-    fn default() -> RedshiftCredentialsAuthTypeEnum {
-        Self::Password
     }
 }

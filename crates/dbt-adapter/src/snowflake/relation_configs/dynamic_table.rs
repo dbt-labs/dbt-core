@@ -173,8 +173,9 @@ impl TryFrom<&str> for TargetLagConfig {
 }
 
 /// Snowflake dynamic table refresh modes
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum RefreshMode {
+    #[default]
     Auto,
     Full,
     Incremental,
@@ -187,12 +188,6 @@ impl Display for RefreshMode {
             Self::Full => write!(f, "FULL"),
             Self::Incremental => write!(f, "INCREMENTAL"),
         }
-    }
-}
-
-impl Default for RefreshMode {
-    fn default() -> Self {
-        Self::Auto
     }
 }
 
@@ -252,16 +247,11 @@ impl TryFrom<&str> for RefreshModeConfig {
 }
 
 /// Snowflake initial data population behavior
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum Initialize {
+    #[default]
     OnCreate,
     OnSchedule,
-}
-
-impl Default for Initialize {
-    fn default() -> Self {
-        Self::OnCreate
-    }
 }
 
 impl Display for Initialize {

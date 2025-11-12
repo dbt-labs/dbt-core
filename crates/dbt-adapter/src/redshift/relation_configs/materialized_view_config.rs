@@ -53,18 +53,14 @@ impl TryFrom<&Value> for DescribeMaterializedViewResults {
 /// Redshift distribution styles for materialized views
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum RedshiftDistStyle {
+    #[default]
     Even,
     All,
     Auto,
     /// Column to use for distribution
     Key(String),
-}
-
-impl Default for RedshiftDistStyle {
-    fn default() -> Self {
-        Self::Even
-    }
 }
 
 impl Display for RedshiftDistStyle {
@@ -138,16 +134,12 @@ impl RedshiftDistConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
+#[derive(Default)]
 pub enum RedshiftSortStyle {
+    #[default]
     Auto,
     Compound(Vec<String>),
     Interleaved(Vec<String>),
-}
-
-impl Default for RedshiftSortStyle {
-    fn default() -> Self {
-        Self::Auto
-    }
 }
 
 impl RedshiftSortStyle {

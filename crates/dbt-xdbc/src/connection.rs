@@ -402,7 +402,7 @@ impl Connection for AdbcConnection {
     fn get_info<'a>(
         &'a self,
         codes: Option<HashSet<options::InfoCode>>,
-    ) -> Result<Box<(dyn RecordBatchReader + Send + 'a)>> {
+    ) -> Result<Box<dyn RecordBatchReader + Send + 'a>> {
         let reader = self.1.get_info(codes)?;
         let reader = Box::new(reader);
         Ok(reader)

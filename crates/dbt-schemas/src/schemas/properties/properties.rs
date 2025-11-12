@@ -93,6 +93,7 @@ pub struct DbtPropertiesFile {
 // -- Additional Properties
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[allow(dead_code)]
 pub struct AnalysesConfig {
     #[serde(default, deserialize_with = "string_or_array")]
     pub tags: Option<Vec<String>>,

@@ -171,7 +171,7 @@ impl Batch {
                 message
                     .any
                     .as_ref()
-                    .map_or("unknown", |a| a.type_url.as_str()),
+                    .map_or_else(|| "unknown", |a| a.type_url.as_str()),
                 encoded_len
             );
             return; // silently drop the large message in release builds

@@ -13,9 +13,12 @@ use serde::{Deserialize, Serialize};
 
 /// AdapterVersionEnum : * `apache_spark_v0` - apache_spark_v0 * `databricks_spark_v0` - databricks_spark_v0 * `databricks_v0` - databricks_v0 * `trino_v0` - trino_v0 * `snowflake_v0` - snowflake_v0 * `bigquery_v0` - bigquery_v0 * `bigquery_v1` - bigquery_v1 * `postgres_v0` - postgres_v0 * `redshift_v0` - redshift_v0 * `synapse_v0` - synapse_v0 * `fabric_v0` - fabric_v0 * `athena_v0` - athena_v0 * `teradata_v0` - teradata_v0
 /// * `apache_spark_v0` - apache_spark_v0 * `databricks_spark_v0` - databricks_spark_v0 * `databricks_v0` - databricks_v0 * `trino_v0` - trino_v0 * `snowflake_v0` - snowflake_v0 * `bigquery_v0` - bigquery_v0 * `bigquery_v1` - bigquery_v1 * `postgres_v0` - postgres_v0 * `redshift_v0` - redshift_v0 * `synapse_v0` - synapse_v0 * `fabric_v0` - fabric_v0 * `athena_v0` - athena_v0 * `teradata_v0` - teradata_v0
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
+#[derive(
+    Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize, Default,
+)]
 pub enum AdapterVersionEnum {
     #[serde(rename = "apache_spark_v0")]
+    #[default]
     ApacheSparkV0,
     #[serde(rename = "databricks_spark_v0")]
     DatabricksSparkV0,
@@ -60,11 +63,5 @@ impl std::fmt::Display for AdapterVersionEnum {
             Self::AthenaV0 => write!(f, "athena_v0"),
             Self::TeradataV0 => write!(f, "teradata_v0"),
         }
-    }
-}
-
-impl Default for AdapterVersionEnum {
-    fn default() -> AdapterVersionEnum {
-        Self::ApacheSparkV0
     }
 }

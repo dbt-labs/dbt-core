@@ -219,7 +219,7 @@ where
                 file: location
                     .file
                     .as_ref()
-                    .map_or("<unknown>", |v| v)
+                    .map_or_else(|| "<unknown>", |v| v)
                     .to_string(),
                 line: location.line.unwrap_or_default(),
             }
@@ -493,7 +493,7 @@ where
                         file: location
                             .file
                             .as_ref()
-                            .map_or("<unknown>", |v| v)
+                            .map_or_else(|| "<unknown>", |v| v)
                             .to_string(),
                         line: location.line.unwrap_or_default(),
                     }
@@ -744,7 +744,7 @@ where
         // ignore such events. These scenarios should be covered by tests to avoid regressions.
         debug_assert!(
             root_span.is_some() || cfg!(test),
-            "Event logged outside of span context. Expected root span created via `create_root_info_span` 
+            "Event logged outside of span context. Expected root span created via `create_root_info_span`
             or a process span. Are you logging events after tracing has been shutdown?",
         );
 

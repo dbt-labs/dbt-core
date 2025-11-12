@@ -13,9 +13,12 @@ use serde::{Deserialize, Serialize};
 
 /// DbtAdapterVersion : An enumeration.
 /// An enumeration.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
+#[derive(
+    Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize, Default,
+)]
 pub enum DbtAdapterVersion {
     #[serde(rename = "apache_spark_v0")]
+    #[default]
     ApacheSparkV0,
     #[serde(rename = "databricks_spark_v0")]
     DatabricksSparkV0,
@@ -60,11 +63,5 @@ impl std::fmt::Display for DbtAdapterVersion {
             Self::AthenaV0 => write!(f, "athena_v0"),
             Self::TeradataV0 => write!(f, "teradata_v0"),
         }
-    }
-}
-
-impl Default for DbtAdapterVersion {
-    fn default() -> DbtAdapterVersion {
-        Self::ApacheSparkV0
     }
 }

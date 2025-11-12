@@ -16,9 +16,20 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 /// * `0` - DEFAULT * `1` - HYBRID
 #[repr(i64)]
 #[derive(
-    Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize_repr, Deserialize_repr,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Hash,
+    Serialize_repr,
+    Deserialize_repr,
+    Default,
 )]
 pub enum Type24eEnum {
+    #[default]
     Variant0 = 0,
     Variant1 = 1,
 }
@@ -33,10 +44,5 @@ impl std::fmt::Display for Type24eEnum {
                 Self::Variant1 => "1",
             }
         )
-    }
-}
-impl Default for Type24eEnum {
-    fn default() -> Type24eEnum {
-        Self::Variant0
     }
 }

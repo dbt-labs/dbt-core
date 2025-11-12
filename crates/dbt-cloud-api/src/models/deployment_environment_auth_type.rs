@@ -13,9 +13,12 @@ use serde::{Deserialize, Serialize};
 
 /// DeploymentEnvironmentAuthType : An enumeration.
 /// An enumeration.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
+#[derive(
+    Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize, Default,
+)]
 pub enum DeploymentEnvironmentAuthType {
     #[serde(rename = "service-account-json")]
+    #[default]
     ServiceAccountJson,
     #[serde(rename = "external-oauth-wif")]
     ExternalOauthWif,
@@ -27,11 +30,5 @@ impl std::fmt::Display for DeploymentEnvironmentAuthType {
             Self::ServiceAccountJson => write!(f, "service-account-json"),
             Self::ExternalOauthWif => write!(f, "external-oauth-wif"),
         }
-    }
-}
-
-impl Default for DeploymentEnvironmentAuthType {
-    fn default() -> DeploymentEnvironmentAuthType {
-        Self::ServiceAccountJson
     }
 }

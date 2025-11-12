@@ -293,8 +293,10 @@ impl StdColumnType {
 }
 
 /// NULLABLE, REQUIRED, REPEATED
+#[derive(Default)]
 pub enum BigqueryColumnMode {
     /// NULLABLE
+    #[default]
     Nullable,
     /// REQUIRED
     Required,
@@ -309,12 +311,6 @@ impl AsRef<str> for BigqueryColumnMode {
             Self::Required => "REQUIRED",
             Self::Repeated => "REPEATED",
         }
-    }
-}
-
-impl Default for BigqueryColumnMode {
-    fn default() -> Self {
-        Self::Nullable
     }
 }
 
@@ -1181,7 +1177,7 @@ mod tests {
                 .flatten()
                 .iter()
                 .zip(
-                    vec![
+                    [
                         StdColumn::new_bigquery(
                             "parent.a".to_string(),
                             "NUMBER".to_string(),
@@ -1193,7 +1189,7 @@ mod tests {
                             "BOOLEAN".to_string(),
                             &[],
                             BigqueryColumnMode::Nullable
-                        ),
+                        )
                     ]
                     .iter()
                 )

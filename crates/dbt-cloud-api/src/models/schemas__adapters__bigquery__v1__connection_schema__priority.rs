@@ -13,9 +13,12 @@ use serde::{Deserialize, Serialize};
 
 /// SchemasAdaptersBigqueryV1ConnectionSchemaPriority : An enumeration.
 /// An enumeration.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
+#[derive(
+    Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize, Default,
+)]
 pub enum SchemasAdaptersBigqueryV1ConnectionSchemaPriority {
     #[serde(rename = "interactive")]
+    #[default]
     Interactive,
     #[serde(rename = "batch")]
     Batch,
@@ -27,11 +30,5 @@ impl std::fmt::Display for SchemasAdaptersBigqueryV1ConnectionSchemaPriority {
             Self::Interactive => write!(f, "interactive"),
             Self::Batch => write!(f, "batch"),
         }
-    }
-}
-
-impl Default for SchemasAdaptersBigqueryV1ConnectionSchemaPriority {
-    fn default() -> SchemasAdaptersBigqueryV1ConnectionSchemaPriority {
-        Self::Interactive
     }
 }

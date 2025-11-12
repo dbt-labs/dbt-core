@@ -72,7 +72,8 @@ impl fmt::Display for Stats {
                     "{:<width$} | {:<9} | {:<8} | {:<10} | {:<10} | {:<10}",
                     stat.unique_id,
                     stat.status_string(),
-                    stat.num_rows.map_or("-".to_string(), |num| num.to_string()),
+                    stat.num_rows
+                        .map_or_else(|| "-".to_string(), |num| num.to_string()),
                     Stat::format_time(stat.start_time),
                     Stat::format_time(stat.end_time),
                     format_duration(stat.get_duration()).to_string(),

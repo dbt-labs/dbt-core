@@ -32,19 +32,15 @@ struct LoggerConfig {
     excludes: Option<Vec<String>>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Deserialize, ValueEnum, Serialize, Copy)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, ValueEnum, Serialize, Copy, Default)]
 pub enum LogFormat {
     Text,
     Json,
+    #[default]
     Default,
     Otel,
 }
 
-impl Default for LogFormat {
-    fn default() -> Self {
-        Self::Default
-    }
-}
 impl Display for LogFormat {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

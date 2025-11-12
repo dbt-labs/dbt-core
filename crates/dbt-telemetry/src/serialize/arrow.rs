@@ -1312,7 +1312,7 @@ mod tests {
             .fields()
             .iter()
             .enumerate()
-            .filter(|&(idx, _)| (idx != column_index))
+            .filter(|&(idx, _)| idx != column_index)
             .map(|(_, field)| Arc::new(field.as_ref().clone()))
             .collect();
 
@@ -1320,7 +1320,7 @@ mod tests {
             .columns()
             .iter()
             .enumerate()
-            .filter(|&(idx, _)| (idx != column_index))
+            .filter(|&(idx, _)| idx != column_index)
             .map(|(_, column)| column.clone())
             .collect();
 

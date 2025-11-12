@@ -13,9 +13,12 @@ use serde::{Deserialize, Serialize};
 
 /// ConnectionMethod : An enumeration.
 /// An enumeration.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
+#[derive(
+    Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize, Default,
+)]
 pub enum ConnectionMethod {
     #[serde(rename = "http")]
+    #[default]
     Http,
     #[serde(rename = "thrift")]
     Thrift,
@@ -27,11 +30,5 @@ impl std::fmt::Display for ConnectionMethod {
             Self::Http => write!(f, "http"),
             Self::Thrift => write!(f, "thrift"),
         }
-    }
-}
-
-impl Default for ConnectionMethod {
-    fn default() -> ConnectionMethod {
-        Self::Http
     }
 }

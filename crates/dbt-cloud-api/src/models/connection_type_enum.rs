@@ -13,9 +13,12 @@ use serde::{Deserialize, Serialize};
 
 /// ConnectionTypeEnum : * `postgres` - postgres * `redshift` - redshift * `snowflake` - snowflake * `bigquery` - bigquery * `adapter` - adapter
 /// * `postgres` - postgres * `redshift` - redshift * `snowflake` - snowflake * `bigquery` - bigquery * `adapter` - adapter
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize)]
+#[derive(
+    Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash, Serialize, Deserialize, Default,
+)]
 pub enum ConnectionTypeEnum {
     #[serde(rename = "postgres")]
+    #[default]
     Postgres,
     #[serde(rename = "redshift")]
     Redshift,
@@ -36,11 +39,5 @@ impl std::fmt::Display for ConnectionTypeEnum {
             Self::Bigquery => write!(f, "bigquery"),
             Self::Adapter => write!(f, "adapter"),
         }
-    }
-}
-
-impl Default for ConnectionTypeEnum {
-    fn default() -> ConnectionTypeEnum {
-        Self::Postgres
     }
 }

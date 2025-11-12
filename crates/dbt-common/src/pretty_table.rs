@@ -491,7 +491,7 @@ pub fn pretty_vec_table(
     for (col_idx, column_name) in column_names.iter().enumerate() {
         let column_data: Vec<&str> = rows
             .iter()
-            .map(|row| row.get(col_idx).map_or("", |s| s.as_str()))
+            .map(|row| row.get(col_idx).map_or_else(|| "", |s| s.as_str()))
             .collect();
 
         columns.push(Arc::new(StringArray::from(column_data)));
