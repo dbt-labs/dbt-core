@@ -286,20 +286,12 @@ impl BaseAdapter for BridgeAdapter {
     fn standardize_grants_dict(
         &self,
         _state: &State,
-        args: &[Value],
+        grants_table: &Arc<AgateTable>,
     ) -> Result<Value, MinijinjaError> {
-        let mut parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 1, 1)?;
-
-        let grants_table = parser.get::<Value>("grants_table")?;
-
-        if let Some(grants_table) = grants_table.downcast_object::<AgateTable>() {
-            Ok(Value::from(
-                self.typed_adapter.standardize_grants_dict(grants_table)?,
-            ))
-        } else {
-            invalid_argument!("grants_table must be of type AgateTable")
-        }
+        Ok(Value::from(
+            self.typed_adapter
+                .standardize_grants_dict(grants_table.clone())?,
+        ))
     }
 
     #[tracing::instrument(skip_all, level = "trace")]
@@ -343,18 +335,15 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip_all, level = "trace")]
-    fn convert_type(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
-        let parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 2, 2)?;
-
-        let table = args.first().expect("agate_table");
-        let table = table.downcast_object::<AgateTable>().unwrap();
-
-        let col_idx = args.last().expect("col_idx");
-        let col_idx = col_idx.as_i64().unwrap();
-
-        let result = self.typed_adapter.convert_type(state, table, col_idx)?;
-
+    fn convert_type(
+        &self,
+        state: &State,
+        table: &Arc<AgateTable>,
+        col_idx: i64,
+    ) -> Result<Value, MinijinjaError> {
+        let result = self
+            .typed_adapter
+            .convert_type(state, table.clone(), col_idx)?;
         Ok(Value::from(result))
     }
 
@@ -363,20 +352,11 @@ impl BaseAdapter for BridgeAdapter {
     fn render_raw_model_constraints(
         &self,
         _state: &State,
-        args: &[Value],
+        raw_constraints: &[ModelConstraint],
     ) -> Result<Value, MinijinjaError> {
-        let mut parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 1, 1)?;
-
-        let raw_constraints = parser.get::<Value>("raw_constraints")?;
-
-        let constraints = minijinja_value_to_typed_struct::<Vec<ModelConstraint>>(raw_constraints)
-            .map_err(|e| {
-                MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
-            })?;
         let mut result = vec![];
-        for constraint in constraints {
-            let rendered = render_model_constraint(self.adapter_type(), constraint);
+        for constraint in raw_constraints {
+            let rendered = render_model_constraint(self.adapter_type(), constraint.clone());
             if let Some(rendered) = rendered {
                 result.push(rendered)
             }
@@ -569,10 +549,11 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, _state), level = "trace")]
+    #[allow(clippy::used_underscore_binding)]
     fn valid_snapshot_target(
         &self,
         _state: &State,
-        args: &[Value],
+        _relation: Arc<dyn BaseRelation>,
     ) -> Result<Value, MinijinjaError> {
         unimplemented!("valid_snapshot_target")
     }
@@ -622,44 +603,17 @@ impl BaseAdapter for BridgeAdapter {
     fn assert_valid_snapshot_target_given_strategy(
         &self,
         state: &State,
-        args: &[Value],
+        relation: Arc<dyn BaseRelation>,
+        column_names: Option<&BTreeMap<String, String>>,
+        strategy: &Arc<SnapshotStrategy>,
     ) -> Result<Value, MinijinjaError> {
-        let mut parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 3, 3)?;
-
-        let relation = parser.get::<Value>("relation")?;
-        let relation = downcast_value_to_dyn_base_relation(&relation)?;
-
-        let column_names = parser.get::<Value>("column_names")?;
-        let column_names = if column_names.is_none() {
-            None
-        } else {
-            Some(
-                minijinja_value_to_typed_struct::<BTreeMap<String, String>>(column_names).map_err(
-                    |e| {
-                        MinijinjaError::new(
-                            MinijinjaErrorKind::SerdeDeserializeError,
-                            e.to_string(),
-                        )
-                    },
-                )?,
-            )
-        };
-
-        let strategy = parser.get::<Value>("strategy")?;
-        let strategy =
-            minijinja_value_to_typed_struct::<SnapshotStrategy>(strategy).map_err(|e| {
-                MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
-            })?;
-
         self.typed_adapter
             .assert_valid_snapshot_target_given_strategy(
                 state,
                 relation,
-                column_names,
-                Arc::new(strategy),
+                column_names.cloned(),
+                strategy.clone(),
             )?;
-
         Ok(none_value())
     }
 
@@ -783,15 +737,12 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn get_missing_columns(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
-        let mut parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 2, 2)?;
-
-        let from_relation = parser.get::<Value>("from_relation")?;
-        let to_relation = parser.get::<Value>("to_relation")?;
-
-        let from_relation = downcast_value_to_dyn_base_relation(&from_relation)?;
-        let to_relation = downcast_value_to_dyn_base_relation(&to_relation)?;
+    fn get_missing_columns(
+        &self,
+        state: &State,
+        from_relation: Arc<dyn BaseRelation>,
+        to_relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, MinijinjaError> {
         let result = self
             .typed_adapter
             .get_missing_columns(state, from_relation, to_relation)?;
@@ -1011,10 +962,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, _state), level = "trace")]
-    fn verify_database(&self, _state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
-        let mut parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 1, 1)?;
-        let database = parser.get::<String>("database")?;
+    fn verify_database(&self, _state: &State, database: String) -> Result<Value, MinijinjaError> {
         let result = self.typed_adapter.verify_database(database);
         Ok(result?)
     }

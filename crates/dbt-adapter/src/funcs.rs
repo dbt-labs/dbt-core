@@ -7,9 +7,12 @@ use crate::errors::{AdapterError, AdapterErrorKind};
 use crate::factory::create_static_relation;
 use crate::formatter::SqlLiteralFormatter;
 use crate::response::ResultObject;
+use crate::snapshots::SnapshotStrategy;
 
 use arrow::array::RecordBatch;
 use dbt_agate::AgateTable;
+use dbt_schemas::schemas::properties::ModelConstraint;
+use dbt_schemas::schemas::serde::minijinja_value_to_typed_struct;
 use minijinja::arg_utils::ArgsIter;
 use minijinja::listener::RenderingEventListener;
 use minijinja::value::ValueKind;
@@ -252,17 +255,130 @@ pub fn dispatch_adapter_calls(
         "list_schemas" => adapter.list_schemas(state, args),
         "create_schema" => adapter.create_schema(state, args),
         "drop_schema" => adapter.drop_schema(state, args),
-        "valid_snapshot_target" => adapter.valid_snapshot_target(state, args),
-        "assert_valid_snapshot_target_given_strategy" => {
-            adapter.assert_valid_snapshot_target_given_strategy(state, args)
+        "valid_snapshot_target" => {
+            // relation: BaseRelation
+            let iter = ArgsIter::new(name, &["relation"], args);
+            let relation = iter.next_arg::<&Value>()?;
+            let relation = downcast_value_to_dyn_base_relation(relation)?;
+            iter.finish()?;
+
+            adapter.valid_snapshot_target(state, relation)
         }
-        "get_missing_columns" => adapter.get_missing_columns(state, args),
-        "render_raw_model_constraints" => adapter.render_raw_model_constraints(state, args),
-        "standardize_grants_dict" => adapter.standardize_grants_dict(state, args),
-        "convert_type" => adapter.convert_type(state, args),
+        "assert_valid_snapshot_target_given_strategy" => {
+            // relation: BaseRelation, column_names: Optional[Dict[str, str]], strategy: SnapshotStrategy
+            let iter = ArgsIter::new(name, &["relation", "column_names", "strategy"], args);
+            let relation = iter.next_arg::<&Value>()?;
+            let relation = downcast_value_to_dyn_base_relation(relation)?;
+            let column_names_val = iter.next_arg::<&Value>()?;
+            let column_names = if column_names_val.is_none() || column_names_val.is_undefined() {
+                None
+            } else {
+                Some(
+                    minijinja_value_to_typed_struct::<BTreeMap<String, String>>(
+                        column_names_val.clone(),
+                    )
+                    .map_err(|e| {
+                        MinijinjaError::new(
+                            MinijinjaErrorKind::SerdeDeserializeError,
+                            e.to_string(),
+                        )
+                    })?,
+                )
+            };
+            let strategy_val = iter.next_arg::<&Value>()?;
+            let strategy = minijinja_value_to_typed_struct::<SnapshotStrategy>(
+                strategy_val.clone(),
+            )
+            .map_err(|e| {
+                MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
+            })?;
+            iter.finish()?;
+
+            let strategy_arc = Arc::new(strategy);
+            adapter.assert_valid_snapshot_target_given_strategy(
+                state,
+                relation,
+                column_names.as_ref(),
+                &strategy_arc,
+            )
+        }
+        "get_missing_columns" => {
+            // from_relation: BaseRelation, to_relation: BaseRelation
+            let iter = ArgsIter::new(name, &["from_relation", "to_relation"], args);
+            let from_relation = iter.next_arg::<&Value>()?;
+            let from_relation = downcast_value_to_dyn_base_relation(from_relation)?;
+            let to_relation = iter.next_arg::<&Value>()?;
+            let to_relation = downcast_value_to_dyn_base_relation(to_relation)?;
+            iter.finish()?;
+
+            adapter.get_missing_columns(state, from_relation, to_relation)
+        }
+        "render_raw_model_constraints" => {
+            // raw_constraints: List[ModelConstraint]
+            let iter = ArgsIter::new(name, &["raw_constraints"], args);
+            let raw_constraints = iter.next_arg::<&Value>()?;
+            let constraints =
+                minijinja_value_to_typed_struct::<Vec<ModelConstraint>>(raw_constraints.clone())
+                    .map_err(|e| {
+                        MinijinjaError::new(
+                            MinijinjaErrorKind::SerdeDeserializeError,
+                            e.to_string(),
+                        )
+                    })?;
+            iter.finish()?;
+
+            adapter.render_raw_model_constraints(state, &constraints)
+        }
+        "standardize_grants_dict" => {
+            // This method is typically called after show grants SQL + run_query.
+            // During parse phase, run_query returns Undefined since queries don't execute,
+            // so we don't have an actual AgateTable. Short circuit and return empty grants dict
+            // to avoid downcast errors on Undefined values.
+            if adapter.is_parse() {
+                return Ok(Value::from(BTreeMap::<Value, Vec<Value>>::new()));
+            }
+
+            // grants_table: AgateTable
+            let iter = ArgsIter::new(name, &["grants_table"], args);
+            let grants_table = iter
+                .next_arg::<&Value>()?
+                .downcast_object::<AgateTable>()
+                .ok_or_else(|| {
+                    MinijinjaError::new(
+                        MinijinjaErrorKind::InvalidOperation,
+                        "grants_table must be an AgateTable",
+                    )
+                })?;
+
+            adapter.standardize_grants_dict(state, &grants_table)
+        }
+        "convert_type" => {
+            // table: AgateTable, col_idx: int
+            let iter = ArgsIter::new(name, &["agate_table", "col_idx"], args);
+            let table = iter
+                .next_arg::<&Value>()?
+                .downcast_object::<AgateTable>()
+                .ok_or_else(|| {
+                    MinijinjaError::new(
+                        MinijinjaErrorKind::InvalidOperation,
+                        "agate_table must be an AgateTable",
+                    )
+                })?;
+            let col_idx = iter.next_arg::<i64>()?;
+            iter.finish()?;
+
+            adapter.convert_type(state, &table, col_idx)
+        }
         "render_raw_columns_constraints" => adapter.render_raw_columns_constraints(state, args),
-        "verify_database" => adapter.verify_database(state, args),
-        "commit" => adapter.commit(args),
+        "verify_database" => {
+            // database: str
+            let iter = ArgsIter::new(name, &["database"], args);
+            let database = iter.next_arg::<String>()?;
+            iter.finish()?;
+
+            adapter.verify_database(state, database)
+        }
+        "commit" => adapter.commit(),
         "get_incremental_strategy_macro" => adapter.get_incremental_strategy_macro(state, args),
         "check_schema_exists" => adapter.check_schema_exists(state, args),
         "get_relations_by_pattern" => adapter.get_relations_by_pattern(state, args),

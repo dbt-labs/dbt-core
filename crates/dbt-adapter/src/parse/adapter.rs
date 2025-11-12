@@ -11,6 +11,7 @@ use crate::parse::relation::EmptyRelation;
 use crate::query_comment::QueryCommentConfig;
 use crate::relation_object::{RelationObject, create_relation};
 use crate::response::AdapterResponse;
+use crate::snapshots::SnapshotStrategy;
 use crate::sql_types::TypeOps;
 use crate::stmt_splitter::NaiveStmtSplitter;
 use crate::typed_adapter::TypedBaseAdapter;
@@ -24,6 +25,7 @@ use dbt_common::cancellation::CancellationToken;
 use dbt_common::{FsError, current_function_name};
 use dbt_schemas::schemas::common::{DbtQuoting, ResolvedQuoting};
 use dbt_schemas::schemas::dbt_catalogs::DbtCatalogs;
+use dbt_schemas::schemas::properties::ModelConstraint;
 use dbt_schemas::schemas::relations::base::{BaseRelation, RelationPattern};
 use dbt_xdbc::Connection;
 use minijinja::Value;
@@ -423,7 +425,7 @@ impl BaseAdapter for ParseAdapter {
     fn valid_snapshot_target(
         &self,
         _state: &State,
-        _args: &[Value],
+        _relation: Arc<dyn BaseRelation>,
     ) -> Result<Value, MinijinjaError> {
         Ok(none_value())
     }
@@ -431,7 +433,9 @@ impl BaseAdapter for ParseAdapter {
     fn assert_valid_snapshot_target_given_strategy(
         &self,
         _state: &State,
-        _args: &[Value],
+        _relation: Arc<dyn BaseRelation>,
+        _column_names: Option<&BTreeMap<String, String>>,
+        _strategy: &Arc<SnapshotStrategy>,
     ) -> Result<Value, MinijinjaError> {
         Ok(none_value())
     }
@@ -439,7 +443,8 @@ impl BaseAdapter for ParseAdapter {
     fn get_missing_columns(
         &self,
         _state: &State,
-        _args: &[Value],
+        _from_relation: Arc<dyn BaseRelation>,
+        _to_relation: Arc<dyn BaseRelation>,
     ) -> Result<Value, MinijinjaError> {
         Ok(empty_vec_value())
     }
@@ -506,9 +511,9 @@ impl BaseAdapter for ParseAdapter {
     fn standardize_grants_dict(
         &self,
         _state: &State,
-        _args: &[Value],
+        _grants_table: &Arc<AgateTable>,
     ) -> Result<Value, MinijinjaError> {
-        Ok(Value::from(BTreeMap::<Value, Vec<Value>>::new()))
+        unreachable!("standardize_grants_dict should be handled in dispatch for ParseAdapter")
     }
 
     fn get_column_schema_from_query(
@@ -662,19 +667,24 @@ impl BaseAdapter for ParseAdapter {
         Ok(empty_string_value())
     }
 
-    fn convert_type(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn convert_type(
+        &self,
+        _state: &State,
+        _table: &Arc<AgateTable>,
+        _col_idx: i64,
+    ) -> Result<Value, MinijinjaError> {
         Ok(empty_string_value())
     }
 
     fn render_raw_model_constraints(
         &self,
         _state: &State,
-        _args: &[Value],
+        _raw_constraints: &[ModelConstraint],
     ) -> Result<Value, MinijinjaError> {
         Ok(empty_vec_value())
     }
 
-    fn verify_database(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn verify_database(&self, _state: &State, _database: String) -> Result<Value, MinijinjaError> {
         Ok(Value::from(false))
     }
 

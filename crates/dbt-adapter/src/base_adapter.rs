@@ -2,6 +2,7 @@ use crate::cache::RelationCache;
 use crate::columns::StdColumnType;
 use crate::metadata::*;
 use crate::query_cache::QueryCache;
+use crate::snapshots::SnapshotStrategy;
 use crate::sql_engine::SqlEngine;
 use crate::typed_adapter::{ReplayAdapter, TypedBaseAdapter};
 use crate::{AdapterResponse, AdapterResult};
@@ -14,6 +15,7 @@ use dbt_common::io_args::ReplayMode;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::project::QueryComment;
+use dbt_schemas::schemas::properties::ModelConstraint;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
 use dbt_xdbc::{Backend, Connection};
 use minijinja::arg_utils::ArgParser;
@@ -103,7 +105,13 @@ pub trait AdapterTyping {
 /// Base adapter
 pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
     /// Commit
-    fn commit(&self, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L000
+    ///
+    /// ```python
+    /// def commit(self) -> None
+    /// ```
+    fn commit(&self) -> Result<Value, MinijinjaError> {
         Ok(Value::from(true))
     }
 
@@ -171,10 +179,19 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
     }
 
     /// Standardize grants dict
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L823
+    ///
+    /// ```python
+    /// def standardize_grants_dict(
+    ///     self,
+    ///     grants_table: "agate.Table"
+    /// ) -> dict
+    /// ```
     fn standardize_grants_dict(
         &self,
         _state: &State,
-        _args: &[Value],
+        _grants_table: &Arc<AgateTable>,
     ) -> Result<Value, MinijinjaError>;
 
     /// Encloses identifier in the correct quotes for the adapter when escaping reserved column names etc.
@@ -227,17 +244,43 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
     ) -> Result<Value, MinijinjaError>;
 
     /// Convert type.
-    fn convert_type(&self, state: &State, _args: &[Value]) -> Result<Value, MinijinjaError>;
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1221
+    ///
+    /// ```python
+    /// def convert_type(
+    ///     cls,
+    ///     agate_table: "agate.Table",
+    ///     col_idx: int
+    /// ) -> Optional[str]
+    /// ```
+    fn convert_type(
+        &self,
+        state: &State,
+        _table: &Arc<AgateTable>,
+        _col_idx: i64,
+    ) -> Result<Value, MinijinjaError>;
 
-    /// Render raw model constants.
+    /// Render raw model constraints.
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1891
+    ///
+    /// ```python
+    /// def render_raw_model_constraints(
+    ///     cls,
+    ///     raw_constraints: List[Dict[str, Any]]
+    /// ) -> List[str]
+    ///
+    /// ```
     fn render_raw_model_constraints(
         &self,
         state: &State,
-        _args: &[Value],
+        _raw_constraints: &[ModelConstraint],
     ) -> Result<Value, MinijinjaError>;
 
-    /// TODO: this is a stub (used in postgres__list_schemas macro and maybe others)
-    fn verify_database(&self, state: &State, _args: &[Value]) -> Result<Value, MinijinjaError>;
+    /// Verify database.
+    /// ```
+    fn verify_database(&self, state: &State, _database: String) -> Result<Value, MinijinjaError>;
 
     /// Dispatch.
     fn dispatch(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
@@ -462,14 +505,38 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
     fn drop_schema(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError>;
 
     /// Valid snapshot target.
-    fn valid_snapshot_target(&self, state: &State, args: &[Value])
-    -> Result<Value, MinijinjaError>;
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L884
+    ///
+    /// ```python
+    /// def valid_snapshot_target(
+    ///     relation: BaseRelation,
+    ///     column_names: Optional[Dict[str, str]] = None
+    /// ) -> None
+    /// ```
+    fn valid_snapshot_target(
+        &self,
+        state: &State,
+        _relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, MinijinjaError>;
 
     /// Assert valid snapshot target given strategy.
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L917
+    ///
+    /// ```python
+    /// def assert_valid_snapshot_target_given_strategy(
+    ///     relation: BaseRelation,
+    ///     column_names: Dict[str, str],
+    ///     strategy: SnapshotStrategy
+    /// ) -> None
+    /// ```
     fn assert_valid_snapshot_target_given_strategy(
         &self,
         state: &State,
-        args: &[Value],
+        _relation: Arc<dyn BaseRelation>,
+        _column_names: Option<&BTreeMap<String, String>>,
+        _strategy: &Arc<SnapshotStrategy>,
     ) -> Result<Value, MinijinjaError>;
 
     /// Get hard deletes behavior.
@@ -536,8 +603,22 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
         )
     }
 
-    /// Returns a list of columns.
-    fn get_missing_columns(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError>;
+    /// Get missing columns.
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L852
+    ///
+    /// ```python
+    /// def get_missing_columns(
+    ///     from_relation: BaseRelation,
+    ///     to_relation: BaseRelation
+    /// ) -> List[BaseColumn]
+    /// ```
+    fn get_missing_columns(
+        &self,
+        state: &State,
+        _from_relation: Arc<dyn BaseRelation>,
+        _to_relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, MinijinjaError>;
 
     /// Get columns in relation.
     ///
