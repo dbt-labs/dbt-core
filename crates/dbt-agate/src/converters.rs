@@ -131,6 +131,18 @@ trait ConvertibleToI128 {
     fn to_i128(self) -> Option<i128>;
 }
 
+impl ConvertibleToI128 for i32 {
+    fn to_i128(self) -> Option<i128> {
+        Some(self as i128)
+    }
+}
+
+impl ConvertibleToI128 for i64 {
+    fn to_i128(self) -> Option<i128> {
+        Some(self as i128)
+    }
+}
+
 impl ConvertibleToI128 for i128 {
     fn to_i128(self) -> Option<i128> {
         Some(self)
@@ -500,6 +512,12 @@ pub fn make_array_converter(array: &dyn Array) -> Result<Box<dyn ArrayConverter>
         )),
         DataType::Float64 => Box::new(PrimitiveArrayConverter::<Float64Type>::new(
             array.as_primitive::<Float64Type>(),
+        )),
+        DataType::Decimal32(_, _) => Box::new(DecimalArrayConverter::<Decimal32Type>::new(
+            array.as_primitive::<Decimal32Type>(),
+        )),
+        DataType::Decimal64(_, _) => Box::new(DecimalArrayConverter::<Decimal64Type>::new(
+            array.as_primitive::<Decimal64Type>(),
         )),
         DataType::Decimal128(_, _) => Box::new(DecimalArrayConverter::<Decimal128Type>::new(
             array.as_primitive::<Decimal128Type>(),

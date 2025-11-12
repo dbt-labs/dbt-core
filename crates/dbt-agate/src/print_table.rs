@@ -1,15 +1,67 @@
-use minijinja::{Error as MinijinjaError, Value};
+use std::{fmt, io};
 
 use crate::AgateTable;
 
+pub struct TableDisplay<'a> {
+    table: &'a AgateTable,
+    pub max_rows: usize,
+    pub max_columns: usize,
+    pub max_column_width: usize,
+}
+
+impl<'a> TableDisplay<'a> {
+    pub fn new(table: &'a AgateTable) -> Self {
+        Self {
+            table,
+            max_rows: 20,
+            max_columns: 6,
+            max_column_width: 20,
+        }
+    }
+
+    pub fn with_max_rows(mut self, max_rows: usize) -> Self {
+        self.max_rows = max_rows;
+        self
+    }
+
+    pub fn with_max_columns(mut self, max_columns: usize) -> Self {
+        self.max_columns = max_columns;
+        self
+    }
+
+    pub fn with_max_column_width(mut self, max_column_width: usize) -> Self {
+        self.max_column_width = max_column_width;
+        self
+    }
+}
+
+impl fmt::Display for TableDisplay<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut writer = FormatterAsWriter::new(f);
+        print_table(
+            self.table,
+            self.max_rows,
+            self.max_columns,
+            self.max_column_width,
+            Some(&mut writer),
+        )
+        .map_err(move |_| fmt::Error)
+    }
+}
+
+#[inline(never)]
 pub fn print_table(
     table: &AgateTable,
     max_rows: usize,
     max_columns: usize,
     max_column_width: usize,
-) -> Result<Value, MinijinjaError> {
+    output: Option<&mut dyn io::Write>,
+) -> Result<(), io::Error> {
     // Parse arguments or use defaults matching Python implementation
     // Extract arguments if provided
+
+    let mut stdout = io::stdout();
+    let out = output.unwrap_or(&mut stdout);
 
     // Get character constants (equivalent to Python config options)
     let ellipsis = "...";
@@ -18,9 +70,8 @@ pub fn print_table(
     let v_line = "|";
 
     // Get column names and truncate if needed
-    let column_names = table.column_names();
     let mut display_column_names = Vec::new();
-    for name in column_names.iter().take(max_columns) {
+    for name in table.column_names_iter().take(max_columns) {
         if name.len() > max_column_width {
             display_column_names.push(format!(
                 "{}{}",
@@ -28,11 +79,11 @@ pub fn print_table(
                 truncation
             ));
         } else {
-            display_column_names.push(name.clone());
+            display_column_names.push(name.to_string());
         }
     }
 
-    let columns_truncated = max_columns < column_names.len();
+    let columns_truncated = max_columns < table.num_columns();
     if columns_truncated {
         display_column_names.push(ellipsis.to_string());
     }
@@ -86,12 +137,12 @@ pub fn print_table(
         formatted_data.push(formatted_row);
     }
 
-    // Build the table string
-    let mut output = String::new();
-
     // Helper function to write a row
-    let write_row = |output: &mut String, row: &[String], is_header: bool| {
-        output.push_str(v_line);
+    let write_row = |out: &mut dyn io::Write,
+                     row: &[String],
+                     is_header: bool|
+     -> Result<(), io::Error> {
+        out.write_all(v_line.as_bytes())?;
         for (j, value) in row.iter().enumerate() {
             if j < widths.len() {
                 // Determine if it's a number or text for alignment
@@ -101,48 +152,47 @@ pub fn print_table(
 
                 if is_number || is_header {
                     // Right justify numbers and headers
-                    output.push_str(&format!(" {} ", value.to_string().pad_left(widths[j])));
+                    out.write_fmt(format_args!(" {} ", value.to_string().pad_left(widths[j])))?;
                 } else {
                     // Left justify text
-                    output.push_str(&format!(" {} ", value.to_string().pad_right(widths[j])));
+                    out.write_fmt(format_args!(" {} ", value.to_string().pad_right(widths[j])))?;
                 }
             }
 
             if j < row.len() - 1 {
-                output.push_str(v_line);
+                out.write_all(v_line.as_bytes())?;
             }
         }
-        output.push_str(v_line);
-        output.push('\n');
+        out.write_fmt(format_args!("{}\n", v_line))?;
+        Ok(())
     };
 
     // Write header row
-    write_row(&mut output, &display_column_names, true);
+    write_row(out, &display_column_names, true)?;
 
     // Write divider
-    output.push_str(v_line);
+    out.write_all(v_line.as_bytes())?;
     for (j, &width) in widths.iter().enumerate() {
-        output.push_str(&format!(" {} ", h_line.repeat(width)));
+        out.write_fmt(format_args!(" {} ", h_line.repeat(width)))?;
 
         if j < widths.len() - 1 {
-            output.push_str(v_line);
+            out.write_all(v_line.as_bytes())?;
         }
     }
-    output.push_str(v_line);
-    output.push('\n');
+    out.write_fmt(format_args!("{}\n", v_line))?;
 
     // Write data rows
     for row in formatted_data {
-        write_row(&mut output, &row, false);
+        write_row(out, &row, false)?;
     }
 
     // Add truncation row if rows were truncated
     if rows_truncated {
         let ellipsis_row = vec![ellipsis.to_string(); display_column_names.len()];
-        write_row(&mut output, &ellipsis_row, false);
+        write_row(out, &ellipsis_row, false)?;
     }
 
-    Ok(Value::from(output))
+    Ok(())
 }
 
 // Add helper methods for string padding - used in print_table
@@ -180,5 +230,40 @@ impl StringPadding for str {
 
     fn pad_left(&self, width: usize) -> String {
         self.to_string().pad_left(width)
+    }
+}
+
+/// Adapter to use a `fmt::Formatter` as an `io::Write`.
+///
+/// This is only necessary because [fmt::Formatter::new] is not available
+/// on stable Rust yet [1].
+///
+/// [1] https://github.com/rust-lang/rust/issues/118117
+pub struct FormatterAsWriter<'a, 'b> {
+    f: &'a mut fmt::Formatter<'b>,
+}
+
+impl<'a, 'b> FormatterAsWriter<'a, 'b> {
+    pub fn new(f: &'a mut fmt::Formatter<'b>) -> Self {
+        Self { f }
+    }
+}
+
+impl<'a, 'b> io::Write for FormatterAsWriter<'a, 'b> {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        // XXX: this awkward conversion won't be necessary once
+        // [1] is stabilized.
+        let s = std::str::from_utf8(buf).map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "stream did not contain valid UTF-8",
+            )
+        })?;
+        self.f.write_str(s).map_err(io::Error::other)?;
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
     }
 }

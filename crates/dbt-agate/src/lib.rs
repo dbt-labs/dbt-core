@@ -13,20 +13,23 @@ mod column;
 mod columns;
 mod converters;
 mod decimal;
+pub mod grouper;
+pub mod hashers;
 mod print_table;
 mod row;
 mod rows;
 mod table;
+mod table_set;
 
 pub(crate) mod flat_record_batch;
 mod vec_of_rows;
 
 pub use column::Column;
 pub use columns::Columns;
-pub use print_table::print_table;
 pub use row::Row;
 pub use rows::Rows;
 pub use table::AgateTable;
+pub use table_set::TableSet;
 
 /// Agate uses Python tuples to represent sequences of values.
 ///
@@ -51,7 +54,7 @@ trait TupleRepr: fmt::Debug + Send + Sync {
     ///
     /// Can be specialized on specific tuple representations to
     /// avoid copying every value.
-    fn eq(&self, other: &dyn TupleRepr) -> bool {
+    fn eq_repr(&self, other: &dyn TupleRepr) -> bool {
         if self.len() != other.len() {
             return false;
         }
@@ -111,7 +114,7 @@ impl fmt::Display for Tuple {
 
 impl PartialEq for Tuple {
     fn eq(&self, other: &Self) -> bool {
-        self.0.eq(&*other.0)
+        self.0.eq_repr(&*other.0)
     }
 }
 
@@ -182,6 +185,14 @@ impl ZippedTupleRepr {
     pub fn new(first: Box<dyn TupleRepr>, second: Box<dyn TupleRepr>) -> Self {
         debug_assert!(first.len() == second.len());
         Self { first, second }
+    }
+
+    pub fn from_tuples(first: &Tuple, second: &Tuple) -> Self {
+        Self::new(first.0.clone_repr(), second.0.clone_repr())
+    }
+
+    pub fn into_tuple(self) -> Tuple {
+        Tuple(Box::new(self))
     }
 }
 
@@ -484,6 +495,21 @@ pub trait MappedSequence {
         }
         write!(f, ")>")?;
         Ok(())
+    }
+}
+
+pub fn adjusted_index(idx: isize, len: usize) -> Option<usize> {
+    // Convert len to isize for consistent comparisons
+    let len = len as isize;
+
+    // Handle negative indices (e.g., -1 means last element)
+    let adjusted = if idx < 0 { len + idx } else { idx };
+
+    // Check if the adjusted index is within bounds
+    if adjusted >= 0 && adjusted < len {
+        Some(adjusted as usize)
+    } else {
+        None
     }
 }
 

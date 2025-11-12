@@ -1,30 +1,30 @@
-use crate::Tuple;
 use crate::column::Column;
-use crate::columns::ColumnNamesAsTuple;
-use crate::columns::Columns;
+use crate::columns::*;
+use crate::converters::ArrayConverter;
 use crate::flat_record_batch::FlatRecordBatch;
-use crate::print_table::print_table;
+use crate::grouper::Grouper;
+use crate::print_table::TableDisplay;
 use crate::row::Row;
-use crate::rows::RowNamesAsTuple;
-use crate::rows::Rows;
+use crate::rows::*;
+use crate::table_set::{TableSet, TableSetRepr};
 use crate::vec_of_rows::VecOfRows;
+use crate::{Tuple, adjusted_index};
 
 use arrow::array::StringViewBuilder;
+use arrow::compute::TakeOptions;
 use arrow::record_batch::RecordBatch;
-use arrow_array::Array;
-use arrow_array::StringViewArray;
+use arrow_array::{Array, StringViewArray, UInt64Array};
 use arrow_schema::{ArrowError, Schema};
-use minijinja::Value;
 use minijinja::arg_utils::ArgsIter;
 use minijinja::listener::RenderingEventListener;
-use minijinja::value::Kwargs;
-use minijinja::value::ValueMap;
-use minijinja::value::mutable_map::MutableMap;
-use minijinja::value::{Enumerator, Object};
+use minijinja::value::{Enumerator, Kwargs, Object, ValueMap, mutable_map::MutableMap};
 use minijinja::{Error as MinijinjaError, State};
+use minijinja::{ErrorKind, Value};
+use std::cmp::Ordering;
+use std::hint::unreachable_unchecked;
+use std::io;
 use std::rc::Rc;
-use std::sync::Arc;
-use std::sync::OnceLock;
+use std::sync::{Arc, OnceLock};
 
 /// Internal table representation.
 ///
@@ -85,7 +85,7 @@ impl TableRepr {
         match res {
             Ok(table) => Ok(table),
             Err(e) => {
-                let e = MinijinjaError::new(minijinja::ErrorKind::InvalidOperation, e.to_string());
+                let e = MinijinjaError::new(ErrorKind::InvalidOperation, e.to_string());
                 Err(e)
             }
         }
@@ -100,27 +100,12 @@ impl TableRepr {
         Arc::clone(self.flat.inner())
     }
 
-    pub fn adjusted_index(idx: isize, len: usize) -> Option<usize> {
-        // Convert len to isize for consistent comparisons
-        let len = len as isize;
-
-        // Handle negative indices (e.g., -1 means last element)
-        let adjusted = if idx < 0 { len + idx } else { idx };
-
-        // Check if the adjusted index is within bounds
-        if adjusted >= 0 && adjusted < len {
-            Some(adjusted as usize)
-        } else {
-            None
-        }
-    }
-
     fn adjusted_column_index(&self, idx: isize) -> Option<usize> {
-        Self::adjusted_index(idx, self.num_columns())
+        adjusted_index(idx, self.num_columns())
     }
 
     fn adjusted_row_index(&self, idx: isize) -> Option<usize> {
-        Self::adjusted_index(idx, self.num_rows())
+        adjusted_index(idx, self.num_rows())
     }
 
     // Columns ----------------------------------------------------------------
@@ -137,20 +122,24 @@ impl TableRepr {
 
     pub fn column_name(&self, idx: isize) -> Option<&String> {
         let idx = self.adjusted_column_index(idx)?;
-        let name = self.flat.schema_ref().field(idx).name();
-        Some(name)
+        Some(self.flat.column_name(idx))
+    }
+
+    pub fn column_type(&self, idx: isize) -> Option<&String> {
+        let idx = self.adjusted_column_index(idx)?;
+        Some(self.flat.column_type(idx))
     }
 
     pub fn columns(self: &Arc<Self>) -> Columns {
         Columns::new(Arc::clone(self))
     }
 
+    pub fn column_types(&self) -> impl Iterator<Item = &String> + '_ {
+        self.flat.column_types()
+    }
+
     pub fn column_names(&self) -> impl Iterator<Item = &String> + '_ {
-        self.flat
-            .schema_ref()
-            .fields()
-            .iter()
-            .map(|field| field.name())
+        self.flat.column_names()
     }
 
     /// Indices of the columns with the given names.
@@ -231,6 +220,14 @@ impl TableRepr {
         Arc::new(repr)
     }
 
+    fn grouper(&self, column_indices: &[usize]) -> Result<Grouper, ArrowError> {
+        Grouper::from_record_batch_columns(self.flat.as_ref(), column_indices)
+    }
+
+    pub(crate) fn column_converter(&self, index: usize) -> &dyn ArrayConverter {
+        self.flat.column_converter(index)
+    }
+
     // Rows -------------------------------------------------------------------
 
     pub fn num_rows(&self) -> usize {
@@ -280,6 +277,58 @@ impl TableRepr {
     ) -> Option<usize> {
         let _row = self.row_by_index(row_idx).unwrap();
         todo!("index_of_value_in_row")
+    }
+
+    pub(crate) fn select_rows(
+        &self,
+        indices: &UInt64Array,
+        take_options: Option<TakeOptions>,
+    ) -> Result<TableRepr, ArrowError> {
+        let row_names = self
+            .row_names
+            .as_ref()
+            .map(|row_names| {
+                let selected =
+                    arrow::compute::take(row_names.as_ref(), indices, take_options.clone())?;
+                let casted = selected
+                    .as_ref()
+                    .as_any()
+                    .downcast_ref::<StringViewArray>()
+                    .unwrap() // take preserves the input type
+                    .clone(); // clone is cheap and necessary for the Arc
+                Ok(Arc::new(casted)) as Result<Arc<StringViewArray>, ArrowError>
+            })
+            .transpose()?;
+
+        let columns = self.flat.inner().columns();
+        let mut new_columns = Vec::with_capacity(columns.len());
+        match columns {
+            [] => (),
+            [first, rest @ ..] => {
+                #[allow(clippy::needless_update)]
+                let mut take_opts = take_options.unwrap_or_else(|| TakeOptions {
+                    check_bounds: true,
+                    ..Default::default()
+                });
+                let c0 = arrow::compute::take(first.as_ref(), indices, Some(take_opts.clone()))?;
+                new_columns.push(c0);
+
+                take_opts.check_bounds = false; // already checked for the first column
+                for col in rest {
+                    let c = arrow::compute::take(col.as_ref(), indices, Some(take_opts.clone()))?;
+                    new_columns.push(c);
+                }
+            }
+        }
+        let schema = Arc::clone(self.flat.schema_ref());
+        let row_count = new_columns.first().map_or(indices.len(), |c| c.len());
+        // SAFETY: the schema doesn't change after selecting rows and data types of the
+        // resulting arrays remain the same.
+        let batch = unsafe { RecordBatch::new_unchecked(schema, new_columns, row_count) };
+        // The filtered columns come from flat columns so they remain flat
+        let flat = FlatRecordBatch::_from_flattened_record_batch(Arc::new(batch), None)?;
+        let repr = TableRepr::new(Arc::new(flat), None, row_names);
+        Ok(repr)
     }
 
     // Cells ------------------------------------------------------------------
@@ -373,6 +422,14 @@ impl AgateTable {
         Self { repr }
     }
 
+    pub fn to_value(&self) -> Value {
+        Value::from_object(Self::from_repr(Arc::clone(&self.repr)))
+    }
+
+    pub fn into_value(self) -> Value {
+        Value::from_object(self)
+    }
+
     /// Returns the original Arrow [RecordBatch] used to create this Agate table.
     ///
     /// Some Agate operations like [TableRepr::single_column_table] may create new tables
@@ -416,9 +473,32 @@ impl AgateTable {
         self.repr.column_name(idx)
     }
 
-    /// Get the column names.
+    /// Get the column types as a zero-copy iterator.
+    pub fn column_types_iter(&self) -> impl Iterator<Item = &String> + '_ {
+        self.repr.column_types()
+    }
+
+    /// Get the column names as a zero-copy iterator.
+    pub fn column_names_iter(&self) -> impl Iterator<Item = &String> + '_ {
+        self.repr.column_names()
+    }
+
+    pub(crate) fn column_types_as_tuple(&self) -> ColumnTypesAsTuple {
+        ColumnTypesAsTuple::of_table(&self.repr)
+    }
+
+    pub(crate) fn column_names_as_tuple(&self) -> ColumnNamesAsTuple {
+        ColumnNamesAsTuple::of_table(&self.repr)
+    }
+
+    /// Get the column types as a newly allocated [Vec].
+    pub fn column_types(&self) -> Vec<String> {
+        self.column_types_iter().map(|s| s.to_string()).collect()
+    }
+
+    /// Get the column names as a newly allocated [Vec<String>].
     pub fn column_names(&self) -> Vec<String> {
-        self.repr.column_names().map(|s| s.to_owned()).collect()
+        self.column_names_iter().map(|s| s.to_string()).collect()
     }
 
     /// Create a new table with only the specified columns.
@@ -426,6 +506,14 @@ impl AgateTable {
         let indices = self.repr.column_indices(keys);
         let repr = self.repr.select(indices);
         AgateTable::from_repr(repr)
+    }
+
+    pub fn grouper(&self, column_names: &[String]) -> Result<Grouper, ArrowError> {
+        let indices = self
+            .repr
+            .column_indices(column_names)
+            .collect::<Vec<usize>>();
+        self.repr.grouper(indices.as_slice())
     }
 
     // Rows -------------------------------------------------------------------
@@ -446,6 +534,39 @@ impl AgateTable {
     }
 
     // Rest of API ------------------------------------------------------------
+
+    pub fn print_table(
+        &self,
+        max_rows: usize,
+        max_columns: usize,
+        max_column_width: usize,
+        output: Option<&mut dyn io::Write>,
+    ) -> Result<(), minijinja::Error> {
+        crate::print_table::print_table(self, max_rows, max_columns, max_column_width, output)
+            .map_err(|e| {
+                minijinja::Error::new(
+                    ErrorKind::InvalidOperation,
+                    format!("Table.print_table: I/O error: {e}"),
+                )
+            })
+    }
+
+    pub fn print_table_to_string(
+        &self,
+        max_rows: usize,
+        max_columns: usize,
+        max_column_width: usize,
+    ) -> Result<String, minijinja::Error> {
+        let mut output = Vec::new();
+        self.print_table(max_rows, max_columns, max_column_width, Some(&mut output))?;
+        // SAFETY: print_table() only writes valid UTF-8, it's not necessary to validate again
+        let s = unsafe { String::from_utf8_unchecked(output) };
+        Ok(s)
+    }
+
+    pub fn display<'a>(&'a self) -> TableDisplay<'a> {
+        TableDisplay::new(self)
+    }
 
     fn rename(
         &self,
@@ -484,7 +605,7 @@ impl AgateTable {
                 Ok(renamed)
             } else {
                 Err(MinijinjaError::new(
-                    minijinja::ErrorKind::InvalidArgument,
+                    ErrorKind::InvalidArgument,
                     "Agate.rename: column_names must be a map or an array",
                 ))
             }
@@ -535,7 +656,7 @@ impl AgateTable {
                 Ok(Arc::new(renamed.finish()))
             } else {
                 Err(MinijinjaError::new(
-                    minijinja::ErrorKind::InvalidArgument,
+                    ErrorKind::InvalidArgument,
                     "Agate.rename: row_names must be a map or an array",
                 ))
             }
@@ -543,7 +664,7 @@ impl AgateTable {
 
         if slug_columns || slug_rows {
             return Err(MinijinjaError::new(
-                minijinja::ErrorKind::InvalidOperation,
+                ErrorKind::InvalidOperation,
                 "Agate.rename: slugging columns or rows is not implemented yet",
             ));
         }
@@ -560,6 +681,96 @@ impl AgateTable {
         };
 
         Ok(AgateTable::from_repr(repr))
+    }
+
+    fn group_by_key(
+        &self,
+        key: &str,
+        key_name: &str,
+        key_type: Option<&str>,
+    ) -> Result<TableSet, MinijinjaError> {
+        let column = self
+            .column_names_iter()
+            .position(|n| n == key)
+            .map(|idx| Column::new(idx, Arc::clone(&self.repr)));
+
+        let key_type = key_type
+            .map(|s| s.to_string())
+            .or_else(|| column.as_ref().and_then(|c| c.data_type().cloned()));
+
+        // TODO: cast the values in `column` according to `key_type`, create a new
+        // table with the casted column, and use that table to create the grouper
+        let grouper = self.grouper(&[key.to_string()]).map_err(|e| {
+            MinijinjaError::new(
+                ErrorKind::InvalidOperation,
+                format!("Table.group_by_key: error creating grouper for key '{key}': {e}"),
+            )
+        })?;
+
+        // Each vec contains the row indices for each group.
+        let mut groups: Vec<Vec<u64>> = Vec::new();
+        for (row_idx, group_id) in grouper.iter().enumerate() {
+            match group_id.cmp(&groups.len()) {
+                Ordering::Less => groups[group_id].push(row_idx as u64),
+                Ordering::Equal => groups.push(vec![row_idx as u64]),
+                Ordering::Greater => {
+                    // SAFETY: new group ids are always created with increments of 1, so
+                    // we either see a new group id equal to the current length of groups,
+                    // or an existing group in this loop
+                    unsafe { unreachable_unchecked() }
+                }
+            }
+        }
+        // The key values for a group are the same, so we can just pick the
+        // first row index for each group to address the value of group key.
+        let mut key_index_per_group = Vec::with_capacity(groups.len());
+        for row_indices in groups.iter() {
+            match row_indices.first() {
+                Some(&i) => key_index_per_group.push(i),
+                None => {
+                    // SAFETY: the loop above guarantees that each group has at least one index
+                    unsafe { unreachable_unchecked() }
+                }
+            }
+        }
+        let keys = match column {
+            Some(col) => col.select_values(&key_index_per_group),
+            None => vec![Value::from(()); groups.len()],
+        };
+
+        #[allow(clippy::needless_update)]
+        let tables = groups
+            .into_iter()
+            .map(|indices| {
+                // Move the Vec into an Arrow UInt64Array so we can use the arrow::compute functions
+                let indices = UInt64Array::new(indices.into(), None);
+                let table = self
+                    .repr
+                    .select_rows(
+                        &indices,
+                        Some(TakeOptions {
+                            check_bounds: false, // groups only contain valid indices
+                            ..Default::default()
+                        }),
+                    )
+                    .map(|repr| {
+                        let table = AgateTable::from_repr(Arc::new(repr));
+                        Arc::new(table)
+                    })?;
+                Ok(table) as Result<Arc<AgateTable>, ArrowError>
+            })
+            .collect::<Result<Vec<Arc<AgateTable>>, ArrowError>>()
+            .map_err(|e| {
+                MinijinjaError::new(
+                    ErrorKind::InvalidOperation,
+                    format!("Table.group_by_key: error selecting table rows: {e}"),
+                )
+            })?;
+
+        let key_name = Some(key_name.to_string());
+        let is_fork = true; // skip validations
+        let repr = TableSetRepr::try_new(tables, keys, key_name, key_type, is_fork)?;
+        Ok(TableSet::from_repr(repr))
     }
 }
 
@@ -585,11 +796,12 @@ impl Object for AgateTable {
                 let columns = self.columns();
                 Some(Value::from_object(columns))
             }
-            "column_types" => todo!("AgateTable::column_types"),
+            "column_types" => {
+                let tuple = ColumnTypesAsTuple::of_table(&self.repr).into_tuple();
+                Some(Value::from_object(tuple))
+            }
             "column_names" => {
-                let names = self.column_names();
-                let repr = ColumnNamesAsTuple::new(names);
-                let tuple = Tuple(Box::new(repr));
+                let tuple = ColumnNamesAsTuple::of_table(&self.repr).into_tuple();
                 Some(Value::from_object(tuple))
             }
             "rows" => {
@@ -639,7 +851,8 @@ impl Object for AgateTable {
                 let _max_precision = iter.next_kwarg::<Option<&Value>>("max_precision")?;
                 iter.finish()?;
 
-                print_table(self, max_rows, max_columns, max_column_width)
+                let s = self.print_table_to_string(max_rows, max_columns, max_column_width)?;
+                Ok(Value::from(s))
             }
             "select" => {
                 // ```python
@@ -665,7 +878,7 @@ impl Object for AgateTable {
                         Ok(iter) => iter,
                         Err(e) => {
                             return Err(MinijinjaError::new(
-                                minijinja::ErrorKind::InvalidArgument,
+                                ErrorKind::InvalidArgument,
                                 format!(
                                     "Table.select: key must be a string or an array of strings: {e}"
                                 ),
@@ -678,7 +891,7 @@ impl Object for AgateTable {
                             keys.push(s.to_string());
                         } else {
                             return Err(MinijinjaError::new(
-                                minijinja::ErrorKind::InvalidArgument,
+                                ErrorKind::InvalidArgument,
                                 format!(
                                     "Table.select: key must be a string or an array of strings: {v} found instead"
                                 ),
@@ -718,6 +931,69 @@ impl Object for AgateTable {
                     kwargs,
                 )?;
                 Ok(Value::from_object(table))
+            }
+            // ```python
+            // def group_by(self, key, key_name=None, key_type=None):
+            //     """
+            //     Create a :class:`.TableSet` with a table for each unique key.
+            //
+            //     Note that group names will always be coerced to a string, regardless of the
+            //     format of the input column.
+            //
+            //     :param key:
+            //         Either the name of a column from the this table to group by, or a
+            //         :class:`function` that takes a row and returns a value to group by.
+            //     :param key_name:
+            //         A name that describes the grouped properties. Defaults to the
+            //         column name that was grouped on or "group" if grouping with a key
+            //         function. See :class:`.TableSet` for more.
+            //     :param key_type:
+            //         An instance of any subclass of :class:`.DataType`. If not provided
+            //         it will default to a :class`.Text`.
+            //     :returns:
+            //         A :class:`.TableSet` mapping where the keys are unique values from
+            //         the :code:`key` and the values are new :class:`.Table` instances
+            //         containing the grouped rows.
+            //     """
+            // ```
+            "group_by" => {
+                let iter = ArgsIter::new("Table.group_by", &["key"], args);
+                let key = iter.next_arg::<&Value>()?;
+                let key_name = iter.next_kwarg::<Option<&Value>>("key_name")?;
+                let key_type = iter.next_kwarg::<Option<&Value>>("key_type")?;
+                iter.finish()?;
+
+                let key = match key.as_str() {
+                    Some(s) => s,
+                    None => unimplemented!("group_by with function key"),
+                };
+                let key_name = match key_name {
+                    Some(v) => match v.as_str() {
+                        Some(s) => s,
+                        None => unimplemented!("group_by with non-string key_name"),
+                    },
+                    None => "group",
+                };
+                let key_type = match key_type {
+                    Some(ty) => match ty.as_str() {
+                        Some(s) => Some(s),
+                        None => {
+                            // TODO: support DataType class instances
+                            unimplemented!("group_by with non-string key_type")
+                        }
+                    },
+                    None => None,
+                };
+                let table_set = self
+                    .as_ref()
+                    .group_by_key(key, key_name, key_type)
+                    .map_err(|e| {
+                        MinijinjaError::new(
+                            ErrorKind::InvalidOperation,
+                            format!("Table.group_by: {e}"),
+                        )
+                    })?;
+                Ok(Value::from_object(table_set))
             }
             other => unimplemented!("AgateTable::{}", other),
         }
@@ -783,8 +1059,7 @@ mod tests {
     #[test]
     fn test_select() {
         let batch = simple_record_batch();
-        let agate_table = AgateTable::from_record_batch(batch);
-        let table = Value::from_object(agate_table);
+        let table = AgateTable::from_record_batch(batch).into_value();
 
         let env = Environment::new();
         let state = env.empty_state();
@@ -882,7 +1157,7 @@ mod tests {
         assert_eq!(row_names.count(&row_2_name), 1);
 
         // Now get the rows via the Jinja API
-        let table = Value::from_object(table);
+        let table = table.into_value();
         let row_names = table.get_attr("row_names").unwrap();
         row_names
             .try_iter()
@@ -914,10 +1189,9 @@ mod tests {
             .build(file)
             .unwrap();
         let batch = reader.next().unwrap().unwrap();
-        let table = AgateTable::from_record_batch(Arc::new(batch));
+        let table = AgateTable::from_record_batch(Arc::new(batch)).into_value();
 
-        let table_value = Value::from_object(table);
-        let downcasted = table_value.downcast_object::<AgateTable>().unwrap();
+        let downcasted = table.downcast_object::<AgateTable>().unwrap();
         assert_eq!(downcasted.num_columns(), 2);
         assert_eq!(downcasted.num_rows(), 3);
         let record_batch = downcasted.original_record_batch();
@@ -1217,7 +1491,8 @@ mod tests {
     }
 
     #[test]
-    fn test_empty_batch() {
+    #[allow(clippy::cognitive_complexity)]
+    fn test_empty_batch_column_types_and_names() {
         let schema = Arc::new(Schema::new(vec![
             Field::new("id", DataType::Int32, false),
             Field::new("name", DataType::Utf8, false),
@@ -1245,8 +1520,70 @@ mod tests {
         )
         .unwrap();
         let table = AgateTable::from_record_batch(Arc::new(batch));
+        let column_types = table.column_types();
+        assert_eq!(
+            column_types,
+            vec!["Number".to_string(), "Text".to_string(), "Text".to_string()]
+        );
         let column_names = table.column_names();
         assert_eq!(column_names, vec!["id", "name", "event_tags.0"]);
+
+        let column_types = table.column_types_as_tuple();
+        assert_eq!(column_types.len(), 3);
+        assert_eq!(
+            column_types.get_item_by_index(0).unwrap().as_str().unwrap(),
+            "Number"
+        );
+        assert_eq!(
+            column_types.get_item_by_index(1).unwrap().as_str().unwrap(),
+            "Text"
+        );
+        assert_eq!(
+            column_types.get_item_by_index(2).unwrap().as_str().unwrap(),
+            "Text"
+        );
+        assert_eq!(column_types.count_occurrences_of(&Value::from("Number")), 1);
+        assert_eq!(column_types.count_occurrences_of(&Value::from("Text")), 2);
+        assert_eq!(
+            column_types.count_occurrences_of(&Value::from("DateTime")),
+            0
+        );
+        assert_eq!(column_types.index_of(&Value::from("Number")), Some(0));
+        assert_eq!(column_types.index_of(&Value::from("Text")), Some(1));
+        assert_eq!(column_types.index_of(&Value::from("DateTime")), None);
+        let column_types2 = table.column_types_as_tuple();
+        assert!(column_types.eq_repr(&column_types2 as &dyn TupleRepr));
+
+        let column_names = table.column_names_as_tuple();
+        assert_eq!(column_names.len(), 3);
+        assert_eq!(
+            column_names.get_item_by_index(0).unwrap().as_str().unwrap(),
+            "id"
+        );
+        assert_eq!(
+            column_names.get_item_by_index(1).unwrap().as_str().unwrap(),
+            "name"
+        );
+        assert_eq!(
+            column_names.get_item_by_index(2).unwrap().as_str().unwrap(),
+            "event_tags.0"
+        );
+        assert_eq!(column_names.count_occurrences_of(&Value::from("id")), 1);
+        assert_eq!(column_names.count_occurrences_of(&Value::from("name")), 1);
+        assert_eq!(
+            column_names.count_occurrences_of(&Value::from("event_tags.0")),
+            1
+        );
+        assert_eq!(
+            column_names.count_occurrences_of(&Value::from("nonexistent")),
+            0
+        );
+        assert_eq!(column_names.index_of(&Value::from("id")), Some(0));
+        assert_eq!(column_names.index_of(&Value::from("name")), Some(1));
+        assert_eq!(column_names.index_of(&Value::from("event_tags.0")), Some(2));
+        assert_eq!(column_names.index_of(&Value::from("nonexistent")), None);
+        let column_names2 = table.column_names_as_tuple();
+        assert!(column_names.eq_repr(&column_names2 as &dyn TupleRepr));
     }
 
     #[test]
@@ -1254,7 +1591,7 @@ mod tests {
         let batch = Arc::new(nested_record_batch());
         let agate_table = AgateTable::from_record_batch(batch);
         let col_names = agate_table.column_names();
-        let table = Value::from_object(agate_table);
+        let table = agate_table.into_value();
 
         let env = Environment::new();
         let state = env.empty_state();
@@ -1343,8 +1680,7 @@ mod tests {
     #[test]
     fn test_row_renaming() {
         let batch = simple_record_batch();
-        let agate_table = AgateTable::from_record_batch(batch);
-        let table = Value::from_object(agate_table);
+        let table = AgateTable::from_record_batch(batch).into_value();
 
         let env = Environment::new();
         let state = env.empty_state();
@@ -1388,5 +1724,87 @@ mod tests {
         assert_eq!(new_names.get(0).unwrap().as_str().unwrap(), "First Row");
         assert_eq!(new_names.get(1).unwrap().as_str().unwrap(), "Row 2");
         assert_eq!(new_names.get(2).unwrap().as_str().unwrap(), "Row 3");
+    }
+
+    fn color_table() -> AgateTable {
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("id", DataType::Int32, true),
+            Field::new("color", DataType::Utf8, true),
+            Field::new("value", DataType::Int32, true),
+        ]));
+        let id_array: ArrayRef = Arc::new(Int32Array::new(vec![1, 2, 3, 4, 5, 6].into(), None));
+        let color_array: ArrayRef = Arc::new(StringArray::from(vec![
+            Some("red"),
+            Some("blue"),
+            Some("red"),
+            Some("green"),
+            Some("blue"),
+            Some("red"),
+        ]));
+        let value_array: ArrayRef =
+            Arc::new(Int32Array::new(vec![10, 20, 30, 40, 50, 60].into(), None));
+        let batch = RecordBatch::try_new(schema, vec![id_array, color_array, value_array]).unwrap();
+        AgateTable::from_record_batch(Arc::new(batch))
+    }
+
+    #[test]
+    fn test_grouper() {
+        let table = color_table();
+        let grouper = table.grouper(&["color".to_string()]).unwrap();
+        let mut groups = grouper.iter();
+        assert_eq!(groups.next().unwrap(), 0); // red
+        assert_eq!(groups.next().unwrap(), 1); // blue
+        assert_eq!(groups.next().unwrap(), 0); // red
+        assert_eq!(groups.next().unwrap(), 2); // green
+        assert_eq!(groups.next().unwrap(), 1); // blue
+        assert_eq!(groups.next().unwrap(), 0); // red
+    }
+
+    #[test]
+    fn test_group_by() {
+        let env = Environment::new();
+        let state = env.empty_state();
+        let table = Value::from_object(color_table());
+
+        let table_set = table
+            .call_method(&state, "group_by", &[Value::from("color")], &[])
+            .unwrap();
+        let mut groups = table_set.try_iter().unwrap();
+        // each group Value is an AgateTable
+        let (red, blue, green) = (
+            groups.next().unwrap(),
+            groups.next().unwrap(),
+            groups.next().unwrap(),
+        );
+        let mut iter = red.try_iter().unwrap();
+        assert_eq!(
+            "<agate.Row: (1, red, 10)>",
+            iter.next().unwrap().to_string()
+        );
+        assert_eq!(
+            "<agate.Row: (3, red, 30)>",
+            iter.next().unwrap().to_string()
+        );
+        assert_eq!(
+            "<agate.Row: (6, red, 60)>",
+            iter.next().unwrap().to_string()
+        );
+        assert!(iter.next().is_none());
+        let mut iter = blue.try_iter().unwrap();
+        assert_eq!(
+            "<agate.Row: (2, blue, 20)>",
+            iter.next().unwrap().to_string()
+        );
+        assert_eq!(
+            "<agate.Row: (5, blue, 50)>",
+            iter.next().unwrap().to_string()
+        );
+        assert!(iter.next().is_none());
+        let mut iter = green.try_iter().unwrap();
+        assert_eq!(
+            "<agate.Row: (4, green, 40)>",
+            iter.next().unwrap().to_string()
+        );
+        assert!(iter.next().is_none());
     }
 }

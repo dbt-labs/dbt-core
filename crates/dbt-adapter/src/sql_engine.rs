@@ -19,6 +19,7 @@ use arrow::array::RecordBatch;
 use arrow::compute::concat_batches;
 use arrow_schema::Schema;
 use core::result::Result;
+use dbt_agate::hashers::IdentityBuildHasher;
 use dbt_common::adapter::AdapterType;
 use dbt_common::cancellation::{Cancellable, CancellationToken, never_cancels};
 use dbt_common::create_debug_span;
@@ -35,7 +36,6 @@ use std::borrow::Cow;
 use tracy_client::span;
 
 use std::collections::{BTreeMap, HashMap};
-use std::hash::{BuildHasher, Hasher};
 use std::path::PathBuf;
 use std::sync::RwLock;
 use std::sync::{Arc, LazyLock};
@@ -56,40 +56,6 @@ static NAIVE_STMT_SPLITTER: LazyLock<Arc<dyn StmtSplitter>> =
 /// TODO: remove when the full parser/formatter is available to this crate.
 static NAIVE_TYPE_OPS: LazyLock<Box<dyn TypeOps>> =
     LazyLock::new(|| Box::new(NaiveTypeOpsImpl::new(AdapterType::Snowflake)));
-
-#[derive(Default)]
-struct IdentityHasher {
-    hash: u64,
-    #[cfg(debug_assertions)]
-    unexpected_call: bool,
-}
-impl Hasher for IdentityHasher {
-    fn write(&mut self, _bytes: &[u8]) {
-        #[cfg(debug_assertions)]
-        {
-            self.unexpected_call = true;
-        }
-    }
-    fn write_u64(&mut self, i: u64) {
-        self.hash = i;
-    }
-    fn finish(&self) -> u64 {
-        #[cfg(debug_assertions)]
-        {
-            debug_assert!(!self.unexpected_call);
-        }
-        self.hash
-    }
-}
-
-#[derive(Default)]
-struct IdentityBuildHasher;
-impl BuildHasher for IdentityBuildHasher {
-    type Hasher = IdentityHasher;
-    fn build_hasher(&self) -> Self::Hasher {
-        IdentityHasher::default()
-    }
-}
 
 #[derive(Default)]
 pub struct DatabaseMap {

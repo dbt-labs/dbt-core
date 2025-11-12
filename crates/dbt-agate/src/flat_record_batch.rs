@@ -519,7 +519,7 @@ impl FlatRecordBatch {
         Self::_from_flattened_record_batch(flat, Some(batch))
     }
 
-    fn _from_flattened_record_batch(
+    pub(crate) fn _from_flattened_record_batch(
         flat: Arc<RecordBatch>,
         original: Option<Arc<RecordBatch>>,
     ) -> Result<Self, ArrowError> {
@@ -576,6 +576,36 @@ impl FlatRecordBatch {
         }
         .unwrap();
         Arc::new(Self::_from_flattened_record_batch(Arc::new(new_flat), None).unwrap())
+    }
+
+    pub fn column_types(&self) -> impl Iterator<Item = &String> + '_ {
+        self.schema_ref().fields().iter().map(|field| {
+            let dtype = field
+                .metadata()
+                .get(AGATE_DTYPE_METADATA_KEY)
+                .expect("AGATE:dtype metadata key missing in field metadata");
+            dtype
+        })
+    }
+
+    pub fn column_names(&self) -> impl Iterator<Item = &String> + '_ {
+        self.flat
+            .schema_ref()
+            .fields()
+            .iter()
+            .map(|field| field.name())
+    }
+
+    pub fn column_type(&self, idx: usize) -> &String {
+        let field = self.flat.schema_ref().field(idx);
+        field
+            .metadata()
+            .get(AGATE_DTYPE_METADATA_KEY)
+            .expect("AGATE:dtype metadata key missing in field metadata")
+    }
+
+    pub fn column_name(&self, idx: usize) -> &String {
+        self.flat.schema_ref().field(idx).name()
     }
 
     /// Create a new [FlatRecordBatch] by selecting a subset of columns from the current one.

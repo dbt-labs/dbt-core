@@ -10,48 +10,50 @@ use crate::table::TableRepr;
 use crate::{MappedSequence, Tuple, TupleRepr, ZippedTupleRepr};
 
 #[derive(Debug)]
-pub(crate) struct ColumnNamesAsTuple {
-    names: Vec<String>,
+pub(crate) struct ColumnTypesAsTuple {
+    of_table: Arc<TableRepr>,
 }
 
-impl ColumnNamesAsTuple {
-    pub fn new(names: Vec<String>) -> Self {
-        Self { names }
+impl ColumnTypesAsTuple {
+    pub fn of_table(table: &Arc<TableRepr>) -> Self {
+        Self {
+            of_table: Arc::clone(table),
+        }
     }
 
-    pub fn of_table(table: &Arc<TableRepr>) -> Box<dyn TupleRepr> {
-        let column_names = table
-            .column_names()
-            .map(|name| name.to_owned())
-            .collect::<Vec<_>>();
-        // NOTE: a dedicated TupleRepr could be used here to avoid the intermediate Vec<String>
-        // of column names, but it would require more work to implement and it's not worth it (yet).
-        let repr = ColumnNamesAsTuple::new(column_names);
-        Box::new(repr)
+    pub fn into_tuple(self) -> Tuple {
+        Tuple(Box::new(self))
+    }
+
+    pub fn to_value(&self) -> Value {
+        let tuple = ColumnTypesAsTuple::of_table(&self.of_table).into_tuple();
+        Value::from_object(tuple)
     }
 }
 
-impl TupleRepr for ColumnNamesAsTuple {
+impl Eq for ColumnTypesAsTuple {}
+
+impl PartialEq for ColumnTypesAsTuple {
+    fn eq(&self, other: &Self) -> bool {
+        let self_types = self.of_table.column_types();
+        let other_types = other.of_table.column_types();
+        self_types.eq(other_types)
+    }
+}
+
+impl TupleRepr for ColumnTypesAsTuple {
     fn get_item_by_index(&self, idx: isize) -> Option<Value> {
-        let idx = {
-            if idx < 0 {
-                self.names.len() as isize + idx
-            } else {
-                idx
-            }
-        };
-        self.names
-            .get(idx as usize)
-            .map(|name| Value::from(name.clone()))
+        // XXX: we are currently representing types as strings, but they should be class objects
+        self.of_table.column_type(idx).map(Value::from)
     }
 
     fn len(&self) -> usize {
-        self.names.len()
+        self.of_table.num_columns()
     }
 
     fn count_occurrences_of(&self, needle: &Value) -> usize {
         if let Some(name) = needle.as_str() {
-            self.names.iter().filter(|n| n == &name).count()
+            self.of_table.column_types().filter(|n| n == &name).count()
         } else {
             0
         }
@@ -59,15 +61,107 @@ impl TupleRepr for ColumnNamesAsTuple {
 
     fn index_of(&self, needle: &Value) -> Option<usize> {
         if let Some(name) = needle.as_str() {
-            self.names.iter().position(|n| n == name)
+            self.of_table.column_types().position(|n| n == name)
         } else {
             None
         }
     }
 
     fn clone_repr(&self) -> Box<dyn TupleRepr> {
+        Box::new(ColumnTypesAsTuple {
+            of_table: Arc::clone(&self.of_table),
+        })
+    }
+
+    fn eq_repr(&self, other: &dyn TupleRepr) -> bool {
+        if self.len() != other.len() {
+            return false;
+        }
+        let self_types = self.of_table.column_types();
+        for (i, self_type) in self_types.enumerate() {
+            let other_type = other.get_item_by_index(i as isize);
+            if Some(self_type.as_str()) != other_type.as_ref().and_then(|v| v.as_str()) {
+                return false;
+            }
+        }
+        true
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct ColumnNamesAsTuple {
+    of_table: Arc<TableRepr>,
+}
+
+impl ColumnNamesAsTuple {
+    pub fn of_table(table: &Arc<TableRepr>) -> Self {
+        Self {
+            of_table: Arc::clone(table),
+        }
+    }
+
+    pub fn into_tuple(self) -> Tuple {
+        Tuple(Box::new(self))
+    }
+
+    pub fn to_value(&self) -> Value {
+        let tuple = ColumnNamesAsTuple::of_table(&self.of_table).into_tuple();
+        Value::from_object(tuple)
+    }
+}
+
+impl Eq for ColumnNamesAsTuple {}
+
+impl PartialEq for ColumnNamesAsTuple {
+    fn eq(&self, other: &Self) -> bool {
+        let self_names = self.of_table.column_names();
+        let other_names = other.of_table.column_names();
+        self_names.eq(other_names)
+    }
+}
+
+impl TupleRepr for ColumnNamesAsTuple {
+    fn get_item_by_index(&self, idx: isize) -> Option<Value> {
+        self.of_table.column_name(idx).map(Value::from)
+    }
+
+    fn len(&self) -> usize {
+        self.of_table.num_columns()
+    }
+
+    fn count_occurrences_of(&self, needle: &Value) -> usize {
+        if let Some(name) = needle.as_str() {
+            self.of_table.column_names().filter(|n| n == &name).count()
+        } else {
+            0
+        }
+    }
+
+    fn index_of(&self, needle: &Value) -> Option<usize> {
+        if let Some(name) = needle.as_str() {
+            self.of_table.column_names().position(|n| n == name)
+        } else {
+            None
+        }
+    }
+
+    fn eq_repr(&self, other: &dyn TupleRepr) -> bool {
+        if self.len() != other.len() {
+            return false;
+        }
+        let self_names = self.of_table.column_names();
+        for (i, self_name) in self_names.enumerate() {
+            let other_name = other.get_item_by_index(i as isize);
+            if Some(self_name.as_str()) != other_name.as_ref().and_then(|v| v.as_str()) {
+                return false;
+            }
+        }
+        true
+    }
+
+    fn clone_repr(&self) -> Box<dyn TupleRepr> {
         Box::new(ColumnNamesAsTuple {
-            names: self.names.clone(),
+            of_table: Arc::clone(&self.of_table),
         })
     }
 }
@@ -75,6 +169,18 @@ impl TupleRepr for ColumnNamesAsTuple {
 #[derive(Debug)]
 struct ColumnsAsTuple {
     of_table: Arc<TableRepr>,
+}
+
+impl ColumnsAsTuple {
+    pub fn of_table(of_table: &Arc<TableRepr>) -> Self {
+        Self {
+            of_table: Arc::clone(of_table),
+        }
+    }
+
+    pub fn into_tuple(self) -> Tuple {
+        Tuple(Box::new(self))
+    }
 }
 
 impl TupleRepr for ColumnsAsTuple {
@@ -127,17 +233,14 @@ impl MappedSequence for Columns {
     }
 
     fn keys(&self) -> Option<Tuple> {
-        let column_names = ColumnNamesAsTuple::of_table(&self.of_table);
-        Some(Tuple(column_names))
+        let column_names = ColumnNamesAsTuple::of_table(&self.of_table).into_tuple();
+        Some(column_names)
     }
 
     fn items(&self) -> Option<Tuple> {
-        let column_names = ColumnNamesAsTuple::of_table(&self.of_table);
-        let columns = ColumnsAsTuple {
-            of_table: Arc::clone(&self.of_table),
-        };
-        let zipped = ZippedTupleRepr::new(column_names, Box::new(columns));
-        let items = Tuple(Box::new(zipped));
+        let column_names = ColumnNamesAsTuple::of_table(&self.of_table).into_tuple();
+        let columns = ColumnsAsTuple::of_table(&self.of_table).into_tuple();
+        let items = ZippedTupleRepr::from_tuples(&column_names, &columns).into_tuple();
         Some(items)
     }
 }

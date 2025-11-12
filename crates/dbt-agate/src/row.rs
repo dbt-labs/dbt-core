@@ -76,8 +76,8 @@ impl MappedSequence for Row {
     }
 
     fn keys(&self) -> Option<Tuple> {
-        let column_names = ColumnNamesAsTuple::of_table(&self.of_table);
-        Some(Tuple(column_names))
+        let column_names = ColumnNamesAsTuple::of_table(&self.of_table).into_tuple();
+        Some(column_names)
     }
 }
 

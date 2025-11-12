@@ -6,7 +6,7 @@ use std::{
     sync::Arc,
 };
 
-use dbt_agate::{AgateTable, print_table};
+use dbt_agate::AgateTable;
 use dbt_common::{
     ErrorCode,
     io_args::IoArgs,
@@ -1122,10 +1122,13 @@ impl Object for Exceptions {
                 let sql_columns = args.get::<Value>("sql_columns").unwrap_or(Value::UNDEFINED);
                 let column_diff_table: &Arc<AgateTable> =
                     get_contract_mismatches(yaml_columns, sql_columns)?;
-                //  print_table(table, max_rows, max_columns, max_column_width)
-                let column_diff_string = print_table(column_diff_table.as_ref(), 50, 50, 50)?;
-                let message = format!(
-                    "This model has an enforced contract that failed.\n Please ensure the name, data_type, and number of columns in your contract match the columns in your model's definition.\n\n {column_diff_string}"
+                let column_diff_display = column_diff_table
+                    .display()
+                    .with_max_rows(50)
+                    .with_max_columns(50)
+                    .with_max_column_width(50);
+                let message = format_args!(
+                    "This model has an enforced contract that failed.\n Please ensure the name, data_type, and number of columns in your contract match the columns in your model's definition.\n\n {column_diff_display}"
                 );
                 if let Some((node_id, file_path)) = node_metadata_from_state(state) {
                     Err(Error::new(

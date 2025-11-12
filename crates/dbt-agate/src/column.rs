@@ -104,6 +104,18 @@ impl Column {
             .column_without_nulls_sorted(self.index as isize);
         ColumnAsTuple::from_single_column_table(table)
     }
+
+    pub fn data_type(&self) -> Option<&String> {
+        self.of_table.column_type(self.index as isize)
+    }
+
+    pub fn select_values(&self, indices: &[u64]) -> Vec<Value> {
+        let converter = self.of_table.column_converter(self.index);
+        indices
+            .iter()
+            .map(|idx| converter.to_value(*idx as usize))
+            .collect()
+    }
 }
 
 impl MappedSequence for Column {
@@ -140,8 +152,7 @@ impl Object for Column {
                     .of_table
                     .column_name(self.index as isize)
                     .map(Value::from),
-                // An instance of `AgateDataType`.
-                "data_type" => todo!("Column::data_type"),
+                "data_type" => self.data_type().map(Value::from),
                 _ => MappedSequence::get_value(self, key),
             }
         } else {
