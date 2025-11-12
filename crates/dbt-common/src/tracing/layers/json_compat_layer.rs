@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 use dbt_error::ErrorCode;
 use dbt_telemetry::{
-    Invocation, LogMessage, LogRecordInfo, QueryExecuted, SeverityNumber, SpanEndInfo,
-    UserLogMessage,
+    Invocation, ListItemOutput, LogMessage, LogRecordInfo, QueryExecuted, SeverityNumber,
+    SpanEndInfo, UserLogMessage,
 };
 use serde_json::json;
 use tracing::level_filters::LevelFilter;
@@ -279,6 +279,29 @@ impl TelemetryConsumer for JsonCompatLayer {
                 "info": info_json,
                 "data": {
                     "msg": log_record.body, // Yes, duplicate the message here as well
+                }
+            })
+            .to_string();
+
+            self.writer.writeln(value.as_str());
+            return;
+        }
+
+        // Handle ListItemOutput events (from dbt list command)
+        // These map to PrintEvent (Z052) for backward compatibility
+        if let Some(list_item) = log_record.attributes.downcast_ref::<ListItemOutput>() {
+            let info_json = serde_json::to_value(self.build_core_event_info(
+                Some("Z052"),
+                Some("PrintEvent"),
+                &log_record.severity_text,
+                list_item.content.clone(),
+            ))
+            .expect("Failed to serialize core event info to JSON");
+
+            let value = json!({
+                "info": info_json,
+                "data": {
+                    "msg": &list_item.content, // Use content from event for backward compatibility
                 }
             })
             .to_string();

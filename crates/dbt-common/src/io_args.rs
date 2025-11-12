@@ -638,6 +638,85 @@ pub enum DisplayFormat {
     Path,
 }
 
+/// Output format for the list command. This is a subset of DisplayFormat
+/// that only includes formats supported by the list command.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Serialize,
+    Deserialize,
+    Hash,
+    Eq,
+    ValueEnum,
+    Default,
+    EnumIter,
+    strum_macros::IntoStaticStr,
+)]
+#[strum(serialize_all = "lowercase")]
+#[serde(rename_all = "lowercase")]
+#[clap(rename_all = "lowercase")]
+pub enum ListOutputFormat {
+    /// Output nodes as JSON objects with customizable keys
+    Json,
+    /// Output nodes as selector strings (e.g. "source:pkg.source_name.table_name")
+    #[default]
+    Selector,
+    /// Output nodes as search names (node.search_name)
+    Name,
+    /// Output nodes as file paths (node.original_file_path)
+    Path,
+}
+
+impl From<ListOutputFormat> for DisplayFormat {
+    fn from(format: ListOutputFormat) -> Self {
+        match format {
+            ListOutputFormat::Json => DisplayFormat::Json,
+            ListOutputFormat::Selector => DisplayFormat::Selector,
+            ListOutputFormat::Name => DisplayFormat::Name,
+            ListOutputFormat::Path => DisplayFormat::Path,
+        }
+    }
+}
+
+impl TryFrom<DisplayFormat> for ListOutputFormat {
+    type Error = ();
+
+    fn try_from(format: DisplayFormat) -> Result<Self, Self::Error> {
+        match format {
+            DisplayFormat::Json => Ok(ListOutputFormat::Json),
+            DisplayFormat::Selector => Ok(ListOutputFormat::Selector),
+            DisplayFormat::Name => Ok(ListOutputFormat::Name),
+            DisplayFormat::Path => Ok(ListOutputFormat::Path),
+            _ => Err(()),
+        }
+    }
+}
+
+impl From<ListOutputFormat> for dbt_telemetry::ListOutputFormat {
+    fn from(format: ListOutputFormat) -> Self {
+        match format {
+            ListOutputFormat::Json => Self::Json,
+            ListOutputFormat::Selector => Self::Selector,
+            ListOutputFormat::Name => Self::Name,
+            ListOutputFormat::Path => Self::Path,
+        }
+    }
+}
+
+impl ListOutputFormat {
+    pub fn supported_formats() -> impl Iterator<Item = &'static str> {
+        use strum::IntoEnumIterator;
+
+        Self::iter().map(|f| f.into())
+    }
+
+    pub fn supported_formats_display() -> String {
+        Self::supported_formats().collect::<Vec<_>>().join(", ")
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum ReplayMode {
     DbtReplay(PathBuf),
@@ -806,7 +885,7 @@ impl ShowOptions {
             ShowOptions::Schedule => BLUE.apply_to("Schedule").to_string(),
             ShowOptions::Instructions => BLUE.apply_to("Instruction").to_string(),
             ShowOptions::SourcedSchemas => BLUE.apply_to("Sourced schemas").to_string(),
-            ShowOptions::Nodes => BLUE.apply_to("Selected nodes").to_string(),
+            ShowOptions::Nodes => "Selected nodes".to_string(),
             // remark: we don't use this case, but use compile time and runtime stats
             ShowOptions::Stats => BLUE.apply_to("Statistics").to_string(),
             // remark: these come with own titles..

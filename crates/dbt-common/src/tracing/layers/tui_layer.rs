@@ -1,13 +1,14 @@
 use std::{
     collections::HashSet,
     io::{self, Write},
+    sync::atomic::{AtomicBool, Ordering},
 };
 
 use console::Term;
 use dbt_telemetry::{
-    ExecutionPhase, Invocation, LogMessage, LogRecordInfo, NodeEvaluated, NodeOutcome,
-    NodeOutcomeDetail, NodeType, PhaseExecuted, SeverityNumber, SpanEndInfo, SpanStartInfo,
-    SpanStatus, StatusCode, TelemetryAttributes, UserLogMessage,
+    ExecutionPhase, Invocation, ListItemOutput, LogMessage, LogRecordInfo, NodeEvaluated,
+    NodeOutcome, NodeOutcomeDetail, NodeType, PhaseExecuted, SeverityNumber, SpanEndInfo,
+    SpanStartInfo, SpanStatus, StatusCode, TelemetryAttributes, UserLogMessage,
 };
 
 use dbt_error::ErrorCode;
@@ -15,7 +16,7 @@ use tracing::level_filters::LevelFilter;
 
 use crate::{
     constants::{ANALYZING, RENDERING, RUNNING},
-    io_args::ShowOptions,
+    io_args::{FsCommand, ShowOptions},
     logging::{LogFormat, StatEvent, TermEvent, with_suspended_progress_bars},
     tracing::{
         data_provider::DataProvider,
@@ -33,11 +34,12 @@ pub fn build_tui_layer(
     max_log_verbosity: LevelFilter,
     log_format: LogFormat,
     show_options: HashSet<ShowOptions>,
+    command: FsCommand,
 ) -> ConsumerLayer {
     // Enables progress bar for now.
     let is_interactive = log_format == LogFormat::Default;
 
-    Box::new(TuiLayer::new(is_interactive, show_options).with_filter(max_log_verbosity))
+    Box::new(TuiLayer::new(is_interactive, show_options, command).with_filter(max_log_verbosity))
 }
 
 /// Holds a vector of strings to be printed at the end of the invocation
@@ -61,10 +63,17 @@ pub struct TuiLayer {
     /// Enables progress bar for now.
     is_interactive: bool,
     show_options: HashSet<ShowOptions>,
+    command: FsCommand,
+    /// Track if we've emitted the list header yet
+    list_header_emitted: AtomicBool,
 }
 
 impl TuiLayer {
-    pub fn new(is_interactive: bool, show_options: HashSet<ShowOptions>) -> Self {
+    pub fn new(
+        is_interactive: bool,
+        show_options: HashSet<ShowOptions>,
+        command: FsCommand,
+    ) -> Self {
         let stdout_term = Term::stdout();
         let is_interactive = is_interactive && stdout_term.is_term();
         let max_term_line_width = stdout_term.size_checked().map(|(_, cols)| cols as usize);
@@ -73,6 +82,8 @@ impl TuiLayer {
             max_term_line_width,
             is_interactive,
             show_options,
+            command,
+            list_header_emitted: AtomicBool::new(false),
         }
     }
 }
@@ -339,6 +350,34 @@ impl TelemetryConsumer for TuiLayer {
                     .write_all(log_record.body.as_bytes())
                     .expect("failed to write to stdout");
             });
+
+            return;
+        }
+
+        // Handle ListItemOutput - only show if ShowOptions::Nodes is enabled
+        if let Some(list_item) = log_record.attributes.downcast_ref::<ListItemOutput>() {
+            if self.show_options.contains(&ShowOptions::Nodes) || self.command == FsCommand::List {
+                with_suspended_progress_bars(|| {
+                    let mut stdout = io::stdout().lock();
+
+                    // Emit header once before first list item
+                    if !self.list_header_emitted.swap(true, Ordering::Relaxed) {
+                        let header = format_delimiter(
+                            &ShowOptions::Nodes.title(),
+                            self.max_term_line_width,
+                            true,
+                        );
+                        stdout
+                            .write_all(format!("{}\n", header).as_bytes())
+                            .expect("failed to write header to stdout");
+                    }
+
+                    // Print list item content
+                    stdout
+                        .write_all(format!("{}\n", list_item.content).as_bytes())
+                        .expect("failed to write to stdout");
+                });
+            }
 
             return;
         }

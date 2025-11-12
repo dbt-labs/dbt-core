@@ -1,23 +1,28 @@
 use chrono::{DateTime, Utc};
 use dbt_error::ErrorCode;
 use dbt_telemetry::{
-    Invocation, LogMessage, LogRecordInfo, NodeEvaluated, NodeOutcome, NodeOutcomeDetail, NodeType,
-    QueryExecuted, SeverityNumber, SpanEndInfo, SpanStartInfo, UserLogMessage,
+    Invocation, ListItemOutput, LogMessage, LogRecordInfo, NodeEvaluated, NodeOutcome,
+    NodeOutcomeDetail, NodeType, QueryExecuted, SeverityNumber, SpanEndInfo, SpanStartInfo,
+    UserLogMessage,
 };
-use std::time::SystemTime;
+use std::{
+    sync::atomic::{AtomicBool, Ordering},
+    time::SystemTime,
+};
 use tracing::level_filters::LevelFilter;
 
 use super::super::{
     background_writer::BackgroundWriter,
     data_provider::DataProvider,
     formatters::{
-        invocation::format_invocation_summary, log_message::format_log_message,
+        format_delimiter, invocation::format_invocation_summary, log_message::format_log_message,
         test_result::format_test_failure,
     },
     layer::{ConsumerLayer, TelemetryConsumer},
     shared_writer::SharedWriter,
     shutdown::TelemetryShutdownItem,
 };
+use crate::io_args::ShowOptions;
 
 /// Format a timestamp in ISO format with microseconds: HH:MM:SS.microseconds
 fn format_timestamp(time: SystemTime) -> String {
@@ -62,12 +67,15 @@ pub fn build_file_log_layer_with_background_writer<W: std::io::Write + Send + 's
 
 pub struct FileLogLayer {
     writer: Box<dyn SharedWriter>,
+    /// Track if we've emitted the list header yet
+    list_header_emitted: AtomicBool,
 }
 
 impl FileLogLayer {
     pub fn new<W: SharedWriter + 'static>(writer: W) -> Self {
         Self {
             writer: Box::new(writer),
+            list_header_emitted: AtomicBool::new(false),
         }
     }
 
@@ -190,6 +198,23 @@ impl TelemetryConsumer for FileLogLayer {
                 log_record.time_unix_nano,
                 log_record.severity_number,
                 std::slice::from_ref(&log_record.body),
+            );
+            return;
+        }
+
+        // Handle ListItemOutput events (from dbt list command)
+        if let Some(list_item) = log_record.attributes.downcast_ref::<ListItemOutput>() {
+            // Emit header once before first list item
+            if !self.list_header_emitted.swap(true, Ordering::Relaxed) {
+                let header = format_delimiter(&ShowOptions::Nodes.title(), None, false);
+                self.writer.writeln(&header);
+            }
+
+            // Write list item content to file log
+            self.write_log_lines(
+                log_record.time_unix_nano,
+                log_record.severity_number,
+                std::slice::from_ref(&list_item.content),
             );
         }
     }

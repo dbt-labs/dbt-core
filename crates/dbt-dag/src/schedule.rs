@@ -3,11 +3,20 @@ use std::{
     fmt,
 };
 
-use dbt_common::{io_args::DisplayFormat, node_selector::SelectExpression};
+use dbt_common::{io_args::ListOutputFormat, node_selector::SelectExpression};
 use dbt_schemas::schemas::Nodes;
 use serde_json::Map;
 
 type JsonValue = serde_json::Value;
+
+/// Represents a single node in the list command output
+#[derive(Debug, Clone)]
+pub struct ListItem {
+    /// The unique_id of the node (e.g., "model.my_project.my_model")
+    pub unique_id: String,
+    /// The formatted content to display
+    pub content: String,
+}
 
 #[derive(Debug, Clone, Default)]
 pub struct Schedule<T> {
@@ -114,37 +123,28 @@ impl Schedule<String> {
     pub fn show_dbt_nodes(
         &self,
         nodes: &Nodes,
-        output_format: DisplayFormat,
+        output_format: ListOutputFormat,
         output_keys: &[String],
-    ) -> Vec<String> {
+    ) -> Vec<ListItem> {
         let mut res = Vec::new();
         for selected_id in &self.selected_nodes {
             let node = nodes
                 .get_node(selected_id)
                 .expect("selected node not in manifest");
-            match output_format {
-                DisplayFormat::Json => {
+            let content = match output_format {
+                ListOutputFormat::Json => {
                     let node_yaml_value = dbt_serde_yaml::to_value(node.serialize()).unwrap();
                     let node_value = serde_json::to_value(node_yaml_value).unwrap();
-                    let json_string = Self::generate_json_output(&node_value, output_keys);
-                    res.push(json_string);
+                    Self::generate_json_output(&node_value, output_keys)
                 }
-                DisplayFormat::Selector => {
-                    res.push(node.selector_string());
-                }
-                DisplayFormat::Name => {
-                    res.push(node.search_name());
-                }
-                DisplayFormat::Path => {
-                    res.push(node.file_path());
-                }
-                // Handle other DisplayFormat variants if necessary (Csv, Tsv, Yml, Table)
-                // For now, default them to FQN output for backward compatibility
-                _ => {
-                    // Default to Selector for other formats for now
-                    res.push(node.selector_string());
-                }
-            }
+                ListOutputFormat::Selector => node.selector_string(),
+                ListOutputFormat::Name => node.search_name(),
+                ListOutputFormat::Path => node.file_path(),
+            };
+            res.push(ListItem {
+                unique_id: selected_id.clone(),
+                content,
+            });
         }
         res
     }

@@ -126,6 +126,9 @@ pub struct ArrowAttributes<'a> {
     pub query_error_vendor_code: Option<i32>,
     /// Associated content hash (e.g. can be CAS hash for artifacts stored in CAS).
     pub content_hash: Option<Cow<'a, str>>,
+    // Formatted output fields (e.g. `list` command)
+    pub output_format: Option<Cow<'a, str>>,
+    pub content: Option<Cow<'a, str>>,
 }
 
 #[inline]
@@ -434,6 +437,9 @@ fn create_arrow_schema() -> (Vec<FieldRef>, Vec<FieldRef>) {
         Field::new("query_error_vendor_code", DataType::Int32, true),
         // Content hash (e.g. CAS hash for artifacts stored in CAS)
         large_utf8_field("content_hash", true),
+        // List command output fields
+        dict_utf8_field("output_format", true),
+        large_utf8_field("content", true),
     ]);
 
     // Top-level fields for ArrowTelemetryRecord

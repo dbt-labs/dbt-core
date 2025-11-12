@@ -22,7 +22,7 @@ use crate::{
         DBT_DEAFULT_LOG_FILE_NAME, DBT_DEAFULT_QUERY_LOG_FILE_NAME, DBT_LOG_DIR_NAME,
         DBT_METADATA_DIR_NAME, DBT_PROJECT_YML, DBT_TARGET_DIR_NAME,
     },
-    io_args::{IoArgs, ShowOptions},
+    io_args::{FsCommand, IoArgs, ShowOptions},
     io_utils::determine_project_dir,
     logging::LogFormat,
     tracing::middlewares::parse_error_filter::TelemetryParsingErrorFilter,
@@ -39,6 +39,8 @@ use tracing::level_filters::LevelFilter;
 pub struct FsTraceConfig {
     /// Name of the package emitting the telemetry, e.g. `dbt-cli` or `dbt-lsp`
     pub(super) package: &'static str,
+    /// The command being executed, e.g. "run", "compile", "list"
+    pub(super) command: FsCommand,
     /// Tracing level filter, which specifies maximum verbosity (inverse
     /// of log level) for tui & jsonl log sinks.
     pub(super) max_log_verbosity: LevelFilter,
@@ -79,6 +81,7 @@ impl Default for FsTraceConfig {
     fn default() -> Self {
         Self {
             package: "unknown",
+            command: FsCommand::Unset,
             max_log_verbosity: LevelFilter::INFO,
             max_file_log_verbosity: LevelFilter::DEBUG,
             otel_file_path: None,
@@ -127,6 +130,7 @@ impl FsTraceConfig {
     /// # Arguments
     ///
     /// * `package` - Static string identifying the package emitting telemetry (e.g., "dbt", "dbt-lsp")
+    /// * `command` - Command being executed (e.g., "run", "compile", "list")
     /// * `project_dir` - Optional path to the dbt project directory. If None, attempts to auto-detect
     ///   from current working directory using `dbt_project.yml` as a marker
     /// * `target_path` - Optional path to the target directory for outputs. If None, defaults to
@@ -185,6 +189,7 @@ impl FsTraceConfig {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         package: &'static str,
+        command: FsCommand,
         project_dir: Option<&PathBuf>,
         target_path: Option<&PathBuf>,
         log_path: Option<&PathBuf>,
@@ -217,6 +222,7 @@ impl FsTraceConfig {
 
         Self {
             package,
+            command,
             max_log_verbosity,
             max_file_log_verbosity,
             otel_file_path: otel_file_name.map(|file_name| log_dir_path.join(file_name)),
@@ -254,6 +260,7 @@ impl FsTraceConfig {
 
         Self::new(
             package,
+            io_args.command,
             project_dir,
             target_path,
             io_args.log_path.as_ref(),
@@ -348,6 +355,7 @@ impl FsTraceConfig {
                         self.max_log_verbosity,
                         self.log_format,
                         self.show_options.clone(),
+                        self.command,
                     ))
                 }
                 LogFormat::Json => {

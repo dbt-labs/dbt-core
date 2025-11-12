@@ -180,32 +180,6 @@ macro_rules! show_result_with_default_title {
 }
 
 #[macro_export]
-macro_rules! show_list_result_with_default_title {
-    ( $io:expr, $option:expr, $list_result:expr) => {{
-        use $crate::io_args::ShowOptions;
-        use $crate::pretty_string::BLUE;
-        if $io.should_show($option) {
-            $crate::_log!(
-                $crate::macros::log_adapter::log::Level::Info,
-                "\n{}",
-                BLUE.apply_to($option.title())
-            );
-
-            for item in $list_result {
-                $crate::_log!(
-                    $crate::macros::log_adapter::log::Level::Info,
-                    _INVOCATION_ID_ = $io.invocation_id.as_u128(),
-                    name = "PrintEvent",
-                    code = "Z052";
-                    "{}",
-                    item
-                );
-            }
-        }
-    }};
-}
-
-#[macro_export]
 macro_rules! show_result_with_title {
     ( $io:expr, $option:expr, $title: expr, $artifact:expr) => {{
         use $crate::io_args::ShowOptions;

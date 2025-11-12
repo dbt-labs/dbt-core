@@ -21,6 +21,77 @@ impl ::prost::Name for CompiledCodeInline {
         "/v1.public.events.fusion.log.CompiledCodeInline".into()
     }
 }
+/// Event emitted for each item in a list command output.
+/// This event replaces the dbt-core PrintEvent (Z052) for list operations.
+#[cfg_attr(any(test, feature = "test-utils"), derive(::fake::Dummy))]
+#[derive(crate::macros::ProtoNew)]
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ListItemOutput {
+    /// Format of the output
+    #[prost(enumeration = "ListOutputFormat", tag = "1")]
+    #[cfg_attr(
+        any(test, feature = "test-utils"),
+        dummy(expr = "::fake::Fake::fake::<ListOutputFormat>(&::fake::Faker) as i32")
+    )]
+    pub output_format: i32,
+    /// The actual content of the list item being displayed
+    #[prost(string, tag = "2")]
+    pub content: ::prost::alloc::string::String,
+    /// The unique_id of the node being listed (e.g., "model.my_project.my_model")
+    #[prost(string, optional, tag = "3")]
+    pub unique_id: ::core::option::Option<::prost::alloc::string::String>,
+}
+impl crate::StaticName for ListItemOutput {
+    const FULL_NAME: &'static str = "v1.public.events.fusion.log.ListItemOutput";
+    const TYPE_URL: &'static str = "/v1.public.events.fusion.log.ListItemOutput";
+}
+impl ::prost::Name for ListItemOutput {
+    const NAME: &'static str = "ListItemOutput";
+    const PACKAGE: &'static str = "v1.public.events.fusion.log";
+    fn full_name() -> ::prost::alloc::string::String {
+        "v1.public.events.fusion.log.ListItemOutput".into()
+    }
+    fn type_url() -> ::prost::alloc::string::String {
+        "/v1.public.events.fusion.log.ListItemOutput".into()
+    }
+}
+/// Output format for list command
+#[cfg_attr(any(test, feature = "test-utils"), derive(::fake::Dummy))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum ListOutputFormat {
+    Unspecified = 0,
+    Json = 1,
+    Selector = 2,
+    Name = 3,
+    Path = 4,
+}
+impl ListOutputFormat {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "LIST_OUTPUT_FORMAT_UNSPECIFIED",
+            Self::Json => "LIST_OUTPUT_FORMAT_JSON",
+            Self::Selector => "LIST_OUTPUT_FORMAT_SELECTOR",
+            Self::Name => "LIST_OUTPUT_FORMAT_NAME",
+            Self::Path => "LIST_OUTPUT_FORMAT_PATH",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "LIST_OUTPUT_FORMAT_UNSPECIFIED" => Some(Self::Unspecified),
+            "LIST_OUTPUT_FORMAT_JSON" => Some(Self::Json),
+            "LIST_OUTPUT_FORMAT_SELECTOR" => Some(Self::Selector),
+            "LIST_OUTPUT_FORMAT_NAME" => Some(Self::Name),
+            "LIST_OUTPUT_FORMAT_PATH" => Some(Self::Path),
+            _ => None,
+        }
+    }
+}
 /// Generic event for log messages that do not cary special meaning
 /// or additional metadata beyond the standard fields
 #[cfg_attr(any(test, feature = "test-utils"), derive(::fake::Dummy))]
