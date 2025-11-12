@@ -78,15 +78,13 @@ use dbt_serde_yaml::Value as YmlValue;
 pub async fn resolve(
     arg: &ResolveArgs,
     invocation_args: &InvocationArgs,
-    dbt_state: DbtState,
+    dbt_state: Arc<DbtState>,
     macros: Macros,
     nodes: Nodes,
     token: &CancellationToken,
     jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
 ) -> FsResult<(ResolverState, Arc<JinjaEnv>)> {
     let _pb = with_progress!(arg.io, spinner => RESOLVING);
-
-    let dbt_state = Arc::new(dbt_state);
 
     // Get the root project name
     let root_project_name = dbt_state.root_project_name();

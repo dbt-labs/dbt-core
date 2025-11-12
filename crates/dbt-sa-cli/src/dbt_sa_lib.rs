@@ -235,7 +235,7 @@ async fn execute_all_phases(
     let (resolved_state, _jinja_env) = resolve(
         &resolve_args,
         &invocation_args,
-        dbt_state,
+        Arc::new(dbt_state),
         Macros::default(),
         Nodes::default(),
         token,
