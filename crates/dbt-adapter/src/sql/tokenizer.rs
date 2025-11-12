@@ -46,10 +46,20 @@ pub(crate) fn tokenize(actual: &str) -> Vec<Token> {
 
     for c in actual.chars() {
         match c {
-            ' ' | '\t' | '\n' | '\r' => {
+            ' ' | '\t' | '\r' => {
                 if !current_token.is_empty() {
                     tokens.push(current_token);
                 }
+                current_token = Token::new();
+            }
+            '\n' => {
+                if !current_token.is_empty() {
+                    tokens.push(current_token);
+                }
+                tokens.push(Token {
+                    value: "\n".to_string(),
+                    maybe_hash: false,
+                });
                 current_token = Token::new();
             }
             '.' | '_' => {
@@ -246,7 +256,7 @@ pub(crate) fn abstract_tokenize(tokens: Vec<Token>) -> Vec<AbstractToken> {
             assert!(tokens.get(index + 3).unwrap().matches("from"));
             assert!(tokens.get(index + 4).unwrap().matches("("));
             index += 5;
-            if tokens.get(index).unwrap().matches("with") {
+            if tokens.get(index).unwrap().value.to_lowercase() == "with" {
                 index += 1;
                 abstract_tokens.push(AbstractToken::Token(Token {
                     value: ",".to_string(),

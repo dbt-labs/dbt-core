@@ -43,8 +43,11 @@ fn fuzzy_compare_sql(actual: &str, expected: &str) -> bool {
     let actual_tokens = tokenize(actual);
     let expected_tokens = tokenize(expected);
 
-    let actual_abstract_tokens = abstract_tokenize(actual_tokens);
-    let expected_abstract_tokens = abstract_tokenize(expected_tokens);
+    let actual_tokens_without_comments = eliminate_comments(actual_tokens);
+    let expected_tokens_without_comments = eliminate_comments(expected_tokens);
+
+    let actual_abstract_tokens = abstract_tokenize(actual_tokens_without_comments);
+    let expected_abstract_tokens = abstract_tokenize(expected_tokens_without_comments);
 
     let mut actual_index = 0;
     let mut expected_index = 0;
@@ -67,7 +70,10 @@ fn fuzzy_compare_sql(actual: &str, expected: &str) -> bool {
             (AbstractToken::Token(actual_token), AbstractToken::Token(expected_token)) => {
                 let actual_token_value = actual_token.value.clone();
                 let expected_token_value = expected_token.value.clone();
-                if actual_token_value == expected_token_value {
+                if actual_token_value == expected_token_value
+                    || (actual_token_value.to_lowercase() == "with"
+                        && expected_token_value.to_lowercase() == "with")
+                {
                     actual_abstract_token = None;
                     expected_abstract_token = None;
                     actual_index += 1;
@@ -205,6 +211,25 @@ fn fuzzy_compare_sql(actual: &str, expected: &str) -> bool {
     false
 }
 
+fn eliminate_comments(tokens: Vec<Token>) -> Vec<Token> {
+    let mut result = Vec::new();
+    let mut in_comment = false;
+    for token in tokens {
+        if token.matches("\n") {
+            if in_comment {
+                in_comment = false;
+            }
+        } else if token.value.starts_with("--") {
+            in_comment = true;
+            if token.value.starts_with("--EPHEMERAL-SELECT-WRAPPER") {
+                result.push(token);
+            }
+        } else if !in_comment {
+            result.push(token);
+        }
+    }
+    result
+}
 fn generate_visual_sql_diff(actual: &str, expected: &str) -> String {
     let mut diff_output = String::new();
     diff_output.push_str("Visual SQL Diff (ignoring all whitespace):\n");
@@ -672,6 +697,112 @@ select *
 from aggregated
     )
 ;"#;
+        let result = compare_sql(sql1, sql2);
+        assert!(result.is_ok(), "Should match");
+    }
+
+    #[test]
+    fn test_comment_in_ephemeral_model() {
+        let sql1 = r#"
+create or replace  temporary view DB.SCHEMA.model_name__dbt_tmp
+  
+   as (
+    with __dbt__cte__stg_source_a as (
+SELECT
+  *
+FROM
+  source_db.metadata.table_a
+), __dbt__cte__stg_source_b as (
+SELECT 
+  *
+FROM
+  source_db.metadata.table_b
+)
+--EPHEMERAL-SELECT-WRAPPER-START
+select * from (
+
+
+-- Do not allow a full refresh of this model
+
+  
+
+
+-- This model contains aggregated statistics
+-- Every day, the data is extracted and stored for analysis
+
+WITH aggregated_data AS (
+  SELECT 
+    entity_id
+    , COUNT(DISTINCT field_name) as field_count
+  FROM 
+    __dbt__cte__stg_source_a
+  GROUP BY entity_id
+)
+
+SELECT
+  t.schema_name
+  , t.entity_name
+  , t.num_rows
+  , t.size_bytes
+  , s.field_count
+  , CURRENT_DATE() AS snapshot_date
+FROM
+  __dbt__cte__stg_source_b t
+LEFT OUTER JOIN 
+  aggregated_data s ON t.entity_id = s.entity_id
+--EPHEMERAL-SELECT-WRAPPER-END
+)
+  );
+"#;
+        let sql2 = r#"
+create or replace  temporary view DB.SCHEMA.model_name__dbt_tmp
+  
+  
+  
+  
+  as (
+    
+
+-- Do not allow a full refresh of this model
+
+  
+
+
+-- This model contains aggregated statistics
+-- Every day, the data is extracted and stored for analysis
+
+WITH  __dbt__cte__stg_source_a as (
+SELECT
+  *
+FROM
+  source_db.metadata.table_a
+),  __dbt__cte__stg_source_b as (
+SELECT 
+  *
+FROM
+  source_db.metadata.table_b
+), aggregated_data AS (
+  SELECT 
+    entity_id
+    , COUNT(DISTINCT field_name) as field_count
+  FROM 
+    __dbt__cte__stg_source_a
+  GROUP BY entity_id
+)
+
+SELECT
+  t.schema_name
+  , t.entity_name
+  , t.num_rows
+  , t.size_bytes
+  , s.field_count
+  , CURRENT_DATE() AS snapshot_date
+FROM
+  __dbt__cte__stg_source_b t
+LEFT OUTER JOIN 
+  aggregated_data s ON t.entity_id = s.entity_id
+  );
+"#;
         let result = compare_sql(sql1, sql2);
         assert!(result.is_ok(), "Should match");
     }
