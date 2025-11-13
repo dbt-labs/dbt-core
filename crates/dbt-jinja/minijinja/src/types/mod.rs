@@ -92,8 +92,8 @@ pub enum Type {
     /// Object type
     Object(DynObject),
     // TODO(serramatutu): remove this
-    /// StdColumn type
-    StdColumn,
+    /// Column type
+    Column,
     /// Namespace type
     Namespace(String),
 }
@@ -124,7 +124,7 @@ impl fmt::Debug for Type {
             Self::Kwargs(arg0) => f.debug_tuple("Kwargs").field(arg0).finish(),
             Self::Frame => write!(f, "Frame"),
             Self::Object(arg0) => f.write_fmt(format_args!("{arg0:?}")),
-            Self::StdColumn => write!(f, "StdColumn"),
+            Self::Column => write!(f, "Column"),
             Self::Namespace(name) => write!(f, "Namespace({name})"),
         }
     }

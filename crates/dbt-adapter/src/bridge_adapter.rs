@@ -1,7 +1,7 @@
 use crate::base_adapter::{AdapterType, AdapterTyping};
 use crate::cache::RelationCache;
 use crate::cast_util::downcast_value_to_dyn_base_relation;
-use crate::columns::StdColumn;
+use crate::column::Column;
 use crate::funcs::{
     dispatch_adapter_calls, dispatch_adapter_get_value, execute_macro, execute_macro_wrapper,
     none_value,
@@ -1524,7 +1524,7 @@ impl BaseAdapter for BridgeAdapter {
         let model_columns = parser.get::<Value>("model_columns")?;
 
         let existing_columns =
-            StdColumn::vec_from_jinja_value(AdapterType::Databricks, existing_columns).map_err(
+            Column::vec_from_jinja_value(AdapterType::Databricks, existing_columns).map_err(
                 |e| MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string()),
             )?;
         let model_columns =

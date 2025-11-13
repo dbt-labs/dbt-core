@@ -242,7 +242,7 @@ impl BigqueryPartitionConfig {
         } else {
             Err(MinijinjaError::new(
                 MinijinjaErrorKind::InvalidArgument,
-                "columns must be a list of StdColumn",
+                "columns must be a list of Column",
             ))
         }
     }

@@ -11,7 +11,7 @@ use crate::databricks::relation_configs::streaming_table::StreamingTableConfig;
 use crate::databricks::relation_configs::view::ViewConfig;
 
 use crate::catalog_relation::CatalogRelation;
-use crate::columns::StdColumn;
+use crate::column::Column;
 use crate::databricks::relation::DatabricksRelation;
 use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
 use crate::funcs::execute_macro_wrapper_with_package;
@@ -309,7 +309,7 @@ impl TypedBaseAdapter for DatabricksAdapter {
         &self,
         state: &State,
         relation: Arc<dyn BaseRelation>,
-    ) -> AdapterResult<Vec<StdColumn>> {
+    ) -> AdapterResult<Vec<Column>> {
         let result = match execute_macro_wrapper_with_package(
             state,
             &[RelationObject::new(relation).as_value()],
@@ -334,7 +334,7 @@ impl TypedBaseAdapter for DatabricksAdapter {
 
         let columns = (0..name_string_array.len())
             .map(|i| {
-                StdColumn::new(
+                Column::new(
                     AdapterType::Databricks,
                     name_string_array.value(i).to_string(),
                     dtype_string_array.value(i).to_string(),
@@ -597,7 +597,7 @@ impl TypedBaseAdapter for DatabricksAdapter {
     /// we determine which columns to update and persist docs for
     fn get_persist_doc_columns(
         &self,
-        existing_columns: Vec<StdColumn>,
+        existing_columns: Vec<Column>,
         model_columns: IndexMap<String, dbt_schemas::schemas::dbt_column::DbtColumnRef>,
     ) -> AdapterResult<IndexMap<String, dbt_schemas::schemas::dbt_column::DbtColumnRef>> {
         // TODO(jasonlin45): grab comment info as well - we should avoid persisting for comments that are the same for performance reasons

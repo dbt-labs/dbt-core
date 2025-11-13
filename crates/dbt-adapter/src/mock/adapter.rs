@@ -1,6 +1,6 @@
 use crate::SqlEngine;
 use crate::base_adapter::{AdapterType, AdapterTyping};
-use crate::columns::StdColumn;
+use crate::column::Column;
 use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
 use crate::funcs::none_value;
 use crate::metadata::*;
@@ -192,8 +192,8 @@ impl TypedBaseAdapter for MockAdapter {
         &self,
         _state: &State,
         _relation: Arc<dyn BaseRelation>,
-    ) -> AdapterResult<Vec<StdColumn>> {
-        Ok(vec![StdColumn::new(
+    ) -> AdapterResult<Vec<Column>> {
+        Ok(vec![Column::new(
             self.adapter_type(),
             "one".to_string(),  // name
             "text".to_string(), // dtype

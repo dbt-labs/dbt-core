@@ -22,9 +22,9 @@ static LOG_RE: Lazy<Regex> =
 
 /// A struct representing a column type for use with static methods
 #[derive(Clone, Copy, Debug)]
-pub struct StdColumnType(AdapterType);
+pub struct ColumnStatic(AdapterType);
 
-impl Object for StdColumnType {
+impl Object for ColumnStatic {
     fn call_method(
         self: &Arc<Self>,
         _state: &minijinja::State,
@@ -35,7 +35,7 @@ impl Object for StdColumnType {
         match name {
             "create" => self.jinja_create(args),
             "translate_type" => {
-                let iter = ArgsIter::new("StdColumnType.translate_type", &["dtype"], args);
+                let iter = ArgsIter::new("ColumnStatic.translate_type", &["dtype"], args);
                 let dtype = iter.next_arg::<&str>()?;
                 iter.finish()?;
 
@@ -43,7 +43,7 @@ impl Object for StdColumnType {
             }
             "numeric_type" => {
                 let iter = ArgsIter::new(
-                    "StdColumnType.numeric_type",
+                    "ColumnStatic.numeric_type",
                     &["dtype", "precision", "scale"],
                     args,
                 );
@@ -55,7 +55,7 @@ impl Object for StdColumnType {
                 Ok(Value::from(self.numeric_type(dtype, precision, scale)))
             }
             "string_type" => {
-                let iter = ArgsIter::new("StdColumnType.string_type", &["size"], args);
+                let iter = ArgsIter::new("ColumnStatic.string_type", &["size"], args);
                 let size = iter.next_arg::<Option<usize>>()?;
                 iter.finish()?;
 
@@ -63,7 +63,7 @@ impl Object for StdColumnType {
             }
             "from_description" => {
                 let iter = ArgsIter::new(
-                    "StdColumnType.from_description",
+                    "ColumnStatic.from_description",
                     &["name", "raw_data_type"],
                     args,
                 );
@@ -80,7 +80,7 @@ impl Object for StdColumnType {
                 // TODO: ArgsIter
                 let mut args = ArgParser::new(args, None);
                 let columns = args.get::<Value>("columns")?;
-                let columns = StdColumn::vec_from_jinja_value(AdapterType::Databricks, columns)?;
+                let columns = Column::vec_from_jinja_value(AdapterType::Databricks, columns)?;
 
                 Ok(Value::from(self.dbx_format_add_column_list(&columns)?))
             }
@@ -88,14 +88,14 @@ impl Object for StdColumnType {
                 // TODO: ArgsIter
                 let mut args = ArgParser::new(args, None);
                 let columns = args.get::<Value>("columns")?;
-                let columns = StdColumn::vec_from_jinja_value(AdapterType::Databricks, columns)?;
+                let columns = Column::vec_from_jinja_value(AdapterType::Databricks, columns)?;
 
                 Ok(Value::from(self.dbx_format_remove_column_list(&columns)?))
             }
             "get_name" => {
                 let mut args: ArgParser = ArgParser::new(args, None);
                 let column = args.get::<Value>("column")?;
-                // FIXME: why is this DbtColumn and not StdColumn?
+                // FIXME: why is this DbtColumn and not Column?
                 let column = minijinja_value_to_typed_struct::<DbtColumn>(column).map_err(|e| {
                     minijinja::Error::new(
                         minijinja::ErrorKind::SerdeDeserializeError,
@@ -107,7 +107,7 @@ impl Object for StdColumnType {
             }
             _ => Err(minijinja::Error::new(
                 minijinja::ErrorKind::InvalidOperation,
-                format!("Unknown method on StdColumnType: '{name}'"),
+                format!("Unknown method on ColumnStatic: '{name}'"),
             )),
         }
     }
@@ -122,14 +122,14 @@ impl Object for StdColumnType {
     }
 }
 
-impl StdColumnType {
+impl ColumnStatic {
     pub fn new(adapter_type: AdapterType) -> Self {
         Self(adapter_type)
     }
 
     fn jinja_create(&self, args: &[Value]) -> Result<Value, minijinja::Error> {
         let iter = ArgsIter::new(
-            "StdColumnType.create",
+            "ColumnStatic.create",
             &[
                 "name",
                 "label_or_dtype",
@@ -166,8 +166,8 @@ impl StdColumnType {
         char_size: Option<u32>,
         numeric_precision: Option<u64>,
         numeric_scale: Option<u64>,
-    ) -> StdColumn {
-        StdColumn::new(
+    ) -> Column {
+        Column::new(
             self.0,
             name,
             dtype,
@@ -237,10 +237,10 @@ impl StdColumnType {
         &self,
         name: &str,
         raw_data_type: &str,
-    ) -> Result<StdColumn, minijinja::Error> {
+    ) -> Result<Column, minijinja::Error> {
         // TODO(serramatutu): why is this Snowflake specific in non-Snowflake specific trait?
         // It seems like it is used by other adapters as well... (tested with BigQuery)
-        let mut col = StdColumn::try_from_snowflake_raw_data_type(name, raw_data_type)
+        let mut col = Column::try_from_snowflake_raw_data_type(name, raw_data_type)
             .map_err(|msg| minijinja::Error::new(minijinja::ErrorKind::InvalidArgument, msg))?;
         col._adapter_type = self.0;
         Ok(col)
@@ -249,7 +249,7 @@ impl StdColumnType {
     /// https://github.com/databricks/dbt-databricks/blob/822b105b15e644676d9e1f47cbfd765cd4c1541f/dbt/adapters/databricks/column.py#L66
     fn dbx_format_add_column_list(
         self: &Arc<Self>,
-        columns: &[StdColumn],
+        columns: &[Column],
     ) -> Result<String, minijinja::Error> {
         if self.0 != AdapterType::Databricks {
             unimplemented!("Only available for Databricks")
@@ -265,7 +265,7 @@ impl StdColumnType {
     /// https://github.com/databricks/dbt-databricks/blob/822b105b15e644676d9e1f47cbfd765cd4c1541f/dbt/adapters/databricks/column.py#L62
     fn dbx_format_remove_column_list(
         self: &Arc<Self>,
-        columns: &[StdColumn],
+        columns: &[Column],
     ) -> Result<String, minijinja::Error> {
         if self.0 != AdapterType::Databricks {
             unimplemented!("Only available for Databricks")
@@ -315,7 +315,7 @@ impl AsRef<str> for BigqueryColumnMode {
 }
 
 #[derive(Clone, Debug)]
-pub struct StdColumn {
+pub struct Column {
     /// The adapter this column is associated with.
     ///
     /// Instead of using sub-typing and virtual-dispatch as in dbt-adapters, we
@@ -332,7 +332,7 @@ pub struct StdColumn {
     /// Whether this column is an array/repeated field (optional).
     ///
     /// This is important for BigQuery, where a column can be `REPEATED`.
-    /// [StdColumn::mode] provides a unified way to derive the BigQuery mode
+    /// [Column::mode] provides a unified way to derive the BigQuery mode
     /// of a column. BigQuery adopts the Protobuf model of nullability where
     /// repeated fields are always non-nullable because the null state is
     /// represented by an empty array.
@@ -368,7 +368,7 @@ pub struct StdColumn {
     numeric_scale: Option<u64>,
 }
 
-impl StdColumn {
+impl Column {
     #[cfg(test)]
     fn cmp_column(&self, other: &Self) -> bool {
         self._adapter_type == other._adapter_type
@@ -555,7 +555,7 @@ impl StdColumn {
         adapter_type: AdapterType,
         value: Value,
     ) -> Result<Vec<Self>, minijinja::Error> {
-        // First, we attempt to convert the jinja value as a proper StdColumn object so that we
+        // First, we attempt to convert the jinja value as a proper Column object so that we
         // carry the private fields. If that's not possible, that means the object came from a
         // macro or some other thing that serializes the column. In this case, fall back to
         // dbt Core's column spec.
@@ -613,15 +613,12 @@ impl StdColumn {
         }
     }
 
-    pub fn as_static(&self) -> StdColumnType {
-        StdColumnType::new(self._adapter_type)
+    pub fn as_static(&self) -> ColumnStatic {
+        ColumnStatic::new(self._adapter_type)
     }
 
     /// Parse a Snowflake raw data type into a tuple of (data_type, char_size, numeric_precision, numeric_scale)
-    fn try_from_snowflake_raw_data_type(
-        name: &str,
-        raw_data_type: &str,
-    ) -> Result<StdColumn, String> {
+    fn try_from_snowflake_raw_data_type(name: &str, raw_data_type: &str) -> Result<Column, String> {
         // We want to pass through numeric parsing for composite types
         let raw_data_type_trimmed = raw_data_type.trim().to_lowercase();
         if raw_data_type_trimmed.starts_with("array")
@@ -632,7 +629,7 @@ impl StdColumn {
             let (core_dtype, core_data_type) =
                 Self::make_degenerate_types(AdapterType::Snowflake, raw_data_type);
 
-            return Ok(StdColumn {
+            return Ok(Column {
                 _adapter_type: AdapterType::Snowflake,
                 _nullable: None,
                 _repeated: None,
@@ -897,7 +894,7 @@ impl StdColumn {
     /// # Panics
     ///
     /// This function will panic if the column is not a string.
-    pub fn can_expand_to(&self, other: &StdColumn) -> Result<bool, minijinja::Error> {
+    pub fn can_expand_to(&self, other: &Column) -> Result<bool, minijinja::Error> {
         Ok(self.is_string()
             && other.is_string()
             && self
@@ -952,7 +949,7 @@ impl StdColumn {
     }
 }
 
-impl Object for StdColumn {
+impl Object for Column {
     fn call_method(
         self: &Arc<Self>,
         _state: &minijinja::State,
@@ -974,7 +971,7 @@ impl Object for StdColumn {
                 let mut parser = ArgParser::new(args, None);
                 check_num_args(current_function_name!(), &parser, 1, 1)?;
                 let other_raw = parser.get::<Value>("other_column")?;
-                let other = StdColumn::from_jinja_value(self._adapter_type, other_raw)?;
+                let other = Column::from_jinja_value(self._adapter_type, other_raw)?;
                 Ok(Value::from(self.can_expand_to(&other)?))
             }
             // Bigquery only
@@ -982,7 +979,7 @@ impl Object for StdColumn {
 
             _ => Err(minijinja::Error::new(
                 minijinja::ErrorKind::InvalidOperation,
-                format!("Unknown method on StdColumn: '{name}'"),
+                format!("Unknown method on Column: '{name}'"),
             )),
         }
     }
@@ -1030,7 +1027,7 @@ impl Object for StdColumn {
 }
 
 #[expect(clippy::from_over_into)]
-impl Into<Value> for StdColumn {
+impl Into<Value> for Column {
     fn into(self) -> Value {
         Value::from_object(self)
     }
@@ -1042,7 +1039,7 @@ mod tests {
 
     #[test]
     fn test_try_from_snowflake_raw_data_type_object() {
-        let result = StdColumn::try_from_snowflake_raw_data_type(
+        let result = Column::try_from_snowflake_raw_data_type(
             "test_col",
             "OBJECT(name VARCHAR, age NUMBER)",
         );
@@ -1059,7 +1056,7 @@ mod tests {
 
     #[test]
     fn test_try_from_snowflake_raw_data_type_numeric() {
-        let result = StdColumn::try_from_snowflake_raw_data_type("test_col", "NUMERIC(10,2)");
+        let result = Column::try_from_snowflake_raw_data_type("test_col", "NUMERIC(10,2)");
         assert!(result.is_ok());
 
         let column = result.unwrap();
@@ -1073,7 +1070,7 @@ mod tests {
 
     #[test]
     fn test_try_from_snowflake_raw_data_type_numeric_precision_only() {
-        let result = StdColumn::try_from_snowflake_raw_data_type("test_col", "NUMERIC(18)");
+        let result = Column::try_from_snowflake_raw_data_type("test_col", "NUMERIC(18)");
         assert!(result.is_ok());
 
         let column = result.unwrap();
@@ -1087,7 +1084,7 @@ mod tests {
 
     #[test]
     fn test_bq_flatten() {
-        let simple = StdColumn::new_bigquery(
+        let simple = Column::new_bigquery(
             "col".to_string(),
             "NUMBER".to_string(),
             &[],
@@ -1098,7 +1095,7 @@ mod tests {
                 .flatten()
                 .iter()
                 .zip(
-                    [StdColumn::new_bigquery(
+                    [Column::new_bigquery(
                         "col".to_string(),
                         "NUMBER".to_string(),
                         &[],
@@ -1109,7 +1106,7 @@ mod tests {
                 .all(|(a, b)| a.cmp_column(b))
         );
 
-        let nested = StdColumn::new_bigquery(
+        let nested = Column::new_bigquery(
             "parent".to_string(),
             "STRUCT<NUMBER col>".to_string(),
             &[simple],
@@ -1120,7 +1117,7 @@ mod tests {
                 .flatten()
                 .iter()
                 .zip(
-                    [StdColumn::new_bigquery(
+                    [Column::new_bigquery(
                         "parent.col".to_string(),
                         "NUMBER".to_string(),
                         &[],
@@ -1131,7 +1128,7 @@ mod tests {
                 .all(|(a, b)| a.cmp_column(b))
         );
 
-        let deeply_nested = StdColumn::new_bigquery(
+        let deeply_nested = Column::new_bigquery(
             "grandpa".to_string(),
             "STRUCT<NUMBER col>".to_string(),
             &[nested],
@@ -1142,7 +1139,7 @@ mod tests {
                 .flatten()
                 .iter()
                 .zip(
-                    [StdColumn::new_bigquery(
+                    [Column::new_bigquery(
                         "grandpa.parent.col".to_string(),
                         "NUMBER".to_string(),
                         &[],
@@ -1153,17 +1150,17 @@ mod tests {
                 .all(|(a, b)| a.cmp_column(b))
         );
 
-        let nested_with_siblings = StdColumn::new_bigquery(
+        let nested_with_siblings = Column::new_bigquery(
             "parent".to_string(),
             "STRUCT<NUMBER a, BOOLEAN b>".to_string(),
             &[
-                StdColumn::new_bigquery(
+                Column::new_bigquery(
                     "a".to_string(),
                     "NUMBER".to_string(),
                     &[],
                     BigqueryColumnMode::Nullable,
                 ),
-                StdColumn::new_bigquery(
+                Column::new_bigquery(
                     "b".to_string(),
                     "BOOLEAN".to_string(),
                     &[],
@@ -1178,13 +1175,13 @@ mod tests {
                 .iter()
                 .zip(
                     [
-                        StdColumn::new_bigquery(
+                        Column::new_bigquery(
                             "parent.a".to_string(),
                             "NUMBER".to_string(),
                             &[],
                             BigqueryColumnMode::Nullable
                         ),
-                        StdColumn::new_bigquery(
+                        Column::new_bigquery(
                             "parent.b".to_string(),
                             "BOOLEAN".to_string(),
                             &[],

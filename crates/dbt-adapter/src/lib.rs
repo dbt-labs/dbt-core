@@ -9,7 +9,6 @@ pub mod bridge_adapter;
 pub mod cache;
 pub mod catalog_relation;
 pub mod column;
-pub mod columns;
 pub mod errors;
 pub mod factory;
 pub mod formatter;
@@ -77,6 +76,7 @@ pub mod load_store;
 
 pub use base_adapter::{AdapterType, AdapterTyping, BaseAdapter};
 pub use bridge_adapter::BridgeAdapter;
+pub use column::{Column, ColumnBuilder};
 pub use errors::AdapterResult;
 pub use funcs::{execute_macro_with_package, execute_macro_wrapper_with_package};
 pub use parse::adapter::ParseAdapter;

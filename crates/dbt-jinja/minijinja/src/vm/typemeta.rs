@@ -212,7 +212,7 @@ impl TypeWithConstraint {
                     format!("{arg0:?}")
                 }
             }
-            Type::StdColumn => "StdColumn".to_string(),
+            Type::Column => "Column".to_string(),
             Type::Namespace(_) => "Namespace".to_string(),
         }
     }

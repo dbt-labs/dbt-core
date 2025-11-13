@@ -1,5 +1,4 @@
-use crate::column::ColumnBuilder;
-use crate::columns::StdColumn;
+use crate::column::{Column, ColumnBuilder};
 use crate::errors::{AdapterError, AdapterErrorKind};
 use crate::funcs::{execute_macro, none_value};
 use crate::metadata::CatalogAndSchema;
@@ -415,7 +414,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         state: &State,
         source_relation: Arc<dyn BaseRelation>,
         target_relation: Arc<dyn BaseRelation>,
-    ) -> AdapterResult<Vec<StdColumn>> {
+    ) -> AdapterResult<Vec<Column>> {
         // Get columns for both relations
         let source_cols = self.get_columns_in_relation(state, source_relation)?;
         let target_cols = self.get_columns_in_relation(state, target_relation)?;
@@ -444,7 +443,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         &self,
         state: &State,
         relation: Arc<dyn BaseRelation>,
-    ) -> AdapterResult<Vec<StdColumn>>;
+    ) -> AdapterResult<Vec<Column>>;
 
     /// Truncate relation
     /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/sql/impl.py#L147
@@ -670,7 +669,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     /// This is only supported by Databricks
     fn get_persist_doc_columns(
         &self,
-        _existing_columns: Vec<StdColumn>,
+        _existing_columns: Vec<Column>,
         _model_columns: IndexMap<String, DbtColumnRef>,
     ) -> AdapterResult<IndexMap<String, DbtColumnRef>> {
         unimplemented!("Only available for Databricks Adapter")
@@ -814,7 +813,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         Ok(result)
     }
 
-    /// Convert an Arrow [Schema] to a [Vec] of [StdColumn]s.
+    /// Convert an Arrow [Schema] to a [Vec] of [Column]s.
     ///
     /// This is not part of the Jinja adapter API.
     ///
@@ -827,13 +826,13 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         &self,
         _original: Option<&Arc<Schema>>,
         schema: &Arc<Schema>,
-    ) -> AdapterResult<Vec<StdColumn>> {
+    ) -> AdapterResult<Vec<Column>> {
         let engine = self.engine();
         let type_formatter = engine.type_ops();
         let builder = ColumnBuilder::new(self.adapter_type());
 
         let fields = schema.fields();
-        let mut columns = Vec::<StdColumn>::with_capacity(fields.len());
+        let mut columns = Vec::<Column>::with_capacity(fields.len());
         for field in fields {
             let column = builder.build(field, type_formatter)?;
             columns.push(column);
@@ -848,7 +847,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         conn: &mut dyn Connection,
         ctx: &QueryCtx,
         sql: &str,
-    ) -> AdapterResult<Vec<StdColumn>> {
+    ) -> AdapterResult<Vec<Column>> {
         if let Some(replay_adapter) = self.as_replay() {
             return replay_adapter.replay_get_column_schema_from_query(state, conn, ctx);
         }
@@ -863,7 +862,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         &self,
         _conn: &'_ mut dyn Connection,
         _sql: &str,
-    ) -> AdapterResult<Vec<StdColumn>> {
+    ) -> AdapterResult<Vec<Column>> {
         unimplemented!("only available with BigQuery adapter")
     }
 
@@ -1198,12 +1197,12 @@ pub trait ReplayAdapter: TypedBaseAdapter {
         state: &State,
         _conn: &mut dyn Connection,
         _query_ctx: &QueryCtx,
-    ) -> AdapterResult<Vec<StdColumn>>;
+    ) -> AdapterResult<Vec<Column>>;
 
     fn replay_get_columns_in_relation(
         &self,
         state: &State,
         relation: Arc<dyn BaseRelation>,
-        cache_result: Option<Vec<StdColumn>>,
+        cache_result: Option<Vec<Column>>,
     ) -> Result<Value, minijinja::Error>;
 }

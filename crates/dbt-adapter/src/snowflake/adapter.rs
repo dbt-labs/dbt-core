@@ -1,5 +1,5 @@
 use crate::catalog_relation::CatalogRelation;
-use crate::columns::StdColumn;
+use crate::column::Column;
 use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
 use crate::funcs::execute_macro;
 use crate::load_catalogs;
@@ -290,7 +290,7 @@ prevent unnecessary latency for other users."#,
         &self,
         state: &State,
         relation: Arc<dyn BaseRelation>,
-    ) -> AdapterResult<Vec<StdColumn>> {
+    ) -> AdapterResult<Vec<Column>> {
         let result = match execute_macro(
             state,
             &[RelationObject::new(relation).as_value()],
@@ -307,7 +307,7 @@ prevent unnecessary latency for other users."#,
             }
         };
 
-        Ok(StdColumn::vec_from_jinja_value(
+        Ok(Column::vec_from_jinja_value(
             AdapterType::Snowflake,
             result,
         )?)

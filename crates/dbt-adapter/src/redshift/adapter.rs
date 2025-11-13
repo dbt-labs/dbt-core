@@ -1,5 +1,5 @@
 use crate::base_adapter::AdapterTyping;
-use crate::columns::StdColumn;
+use crate::column::Column;
 use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
 use crate::funcs::execute_macro;
 use crate::metadata::*;
@@ -197,16 +197,13 @@ LEFT JOIN materialized_views mv
         &self,
         state: &State,
         relation: Arc<dyn BaseRelation>,
-    ) -> AdapterResult<Vec<StdColumn>> {
+    ) -> AdapterResult<Vec<Column>> {
         let result = execute_macro(
             state,
             &[RelationObject::new(relation).as_value()],
             "get_columns_in_relation",
         )?;
-        Ok(StdColumn::vec_from_jinja_value(
-            AdapterType::Redshift,
-            result,
-        )?)
+        Ok(Column::vec_from_jinja_value(AdapterType::Redshift, result)?)
     }
 
     /// https://github.com/dbt-labs/dbt-adapters/blob/2a94cc75dba1f98fa5caff1f396f5af7ee444598/dbt-redshift/src/dbt/adapters/redshift/impl.py#L53

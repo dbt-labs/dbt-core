@@ -1,5 +1,5 @@
 use crate::cache::RelationCache;
-use crate::columns::StdColumnType;
+use crate::column::ColumnStatic;
 use crate::metadata::*;
 use crate::query_cache::QueryCache;
 use crate::snapshots::SnapshotStrategy;
@@ -65,7 +65,7 @@ pub trait AdapterTyping {
 
     /// Get column type instance
     fn column_type(&self) -> Option<Value> {
-        let value = Value::from_object(StdColumnType::new(self.adapter_type()));
+        let value = Value::from_object(ColumnStatic::new(self.adapter_type()));
         Some(value)
     }
 
@@ -903,7 +903,7 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
 ///
 /// It can create adapters wrapped in a boxed `dyn BaseAdapter`
 /// objects. Similarly, it can create boxed `dyn BaseRelation`
-/// and `StdColumn` objects.
+/// and `Column` objects.
 pub trait AdapterFactory: Send + Sync {
     #[allow(clippy::too_many_arguments)]
     fn create_adapter(

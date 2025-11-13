@@ -1,5 +1,5 @@
 use crate::base_adapter::{AdapterType, AdapterTyping};
-use crate::columns::StdColumn;
+use crate::column::Column;
 use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
 use crate::funcs::execute_macro;
 use crate::metadata::*;
@@ -87,16 +87,13 @@ impl TypedBaseAdapter for PostgresAdapter {
         &self,
         state: &State,
         relation: Arc<dyn BaseRelation>,
-    ) -> AdapterResult<Vec<StdColumn>> {
+    ) -> AdapterResult<Vec<Column>> {
         let result = execute_macro(
             state,
             &[RelationObject::new(relation).as_value()],
             "get_columns_in_relation",
         )?;
-        Ok(StdColumn::vec_from_jinja_value(
-            AdapterType::Postgres,
-            result,
-        )?)
+        Ok(Column::vec_from_jinja_value(AdapterType::Postgres, result)?)
     }
 
     // reference: https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-postgres/src/dbt/include/postgres/macros/adapters.sql#L85

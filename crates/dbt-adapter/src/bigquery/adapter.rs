@@ -7,8 +7,7 @@ use crate::bigquery::relation_config::{
 };
 use crate::cast_util::downcast_value_to_dyn_base_relation;
 use crate::catalog_relation::CatalogRelation;
-use crate::column::ColumnBuilder;
-use crate::columns::{BigqueryColumnMode, StdColumn};
+use crate::column::{BigqueryColumnMode, Column, ColumnBuilder};
 use crate::errors::{
     AdapterError, AdapterErrorKind, AdapterResult, adbc_error_to_adapter_error,
     arrow_error_to_adapter_error,
@@ -286,9 +285,9 @@ impl TypedBaseAdapter for BigqueryAdapter {
         &self,
         state: &State,
         relation: Arc<dyn BaseRelation>,
-    ) -> AdapterResult<Vec<StdColumn>> {
+    ) -> AdapterResult<Vec<Column>> {
         // TODO(serramatutu): once this is moved over to Arrow, let's remove the fallback to DbtCoreBaseColumn
-        // from StdColumn::vec_from_jinja_value for BigQuery
+        // from Column::vec_from_jinja_value for BigQuery
         // FIXME(harry): the Python version uses googleapi GetTable, that doesn't return pseudocolumn like _PARTITIONDATE or _PARTITIONTIME
         let result = match execute_macro(
             state,
@@ -307,10 +306,7 @@ impl TypedBaseAdapter for BigqueryAdapter {
                 return Err(err);
             }
         };
-        Ok(StdColumn::vec_from_jinja_value(
-            AdapterType::Bigquery,
-            result,
-        )?)
+        Ok(Column::vec_from_jinja_value(AdapterType::Bigquery, result)?)
     }
 
     /// This only supports non-nested columns additions
@@ -331,7 +327,7 @@ impl TypedBaseAdapter for BigqueryAdapter {
         let table = relation.identifier_as_str()?;
         let schema = relation.schema_as_str()?;
 
-        let columns = StdColumn::vec_from_jinja_value(AdapterType::Bigquery, columns)?;
+        let columns = Column::vec_from_jinja_value(AdapterType::Bigquery, columns)?;
         if columns.is_empty() {
             return Ok(none_value());
         }
@@ -566,7 +562,7 @@ impl TypedBaseAdapter for BigqueryAdapter {
         conn: &mut dyn Connection,
         ctx: &QueryCtx,
         sql: &str,
-    ) -> AdapterResult<Vec<StdColumn>> {
+    ) -> AdapterResult<Vec<Column>> {
         let batch = self.engine().execute(Some(state), conn, ctx, sql)?;
         let schema = batch.schema();
 
@@ -575,7 +571,7 @@ impl TypedBaseAdapter for BigqueryAdapter {
 
         let fields = schema.fields();
 
-        let mut columns = Vec::<StdColumn>::with_capacity(fields.len());
+        let mut columns = Vec::<Column>::with_capacity(fields.len());
         for field in fields {
             let column = builder.build(field, type_ops)?;
             columns.push(column);
@@ -854,7 +850,7 @@ impl TypedBaseAdapter for BigqueryAdapter {
         columns: Value,
         partition_config: BigqueryPartitionConfig,
     ) -> AdapterResult<Value> {
-        let mut result = StdColumn::vec_from_jinja_value(AdapterType::Bigquery, columns.clone())?;
+        let mut result = Column::vec_from_jinja_value(AdapterType::Bigquery, columns.clone())?;
 
         if result
             .iter()
@@ -863,7 +859,7 @@ impl TypedBaseAdapter for BigqueryAdapter {
             return Ok(columns);
         }
 
-        result.push(StdColumn::new_bigquery(
+        result.push(Column::new_bigquery(
             partition_config
                 .insertable_time_partitioning_field()?
                 .as_str()

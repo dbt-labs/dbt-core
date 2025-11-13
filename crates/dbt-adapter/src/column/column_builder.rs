@@ -2,7 +2,7 @@ use std::borrow::Cow;
 use std::sync::LazyLock;
 
 use crate::AdapterResult;
-use crate::columns::{BigqueryColumnMode, StdColumn};
+use crate::column::{BigqueryColumnMode, Column};
 use crate::metadata;
 use crate::sql_types::{self, TypeOps};
 use arrow_schema::{DataType, FieldRef};
@@ -20,7 +20,7 @@ impl ColumnBuilder {
         Self { adapter_type }
     }
 
-    pub fn build(&self, field: &FieldRef, type_ops: &dyn TypeOps) -> AdapterResult<StdColumn> {
+    pub fn build(&self, field: &FieldRef, type_ops: &dyn TypeOps) -> AdapterResult<Column> {
         use AdapterType::*;
         match self.adapter_type {
             Snowflake => Ok(Self::build_snowflake(field, type_ops)),
@@ -39,10 +39,10 @@ impl ColumnBuilder {
         numeric_precision: Option<u64>,
         numeric_scale: Option<u64>,
         mode: Option<BigqueryColumnMode>,
-    ) -> StdColumn {
+    ) -> Column {
         use AdapterType::*;
         match self.adapter_type {
-            Postgres => StdColumn::new(
+            Postgres => Column::new(
                 Postgres,
                 name,
                 dtype,
@@ -50,7 +50,7 @@ impl ColumnBuilder {
                 numeric_precision,
                 numeric_scale,
             ),
-            Snowflake => StdColumn::new(
+            Snowflake => Column::new(
                 Snowflake,
                 name,
                 dtype,
@@ -59,8 +59,8 @@ impl ColumnBuilder {
                 numeric_scale,
             ),
             // TODO: BigQuery fields
-            Bigquery => StdColumn::new_bigquery(name, dtype, &[], mode.unwrap()),
-            Redshift => StdColumn::new(
+            Bigquery => Column::new_bigquery(name, dtype, &[], mode.unwrap()),
+            Redshift => Column::new(
                 Redshift,
                 name,
                 dtype,
@@ -68,7 +68,7 @@ impl ColumnBuilder {
                 numeric_precision,
                 numeric_scale,
             ),
-            Databricks => StdColumn::new(
+            Databricks => Column::new(
                 Databricks, name, dtype, char_size, None, // numeric_precision
                 None, // numeric_scale
             ),
@@ -76,7 +76,7 @@ impl ColumnBuilder {
         }
     }
 
-    fn build_snowflake(field: &FieldRef, type_ops: &dyn TypeOps) -> StdColumn {
+    fn build_snowflake(field: &FieldRef, type_ops: &dyn TypeOps) -> Column {
         use AdapterType::Snowflake;
         use sql_types::snowflake::*;
 
@@ -167,7 +167,7 @@ impl ColumnBuilder {
             _ => {}
         }
 
-        StdColumn::new(
+        Column::new(
             Snowflake,
             field.name().to_string(),
             dtype,
@@ -180,7 +180,7 @@ impl ColumnBuilder {
     /// The logic from `get_column_schema_from_query` for BigQuery [1].
     ///
     /// [1] https://github.com/dbt-labs/dbt-adapters/blob/c16cc7047e8678f8bb88ae294f43da2c68e9f5cc/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L444
-    fn build_bigquery(field: &FieldRef, type_ops: &dyn TypeOps) -> StdColumn {
+    fn build_bigquery(field: &FieldRef, type_ops: &dyn TypeOps) -> Column {
         let original_type_str = type_ops
             .get_original_sql_type_from_field(field)
             // FIXME: whats a good fallback here? This should technically never fail unless the
@@ -238,7 +238,7 @@ impl ColumnBuilder {
             _ => Vec::new(),
         };
 
-        StdColumn::new_bigquery(
+        Column::new_bigquery(
             field.name().to_string(),
             original_type_str.to_string(),
             inner_columns,
@@ -246,7 +246,7 @@ impl ColumnBuilder {
         )
     }
 
-    fn build_databricks(field: &FieldRef, type_ops: &dyn TypeOps) -> StdColumn {
+    fn build_databricks(field: &FieldRef, type_ops: &dyn TypeOps) -> Column {
         let name = field.name().to_string();
         let type_text = {
             let type_text = original_type_string(Backend::Databricks, field);
@@ -263,7 +263,7 @@ impl ColumnBuilder {
                 type_text
             }
         };
-        StdColumn::new(
+        Column::new(
             AdapterType::Databricks,
             name,
             type_text,
@@ -273,7 +273,7 @@ impl ColumnBuilder {
         )
     }
 
-    fn build_postgres_like(field: &FieldRef, type_ops: &dyn TypeOps) -> StdColumn {
+    fn build_postgres_like(field: &FieldRef, type_ops: &dyn TypeOps) -> Column {
         let mut data_type = String::new();
         match field.data_type() {
             // Mimic broken conversion that was here before just in case
@@ -289,7 +289,7 @@ impl ColumnBuilder {
         if !field.is_nullable() {
             data_type.push_str(" not null");
         }
-        StdColumn::new(
+        Column::new(
             AdapterType::Postgres,
             field.name().to_string(),
             data_type,
@@ -299,7 +299,7 @@ impl ColumnBuilder {
         )
     }
 
-    fn build_redshift(field: &FieldRef, type_ops: &dyn TypeOps) -> StdColumn {
+    fn build_redshift(field: &FieldRef, type_ops: &dyn TypeOps) -> Column {
         use AdapterType::Redshift;
         let data_type = field.data_type();
         let char_size = sql_types::var_size(Redshift, data_type);
@@ -333,7 +333,7 @@ impl ColumnBuilder {
             type_name_or_formatted
         };
 
-        StdColumn::new(
+        Column::new(
             Redshift,
             field.name().to_string(),
             base_type_name, // dtype
