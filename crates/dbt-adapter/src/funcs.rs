@@ -252,9 +252,32 @@ pub fn dispatch_adapter_calls(
 
             adapter.expand_target_column_types(state, from_relation, to_relation)
         }
-        "list_schemas" => adapter.list_schemas(state, args),
-        "create_schema" => adapter.create_schema(state, args),
-        "drop_schema" => adapter.drop_schema(state, args),
+        "list_schemas" => {
+            // database: str
+            let iter = ArgsIter::new(name, &["database"], args);
+            let database = iter.next_arg::<&str>()?;
+            iter.finish()?;
+
+            adapter.list_schemas(state, database)
+        }
+        "create_schema" => {
+            // relation: BaseRelation
+            let iter = ArgsIter::new(name, &["relation"], args);
+            let relation = iter.next_arg::<&Value>()?;
+            let relation = downcast_value_to_dyn_base_relation(relation)?;
+            iter.finish()?;
+
+            adapter.create_schema(state, relation)
+        }
+        "drop_schema" => {
+            // relation: BaseRelation
+            let iter = ArgsIter::new(name, &["relation"], args);
+            let relation = iter.next_arg::<&Value>()?;
+            let relation = downcast_value_to_dyn_base_relation(relation)?;
+            iter.finish()?;
+
+            adapter.drop_schema(state, relation)
+        }
         "valid_snapshot_target" => {
             // relation: BaseRelation
             let iter = ArgsIter::new(name, &["relation"], args);

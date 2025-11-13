@@ -34,7 +34,7 @@ use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
 use dbt_schemas::schemas::serde::{minijinja_value_to_typed_struct, yml_value_to_minijinja};
 use dbt_xdbc::Connection;
 use indexmap::IndexMap;
-use minijinja::arg_utils::{ArgParser, ArgsIter, check_num_args};
+use minijinja::arg_utils::{ArgParser, check_num_args};
 use minijinja::dispatch_object::DispatchObject;
 use minijinja::listener::RenderingEventListener;
 use minijinja::value::{Kwargs, Object};
@@ -516,11 +516,7 @@ impl BaseAdapter for BridgeAdapter {
 
     /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/sql/impl.py#L212-L213
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn list_schemas(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
-        let mut parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 1, 1)?;
-
-        let database = parser.get::<String>("database")?;
+    fn list_schemas(&self, state: &State, database: &str) -> Result<Value, MinijinjaError> {
         let kwargs = Kwargs::from_iter([("database", Value::from(database))]);
 
         let result = execute_macro_wrapper(state, &[Value::from(kwargs)], "list_schemas")?;
@@ -531,20 +527,26 @@ impl BaseAdapter for BridgeAdapter {
 
     /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/sql/impl.py#L161
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn create_schema(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
-        execute_macro(state, args, "create_schema")?;
+    fn create_schema(
+        &self,
+        state: &State,
+        relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, MinijinjaError> {
+        let args = [RelationObject::new(relation).into_value()];
+        execute_macro(state, &args, "create_schema")?;
         Ok(none_value())
     }
 
     /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/sql/impl.py#L172-L173
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn drop_schema(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
-        let iter = ArgsIter::new(current_function_name!(), &["relation"], args);
-        let relation = iter.next_arg::<&RelationObject>()?;
-        iter.finish()?;
-        self.relation_cache
-            .evict_schema_for_relation(&relation.inner());
-        execute_macro(state, args, "drop_schema")?;
+    fn drop_schema(
+        &self,
+        state: &State,
+        relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, MinijinjaError> {
+        self.relation_cache.evict_schema_for_relation(&relation);
+        let args = [RelationObject::new(relation).into_value()];
+        execute_macro(state, &args, "drop_schema")?;
         Ok(none_value())
     }
 

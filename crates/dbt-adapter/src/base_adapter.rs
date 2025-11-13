@@ -487,7 +487,16 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
     ) -> Result<Value, MinijinjaError>;
 
     /// List schemas.
-    fn list_schemas(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError>;
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/sql/impl.py#L217
+    ///
+    /// ```python
+    /// def list_schemas(
+    ///     self,
+    ///     database: str
+    /// ) -> List[str]
+    /// ```
+    fn list_schemas(&self, state: &State, database: &str) -> Result<Value, MinijinjaError>;
 
     /// List relations without caching.
     fn list_relations_without_caching(
@@ -499,10 +508,36 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
     }
 
     /// Create schema.
-    fn create_schema(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError>;
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/sql/impl.py#L166
+    ///
+    /// ```python
+    /// def create_schema(
+    ///     self,
+    ///     relation: BaseRelation
+    /// ) -> None
+    /// ```
+    fn create_schema(
+        &self,
+        state: &State,
+        relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, MinijinjaError>;
 
     /// Drop schema.
-    fn drop_schema(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError>;
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/sql/impl.py#L177
+    ///
+    /// ```python
+    /// def drop_schema(
+    ///     self,
+    ///     relation: BaseRelation
+    /// ) -> None
+    /// ```
+    fn drop_schema(
+        &self,
+        state: &State,
+        relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, MinijinjaError>;
 
     /// Valid snapshot target.
     ///

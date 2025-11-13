@@ -402,15 +402,23 @@ impl BaseAdapter for ParseAdapter {
         Ok(none_value())
     }
 
-    fn list_schemas(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn list_schemas(&self, _state: &State, _database: &str) -> Result<Value, MinijinjaError> {
         Ok(empty_vec_value())
     }
 
-    fn create_schema(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn create_schema(
+        &self,
+        _state: &State,
+        _relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, MinijinjaError> {
         Ok(none_value())
     }
 
-    fn drop_schema(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn drop_schema(
+        &self,
+        _state: &State,
+        _relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, MinijinjaError> {
         Ok(none_value())
     }
 
