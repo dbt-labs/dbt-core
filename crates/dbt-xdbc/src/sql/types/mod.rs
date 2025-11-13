@@ -1195,6 +1195,8 @@ impl SqlType {
                     // is to be an alias for TIMESTAMP_NTZ which is what we assume here.
                     (Snowflake, Unspecified) => arrow_timestamp(*precision, None),
 
+                    (BigQuery, Unspecified) => arrow_timestamp(*precision, Some("UTC".into())),
+
                     (_, Without | Unspecified) => arrow_timestamp(*precision, None),
                 }
             }
