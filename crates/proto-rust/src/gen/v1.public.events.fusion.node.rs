@@ -196,7 +196,7 @@ pub mod node_evaluated {
     /// Node type specific details (e.g. test fail counts, cache use reasons).
     #[cfg_attr(any(test, feature = "test-utils"), derive(::fake::Dummy))]
     #[derive(::serde::Serialize, ::serde::Deserialize)]
-    #[serde(untagged)]
+    #[cfg_attr(any(test, feature = "test-utils"), derive(::strum::EnumIter))]
     #[derive(Clone, PartialEq, Eq, Hash, ::prost::Oneof)]
     pub enum NodeOutcomeDetail {
         /// Detailed reason why cache was used.

@@ -25,10 +25,13 @@ where
 }
 
 /// Helper function to create a faker for a given type.
+/// Returns multiple variants of the message:
+/// - One using Faker
+/// - One using Default::default()
 #[cfg(any(test, feature = "test-utils"))]
-fn faker_for_type<T>(seed: &str) -> Box<dyn AnyTelemetryEvent>
+fn faker_for_type<T>(seed: &str) -> Vec<Box<dyn AnyTelemetryEvent>>
 where
-    T: AnyTelemetryEvent + fake::Dummy<fake::Faker>,
+    T: AnyTelemetryEvent + fake::Dummy<fake::Faker> + Default,
 {
     use fake::rand::SeedableRng;
     use fake::rand::rngs::StdRng;
@@ -46,14 +49,84 @@ where
     let hashed_seed = hash_seed(seed);
     let mut rng = StdRng::seed_from_u64(hashed_seed);
 
-    let atrrs: T = Faker.fake_with_rng(&mut rng);
+    let mut variants = Vec::new();
 
-    Box::new(atrrs) as Box<dyn AnyTelemetryEvent>
+    // First variant: using Faker
+    let faker_variant: T = Faker.fake_with_rng(&mut rng);
+    variants.push(Box::new(faker_variant) as Box<dyn AnyTelemetryEvent>);
+
+    // Second variant: using Default
+    let default_variant = T::default();
+    variants.push(Box::new(default_variant) as Box<dyn AnyTelemetryEvent>);
+
+    variants
+}
+
+/// Macro to generate faker functions for messages with oneof fields.
+///
+/// This macro creates a function that returns multiple variants of a message:
+/// - One using Faker
+/// - One for each variant of each specified oneof field
+///
+/// The oneof variants are iterated separately (not combined), so if you have
+/// two oneof fields with 3 and 4 variants respectively, you'll get:
+/// 1 (faker) + 3 (first oneof) + 4 (second oneof) = 8 variants total
+///
+/// # Usage
+///
+/// ```ignore
+/// faker_for_type_with_oneofs!(
+///     faker_for_my_message,          // Name of the function to generate
+///     MyMessage,                      // The message type
+///     MyOneofEnum => field_name,      // First oneof: enum type => field name
+///     AnotherOneofEnum => other_field // Second oneof: enum type => field name
+/// );
+/// ```
+#[cfg(any(test, feature = "test-utils"))]
+macro_rules! faker_for_type_with_oneofs {
+    ($fn_name:ident, $message_type:ty $(, $oneof_enum:ty => $field_name:ident)*) => {
+        #[allow(unused_imports)]
+        fn $fn_name(seed: &str) -> Vec<Box<dyn AnyTelemetryEvent>> {
+            use fake::rand::SeedableRng;
+            use fake::rand::rngs::StdRng;
+            use fake::{Fake, Faker};
+            use std::collections::hash_map::DefaultHasher;
+            use std::hash::{Hash, Hasher};
+
+            // Generate pseudo-random but deterministic values for testing
+            fn hash_seed(seed: &str) -> u64 {
+                let mut hasher = DefaultHasher::new();
+                seed.hash(&mut hasher);
+                hasher.finish()
+            }
+
+            let hashed_seed = hash_seed(seed);
+            let mut rng = StdRng::seed_from_u64(hashed_seed);
+
+            let mut variants = Vec::new();
+
+            // First variant: using Faker
+            let faker_variant: $message_type = Faker.fake_with_rng(&mut rng);
+            variants.push(Box::new(faker_variant) as Box<dyn AnyTelemetryEvent>);
+
+            // Additional variants: one for each oneof enum variant
+            // For each oneof field specified, iterate over its variants
+            $(
+                for oneof_variant in <$oneof_enum as strum::IntoEnumIterator>::iter() {
+                    let mut base = <$message_type>::default();
+                    base.$field_name = Some(oneof_variant);
+                    variants.push(Box::new(base) as Box<dyn AnyTelemetryEvent>);
+                }
+            )*
+
+            variants
+        }
+    };
 }
 
 pub type ArrowDeserializerFn = fn(&ArrowAttributes) -> Result<Box<dyn AnyTelemetryEvent>, String>;
 #[cfg(any(test, feature = "test-utils"))]
-pub type FakerFn = fn(&str) -> Box<dyn AnyTelemetryEvent>;
+pub type FakerFn = fn(&str) -> Vec<Box<dyn AnyTelemetryEvent>>;
 
 /// Registry for telemetry attribute type deserializers.
 ///
@@ -67,8 +140,8 @@ pub struct TelemetryEventTypeRegistry {
     fakers: HashMap<&'static str, FakerFn>,
 }
 
-static PUBLIC_TELEMETRY_EVENT_REGISTRY: LazyLock<TelemetryEventTypeRegistry> =
-    LazyLock::new(|| {
+static PUBLIC_TELEMETRY_EVENT_REGISTRY: LazyLock<TelemetryEventTypeRegistry> = LazyLock::new(
+    || {
         let mut registry = TelemetryEventTypeRegistry::new();
 
         // Register span event types
@@ -102,11 +175,19 @@ static PUBLIC_TELEMETRY_EVENT_REGISTRY: LazyLock<TelemetryEventTypeRegistry> =
             #[cfg(any(test, feature = "test-utils"))]
             faker_for_type::<OnboardingScreenShown>,
         );
+
+        // Needs a custom faker due to oneof fields
+        #[cfg(any(test, feature = "test-utils"))]
+        faker_for_type_with_oneofs!(
+            faker_for_node_evaluated,
+            NodeEvaluated,
+            proto_rust::v1::public::events::fusion::node::node_evaluated::NodeOutcomeDetail => node_outcome_detail
+        );
         registry.register(
             NodeEvaluated::FULL_NAME,
             arrow_deserialize_for_type::<NodeEvaluated>,
             #[cfg(any(test, feature = "test-utils"))]
-            faker_for_type::<NodeEvaluated>,
+            faker_for_node_evaluated,
         );
         registry.register(
             ArtifactWritten::FULL_NAME,
@@ -160,7 +241,8 @@ static PUBLIC_TELEMETRY_EVENT_REGISTRY: LazyLock<TelemetryEventTypeRegistry> =
         );
 
         registry
-    });
+    },
+);
 
 impl TelemetryEventTypeRegistry {
     /// Create a new empty registry.
@@ -173,7 +255,7 @@ impl TelemetryEventTypeRegistry {
         &mut self,
         event_type: &'static str,
         arrow_deserializer: fn(&ArrowAttributes) -> Result<Box<dyn AnyTelemetryEvent>, String>,
-        #[cfg(any(test, feature = "test-utils"))] faker: fn(&str) -> Box<dyn AnyTelemetryEvent>,
+        #[cfg(any(test, feature = "test-utils"))] faker: FakerFn,
     ) {
         self.arrow_deserializers
             .insert(event_type, arrow_deserializer);
@@ -283,6 +365,71 @@ mod tests {
             unexpected.is_empty(),
             "Unexpected deserializers for: {}",
             unexpected.join(", ")
+        );
+    }
+
+    /// Test that verifies faker functions for types with oneofs return more than 2 variants.
+    ///
+    /// # How this test works
+    ///
+    /// This is a very naive test, but better than nothing. It works by:
+    /// 1. Using proto-rust test utilities to get all messages with oneofs
+    /// 2. For each registered event type, checking if it's in the oneof list
+    /// 3. If it has oneofs, verifying the faker returns > 2 variants
+    ///
+    /// Regular types return exactly 2 variants (Faker + Default), while types with
+    /// oneofs should return at least 3 (Faker + N oneof variants where N >= 1).
+    ///
+    /// # False positives
+    ///
+    /// This test may produce false positives for single-field oneofs (where the oneof
+    /// has only one variant). In such cases, you'd get Faker + 1 oneof variant = 2 total,
+    /// which would fail this test. However, single-field oneofs are generally a code smell
+    /// and should be avoided - use an optional field instead.
+    ///
+    /// If you encounter this, consider refactoring the proto definition to avoid
+    /// single-variant oneofs, as they add unnecessary complexity.
+    #[test]
+    fn faker_functions_with_oneofs_return_multiple_variants() {
+        let oneofs = proto_rust::test_utils::message_oneofs();
+        let registry = TelemetryEventTypeRegistry::public();
+
+        // Track which types we've verified have oneofs
+        let mut types_with_oneofs_verified = Vec::new();
+
+        for event_type in registry.iter() {
+            let faker = registry
+                .get_faker(event_type)
+                .unwrap_or_else(|| panic!("No faker for event type \"{event_type}\""));
+
+            let variants = faker("test_seed_for_oneof_check");
+
+            // Check if this type has oneofs according to proto metadata
+            if oneofs.contains_key(event_type) {
+                assert!(
+                    variants.len() > 1 + oneofs.get(event_type).unwrap().len(),
+                    "Type \"{event_type}\" has oneof fields {:?} but faker returned only {} variants. \
+                    Expected > 2 (Faker + K oneof fields * 2+ oneof variants each). \
+                    If this is a single-variant oneof, consider refactoring to use an optional field instead.",
+                    oneofs.get(event_type),
+                    variants.len()
+                );
+                types_with_oneofs_verified.push(event_type);
+            } else {
+                // Types without oneofs should return exactly 2 variants (Faker + Default)
+                assert_eq!(
+                    variants.len(),
+                    2,
+                    "Type \"{event_type}\" has no oneofs but faker returned {} variants (expected 2)",
+                    variants.len()
+                );
+            }
+        }
+
+        // Verify we actually tested some types with oneofs
+        assert!(
+            !types_with_oneofs_verified.is_empty(),
+            "No types with oneofs were verified. Expected at least NodeEvaluated to have oneofs."
         );
     }
 }

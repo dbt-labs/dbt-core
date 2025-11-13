@@ -253,7 +253,15 @@ impl TelemetryConsumer for TelemetryParquetWriterLayer {
             .contains(TelemetryOutputFlags::EXPORT_PARQUET)
     }
 
-    // Only include SpanEnd records, not SpanStart
+    fn on_span_start(&self, span: &SpanStartInfo, _: &mut DataProvider<'_>) {
+        let telemetry_record = TelemetryRecord::SpanStart(span.clone());
+
+        // Errors are stored internally and reported during shutdown.
+        // If the writer has already failed, this will return an error
+        // but we can safely ignore it as the failure will be reported on shutdown.
+        self.write_record(telemetry_record).ok();
+    }
+
     fn on_span_end(&self, span: &SpanEndInfo, _: &mut DataProvider<'_>) {
         let telemetry_record = TelemetryRecord::SpanEnd(span.clone());
 
@@ -327,8 +335,8 @@ mod tests {
     use super::*;
     use arrow_schema::Schema;
     use dbt_telemetry::{
-        LogMessage, LogRecordInfo, SeverityNumber, SpanEndInfo, TelemetryEventTypeRegistry,
-        TelemetryRecord, Unknown,
+        LogMessage, LogRecordInfo, SeverityNumber, TelemetryEventTypeRegistry, TelemetryRecord,
+        Unknown,
         serialize::arrow::{deserialize_from_arrow, get_telemetry_arrow_schema},
     };
     use std::io::{self, Cursor, Write};
@@ -571,37 +579,59 @@ mod tests {
         let buffer_contents = buffer.lock().unwrap();
         let records = deserialize_parquet(buffer_contents.get_ref());
 
-        assert_eq!(records.len(), 2, "Should have 2 span end records");
+        assert_eq!(
+            records.len(),
+            4,
+            "Should have 2 span start + 2 span end records"
+        );
+
+        // Count span starts and ends
+        let span_starts = records
+            .iter()
+            .filter(|r| matches!(r, TelemetryRecord::SpanStart(_)))
+            .count();
+        let span_ends = records
+            .iter()
+            .filter(|r| matches!(r, TelemetryRecord::SpanEnd(_)))
+            .count();
+
+        assert_eq!(span_starts, 2, "Should have 2 span start records");
+        assert_eq!(span_ends, 2, "Should have 2 span end records");
 
         // Check records for correct span names and parent-child relationship
         for record in &records {
-            if let TelemetryRecord::SpanEnd(SpanEndInfo {
-                trace_id: deserialized_trace_id,
-                span_name,
-                parent_span_id: parent_id,
-                attributes,
-                ..
-            }) = record
-            {
-                let name = attributes
-                    .downcast_ref::<Unknown>()
-                    .expect("Must be of Unknown type")
-                    .name
-                    .as_str();
-                assert_eq!(deserialized_trace_id, &trace_id);
-                assert!(span_name.starts_with("Unknown"));
+            let (trace_id_val, span_name, parent_span_id, attributes) = match record {
+                TelemetryRecord::SpanStart(info) => (
+                    &info.trace_id,
+                    &info.span_name,
+                    &info.parent_span_id,
+                    &info.attributes,
+                ),
+                TelemetryRecord::SpanEnd(info) => (
+                    &info.trace_id,
+                    &info.span_name,
+                    &info.parent_span_id,
+                    &info.attributes,
+                ),
+                _ => panic!("Unexpected record: {record:?}"),
+            };
 
-                if name == "child_span" {
-                    // Child span should have root span as parent
-                    assert!(parent_id.is_some());
-                } else if name == "root_span" {
-                    // Root span should have no parent
-                    assert!(parent_id.is_none());
-                } else {
-                    panic!("Unexpected span name: {name}");
-                }
+            let name = attributes
+                .downcast_ref::<Unknown>()
+                .expect("Must be of Unknown type")
+                .name
+                .as_str();
+            assert_eq!(trace_id_val, &trace_id);
+            assert!(span_name.starts_with("Unknown"));
+
+            if name == "child_span" {
+                // Child span should have root span as parent
+                assert!(parent_span_id.is_some());
+            } else if name == "root_span" {
+                // Root span should have no parent
+                assert!(parent_span_id.is_none());
             } else {
-                panic!("Unexpected record: {record:?}")
+                panic!("Unexpected span name: {name}");
             }
         }
     }

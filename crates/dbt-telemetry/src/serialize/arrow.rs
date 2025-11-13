@@ -1025,28 +1025,27 @@ mod tests {
         hasher.finish()
     }
 
-    fn create_fake_attributes(seed: &str, event_type: &'static str) -> TelemetryAttributes {
-        let faker = TelemetryEventTypeRegistry::public()
-            .get_faker(event_type)
-            .unwrap_or_else(|| panic!("No faker defined for event type \"{event_type}\""));
-
-        TelemetryAttributes::new(faker(seed))
-    }
-
     fn create_all_fake_attributes(seed: &str) -> Vec<TelemetryAttributes> {
         let mut attributes = Vec::new();
         for event_type in TelemetryEventTypeRegistry::public().iter() {
-            let attrs = create_fake_attributes(seed, event_type);
+            let faker = TelemetryEventTypeRegistry::public()
+                .get_faker(event_type)
+                .unwrap_or_else(|| panic!("No faker defined for event type \"{event_type}\""));
 
-            // Skip variants that are known to not be serialized
-            if !attrs
-                .output_flags()
-                .contains(TelemetryOutputFlags::EXPORT_PARQUET)
-            {
-                continue;
+            // Faker returns a vector of attribute variants
+            for attr_boxed in faker(seed) {
+                let attrs = TelemetryAttributes::new(attr_boxed);
+
+                // Skip variants that are known to not be serialized
+                if !attrs
+                    .output_flags()
+                    .contains(TelemetryOutputFlags::EXPORT_PARQUET)
+                {
+                    continue;
+                }
+
+                attributes.push(attrs);
             }
-
-            attributes.push(attrs);
         }
         attributes
     }
