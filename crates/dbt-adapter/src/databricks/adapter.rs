@@ -423,7 +423,7 @@ impl TypedBaseAdapter for DatabricksAdapter {
     ///
     /// squashes featureset of DatabricksAdapter iceberg_table_properties
     /// https://github.com/databricks/dbt-databricks/blob/53cd1a2c1fcb245ef25ecf2e41249335fd4c8e4b/dbt/adapters/databricks/impl.py#L229C9-L229C41
-    fn update_tblproperties_for_iceberg(
+    fn update_tblproperties_for_uniform_iceberg(
         &self,
         state: &State,
         conn: &mut dyn Connection,
@@ -452,6 +452,7 @@ impl TypedBaseAdapter for DatabricksAdapter {
             &Value::from_object(dbt_common::serde_utils::convert_yml_to_value_map(node_yml)),
             load_catalogs::fetch_catalogs(),
         )?;
+        // We only have to update tblproperties if using a UniForm Iceberg table
         if catalog_relation.table_format == "iceberg" {
             if self
                 .compare_dbr_version(state, conn, 14, 3)?
@@ -499,6 +500,87 @@ impl TypedBaseAdapter for DatabricksAdapter {
                 .or_insert_with(|| Value::from("iceberg"));
         }
         Ok(())
+    }
+
+    /// https://github.com/databricks/dbt-databricks/blob/8cda62ee19d01e0670e3156e652841e3ffd3ed41/dbt/adapters/databricks/impl.py#L253
+    fn is_uniform(
+        &self,
+        state: &State,
+        conn: &mut dyn Connection,
+        config: ModelConfig,
+    ) -> AdapterResult<bool> {
+        // TODO(anna): For now, we treat the model as something of type InternalDbtNode/DbtModel, but serialize it to Jinja the same way we'd do when inserting into context.
+        // And since we serialized the `RunConfig` as a `ModelConfig`, we create a dummy model here.
+        let model = DbtModel {
+            __model_attr__: DbtModelAttr {
+                catalog_name: config.catalog_name,
+                table_format: config.table_format,
+                ..Default::default()
+            },
+            __adapter_attr__: AdapterAttr::from_config_and_dialect(
+                &config.__warehouse_specific_config__,
+                AdapterType::Databricks,
+            ),
+            ..Default::default()
+        };
+        let node_yml = InternalDbtNodeWrapper::Model(Box::new(model))
+            .as_internal_node()
+            .serialize();
+        let catalog_relation = CatalogRelation::from_model_config_and_catalogs(
+            &self.adapter_type(),
+            &Value::from_object(dbt_common::serde_utils::convert_yml_to_value_map(node_yml)),
+            load_catalogs::fetch_catalogs(),
+        )?;
+
+        if catalog_relation.table_format != "iceberg" {
+            return Ok(false);
+        }
+
+        if self
+            .compare_dbr_version(state, conn, 14, 3)?
+            .as_i64()
+            .expect("dbr_version is a number")
+            < 0
+        {
+            return Err(AdapterError::new(
+                AdapterErrorKind::Configuration,
+                "Iceberg support requires Databricks Runtime 14.3 or later.",
+            ));
+        }
+
+        let materialized = config.materialized.ok_or_else(|| {
+            AdapterError::new(
+                AdapterErrorKind::Configuration,
+                "materialized is required for iceberg tables.",
+            )
+        })?;
+
+        // TODO(versusfacit): support snapshot
+        if materialized != DbtMaterialization::Incremental
+            && materialized != DbtMaterialization::Table
+            && materialized != DbtMaterialization::Seed
+        {
+            return Err(AdapterError::new(
+                AdapterErrorKind::Configuration,
+                "When table_format is 'iceberg', materialized must be 'incremental', 'table', or 'seed'.",
+            ));
+        }
+
+        let use_uniform = if let Some(val) = catalog_relation.adapter_properties.get("use_uniform")
+        {
+            val.eq_ignore_ascii_case("true")
+        } else {
+            false
+        };
+
+        if use_uniform && catalog_relation.catalog_type != "unity" {
+            return Err(AdapterError::new(
+                AdapterErrorKind::Configuration,
+                "Managed Iceberg tables are only supported in Unity Catalog. Set 'use_uniform' adapter property to true for Hive Metastore.",
+            ));
+        }
+
+        Ok(use_uniform)
     }
 
     /// https://github.com/dbt-labs/dbt-adapters/blob/4dc395b42dae78e895adf9c66ad6811534e879a6/dbt-athena/src/dbt/adapters/athena/impl.py#L445

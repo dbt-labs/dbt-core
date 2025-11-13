@@ -818,12 +818,15 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
         _args: &[Value],
     ) -> Result<Value, MinijinjaError>;
 
-    /// update_tblproperties_for_iceberg
-    fn update_tblproperties_for_iceberg(
+    /// update_tblproperties_for_uniform_iceberg
+    fn update_tblproperties_for_uniform_iceberg(
         &self,
         _state: &State,
         _args: &[Value],
     ) -> Result<Value, MinijinjaError>;
+
+    /// is_uniform
+    fn is_uniform(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError>;
 
     /// generate_unique_temporary_table_suffix
     fn generate_unique_temporary_table_suffix(

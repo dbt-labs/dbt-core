@@ -979,14 +979,24 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         unimplemented!("only available with Databricks adapter")
     }
 
-    /// update_tblproperties_for_iceberg
-    fn update_tblproperties_for_iceberg(
+    /// update_tblproperties_for_uniform_iceberg
+    fn update_tblproperties_for_uniform_iceberg(
         &self,
         _state: &State,
         _conn: &mut dyn Connection,
         _config: ModelConfig,
         _tblproperties: &mut BTreeMap<String, Value>,
     ) -> AdapterResult<()> {
+        unimplemented!("only available with Databricks adapter")
+    }
+
+    /// is_uniform
+    fn is_uniform(
+        &self,
+        _state: &State,
+        _conn: &mut dyn Connection,
+        _config: ModelConfig,
+    ) -> AdapterResult<bool> {
         unimplemented!("only available with Databricks adapter")
     }
 

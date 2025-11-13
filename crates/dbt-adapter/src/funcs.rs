@@ -481,7 +481,10 @@ pub fn dispatch_adapter_calls(
         // only available for DataBricks
         "compare_dbr_version" => adapter.compare_dbr_version(state, args),
         "compute_external_path" => adapter.compute_external_path(state, args),
-        "update_tblproperties_for_iceberg" => adapter.update_tblproperties_for_iceberg(state, args),
+        "update_tblproperties_for_uniform_iceberg" => {
+            adapter.update_tblproperties_for_uniform_iceberg(state, args)
+        }
+        "is_uniform" => adapter.is_uniform(state, args),
         "valid_incremental_strategies" => adapter.valid_incremental_strategies(state, args),
         "get_relation_config" => adapter.get_relation_config(state, args),
         "get_config_from_model" => adapter.get_config_from_model(state, args),

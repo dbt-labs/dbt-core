@@ -34,7 +34,7 @@ use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
 use dbt_schemas::schemas::serde::{minijinja_value_to_typed_struct, yml_value_to_minijinja};
 use dbt_xdbc::Connection;
 use indexmap::IndexMap;
-use minijinja::arg_utils::{ArgParser, check_num_args};
+use minijinja::arg_utils::{ArgParser, ArgsIter, check_num_args};
 use minijinja::dispatch_object::DispatchObject;
 use minijinja::listener::RenderingEventListener;
 use minijinja::value::{Kwargs, Object};
@@ -1384,18 +1384,20 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn update_tblproperties_for_iceberg(
+    fn update_tblproperties_for_uniform_iceberg(
         &self,
         state: &State,
         args: &[Value],
     ) -> Result<Value, MinijinjaError> {
         if self.adapter_type() != AdapterType::Databricks {
-            unimplemented!("update_tblproperties_for_iceberg is only supported in Databricks")
+            unimplemented!(
+                "update_tblproperties_for_uniform_iceberg is only supported in Databricks"
+            )
         }
         let mut parser = ArgParser::new(args, None);
         check_num_args(current_function_name!(), &parser, 1, 2)?;
 
-        // TODO(anna): The value passed in to `update_tblproperties_for_iceberg` is not actually a `ModelConfig`. It is a `RunConfig`. We should fix this.
+        // TODO(anna): The value passed in to `update_tblproperties_for_uniform_iceberg` is not actually a `ModelConfig`. It is a `RunConfig`. We should fix this.
         let config = parser.get::<Value>("config")?;
         let config = minijinja_value_to_typed_struct::<ModelConfig>(config).map_err(|e| {
             MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
@@ -1418,13 +1420,35 @@ impl BaseAdapter for BridgeAdapter {
         };
 
         let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
-        self.typed_adapter.update_tblproperties_for_iceberg(
-            state,
-            conn.as_mut(),
-            config,
-            &mut tblproperties,
-        )?;
+        self.typed_adapter
+            .update_tblproperties_for_uniform_iceberg(
+                state,
+                conn.as_mut(),
+                config,
+                &mut tblproperties,
+            )?;
         Ok(Value::from_serialize(&tblproperties))
+    }
+
+    #[tracing::instrument(skip(self, state), level = "trace")]
+    fn is_uniform(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
+        if self.adapter_type() != AdapterType::Databricks {
+            unimplemented!("is_uniform is only supported in Databricks")
+        }
+        let iter = ArgsIter::new(current_function_name!(), &["config"], args);
+        let config = iter.next_arg::<Value>()?;
+        iter.finish()?;
+
+        // TODO(anna): The value passed in to `update_tblproperties_for_uniform_iceberg` is not actually a `ModelConfig`. It is a `RunConfig`. We should fix this.
+        let config = minijinja_value_to_typed_struct::<ModelConfig>(config).map_err(|e| {
+            MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
+        })?;
+
+        let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
+        let result = self
+            .typed_adapter
+            .is_uniform(state, conn.as_mut(), config)?;
+        Ok(Value::from(result))
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]

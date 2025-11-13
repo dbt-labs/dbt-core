@@ -712,12 +712,16 @@ impl BaseAdapter for ParseAdapter {
         Ok(empty_string_value())
     }
 
-    fn update_tblproperties_for_iceberg(
+    fn update_tblproperties_for_uniform_iceberg(
         &self,
         _state: &State,
         _args: &[Value],
     ) -> Result<Value, MinijinjaError> {
         Ok(empty_map_value())
+    }
+
+    fn is_uniform(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
+        todo!()
     }
 
     fn get_incremental_strategy_macro(

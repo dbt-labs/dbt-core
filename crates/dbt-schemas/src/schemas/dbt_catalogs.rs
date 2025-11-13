@@ -41,6 +41,7 @@
 //!           file_format: delta                                        // required with table_format=iceberg
 //!           adapter_properties:
 //!             location: <string>                                      // optional; if present, non-empty -- will be external_volume under the hood
+//!             use_uniform: <bool>                                     // optional; defaults to false
 //!
 //!       ## ==== Bigquery
 //!       write_integrations:
@@ -257,6 +258,7 @@ pub struct BigqueryBuiltInPropsView<'a> {
 #[derive(Debug)]
 pub struct DatabricksUnityPropsView<'a> {
     pub location_root: Option<&'a str>,
+    pub use_uniform: Option<bool>,
 }
 
 #[derive(Debug)]
@@ -974,6 +976,7 @@ impl<'a> WriteIntegrationView<'a> {
     }
 }
 
+// TODO: I think this should take in the table format - what if some adapter properties are only supported for certain table formats? Ex. databricks only allows use_uniform for table_format=iceberg
 fn parse_adapter_properties<'a>(
     properties: &'a yml::Mapping,
     catalog_type: CatalogType,
@@ -1113,7 +1116,11 @@ fn parse_adapter_properties<'a>(
             ))
         }
         CatalogType::DatabricksUnity => {
-            check_unknown_keys(properties, &["location_root"], "adapter_properties(unity)")?;
+            check_unknown_keys(
+                properties,
+                &["location_root", "use_uniform"],
+                "adapter_properties(unity)",
+            )?;
             if let Some((loc, span)) = get_str(properties, "location_root")?
                 && loc.trim().is_empty()
             {
@@ -1128,6 +1135,7 @@ fn parse_adapter_properties<'a>(
                     location_root: get_str(properties, "location_root")?
                         .filter(|(s, _)| !s.trim().is_empty())
                         .map(|(s, _)| s),
+                    use_uniform: get_bool(properties, "use_uniform")?.map(|(s, _)| s),
                 },
             ))
         }
@@ -2310,6 +2318,41 @@ catalogs:
             yaml,
             "when table_format=iceberg, file_format must be 'delta'",
         );
+    }
+
+    #[test]
+    fn databricks_unity_min_valid_with_iceberg_uniform() {
+        let yaml = r#"
+catalogs:
+  - name: uc
+    active_write_integration: i
+    write_integrations:
+      - name: i
+        catalog_type: unity
+        table_format: iceberg
+        file_format: delta
+        adapter_properties:
+          use_uniform: true
+"#;
+        let res = parse_view_and_validate(yaml);
+        assert!(res.is_ok(), "unity(min) should validate: {:?}", res.err());
+    }
+
+    #[test]
+    fn databricks_unity_rejects_non_bool_uniform() {
+        let yaml = r#"
+catalogs:
+  - name: uc
+    active_write_integration: i
+    write_integrations:
+      - name: i
+        catalog_type: unity
+        table_format: iceberg
+        file_format: delta
+        adapter_properties:
+          use_uniform: tautology
+"#;
+        assert_err_contains(yaml, "must be a boolean");
     }
 
     #[test]

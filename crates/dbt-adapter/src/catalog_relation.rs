@@ -487,16 +487,19 @@ impl CatalogRelation {
         let file_format = file_format;
 
         // 6) adapter_properties:
-        //    - UNITY: allow only location_root (optional; non-blank)
+        //    - UNITY: allow only location_root (optional; non-blank) or use_uniform (optional)
         //    - HMS: disallow adapter_properties entirely
         let yaml_adapter_props = Self::get_yaml_adapter_properties(write_integration);
         let model_adapter_props = Self::get_model_adapter_properties(model_config);
         let mut external_volume = None;
 
         // location_root: model(adapter_properties) > model (legacy) > YAML > default
-        let location_root = Self::get_model_config_value(model_config, "location_root")
-            .or_else(|| Self::get_adapter_property(model_adapter_props.as_ref(), "location_root"))
-            .or_else(|| Self::get_adapter_property(yaml_adapter_props.as_ref(), "location_root"));
+        let location_root =
+            Self::get_adapter_property(model_adapter_props.as_ref(), "location_root")
+                .or_else(|| Self::get_model_config_value(model_config, "location_root"))
+                .or_else(|| {
+                    Self::get_adapter_property(yaml_adapter_props.as_ref(), "location_root")
+                });
 
         let adapter_properties =
             Self::merged_adapter_properties(yaml_adapter_props, model_adapter_props);
@@ -521,6 +524,16 @@ impl CatalogRelation {
             ));
         };
         let external_volume = external_volume;
+
+        // use_uniform: model(adapter_properties) > YAML > default
+        // Since this is new, no legacy top-level config is allowed.
+        let use_uniform = Self::get_adapter_property(Some(&adapter_properties), "use_uniform");
+        if use_uniform.is_some() && table_format != DBX_ICEBERG_TABLE_FORMAT {
+            return Err(AdapterError::new(
+                AdapterErrorKind::Configuration,
+                "adapter_properties.use_uniform only allowed when table_format=iceberg",
+            ));
+        }
 
         Ok(CatalogRelation {
             adapter_type: AdapterType::Databricks,
@@ -1361,6 +1374,9 @@ impl Object for CatalogRelation {
             "location" => self.gate_by_adapter(vec![AdapterType::Databricks], || {
                 Self::map_opt_str(self.external_volume.clone())
             }),
+            "use_uniform" => self.gate_by_adapter(vec![AdapterType::Databricks], || {
+                Self::map_properties_bool(&self.adapter_properties, "use_uniform")
+            }),
 
             // === Bigquery
             "storage_uri" => self.gate_by_adapter(vec![AdapterType::Bigquery], || {
@@ -2192,6 +2208,48 @@ mod tests {
             .unwrap_err();
 
             assert!(format!("{err}").contains("location_root cannot be blank"));
+        }
+    }
+
+    #[test]
+    fn dbx_unity_use_uniform_ok() {
+        let cats = catalogs_yaml_one(
+            "UC",
+            "WIN",
+            "unity",
+            "ICEBERG",
+            &[
+                ("file_format", s("delta")),
+                ("adapter_properties", map(&[("use_uniform", boolv(true))])),
+            ],
+        );
+        let conf = json!({ "catalog_name": "UC" });
+
+        let ms = [
+            model(AdapterType::Databricks, conf.clone()),
+            model_deprecated_config(conf),
+        ];
+        for m in ms {
+            let r = CatalogRelation::from_model_config_and_catalogs(
+                &AdapterType::Databricks,
+                &m,
+                Some(Arc::new(DbtCatalogs {
+                    repr: cats.clone(),
+                    span: Default::default(),
+                })),
+            )
+            .unwrap();
+
+            assert_eq!(r.catalog_name.as_deref(), Some("UC"));
+            assert_eq!(r.integration_name.as_deref(), Some("WIN"));
+            assert_eq!(r.catalog_type, "unity");
+            assert_eq!(r.table_format, "iceberg");
+            assert_eq!(r.file_format.as_deref(), Some("delta"));
+            assert_eq!(
+                r.adapter_properties.get("use_uniform").map(|s| s.as_str()),
+                Some("true")
+            );
+            assert!(r.is_transient.is_none());
         }
     }
 
