@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::schemas::{
+    dbt_column::Granularity,
     manifest::{
         DbtMetric,
         common::{SourceFileMetadata, WhereFilterIntersection},
@@ -21,7 +22,7 @@ pub struct SemanticManifestMetric {
     pub metadata: Option<SourceFileMetadata>,
     pub label: Option<String>,
     pub config: Option<SemanticLayerElementConfig>,
-    pub time_granularity: Option<String>,
+    pub time_granularity: Option<Granularity>,
 }
 
 // Decide whether to map from DbtMetric or DbtManifest

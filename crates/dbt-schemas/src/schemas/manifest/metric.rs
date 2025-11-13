@@ -40,7 +40,7 @@ pub struct DbtMetricAttr {
     pub type_params: MetricTypeParams,
     pub filter: Option<WhereFilterIntersection>,
     pub metadata: Option<SourceFileMetadata>,
-    pub time_granularity: Option<String>,
+    pub time_granularity: Option<Granularity>,
     pub unrendered_config: BTreeMap<String, YmlValue>,
     pub metrics: Vec<MetricInput>,
     pub created_at: f64,

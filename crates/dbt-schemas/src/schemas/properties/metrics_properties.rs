@@ -38,6 +38,8 @@ pub struct MetricsProperties {
     pub base_metric: Option<StringOrMetricPropertiesMetricInput>,
     pub conversion_metric: Option<StringOrMetricPropertiesMetricInput>,
     pub constant_properties: Option<Vec<ConstantProperty>>,
+    // Used to specify a default time granularity for the metric
+    pub time_granularity: Option<Granularity>,
 }
 
 pub fn default_hidden() -> Option<bool> {

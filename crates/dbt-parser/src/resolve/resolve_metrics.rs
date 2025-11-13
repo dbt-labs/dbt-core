@@ -259,8 +259,8 @@ pub fn resolve_nested_model_metrics(
                         metric_type: metric_props.type_.clone().unwrap_or_default(),
                         type_params,
                         filter: metric_props.filter.clone().map(|f| vec![f].into()),
-                        time_granularity: None, // this is always None, hydrated in type_params.grain_to_date instead
-                        metrics: vec![],        // always empty, hydrated in type_params.metrics
+                        time_granularity: metric_props.time_granularity.clone(),
+                        metrics: vec![], // always empty, hydrated in type_params.metrics
                     },
                     deprecated_config: MetricConfig {
                         enabled: metric_config.enabled,
@@ -519,7 +519,7 @@ pub fn resolve_top_level_metrics(
                 metric_type,
                 type_params,
                 filter: metric_props.filter.clone().map(|f| vec![f].into()),
-                time_granularity: None, // this is always None, hydrated in type_params.grain_to_date instead
+                time_granularity: metric_props.time_granularity.clone(),
                 metrics: vec![],
             },
             deprecated_config: MetricConfig {

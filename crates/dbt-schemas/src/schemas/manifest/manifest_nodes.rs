@@ -13,6 +13,7 @@ use crate::schemas::common::DbtIncrementalStrategy;
 use crate::schemas::common::DbtUniqueKey;
 use crate::schemas::common::{DocsConfig, OnConfigurationChange};
 use crate::schemas::common::{Hooks, OnSchemaChange};
+use crate::schemas::dbt_column::Granularity;
 use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
 use crate::schemas::properties::ModelFreshness;
 
@@ -1134,7 +1135,7 @@ pub struct ManifestMetric {
     pub type_params: MetricTypeParams,
     pub filter: Option<WhereFilterIntersection>,
     pub metadata: Option<SourceFileMetadata>,
-    pub time_granularity: Option<String>,
+    pub time_granularity: Option<Granularity>,
     pub group: Option<String>,
 
     pub config: ManifestMetricConfig,
