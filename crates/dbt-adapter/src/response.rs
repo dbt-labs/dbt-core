@@ -51,12 +51,16 @@ impl AdapterResponse {
 
     /// Get the query ID for the response from the batch.
     pub(crate) fn query_id(batch: &RecordBatch, adapter_type: AdapterType) -> Option<String> {
-        #[allow(clippy::single_match)]
         match adapter_type {
             AdapterType::Snowflake => batch
                 .schema()
                 .metadata()
                 .get("SNOWFLAKE_QUERY_ID")
+                .map(|query_id: &String| query_id.to_string()),
+            AdapterType::Bigquery => batch
+                .schema()
+                .metadata()
+                .get("BIGQUERY:query_id")
                 .map(|query_id: &String| query_id.to_string()),
             _ => None,
         }
