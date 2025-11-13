@@ -11,6 +11,8 @@ from dbt.artifacts.resources import (
     ExportConfig,
     ExposureConfig,
     Measure,
+    MeasureAggregationParameters,
+    MetricAggregationParams,
     MetricConfig,
     MetricInput,
     MetricInputMeasure,
@@ -36,6 +38,7 @@ from dbt.context.providers import (
 from dbt.contracts.files import SchemaSourceFile
 from dbt.contracts.graph.nodes import Exposure, Group, Metric, SavedQuery, SemanticModel
 from dbt.contracts.graph.unparsed import (
+    PercentileType,
     UnparsedConversionTypeParams,
     UnparsedCumulativeTypeParams,
     UnparsedDimension,
@@ -46,10 +49,13 @@ from dbt.contracts.graph.unparsed import (
     UnparsedGroup,
     UnparsedMeasure,
     UnparsedMetric,
+    UnparsedMetricBase,
     UnparsedMetricInput,
     UnparsedMetricInputMeasure,
     UnparsedMetricTypeParams,
+    UnparsedMetricV2,
     UnparsedNonAdditiveDimension,
+    UnparsedNonAdditiveDimensionV2,
     UnparsedQueryParams,
     UnparsedSavedQuery,
     UnparsedSemanticModel,
@@ -72,7 +78,7 @@ from dbt_semantic_interfaces.type_enums import (
 
 
 def parse_where_filter(
-    where: Optional[Union[List[str], str]]
+    where: Optional[Union[List[str], str]],
 ) -> Optional[WhereFilterIntersection]:
     if where is None:
         return None
@@ -306,11 +312,19 @@ class MetricParser(YamlReader):
 
         return metric_inputs
 
-    def _get_optional_conversion_type_params(
+    def _get_optional_v1_conversion_type_params(
         self, unparsed: Optional[UnparsedConversionTypeParams]
     ) -> Optional[ConversionTypeParams]:
         if unparsed is None:
             return None
+        if unparsed.base_measure is None:
+            raise ValidationError(
+                "base_measure is required for conversion metrics that use type_params."
+            )
+        if unparsed.conversion_measure is None:
+            raise ValidationError(
+                "conversion_measure is required for conversion metrics that use type_params."
+            )
         return ConversionTypeParams(
             base_measure=self._get_input_measure(unparsed.base_measure),
             conversion_measure=self._get_input_measure(unparsed.conversion_measure),
@@ -320,7 +334,31 @@ class MetricParser(YamlReader):
             constant_properties=unparsed.constant_properties,
         )
 
-    def _get_optional_cumulative_type_params(
+    def _get_optional_v2_conversion_type_params(
+        self,
+        unparsed_metric: UnparsedMetricV2,
+    ) -> Optional[ConversionTypeParams]:
+        if MetricType(unparsed_metric.type) is not MetricType.CONVERSION:
+            return None
+        # We should catch this in the unparsed class validations! We're only asserting
+        # here for type safety.
+        if unparsed_metric.base_metric is None:
+            raise ValidationError("base_metric is required for cumulative metrics.")
+        if unparsed_metric.conversion_metric is None:
+            raise ValidationError("conversion_metric is required for cumulative metrics.")
+        if unparsed_metric.entity is None:
+            raise ValidationError("entity is required for conversion metrics.")
+
+        return ConversionTypeParams(
+            base_metric=self._get_metric_input(unparsed_metric.base_metric),
+            conversion_metric=self._get_metric_input(unparsed_metric.conversion_metric),
+            entity=unparsed_metric.entity,
+            calculation=ConversionCalculationType(unparsed_metric.calculation),
+            window=self._get_optional_time_window(unparsed_metric.window),
+            constant_properties=unparsed_metric.constant_properties,
+        )
+
+    def _get_optional_v1_cumulative_type_params(
         self, unparsed_metric: UnparsedMetric
     ) -> Optional[CumulativeTypeParams]:
         unparsed_type_params = unparsed_metric.type_params
@@ -353,36 +391,106 @@ class MetricParser(YamlReader):
 
         return None
 
-    def _get_metric_type_params(self, unparsed_metric: UnparsedMetric) -> MetricTypeParams:
-        type_params = unparsed_metric.type_params
-
-        grain_to_date: Optional[TimeGranularity] = None
-        if type_params.grain_to_date is not None:
-            # This should've been changed to a string (to support custom grain), but since this
-            # is a legacy field waiting to be deprecated, we will not support custom grain here
-            # in order to force customers off of using this field. The field to use should be
-            # `cumulative_type_params.grain_to_date`
-            grain_to_date = TimeGranularity(type_params.grain_to_date)
-
-        return MetricTypeParams(
-            measure=self._get_optional_input_measure(type_params.measure),
-            numerator=self._get_optional_metric_input(type_params.numerator),
-            denominator=self._get_optional_metric_input(type_params.denominator),
-            expr=str(type_params.expr) if type_params.expr is not None else None,
-            window=self._get_optional_time_window(type_params.window),
-            grain_to_date=grain_to_date,
-            metrics=self._get_metric_inputs(type_params.metrics),
-            conversion_type_params=self._get_optional_conversion_type_params(
-                type_params.conversion_type_params
-            ),
-            cumulative_type_params=self._get_optional_cumulative_type_params(
-                unparsed_metric=unparsed_metric,
-            ),
-            # input measures are calculated via metric processing post parsing
-            # input_measures=?,
+    def _get_optional_v2_cumulative_type_params(
+        self,
+        unparsed_metric: UnparsedMetricV2,
+    ) -> Optional[CumulativeTypeParams]:
+        if MetricType(unparsed_metric.type) is not MetricType.CUMULATIVE:
+            return None
+        return CumulativeTypeParams(
+            window=self._get_optional_time_window(unparsed_metric.window),
+            grain_to_date=unparsed_metric.grain_to_date,
+            period_agg=self._get_period_agg(unparsed_metric.period_agg),
         )
 
-    def parse_metric(self, unparsed: UnparsedMetric, generated_from: Optional[str] = None) -> None:
+    def _get_v2_non_additive_dimension(
+        self,
+        unparsed_non_additive_dimension: Optional[UnparsedNonAdditiveDimensionV2],
+    ) -> Optional[NonAdditiveDimension]:
+        if unparsed_non_additive_dimension is None:
+            return None
+        return NonAdditiveDimension(
+            name=unparsed_non_additive_dimension.name,
+            window_choice=AggregationType(unparsed_non_additive_dimension.window_agg),
+            window_groupings=unparsed_non_additive_dimension.group_by,
+        )
+
+    def _get_metric_type_params(self, unparsed_metric: UnparsedMetricBase) -> MetricTypeParams:
+        if isinstance(unparsed_metric, UnparsedMetric):
+            type_params = unparsed_metric.type_params
+
+            grain_to_date: Optional[TimeGranularity] = None
+            if type_params.grain_to_date is not None:
+                # This should've been changed to a string (to support custom grain), but since this
+                # is a legacy field waiting to be deprecated, we will not support custom grain here
+                # in order to force customers off of using this field. The field to use should be
+                # `cumulative_type_params.grain_to_date`
+                grain_to_date = TimeGranularity(type_params.grain_to_date)
+
+            return MetricTypeParams(
+                measure=self._get_optional_input_measure(type_params.measure),
+                numerator=self._get_optional_metric_input(type_params.numerator),
+                denominator=self._get_optional_metric_input(type_params.denominator),
+                expr=str(type_params.expr) if type_params.expr is not None else None,
+                window=self._get_optional_time_window(type_params.window),
+                grain_to_date=grain_to_date,
+                metrics=self._get_metric_inputs(type_params.metrics),
+                conversion_type_params=self._get_optional_v1_conversion_type_params(
+                    type_params.conversion_type_params
+                ),
+                cumulative_type_params=self._get_optional_v1_cumulative_type_params(
+                    unparsed_metric=unparsed_metric,
+                ),
+                # input measures are calculated via metric processing post parsing
+                # input_measures=?,
+            )
+        elif isinstance(unparsed_metric, UnparsedMetricV2):
+            if unparsed_metric.agg is not None:
+                # TODO: replace with assertions:
+                # - this is only possible on simple metrics
+                # - semantic model is required and must be set by the parser
+                semantic_model = "TODO: set by the parser"
+
+                metric_aggregation_params = MetricAggregationParams(
+                    semantic_model=semantic_model,
+                    agg=AggregationType(unparsed_metric.agg),
+                    agg_params=MeasureAggregationParameters(
+                        percentile=unparsed_metric.percentile,
+                        use_discrete_percentile=(unparsed_metric.percentile_type or "").lower()
+                        == PercentileType.DISCRETE,
+                        use_approximate_percentile=(unparsed_metric.percentile_type or "").lower()
+                        == PercentileType.CONTINUOUS,
+                    ),
+                    agg_time_dimension=unparsed_metric.agg_time_dimension,
+                    non_additive_dimension=self._get_v2_non_additive_dimension(
+                        unparsed_non_additive_dimension=unparsed_metric.non_additive_dimension,
+                    ),
+                )
+            else:
+                metric_aggregation_params = None
+            return MetricTypeParams(
+                numerator=self._get_optional_metric_input(unparsed_metric.numerator),
+                denominator=self._get_optional_metric_input(unparsed_metric.denominator),
+                expr=str(unparsed_metric.expr) if unparsed_metric.expr is not None else None,
+                window=self._get_optional_time_window(unparsed_metric.window),
+                metrics=self._get_metric_inputs(unparsed_metric.input_metrics),
+                conversion_type_params=self._get_optional_v2_conversion_type_params(
+                    unparsed_metric=unparsed_metric,
+                ),
+                cumulative_type_params=self._get_optional_v2_cumulative_type_params(
+                    unparsed_metric=unparsed_metric,
+                ),
+                metric_aggregation_params=metric_aggregation_params,
+            )
+        else:
+            raise DbtInternalError(
+                f"Tried to parse type params for a {type(unparsed_metric)}, but expected "
+                "an UnparsedMetric or UnparsedMetricV2",
+            )
+
+    def parse_metric(
+        self, unparsed: UnparsedMetricBase, generated_from: Optional[str] = None
+    ) -> None:
         package_name = self.project.project_name
         unique_id = f"{NodeType.Metric}.{package_name}.{unparsed.name}"
         path = self.yaml.path.relative_path
@@ -411,10 +519,23 @@ class MetricParser(YamlReader):
                 f"Calculated a {type(config)} for a metric, but expected a MetricConfig"
             )
 
-        # If we have meta in the config, copy to node level, for backwards
-        # compatibility with earlier node-only config.
-        if "meta" in config and config["meta"]:
-            unparsed.meta = config["meta"]
+        if isinstance(unparsed, UnparsedMetric):
+            # If we have meta in the config, copy to node level, for backwards
+            # compatibility with earlier node-only config.
+            if "meta" in config and config["meta"]:
+                unparsed.meta = config["meta"]
+            meta = unparsed.meta
+            tags = unparsed.tags
+        elif isinstance(unparsed, UnparsedMetricV2):
+            # V2 Metrics do not have a top-level meta field; this should be part of
+            # the config.
+            meta = {}
+            tags = []
+        else:
+            raise DbtInternalError(
+                f"Tried to parse a {type(unparsed)} into a metric, but expected "
+                "an UnparsedMetric or UnparsedMetricV2",
+            )
 
         parsed = Metric(
             resource_type=NodeType.Metric,
@@ -425,13 +546,13 @@ class MetricParser(YamlReader):
             fqn=fqn,
             name=unparsed.name,
             description=unparsed.description,
-            label=unparsed.label,
+            label=unparsed.label or unparsed.name,
             type=MetricType(unparsed.type),
             type_params=self._get_metric_type_params(unparsed),
             time_granularity=unparsed.time_granularity,
             filter=parse_where_filter(unparsed.filter),
-            meta=unparsed.meta,
-            tags=unparsed.tags,
+            meta=meta,
+            tags=tags,
             config=config,
             unrendered_config=unrendered_config,
             group=config.group,
@@ -445,7 +566,7 @@ class MetricParser(YamlReader):
             self.manifest.add_disabled(self.yaml.file, parsed)
 
     def _generate_metric_config(
-        self, target: UnparsedMetric, fqn: List[str], package_name: str, rendered: bool
+        self, target: UnparsedMetricBase, fqn: List[str], package_name: str, rendered: bool
     ):
         generator: BaseContextConfigGenerator
         if rendered:
@@ -470,12 +591,20 @@ class MetricParser(YamlReader):
 
     def parse(self) -> None:
         for data in self.get_key_dicts():
-            try:
-                UnparsedMetric.validate(data)
-                unparsed = UnparsedMetric.from_dict(data)
-
-            except (ValidationError, JSONValidationError) as exc:
-                raise YamlParseDictError(self.yaml.path, self.key, data, exc)
+            # The main differentiator of old-style yaml and new-style is "type_params",
+            # so if that is missing, we'll assume you're using the newer yaml.
+            if "type_params" in data:
+                try:
+                    UnparsedMetric.validate(data)
+                    unparsed = UnparsedMetric.from_dict(data)
+                except (ValidationError, JSONValidationError) as exc:
+                    raise YamlParseDictError(self.yaml.path, self.key, data, exc)
+            else:
+                try:
+                    UnparsedMetricV2.validate(data)
+                    unparsed = UnparsedMetricV2.from_dict(data)
+                except (ValidationError, JSONValidationError) as exc:
+                    raise YamlParseDictError(self.yaml.path, self.key, data, exc)
             self.parse_metric(unparsed)
 
 

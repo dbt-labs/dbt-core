@@ -297,6 +297,51 @@ metrics:
       measure: sum_of_things
 """
 
+schema_yml_v2 = """models:
+  - name: fct_revenue
+    description: This is the model fct_revenue. It should be able to use doc blocks
+
+semantic_models:
+  - name: revenue
+    description: This is the revenue semantic model. It should be able to use doc blocks
+    model: ref('fct_revenue')
+
+    defaults:
+      agg_time_dimension: ds
+
+    dimensions:
+      - name: ds
+        type: time
+        expr: created_at
+        type_params:
+          time_granularity: day
+
+    entities:
+      - name: user
+        type: foreign
+        expr: user_id
+      - name: id
+        type: primary
+
+metrics:
+  # shouldn't work because the simple metric will need to be attached to a model,
+  # but it's fine for now.
+  - name: simple_metric
+    label: Simple Metric
+    type: simple
+    agg: count
+    expr: txn_revenue
+"""
+
+# Might need to increase the indentation on this to use it INSIDE a dbt model
+# when that is supported
+v2_metric_missing_agg = """
+  - name: bad_metric_missing_agg
+    label: Bad Metric Missing Agg
+    type: simple
+    expr: txn_revenue
+"""
+
 schema_without_semantic_model_yml = """models:
   - name: fct_revenue
     description: This is the model fct_revenue. It should be able to use doc blocks
