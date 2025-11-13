@@ -197,3 +197,93 @@ impl ::prost::Name for UserLogMessage {
         "/v1.public.events.fusion.log.UserLogMessage".into()
     }
 }
+/// Event emitted when displaying inline data (e.g., from show command).
+/// This event replaces the dbt-core ShowNode event (Q041) for inline data display.
+#[cfg_attr(any(test, feature = "test-utils"), derive(::fake::Dummy))]
+#[derive(crate::macros::ProtoNew)]
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ShowDataOutput {
+    /// Format of the output
+    #[prost(enumeration = "ShowDataOutputFormat", tag = "1")]
+    #[cfg_attr(
+        any(test, feature = "test-utils"),
+        dummy(expr = "::fake::Fake::fake::<ShowDataOutputFormat>(&::fake::Faker) as i32")
+    )]
+    pub output_format: i32,
+    /// The data in the specified format (e.g., pretty-printed table)
+    #[prost(string, tag = "2")]
+    pub content: ::prost::alloc::string::String,
+    /// Name of the node being shown (e.g., "my_model" or "inline")
+    #[prost(string, tag = "3")]
+    pub node_name: ::prost::alloc::string::String,
+    /// Whether this is an inline/ad-hoc query (true) or a defined node (false)
+    #[prost(bool, tag = "4")]
+    pub is_inline: bool,
+    /// The unique_id of the node being shown (e.g., "model.my_project.my_model").
+    /// Unset for ad-hoc queries
+    #[prost(string, optional, tag = "5")]
+    pub unique_id: ::core::option::Option<::prost::alloc::string::String>,
+    /// Column names for the data
+    #[prost(string, repeated, tag = "6")]
+    pub columns: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+    /// Legacy dbt core event code for backward compatibility (always "Q041")
+    #[prost(string, tag = "7")]
+    pub dbt_core_event_code: ::prost::alloc::string::String,
+}
+impl crate::StaticName for ShowDataOutput {
+    const FULL_NAME: &'static str = "v1.public.events.fusion.log.ShowDataOutput";
+    const TYPE_URL: &'static str = "/v1.public.events.fusion.log.ShowDataOutput";
+}
+impl ::prost::Name for ShowDataOutput {
+    const NAME: &'static str = "ShowDataOutput";
+    const PACKAGE: &'static str = "v1.public.events.fusion.log";
+    fn full_name() -> ::prost::alloc::string::String {
+        "v1.public.events.fusion.log.ShowDataOutput".into()
+    }
+    fn type_url() -> ::prost::alloc::string::String {
+        "/v1.public.events.fusion.log.ShowDataOutput".into()
+    }
+}
+/// Output format for list command
+#[cfg_attr(any(test, feature = "test-utils"), derive(::fake::Dummy))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum ShowDataOutputFormat {
+    Unspecified = 0,
+    Text = 1,
+    Csv = 2,
+    Tsv = 3,
+    Json = 4,
+    Ndjson = 5,
+    Yml = 6,
+}
+impl ShowDataOutputFormat {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "SHOW_DATA_OUTPUT_FORMAT_UNSPECIFIED",
+            Self::Text => "SHOW_DATA_OUTPUT_FORMAT_TEXT",
+            Self::Csv => "SHOW_DATA_OUTPUT_FORMAT_CSV",
+            Self::Tsv => "SHOW_DATA_OUTPUT_FORMAT_TSV",
+            Self::Json => "SHOW_DATA_OUTPUT_FORMAT_JSON",
+            Self::Ndjson => "SHOW_DATA_OUTPUT_FORMAT_NDJSON",
+            Self::Yml => "SHOW_DATA_OUTPUT_FORMAT_YML",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "SHOW_DATA_OUTPUT_FORMAT_UNSPECIFIED" => Some(Self::Unspecified),
+            "SHOW_DATA_OUTPUT_FORMAT_TEXT" => Some(Self::Text),
+            "SHOW_DATA_OUTPUT_FORMAT_CSV" => Some(Self::Csv),
+            "SHOW_DATA_OUTPUT_FORMAT_TSV" => Some(Self::Tsv),
+            "SHOW_DATA_OUTPUT_FORMAT_JSON" => Some(Self::Json),
+            "SHOW_DATA_OUTPUT_FORMAT_NDJSON" => Some(Self::Ndjson),
+            "SHOW_DATA_OUTPUT_FORMAT_YML" => Some(Self::Yml),
+            _ => None,
+        }
+    }
+}

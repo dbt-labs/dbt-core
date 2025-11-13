@@ -550,6 +550,296 @@ impl<'de> serde::Deserialize<'de> for LogMessage {
         deserializer.deserialize_struct("v1.public.events.fusion.log.LogMessage", FIELDS, GeneratedVisitor)
     }
 }
+impl serde::Serialize for ShowDataOutput {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if self.output_format != 0 {
+            len += 1;
+        }
+        if !self.content.is_empty() {
+            len += 1;
+        }
+        if !self.node_name.is_empty() {
+            len += 1;
+        }
+        if self.is_inline {
+            len += 1;
+        }
+        if self.unique_id.is_some() {
+            len += 1;
+        }
+        if !self.columns.is_empty() {
+            len += 1;
+        }
+        if !self.dbt_core_event_code.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("v1.public.events.fusion.log.ShowDataOutput", len)?;
+        if self.output_format != 0 {
+            let v = ShowDataOutputFormat::try_from(self.output_format)
+                .map_err(|_| serde::ser::Error::custom(format!("Invalid variant {}", self.output_format)))?;
+            struct_ser.serialize_field("output_format", &v)?;
+        }
+        if !self.content.is_empty() {
+            struct_ser.serialize_field("content", &self.content)?;
+        }
+        if !self.node_name.is_empty() {
+            struct_ser.serialize_field("node_name", &self.node_name)?;
+        }
+        if self.is_inline {
+            struct_ser.serialize_field("is_inline", &self.is_inline)?;
+        }
+        if let Some(v) = self.unique_id.as_ref() {
+            struct_ser.serialize_field("unique_id", v)?;
+        }
+        if !self.columns.is_empty() {
+            struct_ser.serialize_field("columns", &self.columns)?;
+        }
+        if !self.dbt_core_event_code.is_empty() {
+            struct_ser.serialize_field("dbt_core_event_code", &self.dbt_core_event_code)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for ShowDataOutput {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "output_format",
+            "outputFormat",
+            "content",
+            "node_name",
+            "nodeName",
+            "is_inline",
+            "isInline",
+            "unique_id",
+            "uniqueId",
+            "columns",
+            "dbt_core_event_code",
+            "dbtCoreEventCode",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            OutputFormat,
+            Content,
+            NodeName,
+            IsInline,
+            UniqueId,
+            Columns,
+            DbtCoreEventCode,
+            __SkipField__,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "outputFormat" | "output_format" => Ok(GeneratedField::OutputFormat),
+                            "content" => Ok(GeneratedField::Content),
+                            "nodeName" | "node_name" => Ok(GeneratedField::NodeName),
+                            "isInline" | "is_inline" => Ok(GeneratedField::IsInline),
+                            "uniqueId" | "unique_id" => Ok(GeneratedField::UniqueId),
+                            "columns" => Ok(GeneratedField::Columns),
+                            "dbtCoreEventCode" | "dbt_core_event_code" => Ok(GeneratedField::DbtCoreEventCode),
+                            _ => Ok(GeneratedField::__SkipField__),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = ShowDataOutput;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct v1.public.events.fusion.log.ShowDataOutput")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<ShowDataOutput, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut output_format__ = None;
+                let mut content__ = None;
+                let mut node_name__ = None;
+                let mut is_inline__ = None;
+                let mut unique_id__ = None;
+                let mut columns__ = None;
+                let mut dbt_core_event_code__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::OutputFormat => {
+                            if output_format__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("outputFormat"));
+                            }
+                            output_format__ = Some(map_.next_value::<ShowDataOutputFormat>()? as i32);
+                        }
+                        GeneratedField::Content => {
+                            if content__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("content"));
+                            }
+                            content__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::NodeName => {
+                            if node_name__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("nodeName"));
+                            }
+                            node_name__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::IsInline => {
+                            if is_inline__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("isInline"));
+                            }
+                            is_inline__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::UniqueId => {
+                            if unique_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("uniqueId"));
+                            }
+                            unique_id__ = map_.next_value()?;
+                        }
+                        GeneratedField::Columns => {
+                            if columns__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("columns"));
+                            }
+                            columns__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::DbtCoreEventCode => {
+                            if dbt_core_event_code__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("dbtCoreEventCode"));
+                            }
+                            dbt_core_event_code__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::__SkipField__ => {
+                            let _ = map_.next_value::<serde::de::IgnoredAny>()?;
+                        }
+                    }
+                }
+                Ok(ShowDataOutput {
+                    output_format: output_format__.unwrap_or_default(),
+                    content: content__.unwrap_or_default(),
+                    node_name: node_name__.unwrap_or_default(),
+                    is_inline: is_inline__.unwrap_or_default(),
+                    unique_id: unique_id__,
+                    columns: columns__.unwrap_or_default(),
+                    dbt_core_event_code: dbt_core_event_code__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("v1.public.events.fusion.log.ShowDataOutput", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for ShowDataOutputFormat {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let variant = match self {
+            Self::Unspecified => "SHOW_DATA_OUTPUT_FORMAT_UNSPECIFIED",
+            Self::Text => "SHOW_DATA_OUTPUT_FORMAT_TEXT",
+            Self::Csv => "SHOW_DATA_OUTPUT_FORMAT_CSV",
+            Self::Tsv => "SHOW_DATA_OUTPUT_FORMAT_TSV",
+            Self::Json => "SHOW_DATA_OUTPUT_FORMAT_JSON",
+            Self::Ndjson => "SHOW_DATA_OUTPUT_FORMAT_NDJSON",
+            Self::Yml => "SHOW_DATA_OUTPUT_FORMAT_YML",
+        };
+        serializer.serialize_str(variant)
+    }
+}
+impl<'de> serde::Deserialize<'de> for ShowDataOutputFormat {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "SHOW_DATA_OUTPUT_FORMAT_UNSPECIFIED",
+            "SHOW_DATA_OUTPUT_FORMAT_TEXT",
+            "SHOW_DATA_OUTPUT_FORMAT_CSV",
+            "SHOW_DATA_OUTPUT_FORMAT_TSV",
+            "SHOW_DATA_OUTPUT_FORMAT_JSON",
+            "SHOW_DATA_OUTPUT_FORMAT_NDJSON",
+            "SHOW_DATA_OUTPUT_FORMAT_YML",
+        ];
+
+        struct GeneratedVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = ShowDataOutputFormat;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(formatter, "expected one of: {:?}", &FIELDS)
+            }
+
+            fn visit_i64<E>(self, v: i64) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                i32::try_from(v)
+                    .ok()
+                    .and_then(|x| x.try_into().ok())
+                    .ok_or_else(|| {
+                        serde::de::Error::invalid_value(serde::de::Unexpected::Signed(v), &self)
+                    })
+            }
+
+            fn visit_u64<E>(self, v: u64) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                i32::try_from(v)
+                    .ok()
+                    .and_then(|x| x.try_into().ok())
+                    .ok_or_else(|| {
+                        serde::de::Error::invalid_value(serde::de::Unexpected::Unsigned(v), &self)
+                    })
+            }
+
+            fn visit_str<E>(self, value: &str) -> std::result::Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                match value {
+                    "SHOW_DATA_OUTPUT_FORMAT_UNSPECIFIED" => Ok(ShowDataOutputFormat::Unspecified),
+                    "SHOW_DATA_OUTPUT_FORMAT_TEXT" => Ok(ShowDataOutputFormat::Text),
+                    "SHOW_DATA_OUTPUT_FORMAT_CSV" => Ok(ShowDataOutputFormat::Csv),
+                    "SHOW_DATA_OUTPUT_FORMAT_TSV" => Ok(ShowDataOutputFormat::Tsv),
+                    "SHOW_DATA_OUTPUT_FORMAT_JSON" => Ok(ShowDataOutputFormat::Json),
+                    "SHOW_DATA_OUTPUT_FORMAT_NDJSON" => Ok(ShowDataOutputFormat::Ndjson),
+                    "SHOW_DATA_OUTPUT_FORMAT_YML" => Ok(ShowDataOutputFormat::Yml),
+                    _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
+                }
+            }
+        }
+        deserializer.deserialize_any(GeneratedVisitor)
+    }
+}
 impl serde::Serialize for UserLogMessage {
     #[allow(deprecated)]
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>

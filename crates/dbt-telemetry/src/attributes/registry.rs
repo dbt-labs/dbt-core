@@ -8,7 +8,8 @@ use crate::{
     attributes::traits::ArrowSerializableTelemetryEvent,
     schemas::{
         ArtifactWritten, CallTrace, CompiledCodeInline, Invocation, ListItemOutput, LogMessage,
-        NodeEvaluated, OnboardingScreenShown, PhaseExecuted, Process, QueryExecuted, Unknown,
+        NodeEvaluated, OnboardingScreenShown, PhaseExecuted, Process, QueryExecuted,
+        ShowDataOutput, Unknown,
     },
     serialize::arrow::ArrowAttributes,
 };
@@ -150,6 +151,12 @@ static PUBLIC_TELEMETRY_EVENT_REGISTRY: LazyLock<TelemetryEventTypeRegistry> =
             arrow_deserialize_for_type::<ListItemOutput>,
             #[cfg(any(test, feature = "test-utils"))]
             faker_for_type::<ListItemOutput>,
+        );
+        registry.register(
+            ShowDataOutput::FULL_NAME,
+            arrow_deserialize_for_type::<ShowDataOutput>,
+            #[cfg(any(test, feature = "test-utils"))]
+            faker_for_type::<ShowDataOutput>,
         );
 
         registry

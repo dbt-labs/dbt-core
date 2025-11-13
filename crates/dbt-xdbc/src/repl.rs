@@ -353,7 +353,7 @@ pub async fn run_repl(backend_str: &str) -> Result<()> {
                         "",
                         &column_names,
                         slice::from_ref(&batch),
-                        &DisplayFormat::Table,
+                        DisplayFormat::Table,
                         Some(10),
                         true,
                         Some(batch.num_rows()),

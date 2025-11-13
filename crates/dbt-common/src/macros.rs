@@ -124,46 +124,6 @@ macro_rules! fsinfo {
 // ------------------------------------------------------------------------------------------------
 
 #[macro_export]
-macro_rules! show_result {
-    ( $io:expr, $option:expr, $artifact:expr) => {
-        $crate::show_result!($io, $option, $artifact, columns = Option::<&[String]>::None)
-    };
-
-    ( $io:expr, $option:expr, $artifact:expr, columns = $columns:expr) => {
-        $crate::show_result!($io, $option, $artifact, columns = $columns, unique_id = Option::<&str>::None)
-    };
-
-    ( $io:expr, $option:expr, $artifact:expr, columns = $columns:expr, unique_id = $unique_id:expr) => {{
-        use $crate::io_args::ShowOptions;
-        use dbt_common::constants::INLINE_NODE;
-        use serde_json::json;
-        if $io.should_show($option) {
-            let output = format!("\n{}", $artifact);
-            // this preview field and name is used by the dbt-cloud CLI to display the result
-            let node_id = $unique_id.unwrap_or(INLINE_NODE);
-            let mut data = json!({
-                "preview": $artifact.to_string(),
-                "unique_id": node_id
-            });
-
-            // columns can be used to show column names when the resultset is empty, eg.
-            //   { "preview": "[]", "columns": ["column1", "column2"] }
-            if let Some(cols) = $columns {
-                data["columns"] = json!(cols);
-            }
-
-            $crate::_log!(
-                $crate::macros::log_adapter::log::Level::Info,
-                _INVOCATION_ID_ = $io.invocation_id.as_u128(),
-                name= "ShowNode",
-                data:serde = data;
-                "{}", output
-            );
-        }
-    }};
-}
-
-#[macro_export]
 macro_rules! show_result_with_default_title {
     ( $io:expr, $option:expr, $artifact:expr) => {{
         use $crate::io_args::ShowOptions;

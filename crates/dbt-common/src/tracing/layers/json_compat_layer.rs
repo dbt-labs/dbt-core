@@ -4,7 +4,7 @@ use chrono::{DateTime, Utc};
 use dbt_error::ErrorCode;
 use dbt_telemetry::{
     Invocation, ListItemOutput, LogMessage, LogRecordInfo, QueryExecuted, SeverityNumber,
-    SpanEndInfo, UserLogMessage,
+    ShowDataOutput, SpanEndInfo, UserLogMessage,
 };
 use serde_json::json;
 use tracing::level_filters::LevelFilter;
@@ -303,6 +303,36 @@ impl TelemetryConsumer for JsonCompatLayer {
                 "data": {
                     "msg": &list_item.content, // Use content from event for backward compatibility
                 }
+            })
+            .to_string();
+
+            self.writer.writeln(value.as_str());
+            return;
+        }
+
+        // Handle ShowDataOutput events (from dbt show command)
+        // These map to ShowNode event (Q041) for backward compatibility
+        if let Some(inline_data) = log_record.attributes.downcast_ref::<ShowDataOutput>() {
+            let info_json = serde_json::to_value(self.build_core_event_info(
+                Some("Q041"),
+                Some("ShowNode"),
+                &log_record.severity_text,
+                inline_data.content.clone(),
+            ))
+            .expect("Failed to serialize core event info to JSON");
+
+            let data_obj = json!({
+                "node_name": &inline_data.node_name,
+                "preview": &inline_data.content,
+                "is_inline": inline_data.is_inline,
+                "output_format": inline_data.output_format().as_str(),
+                "unique_id": inline_data.unique_id.as_deref().unwrap_or("sql_operation.inline_query"),
+                "columns": &inline_data.columns,
+            });
+
+            let value = json!({
+                "info": info_json,
+                "data": data_obj,
             })
             .to_string();
 

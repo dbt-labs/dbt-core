@@ -2,8 +2,8 @@ use chrono::{DateTime, Utc};
 use dbt_error::ErrorCode;
 use dbt_telemetry::{
     Invocation, ListItemOutput, LogMessage, LogRecordInfo, NodeEvaluated, NodeOutcome,
-    NodeOutcomeDetail, NodeType, QueryExecuted, SeverityNumber, SpanEndInfo, SpanStartInfo,
-    UserLogMessage,
+    NodeOutcomeDetail, NodeType, QueryExecuted, SeverityNumber, ShowDataOutput, SpanEndInfo,
+    SpanStartInfo, UserLogMessage,
 };
 use std::{
     sync::atomic::{AtomicBool, Ordering},
@@ -215,6 +215,17 @@ impl TelemetryConsumer for FileLogLayer {
                 log_record.time_unix_nano,
                 log_record.severity_number,
                 std::slice::from_ref(&list_item.content),
+            );
+            return;
+        }
+
+        // Handle ShowDataOutput events (from dbt show command or run with --show data)
+        if let Some(show_data) = log_record.attributes.downcast_ref::<ShowDataOutput>() {
+            // Write preview to file log
+            self.write_log_lines(
+                log_record.time_unix_nano,
+                log_record.severity_number,
+                std::slice::from_ref(&show_data.content),
             );
         }
     }

@@ -7,8 +7,8 @@ use std::{
 use console::Term;
 use dbt_telemetry::{
     ExecutionPhase, Invocation, ListItemOutput, LogMessage, LogRecordInfo, NodeEvaluated,
-    NodeOutcome, NodeOutcomeDetail, NodeType, PhaseExecuted, SeverityNumber, SpanEndInfo,
-    SpanStartInfo, SpanStatus, StatusCode, TelemetryAttributes, UserLogMessage,
+    NodeOutcome, NodeOutcomeDetail, NodeType, PhaseExecuted, SeverityNumber, ShowDataOutput,
+    SpanEndInfo, SpanStartInfo, SpanStatus, StatusCode, TelemetryAttributes, UserLogMessage,
 };
 
 use dbt_error::ErrorCode;
@@ -354,7 +354,8 @@ impl TelemetryConsumer for TuiLayer {
             return;
         }
 
-        // Handle ListItemOutput - only show if ShowOptions::Nodes is enabled
+        // Handle ListItemOutput - only show for list commad unconditionally,
+        // or if ShowOptions::Nodes is enabled for other commands
         if let Some(list_item) = log_record.attributes.downcast_ref::<ListItemOutput>() {
             if self.show_options.contains(&ShowOptions::Nodes) || self.command == FsCommand::List {
                 with_suspended_progress_bars(|| {
@@ -378,6 +379,19 @@ impl TelemetryConsumer for TuiLayer {
                         .expect("failed to write to stdout");
                 });
             }
+
+            return;
+        }
+
+        // Handle ShowDataOutput - always show unconditionally. Call-sites decide whether to emit or not.
+        if let Some(show_data) = log_record.attributes.downcast_ref::<ShowDataOutput>() {
+            with_suspended_progress_bars(|| {
+                let mut stdout = io::stdout().lock();
+
+                stdout
+                    .write_all(format!("{}\n", show_data.content).as_bytes())
+                    .expect("failed to write show data to stdout");
+            });
 
             return;
         }
