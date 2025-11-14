@@ -60,6 +60,20 @@ version = "2.0.0-preview.68"
 
 [patch.crates-io]
 
+# ============================= ring build.rs workaround ===========================
+#
+# ring 0.17.14 contains a rogue `build.rs` that forces a full rebuild of our
+# entire workspace on every `cargo xtask` invocation, which completely ruins
+# developer experience. As a workaround, we fork ring 0.17.14 and backport the
+# `build.rs` fix.
+#
+# This is a *temporary* workaround until upstream pushes a new release
+# containing the fix.
+#
+# For more context, see: https://github.com/briansmith/ring/issues/2454
+ring = { git = "https://github.com/sdf-labs/ring.git", rev = "3c35ce0b7e1bd9fe83180b19eda21d302e0b5006" }
+# ==================================================================================
+
 # We currently need a fork of apache/arrow-datafusion with a few patches.
 # However, note that we declare dependencies in our crates with the same version
 # numbers as crates.io / the upstream repository.
