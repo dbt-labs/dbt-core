@@ -309,6 +309,7 @@ where
     let cli = P::parse_from(cmd_vec);
     let arg = from_lib(&cli);
     let trace_config = FsTraceConfig::new_from_io_args(
+        arg.command,
         Some(&project_dir),
         Some(&target_dir),
         &arg.io,

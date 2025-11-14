@@ -470,7 +470,7 @@ impl InitArgs {
                 in_dir: in_dir.to_path_buf(),
                 out_dir: out_dir.to_path_buf(),
                 show,
-                command: arg.command,
+                is_compile: arg.command == FsCommand::Compile,
                 debug: arg.io.debug,
                 invocation_id: arg.io.invocation_id,
                 send_anonymous_usage_stats: self.common_args.send_anonymous_usage_stats,
@@ -556,7 +556,7 @@ impl CommonArgs {
             command: arg.command,
             io: IoArgs {
                 show,
-                command: arg.command,
+                is_compile: arg.command == FsCommand::Compile,
                 debug: self.debug,
                 invocation_id: arg.io.invocation_id,
                 in_dir: in_dir.to_path_buf(),
@@ -645,7 +645,7 @@ pub fn from_main(cli: &Cli) -> SystemArgs {
         io: IoArgs {
             invocation_id: uuid::Uuid::new_v4(),
             show: cli.common_args().show.iter().cloned().collect(),
-            command,
+            is_compile: command == FsCommand::Compile,
             debug: cli.common_args().debug,
             in_dir: PathBuf::new(),
             out_dir: PathBuf::new(),
@@ -690,7 +690,7 @@ pub fn from_lib(cli: &Cli) -> SystemArgs {
         io: IoArgs {
             invocation_id: uuid::Uuid::new_v4(),
             show: cli.common_args().show.iter().cloned().collect(),
-            command,
+            is_compile: command == FsCommand::Compile,
             debug: cli.common_args().debug,
             in_dir: PathBuf::new(),
             out_dir: PathBuf::new(),

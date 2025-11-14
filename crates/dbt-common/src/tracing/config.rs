@@ -243,6 +243,7 @@ impl FsTraceConfig {
     /// Creates a new FsTraceConfig with proper path resolution.
     /// This method never fails - it uses fallback logic for directory resolution.
     pub fn new_from_io_args(
+        command: FsCommand,
         project_dir: Option<&PathBuf>,
         target_path: Option<&PathBuf>,
         io_args: &IoArgs,
@@ -260,7 +261,7 @@ impl FsTraceConfig {
 
         Self::new(
             package,
-            io_args.command,
+            command,
             project_dir,
             target_path,
             io_args.log_path.as_ref(),

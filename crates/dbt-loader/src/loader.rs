@@ -212,7 +212,11 @@ pub async fn load(
         &simplified_dbt_project,
     );
 
-    persist_internal_packages(&internal_packages_install_path, adapter_type, arg.command)?;
+    persist_internal_packages(
+        &internal_packages_install_path,
+        adapter_type,
+        arg.enable_persist_compare_package,
+    )?;
 
     let (packages_lock, upstream_projects) = get_or_install_packages(
         &arg.io,

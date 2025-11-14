@@ -103,7 +103,7 @@ impl FsCommand {
 pub struct IoArgs {
     pub invocation_id: uuid::Uuid,
     pub show: HashSet<ShowOptions>,
-    pub command: FsCommand,
+    pub is_compile: bool,
     pub in_dir: PathBuf,
     pub out_dir: PathBuf,
     pub log_path: Option<PathBuf>,
@@ -209,7 +209,7 @@ impl IoArgs {
             // TODO: temporary logic to avoid showing skipped nodes for compile.
             // Should be centralized across all commands, progress message types, and options.
             && (option != ShowOptions::Completed
-                || self.command != FsCommand::Compile
+                || !self.is_compile
                 || self.debug)
     }
 

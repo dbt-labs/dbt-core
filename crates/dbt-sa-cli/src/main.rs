@@ -47,6 +47,7 @@ fn main() -> ExitCode {
 
     // Init tracing
     let mut telemetry_handle = match init_tracing(FsTraceConfig::new_from_io_args(
+        arg.command,
         cli.project_dir().as_ref(),
         cli.target_path().as_ref(),
         &arg.io,

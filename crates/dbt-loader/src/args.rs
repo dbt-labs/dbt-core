@@ -7,7 +7,6 @@ use dbt_schemas::state::DbtState;
 
 #[derive(Clone, Default)]
 pub struct LoadArgs {
-    pub command: FsCommand,
     pub io: IoArgs,
     // The profile directory to load the profiles from
     pub profiles_dir: Option<PathBuf>,
@@ -41,6 +40,8 @@ pub struct LoadArgs {
     pub version_check: bool,
     /// Inline SQL to compile (from --inline flag)
     pub inline_sql: Option<String>,
+    /// Enables persisting compare packages in private builds
+    pub enable_persist_compare_package: bool,
     /// This is for incremental.
     /// The [DbtState] of the previouis compile.
     /// Setting this will cause the 'load' phase to skip a lot of work
@@ -51,7 +52,6 @@ pub struct LoadArgs {
 impl LoadArgs {
     pub fn from_eval_args(arg: &EvalArgs) -> Self {
         Self {
-            command: arg.command,
             io: arg.io.clone(),
             profile: arg.profile.clone(),
             profiles_dir: arg.profiles_dir.clone(),
@@ -69,6 +69,7 @@ impl LoadArgs {
             debug_profile: arg.phase == Phases::Debug,
             version_check: arg.version_check,
             inline_sql: None, // Will be set separately when needed
+            enable_persist_compare_package: arg.command == FsCommand::Extension("compare"),
             prev_dbt_state: None,
         }
     }
