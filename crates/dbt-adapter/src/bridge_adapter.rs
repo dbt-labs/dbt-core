@@ -26,7 +26,7 @@ use dbt_schemas::schemas::InternalDbtNodeWrapper;
 use dbt_schemas::schemas::common::{DbtIncrementalStrategy, ResolvedQuoting};
 use dbt_schemas::schemas::dbt_column::{DbtColumn, DbtColumnRef};
 use dbt_schemas::schemas::manifest::{
-    BigqueryClusterConfig, BigqueryPartitionConfig, GrantAccessToTarget, PartitionConfig,
+    BigqueryClusterConfig, BigqueryPartitionConfig, GrantAccessToTarget,
 };
 use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::properties::ModelConstraint;
@@ -564,16 +564,10 @@ impl BaseAdapter for BridgeAdapter {
     fn get_incremental_strategy_macro(
         &self,
         state: &State,
-        args: &[Value],
+        strategy: &str,
     ) -> Result<Value, MinijinjaError> {
-        let mut parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 2, 2)?;
-
-        let _ = parser.get::<String>("context")?; // unnecessary, parse for backward compat; the existing dbt requires it to execute a macro
-        let strategy = parser.get::<String>("strategy")?;
-
         if strategy != "default" {
-            let strategy_ = DbtIncrementalStrategy::from_str(&strategy)
+            let strategy_ = DbtIncrementalStrategy::from_str(strategy)
                 .map_err(|e| invalid_argument_inner!("Invalid strategy value {}", e))?;
             if !self
                 .typed_adapter()
@@ -623,32 +617,8 @@ impl BaseAdapter for BridgeAdapter {
     fn get_hard_deletes_behavior(
         &self,
         _state: &State,
-        args: &[Value],
+        config: BTreeMap<String, Value>,
     ) -> Result<Value, MinijinjaError> {
-        let mut parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 1, 1)?;
-
-        let config: Value = parser.next_positional()?;
-        let hard_deletes = config.get_item(&Value::from("hard_deletes")).ok();
-        let invalidate_hard_deletes = config
-            .get_item(&Value::from("invalidate_hard_deletes"))
-            .ok();
-
-        let mut config = BTreeMap::<String, Value>::new();
-        if let Some(hard_deletes) = hard_deletes
-            && !hard_deletes.is_undefined()
-        {
-            config.insert("hard_deletes".to_string(), hard_deletes);
-        }
-        if let Some(invalidate_hard_deletes) = invalidate_hard_deletes
-            && !invalidate_hard_deletes.is_undefined()
-        {
-            config.insert(
-                "invalidate_hard_deletes".to_string(),
-                invalidate_hard_deletes,
-            );
-        }
-
         Ok(Value::from(
             self.typed_adapter.get_hard_deletes_behavior(config)?,
         ))
@@ -861,33 +831,32 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip_all, level = "trace")]
-    fn check_schema_exists(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
-        let mut parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 2, 2)?;
-
-        let database = parser.get::<String>("database")?;
-        let schema = parser.get::<String>("schema")?;
-
+    fn check_schema_exists(
+        &self,
+        state: &State,
+        database: &str,
+        schema: &str,
+    ) -> Result<Value, MinijinjaError> {
         // Replay fast-path: consult trace-derived cache if available
         if self.typed_adapter.as_replay().is_some() {
             // TODO: move this logic to the [ReplayAdapter]
             if let Some(exists) = self
                 .typed_adapter
-                .schema_exists_from_trace(&database, &schema)
+                .schema_exists_from_trace(database, schema)
             {
                 return Ok(Value::from(exists));
             }
         }
 
         let information_schema = InformationSchema {
-            database: Some(database),
+            database: Some(database.to_string()),
             schema: "INFORMATION_SCHEMA".to_string(),
             identifier: None,
             location: None,
         };
 
         let (package_name, macro_name) =
-            self.typed_adapter.check_schema_exists_macro(state, args)?;
+            self.typed_adapter.check_schema_exists_macro(state, &[])?;
         let batch: Arc<arrow::array::RecordBatch> = execute_macro_wrapper_with_package(
             state,
             &[information_schema.as_value(), Value::from(schema)],
@@ -906,28 +875,50 @@ impl BaseAdapter for BridgeAdapter {
     fn get_relations_by_pattern(
         &self,
         state: &State,
-        args: &[Value],
+        schema_pattern: &str,
+        table_pattern: &str,
+        exclude: Option<&str>,
+        database: Option<&str>,
+        quote_table: Option<bool>,
+        excluded_schemas: Option<Value>,
     ) -> Result<Value, MinijinjaError> {
-        let mut parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 2, 6)?;
+        // Validate excluded_schemas if provided
+        if let Some(ref schemas) = excluded_schemas {
+            let _ =
+                minijinja_value_to_typed_struct::<Vec<String>>(schemas.clone()).map_err(|e| {
+                    MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
+                })?;
+        }
 
-        let _ = parser.get::<String>("schema_pattern")?;
-        let _ = parser.get::<String>("table_pattern")?;
-        let _ = parser.get_optional::<String>("exclude").unwrap_or_default();
-        let _ = parser
-            .get_optional::<String>("database")
-            .unwrap_or_default();
-        let _ = parser
-            .get_optional::<bool>("quote_table")
-            .unwrap_or_default();
-        let excluded_schemas = parser
-            .get_optional::<Value>("excluded_schemas")
-            .unwrap_or_else(|| Value::from_iter::<Vec<String>>(vec![]));
-        let _ = minijinja_value_to_typed_struct::<Vec<String>>(excluded_schemas).map_err(|e| {
-            MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
-        })?;
+        // Get default database from state if not provided
+        let database_str = if let Some(db) = database {
+            db.to_string()
+        } else {
+            let target = state.lookup("target").ok_or_else(|| {
+                MinijinjaError::new(
+                    MinijinjaErrorKind::InvalidOperation,
+                    "target is not set in state",
+                )
+            })?;
+            let db_value = target.get_attr("database").unwrap_or_default();
+            db_value.as_str().unwrap_or_default().to_string()
+        };
 
-        let result = execute_macro(state, args, "get_relations_by_pattern_internal")?;
+        // Build args array for macro call
+        // Note: For optional string parameters like 'exclude', we pass empty string instead of None
+        // because the macro expects a string and None gets converted to "none" string
+        let args = vec![
+            Value::from(schema_pattern),
+            Value::from(table_pattern),
+            exclude.map(Value::from).unwrap_or_else(|| Value::from("")),
+            Value::from(database_str.as_str()),
+            quote_table
+                .map(Value::from)
+                .unwrap_or_else(|| Value::from(false)),
+            excluded_schemas.unwrap_or_else(|| Value::from_iter::<Vec<String>>(vec![])),
+        ];
+
+        let result = execute_macro(state, &args, "get_relations_by_pattern_internal")?;
         Ok(result)
     }
 
@@ -1004,46 +995,16 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn is_replaceable(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
-        let mut parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 1, 3)?;
-
-        let relation_as_val = parser.get::<Value>("relation")?;
-        let relation = if relation_as_val.is_none() {
-            return Ok(Value::from(true));
-        } else {
-            downcast_value_to_dyn_base_relation(&relation_as_val)?
-        };
-        let partition_by = parser.get::<Value>("partition_by")?;
-        let partition_by = if partition_by.is_none() {
-            None
-        } else {
-            Some(
-                minijinja_value_to_typed_struct::<BigqueryPartitionConfig>(partition_by).map_err(
-                    |e| {
-                        MinijinjaError::new(
-                            MinijinjaErrorKind::SerdeDeserializeError,
-                            e.to_string(),
-                        )
-                    },
-                )?,
-            )
-        };
-
-        let cluster_by = parser.get::<Value>("cluster_by")?;
-        let cluster_by = if cluster_by.is_none() {
-            None
-        } else {
-            Some(
-                minijinja_value_to_typed_struct::<BigqueryClusterConfig>(cluster_by).map_err(
-                    |e| {
-                        MinijinjaError::new(
-                            MinijinjaErrorKind::SerdeDeserializeError,
-                            e.to_string(),
-                        )
-                    },
-                )?,
-            )
+    fn is_replaceable(
+        &self,
+        state: &State,
+        relation: Option<Arc<dyn BaseRelation>>,
+        partition_by: Option<BigqueryPartitionConfig>,
+        cluster_by: Option<BigqueryClusterConfig>,
+    ) -> Result<Value, MinijinjaError> {
+        let relation = match relation {
+            None => return Ok(Value::from(true)),
+            Some(r) => r,
         };
 
         let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
@@ -1058,14 +1019,14 @@ impl BaseAdapter for BridgeAdapter {
     /// # Panics
     /// This method will panic if called on a non-BigQuery adapter
     #[tracing::instrument(skip_all, level = "trace")]
-    fn parse_partition_by(&self, _state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
-        let mut parser = ArgParser::new(args, None);
-        parser.check_num_args(current_function_name!(), 1, 1)?;
-
-        let raw_partition_by = parser.get::<Value>("raw_partition_by")?;
-
-        let result = self.typed_adapter.parse_partition_by(raw_partition_by)?;
-
+    fn parse_partition_by(
+        &self,
+        _state: &State,
+        raw_partition_by: &Value,
+    ) -> Result<Value, MinijinjaError> {
+        let result = self
+            .typed_adapter
+            .parse_partition_by(raw_partition_by.clone())?;
         Ok(result)
     }
 
@@ -1136,31 +1097,12 @@ impl BaseAdapter for BridgeAdapter {
     fn add_time_ingestion_partition_column(
         &self,
         _state: &State,
-        args: &[Value],
+        columns: &Value,
+        partition_config: BigqueryPartitionConfig,
     ) -> Result<Value, MinijinjaError> {
-        let mut parser = ArgParser::new(args, None);
-        parser.check_num_args(current_function_name!(), 2, 3)?;
-
-        let partition_by = parser.get::<Value>("partition_by")?;
-        let columns = parser.get::<Value>("columns")?;
-
-        let partition_by =
-            minijinja_value_to_typed_struct::<PartitionConfig>(partition_by.clone()).map_err(|e| {
-                MinijinjaError::new(
-                    MinijinjaErrorKind::SerdeDeserializeError,
-                    format!("adapter.add_time_ingestion_partition_column failed on partition_by {partition_by:?}: {e}"),
-                )
-            })?;
-
-        let result = self.typed_adapter.add_time_ingestion_partition_column(
-            columns,
-            partition_by.into_bigquery().ok_or_else(|| {
-                MinijinjaError::new(
-                    MinijinjaErrorKind::InvalidArgument,
-                    "Expect a BigqueryPartitionConfigStruct",
-                )
-            })?,
-        )?;
+        let result = self
+            .typed_adapter
+            .add_time_ingestion_partition_column(columns.clone(), partition_config)?;
         Ok(result)
     }
 

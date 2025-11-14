@@ -20,16 +20,15 @@ use crate::{AdapterResult, SqlEngine};
 use dashmap::{DashMap, DashSet};
 use dbt_agate::AgateTable;
 use dbt_auth::{AdapterConfig, Auth, auth_for_backend};
+use dbt_common::FsError;
 use dbt_common::behavior_flags::Behavior;
 use dbt_common::cancellation::CancellationToken;
-use dbt_common::{FsError, current_function_name};
 use dbt_schemas::schemas::common::{DbtQuoting, ResolvedQuoting};
 use dbt_schemas::schemas::dbt_catalogs::DbtCatalogs;
 use dbt_schemas::schemas::properties::ModelConstraint;
 use dbt_schemas::schemas::relations::base::{BaseRelation, RelationPattern};
 use dbt_xdbc::Connection;
 use minijinja::Value;
-use minijinja::arg_utils::{ArgParser, check_num_args};
 use minijinja::constants::TARGET_UNIQUE_ID;
 use minijinja::listener::RenderingEventListener;
 use minijinja::value::Object;
@@ -369,7 +368,7 @@ impl BaseAdapter for ParseAdapter {
     fn get_hard_deletes_behavior(
         &self,
         _state: &State,
-        _args: &[Value],
+        _config: BTreeMap<String, Value>,
     ) -> Result<Value, MinijinjaError> {
         // For parse adapter, always return "ignore" as default behavior
         Ok(none_value())
@@ -461,24 +460,31 @@ impl BaseAdapter for ParseAdapter {
         Ok(empty_vec_value())
     }
 
-    fn check_schema_exists(&self, _state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
-        let parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 2, 2)?;
-
+    fn check_schema_exists(
+        &self,
+        _state: &State,
+        _database: &str,
+        _schema: &str,
+    ) -> Result<Value, MinijinjaError> {
         Ok(Value::from(true))
     }
 
     fn get_relations_by_pattern(
         &self,
         state: &State,
-        args: &[Value],
+        schema_pattern: &str,
+        table_pattern: &str,
+        _exclude: Option<&str>,
+        database: Option<&str>,
+        _quote_table: Option<bool>,
+        excluded_schemas: Option<Value>,
     ) -> Result<Value, MinijinjaError> {
-        let mut parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 2, 6)?;
-
-        let schema_pattern = parser.get::<String>("schema_pattern")?;
-        let table_pattern = parser.get::<String>("table_pattern")?;
-        let _ = parser.get_optional::<String>("exclude").unwrap_or_default();
+        // Validate excluded_schemas if provided
+        if let Some(ref schemas) = excluded_schemas {
+            let _: Vec<String> = Vec::<String>::deserialize(schemas.clone()).map_err(|e| {
+                MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
+            })?;
+        }
 
         let target = state
             .lookup("target")
@@ -486,20 +492,13 @@ impl BaseAdapter for ParseAdapter {
             .get_attr("database")
             .unwrap_or_default();
         let default_database = target.as_str().unwrap_or_default();
-        let database = parser
-            .get_optional::<String>("database")
-            .unwrap_or_else(|| default_database.to_string());
-        let _ = parser
-            .get_optional::<bool>("quote_table")
-            .unwrap_or_default();
-        let excluded_schemas = parser
-            .get_optional::<Value>("excluded_schemas")
-            .unwrap_or_else(|| Value::from_iter::<Vec<String>>(vec![]));
-        let _: Vec<String> = Vec::<String>::deserialize(excluded_schemas).map_err(|e| {
-            MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
-        })?;
+        let database = database.unwrap_or(default_database);
 
-        let patterned_relation = RelationPattern::new(database, schema_pattern, table_pattern);
+        let patterned_relation = RelationPattern::new(
+            database.to_string(),
+            schema_pattern.to_string(),
+            table_pattern.to_string(),
+        );
 
         if state.is_execute() {
             if let Some(unique_id) = state.lookup(TARGET_UNIQUE_ID) {
@@ -551,16 +550,27 @@ impl BaseAdapter for ParseAdapter {
     fn add_time_ingestion_partition_column(
         &self,
         _state: &State,
-        _args: &[Value],
+        _columns: &Value,
+        _partition_config: dbt_schemas::schemas::manifest::BigqueryPartitionConfig,
     ) -> Result<Value, MinijinjaError> {
         Ok(empty_vec_value())
     }
 
-    fn parse_partition_by(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn parse_partition_by(
+        &self,
+        _state: &State,
+        _raw_partition_by: &Value,
+    ) -> Result<Value, MinijinjaError> {
         Ok(none_value())
     }
 
-    fn is_replaceable(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn is_replaceable(
+        &self,
+        _state: &State,
+        _relation: Option<Arc<dyn BaseRelation>>,
+        _partition_by: Option<dbt_schemas::schemas::manifest::BigqueryPartitionConfig>,
+        _cluster_by: Option<dbt_schemas::schemas::manifest::BigqueryClusterConfig>,
+    ) -> Result<Value, MinijinjaError> {
         Ok(Value::from(false))
     }
 
@@ -727,7 +737,7 @@ impl BaseAdapter for ParseAdapter {
     fn get_incremental_strategy_macro(
         &self,
         _state: &State,
-        _args: &[Value],
+        _strategy: &str,
     ) -> Result<Value, MinijinjaError> {
         Ok(none_value())
     }

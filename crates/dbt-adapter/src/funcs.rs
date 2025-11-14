@@ -11,6 +11,9 @@ use crate::snapshots::SnapshotStrategy;
 
 use arrow::array::RecordBatch;
 use dbt_agate::AgateTable;
+use dbt_schemas::schemas::manifest::{
+    BigqueryClusterConfig, BigqueryPartitionConfig, PartitionConfig,
+};
 use dbt_schemas::schemas::properties::ModelConstraint;
 use dbt_schemas::schemas::serde::minijinja_value_to_typed_struct;
 use minijinja::arg_utils::ArgsIter;
@@ -35,7 +38,15 @@ pub fn dispatch_adapter_calls(
     _listeners: &[Rc<dyn RenderingEventListener>],
 ) -> Result<Value, MinijinjaError> {
     match name {
-        "dispatch" => adapter.dispatch(state, args),
+        "dispatch" => {
+            // macro_name: str, macro_namespace: Optional[str] = None
+            let iter = ArgsIter::new(name, &["macro_name"], args);
+            let macro_name = iter.next_arg::<&str>()?;
+            let macro_namespace = iter.next_kwarg::<Option<&str>>("macro_namespace")?;
+            iter.finish()?;
+
+            adapter.dispatch(state, macro_name, macro_namespace)
+        }
         "execute" => {
             // sql: str, auto_begin: bool = False, fetch: bool = False, limit: Optional[int] = None
             let iter = ArgsIter::new(name, &["sql"], args);
@@ -149,7 +160,35 @@ pub fn dispatch_adapter_calls(
         }
         "get_catalog_integration" => adapter.get_catalog_integration(state, args),
         "type" => Ok(Value::from(adapter.adapter_type().to_string())),
-        "get_hard_deletes_behavior" => adapter.get_hard_deletes_behavior(state, args),
+        "get_hard_deletes_behavior" => {
+            // config: dict
+            let iter = ArgsIter::new(name, &["config"], args);
+            let config = iter.next_arg::<&Value>()?;
+            iter.finish()?;
+
+            // Extract relevant fields from config dict
+            let hard_deletes = config.get_item(&Value::from("hard_deletes")).ok();
+            let invalidate_hard_deletes = config
+                .get_item(&Value::from("invalidate_hard_deletes"))
+                .ok();
+
+            let mut config_map = BTreeMap::<String, Value>::new();
+            if let Some(hard_deletes) = hard_deletes
+                && !hard_deletes.is_undefined()
+            {
+                config_map.insert("hard_deletes".to_string(), hard_deletes);
+            }
+            if let Some(invalidate_hard_deletes) = invalidate_hard_deletes
+                && !invalidate_hard_deletes.is_undefined()
+            {
+                config_map.insert(
+                    "invalidate_hard_deletes".to_string(),
+                    invalidate_hard_deletes,
+                );
+            }
+
+            adapter.get_hard_deletes_behavior(state, config_map)
+        }
         "cache_added" => {
             // relation: BaseRelation
             let iter = ArgsIter::new(name, &["relation"], args);
@@ -402,16 +441,154 @@ pub fn dispatch_adapter_calls(
             adapter.verify_database(state, database)
         }
         "commit" => adapter.commit(),
-        "get_incremental_strategy_macro" => adapter.get_incremental_strategy_macro(state, args),
-        "check_schema_exists" => adapter.check_schema_exists(state, args),
-        "get_relations_by_pattern" => adapter.get_relations_by_pattern(state, args),
+        "get_incremental_strategy_macro" => {
+            // context: dict, strategy: str
+            let iter = ArgsIter::new(name, &["context", "strategy"], args);
+            let _context = iter.next_arg::<Value>()?; // unused, for backward compat
+            let strategy = iter.next_arg::<&str>()?;
+            iter.finish()?;
+
+            adapter.get_incremental_strategy_macro(state, strategy)
+        }
+        "check_schema_exists" => {
+            // database: str, schema: str
+            let iter = ArgsIter::new(name, &["database", "schema"], args);
+            let database = iter.next_arg::<&str>()?;
+            let schema = iter.next_arg::<&str>()?;
+            iter.finish()?;
+
+            adapter.check_schema_exists(state, database, schema)
+        }
+        "get_relations_by_pattern" => {
+            // schema_pattern: str, table_pattern: str, exclude: Optional[str] = None,
+            // database: Optional[str] = None, quote_table: Optional[bool] = None,
+            // excluded_schemas: Optional[List[str]] = None
+            let iter = ArgsIter::new(name, &["schema_pattern", "table_pattern"], args);
+            let schema_pattern = iter.next_arg::<&str>()?;
+            let table_pattern = iter.next_arg::<&str>()?;
+            let exclude = iter.next_kwarg::<Option<&str>>("exclude")?;
+            let database = iter.next_kwarg::<Option<&str>>("database")?;
+            let quote_table = iter.next_kwarg::<Option<bool>>("quote_table")?;
+            let excluded_schemas = iter.next_kwarg::<Option<Value>>("excluded_schemas")?;
+            iter.finish()?;
+
+            adapter.get_relations_by_pattern(
+                state,
+                schema_pattern,
+                table_pattern,
+                exclude,
+                database,
+                quote_table,
+                excluded_schemas,
+            )
+        }
         // only available for Bigquery
         "nest_column_data_types" => adapter.nest_column_data_types(state, args),
         "add_time_ingestion_partition_column" => {
-            adapter.add_time_ingestion_partition_column(state, args)
+            // In parse mode, return stub value early without validation
+            if adapter.is_parse() {
+                return Ok(empty_vec_value());
+            }
+
+            // partition_by: dict, columns: List[Column]
+            let iter = ArgsIter::new(name, &["partition_by", "columns"], args);
+            let partition_by = iter.next_arg::<&Value>()?;
+            let columns = iter.next_arg::<&Value>()?;
+            iter.finish()?;
+
+            // Match original behavior: try to deserialize directly, let deserialization handle errors
+            let partition_by =
+                minijinja_value_to_typed_struct::<PartitionConfig>(partition_by.clone()).map_err(
+                    |e| {
+                        MinijinjaError::new(
+                            MinijinjaErrorKind::SerdeDeserializeError,
+                            format!(
+                                "adapter.add_time_ingestion_partition_column failed on partition_by {partition_by:?}: {e}"
+                            ),
+                        )
+                    },
+                )?;
+
+            let partition_config = partition_by.into_bigquery().ok_or_else(|| {
+                MinijinjaError::new(
+                    MinijinjaErrorKind::InvalidArgument,
+                    "Expect a BigqueryPartitionConfigStruct",
+                )
+            })?;
+
+            adapter.add_time_ingestion_partition_column(state, columns, partition_config)
         }
-        "parse_partition_by" => adapter.parse_partition_by(state, args),
-        "is_replaceable" => adapter.is_replaceable(state, args),
+        "parse_partition_by" => {
+            // In parse mode, return stub value early without validation
+            if adapter.is_parse() {
+                return Ok(none_value());
+            }
+
+            // raw_partition_by: Optional[dict]
+            let iter = ArgsIter::new(name, &["raw_partition_by"], args);
+            let raw_partition_by = iter.next_arg::<&Value>()?;
+            iter.finish()?;
+
+            adapter.parse_partition_by(state, raw_partition_by)
+        }
+        "is_replaceable" => {
+            // In parse mode, return stub value early without validation
+            if adapter.is_parse() {
+                return Ok(Value::from(false));
+            }
+
+            // relation: Optional[BaseRelation], partition_by: Optional[dict], cluster_by: Optional[dict]
+            let iter = ArgsIter::new(name, &["relation"], args);
+            let relation_val = iter.next_arg::<&Value>()?;
+            let relation = if relation_val.is_none() {
+                None
+            } else {
+                Some(downcast_value_to_dyn_base_relation(relation_val)?)
+            };
+            let partition_by = iter.next_kwarg::<Option<&Value>>("partition_by")?;
+            let cluster_by = iter.next_kwarg::<Option<&Value>>("cluster_by")?;
+            iter.finish()?;
+
+            let partition_by = if let Some(pb) = partition_by {
+                // Match original behavior: check is_none() only, then deserialize
+                if pb.is_none() {
+                    None
+                } else {
+                    Some(
+                        minijinja_value_to_typed_struct::<BigqueryPartitionConfig>(pb.clone())
+                            .map_err(|e| {
+                                MinijinjaError::new(
+                                    MinijinjaErrorKind::SerdeDeserializeError,
+                                    e.to_string(),
+                                )
+                            })?,
+                    )
+                }
+            } else {
+                None
+            };
+
+            let cluster_by = if let Some(cb) = cluster_by {
+                // Match original behavior: check is_none() only, then deserialize
+                if cb.is_none() {
+                    None
+                } else {
+                    Some(
+                        minijinja_value_to_typed_struct::<BigqueryClusterConfig>(cb.clone())
+                            .map_err(|e| {
+                                MinijinjaError::new(
+                                    MinijinjaErrorKind::SerdeDeserializeError,
+                                    e.to_string(),
+                                )
+                            })?,
+                    )
+                }
+            } else {
+                None
+            };
+
+            adapter.is_replaceable(state, relation, partition_by, cluster_by)
+        }
         "list_relations_without_caching" => adapter.list_relations_without_caching(state, args),
         "copy_table" => adapter.copy_table(state, args),
         "update_columns" => adapter.update_columns(state, args),

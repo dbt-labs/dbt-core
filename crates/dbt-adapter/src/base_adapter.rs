@@ -18,7 +18,6 @@ use dbt_schemas::schemas::project::QueryComment;
 use dbt_schemas::schemas::properties::ModelConstraint;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
 use dbt_xdbc::{Backend, Connection};
-use minijinja::arg_utils::ArgParser;
 use minijinja::dispatch_object::DispatchObject;
 use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State, Value};
 
@@ -283,11 +282,22 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
     fn verify_database(&self, state: &State, _database: String) -> Result<Value, MinijinjaError>;
 
     /// Dispatch.
-    fn dispatch(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
-        let mut parser = ArgParser::new(args, None);
-        let macro_name = parser.get::<String>("macro_name")?;
-        let package_name: Option<String> = parser.get_optional::<String>("macro_namespace");
-
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L226
+    ///
+    /// ```python
+    /// def dispatch(
+    ///     self,
+    ///     macro_name: str,
+    ///     macro_namespace: Optional[str] = None
+    /// ) -> DispatchObject
+    /// ```
+    fn dispatch(
+        &self,
+        state: &State,
+        macro_name: &str,
+        macro_namespace: Option<&str>,
+    ) -> Result<Value, MinijinjaError> {
         if macro_name.contains('.') {
             let parts: Vec<&str> = macro_name.split('.').collect();
             return Err(MinijinjaError::new(
@@ -300,8 +310,8 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
         }
 
         Ok(Value::from_object(DispatchObject {
-            macro_name,
-            package_name,
+            macro_name: macro_name.to_string(),
+            package_name: macro_namespace.map(|s| s.to_string()),
             strict: false,
             auto_execute: false,
             context: Some(state.get_base_context()),
@@ -314,10 +324,20 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
     /// 1. Assert that if the given strategy is a "builtin" strategy, then it must
     ///    also be defined as a "valid" strategy for the associated adapter
     /// 2. Assert that the incremental strategy exists in the model context
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1704
+    ///
+    /// ```python
+    /// def get_incremental_strategy_macro(
+    ///     self,
+    ///     context: dict,
+    ///     strategy: str
+    /// ) -> DispatchObject
+    /// ```
     fn get_incremental_strategy_macro(
         &self,
         state: &State,
-        args: &[Value],
+        strategy: &str,
     ) -> Result<Value, MinijinjaError>;
 
     /// Execute the given SQL. This is a thin wrapper around [SqlEngine.execute].
@@ -575,10 +595,19 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
     ) -> Result<Value, MinijinjaError>;
 
     /// Get hard deletes behavior.
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1964
+    ///
+    /// ```python
+    /// def get_hard_deletes_behavior(
+    ///     cls,
+    ///     config: Dict[str, str]
+    /// ) -> str
+    /// ```
     fn get_hard_deletes_behavior(
         &self,
         state: &State,
-        args: &[Value],
+        config: BTreeMap<String, Value>,
     ) -> Result<Value, MinijinjaError>;
 
     /// Get relation.
@@ -679,13 +708,48 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
     ) -> Result<Value, MinijinjaError>;
 
     /// Check if schema exists
-    fn check_schema_exists(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError>;
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L849
+    ///
+    /// ```python
+    /// def check_schema_exists(
+    ///     self,
+    ///     database: str,
+    ///     schema: str
+    /// ) -> bool
+    /// ```
+    fn check_schema_exists(
+        &self,
+        state: &State,
+        database: &str,
+        schema: &str,
+    ) -> Result<Value, MinijinjaError>;
 
     /// Get relations by pattern
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L858
+    ///
+    /// ```python
+    /// def get_relations_by_pattern(
+    ///     self,
+    ///     schema_pattern: str,
+    ///     table_pattern: str,
+    ///     exclude: Optional[str] = None,
+    ///     database: Optional[str] = None,
+    ///     quote_table: Optional[bool] = None,
+    ///     excluded_schemas: Optional[List[str]] = None
+    /// ) -> List[BaseRelation]
+    /// ```
+    #[allow(clippy::too_many_arguments)]
     fn get_relations_by_pattern(
         &self,
         state: &State,
-        args: &[Value],
+        schema_pattern: &str,
+        table_pattern: &str,
+        exclude: Option<&str>,
+        database: Option<&str>,
+        quote_table: Option<bool>,
+        excluded_schemas: Option<Value>,
     ) -> Result<Value, MinijinjaError>;
 
     /// Get column schema from query
@@ -702,22 +766,65 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
         args: &[Value],
     ) -> Result<Value, MinijinjaError>;
 
-    /// list_relations_without_caching
+    /// Add time ingestion partition column
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L259
+    ///
+    /// ```python
+    /// @available.parse(lambda *a, **k: [])
+    /// def add_time_ingestion_partition_column(
+    ///     self,
+    ///     partition_by,
+    ///     columns
+    /// ) -> List[BigQueryColumn]
+    /// ```
     fn add_time_ingestion_partition_column(
         &self,
         _state: &State,
-        _args: &[Value],
+        _columns: &Value,
+        _partition_config: dbt_schemas::schemas::manifest::BigqueryPartitionConfig,
     ) -> Result<Value, MinijinjaError> {
         unimplemented!("only available with BigQuery adapter")
     }
 
-    /// parse_partition_by
-    fn parse_partition_by(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    /// Parse partition by
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L581
+    ///
+    /// ```python
+    /// @available
+    /// def parse_partition_by(
+    ///     self,
+    ///     raw_partition_by: Any
+    /// ) -> Optional[PartitionConfig]
+    /// ```
+    fn parse_partition_by(
+        &self,
+        _state: &State,
+        _raw_partition_by: &Value,
+    ) -> Result<Value, MinijinjaError> {
         unimplemented!("only available with BigQuery adapter")
     }
 
-    /// is_replaceable
-    fn is_replaceable(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    /// Is replaceable
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L541
+    ///
+    /// ```python
+    /// def is_replaceable(
+    ///     self,
+    ///     relation: Optional[BaseRelation],
+    ///     partition_by: Optional[dict],
+    ///     cluster_by: Optional[dict]
+    /// ) -> bool
+    /// ```
+    fn is_replaceable(
+        &self,
+        _state: &State,
+        _relation: Option<Arc<dyn BaseRelation>>,
+        _partition_by: Option<dbt_schemas::schemas::manifest::BigqueryPartitionConfig>,
+        _cluster_by: Option<dbt_schemas::schemas::manifest::BigqueryClusterConfig>,
+    ) -> Result<Value, MinijinjaError> {
         unimplemented!("only available with BigQuery adapter")
     }
 
