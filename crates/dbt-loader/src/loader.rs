@@ -69,7 +69,7 @@ pub async fn load(
     arg: &LoadArgs,
     iarg: &InvocationArgs,
     token: &CancellationToken,
-) -> FsResult<(DbtState, Option<usize>, Option<DbtCloudProjectConfig>)> {
+) -> FsResult<(DbtState, Option<DbtCloudProjectConfig>)> {
     let _pb = with_progress!(arg.io, spinner => LOADING);
 
     let (simplified_dbt_project, mut dbt_profile) =
@@ -144,7 +144,7 @@ pub async fn load(
 
     // If we are running `dbt debug` we don't need to collect dbt_project.yml files
     if arg.debug_profile {
-        return Ok((dbt_state, final_threads, dbt_cloud_project));
+        return Ok((dbt_state, dbt_cloud_project));
     }
 
     let flags: BTreeMap<String, minijinja::Value> = iarg.to_dict();
@@ -201,7 +201,7 @@ pub async fn load(
         dbt_state.packages.extend(packages);
         dbt_state.packages[0] = new_root_package;
 
-        return Ok((dbt_state, final_threads, dbt_cloud_project));
+        return Ok((dbt_state, dbt_cloud_project));
     }
 
     // Load the packages.yml file, if it exists and install the packages if arg.install_deps is true
@@ -232,7 +232,7 @@ pub async fn load(
     download_publication_artifacts(&upstream_projects, &dbt_cloud_project, &arg.io).await?;
     // If we are running `dbt deps` we don't need to collect files
     if arg.install_deps {
-        return Ok((dbt_state, final_threads, dbt_cloud_project));
+        return Ok((dbt_state, dbt_cloud_project));
     }
 
     let lookup_map = packages_lock.lookup_map();
@@ -273,7 +273,7 @@ pub async fn load(
         let _ = prepare_inline_sql(inline_sql, &arg.io.out_dir, &mut dbt_state).await?;
     }
 
-    Ok((dbt_state, final_threads, dbt_cloud_project))
+    Ok((dbt_state, dbt_cloud_project))
 }
 
 pub async fn load_catalogs(arg: &LoadArgs, env: &JinjaEnv) -> FsResult<()> {

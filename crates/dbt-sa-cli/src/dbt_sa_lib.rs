@@ -208,13 +208,12 @@ async fn execute_all_phases(
     // Loads all .yml files + collects all included files
     let load_args = LoadArgs::from_eval_args(arg);
     let invocation_args = InvocationArgs::from_eval_args(arg);
-    let (dbt_state, num_threads, _dbt_cloud_config) =
-        load(&load_args, &invocation_args, token).await?;
+    let (dbt_state, _dbt_cloud_config) = load(&load_args, &invocation_args, token).await?;
 
     let arg = EvalArgsBuilder::from_eval_args(arg)
         .with_additional(
             dbt_state.dbt_profile.target.to_string(),
-            num_threads,
+            dbt_state.dbt_profile.threads,
             dbt_state.dbt_profile.db_config.adapter_type_if_supported(),
         )
         .build();

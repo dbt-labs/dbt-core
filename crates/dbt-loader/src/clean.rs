@@ -28,12 +28,11 @@ pub async fn execute_clean_command(
 ) -> FsResult<i32> {
     let load_args = LoadArgs::from_eval_args(arg);
     let invocation_args = InvocationArgs::from_eval_args(arg);
-    let (dbt_state, num_threads, _dbt_cloud_config) =
-        load(&load_args, &invocation_args, token).await?;
+    let (dbt_state, _dbt_cloud_config) = load(&load_args, &invocation_args, token).await?;
     let flags: BTreeMap<String, minijinja::Value> = invocation_args.to_dict();
 
     let arg = EvalArgsBuilder::from_eval_args(arg)
-        .with_threads(num_threads)
+        .with_threads(dbt_state.dbt_profile.threads)
         .build();
 
     let env = initialize_load_jinja_environment(
