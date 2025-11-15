@@ -10,7 +10,11 @@ from dbt import utils
 from dbt.artifacts.resources import ModelConfig, UnitTestConfig, UnitTestFormat
 from dbt.config import RuntimeConfig
 from dbt.context.context_config import ContextConfig
-from dbt.context.providers import generate_parse_exposure, get_rendered
+from dbt.context.providers import (
+    generate_parse_exposure,
+    generate_runtime_unit_test_context,
+    get_rendered,
+)
 from dbt.contracts.files import FileHash, SchemaSourceFile
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.model_config import UnitTestNodeConfig
@@ -100,12 +104,18 @@ class UnitTestManifestLoader:
             overrides=test_case.overrides,
         )
 
-        ctx = generate_parse_exposure(
-            unit_test_node,  # type: ignore
-            self.root_project,
-            self.manifest,
-            test_case.package_name,
+        # Needed to support macro-based set_sql_header overrides of the sql_header node config
+        # option.
+        ctx = generate_runtime_unit_test_context(unit_test_node, self.root_project, self.manifest)
+        ctx.update(
+            generate_parse_exposure(
+                unit_test_node,  # type: ignore
+                self.root_project,
+                self.manifest,
+                test_case.package_name,
+            )
         )
+
         get_rendered(unit_test_node.raw_code, ctx, unit_test_node, capture_macros=True)
         # unit_test_node now has a populated refs/sources
 
