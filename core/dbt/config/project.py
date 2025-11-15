@@ -406,14 +406,14 @@ class PartialProject(RenderComponents):
         # these are all the defaults
 
         # `source_paths` is deprecated but still allowed. Copy it into
-        # `model_paths` to simlify logic throughout the rest of the system.
+        # `model_paths` to simplify logic throughout the rest of the system.
         model_paths: List[str] = value_or(
             cfg.model_paths if "model-paths" in rendered.project_dict else cfg.source_paths,
             ["models"],
         )
         macro_paths: List[str] = value_or(cfg.macro_paths, ["macros"])
         # `data_paths` is deprecated but still allowed. Copy it into
-        # `seed_paths` to simlify logic throughout the rest of the system.
+        # `seed_paths` to simplify logic throughout the rest of the system.
         seed_paths: List[str] = value_or(
             cfg.seed_paths if "seed-paths" in rendered.project_dict else cfg.data_paths, ["seeds"]
         )
