@@ -463,6 +463,46 @@ impl<'a> ArgsIter<'a> {
     where
         T: ArgType<'a, Output = T>,
     {
+        self._next_arg_impl::<T>(&[])
+    }
+
+    /// Get the next (required) positional argument allowing for different names
+    /// if it's passed as a kwarg.
+    ///
+    /// This is useful when a single Rust function is implementing multiple Python
+    /// functions (e.g. multiple overloads of a method) that have different names
+    /// for the same positional parameter.
+    ///
+    /// ```python
+    ///     def information_schema(self, identifier)
+    ///     // and
+    ///     def information_schema(self, view_name)
+    /// ```
+    ///
+    /// A single Rust function replacing both can be written as:
+    ///
+    /// ```rust
+    /// # use minijinja::{Error, Value};
+    /// # use minijinja::arg_utils::ArgsIter;
+    /// fn information_schema(args: &[Value]) -> Result<String, Error> {
+    ///    let iter = ArgsIter::new("information_schema", &["identifier"], args);
+    ///    let identifier = iter.next_pos_arg_aliased::<&str>(&["view_name"])?;
+    ///    iter.finish()?;
+    ///    // ...use identifier here...
+    ///    # Ok(String::new())
+    /// }
+    /// ```
+    pub fn next_pos_arg_aliased<T>(&'a self, aliases: &[&'a str]) -> Result<T, MinijinjaError>
+    where
+        T: ArgType<'a, Output = T>,
+    {
+        self._next_arg_impl::<T>(aliases)
+    }
+
+    fn _next_arg_impl<T>(&'a self, aliases: &[&'a str]) -> Result<T, MinijinjaError>
+    where
+        T: ArgType<'a, Output = T>,
+    {
         if self.index.get() >= self.pos_params.len() {
             unreachable!(
                 "next_arg() called more than the number of positional parameters: {}",
@@ -481,30 +521,51 @@ impl<'a> ArgsIter<'a> {
         } else {
             // positional arguments have been consumed,
             // so we check if it was passed as a kwarg
-            self._get_pos_arg_from_kwargs::<T>(idx)
+            self._get_pos_arg_from_kwargs::<T>(idx, aliases)
         }
     }
 
-    fn _get_pos_arg_from_kwargs<T>(&'a self, idx: usize) -> Result<T, MinijinjaError>
+    fn _get_pos_arg_from_kwargs<T>(
+        &'a self,
+        idx: usize,
+        aliases: &[&'a str],
+    ) -> Result<T, MinijinjaError>
     where
         T: ArgType<'a, Output = T>,
     {
         let name = match self.pos_params.get(idx) {
             Some(name) => name,
-            None => return Err(self._missing_pos_arg(idx)),
+            None => return Err(self._missing_pos_arg(idx, aliases)),
         };
-        self.kwargs.get::<'a, T>(name).map_err(|err| {
-            if err.kind() == MinijinjaErrorKind::MissingArgument {
-                // Missing kwarg would be the wrong diagnostic here,
-                // so we produce a better one.
-                self._missing_pos_arg(idx)
-            } else {
-                // peek() the existing value (because it's not a missing argument error) as a
-                // [Value] to render the name of the type we got where T was expected instead.
-                let value = self.kwargs.peek::<Option<&'a Value>>(name).ok().flatten();
-                self._detail_from_value_err(None, Some(name), value, err)
-            }
-        })
+        self.kwargs
+            .get::<'a, T>(name)
+            .map_err(|err| {
+                if err.kind() == MinijinjaErrorKind::MissingArgument {
+                    // Missing kwarg would be the wrong diagnostic here,
+                    // so we produce a better one.
+                    self._missing_pos_arg(idx, aliases)
+                } else {
+                    // peek() the existing value (because it's not a missing argument error) as a
+                    // [Value] to render the name of the type we got where T was expected instead.
+                    let value = self.kwargs.peek::<Option<&'a Value>>(name).ok().flatten();
+                    self._detail_from_value_err(None, Some(name), value, err)
+                }
+            })
+            .or_else(|err| {
+                for name in aliases {
+                    match self.kwargs.peek::<Option<&'a Value>>(name) {
+                        Ok(value @ Some(_)) => {
+                            return self.kwargs.get::<'a, T>(name).map_err(|err| {
+                                // Render the name of the type we got in the peeked [Value]
+                                // to render the type we got instead of T.
+                                self._detail_from_value_err(None, Some(name), value, err)
+                            });
+                        }
+                        Ok(None) | Err(_) => continue,
+                    }
+                }
+                Err(err)
+            })
     }
 
     /// Get the next kwarg at the current iterator position.
@@ -531,6 +592,53 @@ impl<'a> ArgsIter<'a> {
     where
         T: ArgType<'a, Output = T>,
     {
+        self._next_kwarg_impl::<T>(name, &[])
+    }
+
+    /// Get the next kwarg allowing for different names.
+    ///
+    /// This is useful when a single Rust function is implementing multiple Python
+    /// functions (e.g. multiple overloads of a method) that have different names
+    /// for the same keyword parameter.
+    ///
+    /// ```python
+    ///     def information_schema(self, identifier=None)
+    ///     // and
+    ///     def information_schema(self, view_name=None)
+    /// ```
+    ///
+    /// A single Rust function replacing both can be written as:
+    ///
+    /// ```rust
+    /// # use minijinja::{Error, Value};
+    /// # use minijinja::arg_utils::ArgsIter;
+    /// fn information_schema(args: &[Value]) -> Result<String, Error> {
+    ///    let iter = ArgsIter::new("information_schema", &[], args);
+    ///    let identifier = iter.next_kwarg_aliased::<Option<&str>>("identifier", &["view_name"])?;
+    ///    iter.finish()?;
+    ///    // ...use identifier here...
+    ///    # Ok(String::new())
+    /// }
+    /// ```
+    pub fn next_kwarg_aliased<T>(
+        &'a self,
+        name: &'a str,
+        aliases: &[&'a str],
+    ) -> Result<T, MinijinjaError>
+    where
+        T: ArgType<'a, Output = T>,
+    {
+        self._next_kwarg_impl::<T>(name, aliases)
+    }
+
+    fn _next_kwarg_impl<T>(
+        &'a self,
+        name: &'a str,
+        aliases: &[&'a str],
+    ) -> Result<T, MinijinjaError>
+    where
+        T: ArgType<'a, Output = T>,
+    {
         if let Some(arg) = self._next() {
             let rv = T::from_value(Some(arg))
                 .map_err(|err| self._detail_from_value_err(None, Some(name), Some(arg), err))?;
@@ -538,6 +646,15 @@ impl<'a> ArgsIter<'a> {
             return Ok(rv);
         }
 
+        let prefix = [name];
+        let iter = prefix.iter().chain(aliases.iter());
+        for name in iter {
+            match self.kwargs.peek::<Option<&'a Value>>(name) {
+                Ok(Some(_)) => return self.kwargs.get::<T>(name),
+                Ok(None) | Err(_) => continue,
+            }
+        }
+        // produce an error with the main name
         self.kwargs.get::<T>(name)
     }
 
@@ -627,7 +744,7 @@ were consumed from the iterator. You are misusing the ArgsIter API.",
     }
 
     #[inline(never)]
-    fn _missing_pos_arg(&self, idx: usize) -> MinijinjaError {
+    fn _missing_pos_arg(&self, idx: usize, aliases: &[&'a str]) -> MinijinjaError {
         let msg = match self.pos_params {
             PosParams::Named(param_names) => {
                 use std::fmt::Write as _;
@@ -651,11 +768,21 @@ were consumed from the iterator. You are misusing the ArgsIter API.",
 
                 let mut msg = String::new();
                 (if missing.len() == 1 {
-                    write!(
+                    let _ = write!(
                         &mut msg,
                         "{}() missing 1 required positional argument: '{}'",
                         self.fn_name, missing[0]
-                    )
+                    );
+                    match aliases {
+                        [] => Ok(()),
+                        [alias, others @ ..] => {
+                            let _ = write!(&mut msg, " (or '{alias}'");
+                            for a in others {
+                                let _ = write!(&mut msg, ", '{a}'");
+                            }
+                            write!(&mut msg, ")")
+                        }
+                    }
                 } else {
                     write!(
                         &mut msg,
@@ -1570,5 +1697,181 @@ mod tests {
             e.to_string().split_once(": ").unwrap().1,
             "argument 2 to take_unamed_args() has incompatible type MyStruct; expected NotMyStruct"
         )
+    }
+
+    /// Subtle example: handling optional positional argument.
+    ///
+    /// ```python
+    /// def string_type(size: int) -> str
+    /// ```
+    fn string_type(args: &[Value]) -> Result<String, MinijinjaError> {
+        let iter = ArgsIter::new("string_type", &["size"], args);
+        let size = iter.next_arg::<Option<i64>>()?;
+        iter.finish()?;
+        let s = match size {
+            None => "STRING".to_string(),
+            Some(size) => format!("STRING({size})"),
+        };
+        Ok(s)
+    }
+
+    #[test]
+    fn test_optional_positional_argument() {
+        // string_type()
+        let args = [];
+        let result = string_type(&args).unwrap();
+        assert_eq!(result, "STRING");
+
+        // string_type(255)
+        let args = [Value::from(255)];
+        let result = string_type(&args).unwrap();
+        assert_eq!(result, "STRING(255)");
+
+        // string_type(size=None)
+        let args = [Value::from(Kwargs::from_iter([(
+            "size".to_string(),
+            Value::from(()),
+        )]))];
+        let result = string_type(&args).unwrap();
+        assert_eq!(result, "STRING");
+    }
+
+    /// Example: Handling aliased positional argument names.
+    ///
+    /// ```python
+    ///     def information_schema(self, identifier)
+    ///     // and
+    ///     def information_schema(self, view_name)
+    /// ```
+    fn information_schema(args: &[Value]) -> Result<String, MinijinjaError> {
+        let iter = ArgsIter::new("information_schema", &["identifier"], args);
+        let identifier = iter.next_pos_arg_aliased::<&str>(&["view_name"])?;
+        iter.finish()?;
+        Ok(identifier.to_string())
+    }
+
+    /// Example: Handling aliased kwarg argument names.
+    ///
+    /// ```python
+    ///     def information_schema(self, identifier=None)
+    ///     // and
+    ///     def information_schema(self, view_name=None)
+    /// ```
+    fn information_schema2(args: &[Value]) -> Result<String, MinijinjaError> {
+        let iter = ArgsIter::new("information_schema", &[], args);
+        let identifier = iter.next_kwarg_aliased::<Option<&str>>("identifier", &["view_name"])?;
+        iter.finish()?;
+        Ok(format!("{:?}", identifier))
+    }
+
+    #[test]
+    fn test_args_iter_aliased_pos_arg() {
+        // information_schema()
+        let args = [];
+        let e = information_schema(&args).unwrap_err();
+        assert_eq!(
+            e.to_string().split_once(": ").unwrap().1,
+            "information_schema() missing 1 required positional argument: 'identifier' (or 'view_name')"
+        );
+
+        // information_schema("test")
+        let args = [Value::from("test")];
+        let result = information_schema(&args).unwrap();
+        assert_eq!(result, "test");
+
+        // information_schema(identifier="test")
+        let args = [Value::from(Kwargs::from_iter([(
+            "identifier".to_string(),
+            Value::from("test"),
+        )]))];
+        let result = information_schema(&args).unwrap();
+        assert_eq!(result, "test");
+
+        // information_schema(view_name="test")
+        let args = [Value::from(Kwargs::from_iter([(
+            "view_name".to_string(),
+            Value::from("test"),
+        )]))];
+        let result = information_schema(&args).unwrap();
+        assert_eq!(result, "test");
+
+        // information_schema(blah="test")
+        let args = [Value::from(Kwargs::from_iter([(
+            "blah".to_string(),
+            Value::from("test"),
+        )]))];
+        let e = information_schema(&args).unwrap_err();
+        assert_eq!(
+            e.to_string().split_once(": ").unwrap().1,
+            "information_schema() missing 1 required positional argument: 'identifier' (or 'view_name')"
+        );
+
+        // If both are passed (theoretically possible, not expected in practice),
+        // we get an error
+        //
+        // information_schema(identifier="the identifier", view_name="the view_name")
+        let args = [Value::from(Kwargs::from_iter([
+            ("view_name".to_string(), Value::from("the view_name")),
+            ("identifier".to_string(), Value::from("the identifier")),
+        ]))];
+        let e = information_schema(&args).unwrap_err();
+        assert_eq!(
+            e.to_string().split_once(": ").unwrap().1,
+            "unknown keyword argument 'view_name'"
+        );
+    }
+
+    #[test]
+    fn test_args_iter_aliased_kwarg() {
+        // information_schema()
+        let args = [];
+        let result = information_schema2(&args).unwrap();
+        assert_eq!(result, "None");
+
+        // information_schema("test")
+        let args = [Value::from("test")];
+        let result = information_schema2(&args).unwrap();
+        assert_eq!(result, "Some(\"test\")");
+
+        // information_schema(identifier="test")
+        let args = [Value::from(Kwargs::from_iter([(
+            "identifier".to_string(),
+            Value::from("test"),
+        )]))];
+        let result = information_schema2(&args).unwrap();
+        assert_eq!(result, "Some(\"test\")");
+
+        // information_schema(view_name="test")
+        let args = [Value::from(Kwargs::from_iter([(
+            "view_name".to_string(),
+            Value::from("test"),
+        )]))];
+        let result = information_schema2(&args).unwrap();
+        assert_eq!(result, "Some(\"test\")");
+
+        // information_schema(blah="test")
+        let args = [Value::from(Kwargs::from_iter([(
+            "blah".to_string(),
+            Value::from("test"),
+        )]))];
+        let e = information_schema2(&args).unwrap_err();
+        assert_eq!(
+            e.to_string().split_once(": ").unwrap().1,
+            "unknown keyword argument 'blah'"
+        );
+
+        // If both are passed (theoretically possible, not expected in practice),
+        // we get an error
+        //
+        // information_schema(identifier="the identifier", view_name="the view_name")
+        let args = [Value::from(Kwargs::from_iter([
+            ("view_name".to_string(), Value::from("the view_name")),
+            ("identifier".to_string(), Value::from("the identifier")),
+        ]))];
+        let e = information_schema2(&args).unwrap_err();
+        assert_eq!(
+            e.to_string().split_once(": ").unwrap().1,
+            "unknown keyword argument 'view_name'"
+        );
     }
 }
