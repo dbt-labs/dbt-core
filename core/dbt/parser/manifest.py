@@ -1940,7 +1940,7 @@ def _process_metric_node(
 
             if target_metric is None:
                 raise dbt.exceptions.ParsingError(
-                    f"The metric `{input_metric.name}` does not exist but was referenced.",
+                    f"The metric `{input_metric.name}` does not exist but was referenced by metric `{metric.name}`.",
                     node=metric,
                 )
             elif isinstance(target_metric, Disabled):
