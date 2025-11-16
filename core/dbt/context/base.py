@@ -152,10 +152,12 @@ class Var:
         context: Mapping[str, Any],
         cli_vars: Mapping[str, Any],
         node: Optional[Resource] = None,
+        require_vars: bool = True,
     ) -> None:
         self._context: Mapping[str, Any] = context
         self._cli_vars: Mapping[str, Any] = cli_vars
         self._node: Optional[Resource] = node
+        self._require_vars: bool = require_vars
         self._merged: Mapping[str, Any] = self._generate_merged()
 
     def _generate_merged(self) -> Mapping[str, Any]:
@@ -168,7 +170,11 @@ class Var:
         else:
             return "<Configuration>"
 
-    def get_missing_var(self, var_name: str) -> NoReturn:
+    def get_missing_var(self, var_name: str):
+        # If vars are not required (e.g., during deps), return None
+        # instead of raising an error
+        if not self._require_vars:
+            return None
         # TODO function name implies a non exception resolution
         raise RequiredVarNotFoundError(var_name, dict(self._merged), self._node)
 
@@ -198,10 +204,11 @@ class BaseContext(metaclass=ContextMeta):
     _context_attrs_: Dict[str, Any]
 
     # subclass is TargetContext
-    def __init__(self, cli_vars: Dict[str, Any]) -> None:
+    def __init__(self, cli_vars: Dict[str, Any], require_vars: bool = True) -> None:
         self._ctx: Dict[str, Any] = {}
         self.cli_vars: Dict[str, Any] = cli_vars
         self.env_vars: Dict[str, Any] = {}
+        self.require_vars: bool = require_vars
 
     def generate_builtins(self) -> Dict[str, Any]:
         builtins: Dict[str, Any] = {}
@@ -307,7 +314,7 @@ class BaseContext(metaclass=ContextMeta):
             from events
             where event_type = '{{ var("event_type", "activation") }}'
         """
-        return Var(self._ctx, self.cli_vars)
+        return Var(self._ctx, self.cli_vars, require_vars=self.require_vars)
 
     @contextmember()
     def env_var(self, var: str, default: Optional[str] = None) -> str:
