@@ -6,7 +6,9 @@ use crate::errors::{
 use crate::metadata::*;
 use crate::record_batch_utils::get_column_values;
 use crate::{AdapterTyping, TypedBaseAdapter};
-use arrow_array::{Array, BooleanArray, Int64Array, RecordBatch, StringArray};
+use arrow_array::{
+    Array, BooleanArray, Int64Array, RecordBatch, StringArray, TimestampMicrosecondArray,
+};
 use arrow_schema::{DataType, Field, Schema, SchemaBuilder, TimeUnit};
 use dbt_common::cancellation::Cancellable;
 use dbt_schemas::schemas::legacy_catalog::{
@@ -83,6 +85,88 @@ fn generate_system_table_fqn(
         // All other tables NEED to be qualified with the region otherwise the query will fail
         let region = user_preferred_region.unwrap_or("us");
         format!("`region-{region}`.INFORMATION_SCHEMA.{sys_identifier}")
+    }
+}
+
+pub fn build_relation_clauses_bigquery(
+    relations: &[Arc<dyn BaseRelation>],
+) -> AdapterResult<(WhereClausesByDb, RelationsByDb)> {
+    let mut where_by_db = BTreeMap::<String, Vec<String>>::new();
+    let mut rels_by_db = BTreeMap::<String, Vec<Arc<dyn BaseRelation>>>::new();
+
+    for rel in relations {
+        // Semantic FQN: <project>.<dataset>.<table>
+        let fqn = rel.semantic_fqn();
+        let parts: Vec<&str> = fqn.split('.').collect();
+        if parts.len() != 3 {
+            return Err(AdapterError::new(
+                AdapterErrorKind::UnexpectedResult,
+                format!("Invalid BigQuery FQN: {}", rel.semantic_fqn()),
+            ));
+        }
+        let (project, dataset_raw, table_raw) = (parts[0], parts[1], parts[2]);
+
+        let dataset = dataset_raw.trim_matches('`');
+        let table = table_raw.trim_matches('`');
+        let db_key = format!("{project}.{dataset}");
+
+        where_by_db
+            .entry(db_key.clone())
+            .or_default()
+            .push(format!("table_id = '{table}'"));
+
+        rels_by_db.entry(db_key).or_default().push(rel.clone());
+    }
+
+    Ok((where_by_db, rels_by_db))
+}
+
+fn make_map_f(
+    relations: Vec<Arc<dyn BaseRelation>>,
+    adapter: BigqueryAdapter,
+) -> impl Fn(&mut dyn Connection, &(String, Vec<String>)) -> AdapterResult<Arc<RecordBatch>>
++ Send
++ Sync
++ 'static {
+    move |conn: &mut dyn Connection, database_and_where_clauses: &(String, Vec<String>)| {
+        let (database, where_clauses) = &database_and_where_clauses;
+        // Query to get last modified times from BigQuery's __TABLES__ metadata table
+        let table_list = relations
+            .iter()
+            .map(|relation| format!("'{}'", relation.identifier()))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let or_block = where_clauses.join(" OR ");
+
+        let table_filter = format!("table_id IN ({})", table_list);
+
+        let joined_where_clauses = if or_block.is_empty() {
+            table_filter
+        } else {
+            format!("({}) AND {}", or_block, table_filter)
+        };
+
+        // reference: https://discuss.google.dev/t/information-schema-tables-monitoring-last-modified-time/125698
+        // XXX: Though __TABLES__ is deprecated, I couldn't find a workaround using the existing INFORMATION_SCHEMA views
+        // Another option might be to use get_schema to fan out all individual relation
+        // Last Modified is easily accessible via their REST API, we need to look into if that will be cheaper or not
+        let sql = format!(
+            "SELECT
+                 dataset_id AS table_schema,
+                 table_id AS table_name,
+                 TIMESTAMP_MILLIS(last_modified_time) AS last_altered,
+                 (type = 2) AS is_view
+             FROM {db}.__TABLES__
+             WHERE {joined_where_clauses}",
+            db = database,
+            joined_where_clauses = joined_where_clauses,
+        );
+
+        let ctx = QueryCtx::default().with_desc("Extracting freshness from information schema");
+        let (_, agate_table) = adapter.query(&ctx, &mut *conn, &sql, None)?;
+        let batch = agate_table.original_record_batch();
+        Ok(batch)
     }
 }
 
@@ -504,12 +588,67 @@ impl MetadataAdapter for BigqueryAdapter {
 
     fn freshness(
         &self,
-        _relations: &[Arc<dyn BaseRelation>],
+        relations: &[Arc<dyn BaseRelation>],
     ) -> AsyncAdapterResult<'_, BTreeMap<String, MetadataFreshness>> {
-        // FIXME: implement this
-        println!("WARNING: BigqueryAdapter::freshness is not implemented");
-        let future = async move { Ok(BTreeMap::new()) };
-        Box::pin(future)
+        // Build the where clause for all relations grouped by databases
+        let (where_clauses_by_database, relations_by_database) =
+            match build_relation_clauses_bigquery(relations) {
+                Ok(result) => result,
+                Err(e) => {
+                    let future = async move { Err(Cancellable::Error(e)) };
+                    return Box::pin(future);
+                }
+            };
+
+        type Acc = BTreeMap<String, MetadataFreshness>;
+
+        let adapter = self.clone();
+        let new_connection_f = move || {
+            adapter
+                .new_connection(None, None)
+                .map_err(Cancellable::Error)
+        };
+
+        let adapter = self.clone();
+        let map_f = make_map_f(relations.to_vec(), adapter);
+
+        let reduce_f = move |acc: &mut Acc,
+                             database_and_where_clauses: (String, Vec<String>),
+                             batch_res: AdapterResult<Arc<RecordBatch>>|
+              -> Result<(), Cancellable<AdapterError>> {
+            let batch = batch_res?;
+            let schemas = get_column_values::<StringArray>(&batch, "table_schema")?;
+            let tables = get_column_values::<StringArray>(&batch, "table_name")?;
+            let timestamps =
+                get_column_values::<TimestampMicrosecondArray>(&batch, "last_altered")?;
+            let is_views = get_column_values::<BooleanArray>(&batch, "is_view")?;
+            let (database, _where_clauses) = &database_and_where_clauses;
+            for i in 0..batch.num_rows() {
+                let schema = schemas.value(i);
+                let table = tables.value(i);
+                let timestamp = timestamps.value(i);
+                let is_view = is_views.value(i);
+                let relations = &relations_by_database[database];
+
+                for table_name in find_matching_relation(schema, table, relations)? {
+                    acc.insert(
+                        table_name,
+                        MetadataFreshness::from_micros(timestamp, is_view)?,
+                    );
+                }
+            }
+            Ok(())
+        };
+
+        let map_reduce = MapReduce::new(
+            Box::new(new_connection_f),
+            Box::new(map_f),
+            Box::new(reduce_f),
+            MAX_CONNECTIONS,
+        );
+        let keys = where_clauses_by_database.into_iter().collect::<Vec<_>>();
+        let token = self.cancellation_token();
+        map_reduce.run(Arc::new(keys), token)
     }
 
     fn create_schemas_if_not_exists(
