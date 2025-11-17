@@ -185,6 +185,12 @@ pub fn setup_redshift_profile(
         cluster_id: None,
         region: None,
         threads: None,
+        token_endpoint: None,
+        idc_client_display_name: None,
+        idc_region: None,
+        idp_response_timeout: None,
+        issuer_url: None,
+        idp_listen_port: None,
     };
     let mut config = ConfigProcessor::process_config(existing_config.or(Some(&default_config)))?;
 

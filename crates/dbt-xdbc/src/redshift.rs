@@ -193,6 +193,12 @@ pub const CONNECTION_URI: &str = "redshift.connection_uri";
 pub const AUTH_IDC_REGION: &str = "redshift.auth.idc_region";
 pub const AUTH_ISSUER_URL: &str = "redshift.auth.issuer_url";
 
+pub const AUTH_TOKEN_TYPE: &str = "redshift.auth.token_type";
+pub const AUTH_TOKEN: &str = "redshift.auth.token";
+pub const AUTH_IDP_LISTEN_PORT: &str = "redshift.auth.listen_port";
+pub const AUTH_IDP_RESPONSE_TIMEOUT: &str = "redshift.auth.idp_response_timeout_seconds";
+pub const AUTH_IDC_CLIENT_DISPLAY_NAME: &str = "redshift.auth.idc_client_display_name";
+
 /// Whether TLS encryption is required
 pub const SSL_MODE: &str = "redshift.ssl_mode";
 pub const SSL_CERT: &str = "redshift.ssl_cert";
@@ -215,3 +221,4 @@ pub const INGEST_BUCKET: &str = "redshift.ingest.bucket";
 
 pub const AUTH_PROVIDER_USER_PASS: &str = "userpass";
 pub const AUTH_PROVIDER_BROWSER_IDC: &str = "BrowserIdcAuthPlugin";
+pub const AUTH_PROVIDER_IDP_TOKEN: &str = "IdpTokenAuthPlugin";

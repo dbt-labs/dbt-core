@@ -86,7 +86,7 @@ pub const SNOWFLAKE_DRIVER_VERSION: &str = "0.18.0+dbt0.0.17";
 pub const BIGQUERY_DRIVER_VERSION: &str = "0.18.0+dbt0.0.22";
 pub const POSTGRES_DRIVER_VERSION: &str = "0.18.0+dbt0.0.3";
 pub const DATABRICKS_DRIVER_VERSION: &str = "0.18.0+dbt0.0.6";
-pub const REDSHIFT_DRIVER_VERSION: &str = "0.18.0+dbt0.18.2";
+pub const REDSHIFT_DRIVER_VERSION: &str = "0.18.0+dbt0.18.4";
 pub const DUCKDB_DRIVER_VERSION: &str = "0.18.0+dbt0.0.1";
 pub const SALESFORCE_DRIVER_VERSION: &str = "0.18.0+dbt0.0.4";
 

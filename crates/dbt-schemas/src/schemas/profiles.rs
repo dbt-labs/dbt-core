@@ -463,6 +463,19 @@ pub struct RedshiftDbConfig {
     pub region: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub threads: Option<StringOrInteger>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[merge(strategy = merge_strategies_extend::overwrite_always)]
+    pub token_endpoint: Option<HashMap<String, YmlValue>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub idc_region: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub issuer_url: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub idp_listen_port: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub idc_client_display_name: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub idp_response_timeout: Option<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema, Merge)]
@@ -864,9 +877,17 @@ pub struct DatabricksTargetEnv {
 }
 
 #[derive(Serialize, JsonSchema)]
+pub struct RedshiftTokenEndpoint {
+    pub r#type: String,
+    pub request_url: String,
+    pub idp_auth_credentials: Option<String>,
+    pub request_data: String,
+}
+
+#[derive(Serialize, JsonSchema)]
 pub struct RedshiftTargetEnv {
     pub host: String,
-    pub user: String,
+    pub user: Option<String>,
     pub port: StringOrInteger,
     pub method: Option<String>,
     pub cluster_id: Option<String>,
@@ -887,6 +908,12 @@ pub struct RedshiftTargetEnv {
     pub is_serverless: Option<bool>,
     pub serverless_work_group: Option<String>,
     pub serverless_acct_id: Option<String>,
+    pub token_endpoint: Option<HashMap<String, YmlValue>>,
+    pub idc_region: Option<String>,
+    pub issuer_url: Option<String>,
+    pub idp_listen_port: Option<i64>,
+    pub idc_client_display_name: Option<String>,
+    pub idp_response_timeout: Option<i64>,
 }
 
 #[derive(Serialize, JsonSchema)]
@@ -1063,7 +1090,7 @@ impl TryFrom<DbConfig> for TargetContext {
                     .ok_or_else(|| missing("dbname or database"))?;
                 Ok(TargetContext::Redshift(RedshiftTargetEnv {
                     host: config.host.ok_or_else(|| missing("host"))?,
-                    user: config.user.ok_or_else(|| missing("user"))?,
+                    user: config.user,
                     port: config.port.ok_or_else(|| missing("port"))?,
                     method: config.method,
                     cluster_id: config.cluster_id,
@@ -1089,6 +1116,12 @@ impl TryFrom<DbConfig> for TargetContext {
                     is_serverless: None,
                     serverless_work_group: None,
                     serverless_acct_id: None,
+                    token_endpoint: config.token_endpoint,
+                    idc_region: config.idc_region,
+                    idc_client_display_name: config.idc_client_display_name,
+                    issuer_url: config.issuer_url,
+                    idp_listen_port: config.idp_listen_port,
+                    idp_response_timeout: config.idp_response_timeout,
                 }))
             }
 

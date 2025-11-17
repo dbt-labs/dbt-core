@@ -209,64 +209,64 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "6f38377190af7320b0020c11f726e018cae0932272adba88359bf395c0f8ad94",
     ),
     (
-        ("redshift", "apple-darwin", "aarch64", "0.18.0+dbt0.18.0"),
-        "c12c7cbfc9d7819b268389e62ae2476c36ece2d8d8844705e251269922709d82",
-    ),
-    (
-        ("redshift", "apple-darwin", "aarch64", "0.18.0+dbt0.18.1"),
-        "fd1cf44eaae243479706235dcd486e28e19f96542b4de0b91da9633aea4dd69e",
-    ),
-    (
         ("redshift", "apple-darwin", "aarch64", "0.18.0+dbt0.18.2"),
         "ab2b73c667a2b977362ca03cdca9ee309c68b1659f428dee176639d9070c9c1c",
     ),
     (
-        ("redshift", "apple-darwin", "x86_64", "0.18.0+dbt0.18.0"),
-        "699697f946a6e2a7d80135304600eb716f1682b20c8d43bd324e3151f0723ceb",
+        ("redshift", "apple-darwin", "aarch64", "0.18.0+dbt0.18.3"),
+        "ce4f16d63e73955b7609ce3658fe95a14426ff0394305c1dcff060b5e71ce398",
     ),
     (
-        ("redshift", "apple-darwin", "x86_64", "0.18.0+dbt0.18.1"),
-        "477b3ea638297ecfb950738cd15295a72a9b42a64e07372a7a3f7cb5c7e1164a",
+        ("redshift", "apple-darwin", "aarch64", "0.18.0+dbt0.18.4"),
+        "06577fa0d7049dbac38ad50c91c13c636f188d3278a2a3abc5ba563eb83d51f2",
     ),
     (
         ("redshift", "apple-darwin", "x86_64", "0.18.0+dbt0.18.2"),
         "4283d97f8adaf6066ee84b9a3efb4ce4340774f8cd77e79310272daa317e9d7f",
     ),
     (
-        ("redshift", "manylinux_2_17-linux-gnu", "aarch64", "0.18.0+dbt0.18.0"),
-        "ec9f0288ac76864913a29be35837bdd5698a3550edbbcd315d577e67913ba567",
+        ("redshift", "apple-darwin", "x86_64", "0.18.0+dbt0.18.3"),
+        "1be66c9643987b70b3baae8e41135415c4433d92e85508bec3c0a3c6e0151978",
     ),
     (
-        ("redshift", "manylinux_2_17-linux-gnu", "aarch64", "0.18.0+dbt0.18.1"),
-        "272922a5a3e36ba73b591f5009ced1a5f67431eb3358b27c14a2382c00f6780d",
+        ("redshift", "apple-darwin", "x86_64", "0.18.0+dbt0.18.4"),
+        "33f49abc1eaebead97d0e3edcfdfa37fb1c92b779bcfa5fee1022bb75ce1c9d4",
     ),
     (
         ("redshift", "manylinux_2_17-linux-gnu", "aarch64", "0.18.0+dbt0.18.2"),
         "0ea7538a182b73bbafd4f594f8d63aa2cd26c3c2e354c13967540f861f20ccc7",
     ),
     (
-        ("redshift", "manylinux_2_17-linux-gnu", "x86_64", "0.18.0+dbt0.18.0"),
-        "7bb6e96fd397d870020cf8c363e17b4cf7b5fbdddacd4f77a2d2815544cf8b58",
+        ("redshift", "manylinux_2_17-linux-gnu", "aarch64", "0.18.0+dbt0.18.3"),
+        "cb2538c84e6dcbad15e074a2a9907a7cab551d66c833264a5af7835a19352cbd",
     ),
     (
-        ("redshift", "manylinux_2_17-linux-gnu", "x86_64", "0.18.0+dbt0.18.1"),
-        "ae3f9a741c9a4613e24666df4cce7cfa61517b55c7d4bd64f6cf894fcfc9688c",
+        ("redshift", "manylinux_2_17-linux-gnu", "aarch64", "0.18.0+dbt0.18.4"),
+        "4044e6e1f37ef4d5696c56b7de7303f8a56d64678609f2694413baf493cf9560",
     ),
     (
         ("redshift", "manylinux_2_17-linux-gnu", "x86_64", "0.18.0+dbt0.18.2"),
         "3c853f6444cd16bb9a7600f6b6350717aac440b840df1790d3c3d138d907283f",
     ),
     (
-        ("redshift", "pc-windows-msvc", "x86_64", "0.18.0+dbt0.18.0"),
-        "ac5995cd9acc93ad4ca09a42be373111c6a977d5dff29a2ef56ce6983caea9d6",
+        ("redshift", "manylinux_2_17-linux-gnu", "x86_64", "0.18.0+dbt0.18.3"),
+        "89c1e7b6b5e860259bb382d2b6257f9c593e8f977365f82dacc17bd14defb533",
     ),
     (
-        ("redshift", "pc-windows-msvc", "x86_64", "0.18.0+dbt0.18.1"),
-        "65761e237d7874452a527478f6139cd85a091fb0fedcda8999009114f5eff0f8",
+        ("redshift", "manylinux_2_17-linux-gnu", "x86_64", "0.18.0+dbt0.18.4"),
+        "5a2600f85b0f9c8d34d91d8d0ae13cab266947238f97df07efe0351b53af3af9",
     ),
     (
         ("redshift", "pc-windows-msvc", "x86_64", "0.18.0+dbt0.18.2"),
         "3c802b424c2fd1ea7fb45ebd1251fbe3e65b4d53a9d61dd4da303b1d5f206506",
+    ),
+    (
+        ("redshift", "pc-windows-msvc", "x86_64", "0.18.0+dbt0.18.3"),
+        "d6cf68f50f2551e07902d43631ff01f8dd507d9592a43cf8a074ac57ef2cb9e4",
+    ),
+    (
+        ("redshift", "pc-windows-msvc", "x86_64", "0.18.0+dbt0.18.4"),
+        "566dc019803edae2b29a58dace76034a793fd2ace289a54da35438834231e388",
     ),
     (
         ("salesforce", "apple-darwin", "aarch64", "0.18.0+dbt0.0.2"),
