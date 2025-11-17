@@ -81,6 +81,7 @@ These are the tools used in `dbt-core` development and testing:
 - [`mypy`](https://mypy.readthedocs.io/en/stable/) for static type checking
 - [`pre-commit`](https://pre-commit.com) to easily run those checks
 - [`changie`](https://changie.dev/) to create changelog entries, without merge conflicts
+- [`hatchling`](https://hatch.pypa.io/) as the build backend for creating distribution packages
 - [`make`](https://users.cs.duke.edu/~ola/courses/programming/Makefiles/Makefiles.html) to run multiple setup or test steps in combination. Don't worry too much, nobody _really_ understands how `make` works, and our Makefile aims to be super simple.
 - [GitHub Actions](https://github.com/features/actions) for automating tests and checks, once a PR is pushed to the `dbt-core` repository
 
@@ -126,6 +127,19 @@ pre-commit install
 ```
 
 When installed in this way, any changes you make to your local copy of the source code will be reflected immediately in your next `dbt` run.
+
+#### Building dbt-core
+
+dbt-core uses [Hatch](https://hatch.pypa.io/) (specifically `hatchling`) as its build backend. To build distribution packages:
+
+```sh
+cd core
+python -m build
+```
+
+This will create both wheel (`.whl`) and source distribution (`.tar.gz`) files in the `dist/` directory.
+
+The build configuration is defined in `core/pyproject.toml` with additional environment configurations in `core/hatch.toml`. Note that `hatch` itself is not required for development work - standard `pip install -e` works as usual.
 
 ### Running `dbt-core`
 
