@@ -54,6 +54,206 @@ use std::sync::{Arc, LazyLock};
 
 pub const ADBC_EXECUTE_INVOCATION_OPTION: &str = "dbt_invocation_id";
 
+/// Shared, pure parser for BigQuery `partition_by` config that does not require DB access.
+pub(crate) fn parse_partition_by_value(raw_partition_by: Value) -> AdapterResult<Value> {
+    if raw_partition_by.is_none() {
+        return Ok(none_value());
+    }
+
+    let partition_by = minijinja_value_to_typed_struct::<PartitionConfig>(raw_partition_by.clone())
+        .map_err(|e| {
+            MinijinjaError::new(
+                MinijinjaErrorKind::SerdeDeserializeError,
+                format!("adapter.parse_partition_by failed on {raw_partition_by:?}: {e}"),
+            )
+        })?;
+
+    let validated_config = partition_by.into_bigquery().ok_or_else(|| {
+        MinijinjaError::new(
+            MinijinjaErrorKind::InvalidArgument,
+            "Expect a BigqueryPartitionConfigStruct",
+        )
+    })?;
+
+    Ok(Value::from_object(validated_config))
+}
+
+/// Shared, pure helper to compute common table options for BigQuery without DB access.
+pub(crate) fn get_common_table_options_value(
+    state: &State,
+    config: ModelConfig,
+    common_attr: &CommonAttributes,
+    temporary: bool,
+) -> BTreeMap<String, Value> {
+    let _ = state;
+    let mut result = BTreeMap::new();
+
+    if let Some(hours) = config.__warehouse_specific_config__.hours_to_expiration
+        && !temporary
+    {
+        let expiration = format!("TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL {hours} hour)");
+        result.insert("expiration_timestamp".to_string(), Value::from(expiration));
+    }
+
+    // Handle description if persist_docs is enabled
+    if let Some(persist_docs) = &config.persist_docs
+        && persist_docs.relation.unwrap_or(false)
+        && let Some(description) = &common_attr.description
+    {
+        let escaped_description = description.replace('\\', "\\\\").replace('"', "\\\"");
+        result.insert(
+            "description".to_string(),
+            Value::from(format!("\"\"\"{escaped_description}\"\"\"")),
+        );
+    }
+
+    let mut labels = config
+        .__warehouse_specific_config__
+        .labels
+        .clone()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(key, value)| Value::from_iter(vec![Value::from(key), Value::from(value)]))
+        .collect::<Vec<_>>();
+
+    // https://github.com/dbt-labs/dbt-adapters/pull/890
+    // Merge with priority to labels
+    if config
+        .__warehouse_specific_config__
+        .labels_from_meta
+        .unwrap_or_default()
+        && let Some(meta) = &config.meta
+    {
+        // Convert meta values to strings
+        for (key, value) in meta {
+            labels.push(Value::from_iter(vec![
+                Value::from(key),
+                value.as_str().map(Value::from).unwrap_or_default(),
+            ]));
+        }
+    }
+
+    // Add labels to opts if any exist
+    if !labels.is_empty() {
+        result.insert(
+            "labels".to_string(),
+            Value::from_object(MutableVec::from_iter(labels)),
+        );
+    }
+
+    let resource_tags = config
+        .__warehouse_specific_config__
+        .resource_tags
+        .unwrap_or_default()
+        .into_iter()
+        .map(|(key, value)| Value::from_iter(vec![Value::from(key), Value::from(value)]))
+        .collect::<Vec<_>>();
+
+    // Add resource_tags to opts if any exist
+    if !resource_tags.is_empty() {
+        result.insert(
+            "tags".to_string(),
+            Value::from_object(MutableVec::from_iter(resource_tags)),
+        );
+    }
+
+    result
+}
+
+/// Shared, pure helper to compute full table options for BigQuery without DB access.
+pub(crate) fn get_table_options_value(
+    state: &State,
+    config: ModelConfig,
+    node: &InternalDbtNodeWrapper,
+    temporary: bool,
+    adapter_type: AdapterType,
+) -> AdapterResult<BTreeMap<String, Value>> {
+    // Common options
+    let common_attr = node.as_internal_node().common();
+    let mut opts = get_common_table_options_value(state, config.clone(), common_attr, temporary);
+
+    // Node serialization and catalogs lookup are in-memory/pure
+    let node_yml = node.as_internal_node().serialize();
+    let catalog_relation = CatalogRelation::from_model_config_and_catalogs(
+        &adapter_type,
+        &Value::from_object(convert_yml_to_value_map(node_yml)),
+        load_catalogs::fetch_catalogs(),
+    )?;
+
+    // KMS key name if present
+    if let Some(kms_key_name) = config.__warehouse_specific_config__.kms_key_name {
+        opts.insert(
+            "kms_key_name".to_string(),
+            Value::from(format!("'{kms_key_name}'")),
+        );
+    }
+
+    if temporary {
+        // For temporary tables, set 12-hour expiration
+        opts.insert(
+            "expiration_timestamp".to_string(),
+            Value::from("TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 12 hour)"),
+        );
+    } else {
+        // Partition filter requirements for non-temporary tables
+        if config
+            .__warehouse_specific_config__
+            .require_partition_filter
+            .unwrap_or(false)
+            && config.__warehouse_specific_config__.partition_by.is_some()
+        {
+            opts.insert(
+                "require_partition_filter".to_string(),
+                Value::from(
+                    config
+                        .__warehouse_specific_config__
+                        .require_partition_filter,
+                ),
+            );
+        }
+
+        if catalog_relation.table_format == "iceberg" {
+            opts.insert(
+                "table_format".to_string(),
+                Value::from(format!("'{}'", catalog_relation.table_format)),
+            );
+            let file_format = catalog_relation.file_format.ok_or_else(|| {
+                AdapterError::new(
+                    AdapterErrorKind::Internal,
+                    "file_format is not set in catalog",
+                )
+            })?;
+            opts.insert(
+                "file_format".to_string(),
+                Value::from(format!("'{}'", file_format)),
+            );
+            let storage_uri = catalog_relation
+                .adapter_properties
+                .get("storage_uri")
+                .ok_or_else(|| {
+                    AdapterError::new(
+                        AdapterErrorKind::Internal,
+                        "storage_uri is not set in catalog",
+                    )
+                })?;
+            opts.insert(
+                "storage_uri".to_string(),
+                Value::from(format!("'{}'", storage_uri)),
+            );
+        }
+    }
+
+    // Partition expiration if specified
+    if let Some(days) = config
+        .__warehouse_specific_config__
+        .partition_expiration_days
+    {
+        opts.insert("partition_expiration_days".to_string(), Value::from(days));
+    }
+
+    Ok(opts)
+}
+
 /// An adapter for interacting with Bigquery.
 #[derive(Clone)]
 pub struct BigqueryAdapter {
@@ -74,83 +274,12 @@ impl BigqueryAdapter {
     /// reference: https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L750-L751
     pub fn get_common_table_options(
         &self,
-        _state: &State,
+        state: &State,
         config: ModelConfig,
         common_attr: &CommonAttributes,
         temporary: bool,
     ) -> BTreeMap<String, Value> {
-        let mut result = BTreeMap::new();
-
-        if let Some(hours) = config.__warehouse_specific_config__.hours_to_expiration
-            && !temporary
-        {
-            let expiration = format!("TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL {hours} hour)");
-            result.insert("expiration_timestamp".to_string(), Value::from(expiration));
-        }
-
-        // Handle description if persist_docs is enabled
-        if let Some(persist_docs) = &config.persist_docs
-            && persist_docs.relation.unwrap_or(false)
-            && let Some(description) = &common_attr.description
-        {
-            let escaped_description = description.replace('\\', "\\\\").replace('"', "\\\"");
-            result.insert(
-                "description".to_string(),
-                Value::from(format!("\"\"\"{escaped_description}\"\"\"")),
-            );
-        }
-
-        let mut labels = config
-            .__warehouse_specific_config__
-            .labels
-            .clone()
-            .unwrap_or_default()
-            .into_iter()
-            .map(|(key, value)| Value::from_iter(vec![Value::from(key), Value::from(value)]))
-            .collect::<Vec<_>>();
-
-        // https://github.com/dbt-labs/dbt-adapters/pull/890
-        // Merge with priority to labels
-        if config
-            .__warehouse_specific_config__
-            .labels_from_meta
-            .unwrap_or_default()
-            && let Some(meta) = &config.meta
-        {
-            // Convert meta values to strings
-            for (key, value) in meta {
-                labels.push(Value::from_iter(vec![
-                    Value::from(key),
-                    value.as_str().map(Value::from).unwrap_or_default(),
-                ]));
-            }
-        }
-
-        // Add labels to opts if any exist
-        if !labels.is_empty() {
-            result.insert(
-                "labels".to_string(),
-                Value::from_object(MutableVec::from_iter(labels)),
-            );
-        }
-
-        let resource_tags = config
-            .__warehouse_specific_config__
-            .resource_tags
-            .unwrap_or_default()
-            .into_iter()
-            .map(|(key, value)| Value::from_iter(vec![Value::from(key), Value::from(value)]))
-            .collect::<Vec<_>>();
-
-        // Add resource_tags to opts if any exist
-        if !resource_tags.is_empty() {
-            result.insert(
-                "tags".to_string(),
-                Value::from_object(MutableVec::from_iter(resource_tags)),
-            );
-        }
-
-        result
+        get_common_table_options_value(state, config, common_attr, temporary)
     }
 }
 
@@ -715,28 +844,7 @@ impl TypedBaseAdapter for BigqueryAdapter {
 
     /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L579-L586
     fn parse_partition_by(&self, raw_partition_by: Value) -> AdapterResult<Value> {
-        if raw_partition_by.is_none() {
-            return Ok(none_value());
-        }
-
-        let partition_by = minijinja_value_to_typed_struct::<PartitionConfig>(
-            raw_partition_by.clone(),
-        )
-        .map_err(|e| {
-            MinijinjaError::new(
-                MinijinjaErrorKind::SerdeDeserializeError,
-                format!("adapter.parse_partition_by failed on {raw_partition_by:?}: {e}"),
-            )
-        })?;
-
-        let validated_config = partition_by.into_bigquery().ok_or_else(|| {
-            MinijinjaError::new(
-                MinijinjaErrorKind::InvalidArgument,
-                "Expect a BigqueryPartitionConfigStruct",
-            )
-        })?;
-
-        Ok(Value::from_object(validated_config))
+        parse_partition_by_value(raw_partition_by)
     }
 
     /// get_table_options
@@ -747,90 +855,7 @@ impl TypedBaseAdapter for BigqueryAdapter {
         node: &InternalDbtNodeWrapper,
         temporary: bool,
     ) -> AdapterResult<BTreeMap<String, Value>> {
-        // Get common options first
-        let common_attr = node.as_internal_node().common();
-        let mut opts = self.get_common_table_options(state, config.clone(), common_attr, temporary);
-
-        // TODO(anna): For now, we treat the model as something of type InternalDbtNode/DbtModel, but serialize it to Jinja the same way we'd do when inserting into context.
-        let node_yml = node.as_internal_node().serialize();
-        let catalog_relation = CatalogRelation::from_model_config_and_catalogs(
-            &self.adapter_type(),
-            &Value::from_object(convert_yml_to_value_map(node_yml)),
-            load_catalogs::fetch_catalogs(),
-        )?;
-
-        // Handle KMS key name if present
-        if let Some(kms_key_name) = config.__warehouse_specific_config__.kms_key_name {
-            opts.insert(
-                "kms_key_name".to_string(),
-                Value::from(format!("'{kms_key_name}'")),
-            );
-        }
-
-        if temporary {
-            // For temporary tables, set 12-hour expiration
-            opts.insert(
-                "expiration_timestamp".to_string(),
-                Value::from("TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 12 hour)"),
-            );
-        } else {
-            // Handle partition filter requirements for non-temporary tables
-            if config
-                .__warehouse_specific_config__
-                .require_partition_filter
-                .unwrap_or(false)
-                && config.__warehouse_specific_config__.partition_by.is_some()
-            {
-                opts.insert(
-                    "require_partition_filter".to_string(),
-                    Value::from(
-                        config
-                            .__warehouse_specific_config__
-                            .require_partition_filter,
-                    ),
-                );
-            }
-
-            if catalog_relation.table_format == "iceberg" {
-                opts.insert(
-                    "table_format".to_string(),
-                    Value::from(format!("'{}'", catalog_relation.table_format)),
-                );
-                let file_format = catalog_relation.file_format.ok_or_else(|| {
-                    AdapterError::new(
-                        AdapterErrorKind::Internal,
-                        "file_format is not set in catalog",
-                    )
-                })?;
-                opts.insert(
-                    "file_format".to_string(),
-                    Value::from(format!("'{}'", file_format)),
-                );
-                let storage_uri = catalog_relation
-                    .adapter_properties
-                    .get("storage_uri")
-                    .ok_or_else(|| {
-                        AdapterError::new(
-                            AdapterErrorKind::Internal,
-                            "storage_uri is not set in catalog",
-                        )
-                    })?;
-                opts.insert(
-                    "storage_uri".to_string(),
-                    Value::from(format!("'{}'", storage_uri)),
-                );
-            }
-        }
-
-        // Handle partition expiration if specified
-        if let Some(days) = config
-            .__warehouse_specific_config__
-            .partition_expiration_days
-        {
-            opts.insert("partition_expiration_days".to_string(), Value::from(days));
-        }
-
-        Ok(opts)
+        get_table_options_value(state, config, node, temporary, self.adapter_type())
     }
 
     /// get_view_options
@@ -840,7 +865,7 @@ impl TypedBaseAdapter for BigqueryAdapter {
         config: ModelConfig,
         common_attr: &CommonAttributes,
     ) -> AdapterResult<BTreeMap<String, Value>> {
-        let result = self.get_common_table_options(state, config, common_attr, false);
+        let result = get_common_table_options_value(state, config, common_attr, false);
         Ok(result)
     }
 

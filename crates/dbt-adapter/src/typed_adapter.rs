@@ -883,18 +883,31 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     }
 
     /// parse_partition_by
-    fn parse_partition_by(&self, _partition_by: Value) -> AdapterResult<Value> {
+    fn parse_partition_by(&self, partition_by: Value) -> AdapterResult<Value> {
+        if self.adapter_type() == AdapterType::Bigquery {
+            // Pure config parse; safe for both BigQuery and Replay (when adapter type is BigQuery)
+            return crate::bigquery::adapter::parse_partition_by_value(partition_by);
+        }
         unimplemented!("only available with BigQuery adapter")
     }
 
     /// get_table_options
     fn get_table_options(
         &self,
-        _state: &State,
-        _config: ModelConfig,
-        _node: &InternalDbtNodeWrapper,
-        _temporary: bool,
+        state: &State,
+        config: ModelConfig,
+        node: &InternalDbtNodeWrapper,
+        temporary: bool,
     ) -> AdapterResult<BTreeMap<String, Value>> {
+        if self.adapter_type() == AdapterType::Bigquery {
+            return crate::bigquery::adapter::get_table_options_value(
+                state,
+                config,
+                node,
+                temporary,
+                self.adapter_type(),
+            );
+        }
         unimplemented!("only available with BigQuery adapter")
     }
 
