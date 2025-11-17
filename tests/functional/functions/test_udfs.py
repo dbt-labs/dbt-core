@@ -149,6 +149,42 @@ scalar_function_python_macro = """
 {% endmacro %}
 """
 
+sum_2_values_sql = """
+SELECT val1 + val2 as sum_2_values
+"""
+
+sum_2_values_yml = """
+functions:
+  - name: sum_2_values
+    description: Add two values together
+    arguments:
+      - name: val1
+        data_type: integer
+        description: The first value
+      - name: val2
+        data_type: integer
+        description: The second value
+        default_value: 0
+    returns:
+      data_type: integer
+"""
+
+sum_2_values_bad_default_arg_order_yml = """
+functions:
+  - name: sum_2_values
+    description: Add two values together
+    arguments:
+      - name: val1
+        data_type: integer
+        description: The first value
+        default_value: 0
+      - name: val2
+        data_type: integer
+        description: The second value
+    returns:
+      data_type: integer
+"""
+
 
 class TestBasicSQLUDF(BasicUDFSetup):
     def test_basic_parsing(self, project):
@@ -449,3 +485,34 @@ class TestPythonFunctionWithJinjaHasCorrectCompiledCode:
         node = result.results[0].node
         assert isinstance(node, FunctionNode)
         assert node.compiled_code == "def entry(value):\n    \n    return value * 2\n    "
+
+
+class TestDefaultArgumentsBasic:
+    @pytest.fixture(scope="class")
+    def functions(self) -> Dict[str, str]:
+        return {
+            "sum_2_values.py": sum_2_values_sql,
+            "sum_2_values.yml": sum_2_values_yml,
+        }
+
+    def test_udfs(self, project):
+        manifest = run_dbt(["parse"])
+        assert len(manifest.functions) == 1
+        function_node = manifest.functions["function.test.sum_2_values"]
+        assert isinstance(function_node, FunctionNode)
+        assert len(function_node.arguments) == 2
+        assert function_node.arguments[0].default_value is None
+        assert function_node.arguments[1].default_value == 0
+
+
+class TestDefaultArgumentsMustComeLast:
+    @pytest.fixture(scope="class")
+    def functions(self) -> Dict[str, str]:
+        return {
+            "sum_2_values.py": sum_2_values_sql,
+            "sum_2_values.yml": sum_2_values_bad_default_arg_order_yml,
+        }
+
+    def test_udfs(self, project):
+        run_dbt(["parse"], expect_pass=False)
+        # TODO: check the error message
