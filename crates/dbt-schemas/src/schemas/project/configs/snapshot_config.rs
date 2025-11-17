@@ -94,7 +94,11 @@ pub struct ProjectSnapshotConfig {
         deserialize_with = "bool_or_string_bool"
     )]
     pub quote_columns: Option<bool>,
-    #[serde(rename = "+invalidate_hard_deletes")]
+    #[serde(
+        default,
+        rename = "+invalidate_hard_deletes",
+        deserialize_with = "bool_or_string_bool"
+    )]
     pub invalidate_hard_deletes: Option<bool>,
     #[serde(rename = "+docs")]
     pub docs: Option<DocsConfig>,
@@ -344,6 +348,7 @@ pub struct SnapshotConfig {
     pub group: Option<String>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub quote_columns: Option<bool>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub invalidate_hard_deletes: Option<bool>,
     pub docs: Option<DocsConfig>,
     pub description: Option<String>,
