@@ -147,10 +147,13 @@ fn make_map_f(
             format!("({}) AND {}", or_block, table_filter)
         };
 
+        // __TABLES__ is officially deprecated in favor of TABLES and
+        // PARTITIONS, but neither has last_modified_time. Bigquery's API
+        // has get_table. But for customers with larger source freshness
+        // workloads fanning out over all individual relations can trigger
+        // API limiting errors or run up larger bills.
+        //
         // reference: https://discuss.google.dev/t/information-schema-tables-monitoring-last-modified-time/125698
-        // XXX: Though __TABLES__ is deprecated, I couldn't find a workaround using the existing INFORMATION_SCHEMA views
-        // Another option might be to use get_schema to fan out all individual relation
-        // Last Modified is easily accessible via their REST API, we need to look into if that will be cheaper or not
         let sql = format!(
             "SELECT
                  dataset_id AS table_schema,
