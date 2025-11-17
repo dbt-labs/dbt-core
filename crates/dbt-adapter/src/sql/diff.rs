@@ -1,8 +1,13 @@
 use dbt_common::{AdapterError, AdapterErrorKind, AdapterResult};
 
 use super::tokenizer::{AbstractToken, Token, abstract_tokenize, tokenize};
+use regex::Regex;
 
 pub fn compare_sql(actual: &str, expected: &str) -> AdapterResult<()> {
+    // Canonicalize ignorable differences first
+    let actual = canonicalize_query_tag(actual);
+    let expected = canonicalize_query_tag(expected);
+
     // Create normalized SQL strings (remove all whitespace)
     let actual_normalized = actual
         .chars()
@@ -26,17 +31,30 @@ pub fn compare_sql(actual: &str, expected: &str) -> AdapterResult<()> {
     }
 
     // fuzzy comparison
-    if fuzzy_compare_sql(actual, expected) {
+    if fuzzy_compare_sql(&actual, &expected) {
         return Ok(());
     }
 
     // SQL differs, generate visual diff information
-    let diff_info = generate_visual_sql_diff(actual, expected);
+    let diff_info = generate_visual_sql_diff(&actual, &expected);
 
     Err(AdapterError::new(
         AdapterErrorKind::UnexpectedResult,
         format!("SQL mismatch detected:\n\n{diff_info}"),
     ))
+}
+
+/// Replace the payload of `ALTER SESSION SET QUERY_TAG = '...';` with a fixed placeholder,
+/// so differences in the query tag JSON/body are ignored during comparison.
+fn canonicalize_query_tag(sql: &str) -> String {
+    // Match: ALTER SESSION SET QUERY_TAG = '...'
+    // Flags: (?i) case-insensitive, (?s) allow '.' to match newlines (defensive)
+    // We specifically capture a single-quoted literal to avoid over-matching.
+    static RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
+        Regex::new(r"(?is)\balter\s+session\s+set\s+query_tag\s*=\s*'[^']*'").unwrap()
+    });
+    RE.replace_all(sql, "alter session set query_tag = '__TAG__'")
+        .to_string()
 }
 
 fn fuzzy_compare_sql(actual: &str, expected: &str) -> bool {
@@ -805,5 +823,16 @@ LEFT OUTER JOIN
 "#;
         let result = compare_sql(sql1, sql2);
         assert!(result.is_ok(), "Should match");
+    }
+
+    #[test]
+    fn test_compare_sql_query_tag_payload_ignored() {
+        let actual = r#"    alter session set query_tag = '{""model_name"":""stg_base_orders"",""env"":""PRD"",""job"":{""run_id"":"""",""execution_date"":"""",""start_date"":""""}}'"#;
+        let expected = r#"    alter session set query_tag = '{""env"": ""PRD"", ""job"": {""execution_date"": """", ""run_id"": """", ""start_date"": """"}, ""model_name"": ""stg_base_orders""}'"#;
+        let result = compare_sql(actual, expected);
+        assert!(
+            result.is_ok(),
+            "Query tag payload differences should be ignored"
+        );
     }
 }
