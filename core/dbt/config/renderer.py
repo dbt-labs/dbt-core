@@ -151,6 +151,7 @@ class DbtProjectYamlRenderer(BaseRenderer):
     def render_selectors(self, selectors: Dict[str, Any]):
         # Selectors require vars to be provided (unlike dbt_project.yml during deps)
         # Create a strict context that will raise errors for missing vars
+        strict_ctx_obj: Union[TargetContext, BaseContext]
         if self.profile:
             strict_ctx_obj = TargetContext(
                 self.profile.to_target_dict(), self.cli_vars, require_vars=True
