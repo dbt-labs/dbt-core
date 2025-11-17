@@ -109,6 +109,10 @@ class DbtProjectYamlRenderer(BaseRenderer):
         # even when we don't have a profile.
         if cli_vars is None:
             cli_vars = {}
+        # Store profile and cli_vars for creating strict context later
+        self.profile = profile
+        self.cli_vars = cli_vars
+        # Lenient context for project loading (dbt deps, dbt_project.yml)
         if profile:
             self.ctx_obj = TargetContext(profile.to_target_dict(), cli_vars, require_vars=False)
         else:
@@ -145,7 +149,24 @@ class DbtProjectYamlRenderer(BaseRenderer):
             return package_renderer.render_data(packages)
 
     def render_selectors(self, selectors: Dict[str, Any]):
-        return self.render_data(selectors)
+        # Selectors require vars to be provided (unlike dbt_project.yml during deps)
+        # Create a strict context that will raise errors for missing vars
+        if self.profile:
+            strict_ctx_obj = TargetContext(
+                self.profile.to_target_dict(), self.cli_vars, require_vars=True
+            )
+        else:
+            strict_ctx_obj = BaseContext(self.cli_vars, require_vars=True)
+        strict_context = strict_ctx_obj.to_dict()
+
+        # Temporarily use strict context for selector rendering
+        original_context = self.context
+        self.context = strict_context
+        try:
+            return self.render_data(selectors)
+        finally:
+            # Restore lenient context
+            self.context = original_context
 
     def render_entry(self, value: Any, keypath: Keypath) -> Any:
         result = super().render_entry(value, keypath)
