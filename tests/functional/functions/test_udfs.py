@@ -6,6 +6,7 @@ import pytest
 from dbt.artifacts.resources import FunctionReturns
 from dbt.artifacts.resources.types import FunctionType, FunctionVolatility
 from dbt.contracts.graph.nodes import FunctionNode
+from dbt.exceptions import ParsingError
 from dbt.tests.util import run_dbt, write_file
 
 double_it_sql = """
@@ -514,5 +515,9 @@ class TestDefaultArgumentsMustComeLast:
         }
 
     def test_udfs(self, project):
-        run_dbt(["parse"], expect_pass=False)
-        # TODO: check the error message
+        with pytest.raises(ParsingError) as excinfo:
+            run_dbt(["parse"])
+        assert (
+            "Non-defaulted argument 'val2' of function 'sum_2_values' comes after a defaulted argument. Non-defaulted arguments cannot come after defaulted arguments. "
+            in str(excinfo.value)
+        )
