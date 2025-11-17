@@ -11,7 +11,7 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         &str, // version
     ),
     &str, // checksum
-); 99] = [
+); 95] = [
     (
         ("bigquery", "apple-darwin", "aarch64", "0.18.0+dbt0.0.20"),
         "22b9d3596c8cbcafec0394833d173ae3e4c3a409f74bf9c09e0a191e1286e17d",
@@ -153,60 +153,44 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "acb8bbc8f477a072991345fe0ab0ee36b561e7668bdbf5b900189a35dd021888",
     ),
     (
-        ("postgresql", "apple-darwin", "aarch64", "0.17.0+dbt0.0.1"),
-        "6f1e25c0a4da44697bb449091ebd14575a92bd27e48cce49fdd56d0a7ad5066a",
-    ),
-    (
-        ("postgresql", "apple-darwin", "aarch64", "0.18.0+dbt0.0.2"),
-        "fb3a52e89163a61e09f5d85d03cd8d7afaaae697617e2b981128f375faa53aeb",
-    ),
-    (
         ("postgresql", "apple-darwin", "aarch64", "0.18.0+dbt0.0.3"),
         "759eaacee1ea8139f884fa258ec8a7496ae9458f66cb8029817a2978b6f651ed",
     ),
     (
-        ("postgresql", "apple-darwin", "x86_64", "0.17.0+dbt0.0.1"),
-        "40f6627b9ecabc659c9750c06a8d836b86e807044bea150e74ac4550ac641cbf",
-    ),
-    (
-        ("postgresql", "apple-darwin", "x86_64", "0.18.0+dbt0.0.2"),
-        "da4087189a70deba7040d7f00faea221b492d00855d9d8eff56787eb5fbf02c1",
+        ("postgresql", "apple-darwin", "aarch64", "0.21.0+dbt0.21.0"),
+        "07afc8277fd952d956b7de7a8129b323dad9a1aea71e35e3a0d31dee6371546d",
     ),
     (
         ("postgresql", "apple-darwin", "x86_64", "0.18.0+dbt0.0.3"),
         "aa0b1da8145aa3b374dd0bd2b52cd02a8814ce3b03490aa8b5fc99178682803c",
     ),
     (
-        ("postgresql", "manylinux_2_17-linux-gnu", "aarch64", "0.18.0+dbt0.0.2"),
-        "0f3989966d5308b172d5b4cdb8d4cde6752c10ae175a1200f738a0f73c45edde",
+        ("postgresql", "apple-darwin", "x86_64", "0.21.0+dbt0.21.0"),
+        "cca3bb3f50a93879a346b50fb49374ced4494f65796ccd60e933c841eea3f27f",
     ),
     (
         ("postgresql", "manylinux_2_17-linux-gnu", "aarch64", "0.18.0+dbt0.0.3"),
         "0650e5069c7ba4c545fc2850143109292842b117719991a7554bd35434a08bd0",
     ),
     (
-        ("postgresql", "manylinux_2_17-linux-gnu", "x86_64", "0.17.0+dbt0.0.1"),
-        "ddeaafefdd79dfddc38c48a405b6789e6f51985b32be163a322eaadb55d9ca30",
-    ),
-    (
-        ("postgresql", "manylinux_2_17-linux-gnu", "x86_64", "0.18.0+dbt0.0.2"),
-        "a14e9532dc54371698c9730d7904f03431137c2c216b22ac623e84552b7cc93e",
+        ("postgresql", "manylinux_2_17-linux-gnu", "aarch64", "0.21.0+dbt0.21.0"),
+        "279f5b9f042a7729f33c053e675f6d0c530a9ce8b88fa6965a981bd93a939df8",
     ),
     (
         ("postgresql", "manylinux_2_17-linux-gnu", "x86_64", "0.18.0+dbt0.0.3"),
         "ff3cd85d65c0425eb31471f536812c333dec6ef0eb5e51d537ce607c9d2853dc",
     ),
     (
-        ("postgresql", "pc-windows-msvc", "x86_64", "0.17.0+dbt0.0.1"),
-        "cff84d5f3db4fe0efbfc64591d4005d81020261faee24c4b9b7b7211c4895fbd",
-    ),
-    (
-        ("postgresql", "pc-windows-msvc", "x86_64", "0.18.0+dbt0.0.2"),
-        "b5ee9393977dff39f62d4196938a90313bea3681b1183ddb1e2f8afb92af23c8",
+        ("postgresql", "manylinux_2_17-linux-gnu", "x86_64", "0.21.0+dbt0.21.0"),
+        "cbc2a0865bfc311663db2c2564830e4d4d260beda29baecd4371d8ce52eada5b",
     ),
     (
         ("postgresql", "pc-windows-msvc", "x86_64", "0.18.0+dbt0.0.3"),
         "6f38377190af7320b0020c11f726e018cae0932272adba88359bf395c0f8ad94",
+    ),
+    (
+        ("postgresql", "pc-windows-msvc", "x86_64", "0.21.0+dbt0.21.0"),
+        "4986f51e67888f77999525301386505f6375edcb36af4018becff374bb3f82e2",
     ),
     (
         ("redshift", "apple-darwin", "aarch64", "0.18.0+dbt0.18.2"),
