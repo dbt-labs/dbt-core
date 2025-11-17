@@ -1,29 +1,3 @@
-[tool.setuptools]
-package-dir = {"" = "."}
-include-package-data = true
-zip-safe = false
-
-[tool.setuptools.packages.find]
-where = ["."]
-include = [
-    "dbt",
-    "dbt.*",
-]
-
-# this needs to match MANIFEST.in for the wheels
-[tool.setuptools.package-data]
-"dbt" = [
-    "include/**/*.py",
-    "include/**/*.sql",
-    "include/**/*.yml",
-    "include/**/*.html",
-    "include/**/*.md",
-    "include/**/.gitkeep",
-    "include/**/.gitignore",
-    "task/docs/**/*.html",
-    "jsonschemas/**/*.json",
-    "py.typed",
-]
 
 [project]
 name = "dbt-core"
@@ -103,8 +77,22 @@ Changelog = "https://github.com/dbt-labs/dbt-core/blob/main/CHANGELOG.md"
 dbt = "dbt.cli.main:cli"
 
 [build-system]
-requires = [
-    "setuptools>=61",
-    "wheel",
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["dbt"]
+only-packages = true
+artifacts = [
+    "dbt/include/**/*",
+    "dbt/task/docs/**/*.html",
+    "dbt/jsonschemas/**/*.json",
+    "dbt/py.typed",
 ]
-build-backend = "setuptools.build_meta"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/dbt",
+    "/README.md",
+    "/License.md",
+]
