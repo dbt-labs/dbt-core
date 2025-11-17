@@ -160,7 +160,12 @@ mod tests {
 
                 Ok(builder)
             }
-            Backend::DuckDB => unimplemented!("Database builder for DuckDB in tests"),
+            Backend::DuckDB => {
+                let mut builder = database::Builder::new(backend);
+                let database_path = ":memory:".to_string();
+                builder.with_named_option("path", database_path)?;
+                Ok(builder)
+            }
             Backend::Generic { .. } => unimplemented!("generic backend database builder in tests"),
         }?;
         if backend == Backend::Snowflake {
@@ -262,6 +267,7 @@ mod tests {
                 Backend::Postgres
                 | Backend::Redshift
                 | Backend::Databricks
+                | Backend::DuckDB
                 | Backend::DatabricksODBC
                 | Backend::RedshiftODBC => {
                     assert_eq!(batch.column(0).as_primitive::<Int32Type>().value(0), 42);
@@ -304,6 +310,11 @@ mod tests {
     #[test]
     fn statement_execute_databricks() -> Result<()> {
         execute_statement(Backend::Databricks)
+    }
+
+    #[test]
+    fn statement_execute_duckdb() -> Result<()> {
+        execute_statement(Backend::DuckDB)
     }
 
     #[cfg(feature = "odbc")]

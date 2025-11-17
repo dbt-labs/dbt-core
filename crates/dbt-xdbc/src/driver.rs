@@ -318,6 +318,7 @@ impl AdbcDriver {
             | Backend::Postgres
             | Backend::Databricks
             | Backend::Redshift
+            | Backend::DuckDB
             | Backend::Salesforce => {
                 debug_assert!(backend.ffi_protocol() == FFIProtocol::Adbc);
                 debug_assert!(install::is_installable_driver(backend));
@@ -361,7 +362,7 @@ impl AdbcDriver {
                 Self::try_load_driver_through_cdn_cache(backend, adbc_version)
             }
             // Drivers that are not published to the dbt Labs CDN.
-            Backend::DuckDB | Backend::Generic { .. } => Self::try_load_driver_from_name(
+            Backend::Generic { .. } => Self::try_load_driver_from_name(
                 backend.adbc_library_name().unwrap(),
                 backend.adbc_driver_entrypoint(),
                 adbc_version,
@@ -507,6 +508,8 @@ mod tests {
         try_load_with_builder(Backend::BigQuery, AdbcVersion::V100)?;
         try_load_with_builder(Backend::Postgres, AdbcVersion::V100)?;
         try_load_with_builder(Backend::Databricks, AdbcVersion::V100)?;
+        try_load_with_builder(Backend::DuckDB, AdbcVersion::V100)?;
+        try_load_with_builder(Backend::Salesforce, AdbcVersion::V100)?;
         Ok(())
     }
 
@@ -517,6 +520,8 @@ mod tests {
         try_load_with_builder(Backend::BigQuery, AdbcVersion::V110)?;
         try_load_with_builder(Backend::Postgres, AdbcVersion::V110)?;
         try_load_with_builder(Backend::Databricks, AdbcVersion::V110)?;
+        try_load_with_builder(Backend::DuckDB, AdbcVersion::V110)?;
+        try_load_with_builder(Backend::Salesforce, AdbcVersion::V110)?;
         Ok(())
     }
 
@@ -528,6 +533,8 @@ mod tests {
             Backend::BigQuery,
             Backend::Postgres,
             Backend::Databricks,
+            Backend::DuckDB,
+            Backend::Salesforce,
         ]
         .iter()
         .copied()
