@@ -277,7 +277,7 @@ fn get_str<'a>(m: &'a yml::Mapping, k: &str) -> FsResult<Option<(&'a str, yml::S
             yml::Value::String(s, span) => Ok(Some((s.trim(), span.clone()))),
             _ => Err(fs_err!(
                 code => ErrorCode::InvalidConfig,
-                hacky_yml_loc => Some(v.span()),
+                hacky_yml_loc => Some(v.span().clone()),
                 "Key '{}' must be a string",
                 k
             )),
@@ -293,7 +293,7 @@ fn get_map<'a>(m: &'a yml::Mapping, k: &str) -> FsResult<Option<(&'a yml::Mappin
             yml::Value::Mapping(map, span) => Ok(Some((map, span.clone()))),
             _ => Err(fs_err!(
                 code => ErrorCode::InvalidConfig,
-                hacky_yml_loc => Some(v.span()),
+                hacky_yml_loc => Some(v.span().clone()),
                 "Key '{}' must be a mapping",
                 k
             )),
@@ -309,7 +309,7 @@ fn get_seq<'a>(m: &'a yml::Mapping, k: &str) -> FsResult<Option<(&'a yml::Sequen
             yml::Value::Sequence(seq, span) => Ok(Some((seq, span.clone()))),
             _ => Err(fs_err!(
                 code => ErrorCode::InvalidConfig,
-                hacky_yml_loc => Some(v.span()),
+                hacky_yml_loc => Some(v.span().clone()),
                 "Key '{}' must be a sequence/list",
                 k
             )),
@@ -325,7 +325,7 @@ fn get_bool(m: &yml::Mapping, k: &str) -> FsResult<Option<(bool, yml::Span)>> {
             yml::Value::Bool(b, span) => Ok((*b, span.clone())),
             _ => Err(fs_err!(
                 code => ErrorCode::InvalidConfig,
-                hacky_yml_loc => Some(v.span()),
+                hacky_yml_loc => Some(v.span().clone()),
                 "Key '{}' must be a boolean",
                 k
             )),
@@ -351,7 +351,7 @@ fn get_u32(m: &yml::Mapping, k: &str) -> FsResult<Option<(u32, yml::Span)>> {
                 }),
             _ => Err(fs_err!(
                 code => ErrorCode::InvalidConfig,
-                hacky_yml_loc => Some(v.span()),
+                hacky_yml_loc => Some(v.span().clone()),
                 "Key '{}' must be a non-negative integer",
                 k
             )),
@@ -378,10 +378,10 @@ fn check_unknown_keys(m: &yml::Mapping, allowed: &[&str], ctx: &str) -> FsResult
     for k in m.keys() {
         let span = k.span();
         let Some(ks) = k.as_str() else {
-            return err!(code => ErrorCode::InvalidConfig, hacky_yml_loc => Some(span), "Non-string key in {}", ctx);
+            return err!(code => ErrorCode::InvalidConfig, hacky_yml_loc => Some(span.clone()), "Non-string key in {}", ctx);
         };
         if !allowed.iter().any(|a| a == &ks) {
-            return err!(code => ErrorCode::InvalidConfig, hacky_yml_loc => Some(span), "Unknown key '{}' in {}", ks, ctx);
+            return err!(code => ErrorCode::InvalidConfig, hacky_yml_loc => Some(span.clone()), "Unknown key '{}' in {}", ks, ctx);
         }
     }
     Ok(())
@@ -427,7 +427,7 @@ impl<'a> DbtCatalogsView<'a> {
         let mut catalogs = Vec::with_capacity(catalog_entries.0.len());
 
         for (idx, item) in catalog_entries.0.iter().enumerate() {
-            let item_span = item.span();
+            let item_span = item.span().clone();
             let m = match item.as_mapping() {
                 Some(m) => m,
                 None => {
@@ -487,7 +487,7 @@ impl<'a> CatalogSpecView<'a> {
             let write_integration_mapping = item.as_mapping().ok_or_else(|| {
                 fs_err!(
                     code => ErrorCode::InvalidConfig,
-                    hacky_yml_loc => Some(item_span),
+                    hacky_yml_loc => Some(item_span.clone()),
                     "write_integrations[{idx}] must be a mapping"
                 )
             })?;
@@ -1141,7 +1141,7 @@ fn parse_adapter_properties<'a>(
         }
         CatalogType::DatabricksHiveMetastore => {
             if !properties.is_empty() {
-                let first_key_span = properties.keys().next().map(|k| k.span());
+                let first_key_span = properties.keys().next().map(|k| k.span().clone());
                 return err!(
                     code => ErrorCode::InvalidConfig,
                     hacky_yml_loc => first_key_span,
@@ -1353,7 +1353,7 @@ mod tests {
         let v: yml::Value = yml::from_str(yaml).unwrap();
         let v_span = v.span();
         let m = v.as_mapping().expect("top-level YAML must be a mapping");
-        let view = DbtCatalogsView::from_mapping(m, v_span)?;
+        let view = DbtCatalogsView::from_mapping(m, v_span.clone())?;
         validate_catalogs(&view, Path::new("<test>"))
     }
 
@@ -1460,7 +1460,7 @@ catalogs:
             catalog_linked_database: cld
 "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
-        let yml_span = yml_val.span();
+        let yml_span = yml_val.span().clone();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
@@ -1486,7 +1486,7 @@ catalogs:
     write_integrations: [42]
 "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
-        let yml_span = yml_val.span();
+        let yml_span = yml_val.span().clone();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
@@ -1503,7 +1503,7 @@ catalogs:
 not_catalogs: []
 "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
-        let yml_span = yml_val.span();
+        let yml_span = yml_val.span().clone();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
@@ -1522,7 +1522,7 @@ not_catalogs: []
             external_volume: ev
     "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
-        let yml_span = yml_val.span();
+        let yml_span = yml_val.span().clone();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
@@ -1541,7 +1541,7 @@ catalogs:
         catalog_type: mango
 "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
-        let yml_span = yml_val.span();
+        let yml_span = yml_val.span().clone();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
@@ -1562,7 +1562,7 @@ catalogs:
         external_volume: ev
 "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
-        let yml_span = yml_val.span();
+        let yml_span = yml_val.span().clone();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
@@ -1584,7 +1584,7 @@ catalogs:
           storage_serialization_policy: FASTEST
 "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
-        let yml_span = yml_val.span();
+        let yml_span = yml_val.span().clone();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
@@ -1608,7 +1608,7 @@ catalogs:
           target_file_size: "1MB"
 "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
-        let yml_span = yml_val.span();
+        let yml_span = yml_val.span().clone();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
@@ -1629,7 +1629,7 @@ catalogs:
         table_format: iceberg
 "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
-        let yml_span = yml_val.span();
+        let yml_span = yml_val.span().clone();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
@@ -1653,7 +1653,7 @@ catalogs:
         table_format: iceberg
 "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
-        let yml_span = yml_val.span();
+        let yml_span = yml_val.span().clone();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
@@ -1725,7 +1725,7 @@ catalogs:
         table_format: iceberg
 "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
-        let yml_span = yml_val.span();
+        let yml_span = yml_val.span().clone();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
@@ -1915,7 +1915,7 @@ catalogs:
           storage_serialisation_policy: COMPATIBLE   # typo (s/z)
 "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
-        let yml_span = yml_val.span();
+        let yml_span = yml_val.span().clone();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
@@ -1973,7 +1973,7 @@ catalogs:
     extra_top_level: true
     "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
-        let yml_span = yml_val.span();
+        let yml_span = yml_val.span().clone();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
@@ -1991,7 +1991,7 @@ catalogs:
         unexpected: 42
     "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
-        let yml_span = yml_val.span();
+        let yml_span = yml_val.span().clone();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
@@ -2011,7 +2011,7 @@ catalogs:
             oops: true
     "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
-        let yml_span = yml_val.span();
+        let yml_span = yml_val.span().clone();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
@@ -2034,7 +2034,7 @@ catalogs:
             catalog_type: iceberg_rest
     "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
-        let yml_span = yml_val.span();
+        let yml_span = yml_val.span().clone();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
@@ -2057,7 +2057,7 @@ catalogs:
             catalog_type: iceberg_rest
     "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
-        let yml_span = yml_val.span();
+        let yml_span = yml_val.span().clone();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
@@ -2081,7 +2081,7 @@ catalogs:
         table_format: iceberg
 "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
-        let yml_span = yml_val.span();
+        let yml_span = yml_val.span().clone();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
@@ -2105,7 +2105,7 @@ catalogs:
         table_format: iceberg
 "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
-        let yml_span = yml_val.span();
+        let yml_span = yml_val.span().clone();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
@@ -2127,7 +2127,7 @@ catalogs:
           data_retention_time_in_days: -1
 "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
-        let yml_span = yml_val.span();
+        let yml_span = yml_val.span().clone();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
@@ -2149,7 +2149,7 @@ catalogs:
           change_tracking: "yes"
 "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
-        let yml_span = yml_val.span();
+        let yml_span = yml_val.span().clone();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
@@ -2169,7 +2169,7 @@ catalogs:
         adapter_properties: []
 "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
-        let yml_span = yml_val.span();
+        let yml_span = yml_val.span().clone();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
@@ -2232,7 +2232,7 @@ catalogs:
         external_volume: ev
 "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
-        let yml_span = yml_val.span();
+        let yml_span = yml_val.span().clone();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");
@@ -2253,7 +2253,7 @@ catalogs:
     write_integrations: [{ name: j1, catalog_type: built_in, external_volume: ev, table_format: iceberg}]
 "#;
         let yml_val: yml::Value = yml::from_str(yaml).unwrap();
-        let yml_span = yml_val.span();
+        let yml_span = yml_val.span().clone();
         let m = yml_val
             .as_mapping()
             .expect("top-level YAML must be a mapping");

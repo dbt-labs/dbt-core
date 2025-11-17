@@ -313,7 +313,7 @@ fn value_from_str(
         let path = strip_dunder_fields_from_path(&path.to_string());
         let duplicate_key_error = fs_err!(
             code => ErrorCode::DuplicateConfigKey,
-            loc => key.span(),
+            loc => key.span().clone(),
             "Duplicate key `{}`. This key overwrites a previous definition of the same key \
                 at line {} column {}. YAML path: `{}`.",
             key_repr.trim(),
@@ -372,7 +372,7 @@ where
         let path = strip_dunder_fields_from_path(&path.to_string());
         warnings.push(*fs_err!(
             code => ErrorCode::UnusedConfigKey,
-            loc => key.span(),
+            loc => key.span().clone(),
             "Ignored unexpected key `{:?}`. YAML path: `{}`.", key_repr.trim(), path
         ))
     };

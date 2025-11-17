@@ -394,7 +394,7 @@ fn extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
 
         let schema_error = fs_err!(
             code => ErrorCode::SchemaError,
-            loc => deprecated.iter().next().map(|(_, v)| v.span()).unwrap_or_default(),
+            loc => deprecated.iter().next().map(|(_, v)| v.span().clone()).unwrap_or_default(),
             "{}",
             message
         );

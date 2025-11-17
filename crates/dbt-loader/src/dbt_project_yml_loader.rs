@@ -111,8 +111,10 @@ fn prune_unexpected_nulls_in_children<T>(
                     get_children_map,
                 );
             }
-            ShouldBe::ButIsnt { raw, .. } => {
-                if let Some(YmlValue::Null(span)) = raw.as_ref() {
+            ShouldBe::ButIsnt(..) => {
+                // FIXME: We should always emit the original error from the
+                // ShouldBe::ButIsnt, instead of making up a new one here
+                if let Some(YmlValue::Null(span)) = child_val.as_ref_raw() {
                     let trimmed_key = child_key.trim();
                     let yaml_path = if current_path.is_empty() {
                         format!("{}.{}", section_name, trimmed_key)
