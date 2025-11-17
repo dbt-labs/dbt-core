@@ -7,6 +7,8 @@ pub fn compare_sql(actual: &str, expected: &str) -> AdapterResult<()> {
     // Canonicalize ignorable differences first
     let actual = canonicalize_query_tag(actual);
     let expected = canonicalize_query_tag(expected);
+    let actual = canonicalize_uuid_literals(&actual);
+    let expected = canonicalize_uuid_literals(&expected);
 
     // Create normalized SQL strings (remove all whitespace)
     let actual_normalized = actual
@@ -55,6 +57,19 @@ fn canonicalize_query_tag(sql: &str) -> String {
     });
     RE.replace_all(sql, "alter session set query_tag = '__TAG__'")
         .to_string()
+}
+
+/// Replace single-quoted UUID string literals with a fixed `'UUID'` placeholder.
+/// Example: '8f439b7e-752f-460a-8d1a-f469231d169c' -> 'UUID'
+/// This is a blunt instrument. Ideally, we should address the problem at the root:
+/// A lot of these are from {{ invocation_id }}. The value of the original invocation_id
+/// is available in manifest.json. We should consider using it in replay. TODO: Do this!
+fn canonicalize_uuid_literals(sql: &str) -> String {
+    // Case-insensitive UUID regex inside single quotes
+    static UUID_RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
+        Regex::new(r"(?i)'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'").unwrap()
+    });
+    UUID_RE.replace_all(sql, "'UUID'").to_string()
 }
 
 fn fuzzy_compare_sql(actual: &str, expected: &str) -> bool {
@@ -834,5 +849,75 @@ LEFT OUTER JOIN
             result.is_ok(),
             "Query tag payload differences should be ignored"
         );
+    }
+
+    #[test]
+    fn test_compare_sql_uuid_literals_ignored() {
+        let actual = r#"
+INSERT INTO
+    PROD_SSAP_AUDIT.ABAC.ABAC_JOB_RUN
+    (
+        system_run_id,
+        job_id,
+        batch_run_id,
+        job_start_dttm,
+        job_end_dttm,
+        job_start_dttm_utc,
+        job_end_dttm_utc,
+        job_status,
+        last_updt_dttm,
+        last_updt_uid
+    )
+SELECT
+    '019a71ca-e5ad-7ca3-99d8-49b58a470d82' AS system_run_id,
+    962 AS job_id,
+    47217 AS batch_run_id,
+    CURRENT_TIMESTAMP() AS job_start_dttm,
+    NULL AS job_end_dttm,
+    CONVERT_TIMEZONE('UTC', CURRENT_TIMESTAMP()) AS job_start_dttm_utc,
+    NULL AS job_end_dttm_utc,
+    'RUNNING' AS job_status,
+    CURRENT_TIMESTAMP() AS last_updt_dttm,
+    CURRENT_USER() AS last_updt_uid
+FROM
+    PROD_SSAP_AUDIT.ABAC.ABAC_JOB AS abac_job
+WHERE
+    abac_job.job_target = 'ldw_prtnr_all_wk_sumr_sales'
+        "#;
+
+        let expected = r#"
+INSERT INTO
+    PROD_SSAP_AUDIT.ABAC.ABAC_JOB_RUN
+    (
+        system_run_id,
+        job_id,
+        batch_run_id,
+        job_start_dttm,
+        job_end_dttm,
+        job_start_dttm_utc,
+        job_end_dttm_utc,
+        job_status,
+        last_updt_dttm,
+        last_updt_uid
+    )
+SELECT
+    '8f439b7e-752f-460a-8d1a-f469231d169c' AS system_run_id,
+    962 AS job_id,
+    47217 AS batch_run_id,
+    CURRENT_TIMESTAMP() AS job_start_dttm,
+    NULL AS job_end_dttm,
+    CONVERT_TIMEZONE('UTC', CURRENT_TIMESTAMP()) AS job_start_dttm_utc,
+    NULL AS job_end_dttm_utc,
+    'RUNNING' AS job_status,
+    CURRENT_TIMESTAMP() AS last_updt_dttm,
+    CURRENT_USER() AS last_updt_uid
+FROM
+    PROD_SSAP_AUDIT.ABAC.ABAC_JOB AS abac_job
+WHERE
+    abac_job.job_target = 'ldw_prtnr_all_wk_sumr_sales'
+        "#;
+
+        let result = compare_sql(actual, expected);
+        assert!(result.is_ok(), "UUID literal differences should be ignored");
     }
 }
