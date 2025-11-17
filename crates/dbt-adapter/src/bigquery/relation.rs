@@ -251,7 +251,7 @@ impl BaseRelation for BigqueryRelation {
     fn information_schema_inner(
         &self,
         database: Option<String>,
-        view_name: &str,
+        view_name: Option<&str>,
     ) -> Result<Value, MinijinjaError> {
         let mut info_schema = InformationSchema::try_from_relation(database.clone(), view_name)?;
 
@@ -259,7 +259,9 @@ impl BaseRelation for BigqueryRelation {
         // - OBJECT_PRIVILEGES: project-level with region → project.`region-<loc>`.INFORMATION_SCHEMA.<view>
         // - Other views: dataset-level → dataset.INFORMATION_SCHEMA.<view> (using the relation's own dataset)
 
-        if view_name.eq_ignore_ascii_case("OBJECT_PRIVILEGES") {
+        if let Some(view_name) = view_name
+            && view_name.eq_ignore_ascii_case("OBJECT_PRIVILEGES")
+        {
             // OBJECT_PRIVILEGES require a location. If the location is blank there is nothing
             // the user can do about it.
             let loc = self.location.as_ref().ok_or_else(|| {
@@ -399,7 +401,7 @@ mod tests {
         // Test TABLES view - BigQuery uses dataset-level INFORMATION_SCHEMA
         // When relation has both project and dataset, format as project.dataset.INFORMATION_SCHEMA
         let info_schema = relation
-            .information_schema_inner(Some("other_db".to_string()), "TABLES")
+            .information_schema_inner(Some("other_db".to_string()), Some("TABLES"))
             .unwrap();
 
         let info_relation = info_schema.downcast_object::<RelationObject>().unwrap();
@@ -411,7 +413,7 @@ mod tests {
 
         // Test COLUMNS view
         let info_schema = relation
-            .information_schema_inner(Some("other_db".to_string()), "COLUMNS")
+            .information_schema_inner(Some("other_db".to_string()), Some("COLUMNS"))
             .unwrap();
 
         let info_relation = info_schema.downcast_object::<RelationObject>().unwrap();
@@ -422,7 +424,9 @@ mod tests {
         );
 
         // Test SCHEMATA view - still uses dataset-level with project.dataset format
-        let info_schema = relation.information_schema_inner(None, "SCHEMATA").unwrap();
+        let info_schema = relation
+            .information_schema_inner(None, Some("SCHEMATA"))
+            .unwrap();
 
         let info_relation = info_schema.downcast_object::<RelationObject>().unwrap();
         let rendered = info_relation.inner().render_self().unwrap();
@@ -444,8 +448,8 @@ mod tests {
         );
 
         // Test OBJECT_PRIVILEGES without location - should fail
-        let result =
-            relation.information_schema_inner(Some("test_db".to_string()), "OBJECT_PRIVILEGES");
+        let result = relation
+            .information_schema_inner(Some("test_db".to_string()), Some("OBJECT_PRIVILEGES"));
         assert!(result.is_err());
         assert!(
             result
@@ -457,7 +461,7 @@ mod tests {
         // Add location and test again - should succeed
         relation.location = Some("US".to_string());
         let info_schema = relation
-            .information_schema_inner(Some("test_db".to_string()), "OBJECT_PRIVILEGES")
+            .information_schema_inner(Some("test_db".to_string()), Some("OBJECT_PRIVILEGES"))
             .unwrap();
 
         let info_relation = info_schema.downcast_object::<RelationObject>().unwrap();
@@ -480,7 +484,9 @@ mod tests {
         );
 
         // Test TABLES view without database - uses dataset-level INFORMATION_SCHEMA
-        let info_schema = relation.information_schema_inner(None, "TABLES").unwrap();
+        let info_schema = relation
+            .information_schema_inner(None, Some("TABLES"))
+            .unwrap();
 
         let info_relation = info_schema.downcast_object::<RelationObject>().unwrap();
         let rendered = info_relation.inner().render_self().unwrap();
@@ -488,5 +494,24 @@ mod tests {
             rendered.as_str().unwrap(),
             "test_schema.INFORMATION_SCHEMA.TABLES"
         );
+    }
+
+    #[test]
+    fn test_information_schema_without_view() {
+        let relation = BigqueryRelation::new(
+            None,
+            Some("test_schema".to_string()),
+            Some("test_table".to_string()),
+            Some(RelationType::Table),
+            None,
+            DEFAULT_RESOLVED_QUOTING,
+        );
+
+        // Test TABLES view without database - uses dataset-level INFORMATION_SCHEMA
+        let info_schema = relation.information_schema_inner(None, None).unwrap();
+
+        let info_relation = info_schema.downcast_object::<RelationObject>().unwrap();
+        let rendered = info_relation.inner().render_self().unwrap();
+        assert_eq!(rendered.as_str().unwrap(), "test_schema.INFORMATION_SCHEMA");
     }
 }

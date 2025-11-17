@@ -6,7 +6,7 @@ use crate::schemas::common::ResolvedQuoting;
 use dbt_common::constants::DBT_CTE_PREFIX;
 use dbt_common::{FsResult, current_function_name};
 use dbt_frontend_common::FullyQualifiedName;
-use minijinja::arg_utils::{ArgParser, check_num_args};
+use minijinja::arg_utils::{ArgParser, ArgsIter};
 use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State, Value};
 use minijinja::{invalid_argument, invalid_argument_inner, jinja_err};
 use minijinja_contrib::modules::py_datetime::datetime::PyDateTime;
@@ -665,16 +665,11 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
         quote_policy: Policy,
     ) -> Result<Arc<dyn BaseRelation>, MinijinjaError>;
 
-    /// reference: https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/relation.py#L183-L184
+    /// reference: https://github.com/dbt-labs/dbt-adapters/blob/0775dd27929337ea529cad868dd1722812b8e0fb/dbt-adapters/src/dbt/adapters/base/relation.py#L234
     fn information_schema(&self, args: &[Value]) -> Result<Value, MinijinjaError> {
-        let mut args = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &args, 0, 1)?;
-
-        let view_name = args.get::<Value>("view_name")?;
-        let view_name = match view_name.as_str() {
-            Some(view_name) => view_name,
-            None => return invalid_argument!("view_name must exist"),
-        };
+        let iter = ArgsIter::new(current_function_name!(), &["view_name"], args);
+        let view_name = iter.next_kwarg_aliased::<Option<&str>>("view_name", &["identifier"])?;
+        iter.finish()?;
 
         self.information_schema_inner(self.database_as_str().ok(), view_name)
     }
@@ -682,7 +677,7 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
     fn information_schema_inner(
         &self,
         database: Option<String>,
-        view_name: &str,
+        view_name: Option<&str>,
     ) -> Result<Value, MinijinjaError>;
 
     /// needs_to_drop
@@ -915,7 +910,7 @@ mod tests {
         fn information_schema_inner(
             &self,
             _database: Option<String>,
-            _view_name: &str,
+            _view_name: Option<&str>,
         ) -> Result<Value, MinijinjaError> {
             unimplemented!("InformationSchema")
         }

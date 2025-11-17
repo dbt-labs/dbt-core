@@ -455,7 +455,7 @@ impl BaseRelation for SnowflakeRelation {
     fn information_schema_inner(
         &self,
         database: Option<String>,
-        view_name: &str,
+        view_name: Option<&str>,
     ) -> Result<Value, MinijinjaError> {
         let result = InformationSchema::try_from_relation(database, view_name)?;
         Ok(RelationObject::new(Arc::new(result)).into_value())

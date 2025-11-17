@@ -193,7 +193,7 @@ impl BaseRelation for SalesforceRelation {
     fn information_schema_inner(
         &self,
         _database: Option<String>,
-        _view_name: &str,
+        _view_name: Option<&str>,
     ) -> Result<Value, MinijinjaError> {
         unimplemented!("Salesforce information schema inner")
     }

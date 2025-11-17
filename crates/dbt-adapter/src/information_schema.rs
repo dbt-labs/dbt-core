@@ -21,7 +21,7 @@ pub struct InformationSchema {
 impl InformationSchema {
     pub fn try_from_relation(
         relation_database: Option<String>,
-        information_schema_view: &str,
+        information_schema_view: Option<&str>,
     ) -> Result<Self, MinijinjaError> {
         // Create the InformationSchema object with the database name as none if it is an empty string
         Ok(Self {
@@ -31,7 +31,7 @@ impl InformationSchema {
                 relation_database
             },
             schema: "INFORMATION_SCHEMA".to_string(),
-            identifier: Some(information_schema_view.to_string()),
+            identifier: information_schema_view.map(|s| s.to_string()),
             location: None,
         })
     }
@@ -149,7 +149,7 @@ impl BaseRelation for InformationSchema {
     fn information_schema_inner(
         &self,
         _database: Option<String>,
-        _view_name: &str,
+        _view_name: Option<&str>,
     ) -> Result<Value, MinijinjaError> {
         unimplemented!("InformationSchema")
     }

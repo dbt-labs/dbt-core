@@ -430,7 +430,7 @@ impl BaseRelation for MockBaseRelation {
     fn information_schema_inner(
         &self,
         _database: Option<String>,
-        _view_name: &str,
+        _view_name: Option<&str>,
     ) -> Result<Value, minijinja::Error> {
         unimplemented!("information schema query generation in metadata adapter")
     }
