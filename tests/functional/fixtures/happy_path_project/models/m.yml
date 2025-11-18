@@ -5,6 +5,7 @@ metrics:
     label: Total Outer
     type_params:
       measure: total_outer_count
+    time_granularity: month
 
   - name: simple_ratio_metric
     description: a simple ratio metric
