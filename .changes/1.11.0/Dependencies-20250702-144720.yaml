@@ -1,6 +1,0 @@
-kind: Dependencies
-body: Bump dbt-common minimum to 1.25.1
-time: 2025-07-02T14:47:20.772002-05:00
-custom:
-  Author: QMalcolm
-  Issue: "11789"

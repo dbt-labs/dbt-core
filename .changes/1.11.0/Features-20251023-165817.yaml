@@ -1,6 +1,0 @@
-kind: Features
-body: Add python UDF parsing support
-time: 2025-10-23T16:58:17.430824-05:00
-custom:
-  Author: QMalcolm
-  Issue: "12043"

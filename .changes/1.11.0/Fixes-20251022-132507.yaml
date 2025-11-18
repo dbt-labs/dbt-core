@@ -1,6 +1,0 @@
-kind: Fixes
-body: Support setting function node configs from dbt_project.yml
-time: 2025-10-22T13:25:07.824387-05:00
-custom:
-  Author: QMalcolm
-  Issue: "12096"

@@ -1,6 +1,0 @@
-kind: Features
-body: 'Validate {{ config }} in SQL for models that don''t statically parse '
-time: 2025-09-25T17:16:52.76822-04:00
-custom:
-    Author: michelleark
-    Issue: "12046"

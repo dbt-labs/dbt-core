@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Fixes issue where config isn't propagated to metric from measure when set as create_metric:True
-time: 2025-11-03T00:53:11.354097-05:00
-custom:
-    Author: WilliamDee
-    Issue: None

@@ -1,6 +1,0 @@
-kind: Dependencies
-body: Allow for either pydantic v1 and v2
-time: 2025-06-20T12:36:00.196384-05:00
-custom:
-  Author: QMalcolm
-  Issue: "11634"
