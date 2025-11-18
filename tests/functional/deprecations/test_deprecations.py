@@ -29,6 +29,7 @@ from dbt.events.types import (
     WEOIncludeExcludeDeprecation,
 )
 from dbt.tests.util import read_file, run_dbt, run_dbt_and_capture, write_file
+from dbt_common.events.event_catcher import EventCatcher
 from dbt_common.events.types import Note
 from dbt_common.exceptions import EventCompilationError
 from tests.functional.deprecations.fixtures import (
@@ -46,7 +47,6 @@ from tests.functional.deprecations.fixtures import (
     test_missing_arguments_property_yaml,
     test_with_arguments_yaml,
 )
-from tests.utils import EventCatcher
 
 
 class TestConfigPathDeprecation:

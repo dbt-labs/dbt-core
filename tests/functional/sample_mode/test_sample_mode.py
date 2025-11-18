@@ -10,7 +10,7 @@ from dbt.event_time.sample_window import SampleWindow
 from dbt.events.types import JinjaLogInfo
 from dbt.materializations.incremental.microbatch import MicrobatchBuilder
 from dbt.tests.util import read_file, relation_from_name, run_dbt, write_file
-from tests.utils import EventCatcher
+from dbt_common.events.event_catcher import EventCatcher
 
 input_model_sql = """
 {{ config(materialized='table', event_time='event_time') }}

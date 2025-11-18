@@ -28,8 +28,8 @@ from dbt.flags import get_flags, set_from_args
 from dbt.task.run import MicrobatchModelRunner, ModelRunner, RunTask, _get_adapter_info
 from dbt.tests.util import safe_set_invocation_context
 from dbt_common.events.base_types import EventLevel
+from dbt_common.events.event_catcher import EventCatcher
 from dbt_common.events.event_manager_client import add_callback_to_manager
-from tests.utils import EventCatcher
 
 
 @pytest.mark.parametrize(

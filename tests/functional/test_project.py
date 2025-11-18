@@ -9,8 +9,8 @@ from dbt.deprecations import (
 )
 from dbt.events.types import GenericJSONSchemaValidationDeprecation
 from dbt.tests.util import run_dbt, write_file
+from dbt_common.events.event_catcher import EventCatcher
 from dbt_common.events.types import Note
-from tests.utils import EventCatcher
 
 
 class TestProjectJsonschemaValidatedOnlyOnce:

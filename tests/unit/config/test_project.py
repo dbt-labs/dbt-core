@@ -22,6 +22,7 @@ from dbt.flags import set_from_args
 from dbt.jsonschemas import project_schema
 from dbt.node_types import NodeType
 from dbt.tests.util import safe_set_invocation_context
+from dbt_common.events.event_catcher import EventCatcher
 from dbt_common.events.event_manager_client import get_event_manager
 from dbt_common.events.types import Note
 from dbt_common.exceptions import DbtRuntimeError
@@ -32,7 +33,6 @@ from tests.unit.config import (
     project_from_config_norender,
     project_from_config_rendered,
 )
-from tests.utils import EventCatcher
 
 
 class TestProjectMethods:

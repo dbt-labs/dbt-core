@@ -2,7 +2,7 @@ import pytest
 
 from dbt.events.types import InvalidMacroAnnotation
 from dbt.tests.util import run_dbt
-from tests.utils import EventCatcher
+from dbt_common.events.event_catcher import EventCatcher
 
 macros_sql = """
 {% macro my_macro(my_arg_1, my_arg_2, my_arg_3) %}

@@ -6,8 +6,8 @@ from dbt.deprecations import active_deprecations
 from dbt.env_vars import KNOWN_ENGINE_ENV_VARS, validate_engine_env_vars
 from dbt.events.types import EnvironmentVariableNamespaceDeprecation
 from dbt.tests.util import safe_set_invocation_context
+from dbt_common.events.event_catcher import EventCatcher
 from dbt_common.events.event_manager_client import add_callback_to_manager
-from tests.utils import EventCatcher
 
 
 @mock.patch.dict(
