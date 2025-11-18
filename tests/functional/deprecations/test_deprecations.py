@@ -383,7 +383,7 @@ class TestCustomKeyInConfigSQLDeprecation:
             "model_custom_key_in_config.sql": models_custom_key_in_config_sql,
         }
 
-    @mock.patch("dbt.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
+    @mock.patch("dbt.jsonschemas.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
     @mock.patch.dict(os.environ, {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": "True"})
     def test_custom_key_in_config_sql_deprecation(self, project):
         event_catcher = EventCatcher(CustomKeyInConfigDeprecation)
