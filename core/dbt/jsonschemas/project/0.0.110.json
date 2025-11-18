@@ -944,6 +944,12 @@
             "null"
           ]
         },
+        "+group": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+meta": {
           "type": [
             "object",
