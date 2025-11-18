@@ -90,6 +90,7 @@ from dbt.events.types import (
 )
 from dbt.exceptions import (
     AmbiguousAliasError,
+    DuplicateResourceNameError,
     InvalidAccessTypeError,
     TargetNotFoundError,
     scrub_secrets,
@@ -1647,12 +1648,22 @@ def _check_resource_uniqueness(
     alias_resources: Dict[str, ManifestNode] = {}
     name_resources: Dict[str, Dict] = {}
 
-    for resource, node in manifest.nodes.items():
+    for _, node in manifest.nodes.items():
         if not node.is_relational:
             continue
 
         if node.package_name not in name_resources:
             name_resources[node.package_name] = {"ver": {}, "unver": {}}
+
+        existing_node = name_resources[node.package_name]["unver"].get(
+            node.name
+        ) or name_resources[node.package_name]["ver"].get(node.name)
+        if existing_node is not None and not existing_node.is_versioned:
+            if get_flags().require_unambiguous_ref:
+                raise DuplicateResourceNameError(existing_node, node)
+            else:
+                continue
+
         if node.is_versioned:
             name_resources[node.package_name]["ver"][node.name] = node
         else:
