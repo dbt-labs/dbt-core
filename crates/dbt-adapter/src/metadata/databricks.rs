@@ -54,12 +54,14 @@ WHERE table_catalog = '{}'
     let schemas = get_column_values::<StringArray>(&batch, "table_schema")?;
     let catalogs = get_column_values::<StringArray>(&batch, "table_catalog")?;
     let table_types = get_column_values::<StringArray>(&batch, "table_type")?;
+    let file_formats = get_column_values::<StringArray>(&batch, "file_format")?;
 
     for i in 0..batch.num_rows() {
         let name = names.value(i);
         let schema = schemas.value(i);
         let catalog = catalogs.value(i);
         let table_type = table_types.value(i).to_uppercase();
+        let is_delta = file_formats.value(i) == "delta";
 
         let relation = Arc::new(DatabricksRelation::new(
             Some(catalog.to_string()),
@@ -72,7 +74,7 @@ WHERE table_catalog = '{}'
             None,
             adapter.quoting(),
             None,
-            false,
+            is_delta,
         )) as Arc<dyn BaseRelation>;
         relations.push(relation);
     }
