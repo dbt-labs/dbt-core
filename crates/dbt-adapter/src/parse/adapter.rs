@@ -844,6 +844,17 @@ impl BaseAdapter for ParseAdapter {
     ) -> Result<Value, MinijinjaError> {
         Ok(none_value())
     }
+
+    fn describe_dynamic_table(
+        &self,
+        _state: &State,
+        _relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, MinijinjaError> {
+        let map = [("dynamic_table", none_value())]
+            .into_iter()
+            .collect::<HashMap<_, _>>();
+        Ok(Value::from_serialize(map))
+    }
 }
 
 impl fmt::Display for ParseAdapter {

@@ -647,6 +647,19 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
     /// and push down validation to the DDL level.
     fn build_catalog_relation(&self, model: &Value) -> Result<Value, MinijinjaError>;
 
+    /// Get all relevant metadata about a dynamic table to return as a dict to Agate Table row
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/703180a871f2960cd0c91765ffc4b1dc111d615b/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L510
+    ///
+    /// ```python
+    /// def describe_dynamic_table(self, relation: SnowflakeRelation) -> Dict[str, Any]
+    /// ```
+    fn describe_dynamic_table(
+        &self,
+        state: &State,
+        relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, MinijinjaError>;
+
     /// Get a catalog integration object.
     ///
     /// https://github.com/dbt-labs/dbt-adapters/blob/c16cc7047e8678f8bb88ae294f43da2c68e9f5cc/dbt-adapters/src/dbt/adapters/base/impl.py#L334

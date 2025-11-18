@@ -568,7 +568,7 @@ impl AgateTable {
         TableDisplay::new(self)
     }
 
-    fn rename(
+    pub fn rename(
         &self,
         column_names: Option<&Value>, // array or map
         row_names: Option<&Value>,    // array or map

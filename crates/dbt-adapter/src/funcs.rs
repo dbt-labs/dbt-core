@@ -158,6 +158,14 @@ pub fn dispatch_adapter_calls(
 
             adapter.build_catalog_relation(model)
         }
+        "describe_dynamic_table" => {
+            let iter = ArgsIter::new(name, &["relation"], args);
+            let relation = iter.next_arg::<&Value>()?;
+            let relation = downcast_value_to_dyn_base_relation(relation)?;
+            iter.finish()?;
+
+            adapter.describe_dynamic_table(state, relation)
+        }
         "get_catalog_integration" => adapter.get_catalog_integration(state, args),
         "type" => Ok(Value::from(adapter.adapter_type().to_string())),
         "get_hard_deletes_behavior" => {

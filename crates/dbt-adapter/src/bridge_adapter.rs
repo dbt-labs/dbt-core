@@ -1631,6 +1631,17 @@ impl BaseAdapter for BridgeAdapter {
         )?;
         Ok(result)
     }
+
+    #[tracing::instrument(skip(self, state), level = "trace")]
+    fn describe_dynamic_table(
+        &self,
+        state: &State,
+        relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, MinijinjaError> {
+        let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
+        self.typed_adapter
+            .describe_dynamic_table(state, conn.as_mut(), relation)
+    }
 }
 
 impl fmt::Display for BridgeAdapter {

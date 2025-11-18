@@ -3,6 +3,7 @@ use crate::errors::{AdapterError, AdapterErrorKind};
 use crate::funcs::{execute_macro, none_value};
 use crate::metadata::CatalogAndSchema;
 use crate::python;
+use crate::query_ctx::query_ctx_from_state;
 use crate::record_batch_utils::get_column_values;
 use crate::relation_object::RelationObject;
 use crate::response::{AdapterResponse, ResultObject};
@@ -366,6 +367,74 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     /// needed for Iceberg ddl generation.
     fn build_catalog_relation(&self, _model: &Value) -> AdapterResult<Value> {
         unimplemented!("only available with Bigquery, Databricks, and Snowflake adapters")
+    }
+
+    /// Get all relevant metadata about a dynamic table
+    fn describe_dynamic_table(
+        &self,
+        state: &State,
+        conn: &'_ mut dyn Connection,
+        relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, minijinja::Error> {
+        if self.adapter_type() == AdapterType::Snowflake {
+            let ctx = query_ctx_from_state(state)?.with_desc("describe_dynamic_table");
+
+            let quoting = relation.quote_policy();
+
+            let schema = if quoting.schema {
+                relation.schema_as_quoted_str()?
+            } else {
+                relation.schema_as_str()?
+            };
+
+            let database = if quoting.database {
+                relation.database_as_quoted_str()?
+            } else {
+                relation.database_as_str()?
+            };
+
+            let show_sql = format!(
+                "show dynamic tables like '{}' in schema {database}.{schema}",
+                relation.identifier_as_str()?
+            );
+
+            let (_, table) = self.query(&ctx, conn, &show_sql, None)?;
+
+            let renamed: BTreeMap<String, String> = table
+                .column_names()
+                .into_iter()
+                .map(|name| {
+                    let lowered = name.to_ascii_lowercase();
+                    (name, lowered)
+                })
+                .collect();
+
+            let table = table.rename(
+                Some(&Value::from_serialize(renamed)),
+                None,
+                false,
+                false,
+                &minijinja::value::Kwargs::default(),
+            )?;
+
+            let columns_to_select = [
+                "name".to_string(),
+                "schema_name".to_string(),
+                "database_name".to_string(),
+                "text".to_string(),
+                "target_lag".to_string(),
+                "warehouse".to_string(),
+                "refresh_mode".to_string(),
+            ];
+
+            let table = table.select(&columns_to_select);
+
+            let mut result = HashMap::new();
+            result.insert("dynamic_table", Value::from_object(table));
+
+            return Ok(Value::from_serialize(result));
+        }
+        unimplemented!("describe_dynamic_table is only available for the Snowflake adapter")
     }
 
     /// Drop relation
