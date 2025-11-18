@@ -1655,12 +1655,10 @@ def _check_resource_uniqueness(
         if node.package_name not in name_resources:
             name_resources[node.package_name] = {"ver": {}, "unver": {}}
 
-        existing_node = name_resources[node.package_name]["unver"].get(
-            node.name
-        ) or name_resources[node.package_name]["ver"].get(node.name)
-        if existing_node is not None and not existing_node.is_versioned:
+        existing_unversioned_node = name_resources[node.package_name]["unver"].get(node.name)
+        if existing_unversioned_node is not None and not node.is_versioned:
             if get_flags().require_unambiguous_ref:
-                raise DuplicateResourceNameError(existing_node, node)
+                raise DuplicateResourceNameError(existing_unversioned_node, node)
             else:
                 continue
 
