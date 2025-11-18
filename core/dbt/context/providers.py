@@ -1905,6 +1905,21 @@ def generate_parser_model_context(
     return ctx.to_dict()
 
 
+def generate_parser_unit_test_context(
+    unit_test: UnitTestNode, config: RuntimeConfig, manifest: Manifest
+) -> Dict[str, Any]:
+    context_config = ContextConfig(
+        config,
+        unit_test.fqn,
+        NodeType.Unit,
+        config.project_name,
+    )
+
+    ctx = UnitTestContext(unit_test, config, manifest, ParseProvider(), context_config)
+
+    return ctx.to_dict()
+
+
 def generate_generate_name_macro_context(
     macro: Macro,
     config: RuntimeConfig,

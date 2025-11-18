@@ -1,0 +1,6 @@
+kind: Fixes
+body: Include macros in unit test parsing
+time: 2025-11-17T14:06:49.518566-05:00
+custom:
+    Author: michelleark nathanskone
+    Issue: "10157"
