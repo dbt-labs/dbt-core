@@ -96,3 +96,105 @@ include = [
     "/README.md",
     "/License.md",
 ]
+
+[tool.hatch.build.targets.sdist.force-include]
+"dbt/task/docs/index.html" = "dbt/task/docs/index.html"
+
+[tool.hatch.envs.default]
+dependencies = [
+    "pre-commit~=3.7.0",
+    "pytest>=7.0,<8.0",
+    "pytest-xdist~=3.6",
+    "pytest-csv~=3.0",
+    "pytest-logbook~=1.2",
+    "logbook<1.9",
+    "mypy>=1.9,<2.0",
+    "flake8>=6.0,<7.0",
+    "black>=24.3,<25.0",
+    "tox~=4.16",
+]
+
+[tool.hatch.envs.default.scripts]
+# Setup commands
+dev = [
+    "pip install -r ../dev-requirements.txt -r ../editable-requirements.txt",
+    "pre-commit install",
+]
+dev-req = "pip install -r ../dev-requirements.txt -r ../editable-requirements.txt"
+setup = "pre-commit install"
+
+# Linting commands
+lint = [
+    "pre-commit run flake8-check --hook-stage manual --all-files",
+    "pre-commit run mypy-check --hook-stage manual --all-files",
+]
+flake8 = "pre-commit run flake8-check --hook-stage manual --all-files"
+mypy = "pre-commit run mypy-check --hook-stage manual --all-files"
+black = "pre-commit run black-check --hook-stage manual --all-files"
+check-all = "pre-commit run --all-files --show-diff-on-failure"
+
+# Testing commands
+unit = "tox -e unit"
+test = [
+    "tox -e unit",
+    "pre-commit run black-check --hook-stage manual --all-files",
+    "pre-commit run flake8-check --hook-stage manual --all-files",
+    "pre-commit run mypy-check --hook-stage manual --all-files",
+]
+integration = "tox -e py-integration -- -nauto"
+integration-fail-fast = "tox -e py-integration -- -x -nauto"
+
+# Setup commands
+setup-db = [
+    "docker compose up -d database",
+    "bash ../test/setup_db.sh",
+]
+
+# Utility commands
+clean = [
+    "rm -f .coverage",
+    "rm -f .coverage.*",
+    "rm -rf .eggs/",
+    "rm -rf .tox/",
+    "rm -rf build/",
+    "rm -rf dbt.egg-info/",
+    "rm -f dbt_project.yml",
+    "rm -rf dist/",
+    "find . -type f -name '*.pyc' -delete",
+    "find . -type d -name __pycache__ -exec rm -rf {} +",
+]
+json-schema = "python ../scripts/collect-artifact-schema.py --path ../schemas"
+
+[tool.hatch.envs.build]
+detached = true
+dependencies = [
+    "wheel",
+    "twine",
+    "check-wheel-contents",
+]
+
+[tool.hatch.envs.build.scripts]
+check-wheel = [
+    "twine check dist/*",
+    "pip install --force-reinstall dist/*.whl",
+]
+
+[tool.hatch.envs.ci]
+dependencies = [
+    "pytest>=7.0,<8.0",
+    "pytest-xdist~=3.6",
+]
+
+[tool.hatch.envs.ci.scripts]
+unit-tests = "python -m pytest tests/unit"
+integration-tests = "python -m pytest tests/functional"
+
+[tool.hatch.envs.cd]
+dependencies = [
+    "pytest>=7.0,<8.0",
+    "pytest-xdist~=3.6",
+]
+
+[tool.hatch.envs.cd.scripts]
+unit-tests = "python -m pytest tests/unit"
+integration-tests = "python -m pytest tests/functional"

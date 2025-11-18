@@ -115,12 +115,16 @@ brew install postgresql
 
 ### Installation
 
-First make sure that you set up your `virtualenv` as described in [Setting up an environment](#setting-up-an-environment).  Also ensure you have the latest version of pip installed with `pip install --upgrade pip`. Next, install `dbt-core` (and its dependencies):
+First make sure that you set up your `virtualenv` as described in [Setting up an environment](#setting-up-an-environment).  Also ensure you have the latest version of pip installed with `pip install --upgrade pip`. Next, install `hatch` and `dbt-core` (and its dependencies):
 
 ```sh
-make dev
+pip install hatch
+cd core
+hatch run dev
 ```
-or, alternatively:
+
+This will install all development dependencies and set up pre-commit hooks. Alternatively, you can install dependencies directly:
+
 ```sh
 pip install -r dev-requirements.txt -r editable-requirements.txt
 pre-commit install
@@ -134,12 +138,12 @@ dbt-core uses [Hatch](https://hatch.pypa.io/) (specifically `hatchling`) as its 
 
 ```sh
 cd core
-python -m build
+hatch build
 ```
 
 This will create both wheel (`.whl`) and source distribution (`.tar.gz`) files in the `dist/` directory.
 
-The build configuration is defined in `core/pyproject.toml` with additional environment configurations in `core/hatch.toml`. Note that `hatch` itself is not required for development work - standard `pip install -e` works as usual.
+The build configuration is defined in `core/pyproject.toml` with additional environment configurations in `core/hatch.toml`. You can also use the standard `python -m build` command if you prefer.
 
 ### Running `dbt-core`
 
@@ -161,9 +165,12 @@ Although `dbt-core` works with a number of different databases, you won't need t
 Postgres offers the easiest way to test most `dbt-core` functionality today. They are the fastest to run, and the easiest to set up. To run the Postgres integration tests, you'll have to do one extra step of setting up the test database:
 
 ```sh
-make setup-db
+cd core
+hatch run setup-db
 ```
-or, alternatively:
+
+Alternatively, you can run the setup commands directly:
+
 ```sh
 docker-compose up -d database
 PGHOST=localhost PGUSER=root PGPASSWORD=password PGDATABASE=postgres bash test/setup_db.sh
@@ -173,25 +180,40 @@ PGHOST=localhost PGUSER=root PGPASSWORD=password PGDATABASE=postgres bash test/s
 
 There are a few methods for running tests locally.
 
-#### Makefile
+#### Hatch scripts
 
-There are multiple targets in the Makefile to run common test suites and code
-checks, most notably:
+The primary way to run tests and checks is using hatch scripts (defined in `core/hatch.toml`):
 
 ```sh
-# Runs unit tests with py38 and code checks in parallel.
-make test
-# Runs postgres integration tests with py38 in "fail fast" mode.
-make integration
-```
-> These make targets assume you have a local installation of a recent version of [`tox`](https://tox.readthedocs.io/en/latest/) for unit/integration testing and pre-commit for code quality checks,
-> unless you use choose a Docker container to run tests. Run `make help` for more info.
+cd core
 
-Check out the other targets in the Makefile to see other commonly used test
-suites.
+# Run all unit tests
+hatch run unit
+
+# Run unit tests and all code quality checks
+hatch run test
+
+# Run integration tests
+hatch run integration
+
+# Run linting checks only
+hatch run lint
+hatch run flake8
+hatch run mypy
+hatch run black
+
+# Run all pre-commit hooks
+hatch run check-all
+
+# Clean build artifacts
+hatch run clean
+```
+
+> These hatch scripts handle virtualenv management and dependency installation automatically via [`tox`](https://tox.readthedocs.io/en/latest/) for unit/integration testing and `pre-commit` for code quality checks.
 
 #### `pre-commit`
-[`pre-commit`](https://pre-commit.com) takes care of running all code-checks for formatting and linting. Run `make dev` to install `pre-commit` in your local environment (we recommend running this command with a python virtual environment active). This command installs several pip executables including black, mypy, and flake8. Once this is done you can use any of the linter-based make targets as well as a git pre-commit hook that will ensure proper formatting and linting.
+
+[`pre-commit`](https://pre-commit.com) takes care of running all code-checks for formatting and linting. Run `hatch run dev` (or `pip install -r dev-requirements.txt && pre-commit install`) to install `pre-commit` in your local environment (we recommend running this command with a python virtual environment active). This installs several pip executables including black, mypy, and flake8. Once installed, hooks will run automatically on `git commit`, or you can run them manually with `hatch run check-all`.
 
 #### `tox`
 
