@@ -3,8 +3,8 @@ use opentelemetry::{
     context::Context as OtelContext,
     logs::{AnyValue, LogRecord, Logger, Severity as OtelSeverity},
     trace::{
-        SamplingResult, Span as _, SpanContext, SpanId, SpanKind, Status as OtelStatus,
-        TraceContextExt, TraceFlags, TraceState, Tracer,
+        Link, SamplingResult, Span as _, SpanContext, SpanId, SpanKind, Status as OtelStatus,
+        TraceContextExt, TraceFlags, TraceId, TraceState, Tracer,
     },
 };
 use opentelemetry_sdk::{logs::SdkLogger, trace::SdkTracer};
@@ -12,8 +12,29 @@ use opentelemetry_semantic_conventions::attribute::{CODE_FILE_PATH, CODE_LINE_NU
 use std::collections::HashMap;
 
 use crate::{
-    LogRecordInfo, SeverityNumber, SpanEndInfo, SpanStatus, StatusCode, TelemetryAttributes,
+    LogRecordInfo, SeverityNumber, SpanEndInfo, SpanLinkInfo, SpanStatus, StatusCode,
+    TelemetryAttributes,
 };
+
+/// Converts a [`SpanLinkInfo`] to an OpenTelemetry [`Link`].
+fn span_link_to_otel(link: &SpanLinkInfo) -> Link {
+    let span_context = SpanContext::new(
+        TraceId::from(link.trace_id),
+        SpanId::from(link.span_id),
+        TraceFlags::SAMPLED,
+        false,
+        TraceState::NONE,
+    );
+
+    let attributes: Vec<KeyValue> = link
+        .attributes
+        .iter()
+        .map(|(k, v)| KeyValue::new(Key::from(k.clone()), serde_json_value_to_otel(v)))
+        .collect();
+
+    // Link::new takes span_context, attributes, and dropped_attributes_count (0 in our case)
+    Link::new(span_context, attributes, 0)
+}
 
 /// Exports a [`SpanEndInfo`] telemetry record using the provided OpenTelemetry tracer.
 ///
@@ -40,6 +61,13 @@ pub fn export_span(tracer: &SdkTracer, span_record: &SpanEndInfo) {
 
     let span_attrs = telemetry_attributes_to_key_values(&span_record.attributes);
 
+    // Convert span links to OpenTelemetry format
+    let otel_links: Vec<Link> = span_record
+        .links
+        .as_ref()
+        .map(|links| links.iter().map(span_link_to_otel).collect())
+        .unwrap_or_default();
+
     // Create OpenTelemetry span
     let mut otel_span = tracer
         .span_builder(span_record.span_name.clone())
@@ -54,6 +82,7 @@ pub fn export_span(tracer: &SdkTracer, span_record: &SpanEndInfo) {
         .with_span_id(otel_span_id)
         .with_start_time(span_record.start_time_unix_nano)
         .with_attributes(span_attrs)
+        .with_links(otel_links)
         .start_with_context(tracer, &otel_parent_cx);
 
     // Set span status as OK
@@ -541,5 +570,96 @@ mod tests {
         let trace_context = record.trace_context().expect("trace context");
         assert_eq!(trace_context.trace_id, log_info.trace_id.into());
         assert_eq!(trace_context.span_id, log_info.span_id.unwrap().into());
+    }
+
+    #[test]
+    fn export_span_with_links_emits_expected_data() {
+        let attributes = TelemetryAttributes::new(Box::new(DummySpanEvent));
+
+        // Create span links
+        let mut link_attrs = std::collections::BTreeMap::new();
+        link_attrs.insert(
+            "link_key".to_string(),
+            serde_json::from_str("\"link_value\"").unwrap(),
+        );
+
+        let links = vec![
+            SpanLinkInfo {
+                trace_id: 100,
+                span_id: 200,
+                attributes: link_attrs.clone(),
+            },
+            SpanLinkInfo {
+                trace_id: 101,
+                span_id: 201,
+                attributes: std::collections::BTreeMap::new(),
+            },
+        ];
+
+        let span_info = SpanEndInfo {
+            trace_id: 1,
+            span_id: 2,
+            parent_span_id: Some(3),
+            links: Some(links),
+            span_name: "dummy_with_links".to_string(),
+            start_time_unix_nano: SystemTime::UNIX_EPOCH,
+            end_time_unix_nano: SystemTime::UNIX_EPOCH,
+            attributes,
+            status: Some(SpanStatus::succeeded()),
+            severity_number: SeverityNumber::Info,
+            severity_text: "INFO".to_string(),
+        };
+
+        let (span_exporter, spans) = TestSpanExporter::new();
+        let tracer_provider = SdkTracerProvider::builder()
+            .with_simple_exporter(span_exporter)
+            .build();
+        let tracer = tracer_provider.tracer("test");
+
+        export_span(&tracer, &span_info);
+
+        tracer_provider.force_flush().unwrap();
+        tracer_provider.shutdown().unwrap();
+
+        let spans = spans.lock().unwrap();
+        assert_eq!(spans.len(), 1);
+        let span = &spans[0];
+
+        assert_eq!(span.span_context.trace_id(), span_info.trace_id.into());
+        assert_eq!(span.span_context.span_id(), span_info.span_id.into());
+        assert_eq!(span.name, "dummy_with_links");
+        assert_eq!(span.status, OtelStatus::Ok);
+
+        // Verify links
+        assert_eq!(span.links.len(), 2);
+
+        // Check first link (Link has span_context and attributes as fields, not methods)
+        let link1 = &span.links[0];
+        assert_eq!(link1.span_context.trace_id(), TraceId::from(100u128));
+        assert_eq!(link1.span_context.span_id(), SpanId::from(200u64));
+
+        // Verify the link has 1 attribute
+        assert!(
+            !link1.attributes.is_empty(),
+            "Expected at least 1 attribute, found: {}",
+            link1.attributes.len()
+        );
+
+        // Check that link_key exists with link_value
+        let has_link_attr = link1.attributes.iter().any(|kv| {
+            kv.key.as_str() == "link_key"
+                && matches!(kv.value, OtelValue::String(ref s) if s.as_ref() == "link_value")
+        });
+        assert!(
+            has_link_attr,
+            "link_key attribute not found or has wrong value. Attributes: {:?}",
+            link1.attributes
+        );
+
+        // Check second link (no attributes)
+        let link2 = &span.links[1];
+        assert_eq!(link2.span_context.trace_id(), TraceId::from(101u128));
+        assert_eq!(link2.span_context.span_id(), SpanId::from(201u64));
+        assert_eq!(link2.attributes.len(), 0);
     }
 }

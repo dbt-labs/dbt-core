@@ -175,3 +175,85 @@ fn test_otlp_layer_exports_only_marked_records() {
     });
     assert!(has_code_1, "expected log attributes to contain code=1");
 }
+
+#[test]
+fn test_otlp_export_with_links() {
+    // Test that links are exported to OTLP
+    let trace_id = rand::random::<u128>();
+
+    let (trace_exporter, spans) = TestSpanExporter::new();
+    let (log_exporter, _logs) = TestLogExporter::new();
+
+    let otlp_layer = OTLPExporterLayer::new(trace_exporter, log_exporter);
+    let trace_provider = otlp_layer.tracer_provider();
+
+    let subscriber = create_tracing_subcriber_with_layer(
+        tracing::level_filters::LevelFilter::TRACE,
+        TelemetryDataLayer::new(
+            trace_id,
+            false,
+            std::iter::empty(),
+            std::iter::once(Box::new(otlp_layer) as ConsumerLayer),
+        ),
+    );
+
+    tracing::subscriber::with_default(subscriber, || {
+        let span1 = create_root_info_span(MockDynSpanEvent {
+            name: "span_1".to_string(),
+            flags: TelemetryOutputFlags::EXPORT_OTLP,
+            ..Default::default()
+        });
+
+        let span2 = create_root_info_span(MockDynSpanEvent {
+            name: "span_2".to_string(),
+            flags: TelemetryOutputFlags::EXPORT_OTLP,
+            ..Default::default()
+        });
+
+        // span2 follows from span1
+        span2.follows_from(&span1);
+    });
+
+    trace_provider
+        .shutdown()
+        .expect("Failed to shutdown telemetry");
+
+    let exported_spans = spans.lock().unwrap().clone();
+
+    assert_eq!(exported_spans.len(), 2, "Should have exported 2 spans");
+
+    // Find span2 (the one with links) - MockDynSpanEvent adds a prefix to the name
+    let span2_data = exported_spans
+        .iter()
+        .find(|s| s.name.contains("span_2"))
+        .unwrap_or_else(|| {
+            panic!(
+                "span2 not found in exported spans. Available spans: {:?}",
+                exported_spans.iter().map(|s| &s.name).collect::<Vec<_>>()
+            )
+        });
+
+    assert_eq!(
+        span2_data.links.len(),
+        1,
+        "span2 should have exactly 1 link"
+    );
+
+    // Verify the link points to span1
+    let span1_data = exported_spans
+        .iter()
+        .find(|s| s.name.contains("span_1"))
+        .expect("span1 not found in exported spans");
+
+    let link = &span2_data.links[0];
+    assert_eq!(
+        link.span_context.span_id(),
+        span1_data.span_context.span_id(),
+        "link should point to span1"
+    );
+    assert_eq!(
+        link.span_context.trace_id(),
+        span1_data.span_context.trace_id(),
+        "link should have the same trace_id as span1"
+    );
+}

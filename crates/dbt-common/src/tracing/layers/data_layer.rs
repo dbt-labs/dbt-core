@@ -22,7 +22,7 @@ use tracing_subscriber::{
 
 use dbt_telemetry::{
     CallTrace, Invocation, LogMessage, LogRecordInfo, RecordCodeLocation, SeverityNumber,
-    SpanEndInfo, SpanStartInfo, SpanStatus, TelemetryAttributes, TelemetryContext,
+    SpanEndInfo, SpanLinkInfo, SpanStartInfo, SpanStatus, TelemetryAttributes, TelemetryContext,
     TelemetryEventRecType, Unknown,
 };
 
@@ -74,8 +74,36 @@ impl FilterMask {
 // by middleware or consumer layers. These types are stored in span extensions
 // and are only accessible by the data layer itself.
 
-/// Private wrapper for SpanStartInfo stored in span extensions.
-struct DLSpanStartInfo(SpanStartInfo);
+/// Read-only wrapper for SpanStartInfo stored in span extensions.
+///
+/// This struct provides immutable access to SpanStartInfo while preventing
+/// accidental modification by middleware or consumer layers. The wrapper can
+/// only be constructed within the data layer, but can be accessed immutably
+/// from anywhere within the tracing module to enable read-only APIs.
+///
+/// # Safety guarantees
+///
+/// - Construction is restricted to the data layer (private field)
+/// - Deref provides only immutable references to SpanStartInfo
+/// - Cannot be mutated via span extensions (extensions_mut requires
+///   constructing a new value to replace, and our Deref prevents mutable access)
+pub(in crate::tracing) struct DLSpanStartInfo(SpanStartInfo);
+
+impl DLSpanStartInfo {
+    /// Creates a new wrapper for SpanStartInfo.
+    /// Only accessible within the data layer module.
+    fn new(info: SpanStartInfo) -> Self {
+        Self(info)
+    }
+}
+
+impl std::ops::Deref for DLSpanStartInfo {
+    type Target = SpanStartInfo;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 /// Private wrapper for TelemetryContext stored in span extensions.
 struct DLTelemetryContext(TelemetryContext);
@@ -291,7 +319,7 @@ where
             span_id: global_span_id,
             span_name: attributes.event_display_name(),
             parent_span_id: global_parent_span_id,
-            links: None, // TODO: implement links from `follows_from`
+            links: None, // Links are always empty at creation time
             start_time_unix_nano: start_time,
             severity_number,
             severity_text: severity_number.as_str().to_string(),
@@ -333,7 +361,7 @@ where
                 span_id: global_span_id,
                 span_name: attributes.event_display_name(),
                 parent_span_id: global_parent_span_id,
-                links: None, // TODO: implement links from `follows_from`
+                links: None, // Links are always empty at creation time
                 start_time_unix_nano: start_time,
                 severity_number,
                 severity_text: severity_number.as_str().to_string(),
@@ -346,6 +374,7 @@ where
             let mut data_provider = DataProvider::new(&root_span);
 
             for middleware in &self.middlewares {
+                // Extract links before moving record into middleware
                 match middleware.on_span_start(record, &mut data_provider) {
                     Some(next_record) => {
                         record = next_record;
@@ -424,7 +453,7 @@ where
         ext_mut.insert(span_filter_mask);
 
         // Store an immutable start record in span extensions. Used later to build the SpanEnd record
-        ext_mut.insert(DLSpanStartInfo(record));
+        ext_mut.insert(DLSpanStartInfo::new(record));
 
         // Store computed context for this span (if any)
         if let Some(ctx) = this_ctx {
@@ -435,6 +464,48 @@ where
         // This allows both the app code as well as middleware to
         // modify span attributes post-creation before they are finalized at span end.
         ext_mut.insert(attributes);
+    }
+
+    fn on_follows_from(&self, span: &span::Id, follows: &span::Id, ctx: Context<'_, S>) {
+        // Get the span that declares it follows another span
+        let Some(current_span) = ctx.span(span) else {
+            return;
+        };
+
+        // Get the span that is being followed
+        let Some(followed_span) = ctx.span(follows) else {
+            // The followed span might not be tracked (e.g., it was filtered out or never created)
+            return;
+        };
+
+        // Extract trace_id and span_id from the followed span
+        let (followed_trace_id, followed_span_id) = {
+            let followed_ext = followed_span.extensions();
+            let Some(DLSpanStartInfo(followed_start_info)) = followed_ext.get::<DLSpanStartInfo>()
+            else {
+                // The followed span doesn't have start info (shouldn't happen in normal operation)
+                return;
+            };
+            (followed_start_info.trace_id, followed_start_info.span_id)
+        };
+
+        // Create a SpanLinkInfo for this follows_from relationship
+        let link = SpanLinkInfo {
+            trace_id: followed_trace_id,
+            span_id: followed_span_id,
+            attributes: std::collections::BTreeMap::new(),
+        };
+
+        // Update the current span's DLSpanStartInfo to include this link
+        let mut current_ext = current_span.extensions_mut();
+        if let Some(DLSpanStartInfo(start_info)) = current_ext.get_mut::<DLSpanStartInfo>() {
+            // Initialize links vector if it doesn't exist, then append the new link
+            match &mut start_info.links {
+                Some(links) => links.push(link),
+                None => start_info.links = Some(vec![link]),
+            }
+        }
+        // If there's no DLSpanStartInfo, the span wasn't properly initialized, so we skip
     }
 
     fn on_close(&self, id: span::Id, ctx: Context<'_, S>) {
@@ -453,6 +524,7 @@ where
                 trace_id,
                 span_id,
                 parent_span_id,
+                links,
                 start_time_unix_nano,
                 severity_number,
                 severity_text,
@@ -461,6 +533,7 @@ where
                 trace_id,
                 span_id,
                 parent_span_id,
+                links,
                 start_time_unix_nano,
                 severity_number,
                 severity_text,
@@ -472,6 +545,7 @@ where
                     *trace_id,
                     *span_id,
                     *parent_span_id,
+                    links.clone(),
                     *start_time_unix_nano,
                     *severity_number,
                     severity_text.clone(),
@@ -485,6 +559,7 @@ where
                     self.fallback_trace_id,
                     self.next_span_id(),
                     None,
+                    None, // No links in fallback case
                     SystemTime::now(),
                     severity_number,
                     severity_number.as_str().to_string(),
@@ -535,7 +610,7 @@ where
                 span_id,
                 span_name: attributes.event_display_name(),
                 parent_span_id,
-                links: None, // TODO: implement links from `follows_from`
+                links,
                 start_time_unix_nano,
                 end_time_unix_nano: SystemTime::now(),
                 severity_number,
@@ -857,7 +932,7 @@ pub(in crate::tracing) fn get_span_start_info_from_span(
     let span_ext = span.extensions();
     span_ext
         .get::<DLSpanStartInfo>()
-        .map(|start_info| start_info.0.clone())
+        .map(|start_info| (**start_info).clone())
 }
 
 #[cfg(test)]

@@ -1,7 +1,10 @@
 use std::collections::BTreeMap;
 
+use super::layers::data_layer::DLSpanStartInfo;
 use super::shared::Recordable;
-use dbt_telemetry::{AnyTelemetryEvent, DebugValue, SpanStatus, TelemetryAttributes};
+use dbt_telemetry::{
+    AnyTelemetryEvent, DebugValue, SpanStartInfo, SpanStatus, TelemetryAttributes,
+};
 
 use tracing::Span;
 use tracing_subscriber::{
@@ -102,27 +105,23 @@ where
 ///
 /// Should always return `Some(R)`. None means thread local subscriber missing,
 /// which should not happen in our case.
-///
-/// # Panics
-///
-/// This function will panic if it is called with a span that does not exist
-/// in the current context.
-pub(super) fn with_span<F, R>(span: &Span, mut f: F) -> Option<R>
+pub(super) fn with_span<F, R>(span: &Span, f: F) -> Option<R>
 where
-    F: FnMut(SpanRef<Registry>) -> R,
+    F: FnOnce(SpanRef<Registry>) -> R,
 {
-    tracing::dispatcher::get_default(|dispatch| {
+    span.with_subscriber(|(span_id, dispatch)| {
         // If the dispatcher is not a `Registry`, means tracing
         // wasn't initialized and so this is a no-op.
         let registry = dispatch.downcast_ref::<Registry>()?;
 
         let span_ref = registry
             // Disabled span? Silently ignore.
-            .span(&span.id()?)
+            .span(span_id)
             .expect("Must be an existing span reference");
 
         Some(f(span_ref))
     })
+    .flatten()
 }
 
 pub fn get_root_span_ref(cur_span: SpanRef<Registry>) -> SpanRef<Registry> {
@@ -185,12 +184,9 @@ pub fn find_and_record_span_status<A: AnyTelemetryEvent>(error_message: Option<&
 ///
 /// The `attrs_updater` closure receives a mutable reference to the current
 /// attributes and should modify them in place.
-pub fn record_span_status_with_attrs<F>(
-    span: &Span,
-    mut attrs_updater: F,
-    error_message: Option<&str>,
-) where
-    F: FnMut(&mut TelemetryAttributes),
+pub fn record_span_status_with_attrs<F>(span: &Span, attrs_updater: F, error_message: Option<&str>)
+where
+    F: FnOnce(&mut TelemetryAttributes),
 {
     with_span(span, |span_ref| {
         let mut span_ext_mut = span_ref.extensions_mut();
@@ -254,9 +250,9 @@ pub fn find_and_record_span_status_with_attrs<F, A: AnyTelemetryEvent>(
 ///
 /// The `attrs_updater` closure receives a mutable reference to the current
 /// attributes and should modify them in place.
-pub fn record_span_status_from_attrs<F>(span: &Span, mut attrs_updater: F)
+pub fn record_span_status_from_attrs<F>(span: &Span, attrs_updater: F)
 where
-    F: FnMut(&mut TelemetryAttributes),
+    F: FnOnce(&mut TelemetryAttributes),
 {
     with_span(span, |span_ref| {
         let mut span_ext_mut = span_ref.extensions_mut();
@@ -340,4 +336,96 @@ where
             }
         }
     });
+}
+
+/// Reads span start info from the given span with read-only access.
+///
+/// This provides immutable access to the span's start information including
+/// trace_id, span_id, span_name, and other metadata.
+///
+/// Returns `None` if span is disabled.
+///
+/// # Panics
+///
+/// If the span doesn't have start info (i.e., the span wasn't
+/// properly initialized or telemetry hasn't been set up).
+///
+/// # Example
+///
+/// ```ignore
+/// read_span_start_info(&span, |info| {
+///     println!("Trace ID: {:?}", info.trace_id);
+///     println!("Span ID: {}", info.span_id);
+///     info.span_id
+/// })
+/// ```
+pub fn read_span_start_info<R>(span: &Span, reader: impl FnOnce(&SpanStartInfo) -> R) -> Option<R> {
+    with_span(span, |span_ref| {
+        let span_ext = span_ref.extensions();
+        let info = span_ext
+            .get::<DLSpanStartInfo>()
+            .expect("Telemetry hasn't been properly initialized. Missing span start info");
+
+        reader(info)
+    })
+}
+
+/// Reads span start info from the current span with read-only access.
+///
+/// This provides immutable access to the current span's start information
+/// including trace_id, span_id, span_name, and other metadata. The data layer
+/// guarantees that this information cannot be modified through this API.
+///
+/// Returns `None` if there is no current span or the span doesn't have start
+/// info (e.g., the span wasn't properly initialized or telemetry hasn't been
+/// set up).
+///
+/// # Example
+///
+/// ```ignore
+/// read_current_span_start_info(|info| {
+///     println!("Trace ID: {:?}", info.trace_id);
+///     println!("Span ID: {}", info.span_id);
+///     info.span_id
+/// })
+/// ```
+pub fn read_current_span_start_info<R>(mut reader: impl FnMut(&SpanStartInfo) -> R) -> Option<R> {
+    with_current_span(|span_ref| {
+        let span_ext = span_ref.extensions();
+        let info = span_ext
+            .get::<DLSpanStartInfo>()
+            .expect("Telemetry hasn't been properly initialized. Missing span start info");
+
+        reader(info)
+    })
+}
+
+/// Reads attributes from a span with the expected `TelemetryAttributes` type.
+///
+/// This provides read-only access to span attributes that have been downcast
+/// to the specific event type. Returns `None` if the span doesn't have the
+/// expected attributes.
+///
+/// # Example
+///
+/// ```ignore
+/// read_span_attrs::<MyEvent, _>(&span, |attrs| {
+///     println!("Event name: {}", attrs.name);
+///     attrs.some_field.clone()
+/// })
+/// ```
+pub fn read_span_attrs<A: AnyTelemetryEvent, R>(
+    span: &Span,
+    reader: impl FnOnce(&A) -> R,
+) -> Option<R> {
+    with_span(span, |span_ref| {
+        let span_ext = span_ref.extensions();
+
+        span_ext
+            .get::<TelemetryAttributes>()
+            .expect("Telemetry hasn't been properly initialized. Missing span event attributes")
+            .downcast_ref::<A>()
+            .map(reader)
+    })
+    .flatten()
 }
