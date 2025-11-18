@@ -456,6 +456,7 @@ pbjson-types = "0.8.0"
 prost = "0.14"
 prost-build = "0.14"
 prost-types = "0.14"
+pyo3 = { version = "0.27", features = ["extension-module"] }
 
 # jsonschema
 jsonschema-valid = "0.5.2"
