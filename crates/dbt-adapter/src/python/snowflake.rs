@@ -133,6 +133,19 @@ pub fn submit_python_job(
         String::new()
     };
 
+    let send_anonymous_usage_stats = state
+        .lookup("flags")
+        .and_then(|flags| flags.get_attr("SEND_ANONYMOUS_USAGE_STATS").ok())
+        .filter(|v| !v.is_undefined()) // Filter out undefined values - they should use the default
+        .map(|value| value.is_true())
+        .unwrap_or(true);
+
+    let telemetry_snippet = if send_anonymous_usage_stats {
+        "import sys\nsys._xoptions['snowflake_partner_attribution'].append(\"dbtLabs_dbtPython\")\n\n"
+    } else {
+        ""
+    };
+
     // Build the common procedure code
     let common_procedure_code = format!(
         r#"
@@ -148,12 +161,14 @@ EXECUTE AS CALLER
 AS
 $$
 {}
+{}
 $$"#,
         python_version,
         packages_str,
         external_access_clause,
         secrets_clause,
         imports_clause,
+        telemetry_snippet,
         compiled_code
     );
 
@@ -161,8 +176,9 @@ $$"#,
     let use_anonymous_sproc = config
         .get_attr("use_anonymous_sproc")
         .ok()
+        .filter(|v| !v.is_undefined()) // Filter out undefined values - they should use the default
         .map(|v| v.is_true())
-        .unwrap_or(true);
+        .unwrap_or(true); // Default to true when not found or undefined
 
     let python_stored_procedure = if use_anonymous_sproc {
         let proc_name = format!("{}__dbt_sp", alias);

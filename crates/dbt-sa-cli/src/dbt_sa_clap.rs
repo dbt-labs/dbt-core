@@ -473,7 +473,7 @@ impl InitArgs {
                 is_compile: arg.command == FsCommand::Compile,
                 debug: arg.io.debug,
                 invocation_id: arg.io.invocation_id,
-                send_anonymous_usage_stats: self.common_args.send_anonymous_usage_stats,
+                send_anonymous_usage_stats: self.common_args.get_send_anonymous_usage_stats(),
                 status_reporter: arg.io.status_reporter.clone(),
                 log_format: self.common_args.log_format,
                 log_level: self.common_args.log_level,
@@ -491,6 +491,7 @@ impl InitArgs {
                 host: arg.io.host,
                 port: arg.io.port,
             },
+            send_anonymous_usage_stats: self.common_args.get_send_anonymous_usage_stats(),
             ..Default::default()
         }
     }
@@ -561,7 +562,7 @@ impl CommonArgs {
                 invocation_id: arg.io.invocation_id,
                 in_dir: in_dir.to_path_buf(),
                 out_dir: out_dir.to_path_buf(),
-                send_anonymous_usage_stats: arg.io.send_anonymous_usage_stats,
+                send_anonymous_usage_stats: self.get_send_anonymous_usage_stats(),
                 status_reporter: arg.io.status_reporter.clone(),
                 log_format: self.log_format,
                 log_level: self.log_level,
@@ -624,6 +625,7 @@ impl CommonArgs {
                 self.write_json
             },
             target_path: self.target_path.clone(),
+            send_anonymous_usage_stats: self.get_send_anonymous_usage_stats(),
             ..Default::default()
         }
     }
