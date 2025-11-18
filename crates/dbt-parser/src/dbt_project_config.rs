@@ -7,8 +7,12 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use dbt_common::{FsResult, io_args::IoArgs, tracing::emit::emit_strict_parse_error};
-use dbt_schemas::schemas::{common::DbtQuoting, project::DbtProject};
+use dbt_common::{
+    FsResult, adapter::AdapterType, io_args::IoArgs, tracing::emit::emit_strict_parse_error,
+};
+use dbt_schemas::schemas::{
+    common::DbtQuoting, project::DbtProject, relations::default_dbt_quoting_for,
+};
 use dbt_schemas::schemas::{
     project::{
         AnalysesConfig, DataTestConfig, DefaultTo, ExposureConfig, FunctionConfig, IterChildren,
@@ -192,6 +196,7 @@ pub fn build_root_project_configs(
     io_args: &IoArgs,
     root_project: &DbtProject,
     root_project_quoting: DbtQuoting,
+    adapter_type: AdapterType,
 ) -> FsResult<RootProjectConfigs> {
     let maybe_root_project_config =
         match (root_project.tests.clone(), root_project.data_tests.clone()) {
@@ -202,6 +207,9 @@ pub fn build_root_project_configs(
             (None, Some(data_tests)) => Some(data_tests),
             (None, None) => None,
         };
+
+    let source_default_quoting = default_dbt_quoting_for(adapter_type);
+
     Ok(RootProjectConfigs {
         models: init_project_config(
             io_args,
@@ -218,7 +226,7 @@ pub fn build_root_project_configs(
             &root_project.sources,
             SourceConfig {
                 enabled: Some(true),
-                quoting: Some(root_project_quoting),
+                quoting: Some(source_default_quoting),
                 ..Default::default()
             },
             None,

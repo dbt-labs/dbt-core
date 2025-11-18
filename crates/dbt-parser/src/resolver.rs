@@ -153,8 +153,12 @@ pub async fn resolve(
 
     // let mut nodes = Nodes::default();
     let mut disabled_nodes = Nodes::default();
-    let root_project_configs =
-        build_root_project_configs(&arg.io, dbt_state.root_project(), root_project_quoting)?;
+    let root_project_configs = build_root_project_configs(
+        &arg.io,
+        dbt_state.root_project(),
+        root_project_quoting,
+        adapter_type,
+    )?;
     let root_project_configs = Arc::new(root_project_configs);
     // Process packages in topological order
 
@@ -505,7 +509,6 @@ pub async fn resolve_inner(
     let (sources, disabled_sources) = resolve_sources(
         arg,
         package,
-        package_quoting,
         root_package_name,
         root_project_configs,
         min_properties.source_tables,

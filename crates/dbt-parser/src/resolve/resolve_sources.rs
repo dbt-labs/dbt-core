@@ -12,12 +12,13 @@ use dbt_jinja_utils::node_resolver::NodeResolver;
 use dbt_jinja_utils::serde::{Omissible, into_typed_with_jinja};
 use dbt_jinja_utils::utils::generate_relation_name;
 use dbt_schemas::schemas::common::{
-    DbtChecksum, DbtMaterialization, DbtQuoting, FreshnessDefinition, FreshnessRules,
-    NodeDependsOn, merge_meta, merge_tags, normalize_quoting,
+    DbtChecksum, DbtMaterialization, FreshnessDefinition, FreshnessRules, NodeDependsOn,
+    merge_meta, merge_tags, normalize_quoting,
 };
 use dbt_schemas::schemas::dbt_column::process_columns;
 use dbt_schemas::schemas::project::{DefaultTo, SourceConfig};
 use dbt_schemas::schemas::properties::{SourceProperties, Tables};
+use dbt_schemas::schemas::relations::default_dbt_quoting_for;
 use dbt_schemas::schemas::{CommonAttributes, DbtSource, DbtSourceAttr, NodeBaseAttributes};
 use dbt_schemas::state::{DbtPackage, GenericTestAsset, ModelStatus, NodeResolverTracker};
 use minijinja::Value as MinijinjaValue;
@@ -33,7 +34,6 @@ use super::resolve_tests::persist_generic_data_tests::{TestableNodeTrait, Testab
 pub fn resolve_sources(
     arg: &ResolveArgs,
     package: &DbtPackage,
-    package_quoting: DbtQuoting,
     root_package_name: &str,
     root_project_configs: &RootProjectConfigs,
     source_properties: BTreeMap<(String, String), MinimalPropertiesEntry>,
@@ -60,12 +60,16 @@ pub fn resolve_sources(
 
     let special_chars = Regex::new(r"[^a-zA-Z0-9_]").unwrap();
 
+    // Sources use adapter-specific quoting defaults, NOT project-level quoting
+    // https://docs.getdbt.com/reference/resource-properties/quoting
+    let source_default_quoting = default_dbt_quoting_for(adapter_type);
+
     let local_project_config = init_project_config(
         io_args,
         &package.dbt_project.sources,
         SourceConfig {
             enabled: Some(true),
-            quoting: Some(package_quoting),
+            quoting: Some(source_default_quoting),
             ..Default::default()
         },
         dependency_package_name,

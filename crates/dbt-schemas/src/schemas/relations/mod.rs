@@ -1,3 +1,5 @@
+use dbt_common::adapter::AdapterType;
+
 use crate::schemas::common::{DbtQuoting, ResolvedQuoting};
 
 pub mod base;
@@ -30,3 +32,11 @@ pub static SNOWFLAKE_DBT_QUOTING: DbtQuoting = DbtQuoting {
 };
 
 pub static DEFAULT_DATABRICKS_DATABASE: &str = "hive_metastore";
+
+#[inline]
+pub fn default_dbt_quoting_for(adapter_type: AdapterType) -> DbtQuoting {
+    match adapter_type {
+        AdapterType::Snowflake => SNOWFLAKE_DBT_QUOTING,
+        _ => DEFAULT_DBT_QUOTING,
+    }
+}

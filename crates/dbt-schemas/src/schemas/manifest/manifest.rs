@@ -29,6 +29,7 @@ use crate::{
             AdapterAttr, DbtAnalysis, DbtAnalysisAttr, DbtGroup, DbtGroupAttr, DbtSeedAttr,
             DbtSnapshotAttr, DbtSourceAttr, DbtTestAttr,
         },
+        relations::default_dbt_quoting_for,
     },
     state::ResolverState,
 };
@@ -536,6 +537,17 @@ fn build_parent_and_child_maps(
 
 pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -> Nodes {
     let mut nodes = Nodes::default();
+
+    let adapter_type =
+        AdapterType::from_str(&manifest.metadata.adapter_type).unwrap_or_else(|_| {
+            panic!(
+                "Invalid adapter_type in manifest {}",
+                &manifest.metadata.adapter_type
+            )
+        });
+
+    let source_default_quoting = default_dbt_quoting_for(adapter_type);
+
     // Do not put disabled nodes into the nodes, because all things in Nodes object should be enabled.
     for (unique_id, node) in manifest.nodes.clone() {
         match node {
@@ -905,10 +917,10 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     quoting: source
                         .quoting
                         .map(|mut quoting| {
-                            quoting.default_to(&dbt_quoting);
+                            quoting.default_to(&source_default_quoting);
                             quoting
                         })
-                        .unwrap_or(dbt_quoting)
+                        .unwrap_or(source_default_quoting)
                         .try_into()
                         .expect("DbtQuoting should be set"),
                     quoting_ignore_case: false,
