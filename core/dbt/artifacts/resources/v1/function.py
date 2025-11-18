@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List, Literal, Optional
+from typing import Any, List, Literal, Optional
 
 from dbt.artifacts.resources.types import FunctionType, FunctionVolatility, NodeType
 from dbt.artifacts.resources.v1.components import CompiledResource
@@ -32,6 +32,7 @@ class FunctionArgument(dbtClassMixin):
     name: str
     data_type: str
     description: Optional[str] = None
+    default_value: Optional[Any] = None
 
 
 @dataclass
