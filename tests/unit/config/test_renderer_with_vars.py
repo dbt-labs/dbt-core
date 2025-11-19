@@ -37,8 +37,9 @@ class TestRendererWithRequiredVars:
             var_func("missing_var")
 
     def test_dbt_project_yaml_renderer_doesnt_fail_on_missing_vars(self):
-        """Test that DbtProjectYamlRenderer can render configs with missing vars"""
-        renderer = DbtProjectYamlRenderer(profile=None, cli_vars={})
+        """Test that DbtProjectYamlRenderer with require_vars=False can render configs with missing vars"""
+        # Pass require_vars=False to enable lenient mode (used by dbt deps)
+        renderer = DbtProjectYamlRenderer(profile=None, cli_vars={}, require_vars=False)
 
         # This project config uses a var without a default value
         project_dict = {
@@ -47,7 +48,7 @@ class TestRendererWithRequiredVars:
             "models": {"test_project": {"+dataset": "dqm_{{ var('my_dataset') }}"}},
         }
 
-        # This should not raise an error
+        # This should not raise an error in lenient mode
         rendered = renderer.render_data(project_dict)
 
         # The var should be rendered as None (which becomes "dqm_None" in the string)
