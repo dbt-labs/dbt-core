@@ -38,6 +38,8 @@ from tests.functional.deprecations.fixtures import (
     deprecated_model_exposure_yaml,
     duplicate_keys_yaml,
     invalid_deprecation_date_yaml,
+    models_custom_key_in_config_non_static_parser_sql,
+    models_custom_key_in_config_sql,
     models_trivial__model_sql,
     multiple_custom_keys_in_config_yaml,
     property_moved_to_config_yaml,
@@ -372,6 +374,36 @@ class TestCustomKeyInConfigDeprecation:
             "Custom key `my_custom_key` found in `config` at path `models[0].config`"
             in event_catcher.caught_events[0].info.msg
         )
+
+
+class TestCustomKeyInConfigSQLDeprecation:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "model_custom_key_in_config.sql": models_custom_key_in_config_sql,
+        }
+
+    @mock.patch("dbt.jsonschemas.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
+    @mock.patch.dict(os.environ, {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": "True"})
+    def test_custom_key_in_config_sql_deprecation(self, project):
+        event_catcher = EventCatcher(CustomKeyInConfigDeprecation)
+        run_dbt(
+            ["parse", "--no-partial-parse", "--show-all-deprecations"],
+            callbacks=[event_catcher.catch],
+        )
+        assert len(event_catcher.caught_events) == 1
+        assert (
+            "Custom key `my_custom_key` found in `config`"
+            in event_catcher.caught_events[0].info.msg
+        )
+
+
+class TestCustomKeyInConfigComplexSQLDeprecation(TestCustomKeyInConfigSQLDeprecation):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "model_custom_key_in_config.sql": models_custom_key_in_config_non_static_parser_sql,
+        }
 
 
 class TestMultipleCustomKeysInConfigDeprecation:
