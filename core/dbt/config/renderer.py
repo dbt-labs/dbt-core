@@ -101,7 +101,10 @@ class DbtProjectYamlRenderer(BaseRenderer):
     _KEYPATH_HANDLERS = ProjectPostprocessor()
 
     def __init__(
-        self, profile: Optional[HasCredentials] = None, cli_vars: Optional[Dict[str, Any]] = None
+        self,
+        profile: Optional[HasCredentials] = None,
+        cli_vars: Optional[Dict[str, Any]] = None,
+        require_vars: bool = True,
     ) -> None:
         # Generate contexts here because we want to save the context
         # object in order to retrieve the env_vars. This is almost always
@@ -112,11 +115,15 @@ class DbtProjectYamlRenderer(BaseRenderer):
         # Store profile and cli_vars for creating strict context later
         self.profile = profile
         self.cli_vars = cli_vars
-        # Lenient context for project loading (dbt deps, dbt_project.yml)
+
+        # By default, require vars (strict mode) for proper error messages
+        # Only dbt deps explicitly passes require_vars=False for lenient loading
         if profile:
-            self.ctx_obj = TargetContext(profile.to_target_dict(), cli_vars, require_vars=False)
+            self.ctx_obj = TargetContext(
+                profile.to_target_dict(), cli_vars, require_vars=require_vars
+            )
         else:
-            self.ctx_obj = BaseContext(cli_vars, require_vars=False)  # type:ignore
+            self.ctx_obj = BaseContext(cli_vars, require_vars=require_vars)  # type:ignore
         context = self.ctx_obj.to_dict()
         super().__init__(context)
 

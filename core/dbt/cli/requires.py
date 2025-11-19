@@ -287,8 +287,18 @@ def project(func):
         flags = ctx.obj["flags"]
         # TODO deprecations warnings fired from loading the project will lack
         # the project_id in the snowplow event.
+
+        # For dbt deps, use lenient var validation to allow missing vars
+        # For all other commands, use strict validation for helpful error messages
+        require_vars = flags.WHICH != "deps"
+
         project = load_project(
-            flags.PROJECT_DIR, flags.VERSION_CHECK, ctx.obj["profile"], flags.VARS, validate=True
+            flags.PROJECT_DIR,
+            flags.VERSION_CHECK,
+            ctx.obj["profile"],
+            flags.VARS,
+            validate=True,
+            require_vars=require_vars,
         )
         ctx.obj["project"] = project
 

@@ -52,9 +52,10 @@ def load_project(
     profile: HasCredentials,
     cli_vars: Optional[Dict[str, Any]] = None,
     validate: bool = False,
+    require_vars: bool = True,
 ) -> Project:
     # get the project with all of the provided information
-    project_renderer = DbtProjectYamlRenderer(profile, cli_vars)
+    project_renderer = DbtProjectYamlRenderer(profile, cli_vars, require_vars=require_vars)
     project = Project.from_project_root(
         project_root, project_renderer, verify_version=version_check, validate=validate
     )
