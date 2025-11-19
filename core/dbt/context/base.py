@@ -170,13 +170,11 @@ class Var:
         else:
             return "<Configuration>"
 
-    def get_missing_var(self, var_name: str):
-        # If vars are not required (e.g., during deps), return None
-        # instead of raising an error
-        if not self._require_vars:
-            return None
-        # TODO function name implies a non exception resolution
-        raise RequiredVarNotFoundError(var_name, dict(self._merged), self._node)
+    def get_missing_var(self, var_name: str) -> None:
+        # Only raise an error if vars are _required_
+        if self._require_vars:
+            # TODO function name implies a non exception resolution
+            raise RequiredVarNotFoundError(var_name, dict(self._merged), self._node)
 
     def has_var(self, var_name: str) -> bool:
         return var_name in self._merged
