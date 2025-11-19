@@ -1091,6 +1091,7 @@ class TestList:
             "metric:test.derived_metric",
             "metric:test.filtered_ratio_metric",
             "metric:test.simple_ratio_metric",
+            "metric:test.discrete_order_value_p99",
             "saved_query:test.my_saved_query",
             "test.expression_is_true_seed_b_2",
             "test.not_null_seed__a_",
@@ -1133,6 +1134,7 @@ class TestList:
             "metric:test.cumulative_metric",
             "metric:test.cumulative_metric_2",
             "metric:test.derived_metric",
+            "metric:test.discrete_order_value_p99",
         }
 
         results = self.run_dbt_ls(["--resource-type", "saved_query"])
