@@ -26,6 +26,8 @@ pub struct ProjectAnalysisConfig {
     pub tags: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+docs")]
     pub docs: Option<DocsConfig>,
+    #[serde(rename = "+group")]
+    pub group: Option<String>,
     pub __additional_properties__: BTreeMap<String, ShouldBe<Self>>,
 }
 
@@ -37,6 +39,7 @@ impl Default for ProjectAnalysisConfig {
             meta: None,
             tags: None,
             docs: None,
+            group: None,
             __additional_properties__: BTreeMap::new(),
         }
     }
@@ -58,6 +61,7 @@ pub struct AnalysesConfig {
     pub tags: Option<StringOrArrayOfStrings>,
     pub description: Option<String>,
     pub docs: Option<DocsConfig>,
+    pub group: Option<String>,
 }
 
 impl From<ProjectAnalysisConfig> for AnalysesConfig {
@@ -69,6 +73,7 @@ impl From<ProjectAnalysisConfig> for AnalysesConfig {
             tags: config.tags,
             description: None,
             docs: config.docs,
+            group: config.group,
         }
     }
 }
@@ -89,6 +94,9 @@ impl DefaultTo<AnalysesConfig> for AnalysesConfig {
         }
         if self.description.is_none() {
             self.description = other.description.clone();
+        }
+        if self.group.is_none() {
+            self.group = other.group.clone();
         }
     }
 
