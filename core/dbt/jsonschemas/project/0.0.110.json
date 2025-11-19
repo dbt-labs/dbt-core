@@ -6,6 +6,16 @@
     "name"
   ],
   "properties": {
+    "analyses": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/ProjectAnalysisConfig"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "analysis-paths": {
       "type": [
         "array",
@@ -92,6 +102,25 @@
       "anyOf": [
         {
           "$ref": "#/definitions/AnyValue"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "function-paths": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string"
+      }
+    },
+    "functions": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/ProjectFunctionConfig"
         },
         {
           "type": "null"
@@ -220,7 +249,7 @@
     "saved-queries": {
       "anyOf": [
         {
-          "$ref": "#/definitions/ProjectSavedQueriesConfig"
+          "$ref": "#/definitions/ProjectSavedQueryConfig"
         },
         {
           "type": "null"
@@ -399,6 +428,17 @@
       },
       "additionalProperties": false
     },
+    "DataLakeObjectCategory": {
+      "description": "See `category` from https://developer.salesforce.com/docs/data/connectapi/references/spec?meta=postDataLakeObject",
+      "type": "string",
+      "enum": [
+        "Profile",
+        "Engagement",
+        "Directory_Table",
+        "Insights",
+        "Other"
+      ]
+    },
     "DbtBatchSize": {
       "type": "string",
       "enum": [
@@ -441,8 +481,7 @@
             "merge",
             "delete+insert",
             "insert_overwrite",
-            "microbatch",
-            "unknown"
+            "microbatch"
           ]
         },
         {
@@ -451,6 +490,18 @@
           "enum": [
             "replace_where"
           ]
+        },
+        {
+          "type": "object",
+          "required": [
+            "custom"
+          ],
+          "properties": {
+            "custom": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
         }
       ]
     },
@@ -459,6 +510,8 @@
         {
           "type": "string",
           "enum": [
+            "snapshot",
+            "seed",
             "view",
             "table",
             "incremental",
@@ -467,7 +520,8 @@
             "test",
             "ephemeral",
             "unit",
-            "analysis"
+            "analysis",
+            "function"
           ]
         },
         {
@@ -482,6 +536,13 @@
           "type": "string",
           "enum": [
             "dynamic_table"
+          ]
+        },
+        {
+          "description": "for inline SQL compilation",
+          "type": "string",
+          "enum": [
+            "inline"
           ]
         },
         {
@@ -647,6 +708,15 @@
       },
       "additionalProperties": false
     },
+    "FunctionKind": {
+      "description": "Function kind enum with same values as UDFKind",
+      "type": "string",
+      "enum": [
+        "scalar",
+        "aggregate",
+        "table"
+      ]
+    },
     "GrantAccessToTarget": {
       "type": "object",
       "properties": {
@@ -676,6 +746,12 @@
     "HookConfig": {
       "type": "object",
       "properties": {
+        "index": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "sql": {
           "type": [
             "string",
@@ -788,7 +864,7 @@
       ]
     },
     "PartitionConfig": {
-      "description": "dbt-core allows either of the variants for the `partition_by` in the model config but the bigquery-adapter throws RunTime error the behaviors are tested from the latest dbt-core + bigquery-adapter as this is written we're conformant to this behavior via here and via the `validate` method",
+      "description": "dbt-core allows either of the variants for the `partition_by` in the model config but the bigquery-adapter throws RunTime error the behaviors are tested from the latest dbt-core + bigquery-adapter as this is written we're conformant to this behavior via here and via the `into_bigquery()` method",
       "anyOf": [
         {
           "type": "string"
@@ -849,9 +925,77 @@
       },
       "additionalProperties": false
     },
+    "ProjectAnalysisConfig": {
+      "type": "object",
+      "properties": {
+        "+docs": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DocsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+enabled": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+group": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
+        "+static_analysis": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisKind"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+tags": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/definitions/ProjectAnalysisConfig"
+      }
+    },
     "ProjectDataTestConfig": {
       "type": "object",
       "properties": {
+        "+adapter_properties": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
         "+alias": {
           "type": [
             "string",
@@ -914,6 +1058,12 @@
           "format": "int64"
         },
         "+catalog": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+catalog_name": {
           "type": [
             "string",
             "null"
@@ -1194,11 +1344,10 @@
         },
         "+refresh_interval_minutes": {
           "type": [
-            "integer",
+            "number",
             "null"
           ],
-          "format": "uint64",
-          "minimum": 0.0
+          "format": "double"
         },
         "+refresh_mode": {
           "type": [
@@ -1476,6 +1625,12 @@
               "type": "null"
             }
           ]
+        },
+        "tenant_hostname": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false
@@ -1511,6 +1666,150 @@
       },
       "additionalProperties": {
         "$ref": "#/definitions/ProjectExposureConfig"
+      }
+    },
+    "ProjectFunctionConfig": {
+      "type": "object",
+      "properties": {
+        "+access": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Access"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+database": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+docs": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DocsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+enabled": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+grants": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/StringOrArrayOfStrings"
+          }
+        },
+        "+group": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+language": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
+        "+on_configuration_change": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+quoting": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DbtQuoting"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+schema": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+static_analysis": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisKind"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+tags": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+type": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FunctionKind"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "+volatility": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Volatility"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/definitions/ProjectFunctionConfig"
       }
     },
     "ProjectMetricConfigs": {
@@ -1564,6 +1863,15 @@
               "type": "null"
             }
           ]
+        },
+        "+adapter_properties": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
         },
         "+alias": {
           "type": [
@@ -1652,6 +1960,16 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "+category": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DataLakeObjectCategory"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "+cluster_by": {
@@ -1827,6 +2145,16 @@
           ],
           "format": "uint64",
           "minimum": 0.0
+        },
+        "+imports": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "+include_full_name_in_path": {
           "type": [
@@ -2089,6 +2417,12 @@
             "type": "string"
           }
         },
+        "+primary_key": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+query_tag": {
           "type": [
             "string",
@@ -2107,11 +2441,10 @@
         },
         "+refresh_interval_minutes": {
           "type": [
-            "integer",
+            "number",
             "null"
           ],
-          "format": "uint64",
-          "minimum": 0.0
+          "format": "double"
         },
         "+refresh_mode": {
           "type": [
@@ -2124,6 +2457,15 @@
             "boolean",
             "null"
           ]
+        },
+        "+resource_tags": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          }
         },
         "+row_access_policy": {
           "type": [
@@ -2278,13 +2620,13 @@
         "$ref": "#/definitions/ProjectModelConfig"
       }
     },
-    "ProjectSavedQueriesConfig": {
+    "ProjectSavedQueryConfig": {
       "type": "object",
       "properties": {
         "+cache": {
           "anyOf": [
             {
-              "$ref": "#/definitions/SavedQueriesConfigCache"
+              "$ref": "#/definitions/SavedQueryCache"
             },
             {
               "type": "null"
@@ -2340,12 +2682,21 @@
         }
       },
       "additionalProperties": {
-        "$ref": "#/definitions/ProjectSavedQueriesConfig"
+        "$ref": "#/definitions/ProjectSavedQueryConfig"
       }
     },
     "ProjectSeedConfig": {
       "type": "object",
       "properties": {
+        "+adapter_properties": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
         "+alias": {
           "type": [
             "string",
@@ -2408,6 +2759,12 @@
           "format": "int64"
         },
         "+catalog": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+catalog_name": {
           "type": [
             "string",
             "null"
@@ -2751,11 +3108,10 @@
         },
         "+refresh_interval_minutes": {
           "type": [
-            "integer",
+            "number",
             "null"
           ],
-          "format": "uint64",
-          "minimum": 0.0
+          "format": "double"
         },
         "+refresh_mode": {
           "type": [
@@ -2900,6 +3256,27 @@
     "ProjectSemanticModelConfig": {
       "type": "object",
       "properties": {
+        "+enabled": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "+group": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
         "+tags": {
           "anyOf": [
             {
@@ -2909,27 +3286,6 @@
               "type": "null"
             }
           ]
-        },
-        "enabled": {
-          "type": [
-            "boolean",
-            "null"
-          ]
-        },
-        "group": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "meta": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": {
-            "$ref": "#/definitions/AnyValue"
-          }
         }
       },
       "additionalProperties": {
@@ -2939,6 +3295,15 @@
     "ProjectSnapshotConfig": {
       "type": "object",
       "properties": {
+        "+adapter_properties": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
         "+alias": {
           "type": [
             "string",
@@ -3001,6 +3366,12 @@
           "format": "int64"
         },
         "+catalog": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+catalog_name": {
           "type": [
             "string",
             "null"
@@ -3365,11 +3736,10 @@
         },
         "+refresh_interval_minutes": {
           "type": [
-            "integer",
+            "number",
             "null"
           ],
-          "format": "uint64",
-          "minimum": 0.0
+          "format": "double"
         },
         "+refresh_mode": {
           "type": [
@@ -3505,7 +3875,19 @@
             "null"
           ]
         },
+        "+target_database": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "+target_lag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+target_schema": {
           "type": [
             "string",
             "null"
@@ -3556,6 +3938,15 @@
     "ProjectSourceConfig": {
       "type": "object",
       "properties": {
+        "+adapter_properties": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
         "+as_columnstore": {
           "type": [
             "boolean",
@@ -3612,6 +4003,12 @@
           "format": "int64"
         },
         "+catalog": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+catalog_name": {
           "type": [
             "string",
             "null"
@@ -3889,11 +4286,10 @@
         },
         "+refresh_interval_minutes": {
           "type": [
-            "integer",
+            "number",
             "null"
           ],
-          "format": "uint64",
-          "minimum": 0.0
+          "format": "double"
         },
         "+refresh_mode": {
           "type": [
@@ -4042,6 +4438,15 @@
     "ProjectUnitTestConfig": {
       "type": "object",
       "properties": {
+        "+adapter_properties": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
         "+as_columnstore": {
           "type": [
             "boolean",
@@ -4098,6 +4503,12 @@
           "format": "int64"
         },
         "+catalog": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "+catalog_name": {
           "type": [
             "string",
             "null"
@@ -4337,11 +4748,10 @@
         },
         "+refresh_interval_minutes": {
           "type": [
-            "integer",
+            "number",
             "null"
           ],
-          "format": "uint64",
-          "minimum": 0.0
+          "format": "double"
         },
         "+refresh_mode": {
           "type": [
@@ -4535,7 +4945,7 @@
       },
       "additionalProperties": false
     },
-    "SavedQueriesConfigCache": {
+    "SavedQueryCache": {
       "type": "object",
       "properties": {
         "enabled": {
@@ -4576,35 +4986,30 @@
       "type": "object",
       "properties": {
         "dbt_is_deleted": {
-          "default": "DBT_IS_DELETED",
           "type": [
             "string",
             "null"
           ]
         },
         "dbt_scd_id": {
-          "default": "DBT_SCD_ID",
           "type": [
             "string",
             "null"
           ]
         },
         "dbt_updated_at": {
-          "default": "DBT_UPDATED_AT",
           "type": [
             "string",
             "null"
           ]
         },
         "dbt_valid_from": {
-          "default": "DBT_VALID_FROM",
           "type": [
             "string",
             "null"
           ]
         },
         "dbt_valid_to": {
-          "default": "DBT_VALID_TO",
           "type": [
             "string",
             "null"
@@ -4692,6 +5097,31 @@
       "enum": [
         "any",
         "all"
+      ]
+    },
+    "Volatility": {
+      "description": "Function volatility enum - defines the function's eligibility for certain optimizations Matches the Python Volatility enum from dbt-core",
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "stable"
+          ]
+        },
+        {
+          "description": "Deterministic - An deterministic function will always return the same output when given the same input.",
+          "type": "string",
+          "enum": [
+            "deterministic"
+          ]
+        },
+        {
+          "description": "NonDeterministic - A non-deterministic function may change the return value from evaluation to evaluation. Multiple invocations of a non-deterministic function may return different results when used in the same query.",
+          "type": "string",
+          "enum": [
+            "non-deterministic"
+          ]
+        }
       ]
     },
     "_Dispatch": {

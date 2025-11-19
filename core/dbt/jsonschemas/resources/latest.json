@@ -39,13 +39,22 @@
         "$ref": "#/definitions/ExposureProperties"
       }
     },
+    "functions": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/FunctionProperties"
+      }
+    },
     "groups": {
       "type": [
         "array",
         "null"
       ],
       "items": {
-        "$ref": "#/definitions/GroupsProperties"
+        "$ref": "#/definitions/GroupProperties"
       }
     },
     "macros": {
@@ -99,7 +108,7 @@
         "null"
       ],
       "items": {
-        "$ref": "#/definitions/SemanticModelsProperties"
+        "$ref": "#/definitions/AnyValue"
       }
     },
     "snapshots": {
@@ -147,15 +156,6 @@
           "type": "null"
         }
       ]
-    },
-    "functions": {
-      "type": [
-        "array",
-        "null"
-      ],
-      "items": {
-        "type": "object"
-      }
     }
   },
   "additionalProperties": false,
@@ -168,58 +168,29 @@
         "public"
       ]
     },
-    "AggregationTypeParams": {
-      "type": "object",
-      "properties": {
-        "percentile": {
-          "type": [
-            "number",
-            "null"
-          ],
-          "format": "float"
-        },
-        "use_approximate_percentile": {
-          "type": [
-            "boolean",
-            "null"
-          ]
-        },
-        "use_discrete_percentile": {
-          "type": [
-            "boolean",
-            "null"
-          ]
-        }
-      },
-      "additionalProperties": false
+    "AggregationType": {
+      "type": "string",
+      "enum": [
+        "sum",
+        "min",
+        "max",
+        "count_distinct",
+        "sum_boolean",
+        "average",
+        "percentile",
+        "median",
+        "count"
+      ]
     },
-    "AnalysesColumns": {
+    "AnalysesConfig": {
       "type": "object",
-      "required": [
-        "name"
-      ],
       "properties": {
-        "data_type": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
         "description": {
           "type": [
             "string",
             "null"
           ]
         },
-        "name": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false
-    },
-    "AnalysesConfig": {
-      "type": "object",
-      "properties": {
         "docs": {
           "anyOf": [
             {
@@ -251,14 +222,25 @@
             "$ref": "#/definitions/AnyValue"
           }
         },
+        "static_analysis": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisKind"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "tags": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "additionalProperties": false
@@ -275,7 +257,7 @@
             "null"
           ],
           "items": {
-            "$ref": "#/definitions/AnalysesColumns"
+            "$ref": "#/definitions/ColumnProperties"
           }
         },
         "config": {
@@ -415,10 +397,30 @@
             "null"
           ]
         },
+        "dimension": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ColumnPropertiesDimension"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "entity": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Entity"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "granularity": {
           "anyOf": [
             {
-              "$ref": "#/definitions/ColumnPropertiesGranularity"
+              "$ref": "#/definitions/Granularity"
             },
             {
               "type": "null"
@@ -455,23 +457,89 @@
       },
       "additionalProperties": false
     },
-    "ColumnPropertiesGranularity": {
-      "type": "string",
-      "enum": [
-        "nanosecond",
-        "microsecond",
-        "millisecond",
-        "second",
-        "minute",
-        "hour",
-        "day",
-        "week",
-        "month",
-        "quarter",
-        "year"
+    "ColumnPropertiesDimension": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/ColumnPropertiesDimensionConfig"
+        },
+        {
+          "$ref": "#/definitions/ColumnPropertiesDimensionType"
+        }
       ]
     },
-    "ConstantPropertyInput": {
+    "ColumnPropertiesDimensionConfig": {
+      "type": "object",
+      "required": [
+        "type"
+      ],
+      "properties": {
+        "config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SemanticLayerElementConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "is_partition": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "label": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "type": {
+          "$ref": "#/definitions/ColumnPropertiesDimensionType"
+        },
+        "validity_params": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DimensionValidityParams"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "ColumnPropertiesDimensionType": {
+      "type": "string",
+      "enum": [
+        "categorical",
+        "time"
+      ]
+    },
+    "ColumnPropertiesEntityType": {
+      "type": "string",
+      "enum": [
+        "foreign",
+        "natural",
+        "primary",
+        "unique"
+      ]
+    },
+    "ConstantProperty": {
       "type": "object",
       "required": [
         "base_property",
@@ -557,87 +625,6 @@
         "conversions",
         "conversion_rate"
       ]
-    },
-    "ConversionTypeParams": {
-      "type": "object",
-      "required": [
-        "base_measure",
-        "calculation",
-        "conversion_measure",
-        "entity"
-      ],
-      "properties": {
-        "base_measure": {
-          "$ref": "#/definitions/StringOrMetricInputMeasure"
-        },
-        "calculation": {
-          "$ref": "#/definitions/ConversionCalculationType"
-        },
-        "constant_properties": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "$ref": "#/definitions/ConstantPropertyInput"
-          }
-        },
-        "conversion_measure": {
-          "$ref": "#/definitions/StringOrMetricInputMeasure"
-        },
-        "entity": {
-          "type": "string"
-        },
-        "window": {
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      },
-      "additionalProperties": false
-    },
-    "CumulativeTypeParams": {
-      "type": "object",
-      "required": [
-        "period_agg"
-      ],
-      "properties": {
-        "grain_to_date": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "period_agg": {
-          "$ref": "#/definitions/PeriodAggregationType"
-        },
-        "window": {
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      },
-      "additionalProperties": false
-    },
-    "CustomGranularity": {
-      "type": "object",
-      "required": [
-        "name"
-      ],
-      "properties": {
-        "column_name": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "name": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false
     },
     "CustomTest": {
       "anyOf": [
@@ -746,10 +733,30 @@
       },
       "additionalProperties": false
     },
+    "DataLakeObjectCategory": {
+      "description": "See `category` from https://developer.salesforce.com/docs/data/connectapi/references/spec?meta=postDataLakeObject",
+      "type": "string",
+      "enum": [
+        "Profile",
+        "Engagement",
+        "Directory_Table",
+        "Insights",
+        "Other"
+      ]
+    },
     "DataTestConfig": {
       "description": "This configuration is a superset of all warehouse specific configurations that users can set",
       "type": "object",
       "properties": {
+        "adapter_properties": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
         "alias": {
           "type": [
             "string",
@@ -815,6 +822,22 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "catalog_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "category": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DataLakeObjectCategory"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "cluster_by": {
@@ -1008,6 +1031,16 @@
             "null"
           ]
         },
+        "materialized": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DbtMaterialization"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "max_staleness": {
           "type": [
             "string",
@@ -1074,6 +1107,12 @@
             "type": "string"
           }
         },
+        "primary_key": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "query_tag": {
           "type": [
             "string",
@@ -1092,11 +1131,10 @@
         },
         "refresh_interval_minutes": {
           "type": [
-            "integer",
+            "number",
             "null"
           ],
-          "format": "uint64",
-          "minimum": 0.0
+          "format": "double"
         },
         "refresh_mode": {
           "type": [
@@ -1109,6 +1147,15 @@
             "boolean",
             "null"
           ]
+        },
+        "resource_tags": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          }
         },
         "row_access_policy": {
           "type": [
@@ -1364,8 +1411,7 @@
             "merge",
             "delete+insert",
             "insert_overwrite",
-            "microbatch",
-            "unknown"
+            "microbatch"
           ]
         },
         {
@@ -1374,6 +1420,18 @@
           "enum": [
             "replace_where"
           ]
+        },
+        {
+          "type": "object",
+          "required": [
+            "custom"
+          ],
+          "properties": {
+            "custom": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
         }
       ]
     },
@@ -1382,6 +1440,8 @@
         {
           "type": "string",
           "enum": [
+            "snapshot",
+            "seed",
             "view",
             "table",
             "incremental",
@@ -1390,7 +1450,8 @@
             "test",
             "ephemeral",
             "unit",
-            "analysis"
+            "analysis",
+            "function"
           ]
         },
         {
@@ -1405,6 +1466,13 @@
           "type": "string",
           "enum": [
             "dynamic_table"
+          ]
+        },
+        {
+          "description": "for inline SQL compilation",
+          "type": "string",
+          "enum": [
+            "inline"
           ]
         },
         {
@@ -1486,9 +1554,10 @@
         }
       ]
     },
-    "Dimension": {
+    "DerivedDimension": {
       "type": "object",
       "required": [
+        "expr",
         "name",
         "type"
       ],
@@ -1496,7 +1565,7 @@
         "config": {
           "anyOf": [
             {
-              "$ref": "#/definitions/DimensionConfig"
+              "$ref": "#/definitions/SemanticLayerElementConfig"
             },
             {
               "type": "null"
@@ -1510,14 +1579,23 @@
           ]
         },
         "expr": {
-          "type": [
-            "string",
-            "null"
+          "type": "string"
+        },
+        "granularity": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Granularity"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "is_partition": {
-          "default": false,
-          "type": "boolean"
+          "type": [
+            "boolean",
+            "null"
+          ]
         },
         "label": {
           "type": [
@@ -1525,69 +1603,11 @@
             "null"
           ]
         },
-        "metadata": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/AnyValue"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
         "name": {
           "type": "string"
         },
         "type": {
-          "$ref": "#/definitions/DimensionType"
-        },
-        "type_params": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/DimensionTypeParams"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "additionalProperties": false
-    },
-    "DimensionConfig": {
-      "type": "object",
-      "required": [
-        "meta"
-      ],
-      "properties": {
-        "meta": {
-          "type": "object",
-          "additionalProperties": {
-            "$ref": "#/definitions/AnyValue"
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    "DimensionType": {
-      "type": "string",
-      "enum": [
-        "categorical",
-        "time"
-      ]
-    },
-    "DimensionTypeParams": {
-      "type": "object",
-      "properties": {
-        "time_granularity": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/TimeGranularity"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "$ref": "#/definitions/ColumnPropertiesDimensionType"
         },
         "validity_params": {
           "anyOf": [
@@ -1598,6 +1618,72 @@
               "type": "null"
             }
           ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "DerivedEntity": {
+      "type": "object",
+      "required": [
+        "expr",
+        "name",
+        "type"
+      ],
+      "properties": {
+        "config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SemanticLayerElementConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expr": {
+          "type": "string"
+        },
+        "label": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/definitions/ColumnPropertiesEntityType"
+        }
+      },
+      "additionalProperties": false
+    },
+    "DerivedSemantics": {
+      "type": "object",
+      "properties": {
+        "dimensions": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/DerivedDimension"
+          }
+        },
+        "entities": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/DerivedEntity"
+          }
         }
       },
       "additionalProperties": false
@@ -1633,16 +1719,25 @@
       "additionalProperties": false
     },
     "Entity": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/EntityConfig"
+        },
+        {
+          "$ref": "#/definitions/ColumnPropertiesEntityType"
+        }
+      ]
+    },
+    "EntityConfig": {
       "type": "object",
       "required": [
-        "name",
         "type"
       ],
       "properties": {
         "config": {
           "anyOf": [
             {
-              "$ref": "#/definitions/EntityConfig"
+              "$ref": "#/definitions/SemanticLayerElementConfig"
             },
             {
               "type": "null"
@@ -1655,16 +1750,6 @@
             "null"
           ]
         },
-        "expr": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/EntityExpr"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
         "label": {
           "type": [
             "string",
@@ -1672,51 +1757,16 @@
           ]
         },
         "name": {
-          "type": "string"
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "type": {
-          "$ref": "#/definitions/EntityType"
+          "$ref": "#/definitions/ColumnPropertiesEntityType"
         }
       },
       "additionalProperties": false
-    },
-    "EntityConfig": {
-      "type": "object",
-      "properties": {
-        "meta": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": {
-            "$ref": "#/definitions/AnyValue"
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    "EntityExpr": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "boolean"
-        }
-      ]
-    },
-    "EntityType": {
-      "type": "string",
-      "enum": [
-        "PRIMARY",
-        "UNIQUE",
-        "FOREIGN",
-        "NATURAL",
-        "primary",
-        "unique",
-        "foreign",
-        "natural"
-      ]
     },
     "Expect": {
       "type": "object",
@@ -1990,6 +2040,725 @@
       },
       "additionalProperties": false
     },
+    "FunctionArgument": {
+      "type": "object",
+      "properties": {
+        "data_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "default_value": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "FunctionConfig": {
+      "description": "This configuration is a superset of all warehouse specific configurations that users can set",
+      "type": "object",
+      "properties": {
+        "access": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Access"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "adapter_properties": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
+        "alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "as_columnstore": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "auto_liquid_cluster": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "auto_refresh": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "automatic_clustering": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "backup": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "base_location_root": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "base_location_subpath": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bind": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "buckets": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64"
+        },
+        "catalog": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "catalog_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "category": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DataLakeObjectCategory"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cluster_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/BigqueryClusterConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "clustered_by": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "compression": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "copy_grants": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "database": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "databricks_compute": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "databricks_tags": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
+        "dist": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "docs": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DocsConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enable_refresh": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "enabled": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "external_volume": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "file_format": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "grant_access_to": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/GrantAccessToTarget"
+          }
+        },
+        "grants": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/StringOrArrayOfStrings"
+          }
+        },
+        "group": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "hours_to_expiration": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "include_full_name_in_path": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "indexes": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/PostgresIndex"
+          }
+        },
+        "initialize": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "kms_key_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "labels": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "labels_from_meta": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "language": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "liquid_clustered_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "location_root": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "matched_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "max_staleness": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "merge_with_schema_evolution": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "meta": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
+        "not_matched_by_source_action": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "not_matched_by_source_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "not_matched_condition": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "on_configuration_change": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "partition_by": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/PartitionConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "partition_expiration_days": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "partitions": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "primary_key": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "query_tag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "quoting": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DbtQuoting"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "refresh_interval_minutes": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "refresh_mode": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "require_partition_filter": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "resource_tags": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "row_access_policy": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "schedule": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ScheduleConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "schema": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "secure": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "skip_matched_step": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "skip_not_matched_step": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "snowflake_warehouse": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sort": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sort_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source_alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "static_analysis": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StaticAnalysisKind"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "table_tag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "table_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "target_alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target_lag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "tblproperties": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
+        "tmp_relation_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "transient": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "type": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FunctionKind"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "volatility": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Volatility"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "FunctionKind": {
+      "description": "Function kind enum with same values as UDFKind",
+      "type": "string",
+      "enum": [
+        "scalar",
+        "aggregate",
+        "table"
+      ]
+    },
+    "FunctionProperties": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "arguments": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/FunctionArgument"
+          }
+        },
+        "config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FunctionConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "data_tests": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/DataTests"
+          }
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "identifier": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "language": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "returns": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FunctionReturnType"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tests": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/DataTests"
+          }
+        },
+        "type": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FunctionKind"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "FunctionReturnType": {
+      "type": "object",
+      "properties": {
+        "data_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
     "Given": {
       "type": "object",
       "required": [
@@ -2044,41 +2813,38 @@
       },
       "additionalProperties": false
     },
-    "GroupsConfig": {
+    "Granularity": {
+      "type": "string",
+      "enum": [
+        "nanosecond",
+        "microsecond",
+        "millisecond",
+        "second",
+        "minute",
+        "hour",
+        "day",
+        "week",
+        "month",
+        "quarter",
+        "year"
+      ]
+    },
+    "GroupConfig": {
       "type": "object",
       "properties": {
         "meta": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/AnyValue"
-            },
-            {
-              "type": "null"
-            }
-          ]
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
         }
       },
       "additionalProperties": false
     },
-    "GroupsOwner": {
-      "type": "object",
-      "properties": {
-        "email": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "name": {
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      },
-      "additionalProperties": false
-    },
-    "GroupsProperties": {
+    "GroupProperties": {
       "type": "object",
       "required": [
         "name",
@@ -2088,7 +2854,7 @@
         "config": {
           "anyOf": [
             {
-              "$ref": "#/definitions/GroupsConfig"
+              "$ref": "#/definitions/GroupConfig"
             },
             {
               "type": "null"
@@ -2105,7 +2871,7 @@
           "type": "string"
         },
         "owner": {
-          "$ref": "#/definitions/GroupsOwner"
+          "$ref": "#/definitions/DbtOwner"
         }
       },
       "additionalProperties": false
@@ -2121,6 +2887,12 @@
     "HookConfig": {
       "type": "object",
       "properties": {
+        "index": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "sql": {
           "type": [
             "string",
@@ -2219,119 +2991,11 @@
       },
       "additionalProperties": false
     },
-    "Measure": {
-      "type": "object",
-      "required": [
-        "agg",
-        "name"
-      ],
-      "properties": {
-        "agg": {
-          "$ref": "#/definitions/MeasureAgg"
-        },
-        "agg_params": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/AggregationTypeParams"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "agg_time_dimension": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "config": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/AnyValue"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "create_metric": {
-          "type": [
-            "boolean",
-            "null"
-          ]
-        },
-        "create_metric_display_name": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "description": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "expr": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/_MeasureExpr"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "label": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "name": {
-          "type": "string"
-        },
-        "non_additive_dimension": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/NonAdditiveDimension"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "additionalProperties": false
-    },
-    "MeasureAgg": {
-      "type": "string",
-      "enum": [
-        "SUM",
-        "MIN",
-        "MAX",
-        "AVERAGE",
-        "COUNT_DISTINCT",
-        "SUM_BOOLEAN",
-        "COUNT",
-        "PERCENTILE",
-        "MEDIAN",
-        "sum",
-        "min",
-        "max",
-        "average",
-        "count_distinct",
-        "sum_boolean",
-        "count",
-        "percentile",
-        "median"
-      ]
-    },
     "MetricConfig": {
       "type": "object",
       "properties": {
         "enabled": {
+          "default": null,
           "type": [
             "boolean",
             "null"
@@ -2365,7 +3029,18 @@
       },
       "additionalProperties": false
     },
-    "MetricInput": {
+    "MetricExpr": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "integer",
+          "format": "int32"
+        }
+      ]
+    },
+    "MetricPropertiesMetricInput": {
       "type": "object",
       "required": [
         "name"
@@ -2378,13 +3053,9 @@
           ]
         },
         "filter": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/StringOrArrayOfStrings"
-            },
-            {
-              "type": "null"
-            }
+          "type": [
+            "string",
+            "null"
           ]
         },
         "name": {
@@ -2405,43 +3076,27 @@
       },
       "additionalProperties": false
     },
-    "MetricInputMeasure": {
+    "MetricPropertiesNonAdditiveDimension": {
       "type": "object",
       "required": [
-        "name"
+        "name",
+        "window_agg"
       ],
       "properties": {
-        "alias": {
+        "group_by": {
           "type": [
-            "string",
-            "null"
-          ]
-        },
-        "fill_nulls_with": {
-          "type": [
-            "integer",
+            "array",
             "null"
           ],
-          "format": "int32"
-        },
-        "filter": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/StringOrArrayOfStrings"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "join_to_timespine": {
-          "type": [
-            "boolean",
-            "null"
-          ]
+          "items": {
+            "type": "string"
+          }
         },
         "name": {
           "type": "string"
+        },
+        "window_agg": {
+          "$ref": "#/definitions/WindowChoice"
         }
       },
       "additionalProperties": false
@@ -2456,23 +3111,71 @@
         "conversion"
       ]
     },
-    "MetricTypeParams": {
+    "MetricsProperties": {
       "type": "object",
+      "required": [
+        "name"
+      ],
       "properties": {
-        "conversion_type_params": {
+        "agg": {
           "anyOf": [
             {
-              "$ref": "#/definitions/ConversionTypeParams"
+              "$ref": "#/definitions/AggregationType"
             },
             {
               "type": "null"
             }
           ]
         },
-        "cumulative_type_params": {
+        "agg_time_dimension": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "base_metric": {
           "anyOf": [
             {
-              "$ref": "#/definitions/CumulativeTypeParams"
+              "$ref": "#/definitions/StringOrMetricPropertiesMetricInput"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "calculation": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ConversionCalculationType"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/MetricConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "constant_properties": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/ConstantProperty"
+          }
+        },
+        "conversion_metric": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrMetricPropertiesMetricInput"
             },
             {
               "type": "null"
@@ -2482,70 +3185,7 @@
         "denominator": {
           "anyOf": [
             {
-              "$ref": "#/definitions/StringOrMetricInput"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "expr": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "measure": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/StringOrMetricInputMeasure"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "metrics": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "$ref": "#/definitions/StringOrMetricInput"
-          }
-        },
-        "numerator": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/StringOrMetricInput"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "window": {
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      },
-      "additionalProperties": false
-    },
-    "MetricsProperties": {
-      "type": "object",
-      "required": [
-        "label",
-        "name",
-        "type",
-        "type_params"
-      ],
-      "properties": {
-        "config": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/MetricConfig"
+              "$ref": "#/definitions/StringOrMetricPropertiesMetricInput"
             },
             {
               "type": "null"
@@ -2558,26 +3198,137 @@
             "null"
           ]
         },
-        "filter": {
+        "entity": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "expr": {
           "anyOf": [
             {
-              "$ref": "#/definitions/StringOrArrayOfStrings"
+              "$ref": "#/definitions/MetricExpr"
             },
             {
               "type": "null"
             }
           ]
         },
+        "fill_nulls_with": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "filter": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "grain_to_date": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Granularity"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "hidden": {
+          "default": false,
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "input_metric": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrMetricPropertiesMetricInput"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "input_metrics": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/MetricPropertiesMetricInput"
+          }
+        },
+        "join_to_timespine": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
         "label": {
-          "type": "string"
+          "type": [
+            "string",
+            "null"
+          ]
         },
         "name": {
           "type": "string"
         },
+        "non_additive_dimension": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/MetricPropertiesNonAdditiveDimension"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "numerator": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrMetricPropertiesMetricInput"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "percentile": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "float"
+        },
+        "percentile_type": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/PercentileType"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "period_agg": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/PeriodAggregationType"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "time_granularity": {
           "anyOf": [
             {
-              "$ref": "#/definitions/TimeGranularity"
+              "$ref": "#/definitions/Granularity"
             },
             {
               "type": "null"
@@ -2585,10 +3336,20 @@
           ]
         },
         "type": {
-          "$ref": "#/definitions/MetricType"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/MetricType"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
-        "type_params": {
-          "$ref": "#/definitions/MetricTypeParams"
+        "window": {
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "additionalProperties": false
@@ -2606,6 +3367,15 @@
               "type": "null"
             }
           ]
+        },
+        "adapter_properties": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
         },
         "alias": {
           "type": [
@@ -2694,6 +3464,16 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "category": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DataLakeObjectCategory"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "cluster_by": {
@@ -2872,6 +3652,16 @@
           ],
           "format": "uint64",
           "minimum": 0.0
+        },
+        "imports": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "include_full_name_in_path": {
           "type": [
@@ -3135,6 +3925,12 @@
             "type": "string"
           }
         },
+        "primary_key": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "query_tag": {
           "type": [
             "string",
@@ -3153,11 +3949,10 @@
         },
         "refresh_interval_minutes": {
           "type": [
-            "integer",
+            "number",
             "null"
           ],
-          "format": "uint64",
-          "minimum": 0.0
+          "format": "double"
         },
         "refresh_mode": {
           "type": [
@@ -3170,6 +3965,15 @@
             "boolean",
             "null"
           ]
+        },
+        "resource_tags": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          }
         },
         "row_access_policy": {
           "type": [
@@ -3446,6 +4250,12 @@
         "name"
       ],
       "properties": {
+        "agg_time_dimension": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "columns": {
           "type": [
             "array",
@@ -3489,6 +4299,16 @@
             "null"
           ]
         },
+        "derived_semantics": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DerivedSemantics"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "description": {
           "type": [
             "string",
@@ -3511,8 +4331,33 @@
             }
           ]
         },
+        "metrics": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/MetricsProperties"
+          }
+        },
         "name": {
           "type": "string"
+        },
+        "primary_entity": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "semantic_model": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ModelPropertiesSemanticModelConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "tests": {
           "type": [
@@ -3526,7 +4371,7 @@
         "time_spine": {
           "anyOf": [
             {
-              "$ref": "#/definitions/ModelsTimeSpine"
+              "$ref": "#/definitions/ModelPropertiesTimeSpine"
             },
             {
               "type": "null"
@@ -3545,7 +4390,41 @@
       },
       "additionalProperties": false
     },
-    "ModelsTimeSpine": {
+    "ModelPropertiesSemanticModelConfig": {
+      "type": "object",
+      "required": [
+        "enabled"
+      ],
+      "properties": {
+        "config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SemanticLayerElementConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "group": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "ModelPropertiesTimeSpine": {
       "type": "object",
       "required": [
         "standard_granularity_column"
@@ -3557,7 +4436,7 @@
             "null"
           ],
           "items": {
-            "$ref": "#/definitions/CustomGranularity"
+            "$ref": "#/definitions/TimeSpineCustomGranularity"
           }
         },
         "standard_granularity_column": {
@@ -3565,46 +4444,6 @@
         }
       },
       "additionalProperties": false
-    },
-    "NonAdditiveDimension": {
-      "type": "object",
-      "required": [
-        "name"
-      ],
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "window_choice": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/NonAdditiveDimensionWindowChoice"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "window_groupings": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    "NonAdditiveDimensionWindowChoice": {
-      "type": "string",
-      "enum": [
-        "MIN",
-        "MAX",
-        "min",
-        "max"
-      ]
     },
     "OnConfigurationChange": {
       "type": "string",
@@ -3626,7 +4465,7 @@
       ]
     },
     "PartitionConfig": {
-      "description": "dbt-core allows either of the variants for the `partition_by` in the model config but the bigquery-adapter throws RunTime error the behaviors are tested from the latest dbt-core + bigquery-adapter as this is written we're conformant to this behavior via here and via the `validate` method",
+      "description": "dbt-core allows either of the variants for the `partition_by` in the model config but the bigquery-adapter throws RunTime error the behaviors are tested from the latest dbt-core + bigquery-adapter as this is written we're conformant to this behavior via here and via the `into_bigquery()` method",
       "anyOf": [
         {
           "type": "string"
@@ -3640,6 +4479,13 @@
         {
           "$ref": "#/definitions/BigqueryPartitionConfig"
         }
+      ]
+    },
+    "PercentileType": {
+      "type": "string",
+      "enum": [
+        "discrete",
+        "continuous"
       ]
     },
     "PeriodAggregationType": {
@@ -3749,13 +4595,105 @@
         }
       ]
     },
-    "SavedQueriesConfig": {
+    "SavedQueriesProperties": {
+      "type": "object",
+      "required": [
+        "name",
+        "query_params"
+      ],
+      "properties": {
+        "config": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SavedQueryConfig"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "description": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "exports": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/Export"
+          }
+        },
+        "label": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "query_params": {
+          "$ref": "#/definitions/SavedQueriesQueryParams"
+        }
+      },
+      "additionalProperties": false
+    },
+    "SavedQueriesQueryParams": {
+      "type": "object",
+      "properties": {
+        "group_by": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "metrics": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "where": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "SavedQueryCache": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "SavedQueryConfig": {
       "type": "object",
       "properties": {
         "cache": {
           "anyOf": [
             {
-              "$ref": "#/definitions/SavedQueriesConfigCache"
+              "$ref": "#/definitions/SavedQueryCache"
             },
             {
               "type": "null"
@@ -3763,6 +4701,7 @@
           ]
         },
         "enabled": {
+          "default": null,
           "type": [
             "boolean",
             "null"
@@ -3812,107 +4751,6 @@
       },
       "additionalProperties": false
     },
-    "SavedQueriesConfigCache": {
-      "type": "object",
-      "properties": {
-        "enabled": {
-          "type": [
-            "boolean",
-            "null"
-          ]
-        }
-      },
-      "additionalProperties": false
-    },
-    "SavedQueriesProperties": {
-      "type": "object",
-      "required": [
-        "name",
-        "query_params"
-      ],
-      "properties": {
-        "config": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/SavedQueriesConfig"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "description": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "exports": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "$ref": "#/definitions/Export"
-          }
-        },
-        "label": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "name": {
-          "type": "string"
-        },
-        "query_params": {
-          "$ref": "#/definitions/SavedQueriesQueryParams"
-        }
-      },
-      "additionalProperties": false
-    },
-    "SavedQueriesQueryParams": {
-      "type": "object",
-      "properties": {
-        "dimensions": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
-        },
-        "group_by": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
-        },
-        "metrics": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
-        },
-        "where": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "type": "string"
-          }
-        }
-      },
-      "additionalProperties": false
-    },
     "ScheduleConfig": {
       "type": "object",
       "properties": {
@@ -3935,6 +4773,15 @@
       "description": "This configuration is a superset of all warehouse specific configurations that users can set",
       "type": "object",
       "properties": {
+        "adapter_properties": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
         "alias": {
           "type": [
             "string",
@@ -4000,6 +4847,22 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "catalog_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "category": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DataLakeObjectCategory"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "cluster_by": {
@@ -4220,6 +5083,16 @@
             "null"
           ]
         },
+        "materialized": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DbtMaterialization"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "max_staleness": {
           "type": [
             "string",
@@ -4316,6 +5189,12 @@
             }
           ]
         },
+        "primary_key": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "query_tag": {
           "type": [
             "string",
@@ -4340,11 +5219,10 @@
         },
         "refresh_interval_minutes": {
           "type": [
-            "integer",
+            "number",
             "null"
           ],
-          "format": "uint64",
-          "minimum": 0.0
+          "format": "double"
         },
         "refresh_mode": {
           "type": [
@@ -4357,6 +5235,15 @@
             "boolean",
             "null"
           ]
+        },
+        "resource_tags": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          }
         },
         "row_access_policy": {
           "type": [
@@ -4539,21 +5426,9 @@
       },
       "additionalProperties": false
     },
-    "SemanticModelConfig": {
+    "SemanticLayerElementConfig": {
       "type": "object",
       "properties": {
-        "enabled": {
-          "type": [
-            "boolean",
-            "null"
-          ]
-        },
-        "group": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
         "meta": {
           "type": [
             "object",
@@ -4562,109 +5437,6 @@
           "additionalProperties": {
             "$ref": "#/definitions/AnyValue"
           }
-        },
-        "tags": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/StringOrArrayOfStrings"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "additionalProperties": false
-    },
-    "SemanticModelsDefaults": {
-      "type": "object",
-      "properties": {
-        "agg_time_dimension": {
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      },
-      "additionalProperties": false
-    },
-    "SemanticModelsProperties": {
-      "type": "object",
-      "required": [
-        "model",
-        "name"
-      ],
-      "properties": {
-        "config": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/SemanticModelConfig"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "defaults": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/SemanticModelsDefaults"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "description": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "dimensions": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "$ref": "#/definitions/Dimension"
-          }
-        },
-        "entities": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "$ref": "#/definitions/Entity"
-          }
-        },
-        "label": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "measures": {
-          "type": [
-            "array",
-            "null"
-          ],
-          "items": {
-            "$ref": "#/definitions/Measure"
-          }
-        },
-        "model": {
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        },
-        "primary_entity": {
-          "type": [
-            "string",
-            "null"
-          ]
         }
       },
       "additionalProperties": false
@@ -4680,6 +5452,15 @@
       "description": "This configuration is a superset of all warehouse specific configurations that users can set",
       "type": "object",
       "properties": {
+        "adapter_properties": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
         "alias": {
           "type": [
             "string",
@@ -4745,6 +5526,22 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "catalog_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "category": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DataLakeObjectCategory"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "check_cols": {
@@ -5082,6 +5879,12 @@
             }
           ]
         },
+        "primary_key": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "query_tag": {
           "type": [
             "string",
@@ -5106,11 +5909,10 @@
         },
         "refresh_interval_minutes": {
           "type": [
-            "integer",
+            "number",
             "null"
           ],
-          "format": "uint64",
-          "minimum": 0.0
+          "format": "double"
         },
         "refresh_mode": {
           "type": [
@@ -5123,6 +5925,15 @@
             "boolean",
             "null"
           ]
+        },
+        "resource_tags": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          }
         },
         "row_access_policy": {
           "type": [
@@ -5246,7 +6057,19 @@
             "null"
           ]
         },
+        "target_database": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "target_lag": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target_schema": {
           "type": [
             "string",
             "null"
@@ -5296,35 +6119,30 @@
       "type": "object",
       "properties": {
         "dbt_is_deleted": {
-          "default": "DBT_IS_DELETED",
           "type": [
             "string",
             "null"
           ]
         },
         "dbt_scd_id": {
-          "default": "DBT_SCD_ID",
           "type": [
             "string",
             "null"
           ]
         },
         "dbt_updated_at": {
-          "default": "DBT_UPDATED_AT",
           "type": [
             "string",
             "null"
           ]
         },
         "dbt_valid_from": {
-          "default": "DBT_VALID_FROM",
           "type": [
             "string",
             "null"
           ]
         },
         "dbt_valid_to": {
-          "default": "DBT_VALID_TO",
           "type": [
             "string",
             "null"
@@ -5398,6 +6216,15 @@
       "description": "This configuration is a superset of all warehouse specific configurations that users can set",
       "type": "object",
       "properties": {
+        "adapter_properties": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
         "as_columnstore": {
           "type": [
             "boolean",
@@ -5457,6 +6284,22 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "catalog_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "category": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DataLakeObjectCategory"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "cluster_by": {
@@ -5713,6 +6556,12 @@
             "type": "string"
           }
         },
+        "primary_key": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "query_tag": {
           "type": [
             "string",
@@ -5731,11 +6580,10 @@
         },
         "refresh_interval_minutes": {
           "type": [
-            "integer",
+            "number",
             "null"
           ],
-          "format": "uint64",
-          "minimum": 0.0
+          "format": "double"
         },
         "refresh_mode": {
           "type": [
@@ -5748,6 +6596,15 @@
             "boolean",
             "null"
           ]
+        },
+        "resource_tags": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          }
         },
         "row_access_policy": {
           "type": [
@@ -5979,23 +6836,13 @@
         }
       ]
     },
-    "StringOrMetricInput": {
+    "StringOrMetricPropertiesMetricInput": {
       "anyOf": [
         {
           "type": "string"
         },
         {
-          "$ref": "#/definitions/MetricInput"
-        }
-      ]
-    },
-    "StringOrMetricInputMeasure": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "$ref": "#/definitions/MetricInputMeasure"
+          "$ref": "#/definitions/MetricPropertiesMetricInput"
         }
       ]
     },
@@ -6160,26 +7007,37 @@
       },
       "additionalProperties": false
     },
-    "TimeGranularity": {
-      "type": "string",
-      "enum": [
-        "nanosecond",
-        "microsecond",
-        "millisecond",
-        "second",
-        "minute",
-        "hour",
-        "day",
-        "week",
-        "month",
-        "quarter",
-        "year"
-      ]
+    "TimeSpineCustomGranularity": {
+      "type": "object",
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "column_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
     },
     "UnitTestConfig": {
       "description": "This configuration is a superset of all warehouse specific configurations that users can set",
       "type": "object",
       "properties": {
+        "adapter_properties": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/AnyValue"
+          }
+        },
         "as_columnstore": {
           "type": [
             "boolean",
@@ -6239,6 +7097,22 @@
           "type": [
             "string",
             "null"
+          ]
+        },
+        "catalog_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "category": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/DataLakeObjectCategory"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "cluster_by": {
@@ -6467,6 +7341,12 @@
             "type": "string"
           }
         },
+        "primary_key": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "query_tag": {
           "type": [
             "string",
@@ -6475,11 +7355,10 @@
         },
         "refresh_interval_minutes": {
           "type": [
-            "integer",
+            "number",
             "null"
           ],
-          "format": "uint64",
-          "minimum": 0.0
+          "format": "double"
         },
         "refresh_mode": {
           "type": [
@@ -6492,6 +7371,15 @@
             "boolean",
             "null"
           ]
+        },
+        "resource_tags": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "string"
+          }
         },
         "row_access_policy": {
           "type": [
@@ -6755,18 +7643,36 @@
         }
       }
     },
-    "_MeasureExpr": {
-      "anyOf": [
+    "Volatility": {
+      "description": "Function volatility enum - defines the function's eligibility for certain optimizations Matches the Python Volatility enum from dbt-core",
+      "oneOf": [
         {
-          "type": "string"
+          "type": "string",
+          "enum": [
+            "stable"
+          ]
         },
         {
-          "type": "integer",
-          "format": "int32"
+          "description": "Deterministic - An deterministic function will always return the same output when given the same input.",
+          "type": "string",
+          "enum": [
+            "deterministic"
+          ]
         },
         {
-          "type": "boolean"
+          "description": "NonDeterministic - A non-deterministic function may change the return value from evaluation to evaluation. Multiple invocations of a non-deterministic function may return different results when used in the same query.",
+          "type": "string",
+          "enum": [
+            "non-deterministic"
+          ]
         }
+      ]
+    },
+    "WindowChoice": {
+      "type": "string",
+      "enum": [
+        "min",
+        "max"
       ]
     }
   }
