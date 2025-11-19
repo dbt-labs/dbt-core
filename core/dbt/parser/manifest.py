@@ -1657,7 +1657,7 @@ def _check_resource_uniqueness(
 
         existing_unversioned_node = name_resources[node.package_name]["unver"].get(node.name)
         if existing_unversioned_node is not None and not node.is_versioned:
-            if get_flags().require_unambiguous_ref:
+            if get_flags().require_unique_project_resource_names:
                 raise DuplicateResourceNameError(existing_unversioned_node, node)
             else:
                 continue

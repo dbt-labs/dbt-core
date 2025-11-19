@@ -29,33 +29,33 @@ class BaseTestDuplicateNames:
         }
 
 
-class TestDuplicateNamesRequireUnambiguousRefFlagTrue(BaseTestDuplicateNames):
+class TestDuplicateNamesRequireUniqueProjectResourceNamesTrue(BaseTestDuplicateNames):
 
     @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
             "flags": {
-                "require_unambiguous_ref": True,
+                "require_unique_project_resource_names": True,
             }
         }
 
     def test_duplicate_names_with_flag_enabled(self, project):
-        """When require_unambiguous_ref is True, duplicate unversioned names should raise DuplicateResourceNameError"""
+        """When require_unique_project_resource_names is True, duplicate unversioned names should raise DuplicateResourceNameError"""
         with pytest.raises(DuplicateResourceNameError):
             run_dbt(["parse"])
 
 
-class TestDuplicateNamesRequireUnambiguousRefFlagFalse(BaseTestDuplicateNames):
+class TestDuplicateNamesRequireUniqueProjectResourceNamesFalse(BaseTestDuplicateNames):
     @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
             "flags": {
-                "require_unambiguous_ref": False,
+                "require_unique_project_resource_names": False,
             }
         }
 
     def test_duplicate_names_with_flag_disabled(self, project):
-        """When require_unambiguous_ref is False, duplicate unversioned names should be allowed (continue behavior)"""
+        """When require_unique_project_resource_names is False, duplicate unversioned names should be allowed (continue behavior)"""
         manifest = run_dbt(["parse"])
 
         assert (
@@ -64,7 +64,7 @@ class TestDuplicateNamesRequireUnambiguousRefFlagFalse(BaseTestDuplicateNames):
         )
 
 
-class TestDuplicateNamesDefaultBehavior(TestDuplicateNamesRequireUnambiguousRefFlagFalse):
+class TestDuplicateNamesDefaultBehavior(TestDuplicateNamesRequireUniqueProjectResourceNamesFalse):
     @pytest.fixture(scope="class")
     def project_config_update(self):
         return {}
