@@ -590,7 +590,6 @@ pub struct ManifestModelConfig {
     pub sql_header: Option<String>,
     pub location: Option<String>,
     pub predicates: Option<Vec<String>>,
-    pub description: Option<String>,
     // Adapter specific configs
     pub __warehouse_specific_config__: WarehouseSpecificNodeConfig,
 }
@@ -622,7 +621,6 @@ pub struct ManifestSeedConfig {
     pub pre_hook: Verbatim<Option<Hooks>>,
     pub tags: Option<StringOrArrayOfStrings>,
     pub quoting: Option<DbtQuoting>,
-    pub description: Option<String>,
     pub materialized: Option<DbtMaterialization>,
     // Adapter specific configs
     pub __warehouse_specific_config__: WarehouseSpecificNodeConfig,
@@ -649,7 +647,6 @@ impl From<SeedConfig> for ManifestSeedConfig {
             pre_hook: config.pre_hook,
             tags: config.tags,
             quoting: config.quoting,
-            description: config.description,
             materialized: config.materialized,
             __warehouse_specific_config__: config.__warehouse_specific_config__,
         }
@@ -677,7 +674,6 @@ impl From<ManifestSeedConfig> for SeedConfig {
             pre_hook: config.pre_hook,
             tags: config.tags,
             quoting: config.quoting,
-            description: config.description,
             materialized: config.materialized,
             __warehouse_specific_config__: config.__warehouse_specific_config__,
         }
@@ -726,7 +722,6 @@ impl From<ModelConfig> for ManifestModelConfig {
             sql_header: config.sql_header,
             location: config.location,
             predicates: config.predicates,
-            description: config.description,
             __warehouse_specific_config__: config.__warehouse_specific_config__,
         }
     }
@@ -774,7 +769,6 @@ impl From<ManifestModelConfig> for ModelConfig {
             sql_header: config.sql_header,
             location: config.location,
             predicates: config.predicates,
-            description: config.description,
             __warehouse_specific_config__: config.__warehouse_specific_config__,
         }
     }

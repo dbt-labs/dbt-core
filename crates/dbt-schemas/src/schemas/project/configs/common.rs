@@ -170,6 +170,7 @@ pub struct WarehouseSpecificNodeConfig {
     pub adapter_properties: Option<BTreeMap<String, YmlValue>>,
 
     // BigQuery
+    pub description: Option<String>,
     pub cluster_by: Option<BigqueryClusterConfig>,
     #[serde(default, deserialize_with = "u64_or_string_u64")]
     pub hours_to_expiration: Option<u64>,
@@ -282,6 +283,7 @@ impl DefaultTo<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConfig {
             partition_by,
 
             // BigQuery
+            description,
             cluster_by,
             hours_to_expiration,
             labels,
@@ -367,6 +369,7 @@ impl DefaultTo<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConfig {
                 // Shared
                 partition_by,
                 // BigQuery
+                description,
                 cluster_by,
                 hours_to_expiration,
                 labels,

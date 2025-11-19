@@ -158,8 +158,6 @@ pub struct ProjectSnapshotConfig {
     // Adapter-specific fields (BigQuery)
     #[serde(rename = "+cluster_by")]
     pub cluster_by: Option<BigqueryClusterConfig>,
-    #[serde(rename = "+description")]
-    pub description: Option<String>,
     #[serde(
         default,
         rename = "+enable_refresh",
@@ -351,7 +349,6 @@ pub struct SnapshotConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub invalidate_hard_deletes: Option<bool>,
     pub docs: Option<DocsConfig>,
-    pub description: Option<String>,
     // Adapter specific configs
     pub __warehouse_specific_config__: WarehouseSpecificNodeConfig,
 }
@@ -484,8 +481,8 @@ impl From<ProjectSnapshotConfig> for SnapshotConfig {
             quote_columns: config.quote_columns,
             invalidate_hard_deletes: config.invalidate_hard_deletes,
             docs: config.docs,
-            description: config.description,
             __warehouse_specific_config__: WarehouseSpecificNodeConfig {
+                description: None, // Only for Bigquery models
                 adapter_properties: config.adapter_properties,
                 external_volume: config.external_volume,
                 base_location_root: config.base_location_root,
@@ -593,7 +590,6 @@ impl From<SnapshotConfig> for ProjectSnapshotConfig {
             quote_columns: config.quote_columns,
             invalidate_hard_deletes: config.invalidate_hard_deletes,
             docs: config.docs,
-            description: config.description,
             // Snowflake fields
             adapter_properties: config.__warehouse_specific_config__.adapter_properties,
             external_volume: config.__warehouse_specific_config__.external_volume,
@@ -724,7 +720,6 @@ impl DefaultTo<SnapshotConfig> for SnapshotConfig {
             invalidate_hard_deletes,
             docs,
             static_analysis,
-            description,
             // Flattened configs
             __warehouse_specific_config__: warehouse_specific_config,
         } = self;
@@ -772,7 +767,6 @@ impl DefaultTo<SnapshotConfig> for SnapshotConfig {
                 hard_deletes,
                 check_cols,
                 static_analysis,
-                description,
                 materialized,
             ]
         );

@@ -158,8 +158,6 @@ pub struct ProjectSeedConfig {
         deserialize_with = "f64_or_string_f64"
     )]
     pub refresh_interval_minutes: Option<f64>,
-    #[serde(rename = "+description")]
-    pub description: Option<String>,
     #[serde(rename = "+max_staleness")]
     pub max_staleness: Option<String>,
     #[serde(rename = "+file_format")]
@@ -295,7 +293,6 @@ pub struct SeedConfig {
     pub pre_hook: Verbatim<Option<Hooks>>,
     pub tags: Option<StringOrArrayOfStrings>,
     pub quoting: Option<DbtQuoting>,
-    pub description: Option<String>,
     pub materialized: Option<DbtMaterialization>,
     // Adapter specific configs
     pub __warehouse_specific_config__: WarehouseSpecificNodeConfig,
@@ -322,9 +319,9 @@ impl From<ProjectSeedConfig> for SeedConfig {
             pre_hook: config.pre_hook,
             tags: config.tags,
             quoting: config.quoting,
-            description: config.description,
             materialized: Some(DbtMaterialization::Seed),
             __warehouse_specific_config__: WarehouseSpecificNodeConfig {
+                description: None, // Only for BigQuery models
                 adapter_properties: config.adapter_properties,
                 external_volume: config.external_volume,
                 base_location_root: config.base_location_root,
@@ -423,7 +420,6 @@ impl From<SeedConfig> for ProjectSeedConfig {
             pre_hook: config.pre_hook,
             tags: config.tags,
             quoting: config.quoting,
-            description: config.description,
             // Snowflake fields
             adapter_properties: config.__warehouse_specific_config__.adapter_properties,
             snowflake_warehouse: config.__warehouse_specific_config__.snowflake_warehouse,
@@ -543,7 +539,6 @@ impl DefaultTo<SeedConfig> for SeedConfig {
             full_refresh,
             group,
             persist_docs,
-            description,
             materialized,
             // Adapter specific configs
             __warehouse_specific_config__: warehouse_specific_config,
@@ -581,7 +576,6 @@ impl DefaultTo<SeedConfig> for SeedConfig {
                 full_refresh,
                 group,
                 persist_docs,
-                description,
                 materialized,
             ]
         );

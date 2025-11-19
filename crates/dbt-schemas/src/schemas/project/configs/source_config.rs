@@ -136,8 +136,6 @@ pub struct ProjectSourceConfig {
         deserialize_with = "f64_or_string_f64"
     )]
     pub refresh_interval_minutes: Option<f64>,
-    #[serde(rename = "+description")]
-    pub description: Option<String>,
     #[serde(rename = "+max_staleness")]
     pub max_staleness: Option<String>,
 
@@ -268,7 +266,6 @@ pub struct SourceConfig {
     pub loaded_at_field: Option<String>,
     pub loaded_at_query: Option<String>,
     pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
-    pub description: Option<String>,
     // Adapter specific configs
     pub __warehouse_specific_config__: WarehouseSpecificNodeConfig,
 }
@@ -285,8 +282,8 @@ impl From<ProjectSourceConfig> for SourceConfig {
             loaded_at_field: config.loaded_at_field,
             loaded_at_query: config.loaded_at_query,
             static_analysis: config.static_analysis,
-            description: config.description,
             __warehouse_specific_config__: WarehouseSpecificNodeConfig {
+                description: None, // Only for Bigquery Models
                 adapter_properties: config.adapter_properties,
                 external_volume: config.external_volume,
                 base_location_root: config.base_location_root,
@@ -376,7 +373,6 @@ impl From<SourceConfig> for ProjectSourceConfig {
             loaded_at_field: config.loaded_at_field,
             loaded_at_query: config.loaded_at_query,
             static_analysis: config.static_analysis,
-            description: config.description,
             // Snowflake fields
             adapter_properties: config.__warehouse_specific_config__.adapter_properties,
             external_volume: config.__warehouse_specific_config__.external_volume,
@@ -481,7 +477,6 @@ impl DefaultTo<SourceConfig> for SourceConfig {
             loaded_at_field,
             loaded_at_query,
             static_analysis,
-            description,
             __warehouse_specific_config__: warehouse_specific_config,
         } = self;
 
@@ -506,7 +501,6 @@ impl DefaultTo<SourceConfig> for SourceConfig {
                 loaded_at_field,
                 loaded_at_query,
                 static_analysis,
-                description
             ]
         );
     }

@@ -113,6 +113,8 @@ pub struct ProjectModelConfig {
     pub databricks_compute: Option<String>,
     #[serde(rename = "+databricks_tags")]
     pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
+
+    // NOTE: This is only for BigQuery materialized views
     #[serde(rename = "+description")]
     pub description: Option<String>,
     #[serde(rename = "+dist")]
@@ -397,7 +399,6 @@ pub struct ModelConfig {
     pub sql_header: Option<String>,
     pub location: Option<String>,
     pub predicates: Option<Vec<String>>,
-    pub description: Option<String>,
     // Adapter specific configs
     pub __warehouse_specific_config__: WarehouseSpecificNodeConfig,
 }
@@ -444,8 +445,8 @@ impl From<ProjectModelConfig> for ModelConfig {
             table_format: config.table_format,
             tags: config.tags.into_inner(),
             unique_key: config.unique_key,
-            description: config.description,
             __warehouse_specific_config__: WarehouseSpecificNodeConfig {
+                description: config.description,
                 adapter_properties: config.adapter_properties,
                 external_volume: config.external_volume,
                 base_location_root: config.base_location_root,
@@ -536,6 +537,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             concurrent_batches: config.concurrent_batches,
             contract: config.contract,
             database: config.database,
+            description: config.__warehouse_specific_config__.description,
             docs: config.docs,
             enabled: config.enabled,
             event_time: config.event_time,
@@ -638,7 +640,6 @@ impl From<ModelConfig> for ProjectModelConfig {
             table_type: config.__warehouse_specific_config__.table_type,
             indexes: config.__warehouse_specific_config__.indexes,
             schedule: config.__warehouse_specific_config__.schedule,
-            description: config.description,
             primary_key: config.__warehouse_specific_config__.primary_key,
             category: config.__warehouse_specific_config__.category,
             __additional_properties__: BTreeMap::new(),
@@ -702,7 +703,6 @@ impl DefaultTo<ModelConfig> for ModelConfig {
             sql_header,
             location,
             predicates,
-            description,
         } = self;
 
         // Handle flattened configs
@@ -763,7 +763,6 @@ impl DefaultTo<ModelConfig> for ModelConfig {
                 sql_header,
                 location,
                 predicates,
-                description,
             ]
         );
     }
@@ -836,7 +835,6 @@ impl ModelConfig {
             && self.sql_header == other.sql_header
             && self.location == other.location
             && self.predicates == other.predicates
-            && self.description == other.description
             && self.__warehouse_specific_config__ == other.__warehouse_specific_config__
     }
 }

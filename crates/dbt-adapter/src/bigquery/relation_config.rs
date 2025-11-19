@@ -577,8 +577,7 @@ impl BigqueryMaterializedViewConfig for BigqueryMaterializedViewConfigFromDbtMod
     }
 
     fn description(&self) -> &str {
-        self.0
-            .common()
+        self.attr()
             .description
             .as_ref()
             .map(|s| s.as_ref())

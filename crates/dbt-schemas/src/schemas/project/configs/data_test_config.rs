@@ -159,8 +159,6 @@ pub struct ProjectDataTestConfig {
         deserialize_with = "f64_or_string_f64"
     )]
     pub refresh_interval_minutes: Option<f64>,
-    #[serde(rename = "+description")]
-    pub description: Option<String>,
     #[serde(rename = "+max_staleness")]
     pub max_staleness: Option<String>,
 
@@ -302,7 +300,6 @@ pub struct DataTestConfig {
     pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
     #[serde(rename = "where")]
     pub where_: Option<String>,
-    pub description: Option<String>,
     pub materialized: Option<DbtMaterialization>,
     // Adapter specific configs
     pub __warehouse_specific_config__: WarehouseSpecificNodeConfig,
@@ -328,10 +325,10 @@ impl From<ProjectDataTestConfig> for DataTestConfig {
             quoting: config.quoting,
             where_: config.where_,
             static_analysis: config.static_analysis,
-            description: config.description,
             materialized: Some(DbtMaterialization::Test),
             // Initialize adapter specific configs with values from flattened fields
             __warehouse_specific_config__: WarehouseSpecificNodeConfig {
+                description: None, // Not applicable for data tests
                 adapter_properties: config.adapter_properties,
                 external_volume: config.external_volume,
                 base_location_root: config.base_location_root,
@@ -429,7 +426,6 @@ impl From<DataTestConfig> for ProjectDataTestConfig {
             quoting: config.quoting,
             where_: config.where_,
             static_analysis: config.static_analysis,
-            description: config.description,
             partition_by: config.__warehouse_specific_config__.partition_by,
             // Snowflake fields
             adapter_properties: config.__warehouse_specific_config__.adapter_properties,
@@ -542,7 +538,6 @@ impl DefaultTo<DataTestConfig> for DataTestConfig {
             quoting,
             where_,
             static_analysis,
-            description,
             materialized,
             // Adapter specific configs
             __warehouse_specific_config__: warehouse_specific_config,
@@ -577,7 +572,6 @@ impl DefaultTo<DataTestConfig> for DataTestConfig {
                 group,
                 where_,
                 static_analysis,
-                description,
                 materialized,
             ]
         );

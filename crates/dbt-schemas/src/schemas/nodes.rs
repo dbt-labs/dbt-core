@@ -2350,6 +2350,7 @@ impl AdapterAttr {
             AdapterType::Postgres => AdapterAttr::default(),
             AdapterType::Bigquery => {
                 AdapterAttr::default().with_bigquery_attr(Some(Box::new(BigQueryAttr {
+                    description: config.description.clone(),
                     adapter_properties: config.adapter_properties.clone(),
                     external_volume: config.external_volume.clone(),
                     base_location_root: config.base_location_root.clone(),
@@ -2431,6 +2432,7 @@ impl AdapterAttr {
                         transient: config.transient,
                     })))
                     .with_bigquery_attr(Some(Box::new(BigQueryAttr {
+                        description: config.description.clone(),
                         adapter_properties: config.adapter_properties.clone(),
                         external_volume: config.external_volume.clone(),
                         base_location_root: config.base_location_root.clone(),
@@ -2548,6 +2550,7 @@ pub struct DatabricksAttr {
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct BigQueryAttr {
+    pub description: Option<String>,
     pub adapter_properties: Option<BTreeMap<String, YmlValue>>,
     pub external_volume: Option<String>,
     pub file_format: Option<String>,

@@ -130,8 +130,6 @@ pub struct ProjectUnitTestConfig {
         deserialize_with = "f64_or_string_f64"
     )]
     pub refresh_interval_minutes: Option<f64>,
-    #[serde(rename = "+description")]
-    pub description: Option<String>,
     #[serde(rename = "+max_staleness")]
     pub max_staleness: Option<String>,
 
@@ -256,7 +254,6 @@ pub struct UnitTestConfig {
     pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
     pub meta: Option<BTreeMap<String, YmlValue>>,
     pub tags: Option<StringOrArrayOfStrings>,
-    pub description: Option<String>,
     // Adapter specific configs
     pub __warehouse_specific_config__: WarehouseSpecificNodeConfig,
 }
@@ -268,8 +265,8 @@ impl From<ProjectUnitTestConfig> for UnitTestConfig {
             static_analysis: config.static_analysis,
             meta: config.meta,
             tags: config.tags,
-            description: config.description,
             __warehouse_specific_config__: WarehouseSpecificNodeConfig {
+                description: None, // Only for Bigquery Models
                 adapter_properties: config.adapter_properties,
                 external_volume: config.external_volume,
                 base_location_root: config.base_location_root,
@@ -353,7 +350,6 @@ impl From<UnitTestConfig> for ProjectUnitTestConfig {
             static_analysis: config.static_analysis,
             meta: config.meta,
             tags: config.tags,
-            description: config.description,
             // Snowflake fields
             adapter_properties: config.__warehouse_specific_config__.adapter_properties,
             external_volume: config.__warehouse_specific_config__.external_volume,
@@ -452,7 +448,6 @@ impl DefaultTo<UnitTestConfig> for UnitTestConfig {
             static_analysis,
             meta,
             tags,
-            description,
             __warehouse_specific_config__: warehouse_specific_config,
         } = self;
 
@@ -466,6 +461,6 @@ impl DefaultTo<UnitTestConfig> for UnitTestConfig {
         #[allow(unused, clippy::let_unit_value)]
         let tags = ();
 
-        default_to!(parent, [enabled, static_analysis, description]);
+        default_to!(parent, [enabled, static_analysis]);
     }
 }
