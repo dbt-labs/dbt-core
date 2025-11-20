@@ -288,8 +288,12 @@ def project(func):
         # TODO deprecations warnings fired from loading the project will lack
         # the project_id in the snowplow event.
 
-        # For dbt deps, use lenient var validation to allow missing vars
-        # For all other commands, use strict validation for helpful error messages
+        # Determine if vars should be required during project loading.
+        # Commands that don't need vars evaluated (like 'deps', 'clean')
+        # should use lenient mode (require_vars=False) to allow missing vars.
+        # Commands that validate or execute (like 'run', 'compile', 'build', 'debug') should use
+        # strict mode (require_vars=True) to show helpful "Required var X not found" errors.
+        # If adding more commands to lenient mode, update this condition.
         require_vars = flags.WHICH != "deps"
 
         project = load_project(

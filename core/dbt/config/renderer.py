@@ -116,8 +116,9 @@ class DbtProjectYamlRenderer(BaseRenderer):
         self.profile = profile
         self.cli_vars = cli_vars
 
-        # By default, require vars (strict mode) for proper error messages
-        # Only dbt deps explicitly passes require_vars=False for lenient loading
+        # By default, require vars (strict mode) for proper error messages.
+        # Commands that don't need vars (like 'deps') should explicitly pass
+        # require_vars=False for lenient loading.
         if profile:
             self.ctx_obj = TargetContext(
                 profile.to_target_dict(), cli_vars, require_vars=require_vars
