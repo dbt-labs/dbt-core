@@ -11,7 +11,7 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         &str, // version
     ),
     &str, // checksum
-); 95] = [
+); 100] = [
     (
         ("bigquery", "apple-darwin", "aarch64", "0.18.0+dbt0.0.20"),
         "22b9d3596c8cbcafec0394833d173ae3e4c3a409f74bf9c09e0a191e1286e17d",
@@ -23,6 +23,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
     (
         ("bigquery", "apple-darwin", "aarch64", "0.18.0+dbt0.0.22"),
         "f6ebd9d429807722aa2c42822a0e5dc957914f91705dabd1c18113ce0aa13af3",
+    ),
+    (
+        ("bigquery", "apple-darwin", "aarch64", "0.21.0+dbt0.21.2"),
+        "1e605796f25451099ff4717358fd4e8950e33aa8a68e11935ac20cd8f53c8fe9",
     ),
     (
         ("bigquery", "apple-darwin", "x86_64", "0.18.0+dbt0.0.20"),
@@ -37,6 +41,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "2939d31a809456e5362be24372e00808015a8c599ff0a8d121a3012752878bb7",
     ),
     (
+        ("bigquery", "apple-darwin", "x86_64", "0.21.0+dbt0.21.2"),
+        "6bbf74f9fd1ab8d0555d6031cbe77f7a7787cbe57f8e0bdc86aa1aad8d6751c2",
+    ),
+    (
         ("bigquery", "manylinux_2_17-linux-gnu", "aarch64", "0.18.0+dbt0.0.20"),
         "fe5bf4889d158e09dd18c35634f2d566903199f888d5f7a2f97e2dd5d424b177",
     ),
@@ -47,6 +55,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
     (
         ("bigquery", "manylinux_2_17-linux-gnu", "aarch64", "0.18.0+dbt0.0.22"),
         "bc0e9fc2c52681953f425a8ef154f6c9667feec16ae96be70fa8f743e17e6d73",
+    ),
+    (
+        ("bigquery", "manylinux_2_17-linux-gnu", "aarch64", "0.21.0+dbt0.21.2"),
+        "43ed25623625684e1e0d663f31e935893199b5cbbb1d8fc8ca3dd06fdfdddd5c",
     ),
     (
         ("bigquery", "manylinux_2_17-linux-gnu", "x86_64", "0.18.0+dbt0.0.20"),
@@ -61,6 +73,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "1ba38a1acec0cd3008fb0ec18264ed2a578dd437755f5ffccdc9a928e90999ab",
     ),
     (
+        ("bigquery", "manylinux_2_17-linux-gnu", "x86_64", "0.21.0+dbt0.21.2"),
+        "33e3aa9f9146899d0962538de52c8f90e908ad94d22da02dcb93b8e05cf9ac94",
+    ),
+    (
         ("bigquery", "pc-windows-msvc", "x86_64", "0.18.0+dbt0.0.20"),
         "8106664e2a15e2fa459b3f5f300885eb46b49614a50f134bc1af2a47c87979ea",
     ),
@@ -71,6 +87,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
     (
         ("bigquery", "pc-windows-msvc", "x86_64", "0.18.0+dbt0.0.22"),
         "e933574b81569b072ea52411b8ff6b039aed0dea15ae9838ef83fd1e741a9fd5",
+    ),
+    (
+        ("bigquery", "pc-windows-msvc", "x86_64", "0.21.0+dbt0.21.2"),
+        "f41bea58ae676ebf1ce7b73d556973dc42382051dd7d339a2054d16eb03608eb",
     ),
     (
         ("databricks", "apple-darwin", "aarch64", "0.18.0+dbt0.0.4"),
