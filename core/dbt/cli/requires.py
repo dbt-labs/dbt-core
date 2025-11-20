@@ -136,12 +136,16 @@ def setup_record_replay():
 
     recorder: Optional[Recorder] = None
     if rec_mode == RecorderMode.REPLAY:
-        previous_recording_path = os.environ.get("DBT_RECORDER_FILE_PATH")
+        previous_recording_path = os.environ.get(
+            "DBT_ENGINE_RECORDER_FILE_PATH"
+        ) or os.environ.get("DBT_RECORDER_FILE_PATH")
         recorder = Recorder(
             RecorderMode.REPLAY, types=rec_types, previous_recording_path=previous_recording_path
         )
     elif rec_mode == RecorderMode.DIFF:
-        previous_recording_path = os.environ.get("DBT_RECORDER_FILE_PATH")
+        previous_recording_path = os.environ.get(
+            "DBT_ENGINE_RECORDER_FILE_PATH"
+        ) or os.environ.get("DBT_RECORDER_FILE_PATH")
         # ensure types match the previous recording
         types = get_record_types_from_dict(previous_recording_path)
         recorder = Recorder(

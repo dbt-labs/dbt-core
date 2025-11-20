@@ -206,7 +206,7 @@ def load_raw_project(project_root: str, validate: bool = False) -> Dict[str, Any
     project_dict = _load_yaml(project_yaml_filepath, validate=validate)
 
     if validate:
-        from dbt.jsonschemas import jsonschema_validate, project_schema
+        from dbt.jsonschemas.jsonschemas import jsonschema_validate, project_schema
 
         jsonschema_validate(
             schema=project_schema(), json=project_dict, file_path=project_yaml_filepath
@@ -460,6 +460,7 @@ class PartialProject(RenderComponents):
         semantic_models: Dict[str, Any]
         saved_queries: Dict[str, Any]
         exposures: Dict[str, Any]
+        functions: Dict[str, Any]
         vars_value: VarProvider
         dbt_cloud: Dict[str, Any]
 
@@ -476,6 +477,7 @@ class PartialProject(RenderComponents):
         semantic_models = cfg.semantic_models
         saved_queries = cfg.saved_queries
         exposures = cfg.exposures
+        functions = cfg.functions
         if cfg.vars is None:
             vars_dict: Dict[str, Any] = {}
         else:
@@ -540,6 +542,7 @@ class PartialProject(RenderComponents):
             semantic_models=semantic_models,
             saved_queries=saved_queries,
             exposures=exposures,
+            functions=functions,
             vars=vars_value,
             config_version=cfg.config_version,
             unrendered=unrendered,
@@ -653,6 +656,7 @@ class Project:
     semantic_models: Dict[str, Any]
     saved_queries: Dict[str, Any]
     exposures: Dict[str, Any]
+    functions: Dict[str, Any]
     vars: VarProvider
     dbt_version: List[VersionSpecifier]
     packages: PackageConfig
@@ -742,6 +746,7 @@ class Project:
                 "semantic-models": self.semantic_models,
                 "saved-queries": self.saved_queries,
                 "exposures": self.exposures,
+                "functions": self.functions,
                 "vars": self.vars.to_dict(),
                 "require-dbt-version": [v.to_version_string() for v in self.dbt_version],
                 "restrict-access": self.restrict_access,

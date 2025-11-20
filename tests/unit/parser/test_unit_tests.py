@@ -5,11 +5,11 @@ from dbt.contracts.graph.nodes import NodeType, UnitTestDefinition
 from dbt.contracts.graph.unparsed import UnitTestOutputFixture
 from dbt.parser import SchemaParser
 from dbt.parser.unit_tests import UnitTestParser
+from dbt_common.events.event_catcher import EventCatcher
 from dbt_common.events.event_manager_client import add_callback_to_manager
 from dbt_common.events.types import SystemStdErr
 from tests.unit.parser.test_parser import SchemaParserTest, assertEqualNodes
 from tests.unit.utils import MockNode
-from tests.utils import EventCatcher
 
 UNIT_TEST_MODEL_NOT_FOUND_SOURCE = """
 unit_tests:

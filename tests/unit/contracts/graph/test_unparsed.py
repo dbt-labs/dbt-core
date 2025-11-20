@@ -933,6 +933,41 @@ class TestUnparsedMetric(ContractTestCase):
         tst["tags"] = [123]
         self.assert_fails_validation(tst)
 
+    def test_bad_metric_name_with_spaces(self):
+        tst = self.get_ok_dict()
+        tst["name"] = "metric name with spaces"
+        self.assert_fails_validation(tst)
+
+    def test_bad_metric_name_too_long(self):
+        tst = self.get_ok_dict()
+        tst["name"] = "a" * 251
+        self.assert_fails_validation(tst)
+
+    def test_bad_metric_name_does_not_start_with_letter(self):
+        tst = self.get_ok_dict()
+        tst["name"] = "123metric"
+        self.assert_fails_validation(tst)
+
+        tst["name"] = "_metric"
+        self.assert_fails_validation(tst)
+
+    def test_bad_metric_name_contains_special_characters(self):
+        tst = self.get_ok_dict()
+        tst["name"] = "metric!name"
+        self.assert_fails_validation(tst)
+
+        tst["name"] = "metric@name"
+        self.assert_fails_validation(tst)
+
+        tst["name"] = "metric#name"
+        self.assert_fails_validation(tst)
+
+        tst["name"] = "metric$name"
+        self.assert_fails_validation(tst)
+
+        tst["name"] = "metric-name"
+        self.assert_fails_validation(tst)
+
 
 class TestUnparsedVersion(ContractTestCase):
     ContractType = UnparsedVersion

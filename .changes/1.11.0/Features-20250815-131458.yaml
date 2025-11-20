@@ -1,6 +1,0 @@
-kind: Features
-body: Support Nested Key Traversal in dbt ls json output
-time: 2025-08-15T13:14:58.162067-05:00
-custom:
-    Author: trouze
-    Issue: "11919"

@@ -525,6 +525,7 @@ class ManifestLoader:
         self.check_for_microbatch_deprecations()
         self.check_forcing_batch_concurrency()
         self.check_microbatch_model_has_a_filtered_input()
+        self.check_function_default_arguments_ordering()
 
         return self.manifest
 
@@ -1167,6 +1168,10 @@ class ManifestLoader:
                 continue
             _process_refs(self.manifest, current_project, semantic_model, dependencies)
             self.update_semantic_model(semantic_model)
+        for function in self.manifest.functions.values():
+            if function.created_at < self.started_at:
+                continue
+            _process_refs(self.manifest, current_project, function, dependencies)
 
     # Takes references in 'metrics' array of nodes and exposures, finds the target
     # node, and updates 'depends_on.nodes' with the unique id
@@ -1545,6 +1550,17 @@ class ManifestLoader:
 
                     if not has_input_with_event_time_config:
                         fire_event(MicrobatchModelNoEventTimeInputs(model_name=node.name))
+
+    def check_function_default_arguments_ordering(self):
+        for function in self.manifest.functions.values():
+            found_default_value = False
+            for argument in function.arguments:
+                if not found_default_value and argument.default_value is not None:
+                    found_default_value = True
+                elif found_default_value and argument.default_value is None:
+                    raise dbt.exceptions.ParsingError(
+                        f"Non-defaulted argument '{argument.name}' of function '{function.name}' comes after a defaulted argument. Non-defaulted arguments cannot come after defaulted arguments. "
+                    )
 
     def write_perf_info(self, target_path: str):
         path = os.path.join(target_path, PERF_INFO_FILE_NAME)
@@ -1939,7 +1955,7 @@ def _process_metric_node(
 
             if target_metric is None:
                 raise dbt.exceptions.ParsingError(
-                    f"The metric `{input_metric.name}` does not exist but was referenced.",
+                    f"The metric `{input_metric.name}` does not exist but was referenced by metric `{metric.name}`.",
                     node=metric,
                 )
             elif isinstance(target_metric, Disabled):

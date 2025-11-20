@@ -39,7 +39,9 @@ class TestCLI:
                 # deprecated params are named "deprecated_x" and do not need to have
                 # a parallel name like "DBT_"
                 if param.envvar is not None and "deprecated_" not in param.name:
-                    assert "DBT_" + param.name.upper() == param.envvar
+                    assert ("DBT_" + param.name.upper() == param.envvar) or (
+                        "DBT_ENGINE_" + param.name.upper() == param.envvar
+                    )
             if type(command) is click.Group:
                 for command in command.commands.values():
                     run_test(command)

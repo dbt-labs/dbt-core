@@ -3,7 +3,7 @@ import typing as t
 
 import click
 from click import Context
-from click.parser import OptionParser, ParsingState
+from click.parser import _OptionParser, _ParsingState
 
 from dbt.cli.option_types import ChoiceTuple
 
@@ -33,8 +33,8 @@ class MultiOption(click.Option):
         else:
             assert isinstance(option_type, ChoiceTuple), msg
 
-    def add_to_parser(self, parser: OptionParser, ctx: Context):
-        def parser_process(value: str, state: ParsingState):
+    def add_to_parser(self, parser: _OptionParser, ctx: Context):
+        def parser_process(value: str, state: _ParsingState):
             # method to hook to the parser.process
             done = False
             value_list = str.split(value, " ")

@@ -1,6 +1,0 @@
-kind: Fixes
-body: Skip initial render of loaded_at_query when specified as source or table config
-time: 2025-09-11T17:16:48.843045-04:00
-custom:
-    Author: michelleark
-    Issue: '11973'

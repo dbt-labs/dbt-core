@@ -85,3 +85,9 @@ class FunctionType(StrEnum):
     Scalar = "scalar"
     Aggregate = "aggregate"
     Table = "table"
+
+
+class FunctionVolatility(StrEnum):
+    Deterministic = "deterministic"
+    Stable = "stable"
+    NonDeterministic = "non-deterministic"

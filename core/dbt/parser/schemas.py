@@ -139,7 +139,10 @@ def yaml_from_file(
                 failures=failures, file=source_file.path.original_file_path
             )
             if contents is not None:
-                from dbt.jsonschemas import jsonschema_validate, resources_schema
+                from dbt.jsonschemas.jsonschemas import (
+                    jsonschema_validate,
+                    resources_schema,
+                )
 
                 # Validate the yaml against the jsonschema to raise deprecation warnings
                 # for invalid fields.
@@ -1292,7 +1295,6 @@ class FunctionPatchParser(NodePatchParser[UnparsedFunctionUpdate]):
 
         node.arguments = patch.arguments
         node.returns = patch.returns
-        node.type = patch.type
 
     def _get_node_patch(self, block: TargetBlock[NodeTarget], refs: ParserRef) -> ParsedNodePatch:
         target = block.target
@@ -1316,7 +1318,6 @@ class FunctionPatchParser(NodePatchParser[UnparsedFunctionUpdate]):
             time_spine=None,
             arguments=target.arguments,
             returns=target.returns,
-            type=target.type,
         )
 
 

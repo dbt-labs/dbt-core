@@ -1,6 +1,0 @@
-kind: Fixes
-body: ensure consistent casing in column names while processing user unit tests
-time: 2025-06-24T15:20:47.589212-07:00
-custom:
-  Author: colin-rogers-dbt
-  Issue: "11770"

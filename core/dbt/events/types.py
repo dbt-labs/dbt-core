@@ -2071,7 +2071,7 @@ class LogFunctionResult(DynamicLevel):
             status = yellow(self.status.upper())
         else:
             info = "OK created"
-            status = green(self.status)
+            status = green(self.status.upper())
 
         msg = f"{info} {self.description}"
         return format_fancy_output_line(

@@ -25,7 +25,7 @@ from dbt.tests.util import (
     run_dbt_and_capture,
     write_file,
 )
-from tests.utils import EventCatcher
+from dbt_common.events.event_catcher import EventCatcher
 
 input_model_sql = """
 {{ config(materialized='table', event_time='event_time') }}

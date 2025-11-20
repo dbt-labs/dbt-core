@@ -17,9 +17,9 @@ from dbt.contracts.project import PackageConfig
 from dbt.events.types import UnusedResourceConfigPath
 from dbt.flags import set_from_args
 from dbt.tests.util import safe_set_invocation_context
+from dbt_common.events.event_catcher import EventCatcher
 from dbt_common.events.event_manager_client import add_callback_to_manager
 from tests.unit.config import BaseConfigTest, temp_cd
-from tests.utils import EventCatcher
 
 
 class TestRuntimeConfig:

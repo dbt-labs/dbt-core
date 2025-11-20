@@ -261,6 +261,7 @@ class Project(dbtClassMixin):
     semantic_models: Dict[str, Any] = field(default_factory=dict)
     saved_queries: Dict[str, Any] = field(default_factory=dict)
     exposures: Dict[str, Any] = field(default_factory=dict)
+    functions: Dict[str, Any] = field(default_factory=dict)
     vars: Optional[Dict[str, Any]] = field(
         default=None,
         metadata=dict(

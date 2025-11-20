@@ -88,6 +88,8 @@ class RenderedConfig(ConfigSource):
             model_configs = self.project.exposures
         elif resource_type == NodeType.Unit:
             model_configs = self.project.unit_tests
+        elif resource_type == NodeType.Function:
+            model_configs = self.project.functions
         else:
             model_configs = self.project.models
         return model_configs

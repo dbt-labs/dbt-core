@@ -14,8 +14,9 @@ SELECT SUM(values) * 2
 double_total_yml = """
 functions:
   - name: double_total
-    type: aggregate
     description: Sums the sequence of numbers and then doubles the result
+    config:
+      type: aggregate
     arguments:
       - name: values
         data_type: float
@@ -41,10 +42,10 @@ class TestBasicSQLUDAF(BasicUDAFSetup):
         assert "function.test.double_total" in manifest.functions
         function_node = manifest.functions["function.test.double_total"]
         assert isinstance(function_node, FunctionNode)
-        assert function_node.type == FunctionType.Aggregate
         assert (
             function_node.description == "Sums the sequence of numbers and then doubles the result"
         )
+        assert function_node.config.type == FunctionType.Aggregate
         assert len(function_node.arguments) == 1
         argument = function_node.arguments[0]
         assert argument.name == "values"

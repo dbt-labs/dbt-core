@@ -19,9 +19,10 @@ from dbt.deprecations import (
 )
 from dbt.events.types import GenericJSONSchemaValidationDeprecation
 from dbt.flags import set_from_args
-from dbt.jsonschemas import project_schema
+from dbt.jsonschemas.jsonschemas import project_schema
 from dbt.node_types import NodeType
 from dbt.tests.util import safe_set_invocation_context
+from dbt_common.events.event_catcher import EventCatcher
 from dbt_common.events.event_manager_client import get_event_manager
 from dbt_common.events.types import Note
 from dbt_common.exceptions import DbtRuntimeError
@@ -32,7 +33,6 @@ from tests.unit.config import (
     project_from_config_norender,
     project_from_config_rendered,
 )
-from tests.utils import EventCatcher
 
 
 class TestProjectMethods:
@@ -51,7 +51,7 @@ class TestProjectMethods:
     def test__str__(self, project: Project):
         assert (
             str(project)
-            == "{'name': 'test_project', 'version': 1.0, 'project-root': 'doesnt/actually/exist', 'profile': 'test_profile', 'model-paths': ['models'], 'macro-paths': ['macros'], 'seed-paths': ['seeds'], 'test-paths': ['tests'], 'analysis-paths': ['analyses'], 'docs-paths': ['docs'], 'asset-paths': ['assets'], 'target-path': 'target', 'snapshot-paths': ['snapshots'], 'clean-targets': ['target'], 'log-path': 'path/to/project/logs', 'quoting': {}, 'models': {}, 'on-run-start': [], 'on-run-end': [], 'dispatch': [{'macro_namespace': 'dbt_utils', 'search_order': ['test_project', 'dbt_utils']}], 'seeds': {}, 'snapshots': {}, 'sources': {}, 'data_tests': {}, 'unit_tests': {}, 'metrics': {}, 'semantic-models': {}, 'saved-queries': {}, 'exposures': {}, 'vars': {}, 'require-dbt-version': ['=0.0.0'], 'restrict-access': False, 'dbt-cloud': {}, 'flags': {}, 'query-comment': {'comment': \"\\n{%- set comment_dict = {} -%}\\n{%- do comment_dict.update(\\n    app='dbt',\\n    dbt_version=dbt_version,\\n    profile_name=target.get('profile_name'),\\n    target_name=target.get('target_name'),\\n) -%}\\n{%- if node is not none -%}\\n  {%- do comment_dict.update(\\n    node_id=node.unique_id,\\n  ) -%}\\n{% else %}\\n  {# in the node context, the connection name is the node_id #}\\n  {%- do comment_dict.update(connection_name=connection_name) -%}\\n{%- endif -%}\\n{{ return(tojson(comment_dict)) }}\\n\", 'append': False, 'job-label': False}, 'packages': []}"
+            == "{'name': 'test_project', 'version': 1.0, 'project-root': 'doesnt/actually/exist', 'profile': 'test_profile', 'model-paths': ['models'], 'macro-paths': ['macros'], 'seed-paths': ['seeds'], 'test-paths': ['tests'], 'analysis-paths': ['analyses'], 'docs-paths': ['docs'], 'asset-paths': ['assets'], 'target-path': 'target', 'snapshot-paths': ['snapshots'], 'clean-targets': ['target'], 'log-path': 'path/to/project/logs', 'quoting': {}, 'models': {}, 'on-run-start': [], 'on-run-end': [], 'dispatch': [{'macro_namespace': 'dbt_utils', 'search_order': ['test_project', 'dbt_utils']}], 'seeds': {}, 'snapshots': {}, 'sources': {}, 'data_tests': {}, 'unit_tests': {}, 'metrics': {}, 'semantic-models': {}, 'saved-queries': {}, 'exposures': {}, 'functions': {}, 'vars': {}, 'require-dbt-version': ['=0.0.0'], 'restrict-access': False, 'dbt-cloud': {}, 'flags': {}, 'query-comment': {'comment': \"\\n{%- set comment_dict = {} -%}\\n{%- do comment_dict.update(\\n    app='dbt',\\n    dbt_version=dbt_version,\\n    profile_name=target.get('profile_name'),\\n    target_name=target.get('target_name'),\\n) -%}\\n{%- if node is not none -%}\\n  {%- do comment_dict.update(\\n    node_id=node.unique_id,\\n  ) -%}\\n{% else %}\\n  {# in the node context, the connection name is the node_id #}\\n  {%- do comment_dict.update(connection_name=connection_name) -%}\\n{%- endif -%}\\n{{ return(tojson(comment_dict)) }}\\n\", 'append': False, 'job-label': False}, 'packages': []}"
         )
 
     def test_get_selector(self, project: Project):
@@ -624,7 +624,7 @@ class TestDeprecations:
 
     @mock.patch.dict(os.environ, {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": "True"})
     def test_jsonschema_validate(self) -> None:
-        from dbt.jsonschemas import jsonschema_validate
+        from dbt.jsonschemas.jsonschemas import jsonschema_validate
 
         project_dict: Dict[str, Any] = {}
 

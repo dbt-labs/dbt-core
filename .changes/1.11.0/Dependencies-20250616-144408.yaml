@@ -1,6 +1,0 @@
-kind: Dependencies
-body: Bump minimum jsonschema version to `4.19.1`
-time: 2025-06-16T14:44:08.512306-05:00
-custom:
-  Author: QMalcolm
-  Issue: "11740"

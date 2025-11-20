@@ -1,6 +1,0 @@
-kind: Fixes
-body: Make `GenericJSONSchemaValidationDeprecation` a "preview" deprecation
-time: 2025-07-10T17:01:48.903582-05:00
-custom:
-  Author: QMalcolm
-  Issue: "11814"

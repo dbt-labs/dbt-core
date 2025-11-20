@@ -100,6 +100,18 @@ models:
 """
 
 
+models__model_freshness_schema_yml_build_period_has_0_count = """
+models:
+  - name: model_a
+    description: Model with only model freshness defined
+    config:
+      freshness:
+        build_after:
+          period: day
+          count: 0
+"""
+
+
 models__model_freshness_schema_yml_build_count_requires_period = """
 models:
   - name: model_a
@@ -157,6 +169,18 @@ class TestModelFreshnessConfigParseBuildPeriodRequiresCount:
             "`freshness.build_after` must have a value for `count` if a `period` is provided"
         )
         assert expected_msg in str(excinfo.value)
+
+
+class TestModelFreshnessConfigParseBuildPeriodHas0Count:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": models__model_freshness_schema_yml_build_period_has_0_count,
+            "model_a.sql": models__no_freshness_sql,
+        }
+
+    def test_model_freshness_configs(self, project):
+        run_dbt(["parse"])
 
 
 class TestModelFreshnessConfigParseBuildCountRequiresPeriod:

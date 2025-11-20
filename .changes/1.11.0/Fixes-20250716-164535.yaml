@@ -1,6 +1,0 @@
-kind: Fixes
-body: Propagate config.meta and config.tags to top-level on source nodes
-time: 2025-07-16T16:45:35.683199-04:00
-custom:
-    Author: michelleark
-    Issue: "11839"
