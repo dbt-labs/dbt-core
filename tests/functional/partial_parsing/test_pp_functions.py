@@ -3,6 +3,7 @@ import pytest
 from dbt.artifacts.resources import FunctionArgument, FunctionReturns
 from dbt.contracts.graph.manifest import Manifest
 from dbt.tests.util import run_dbt, write_file
+from dbt_common.events.event_catcher import EventCatcher
 from dbt_common.events.types import Note
 from tests.functional.partial_parsing.fixtures import (
     my_func_sql,
@@ -10,7 +11,6 @@ from tests.functional.partial_parsing.fixtures import (
     updated_my_func_sql,
     updated_my_func_yml,
 )
-from tests.utils import EventCatcher
 
 
 class TestPartialParsingFunctions:
