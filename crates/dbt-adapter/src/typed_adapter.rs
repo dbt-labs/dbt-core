@@ -1,15 +1,16 @@
 use crate::column::{Column, ColumnBuilder};
 use crate::errors::{AdapterError, AdapterErrorKind};
 use crate::funcs::{execute_macro, none_value};
+use crate::information_schema::InformationSchema;
 use crate::metadata::CatalogAndSchema;
-use crate::python;
 use crate::query_ctx::query_ctx_from_state;
-use crate::record_batch_utils::get_column_values;
+use crate::record_batch_utils::{extract_first_value_as_i64, get_column_values};
 use crate::relation_object::RelationObject;
 use crate::response::{AdapterResponse, ResultObject};
 use crate::snapshots::SnapshotStrategy;
 use crate::sql_engine::{Options as ExecuteOptions, SqlEngine, execute_query_with_retry};
 use crate::{AdapterResult, AdapterType, AdapterTyping};
+use crate::{execute_macro_wrapper_with_package, python};
 
 use adbc_core::options::OptionValue;
 use arrow::array::{RecordBatch, StringArray, TimestampMillisecondArray};
@@ -299,28 +300,58 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         model: &Value,
         compiled_code: &str,
     ) -> AdapterResult<AdapterResponse> {
-        let typed_adapter = self.as_typed_base_adapter();
-        match self.adapter_type() {
-            AdapterType::Snowflake => python::snowflake::submit_python_job(
-                typed_adapter,
-                ctx,
-                conn,
-                state,
-                model,
-                compiled_code,
-            ),
+        let code = match self.adapter_type() {
+            AdapterType::Snowflake => {
+                python::snowflake::finalize_python_code(state, model, compiled_code)
+            }
             // TODO: add support for BigQuery and Databricks
             // https://docs.getdbt.com/docs/core/connect-data-platform/bigquery-setup#running-python-models-on-bigquery-dataframes
             // https://docs.getdbt.com/reference/resource-configs/bigquery-configs#python-model-configuration
             //
             // https://docs.getdbt.com/reference/resource-configs/databricks-configs
-            _ => Err(AdapterError::new(
+            AdapterType::Bigquery
+            | AdapterType::Databricks
+            | AdapterType::Redshift
+            | AdapterType::Postgres
+            | AdapterType::Salesforce => Err(AdapterError::new(
                 AdapterErrorKind::Internal,
                 format!(
                     "Python models are not supported for {} adapter",
                     self.adapter_type()
                 ),
             )),
+        }?;
+
+        // TODO: build options if required for some adapters
+        // For example, `notebook_template_id` for `bigframes` submission method for BigQuery
+
+        if let Some(replay_adapter) = self.as_replay() {
+            // In DBT Replay mode, route through the replay adapter to consume recorded execute calls.
+            let (response, _) = replay_adapter.replay_execute(
+                Some(state),
+                conn,
+                ctx,
+                &code,
+                false,
+                false,
+                None,
+                None,
+            )?;
+            Ok(response)
+        } else {
+            let (response, _) = self.execute_inner(
+                self.adapter_type().into(),
+                self.engine().clone(),
+                Some(state),
+                conn,
+                ctx,
+                &code,
+                false,
+                false,
+                None,
+                None,
+            )?;
+            Ok(response)
         }
     }
 
@@ -452,6 +483,45 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         let args = vec![RelationObject::new(relation).as_value()];
         execute_macro(state, &args, "drop_relation")?;
         Ok(none_value())
+    }
+
+    fn check_schema_exists(
+        &self,
+        state: &State,
+        database: &str,
+        schema: &str,
+    ) -> Result<Value, minijinja::Error> {
+        // Replay fast-path: consult trace-derived cache if available
+        if self.as_replay().is_some() {
+            // TODO: move this logic to the [ReplayAdapter]
+            if let Some(exists) = self.schema_exists_from_trace(database, schema) {
+                return Ok(Value::from(exists));
+            }
+        }
+
+        let information_schema = InformationSchema {
+            database: Some(database.to_string()),
+            schema: "INFORMATION_SCHEMA".to_string(),
+            identifier: None,
+            location: None,
+        };
+
+        let (package_name, macro_name) = self.check_schema_exists_macro(state, &[])?;
+        let batch = execute_macro_wrapper_with_package(
+            state,
+            &[information_schema.as_value(), Value::from(schema)],
+            &macro_name,
+            &package_name,
+        )?;
+
+        match extract_first_value_as_i64(&batch) {
+            Some(0) => Ok(Value::from(false)),
+            Some(1) => Ok(Value::from(true)),
+            _ => Err(minijinja::Error::new(
+                minijinja::ErrorKind::ReturnValue,
+                "invalid return value",
+            )),
+        }
     }
 
     /// Get the full macro name for check_schema_exists

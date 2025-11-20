@@ -1,19 +1,13 @@
-use crate::{AdapterResponse, TypedBaseAdapter};
-
 use dbt_common::{AdapterError, AdapterErrorKind, AdapterResult};
-use dbt_xdbc::{Connection, QueryCtx};
 use minijinja::{State, Value};
 
 const DEFAULT_SNOWFLAKE_PYTHON_PACKAGE: &str = "snowflake-snowpark-python";
 
-pub fn submit_python_job(
-    adapter: &dyn TypedBaseAdapter,
-    ctx: &QueryCtx,
-    conn: &'_ mut dyn Connection,
+pub fn finalize_python_code(
     state: &State,
     model: &Value,
     compiled_code: &str,
-) -> AdapterResult<AdapterResponse> {
+) -> AdapterResult<String> {
     // Extract config from model
     let config = model
         .get_attr("config")
@@ -203,33 +197,5 @@ DROP PROCEDURE IF EXISTS {}();
         )
     };
 
-    // Execute the Python stored procedure
-    if let Some(replay_adapter) = adapter.as_replay() {
-        // In DBT Replay mode, route through the replay adapter to consume recorded execute calls.
-        let (response, _) = replay_adapter.replay_execute(
-            Some(state),
-            conn,
-            ctx,
-            &python_stored_procedure,
-            false, // auto_begin
-            false, // fetch
-            None,
-            None,
-        )?;
-        Ok(response)
-    } else {
-        let (response, _) = adapter.execute_inner(
-            adapter.adapter_type().into(),
-            adapter.engine().clone(),
-            Some(state),
-            conn,
-            ctx,
-            &python_stored_procedure,
-            false, // auto_begin
-            false, // fetch
-            None,
-            None,
-        )?;
-        Ok(response)
-    }
+    Ok(python_stored_procedure)
 }

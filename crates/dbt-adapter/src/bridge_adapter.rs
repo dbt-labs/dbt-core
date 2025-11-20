@@ -4,13 +4,10 @@ use crate::cast_util::downcast_value_to_dyn_base_relation;
 use crate::column::Column;
 use crate::funcs::{
     dispatch_adapter_calls, dispatch_adapter_get_value, execute_macro, execute_macro_wrapper,
-    none_value,
+    format_sql_with_bindings, none_value,
 };
-use crate::funcs::{execute_macro_wrapper_with_package, format_sql_with_bindings};
-use crate::information_schema::InformationSchema;
 use crate::metadata::*;
 use crate::query_ctx::{node_id_from_state, query_ctx_from_state};
-use crate::record_batch_utils::extract_first_value_as_i64;
 use crate::relation_object::RelationObject;
 use crate::render_constraint::render_model_constraint;
 use crate::snapshots::SnapshotStrategy;
@@ -39,7 +36,7 @@ use minijinja::dispatch_object::DispatchObject;
 use minijinja::listener::RenderingEventListener;
 use minijinja::value::{Kwargs, Object};
 use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State};
-use minijinja::{Value, invalid_argument, invalid_argument_inner, jinja_err};
+use minijinja::{Value, invalid_argument, invalid_argument_inner};
 use tracing;
 use tracy_client::span;
 
@@ -837,38 +834,8 @@ impl BaseAdapter for BridgeAdapter {
         database: &str,
         schema: &str,
     ) -> Result<Value, MinijinjaError> {
-        // Replay fast-path: consult trace-derived cache if available
-        if self.typed_adapter.as_replay().is_some() {
-            // TODO: move this logic to the [ReplayAdapter]
-            if let Some(exists) = self
-                .typed_adapter
-                .schema_exists_from_trace(database, schema)
-            {
-                return Ok(Value::from(exists));
-            }
-        }
-
-        let information_schema = InformationSchema {
-            database: Some(database.to_string()),
-            schema: "INFORMATION_SCHEMA".to_string(),
-            identifier: None,
-            location: None,
-        };
-
-        let (package_name, macro_name) =
-            self.typed_adapter.check_schema_exists_macro(state, &[])?;
-        let batch: Arc<arrow::array::RecordBatch> = execute_macro_wrapper_with_package(
-            state,
-            &[information_schema.as_value(), Value::from(schema)],
-            &macro_name,
-            &package_name,
-        )?;
-
-        match extract_first_value_as_i64(&batch) {
-            Some(0) => Ok(Value::from(false)),
-            Some(1) => Ok(Value::from(true)),
-            _ => jinja_err!(MinijinjaErrorKind::ReturnValue, "invalid return value"),
-        }
+        self.typed_adapter
+            .check_schema_exists(state, database, schema)
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
