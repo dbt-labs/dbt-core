@@ -20,7 +20,7 @@ use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::manifest::postgres::PostgresIndex;
 use crate::schemas::manifest::{BigqueryClusterConfig, PartitionConfig};
 use crate::schemas::project::DefaultTo;
-use crate::schemas::project::IterChildren;
+use crate::schemas::project::TypedRecursiveConfig;
 use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
 use crate::schemas::project::configs::common::default_column_types;
 use crate::schemas::project::configs::common::default_hooks;
@@ -262,7 +262,11 @@ pub struct ProjectSeedConfig {
     pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectSeedConfig>>,
 }
 
-impl IterChildren<ProjectSeedConfig> for ProjectSeedConfig {
+impl TypedRecursiveConfig for ProjectSeedConfig {
+    fn type_name() -> &'static str {
+        "seed"
+    }
+
     fn iter_children(&self) -> Iter<'_, String, ShouldBe<Self>> {
         self.__additional_properties__.iter()
     }

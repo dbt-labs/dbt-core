@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 type YmlValue = dbt_serde_yaml::Value;
 
 use crate::schemas::common::DocsConfig;
-use crate::schemas::project::{DefaultTo, IterChildren};
+use crate::schemas::project::{DefaultTo, TypedRecursiveConfig};
 use crate::schemas::serde::{StringOrArrayOfStrings, bool_or_string_bool};
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_serde_yaml::ShouldBe;
@@ -45,7 +45,11 @@ impl Default for ProjectAnalysisConfig {
     }
 }
 
-impl IterChildren<ProjectAnalysisConfig> for ProjectAnalysisConfig {
+impl TypedRecursiveConfig for ProjectAnalysisConfig {
+    fn type_name() -> &'static str {
+        "analysis"
+    }
+
     fn iter_children(&'_ self) -> Iter<'_, String, ShouldBe<Self>> {
         self.__additional_properties__.iter()
     }

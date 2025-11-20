@@ -14,7 +14,7 @@ use crate::{
             BigqueryClusterConfig, GrantAccessToTarget, PartitionConfig, postgres::PostgresIndex,
         },
         project::{
-            DefaultTo, IterChildren,
+            DefaultTo, TypedRecursiveConfig,
             configs::common::{WarehouseSpecificNodeConfig, default_meta_and_tags},
         },
         serde::{
@@ -240,7 +240,11 @@ pub struct ProjectUnitTestConfig {
     pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectUnitTestConfig>>,
 }
 
-impl IterChildren<ProjectUnitTestConfig> for ProjectUnitTestConfig {
+impl TypedRecursiveConfig for ProjectUnitTestConfig {
+    fn type_name() -> &'static str {
+        "unit_test"
+    }
+
     fn iter_children(&self) -> Iter<'_, String, ShouldBe<Self>> {
         self.__additional_properties__.iter()
     }

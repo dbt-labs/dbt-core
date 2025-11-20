@@ -1,4 +1,4 @@
-use crate::schemas::project::IterChildren;
+use crate::schemas::project::TypedRecursiveConfig;
 use dbt_serde_yaml::{JsonSchema, ShouldBe};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
@@ -28,7 +28,11 @@ pub struct ProjectExposureConfig {
     pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectExposureConfig>>,
 }
 
-impl IterChildren<ProjectExposureConfig> for ProjectExposureConfig {
+impl TypedRecursiveConfig for ProjectExposureConfig {
+    fn type_name() -> &'static str {
+        "exposure"
+    }
+
     fn iter_children(&self) -> Iter<'_, String, ShouldBe<Self>> {
         self.__additional_properties__.iter()
     }

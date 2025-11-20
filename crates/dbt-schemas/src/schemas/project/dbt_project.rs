@@ -281,8 +281,13 @@ macro_rules! default_to {
     };
 }
 
-pub trait IterChildren<T> {
-    fn iter_children(&self) -> Iter<'_, String, ShouldBe<T>>;
+/// Yaml configs that can contain nested child configs of the same type.
+pub trait TypedRecursiveConfig: Clone {
+    /// Returns the type name of the config, e.g., "model", "source", etc.
+    fn type_name() -> &'static str;
+
+    /// Returns an iterator over the child configs.
+    fn iter_children(&self) -> Iter<'_, String, ShouldBe<Self>>;
 }
 
 #[cfg(test)]

@@ -32,7 +32,7 @@ use crate::schemas::project::configs::common::default_meta_and_tags;
 use crate::schemas::project::configs::common::default_quoting;
 use crate::schemas::project::configs::common::default_to_grants;
 use crate::schemas::project::dbt_project::DefaultTo;
-use crate::schemas::project::dbt_project::IterChildren;
+use crate::schemas::project::dbt_project::TypedRecursiveConfig;
 use crate::schemas::properties::ModelFreshness;
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::{
@@ -345,7 +345,11 @@ pub enum DataLakeObjectCategory {
     Other,
 }
 
-impl IterChildren<ProjectModelConfig> for ProjectModelConfig {
+impl TypedRecursiveConfig for ProjectModelConfig {
+    fn type_name() -> &'static str {
+        "model"
+    }
+
     fn iter_children(&self) -> Iter<'_, String, ShouldBe<Self>> {
         self.__additional_properties__.iter()
     }

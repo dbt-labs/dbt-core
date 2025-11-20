@@ -23,7 +23,7 @@ use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::manifest::postgres::PostgresIndex;
 use crate::schemas::manifest::{BigqueryClusterConfig, PartitionConfig};
 use crate::schemas::project::DefaultTo;
-use crate::schemas::project::IterChildren;
+use crate::schemas::project::TypedRecursiveConfig;
 use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
 use crate::schemas::project::configs::common::default_hooks;
 use crate::schemas::project::configs::common::default_meta_and_tags;
@@ -302,7 +302,11 @@ pub struct ProjectSnapshotConfig {
     pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectSnapshotConfig>>,
 }
 
-impl IterChildren<ProjectSnapshotConfig> for ProjectSnapshotConfig {
+impl TypedRecursiveConfig for ProjectSnapshotConfig {
+    fn type_name() -> &'static str {
+        "snapshot"
+    }
+
     fn iter_children(&self) -> Iter<'_, String, ShouldBe<Self>> {
         self.__additional_properties__.iter()
     }

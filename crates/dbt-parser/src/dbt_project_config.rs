@@ -15,9 +15,9 @@ use dbt_schemas::schemas::{
 };
 use dbt_schemas::schemas::{
     project::{
-        AnalysesConfig, DataTestConfig, DefaultTo, ExposureConfig, FunctionConfig, IterChildren,
-        MetricConfig, ModelConfig, SavedQueryConfig, SeedConfig, SemanticModelConfig,
-        SnapshotConfig, SourceConfig, UnitTestConfig,
+        AnalysesConfig, DataTestConfig, DefaultTo, ExposureConfig, FunctionConfig, MetricConfig,
+        ModelConfig, SavedQueryConfig, SeedConfig, SemanticModelConfig, SnapshotConfig,
+        SourceConfig, TypedRecursiveConfig, UnitTestConfig,
     },
     serde::yaml_to_fs_error,
 };
@@ -51,7 +51,7 @@ pub struct DbtProjectConfig<T: DefaultTo<T>> {
 
 impl<T: DefaultTo<T>> DbtProjectConfig<T> {
     /// Create a new [GlobalProjectConfig] from a default configuration and the root dbt_project.yml [DbtProjectConfigs]
-    pub fn try_new<S: Into<T> + IterChildren<S> + Clone>(
+    pub fn try_new<S: Into<T> + TypedRecursiveConfig>(
         io: &IoArgs,
         dbt_config: &T,
         configs: &S,
@@ -107,7 +107,7 @@ impl<T: DefaultTo<T>> DbtProjectConfig<T> {
 }
 
 /// Recursively build the [DbtProjectConfig] from a parent and child configuration
-pub fn recur_build_dbt_project_config<T: DefaultTo<T>, S: Into<T> + IterChildren<S> + Clone>(
+pub fn recur_build_dbt_project_config<T: DefaultTo<T>, S: Into<T> + TypedRecursiveConfig>(
     io: &IoArgs,
     parent_config: &T,
     child: &S,
@@ -136,7 +136,14 @@ pub fn recur_build_dbt_project_config<T: DefaultTo<T>, S: Into<T> + IterChildren
                     } else {
                         None
                     };
-                    let fs_err = yaml_to_fs_error(err, filename);
+                    let fs_err = yaml_to_fs_error(err, filename).with_context(format!(
+                        "Invalid {} definition `{}`: {}",
+                        S::type_name(),
+                        key_path,
+                        maybe_child_config_variant
+                            .as_err_msg()
+                            .expect("Error message always present on ShouldBe::ButIsnt variant")
+                    ));
                     emit_strict_parse_error(&fs_err, dependency_package_name, io);
                 }
                 // Otherwise, the error has already been processed, so we skip this child
@@ -329,7 +336,7 @@ pub fn build_root_project_configs(
 }
 
 /// generate the project config that will be inherited throughout the project
-pub fn init_project_config<T: DefaultTo<T>, S: Into<T> + IterChildren<S> + Clone>(
+pub fn init_project_config<T: DefaultTo<T>, S: TypedRecursiveConfig + Into<T>>(
     io_args: &IoArgs,
     dbt_project_configs: &Option<S>,
     default_config: T,

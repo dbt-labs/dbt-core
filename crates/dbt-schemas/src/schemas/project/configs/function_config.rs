@@ -19,7 +19,7 @@ use crate::schemas::project::configs::common::{
     default_meta_and_tags, default_quoting, default_to_grants,
 };
 use crate::schemas::project::dbt_project::DefaultTo;
-use crate::schemas::project::dbt_project::IterChildren;
+use crate::schemas::project::dbt_project::TypedRecursiveConfig;
 use crate::schemas::properties::{FunctionKind, Volatility};
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::{bool_or_string_bool, default_type};
@@ -140,7 +140,11 @@ impl DefaultTo<ProjectFunctionConfig> for ProjectFunctionConfig {
     }
 }
 
-impl IterChildren<ProjectFunctionConfig> for ProjectFunctionConfig {
+impl TypedRecursiveConfig for ProjectFunctionConfig {
+    fn type_name() -> &'static str {
+        "function"
+    }
+
     fn iter_children(&self) -> Iter<'_, String, ShouldBe<Self>> {
         self.__additional_properties__.iter()
     }

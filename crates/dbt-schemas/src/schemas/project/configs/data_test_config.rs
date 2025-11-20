@@ -17,7 +17,7 @@ use crate::schemas::manifest::{BigqueryClusterConfig, PartitionConfig};
 use crate::schemas::project::configs::common::{
     WarehouseSpecificNodeConfig, default_meta_and_tags, default_quoting,
 };
-use crate::schemas::project::{DefaultTo, IterChildren};
+use crate::schemas::project::{DefaultTo, TypedRecursiveConfig};
 use crate::schemas::serde::{
     StringOrArrayOfStrings, bool_or_string_bool, f64_or_string_f64, u64_or_string_u64,
 };
@@ -269,7 +269,11 @@ pub struct ProjectDataTestConfig {
     pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectDataTestConfig>>,
 }
 
-impl IterChildren<ProjectDataTestConfig> for ProjectDataTestConfig {
+impl TypedRecursiveConfig for ProjectDataTestConfig {
+    fn type_name() -> &'static str {
+        "data_test"
+    }
+
     fn iter_children(&self) -> Iter<'_, String, ShouldBe<Self>> {
         self.__additional_properties__.iter()
     }

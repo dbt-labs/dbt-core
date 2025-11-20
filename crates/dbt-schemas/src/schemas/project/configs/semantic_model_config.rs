@@ -10,7 +10,7 @@ type YmlValue = dbt_serde_yaml::Value;
 use crate::{
     default_to,
     schemas::{
-        project::{DefaultTo, IterChildren, configs::common::default_meta_and_tags},
+        project::{DefaultTo, TypedRecursiveConfig, configs::common::default_meta_and_tags},
         serde::StringOrArrayOfStrings,
     },
 };
@@ -30,7 +30,11 @@ pub struct ProjectSemanticModelConfig {
     pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectSemanticModelConfig>>,
 }
 
-impl IterChildren<ProjectSemanticModelConfig> for ProjectSemanticModelConfig {
+impl TypedRecursiveConfig for ProjectSemanticModelConfig {
+    fn type_name() -> &'static str {
+        "semantic_model"
+    }
+
     fn iter_children(&self) -> Iter<'_, String, ShouldBe<Self>> {
         self.__additional_properties__.iter()
     }

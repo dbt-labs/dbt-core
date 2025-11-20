@@ -150,8 +150,8 @@ pub mod schemas {
         pub use configs::source_config::{ProjectSourceConfig, SourceConfig};
         pub use configs::unit_test_config::{ProjectUnitTestConfig, UnitTestConfig};
         pub use dbt_project::{
-            DbtProject, DbtProjectNameOnly, DbtProjectSimplified, DefaultTo, IterChildren,
-            ProjectDbtCloudConfig, QueryComment,
+            DbtProject, DbtProjectNameOnly, DbtProjectSimplified, DefaultTo, ProjectDbtCloudConfig,
+            QueryComment, TypedRecursiveConfig,
         };
     }
 
