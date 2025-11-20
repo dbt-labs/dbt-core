@@ -992,6 +992,12 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
         _args: &[Value],
     ) -> Result<Value, MinijinjaError>;
 
+    fn get_column_tags_from_model(
+        &self,
+        _state: &State,
+        _node: &dyn InternalDbtNodeAttributes,
+    ) -> Result<Value, MinijinjaError>;
+
     /// clean_sql
     fn clean_sql(&self, _args: &[Value]) -> Result<Value, MinijinjaError>;
 

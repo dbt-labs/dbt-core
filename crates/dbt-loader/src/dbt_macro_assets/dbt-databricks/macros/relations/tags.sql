@@ -43,3 +43,32 @@
     {%- endfor %}
   )
 {%- endmacro -%}
+
+{% macro apply_column_tags(relation, column_tags) -%}
+  {%- if column_tags and relation.is_hive_metastore() -%}
+    {{ exceptions.raise_compiler_error("Column tags are only supported for Unity Catalog") }}
+  {%- endif -%}
+  {%- if column_tags and column_tags.tags %}
+    {%- for column_name, tags in column_tags.tags.items() %}
+      {%- call statement('main') -%}
+         {{ alter_column_set_tags(relation, column_name, tags) }}
+      {%- endcall -%}
+    {%- endfor %}
+  {%- endif %}
+{%- endmacro -%}
+
+{% macro alter_column_set_tags(relation, column_name, tags) -%}
+  ALTER TABLE {{ relation.render() }} ALTER COLUMN {{ column_name }} SET TAGS (
+    {% for tag in tags -%}
+      '{{ tag }}' = '{{ tags[tag] }}' {%- if not loop.last %}, {% endif -%}
+    {%- endfor %}
+  )
+{%- endmacro -%}
+
+{% macro alter_column_unset_tags(relation, column_name, tags) -%}
+  ALTER TABLE {{ relation.render() }} ALTER COLUMN {{ column_name }} UNSET TAGS (
+    {% for tag in tags -%}
+      '{{ tag }}' {%- if not loop.last %}, {%- endif %}
+    {%- endfor %}
+  )
+{%- endmacro -%}

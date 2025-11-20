@@ -44,6 +44,7 @@ pub struct DbtColumn {
     pub meta: BTreeMap<String, YmlValue>,
     pub tags: Vec<String>,
     pub policy_tags: Option<Vec<String>>,
+    pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
     pub quote: Option<bool>,
     #[serde(default, rename = "config")]
     pub deprecated_config: ColumnConfig,
@@ -111,6 +112,8 @@ pub struct ColumnProperties {
     pub data_tests: Option<Vec<DataTests>>,
     pub granularity: Option<Granularity>,
     pub policy_tags: Option<Vec<String>>,
+    pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
+    pub tags: Option<Vec<String>>,
     pub quote: Option<bool>,
     pub config: Option<ColumnConfig>,
 
@@ -141,6 +144,7 @@ pub struct ColumnConfig {
     #[serde(default)]
     pub tags: Option<StringOrArrayOfStrings>,
     pub meta: Option<BTreeMap<String, YmlValue>>,
+    pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
 }
 
 /// Represents column inheritance rules for a model version
@@ -226,10 +230,10 @@ pub fn process_columns(
         .map(|cols| {
             cols.iter()
                 .map(|cp| {
-                    let (cp_meta, cp_tags) = cp
+                    let (cp_meta, cp_tags, cp_databricks_tags) = cp
                         .config
                         .clone()
-                        .map(|c| (c.meta, c.tags))
+                        .map(|c| (c.meta, c.tags, c.databricks_tags))
                         .unwrap_or_default();
 
                     Ok(Arc::new(DbtColumn {
@@ -238,11 +242,14 @@ pub fn process_columns(
                         description: cp.description.clone(),
                         constraints: cp.constraints.clone().unwrap_or_default(),
                         meta: cp_meta.or_else(|| meta.clone()).unwrap_or_default(),
-                        tags: cp_tags
-                            .map(|t| t.into())
+                        tags: cp
+                            .tags
+                            .clone()
+                            .or_else(|| cp_tags.map(|t| t.into()))
                             .or_else(|| tags.clone())
                             .unwrap_or_default(),
                         policy_tags: cp.policy_tags.clone(),
+                        databricks_tags: cp.databricks_tags.clone().or(cp_databricks_tags),
                         quote: cp.quote,
                         deprecated_config: cp.config.clone().unwrap_or_default(),
                     }))

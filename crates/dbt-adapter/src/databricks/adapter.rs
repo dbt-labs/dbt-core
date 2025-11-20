@@ -675,6 +675,32 @@ impl TypedBaseAdapter for DatabricksAdapter {
         Ok(Value::from_object(result))
     }
 
+    fn get_column_tags_from_model(
+        &self,
+        model: &dyn InternalDbtNodeAttributes,
+    ) -> AdapterResult<Value> {
+        use crate::databricks::relation_configs::base::DatabricksComponentProcessor;
+        use crate::databricks::relation_configs::column_tags::{
+            ColumnTagsConfig, ColumnTagsProcessor,
+        };
+        use std::collections::BTreeMap;
+
+        let processor = ColumnTagsProcessor;
+        if let Some(
+            crate::databricks::relation_configs::base::DatabricksComponentConfig::ColumnTags(
+                column_tags,
+            ),
+        ) = processor.from_relation_config(model)?
+        {
+            let value = Value::from_serialize(&column_tags);
+            return Ok(value);
+        }
+
+        Ok(Value::from_serialize(
+            ColumnTagsConfig::new(BTreeMap::new()),
+        ))
+    }
+
     /// Given existing columns and columns from our model
     /// we determine which columns to update and persist docs for
     fn get_persist_doc_columns(

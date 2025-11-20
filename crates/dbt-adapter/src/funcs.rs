@@ -779,6 +779,24 @@ pub fn dispatch_adapter_calls(
         "get_relation_config" => adapter.get_relation_config(state, args),
         "get_config_from_model" => adapter.get_config_from_model(state, args),
         "get_persist_doc_columns" => adapter.get_persist_doc_columns(state, args),
+        "get_column_tags_from_model" => {
+            let iter = ArgsIter::new(name, &["model"], args);
+            let model = iter.next_arg::<Value>()?;
+            iter.finish()?;
+
+            let deserialized_node = minijinja_value_to_typed_struct::<dbt_schemas::schemas::InternalDbtNodeWrapper>(model)
+                .map_err(|e| {
+                    MinijinjaError::new(
+                        MinijinjaErrorKind::SerdeDeserializeError,
+                        format!(
+                            "Failed to deserialize the node passed to adapter.get_column_tags_from_model: {}",
+                            e
+                        ),
+                    )
+                })?;
+
+            adapter.get_column_tags_from_model(state, deserialized_node.as_internal_node())
+        }
         "generate_unique_temporary_table_suffix" => {
             adapter.generate_unique_temporary_table_suffix(state, args)
         }

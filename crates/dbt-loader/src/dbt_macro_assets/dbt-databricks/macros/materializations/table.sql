@@ -33,6 +33,11 @@
     {% do apply_tblproperties(target_relation, tblproperties) %}
   {% endif %}
   {%- do apply_tags(target_relation, tags) -%}
+  {# Deviation from core: Explicit column tag application is being done for V1 mat #}
+  {% set column_tags = adapter.get_column_tags_from_model(config.model) %}
+  {% if column_tags and column_tags.tags %}
+    {% do apply_column_tags(target_relation, column_tags) %}
+  {% endif %}
 
   {% do persist_docs(target_relation, model, for_relation=language=='python') %}
 

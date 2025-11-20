@@ -1170,6 +1170,13 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         unimplemented!("only available with Databricks adapter")
     }
 
+    fn get_column_tags_from_model(
+        &self,
+        _model: &dyn InternalDbtNodeAttributes,
+    ) -> AdapterResult<Value> {
+        unimplemented!("only available with Databricks adapter")
+    }
+
     /// clean_sql
     fn clean_sql(&self, _args: &str) -> AdapterResult<String> {
         unimplemented!("only available with Databricks adapter")

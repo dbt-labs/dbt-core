@@ -19,7 +19,6 @@ use dbt_common::adapter::SchemaRegistry;
 use dbt_common::behavior_flags::{Behavior, BehaviorFlag};
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::{FsError, FsResult, current_function_name};
-use dbt_schemas::schemas::InternalDbtNodeWrapper;
 use dbt_schemas::schemas::common::{DbtIncrementalStrategy, ResolvedQuoting};
 use dbt_schemas::schemas::dbt_column::{DbtColumn, DbtColumnRef};
 use dbt_schemas::schemas::manifest::{
@@ -29,6 +28,7 @@ use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::properties::ModelConstraint;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
 use dbt_schemas::schemas::serde::{minijinja_value_to_typed_struct, yml_value_to_minijinja};
+use dbt_schemas::schemas::{InternalDbtNodeAttributes, InternalDbtNodeWrapper};
 use dbt_xdbc::Connection;
 use indexmap::IndexMap;
 use minijinja::arg_utils::{ArgParser, ArgsIter, check_num_args};
@@ -1473,6 +1473,15 @@ impl BaseAdapter for BridgeAdapter {
         );
 
         Ok(Value::from_object(result))
+    }
+
+    fn get_column_tags_from_model(
+        &self,
+        _state: &State,
+        node: &dyn InternalDbtNodeAttributes,
+    ) -> Result<Value, MinijinjaError> {
+        let result = self.typed_adapter.get_column_tags_from_model(node)?;
+        Ok(result)
     }
 
     #[tracing::instrument(skip_all, level = "trace")]

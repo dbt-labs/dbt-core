@@ -5,6 +5,7 @@ use crate::databricks::relation_configs::base::{
     DatabricksRelationConfigBase, DatabricksRelationConfigBaseObject,
 };
 use crate::databricks::relation_configs::column_comments::ColumnCommentsProcessor;
+use crate::databricks::relation_configs::column_tags::ColumnTagsProcessor;
 use crate::databricks::relation_configs::comment::CommentProcessor;
 use crate::databricks::relation_configs::configs::DatabricksRelationConfig;
 use crate::databricks::relation_configs::query::QueryProcessor;
@@ -25,6 +26,7 @@ impl DatabricksRelationConfig for ViewConfig {
     fn config_components() -> Vec<Arc<dyn DatabricksComponentProcessor>> {
         vec![
             Arc::new(TagsProcessor),
+            Arc::new(ColumnTagsProcessor),
             Arc::new(TblPropertiesProcessor),
             Arc::new(QueryProcessor),
             Arc::new(CommentProcessor),

@@ -5,6 +5,7 @@ use crate::databricks::relation_configs::base::{
     DatabricksRelationConfigBaseObject,
 };
 use crate::databricks::relation_configs::column_comments::ColumnCommentsProcessor;
+use crate::databricks::relation_configs::column_tags::ColumnTagsProcessor;
 use crate::databricks::relation_configs::comment::CommentProcessor;
 use crate::databricks::relation_configs::configs::DatabricksRelationConfig;
 use crate::databricks::relation_configs::constraints::ConstraintsProcessor;
@@ -26,6 +27,7 @@ impl DatabricksRelationConfig for IncrementalTableConfig {
         vec![
             Arc::new(CommentProcessor),
             Arc::new(ColumnCommentsProcessor),
+            Arc::new(ColumnTagsProcessor),
             Arc::new(ConstraintsProcessor),
             Arc::new(TagsProcessor),
             Arc::new(TblPropertiesProcessor),

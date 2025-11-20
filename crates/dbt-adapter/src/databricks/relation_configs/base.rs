@@ -1,5 +1,6 @@
 use crate::databricks::relation_configs::DatabricksRelationConfig;
 use crate::databricks::relation_configs::column_comments::ColumnCommentsConfig;
+use crate::databricks::relation_configs::column_tags::ColumnTagsConfig;
 use crate::databricks::relation_configs::comment::CommentConfig;
 use crate::databricks::relation_configs::constraints::ConstraintsConfig;
 use crate::databricks::relation_configs::liquid_clustering::LiquidClusteringConfig;
@@ -33,6 +34,7 @@ use std::sync::Arc;
 pub enum DatabricksRelationMetadataKey {
     InfoSchemaViews,
     InfoSchemaTags,
+    InfoSchemaColumnTags,
     DescribeExtended,
     ShowTblProperties,
     ColumnMasks,
@@ -50,6 +52,9 @@ impl From<DatabricksRelationMetadataKey> for String {
                 "information_schema.views".to_string()
             }
             DatabricksRelationMetadataKey::InfoSchemaTags => "information_schema.tags".to_string(),
+            DatabricksRelationMetadataKey::InfoSchemaColumnTags => {
+                "information_schema.column_tags".to_string()
+            }
             DatabricksRelationMetadataKey::DescribeExtended => "describe_extended".to_string(),
             DatabricksRelationMetadataKey::ShowTblProperties => "show_tblproperties".to_string(),
             DatabricksRelationMetadataKey::ColumnMasks => "column_masks".to_string(),
@@ -115,6 +120,7 @@ impl DatabricksRelationResultsBuilder {
     result_builder_entries! {
         with_info_schema_views => DatabricksRelationMetadataKey::InfoSchemaViews,
         with_info_schema_tags => DatabricksRelationMetadataKey::InfoSchemaTags,
+        with_info_schema_column_tags => DatabricksRelationMetadataKey::InfoSchemaColumnTags,
         with_describe_extended => DatabricksRelationMetadataKey::DescribeExtended,
         with_show_tblproperties => DatabricksRelationMetadataKey::ShowTblProperties,
         with_column_masks => DatabricksRelationMetadataKey::ColumnMasks,
@@ -136,6 +142,7 @@ impl DatabricksRelationResultsBuilder {
 #[serde(untagged)]
 pub enum DatabricksComponentConfig {
     ColumnComments(ColumnCommentsConfig),
+    ColumnTags(ColumnTagsConfig),
     Comment(CommentConfig),
     Constraints(ConstraintsConfig),
     LiquidClustering(LiquidClusteringConfig),

@@ -25,7 +25,7 @@
         {{ alter_column_comments(target_relation, column_comments.comments) }}
       {% endif %}
       {% if column_tags %}
-        {{ apply_column_tags(target_relation, column_tags) }}
+        {% do apply_column_tags(target_relation, column_tags) %}
       {% endif %}
       {% if constraints %}
         {{ apply_constraints(target_relation, constraints) }}

@@ -28,6 +28,10 @@
   {% do apply_grants(target_relation, grant_config, should_revoke=True) %}
 
   {%- do apply_tags(target_relation, tags) -%}
+  {% set column_tags = adapter.get_column_tags_from_model(config.model) %}
+  {% if column_tags and column_tags.tags %}
+    {% do apply_column_tags(target_relation, column_tags) %}
+  {% endif %}
 
   {{ run_hooks(post_hooks) }}
 

@@ -23,6 +23,7 @@ use dbt_auth::{AdapterConfig, Auth, auth_for_backend};
 use dbt_common::FsError;
 use dbt_common::behavior_flags::Behavior;
 use dbt_common::cancellation::CancellationToken;
+use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_schemas::schemas::common::{DbtQuoting, ResolvedQuoting};
 use dbt_schemas::schemas::dbt_catalogs::DbtCatalogs;
 use dbt_schemas::schemas::properties::ModelConstraint;
@@ -789,6 +790,14 @@ impl BaseAdapter for ParseAdapter {
         &self,
         _state: &State,
         _args: &[Value],
+    ) -> Result<Value, MinijinjaError> {
+        Ok(none_value())
+    }
+
+    fn get_column_tags_from_model(
+        &self,
+        _state: &State,
+        _node: &dyn InternalDbtNodeAttributes,
     ) -> Result<Value, MinijinjaError> {
         Ok(none_value())
     }

@@ -18,6 +18,7 @@ use minijinja::State;
 
 pub mod base;
 pub mod column_comments;
+pub mod column_tags;
 pub mod comment;
 pub mod constraints;
 pub mod liquid_clustering;
@@ -90,6 +91,13 @@ impl DatabricksAdapter {
                     &identifier,
                     state,
                     &mut *conn,
+                )?)
+                .with_info_schema_column_tags(self.fetch_column_tags(
+                    &database,
+                    &schema,
+                    &identifier,
+                    state,
+                    &mut *conn,
                 )?),
             RelationType::StreamingTable => results_builder,
             RelationType::Table => {
@@ -113,6 +121,13 @@ impl DatabricksAdapter {
                 }
                 results_builder
                     .with_info_schema_tags(self.fetch_tags(
+                        &database,
+                        &schema,
+                        &identifier,
+                        state,
+                        &mut *conn,
+                    )?)
+                    .with_info_schema_column_tags(self.fetch_column_tags(
                         &database,
                         &schema,
                         &identifier,
@@ -366,6 +381,25 @@ impl DatabricksAdapter {
                 AND table_name = '{identifier}'"
         );
         let (_, result) = self.execute_sql_with_context(&sql, state, "Fetch tags", conn)?;
+        Ok(result)
+    }
+
+    fn fetch_column_tags(
+        &self,
+        database: &str,
+        schema: &str,
+        identifier: &str,
+        state: &State,
+        conn: &mut dyn Connection,
+    ) -> AdapterResult<AgateTable> {
+        let sql = format!(
+            "SELECT column_name, tag_name, tag_value
+            FROM `system`.`information_schema`.`column_tags`
+            WHERE catalog_name = '{database}' 
+                AND schema_name = '{schema}'
+                AND table_name = '{identifier}'"
+        );
+        let (_, result) = self.execute_sql_with_context(&sql, state, "Fetch column tags", conn)?;
         Ok(result)
     }
 }
