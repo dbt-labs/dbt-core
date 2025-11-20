@@ -526,7 +526,7 @@ impl BaseAdapter for ParseAdapter {
     fn get_column_schema_from_query(
         &self,
         _state: &State,
-        _args: &[Value],
+        _sql: &str,
     ) -> Result<Value, MinijinjaError> {
         Ok(empty_vec_value())
     }
@@ -542,7 +542,7 @@ impl BaseAdapter for ParseAdapter {
     fn get_columns_in_select_sql(
         &self,
         _state: &State,
-        _args: &[Value],
+        _sql: &str,
     ) -> Result<Value, MinijinjaError> {
         Ok(empty_vec_value())
     }
@@ -631,7 +631,13 @@ impl BaseAdapter for ParseAdapter {
         Ok(none_value())
     }
 
-    fn get_common_options(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn get_common_options(
+        &self,
+        _state: &State,
+        _config: dbt_schemas::schemas::project::ModelConfig,
+        _node: &dbt_schemas::schemas::InternalDbtNodeWrapper,
+        _temporary: bool,
+    ) -> Result<Value, MinijinjaError> {
         Ok(none_value())
     }
 
@@ -639,7 +645,12 @@ impl BaseAdapter for ParseAdapter {
         Ok(none_value())
     }
 
-    fn get_view_options(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn get_view_options(
+        &self,
+        _state: &State,
+        _config: dbt_schemas::schemas::project::ModelConfig,
+        _node: &dbt_schemas::schemas::InternalDbtNodeWrapper,
+    ) -> Result<Value, MinijinjaError> {
         Ok(none_value())
     }
 
@@ -769,7 +780,7 @@ impl BaseAdapter for ParseAdapter {
     fn get_partitions_metadata(
         &self,
         _state: &State,
-        _args: &[Value],
+        _relation: Arc<dyn BaseRelation>,
     ) -> Result<Value, MinijinjaError> {
         Ok(none_value())
     }
@@ -793,17 +804,17 @@ impl BaseAdapter for ParseAdapter {
     fn get_relations_without_caching(
         &self,
         _state: &State,
-        _args: &[Value],
+        _relation: Arc<dyn BaseRelation>,
     ) -> Result<Value, MinijinjaError> {
+        Ok(empty_vec_value())
+    }
+
+    fn parse_index(&self, _state: &State, _raw_index: &Value) -> Result<Value, MinijinjaError> {
         Ok(none_value())
     }
 
-    fn parse_index(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
-        Ok(none_value())
-    }
-
-    fn redact_credentials(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
-        Ok(none_value())
+    fn redact_credentials(&self, _state: &State, _sql: &str) -> Result<Value, MinijinjaError> {
+        Ok(Value::from(""))
     }
 
     fn valid_incremental_strategies(

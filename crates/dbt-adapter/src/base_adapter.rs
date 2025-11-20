@@ -769,15 +769,11 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
     fn get_column_schema_from_query(
         &self,
         state: &State,
-        args: &[Value],
+        sql: &str,
     ) -> Result<Value, MinijinjaError>;
 
     /// Get columns in select sql
-    fn get_columns_in_select_sql(
-        &self,
-        state: &State,
-        args: &[Value],
-    ) -> Result<Value, MinijinjaError>;
+    fn get_columns_in_select_sql(&self, state: &State, sql: &str) -> Result<Value, MinijinjaError>;
 
     /// Add time ingestion partition column
     ///
@@ -889,7 +885,13 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
     }
 
     /// get_common_options
-    fn get_common_options(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn get_common_options(
+        &self,
+        _state: &State,
+        _config: dbt_schemas::schemas::project::ModelConfig,
+        _node: &dbt_schemas::schemas::InternalDbtNodeWrapper,
+        _temporary: bool,
+    ) -> Result<Value, MinijinjaError> {
         unimplemented!("only available with BigQuery adapter")
     }
 
@@ -899,7 +901,12 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
     }
 
     /// get_view_options
-    fn get_view_options(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn get_view_options(
+        &self,
+        _state: &State,
+        _config: dbt_schemas::schemas::project::ModelConfig,
+        _node: &dbt_schemas::schemas::InternalDbtNodeWrapper,
+    ) -> Result<Value, MinijinjaError> {
         unimplemented!("only available with BigQuery adapter")
     }
 
@@ -975,7 +982,7 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
     fn get_partitions_metadata(
         &self,
         _state: &State,
-        _args: &[Value],
+        _relation: Arc<dyn BaseRelation>,
     ) -> Result<Value, MinijinjaError>;
 
     /// get_persist_doc_columns
@@ -1003,14 +1010,14 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
     fn get_relations_without_caching(
         &self,
         _state: &State,
-        _args: &[Value],
+        _relation: Arc<dyn BaseRelation>,
     ) -> Result<Value, MinijinjaError>;
 
     /// parse_index
-    fn parse_index(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError>;
+    fn parse_index(&self, _state: &State, _raw_index: &Value) -> Result<Value, MinijinjaError>;
 
     /// redact_credentials
-    fn redact_credentials(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError>;
+    fn redact_credentials(&self, _state: &State, _sql: &str) -> Result<Value, MinijinjaError>;
 
     /// Behavior (flags)
     fn behavior(&self) -> Value;

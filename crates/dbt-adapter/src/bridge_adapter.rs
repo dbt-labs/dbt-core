@@ -893,18 +893,14 @@ impl BaseAdapter for BridgeAdapter {
     fn get_column_schema_from_query(
         &self,
         state: &State,
-        args: &[Value],
+        sql: &str,
     ) -> Result<Value, MinijinjaError> {
-        let mut parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 1, 1)?;
-        let sql = parser.get::<String>("sql")?;
-
         let ctx =
             query_ctx_from_state(state)?.with_desc("get_column_schema_from_query adapter call");
         let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
         let result =
             self.typed_adapter
-                .get_column_schema_from_query(state, conn.as_mut(), &ctx, &sql)?;
+                .get_column_schema_from_query(state, conn.as_mut(), &ctx, sql)?;
         Ok(Value::from(result))
     }
 
@@ -913,12 +909,8 @@ impl BaseAdapter for BridgeAdapter {
     /// FIXME(harry): unlike get_column_schema_from_query which only works when returning a non-empty result
     /// get_columns_in_select_sql returns a schema using the BigQuery Job and GetTable APIs
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn get_columns_in_select_sql(
-        &self,
-        state: &State,
-        args: &[Value],
-    ) -> Result<Value, MinijinjaError> {
-        self.get_column_schema_from_query(state, args)
+    fn get_columns_in_select_sql(&self, state: &State, sql: &str) -> Result<Value, MinijinjaError> {
+        self.get_column_schema_from_query(state, sql)
     }
 
     #[tracing::instrument(skip(self, _state), level = "trace")]
@@ -1031,33 +1023,40 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn get_view_options(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
-        let mut parser = ArgParser::new(args, None);
-        parser.check_num_args(current_function_name!(), 2, 3)?;
-
-        let config = parser.get::<Value>("config")?;
-        let node = parser.get::<Value>("node")?;
-
-        let config = minijinja_value_to_typed_struct::<ModelConfig>(config).map_err(|e| {
-            MinijinjaError::new(
-                MinijinjaErrorKind::SerdeDeserializeError,
-                format!("get_view_options: Failed to deserialize config: {e}"),
-            )
-        })?;
-
-        let node_wrapper = minijinja_value_to_typed_struct::<InternalDbtNodeWrapper>(node)
-            .map_err(|e| {
-                MinijinjaError::new(
-                    MinijinjaErrorKind::SerdeDeserializeError,
-                    format!("get_view_options: Failed to deserialize InternalDbtNodeWrapper: {e}"),
-                )
-            })?;
-        let node = node_wrapper.as_internal_node();
-
+    fn get_view_options(
+        &self,
+        state: &State,
+        config: ModelConfig,
+        node: &InternalDbtNodeWrapper,
+    ) -> Result<Value, MinijinjaError> {
+        let node = node.as_internal_node();
         let options = self
             .typed_adapter
             .get_view_options(state, config, node.common())?;
         Ok(Value::from_serialize(options))
+    }
+
+    #[tracing::instrument(skip(self, state), level = "trace")]
+    fn get_common_options(
+        &self,
+        state: &State,
+        config: ModelConfig,
+        node: &InternalDbtNodeWrapper,
+        temporary: bool,
+    ) -> Result<Value, MinijinjaError> {
+        use crate::bigquery::adapter::get_common_table_options_value;
+        use dbt_common::adapter::AdapterType::Bigquery;
+
+        if self.typed_adapter().adapter_type() == Bigquery {
+            let node = node.as_internal_node();
+            let options = get_common_table_options_value(state, config, node.common(), temporary);
+            Ok(Value::from_serialize(options))
+        } else {
+            Err(MinijinjaError::new(
+                MinijinjaErrorKind::InvalidOperation,
+                "get_common_options is only available with BigQuery adapter",
+            ))
+        }
     }
 
     #[tracing::instrument(skip(self, _state), level = "trace")]
@@ -1425,14 +1424,8 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, _state), level = "trace")]
-    fn redact_credentials(&self, _state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
-        let mut parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 1, 1)?;
-
-        let sql = parser.next_positional::<String>()?;
-
-        let sql_redacted = self.typed_adapter().redact_credentials(&sql)?;
-
+    fn redact_credentials(&self, _state: &State, sql: &str) -> Result<Value, MinijinjaError> {
+        let sql_redacted = self.typed_adapter().redact_credentials(sql)?;
         Ok(Value::from(sql_redacted))
     }
 
@@ -1440,8 +1433,9 @@ impl BaseAdapter for BridgeAdapter {
     fn get_partitions_metadata(
         &self,
         _state: &State,
-        args: &[Value],
+        relation: Arc<dyn BaseRelation>,
     ) -> Result<Value, MinijinjaError> {
+        let _ = relation;
         unimplemented!("get_partitions_metadata")
     }
 
@@ -1527,13 +1521,13 @@ impl BaseAdapter for BridgeAdapter {
     fn get_relations_without_caching(
         &self,
         _state: &State,
-        _args: &[Value],
+        _relation: Arc<dyn BaseRelation>,
     ) -> Result<Value, MinijinjaError> {
         unimplemented!("get_relations_without_caching")
     }
 
     #[tracing::instrument(skip_all, level = "trace")]
-    fn parse_index(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn parse_index(&self, _state: &State, _raw_index: &Value) -> Result<Value, MinijinjaError> {
         unimplemented!("parse_index")
     }
 

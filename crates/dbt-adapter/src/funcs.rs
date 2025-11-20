@@ -654,15 +654,120 @@ pub fn dispatch_adapter_calls(
         }
         "grant_access_to" => adapter.grant_access_to(state, args),
         "get_dataset_location" => adapter.get_dataset_location(state, args),
-        "get_column_schema_from_query" => adapter.get_column_schema_from_query(state, args),
-        "get_columns_in_select_sql" => adapter.get_columns_in_select_sql(state, args),
-        "get_common_options" => adapter.get_common_options(state, args),
+        "get_column_schema_from_query" => {
+            // sql: str
+            let iter = ArgsIter::new(name, &["sql"], args);
+            let sql = iter.next_arg::<&str>()?;
+            iter.finish()?;
+
+            adapter.get_column_schema_from_query(state, sql)
+        }
+        "get_columns_in_select_sql" => {
+            // sql: str
+            let iter = ArgsIter::new(name, &["sql"], args);
+            let sql = iter.next_arg::<&str>()?;
+            iter.finish()?;
+
+            adapter.get_columns_in_select_sql(state, sql)
+        }
+        "get_common_options" => {
+            // config: dict, node: dict, temporary: Optional[bool] = False
+            let iter = ArgsIter::new(name, &["config", "node"], args);
+            let config_val = iter.next_arg::<&Value>()?;
+            let node_val = iter.next_arg::<&Value>()?;
+            let temporary = iter
+                .next_kwarg::<Option<bool>>("temporary")?
+                .unwrap_or(false);
+            iter.finish()?;
+
+            let config = minijinja_value_to_typed_struct::<
+                dbt_schemas::schemas::project::ModelConfig,
+            >(config_val.clone())
+            .map_err(|e| {
+                MinijinjaError::new(
+                    MinijinjaErrorKind::SerdeDeserializeError,
+                    format!("get_common_options: Failed to deserialize config: {e}"),
+                )
+            })?;
+
+            let node_wrapper = minijinja_value_to_typed_struct::<
+                dbt_schemas::schemas::InternalDbtNodeWrapper,
+            >(node_val.clone())
+            .map_err(|e| {
+                MinijinjaError::new(
+                    MinijinjaErrorKind::SerdeDeserializeError,
+                    format!(
+                        "get_common_options: Failed to deserialize InternalDbtNodeWrapper: {e}"
+                    ),
+                )
+            })?;
+
+            adapter.get_common_options(state, config, &node_wrapper, temporary)
+        }
         "get_table_options" => adapter.get_table_options(state, args),
-        "get_view_options" => adapter.get_view_options(state, args),
-        "get_partitions_metadata" => adapter.get_partitions_metadata(state, args),
-        "get_relations_without_caching" => adapter.get_relations_without_caching(state, args),
-        "parse_index" => adapter.parse_index(state, args),
-        "redact_credentials" => adapter.redact_credentials(state, args),
+        "get_view_options" => {
+            // config: dict, node: dict
+            let iter = ArgsIter::new(name, &["config", "node"], args);
+            let config_val = iter.next_arg::<&Value>()?;
+            let node_val = iter.next_arg::<&Value>()?;
+            iter.finish()?;
+
+            let config = minijinja_value_to_typed_struct::<
+                dbt_schemas::schemas::project::ModelConfig,
+            >(config_val.clone())
+            .map_err(|e| {
+                MinijinjaError::new(
+                    MinijinjaErrorKind::SerdeDeserializeError,
+                    format!("get_view_options: Failed to deserialize config: {e}"),
+                )
+            })?;
+
+            let node_wrapper = minijinja_value_to_typed_struct::<
+                dbt_schemas::schemas::InternalDbtNodeWrapper,
+            >(node_val.clone())
+            .map_err(|e| {
+                MinijinjaError::new(
+                    MinijinjaErrorKind::SerdeDeserializeError,
+                    format!("get_view_options: Failed to deserialize InternalDbtNodeWrapper: {e}"),
+                )
+            })?;
+
+            adapter.get_view_options(state, config, &node_wrapper)
+        }
+        "get_partitions_metadata" => {
+            // table: BaseRelation
+            let iter = ArgsIter::new(name, &["table"], args);
+            let relation_val = iter.next_arg::<&Value>()?;
+            let relation = downcast_value_to_dyn_base_relation(relation_val)?;
+            iter.finish()?;
+
+            adapter.get_partitions_metadata(state, relation)
+        }
+        "get_relations_without_caching" => {
+            // schema_relation: BaseRelation
+            let iter = ArgsIter::new(name, &["schema_relation"], args);
+            let relation_val = iter.next_arg::<&Value>()?;
+            let relation = downcast_value_to_dyn_base_relation(relation_val)?;
+            iter.finish()?;
+
+            adapter.get_relations_without_caching(state, relation)
+        }
+        "parse_index" => {
+            // raw_index: dict
+            let iter = ArgsIter::new(name, &["raw_index"], args);
+            let raw_index = iter.next_arg::<&Value>()?;
+            iter.finish()?;
+
+            adapter.parse_index(state, raw_index)
+        }
+        "redact_credentials" => {
+            // sql: str
+            let iter = ArgsIter::new(name, &["sql"], args);
+            let sql = iter.next_arg::<&str>()?;
+            iter.finish()?;
+
+            adapter.redact_credentials(state, sql)
+        }
         // only available for DataBricks
         "compare_dbr_version" => adapter.compare_dbr_version(state, args),
         "compute_external_path" => adapter.compute_external_path(state, args),
