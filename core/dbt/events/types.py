@@ -231,7 +231,8 @@ Need help? Don't hesitate to reach out to us via GitHub issues or on Slack:
 
 Happy modeling!
 """
-
+p.s. change directories to "{self.project_name}" to use this project
+"""
 
 # =======================================================
 # D - Deprecations
