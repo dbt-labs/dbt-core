@@ -1,0 +1,134 @@
+[build.targets.wheel]
+packages = ["dbt"]
+only-packages = true
+artifacts = [
+    "dbt/include/**/*",
+    "dbt/task/docs/**/*.html",
+    "dbt/jsonschemas/**/*.json",
+    "dbt/py.typed",
+]
+
+[build.targets.sdist]
+include = [
+    "/dbt",
+    "/README.md",
+    "/License.md",
+]
+
+[build.targets.sdist.force-include]
+"dbt/task/docs/index.html" = "dbt/task/docs/index.html"
+
+[envs.default]
+dependencies = [
+    "pre-commit~=3.7.0",
+    "pytest>=7.0,<8.0",
+    "pytest-xdist~=3.6",
+    "pytest-csv~=3.0",
+    "pytest-logbook~=1.2",
+    "logbook<1.9",
+    "mypy>=1.9,<2.0",
+    "flake8>=6.0,<7.0",
+    "black>=24.3,<25.0",
+    "tox~=4.16",
+]
+
+[envs.default.scripts]
+# Setup commands
+setup = [
+    "pip install -r ../dev-requirements.txt",
+    "pip install -e .",
+    "pre-commit install",
+]
+dev-req = [
+    "pip install -r ../dev-requirements.txt",
+    "pip install -e .",
+]
+
+# Code quality commands
+code-quality = "pre-commit run --all-files --show-diff-on-failure"
+lint = [
+    "pre-commit run flake8-check --hook-stage manual --all-files",
+    "pre-commit run mypy-check --hook-stage manual --all-files",
+]
+flake8 = "pre-commit run flake8-check --hook-stage manual --all-files"
+mypy = "pre-commit run mypy-check --hook-stage manual --all-files"
+black = "pre-commit run black-check --hook-stage manual --all-files"
+
+# Testing commands
+unit-tests = "tox -e unit"
+integration-tests = "tox -e py-integration -- -nauto"
+integration-tests-fail-fast = "tox -e py-integration -- -x -nauto"
+test = [
+    "tox -e unit",
+    "pre-commit run black-check --hook-stage manual --all-files",
+    "pre-commit run flake8-check --hook-stage manual --all-files",
+    "pre-commit run mypy-check --hook-stage manual --all-files",
+]
+
+# Database setup
+setup-db = [
+    "docker compose up -d database",
+    "bash ../test/setup_db.sh",
+]
+
+# Utility commands
+clean = [
+    "rm -f .coverage",
+    "rm -f .coverage.*",
+    "rm -rf .eggs/",
+    "rm -rf .tox/",
+    "rm -rf build/",
+    "rm -rf dbt.egg-info/",
+    "rm -f dbt_project.yml",
+    "rm -rf dist/",
+    "find . -type f -name '*.pyc' -delete",
+    "find . -type d -name __pycache__ -exec rm -rf {} +",
+]
+json-schema = "python ../scripts/collect-artifact-schema.py --path ../schemas"
+
+[envs.build]
+detached = true
+dependencies = [
+    "wheel",
+    "twine",
+    "check-wheel-contents",
+]
+
+[envs.build.scripts]
+check-all = [
+    "- check-wheel",
+    "- check-sdist",
+]
+check-wheel = [
+    "twine check dist/*",
+    "find ./dist/dbt_core-*.whl -maxdepth 1 -type f | xargs python -m pip install --force-reinstall --find-links=dist/",
+    "pip freeze | grep dbt-core",
+    "dbt --version",
+]
+check-sdist = [
+    "check-wheel-contents dist/*.whl --ignore W007,W008",
+    "find ./dist/dbt_core-*.gz -maxdepth 1 -type f | xargs python -m pip install --force-reinstall --find-links=dist/",
+    "pip freeze | grep dbt-core",
+    "dbt --version",
+]
+
+[envs.ci]
+dependencies = [
+    "pytest>=7.0,<8.0",
+    "pytest-xdist~=3.6",
+    "tox~=4.16",
+]
+
+[envs.ci.scripts]
+unit-tests = "tox -e unit"
+integration-tests = "tox {args}"
+
+[envs.cd]
+dependencies = [
+    "pytest>=7.0,<8.0",
+    "pytest-xdist~=3.6",
+]
+
+[envs.cd.scripts]
+unit-tests = "python -m pytest tests/unit"
+integration-tests = "python -m pytest tests/functional"

@@ -96,7 +96,7 @@ jobs:
       - name: "Setup Dev Environment"
         run: |
           cd core
-          hatch run dev
+          hatch run setup
 
       - name: "Set up postgres (linux)"
         if: inputs.os == '${{ vars.UBUNTU_LATEST }}'
