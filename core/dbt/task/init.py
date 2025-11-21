@@ -207,7 +207,7 @@ class InitTask(BaseTask):
         profile_name = profile_name or self.get_profile_name_from_current_project()
         with open(profiles_file, "r") as f:
             profiles = yaml.safe_load(f) or {}
-        if profile_name in profiles.keys():
+        if profile_name in profiles:
             response = click.confirm(
                 f"The profile {profile_name} already exists in "
                 f"{profiles_file}. Continue and overwrite it?"
