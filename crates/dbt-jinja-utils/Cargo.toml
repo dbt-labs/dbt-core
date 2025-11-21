@@ -46,4 +46,5 @@ dbt-fusion-workspace-hack = { version = "0.1" }
 
 [dev-dependencies]
 dbt-test-primitives = { workspace = true }
+dbt-test-utils = { workspace = true }
 insta = { version = "1.38.0", features = ["glob", "serde"] }
