@@ -646,7 +646,7 @@ class PartialParsing:
             source_file.unit_tests.remove(unique_id)
         self.saved_manifest.files.pop(source_file.file_id)
 
-    def delete_function_node(self, source_file: SourceFile):
+    def delete_function_node(self, source_file: SourceFile) -> None:
         # There should always be a node for a Function file
         if not isinstance(source_file, SourceFile) or not source_file.functions:
             return
@@ -661,15 +661,26 @@ class PartialParsing:
         # duplicate when it's re-added
         source_file.functions.remove(function_unique_id)
 
-        # schedule function for parsing.
-        # Note: We _don't_ need to schedule referencing nodes for reparsing, because a change in a function changes nothing
-        # for the parsing/compilation of a node that references it. It only affects the referencer's execution in the data warehouse.
-        self._schedule_for_parsing(
-            "functions",
-            function_node,
-            function_node.name,
-            self.delete_schema_function,
-        )
+        # If this function had a schema patch, schedule that schema element to be reapplied.
+        patch_path = function_node.patch_path
+        if (
+            patch_path is not None
+            and patch_path in self.saved_files
+            and patch_path not in self.file_diff["deleted_schema_files"]
+        ):
+            schema_file = self.saved_files[patch_path]
+            # Only proceed if this is a schema file
+            if isinstance(schema_file, SchemaSourceFile):
+                elements = schema_file.dict_from_yaml.get("functions", [])
+                schema_element = self.get_schema_element(elements, function_node.name)
+                if schema_element:
+                    # Remove any previous links and re-merge the patch to pp_dict so it gets reparsed
+                    self.delete_schema_function(schema_file, schema_element)
+                    self.merge_patch(schema_file, "functions", schema_element)
+
+        # Finally, remove the deleted function file from saved files
+        if source_file.file_id in self.saved_manifest.files:
+            self.saved_manifest.files.pop(source_file.file_id)
 
     # Schema files -----------------------
     # Changed schema files
@@ -1122,15 +1133,23 @@ class PartialParsing:
                     schema_file.unit_tests.remove(unique_id)
             # No disabled unit tests yet
 
-    def delete_schema_function(self, schema_file: SchemaSourceFile, function_dict: dict):
+    def delete_schema_function(self, schema_file: SchemaSourceFile, function_dict: dict) -> None:
         function_name = function_dict["name"]
         functions = schema_file.node_patches.copy()
         for unique_id in functions:
             if unique_id in self.saved_manifest.functions:
                 function = self.saved_manifest.functions[unique_id]
                 if function.name == function_name:
-                    self.saved_manifest.functions.pop(unique_id)
-                    schema_file.functions.remove(unique_id)
+                    removed_function = self.saved_manifest.functions.pop(unique_id)
+                    # For schema patches, recorded unique_ids live in node_patches (ndp)
+                    if unique_id in schema_file.node_patches:
+                        schema_file.node_patches.remove(unique_id)
+                    # Schedule the function's SQL file for reparsing so the node is re-added
+                    file_id = removed_function.file_id
+                    if file_id and file_id in self.new_files:
+                        self.saved_files[file_id] = deepcopy(self.new_files[file_id])
+                    if file_id and file_id in self.saved_files:
+                        self.add_to_pp_files(self.saved_files[file_id])
 
     def get_schema_element(self, elem_list, elem_name):
         for element in elem_list:
