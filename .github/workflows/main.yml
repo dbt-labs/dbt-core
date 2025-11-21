@@ -62,13 +62,13 @@ jobs:
           python -m pip --version
           python -m pip install hatch
           cd core
-          hatch run dev
+          hatch run setup
           dbt --version
 
       - name: Run pre-commit hooks
         run: |
           cd core
-          hatch run check-all
+          hatch run code-quality
 
   unit:
     name: unit test / python ${{ matrix.python-version }}
@@ -97,15 +97,15 @@ jobs:
         run: |
           python -m pip install --user --upgrade pip
           python -m pip --version
-          python -m pip install tox
-          tox --version
+          python -m pip install hatch
+          hatch --version
 
       - name: Run unit tests
         uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # nick-fields/retry@v3
         with:
           timeout_minutes: 10
           max_attempts: 3
-          command: tox -e unit
+          command: cd core && hatch run ci:unit-tests
 
       - name: Get current date
         if: always()
@@ -221,15 +221,15 @@ jobs:
         run: |
           python -m pip install --user --upgrade pip
           python -m pip --version
-          python -m pip install tox
-          tox --version
+          python -m pip install hatch
+          hatch --version
 
       - name: Run integration tests
         uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # nick-fields/retry@v3
         with:
           timeout_minutes: 30
           max_attempts: 3
-          command: tox -- --ddtrace
+          command: cd core && hatch run ci:integration-tests -- --ddtrace
         env:
           PYTEST_ADDOPTS: ${{ format('--splits {0} --group {1}', env.PYTHON_INTEGRATION_TEST_WORKERS, matrix.split-group) }}
 
@@ -304,15 +304,15 @@ jobs:
         run: |
           python -m pip install --user --upgrade pip
           python -m pip --version
-          python -m pip install tox
-          tox --version
+          python -m pip install hatch
+          hatch --version
 
       - name: Run integration tests
         uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # nick-fields/retry@v3
         with:
           timeout_minutes: 30
           max_attempts: 3
-          command: tox -- --ddtrace
+          command: cd core && hatch run ci:integration-tests -- --ddtrace
         env:
           PYTEST_ADDOPTS: ${{ format('--splits {0} --group {1}', env.PYTHON_INTEGRATION_TEST_WORKERS, matrix.split-group) }}
 
@@ -380,27 +380,7 @@ jobs:
       - name: Show distributions
         run: ls -lh dist/
 
-      - name: Check distribution descriptions
+      - name: Check and verify distributions
         run: |
-          twine check dist/*
-
-      - name: Check wheel contents
-        run: |
-          check-wheel-contents dist/*.whl --ignore W007,W008
-
-      - name: Install wheel distributions
-        run: |
-          find ./dist/*.whl -maxdepth 1 -type f | xargs python -m pip install --force-reinstall --find-links=dist/
-
-      - name: Check wheel distributions
-        run: |
-          dbt --version
-
-      - name: Install source distributions
-        # ignore dbt-1.0.0, which intentionally raises an error when installed from source
-        run: |
-          find ./dist/*.gz -maxdepth 1 -type f | xargs python -m pip install --force-reinstall --find-links=dist/
-
-      - name: Check source distributions
-        run: |
-          dbt --version
+          cd core
+          hatch run build:check-all
