@@ -1314,3 +1314,39 @@ macros:
   - name: bar
     description: Lorem ipsum.
 """
+
+my_func_sql = """
+value * 2
+"""
+
+my_func_yml = """
+functions:
+  - name: my_func
+    description: "Doubles an integer"
+    arguments:
+      - name: value
+        data_type: int
+        description: "An integer to be doubled"
+    returns:
+      data_type: int
+"""
+
+updated_my_func_sql = """
+number * 2.0
+"""
+
+updated_my_func_yml = """
+functions:
+  - name: my_func
+    description: "Doubles a float"
+    arguments:
+      - name: number
+        data_type: float
+        description: "A float to be doubled"
+    returns:
+      data_type: float
+"""
+
+model_using_function_sql = """
+SELECT {{ function('my_func') }}(1) as result
+"""
