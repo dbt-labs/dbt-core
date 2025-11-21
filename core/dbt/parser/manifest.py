@@ -1660,7 +1660,13 @@ def _check_resource_uniqueness(
             if get_flags().require_unique_project_resource_names:
                 raise DuplicateResourceNameError(existing_unversioned_node, node)
             else:
-                continue
+                dbt.deprecations.warn(
+                    "duplicate-name-distinct-node-types-deprecation",
+                    resource_name=node.name,
+                    unique_id1=existing_unversioned_node.unique_id,
+                    unique_id2=node.unique_id,
+                    package_name=node.package_name,
+                )
 
         if node.is_versioned:
             name_resources[node.package_name]["ver"][node.name] = node

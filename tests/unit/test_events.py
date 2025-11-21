@@ -176,6 +176,9 @@ sample_values = [
     core_types.ArgumentsPropertyInGenericTestDeprecation(test_name=""),
     core_types.MissingArgumentsPropertyInGenericTestDeprecation(test_name=""),
     core_types.ModulesItertoolsUsageDeprecation(),
+    core_types.DuplicateNameDistinctNodeTypesDeprecation(
+        resource_name="", package_name="", unique_id1="", unique_id2=""
+    ),
     # E - DB Adapter ======================
     adapter_types.AdapterEventDebug(),
     adapter_types.AdapterEventInfo(),

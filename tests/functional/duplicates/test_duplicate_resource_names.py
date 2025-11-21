@@ -3,7 +3,7 @@ import pytest
 from dbt.exceptions import DuplicateResourceNameError
 from dbt.tests.util import run_dbt
 
-# Test resources with duplicate names
+# Test resources with duplicate names but different database aliases
 model_sql = """
 select 1 as id, 'test' as name
 """
@@ -12,6 +12,13 @@ seed_csv = """
 id,value
 1,test
 2,another
+"""
+
+
+macros_sql = """
+{% macro generate_alias_name(custom_alias_name, node) -%}
+    {{ node.name }}_{{ node.resource_type }}
+{%- endmacro %}
 """
 
 
@@ -26,6 +33,12 @@ class BaseTestDuplicateNames:
     def seeds(self):
         return {
             "same_name.csv": seed_csv,
+        }
+
+    @pytest.fixture(scope="class")
+    def macros(self):
+        return {
+            "generate_alias_name.sql": macros_sql,
         }
 
 
