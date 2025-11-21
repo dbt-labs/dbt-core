@@ -1305,9 +1305,19 @@ pub fn build_flat_graph(nodes: &Nodes) -> MutableMap {
         Value::from("sources"),
         Value::from_serialize(sources_insert),
     );
+    let exposures_insert: BTreeMap<String, Value> = nodes
+        .exposures
+        .iter()
+        .map(|(unique_id, exposure)| {
+            (
+                unique_id.clone(),
+                Value::from_serialize((Arc::as_ref(exposure) as &dyn InternalDbtNode).serialize()),
+            )
+        })
+        .collect();
     graph.insert(
         Value::from("exposures"),
-        Value::from_serialize(BTreeMap::<String, Value>::new()),
+        Value::from_serialize(exposures_insert),
     );
     graph.insert(
         Value::from("groups"),
