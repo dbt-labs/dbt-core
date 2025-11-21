@@ -1299,15 +1299,25 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
 
         match hard_deletes {
             None => Ok("ignore".to_string()),
-            Some(val) => match val.as_str() {
-                Some("invalidate") => Ok("invalidate".to_string()),
-                Some("new_record") => Ok("new_record".to_string()),
-                Some("ignore") => Ok("ignore".to_string()),
-                Some(_) | None => Err(AdapterError::new(
-                    AdapterErrorKind::Configuration,
-                    "Invalid setting for property hard_deletes.",
-                )),
-            },
+            Some(val) => {
+                // Treat null values same as missing (None)
+                if val.is_none() {
+                    return Ok("ignore".to_string());
+                }
+                match val.as_str() {
+                    Some("invalidate") => Ok("invalidate".to_string()),
+                    Some("new_record") => Ok("new_record".to_string()),
+                    Some("ignore") => Ok("ignore".to_string()),
+                    Some(_) => Err(AdapterError::new(
+                        AdapterErrorKind::Configuration,
+                        "Invalid string value for property hard_deletes.",
+                    )),
+                    None => Err(AdapterError::new(
+                        AdapterErrorKind::Configuration,
+                        "Invalid type for property hard_deletes (expected string).",
+                    )),
+                }
+            }
         }
     }
 

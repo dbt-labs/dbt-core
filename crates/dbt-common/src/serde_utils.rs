@@ -28,6 +28,7 @@ fn convert_yml_value(yml: YmlValue) -> MinijinjaValue {
         YmlValue::Sequence(arr, _) => {
             MinijinjaValue::from_iter(arr.into_iter().map(convert_yml_value))
         }
+        YmlValue::Null(_) => MinijinjaValue::from(None::<()>),
         _ => MinijinjaValue::from_serialize(yml),
     }
 }
@@ -94,6 +95,7 @@ fn convert_yml_value_ordered(yml: YmlValue) -> MinijinjaValue {
         YmlValue::Sequence(arr, _) => {
             MinijinjaValue::from_iter(arr.into_iter().map(convert_yml_value))
         }
+        YmlValue::Null(_) => MinijinjaValue::from(None::<()>),
         _ => MinijinjaValue::from_serialize(yml),
     }
 }

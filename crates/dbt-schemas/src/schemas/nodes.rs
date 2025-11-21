@@ -181,7 +181,16 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
     fn resource_type(&self) -> NodeType;
     fn as_any(&self) -> &dyn Any;
     fn serialize(&self) -> YmlValue {
-        let mut ret = self.serialize_inner();
+        self.serialize_with_mode(crate::schemas::serialization_utils::SerializationMode::OmitNone)
+    }
+    fn serialize_for_jinja(&self) -> YmlValue {
+        self.serialize_with_mode(crate::schemas::serialization_utils::SerializationMode::KeepNone)
+    }
+    fn serialize_with_mode(
+        &self,
+        mode: crate::schemas::serialization_utils::SerializationMode,
+    ) -> YmlValue {
+        let mut ret = self.serialize_inner(mode);
         if let YmlValue::Mapping(ref mut map, _) = ret {
             map.insert(
                 YmlValue::string("resource_type".to_string()),
@@ -190,7 +199,10 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
         }
         ret
     }
-    fn serialize_inner(&self) -> YmlValue;
+    fn serialize_inner(
+        &self,
+        mode: crate::schemas::serialization_utils::SerializationMode,
+    ) -> YmlValue;
 
     // Selector functions
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool;
@@ -447,8 +459,11 @@ impl InternalDbtNode for DbtModel {
         self
     }
 
-    fn serialize_inner(&self) -> YmlValue {
-        dbt_serde_yaml::to_value(self).expect("Failed to serialize to YAML")
+    fn serialize_inner(
+        &self,
+        mode: crate::schemas::serialization_utils::SerializationMode,
+    ) -> YmlValue {
+        crate::schemas::serialization_utils::serialize_with_mode(self, mode)
     }
 
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
@@ -539,8 +554,11 @@ impl InternalDbtNode for DbtSeed {
         self
     }
 
-    fn serialize_inner(&self) -> YmlValue {
-        dbt_serde_yaml::to_value(self).expect("Failed to serialize to YAML")
+    fn serialize_inner(
+        &self,
+        mode: crate::schemas::serialization_utils::SerializationMode,
+    ) -> YmlValue {
+        crate::schemas::serialization_utils::serialize_with_mode(self, mode)
     }
 
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
@@ -612,8 +630,11 @@ impl InternalDbtNode for DbtTest {
         self.defined_at.as_ref()
     }
 
-    fn serialize_inner(&self) -> YmlValue {
-        dbt_serde_yaml::to_value(self).expect("Failed to serialize to YAML")
+    fn serialize_inner(
+        &self,
+        mode: crate::schemas::serialization_utils::SerializationMode,
+    ) -> YmlValue {
+        crate::schemas::serialization_utils::serialize_with_mode(self, mode)
     }
 
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
@@ -683,8 +704,11 @@ impl InternalDbtNode for DbtUnitTest {
         self
     }
 
-    fn serialize_inner(&self) -> YmlValue {
-        dbt_serde_yaml::to_value(self).expect("Failed to serialize to YAML")
+    fn serialize_inner(
+        &self,
+        mode: crate::schemas::serialization_utils::SerializationMode,
+    ) -> YmlValue {
+        crate::schemas::serialization_utils::serialize_with_mode(self, mode)
     }
 
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
@@ -767,8 +791,11 @@ impl InternalDbtNode for DbtSource {
         self
     }
 
-    fn serialize_inner(&self) -> YmlValue {
-        dbt_serde_yaml::to_value(self).expect("Failed to serialize to YAML")
+    fn serialize_inner(
+        &self,
+        mode: crate::schemas::serialization_utils::SerializationMode,
+    ) -> YmlValue {
+        crate::schemas::serialization_utils::serialize_with_mode(self, mode)
     }
 
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
@@ -844,8 +871,11 @@ impl InternalDbtNode for DbtSnapshot {
         self
     }
 
-    fn serialize_inner(&self) -> YmlValue {
-        dbt_serde_yaml::to_value(self).expect("Failed to serialize to YAML")
+    fn serialize_inner(
+        &self,
+        mode: crate::schemas::serialization_utils::SerializationMode,
+    ) -> YmlValue {
+        crate::schemas::serialization_utils::serialize_with_mode(self, mode)
     }
 
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
@@ -940,8 +970,11 @@ impl InternalDbtNode for DbtExposure {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    fn serialize_inner(&self) -> YmlValue {
-        dbt_serde_yaml::to_value(self).expect("Failed to serialize to YAML")
+    fn serialize_inner(
+        &self,
+        mode: crate::schemas::serialization_utils::SerializationMode,
+    ) -> YmlValue {
+        crate::schemas::serialization_utils::serialize_with_mode(self, mode)
     }
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(other_exposure) = other.as_any().downcast_ref::<DbtExposure>() {
@@ -1006,8 +1039,11 @@ impl InternalDbtNode for DbtSemanticModel {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    fn serialize_inner(&self) -> YmlValue {
-        dbt_serde_yaml::to_value(self).expect("Failed to serialize to YAML")
+    fn serialize_inner(
+        &self,
+        mode: crate::schemas::serialization_utils::SerializationMode,
+    ) -> YmlValue {
+        crate::schemas::serialization_utils::serialize_with_mode(self, mode)
     }
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(_other_semantic_model) = other.as_any().downcast_ref::<DbtSemanticModel>() {
@@ -1066,8 +1102,11 @@ impl InternalDbtNode for DbtMetric {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    fn serialize_inner(&self) -> YmlValue {
-        dbt_serde_yaml::to_value(self).expect("Failed to serialize to YAML")
+    fn serialize_inner(
+        &self,
+        mode: crate::schemas::serialization_utils::SerializationMode,
+    ) -> YmlValue {
+        crate::schemas::serialization_utils::serialize_with_mode(self, mode)
     }
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(other_metric) = other.as_any().downcast_ref::<DbtMetric>() {
@@ -1125,8 +1164,11 @@ impl InternalDbtNode for DbtSavedQuery {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    fn serialize_inner(&self) -> YmlValue {
-        dbt_serde_yaml::to_value(self).expect("Failed to serialize to YAML")
+    fn serialize_inner(
+        &self,
+        mode: crate::schemas::serialization_utils::SerializationMode,
+    ) -> YmlValue {
+        crate::schemas::serialization_utils::serialize_with_mode(self, mode)
     }
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(other_saved_query) = other.as_any().downcast_ref::<DbtSavedQuery>() {
@@ -1186,8 +1228,11 @@ impl InternalDbtNode for DbtFunction {
         self
     }
 
-    fn serialize_inner(&self) -> YmlValue {
-        dbt_serde_yaml::to_value(self).expect("Failed to serialize to YAML")
+    fn serialize_inner(
+        &self,
+        mode: crate::schemas::serialization_utils::SerializationMode,
+    ) -> YmlValue {
+        crate::schemas::serialization_utils::serialize_with_mode(self, mode)
     }
 
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
@@ -1265,8 +1310,11 @@ impl InternalDbtNode for DbtMacro {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    fn serialize_inner(&self) -> YmlValue {
-        dbt_serde_yaml::to_value(self).expect("Failed to serialize to YAML")
+    fn serialize_inner(
+        &self,
+        mode: crate::schemas::serialization_utils::SerializationMode,
+    ) -> YmlValue {
+        crate::schemas::serialization_utils::serialize_with_mode(self, mode)
     }
     fn has_same_config(&self, _other: &dyn InternalDbtNode) -> bool {
         unimplemented!("macro config comparison")
@@ -2731,8 +2779,11 @@ impl InternalDbtNode for DbtAnalysis {
         self
     }
 
-    fn serialize_inner(&self) -> YmlValue {
-        dbt_serde_yaml::to_value(self).expect("Failed to serialize to YAML")
+    fn serialize_inner(
+        &self,
+        mode: crate::schemas::serialization_utils::SerializationMode,
+    ) -> YmlValue {
+        crate::schemas::serialization_utils::serialize_with_mode(self, mode)
     }
 
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {

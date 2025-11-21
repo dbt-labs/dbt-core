@@ -1249,20 +1249,24 @@ pub fn build_flat_graph(nodes: &Nodes) -> MutableMap {
         .map(|(unique_id, model)| {
             (
                 unique_id.clone(),
-                Value::from_serialize((Arc::as_ref(model) as &dyn InternalDbtNode).serialize()),
+                Value::from_serialize(
+                    (Arc::as_ref(model) as &dyn InternalDbtNode).serialize_for_jinja(),
+                ),
             )
         })
         .chain(nodes.snapshots.iter().map(|(unique_id, snapshot)| {
             (
                 unique_id.clone(),
-                Value::from_serialize((Arc::as_ref(snapshot) as &dyn InternalDbtNode).serialize()),
+                Value::from_serialize(
+                    (Arc::as_ref(snapshot) as &dyn InternalDbtNode).serialize_for_jinja(),
+                ),
             )
         }))
         .chain(nodes.tests.iter().map(|(unique_id, test)| {
             // For tests, update original_file_path to use patch_path if it exists
             // we also do this this when we write the test to the manifest
             // (indicates test was defined in a YAML file)
-            let mut serialized = (Arc::as_ref(test) as &dyn InternalDbtNode).serialize();
+            let mut serialized = (Arc::as_ref(test) as &dyn InternalDbtNode).serialize_for_jinja();
             if let YmlValue::Mapping(ref mut map, _) = serialized
                 && let Some(patch_path) = &test.__common_attr__.patch_path
             {
@@ -1276,7 +1280,9 @@ pub fn build_flat_graph(nodes: &Nodes) -> MutableMap {
         .chain(nodes.seeds.iter().map(|(unique_id, seed)| {
             (
                 unique_id.clone(),
-                Value::from_serialize((Arc::as_ref(seed) as &dyn InternalDbtNode).serialize()),
+                Value::from_serialize(
+                    (Arc::as_ref(seed) as &dyn InternalDbtNode).serialize_for_jinja(),
+                ),
             )
         }))
         .collect();
@@ -1288,7 +1294,9 @@ pub fn build_flat_graph(nodes: &Nodes) -> MutableMap {
         .map(|(unique_id, source)| {
             (
                 unique_id.clone(),
-                Value::from_serialize((Arc::as_ref(source) as &dyn InternalDbtNode).serialize()),
+                Value::from_serialize(
+                    (Arc::as_ref(source) as &dyn InternalDbtNode).serialize_for_jinja(),
+                ),
             )
         })
         .collect();

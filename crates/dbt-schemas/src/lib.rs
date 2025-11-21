@@ -12,6 +12,7 @@ pub mod schemas {
     pub mod data_tests;
     pub mod dbt_catalogs;
     pub mod dbt_column;
+    pub mod serialization_utils;
 
     pub use dbt_catalogs::{
         AdapterPropsView, CatalogSpecView, CatalogType, DatabricksUnityPropsView, DbtCatalogsView,

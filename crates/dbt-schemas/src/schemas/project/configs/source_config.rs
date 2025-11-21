@@ -3,7 +3,6 @@ use dbt_serde_yaml::{JsonSchema, ShouldBe, Spanned};
 use serde::{Deserialize, Serialize};
 // Type aliases for clarity
 type YmlValue = dbt_serde_yaml::Value;
-use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
 use std::collections::btree_map::Iter;
 
@@ -19,7 +18,7 @@ use crate::schemas::serde::{
     StringOrArrayOfStrings, bool_or_string_bool, f64_or_string_f64, u64_or_string_u64,
 };
 
-#[skip_serializing_none]
+// NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct ProjectSourceConfig {
     #[serde(default, rename = "+enabled", deserialize_with = "bool_or_string_bool")]
@@ -257,7 +256,7 @@ impl TypedRecursiveConfig for ProjectSourceConfig {
     }
 }
 
-#[skip_serializing_none]
+// NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
 #[derive(Deserialize, Serialize, Debug, Clone, Default, PartialEq, JsonSchema)]
 pub struct SourceConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]

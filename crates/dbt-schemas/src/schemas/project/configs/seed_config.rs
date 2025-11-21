@@ -272,7 +272,7 @@ impl TypedRecursiveConfig for ProjectSeedConfig {
     }
 }
 
-#[skip_serializing_none]
+// NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
 #[derive(Deserialize, Serialize, Debug, Default, PartialEq, Clone, JsonSchema)]
 pub struct SeedConfig {
     pub column_types: Option<BTreeMap<Spanned<String>, String>>,

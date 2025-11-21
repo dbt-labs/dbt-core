@@ -228,7 +228,7 @@ pub fn yml_value_to_string(value: &YmlValue) -> Option<String> {
 /// Convert YmlValue to minijinja::Value
 pub fn yml_value_to_minijinja(value: YmlValue) -> MinijinjaValue {
     match value {
-        YmlValue::Null(_) => MinijinjaValue::from(()),
+        YmlValue::Null(_) => MinijinjaValue::from(None::<()>),
         YmlValue::Bool(b, _) => MinijinjaValue::from(b),
         YmlValue::String(s, _) => MinijinjaValue::from(s),
         YmlValue::Number(n, _) => {

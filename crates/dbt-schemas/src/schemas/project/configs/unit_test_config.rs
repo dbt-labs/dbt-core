@@ -23,7 +23,7 @@ use crate::{
     },
 };
 
-#[skip_serializing_none]
+// NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct ProjectUnitTestConfig {
     #[serde(default, rename = "+enabled", deserialize_with = "bool_or_string_bool")]

@@ -695,6 +695,11 @@ fn generate_test_macro(
     if let Some(cfg) = config {
         // we write the config out as a JSON in {{ config(...) }}
         let cfg_val = dbt_serde_yaml::to_value(cfg).map_err(|e| yaml_to_fs_error(e, None))?;
+        // Strip null fields so they don't become undefined in Jinja
+        let cfg_val = dbt_schemas::schemas::serialization_utils::serialize_with_mode(
+            &cfg_val,
+            dbt_schemas::schemas::serialization_utils::SerializationMode::OmitNone,
+        );
         let config_str = serde_json::to_string(&cfg_val)
             .map_err(|e| fs_err!(ErrorCode::SchemaError, "Failed to serialize config: {}", e))?;
 

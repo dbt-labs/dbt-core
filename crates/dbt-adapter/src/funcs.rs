@@ -183,11 +183,13 @@ pub fn dispatch_adapter_calls(
             let mut config_map = BTreeMap::<String, Value>::new();
             if let Some(hard_deletes) = hard_deletes
                 && !hard_deletes.is_undefined()
+                && !hard_deletes.is_none()
             {
                 config_map.insert("hard_deletes".to_string(), hard_deletes);
             }
             if let Some(invalidate_hard_deletes) = invalidate_hard_deletes
                 && !invalidate_hard_deletes.is_undefined()
+                && !invalidate_hard_deletes.is_none()
             {
                 config_map.insert(
                     "invalidate_hard_deletes".to_string(),

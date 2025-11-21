@@ -6,7 +6,6 @@ use dbt_serde_yaml::Verbatim;
 use serde::{Deserialize, Serialize};
 // Type aliases for clarity
 type YmlValue = dbt_serde_yaml::Value;
-use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
 use std::collections::btree_map::Iter;
 
@@ -40,7 +39,7 @@ use crate::schemas::serde::{
 };
 use dbt_serde_yaml::ShouldBe;
 
-#[skip_serializing_none]
+// NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct ProjectModelConfig {
     #[serde(rename = "+access")]

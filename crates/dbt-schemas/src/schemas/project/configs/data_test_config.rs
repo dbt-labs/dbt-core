@@ -3,7 +3,6 @@ use dbt_serde_yaml::{JsonSchema, ShouldBe, Spanned};
 use serde::{Deserialize, Serialize};
 // Type aliases for clarity
 type YmlValue = dbt_serde_yaml::Value;
-use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
 use std::collections::btree_map::Iter;
 
@@ -22,7 +21,7 @@ use crate::schemas::serde::{
     StringOrArrayOfStrings, bool_or_string_bool, f64_or_string_f64, u64_or_string_u64,
 };
 
-#[skip_serializing_none]
+// NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct ProjectDataTestConfig {
     #[serde(rename = "+alias")]
@@ -35,6 +34,12 @@ pub struct ProjectDataTestConfig {
     pub error_if: Option<String>,
     #[serde(rename = "+fail_calc")]
     pub fail_calc: Option<String>,
+    #[serde(
+        default,
+        rename = "+full_refresh",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub full_refresh: Option<bool>,
     #[serde(rename = "+group")]
     pub group: Option<String>,
     #[serde(rename = "+limit")]
@@ -279,7 +284,7 @@ impl TypedRecursiveConfig for ProjectDataTestConfig {
     }
 }
 
-#[skip_serializing_none]
+// NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
 #[derive(Deserialize, Serialize, Debug, Clone, Default, JsonSchema)]
 pub struct DataTestConfig {
     pub alias: Option<String>,
@@ -291,6 +296,8 @@ pub struct DataTestConfig {
     pub enabled: Option<bool>,
     pub error_if: Option<String>,
     pub fail_calc: Option<String>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub full_refresh: Option<bool>,
     pub group: Option<String>,
     pub limit: Option<i32>,
     pub meta: Option<BTreeMap<String, YmlValue>>,
@@ -317,6 +324,7 @@ impl From<ProjectDataTestConfig> for DataTestConfig {
             enabled: config.enabled,
             error_if: config.error_if,
             fail_calc: config.fail_calc,
+            full_refresh: config.full_refresh,
             group: config.group,
             limit: config.limit,
             meta: config.meta,
@@ -418,6 +426,7 @@ impl From<DataTestConfig> for ProjectDataTestConfig {
             enabled: config.enabled,
             error_if: config.error_if,
             fail_calc: config.fail_calc,
+            full_refresh: config.full_refresh,
             group: config.group,
             limit: config.limit,
             meta: config.meta,
@@ -530,6 +539,7 @@ impl DefaultTo<DataTestConfig> for DataTestConfig {
             enabled,
             error_if,
             fail_calc,
+            full_refresh,
             group,
             limit,
             meta,
@@ -570,6 +580,7 @@ impl DefaultTo<DataTestConfig> for DataTestConfig {
                 error_if,
                 warn_if,
                 fail_calc,
+                full_refresh,
                 alias,
                 database,
                 schema,

@@ -133,7 +133,9 @@ impl Schedule<String> {
                 .expect("selected node not in manifest");
             let content = match output_format {
                 ListOutputFormat::Json => {
-                    let node_yaml_value = dbt_serde_yaml::to_value(node.serialize()).unwrap();
+                    // Use serialize_for_jinja to keep null fields for dbt-core compatibility (omit_none=False)
+                    let node_yaml_value =
+                        dbt_serde_yaml::to_value(node.serialize_for_jinja()).unwrap();
                     let node_value = serde_json::to_value(node_yaml_value).unwrap();
                     Self::generate_json_output(&node_value, output_keys)
                 }

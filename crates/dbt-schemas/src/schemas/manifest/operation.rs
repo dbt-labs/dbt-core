@@ -46,8 +46,11 @@ impl InternalDbtNode for DbtOperation {
         self
     }
 
-    fn serialize_inner(&self) -> YmlValue {
-        dbt_serde_yaml::to_value(self).expect("Failed to serialize to YAML")
+    fn serialize_inner(
+        &self,
+        mode: crate::schemas::serialization_utils::SerializationMode,
+    ) -> YmlValue {
+        crate::schemas::serialization_utils::serialize_with_mode(self, mode)
     }
 
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {

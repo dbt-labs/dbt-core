@@ -1,7 +1,6 @@
 use crate::schemas::serde::bool_or_string_bool;
 use dbt_serde_yaml::{JsonSchema, ShouldBe};
 use serde::{Deserialize, Serialize};
-use serde_with::skip_serializing_none;
 use std::collections::{BTreeMap, btree_map::Iter};
 
 // Type aliases for clarity
@@ -15,7 +14,7 @@ use crate::{
     },
 };
 
-#[skip_serializing_none]
+// NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct ProjectSemanticModelConfig {
     #[serde(default, rename = "+enabled", deserialize_with = "bool_or_string_bool")]
@@ -40,7 +39,7 @@ impl TypedRecursiveConfig for ProjectSemanticModelConfig {
     }
 }
 
-#[skip_serializing_none]
+// NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
 #[derive(Deserialize, Serialize, Debug, Clone, Default, PartialEq, Eq, JsonSchema)]
 pub struct SemanticModelConfig {
     pub enabled: Option<bool>,

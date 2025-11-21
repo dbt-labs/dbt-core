@@ -1,7 +1,6 @@
 use crate::schemas::project::TypedRecursiveConfig;
 use dbt_serde_yaml::{JsonSchema, ShouldBe};
 use serde::{Deserialize, Serialize};
-use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
 use std::collections::btree_map::Iter;
 
@@ -16,7 +15,7 @@ use crate::{
     },
 };
 
-#[skip_serializing_none]
+// NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq)]
 pub struct ProjectExposureConfig {
     #[serde(rename = "+meta")]
@@ -38,7 +37,7 @@ impl TypedRecursiveConfig for ProjectExposureConfig {
     }
 }
 
-#[skip_serializing_none]
+// NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
 #[derive(Deserialize, Serialize, Debug, Clone, Default, JsonSchema, PartialEq)]
 pub struct ExposureConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]

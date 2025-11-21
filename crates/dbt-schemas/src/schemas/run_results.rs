@@ -53,7 +53,7 @@ where
     S: serde::Serializer,
 {
     match node {
-        Some(node) => node.serialize().serialize(serializer),
+        Some(node) => node.serialize_for_jinja().serialize(serializer),
         None => serializer.serialize_none(),
     }
 }

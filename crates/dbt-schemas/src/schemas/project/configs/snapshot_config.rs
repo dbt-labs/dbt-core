@@ -33,7 +33,7 @@ use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::bool_or_string_bool;
 use crate::schemas::serde::{f64_or_string_f64, u64_or_string_u64};
 
-#[skip_serializing_none]
+// NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct ProjectSnapshotConfig {
     // Snapshot-specific Configuration
@@ -68,6 +68,12 @@ pub struct ProjectSnapshotConfig {
     // General Configuration
     #[serde(default, rename = "+enabled", deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
+    #[serde(
+        default,
+        rename = "+full_refresh",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub full_refresh: Option<bool>,
     #[serde(rename = "+tags")]
     pub tags: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+pre-hook")]
@@ -312,7 +318,7 @@ impl TypedRecursiveConfig for ProjectSnapshotConfig {
     }
 }
 
-#[skip_serializing_none]
+// NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, Default, PartialEq)]
 pub struct SnapshotConfig {
     // Snapshot-specific Configuration
@@ -336,6 +342,8 @@ pub struct SnapshotConfig {
     // General Configuration
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub full_refresh: Option<bool>,
     pub tags: Option<StringOrArrayOfStrings>,
     #[serde(alias = "pre-hook")]
     pub pre_hook: Verbatim<Option<Hooks>>,
@@ -472,6 +480,7 @@ impl From<ProjectSnapshotConfig> for SnapshotConfig {
             target_database: config.target_database,
             target_schema: config.target_schema,
             enabled: config.enabled,
+            full_refresh: config.full_refresh,
             tags: config.tags,
             pre_hook: config.pre_hook,
             post_hook: config.post_hook,
@@ -581,6 +590,7 @@ impl From<SnapshotConfig> for ProjectSnapshotConfig {
             target_database: config.target_database,
             target_schema: config.target_schema,
             enabled: config.enabled,
+            full_refresh: config.full_refresh,
             tags: config.tags,
             pre_hook: config.pre_hook,
             post_hook: config.post_hook,
@@ -711,6 +721,7 @@ impl DefaultTo<SnapshotConfig> for SnapshotConfig {
             target_database,
             target_schema,
             enabled,
+            full_refresh,
             tags,
             pre_hook,
             post_hook,
@@ -751,6 +762,7 @@ impl DefaultTo<SnapshotConfig> for SnapshotConfig {
             parent,
             [
                 enabled,
+                full_refresh,
                 alias,
                 schema,
                 database,
