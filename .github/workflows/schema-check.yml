@@ -22,7 +22,7 @@ on:
       target_branch:
         description: "The branch to check against"
         type: string
-        default: 'main'
+        default: "main"
         required: true
 
 # no special access is needed
@@ -48,8 +48,8 @@ jobs:
       - name: Checkout dbt repo
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
         with:
-            path: ${{ env.DBT_REPO_DIRECTORY }}
-            ref: ${{ inputs.target_branch }}
+          path: ${{ env.DBT_REPO_DIRECTORY }}
+          ref: ${{ inputs.target_branch }}
 
       - name: Check for changes in core/dbt/artifacts
         # https://github.com/marketplace/actions/paths-changes-filter
@@ -72,18 +72,16 @@ jobs:
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
         with:
           repository: dbt-labs/schemas.getdbt.com
-          ref: 'main'
+          ref: "main"
           path: ${{ env.SCHEMA_REPO_DIRECTORY }}
 
       - name: Generate current schema
         if: steps.check_artifact_changes.outputs.artifacts_changed == 'true'
         run: |
-          cd ${{ env.DBT_REPO_DIRECTORY }}
-          python3 -m venv env
-          source env/bin/activate
-          pip install --upgrade pip
-          pip install -r dev-requirements.txt -r editable-requirements.txt
-          python scripts/collect-artifact-schema.py --path ${{ env.LATEST_SCHEMA_PATH }}
+          cd ${{ env.DBT_REPO_DIRECTORY }}/core
+          pip install --upgrade pip hatch
+          hatch run setup
+          hatch run json-schema -- --path ${{ env.LATEST_SCHEMA_PATH }}
 
       # Copy generated schema files into the schemas.getdbt.com repo
       # Do a git diff to find any changes
@@ -99,5 +97,5 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # actions/upload-artifact@v4
         if: ${{ failure() && steps.check_artifact_changes.outputs.artifacts_changed == 'true' }}
         with:
-          name: 'schema_changes.txt'
-          path: '${{ env.SCHEMA_DIFF_ARTIFACT }}'
+          name: "schema_changes.txt"
+          path: "${{ env.SCHEMA_DIFF_ARTIFACT }}"
