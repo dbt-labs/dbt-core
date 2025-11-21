@@ -121,7 +121,7 @@ dependencies = [
 
 [envs.ci.scripts]
 unit-tests = "tox -e unit"
-integration-tests = "tox {args}"
+integration-tests = "tox -- {args}"
 
 [envs.cd]
 dependencies = [
