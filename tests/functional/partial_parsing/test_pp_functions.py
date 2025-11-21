@@ -2,10 +2,11 @@ import pytest
 
 from dbt.artifacts.resources import FunctionArgument, FunctionReturns
 from dbt.contracts.graph.manifest import Manifest
-from dbt.tests.util import run_dbt, write_file
+from dbt.tests.util import run_dbt, update_config_file, write_file
 from dbt_common.events.event_catcher import EventCatcher
 from dbt_common.events.types import Note
 from tests.functional.partial_parsing.fixtures import (
+    model_using_function_sql,
     my_func_sql,
     my_func_yml,
     updated_my_func_sql,
@@ -69,3 +70,46 @@ class TestPartialParsingFunctions:
         assert (
             note_catcher.caught_events[0].info.msg == "Nothing changed, skipping partial parsing."
         )
+
+
+class TestPartialParsingFunctionsAndCompilationOfDownstreamNodes:
+    @pytest.fixture(scope="class")
+    def functions(self):
+        return {
+            "my_func.sql": my_func_sql,
+            "my_func.yml": my_func_yml,
+        }
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "model_using_function.sql": model_using_function_sql,
+        }
+
+    def test_pp_functions(self, project):
+        result = run_dbt(["compile"])
+        # one function node and one model node
+        assert len(result.results) == 2
+        assert result.results[0].node.name == "my_func"
+        assert result.results[0].node.config.alias is None
+        assert result.results[1].node.name == "model_using_function"
+        # `my_func` should be the third part of the name for the function in the compiled code
+        assert "my_func" in result.results[1].node.compiled_code
+
+        # Add an alias to `my_func`
+        add_function_alias = {
+            "functions": {
+                "+alias": "aliased_my_func",
+            }
+        }
+        update_config_file(add_function_alias, "dbt_project.yml")
+
+        # Recompile
+        result = run_dbt(["compile"])
+        # one function node and one model node
+        assert len(result.results) == 2
+        assert result.results[0].node.name == "my_func"
+        assert result.results[0].node.config.alias == "aliased_my_func"
+        assert result.results[1].node.name == "model_using_function"
+        # `aliased_my_func` should be the third part of the name for the function in the compiled code
+        assert "aliased_my_func" in result.results[1].node.compiled_code

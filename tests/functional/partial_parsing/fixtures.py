@@ -1346,3 +1346,7 @@ functions:
     returns:
       data_type: float
 """
+
+model_using_function_sql = """
+SELECT {{ function('my_func') }}(1) as result
+"""
