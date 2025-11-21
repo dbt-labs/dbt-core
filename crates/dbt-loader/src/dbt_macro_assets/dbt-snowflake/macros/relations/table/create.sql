@@ -111,12 +111,13 @@ create or replace {{ transient }} table {{ relation }}
     {% if row_access_policy -%} with row access policy {{ row_access_policy }} {%- endif %}
     {% if table_tag -%} with tag ({{ table_tag }}) {%- endif %}
     as (
-	{%- if catalog_relation.cluster_by -%}
+    {#- TODO: when we store this under the Catalog Relation, we can change this back to how it is in Core -#}
+	{%- if cluster_by_string -%}
         select * from (
             {{ compiled_code }}
         )
         order by (
-            {{ catalog_relation.cluster_by }}
+            {{ cluster_by_string }}
         )
         {%- else -%}
         {{ compiled_code }}
@@ -206,7 +207,7 @@ as (
 ;
 
 {% if cluster_by_string -%}
-alter table {{relation}} cluster by ({{cluster_by_string}});
+alter iceberg table {{relation}} cluster by ({{cluster_by_string}});
 {%- endif -%}
 
 {% if enable_automatic_clustering and cluster_by_string %}
