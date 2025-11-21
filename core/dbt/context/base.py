@@ -714,7 +714,7 @@ class BaseContext(metaclass=ContextMeta):
         dict_diff = {}
         dict_b_lowered = {k.casefold(): [x.casefold() for x in v] for k, v in dict_b.items()}
         for k in dict_a:
-            if k.casefold() in dict_b_lowered.keys():
+            if k.casefold() in dict_b_lowered:
                 diff = []
                 for v in dict_a[k]:
                     if v.casefold() not in dict_b_lowered[k.casefold()]:
