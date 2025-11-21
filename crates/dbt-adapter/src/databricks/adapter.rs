@@ -29,12 +29,9 @@ use dbt_common::behavior_flags::BehaviorFlag;
 
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::common::{ConstraintSupport, ConstraintType, DbtMaterialization};
-use dbt_schemas::schemas::nodes::AdapterAttr;
 use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::relations::base::BaseRelation;
-use dbt_schemas::schemas::{
-    BaseRelationConfig, DbtModel, DbtModelAttr, InternalDbtNodeAttributes, InternalDbtNodeWrapper,
-};
+use dbt_schemas::schemas::{BaseRelationConfig, InternalDbtNodeAttributes, InternalDbtNodeWrapper};
 use dbt_xdbc::{Connection, QueryCtx};
 use indexmap::IndexMap;
 use minijinja::{State, Value};
@@ -428,25 +425,11 @@ impl TypedBaseAdapter for DatabricksAdapter {
         state: &State,
         conn: &mut dyn Connection,
         config: ModelConfig,
+        node: &InternalDbtNodeWrapper,
         tblproperties: &mut BTreeMap<String, Value>,
     ) -> AdapterResult<()> {
-        // TODO(anna): For now, we treat the model as something of type InternalDbtNode/DbtModel, but serialize it to Jinja the same way we'd do when inserting into context.
-        // And since we serialized the `RunConfig` as a `ModelConfig`, we create a dummy model here.
-        let model = DbtModel {
-            __model_attr__: DbtModelAttr {
-                catalog_name: config.catalog_name,
-                table_format: config.table_format,
-                ..Default::default()
-            },
-            __adapter_attr__: AdapterAttr::from_config_and_dialect(
-                &config.__warehouse_specific_config__,
-                AdapterType::Databricks,
-            ),
-            ..Default::default()
-        };
-        let node_yml = InternalDbtNodeWrapper::Model(Box::new(model))
-            .as_internal_node()
-            .serialize();
+        // TODO(anna): Ideally from_model_config_and_catalogs would just take in an InternalDbtNodeWrapper instead of a Value. This is blocked by a Snowflake hack in `snowflake__drop_table`.
+        let node_yml = node.as_internal_node().serialize();
         let catalog_relation = CatalogRelation::from_model_config_and_catalogs(
             &self.adapter_type(),
             &Value::from_object(dbt_common::serde_utils::convert_yml_to_value_map(node_yml)),
@@ -508,24 +491,10 @@ impl TypedBaseAdapter for DatabricksAdapter {
         state: &State,
         conn: &mut dyn Connection,
         config: ModelConfig,
+        node: &InternalDbtNodeWrapper,
     ) -> AdapterResult<bool> {
-        // TODO(anna): For now, we treat the model as something of type InternalDbtNode/DbtModel, but serialize it to Jinja the same way we'd do when inserting into context.
-        // And since we serialized the `RunConfig` as a `ModelConfig`, we create a dummy model here.
-        let model = DbtModel {
-            __model_attr__: DbtModelAttr {
-                catalog_name: config.catalog_name,
-                table_format: config.table_format,
-                ..Default::default()
-            },
-            __adapter_attr__: AdapterAttr::from_config_and_dialect(
-                &config.__warehouse_specific_config__,
-                AdapterType::Databricks,
-            ),
-            ..Default::default()
-        };
-        let node_yml = InternalDbtNodeWrapper::Model(Box::new(model))
-            .as_internal_node()
-            .serialize();
+        // TODO(anna): Ideally from_model_config_and_catalogs would just take in an InternalDbtNodeWrapper instead of a Value. This is blocked by a Snowflake hack in `snowflake__drop_table`.
+        let node_yml = node.as_internal_node().serialize();
         let catalog_relation = CatalogRelation::from_model_config_and_catalogs(
             &self.adapter_type(),
             &Value::from_object(dbt_common::serde_utils::convert_yml_to_value_map(node_yml)),

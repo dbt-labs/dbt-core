@@ -642,7 +642,13 @@ impl BaseAdapter for ParseAdapter {
         Ok(none_value())
     }
 
-    fn get_table_options(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn get_table_options(
+        &self,
+        _state: &State,
+        _config: dbt_schemas::schemas::project::ModelConfig,
+        _node: &dbt_schemas::schemas::InternalDbtNodeWrapper,
+        _temporary: bool,
+    ) -> Result<Value, MinijinjaError> {
         Ok(none_value())
     }
 
@@ -737,13 +743,20 @@ impl BaseAdapter for ParseAdapter {
     fn update_tblproperties_for_uniform_iceberg(
         &self,
         _state: &State,
-        _args: &[Value],
+        _config: dbt_schemas::schemas::project::ModelConfig,
+        _node: &dbt_schemas::schemas::InternalDbtNodeWrapper,
+        _tblproperties: Option<Value>,
     ) -> Result<Value, MinijinjaError> {
         Ok(empty_map_value())
     }
 
-    fn is_uniform(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
-        todo!()
+    fn is_uniform(
+        &self,
+        _state: &State,
+        _config: dbt_schemas::schemas::project::ModelConfig,
+        _node: &dbt_schemas::schemas::InternalDbtNodeWrapper,
+    ) -> Result<Value, MinijinjaError> {
+        Ok(Value::from(false))
     }
 
     fn get_incremental_strategy_macro(

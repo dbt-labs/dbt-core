@@ -895,8 +895,22 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
         unimplemented!("only available with BigQuery adapter")
     }
 
-    /// get_table_options
-    fn get_table_options(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    /// Get table options
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/57b131a11ea24b79cfebda003c15456972892427/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L793
+    ///
+    /// ```python
+    /// def get_table_options(
+    ///     self, config: Dict[str, Any], node: Dict[str, Any], temporary: bool
+    /// ) -> Dict[str, Any]:
+    /// ```
+    fn get_table_options(
+        &self,
+        _state: &State,
+        _config: dbt_schemas::schemas::project::ModelConfig,
+        _node: &dbt_schemas::schemas::InternalDbtNodeWrapper,
+        _temporary: bool,
+    ) -> Result<Value, MinijinjaError> {
         unimplemented!("only available with BigQuery adapter")
     }
 
@@ -945,15 +959,36 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
         _args: &[Value],
     ) -> Result<Value, MinijinjaError>;
 
-    /// update_tblproperties_for_uniform_iceberg
+    /// Add UniForm Iceberg table properties.
+    ///
+    /// https://github.com/databricks/dbt-databricks/blob/bfcb5c7c7714e97e67023119f674d2938b04acb0/dbt/adapters/databricks/impl.py#L280
+    ///
+    /// ```python
+    /// def update_tblproperties_for_uniform_iceberg(
+    ///     self, config: BaseConfig, tblproperties: Optional[dict[str, str]] = None
+    /// )  -> dict[str, str]
+    /// ```
     fn update_tblproperties_for_uniform_iceberg(
         &self,
         _state: &State,
-        _args: &[Value],
+        _config: dbt_schemas::schemas::project::ModelConfig,
+        _node: &dbt_schemas::schemas::InternalDbtNodeWrapper,
+        _tblproperties: Option<Value>,
     ) -> Result<Value, MinijinjaError>;
 
-    /// is_uniform
-    fn is_uniform(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError>;
+    /// Is table UniForm Iceberg
+    ///
+    /// https://github.com/databricks/dbt-databricks/blob/bfcb5c7c7714e97e67023119f674d2938b04acb0/dbt/adapters/databricks/impl.py#L256C6-L256C7
+    ///
+    /// ```python
+    /// def is_uniform(self, config: BaseConfig) -> bool:
+    /// ```
+    fn is_uniform(
+        &self,
+        _state: &State,
+        _config: dbt_schemas::schemas::project::ModelConfig,
+        _node: &dbt_schemas::schemas::InternalDbtNodeWrapper,
+    ) -> Result<Value, MinijinjaError>;
 
     /// generate_unique_temporary_table_suffix
     fn generate_unique_temporary_table_suffix(

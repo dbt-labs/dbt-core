@@ -31,7 +31,7 @@ use dbt_schemas::schemas::serde::{minijinja_value_to_typed_struct, yml_value_to_
 use dbt_schemas::schemas::{InternalDbtNodeAttributes, InternalDbtNodeWrapper};
 use dbt_xdbc::Connection;
 use indexmap::IndexMap;
-use minijinja::arg_utils::{ArgParser, ArgsIter, check_num_args};
+use minijinja::arg_utils::{ArgParser, check_num_args};
 use minijinja::dispatch_object::DispatchObject;
 use minijinja::listener::RenderingEventListener;
 use minijinja::value::{Kwargs, Object};
@@ -990,35 +990,16 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn get_table_options(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
-        let mut parser = ArgParser::new(args, None);
-        parser.check_num_args(current_function_name!(), 2, 3)?;
-        let config = parser.get::<Value>("config")?;
-        let node = parser.get::<Value>("node")?;
-        let temporary = parser
-            .get_optional::<Value>("node")
-            .unwrap_or_default()
-            .is_true();
-
-        let node_wrapper = minijinja_value_to_typed_struct::<InternalDbtNodeWrapper>(node)
-            .map_err(|e| {
-                MinijinjaError::new(
-                    MinijinjaErrorKind::SerdeDeserializeError,
-                    format!("get_table_options: Failed to deserialize InternalDbtNodeWrapper: {e}"),
-                )
-            })?;
-
-        // TODO(anna): The value passed in to `get_table_options` is not actually a `ModelConfig`. It is a `RunConfig`. We should fix this.
-        let config = minijinja_value_to_typed_struct::<ModelConfig>(config).map_err(|e| {
-            MinijinjaError::new(
-                MinijinjaErrorKind::SerdeDeserializeError,
-                format!("get_table_options: Failed to deserialize config: {e}"),
-            )
-        })?;
-
-        let options =
-            self.typed_adapter
-                .get_table_options(state, config, &node_wrapper, temporary)?;
+    fn get_table_options(
+        &self,
+        state: &State,
+        config: ModelConfig,
+        node: &InternalDbtNodeWrapper,
+        temporary: bool,
+    ) -> Result<Value, MinijinjaError> {
+        let options = self
+            .typed_adapter
+            .get_table_options(state, config, node, temporary)?;
         Ok(Value::from_serialize(options))
     }
 
@@ -1295,23 +1276,17 @@ impl BaseAdapter for BridgeAdapter {
     fn update_tblproperties_for_uniform_iceberg(
         &self,
         state: &State,
-        args: &[Value],
+        config: ModelConfig,
+        node: &InternalDbtNodeWrapper,
+        tblproperties: Option<Value>,
     ) -> Result<Value, MinijinjaError> {
         if self.adapter_type() != AdapterType::Databricks {
             unimplemented!(
                 "update_tblproperties_for_uniform_iceberg is only supported in Databricks"
             )
         }
-        let mut parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 1, 2)?;
 
-        // TODO(anna): The value passed in to `update_tblproperties_for_uniform_iceberg` is not actually a `ModelConfig`. It is a `RunConfig`. We should fix this.
-        let config = parser.get::<Value>("config")?;
-        let config = minijinja_value_to_typed_struct::<ModelConfig>(config).map_err(|e| {
-            MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
-        })?;
-
-        let mut tblproperties = match parser.get_optional::<Value>("tblproperties") {
+        let mut tblproperties = match tblproperties {
             Some(v) if !v.is_none() => {
                 minijinja_value_to_typed_struct::<BTreeMap<String, Value>>(v).map_err(|e| {
                     MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
@@ -1333,29 +1308,26 @@ impl BaseAdapter for BridgeAdapter {
                 state,
                 conn.as_mut(),
                 config,
+                node,
                 &mut tblproperties,
             )?;
         Ok(Value::from_serialize(&tblproperties))
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn is_uniform(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn is_uniform(
+        &self,
+        state: &State,
+        config: ModelConfig,
+        node: &InternalDbtNodeWrapper,
+    ) -> Result<Value, MinijinjaError> {
         if self.adapter_type() != AdapterType::Databricks {
             unimplemented!("is_uniform is only supported in Databricks")
         }
-        let iter = ArgsIter::new(current_function_name!(), &["config"], args);
-        let config = iter.next_arg::<Value>()?;
-        iter.finish()?;
-
-        // TODO(anna): The value passed in to `update_tblproperties_for_uniform_iceberg` is not actually a `ModelConfig`. It is a `RunConfig`. We should fix this.
-        let config = minijinja_value_to_typed_struct::<ModelConfig>(config).map_err(|e| {
-            MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
-        })?;
-
         let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
         let result = self
             .typed_adapter
-            .is_uniform(state, conn.as_mut(), config)?;
+            .is_uniform(state, conn.as_mut(), config, node)?;
         Ok(Value::from(result))
     }
 

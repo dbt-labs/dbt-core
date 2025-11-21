@@ -173,6 +173,7 @@ pub(crate) fn get_table_options_value(
     let mut opts = get_common_table_options_value(state, config.clone(), common_attr, temporary);
 
     // Node serialization and catalogs lookup are in-memory/pure
+    // TODO(anna): Ideally from_model_config_and_catalogs would just take in an InternalDbtNodeWrapper instead of a Value. This is blocked by a Snowflake hack in `snowflake__drop_table`.
     let node_yml = node.as_internal_node().serialize();
     let catalog_relation = CatalogRelation::from_model_config_and_catalogs(
         &adapter_type,

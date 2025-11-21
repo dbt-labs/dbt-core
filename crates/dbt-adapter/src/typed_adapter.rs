@@ -1137,6 +1137,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         _state: &State,
         _conn: &mut dyn Connection,
         _config: ModelConfig,
+        _node: &InternalDbtNodeWrapper,
         _tblproperties: &mut BTreeMap<String, Value>,
     ) -> AdapterResult<()> {
         unimplemented!("only available with Databricks adapter")
@@ -1148,6 +1149,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         _state: &State,
         _conn: &mut dyn Connection,
         _config: ModelConfig,
+        _node: &InternalDbtNodeWrapper,
     ) -> AdapterResult<bool> {
         unimplemented!("only available with Databricks adapter")
     }

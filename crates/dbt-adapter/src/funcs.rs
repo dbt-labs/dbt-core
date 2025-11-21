@@ -706,7 +706,38 @@ pub fn dispatch_adapter_calls(
 
             adapter.get_common_options(state, config, &node_wrapper, temporary)
         }
-        "get_table_options" => adapter.get_table_options(state, args),
+        "get_table_options" => {
+            // config: dict, node: dict, temporary
+            let iter = ArgsIter::new(name, &["config", "node"], args);
+            let config_val = iter.next_arg::<&Value>()?;
+            let node_val = iter.next_arg::<&Value>()?;
+            let temporary = iter
+                .next_kwarg::<Option<bool>>("temporary")?
+                .unwrap_or_default();
+            iter.finish()?;
+
+            let config = minijinja_value_to_typed_struct::<
+                dbt_schemas::schemas::project::ModelConfig,
+            >(config_val.clone())
+            .map_err(|e| {
+                MinijinjaError::new(
+                    MinijinjaErrorKind::SerdeDeserializeError,
+                    format!("get_table_options: Failed to deserialize config: {e}"),
+                )
+            })?;
+
+            let node_wrapper = minijinja_value_to_typed_struct::<
+                dbt_schemas::schemas::InternalDbtNodeWrapper,
+            >(node_val.clone())
+            .map_err(|e| {
+                MinijinjaError::new(
+                    MinijinjaErrorKind::SerdeDeserializeError,
+                    format!("get_table_options: Failed to deserialize InternalDbtNodeWrapper: {e}"),
+                )
+            })?;
+
+            adapter.get_table_options(state, config, &node_wrapper, temporary)
+        }
         "get_view_options" => {
             // config: dict, node: dict
             let iter = ArgsIter::new(name, &["config", "node"], args);
@@ -774,9 +805,69 @@ pub fn dispatch_adapter_calls(
         "compare_dbr_version" => adapter.compare_dbr_version(state, args),
         "compute_external_path" => adapter.compute_external_path(state, args),
         "update_tblproperties_for_uniform_iceberg" => {
-            adapter.update_tblproperties_for_uniform_iceberg(state, args)
+            // config: dict, tblproperties: Optional[str] = None
+            let iter = ArgsIter::new(name, &["config"], args);
+            let config_val = iter.next_arg::<&Value>()?;
+            let tblproperties = iter.next_kwarg::<Option<Value>>("tblproperties")?;
+            iter.finish()?;
+
+            let config = minijinja_value_to_typed_struct::<
+                dbt_schemas::schemas::project::ModelConfig,
+            >(config_val.clone())
+            .map_err(|e| {
+                MinijinjaError::new(
+                    MinijinjaErrorKind::SerdeDeserializeError,
+                    format!("update_tblproperties_for_uniform_iceberg: Failed to deserialize config: {e}"),
+                )
+            })?;
+
+            let node_val = config_val.get_attr("model")?;
+            let node_wrapper = minijinja_value_to_typed_struct::<
+                dbt_schemas::schemas::InternalDbtNodeWrapper,
+            >(node_val)
+            .map_err(|e| {
+                MinijinjaError::new(
+                    MinijinjaErrorKind::SerdeDeserializeError,
+                    format!("update_tblproperties_for_uniform_iceberg: Failed to deserialize InternalDbtNodeWrapper: {e}"),
+                )
+            })?;
+
+            adapter.update_tblproperties_for_uniform_iceberg(
+                state,
+                config,
+                &node_wrapper,
+                tblproperties,
+            )
         }
-        "is_uniform" => adapter.is_uniform(state, args),
+        "is_uniform" => {
+            // config: dict
+            let iter = ArgsIter::new(name, &["config"], args);
+            let config_val = iter.next_arg::<&Value>()?;
+            iter.finish()?;
+
+            let config = minijinja_value_to_typed_struct::<
+                dbt_schemas::schemas::project::ModelConfig,
+            >(config_val.clone())
+            .map_err(|e| {
+                MinijinjaError::new(
+                    MinijinjaErrorKind::SerdeDeserializeError,
+                    format!("is_uniform: Failed to deserialize config: {e}"),
+                )
+            })?;
+
+            let node_val = config_val.get_attr("model")?;
+            let node_wrapper = minijinja_value_to_typed_struct::<
+                dbt_schemas::schemas::InternalDbtNodeWrapper,
+            >(node_val)
+            .map_err(|e| {
+                MinijinjaError::new(
+                    MinijinjaErrorKind::SerdeDeserializeError,
+                    format!("is_uniform: Failed to deserialize InternalDbtNodeWrapper: {e}"),
+                )
+            })?;
+
+            adapter.is_uniform(state, config, &node_wrapper)
+        }
         "valid_incremental_strategies" => adapter.valid_incremental_strategies(state, args),
         "get_relation_config" => adapter.get_relation_config(state, args),
         "get_config_from_model" => adapter.get_config_from_model(state, args),
