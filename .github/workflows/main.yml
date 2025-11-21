@@ -63,7 +63,11 @@ jobs:
           python -m pip install hatch
           cd core
           hatch run setup
-          dbt --version
+
+      - name: Verify dbt installation
+        run: |
+          cd core
+          hatch run dbt --version
 
       - name: Run pre-commit hooks
         run: |
@@ -228,6 +232,7 @@ jobs:
         with:
           timeout_minutes: 30
           max_attempts: 3
+          shell: bash
           command: cd core && hatch run ci:integration-tests -- --ddtrace
         env:
           PYTEST_ADDOPTS: ${{ format('--splits {0} --group {1}', env.PYTHON_INTEGRATION_TEST_WORKERS, matrix.split-group) }}
@@ -310,6 +315,7 @@ jobs:
         with:
           timeout_minutes: 30
           max_attempts: 3
+          shell: bash
           command: cd core && hatch run ci:integration-tests -- --ddtrace
         env:
           PYTEST_ADDOPTS: ${{ format('--splits {0} --group {1}', env.PYTHON_INTEGRATION_TEST_WORKERS, matrix.split-group) }}
