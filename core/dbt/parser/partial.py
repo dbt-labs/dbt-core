@@ -659,7 +659,7 @@ class PartialParsing:
 
         # Remove the function node from the source file so that it's not viewed as a
         # duplicate when it's re-added
-        source_file.nodes.remove(function_unique_id)
+        source_file.functions.remove(function_unique_id)
 
         # schedule function for parsing.
         # Note: We _don't_ need to schedule referencing nodes for reparsing, because a change in a function changes nothing
