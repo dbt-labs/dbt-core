@@ -1,0 +1,6 @@
+kind: Fixes
+body: On programmatic invocations set CLI parameters before creating the context to prevent failure due to type validations.
+time: 2025-09-18T15:28:52.584487+02:00
+custom:
+    Author: dumkydewilde
+    Issue: "12028"
