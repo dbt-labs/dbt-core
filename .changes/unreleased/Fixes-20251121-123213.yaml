@@ -1,0 +1,7 @@
+kind: Fixes
+body: Pass generic tests config correctly to macros; stop using config values in test names
+time: 2025-11-21T12:32:13.836202-08:00
+custom:
+    author: ""
+    issue: ""
+    project: dbt-fusion

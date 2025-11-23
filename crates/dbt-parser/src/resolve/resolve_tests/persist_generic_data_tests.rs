@@ -551,6 +551,32 @@ fn parse_test_name_and_namespace(test_name: &str) -> (String, Option<String>) {
     }
 }
 
+/// Recursively merge two YAML values with rhs overriding lhs on key collisions.
+/// - For mappings: merge entries; when both sides have a mapping for a key, merge recursively,
+///   otherwise rhs replaces lhs for that key. The resulting mapping keeps the lhs span.
+/// - For sequences and scalars (or differing kinds): rhs replaces lhs entirely.
+fn merge_yaml_values(
+    lhs: dbt_serde_yaml::Value,
+    rhs: dbt_serde_yaml::Value,
+) -> (bool, dbt_serde_yaml::Value) {
+    use dbt_serde_yaml::Value as Y;
+    match (lhs, rhs) {
+        (Y::Mapping(mut lm, lspan), Y::Mapping(rm, _rspan)) => {
+            for (rk, rv) in rm.into_iter() {
+                if let Some(existing) = lm.get_mut(&rk) {
+                    let (_, merged) = merge_yaml_values(std::mem::take(existing), rv);
+                    lm.insert(rk, merged);
+                } else {
+                    lm.insert(rk, rv);
+                }
+            }
+            (!lm.is_empty(), Y::Mapping(lm, lspan))
+        }
+        // For sequences/scalars or differing kinds, rhs replaces lhs
+        (_l, r) => (true, r),
+    }
+}
+
 static CLEAN_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"[^0-9a-zA-Z_]+").expect("valid regex"));
 
@@ -579,6 +605,11 @@ fn generate_test_name(
     for (arg_name, arg_val) in kwargs.iter().sorted_by(|a, b| a.0.cmp(b.0)) {
         // Skip 'model' argument
         if arg_name == "model" {
+            continue;
+        }
+
+        // Skip nested 'config' section to match dbt-core behavior
+        if arg_name == "config" {
             continue;
         }
 
@@ -692,17 +723,40 @@ fn generate_test_macro(
     }
 
     // ── serialize & emit the config block ────────────────
-    if let Some(cfg) = config {
-        // we write the config out as a JSON in {{ config(...) }}
+    let passed_in_cfg = if let Some(cfg) = config {
+        // Strongly-typed config provided
         let cfg_val = dbt_serde_yaml::to_value(cfg).map_err(|e| yaml_to_fs_error(e, None))?;
         // Strip null fields so they don't become undefined in Jinja
-        let cfg_val = dbt_schemas::schemas::serialization_utils::serialize_with_mode(
+        dbt_schemas::schemas::serialization_utils::serialize_with_mode(
             &cfg_val,
             dbt_schemas::schemas::serialization_utils::SerializationMode::OmitNone,
-        );
-        let config_str = serde_json::to_string(&cfg_val)
-            .map_err(|e| fs_err!(ErrorCode::SchemaError, "Failed to serialize config: {}", e))?;
+        )
+    } else {
+        dbt_serde_yaml::Value::Mapping(dbt_serde_yaml::Mapping::new(), Span::default())
+    };
 
+    let embedded_cfg = match kwargs.get("config") {
+        Some(Value::Object(obj)) => {
+            // Convert embedded serde_json::Value into dbt_serde_yaml::Value
+            let cfg_json = Value::Object(obj.clone());
+            let cfg_yaml: dbt_serde_yaml::Value =
+                serde_json::from_value(cfg_json).map_err(|e| {
+                    fs_err!(
+                        ErrorCode::SchemaError,
+                        "Failed to convert embedded config: {}",
+                        e
+                    )
+                })?;
+            cfg_yaml
+        }
+        _ => dbt_serde_yaml::Value::Mapping(dbt_serde_yaml::Mapping::new(), Span::default()),
+    };
+
+    let (non_empty, cfg_json) = merge_yaml_values(passed_in_cfg, embedded_cfg);
+    if non_empty {
+        // we write the config out as a JSON in {{ config(...) }}
+        let config_str = serde_json::to_string(&cfg_json)
+            .map_err(|e| fs_err!(ErrorCode::SchemaError, "Failed to serialize config: {}", e))?;
         sql.push_str(&format!("{{{{ config({config_str}) }}}}\n"));
     }
 
@@ -715,8 +769,10 @@ fn generate_test_macro(
         format!("test_{test_macro_name}")
     };
     // Format all kwargs, handling ref calls specially
+    // Exclude an embedded 'config' kwarg as it is emitted via config(...) above
     let formatted_args: Vec<String> = kwargs
         .iter()
+        .filter(|(k, _)| k.as_str() != "config")
         .map(|(k, v)| {
             let value_str = if let Value::String(s) = v {
                 // Check if this is a reference to one of our Jinja set variables
@@ -1331,6 +1387,77 @@ mod tests {
     }
 
     #[test]
+    fn test_generate_test_name_excludes_config_from_name() {
+        // Arrange: exact kwargs structure provided by the user
+        let mut kwargs = BTreeMap::new();
+        kwargs.insert(
+            "model".to_string(),
+            Value::String("get_where_subquery(ref('codes_metrics_daily'))".to_string()),
+        );
+        kwargs.insert(
+            "combination_of_columns".to_string(),
+            Value::Array(vec![
+                Value::String("flowcode_id".to_string()),
+                Value::String("report_date".to_string()),
+            ]),
+        );
+        let mut config_obj = serde_json::Map::new();
+        config_obj.insert("error_if".to_string(), Value::String(">1000".to_string()));
+        config_obj.insert("severity".to_string(), Value::String("warn".to_string()));
+        config_obj.insert("warn_if".to_string(), Value::String(">0".to_string()));
+        config_obj.insert(
+            "where".to_string(),
+            Value::String(
+                "report_date >= current_date -  {{ env_var('DBT_CUSTOM_INCREMENT') }}".to_string(),
+            ),
+        );
+        kwargs.insert("config".to_string(), Value::Object(config_obj));
+
+        let test_macro_name = "unique_combination_of_columns";
+        let project_name = "my_project";
+        let test_config = GenericTestConfig {
+            resource_type: "model".to_string(),
+            resource_name: "codes_metrics_daily".to_string(),
+            version_num: None,
+            model_tests: None,
+            column_tests: None,
+            source_name: None,
+        };
+        let jinja_set_vars = BTreeMap::new();
+
+        // Act
+        let generated = generate_test_name(
+            test_macro_name,
+            None,
+            project_name,
+            &test_config,
+            &kwargs,
+            None,
+            &jinja_set_vars,
+        );
+
+        // Assert: ensure config fields are excluded and only combination_of_columns contribute
+        assert!(
+            generated == "unique_combination_of_columns__44f4ef42665e203902f74bb7d4b98bb7",
+            "Expected test name to include only combination_of_columns values in suffix, got: {generated}"
+        );
+        for disallowed in [
+            "warn",
+            "_1000",
+            "_0",
+            "env_var",
+            "current_date",
+            "where",
+            "warn_if",
+            "error_if",
+        ] {
+            assert!(
+                !generated.contains(disallowed),
+                "Generated name should not contain config-derived token '{disallowed}': {generated}"
+            );
+        }
+    }
+    #[test]
     fn test_generate_test_name_with_name_longer_than_63_chars() {
         //This test is to ensure that if the generated test name is longer than 63 characters
         // it will be truncated to 30 characters and an md5 hash will be added to the end
@@ -1470,5 +1597,135 @@ mod tests {
         for input in invalid_cases {
             assert!(normalize_test_name(input).is_err());
         }
+    }
+
+    #[test]
+    fn test_generate_test_macro_embedded_config_in_kwargs() {
+        // Arrange: config parameter is None, but kwargs contains a 'config' object
+        let mut kwargs = BTreeMap::new();
+        // minimal model kwarg so the macro call formats correctly
+        kwargs.insert(
+            "model".to_string(),
+            Value::String("ref('my_model')".to_string()),
+        );
+
+        let mut cfg = serde_json::Map::new();
+        cfg.insert("error_if".to_string(), Value::String("!= 0".to_string()));
+        cfg.insert("warn_if".to_string(), Value::String("> 0".to_string()));
+        cfg.insert(
+            "fail_calc".to_string(),
+            Value::String("count(*)".to_string()),
+        );
+        cfg.insert(
+            "alias".to_string(),
+            Value::String("my_test_alias".to_string()),
+        );
+        kwargs.insert("config".to_string(), Value::Object(cfg));
+
+        let jinja_set_vars = BTreeMap::new();
+
+        // Act
+        let sql =
+            generate_test_macro("accepted_values", &kwargs, None, &None, &jinja_set_vars).unwrap();
+
+        // Assert: a config(...) block is emitted from kwargs.config
+        assert!(
+            sql.contains("{{ config("),
+            "Expected emitted config(...) block when config is embedded in kwargs"
+        );
+        assert!(
+            sql.contains("\"error_if\"")
+                && sql.contains("\"warn_if\"")
+                && sql.contains("\"fail_calc\""),
+            "Expected serialized config JSON keys to be present in config(...)"
+        );
+
+        // Assert: the macro invocation excludes 'config=' kwarg (filtered out)
+        assert!(
+            !sql.contains("config="),
+            "Embedded config must not be passed as a macro kwarg; it should be emitted only via config(...)"
+        );
+
+        // Assert: macro call prefix matches expected form
+        assert!(
+            sql.contains("{{ test_accepted_values("),
+            "Expected default-qualified macro call '{{ test_accepted_values(...) }}'"
+        );
+        // And the model kwarg remains present
+        assert!(
+            sql.contains("model=ref('my_model')"),
+            "Expected model kwarg to be present in macro call"
+        );
+    }
+
+    #[test]
+    fn test_generate_test_macro_merges_param_and_kwargs_config() {
+        use serde_json::json;
+        // Arrange: both parameter config and embedded kwargs config are present
+        // Parameter config (base)
+        let param_cfg: DataTestConfig = serde_json::from_value(json!({
+            "warn_if": "!= 0",
+            "error_if": "!= 0",
+            "alias": "base_alias",
+            "__warehouse_specific_config__": {}
+        }))
+        .unwrap();
+
+        // Kwargs config (overlay) should override warn_if and add fail_calc
+        let mut kwargs = BTreeMap::new();
+        kwargs.insert(
+            "model".to_string(),
+            Value::String("ref('my_model')".to_string()),
+        );
+        let mut overlay = serde_json::Map::new();
+        overlay.insert("warn_if".to_string(), Value::String("> 5".to_string()));
+        overlay.insert(
+            "fail_calc".to_string(),
+            Value::String("count(*)".to_string()),
+        );
+        kwargs.insert("config".to_string(), Value::Object(overlay));
+
+        // Act
+        let sql = generate_test_macro(
+            "accepted_values",
+            &kwargs,
+            None,
+            &Some(param_cfg),
+            &BTreeMap::new(),
+        )
+        .unwrap();
+
+        // Assert: config(...) emitted and contains merged values:
+        // - warn_if from kwargs (> 5) overrides param (!= 0)
+        // - error_if from param remains
+        // - fail_calc from kwargs appears
+        // - alias from param remains
+        assert!(sql.contains("{{ config("), "config(...) should be emitted");
+        assert!(
+            sql.contains("\"warn_if\":\"> 5\""),
+            "warn_if from kwargs should override base: {sql}"
+        );
+        assert!(
+            sql.contains("\"error_if\":\"!= 0\""),
+            "error_if from param should be preserved: {sql}"
+        );
+        assert!(
+            sql.contains("\"fail_calc\":\"count(*)\""),
+            "fail_calc from kwargs should be present: {sql}"
+        );
+        assert!(
+            sql.contains("\"alias\":\"base_alias\""),
+            "alias from param should be preserved: {sql}"
+        );
+
+        // Assert: macro invocation excludes config= and retains model kwarg
+        assert!(
+            !sql.contains("config="),
+            "Merged config must not be passed as macro kwarg"
+        );
+        assert!(
+            sql.contains("{{ test_accepted_values(") && sql.contains("model=ref('my_model')"),
+            "Macro call should be well-formed and include model kwarg"
+        );
     }
 }
