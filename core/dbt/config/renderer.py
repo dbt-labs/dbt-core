@@ -157,25 +157,7 @@ class DbtProjectYamlRenderer(BaseRenderer):
             return package_renderer.render_data(packages)
 
     def render_selectors(self, selectors: Dict[str, Any]):
-        # Selectors require vars to be provided (unlike dbt_project.yml during deps)
-        # Create a strict context that will raise errors for missing vars
-        strict_ctx_obj: Union[TargetContext, BaseContext]
-        if self.profile:
-            strict_ctx_obj = TargetContext(
-                self.profile.to_target_dict(), self.cli_vars, require_vars=True
-            )
-        else:
-            strict_ctx_obj = BaseContext(self.cli_vars, require_vars=True)
-        strict_context = strict_ctx_obj.to_dict()
-
-        # Temporarily use strict context for selector rendering
-        original_context = self.context
-        self.context = strict_context
-        try:
-            return self.render_data(selectors)
-        finally:
-            # Restore lenient context
-            self.context = original_context
+        return self.render_data(selectors)
 
     def render_entry(self, value: Any, keypath: Keypath) -> Any:
         result = super().render_entry(value, keypath)
