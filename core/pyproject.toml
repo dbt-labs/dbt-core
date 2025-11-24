@@ -6,7 +6,7 @@ description = "With dbt, data analysts and engineers can build analytics the way
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
-license-files = ["License.md"]  # License.md copied to core/ by build script even though it lives at the root by convention
+license-files = { globs = ["../LICENSE"] }
 keywords = []
 authors = [
     { name = "dbt Labs", email = "info@dbtlabs.com" },
