@@ -1,5 +1,6 @@
-from typing import Dict, List, Optional, Set, Type
+from typing import Dict, Iterable, List, Optional, Set, Type
 
+from dbt.adapters.base import BaseRelation
 from dbt.artifacts.schemas.results import NodeStatus
 from dbt.artifacts.schemas.run import RunResult
 from dbt.cli.flags import Flags
@@ -63,6 +64,22 @@ class BuildTask(RunTask):
         if no_unit_tests is True and NodeType.Unit in resource_types:
             resource_types.remove(NodeType.Unit)
         return list(resource_types)
+
+    def get_model_schemas(self, adapter, selected_uids: Iterable[str]) -> Set[BaseRelation]:
+
+        # Get model schemas as usual
+        model_schemas = super().get_model_schemas(adapter, selected_uids)
+
+        # Get function schemas
+        function_schemas: Set[BaseRelation] = set()
+        for function in (
+            self.manifest.functions.values() if self.manifest else []
+        ):  # functionally the manifest will never be None as we do an assert in super().get_model_schemas(...)
+            if function.unique_id in selected_uids:
+                relation = adapter.Relation.create_from(self.config, function)
+                function_schemas.add(relation.without_identifier())
+
+        return model_schemas.union(function_schemas)
 
     # overrides get_graph_queue in runnable.py
     def get_graph_queue(self) -> GraphQueue:
