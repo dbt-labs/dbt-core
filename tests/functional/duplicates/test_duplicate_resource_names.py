@@ -1,5 +1,8 @@
+from collections import defaultdict
+
 import pytest
 
+import dbt.deprecations as deprecations
 from dbt.exceptions import DuplicateResourceNameError
 from dbt.tests.util import run_dbt
 
@@ -20,6 +23,12 @@ macros_sql = """
     {{ node.name }}_{{ node.resource_type }}
 {%- endmacro %}
 """
+
+
+@pytest.fixture(scope="class")
+def set_up_deprecations():
+    deprecations.reset_deprecations()
+    assert deprecations.active_deprecations == defaultdict(int)
 
 
 class BaseTestDuplicateNames:
@@ -43,7 +52,6 @@ class BaseTestDuplicateNames:
 
 
 class TestDuplicateNamesRequireUniqueProjectResourceNamesTrue(BaseTestDuplicateNames):
-
     @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
@@ -67,7 +75,7 @@ class TestDuplicateNamesRequireUniqueProjectResourceNamesFalse(BaseTestDuplicate
             }
         }
 
-    def test_duplicate_names_with_flag_disabled(self, project):
+    def test_duplicate_names_with_flag_disabled(self, project, set_up_deprecations):
         """When require_unique_project_resource_names is False, duplicate unversioned names should be allowed (continue behavior)"""
         manifest = run_dbt(["parse"])
 
@@ -75,6 +83,8 @@ class TestDuplicateNamesRequireUniqueProjectResourceNamesFalse(BaseTestDuplicate
             manifest.nodes["model.test.same_name"].name
             == manifest.nodes["seed.test.same_name"].name
         )
+
+        assert "duplicate-name-distinct-node-types-deprecation" in deprecations.active_deprecations
 
 
 class TestDuplicateNamesDefaultBehavior(TestDuplicateNamesRequireUniqueProjectResourceNamesFalse):
