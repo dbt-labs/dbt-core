@@ -1,3 +1,6 @@
+[version]
+path = "dbt/__version__.py"
+
 [build.targets.wheel]
 packages = ["dbt"]
 only-packages = true
