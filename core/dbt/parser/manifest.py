@@ -538,6 +538,9 @@ class ManifestLoader:
         self.skip_parsing = self.partial_parser.skip_parsing()
         if self.skip_parsing:
             # nothing changed, so we don't need to generate project_parser_files
+            fire_event(
+                Note(msg="Nothing changed, skipping partial parsing."), level=EventLevel.DEBUG
+            )
             self.manifest = self.saved_manifest  # type: ignore[assignment]
         else:
             # create child_map and parent_map
