@@ -9,6 +9,8 @@ use crate::stmt_splitter::StmtSplitter;
 use adbc_core::error::{Error as AdbcError, Result as AdbcResult, Status as AdbcStatus};
 use adbc_core::options::{OptionStatement, OptionValue};
 use arrow::array::{RecordBatch, RecordBatchIterator, RecordBatchReader};
+use arrow::ipc::reader::FileReader as ArrowFileReader;
+use arrow::ipc::writer::FileWriter as ArrowFileWriter;
 use arrow_schema::{ArrowError, DataType, Field, Schema, SchemaBuilder};
 use dashmap::DashMap;
 use dbt_common::ErrorCode;
@@ -158,6 +160,250 @@ fn fix_decimal_precision_in_field(field: &Field) -> Field {
         .with_metadata(field.metadata().clone())
 }
 
+#[derive(Clone, Copy)]
+enum FileFormat {
+    Parquet,
+    ArrowIPC,
+}
+
+impl FileFormat {
+    fn extension(&self) -> &str {
+        match self {
+            FileFormat::Parquet => "parquet",
+            FileFormat::ArrowIPC => "arrow",
+        }
+    }
+}
+
+#[derive(Debug)]
+struct FileHandlerError(String);
+
+impl fmt::Display for FileHandlerError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::error::Error for FileHandlerError {}
+
+impl From<std::io::Error> for FileHandlerError {
+    fn from(e: std::io::Error) -> Self {
+        FileHandlerError(format!("IO error: {e}"))
+    }
+}
+
+impl From<ArrowError> for FileHandlerError {
+    fn from(e: ArrowError) -> Self {
+        FileHandlerError(format!("Arrow error: {e}"))
+    }
+}
+
+impl From<parquet::errors::ParquetError> for FileHandlerError {
+    fn from(e: parquet::errors::ParquetError) -> Self {
+        FileHandlerError(format!("Parquet error: {e}"))
+    }
+}
+
+impl From<serde_json::Error> for FileHandlerError {
+    fn from(e: serde_json::Error) -> Self {
+        FileHandlerError(format!("JSON error: {e}"))
+    }
+}
+
+type FileHandlerResult<T> = Result<T, FileHandlerError>;
+
+struct FileHandler {
+    format: FileFormat,
+}
+
+impl FileHandler {
+    /// Creates a new handler for recording (defaults to Arrow IPC)
+    fn new_for_record() -> Self {
+        Self {
+            format: FileFormat::ArrowIPC,
+        }
+    }
+
+    /// Creates a handler for replay with specific format
+    fn new_for_replay(format: FileFormat) -> Self {
+        Self { format }
+    }
+
+    fn extension(&self) -> &str {
+        self.format.extension()
+    }
+
+    /// Writes a schema to file
+    /// Arrow IPC preserves metadata natively, Parquet requires separate metadata file
+    fn write_schema(
+        &self,
+        schema: &Schema,
+        base_path: &Path,
+        file_name: &str,
+    ) -> FileHandlerResult<()> {
+        let fixed_schema = fix_decimal_precision_in_schema(schema);
+        let schema_ref = Arc::new(fixed_schema.clone());
+        let batch = RecordBatch::new_empty(schema_ref.clone());
+
+        let data_path = base_path.join(format!("{file_name}.{}", self.extension()));
+
+        match self.format {
+            FileFormat::ArrowIPC => {
+                let file = File::create(data_path)?;
+                let mut writer = ArrowFileWriter::try_new(file, &schema_ref)?;
+                writer.write(&batch)?;
+                writer.finish()?;
+            }
+            FileFormat::Parquet => {
+                let file = File::create(&data_path)?;
+                let props = WriterProperties::builder().build();
+                let mut writer = ArrowWriter::try_new(file, schema_ref, Some(props))?;
+                writer.write(&batch)?;
+                writer.close()?;
+
+                // Write separate metadata file for Parquet
+                let metadata_path = base_path.join(format!("{file_name}.metadata.json"));
+                let metadata = fixed_schema.metadata();
+                let metadata_json = serde_json::to_string(&metadata)?;
+                fs::write(metadata_path, metadata_json)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Writes batches to file
+    fn write_batches(
+        &self,
+        batches: &[RecordBatch],
+        schema: Arc<Schema>,
+        data_path: &Path,
+    ) -> FileHandlerResult<()> {
+        match self.format {
+            FileFormat::ArrowIPC => {
+                let file = File::create(data_path)?;
+                let mut writer = ArrowFileWriter::try_new(file, &schema)?;
+                for batch in batches {
+                    writer.write(batch)?;
+                }
+                writer.finish()?;
+            }
+            FileFormat::Parquet => {
+                let file = File::create(data_path)?;
+                let props = WriterProperties::builder().build();
+                let mut writer = ArrowWriter::try_new(file, schema, Some(props))?;
+                for batch in batches {
+                    writer.write(batch)?;
+                }
+                writer.close()?;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Writes SQL to file
+    fn write_sql(&self, base_path: &Path, file_name: &str, sql: &str) -> FileHandlerResult<()> {
+        let sql_path = base_path.join(format!("{file_name}.sql"));
+        Ok(fs::write(sql_path, sql)?)
+    }
+
+    /// Writes an error message to file
+    fn write_error(
+        &self,
+        base_path: &Path,
+        file_name: &str,
+        error_msg: &str,
+    ) -> FileHandlerResult<()> {
+        let err_path = base_path.join(format!("{file_name}.err"));
+        Ok(fs::write(err_path, error_msg)?)
+    }
+
+    /// Reads an error message from file if it exists
+    fn read_error(&self, base_path: &Path, file_name: &str) -> FileHandlerResult<Option<String>> {
+        let err_path = base_path.join(format!("{file_name}.err"));
+        if err_path.exists() {
+            let msg = fs::read_to_string(err_path)?;
+            Ok(Some(msg))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Reads SQL from file
+    fn read_sql(&self, base_path: &Path, file_name: &str) -> FileHandlerResult<String> {
+        let sql_path = base_path.join(format!("{file_name}.sql"));
+        Ok(fs::read_to_string(sql_path)?)
+    }
+
+    /// Reads schema from file
+    /// Arrow IPC reads metadata natively, Parquet reads from separate metadata file
+    fn read_schema(&self, base_path: &Path, file_name: &str) -> FileHandlerResult<Schema> {
+        let data_path = base_path.join(format!("{file_name}.{}", self.extension()));
+
+        match self.format {
+            FileFormat::ArrowIPC => {
+                // Arrow IPC preserves schema metadata natively
+                let file = File::open(data_path)?;
+                let reader = ArrowFileReader::try_new(file, None)?;
+                Ok(reader.schema().as_ref().clone())
+            }
+            FileFormat::Parquet => {
+                // Parquet needs to read schema + separate metadata file
+                let file = File::open(&data_path)?;
+                let builder = ParquetRecordBatchReaderBuilder::try_new(file)?;
+                let reader = builder.build()?;
+                let schema = reader.schema().as_ref().clone();
+
+                // Read and merge metadata from separate file
+                let metadata_path = base_path.join(format!("{file_name}.metadata.json"));
+                let metadata_json = fs::read_to_string(metadata_path)?;
+                let metadata: HashMap<String, String> = serde_json::from_str(&metadata_json)?;
+
+                let mut schema_builder = SchemaBuilder::from(schema.fields());
+                for (key, value) in metadata {
+                    schema_builder.metadata_mut().insert(key, value);
+                }
+
+                Ok(schema_builder.finish())
+            }
+        }
+    }
+
+    /// Reads batches from file
+    fn read_batches<'a>(
+        &self,
+        path: &Path,
+    ) -> FileHandlerResult<Box<dyn RecordBatchReader + Send + 'a>> {
+        let file_metadata = metadata(path)?;
+
+        // Handle empty files
+        if file_metadata.len() == 0 {
+            let schema = Arc::new(Schema::new(Vec::<Field>::new()));
+            let batch = RecordBatch::new_empty(schema.clone());
+            let results = vec![batch]
+                .into_iter()
+                .map(|batch| -> Result<RecordBatch, ArrowError> { Ok(batch) });
+            let iterator = RecordBatchIterator::new(results, schema);
+            return Ok(Box::new(iterator));
+        }
+
+        match self.format {
+            FileFormat::ArrowIPC => {
+                let file = File::open(path)?;
+                let reader = ArrowFileReader::try_new(file, None)?;
+                Ok(Box::new(reader))
+            }
+            FileFormat::Parquet => {
+                let file = File::open(path)?;
+                let builder = ParquetRecordBatchReaderBuilder::try_new(file)?;
+                let reader = builder.build()?;
+                Ok(Box::new(reader))
+            }
+        }
+    }
+}
+
 pub struct RecordEngineInner {
     /// Path to recordings
     path: PathBuf,
@@ -263,45 +509,25 @@ impl Connection for RecordEngineConnection {
         let result = self.1.get_table_schema(catalog, db_schema, table_name);
 
         let path = self.0.path.clone();
-        create_dir_all(&path).map_err(|e| from_io_error(e, Some(&path)))?;
+        create_dir_all(&path).map_err(|e| from_fs_error(e.into(), Some(&path)))?;
 
         let file_name = compute_file_name_for_node_id(self.2.as_deref());
-        let err_path = path.join(format!("{file_name}.get_table_schema.err"));
-        let parquet_path = path.join(format!("{file_name}.get_table_schema.parquet"));
-        let metadata_path = path.join(format!("{file_name}.get_table_schema.metadata.json"));
+        let handler = FileHandler::new_for_record();
+        let full_file_name = format!("{file_name}.get_table_schema");
 
         match result {
             Ok(schema) => {
-                // Fix decimal types with invalid precision=0 before writing to parquet
-                let fixed_schema = fix_decimal_precision_in_schema(&schema);
-
-                // create empty record batch with fixed schema
-                let schema_ref = Arc::new(fixed_schema.clone());
-                let batch = RecordBatch::new_empty(schema_ref.clone());
-
-                let file = File::create(&parquet_path)
-                    .map_err(|e| from_io_error(e, Some(&parquet_path)))?;
-                let props = WriterProperties::builder().build();
-                let mut writer = ArrowWriter::try_new(file, schema_ref, Some(props))
-                    .map_err(from_parquet_error)?;
-                writer.write(&batch).map_err(from_parquet_error)?;
-                writer.close().map_err(from_parquet_error)?;
-
-                let metadata = fixed_schema.metadata();
-                let metadata_json = serde_json::to_string(&metadata)
-                    .map_err(|e| from_serde_error(e, Some(&metadata_path)))?;
-                fs::write(&metadata_path, metadata_json)
-                    .map_err(|e| from_io_error(e, Some(&metadata_path)))?;
-
+                handler
+                    .write_schema(&schema, &path, &full_file_name)
+                    .map_err(|e| from_fs_error(e, Some(&path)))?;
                 Ok(schema)
             }
             Err(err) => {
-                let err_msg = format!("{err}");
-                fs::write(&err_path, err_msg.clone())
-                    .map_err(|e| from_io_error(e, Some(&err_path)))?;
-                // do not create json or parquet, relay original error
+                handler
+                    .write_error(&path, &full_file_name, &format!("{err}"))
+                    .map_err(|e| from_fs_error(e, Some(&path)))?;
                 Err(AdbcError::with_message_and_status(
-                    err_msg,
+                    format!("{err}"),
                     AdbcStatus::Internal,
                 ))
             }
@@ -358,30 +584,25 @@ impl Statement for RecordEngineStatement {
         let result = self.inner_stmt.execute();
 
         let path = self.record_engine.path.clone();
-        create_dir_all(&path).map_err(|e| from_io_error(e, Some(&path)))?;
+        create_dir_all(&path).map_err(|e| from_fs_error(e.into(), Some(&path)))?;
 
         let file_name = compute_file_name(&query_ctx, Some(sql))?;
-        let sql_path = path.join(format!("{file_name}.sql"));
-        let err_path = path.join(format!("{file_name}.err"));
-        let parquet_path = path.join(format!("{file_name}.parquet"));
+        let handler = FileHandler::new_for_record();
+        let data_path = path.join(format!("{file_name}.{}", handler.extension()));
 
-        // store the query content (i.e., sql)
-        fs::write(&sql_path, sql).map_err(|e| from_io_error(e, Some(&sql_path)))?;
+        handler
+            .write_sql(&path, &file_name, sql)
+            .map_err(|e| from_fs_error(e, Some(&path)))?;
 
         match result {
             Ok(mut reader) => {
                 let schema = reader.schema();
                 let batches: Vec<RecordBatch> = reader.by_ref().collect::<Result<_, _>>()?;
 
-                let file = File::create(&parquet_path)
-                    .map_err(|e| from_io_error(e, Some(&parquet_path)))?;
-                let props = WriterProperties::builder().build();
-                let mut writer = ArrowWriter::try_new(file, schema.clone(), Some(props))
-                    .map_err(from_parquet_error)?;
-                for batch in &batches {
-                    writer.write(batch).map_err(from_parquet_error)?;
-                }
-                writer.close().map_err(from_parquet_error)?;
+                handler
+                    .write_batches(&batches, schema.clone(), &data_path)
+                    .map_err(|e| from_fs_error(e, Some(&data_path)))?;
+
                 // re-construct the stream from the accumulated batches
                 let results = batches
                     .into_iter()
@@ -391,12 +612,11 @@ impl Statement for RecordEngineStatement {
                 Ok(reader)
             }
             Err(err) => {
-                let err_msg = format!("{err}");
-                fs::write(&err_path, err_msg.clone())
-                    .map_err(|e| from_io_error(e, Some(&err_path)))?;
-                // do not create json or parquet, relay original error
+                handler
+                    .write_error(&path, &file_name, &format!("{err}"))
+                    .map_err(|e| from_fs_error(e, Some(&path)))?;
                 Err(AdbcError::with_message_and_status(
-                    err_msg,
+                    format!("{err}"),
                     AdbcStatus::Internal,
                 ))
             }
@@ -574,40 +794,31 @@ impl Connection for ReplayEngineConnection {
         _table_name: &str,
     ) -> AdbcResult<Schema> {
         let path = self.0.path.clone();
-
         let file_name = compute_file_name_for_node_id(self.1.as_deref());
-        let err_path = path.join(format!("{file_name}.get_table_schema.err"));
-        let parquet_path = path.join(format!("{file_name}.get_table_schema.parquet"));
-        let metadata_path = path.join(format!("{file_name}.get_table_schema.metadata.json"));
+        let full_file_name = format!("{file_name}.get_table_schema");
 
-        // replay the error
-        if err_path.exists() {
-            let msg =
-                fs::read_to_string(&err_path).map_err(|e| from_io_error(e, Some(&err_path)))?;
+        // FIXME: Compat layer
+        // Try Arrow IPC first, fall back to Parquet
+        let arrow_path = path.join(format!("{full_file_name}.arrow"));
+        let handler = if arrow_path.exists() {
+            FileHandler::new_for_replay(FileFormat::ArrowIPC)
+        } else {
+            FileHandler::new_for_replay(FileFormat::Parquet)
+        };
+
+        if let Some(msg) = handler
+            .read_error(&path, &full_file_name)
+            .map_err(|e| from_fs_error(e, Some(&path)))?
+        {
             return Err(AdbcError::with_message_and_status(
                 msg,
                 AdbcStatus::Internal,
             ));
         }
 
-        // read the schema
-        let file = File::open(&parquet_path).map_err(|e| from_io_error(e, Some(&parquet_path)))?;
-        let builder = ParquetRecordBatchReaderBuilder::try_new(file).map_err(from_parquet_error)?;
-        let reader = builder.build().map_err(from_parquet_error)?;
-        let schema = reader.schema();
-
-        // read the metadata
-        let metadata_json = fs::read_to_string(&metadata_path)
-            .map_err(|e| from_io_error(e, Some(&metadata_path)))?;
-        let metadata: HashMap<String, String> = serde_json::from_str(&metadata_json)
-            .map_err(|e| from_serde_error(e, Some(&metadata_path)))?;
-
-        let mut schema_builder = SchemaBuilder::from(schema.fields());
-        for (key, value) in metadata {
-            schema_builder.metadata_mut().insert(key, value);
-        }
-
-        let schema = schema_builder.finish();
+        let schema = handler
+            .read_schema(&path, &full_file_name)
+            .map_err(|e| from_fs_error(e, Some(&path)))?;
         Ok(schema)
     }
 
@@ -632,27 +843,11 @@ impl ReplayEngineStatement {
     }
 }
 
-fn from_parquet_error(e: parquet::errors::ParquetError) -> adbc_core::error::Error {
-    adbc_core::error::Error::with_message_and_status(
-        format!("Parquet error: {e:?}"),
-        adbc_core::error::Status::IO,
-    )
-}
-
-fn from_io_error(e: std::io::Error, path: Option<&Path>) -> adbc_core::error::Error {
+fn from_fs_error(e: FileHandlerError, path: Option<&Path>) -> adbc_core::error::Error {
     let message = if let Some(path) = path {
-        format!("IO error: {:?} ({:?})", e, path.display())
+        format!("{} (path: {})", e, path.display())
     } else {
-        format!("IO error: {e:?}")
-    };
-    adbc_core::error::Error::with_message_and_status(message, adbc_core::error::Status::IO)
-}
-
-fn from_serde_error(e: serde_json::Error, path: Option<&Path>) -> adbc_core::error::Error {
-    let message = if let Some(path) = path {
-        format!("Serde error: {:?} ({:?})", e, path.display())
-    } else {
-        format!("Serde error: {e:?}")
+        e.to_string()
     };
     adbc_core::error::Error::with_message_and_status(message, adbc_core::error::Status::IO)
 }
@@ -679,59 +874,56 @@ impl Statement for ReplayEngineStatement {
 
         let path = self.replay_engine.full_path();
         let file_name = compute_file_name(&query_ctx, Some(replay_sql))?;
-        let parquet_path = path.join(format!("{file_name}.parquet"));
-        let sql_path = path.join(format!("{file_name}.sql"));
-        let err_path = path.join(format!("{file_name}.err"));
 
-        // Query has to match to the recorded one, otherwise we
-        // have issues with ordering or recording
-        if !fs::exists(&sql_path).map_err(|e| from_io_error(e, Some(&sql_path)))? {
+        // FIXME: Compat layer
+        // Try Arrow IPC first, fall back to Parquet
+        let arrow_path = path.join(format!("{file_name}.arrow"));
+        let parquet_path = path.join(format!("{file_name}.parquet"));
+        let (data_path, handler) = if arrow_path.exists() {
+            (
+                arrow_path,
+                FileHandler::new_for_replay(FileFormat::ArrowIPC),
+            )
+        } else {
+            (
+                parquet_path,
+                FileHandler::new_for_replay(FileFormat::Parquet),
+            )
+        };
+
+        let sql_path = path.join(format!("{file_name}.sql"));
+
+        // Query has to match to the recorded one, otherwise we have issues with ordering
+        if !sql_path.exists() {
             panic!(
                 "Missing query file ({:?}) during replay. Query: {}",
                 &sql_path, replay_sql,
             );
         }
-        // dbt_tmp_800c2fb4_a0ba_4708_a0b1_813316032bfb
-        let record_sql =
-            fs::read_to_string(&sql_path).map_err(|e| from_io_error(e, Some(&sql_path)))?;
+
+        let record_sql = handler
+            .read_sql(&path, &file_name)
+            .map_err(|e| from_fs_error(e, Some(&path)))?;
         if normalize_dbt_tmp_name(&record_sql) != normalize_dbt_tmp_name(replay_sql) {
             panic!(
                 "Recorded query ({record_sql}) and actual query ({replay_sql}) do not match ({sql_path:?})"
             );
         }
 
-        if err_path.exists() {
-            // There was an error during recording, so we need to
-            // replay now. TODO: Note that we do not at the moment
-            // replay the exact error kind.
-            let msg =
-                fs::read_to_string(&err_path).map_err(|e| from_io_error(e, Some(&err_path)))?;
+        // Check for recorded error
+        if let Some(msg) = handler
+            .read_error(&path, &file_name)
+            .map_err(|e| from_fs_error(e, Some(&path)))?
+        {
             return Err(AdbcError::with_message_and_status(
                 msg,
                 AdbcStatus::Internal,
             ));
         }
 
-        // If parquet file is empty, then there was no schema during
-        // recording
-        let metadata =
-            metadata(&parquet_path).map_err(|e| from_io_error(e, Some(&parquet_path)))?;
-        let reader: Box<dyn RecordBatchReader + Send + 'a> = if metadata.len() == 0 {
-            let schema = Arc::new(Schema::new(Vec::<Field>::new()));
-            let batch = RecordBatch::new_empty(schema.clone());
-            let results = vec![batch]
-                .into_iter()
-                .map(|batch| -> Result<RecordBatch, ArrowError> { Ok(batch) });
-            let iterator = RecordBatchIterator::new(results, schema);
-            Box::new(iterator)
-        } else {
-            let file =
-                File::open(&parquet_path).map_err(|e| from_io_error(e, Some(&parquet_path)))?;
-            let builder =
-                ParquetRecordBatchReaderBuilder::try_new(file).map_err(from_parquet_error)?;
-            let reader = builder.build().map_err(from_parquet_error)?;
-            Box::new(reader)
-        };
+        let reader = handler
+            .read_batches(&data_path)
+            .map_err(|e| from_fs_error(e, Some(&data_path)))?;
         Ok(reader)
     }
 
