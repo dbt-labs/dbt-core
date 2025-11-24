@@ -776,7 +776,7 @@ class DuplicateNameDistinctNodeTypesDeprecation(WarnLevel):
         return "D040"
 
     def message(self) -> str:
-        description = f"Found resources with the same name '{self.resource_name}' in package '{self.package_name}': {self.unique_id1} and {self.unique_id2}."
+        description = f"Found resources with the same name '{self.resource_name}' in package '{self.package_name}': '{self.unique_id1}' and '{self.unique_id2}'. Please update one of the resources to have a unique name."
         return line_wrap_message(deprecation_tag(description))
 
 
