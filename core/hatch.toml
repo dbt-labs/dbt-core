@@ -15,10 +15,10 @@ artifacts = [
 include = [
     "/dbt",
     "/README.md",
-    "/License.md",
 ]
 
 [build.targets.sdist.force-include]
+"../LICENSE" = "LICENSE"
 "dbt/task/docs/index.html" = "dbt/task/docs/index.html"
 
 [envs.default]
