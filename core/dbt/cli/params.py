@@ -235,6 +235,7 @@ exclude_resource_type = _create_option_and_track_env_var(
             "exposure",
             "snapshot",
             "seed",
+            "function",
             "default",
         ],
         case_sensitive=False,

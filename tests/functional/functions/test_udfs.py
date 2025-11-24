@@ -521,3 +521,21 @@ class TestDefaultArgumentsMustComeLast:
             "Non-defaulted argument 'val2' of function 'sum_2_values' comes after a defaulted argument. Non-defaulted arguments cannot come after defaulted arguments. "
             in str(excinfo.value)
         )
+
+
+class TestFunctionsIncludeAndExcludeByResourceType:
+    @pytest.fixture(scope="class")
+    def functions(self) -> Dict[str, str]:
+        return {
+            "double_it.sql": double_it_sql,
+            "double_it.yml": double_it_yml,
+        }
+
+    def test_udfs(self, project):
+        result = run_dbt(["build", "--resource-type", "function"])
+        assert len(result.results) == 1
+        function_node = result.results[0].node
+        assert isinstance(function_node, FunctionNode)
+
+        result = run_dbt(["build", "--exclude-resource-type", "function"])
+        assert len(result.results) == 0
