@@ -137,20 +137,40 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "661496d8301fff3368f192ed4ccdfb0110864595b8a4555560d68784985d24ce",
     ),
     (
+        ("duckdb", "apple-darwin", "aarch64", "0.21.0+dbt0.0.2"),
+        "ef8be74d82fd90855edcc484ff210567b499d999efa7dfde9bff6e61fe0cef43",
+    ),
+    (
         ("duckdb", "apple-darwin", "x86_64", "0.18.0+dbt0.0.1"),
         "9ff40bb5a6c6657599faaeb47ac938f21ceb572e9e8d488c08e8ffe32647d766",
+    ),
+    (
+        ("duckdb", "apple-darwin", "x86_64", "0.21.0+dbt0.0.2"),
+        "570387713a9788bf11c4aed7f7949d76414306c56d3984be8ed0a9a76af82b5b",
     ),
     (
         ("duckdb", "manylinux_2_17-linux-gnu", "aarch64", "0.18.0+dbt0.0.1"),
         "49c1ac73128734eb36719f5912e4d3c969f52d5611e3b55a6a416f0d5f7447bb",
     ),
     (
+        ("duckdb", "manylinux_2_17-linux-gnu", "aarch64", "0.21.0+dbt0.0.2"),
+        "acef6dd1195d85ee05286b3b87d9863b02926f4b4a59deda84de8d625d96ff34",
+    ),
+    (
         ("duckdb", "manylinux_2_17-linux-gnu", "x86_64", "0.18.0+dbt0.0.1"),
         "912b5c737963c7023891afc59b3ae47c73641197062316a83a2733e4275b85d5",
     ),
     (
+        ("duckdb", "manylinux_2_17-linux-gnu", "x86_64", "0.21.0+dbt0.0.2"),
+        "872407a0cd10870cc70871f5bf6d92e5666ac6d4c83b143d8223ff0a1c1b4f47",
+    ),
+    (
         ("duckdb", "pc-windows-msvc", "x86_64", "0.18.0+dbt0.0.1"),
         "acb8bbc8f477a072991345fe0ab0ee36b561e7668bdbf5b900189a35dd021888",
+    ),
+    (
+        ("duckdb", "pc-windows-msvc", "x86_64", "0.21.0+dbt0.0.2"),
+        "ed9b97311a5da6c9a81c2675e85a2fbe73d4e9ef392da16c0ce71b70e947146b",
     ),
     (
         ("postgresql", "apple-darwin", "aarch64", "0.18.0+dbt0.0.3"),
@@ -293,10 +313,6 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "566dc019803edae2b29a58dace76034a793fd2ace289a54da35438834231e388",
     ),
     (
-        ("salesforce", "apple-darwin", "aarch64", "0.18.0+dbt0.0.2"),
-        "7905dcdca5f7d965357b4ddff28b41ad03ed7d106c08fe3878194af6c80edb40",
-    ),
-    (
         ("salesforce", "apple-darwin", "aarch64", "0.18.0+dbt0.0.3"),
         "5ec5adbf634fee917f4a9ffae49e5d1ff81de14e836d6418397f31af3cae2791",
     ),
@@ -307,10 +323,6 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
     (
         ("salesforce", "apple-darwin", "aarch64", "0.21.0+dbt0.21.1"),
         "a651b99de9f3d4987259735f9d4bd45c965edd76d46f7b8a1126e1ada07257ab",
-    ),
-    (
-        ("salesforce", "apple-darwin", "x86_64", "0.18.0+dbt0.0.2"),
-        "c4abe3bc717d381dd9328f00737d0ec6cfcc3d3233b1edc49626685594959901",
     ),
     (
         ("salesforce", "apple-darwin", "x86_64", "0.18.0+dbt0.0.3"),
@@ -325,10 +337,6 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "06daae1581f75f8bf4d26fed1baf880d7ef31deeb0e15b5d6e90090e447831cc",
     ),
     (
-        ("salesforce", "manylinux_2_17-linux-gnu", "aarch64", "0.18.0+dbt0.0.2"),
-        "5c75a37b1a52d083005e7d6a055152b617332ad83ce83e79bd166e04297d8d12",
-    ),
-    (
         ("salesforce", "manylinux_2_17-linux-gnu", "aarch64", "0.18.0+dbt0.0.3"),
         "06ae9ce089fbb52d6501ff62fd8b22585c18e649d1c29b4fc28339f2bcd47762",
     ),
@@ -341,10 +349,6 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "c77793e9b83963d144a250bcec207dbec598b653eed077f4fae95e59959472c0",
     ),
     (
-        ("salesforce", "manylinux_2_17-linux-gnu", "x86_64", "0.18.0+dbt0.0.2"),
-        "cfd03128ea16639b075bdf0df7d9c8686f608102befeb9588f257234a93d5b17",
-    ),
-    (
         ("salesforce", "manylinux_2_17-linux-gnu", "x86_64", "0.18.0+dbt0.0.3"),
         "3a88d8d6e2b8b46c9425f396b33ab84f370d5141fac67a69b6da1a22212bfcb3",
     ),
@@ -355,10 +359,6 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
     (
         ("salesforce", "manylinux_2_17-linux-gnu", "x86_64", "0.21.0+dbt0.21.1"),
         "6833d78af651a22cd81e8e6b1a67cf5e263ff15cbf116a3292f5558f9cdad696",
-    ),
-    (
-        ("salesforce", "pc-windows-msvc", "x86_64", "0.18.0+dbt0.0.2"),
-        "944b06f4348b924df96629950a17933bf479c180d7411d28cec8db1bb9d2c623",
     ),
     (
         ("salesforce", "pc-windows-msvc", "x86_64", "0.18.0+dbt0.0.3"),
