@@ -184,6 +184,7 @@ impl DbConfig {
                 "compute_region",
                 "dataproc_cluster_name",
                 "gcs_bucket",
+                "submission_method",
                 "dataproc_batch",
             ],
             DbConfig::Redshift(_) => &[
@@ -644,6 +645,8 @@ pub struct BigqueryDbConfig {
     pub dataproc_region: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub gcs_bucket: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub submission_method: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub job_creation_timeout_seconds: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none")]

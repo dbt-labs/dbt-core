@@ -29,6 +29,7 @@ use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
 use dbt_schemas::schemas::relations::relation_configs::BaseRelationConfig;
 use dbt_schemas::schemas::{CommonAttributes, InternalDbtNodeAttributes, InternalDbtNodeWrapper};
+use dbt_serde_yaml::Value as YmlValue;
 use dbt_xdbc::bigquery::QUERY_LINK_FAILED_JOB;
 use dbt_xdbc::salesforce::DATA_TRANSFORM_RUN_TIMEOUT;
 use dbt_xdbc::{Connection, QueryCtx};
@@ -62,6 +63,13 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     /// Get DB config by key
     fn get_db_config(&self, key: &str) -> Option<Cow<'_, str>> {
         self.engine().config(key)
+    }
+
+    fn get_db_config_value(&self, key: &str) -> Option<&YmlValue> {
+        if self.engine().get_config().contains_key(key) {
+            return self.engine().get_config().get(key);
+        }
+        None
     }
 
     fn valid_incremental_strategies(&self) -> &[DbtIncrementalStrategy] {
@@ -300,19 +308,63 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         model: &Value,
         compiled_code: &str,
     ) -> AdapterResult<AdapterResponse> {
-        let code = match self.adapter_type() {
+        match self.adapter_type() {
             AdapterType::Snowflake => {
-                python::snowflake::finalize_python_code(state, model, compiled_code)
+                let code = python::snowflake::finalize_python_code(state, model, compiled_code)?;
+                if let Some(replay_adapter) = self.as_replay() {
+                    // In DBT Replay mode, route through the replay adapter to consume recorded execute calls.
+                    let (response, _) = replay_adapter.replay_execute(
+                        Some(state),
+                        conn,
+                        ctx,
+                        &code,
+                        false,
+                        false,
+                        None,
+                        None,
+                    )?;
+                    Ok(response)
+                } else {
+                    let (response, _) = self.execute_inner(
+                        self.adapter_type().into(),
+                        self.engine().clone(),
+                        Some(state),
+                        conn,
+                        ctx,
+                        &code,
+                        false,
+                        false,
+                        None,
+                        None,
+                    )?;
+                    Ok(response)
+                }
             }
-            // TODO: add support for BigQuery and Databricks
+            // TODO: add support for Databricks
             // https://docs.getdbt.com/docs/core/connect-data-platform/bigquery-setup#running-python-models-on-bigquery-dataframes
             // https://docs.getdbt.com/reference/resource-configs/bigquery-configs#python-model-configuration
             //
             // https://docs.getdbt.com/reference/resource-configs/databricks-configs
-            AdapterType::Bigquery
+            AdapterType::Bigquery => {
+                //TODO: enable once https://github.com/dbt-labs/fs/issues/6547 is fixed
+                if let Some(_replay_adapter) = self.as_replay() {
+                    return Err(AdapterError::new(
+                        AdapterErrorKind::NotSupported,
+                        "replay mode not supported for python models on Bigquery",
+                    ));
+                }
+                python::bigquery::submit_python_job(
+                    self.as_typed_base_adapter(),
+                    ctx,
+                    conn,
+                    state,
+                    model,
+                    compiled_code,
+                )
+            }
+            AdapterType::Postgres
             | AdapterType::Databricks
             | AdapterType::Redshift
-            | AdapterType::Postgres
             | AdapterType::Salesforce => Err(AdapterError::new(
                 AdapterErrorKind::Internal,
                 format!(
@@ -320,38 +372,6 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
                     self.adapter_type()
                 ),
             )),
-        }?;
-
-        // TODO: build options if required for some adapters
-        // For example, `notebook_template_id` for `bigframes` submission method for BigQuery
-
-        if let Some(replay_adapter) = self.as_replay() {
-            // In DBT Replay mode, route through the replay adapter to consume recorded execute calls.
-            let (response, _) = replay_adapter.replay_execute(
-                Some(state),
-                conn,
-                ctx,
-                &code,
-                false,
-                false,
-                None,
-                None,
-            )?;
-            Ok(response)
-        } else {
-            let (response, _) = self.execute_inner(
-                self.adapter_type().into(),
-                self.engine().clone(),
-                Some(state),
-                conn,
-                ctx,
-                &code,
-                false,
-                false,
-                None,
-                None,
-            )?;
-            Ok(response)
         }
     }
 

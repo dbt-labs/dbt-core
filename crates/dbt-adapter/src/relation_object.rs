@@ -95,6 +95,7 @@ impl Object for RelationObject {
             "render" => self.render_self(),
             "without_identifier" => self.without_identifier(args),
             "include" => self.include(args),
+            "quote" => self.quote(args),
             "incorporate" => self.incorporate(args),
             "information_schema" => self.information_schema(args),
             "relation_max_name_length" => self.relation_max_name_length(args),

@@ -2418,6 +2418,8 @@ impl AdapterAttr {
                     enable_refresh: config.enable_refresh,
                     refresh_interval_minutes: config.refresh_interval_minutes,
                     max_staleness: config.max_staleness.clone(),
+                    jar_file_uri: config.jar_file_uri.clone(),
+                    timeout: config.timeout,
                 })))
             }
             AdapterType::Redshift => {
@@ -2500,6 +2502,8 @@ impl AdapterAttr {
                         enable_refresh: config.enable_refresh,
                         refresh_interval_minutes: config.refresh_interval_minutes,
                         max_staleness: config.max_staleness.clone(),
+                        jar_file_uri: config.jar_file_uri.clone(),
+                        timeout: config.timeout,
                     })))
                     .with_redshift_attr(Some(Box::new(RedshiftAttr {
                         auto_refresh: config.auto_refresh,
@@ -2618,6 +2622,8 @@ pub struct BigQueryAttr {
     pub enable_refresh: Option<bool>,
     pub refresh_interval_minutes: Option<f64>,
     pub max_staleness: Option<String>,
+    pub jar_file_uri: Option<String>,
+    pub timeout: Option<u64>,
 }
 
 /// A resolved Redshift configuration

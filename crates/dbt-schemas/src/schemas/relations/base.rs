@@ -554,9 +554,41 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
         self.include_inner(include_policy)
     }
 
+    fn quote(&self, args: &[Value]) -> Result<Value, MinijinjaError> {
+        let defaults = self.include_policy();
+        let iter = ArgsIter::new(
+            current_function_name!(),
+            &["database", "schema", "identifier"],
+            args,
+        );
+        let database = iter
+            .next_kwarg::<Option<bool>>("database")?
+            .unwrap_or(defaults.database);
+        let schema = iter
+            .next_kwarg::<Option<bool>>("schema")?
+            .unwrap_or(defaults.schema);
+        let identifier = iter
+            .next_kwarg::<Option<bool>>("identifier")?
+            .unwrap_or(defaults.identifier);
+
+        let quote_policy = Policy {
+            database,
+            schema,
+            identifier,
+        };
+        self.quote_inner(quote_policy)
+    }
+
     /// Implement this to support `include`
     /// Replace the `include_policy` field with the input policy, and return that an update relation value
     fn include_inner(&self, _policy: Policy) -> Result<Value, MinijinjaError>;
+
+    fn quote_inner(&self, _policy: Policy) -> Result<Value, MinijinjaError> {
+        Err(MinijinjaError::new(
+            MinijinjaErrorKind::InvalidOperation,
+            "Not implemented",
+        ))
+    }
 
     /// Incorporate
     fn incorporate(&self, args: &[Value]) -> Result<Value, MinijinjaError> {

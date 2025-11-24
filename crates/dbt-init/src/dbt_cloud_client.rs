@@ -195,6 +195,7 @@ fn create_merged_db_config(
                 dataproc_cluster_name: None,
                 dataproc_region: None,
                 gcs_bucket: None,
+                submission_method: None,
                 job_creation_timeout_seconds: None,
                 job_execution_timeout_seconds: None,
                 job_retries: None,
@@ -311,6 +312,7 @@ fn create_merged_db_config(
                     dataproc_cluster_name: None,
                     dataproc_region: None,
                     gcs_bucket: None,
+                    submission_method: None,
                     job_creation_timeout_seconds: None,
                     job_execution_timeout_seconds: None,
                     job_retries: None,
@@ -362,6 +364,7 @@ fn create_merged_db_config(
                     // TODO(anna): Not sure whether this needs to be set as none. could not find mention in docs
                     quota_project: None,
                     client_secret: None,
+                    submission_method: None,
                     token: None,
                     keyfile: None,
                     keyfile_json: None,

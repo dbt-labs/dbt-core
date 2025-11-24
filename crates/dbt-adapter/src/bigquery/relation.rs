@@ -212,6 +212,17 @@ impl BaseRelation for BigqueryRelation {
         Ok(relation.as_value())
     }
 
+    fn quote_inner(&self, policy: Policy) -> Result<Value, MinijinjaError> {
+        let relation = Self::new_with_policy(
+            self.path.clone(),
+            self.relation_type,
+            self.include_policy,
+            policy,
+        );
+
+        Ok(relation.as_value())
+    }
+
     fn post_incorporate(&self, mut args: ArgParser) -> Result<Value, MinijinjaError> {
         // Extract and consume 'location' kwarg (consistent with base consume approach)
         let loc_opt: Option<String> = args.consume_optional_only_from_kwargs("location");

@@ -131,6 +131,7 @@ pub fn setup_bigquery_profile(
         dataproc_cluster_name: None,
         dataproc_region: None,
         gcs_bucket: None,
+        submission_method: None,
         job_creation_timeout_seconds: None,
         job_execution_timeout_seconds: None,
         job_retries: None,

@@ -357,7 +357,10 @@ impl From<ProjectSeedConfig> for SeedConfig {
                 refresh_interval_minutes: config.refresh_interval_minutes,
                 resource_tags: None,
                 max_staleness: config.max_staleness,
-
+                jar_file_uri: None,
+                timeout: None,
+                batch_id: None,
+                dataproc_cluster_name: None,
                 file_format: config.file_format,
                 catalog_name: config.catalog_name,
                 location_root: config.location_root,

@@ -190,6 +190,14 @@ pub struct ProjectModelConfig {
     pub materialized: Option<DbtMaterialization>,
     #[serde(rename = "+max_staleness")]
     pub max_staleness: Option<String>,
+    #[serde(rename = "+jar_file_uri")]
+    pub jar_file_uri: Option<String>,
+    #[serde(rename = "+timeout")]
+    pub timeout: Option<u64>,
+    #[serde(rename = "+batch_id")]
+    pub batch_id: Option<String>,
+    #[serde(rename = "+dataproc_cluster_name")]
+    pub dataproc_cluster_name: Option<String>,
     #[serde(rename = "+merge_exclude_columns")]
     pub merge_exclude_columns: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+merge_update_columns")]
@@ -481,6 +489,10 @@ impl From<ProjectModelConfig> for ModelConfig {
                 resource_tags: config.resource_tags,
                 refresh_interval_minutes: config.refresh_interval_minutes,
                 max_staleness: config.max_staleness,
+                jar_file_uri: config.jar_file_uri,
+                timeout: config.timeout,
+                batch_id: config.batch_id,
+                dataproc_cluster_name: config.dataproc_cluster_name,
 
                 file_format: config.file_format,
                 catalog_name: config.catalog_name,
@@ -585,6 +597,10 @@ impl From<ModelConfig> for ProjectModelConfig {
             table_tag: config.__warehouse_specific_config__.table_tag,
             row_access_policy: config.__warehouse_specific_config__.row_access_policy,
             automatic_clustering: config.__warehouse_specific_config__.automatic_clustering,
+            jar_file_uri: config.__warehouse_specific_config__.jar_file_uri,
+            timeout: config.__warehouse_specific_config__.timeout,
+            batch_id: config.__warehouse_specific_config__.batch_id,
+            dataproc_cluster_name: config.__warehouse_specific_config__.dataproc_cluster_name,
             copy_grants: config.__warehouse_specific_config__.copy_grants,
             secure: config.__warehouse_specific_config__.secure,
             partition_by: config.__warehouse_specific_config__.partition_by,

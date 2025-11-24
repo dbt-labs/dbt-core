@@ -190,6 +190,10 @@ pub struct WarehouseSpecificNodeConfig {
     pub refresh_interval_minutes: Option<f64>,
     pub resource_tags: Option<BTreeMap<String, String>>,
     pub max_staleness: Option<String>,
+    pub jar_file_uri: Option<String>,
+    pub timeout: Option<u64>,
+    pub batch_id: Option<String>,
+    pub dataproc_cluster_name: Option<String>,
 
     // Used by both Databricks and Bigquery
     pub file_format: Option<String>,
@@ -297,6 +301,10 @@ impl DefaultTo<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConfig {
             refresh_interval_minutes,
             resource_tags,
             max_staleness,
+            jar_file_uri,
+            timeout,
+            batch_id,
+            dataproc_cluster_name,
 
             // Databricks
             file_format,
@@ -407,6 +415,10 @@ impl DefaultTo<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConfig {
                 skip_matched_step,
                 skip_not_matched_step,
                 schedule,
+                jar_file_uri,
+                timeout,
+                batch_id,
+                dataproc_cluster_name,
                 // Snowflake
                 table_tag,
                 row_access_policy,

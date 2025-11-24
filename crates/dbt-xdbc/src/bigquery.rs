@@ -79,3 +79,16 @@ pub const INGEST_SCHEMA: &str = "adbc.bigquery.ingest.csv_schema";
 pub const UPDATE_TABLE_COLUMNS_DESCRIPTION: &str = "adbc.bigquery.table.update_columns_description";
 pub const UPDATE_DATASET_AUTHORIZE_VIEW_TO_DATASETS: &str =
     "adbc.bigquery.dataset.authorize_view_to_datasets";
+
+pub const DATAPROC_REGION: &str = "adbc.bigquery.dataproc.compute_region";
+pub const DATAPROC_PROJECT: &str = "adbc.bigquery.dataproc.project";
+pub const DATAPROC_POOLING_TIMEOUT: &str = "adbc.bigquery.dataproc.pooling_timeout";
+pub const CREATE_BATCH_REQ_PARENT: &str = "adbc.bigquery.create_batch.parent";
+pub const CREATE_BATCH_REQ_BATCH_YML: &str = "adbc.bigquery.create_batch.batch_yml";
+pub const CREATE_BATCH_REQ_BATCH_ID: &str = "adbc.bigquery.create_batch.batch_id";
+pub const DATAPROC_SUBMIT_JOB_REQ_CLUSTER_NAME: &str =
+    "adbc.bigquery.dataproc.submit_job.cluster_name";
+pub const DATAPROC_SUBMIT_JOB_REQ_GCS_PATH: &str = "adbc.bigquery.dataproc.submit_job.gcs_path";
+pub const WRITE_GCS_BUCKET: &str = "adbc.bigquery.write_gcs.bucket";
+pub const WRITE_GCS_OBJECT_NAME: &str = "adbc.bigquery.write_gcs.object_name";
+pub const WRITE_GCS_CONTENT: &str = "adbc.bigquery.write_gcs.content";
