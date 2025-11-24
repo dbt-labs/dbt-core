@@ -539,3 +539,29 @@ class TestFunctionsIncludeAndExcludeByResourceType:
 
         result = run_dbt(["build", "--exclude-resource-type", "function"])
         assert len(result.results) == 0
+
+
+class TestFunctionsGetSchemaCreatedIfNecessary:
+    @pytest.fixture(scope="class")
+    def functions(self) -> Dict[str, str]:
+        return {
+            "double_it.sql": double_it_sql,
+            "double_it.yml": double_it_yml,
+        }
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "functions": {"+schema": "{{ 'alt_function_schema_' ~ target.schema }}"},
+        }
+
+    def test_functions_get_schema_created_if_necessary(self, project):
+        # previously an error occurred because the function schema wasn't guaranteed to be created.
+        # so it just not erroring out is a good indicator that that's been fixed
+        result = run_dbt(["build", "--debug"])
+
+        # some additional saqnity validations
+        assert len(result.results) == 1
+        function_node = result.results[0].node
+        assert isinstance(function_node, FunctionNode)
+        assert "alt_function_schema_" in function_node.schema
