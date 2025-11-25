@@ -110,7 +110,6 @@ jobs:
     uses: dbt-labs/dbt-release/.github/workflows/release-prep.yml@er/hatch-release
 
     with:
-      sha: ${{ needs.job-setup.outputs.starting_sha }}
       version_number: ${{ inputs.version_number }}
       target_branch: ${{ inputs.target_branch }}
       env_setup_script_path: "scripts/env-setup.sh"
@@ -145,14 +144,9 @@ jobs:
       version_number: ${{ inputs.version_number }}
       changelog_path: ${{ needs.bump-version-generate-changelog.outputs.changelog_path }}
       build_script_path: "scripts/build-dist.sh"
-      s3_bucket_name: "core-team-artifacts"
       package_test_command: "dbt --version"
       test_run: ${{ inputs.test_run }}
       nightly_release: ${{ inputs.nightly_release }}
-
-    secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
   github-release:
     name: GitHub Release
