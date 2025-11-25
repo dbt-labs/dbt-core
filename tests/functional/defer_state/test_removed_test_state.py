@@ -2,38 +2,11 @@ import pytest
 
 from dbt.exceptions import CompilationError
 from dbt.tests.util import run_dbt
-
-# Generic test that we'll define initially
-sample_test_sql = """
-{% test sample_test(model, column_name) %}
-    select * from {{ model }} where {{ column_name }} is null
-{% endtest %}
-"""
-
-# Model that uses the test
-model_a_sql = """
-select 1 as id
-"""
-
-# Schema file that references the test
-schema_with_test_yml = """
-version: 2
-models:
-  - name: model_a
-    columns:
-      - name: id
-        data_tests:
-          - sample_test
-"""
-
-# Schema file without the test reference (for cleanup)
-schema_without_test_yml = """
-version: 2
-models:
-  - name: model_a
-    columns:
-      - name: id
-"""
+from tests.functional.defer_state.fixtures import (
+    removed_test_model_sql,
+    removed_test_schema_yml,
+    sample_test_sql,
+)
 
 
 class TestRemovedGenericTest:
@@ -42,8 +15,8 @@ class TestRemovedGenericTest:
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "model_a.sql": model_a_sql,
-            "schema.yml": schema_with_test_yml,
+            "model_a.sql": removed_test_model_sql,
+            "schema.yml": removed_test_schema_yml,
         }
 
     @pytest.fixture(scope="class")
@@ -100,8 +73,8 @@ class TestRemovedGenericTestStateModifiedGracefulError:
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "model_a.sql": model_a_sql,
-            "schema.yml": schema_with_test_yml,
+            "model_a.sql": removed_test_model_sql,
+            "schema.yml": removed_test_schema_yml,
         }
 
     @pytest.fixture(scope="class")
