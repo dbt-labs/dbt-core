@@ -88,20 +88,6 @@ jobs:
           echo Nightly release:                    ${{ inputs.nightly_release }}
           echo Only Docker:                        ${{ inputs.only_docker }}
 
-      - name: "Checkout target branch"
-        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
-        with:
-          ref: ${{ inputs.target_branch }}
-
-      # release-prep.yml really shouldn't take in the sha but since core + all adapters
-      # depend on it now this workaround lets us not input it manually with risk of error.
-      # The changes always get merged into the head so we can't use a specific commit for
-      # releases anyways.
-      - name: "Capture sha"
-        id: set_sha
-        run: |
-          echo "starting_sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
-
   bump-version-generate-changelog:
     name: Bump package version, Generate changelog
     needs: [job-setup]
@@ -110,7 +96,6 @@ jobs:
     uses: dbt-labs/dbt-release/.github/workflows/release-prep.yml@main
 
     with:
-      sha: ${{ needs.job-setup.outputs.starting_sha }}
       version_number: ${{ inputs.version_number }}
       target_branch: ${{ inputs.target_branch }}
       env_setup_script_path: "scripts/env-setup.sh"
