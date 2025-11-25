@@ -1856,15 +1856,14 @@ impl Nodes {
             .or_else(|| {
                 self.tests
                     .values()
-                    .find(|test| test.base().relation_name == Some(relation_name.to_string()))
+                    // test.base().relation_name is always None
+                    .find(|test| test.relation_name() == relation_name)
                     .map(|arc| Arc::as_ref(arc) as &dyn InternalDbtNodeAttributes)
             })
             .or_else(|| {
                 self.unit_tests
                     .values()
-                    .find(|unit_test| {
-                        unit_test.base().relation_name == Some(relation_name.to_string())
-                    })
+                    .find(|unit_test| unit_test.relation_name() == relation_name)
                     .map(|arc| Arc::as_ref(arc) as &dyn InternalDbtNodeAttributes)
             })
             .or_else(|| {
@@ -2163,6 +2162,15 @@ pub struct DbtUnitTest {
     pub deprecated_config: UnitTestConfig,
 }
 
+impl DbtUnitTest {
+    pub fn relation_name(&self) -> String {
+        format!(
+            "{}.{}.{}",
+            self.__base_attr__.database, self.__base_attr__.schema, self.__base_attr__.alias
+        )
+    }
+}
+
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -2193,6 +2201,15 @@ pub struct DbtTest {
     pub deprecated_config: DataTestConfig,
 
     pub __other__: BTreeMap<String, YmlValue>,
+}
+
+impl DbtTest {
+    pub fn relation_name(&self) -> String {
+        format!(
+            "{}.{}.{}",
+            self.__base_attr__.database, self.__base_attr__.schema, self.__base_attr__.alias
+        )
+    }
 }
 
 #[skip_serializing_none]
