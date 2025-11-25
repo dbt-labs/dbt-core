@@ -129,11 +129,7 @@ jobs:
       env_setup_script_path: "scripts/env-setup.sh"
       test_run: ${{ inputs.test_run }}
       nightly_release: ${{ inputs.nightly_release }}
-<<<<<<< HEAD
       use_hatch: ${{ needs.job-setup.outputs.use_hatch == 'true' }}  # workflow outputs are strings...
-=======
-      use_hatch: true
->>>>>>> 164c478f2 (more cleanup)
 
     secrets: inherit
 
@@ -163,18 +159,11 @@ jobs:
       version_number: ${{ inputs.version_number }}
       hatch_directory: "core"
       changelog_path: ${{ needs.bump-version-generate-changelog.outputs.changelog_path }}
-<<<<<<< HEAD
       build_script_path: "scripts/build-dist.sh"
       package_test_command: "dbt --version"
       test_run: ${{ inputs.test_run }}
       nightly_release: ${{ inputs.nightly_release }}
       use_hatch: ${{ needs.job-setup.outputs.use_hatch == 'true' }}  # workflow outputs are strings...
-=======
-      package_test_command: "dbt --version"
-      test_run: ${{ inputs.test_run }}
-      nightly_release: ${{ inputs.nightly_release }}
-      use_hatch: true
->>>>>>> 164c478f2 (more cleanup)
 
   github-release:
     name: GitHub Release
