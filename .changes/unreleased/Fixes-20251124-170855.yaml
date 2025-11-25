@@ -1,5 +1,5 @@
 kind: Fixes
-body: Correctly reference foreign key references when --defer and --state provided
+body: :bug: :snowman: Correctly reference foreign key references when --defer and --state provided
 time: 2025-11-24T17:08:55.387946-05:00
 custom:
     Author: michellark
