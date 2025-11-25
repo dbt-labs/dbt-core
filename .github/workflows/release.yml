@@ -95,6 +95,7 @@ jobs:
 
     with:
       version_number: ${{ inputs.version_number }}
+      hatch_directory: "core"
       target_branch: ${{ inputs.target_branch }}
       env_setup_script_path: "scripts/env-setup.sh"
       test_run: ${{ inputs.test_run }}
@@ -127,6 +128,7 @@ jobs:
     with:
       sha: ${{ needs.bump-version-generate-changelog.outputs.final_sha }}
       version_number: ${{ inputs.version_number }}
+      hatch_directory: "core"
       changelog_path: ${{ needs.bump-version-generate-changelog.outputs.changelog_path }}
       build_script_path: "scripts/build-dist.sh"
       package_test_command: "dbt --version"
