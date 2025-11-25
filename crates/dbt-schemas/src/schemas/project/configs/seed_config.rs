@@ -293,7 +293,9 @@ pub struct SeedConfig {
     pub group: Option<String>,
     pub meta: Option<BTreeMap<String, YmlValue>>,
     pub persist_docs: Option<PersistDocsConfig>,
+    #[serde(alias = "post-hook")]
     pub post_hook: Verbatim<Option<Hooks>>,
+    #[serde(alias = "pre-hook")]
     pub pre_hook: Verbatim<Option<Hooks>>,
     pub tags: Option<StringOrArrayOfStrings>,
     pub quoting: Option<DbtQuoting>,

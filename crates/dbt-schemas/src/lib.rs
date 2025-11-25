@@ -134,7 +134,7 @@ pub mod schemas {
         }
 
         pub use configs::analysis_config::{AnalysesConfig, ProjectAnalysisConfig};
-        pub use configs::common::WarehouseSpecificNodeConfig;
+        pub use configs::common::{WarehouseSpecificNodeConfig, same_warehouse_config};
         pub use configs::data_test_config::{DataTestConfig, ProjectDataTestConfig};
         pub use configs::exposure_config::{ExposureConfig, ProjectExposureConfig};
         pub use configs::function_config::{FunctionConfig, ProjectFunctionConfig};

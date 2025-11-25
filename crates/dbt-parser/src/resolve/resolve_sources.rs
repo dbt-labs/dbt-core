@@ -375,6 +375,7 @@ fn merge_freshness(
 ) -> Option<FreshnessDefinition> {
     match update {
         // A present but 'null' freshness does not inherit from the base and inhibits freshness by returning None.
+        Omissible::Present(None) => None,
         Omissible::Present(update) => update
             .as_ref()
             .and_then(|update| merge_freshness_unwrapped(base, Some(update))),

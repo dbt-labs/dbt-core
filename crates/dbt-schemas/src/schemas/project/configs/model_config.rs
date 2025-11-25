@@ -20,16 +20,19 @@ use crate::schemas::common::DbtUniqueKey;
 use crate::schemas::common::PersistDocsConfig;
 use crate::schemas::common::{Access, DbtQuoting, ScheduleConfig};
 use crate::schemas::common::{DocsConfig, OnConfigurationChange};
-use crate::schemas::common::{Hooks, OnSchemaChange};
+use crate::schemas::common::{Hooks, OnSchemaChange, hooks_equal};
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::manifest::postgres::PostgresIndex;
 use crate::schemas::manifest::{BigqueryClusterConfig, PartitionConfig};
-use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
 use crate::schemas::project::configs::common::default_column_types;
 use crate::schemas::project::configs::common::default_hooks;
 use crate::schemas::project::configs::common::default_meta_and_tags;
 use crate::schemas::project::configs::common::default_quoting;
 use crate::schemas::project::configs::common::default_to_grants;
+use crate::schemas::project::configs::common::{
+    WarehouseSpecificNodeConfig, access_eq, docs_eq, grants_eq, meta_eq, omissible_option_eq,
+    same_warehouse_config,
+};
 use crate::schemas::project::dbt_project::DefaultTo;
 use crate::schemas::project::dbt_project::TypedRecursiveConfig;
 use crate::schemas::properties::ModelFreshness;
@@ -816,23 +819,28 @@ impl DefaultTo<ModelConfig> for ModelConfig {
 }
 
 impl ModelConfig {
+    pub fn same_database_representation(&self, other: &ModelConfig) -> bool {
+        omissible_option_eq(&self.database, &other.database) && self.alias == other.alias
+    }
+
     /// Custom comparison that treats Omitted and Present(None) as equivalent for schema/database fields
     pub fn same_config(&self, other: &ModelConfig) -> bool {
         // Compare all fields,
         self.enabled == other.enabled
-            && omissible_option_eq(&self.schema, &other.schema)
-            && omissible_option_eq(&self.database, &other.database)
             && self.catalog_name == other.catalog_name
             && meta_eq(&self.meta, &other.meta)  // Custom comparison for meta
-            && self.materialized == other.materialized
+            && materialized_eq(&self.materialized, &other.materialized)
             && self.incremental_strategy == other.incremental_strategy
-            && self.incremental_predicates == other.incremental_predicates
+            // incremental_predicates can differ because of environment, i.e. dev vs prod
+            // so we don't compare them. To compare them we will need a SQL AST whose 
+            // shape and node types can be compared rather contents of each node.
+            // && self.incremental_predicates == other.incremental_predicates
             && self.batch_size == other.batch_size
             && lookback_eq(&self.lookback, &other.lookback)  // Custom comparison for lookback
             && self.begin == other.begin
             && persist_docs_eq(&self.persist_docs, &other.persist_docs)  // Custom comparison for persist_docs
-            && self.post_hook == other.post_hook
-            && self.pre_hook == other.pre_hook
+            && hooks_equal(&self.post_hook, &other.post_hook)
+            && hooks_equal(&self.pre_hook, &other.pre_hook)
             // && self.quoting == other.quoting // TODO: re-enable when no longer using mantle/core manifests in IA
             && column_types_eq(&self.column_types, &other.column_types)  // Custom comparison for column_types
             && self.full_refresh == other.full_refresh
@@ -843,7 +851,9 @@ impl ModelConfig {
             && packages_and_imports_eq(&self.packages, &other.packages)  // Custom comparison for packages
             && packages_and_imports_eq(&self.imports, &other.imports)  // Custom comparison for imports (same function as packages)
             && docs_eq(&self.docs, &other.docs)  // Custom comparison for docs
-            && self.event_time == other.event_time
+            // This is a project level config that can differ between environments,
+            // so we don't compare them.
+            // && self.event_time == other.event_time
             && self.concurrent_batches == other.concurrent_batches
             && self.merge_update_columns == other.merge_update_columns
             && self.merge_exclude_columns == other.merge_exclude_columns
@@ -854,42 +864,7 @@ impl ModelConfig {
             && self.sql_header == other.sql_header
             && self.location == other.location
             && self.predicates == other.predicates
-            && self.__warehouse_specific_config__ == other.__warehouse_specific_config__
-    }
-}
-// Helper function to compare Omissible<Option<T>> fields
-fn omissible_option_eq<T: PartialEq>(a: &Omissible<Option<T>>, b: &Omissible<Option<T>>) -> bool {
-    match (a, b) {
-        // Both omitted
-        (Omissible::Omitted, Omissible::Omitted) => true,
-        // Both present
-        (Omissible::Present(a_val), Omissible::Present(b_val)) => a_val == b_val,
-        // One omitted, one present with None - treat as equivalent
-        (Omissible::Omitted, Omissible::Present(None)) => true,
-        (Omissible::Present(None), Omissible::Omitted) => true,
-        // Any other combination is not equal
-        _ => false,
-    }
-}
-
-// Helper function to compare docs fields, treating None and default DocsConfig as equivalent
-fn docs_eq(a: &Option<DocsConfig>, b: &Option<DocsConfig>) -> bool {
-    use crate::schemas::common::DocsConfig;
-    // Default value in dbt-core
-    // See https://github.com/dbt-labs/dbt-core/blob/b75d5e701ef4dc2d7a98c5301ef63ecfc02eae15/core/dbt/artifacts/resources/base.py#L65
-    let default_docs = DocsConfig {
-        show: true,
-        node_color: None,
-    };
-
-    match (a, b) {
-        // Both None
-        (None, None) => true,
-        // Both Some - direct comparison
-        (Some(a_docs), Some(b_docs)) => a_docs == b_docs,
-        // One None, one Some - check if the Some value equals default
-        (None, Some(b_docs)) => b_docs == &default_docs,
-        (Some(a_docs), None) => a_docs == &default_docs,
+            && same_warehouse_config(&self.__warehouse_specific_config__, &other.__warehouse_specific_config__)
     }
 }
 
@@ -911,23 +886,6 @@ fn on_schema_change_eq(a: &Option<OnSchemaChange>, b: &Option<OnSchemaChange>) -
     }
 }
 
-// Helper function to compare access fields, treating None and default Access as equivalent
-fn access_eq(a: &Option<Access>, b: &Option<Access>) -> bool {
-    use crate::schemas::common::Access;
-    // Default value in dbt-core is "protected"
-    // See https://github.com/dbt-labs/dbt-core/blob/main/core/dbt/artifacts/resources/v1/model.py#L72-L75
-    let default_access = Access::Protected;
-
-    match (a, b) {
-        // Both None
-        (None, None) => true,
-        // Both Some - direct comparison
-        (Some(a_val), Some(b_val)) => a_val == b_val,
-        // One None, one Some - check if the Some value equals default
-        (None, Some(b_val)) => b_val == &default_access,
-        (Some(a_val), None) => a_val == &default_access,
-    }
-}
 // Helper function to compare persist_docs fields, treating None and default PersistDocsConfig as equivalent
 fn persist_docs_eq(a: &Option<PersistDocsConfig>, b: &Option<PersistDocsConfig>) -> bool {
     use crate::schemas::common::PersistDocsConfig;
@@ -966,39 +924,10 @@ fn lookback_eq(a: &Option<i32>, b: &Option<i32>) -> bool {
     }
 }
 
-// Helper function to compare meta fields, treating None and empty BTreeMap as equivalent
-fn meta_eq(a: &Option<BTreeMap<String, YmlValue>>, b: &Option<BTreeMap<String, YmlValue>>) -> bool {
-    match (a, b) {
-        // Both None
-        (None, None) => true,
-        // Both Some - direct comparison
-        (Some(a_val), Some(b_val)) => a_val == b_val,
-        // One None, one Some - check if the Some value is empty (equals default)
-        (None, Some(b_val)) => b_val.is_empty(),
-        (Some(a_val), None) => a_val.is_empty(),
-    }
-}
-
 // Helper function to compare column_types fields, treating None and empty BTreeMap as equivalent
 fn column_types_eq(
     a: &Option<BTreeMap<Spanned<String>, String>>,
     b: &Option<BTreeMap<Spanned<String>, String>>,
-) -> bool {
-    match (a, b) {
-        // Both None
-        (None, None) => true,
-        // Both Some - direct comparison
-        (Some(a_val), Some(b_val)) => a_val == b_val,
-        // One None, one Some - check if the Some value is empty (equals default)
-        (None, Some(b_val)) => b_val.is_empty(),
-        (Some(a_val), None) => a_val.is_empty(),
-    }
-}
-
-// Helper function to compare grants fields, treating None and empty BTreeMap as equivalent
-fn grants_eq(
-    a: &Option<BTreeMap<String, StringOrArrayOfStrings>>,
-    b: &Option<BTreeMap<String, StringOrArrayOfStrings>>,
 ) -> bool {
     match (a, b) {
         // Both None
@@ -1051,5 +980,17 @@ fn on_configuration_change_eq(
         // One None, one Some - check if the Some value equals default
         (None, Some(b_val)) => b_val == &default_on_configuration_change,
         (Some(a_val), None) => a_val == &default_on_configuration_change,
+    }
+}
+
+// Helper function to compare materialized fields, treating None as View (the default)
+fn materialized_eq(a: &Option<DbtMaterialization>, b: &Option<DbtMaterialization>) -> bool {
+    let default_materialized = DbtMaterialization::View;
+
+    match (a, b) {
+        (None, None) => true,
+        (Some(a_val), Some(b_val)) => a_val == b_val,
+        (None, Some(b_val)) => b_val == &default_materialized,
+        (Some(a_val), None) => a_val == &default_materialized,
     }
 }

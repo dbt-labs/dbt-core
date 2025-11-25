@@ -368,11 +368,11 @@ pub struct SnapshotConfig {
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq, Eq, Default)]
 pub struct SnapshotMetaColumnNames {
-    dbt_scd_id: Option<String>,
-    dbt_updated_at: Option<String>,
-    dbt_valid_from: Option<String>,
-    dbt_valid_to: Option<String>,
-    dbt_is_deleted: Option<String>,
+    pub dbt_scd_id: Option<String>,
+    pub dbt_updated_at: Option<String>,
+    pub dbt_valid_from: Option<String>,
+    pub dbt_valid_to: Option<String>,
+    pub dbt_is_deleted: Option<String>,
 }
 
 impl SnapshotMetaColumnNames {

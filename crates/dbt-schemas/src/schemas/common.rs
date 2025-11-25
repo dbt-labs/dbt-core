@@ -933,6 +933,22 @@ impl Hooks {
     }
 }
 
+// Helper function to compare hooks wrapped in Verbatim<Option<Hooks>> where None equals Some(ArrayOfStrings([]))
+pub fn hooks_equal(a: &Verbatim<Option<Hooks>>, b: &Verbatim<Option<Hooks>>) -> bool {
+    match (a.as_ref(), b.as_ref()) {
+        (None, None) => true,
+        (None, Some(b_hooks)) => {
+            // Check if b_hooks is effectively empty
+            matches!(b_hooks, Hooks::ArrayOfStrings(vec) if vec.is_empty())
+        }
+        (Some(a_hooks), None) => {
+            // Check if a_hooks is effectively empty
+            matches!(a_hooks, Hooks::ArrayOfStrings(vec) if vec.is_empty())
+        }
+        (Some(a_hooks), Some(b_hooks)) => a_hooks.hooks_equal(b_hooks),
+    }
+}
+
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, JsonSchema)]
 pub struct HookConfig {

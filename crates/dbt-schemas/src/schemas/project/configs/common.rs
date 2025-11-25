@@ -11,7 +11,7 @@ use crate::default_to;
 use crate::schemas::common::Hooks;
 use crate::schemas::common::merge_meta;
 use crate::schemas::common::merge_tags;
-use crate::schemas::common::{DbtQuoting, ScheduleConfig};
+use crate::schemas::common::{DbtQuoting, DocsConfig, ScheduleConfig};
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::manifest::postgres::PostgresIndex;
 use crate::schemas::manifest::{BigqueryClusterConfig, PartitionConfig};
@@ -455,4 +455,172 @@ impl DefaultTo<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConfig {
             ]
         );
     }
+}
+
+// Shared comparison helper functions
+use crate::schemas::common::Access;
+use dbt_common::serde_utils::Omissible;
+
+/// Helper function to compare Omissible<Option<T>> fields
+pub fn omissible_option_eq<T: PartialEq>(
+    a: &Omissible<Option<T>>,
+    b: &Omissible<Option<T>>,
+) -> bool {
+    match (a, b) {
+        // Both omitted
+        (Omissible::Omitted, Omissible::Omitted) => true,
+        // Both present
+        (Omissible::Present(a_val), Omissible::Present(b_val)) => a_val == b_val,
+        // One omitted, one present with None - treat as equivalent
+        (Omissible::Omitted, Omissible::Present(None)) => true,
+        (Omissible::Present(None), Omissible::Omitted) => true,
+        // Any other combination is not equal
+        _ => false,
+    }
+}
+
+/// Helper function to compare docs fields, treating None and default DocsConfig as equivalent
+pub fn docs_eq(a: &Option<DocsConfig>, b: &Option<DocsConfig>) -> bool {
+    // Default value in dbt-core
+    // See https://github.com/dbt-labs/dbt-core/blob/b75d5e701ef4dc2d7a98c5301ef63ecfc02eae15/core/dbt/artifacts/resources/base.py#L65
+    let default_docs = DocsConfig {
+        show: true,
+        node_color: None,
+    };
+
+    match (a, b) {
+        // Both None
+        (None, None) => true,
+        // Both Some - direct comparison
+        (Some(a_docs), Some(b_docs)) => a_docs == b_docs,
+        // One None, one Some - check if the Some value equals default
+        (None, Some(b_docs)) => b_docs == &default_docs,
+        (Some(a_docs), None) => a_docs == &default_docs,
+    }
+}
+
+/// Helper function to compare access fields, treating None and default Access as equivalent
+pub fn access_eq(a: &Option<Access>, b: &Option<Access>) -> bool {
+    // Default value in dbt-core is "protected"
+    // See https://github.com/dbt-labs/dbt-core/blob/main/core/dbt/artifacts/resources/v1/model.py#L72-L75
+    let default_access = Access::Protected;
+
+    match (a, b) {
+        // Both None
+        (None, None) => true,
+        // Both Some - direct comparison
+        (Some(a_val), Some(b_val)) => a_val == b_val,
+        // One None, one Some - check if the Some value equals default
+        (None, Some(b_val)) => b_val == &default_access,
+        (Some(a_val), None) => a_val == &default_access,
+    }
+}
+
+/// Helper function to compare meta fields, treating None and empty BTreeMap as equivalent
+pub fn meta_eq(
+    a: &Option<BTreeMap<String, YmlValue>>,
+    b: &Option<BTreeMap<String, YmlValue>>,
+) -> bool {
+    match (a, b) {
+        // Both None
+        (None, None) => true,
+        // Both Some - direct comparison
+        (Some(a_val), Some(b_val)) => a_val == b_val,
+        // One None, one Some - check if the Some value is empty (equals default)
+        (None, Some(b_val)) => b_val.is_empty(),
+        (Some(a_val), None) => a_val.is_empty(),
+    }
+}
+
+/// Helper function to compare grants fields, treating None and empty BTreeMap as equivalent
+pub fn grants_eq(
+    a: &Option<BTreeMap<String, StringOrArrayOfStrings>>,
+    b: &Option<BTreeMap<String, StringOrArrayOfStrings>>,
+) -> bool {
+    match (a, b) {
+        // Both None
+        (None, None) => true,
+        // Both Some - direct comparison
+        (Some(a_val), Some(b_val)) => a_val == b_val,
+        // One None, one Some - check if the Some value is empty (equals default)
+        (None, Some(b_val)) => b_val.is_empty(),
+        (Some(a_val), None) => a_val.is_empty(),
+    }
+}
+
+/// Compare warehouse-specific configurations field by field
+pub fn same_warehouse_config(
+    self_wh: &WarehouseSpecificNodeConfig,
+    other_wh: &WarehouseSpecificNodeConfig,
+) -> bool {
+    // Shared
+    self_wh.partition_by == other_wh.partition_by
+        // BigQuery
+        && self_wh.cluster_by == other_wh.cluster_by
+        && self_wh.hours_to_expiration == other_wh.hours_to_expiration
+        && self_wh.labels == other_wh.labels
+        && self_wh.labels_from_meta == other_wh.labels_from_meta
+        && self_wh.kms_key_name == other_wh.kms_key_name
+        && self_wh.require_partition_filter == other_wh.require_partition_filter
+        && self_wh.partition_expiration_days == other_wh.partition_expiration_days
+        && self_wh.grant_access_to == other_wh.grant_access_to
+        && self_wh.partitions == other_wh.partitions
+        && self_wh.enable_refresh == other_wh.enable_refresh
+        && self_wh.refresh_interval_minutes == other_wh.refresh_interval_minutes
+        && self_wh.max_staleness == other_wh.max_staleness
+        // Databricks
+        && self_wh.file_format == other_wh.file_format
+        && self_wh.catalog_name == other_wh.catalog_name
+        && self_wh.location_root == other_wh.location_root
+        && self_wh.tblproperties == other_wh.tblproperties
+        && self_wh.include_full_name_in_path == other_wh.include_full_name_in_path
+        && self_wh.liquid_clustered_by == other_wh.liquid_clustered_by
+        && self_wh.auto_liquid_cluster == other_wh.auto_liquid_cluster
+        && self_wh.clustered_by == other_wh.clustered_by
+        && self_wh.buckets == other_wh.buckets
+        && self_wh.catalog == other_wh.catalog
+        && self_wh.databricks_tags == other_wh.databricks_tags
+        && self_wh.compression == other_wh.compression
+        && self_wh.databricks_compute == other_wh.databricks_compute
+        && self_wh.target_alias == other_wh.target_alias
+        && self_wh.source_alias == other_wh.source_alias
+        && self_wh.matched_condition == other_wh.matched_condition
+        && self_wh.not_matched_condition == other_wh.not_matched_condition
+        && self_wh.not_matched_by_source_condition == other_wh.not_matched_by_source_condition
+        && self_wh.not_matched_by_source_action == other_wh.not_matched_by_source_action
+        && self_wh.merge_with_schema_evolution == other_wh.merge_with_schema_evolution
+        && self_wh.skip_matched_step == other_wh.skip_matched_step
+        && self_wh.skip_not_matched_step == other_wh.skip_not_matched_step
+        && self_wh.schedule == other_wh.schedule
+        // Snowflake
+        && self_wh.adapter_properties == other_wh.adapter_properties
+        && self_wh.table_tag == other_wh.table_tag
+        && self_wh.row_access_policy == other_wh.row_access_policy
+        && self_wh.external_volume == other_wh.external_volume
+        && self_wh.base_location_root == other_wh.base_location_root
+        && self_wh.base_location_subpath == other_wh.base_location_subpath
+        && self_wh.target_lag == other_wh.target_lag
+        && self_wh.refresh_mode == other_wh.refresh_mode
+        && self_wh.initialize == other_wh.initialize
+        && self_wh.tmp_relation_type == other_wh.tmp_relation_type
+        && self_wh.query_tag == other_wh.query_tag
+        && self_wh.automatic_clustering == other_wh.automatic_clustering
+        && self_wh.copy_grants == other_wh.copy_grants
+        && self_wh.secure == other_wh.secure
+        && self_wh.transient == other_wh.transient
+        // Redshift
+        && self_wh.auto_refresh == other_wh.auto_refresh
+        && self_wh.backup == other_wh.backup
+        && self_wh.bind == other_wh.bind
+        && self_wh.dist == other_wh.dist
+        && self_wh.sort == other_wh.sort
+        && self_wh.sort_type == other_wh.sort_type
+        // Fabric
+        && self_wh.as_columnstore == other_wh.as_columnstore
+        && self_wh.table_type == other_wh.table_type
+        // Postgres
+        && self_wh.indexes == other_wh.indexes
+        // Salesforce
+        && self_wh.primary_key == other_wh.primary_key
+        && self_wh.category == other_wh.category
 }

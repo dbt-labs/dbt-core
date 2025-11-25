@@ -14,6 +14,10 @@ use super::omissible_utils::handle_omissible_override;
 use crate::default_to;
 use crate::schemas::common::DocsConfig;
 use crate::schemas::common::{Access, DbtQuoting};
+// Import comparison helpers from common
+use super::common::{
+    access_eq, docs_eq, grants_eq, meta_eq, omissible_option_eq, same_warehouse_config,
+};
 use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
 use crate::schemas::project::configs::common::{
     default_meta_and_tags, default_quoting, default_to_grants,
@@ -267,5 +271,28 @@ impl From<ProjectFunctionConfig> for FunctionConfig {
             volatility: config.volatility,
             __warehouse_specific_config__: WarehouseSpecificNodeConfig::default(),
         }
+    }
+}
+
+impl FunctionConfig {
+    /// Custom comparison that treats Omitted and Present(None) as equivalent for schema/database fields
+    pub fn same_config(&self, other: &FunctionConfig) -> bool {
+        // Compare all fields individually
+        self.enabled == other.enabled
+            && self.alias == other.alias
+            && omissible_option_eq(&self.schema, &other.schema)      // Custom comparison for Omissible
+            && self.tags == other.tags
+            && meta_eq(&self.meta, &other.meta)                      // Custom comparison for meta
+            && self.group == other.group
+            && docs_eq(&self.docs, &other.docs)                      // Custom comparison for docs
+            && grants_eq(&self.grants, &other.grants)                // Custom comparison for grants
+            && self.quoting == other.quoting
+            && self.language == other.language
+            && self.on_configuration_change == other.on_configuration_change
+            && self.static_analysis == other.static_analysis
+            && self.function_kind == other.function_kind
+            && self.volatility == other.volatility
+            && access_eq(&self.access, &other.access)                // Custom comparison for access
+            && same_warehouse_config(&self.__warehouse_specific_config__, &other.__warehouse_specific_config__)
     }
 }

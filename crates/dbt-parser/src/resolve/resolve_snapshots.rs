@@ -105,7 +105,6 @@ pub async fn resolve_snapshots(
     let mut sql_defined_snapshots = Vec::new();
     // Map target path to original macro path for checksum recalculation
     let mut snapshot_original_paths: HashMap<PathBuf, PathBuf> = HashMap::new();
-
     for (macro_uid, macro_node) in macros {
         if macro_node.package_name == package_name && macro_uid.starts_with("snapshot.") {
             // Write the macro call to the `snapshots` directory
