@@ -129,7 +129,7 @@ jobs:
       env_setup_script_path: "scripts/env-setup.sh"
       test_run: ${{ inputs.test_run }}
       nightly_release: ${{ inputs.nightly_release }}
-      use_hatch: ${{ needs.job-setup.outputs.use_hatch }}
+      use_hatch: ${{ needs.job-setup.outputs.use_hatch == 'true' }}  # workflow outputs are strings...
 
     secrets: inherit
 
@@ -163,7 +163,7 @@ jobs:
       package_test_command: "dbt --version"
       test_run: ${{ inputs.test_run }}
       nightly_release: ${{ inputs.nightly_release }}
-      use_hatch: ${{ needs.job-setup.outputs.use_hatch }}
+      use_hatch: ${{ needs.job-setup.outputs.use_hatch == 'true' }}  # workflow outputs are strings...
 
   github-release:
     name: GitHub Release
