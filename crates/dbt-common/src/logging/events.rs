@@ -397,7 +397,7 @@ impl From<NodeStatus> for LogEvent {
             NodeStatus::TestWarned => LogEvent::TestWarn,
             NodeStatus::SkippedUpstreamFailed => LogEvent::Skipping,
             NodeStatus::ReusedNoChanges(_) => LogEvent::Reused,
-            NodeStatus::ReusedStillFresh(_) => LogEvent::Reused,
+            NodeStatus::ReusedStillFresh(_, _, _) => LogEvent::Reused,
             NodeStatus::ReusedStillFreshNoChanges(_) => LogEvent::Reused,
             NodeStatus::NoOp => LogEvent::Unknown("NoOp".to_string()),
         }

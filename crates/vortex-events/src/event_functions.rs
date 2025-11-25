@@ -213,7 +213,7 @@ pub fn run_model_event(
             skipped = true;
             skipped_reason = "reused_no_changes".to_string();
         }
-        NodeStatus::ReusedStillFresh(_) => {
+        NodeStatus::ReusedStillFresh(_, _, _) => {
             skipped = true;
             skipped_reason = "reused_still_fresh".to_string();
         }
@@ -227,7 +227,7 @@ pub fn run_model_event(
         }
     }
 
-    let resource_type = node.resource_type().as_ref().to_string();
+    let resource_type = node.resource_type().as_static_ref().to_string();
 
     let message = RunModel {
         // REQUIRED invocation_id - globally unique identifier

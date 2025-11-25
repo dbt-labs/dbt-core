@@ -62,7 +62,7 @@ fn metrics_are_scoped_to_root_span() {
 
                     assert_eq!(first_root.id().expect("must exist"), root_span.id());
 
-                    DataProvider::new(&root_span).increment_metric(
+                    DataProvider::new(&root_span, &span_ref).increment_metric(
                         MetricKey::InvocationMetric(InvocationMetricKey::TotalWarnings),
                         2,
                     );
@@ -96,9 +96,9 @@ fn metrics_are_scoped_to_root_span() {
                         .expect("child span must exist in registry");
                     let root_span = span_ref.scope().from_root().next().unwrap();
                     assert_eq!(
-                        DataProvider::new(&root_span).get_metric(MetricKey::InvocationMetric(
-                            InvocationMetricKey::TotalWarnings
-                        )),
+                        DataProvider::new(&root_span, &span_ref).get_metric(
+                            MetricKey::InvocationMetric(InvocationMetricKey::TotalWarnings)
+                        ),
                         2
                     );
                 });

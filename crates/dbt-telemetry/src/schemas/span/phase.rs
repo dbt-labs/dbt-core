@@ -13,7 +13,7 @@ use serde_with::skip_serializing_none;
 
 impl ProtoTelemetryEvent for PhaseExecuted {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
-    const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::EXPORT_ALL;
+    const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
     fn event_display_name(&self) -> String {
         // Get the all caps phase name without the "EXECUTION_PHASE_" prefix

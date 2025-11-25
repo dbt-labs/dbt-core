@@ -573,6 +573,8 @@ impl ExecuteAndCompareTelemetry {
             "time_unix_nano",
             "start_time_unix_nano",
             "end_time_unix_nano",
+            // durations
+            "duration_ms",
             // raw command includes local paths
             "raw_command",
             // Keys with absolute paths

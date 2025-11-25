@@ -10,7 +10,7 @@ pub use proto_rust::v1::public::events::fusion::artifact::{ArtifactType, Artifac
 
 impl ProtoTelemetryEvent for ArtifactWritten {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
-    const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::EXPORT_ALL;
+    const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
     fn event_display_name(&self) -> String {
         format!("Artifact: {}", self.relative_path)

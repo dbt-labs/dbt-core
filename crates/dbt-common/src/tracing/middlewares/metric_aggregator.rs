@@ -1,7 +1,9 @@
 use dbt_telemetry::{
-    Invocation, InvocationMetrics, LogMessage, LogRecordInfo, NodeOutcome, NodeSkipReason,
-    SeverityNumber, SpanEndInfo, TestOutcome,
+    Invocation, InvocationMetrics, LogMessage, LogRecordInfo, NodeOutcome, NodeProcessed,
+    NodeSkipReason, SeverityNumber, SpanEndInfo, TestOutcome, node_processed::NodeOutcomeDetail,
 };
+
+use crate::tracing::metrics::NodeOutcomeCountsKey;
 
 use super::super::{
     data_provider::DataProvider,
@@ -32,6 +34,7 @@ impl TelemetryMiddleware for TelemetryMetricAggregator {
             let mut skipped = 0u64;
             let mut reused = 0u64;
             let mut canceled = 0u64;
+            let mut no_op = 0u64;
 
             for ((outcome, skip_reason, test_outcome), count) in data_provider
                 .get_all_metrics()
@@ -53,12 +56,14 @@ impl TelemetryMiddleware for TelemetryMetricAggregator {
                     NodeOutcome::Skipped => {
                         if skip_reason == NodeSkipReason::Cached {
                             reused += count;
+                        } else if skip_reason == NodeSkipReason::NoOp {
+                            no_op += count;
                         } else {
                             skipped += count;
                         }
                     }
                     NodeOutcome::Canceled => canceled += count,
-                    NodeOutcome::Unspecified => {}
+                    NodeOutcome::Unspecified => no_op += count,
                 }
             }
 
@@ -87,6 +92,10 @@ impl TelemetryMiddleware for TelemetryMetricAggregator {
                 MetricKey::InvocationMetric(InvocationMetricKey::NodeTotalsCanceled),
                 canceled,
             );
+            data_provider.increment_metric(
+                MetricKey::InvocationMetric(InvocationMetricKey::NodeTotalsNoOp),
+                no_op,
+            );
 
             // Store totals in invocation attributes
             invocation.metrics = Some(InvocationMetrics {
@@ -100,6 +109,22 @@ impl TelemetryMiddleware for TelemetryMetricAggregator {
                     InvocationMetricKey::AutoFixSuggestions,
                 ))),
             });
+        }
+
+        // Count node processed spans
+        if let Some(attrs) = span.attributes.downcast_ref::<NodeProcessed>()
+            && attrs.in_selection
+        {
+            let key = NodeOutcomeCountsKey::new(
+                attrs.node_outcome(),
+                attrs.node_skip_reason(),
+                if let Some(NodeOutcomeDetail::NodeTestDetail(ted)) = &attrs.node_outcome_detail {
+                    Some(ted.test_outcome())
+                } else {
+                    None
+                },
+            );
+            data_provider.increment_metric(MetricKey::NodeOutcomeCounts(key), 1);
         }
 
         Some(span)

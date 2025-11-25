@@ -1,6 +1,6 @@
 //! Registry for telemetry attribute types.
 
-use proto_rust::{StaticName, v1::public::events::fusion::log::UserLogMessage};
+use proto_rust::StaticName;
 use std::{collections::HashMap, sync::LazyLock};
 
 use super::traits::AnyTelemetryEvent;
@@ -8,8 +8,8 @@ use crate::{
     attributes::traits::ArrowSerializableTelemetryEvent,
     schemas::{
         ArtifactWritten, CallTrace, CompiledCodeInline, Invocation, ListItemOutput, LogMessage,
-        NodeEvaluated, OnboardingScreenShown, PhaseExecuted, Process, QueryExecuted,
-        ShowDataOutput, Unknown,
+        NodeEvaluated, NodeProcessed, OnboardingScreenShown, PackageUpdate, PhaseExecuted, Process,
+        QueryExecuted, ShowDataOutput, Unknown, UserLogMessage,
     },
     serialize::arrow::ArrowAttributes,
 };
@@ -189,6 +189,19 @@ static PUBLIC_TELEMETRY_EVENT_REGISTRY: LazyLock<TelemetryEventTypeRegistry> = L
             #[cfg(any(test, feature = "test-utils"))]
             faker_for_node_evaluated,
         );
+        // Needs a custom faker due to oneof fields
+        #[cfg(any(test, feature = "test-utils"))]
+        faker_for_type_with_oneofs!(
+            faker_for_node_processed,
+            NodeProcessed,
+            proto_rust::v1::public::events::fusion::node::node_processed::NodeOutcomeDetail => node_outcome_detail
+        );
+        registry.register(
+            NodeProcessed::FULL_NAME,
+            arrow_deserialize_for_type::<NodeProcessed>,
+            #[cfg(any(test, feature = "test-utils"))]
+            faker_for_node_processed,
+        );
         registry.register(
             ArtifactWritten::FULL_NAME,
             arrow_deserialize_for_type::<ArtifactWritten>,
@@ -238,6 +251,12 @@ static PUBLIC_TELEMETRY_EVENT_REGISTRY: LazyLock<TelemetryEventTypeRegistry> = L
             arrow_deserialize_for_type::<ShowDataOutput>,
             #[cfg(any(test, feature = "test-utils"))]
             faker_for_type::<ShowDataOutput>,
+        );
+        registry.register(
+            PackageUpdate::FULL_NAME,
+            arrow_deserialize_for_type::<PackageUpdate>,
+            #[cfg(any(test, feature = "test-utils"))]
+            faker_for_type::<PackageUpdate>,
         );
 
         registry
@@ -339,8 +358,6 @@ mod tests {
                     "v1.public.events.fusion.node.NodeSkipUpstreamDetail",
                     "v1.public.events.fusion.node.SourceFreshnessDetail",
                     "v1.public.events.fusion.node.TestEvaluationDetail",
-                    // Not exported to parquet, so doesn't participate in registry
-                    "v1.public.events.fusion.update.PackageUpdate",
                 ]
                 .contains(&n.as_str())
             })

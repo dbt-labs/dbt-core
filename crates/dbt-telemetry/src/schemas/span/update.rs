@@ -1,36 +1,20 @@
-use crate::{AnyTelemetryEvent, TelemetryOutputFlags, attributes::TelemetryEventRecType};
-use proto_rust::StaticName;
+use crate::{
+    AnyTelemetryEvent, ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryOutputFlags,
+    attributes::TelemetryEventRecType, serialize::arrow::ArrowAttributes,
+};
+use prost::Name as _;
 pub use proto_rust::v1::public::events::fusion::update::PackageUpdate;
-use serde_json::Value as JsonValue;
-use std::any::Any;
 
 // Our shorthand `ProtoTelemetryEvent` trait requires arrow trait implementation,
 // and since this one is not exported to Parquet, we have to implement the
 // `AnyTelemetryEvent` methods directly.
 
-impl AnyTelemetryEvent for PackageUpdate {
-    fn event_type(&self) -> &'static str {
-        Self::FULL_NAME
-    }
-
-    fn event_eq(&self, other: &dyn AnyTelemetryEvent) -> bool {
-        self.event_type() == other.event_type()
-            && other
-                .as_any()
-                .downcast_ref::<Self>()
-                .is_some_and(|other| self == other)
-    }
+impl ProtoTelemetryEvent for PackageUpdate {
+    const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
+    const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
     fn event_display_name(&self) -> String {
         format!("Update: {} -> {}", self.package, self.version)
-    }
-
-    fn record_category(&self) -> TelemetryEventRecType {
-        TelemetryEventRecType::Span
-    }
-
-    fn output_flags(&self) -> TelemetryOutputFlags {
-        TelemetryOutputFlags::EXPORT_JSONL_AND_OTLP
     }
 
     fn has_sensitive_data(&self) -> bool {
@@ -46,23 +30,36 @@ impl AnyTelemetryEvent for PackageUpdate {
             exe_path: None,
         }))
     }
+}
 
-    /// Helper for downcasting to concrete types.
-    fn as_any(&self) -> &dyn Any {
-        self
+impl ArrowSerializableTelemetryEvent for PackageUpdate {
+    fn to_arrow_record(&self) -> ArrowAttributes<'_> {
+        ArrowAttributes {
+            json_payload: serde_json::to_string(self)
+                .unwrap_or_else(|_| {
+                    panic!(
+                        "Failed to serialize event type \"{}\" to JSON",
+                        Self::full_name()
+                    )
+                })
+                .into(),
+            ..Default::default()
+        }
     }
 
-    /// Helper for downcasting to concrete types (mutable).
-    fn as_any_mut(&mut self) -> &mut dyn Any {
-        self
-    }
-
-    /// Clone the event as a boxed trait object.
-    fn clone_box(&self) -> Box<dyn AnyTelemetryEvent> {
-        Box::new(self.clone())
-    }
-
-    fn to_json(&self) -> Result<JsonValue, String> {
-        serde_json::to_value(self).map_err(|e| format!("Failed to serialize: {e}"))
+    fn from_arrow_record(record: &ArrowAttributes) -> Result<Self, String> {
+        serde_json::from_str(record.json_payload.as_ref().ok_or_else(|| {
+            format!(
+                "Missing json payload for event type \"{}\"",
+                Self::full_name()
+            )
+        })?)
+        .map_err(|e| {
+            format!(
+                "Failed to deserialize event type \"{}\" from JSON: {}",
+                Self::full_name(),
+                e
+            )
+        })
     }
 }

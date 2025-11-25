@@ -26,6 +26,7 @@ pub enum InvocationMetricKey {
     NodeTotalsReused,
     NodeTotalsSkipped,
     NodeTotalsCanceled,
+    NodeTotalsNoOp,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -38,6 +39,18 @@ impl NodeOutcomeCountsKey {
         test_outcome: Option<TestOutcome>,
     ) -> Self {
         Self(outcome, skip_reason, test_outcome)
+    }
+
+    pub fn node_outcome(&self) -> NodeOutcome {
+        self.0
+    }
+
+    pub fn node_skip_reason(&self) -> NodeSkipReason {
+        self.1
+    }
+
+    pub fn test_outcome(&self) -> Option<TestOutcome> {
+        self.2
     }
 
     pub fn into_parts(self) -> (NodeOutcome, NodeSkipReason, Option<TestOutcome>) {

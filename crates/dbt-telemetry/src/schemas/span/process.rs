@@ -19,7 +19,7 @@ pub fn create_process_event_data(package: &str) -> Process {
 
 impl ProtoTelemetryEvent for Process {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
-    const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::EXPORT_ALL;
+    const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
     fn event_display_name(&self) -> String {
         format!(

@@ -5,13 +5,13 @@ use console::Style;
 use dbt_telemetry::{Invocation, NodeType, SpanEndInfo};
 use itertools::Itertools;
 
-use crate::{
-    pretty_string::{BLUE, DIM, GREEN, MAGENTA, RED, WHITE, YELLOW},
-    tracing::{
-        data_provider::DataProvider,
-        formatters::{color::maybe_apply_color, format_delimiter},
-        metrics::{InvocationMetricKey, MetricKey},
+use crate::tracing::{
+    data_provider::DataProvider,
+    formatters::{
+        color::{BLUE, DIM, GREEN, MAGENTA, RED, WHITE, YELLOW, maybe_apply_color},
+        layout::format_delimiter,
     },
+    metrics::{InvocationMetricKey, MetricKey},
 };
 
 use super::duration::format_duration_for_summary;
@@ -74,6 +74,7 @@ struct InvocationOutcomeTotals {
     reused: u64,
     skipped: u64,
     canceled: u64,
+    no_op: u64,
 }
 
 #[derive(Debug)]
@@ -143,15 +144,19 @@ fn collect_outcome_totals(data_provider: &DataProvider<'_>) -> InvocationOutcome
     let canceled = data_provider.get_metric(MetricKey::InvocationMetric(
         InvocationMetricKey::NodeTotalsCanceled,
     ));
+    let no_op = data_provider.get_metric(MetricKey::InvocationMetric(
+        InvocationMetricKey::NodeTotalsNoOp,
+    ));
 
     InvocationOutcomeTotals {
-        total: success + warn + error + reused + skipped + canceled,
+        total: success + warn + error + reused + skipped + canceled + no_op,
         success,
         warn,
         error,
         reused,
         skipped,
         canceled,
+        no_op,
     }
 }
 
@@ -364,6 +369,9 @@ fn format_result_line(outcomes: &InvocationOutcomeTotals, colorize: bool) -> Opt
             colorize,
             &DIM,
         ));
+    }
+    if outcomes.no_op > 0 {
+        segments.push(colored_metric(outcomes.no_op, "no-op", colorize, &DIM));
     }
 
     Some(format!("Summary: {}", segments.join(" | ")))

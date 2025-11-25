@@ -17,6 +17,11 @@ use tracing_subscriber::{
 pub(super) trait SpanAccess {
     fn extensions(&self) -> Extensions<'_>;
     fn extensions_mut(&self) -> ExtensionsMut<'_>;
+
+    /// Iterates over ancestor spans starting from this span and going up to the root.
+    /// The iterator includes this span as the first element.
+    /// The callback should return true to continue iteration, false to stop.
+    fn for_each_in_scope(&self, f: &mut dyn FnMut(&dyn SpanAccess) -> bool);
 }
 
 impl<'a, R> SpanAccess for SpanRef<'a, R>
@@ -29,6 +34,14 @@ where
 
     fn extensions_mut(&self) -> ExtensionsMut<'_> {
         SpanRef::extensions_mut(self)
+    }
+
+    fn for_each_in_scope(&self, f: &mut dyn FnMut(&dyn SpanAccess) -> bool) {
+        for span_ref in self.scope() {
+            if !f(&span_ref as &dyn SpanAccess) {
+                break;
+            }
+        }
     }
 }
 
@@ -148,6 +161,69 @@ fn record_span_status_on_ref(span_ext_mut: &mut ExtensionsMut<'_>, error_message
 pub fn record_span_status(span: &Span, error_message: Option<&str>) {
     with_span(span, |span_ref| {
         record_span_status_on_ref(&mut span_ref.extensions_mut(), error_message)
+    });
+}
+
+/// Updates attributes of the given span.
+///
+/// The `attrs_updater` closure receives a mutable reference to the current
+/// attributes and should modify them in place.
+///
+/// If the span attirbutes type doesn't match the expected type `A`, this is a no-op.
+///
+/// # Panics
+///
+/// If telemetry hasn't been properly initialized.
+pub fn update_span_attrs<F, A: AnyTelemetryEvent>(span: &Span, attrs_updater: F)
+where
+    F: FnOnce(&mut A),
+{
+    with_span(span, |span_ref| {
+        let mut span_ext_mut = span_ref.extensions_mut();
+
+        if let Some(attrs) = span_ext_mut
+            // Get the current attributes
+            .get_mut::<TelemetryAttributes>()
+            .expect("Telemetry hasn't been properly initialized. Missing span event attributes")
+            // Try downcasting to the expected type
+            .downcast_mut::<A>()
+        {
+            // Found the expected attributes, call the updater and return
+            attrs_updater(attrs);
+        }
+    });
+}
+
+/// Updates attributes for the closest span with the expected
+/// `TelemetryAttributes` type starting from the current span and going up.
+///
+/// The `attrs_updater` closure receives a mutable reference to the current
+/// attributes and should modify them in place.
+///
+/// If no such span is found, this is a no-op.
+pub fn find_and_update_span_attrs<F, A: AnyTelemetryEvent>(mut attrs_updater: F)
+where
+    F: FnMut(&mut A),
+{
+    with_current_span(|span_ref| {
+        // Find the closest span with the expected TelemetryAttributes type.
+        // Scope iterator starts from the current span and goes up to the root.
+        for span_ref in span_ref.scope() {
+            let mut span_ext_mut = span_ref.extensions_mut();
+
+            if let Some(attrs) = span_ext_mut
+                // Get the current attributes
+                .get_mut::<TelemetryAttributes>()
+                .expect("Telemetry hasn't been properly initialized. Missing span event attributes")
+                // Try downcasting to the expected type
+                .downcast_mut::<A>()
+            {
+                // Found the expected attributes, call the updater and return
+                attrs_updater(attrs);
+
+                return;
+            }
+        }
     });
 }
 

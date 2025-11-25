@@ -10,7 +10,7 @@ use std::borrow::Cow;
 
 impl ProtoTelemetryEvent for CallTrace {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
-    const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::EXPORT_ALL;
+    const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
     fn event_display_name(&self) -> String {
         if let Some(file) = &self.file {
@@ -111,7 +111,7 @@ impl ArrowSerializableTelemetryEvent for CallTrace {
 
 impl ProtoTelemetryEvent for Unknown {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
-    const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::EXPORT_ALL;
+    const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
     fn event_display_name(&self) -> String {
         format!("Unknown span: {} ({}:{})", self.name, self.file, self.line)

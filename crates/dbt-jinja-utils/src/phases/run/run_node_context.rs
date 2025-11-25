@@ -248,7 +248,7 @@ pub async fn build_run_node_context<S: Serialize>(
         "write".to_owned(),
         MinijinjaValue::from_object(WriteConfig {
             model_name,
-            resource_type: resource_type.as_ref().to_string(),
+            resource_type: resource_type.as_static_ref().to_string(),
             project_root: io_args.in_dir.clone(),
             target_path: io_args.out_dir.clone(),
         }),

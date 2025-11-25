@@ -1,4 +1,4 @@
-use crate::pretty_string::{PLAIN, RED, YELLOW};
+pub use crate::pretty_string::{BLUE, CYAN, DIM, GREEN, MAGENTA, PLAIN, RED, WHITE, YELLOW};
 use console::Style;
 use dbt_telemetry::SeverityNumber;
 

@@ -9,7 +9,7 @@ pub use proto_rust::v1::public::events::fusion::onboarding::OnboardingScreenShow
 
 impl ProtoTelemetryEvent for OnboardingScreenShown {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
-    const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::EXPORT_ALL;
+    const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
     fn event_display_name(&self) -> String {
         format!("Onboarding screen shown: {}", self.screen().as_str_name())

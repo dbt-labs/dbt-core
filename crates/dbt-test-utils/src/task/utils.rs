@@ -32,7 +32,7 @@ static ISO_TIMESTAMP_PATTERN: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z").unwrap());
 static TIME_PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new(r"\b\d{2}:\d{2}:\d{2}\b").unwrap());
 static BRACKETED_DURATION_PATTERN: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"\[\s*\d+(?:\.\d+)?s\s*\]").unwrap());
+    Lazy::new(|| Regex::new(r"\[(?:\s*\d+(?:\.\d+)?s\s*|-------)\]").unwrap());
 static IN_DURATION_PATTERN: Lazy<Regex> = Lazy::new(|| {
     // Matches: "in 1s", "in 500ms", "in 1s 298ms", "in 2m 10s", etc.
     Regex::new(
@@ -207,11 +207,6 @@ pub fn maybe_normalize_time(output: String) -> String {
     // Replace time formats like "15:39:21"
     result = TIME_PATTERN.replace_all(&result, "HH:MM:SS").to_string();
 
-    // Replace bracketed duration formats like "[ 44.65s]" with "[000.00s]"
-    result = BRACKETED_DURATION_PATTERN
-        .replace_all(&result, "[000.00s]")
-        .to_string();
-
     // Replace trailing "in ..." duration phrases with a stable token
     result = IN_DURATION_PATTERN
         .replace_all(&result, "in duration")
@@ -222,6 +217,12 @@ pub fn maybe_normalize_time(output: String) -> String {
         .replace_all(&result, "Last updated Xs ago")
         .to_string();
 
+    // Replace bracketed duration formats like "[ 44.65s]" and "[-------]" with "[duration]"
+    // This works to unify all durations, as the following pattern captures more duration formats
+    // including in brackets, and replaces them with `duration`.
+    result = BRACKETED_DURATION_PATTERN
+        .replace_all(&result, "[000.00s]")
+        .to_string();
     // Replace multi-unit duration sequences like "32ms 101us 694ns" with a stable token
     result = MULTI_UNIT_DURATION_PATTERN
         .replace_all(&result, "duration")

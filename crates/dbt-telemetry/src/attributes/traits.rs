@@ -140,6 +140,7 @@ pub trait AnyTelemetryEvent: Debug + Send + Sync + Any {
     /// - If `EXPORT_PARQUET` flag IS set but the event does not override this method, this panics.
     ///   Types that are exported to Parquet MUST override and provide a concrete implementation.
     fn to_arrow(&self) -> Option<ArrowAttributes<'_>> {
+        #[cfg(debug_assertions)]
         if self
             .output_flags()
             .contains(TelemetryOutputFlags::EXPORT_PARQUET)

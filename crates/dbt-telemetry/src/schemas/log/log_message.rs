@@ -138,6 +138,7 @@ impl ProtoTelemetryEvent for UserLogMessage {
 #[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Debug)]
 struct UserLogMessageJsonPayload {
     pub is_print: bool,
+    // Legacy (pre preview.70) fields
     pub line: Option<u32>,
     pub column: Option<u32>,
     pub relative_path: Option<String>,
@@ -150,12 +151,16 @@ impl ArrowSerializableTelemetryEvent for UserLogMessage {
             unique_id: self.unique_id.as_deref().map(Cow::Borrowed),
             phase: self.phase.map(|_| self.phase()),
             package_name: self.package_name.as_deref().map(Cow::Borrowed),
+            relative_path: self.relative_path.as_deref().map(Cow::Borrowed),
+            code_line: self.line,
+            code_column: self.column,
             // The rest of the data is serialized as JSON payload
             json_payload: serde_json::to_string(&UserLogMessageJsonPayload {
                 is_print: self.is_print,
-                line: self.line,
-                column: self.column,
-                relative_path: self.relative_path.clone(),
+                // Legacy (pre preview.70) fields
+                line: None,
+                column: None,
+                relative_path: None,
             })
             .unwrap_or_else(|_| {
                 panic!(
@@ -199,9 +204,13 @@ impl ArrowSerializableTelemetryEvent for UserLogMessage {
             unique_id: record.unique_id.as_deref().map(str::to_string),
             phase: record.phase.map(|v| v as i32),
             package_name: record.package_name.as_deref().map(str::to_string),
-            line: json_payload.line,
-            column: json_payload.column,
-            relative_path: json_payload.relative_path,
+            line: record.code_line.or(json_payload.line),
+            column: record.code_column.or(json_payload.column),
+            relative_path: record
+                .relative_path
+                .as_deref()
+                .map(str::to_string)
+                .or(json_payload.relative_path),
         })
     }
 }

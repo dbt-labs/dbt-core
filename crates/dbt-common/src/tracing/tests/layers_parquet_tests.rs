@@ -10,9 +10,9 @@ use crate::tracing::{
     tests::mocks::{MockDynLogEvent, MockDynSpanEvent},
 };
 use dbt_telemetry::{
-    CallTrace, LogMessage, LogRecordInfo, PackageUpdate, RecordCodeLocation, SeverityNumber,
-    SpanEndInfo, TelemetryAttributes, TelemetryEventTypeRegistry, TelemetryOutputFlags,
-    TelemetryRecord, serialize::arrow::deserialize_from_arrow,
+    CallTrace, LogMessage, LogRecordInfo, RecordCodeLocation, SeverityNumber, SpanEndInfo,
+    TelemetryAttributes, TelemetryEventTypeRegistry, TelemetryOutputFlags, TelemetryRecord,
+    serialize::arrow::deserialize_from_arrow,
 };
 use std::{collections::BTreeMap, fs, panic::Location, time::SystemTime};
 
@@ -92,17 +92,6 @@ fn test_tracing_parquet_filtering() {
         // Emit a log with Log attributes (should be included) & save the location (almost, one line off)
         test_log_location = Location::caller();
         emit_info_event(test_log_attrs.clone(), Some("Valid log message"));
-
-        // Emit package update event, should be filtered out as it is marked as
-        // non-exportable via parquet
-        create_info_span_with_parent(
-            dev_span.id(),
-            PackageUpdate {
-                version: "1.0.0".to_string(),
-                package: "test_package".to_string(),
-                exe_path: None,
-            },
-        );
 
         // Emit mock span without EXPORT_PARQUET flag (should be filtered out)
         let mock_span_attrs: TelemetryAttributes = MockDynSpanEvent {

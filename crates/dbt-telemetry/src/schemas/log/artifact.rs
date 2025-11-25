@@ -9,7 +9,7 @@ pub use proto_rust::v1::public::events::fusion::log::CompiledCodeInline;
 
 impl ProtoTelemetryEvent for CompiledCodeInline {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Log;
-    const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::EXPORT_ALL;
+    const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
 
     fn event_display_name(&self) -> String {
         "Compiled SQL (inline)".to_string()

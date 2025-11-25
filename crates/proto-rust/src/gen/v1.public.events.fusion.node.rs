@@ -67,6 +67,14 @@ pub struct NodeCacheDetail {
         dummy(expr = "::fake::Fake::fake::<NodeCacheReason>(&::fake::Faker) as i32")
     )]
     pub node_cache_reason: i32,
+    /// If node_cache_reason == NODE_CACHE_REASON_STILL_FRESH, this field indicates
+    /// freshness period for this node in seconds.
+    #[prost(uint64, optional, tag = "2")]
+    pub build_after_seconds: ::core::option::Option<u64>,
+    /// If node_cache_reason == NODE_CACHE_REASON_STILL_FRESH, this field indicates
+    /// time since last update in seconds.
+    #[prost(uint64, optional, tag = "3")]
+    pub last_updated_seconds: ::core::option::Option<u64>,
 }
 impl crate::StaticName for NodeCacheDetail {
     const FULL_NAME: &'static str = "v1.public.events.fusion.node.NodeCacheDetail";
@@ -158,6 +166,21 @@ pub struct NodeEvaluated {
         )
     )]
     pub phase: i32,
+    /// Relative path to the file containing node definition within the dbt project.
+    #[prost(string, tag = "12")]
+    pub relative_path: ::prost::alloc::string::String,
+    /// Line number (1-indexed) where the test is defined (only applicable to test nodes)
+    #[prost(uint32, optional, tag = "13")]
+    pub defined_at_line: ::core::option::Option<u32>,
+    /// Column number (0-indexed) of where the test is defined (only applicable to test nodes)
+    #[prost(uint32, optional, tag = "14")]
+    pub defined_at_col: ::core::option::Option<u32>,
+    /// Checksum of the node definition
+    #[prost(string, tag = "15")]
+    pub node_checksum: ::prost::alloc::string::String,
+    /// Whether or not SAO was enabled for this node during evaluation. Only set for run phase.
+    #[prost(bool, optional, tag = "16")]
+    pub sao_enabled: ::core::option::Option<bool>,
     /// Categorization of aggregated errors for debugging and retry logic.
     /// Present when node_outcome == NODE_OUTCOME_ERROR.
     #[prost(enumeration = "NodeErrorType", optional, tag = "20")]
@@ -229,6 +252,160 @@ impl ::prost::Name for NodeEvaluated {
     }
     fn type_url() -> ::prost::alloc::string::String {
         "/v1.public.events.fusion.node.NodeEvaluated".into()
+    }
+}
+/// Span event tracking full processing of a node across all phases.
+/// Supersedes legacy NodeStart (Q024) and NodeFinished (Q025) events.
+#[cfg_attr(any(test, feature = "test-utils"), derive(::fake::Dummy))]
+#[derive(crate::macros::ProtoNew)]
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct NodeProcessed {
+    /// unique_id is the globally unique identifier for this node.
+    #[prost(string, tag = "1")]
+    pub unique_id: ::prost::alloc::string::String,
+    /// Node name.
+    #[prost(string, tag = "2")]
+    pub name: ::prost::alloc::string::String,
+    /// Database where this node will be created if applicable.
+    #[prost(string, optional, tag = "3")]
+    pub database: ::core::option::Option<::prost::alloc::string::String>,
+    /// Schema where this node will be created if applicable.
+    #[prost(string, optional, tag = "4")]
+    pub schema: ::core::option::Option<::prost::alloc::string::String>,
+    /// Name of the relation (table, view, etc.) that will be created for this node if applicable.
+    #[prost(string, optional, tag = "5")]
+    pub identifier: ::core::option::Option<::prost::alloc::string::String>,
+    /// How this node is materialized in the data warehouse.
+    #[prost(enumeration = "NodeMaterialization", optional, tag = "7")]
+    #[cfg_attr(
+        any(test, feature = "test-utils"),
+        dummy(
+            expr = "Some(::fake::Fake::fake::<NodeMaterialization>(&::fake::Faker) as i32)"
+        )
+    )]
+    pub materialization: ::core::option::Option<i32>,
+    /// If materialization == NODE_MATERIALIZATION_CUSTOM, this field contains the custom materialization name.
+    #[prost(string, optional, tag = "8")]
+    pub custom_materialization: ::core::option::Option<::prost::alloc::string::String>,
+    /// Type of node being evaluated. Known as `resource_type` in dbt core.
+    #[prost(enumeration = "NodeType", tag = "9")]
+    #[cfg_attr(
+        any(test, feature = "test-utils"),
+        dummy(expr = "::fake::Fake::fake::<NodeType>(&::fake::Faker) as i32")
+    )]
+    pub node_type: i32,
+    /// Core outcome for this node processing across all phases.
+    #[prost(enumeration = "NodeOutcome", tag = "10")]
+    #[cfg_attr(
+        any(test, feature = "test-utils"),
+        dummy(expr = "::fake::Fake::fake::<NodeOutcome>(&::fake::Faker) as i32")
+    )]
+    pub node_outcome: i32,
+    /// Last execution phase that was reached during processing (or would have been reached if not skipped).
+    #[prost(enumeration = "super::phase::ExecutionPhase", tag = "11")]
+    #[cfg_attr(
+        any(test, feature = "test-utils"),
+        dummy(
+            expr = "::fake::Fake::fake::<super::phase::ExecutionPhase>(&::fake::Faker) as i32"
+        )
+    )]
+    pub last_phase: i32,
+    /// Relative path to the file containing node definition within the dbt project.
+    #[prost(string, tag = "12")]
+    pub relative_path: ::prost::alloc::string::String,
+    /// Line number (1-indexed) where the test is defined (only applicable to test nodes)
+    #[prost(uint32, optional, tag = "13")]
+    pub defined_at_line: ::core::option::Option<u32>,
+    /// Column number (0-indexed) of where the test is defined (only applicable to test nodes)
+    #[prost(uint32, optional, tag = "14")]
+    pub defined_at_col: ::core::option::Option<u32>,
+    /// Checksum of the node definition
+    #[prost(string, tag = "15")]
+    pub node_checksum: ::prost::alloc::string::String,
+    /// Whether or not SAO was enabled for this node during evaluation. Only set for invocations,
+    /// that include the run phase.
+    #[prost(bool, optional, tag = "16")]
+    pub sao_enabled: ::core::option::Option<bool>,
+    /// Categorization of aggregated errors for debugging and retry logic.
+    /// Present when node_outcome == NODE_OUTCOME_ERROR.
+    #[prost(enumeration = "NodeErrorType", optional, tag = "20")]
+    #[cfg_attr(
+        any(test, feature = "test-utils"),
+        dummy(expr = "Some(::fake::Fake::fake::<NodeErrorType>(&::fake::Faker) as i32)")
+    )]
+    pub node_error_type: ::core::option::Option<i32>,
+    /// Cancellation reason.
+    /// Present when node_outcome == NODE_OUTCOME_CANCELED.
+    #[prost(enumeration = "NodeCancelReason", optional, tag = "21")]
+    #[cfg_attr(
+        any(test, feature = "test-utils"),
+        dummy(
+            expr = "Some(::fake::Fake::fake::<NodeCancelReason>(&::fake::Faker) as i32)"
+        )
+    )]
+    pub node_cancel_reason: ::core::option::Option<i32>,
+    /// Detailed reason for skipping this node.
+    /// Present when node_outcome == NODE_OUTCOME_SKIPPED.
+    #[prost(enumeration = "NodeSkipReason", optional, tag = "22")]
+    #[cfg_attr(
+        any(test, feature = "test-utils"),
+        dummy(expr = "Some(::fake::Fake::fake::<NodeSkipReason>(&::fake::Faker) as i32)")
+    )]
+    pub node_skip_reason: ::core::option::Option<i32>,
+    /// Legacy dbt core event code. Always set to Q024 for start, Q025 for end.
+    #[prost(string, tag = "40")]
+    pub dbt_core_event_code: ::prost::alloc::string::String,
+    /// Total duration in milliseconds of all nested NodeEvaluated spans.
+    /// This reflects the actual time spent processing the node, excluding time
+    /// waiting for upstream nodes.
+    #[prost(uint64, optional, tag = "41")]
+    pub duration_ms: ::core::option::Option<u64>,
+    /// Some node's maybe be anaklyzed but not selected for execution. This flag indicates
+    /// whether the node was in the selection set.
+    #[prost(bool, tag = "42")]
+    pub in_selection: bool,
+    /// Node type specific details (e.g. test fail counts, cache use reasons).
+    #[prost(oneof = "node_processed::NodeOutcomeDetail", tags = "30, 31, 32, 33")]
+    pub node_outcome_detail: ::core::option::Option<node_processed::NodeOutcomeDetail>,
+}
+/// Nested message and enum types in `NodeProcessed`.
+pub mod node_processed {
+    /// Node type specific details (e.g. test fail counts, cache use reasons).
+    #[cfg_attr(any(test, feature = "test-utils"), derive(::fake::Dummy))]
+    #[derive(::serde::Serialize, ::serde::Deserialize)]
+    #[cfg_attr(any(test, feature = "test-utils"), derive(::strum::EnumIter))]
+    #[derive(Clone, PartialEq, Eq, Hash, ::prost::Oneof)]
+    pub enum NodeOutcomeDetail {
+        /// Detailed reason why cache was used.
+        /// Present when node_skip_reason == NODE_SKIP_REASON_CACHED.
+        #[prost(message, tag = "30")]
+        NodeCacheDetail(super::NodeCacheDetail),
+        /// Test specific outcome details.
+        /// Present for test / unit test node types when node_outcome == NODE_OUTCOME_SUCCESS.
+        #[prost(message, tag = "31")]
+        NodeTestDetail(super::TestEvaluationDetail),
+        /// Source freshness specific outcome details.
+        /// Present for source nodes with freshness checks when node_outcome == NODE_OUTCOME_SUCCESS.
+        #[prost(message, tag = "32")]
+        NodeFreshnessOutcome(super::SourceFreshnessDetail),
+        /// Upstream node that caused this node to be skipped.
+        /// Present when node_skip_reason == NODE_SKIP_REASON_UPSTREAM.
+        #[prost(message, tag = "33")]
+        NodeSkipUpstreamDetail(super::NodeSkipUpstreamDetail),
+    }
+}
+impl crate::StaticName for NodeProcessed {
+    const FULL_NAME: &'static str = "v1.public.events.fusion.node.NodeProcessed";
+    const TYPE_URL: &'static str = "/v1.public.events.fusion.node.NodeProcessed";
+}
+impl ::prost::Name for NodeProcessed {
+    const NAME: &'static str = "NodeProcessed";
+    const PACKAGE: &'static str = "v1.public.events.fusion.node";
+    fn full_name() -> ::prost::alloc::string::String {
+        "v1.public.events.fusion.node.NodeProcessed".into()
+    }
+    fn type_url() -> ::prost::alloc::string::String {
+        "/v1.public.events.fusion.node.NodeProcessed".into()
     }
 }
 /// Node type, also known as "resource type" in dbt core.

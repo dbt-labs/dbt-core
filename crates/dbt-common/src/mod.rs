@@ -28,6 +28,7 @@ pub mod logging;
 pub mod once_cell_vars;
 pub mod row_limit;
 pub mod serde_utils;
+pub mod status_reporter;
 pub mod time;
 pub mod tracing;
 

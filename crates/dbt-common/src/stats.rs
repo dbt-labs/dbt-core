@@ -16,7 +16,7 @@ pub enum NodeStatus {
     TestPassed,
     SkippedUpstreamFailed,
     ReusedNoChanges(String),
-    ReusedStillFresh(String),
+    ReusedStillFresh(String, u64, u64),
     ReusedStillFreshNoChanges(String),
     NoOp,
 }
@@ -25,7 +25,7 @@ impl NodeStatus {
     pub fn get_message(&self) -> Option<String> {
         match self {
             NodeStatus::ReusedNoChanges(message) => Some(message.clone()),
-            NodeStatus::ReusedStillFresh(message) => Some(message.clone()),
+            NodeStatus::ReusedStillFresh(message, _, _) => Some(message.clone()),
             NodeStatus::ReusedStillFreshNoChanges(message) => Some(message.clone()),
             _ => None,
         }
@@ -40,7 +40,7 @@ impl From<NodeStatus> for NodeOutcome {
             NodeStatus::Errored => NodeOutcome::Error,
             NodeStatus::SkippedUpstreamFailed => NodeOutcome::Skipped,
             NodeStatus::ReusedNoChanges(_) => NodeOutcome::Skipped,
-            NodeStatus::ReusedStillFresh(_) => NodeOutcome::Skipped,
+            NodeStatus::ReusedStillFresh(_, _, _) => NodeOutcome::Skipped,
             NodeStatus::ReusedStillFreshNoChanges(_) => NodeOutcome::Skipped,
             NodeStatus::NoOp => NodeOutcome::Skipped,
         }
@@ -54,7 +54,7 @@ impl fmt::Display for NodeStatus {
             NodeStatus::Errored => "error",
             NodeStatus::SkippedUpstreamFailed => "skipped",
             NodeStatus::ReusedNoChanges(_)
-            | NodeStatus::ReusedStillFresh(_)
+            | NodeStatus::ReusedStillFresh(_, _, _)
             | NodeStatus::ReusedStillFreshNoChanges(_) => "reused",
             NodeStatus::NoOp => "noop",
         };
@@ -150,7 +150,7 @@ impl Stat {
             NodeStatus::Errored => "error".to_string(),
             NodeStatus::SkippedUpstreamFailed => "skipped".to_string(),
             NodeStatus::ReusedNoChanges(_) => "reused".to_string(),
-            NodeStatus::ReusedStillFresh(_) => "reused".to_string(),
+            NodeStatus::ReusedStillFresh(_, _, _) => "reused".to_string(),
             NodeStatus::ReusedStillFreshNoChanges(_) => "reused".to_string(),
             NodeStatus::NoOp => "skipped".to_string(),
         }

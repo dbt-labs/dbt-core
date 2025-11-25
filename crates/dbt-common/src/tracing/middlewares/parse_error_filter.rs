@@ -117,7 +117,7 @@ impl TelemetryMiddleware for TelemetryParsingErrorFilter {
         // If our configuration requires filtering repeated deprecations from packages,
         // initialize the set to track seen deprecations.
         if !self.show_all_deprecations && span.parent_span_id.is_none() {
-            data_provider.init(PackageWithLogsSet(HashSet::new()));
+            data_provider.init_root(PackageWithLogsSet(HashSet::new()));
         }
 
         Some(span)
@@ -142,7 +142,7 @@ impl TelemetryMiddleware for TelemetryParsingErrorFilter {
             // check if this is a deprecation message and if we've seen it before.
             if !self.show_all_deprecations {
                 let mut seen = false;
-                data_provider.with_mut::<PackageWithLogsSet>(|seen_package_names| {
+                data_provider.with_root_mut::<PackageWithLogsSet>(|seen_package_names| {
                     // This will check if we've seen this package name before and
                     // insert it into the set if not in one go.
                     seen = !seen_package_names.0.insert(package_name.to_string());

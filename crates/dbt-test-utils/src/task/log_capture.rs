@@ -2,8 +2,8 @@ use super::{ProjectEnv, Task, TestEnv, TestResult};
 use async_trait::async_trait;
 use dbt_common::stdfs;
 use proto_rust::v1::public::fields::core_types::{
-    CommandCompletedMsg, CompiledNodeMsg, CoreEventInfo, NodeExecutingMsg, NodeFinishedMsg,
-    ShowNodeMsg,
+    CommandCompletedMsg, CompiledNodeMsg, CoreEventInfo, MarkSkippedChildrenMsg, NodeExecutingMsg,
+    NodeFinishedMsg, ShowNodeMsg,
 };
 use serde::de::DeserializeOwned;
 use std::path::PathBuf;
@@ -16,7 +16,7 @@ pub enum JsonLogEvent {
     ShowNode(ShowNodeMsg),
     NodeExecuting(NodeExecutingMsg),
     NodeFinished(NodeFinishedMsg),
-    MarkSkippedChildren(NodeExecutingMsg),
+    MarkSkippedChildren(MarkSkippedChildrenMsg),
 }
 
 impl JsonLogEvent {
@@ -78,7 +78,7 @@ impl JsonLogEvent {
     // Unfortunatelly apparently we write MarkSkippedChildren message
     // in a format similar to NodeExecuting, which is not comformant to
     // proto's, but ok for cloud clients somehow...
-    fn mark_skipped_children(msg: NodeExecutingMsg) -> Option<Self> {
+    fn mark_skipped_children(msg: MarkSkippedChildrenMsg) -> Option<Self> {
         let info = msg.info.as_ref()?;
 
         if info.name != "MarkSkippedChildren" {
@@ -154,8 +154,7 @@ impl ExecuteAndCaptureLogs {
                     &mut logs,
                     JsonLogEvent::node_executing,
                 );
-                // Yes, we parse MarkSkippedChildren also as `NodeExecutingMsg`
-                let _ = Self::try_parse::<NodeExecutingMsg, _>(
+                let _ = Self::try_parse::<MarkSkippedChildrenMsg, _>(
                     line,
                     &mut logs,
                     JsonLogEvent::mark_skipped_children,

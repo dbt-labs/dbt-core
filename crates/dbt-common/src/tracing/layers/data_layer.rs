@@ -371,7 +371,7 @@ where
             // This block scope ensures that we don't hold mutable extensions beyond middleware calls.
             // This is important because current span may be the root span itself, and we later take
             // another mutable reference to store the data there.
-            let mut data_provider = DataProvider::new(&root_span);
+            let mut data_provider = DataProvider::new(&root_span, &span);
 
             for middleware in &self.middlewares {
                 // Extract links before moving record into middleware
@@ -398,7 +398,7 @@ where
         // This block also creates scope to limit read-only borrow of span extensions
         // as we need mutable borrow later
         if !span_filter_mask.is_disabled() {
-            let mut data_provider = DataProvider::new(&root_span);
+            let mut data_provider = DataProvider::new(&root_span, &span);
 
             for (index, consumer) in self.consumers.iter().enumerate() {
                 debug_assert!(
@@ -643,7 +643,7 @@ where
             root_span.name()
         );
 
-        let mut data_provider = DataProvider::new(&root_span);
+        let mut data_provider = DataProvider::new(&root_span, &span);
 
         if !self.middlewares.is_empty() {
             for middleware in &self.middlewares {
@@ -823,10 +823,10 @@ where
             or a process span. Are you logging events after tracing has been shutdown?",
         );
 
-        let mut data_provider = root_span
-            .as_ref()
-            .map(|root_span| DataProvider::new(root_span))
-            .unwrap_or_else(DataProvider::none);
+        let mut data_provider = match (root_span.as_ref(), parent_span.as_ref()) {
+            (Some(root_span), Some(parent_span)) => DataProvider::new(root_span, parent_span),
+            _ => DataProvider::none(),
+        };
 
         if !self.middlewares.is_empty() {
             for middleware in &self.middlewares {

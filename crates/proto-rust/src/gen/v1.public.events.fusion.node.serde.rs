@@ -9,11 +9,27 @@ impl serde::Serialize for NodeCacheDetail {
         if self.node_cache_reason != 0 {
             len += 1;
         }
+        if self.build_after_seconds.is_some() {
+            len += 1;
+        }
+        if self.last_updated_seconds.is_some() {
+            len += 1;
+        }
         let mut struct_ser = serializer.serialize_struct("v1.public.events.fusion.node.NodeCacheDetail", len)?;
         if self.node_cache_reason != 0 {
             let v = NodeCacheReason::try_from(self.node_cache_reason)
                 .map_err(|_| serde::ser::Error::custom(format!("Invalid variant {}", self.node_cache_reason)))?;
             struct_ser.serialize_field("node_cache_reason", &v)?;
+        }
+        if let Some(v) = self.build_after_seconds.as_ref() {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("build_after_seconds", ToString::to_string(&v).as_str())?;
+        }
+        if let Some(v) = self.last_updated_seconds.as_ref() {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("last_updated_seconds", ToString::to_string(&v).as_str())?;
         }
         struct_ser.end()
     }
@@ -27,11 +43,17 @@ impl<'de> serde::Deserialize<'de> for NodeCacheDetail {
         const FIELDS: &[&str] = &[
             "node_cache_reason",
             "nodeCacheReason",
+            "build_after_seconds",
+            "buildAfterSeconds",
+            "last_updated_seconds",
+            "lastUpdatedSeconds",
         ];
 
         #[allow(clippy::enum_variant_names)]
         enum GeneratedField {
             NodeCacheReason,
+            BuildAfterSeconds,
+            LastUpdatedSeconds,
             __SkipField__,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
@@ -55,6 +77,8 @@ impl<'de> serde::Deserialize<'de> for NodeCacheDetail {
                     {
                         match value {
                             "nodeCacheReason" | "node_cache_reason" => Ok(GeneratedField::NodeCacheReason),
+                            "buildAfterSeconds" | "build_after_seconds" => Ok(GeneratedField::BuildAfterSeconds),
+                            "lastUpdatedSeconds" | "last_updated_seconds" => Ok(GeneratedField::LastUpdatedSeconds),
                             _ => Ok(GeneratedField::__SkipField__),
                         }
                     }
@@ -75,6 +99,8 @@ impl<'de> serde::Deserialize<'de> for NodeCacheDetail {
                     V: serde::de::MapAccess<'de>,
             {
                 let mut node_cache_reason__ = None;
+                let mut build_after_seconds__ = None;
+                let mut last_updated_seconds__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
                         GeneratedField::NodeCacheReason => {
@@ -83,6 +109,22 @@ impl<'de> serde::Deserialize<'de> for NodeCacheDetail {
                             }
                             node_cache_reason__ = Some(map_.next_value::<NodeCacheReason>()? as i32);
                         }
+                        GeneratedField::BuildAfterSeconds => {
+                            if build_after_seconds__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("buildAfterSeconds"));
+                            }
+                            build_after_seconds__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
+                        }
+                        GeneratedField::LastUpdatedSeconds => {
+                            if last_updated_seconds__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("lastUpdatedSeconds"));
+                            }
+                            last_updated_seconds__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
+                        }
                         GeneratedField::__SkipField__ => {
                             let _ = map_.next_value::<serde::de::IgnoredAny>()?;
                         }
@@ -90,6 +132,8 @@ impl<'de> serde::Deserialize<'de> for NodeCacheDetail {
                 }
                 Ok(NodeCacheDetail {
                     node_cache_reason: node_cache_reason__.unwrap_or_default(),
+                    build_after_seconds: build_after_seconds__,
+                    last_updated_seconds: last_updated_seconds__,
                 })
             }
         }
@@ -350,6 +394,21 @@ impl serde::Serialize for NodeEvaluated {
         if self.phase != 0 {
             len += 1;
         }
+        if !self.relative_path.is_empty() {
+            len += 1;
+        }
+        if self.defined_at_line.is_some() {
+            len += 1;
+        }
+        if self.defined_at_col.is_some() {
+            len += 1;
+        }
+        if !self.node_checksum.is_empty() {
+            len += 1;
+        }
+        if self.sao_enabled.is_some() {
+            len += 1;
+        }
         if self.node_error_type.is_some() {
             len += 1;
         }
@@ -403,6 +462,21 @@ impl serde::Serialize for NodeEvaluated {
             let v = super::phase::ExecutionPhase::try_from(self.phase)
                 .map_err(|_| serde::ser::Error::custom(format!("Invalid variant {}", self.phase)))?;
             struct_ser.serialize_field("phase", &v)?;
+        }
+        if !self.relative_path.is_empty() {
+            struct_ser.serialize_field("relative_path", &self.relative_path)?;
+        }
+        if let Some(v) = self.defined_at_line.as_ref() {
+            struct_ser.serialize_field("defined_at_line", v)?;
+        }
+        if let Some(v) = self.defined_at_col.as_ref() {
+            struct_ser.serialize_field("defined_at_col", v)?;
+        }
+        if !self.node_checksum.is_empty() {
+            struct_ser.serialize_field("node_checksum", &self.node_checksum)?;
+        }
+        if let Some(v) = self.sao_enabled.as_ref() {
+            struct_ser.serialize_field("sao_enabled", v)?;
         }
         if let Some(v) = self.node_error_type.as_ref() {
             let v = NodeErrorType::try_from(*v)
@@ -462,6 +536,16 @@ impl<'de> serde::Deserialize<'de> for NodeEvaluated {
             "node_outcome",
             "nodeOutcome",
             "phase",
+            "relative_path",
+            "relativePath",
+            "defined_at_line",
+            "definedAtLine",
+            "defined_at_col",
+            "definedAtCol",
+            "node_checksum",
+            "nodeChecksum",
+            "sao_enabled",
+            "saoEnabled",
             "node_error_type",
             "nodeErrorType",
             "node_cancel_reason",
@@ -492,6 +576,11 @@ impl<'de> serde::Deserialize<'de> for NodeEvaluated {
             NodeType,
             NodeOutcome,
             Phase,
+            RelativePath,
+            DefinedAtLine,
+            DefinedAtCol,
+            NodeChecksum,
+            SaoEnabled,
             NodeErrorType,
             NodeCancelReason,
             NodeSkipReason,
@@ -532,6 +621,11 @@ impl<'de> serde::Deserialize<'de> for NodeEvaluated {
                             "nodeType" | "node_type" => Ok(GeneratedField::NodeType),
                             "nodeOutcome" | "node_outcome" => Ok(GeneratedField::NodeOutcome),
                             "phase" => Ok(GeneratedField::Phase),
+                            "relativePath" | "relative_path" => Ok(GeneratedField::RelativePath),
+                            "definedAtLine" | "defined_at_line" => Ok(GeneratedField::DefinedAtLine),
+                            "definedAtCol" | "defined_at_col" => Ok(GeneratedField::DefinedAtCol),
+                            "nodeChecksum" | "node_checksum" => Ok(GeneratedField::NodeChecksum),
+                            "saoEnabled" | "sao_enabled" => Ok(GeneratedField::SaoEnabled),
                             "nodeErrorType" | "node_error_type" => Ok(GeneratedField::NodeErrorType),
                             "nodeCancelReason" | "node_cancel_reason" => Ok(GeneratedField::NodeCancelReason),
                             "nodeSkipReason" | "node_skip_reason" => Ok(GeneratedField::NodeSkipReason),
@@ -569,6 +663,11 @@ impl<'de> serde::Deserialize<'de> for NodeEvaluated {
                 let mut node_type__ = None;
                 let mut node_outcome__ = None;
                 let mut phase__ = None;
+                let mut relative_path__ = None;
+                let mut defined_at_line__ = None;
+                let mut defined_at_col__ = None;
+                let mut node_checksum__ = None;
+                let mut sao_enabled__ = None;
                 let mut node_error_type__ = None;
                 let mut node_cancel_reason__ = None;
                 let mut node_skip_reason__ = None;
@@ -635,6 +734,40 @@ impl<'de> serde::Deserialize<'de> for NodeEvaluated {
                                 return Err(serde::de::Error::duplicate_field("phase"));
                             }
                             phase__ = Some(map_.next_value::<super::phase::ExecutionPhase>()? as i32);
+                        }
+                        GeneratedField::RelativePath => {
+                            if relative_path__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("relativePath"));
+                            }
+                            relative_path__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::DefinedAtLine => {
+                            if defined_at_line__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("definedAtLine"));
+                            }
+                            defined_at_line__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
+                        }
+                        GeneratedField::DefinedAtCol => {
+                            if defined_at_col__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("definedAtCol"));
+                            }
+                            defined_at_col__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
+                        }
+                        GeneratedField::NodeChecksum => {
+                            if node_checksum__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("nodeChecksum"));
+                            }
+                            node_checksum__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::SaoEnabled => {
+                            if sao_enabled__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("saoEnabled"));
+                            }
+                            sao_enabled__ = map_.next_value()?;
                         }
                         GeneratedField::NodeErrorType => {
                             if node_error_type__.is_some() {
@@ -704,6 +837,11 @@ impl<'de> serde::Deserialize<'de> for NodeEvaluated {
                     node_type: node_type__.unwrap_or_default(),
                     node_outcome: node_outcome__.unwrap_or_default(),
                     phase: phase__.unwrap_or_default(),
+                    relative_path: relative_path__.unwrap_or_default(),
+                    defined_at_line: defined_at_line__,
+                    defined_at_col: defined_at_col__,
+                    node_checksum: node_checksum__.unwrap_or_default(),
+                    sao_enabled: sao_enabled__,
                     node_error_type: node_error_type__,
                     node_cancel_reason: node_cancel_reason__,
                     node_skip_reason: node_skip_reason__,
@@ -906,6 +1044,544 @@ impl<'de> serde::Deserialize<'de> for NodeOutcome {
             }
         }
         deserializer.deserialize_any(GeneratedVisitor)
+    }
+}
+impl serde::Serialize for NodeProcessed {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.unique_id.is_empty() {
+            len += 1;
+        }
+        if !self.name.is_empty() {
+            len += 1;
+        }
+        if self.database.is_some() {
+            len += 1;
+        }
+        if self.schema.is_some() {
+            len += 1;
+        }
+        if self.identifier.is_some() {
+            len += 1;
+        }
+        if self.materialization.is_some() {
+            len += 1;
+        }
+        if self.custom_materialization.is_some() {
+            len += 1;
+        }
+        if self.node_type != 0 {
+            len += 1;
+        }
+        if self.node_outcome != 0 {
+            len += 1;
+        }
+        if self.last_phase != 0 {
+            len += 1;
+        }
+        if !self.relative_path.is_empty() {
+            len += 1;
+        }
+        if self.defined_at_line.is_some() {
+            len += 1;
+        }
+        if self.defined_at_col.is_some() {
+            len += 1;
+        }
+        if !self.node_checksum.is_empty() {
+            len += 1;
+        }
+        if self.sao_enabled.is_some() {
+            len += 1;
+        }
+        if self.node_error_type.is_some() {
+            len += 1;
+        }
+        if self.node_cancel_reason.is_some() {
+            len += 1;
+        }
+        if self.node_skip_reason.is_some() {
+            len += 1;
+        }
+        if !self.dbt_core_event_code.is_empty() {
+            len += 1;
+        }
+        if self.duration_ms.is_some() {
+            len += 1;
+        }
+        if self.in_selection {
+            len += 1;
+        }
+        if self.node_outcome_detail.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("v1.public.events.fusion.node.NodeProcessed", len)?;
+        if !self.unique_id.is_empty() {
+            struct_ser.serialize_field("unique_id", &self.unique_id)?;
+        }
+        if !self.name.is_empty() {
+            struct_ser.serialize_field("name", &self.name)?;
+        }
+        if let Some(v) = self.database.as_ref() {
+            struct_ser.serialize_field("database", v)?;
+        }
+        if let Some(v) = self.schema.as_ref() {
+            struct_ser.serialize_field("schema", v)?;
+        }
+        if let Some(v) = self.identifier.as_ref() {
+            struct_ser.serialize_field("identifier", v)?;
+        }
+        if let Some(v) = self.materialization.as_ref() {
+            let v = NodeMaterialization::try_from(*v)
+                .map_err(|_| serde::ser::Error::custom(format!("Invalid variant {}", *v)))?;
+            struct_ser.serialize_field("materialization", &v)?;
+        }
+        if let Some(v) = self.custom_materialization.as_ref() {
+            struct_ser.serialize_field("custom_materialization", v)?;
+        }
+        if self.node_type != 0 {
+            let v = NodeType::try_from(self.node_type)
+                .map_err(|_| serde::ser::Error::custom(format!("Invalid variant {}", self.node_type)))?;
+            struct_ser.serialize_field("node_type", &v)?;
+        }
+        if self.node_outcome != 0 {
+            let v = NodeOutcome::try_from(self.node_outcome)
+                .map_err(|_| serde::ser::Error::custom(format!("Invalid variant {}", self.node_outcome)))?;
+            struct_ser.serialize_field("node_outcome", &v)?;
+        }
+        if self.last_phase != 0 {
+            let v = super::phase::ExecutionPhase::try_from(self.last_phase)
+                .map_err(|_| serde::ser::Error::custom(format!("Invalid variant {}", self.last_phase)))?;
+            struct_ser.serialize_field("last_phase", &v)?;
+        }
+        if !self.relative_path.is_empty() {
+            struct_ser.serialize_field("relative_path", &self.relative_path)?;
+        }
+        if let Some(v) = self.defined_at_line.as_ref() {
+            struct_ser.serialize_field("defined_at_line", v)?;
+        }
+        if let Some(v) = self.defined_at_col.as_ref() {
+            struct_ser.serialize_field("defined_at_col", v)?;
+        }
+        if !self.node_checksum.is_empty() {
+            struct_ser.serialize_field("node_checksum", &self.node_checksum)?;
+        }
+        if let Some(v) = self.sao_enabled.as_ref() {
+            struct_ser.serialize_field("sao_enabled", v)?;
+        }
+        if let Some(v) = self.node_error_type.as_ref() {
+            let v = NodeErrorType::try_from(*v)
+                .map_err(|_| serde::ser::Error::custom(format!("Invalid variant {}", *v)))?;
+            struct_ser.serialize_field("node_error_type", &v)?;
+        }
+        if let Some(v) = self.node_cancel_reason.as_ref() {
+            let v = NodeCancelReason::try_from(*v)
+                .map_err(|_| serde::ser::Error::custom(format!("Invalid variant {}", *v)))?;
+            struct_ser.serialize_field("node_cancel_reason", &v)?;
+        }
+        if let Some(v) = self.node_skip_reason.as_ref() {
+            let v = NodeSkipReason::try_from(*v)
+                .map_err(|_| serde::ser::Error::custom(format!("Invalid variant {}", *v)))?;
+            struct_ser.serialize_field("node_skip_reason", &v)?;
+        }
+        if !self.dbt_core_event_code.is_empty() {
+            struct_ser.serialize_field("dbt_core_event_code", &self.dbt_core_event_code)?;
+        }
+        if let Some(v) = self.duration_ms.as_ref() {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("duration_ms", ToString::to_string(&v).as_str())?;
+        }
+        if self.in_selection {
+            struct_ser.serialize_field("in_selection", &self.in_selection)?;
+        }
+        if let Some(v) = self.node_outcome_detail.as_ref() {
+            match v {
+                node_processed::NodeOutcomeDetail::NodeCacheDetail(v) => {
+                    struct_ser.serialize_field("node_cache_detail", v)?;
+                }
+                node_processed::NodeOutcomeDetail::NodeTestDetail(v) => {
+                    struct_ser.serialize_field("node_test_detail", v)?;
+                }
+                node_processed::NodeOutcomeDetail::NodeFreshnessOutcome(v) => {
+                    struct_ser.serialize_field("node_freshness_outcome", v)?;
+                }
+                node_processed::NodeOutcomeDetail::NodeSkipUpstreamDetail(v) => {
+                    struct_ser.serialize_field("node_skip_upstream_detail", v)?;
+                }
+            }
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for NodeProcessed {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "unique_id",
+            "uniqueId",
+            "name",
+            "database",
+            "schema",
+            "identifier",
+            "materialization",
+            "custom_materialization",
+            "customMaterialization",
+            "node_type",
+            "nodeType",
+            "node_outcome",
+            "nodeOutcome",
+            "last_phase",
+            "lastPhase",
+            "relative_path",
+            "relativePath",
+            "defined_at_line",
+            "definedAtLine",
+            "defined_at_col",
+            "definedAtCol",
+            "node_checksum",
+            "nodeChecksum",
+            "sao_enabled",
+            "saoEnabled",
+            "node_error_type",
+            "nodeErrorType",
+            "node_cancel_reason",
+            "nodeCancelReason",
+            "node_skip_reason",
+            "nodeSkipReason",
+            "dbt_core_event_code",
+            "dbtCoreEventCode",
+            "duration_ms",
+            "durationMs",
+            "in_selection",
+            "inSelection",
+            "node_cache_detail",
+            "nodeCacheDetail",
+            "node_test_detail",
+            "nodeTestDetail",
+            "node_freshness_outcome",
+            "nodeFreshnessOutcome",
+            "node_skip_upstream_detail",
+            "nodeSkipUpstreamDetail",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            UniqueId,
+            Name,
+            Database,
+            Schema,
+            Identifier,
+            Materialization,
+            CustomMaterialization,
+            NodeType,
+            NodeOutcome,
+            LastPhase,
+            RelativePath,
+            DefinedAtLine,
+            DefinedAtCol,
+            NodeChecksum,
+            SaoEnabled,
+            NodeErrorType,
+            NodeCancelReason,
+            NodeSkipReason,
+            DbtCoreEventCode,
+            DurationMs,
+            InSelection,
+            NodeCacheDetail,
+            NodeTestDetail,
+            NodeFreshnessOutcome,
+            NodeSkipUpstreamDetail,
+            __SkipField__,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "uniqueId" | "unique_id" => Ok(GeneratedField::UniqueId),
+                            "name" => Ok(GeneratedField::Name),
+                            "database" => Ok(GeneratedField::Database),
+                            "schema" => Ok(GeneratedField::Schema),
+                            "identifier" => Ok(GeneratedField::Identifier),
+                            "materialization" => Ok(GeneratedField::Materialization),
+                            "customMaterialization" | "custom_materialization" => Ok(GeneratedField::CustomMaterialization),
+                            "nodeType" | "node_type" => Ok(GeneratedField::NodeType),
+                            "nodeOutcome" | "node_outcome" => Ok(GeneratedField::NodeOutcome),
+                            "lastPhase" | "last_phase" => Ok(GeneratedField::LastPhase),
+                            "relativePath" | "relative_path" => Ok(GeneratedField::RelativePath),
+                            "definedAtLine" | "defined_at_line" => Ok(GeneratedField::DefinedAtLine),
+                            "definedAtCol" | "defined_at_col" => Ok(GeneratedField::DefinedAtCol),
+                            "nodeChecksum" | "node_checksum" => Ok(GeneratedField::NodeChecksum),
+                            "saoEnabled" | "sao_enabled" => Ok(GeneratedField::SaoEnabled),
+                            "nodeErrorType" | "node_error_type" => Ok(GeneratedField::NodeErrorType),
+                            "nodeCancelReason" | "node_cancel_reason" => Ok(GeneratedField::NodeCancelReason),
+                            "nodeSkipReason" | "node_skip_reason" => Ok(GeneratedField::NodeSkipReason),
+                            "dbtCoreEventCode" | "dbt_core_event_code" => Ok(GeneratedField::DbtCoreEventCode),
+                            "durationMs" | "duration_ms" => Ok(GeneratedField::DurationMs),
+                            "inSelection" | "in_selection" => Ok(GeneratedField::InSelection),
+                            "nodeCacheDetail" | "node_cache_detail" => Ok(GeneratedField::NodeCacheDetail),
+                            "nodeTestDetail" | "node_test_detail" => Ok(GeneratedField::NodeTestDetail),
+                            "nodeFreshnessOutcome" | "node_freshness_outcome" => Ok(GeneratedField::NodeFreshnessOutcome),
+                            "nodeSkipUpstreamDetail" | "node_skip_upstream_detail" => Ok(GeneratedField::NodeSkipUpstreamDetail),
+                            _ => Ok(GeneratedField::__SkipField__),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = NodeProcessed;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct v1.public.events.fusion.node.NodeProcessed")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<NodeProcessed, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut unique_id__ = None;
+                let mut name__ = None;
+                let mut database__ = None;
+                let mut schema__ = None;
+                let mut identifier__ = None;
+                let mut materialization__ = None;
+                let mut custom_materialization__ = None;
+                let mut node_type__ = None;
+                let mut node_outcome__ = None;
+                let mut last_phase__ = None;
+                let mut relative_path__ = None;
+                let mut defined_at_line__ = None;
+                let mut defined_at_col__ = None;
+                let mut node_checksum__ = None;
+                let mut sao_enabled__ = None;
+                let mut node_error_type__ = None;
+                let mut node_cancel_reason__ = None;
+                let mut node_skip_reason__ = None;
+                let mut dbt_core_event_code__ = None;
+                let mut duration_ms__ = None;
+                let mut in_selection__ = None;
+                let mut node_outcome_detail__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::UniqueId => {
+                            if unique_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("uniqueId"));
+                            }
+                            unique_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Name => {
+                            if name__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("name"));
+                            }
+                            name__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Database => {
+                            if database__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("database"));
+                            }
+                            database__ = map_.next_value()?;
+                        }
+                        GeneratedField::Schema => {
+                            if schema__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("schema"));
+                            }
+                            schema__ = map_.next_value()?;
+                        }
+                        GeneratedField::Identifier => {
+                            if identifier__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("identifier"));
+                            }
+                            identifier__ = map_.next_value()?;
+                        }
+                        GeneratedField::Materialization => {
+                            if materialization__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("materialization"));
+                            }
+                            materialization__ = map_.next_value::<::std::option::Option<NodeMaterialization>>()?.map(|x| x as i32);
+                        }
+                        GeneratedField::CustomMaterialization => {
+                            if custom_materialization__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("customMaterialization"));
+                            }
+                            custom_materialization__ = map_.next_value()?;
+                        }
+                        GeneratedField::NodeType => {
+                            if node_type__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("nodeType"));
+                            }
+                            node_type__ = Some(map_.next_value::<NodeType>()? as i32);
+                        }
+                        GeneratedField::NodeOutcome => {
+                            if node_outcome__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("nodeOutcome"));
+                            }
+                            node_outcome__ = Some(map_.next_value::<NodeOutcome>()? as i32);
+                        }
+                        GeneratedField::LastPhase => {
+                            if last_phase__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("lastPhase"));
+                            }
+                            last_phase__ = Some(map_.next_value::<super::phase::ExecutionPhase>()? as i32);
+                        }
+                        GeneratedField::RelativePath => {
+                            if relative_path__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("relativePath"));
+                            }
+                            relative_path__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::DefinedAtLine => {
+                            if defined_at_line__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("definedAtLine"));
+                            }
+                            defined_at_line__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
+                        }
+                        GeneratedField::DefinedAtCol => {
+                            if defined_at_col__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("definedAtCol"));
+                            }
+                            defined_at_col__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
+                        }
+                        GeneratedField::NodeChecksum => {
+                            if node_checksum__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("nodeChecksum"));
+                            }
+                            node_checksum__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::SaoEnabled => {
+                            if sao_enabled__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("saoEnabled"));
+                            }
+                            sao_enabled__ = map_.next_value()?;
+                        }
+                        GeneratedField::NodeErrorType => {
+                            if node_error_type__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("nodeErrorType"));
+                            }
+                            node_error_type__ = map_.next_value::<::std::option::Option<NodeErrorType>>()?.map(|x| x as i32);
+                        }
+                        GeneratedField::NodeCancelReason => {
+                            if node_cancel_reason__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("nodeCancelReason"));
+                            }
+                            node_cancel_reason__ = map_.next_value::<::std::option::Option<NodeCancelReason>>()?.map(|x| x as i32);
+                        }
+                        GeneratedField::NodeSkipReason => {
+                            if node_skip_reason__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("nodeSkipReason"));
+                            }
+                            node_skip_reason__ = map_.next_value::<::std::option::Option<NodeSkipReason>>()?.map(|x| x as i32);
+                        }
+                        GeneratedField::DbtCoreEventCode => {
+                            if dbt_core_event_code__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("dbtCoreEventCode"));
+                            }
+                            dbt_core_event_code__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::DurationMs => {
+                            if duration_ms__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("durationMs"));
+                            }
+                            duration_ms__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
+                        }
+                        GeneratedField::InSelection => {
+                            if in_selection__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("inSelection"));
+                            }
+                            in_selection__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::NodeCacheDetail => {
+                            if node_outcome_detail__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("nodeCacheDetail"));
+                            }
+                            node_outcome_detail__ = map_.next_value::<::std::option::Option<_>>()?.map(node_processed::NodeOutcomeDetail::NodeCacheDetail)
+;
+                        }
+                        GeneratedField::NodeTestDetail => {
+                            if node_outcome_detail__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("nodeTestDetail"));
+                            }
+                            node_outcome_detail__ = map_.next_value::<::std::option::Option<_>>()?.map(node_processed::NodeOutcomeDetail::NodeTestDetail)
+;
+                        }
+                        GeneratedField::NodeFreshnessOutcome => {
+                            if node_outcome_detail__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("nodeFreshnessOutcome"));
+                            }
+                            node_outcome_detail__ = map_.next_value::<::std::option::Option<_>>()?.map(node_processed::NodeOutcomeDetail::NodeFreshnessOutcome)
+;
+                        }
+                        GeneratedField::NodeSkipUpstreamDetail => {
+                            if node_outcome_detail__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("nodeSkipUpstreamDetail"));
+                            }
+                            node_outcome_detail__ = map_.next_value::<::std::option::Option<_>>()?.map(node_processed::NodeOutcomeDetail::NodeSkipUpstreamDetail)
+;
+                        }
+                        GeneratedField::__SkipField__ => {
+                            let _ = map_.next_value::<serde::de::IgnoredAny>()?;
+                        }
+                    }
+                }
+                Ok(NodeProcessed {
+                    unique_id: unique_id__.unwrap_or_default(),
+                    name: name__.unwrap_or_default(),
+                    database: database__,
+                    schema: schema__,
+                    identifier: identifier__,
+                    materialization: materialization__,
+                    custom_materialization: custom_materialization__,
+                    node_type: node_type__.unwrap_or_default(),
+                    node_outcome: node_outcome__.unwrap_or_default(),
+                    last_phase: last_phase__.unwrap_or_default(),
+                    relative_path: relative_path__.unwrap_or_default(),
+                    defined_at_line: defined_at_line__,
+                    defined_at_col: defined_at_col__,
+                    node_checksum: node_checksum__.unwrap_or_default(),
+                    sao_enabled: sao_enabled__,
+                    node_error_type: node_error_type__,
+                    node_cancel_reason: node_cancel_reason__,
+                    node_skip_reason: node_skip_reason__,
+                    dbt_core_event_code: dbt_core_event_code__.unwrap_or_default(),
+                    duration_ms: duration_ms__,
+                    in_selection: in_selection__.unwrap_or_default(),
+                    node_outcome_detail: node_outcome_detail__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("v1.public.events.fusion.node.NodeProcessed", FIELDS, GeneratedVisitor)
     }
 }
 impl serde::Serialize for NodeSkipReason {

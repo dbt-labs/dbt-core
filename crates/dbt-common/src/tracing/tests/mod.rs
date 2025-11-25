@@ -3,6 +3,7 @@ mod emit_tests;
 mod filter_tests;
 mod infra_tests;
 mod layers_file_log_tests;
+mod layers_json_compat_tests;
 mod layers_jsonl_tests;
 mod layers_otlp_tests;
 mod layers_parquet_tests;

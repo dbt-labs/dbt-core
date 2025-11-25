@@ -6,7 +6,7 @@ use chrono::{DateTime, Utc};
 use dbt_common::adapter::AdapterType;
 use dbt_common::io_args::StaticAnalysisOffReason;
 use dbt_common::{ErrorCode, FsResult, err, io_args::StaticAnalysisKind};
-use dbt_telemetry::{ExecutionPhase, NodeEvaluated, NodeType};
+use dbt_telemetry::{ExecutionPhase, NodeEvaluated, NodeProcessed, NodeType};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 type YmlValue = dbt_serde_yaml::Value;
@@ -194,7 +194,7 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
         if let YmlValue::Mapping(ref mut map, _) = ret {
             map.insert(
                 YmlValue::string("resource_type".to_string()),
-                YmlValue::string(self.resource_type().as_ref().to_string()),
+                YmlValue::string(self.resource_type().as_static_ref().to_string()),
             );
         }
         ret
@@ -258,40 +258,133 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
         }
     }
 
-    fn get_node_evaluated_event(&self, phase: ExecutionPhase) -> NodeEvaluated {
-        node_evaluated_event_from_attrs(self.common(), self.base(), self.resource_type(), phase)
+    fn get_node_evaluated_event(&self, phase: ExecutionPhase, in_dir: &PathBuf) -> NodeEvaluated {
+        let common = self.common();
+        let base = self.base();
+        let node_type = self.resource_type();
+
+        let (database, schema, identifier) = (
+            base.database.clone(),
+            base.schema.clone(),
+            Some(base.alias.clone()),
+        );
+
+        let custom_materialization = if let DbtMaterialization::Unknown(custom) = &base.materialized
+        {
+            Some(custom.clone())
+        } else {
+            None
+        };
+
+        let (relative_path, defined_at_line, defined_at_column) = self.defined_at().map_or_else(
+            || (common.original_file_path.display().to_string(), None, None),
+            |defined_at| {
+                let relative_path = if defined_at.file.is_absolute() {
+                    defined_at
+                        .file
+                        .strip_prefix(in_dir)
+                        .map(|p| p.display().to_string())
+                        .unwrap_or_else(|_| defined_at.file.display().to_string())
+                } else {
+                    defined_at.file.display().to_string()
+                };
+
+                (
+                    relative_path,
+                    Some(defined_at.line as u32),
+                    Some(defined_at.col as u32),
+                )
+            },
+        );
+
+        let node_checksum = match &common.checksum {
+            DbtChecksum::String(s) => s.clone(),
+            DbtChecksum::Object(o) => o.checksum.clone(),
+        };
+
+        NodeEvaluated::start(
+            common.unique_id.clone(),
+            common.name.clone(),
+            Some(database),
+            Some(schema),
+            identifier,
+            Some((&base.materialized).into()),
+            custom_materialization,
+            node_type,
+            phase,
+            relative_path,
+            defined_at_line,
+            defined_at_column,
+            node_checksum,
+        )
     }
-}
 
-pub fn node_evaluated_event_from_attrs(
-    common: &CommonAttributes,
-    base: &NodeBaseAttributes,
-    node_type: NodeType,
-    phase: ExecutionPhase,
-) -> NodeEvaluated {
-    let (database, schema, identifier) = (
-        base.database.clone(),
-        base.schema.clone(),
-        Some(base.alias.clone()),
-    );
+    fn get_node_processed_event(
+        &self,
+        last_phase: Option<ExecutionPhase>,
+        in_dir: &PathBuf,
+        in_selection: bool,
+    ) -> NodeProcessed {
+        let common = self.common();
+        let base = self.base();
+        let node_type = self.resource_type();
 
-    let custom_materialization = if let DbtMaterialization::Unknown(custom) = &base.materialized {
-        Some(custom.clone())
-    } else {
-        None
-    };
+        let (database, schema, identifier) = (
+            base.database.clone(),
+            base.schema.clone(),
+            Some(base.alias.clone()),
+        );
 
-    NodeEvaluated::start(
-        common.unique_id.clone(),
-        common.name.clone(),
-        Some(database),
-        Some(schema),
-        identifier,
-        Some((&base.materialized).into()),
-        custom_materialization,
-        node_type,
-        phase,
-    )
+        let custom_materialization = if let DbtMaterialization::Unknown(custom) = &base.materialized
+        {
+            Some(custom.clone())
+        } else {
+            None
+        };
+
+        let (relative_path, defined_at_line, defined_at_column) = self.defined_at().map_or_else(
+            || (common.original_file_path.display().to_string(), None, None),
+            |defined_at| {
+                let relative_path = if defined_at.file.is_absolute() {
+                    defined_at
+                        .file
+                        .strip_prefix(in_dir)
+                        .map(|p| p.display().to_string())
+                        .unwrap_or_else(|_| defined_at.file.display().to_string())
+                } else {
+                    defined_at.file.display().to_string()
+                };
+
+                (
+                    relative_path,
+                    Some(defined_at.line as u32),
+                    Some(defined_at.col as u32),
+                )
+            },
+        );
+
+        let node_checksum = match &common.checksum {
+            DbtChecksum::String(s) => s.clone(),
+            DbtChecksum::Object(o) => o.checksum.clone(),
+        };
+
+        NodeProcessed::start(
+            common.unique_id.clone(),
+            common.name.clone(),
+            Some(database),
+            Some(schema),
+            identifier,
+            Some((&base.materialized).into()),
+            custom_materialization,
+            node_type,
+            last_phase,
+            relative_path,
+            defined_at_line,
+            defined_at_column,
+            node_checksum,
+            in_selection,
+        )
+    }
 }
 
 pub trait InternalDbtNodeAttributes: InternalDbtNode {
