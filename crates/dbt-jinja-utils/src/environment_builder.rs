@@ -110,8 +110,8 @@ impl JinjaEnvBuilder {
             .ok_or_else(|| unexpected_fs_err!("try_with_macros requires root package to be set"))?;
 
         // Get internal packages for this adapter
-        let internal_packages = get_internal_packages(adapter.adapter_type().as_ref());
-
+        #[allow(unused_mut)]
+        let mut internal_packages = get_internal_packages(adapter.adapter_type().as_ref());
         // Initialize all registries
         let mut macro_namespace_registry = ValueMap::new(); // package_name → [macro_names]
         let mut macro_template_registry = ValueMap::new(); // template_name → macro_info
