@@ -70,12 +70,14 @@ class BuildTask(RunTask):
         # selector including unit tests
         full_selector = self.get_node_selector(no_unit_tests=False)
         # selected node unique_ids with unit_tests
-        full_selected_nodes = full_selector.get_selected(spec)
+        full_selected_nodes = full_selector.get_selected(spec=spec, warn_on_no_nodes=False)
 
         # This selector removes the unit_tests from the selector
         selector_wo_unit_tests = self.get_node_selector(no_unit_tests=True)
         # selected node unique_ids without unit_tests
-        selected_nodes_wo_unit_tests = selector_wo_unit_tests.get_selected(spec)
+        selected_nodes_wo_unit_tests = selector_wo_unit_tests.get_selected(
+            spec=spec, warn_on_no_nodes=False
+        )
 
         # Get the difference in the sets of nodes with and without unit tests and
         # save it
