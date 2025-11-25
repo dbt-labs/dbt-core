@@ -212,6 +212,7 @@ impl From<serde_json::Error> for FileHandlerError {
 
 type FileHandlerResult<T> = Result<T, FileHandlerError>;
 
+// TODO: Move this to test utils for sharing
 struct FileHandler {
     format: FileFormat,
 }

@@ -358,6 +358,43 @@ impl Task for SedTask {
                 writer.close()?;
                 fs::rename(temp_path, path)?;
             }
+
+            // Perform the same replacement for arrow IPC files
+            // TODO: this only handles replacing schema name from column values of string-like type
+            if path.extension().map(|ext| ext == "arrow").unwrap_or(false) {
+                use arrow::ipc::reader::FileReader as ArrowFileReader;
+                use arrow::ipc::writer::FileWriter as ArrowFileWriter;
+
+                // setup the reader
+                let file = File::open(path)?;
+                let reader = ArrowFileReader::try_new(file, None)?;
+                let schema = reader.schema();
+
+                // setup the writer (use a temp file for later to be renamed)
+                let temp_path = path.with_extension("arrow.tmp");
+                let temp_file = File::create(&temp_path)?;
+                let mut writer = ArrowFileWriter::try_new(temp_file, &schema)?;
+
+                for batch in reader {
+                    let batch = batch?;
+                    let mut new_columns = Vec::with_capacity(batch.num_columns());
+
+                    for i in 0..batch.num_columns() {
+                        let array = batch.column(i);
+                        let new_array = rebuild_string_like_arrays(array, &replace_fn);
+                        new_columns.push(new_array);
+                    }
+
+                    // write back the updated content
+                    let new_batch = RecordBatch::try_new(schema.clone(), new_columns)?;
+                    writer.write(&new_batch)?;
+                }
+
+                // finalize and replace the original file
+                writer.finish()?;
+                drop(writer);
+                fs::rename(temp_path, path)?;
+            }
             Ok(())
         };
 
