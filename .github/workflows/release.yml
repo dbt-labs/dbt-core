@@ -76,8 +76,6 @@ jobs:
   job-setup:
     name: Log Inputs
     runs-on: ${{ vars.UBUNTU_LATEST }}
-    outputs:
-      starting_sha: ${{ steps.set_sha.outputs.starting_sha }}
     steps:
       - name: "[DEBUG] Print Variables"
         run: |
@@ -101,6 +99,7 @@ jobs:
       env_setup_script_path: "scripts/env-setup.sh"
       test_run: ${{ inputs.test_run }}
       nightly_release: ${{ inputs.nightly_release }}
+      use_hatch: true
 
     secrets: inherit
 
@@ -129,15 +128,10 @@ jobs:
       sha: ${{ needs.bump-version-generate-changelog.outputs.final_sha }}
       version_number: ${{ inputs.version_number }}
       changelog_path: ${{ needs.bump-version-generate-changelog.outputs.changelog_path }}
-      build_script_path: "scripts/build-dist.sh"
-      s3_bucket_name: "core-team-artifacts"
       package_test_command: "dbt --version"
       test_run: ${{ inputs.test_run }}
       nightly_release: ${{ inputs.nightly_release }}
-
-    secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      use_hatch: true
 
   github-release:
     name: GitHub Release
