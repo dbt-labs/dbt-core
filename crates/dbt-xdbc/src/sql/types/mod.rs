@@ -1421,7 +1421,7 @@ impl SqlType {
 // schemas that might have been written using different metadata keys.
 const POSTGRES_KEYS: [&str; 2] = ["POSTGRES:type", "type_text"];
 const SNOWFLAKE_KEYS: [&str; 2] = ["SNOWFLAKE:type", "type_text"];
-const BIGQUERY_KEYS: [&str; 4] = ["BIGQUERY:type", "type_text", "Type", "type"];
+const BIGQUERY_KEYS: [&str; 2] = ["BIGQUERY:type", "type_text"];
 const DATABRICKS_KEYS: [&str; 2] = ["DBX:type", "type_text"];
 const REDSHIFT_KEYS: [&str; 2] = ["REDSHIFT:type", "type_text"];
 const DUCKDB_KEYS: [&str; 2] = ["DUCKDB:type", "type_text"];

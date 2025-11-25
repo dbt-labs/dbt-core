@@ -1,6 +1,7 @@
-//! This crate provides dbt adapters.
+//! The dbt adapter layer.
 
-/// Macros
+#![allow(clippy::let_and_return)]
+
 #[macro_use]
 mod macros;
 

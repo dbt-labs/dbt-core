@@ -4,10 +4,9 @@ use std::sync::LazyLock;
 use crate::AdapterResult;
 use crate::column::{BigqueryColumnMode, Column};
 use crate::metadata;
-use crate::sql_types::{self, TypeOps};
+use crate::sql_types::{self, TypeOps, original_type_string};
 use arrow_schema::{DataType, FieldRef};
 use dbt_common::adapter::AdapterType;
-use dbt_xdbc::sql::types::original_type_string;
 use dbt_xdbc::{Backend, sql::types::SqlType};
 use regex::Regex;
 
@@ -249,9 +248,9 @@ impl ColumnBuilder {
     fn build_databricks(field: &FieldRef, type_ops: &dyn TypeOps) -> Column {
         let name = field.name().to_string();
         let type_text = {
-            let type_text = original_type_string(Backend::Databricks, field);
+            let type_text = original_type_string(AdapterType::Databricks, field);
             if let Some(type_text) = type_text {
-                type_text.to_owned()
+                type_text
             } else {
                 let mut type_text = String::new();
                 type_ops
@@ -260,13 +259,13 @@ impl ColumnBuilder {
                 if !field.is_nullable() {
                     type_text.push_str(" not null");
                 }
-                type_text
+                Cow::Owned(type_text)
             }
         };
         Column::new(
             AdapterType::Databricks,
             name,
-            type_text,
+            type_text.to_string(),
             None, // char_size
             None, // numeric_precision
             None, // numeric_scale

@@ -9,7 +9,7 @@ use crate::metadata::snowflake::ARROW_FIELD_SNOWFLAKE_FIELD_WIDTH_METADATA_KEY;
 use crate::metadata::*;
 use arrow_schema::{DataType, Field, Schema, TimeUnit};
 use dbt_common::adapter::AdapterType;
-use dbt_xdbc::sql::types::{SqlType, metadata_sql_type_key, original_type_string};
+use dbt_xdbc::sql::types::{SqlType, metadata_sql_type_key};
 
 // TODO: Add keys here as necessary
 pub const REDSHIFT_METADATA_SQL_TYPE_KEY: &str = "Type";
@@ -73,23 +73,14 @@ pub trait TypeOps: Send + Sync {
         &self,
         field: &'f Field,
     ) -> AdapterResult<Cow<'f, str>> {
-        let backend = backend_of(self.adapter_type());
-        original_type_string(backend, field)
-            .map(|v| Ok(Cow::Borrowed(v.as_str())))
+        original_type_string(self.adapter_type(), field)
+            .map(Ok)
             .unwrap_or_else(|| {
                 let mut out = String::new();
                 self.format_arrow_type_as_sql(field.data_type(), &mut out)
                     .map(|_| Cow::Owned(out))
             })
     }
-}
-
-pub fn parse_nullable_sql_type(
-    s: &str,
-    adapter_type: AdapterType,
-) -> AdapterResult<(SqlType, bool)> {
-    let backend = backend_of(adapter_type);
-    SqlType::parse(backend, s).map_err(|e| AdapterError::new(AdapterErrorKind::UnexpectedResult, e))
 }
 
 pub struct NaiveTypeOpsImpl(AdapterType, dbt_xdbc::Backend);
@@ -137,8 +128,14 @@ impl TypeOps for NaiveTypeOpsImpl {
         })
     }
 
-    fn parse_into_nullable_arrow_type(&self, _s: &str) -> AdapterResult<(DataType, bool)> {
-        todo!("NaiveTypeOpsImpl::parse_into_nullable_arrow_type")
+    fn parse_into_nullable_arrow_type(&self, s: &str) -> AdapterResult<(DataType, bool)> {
+        let backend = backend_of(self.0);
+        SqlType::parse(backend, s)
+            .map(|(sql_type, nullable)| {
+                let arrow_type = sql_type.pick_best_arrow_type(backend);
+                (arrow_type, nullable)
+            })
+            .map_err(|e| AdapterError::new(AdapterErrorKind::UnexpectedResult, e))
     }
 }
 
@@ -211,7 +208,8 @@ pub fn make_arrow_field_v2(
     use SqlType::*;
     let adapter_type = type_ops.adapter_type();
     let backend = backend_of(adapter_type);
-    let (sql_type, nullable) = parse_nullable_sql_type(sql_type_str, adapter_type)?;
+    let (sql_type, nullable) = SqlType::parse(backend, sql_type_str)
+        .map_err(|e| AdapterError::new(AdapterErrorKind::UnexpectedResult, e))?;
     let data_type = sql_type.pick_best_arrow_type(backend);
 
     let field = Field::new(col_name, data_type, nullable_override.unwrap_or(nullable));
@@ -251,6 +249,28 @@ pub const fn get_field_sql_type_metadata_key(adapter_type: AdapterType) -> &'sta
     }
 }
 
+pub fn original_type_string<'a>(
+    adapter_type: AdapterType,
+    field: &'a Field,
+) -> Option<Cow<'a, str>> {
+    let backend = backend_of(adapter_type);
+    // The first step is trying to the original SQL type from the `Field` by
+    // probing the `<VENDOR>::type` metadata key as proposed in [1].
+    //
+    // [1]: https://github.com/apache/arrow-adbc/issues/3449
+    let sql_type_string = dbt_xdbc::sql::types::original_type_string(backend, field)
+        .map(|s| Cow::Borrowed(s.as_str()));
+
+    match (adapter_type, sql_type_string) {
+        (_, s @ Some(_)) => s,
+        (AdapterType::Bigquery, None) => {
+            // this can build a SQL type from the "Type" metadata key
+            bigquery::field_to_string(field)
+        }
+        (_, s) => s,
+    }
+}
+
 struct SdfSchemaBuilder {
     adapter_type: AdapterType,
     original: Arc<Schema>,
@@ -264,65 +284,42 @@ impl SdfSchemaBuilder {
         }
     }
 
-    fn convert_field(&self, type_ops: &dyn TypeOps, field: &Field) -> AdapterResult<Arc<Field>> {
+    fn field_comment<'a>(&self, field: &'a Field) -> Option<&'a String> {
         use AdapterType::*;
-        match self.adapter_type {
-            Bigquery => {
-                let metadata = field.metadata();
-                let current_type = field.data_type();
-                let nullable = field.is_nullable();
+        let metadata = field.metadata();
+        let comment = match self.adapter_type {
+            Bigquery => metadata.get("Description"),
+            Redshift | Databricks => metadata.get(ARROW_FIELD_COMMENT_METADATA_KEY),
+            // no evidence that these drivers store comments in metadata, but just in case
+            Postgres | Snowflake | Salesforce => metadata.get(ARROW_FIELD_COMMENT_METADATA_KEY),
+        };
+        comment
+    }
 
-                let maybe_original_type_text = bigquery::field_to_string(field);
-
-                // XXX: We should probably error here rather than approximate
-                let resolved_type = if let Some(ref original_type_text) = maybe_original_type_text {
-                    type_ops
-                        .parse_into_arrow_type(original_type_text)
-                        .unwrap_or_else(|_| current_type.clone())
-                } else {
-                    current_type.clone()
-                };
-
-                // TODO: Comment handling for other adapters
-                let comment = metadata.get("Description").map(|s| s.to_string());
-
-                let field = new_arrow_field_with_metadata(
-                    field.name(),
-                    resolved_type,
-                    nullable,
-                    maybe_original_type_text,
-                    comment,
-                );
-                Ok(Arc::new(field))
-            }
-            Redshift | Databricks => {
-                let metadata = field.metadata();
-                let current_type = field.data_type();
-                let nullable = field.is_nullable();
-                let original_type_text = original_type_string(backend_of(self.adapter_type), field);
-                let comment = metadata
-                    .get(ARROW_FIELD_COMMENT_METADATA_KEY)
-                    .map(|s| s.to_string());
-                let resolved_type = if let Some(original_type_text) = original_type_text {
-                    type_ops
-                        .parse_into_arrow_type(original_type_text)
-                        .unwrap_or_else(|_| current_type.clone())
-                } else {
-                    current_type.clone()
-                };
-                let field = new_arrow_field_with_metadata(
-                    field.name(),
-                    resolved_type,
-                    nullable,
-                    original_type_text.cloned(),
-                    comment,
-                );
-                Ok(Arc::new(field))
-            }
-            // More adapters will be handled here when build_sdf_schema()
-            // delegates to this function for more adapters.
-            _ => unreachable!(),
-        }
+    fn convert_field(&self, type_ops: &dyn TypeOps, field: &Field) -> AdapterResult<Arc<Field>> {
+        let current_type = field.data_type();
+        let nullable = field.is_nullable();
+        let comment = self.field_comment(field);
+        let original_type_text = match self.adapter_type {
+            AdapterType::Bigquery => bigquery::field_to_string(field),
+            _ => original_type_string(self.adapter_type, field),
+        };
+        // XXX: We should probably error here rather than approximate
+        let resolved_type = if let Some(original_type_text) = &original_type_text {
+            type_ops
+                .parse_into_arrow_type(original_type_text.as_ref())
+                .unwrap_or_else(|_| current_type.clone())
+        } else {
+            current_type.clone()
+        };
+        let field = new_arrow_field_with_metadata(
+            field.name(),
+            resolved_type,
+            nullable,
+            original_type_text.map(|s| s.to_string()),
+            comment.cloned(),
+        );
+        Ok(Arc::new(field))
     }
 
     pub fn build_sdf_schema(self, type_ops: &dyn TypeOps) -> AdapterResult<SdfSchema> {
@@ -478,17 +475,19 @@ pub fn sql_type_hint_to_str<'a>(
 }
 
 pub mod bigquery {
+    use std::borrow::Cow;
+
     // XXX: make private once all tests are moved to here
     use arrow_schema::{DataType, Field};
     use dbt_common::adapter::AdapterType;
 
     use crate::sql_types::get_field_sql_type_metadata_key;
 
-    pub fn field_to_string(field: &Field) -> Option<String> {
+    pub fn field_to_string<'a>(field: &'a Field) -> Option<Cow<'a, str>> {
         let type_key = get_field_sql_type_metadata_key(AdapterType::Bigquery);
 
         if let Some(original_type) = field.metadata().get(type_key) {
-            let base_type = match original_type.as_str() {
+            let inner_sql_type = match original_type.as_str() {
                 "RECORD" => {
                     // STRUCT/RECORD type, recurse and build original type
                     match field.data_type() {
@@ -501,37 +500,31 @@ pub mod bigquery {
                                     Some(format!("{field_name} {field_type}"))
                                 })
                                 .collect::<Option<Vec<_>>>()?;
-                            Some(format!("STRUCT<{}>", field_strings.join(", ")))
+                            Cow::Owned(format!("STRUCT<{}>", field_strings.join(", ")))
                         }
-                        _ => Some(original_type.to_string()),
+                        _ => Cow::Borrowed(original_type.as_str()),
                     }
                 }
-                _ => Some(map_bigquery_metadata_type(original_type).to_string()),
+                "INTEGER" => Cow::Borrowed("INT64"),
+                "FLOAT" => Cow::Borrowed("FLOAT64"),
+                "BOOLEAN" => Cow::Borrowed("BOOL"),
+                // Pass through other types as-is
+                other => Cow::Borrowed(other),
             };
 
             // REPEATED - this is an Array type
-            if let Some(repeated) = field.metadata().get("Repeated")
-                && repeated == "true"
-            {
-                return base_type.map(|t| format!("ARRAY<{t}>"));
-            }
-
-            base_type
+            let is_array = field
+                .metadata()
+                .get("Repeated")
+                .is_some_and(|v| v == "true");
+            let sql_type = if is_array {
+                Cow::Owned(format!("ARRAY<{}>", inner_sql_type))
+            } else {
+                inner_sql_type
+            };
+            Some(sql_type)
         } else {
             None
-        }
-    }
-
-    /// Maps bigquery aliases to their expected form for DDL statements
-    fn map_bigquery_metadata_type(metadata_type: &str) -> &str {
-        match metadata_type {
-            "INTEGER" => "INT64",
-            "FLOAT" => "FLOAT64",
-            "BOOLEAN" => "BOOL",
-            // XXX: This one has explicit special handling elsewhere. Added for completeness
-            "RECORD" => "STRUCT",
-            // Pass through other types as-is
-            other => other,
         }
     }
 }
