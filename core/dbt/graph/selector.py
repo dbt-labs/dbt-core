@@ -120,7 +120,9 @@ class NodeSelector(MethodManager):
             additional.update(self.graph.select_children(selected, depth))
         return additional
 
-    def select_nodes_recursively(self, spec: SelectionSpec) -> Tuple[Set[UniqueId], Set[UniqueId]]:
+    def select_nodes_recursively(
+        self, spec: SelectionSpec, warn_on_no_nodes: bool = True
+    ) -> Tuple[Set[UniqueId], Set[UniqueId]]:
         """If the spec is a composite spec (a union, difference, or intersection),
         recurse into its selections and combine them. If the spec is a concrete
         selection criteria, resolve that using the given graph.
@@ -128,7 +130,10 @@ class NodeSelector(MethodManager):
         if isinstance(spec, SelectionCriteria):
             direct_nodes, indirect_nodes = self.get_nodes_from_criteria(spec)
         else:
-            bundles = [self.select_nodes_recursively(component) for component in spec]
+            bundles = [
+                self.select_nodes_recursively(spec=component, warn_on_no_nodes=warn_on_no_nodes)
+                for component in spec.components
+            ]
 
             direct_sets = []
             indirect_sets = []
@@ -144,19 +149,23 @@ class NodeSelector(MethodManager):
                 initial_direct, indirect_nodes, spec.indirect_selection
             )
 
-            if spec.expect_exists and len(direct_nodes) == 0:
+            if spec.expect_exists and len(direct_nodes) == 0 and warn_on_no_nodes:
                 warn_or_error(NoNodesForSelectionCriteria(spec_raw=str(spec.raw)))
 
         return direct_nodes, indirect_nodes
 
-    def select_nodes(self, spec: SelectionSpec) -> Tuple[Set[UniqueId], Set[UniqueId]]:
+    def select_nodes(
+        self, spec: SelectionSpec, warn_on_no_nodes: bool = True
+    ) -> Tuple[Set[UniqueId], Set[UniqueId]]:
         """Select the nodes in the graph according to the spec.
 
         This is the main point of entry for turning a spec into a set of nodes:
         - Recurse through spec, select by criteria, combine by set operation
         - Return final (unfiltered) selection set
         """
-        direct_nodes, indirect_nodes = self.select_nodes_recursively(spec)
+        direct_nodes, indirect_nodes = self.select_nodes_recursively(
+            spec=spec, warn_on_no_nodes=warn_on_no_nodes
+        )
         indirect_only = indirect_nodes.difference(direct_nodes)
         return direct_nodes, indirect_only
 
@@ -319,7 +328,7 @@ class NodeSelector(MethodManager):
 
         return selected
 
-    def get_selected(self, spec: SelectionSpec) -> Set[UniqueId]:
+    def get_selected(self, spec: SelectionSpec, warn_on_no_nodes: bool = True) -> Set[UniqueId]:
         """get_selected runs through the node selection process:
 
         - node selection. Based on the include/exclude sets, the set
@@ -329,7 +338,9 @@ class NodeSelector(MethodManager):
             - selectors can filter the nodes after all of them have been
               selected
         """
-        selected_nodes, indirect_only = self.select_nodes(spec)
+        selected_nodes, indirect_only = self.select_nodes(
+            spec=spec, warn_on_no_nodes=warn_on_no_nodes
+        )
         filtered_nodes = self.filter_selection(selected_nodes)
 
         return filtered_nodes
