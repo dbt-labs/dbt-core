@@ -107,7 +107,7 @@ jobs:
     needs: [job-setup]
     if: ${{ !inputs.only_docker }}
 
-    uses: dbt-labs/dbt-release/.github/workflows/release-prep.yml@main
+    uses: dbt-labs/dbt-release/.github/workflows/release-prep.yml@er/hatch-release
 
     with:
       sha: ${{ needs.job-setup.outputs.starting_sha }}
@@ -138,7 +138,7 @@ jobs:
     if: ${{ !failure() && !cancelled() && !inputs.only_docker }}
     needs: [job-setup, bump-version-generate-changelog]
 
-    uses: dbt-labs/dbt-release/.github/workflows/build.yml@main
+    uses: dbt-labs/dbt-release/.github/workflows/build.yml@er/hatch-release
 
     with:
       sha: ${{ needs.bump-version-generate-changelog.outputs.final_sha }}
@@ -160,7 +160,7 @@ jobs:
 
     needs: [bump-version-generate-changelog, build-test-package]
 
-    uses: dbt-labs/dbt-release/.github/workflows/github-release.yml@main
+    uses: dbt-labs/dbt-release/.github/workflows/github-release.yml@er/hatch-release
 
     with:
       sha: ${{ needs.bump-version-generate-changelog.outputs.final_sha }}
@@ -173,7 +173,7 @@ jobs:
 
     needs: [github-release]
 
-    uses: dbt-labs/dbt-release/.github/workflows/pypi-release.yml@main
+    uses: dbt-labs/dbt-release/.github/workflows/pypi-release.yml@er/hatch-release
 
     with:
       version_number: ${{ inputs.version_number }}
@@ -222,7 +222,7 @@ jobs:
     permissions:
       packages: write
 
-    uses: dbt-labs/dbt-release/.github/workflows/release-docker.yml@main
+    uses: dbt-labs/dbt-release/.github/workflows/release-docker.yml@er/hatch-release
     with:
       package: ${{ matrix.package }}
       version_number: ${{ inputs.version_number }}
@@ -241,7 +241,7 @@ jobs:
         docker-release,
       ]
 
-    uses: dbt-labs/dbt-release/.github/workflows/slack-post-notification.yml@main
+    uses: dbt-labs/dbt-release/.github/workflows/slack-post-notification.yml@er/hatch-release
     with:
       status: "failure"
 
@@ -262,7 +262,7 @@ jobs:
         docker-release,
       ]
 
-    uses: dbt-labs/dbt-release/.github/workflows/slack-post-notification.yml@main
+    uses: dbt-labs/dbt-release/.github/workflows/slack-post-notification.yml@er/hatch-release
     with:
       status: "failure"
 
