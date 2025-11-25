@@ -8,6 +8,7 @@ use dbt_common::{
     cancellation::{CancellationToken, never_cancels},
     tracing::FsTraceConfig,
 };
+use std::fmt::Debug;
 use std::{
     fs::File,
     future::Future,
@@ -486,4 +487,13 @@ pub fn assert_str_in_log_messages(logs: &[JsonLogEvent], search_str: &str) -> Fs
     } else {
         panic!("Log message containing '{search_str}' not found");
     }
+}
+
+/// Helper function to assert that two vectors are equal, ignoring order.
+pub fn assert_vec_sorted_eq<T: PartialEq + Clone + Ord + Debug>(expected: Vec<T>, actual: Vec<T>) {
+    let mut expected = expected;
+    expected.sort();
+    let mut actual = actual;
+    actual.sort();
+    assert_eq!(expected, actual);
 }
