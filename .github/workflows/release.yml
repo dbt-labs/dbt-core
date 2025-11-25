@@ -128,6 +128,7 @@ jobs:
       sha: ${{ needs.bump-version-generate-changelog.outputs.final_sha }}
       version_number: ${{ inputs.version_number }}
       changelog_path: ${{ needs.bump-version-generate-changelog.outputs.changelog_path }}
+      build_script_path: "scripts/build-dist.sh"
       package_test_command: "dbt --version"
       test_run: ${{ inputs.test_run }}
       nightly_release: ${{ inputs.nightly_release }}
