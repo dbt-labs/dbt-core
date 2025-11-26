@@ -99,8 +99,7 @@ impl PreviousState {
             Some(ModificationType::Configs) => self.check_configs_modified(node),
             Some(ModificationType::Relation) => self.check_relation_modified(node),
             Some(ModificationType::PersistedDescriptions) => {
-                //self.check_persisted_descriptions_modified(node)// TODO: https://github.com/dbt-labs/dbt-fusion/issues/772
-                false
+                self.check_persisted_descriptions_modified(node)
             }
             // Macro modification is check_modified_content as per dbt-core
             Some(ModificationType::Macros) => self.check_modified_content(node),
@@ -109,7 +108,7 @@ impl PreviousState {
                 self.check_contract_modified(node)
                     || self.check_configs_modified(node)
                     || self.check_relation_modified(node)
-                    //|| self.check_persisted_descriptions_modified(node)// TODO: https://github.com/dbt-labs/dbt-fusion/issues/772
+                    || self.check_persisted_descriptions_modified(node)
                     || self.check_modified_content(node) // Order is important here, check_modified_content should be last as it is the most generic and could potentially match prevuous cases
             }
         }
@@ -177,12 +176,6 @@ impl PreviousState {
         normalized_current != normalized_previous
     }
 
-    // TODO: Fusion is not rendering jinja in descriptions whereas mantle does,
-    // so we are not checking them for now
-    // See https://github.com/dbt-labs/dbt-fusion/issues/772
-    // Rendering of the jinja should be done in the resolve_sources function
-    //in resolve_sources.rs
-    #[allow(dead_code)]
     fn check_persisted_descriptions_modified(&self, current_node: &dyn InternalDbtNode) -> bool {
         // Get the previous node from the manifest
         let previous_node = match self

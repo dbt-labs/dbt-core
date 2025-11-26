@@ -527,12 +527,6 @@ fn same_body(self_common: &CommonAttributes, other_common: &CommonAttributes) ->
     self_common.checksum == other_common.checksum
 }
 
-//TODO: Fusion is not rendering jinja in descriptions whereas mantle does,
-// so we are not checking them for now
-// See https://github.com/dbt-labs/dbt-fusion/issues/772
-// Rendering of the jinja should be done in the resolve_sources function
-//in resolve_sources.rs
-#[allow(dead_code)]
 fn same_persisted_description(
     self_common: &CommonAttributes,
     self_base: &NodeBaseAttributes,
@@ -754,13 +748,12 @@ impl InternalDbtNode for DbtModel {
             // Equivalent to dbt-core's same_contents method for ParsedNode
             same_body(&self.__common_attr__, &other_model.__common_attr__)
                 && self.has_same_config(other)
-                // TODO: https://github.com/dbt-labs/dbt-fusion/issues/772
-                // && same_persisted_description(
-                //     &self.__common_attr__,
-                //     &self.__base_attr__,
-                //     &other_model.__common_attr__,
-                //     &other_model.__base_attr__,
-                // )
+                && same_persisted_description(
+                    &self.__common_attr__,
+                    &self.__base_attr__,
+                    &other_model.__common_attr__,
+                    &other_model.__base_attr__,
+                )
                 && same_fqn(&self.__common_attr__, &other_model.__common_attr__)
                 && same_database_representation_model(
                     &self.deprecated_config,
@@ -1057,13 +1050,12 @@ impl InternalDbtNode for DbtSeed {
             //https://github.com/dbt-labs/dbt-core/blob/b75d5e701ef4dc2d7a98c5301ef63ecfc02eae15/core/dbt/contracts/graph/nodes.py#L900-L933
             same_body(&self.__common_attr__, &other_seed.__common_attr__)
                 && self.has_same_config(other)
-                // TODO: https://github.com/dbt-labs/dbt-fusion/issues/772
-                // && same_persisted_description(
-                //     &self.__common_attr__,
-                //     &self.__base_attr__,
-                //     &other_seed.__common_attr__,
-                //     &other_seed.__base_attr__,
-                // )
+                && same_persisted_description(
+                    &self.__common_attr__,
+                    &self.__base_attr__,
+                    &other_seed.__common_attr__,
+                    &other_seed.__base_attr__,
+                )
                 && same_fqn(&self.__common_attr__, &other_seed.__common_attr__)
                 && same_database_representation_seed(
                     &self.deprecated_config,
@@ -1599,13 +1591,12 @@ impl InternalDbtNode for DbtSnapshot {
             // Equivalent to dbt-core's same_contents method for ParsedNode
             same_body(&self.__common_attr__, &other_snapshot.__common_attr__)
                 && self.has_same_config(other)
-                // TODO: https://github.com/dbt-labs/dbt-fusion/issues/772
-                // && same_persisted_description(
-                //     &self.__common_attr__,
-                //     &self.__base_attr__,
-                //     &other_snapshot.__common_attr__,
-                //     &other_snapshot.__base_attr__,
-                // )
+                && same_persisted_description(
+                    &self.__common_attr__,
+                    &self.__base_attr__,
+                    &other_snapshot.__common_attr__,
+                    &other_snapshot.__base_attr__,
+                )
                 && same_fqn(&self.__common_attr__, &other_snapshot.__common_attr__)
                 && same_database_representation_snapshot(
                     &self.deprecated_config,
