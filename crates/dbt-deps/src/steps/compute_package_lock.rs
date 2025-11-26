@@ -127,10 +127,13 @@ pub async fn compute_package_lock(
             let conflict_package = dbt_packages_lock.get_by_name(&lookup_name).unwrap();
             return err!(
                 ErrorCode::InvalidConfig,
-                "Duplicate packages originating from conflicting package sources. Package '{}' has sources in '{}' and '{}'.",
-                lookup_name,
-                conflict_package.entry_type(),
+                "Packages '{}:{}' and '{}:{}' occupy the same namespace '{}'. Consider unifying on a single source. This can be caused by other packages depending on '{}', but using an outdated or different full name.",
                 package.entry_type(),
+                package.entry_name(),
+                conflict_package.entry_type(),
+                conflict_package.entry_name(),
+                lookup_name,
+                lookup_name
             );
         }
         seen.insert(lookup_name);
