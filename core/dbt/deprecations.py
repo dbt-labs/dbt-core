@@ -266,7 +266,7 @@ def show_deprecations_summary() -> None:
         deprecation_event = deprecations[deprecation].event()
         summaries.append(
             DeprecationSummary(
-                event_name=deprecation_event.__name__,
+                event_name=type(deprecation_event).__name__,
                 event_code=deprecation_event.code(),
                 occurrences=occurrences,
             ).to_msg_dict()
