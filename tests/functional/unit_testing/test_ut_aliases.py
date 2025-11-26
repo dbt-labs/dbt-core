@@ -34,6 +34,7 @@ unit_tests:
           - {foo: foo }
 """
 
+
 class TestUnitTestInputWithAlias:
     @pytest.fixture(scope="class")
     def models(self):
