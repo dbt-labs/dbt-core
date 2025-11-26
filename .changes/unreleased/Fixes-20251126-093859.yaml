@@ -1,0 +1,6 @@
+kind: Fixes
+body: ':bug: :snowman: Fix manifest error message for --defer flag'
+time: 2025-11-26T09:38:59.744776-05:00
+custom:
+  Author: emmyoop
+  Issue: "8553"
