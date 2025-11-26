@@ -1,4 +1,7 @@
-use std::path::{Path, PathBuf};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+};
 
 use dbt_schemas::schemas::{
     packages::{DbtPackageEntry, LocalPackage},
@@ -6,11 +9,12 @@ use dbt_schemas::schemas::{
 };
 use sha1::Digest;
 
-use dbt_common::{
-    ErrorCode, FsResult, constants::DBT_PROJECT_YML, err, fs_err, io_args::IoArgs,
-    io_utils::try_read_yml_to_str,
+use dbt_common::{ErrorCode, FsResult, constants::DBT_PROJECT_YML, err, fs_err, io_args::IoArgs};
+use dbt_jinja_utils::{
+    jinja_environment::JinjaEnv,
+    phases::load::LoadContext,
+    serde::{into_typed_with_jinja, value_from_file},
 };
-use dbt_jinja_utils::serde::from_yaml_raw;
 use dbt_schemas::schemas::project::DbtProject;
 
 use crate::github_client::clone_and_checkout;
@@ -72,6 +76,8 @@ pub fn read_and_validate_dbt_project(
     io: &IoArgs,
     checkout_path: &Path,
     show_errors_or_warnings: bool,
+    jinja_env: &JinjaEnv,
+    vars: &BTreeMap<String, dbt_serde_yaml::Value>,
 ) -> FsResult<DbtProject> {
     let path_to_dbt_project = checkout_path.join(DBT_PROJECT_YML);
     if !path_to_dbt_project.exists() {
@@ -81,30 +87,43 @@ pub fn read_and_validate_dbt_project(
             checkout_path.display()
         );
     }
-    let yml_data = try_read_yml_to_str(&path_to_dbt_project)?;
 
     // Try to deserialize only the package name for error reporting,
     // falling back to the path if deserialization fails
-    let dependency_package_name = from_yaml_raw::<DbtProjectNameOnly>(
-        io,
-        &yml_data,
-        Some(&path_to_dbt_project),
-        // Do not report errors twice. This
-        // parse is only an attempt to get the package name. All actual errors
-        // will be reported when we parse the full `DbtProject` below.
-        false,
-        None,
-    )
-    .map(|p| p.name)
-    .ok()
-    .unwrap_or_else(|| path_to_dbt_project.to_string_lossy().to_string());
+    let dependency_package_name = value_from_file(io, &path_to_dbt_project, false, None)
+        .ok()
+        .and_then(|value| {
+            let deps_context = LoadContext::new(vars.clone());
+            into_typed_with_jinja::<DbtProjectNameOnly, _>(
+                io,
+                value,
+                false,
+                jinja_env,
+                &deps_context,
+                &[],
+                None,
+                false,
+            )
+            .ok()
+        })
+        .map(|p| p.name)
+        .unwrap_or_else(|| path_to_dbt_project.to_string_lossy().to_string());
 
-    from_yaml_raw(
+    let deps_context = LoadContext::new(vars.clone());
+    into_typed_with_jinja(
         io,
-        &yml_data,
-        Some(&path_to_dbt_project),
+        value_from_file(
+            io,
+            &path_to_dbt_project,
+            show_errors_or_warnings,
+            Some(&dependency_package_name),
+        )?,
+        false,
+        jinja_env,
+        &deps_context,
+        &[],
+        Some(&dependency_package_name),
         show_errors_or_warnings,
-        Some(dependency_package_name.as_str()),
     )
 }
 

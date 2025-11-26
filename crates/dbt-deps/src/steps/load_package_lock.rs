@@ -1,29 +1,25 @@
 use dbt_common::io_args::IoArgs;
 use dbt_common::tracing::emit::emit_warn_log_message;
 use dbt_common::{
-    ErrorCode, FsResult,
-    constants::{DBT_PACKAGES_LOCK_FILE, DBT_PROJECT_YML},
-    err, fs_err,
-    io_utils::try_read_yml_to_str,
-    stdfs,
+    ErrorCode, FsResult, constants::DBT_PACKAGES_LOCK_FILE, err, fs_err,
+    io_utils::try_read_yml_to_str, stdfs,
 };
+use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::serde::from_yaml_raw;
-use dbt_schemas::schemas::project::DbtProjectNameOnly;
-use dbt_schemas::schemas::{
-    packages::{
-        DbtPackageLock, DbtPackages, DbtPackagesLock, DeprecatedDbtPackageLock,
-        DeprecatedDbtPackagesLock, GitPackageLock, HubPackageLock, LocalPackageLock,
-    },
-    project::DbtProject,
+use dbt_schemas::schemas::packages::{
+    DbtPackageLock, DbtPackages, DbtPackagesLock, DeprecatedDbtPackageLock,
+    DeprecatedDbtPackagesLock, GitPackageLock, HubPackageLock, LocalPackageLock,
 };
-use std::{collections::HashSet, path::Path};
+use std::{collections::BTreeMap, collections::HashSet, path::Path};
 
-use crate::utils::sha1_hash_packages;
+use crate::utils::{read_and_validate_dbt_project, sha1_hash_packages};
 
 pub fn try_load_valid_dbt_packages_lock(
     io: &IoArgs,
     dbt_packages_dir: &Path,
     dbt_packages: &DbtPackages,
+    jinja_env: &JinjaEnv,
+    vars: &BTreeMap<String, dbt_serde_yaml::Value>,
 ) -> FsResult<Option<DbtPackagesLock>> {
     let packages_lock_path = io.in_dir.join(DBT_PACKAGES_LOCK_FILE);
     let sha1_hash = sha1_hash_packages(&dbt_packages.packages);
@@ -40,6 +36,8 @@ pub fn try_load_valid_dbt_packages_lock(
                             io,
                             dbt_packages_dir,
                             &yml_str,
+                            jinja_env,
+                            vars,
                         );
                     }
                     return err!(
@@ -62,6 +60,8 @@ fn try_load_from_deprecated_dbt_packages_lock(
     io: &IoArgs,
     dbt_packages_dir: &Path,
     yml_str: &str,
+    jinja_env: &JinjaEnv,
+    vars: &BTreeMap<String, dbt_serde_yaml::Value>,
 ) -> FsResult<Option<DbtPackagesLock>> {
     match from_yaml_raw::<DeprecatedDbtPackagesLock>(io, yml_str, None, true, None) {
         // Here, we need to do a fuzzy lookup on the old dbt_packages_lock.yml file
@@ -177,47 +177,27 @@ fn try_load_from_deprecated_dbt_packages_lock(
                         }
                     }
                     DeprecatedDbtPackageLock::Local(local) => {
-                        let local = local.local;
+                        let local_path = local.local;
                         // Find the package name from the `dbt_project.yml` file located in the local package
-                        let dbt_project_path =
-                            if let Ok(dbt_project_path) = stdfs::diff_paths(&local, &io.in_dir) {
-                                dbt_project_path
-                            } else {
-                                io.in_dir.join(&local)
-                            };
+                        let dbt_project_path = if let Ok(dbt_project_path) =
+                            stdfs::diff_paths(&local_path, &io.in_dir)
+                        {
+                            dbt_project_path
+                        } else {
+                            io.in_dir.join(&local_path)
+                        };
 
-                        let project_yml_file = dbt_project_path.join(DBT_PROJECT_YML);
-                        let dbt_project_str = try_read_yml_to_str(&project_yml_file)?;
-
-                        // Try to deserialize only the package name for error reporting,
-                        // falling back to the path if deserialization fails
-                        let dependency_package_name = from_yaml_raw::<DbtProjectNameOnly>(
+                        let dbt_project = read_and_validate_dbt_project(
                             io,
-                            &dbt_project_str,
-                            Some(&project_yml_file),
-                            // Do not report errors twice. This
-                            // parse is only an attempt to get the package name. All actual errors
-                            // will be reported when we parse the full `DbtProject` below.
-                            false,
-                            None,
-                        )
-                        .map(|p| p.name)
-                        .ok()
-                        .unwrap_or_else(|| project_yml_file.to_string_lossy().to_string());
-
-                        let dbt_project: DbtProject = from_yaml_raw(
-                            io,
-                            &dbt_project_str,
-                            Some(&project_yml_file),
+                            &dbt_project_path,
                             true,
-                            // TODO: do we really want to hide errors from local packages?
-                            // maybe we want to let these ones to show up as project errors?
-                            Some(dependency_package_name.as_str()),
+                            jinja_env,
+                            vars,
                         )?;
                         let package_name = dbt_project.name;
                         packages.push(DbtPackageLock::Local(LocalPackageLock {
                             name: package_name,
-                            local,
+                            local: local_path,
                         }));
                     }
                 }
@@ -243,6 +223,8 @@ fn try_load_from_deprecated_dbt_packages_lock(
 pub fn load_dbt_packages_lock_without_validation(
     io: &IoArgs,
     dbt_packages_dir: &Path,
+    jinja_env: &JinjaEnv,
+    vars: &BTreeMap<String, dbt_serde_yaml::Value>,
 ) -> FsResult<Option<DbtPackagesLock>> {
     let packages_lock_path = io.in_dir.join(DBT_PACKAGES_LOCK_FILE);
     if !packages_lock_path.exists() {
@@ -264,6 +246,8 @@ pub fn load_dbt_packages_lock_without_validation(
                         io,
                         dbt_packages_dir,
                         &yml_str,
+                        jinja_env,
+                        vars,
                     );
                 }
                 return err!(

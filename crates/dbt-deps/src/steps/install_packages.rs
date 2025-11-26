@@ -178,6 +178,8 @@ pub async fn install_packages(
                     // do not report warnings here, since it would have alerady been reported
                     // during package resolution phase
                     false,
+                    jinja_env,
+                    vars,
                 )?;
                 let project_name = dbt_project.name;
                 stdfs::rename(&checkout_path, packages_install_path.join(&project_name))?;
@@ -237,6 +239,8 @@ pub async fn install_packages(
                     // do not report warnings here, since it would have alerady been reported
                     // during package resolution phase
                     false,
+                    jinja_env,
+                    vars,
                 )?;
                 let project_name = dbt_project.name;
                 stdfs::rename(&checkout_path, packages_install_path.join(project_name))?;
@@ -310,6 +314,8 @@ pub async fn install_packages(
                     // do not report warnings here, since it would have alerady been reported
                     // during package resolution phase
                     false,
+                    jinja_env,
+                    vars,
                 )?;
                 let project_name = dbt_project.name;
                 stdfs::rename(&checkout_path, packages_install_path.join(&project_name))?;

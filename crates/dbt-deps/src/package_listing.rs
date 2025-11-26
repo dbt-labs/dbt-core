@@ -4,24 +4,19 @@ use std::{
     path::Path,
 };
 
-use dbt_common::{
-    ErrorCode, FsResult, constants::DBT_PROJECT_YML, err, io_args::IoArgs,
-    io_utils::try_read_yml_to_str, unexpected_fs_err,
-};
+use dbt_common::{ErrorCode, FsResult, err, io_args::IoArgs, unexpected_fs_err};
 use dbt_jinja_utils::{
-    jinja_environment::JinjaEnv,
-    phases::load::LoadContext,
-    serde::{from_yaml_raw, into_typed_with_jinja},
+    jinja_environment::JinjaEnv, phases::load::LoadContext, serde::into_typed_with_jinja,
 };
-use dbt_schemas::schemas::{
-    packages::{
-        DbtPackageEntry, DbtPackages, DbtPackagesLock, GitPackage, HubPackage, LocalPackage,
-        PrivatePackage, TarballPackage,
-    },
-    project::{DbtProject, DbtProjectNameOnly},
+use dbt_schemas::schemas::packages::{
+    DbtPackageEntry, DbtPackages, DbtPackagesLock, GitPackage, HubPackage, LocalPackage,
+    PrivatePackage, TarballPackage,
 };
 
-use crate::{private_package::get_resolved_url, utils::get_local_package_full_path};
+use crate::{
+    private_package::get_resolved_url,
+    utils::{get_local_package_full_path, read_and_validate_dbt_project},
+};
 
 use super::types::{
     GitUnpinnedPackage, HubUnpinnedPackage, LocalPinnedPackage, LocalUnpinnedPackage,
@@ -228,41 +223,13 @@ impl PackageListing {
                 }?;
                 // Get absolute path of local package
                 let full_path = get_local_package_full_path(self.in_dir(), &local_package);
-                let path_to_dbt_project = full_path.join(DBT_PROJECT_YML);
-                if !path_to_dbt_project.exists() {
-                    return err!(
-                        ErrorCode::IoError,
-                        "Local package does not contain a dbt_project.yml file: {}",
-                        local_package.local.display()
-                    );
-                };
 
-                let yml_data = try_read_yml_to_str(&path_to_dbt_project)?;
-
-                // Try to deserialize only the package name for error reporting,
-                // falling back to the path if deserialization fails
-                let dependency_package_name = from_yaml_raw::<DbtProjectNameOnly>(
+                let dbt_project = read_and_validate_dbt_project(
                     &self.io_args,
-                    &yml_data,
-                    Some(&path_to_dbt_project),
-                    // Do not report errors twice. This
-                    // parse is only an attempt to get the package name. All actual errors
-                    // will be reported when we parse the full `DbtProject` below.
-                    false,
-                    None,
-                )
-                .map(|p| p.name)
-                .ok()
-                .unwrap_or_else(|| path_to_dbt_project.to_string_lossy().to_string());
-
-                let dbt_project: DbtProject = from_yaml_raw(
-                    &self.io_args,
-                    &yml_data,
-                    Some(&path_to_dbt_project),
+                    &full_path,
                     true,
-                    // TODO: do we really want to hide errors from local packages?
-                    // maybe we want to let these ones to show up as project errors?
-                    Some(dependency_package_name.as_str()),
+                    jinja_env,
+                    &self.vars,
                 )?;
                 self.packages.insert(
                     full_path.to_string_lossy().to_string(),

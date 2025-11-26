@@ -185,7 +185,8 @@ async fn resolve_packages(
                     None,
                 )?;
                 git_unpinned_package.revisions = vec![commit_sha];
-                let dbt_project = read_and_validate_dbt_project(io, &checkout_path, true)?;
+                let dbt_project =
+                    read_and_validate_dbt_project(io, &checkout_path, true, jinja_env, vars)?;
                 git_unpinned_package.name = Some(dbt_project.name);
                 if let Some(dbt_packages) = load_dbt_packages(io, &checkout_path)?.0 {
                     next_listing.update_from(&dbt_packages.packages, jinja_env)?;
@@ -208,7 +209,8 @@ async fn resolve_packages(
                     None,
                 )?;
                 private_unpinned_package.revisions = vec![commit_sha];
-                let dbt_project = read_and_validate_dbt_project(io, &checkout_path, true)?;
+                let dbt_project =
+                    read_and_validate_dbt_project(io, &checkout_path, true, jinja_env, vars)?;
                 private_unpinned_package.name = Some(dbt_project.name);
                 if let Some(dbt_packages) = load_dbt_packages(io, &checkout_path)?.0 {
                     next_listing.update_from(&dbt_packages.packages, jinja_env)?;
@@ -260,7 +262,8 @@ async fn resolve_packages(
                 }
 
                 let checkout_path = tar_contents[0].path();
-                let dbt_project = read_and_validate_dbt_project(io, &checkout_path, true)?;
+                let dbt_project =
+                    read_and_validate_dbt_project(io, &checkout_path, true, jinja_env, vars)?;
                 tarball_unpinned_package.name = Some(dbt_project.name);
                 if let Some(dbt_packages) = load_dbt_packages(io, &checkout_path)?.0 {
                     next_listing.update_from(&dbt_packages.packages, jinja_env)?;

@@ -75,8 +75,13 @@ pub async fn get_or_install_packages(
     let dbt_packages_lock = if let Some(ref dbt_packages) = package_def {
         if !upgrade
             && !lock
-            && let Some(dbt_packages_lock) =
-                try_load_valid_dbt_packages_lock(io, packages_install_path, dbt_packages)?
+            && let Some(dbt_packages_lock) = try_load_valid_dbt_packages_lock(
+                io,
+                packages_install_path,
+                dbt_packages,
+                env,
+                &vars,
+            )?
         {
             show_progress!(io, fsinfo!(LOADING.into(), package_yml_name.to_string()));
             dbt_packages_lock
@@ -108,7 +113,7 @@ pub async fn get_or_install_packages(
         }
 
         if let Some(dbt_packages_lock) =
-            load_dbt_packages_lock_without_validation(io, packages_install_path)?
+            load_dbt_packages_lock_without_validation(io, packages_install_path, env, &vars)?
         {
             show_progress!(io, fsinfo!(LOADING.into(), "package-lock.yml".to_string()));
             dbt_packages_lock
