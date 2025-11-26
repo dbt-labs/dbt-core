@@ -558,6 +558,13 @@ class RuntimeConfigObject(Config):
     def __init__(self, model, context_config: Optional[ContextConfig] = None):
         self.model = model
         # we never use or get a config, only the parser cares
+        self._runtime_context: Optional[Dict[str, Any]] = (
+            None  # Set by ModelRunner for sql_header re-rendering
+        )
+
+    def set_runtime_context(self, context: Dict[str, Any]):
+        """Called by ModelRunner to inject the full runtime context for sql_header re-rendering."""
+        self._runtime_context = context
 
     def __call__(self, *args, **kwargs):
         return ""
@@ -569,6 +576,25 @@ class RuntimeConfigObject(Config):
         validator(value)
 
     def _lookup(self, name, default=_MISSING):
+        # Special handling for sql_header: re-render at runtime if unrendered template exists
+        # This fixes issue #2793 where ref(), source(), this, etc. resolve incorrectly at parse time
+        if name == "sql_header" and self._runtime_context is not None:
+            unrendered_sql_header = getattr(self.model, "unrendered_config", {}).get("sql_header")
+            if unrendered_sql_header:
+                try:
+                    from dbt.clients import jinja
+
+                    rendered_sql_header = jinja.get_rendered(
+                        unrendered_sql_header,
+                        self._runtime_context,
+                        self.model,
+                    )
+                    return rendered_sql_header
+                except Exception:
+                    # Fall back to parse-time version if re-rendering fails
+                    pass
+
+        # Default behavior for all other config values
         # if this is a macro, there might be no `model.config`.
         if not hasattr(self.model, "config"):
             result = default

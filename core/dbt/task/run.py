@@ -322,6 +322,11 @@ class ModelRunner(CompileRunner):
             )
         context_config = context["config"]
 
+        # Inject runtime context for sql_header re-rendering (fixes issue #2793)
+        # This allows ref(), source(), this, is_incremental(), etc. to resolve correctly in sql_header
+        if hasattr(context_config, "set_runtime_context"):
+            context_config.set_runtime_context(context)
+
         mat_has_supported_langs = hasattr(materialization_macro, "supported_languages")
         model_lang_supported = model.language in materialization_macro.supported_languages
         if mat_has_supported_langs and not model_lang_supported:

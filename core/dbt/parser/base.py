@@ -178,6 +178,24 @@ class ConfiguredParser(
         fqn.extend(utils.split_path(no_ext)[:-1])
         return fqn
 
+    def _extract_sql_header_template(self, raw_code: str) -> Optional[str]:
+        """Extract the unrendered sql_header template from raw_code.
+
+        This is needed to fix issue #2793 where ref(), source(), this, etc. in sql_header
+        resolve incorrectly at parse time. By extracting and storing the unrendered template,
+        we can re-render it at runtime with the correct context.
+
+        Similar to how hooks work - they store unrendered SQL and re-render at runtime.
+        """
+        import re
+
+        # Match: {% call set_sql_header(config) %}...{% endcall %}
+        pattern = r"\{%\s*call\s+set_sql_header\s*\([^)]*\)\s*%\}(.*?)\{%\s*endcall\s*%\}"
+        match = re.search(pattern, raw_code, re.DOTALL | re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+        return None
+
     def get_fqn(self, path: str, name: str) -> List[str]:
         """Get the FQN for the node. This impacts node selection and config
         application.
@@ -441,6 +459,19 @@ class ConfiguredParser(
         self.update_parsed_node_config_dict(parsed_node, config_dict)
         # This updates the node database/schema/alias/relation_name
         self.update_parsed_node_relation_names(parsed_node, config_dict)
+
+        # Extract and store the unrendered sql_header template for runtime re-rendering
+        # This fixes issue #2793 where ref(), source(), etc. in sql_header resolve incorrectly at parse time
+        if hasattr(parsed_node, "raw_code") and parsed_node.raw_code:
+            sql_header_template = self._extract_sql_header_template(parsed_node.raw_code)
+            if sql_header_template:
+                parsed_node.unrendered_config["sql_header"] = sql_header_template
+
+                # Re-render sql_header at parse time with parse context to capture dependencies
+                # Similar to how hooks are handled (see below for hook rendering)
+                if not context:
+                    context = self._context_for(parsed_node, config)
+                get_rendered(sql_header_template, context, parsed_node, capture_macros=True)
 
         # tests don't have hooks
         if parsed_node.resource_type == NodeType.Test:
