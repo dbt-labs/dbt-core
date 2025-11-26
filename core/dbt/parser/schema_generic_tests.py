@@ -81,8 +81,8 @@ class SchemaGenericTestParser(SimpleParser):
         if not column.data_tests:
             return
 
-        for data_test in column.data_tests:
-            self.parse_test(block, data_test, column, version)
+        for data_test_idx, data_test in enumerate(column.data_tests):
+            self.parse_test(block, data_test, column, version, data_test_idx)
 
     def create_test_node(
         self,
@@ -161,6 +161,7 @@ class SchemaGenericTestParser(SimpleParser):
         column_name: Optional[str],
         schema_file_id: str,
         version: Optional[NodeVersion],
+        test_index: Optional[int] = None,
     ) -> GenericTestNode:
         try:
             builder = TestBuilder(
@@ -233,7 +234,7 @@ class SchemaGenericTestParser(SimpleParser):
             file_key_name=file_key_name,
             description=builder.description,
         )
-        self.render_test_update(node, config, builder, schema_file_id)
+        self.render_test_update(node, config, builder, schema_file_id, test_index)
 
         return node
 
@@ -278,18 +279,33 @@ class SchemaGenericTestParser(SimpleParser):
     # In the future we will look at generalizing this
     # more to handle additional macros or to use static
     # parsing to avoid jinja overhead.
-    def render_test_update(self, node, config, builder, schema_file_id):
+    def render_test_update(self, node, config, builder, schema_file_id, test_index: int):
         macro_unique_id = self.macro_resolver.get_macro_id(
             node.package_name, "test_" + builder.name
         )
         # Add the depends_on here so we can limit the macros added
         # to the context in rendering processing
         node.depends_on.add_macro(macro_unique_id)
+
+        # Set attached_node for generic test nodes, if available.
+        # Generic test node inherits attached node's group config value.
+        attached_node = self._lookup_attached_node(builder.target, builder.version)
+        if attached_node:
+            node.attached_node = attached_node.unique_id
+            node.group, node.group = attached_node.group, attached_node.group
+
+        # Index for lookups on patch file, used when setting unrendered_config for tests
+        patch_file_index = (
+            f"{node.column_name}_{test_index}" if node.column_name else str(test_index)
+        )
+
         if macro_unique_id in ["macro.dbt.test_not_null", "macro.dbt.test_unique"]:
             config_call_dict = builder.config
             config._config_call_dict = config_call_dict
             # This sets the config from dbt_project
-            self.update_parsed_node_config(node, config)
+            self.update_parsed_node_config(
+                node, config, patch_file_id=schema_file_id, patch_file_index=patch_file_index
+            )
             # source node tests are processed at patch_source time
             if isinstance(builder.target, UnpatchedSourceDefinition):
                 sources = [builder.target.fqn[-2], builder.target.fqn[-1]]
@@ -312,18 +328,13 @@ class SchemaGenericTestParser(SimpleParser):
                 add_rendered_test_kwargs(context, node, capture_macros=True)
                 # the parsed node is not rendered in the native context.
                 get_rendered(node.raw_code, context, node, capture_macros=True)
-                self.update_parsed_node_config(node, config)
+                self.update_parsed_node_config(
+                    node, config, patch_file_id=schema_file_id, patch_file_index=patch_file_index
+                )
                 # env_vars should have been updated in the context env_var method
             except ValidationError as exc:
                 # we got a ValidationError - probably bad types in config()
                 raise SchemaConfigError(exc, node=node) from exc
-
-        # Set attached_node for generic test nodes, if available.
-        # Generic test node inherits attached node's group config value.
-        attached_node = self._lookup_attached_node(builder.target, builder.version)
-        if attached_node:
-            node.attached_node = attached_node.unique_id
-            node.group, node.group = attached_node.group, attached_node.group
 
     def parse_node(self, block: GenericTestBlock) -> GenericTestNode:
         """In schema parsing, we rewrite most of the part of parse_node that
@@ -337,6 +348,7 @@ class SchemaGenericTestParser(SimpleParser):
             column_name=block.column_name,
             schema_file_id=block.file.file_id,
             version=block.version,
+            test_index=block.test_index,
         )
         self.add_test_node(block, node)
         return node
@@ -371,6 +383,7 @@ class SchemaGenericTestParser(SimpleParser):
         data_test: TestDef,
         column: Optional[UnparsedColumn],
         version: Optional[NodeVersion],
+        test_index: int,
     ) -> None:
         if isinstance(data_test, str):
             data_test = {data_test: {}}
@@ -395,15 +408,17 @@ class SchemaGenericTestParser(SimpleParser):
             column_name=column_name,
             tags=column_tags,
             version=version,
+            test_index=test_index,
         )
         self.parse_node(block)
 
     def parse_tests(self, block: TestBlock) -> None:
+        # TODO: plumb indexing here
         for column in block.columns:
             self.parse_column_tests(block, column, None)
 
-        for data_test in block.data_tests:
-            self.parse_test(block, data_test, None, None)
+        for data_test_idx, data_test in enumerate(block.data_tests):
+            self.parse_test(block, data_test, None, None, data_test_idx)
 
     def parse_versioned_tests(self, block: VersionedTestBlock) -> None:
         if not block.target.versions:

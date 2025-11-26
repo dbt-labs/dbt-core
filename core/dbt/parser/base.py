@@ -335,6 +335,7 @@ class ConfiguredParser(
         patch_config_dict=None,
         patch_file_id=None,
         validate_config_call_dict: bool = False,
+        patch_file_index: Optional[str] = None,
     ) -> None:
         """Given the ContextConfig used for parsing and the parsed node,
         generate and set the true values to use, overriding the temporary parse
@@ -413,8 +414,20 @@ class ConfiguredParser(
                 if patch_file and isinstance(patch_file, SchemaSourceFile):
                     schema_key = resource_types_to_schema_file_keys.get(parsed_node.resource_type)
                     if schema_key:
+                        lookup_name = parsed_node.name
+                        lookup_version = getattr(parsed_node, "version", None)
+
+                        # Test lookup needs to consider attached node and indexing
+                        if (
+                            parsed_node.resource_type == NodeType.Test
+                            and hasattr(parsed_node, "attached_node") and parsed_node.attached_node
+                        ):
+                            if attached_node := self.manifest.nodes.get(parsed_node.attached_node):
+                                lookup_name = f"{attached_node.name}_{patch_file_index}"
+                                lookup_version = getattr(attached_node, "version", None)
+
                         if unrendered_patch_config := patch_file.get_unrendered_config(
-                            schema_key, parsed_node.name, getattr(parsed_node, "version", None)
+                            schema_key, lookup_name, lookup_version
                         ):
                             patch_config_dict = deep_merge(
                                 patch_config_dict, unrendered_patch_config

@@ -466,6 +466,31 @@ class YamlReader(metaclass=ABCMeta):
             if "config" in entry:
                 unrendered_config = entry["config"]
 
+            unrendered_data_test_configs = {}
+            if "data_tests" in entry:
+                for data_test_idx, data_test in enumerate(entry["data_tests"]):
+                    if isinstance(data_test, dict) and len(data_test):
+                        data_test_definition = list(data_test.values())[0]
+                        if isinstance(data_test_definition, dict) and data_test_definition.get(
+                            "config"
+                        ):
+                            unrendered_data_test_configs[f"{entry['name']}_{data_test_idx}"] = (
+                                data_test_definition["config"]
+                            )
+
+            if "columns" in entry:
+                for column in entry["columns"]:
+                    if isinstance(column, dict) and column.get("data_tests"):
+                        for data_test_idx, data_test in enumerate(column["data_tests"]):
+                            if isinstance(data_test, dict) and len(data_test) == 1:
+                                data_test_definition = list(data_test.values())[0]
+                                if isinstance(
+                                    data_test_definition, dict
+                                ) and data_test_definition.get("config"):
+                                    unrendered_data_test_configs[
+                                        f"{entry['name']}_{column['name']}_{data_test_idx}"
+                                    ] = data_test_definition["config"]
+
             unrendered_version_configs = {}
             if "versions" in entry:
                 for version in entry["versions"]:
@@ -485,6 +510,12 @@ class YamlReader(metaclass=ABCMeta):
 
             if unrendered_config:
                 schema_file.add_unrendered_config(unrendered_config, self.key, entry["name"])
+
+            for test_name, unrendered_data_test_config in unrendered_data_test_configs.items():
+                print(f"ADD: {test_name}")
+                schema_file.add_unrendered_config(
+                    unrendered_data_test_config, "data_tests", test_name
+                )
 
             for version, unrendered_version_config in unrendered_version_configs.items():
                 schema_file.add_unrendered_config(
