@@ -3,12 +3,18 @@ import pytest
 from dbt.tests.util import run_dbt
 
 my_model_with_macros = """
+{% set set_variable = dbt_utils.star(from=ref('input_model')) %}
+
+{{ print("set_variable: " ~ set_variable) }}
+{{ print("dbt_utils.star(from=ref('input_model')): " ~ dbt_utils.star(from=ref('input_model'))) }}
+
 SELECT
 {{ current_timestamp() }} as global_current_timestamp,
 {{ dbt.current_timestamp() }} as dbt_current_timestamp,
 {{ dbt.type_int() }} as dbt_type_int,
 {{ my_macro() }} as user_defined_my_macro,
-{{ dbt_utils.generate_surrogate_key() }} as package_defined_macro
+{{ dbt_utils.generate_surrogate_key() }} as package_defined_macro,
+{{ set_variable }} as set_variable
 """
 
 test_my_model_with_macros = """
@@ -21,7 +27,10 @@ unit_tests:
         dbt.type_int: "'dbt_macro_override'"
         my_macro: "'global_user_defined_macro_override'"
         dbt_utils.generate_surrogate_key: "'package_macro_override'"
-    given: []
+        dbt_utils.star: "'star_macro_override'"
+    given:
+      - input: ref('input_model')
+        rows: []
     expect:
       rows:
         - global_current_timestamp: "current_timestamp_override"
@@ -29,6 +38,7 @@ unit_tests:
           dbt_type_int: "dbt_macro_override"
           user_defined_my_macro: "global_user_defined_macro_override"
           package_defined_macro: "package_macro_override"
+          set_variable: "star_macro_override"
 """
 
 MY_MACRO_SQL = """
@@ -54,6 +64,7 @@ class TestUnitTestingMacroOverrides:
     def models(self):
         return {
             "my_model_with_macros.sql": my_model_with_macros,
+            "input_model.sql": "select 1 as id",
             "test_my_model_with_macros.yml": test_my_model_with_macros,
         }
 
@@ -63,6 +74,9 @@ class TestUnitTestingMacroOverrides:
 
     def test_macro_overrides(self, project):
         run_dbt(["deps"])
+
+        # Build input model that is mocked out in my_model_with_macros test
+        run_dbt(["build", "--select", "input_model"])
 
         # Select by model name
         results = run_dbt(["test", "--select", "my_model_with_macros"], expect_pass=True)
