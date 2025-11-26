@@ -48,3 +48,4 @@ class TestUnitTestInputWithAlias:
         assert len(results) == 2
 
         results = run_dbt(["test"])
+        assert len(results) == 1
