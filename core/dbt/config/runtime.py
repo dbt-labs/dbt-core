@@ -52,9 +52,10 @@ def load_project(
     profile: HasCredentials,
     cli_vars: Optional[Dict[str, Any]] = None,
     validate: bool = False,
+    require_vars: bool = True,
 ) -> Project:
     # get the project with all of the provided information
-    project_renderer = DbtProjectYamlRenderer(profile, cli_vars)
+    project_renderer = DbtProjectYamlRenderer(profile, cli_vars, require_vars=require_vars)
     project = Project.from_project_root(
         project_root, project_renderer, verify_version=version_check, validate=validate
     )
@@ -265,7 +266,14 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             args,
         )
         flags = get_flags()
-        project = load_project(project_root, bool(flags.VERSION_CHECK), profile, cli_vars)
+        # For dbt deps, use lenient var validation to allow missing vars
+        # For all other commands, use strict validation for helpful error messages
+        # If command is not set (e.g., during test setup), default to strict mode
+        # unless the command is explicitly "deps"
+        require_vars = getattr(flags, "WHICH", None) != "deps"
+        project = load_project(
+            project_root, bool(flags.VERSION_CHECK), profile, cli_vars, require_vars=require_vars
+        )
         return project, profile
 
     # Called in task/base.py, in BaseTask.from_args
