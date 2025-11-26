@@ -751,7 +751,10 @@ class GraphRunnableTask(ConfiguredTask):
             )
 
         if not state.manifest:
-            raise DbtRuntimeError(f'Could not find manifest in --state path: "{state.state_path}"')
+            expected_manifest_path = state.project_root / state.state_path
+            raise DbtRuntimeError(
+                f'Could not find manifest in --state path: "{expected_manifest_path}"'
+            )
         return state.manifest
 
     def _get_deferred_manifest(self) -> Optional[Manifest]:
