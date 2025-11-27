@@ -80,7 +80,7 @@ class AliasError(DbtValidationError):
     pass
 
 
-class DependencyError(Exception):
+class DependencyError(DbtRuntimeError):
     CODE = 10006
     MESSAGE = "Dependency Error"
 
