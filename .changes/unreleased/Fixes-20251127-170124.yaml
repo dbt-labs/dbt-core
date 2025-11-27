@@ -1,0 +1,6 @@
+kind: Fixes
+body: Support unit testing models that depend on sources with the same name
+time: 2025-11-27T17:01:24.193516-05:00
+custom:
+    Author: michelleark
+    Issue: 11975 10433
