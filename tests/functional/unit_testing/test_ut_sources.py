@@ -171,8 +171,5 @@ class TestUnitTestSourceInputSameNames:
         project.create_test_schema(schema_name=other_schema)
         results = run_dbt(["seed", "--target", "otherschema"])
 
-        # results = run_dbt(["run"])
-        # len(results) == 1
-
         results = run_dbt(["test", "--select", "test_type:unit"])
         assert len(results) == 1
