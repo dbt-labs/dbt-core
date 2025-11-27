@@ -5,8 +5,10 @@ from dbt.context.base import BaseContext, contextproperty
 
 class TargetContext(BaseContext):
     # subclass is ConfiguredContext
-    def __init__(self, target_dict: Dict[str, Any], cli_vars: Dict[str, Any]):
-        super().__init__(cli_vars=cli_vars)
+    def __init__(
+        self, target_dict: Dict[str, Any], cli_vars: Dict[str, Any], require_vars: bool = True
+    ):
+        super().__init__(cli_vars=cli_vars, require_vars=require_vars)
         self.target_dict = target_dict
 
     @contextproperty()
