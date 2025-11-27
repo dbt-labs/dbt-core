@@ -697,6 +697,30 @@ class ModelNode(ModelResource, CompiledNode):
                 )
             )
 
+    @staticmethod
+    def _normalize_data_type_for_comparison(data_type: Optional[str]) -> Optional[str]:
+        """
+        Normalize a data type string by removing size, precision, and scale parameters.
+        This allows comparison of base types while ignoring non-breaking parameter changes.
+
+        Examples:
+            varchar(10) -> varchar
+            numeric(10,2) -> numeric
+            text -> text
+            decimal(5) -> decimal
+            None -> None
+
+        Per dbt documentation, changes to size/precision/scale should not be
+        considered breaking changes for contracts.
+        See: https://docs.getdbt.com/reference/resource-configs/contract#size-precision-and-scale
+        """
+        if not data_type:
+            return data_type
+
+        # Split on the first '(' to get the base type without parameters
+        base_type, _, _ = data_type.partition("(")
+        return base_type.strip()
+
     def same_contract(self, old, adapter_type=None) -> bool:
         # If the contract wasn't previously enforced:
         if old.contract.enforced is False and self.contract.enforced is False:
@@ -738,13 +762,23 @@ class ModelNode(ModelResource, CompiledNode):
                 columns_removed.append(old_value.name)
             # Has this column's data type changed?
             elif old_value.data_type != self.columns[old_key].data_type:
-                column_type_changes.append(
-                    {
-                        "column_name": str(old_value.name),
-                        "previous_column_type": str(old_value.data_type),
-                        "current_column_type": str(self.columns[old_key].data_type),
-                    }
+                # Compare normalized data types (without size/precision/scale)
+                # to determine if this is a breaking change
+                old_normalized = self._normalize_data_type_for_comparison(old_value.data_type)
+                new_normalized = self._normalize_data_type_for_comparison(
+                    self.columns[old_key].data_type
                 )
+
+                # Only consider it a breaking change if the base types differ
+                # Changes like varchar(3) -> varchar(10) are not breaking
+                if old_normalized != new_normalized:
+                    column_type_changes.append(
+                        {
+                            "column_name": str(old_value.name),
+                            "previous_column_type": str(old_value.data_type),
+                            "current_column_type": str(self.columns[old_key].data_type),
+                        }
+                    )
 
             # track if there are any column level constraints for the materialization check late
             if old_value.constraints:
