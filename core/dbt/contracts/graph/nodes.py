@@ -705,6 +705,7 @@ class ModelNode(ModelResource, CompiledNode):
 
         Examples:
             varchar(10) -> varchar
+            VARCHAR(5) -> varchar
             numeric(10,2) -> numeric
             text -> text
             decimal(5) -> decimal
@@ -713,13 +714,18 @@ class ModelNode(ModelResource, CompiledNode):
         Per dbt documentation, changes to size/precision/scale should not be
         considered breaking changes for contracts.
         See: https://docs.getdbt.com/reference/resource-configs/contract#size-precision-and-scale
+
+        Note: Comparison is case-insensitive. Type aliases (e.g., 'varchar' vs
+        'character varying') are not automatically resolved - users should use
+        consistent type names in their contracts to avoid false positives.
         """
         if not data_type:
             return data_type
 
         # Split on the first '(' to get the base type without parameters
+        # Convert to lowercase for case-insensitive comparison
         base_type, _, _ = data_type.partition("(")
-        return base_type.strip()
+        return base_type.strip().lower()
 
     def same_contract(self, old, adapter_type=None) -> bool:
         # If the contract wasn't previously enforced:
