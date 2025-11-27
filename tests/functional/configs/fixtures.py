@@ -418,3 +418,35 @@ models__ref_custom_schema = """
 
 select * from {{ ref('custom_schema_model') }}
 """
+
+
+# Fixtures for comparison and boolean operators in set_sql_header
+models__conditional_header = """
+{{
+    config(
+        materialized='incremental',
+        unique_key='id'
+    )
+}}
+
+{% call set_sql_header(config) %}
+    {% if is_incremental() and var('enable_optimization', false) %}
+        -- Boolean AND: Only runs on incremental with optimization enabled
+        select 'incremental_and_optimized' as header_status, '{{ this }}' as target_table;
+    {% endif %}
+    {% if var('threshold', 0) > 50 %}
+        -- Comparison operator: Only runs when threshold > 50
+        select 'threshold_exceeded' as header_status, '{{ this }}' as target_table;
+    {% endif %}
+    {% if not is_incremental() or var('force_refresh', false) %}
+        -- Boolean NOT and OR: Runs on full refresh or when force_refresh is true
+        select 'full_refresh_or_forced' as header_status, '{{ this }}' as target_table;
+    {% endif %}
+{% endcall %}
+
+select 1 as id, 'data' as value
+{% if is_incremental() %}
+union all
+select 2 as id, 'incremental' as value
+{% endif %}
+"""

@@ -8,14 +8,6 @@ The fix implements two-phase rendering:
 1. Parse time: Extract and render the sql_header template to capture dependencies for the DAG
 2. Runtime: Re-render the template with runtime context for correct SQL generation
 
-Related issues addressed:
-- #2793: Basic ref() resolution in set_sql_header
-- #3264: is_incremental() availability in set_sql_header
-- #4692: Nested macro calls containing ref() in set_sql_header
-- #6058: source() resolution in set_sql_header
-- #7151: this with custom alias in set_sql_header
-- #2921: ref() with custom database/schema in set_sql_header
-
 Note: These tests only cover set_sql_header blocks. Other Jinja patterns like
 {% set %} blocks with pre_hooks have different resolution behavior and are out of scope.
 """
@@ -28,6 +20,7 @@ from tests.functional.configs.fixtures import (
     macros__custom_ref_macro,
     models__base_model,
     models__combination_header,
+    models__conditional_header,
     models__custom_schema_model,
     models__ephemeral_with_header,
     models__incremental_header,
@@ -306,3 +299,35 @@ class TestRefWithCustomDatabaseSchema:
         # Check that ref_custom_schema depends on custom_schema_model
         ref_model_id = "model.test.ref_custom_schema"
         assert "model.test.custom_schema_model" in manifest.nodes[ref_model_id].depends_on.nodes
+
+
+class TestComparisonAndBooleanOperators:
+    """Test comparison (>, <, ==) and boolean (and, or, not) operators in set_sql_header"""
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "conditional_header.sql": models__conditional_header,
+        }
+
+    def test_comparison_and_boolean_operators(self, project):
+        """Verify comparison and boolean operators work in set_sql_header blocks"""
+        # First run (full refresh) - should succeed
+        results = run_dbt(["run"])
+        assert len(results) == 1
+        assert results[0].status == "success"
+
+        # Second run (incremental) - should also succeed
+        results = run_dbt(["run"])
+        assert len(results) == 1
+        assert results[0].status == "success"
+
+        # Run with var overrides to test different branches
+        results = run_dbt(["run", "--vars", '{"enable_optimization": true, "threshold": 100}'])
+        assert len(results) == 1
+        assert results[0].status == "success"
+
+        manifest = get_manifest(project.project_root)
+        model_id = "model.test.conditional_header"
+        assert model_id in manifest.nodes
+        assert manifest.nodes[model_id].config.materialized == "incremental"

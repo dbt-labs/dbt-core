@@ -296,8 +296,15 @@ def statically_extract_sql_header(source: str) -> Optional[str]:
             # The body is the template between {% call ... %} and {% endcall %}
             template_parts = []
 
+            unsupported_node_found = False
+
             def extract_template_from_nodes(nodes):
-                """Recursively extract template string from AST nodes"""
+                """Recursively extract template string from AST nodes.
+
+                Returns False if an unsupported node type is encountered.
+                """
+                nonlocal unsupported_node_found
+
                 for node in nodes:
                     if isinstance(node, jinja2.nodes.Output):
                         # Output nodes contain the actual template content
@@ -331,7 +338,24 @@ def statically_extract_sql_header(source: str) -> Optional[str]:
                             template_parts.append("{% else %}")
                             extract_template_from_nodes(node.else_)
                         template_parts.append("{% endif %}")
-                    # Add more node types as needed
+                    elif isinstance(node, jinja2.nodes.Compare):
+                        # Comparison like {% if a > b %}
+                        template_parts.append(_reconstruct_comparison(node))
+                    elif isinstance(node, (jinja2.nodes.And, jinja2.nodes.Or)):
+                        # Boolean operators
+                        template_parts.append(_reconstruct_boolean_op(node))
+                    elif isinstance(node, jinja2.nodes.Not):
+                        # Negation
+                        template_parts.append("not ")
+                        template_parts.append(_reconstruct_test(node.node))
+                    else:
+                        # Unsupported node type - we can't reliably reconstruct this template.
+                        # Return None to fall back to parse-time rendering (existing behavior).
+                        # Supported node types: Output, TemplateData, Call, Name, Getattr, If
+                        # Unsupported examples: For loops, Filters, Complex expressions
+                        # This is safer than returning an incomplete template.
+                        unsupported_node_found = True
+                        return
 
             def _reconstruct_jinja_call(call_node):
                 """Reconstruct a Jinja function call from AST"""
@@ -381,17 +405,104 @@ def statically_extract_sql_header(source: str) -> Optional[str]:
                     return f"{_reconstruct_getattr(node.node)}.{node.attr}"
                 return ""
 
+            def _reconstruct_comparison(comp_node):
+                """Reconstruct comparison expressions like {{ a > b }}"""
+                # Comparisons have: expr (left side), ops (list of Operand objects)
+                # Each Operand has: op (operator type), expr (right side expression)
+                parts = []
+
+                # Start with the left expression
+                if isinstance(comp_node.expr, jinja2.nodes.Name):
+                    parts.append(comp_node.expr.name)
+                elif isinstance(comp_node.expr, jinja2.nodes.Call):
+                    parts.append(_reconstruct_jinja_call(comp_node.expr))
+                elif isinstance(comp_node.expr, jinja2.nodes.Const):
+                    parts.append(repr(comp_node.expr.value))
+
+                # Add operators and operands
+                for operand in comp_node.ops:
+                    # operand has .op and .expr
+                    op_map = {
+                        "eq": "==",
+                        "ne": "!=",
+                        "lt": "<",
+                        "lteq": "<=",
+                        "gt": ">",
+                        "gteq": ">=",
+                        "in": "in",
+                        "notin": "not in",
+                    }
+                    op_str = op_map.get(operand.op, operand.op)
+                    parts.append(f" {op_str} ")
+
+                    # Add the right side expression
+                    if isinstance(operand.expr, jinja2.nodes.Name):
+                        parts.append(operand.expr.name)
+                    elif isinstance(operand.expr, jinja2.nodes.Call):
+                        parts.append(_reconstruct_jinja_call(operand.expr))
+                    elif isinstance(operand.expr, jinja2.nodes.Const):
+                        parts.append(repr(operand.expr.value))
+
+                return "".join(parts)
+
+            def _reconstruct_boolean_op(bool_node):
+                """Reconstruct boolean operators like {{ a and b }}"""
+                op_name = "and" if isinstance(bool_node, jinja2.nodes.And) else "or"
+                parts = []
+
+                # And/Or nodes have 'left' and 'right' attributes
+                def add_operand(operand):
+                    if isinstance(operand, jinja2.nodes.Name):
+                        parts.append(operand.name)
+                    elif isinstance(operand, jinja2.nodes.Call):
+                        parts.append(_reconstruct_jinja_call(operand))
+                    elif isinstance(operand, jinja2.nodes.Compare):
+                        parts.append(_reconstruct_comparison(operand))
+                    elif isinstance(operand, jinja2.nodes.Not):
+                        parts.append("not ")
+                        if isinstance(operand.node, jinja2.nodes.Name):
+                            parts.append(operand.node.name)
+                        elif isinstance(operand.node, jinja2.nodes.Call):
+                            parts.append(_reconstruct_jinja_call(operand.node))
+                    elif isinstance(operand, (jinja2.nodes.And, jinja2.nodes.Or)):
+                        # Nested boolean operators
+                        parts.append("(")
+                        parts.append(_reconstruct_boolean_op(operand))
+                        parts.append(")")
+
+                add_operand(bool_node.left)
+                parts.append(f" {op_name} ")
+                add_operand(bool_node.right)
+
+                return "".join(parts)
+
             def _reconstruct_test(test_node):
                 """Reconstruct test expressions for {% if %} blocks"""
                 if isinstance(test_node, jinja2.nodes.Call):
                     return _reconstruct_jinja_call(test_node)
                 elif isinstance(test_node, jinja2.nodes.Name):
                     return test_node.name
+                elif isinstance(test_node, jinja2.nodes.Compare):
+                    return _reconstruct_comparison(test_node)
+                elif isinstance(test_node, (jinja2.nodes.And, jinja2.nodes.Or)):
+                    return _reconstruct_boolean_op(test_node)
+                elif isinstance(test_node, jinja2.nodes.Not):
+                    result = "not "
+                    if isinstance(test_node.node, jinja2.nodes.Name):
+                        result += test_node.node.name
+                    elif isinstance(test_node.node, jinja2.nodes.Call):
+                        result += _reconstruct_jinja_call(test_node.node)
+                    return result
                 # Add more test types as needed
                 return ""
 
             # Extract template from the CallBlock body
             extract_template_from_nodes(call_block.body)
+
+            # If we encountered an unsupported node type, return None
+            # This causes fallback to parse-time rendering (existing behavior)
+            if unsupported_node_found:
+                return None
 
             # Join and strip the result
             template = "".join(template_parts).strip()
