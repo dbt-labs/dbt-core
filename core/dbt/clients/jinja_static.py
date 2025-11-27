@@ -249,7 +249,7 @@ def statically_extract_sql_header(source: str) -> Optional[str]:
     """
     Extract the unrendered template from a {% call set_sql_header(config) %} block.
     Returns the template string that should be re-rendered at runtime, or None if no
-    set_sql_header block is found.
+    set_sql_header block is found OR if the template contains unsupported Jinja constructs.
 
     This is needed to fix issue #2793 where ref(), source(), etc. in sql_header
     resolve incorrectly at parse time. By extracting and storing the unrendered template,
@@ -269,6 +269,18 @@ def statically_extract_sql_header(source: str) -> Optional[str]:
     No set_sql_header block:
     "select 1 as id"
     returns: None
+
+    Unsupported Jinja construct (e.g., {% for %} loop):
+    "{% call set_sql_header(config) %}
+        {% for item in items %}
+            select * from {{ ref(item) }};
+        {% endfor %}
+    {% endcall %}"
+    returns: None (triggers fallback to parse-time rendering)
+
+    Note: If None is returned due to unsupported constructs, the sql_header will be
+    rendered at parse time, which may cause ref(), source(), and this to resolve
+    incorrectly. Users should simplify their sql_header or report the issue.
     """
     # Return early to avoid creating jinja environment if no set_sql_header in source
     if "set_sql_header" not in source:
@@ -301,11 +313,17 @@ def statically_extract_sql_header(source: str) -> Optional[str]:
             def extract_template_from_nodes(nodes):
                 """Recursively extract template string from AST nodes.
 
+                Currently only supports to most common node types.
+
                 Returns False if an unsupported node type is encountered.
                 """
                 nonlocal unsupported_node_found
 
                 for node in nodes:
+                    # Early exit if we've hit an unsupported node
+                    if unsupported_node_found:
+                        return
+
                     if isinstance(node, jinja2.nodes.Output):
                         # Output nodes contain the actual template content
                         if hasattr(node, "nodes"):
@@ -350,16 +368,33 @@ def statically_extract_sql_header(source: str) -> Optional[str]:
                         template_parts.append(_reconstruct_test(node.node))
                     else:
                         # Unsupported node type - we can't reliably reconstruct this template.
-                        # Return None to fall back to parse-time rendering (existing behavior).
-                        # Supported node types: Output, TemplateData, Call, Name, Getattr, If
-                        # Unsupported examples: For loops, Filters, Complex expressions
-                        # This is safer than returning an incomplete template.
+                        # This triggers fallback to parse-time rendering (existing behavior).
+                        #
+                        # Known unsupported constructs that trigger this:
+                        # - {% for %} loops
+                        # - {{ value | filter }} filters
+                        # - {% set var = value %} assignments
+                        # - Complex expressions
+                        #
+                        # If ref(), source(), or this are used within sql_header and we hit this,
+                        # they will resolve incorrectly at parse time, potentially causing
+                        # "relation does not exist" errors at runtime.
+                        #
+                        # Users experiencing this should:
+                        # 1. Simplify their sql_header to use only supported constructs
+                        # 2. Or report the issue so we can add support for the construct
+                        #
+                        # Supported: Output, TemplateData, Call, Name, Getattr, If, Compare, And, Or, Not
+                        # Node type encountered: {type(node).__name__}
                         unsupported_node_found = True
                         return
 
             def _reconstruct_jinja_call(call_node):
                 """Reconstruct a Jinja function call from AST"""
+                nonlocal unsupported_node_found
+
                 if not hasattr(call_node, "node"):
+                    unsupported_node_found = True
                     return ""
 
                 # Get function name
@@ -369,6 +404,8 @@ def statically_extract_sql_header(source: str) -> Optional[str]:
                 elif isinstance(call_node.node, jinja2.nodes.Getattr):
                     func_parts.append(_reconstruct_getattr(call_node.node))
                 else:
+                    # Unknown function node type - trigger fallback
+                    unsupported_node_found = True
                     return ""
 
                 # Reconstruct arguments
@@ -383,7 +420,10 @@ def statically_extract_sql_header(source: str) -> Optional[str]:
                     elif isinstance(arg, jinja2.nodes.Call):
                         # Nested function call
                         args.append(_reconstruct_jinja_call(arg))
-                    # Add more arg types as needed
+                    else:
+                        # Unknown argument type - trigger fallback
+                        unsupported_node_found = True
+                        return ""
 
                 # Reconstruct keyword arguments
                 for kwarg in call_node.kwargs:
@@ -392,21 +432,31 @@ def statically_extract_sql_header(source: str) -> Optional[str]:
                         args.append(f"{key}={repr(kwarg.value.value)}")
                     elif isinstance(kwarg.value, jinja2.nodes.Name):
                         args.append(f"{key}={kwarg.value.name}")
-                    # Add more kwarg value types as needed
+                    else:
+                        # Unknown kwarg value type - trigger fallback
+                        unsupported_node_found = True
+                        return ""
 
                 func_parts.append(f"({', '.join(args)})")
                 return "".join(func_parts)
 
             def _reconstruct_getattr(node):
                 """Reconstruct attribute access like obj.attr"""
+                nonlocal unsupported_node_found
+
                 if isinstance(node.node, jinja2.nodes.Name):
                     return f"{node.node.name}.{node.attr}"
                 elif isinstance(node.node, jinja2.nodes.Getattr):
                     return f"{_reconstruct_getattr(node.node)}.{node.attr}"
-                return ""
+                else:
+                    # Unknown node type - trigger fallback
+                    unsupported_node_found = True
+                    return ""
 
             def _reconstruct_comparison(comp_node):
                 """Reconstruct comparison expressions like {{ a > b }}"""
+                nonlocal unsupported_node_found
+
                 # Comparisons have: expr (left side), ops (list of Operand objects)
                 # Each Operand has: op (operator type), expr (right side expression)
                 parts = []
@@ -418,6 +468,10 @@ def statically_extract_sql_header(source: str) -> Optional[str]:
                     parts.append(_reconstruct_jinja_call(comp_node.expr))
                 elif isinstance(comp_node.expr, jinja2.nodes.Const):
                     parts.append(repr(comp_node.expr.value))
+                else:
+                    # Unknown left expression type - trigger fallback
+                    unsupported_node_found = True
+                    return ""
 
                 # Add operators and operands
                 for operand in comp_node.ops:
@@ -442,16 +496,24 @@ def statically_extract_sql_header(source: str) -> Optional[str]:
                         parts.append(_reconstruct_jinja_call(operand.expr))
                     elif isinstance(operand.expr, jinja2.nodes.Const):
                         parts.append(repr(operand.expr.value))
+                    else:
+                        # Unknown right expression type - trigger fallback
+                        unsupported_node_found = True
+                        return ""
 
                 return "".join(parts)
 
             def _reconstruct_boolean_op(bool_node):
                 """Reconstruct boolean operators like {{ a and b }}"""
+                nonlocal unsupported_node_found
+
                 op_name = "and" if isinstance(bool_node, jinja2.nodes.And) else "or"
                 parts = []
 
                 # And/Or nodes have 'left' and 'right' attributes
                 def add_operand(operand):
+                    nonlocal unsupported_node_found
+
                     if isinstance(operand, jinja2.nodes.Name):
                         parts.append(operand.name)
                     elif isinstance(operand, jinja2.nodes.Call):
@@ -464,11 +526,17 @@ def statically_extract_sql_header(source: str) -> Optional[str]:
                             parts.append(operand.node.name)
                         elif isinstance(operand.node, jinja2.nodes.Call):
                             parts.append(_reconstruct_jinja_call(operand.node))
+                        else:
+                            # Unknown Not operand type - trigger fallback
+                            unsupported_node_found = True
                     elif isinstance(operand, (jinja2.nodes.And, jinja2.nodes.Or)):
                         # Nested boolean operators
                         parts.append("(")
                         parts.append(_reconstruct_boolean_op(operand))
                         parts.append(")")
+                    else:
+                        # Unknown operand type - trigger fallback
+                        unsupported_node_found = True
 
                 add_operand(bool_node.left)
                 parts.append(f" {op_name} ")
@@ -478,6 +546,8 @@ def statically_extract_sql_header(source: str) -> Optional[str]:
 
             def _reconstruct_test(test_node):
                 """Reconstruct test expressions for {% if %} blocks"""
+                nonlocal unsupported_node_found
+
                 if isinstance(test_node, jinja2.nodes.Call):
                     return _reconstruct_jinja_call(test_node)
                 elif isinstance(test_node, jinja2.nodes.Name):
@@ -492,9 +562,15 @@ def statically_extract_sql_header(source: str) -> Optional[str]:
                         result += test_node.node.name
                     elif isinstance(test_node.node, jinja2.nodes.Call):
                         result += _reconstruct_jinja_call(test_node.node)
+                    else:
+                        # Unknown Not operand type - trigger fallback
+                        unsupported_node_found = True
+                        return ""
                     return result
-                # Add more test types as needed
-                return ""
+                else:
+                    # Unknown test type - trigger fallback
+                    unsupported_node_found = True
+                    return ""
 
             # Extract template from the CallBlock body
             extract_template_from_nodes(call_block.body)
