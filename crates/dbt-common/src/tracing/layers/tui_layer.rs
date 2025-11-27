@@ -597,6 +597,14 @@ impl TuiLayer {
             return;
         }
 
+        // Do not report successful nodes in compile, to reduce verbosity. Unless in debug mode.
+        if node.node_outcome() == NodeOutcome::Success
+            && self.command == FsCommand::Compile
+            && self.max_log_verbosity < LevelFilter::DEBUG
+        {
+            return;
+        }
+
         // Determine if the current node is a skipped test
         let is_current_node_skipped_test = (node.node_type() == NodeType::Test
             || node.node_type() == NodeType::UnitTest)
