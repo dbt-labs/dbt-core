@@ -243,3 +243,158 @@ def construct_static_kwarg_value(kwarg) -> str:
     # This is still useful to be able to detect changes in unrendered configs, even if it is
     # not an exact representation of the user input.
     return str(kwarg)
+
+
+def statically_extract_sql_header(source: str) -> Optional[str]:
+    """
+    Extract the unrendered template from a {% call set_sql_header(config) %} block.
+    Returns the template string that should be re-rendered at runtime, or None if no
+    set_sql_header block is found.
+
+    This is needed to fix issue #2793 where ref(), source(), etc. in sql_header
+    resolve incorrectly at parse time. By extracting and storing the unrendered template,
+    we can re-render it at runtime with the correct context.
+
+    Similar to statically_parse_unrendered_config(), but for CallBlock nodes instead
+    of Call nodes.
+
+    For example, given:
+    "{% call set_sql_header(config) %}
+        select * from {{ ref('my_model') }};
+    {% endcall %}
+    select 1 as id"
+
+    returns: "select * from {{ ref('my_model') }};"
+
+    No set_sql_header block:
+    "select 1 as id"
+    returns: None
+    """
+    # Return early to avoid creating jinja environment if no set_sql_header in source
+    if "set_sql_header" not in source:
+        return None
+
+    # Parse the source using Jinja2 AST
+    env = get_environment(None, capture_macros=True)
+    try:
+        parsed = env.parse(source)
+    except Exception:
+        # If parsing fails, return None rather than raising
+        return None
+
+    # Find all CallBlock nodes ({% call ... %}...{% endcall %})
+    call_blocks = list(parsed.find_all(jinja2.nodes.CallBlock))
+
+    for call_block in call_blocks:
+        # Check if this is a call to set_sql_header
+        if (
+            hasattr(call_block.call, "node")
+            and hasattr(call_block.call.node, "name")
+            and call_block.call.node.name == "set_sql_header"
+        ):
+            # Extract the body content by reconstructing from AST nodes
+            # The body is the template between {% call ... %} and {% endcall %}
+            template_parts = []
+
+            def extract_template_from_nodes(nodes):
+                """Recursively extract template string from AST nodes"""
+                for node in nodes:
+                    if isinstance(node, jinja2.nodes.Output):
+                        # Output nodes contain the actual template content
+                        if hasattr(node, "nodes"):
+                            extract_template_from_nodes(node.nodes)
+                    elif isinstance(node, jinja2.nodes.TemplateData):
+                        # Raw text/whitespace in the template
+                        template_parts.append(node.data)
+                    elif isinstance(node, jinja2.nodes.Call):
+                        # Function call like {{ ref('model') }}
+                        template_parts.append("{{ ")
+                        template_parts.append(_reconstruct_jinja_call(node))
+                        template_parts.append(" }}")
+                    elif isinstance(node, jinja2.nodes.Name):
+                        # Variable reference like {{ my_var }}
+                        template_parts.append("{{ ")
+                        template_parts.append(node.name)
+                        template_parts.append(" }}")
+                    elif isinstance(node, jinja2.nodes.Getattr):
+                        # Attribute access like {{ obj.attr }}
+                        template_parts.append("{{ ")
+                        template_parts.append(_reconstruct_getattr(node))
+                        template_parts.append(" }}")
+                    elif isinstance(node, jinja2.nodes.If):
+                        # {% if ... %} blocks
+                        template_parts.append("{% if ")
+                        template_parts.append(_reconstruct_test(node.test))
+                        template_parts.append(" %}")
+                        extract_template_from_nodes(node.body)
+                        if node.else_:
+                            template_parts.append("{% else %}")
+                            extract_template_from_nodes(node.else_)
+                        template_parts.append("{% endif %}")
+                    # Add more node types as needed
+
+            def _reconstruct_jinja_call(call_node):
+                """Reconstruct a Jinja function call from AST"""
+                if not hasattr(call_node, "node"):
+                    return ""
+
+                # Get function name
+                func_parts = []
+                if isinstance(call_node.node, jinja2.nodes.Name):
+                    func_parts.append(call_node.node.name)
+                elif isinstance(call_node.node, jinja2.nodes.Getattr):
+                    func_parts.append(_reconstruct_getattr(call_node.node))
+                else:
+                    return ""
+
+                # Reconstruct arguments
+                args = []
+                for arg in call_node.args:
+                    if isinstance(arg, jinja2.nodes.Const):
+                        # String/number literal
+                        args.append(repr(arg.value))
+                    elif isinstance(arg, jinja2.nodes.Name):
+                        # Variable reference
+                        args.append(arg.name)
+                    elif isinstance(arg, jinja2.nodes.Call):
+                        # Nested function call
+                        args.append(_reconstruct_jinja_call(arg))
+                    # Add more arg types as needed
+
+                # Reconstruct keyword arguments
+                for kwarg in call_node.kwargs:
+                    key = kwarg.key
+                    if isinstance(kwarg.value, jinja2.nodes.Const):
+                        args.append(f"{key}={repr(kwarg.value.value)}")
+                    elif isinstance(kwarg.value, jinja2.nodes.Name):
+                        args.append(f"{key}={kwarg.value.name}")
+                    # Add more kwarg value types as needed
+
+                func_parts.append(f"({', '.join(args)})")
+                return "".join(func_parts)
+
+            def _reconstruct_getattr(node):
+                """Reconstruct attribute access like obj.attr"""
+                if isinstance(node.node, jinja2.nodes.Name):
+                    return f"{node.node.name}.{node.attr}"
+                elif isinstance(node.node, jinja2.nodes.Getattr):
+                    return f"{_reconstruct_getattr(node.node)}.{node.attr}"
+                return ""
+
+            def _reconstruct_test(test_node):
+                """Reconstruct test expressions for {% if %} blocks"""
+                if isinstance(test_node, jinja2.nodes.Call):
+                    return _reconstruct_jinja_call(test_node)
+                elif isinstance(test_node, jinja2.nodes.Name):
+                    return test_node.name
+                # Add more test types as needed
+                return ""
+
+            # Extract template from the CallBlock body
+            extract_template_from_nodes(call_block.body)
+
+            # Join and strip the result
+            template = "".join(template_parts).strip()
+            return template if template else None
+
+    return None

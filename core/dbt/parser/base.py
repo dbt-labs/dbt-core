@@ -7,6 +7,7 @@ from dbt import deprecations, hooks, utils
 from dbt.adapters.factory import get_adapter  # noqa: F401
 from dbt.artifacts.resources import Contract
 from dbt.clients.jinja import MacroGenerator, get_rendered
+from dbt.clients.jinja_static import statically_extract_sql_header
 from dbt.config import RuntimeConfig
 from dbt.context.context_config import ContextConfig
 from dbt.context.providers import (
@@ -177,24 +178,6 @@ class ConfiguredParser(
         fqn = [self.project.project_name]
         fqn.extend(utils.split_path(no_ext)[:-1])
         return fqn
-
-    def _extract_sql_header_template(self, raw_code: str) -> Optional[str]:
-        """Extract the unrendered sql_header template from raw_code.
-
-        This is needed to fix issue #2793 where ref(), source(), this, etc. in sql_header
-        resolve incorrectly at parse time. By extracting and storing the unrendered template,
-        we can re-render it at runtime with the correct context.
-
-        Similar to how hooks work - they store unrendered SQL and re-render at runtime.
-        """
-        import re
-
-        # Match: {% call set_sql_header(config) %}...{% endcall %}
-        pattern = r"\{%\s*call\s+set_sql_header\s*\([^)]*\)\s*%\}(.*?)\{%\s*endcall\s*%\}"
-        match = re.search(pattern, raw_code, re.DOTALL | re.IGNORECASE)
-        if match:
-            return match.group(1).strip()
-        return None
 
     def get_fqn(self, path: str, name: str) -> List[str]:
         """Get the FQN for the node. This impacts node selection and config
@@ -463,7 +446,7 @@ class ConfiguredParser(
         # Extract and store the unrendered sql_header template for runtime re-rendering
         # This fixes issue #2793 where ref(), source(), etc. in sql_header resolve incorrectly at parse time
         if hasattr(parsed_node, "raw_code") and parsed_node.raw_code:
-            sql_header_template = self._extract_sql_header_template(parsed_node.raw_code)
+            sql_header_template = statically_extract_sql_header(parsed_node.raw_code)
             if sql_header_template:
                 parsed_node.unrendered_config["sql_header"] = sql_header_template
 
