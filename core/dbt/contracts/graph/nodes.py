@@ -1099,6 +1099,10 @@ class UnitTestSourceDefinition(ModelNode):
     quoting: QuotingResource = field(default_factory=QuotingResource)
 
     @property
+    def cte_name(self):
+        return self.unique_id.split(".")[-1]
+
+    @property
     def search_name(self):
         return f"{self.source_name}.{self.name}"
 
