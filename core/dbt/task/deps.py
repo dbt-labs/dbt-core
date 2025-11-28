@@ -119,10 +119,10 @@ class DepsTask(BaseTask):
         )
 
     def check_for_duplicate_packages(self, packages_yml):
-        """Loop through contents of `packages.yml` to ensure no duplicate package names + versions.
+        """Loop through contents of `packages.yml` to remove entries that match the package being added.
 
-        This duplicate check will take into consideration exact match of a package name, as well as
-        a check to see if a package name exists within a name (i.e. a package name inside a git URL).
+        This duplicate check compares the package identifier (package name, git URL, local path, etc.)
+        to identify and remove matching entries before adding the new package specification.
 
         Args:
             packages_yml (dict): In-memory read of `packages.yml` contents
@@ -131,11 +131,39 @@ class DepsTask(BaseTask):
             dict: Updated or untouched packages_yml contents
         """
         for i, pkg_entry in enumerate(packages_yml["packages"]):
-            for val in pkg_entry.values():
-                if self.args.add_package["name"] in val:
-                    del packages_yml["packages"][i]
+            # Get the package identifier key (package type determines which key exists)
+            package_identifier = (
+                pkg_entry.get("package")  # hub/registry package
+                or pkg_entry.get("git")  # git package
+                or pkg_entry.get("local")  # local package
+                or pkg_entry.get("tarball")  # tarball package
+                or pkg_entry.get("private")  # private package
+            )
 
-                    fire_event(DepsFoundDuplicatePackage(removed_package=pkg_entry))
+            # Check if this package identifier matches what we're adding
+            # Use exact match for hub packages, substring match for git URLs
+            if package_identifier:
+                is_duplicate = False
+                if self.args.source == "hub":
+                    # For hub packages, require exact match
+                    is_duplicate = package_identifier == self.args.add_package["name"]
+                else:
+                    # For git/local/tarball, check if package name appears in the identifier
+                    # (e.g., "dbt_utils" in "https://github.com/dbt-labs/dbt-utils.git")
+                    is_duplicate = self.args.add_package["name"] in package_identifier
+
+                if is_duplicate:
+                    del packages_yml["packages"][i]
+                    # Filter out non-string values (like warn-unpinned boolean) before logging
+                    # Note: Check for bool first since bool is a subclass of int in Python
+                    loggable_package = {
+                        k: v
+                        for k, v in pkg_entry.items()
+                        if not isinstance(v, bool)
+                        and isinstance(v, (str, int, float))
+                        and k != "unrendered"
+                    }
+                    fire_event(DepsFoundDuplicatePackage(removed_package=loggable_package))
 
         return packages_yml
 
