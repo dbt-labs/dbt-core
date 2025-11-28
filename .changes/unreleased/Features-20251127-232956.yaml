@@ -1,0 +1,6 @@
+kind: Features
+body: Add summary output for dbt source freshness command showing errors, warnings, and final statistics
+time: 2025-11-27T23:29:56.00000Z
+custom:
+  Author: kalluripradeep
+  Issue: "6248"
