@@ -123,8 +123,14 @@ class DepsTask(BaseTask):
 
         This method is called only during `dbt deps --add-package` to check if the package
         being added already exists in packages.yml. It uses substring matching to identify
-        duplicates, checking if the package name appears within package identifiers (such as
-        within git URLs, hub package names, or local paths).
+        duplicates, which means it will match across different package sources. For example,
+        adding a hub package "dbt-labs/dbt_utils" will remove an existing git package
+        "https://github.com/dbt-labs/dbt-utils.git" since both contain "dbt_utils" or "dbt-utils".
+
+        The matching is flexible to handle both underscore and hyphen variants of package names,
+        as git repos often use hyphens (dbt-utils) while package names use underscores (dbt_utils).
+        Word boundaries (/, .) are enforced to prevent false matches like "dbt-core" matching
+        "dbt-core-utils".
 
         Args:
             packages_yml (dict): In-memory read of `packages.yml` contents
@@ -132,6 +138,30 @@ class DepsTask(BaseTask):
         Returns:
             dict: Updated packages_yml contents with matching packages removed
         """
+        # Extract the package name for matching
+        package_name = self.args.add_package["name"]
+
+        # Create variants for flexible matching (handle _ vs -)
+        # Check multiple variants to handle naming inconsistencies between hub and git
+        package_name_parts = [
+            package_name,  # Original: "dbt-labs/dbt_utils"
+            package_name.replace("_", "-"),  # Hyphens: "dbt-labs/dbt-utils"
+            package_name.replace("-", "_"),  # Underscores: "dbt_labs/dbt_utils"
+        ]
+        # Extract just the package name without org (after last /)
+        if "/" in package_name:
+            short_name = package_name.split("/")[-1]
+            package_name_parts.extend(
+                [
+                    short_name,  # "dbt_utils"
+                    short_name.replace("_", "-"),  # "dbt-utils"
+                    short_name.replace("-", "_"),  # "dbt_utils" (deduplicated)
+                ]
+            )
+
+        # Remove duplicates from package_name_parts
+        package_name_parts = list(set(package_name_parts))
+
         # Iterate backwards to safely delete items without index shifting issues
         for i in range(len(packages_yml["packages"]) - 1, -1, -1):
             pkg_entry = packages_yml["packages"][i]
@@ -146,19 +176,40 @@ class DepsTask(BaseTask):
                 or pkg_entry.get("private")  # private package
             )
 
-            # Check if package name appears in the identifier using substring match
-            if package_identifier and self.args.add_package["name"] in package_identifier:
-                del packages_yml["packages"][i]
-                # Filter out non-string values (like warn-unpinned boolean) before logging
-                # Note: Check for bool first since bool is a subclass of int in Python
-                loggable_package = {
-                    k: v
-                    for k, v in pkg_entry.items()
-                    if not isinstance(v, bool)
-                    and isinstance(v, (str, int, float))
-                    and k != "unrendered"
-                }
-                fire_event(DepsFoundDuplicatePackage(removed_package=loggable_package))
+            # Check if any variant of the package name appears in the identifier
+            # Use word boundaries to avoid false matches (e.g., "dbt-core" shouldn't match "dbt-core-utils")
+            # Word boundaries are: start/end of string, /, or .
+            # Note: - and _ are NOT boundaries since they're used within compound package names
+            if package_identifier:
+                is_duplicate = False
+                for name_variant in package_name_parts:
+                    if name_variant in package_identifier:
+                        # Found a match, now verify it's not a substring of a larger word
+                        # Check characters before and after the match
+                        idx = package_identifier.find(name_variant)
+                        start_ok = idx == 0 or package_identifier[idx - 1] in "/."
+                        end_idx = idx + len(name_variant)
+                        end_ok = (
+                            end_idx == len(package_identifier)
+                            or package_identifier[end_idx] in "/."
+                        )
+
+                        if start_ok and end_ok:
+                            is_duplicate = True
+                            break
+
+                if is_duplicate:
+                    del packages_yml["packages"][i]
+                    # Filter out non-string values (like warn-unpinned boolean) before logging
+                    # Note: Check for bool first since bool is a subclass of int in Python
+                    loggable_package = {
+                        k: v
+                        for k, v in pkg_entry.items()
+                        if not isinstance(v, bool)
+                        and isinstance(v, (str, int, float))
+                        and k != "unrendered"
+                    }
+                    fire_event(DepsFoundDuplicatePackage(removed_package=loggable_package))
 
         return packages_yml
 
