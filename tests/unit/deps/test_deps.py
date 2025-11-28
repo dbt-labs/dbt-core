@@ -21,6 +21,7 @@ from dbt.deps.registry import RegistryUnpinnedPackage
 from dbt.deps.resolver import resolve_packages
 from dbt.deps.tarball import TarballUnpinnedPackage
 from dbt.flags import set_from_args
+from dbt.task.deps import DepsTask
 from dbt.version import get_installed_version
 from dbt_common.dataclass_schema import ValidationError
 from dbt_common.semver import VersionSpecifier
@@ -892,3 +893,243 @@ class TestPackageSpec(unittest.TestCase):
 
         msg = "dbt-labs was not found in the package index. Packages on the index require a namespace, e.g dbt-labs/dbt_utils"
         assert msg in str(exc.exception)
+
+
+class TestCheckForDuplicatePackagesWithBooleans(unittest.TestCase):
+    """Unit test for check_for_duplicate_packages method with boolean values.
+
+    This is a regression test for issue #9104 where the method would fail with
+    "TypeError: argument of type 'bool' is not iterable" when package entries
+    contained boolean fields like warn-unpinned: false.
+    """
+
+    def test_check_duplicate_with_warn_unpinned_false(self):
+        """Test that check_for_duplicate_packages handles warn-unpinned: false"""
+        # Create a mock DepsTask with minimal setup
+        mock_args = Namespace(
+            add_package={"name": "audit_helper", "version": "0.9.0"}, source="hub"
+        )
+
+        # Mock project - we don't need a real one for this test
+        with mock.patch("dbt.task.deps.BaseTask.__init__"):
+            task = DepsTask.__new__(DepsTask)
+            task.args = mock_args
+
+        # Test data: packages.yml with warn-unpinned: false
+        packages_yml = {
+            "packages": [
+                {
+                    "git": "https://github.com/dbt-labs/dbt-utils.git",
+                    "revision": "1.0.0",
+                    "warn-unpinned": False,  # This is the problematic boolean
+                },
+            ]
+        }
+
+        # This should not raise TypeError
+        result = task.check_for_duplicate_packages(packages_yml)
+
+        # Verify the result is returned (not None)
+        self.assertIsNotNone(result)
+        self.assertIn("packages", result)
+        # Original package should still be there (no duplicate)
+        self.assertEqual(len(result["packages"]), 1)
+
+    def test_check_duplicate_with_warn_unpinned_true(self):
+        """Test that check_for_duplicate_packages handles warn-unpinned: true"""
+        mock_args = Namespace(
+            add_package={"name": "audit_helper", "version": "0.9.0"}, source="hub"
+        )
+
+        with mock.patch("dbt.task.deps.BaseTask.__init__"):
+            task = DepsTask.__new__(DepsTask)
+            task.args = mock_args
+
+        packages_yml = {
+            "packages": [
+                {
+                    "git": "https://github.com/dbt-labs/dbt-utils.git",
+                    "revision": "1.0.0",
+                    "warn-unpinned": True,  # Another boolean value
+                },
+            ]
+        }
+
+        # This should not raise TypeError
+        result = task.check_for_duplicate_packages(packages_yml)
+        self.assertIsNotNone(result)
+        self.assertEqual(len(result["packages"]), 1)
+
+    def test_check_duplicate_with_subdirectory_and_warn_unpinned(self):
+        """Test with multiple non-string values (subdirectory string + warn-unpinned bool)"""
+        mock_args = Namespace(
+            add_package={"name": "audit_helper", "version": "0.9.0"}, source="hub"
+        )
+
+        with mock.patch("dbt.task.deps.BaseTask.__init__"):
+            task = DepsTask.__new__(DepsTask)
+            task.args = mock_args
+
+        packages_yml = {
+            "packages": [
+                {
+                    "git": "https://github.com/dbt-labs/dbt-utils.git",
+                    "revision": "1.0.0",
+                    "subdirectory": "some_dir",
+                    "warn-unpinned": False,
+                },
+            ]
+        }
+
+        # This should not raise TypeError
+        result = task.check_for_duplicate_packages(packages_yml)
+        self.assertIsNotNone(result)
+        self.assertEqual(len(result["packages"]), 1)
+
+    def test_check_duplicate_detects_git_match(self):
+        """Test that duplicate detection still works for git packages"""
+        mock_args = Namespace(add_package={"name": "dbt-utils", "version": "1.1.0"}, source="git")
+
+        with mock.patch("dbt.task.deps.BaseTask.__init__"):
+            task = DepsTask.__new__(DepsTask)
+            task.args = mock_args
+
+        packages_yml = {
+            "packages": [
+                {
+                    "git": "https://github.com/dbt-labs/dbt-utils.git",
+                    "revision": "1.0.0",
+                    "warn-unpinned": False,
+                },
+            ]
+        }
+
+        # The package name "dbt-utils" should match in the git URL
+        with mock.patch("dbt_common.events.functions.fire_event"):
+            result = task.check_for_duplicate_packages(packages_yml)
+
+        # The duplicate should be removed
+        self.assertIsNotNone(result)
+        self.assertEqual(len(result["packages"]), 0)
+
+    def test_check_duplicate_with_hub_package(self):
+        """Test with hub package (which don't have warn-unpinned)"""
+        mock_args = Namespace(
+            add_package={"name": "another_package", "version": "1.0.0"}, source="hub"
+        )
+
+        with mock.patch("dbt.task.deps.BaseTask.__init__"):
+            task = DepsTask.__new__(DepsTask)
+            task.args = mock_args
+
+        packages_yml = {
+            "packages": [
+                {
+                    "package": "dbt-labs/dbt_utils",
+                    "version": "1.0.0",
+                },
+            ]
+        }
+
+        # This should work fine
+        result = task.check_for_duplicate_packages(packages_yml)
+        self.assertIsNotNone(result)
+        self.assertEqual(len(result["packages"]), 1)
+
+    def test_check_duplicate_with_mixed_package_types(self):
+        """Test with mixed package types (hub + git with warn-unpinned)"""
+        mock_args = Namespace(
+            add_package={"name": "audit_helper", "version": "0.9.0"}, source="hub"
+        )
+
+        with mock.patch("dbt.task.deps.BaseTask.__init__"):
+            task = DepsTask.__new__(DepsTask)
+            task.args = mock_args
+
+        packages_yml = {
+            "packages": [
+                {
+                    "package": "dbt-labs/dbt_utils",
+                    "version": "1.0.0",
+                },
+                {
+                    "git": "https://github.com/example/some-package.git",
+                    "revision": "0.5.0",
+                    "warn-unpinned": False,
+                },
+            ]
+        }
+
+        # This should not raise TypeError
+        result = task.check_for_duplicate_packages(packages_yml)
+        self.assertIsNotNone(result)
+        # Both packages should remain (no duplicates)
+        self.assertEqual(len(result["packages"]), 2)
+
+    def test_check_duplicate_cross_source_hub_removes_git(self):
+        """Test that adding a hub package removes a git package with the same name"""
+        # When adding "dbt-labs/dbt_utils", it should match git URLs containing "dbt_utils"
+        # Note: The full package name "dbt-labs/dbt_utils" is what gets checked
+        mock_args = Namespace(
+            add_package={"name": "dbt-labs/dbt_utils", "version": "1.0.0"}, source="hub"
+        )
+
+        with mock.patch("dbt.task.deps.BaseTask.__init__"):
+            task = DepsTask.__new__(DepsTask)
+            task.args = mock_args
+
+        packages_yml = {
+            "packages": [
+                {
+                    "git": "https://github.com/dbt-labs/dbt_utils.git",
+                    "revision": "1.0.0",
+                    "warn-unpinned": False,
+                },
+            ]
+        }
+
+        # The hub package name "dbt-labs/dbt_utils" should match in the git URL
+        # because "dbt_utils" appears in both
+        with mock.patch("dbt_common.events.functions.fire_event"):
+            result = task.check_for_duplicate_packages(packages_yml)
+
+        # The git package should be removed (cross-source duplicate)
+        self.assertIsNotNone(result)
+        self.assertEqual(len(result["packages"]), 0)
+
+    def test_check_duplicate_multiple_matches(self):
+        """Test that all duplicate packages are removed, not just the first one"""
+        # When adding "dbt-labs/dbt_utils", it should match any identifier containing "dbt_utils"
+        mock_args = Namespace(
+            add_package={"name": "dbt-labs/dbt_utils", "version": "1.0.0"}, source="hub"
+        )
+
+        with mock.patch("dbt.task.deps.BaseTask.__init__"):
+            task = DepsTask.__new__(DepsTask)
+            task.args = mock_args
+
+        packages_yml = {
+            "packages": [
+                {
+                    "git": "https://github.com/dbt-labs/dbt_utils.git",
+                    "revision": "0.9.0",
+                },
+                {
+                    "git": "https://github.com/fivetran/dbt_amplitude",
+                    "revision": "1.0.0",
+                },
+                {
+                    "package": "dbt-labs/dbt_utils",  # Exact match
+                    "version": "0.8.0",
+                },
+            ]
+        }
+
+        # Should remove both packages that contain "dbt_utils"
+        with mock.patch("dbt_common.events.functions.fire_event"):
+            result = task.check_for_duplicate_packages(packages_yml)
+
+        # Only the dbt_amplitude package should remain
+        self.assertIsNotNone(result)
+        self.assertEqual(len(result["packages"]), 1)
+        self.assertIn("dbt_amplitude", result["packages"][0]["git"])
