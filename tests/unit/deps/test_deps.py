@@ -401,7 +401,7 @@ class TestHubPackage(unittest.TestCase):
             a.resolved()
 
         msg = "Package dbt-labs-test/b was not found in the package index"
-        self.assertEqual(msg, str(exc.exception))
+        self.assertIn(msg, str(exc.exception))
 
     def test_resolve_missing_version(self):
         a = RegistryUnpinnedPackage.from_contract(
@@ -410,12 +410,14 @@ class TestHubPackage(unittest.TestCase):
 
         with self.assertRaises(dbt.exceptions.DependencyError) as exc:
             a.resolved()
-        msg = (
-            "Could not find a matching compatible version for package "
-            "dbt-labs-test/a\n  Requested range: =0.1.4, =0.1.4\n  "
-            "Compatible versions: ['0.1.2', '0.1.3']\n"
+
+        # Check that key parts of the error message are present and avoid spacing failures
+        error_msg = str(exc.exception)
+        assert (
+            "Could not find a matching compatible version for package dbt-labs-test/a" in error_msg
         )
-        assert msg in str(exc.exception)
+        assert "Requested range: =0.1.4, =0.1.4" in error_msg
+        assert "Compatible versions: ['0.1.2', '0.1.3']" in error_msg
 
     def test_resolve_conflict(self):
         a_contract = RegistryPackage(package="dbt-labs-test/a", version="0.1.2")
@@ -430,7 +432,57 @@ class TestHubPackage(unittest.TestCase):
             "Version error for package dbt-labs-test/a: Could not "
             "find a satisfactory version from options: ['=0.1.2', '=0.1.3']"
         )
-        self.assertEqual(msg, str(exc.exception))
+        self.assertIn(msg, str(exc.exception))
+
+    def test_dependency_error_inherits_from_dbt_runtime_error(self):
+        """
+        Test that DependencyError is a DbtRuntimeError (not plain Exception).
+
+        Related to issue #12049 - DependencyError MUST inherit from DbtRuntimeError
+        so that the CLI's exception handler (core/dbt/cli/requires.py line 186)
+        catches it WITHOUT printing Python stack traces.
+
+        The CLI has two exception handlers:
+        - Line 186-188: Catches DbtBaseException -> NO stack trace (desired)
+        - Line 189-192: Catches BaseException -> SHOWS stack trace (undesired)
+
+        If DependencyError inherits from Exception, it's caught by the BaseException
+        handler which prints full stack traces. If it inherits from DbtRuntimeError,
+        it's caught by the DbtBaseException handler which shows clean error messages.
+
+        This is an implementation test (checking inheritance) because the actual
+        behavior (stack trace vs no stack trace) happens in the CLI layer, not here.
+        """
+        from dbt_common.exceptions import DbtRuntimeError
+
+        # This is the critical assertion - DependencyError MUST be a DbtRuntimeError
+        self.assertTrue(
+            issubclass(dbt.exceptions.DependencyError, DbtRuntimeError),
+            "DependencyError must inherit from DbtRuntimeError (not plain Exception) "
+            "to avoid stack traces in CLI output. See issue #12049.",
+        )
+
+        # Verify this applies to actual raised exceptions from version conflicts
+        a_contract = RegistryPackage(package="dbt-labs-test/a", version="0.1.2")
+        b_contract = RegistryPackage(package="dbt-labs-test/a", version="0.1.3")
+        a = RegistryUnpinnedPackage.from_contract(a_contract)
+        b = RegistryUnpinnedPackage.from_contract(b_contract)
+        c = a.incorporate(b)
+
+        with self.assertRaises(dbt.exceptions.DependencyError) as exc:
+            c.resolved()
+
+        # The raised exception instance must be a DbtRuntimeError
+        self.assertIsInstance(
+            exc.exception,
+            DbtRuntimeError,
+            "Raised DependencyError must be instance of DbtRuntimeError",
+        )
+
+        # Verify the error message is still clean and user-friendly
+        error_msg = str(exc.exception)
+        self.assertIn("Version error for package dbt-labs-test/a", error_msg)
+        self.assertIn("Could not find a satisfactory version", error_msg)
 
     def test_resolve_ranges(self):
         a_contract = RegistryPackage(package="dbt-labs-test/a", version="0.1.2")
