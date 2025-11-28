@@ -778,6 +778,7 @@ def source(ctx, **kwargs):
 @p.target_path
 @p.threads
 @p.vars
+@p.force_batched
 @requires.postflight
 @requires.preflight
 @requires.profile

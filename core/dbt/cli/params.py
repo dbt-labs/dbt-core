@@ -266,6 +266,13 @@ favor_state = _create_option_and_track_env_var(
     help="If set, defer to the argument provided to the state flag for resolving unselected nodes, even if the node(s) exist as a database object in the current environment.",
 )
 
+force_batched = _create_option_and_track_env_var(
+    "--force-batched/--no-force-batched",
+    envvar="DBT_ENGINE_FORCE_BATCHED",
+    help="If set, dbt will force the use of batched operations for source freshness checks.",
+    is_flag=True,
+)
+
 full_refresh = _create_option_and_track_env_var(
     "--full-refresh",
     "-f",

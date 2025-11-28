@@ -139,7 +139,7 @@ class FreshnessRunner(BaseRunner):
                 )
 
                 status = compiled_node.freshness.status(freshness["age"])
-            elif self.adapter.supports(Capability.TableLastModifiedMetadata):
+            elif self.adapter.supports(Capability.TableLastModifiedMetadata, accept_cost=self.config.args.force_batched):
                 if compiled_node.freshness.filter is not None:
                     fire_event(
                         Note(
@@ -232,10 +232,17 @@ class FreshnessTask(RunTask):
         before_run_status = super().before_run(adapter, selected_uids)
 
         if before_run_status == RunStatus.Success and adapter.supports(
-            Capability.TableLastModifiedMetadataBatch
+            Capability.TableLastModifiedMetadataBatch, accept_cost=self.args.force_batched
         ):
             populate_metadata_freshness_cache_status = self.populate_metadata_freshness_cache(
                 adapter, selected_uids
+            )
+        elif adapter.supports_with_cost(Capability.TableLastModifiedMetadataBatch) and not self.args.force_batched:
+            fire_event(
+                Note(
+                    msg=f"The {adapter.type()} adapter supports batched metadata freshness checks, but the `--force-batched flag` is required to leverage it due to cost considerations. Using non-batched metadata freshness checks instead.\nPlease visit https://docs.getdbt.com/docs/build/sources#batch-metadata-freshness-checks for adapter-specific information."
+                ),
+                EventLevel.INFO,
             )
 
         if (
