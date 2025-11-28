@@ -126,6 +126,7 @@ class RetryTask(ConfiguredTask):
             result.unique_id
             for result in self.previous_results.results
             if result.status in RETRYABLE_STATUSES
+            # Avoid retrying operation nodes unless we are retrying the run-operation command
             and not (
                 self.previous_command_name != "run-operation"
                 and result.unique_id.startswith("operation.")
@@ -149,6 +150,11 @@ class RetryTask(ConfiguredTask):
                 and result.unique_id.startswith("operation.")
             )
         }
+
+        # Tasks without get_graph_queue (e.g. run-operation) and no failed nodes to retry.
+        if not unique_ids and not hasattr(self.task_class, "get_graph_queue"):
+            # Return early with the previous results as the past invocation was successful
+            return self.previous_results
 
         class TaskWrapper(self.task_class):
             def get_graph_queue(self):
