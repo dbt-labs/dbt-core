@@ -1,0 +1,6 @@
+kind: Features
+body: Add directory change instruction after dbt init
+time: 2025-11-20T00:00:00Z
+custom:
+  Author: kalluripradeep
+  Issue: "9041"
