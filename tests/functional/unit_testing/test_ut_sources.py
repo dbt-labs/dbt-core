@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 import pytest
 
 from dbt.contracts.results import RunStatus, TestStatus
@@ -60,6 +62,40 @@ failing_test_schema_yml = """
 """
 
 
+schema_duplicate_source_names_yml = """
+sources:
+  - name: seed_sources
+    schema: "{{ target.schema }}"
+    tables:
+      - name: raw_customers
+  - name: seed_sources_2
+    schema: "{{ target.schema }}_other"
+    tables:
+      - name: raw_customers
+
+unit_tests:
+  - name: test_customers
+    model: customers_duplicate_source_names
+    given:
+      - input: source('seed_sources', 'raw_customers')
+        rows:
+          - {id: 1, first_name: Emily}
+      - input: source('seed_sources_2', 'raw_customers')
+        rows:
+          - {id: 2, first_name: Michelle}
+    expect:
+      rows:
+        - {id: 1, first_name: Emily}
+        - {id: 2, first_name: Michelle}
+"""
+
+customers_duplicate_source_names_sql = """
+select * from {{ source('seed_sources', 'raw_customers') }}
+union all
+select * from {{ source('seed_sources_2', 'raw_customers') }}
+"""
+
+
 class TestUnitTestSourceInput:
     @pytest.fixture(scope="class")
     def seeds(self):
@@ -102,3 +138,38 @@ class TestUnitTestSourceInput:
             elif result.node.unique_id == "unit_test.test.customers.fail_test_customers":
                 assert result.status == TestStatus.Fail
         assert len(results) == 6
+
+
+class TestUnitTestSourceInputSameNames:
+    @pytest.fixture(scope="class")
+    def other_schema(self, unique_schema):
+        return unique_schema + "_other"
+
+    @pytest.fixture(scope="class")
+    def profiles_config_update(self, dbt_profile_target, unique_schema, other_schema):
+        outputs = {"default": dbt_profile_target, "otherschema": deepcopy(dbt_profile_target)}
+        outputs["default"]["schema"] = unique_schema
+        outputs["otherschema"]["schema"] = other_schema
+        return {"test": {"outputs": outputs, "target": "default"}}
+
+    @pytest.fixture(scope="class")
+    def seeds(self):
+        return {
+            "raw_customers.csv": raw_customers_csv,
+        }
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "customers_duplicate_source_names.sql": customers_duplicate_source_names_sql,
+            "sources.yml": schema_duplicate_source_names_yml,
+        }
+
+    def test_source_input_same_names(self, project, other_schema):
+        results = run_dbt(["seed"])
+
+        project.create_test_schema(schema_name=other_schema)
+        results = run_dbt(["seed", "--target", "otherschema"])
+
+        results = run_dbt(["test", "--select", "test_type:unit"])
+        assert len(results) == 1

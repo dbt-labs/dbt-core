@@ -168,6 +168,10 @@ class UnitTestManifestLoader:
                     **common_fields,
                     source_name=original_input_node.source_name,  # needed for source lookup
                 )
+                # In the case of multiple sources with the same name, we add the source schema name to the unique id.
+                # This additionally prevents duplicate CTE names during compilation.
+                input_node.unique_id = f"model.{original_input_node.package_name}.{original_input_node.source_name}__{input_name}"
+
                 # Sources need to go in the sources dictionary in order to create the right lookup
                 self.unit_test_manifest.sources[input_node.unique_id] = input_node  # type: ignore
 

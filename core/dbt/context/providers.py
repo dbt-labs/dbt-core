@@ -854,7 +854,12 @@ class RuntimeUnitTestSourceResolver(BaseSourceResolver):
         # we just need to set_cte, but skipping it confuses typing. We *do* need
         # the relation in the "this" property.
         self.model.set_cte(target_source.unique_id, None)
-        return self.Relation.create_ephemeral_from(target_source)
+
+        identifier = self.Relation.add_ephemeral_prefix(target_source.cte_name)
+        return self.Relation.create(
+            type=self.Relation.CTE,
+            identifier=identifier,
+        ).quote(identifier=False)
 
 
 # metric` implementations
