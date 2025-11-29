@@ -35,6 +35,7 @@ schema_file_keys_to_resource_types = {
     "semantic_models": NodeType.SemanticModel,
     "saved_queries": NodeType.SavedQuery,
     "functions": NodeType.Function,
+    "data_tests": NodeType.Test,
 }
 
 resource_types_to_schema_file_keys = {
@@ -183,6 +184,7 @@ class GenericTestBlock(TestBlock[Testable], Generic[Testable]):
     column_name: Optional[str]
     tags: List[str]
     version: Optional[NodeVersion]
+    test_index: int
 
     @classmethod
     def from_test_block(
@@ -192,6 +194,7 @@ class GenericTestBlock(TestBlock[Testable], Generic[Testable]):
         column_name: Optional[str],
         tags: List[str],
         version: Optional[NodeVersion],
+        test_index: int,
     ) -> "GenericTestBlock":
         return cls(
             file=src.file,
@@ -201,6 +204,7 @@ class GenericTestBlock(TestBlock[Testable], Generic[Testable]):
             column_name=column_name,
             tags=tags,
             version=version,
+            test_index=test_index,
         )
 
 
