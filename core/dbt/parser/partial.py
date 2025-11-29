@@ -11,7 +11,13 @@ from dbt.contracts.files import (
     parse_file_type_to_parser,
 )
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.nodes import AnalysisNode, ModelNode, SeedNode, SnapshotNode
+from dbt.contracts.graph.nodes import (
+    AnalysisNode,
+    GenericTestNode,
+    ModelNode,
+    SeedNode,
+    SnapshotNode,
+)
 from dbt.events.types import PartialParsingEnabled, PartialParsingFile
 from dbt.node_types import NodeType
 from dbt_common.context import get_invocation_context
@@ -970,7 +976,7 @@ class PartialParsing:
             for child_id in self.saved_manifest.child_map[unique_id]:
                 if child_id.startswith("test") and child_id in self.saved_manifest.nodes:
                     child_test = self.saved_manifest.nodes[child_id]
-                    if child_test.attached_node:
+                    if isinstance(child_test, GenericTestNode) and child_test.attached_node:
                         if child_test.attached_node in self.saved_manifest.nodes:
                             attached_node = self.saved_manifest.nodes[child_test.attached_node]
                             self.update_in_saved(attached_node.file_id)
