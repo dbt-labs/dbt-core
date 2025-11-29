@@ -3,14 +3,13 @@ import importlib
 import importlib.util
 import json
 import os
-import re
 from importlib import metadata as importlib_metadata
-from pathlib import Path
 from typing import Iterator, List, Optional, Tuple
 
 import requests
 
 import dbt_common.semver as semver
+from dbt.__version__ import version as __version_string
 from dbt_common.ui import green, yellow
 
 PYPI_VERSION_URL = "https://pypi.org/pypi/dbt-core/json"
@@ -233,16 +232,8 @@ def _resolve_version() -> str:
     try:
         return importlib_metadata.version("dbt-core")
     except importlib_metadata.PackageNotFoundError:
-        pyproject_path = Path(__file__).resolve().parents[1] / "pyproject.toml"
-        if not pyproject_path.exists():
-            raise RuntimeError("Unable to locate pyproject.toml to determine dbt-core version")
-
-        text = pyproject_path.read_text(encoding="utf-8")
-        match = re.search(r'^version\s*=\s*"(?P<version>[^"]+)"', text, re.MULTILINE)
-        if match:
-            return match.group("version")
-
-        raise RuntimeError("Unable to determine dbt-core version from pyproject.toml")
+        # When running from source (not installed), use version from __version__.py
+        return __version_string
 
 
 __version__ = _resolve_version()
