@@ -229,6 +229,8 @@ pub struct ProjectModelConfig {
     pub on_schema_change: Option<OnSchemaChange>,
     #[serde(rename = "+packages")]
     pub packages: Option<StringOrArrayOfStrings>,
+    #[serde(rename = "+python_version")]
+    pub python_version: Option<String>,
     #[serde(rename = "+imports")]
     pub imports: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+partition_by")]
@@ -398,6 +400,7 @@ pub struct ModelConfig {
     pub on_configuration_change: Option<OnConfigurationChange>,
     pub grants: Option<BTreeMap<String, StringOrArrayOfStrings>>,
     pub packages: Option<StringOrArrayOfStrings>,
+    pub python_version: Option<String>,
     pub docs: Option<DocsConfig>,
     pub imports: Option<StringOrArrayOfStrings>,
     pub contract: Option<DbtContract>,
@@ -447,6 +450,7 @@ impl From<ProjectModelConfig> for ModelConfig {
             on_configuration_change: config.on_configuration_change,
             on_schema_change: config.on_schema_change,
             packages: config.packages,
+            python_version: config.python_version,
             imports: config.imports,
             persist_docs: config.persist_docs,
             post_hook: config.post_hook,
@@ -574,6 +578,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             on_configuration_change: config.on_configuration_change,
             on_schema_change: config.on_schema_change,
             packages: config.packages,
+            python_version: config.python_version,
             imports: config.imports,
             persist_docs: config.persist_docs,
             post_hook: config.post_hook,
@@ -711,6 +716,7 @@ impl DefaultTo<ModelConfig> for ModelConfig {
             on_configuration_change,
             grants,
             packages,
+            python_version,
             imports,
             docs,
             contract,
@@ -771,6 +777,7 @@ impl DefaultTo<ModelConfig> for ModelConfig {
                 on_schema_change,
                 on_configuration_change,
                 packages,
+                python_version,
                 imports,
                 docs,
                 contract,
@@ -850,6 +857,7 @@ impl ModelConfig {
             && grants_eq(&self.grants, &other.grants)  // Custom comparison for grants
             && packages_and_imports_eq(&self.packages, &other.packages)  // Custom comparison for packages
             && packages_and_imports_eq(&self.imports, &other.imports)  // Custom comparison for imports (same function as packages)
+            && self.python_version == other.python_version
             && docs_eq(&self.docs, &other.docs)  // Custom comparison for docs
             // This is a project level config that can differ between environments,
             // so we don't compare them.
