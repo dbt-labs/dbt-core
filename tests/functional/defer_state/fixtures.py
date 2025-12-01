@@ -676,6 +676,7 @@ models:
       - name: id
         data_tests:
           - sample_test
+"""
 
 # Fixtures for test_modified_state.py - varchar/numeric size changes
 varchar_size_contract_schema_yml = """
