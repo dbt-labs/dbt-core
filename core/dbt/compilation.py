@@ -26,6 +26,7 @@ from dbt.contracts.graph.nodes import (
     SeedNode,
     UnitTestDefinition,
     UnitTestNode,
+    UnitTestSourceDefinition,
 )
 from dbt.events.types import FoundStats, WritingInjectedSQLForNode
 from dbt.exceptions import (
@@ -566,7 +567,12 @@ class Compiler:
 
             _extend_prepended_ctes(prepended_ctes, new_prepended_ctes)
 
-            new_cte_name = self.add_ephemeral_prefix(cte_model.identifier)
+            cte_name = (
+                cte_model.cte_name
+                if isinstance(cte_model, UnitTestSourceDefinition)
+                else cte_model.identifier
+            )
+            new_cte_name = self.add_ephemeral_prefix(cte_name)
             rendered_sql = cte_model._pre_injected_sql or cte_model.compiled_code
             sql = f" {new_cte_name} as (\n{rendered_sql}\n)"
 
