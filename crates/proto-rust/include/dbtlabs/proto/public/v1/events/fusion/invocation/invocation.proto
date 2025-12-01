@@ -85,4 +85,8 @@ message Invocation {
 
   // Aggregate invocation metrics.
   InvocationMetrics metrics = 5;
+
+  // Optional parent span ID for trace correlation.
+  // This allows linking this invocation to an external trace.
+  optional uint64 parent_span_id = 6;
 }

@@ -101,6 +101,7 @@ pub fn init_tracing(config: FsTraceConfig) -> FsResult<TelemetryHandle> {
 
     let data_layer = TelemetryDataLayer::new(
         trace_id,
+        config.parent_span_id,
         strip_code_location,
         middlewares.into_iter(),
         consumer_layers.into_iter(),

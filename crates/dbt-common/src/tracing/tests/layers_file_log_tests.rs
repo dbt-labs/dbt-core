@@ -33,6 +33,7 @@ fn file_log_layer_creates_invocation_and_log_stub() {
         LevelFilter::TRACE,
         TelemetryDataLayer::new(
             trace_id,
+            None,
             false,
             std::iter::empty(),
             std::iter::once(file_log_layer),

@@ -43,6 +43,7 @@ where
         LevelFilter::TRACE,
         TelemetryDataLayer::new(
             trace_id,
+            None,
             false,
             std::iter::empty(),
             std::iter::once(json_layer),

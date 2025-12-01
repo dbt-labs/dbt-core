@@ -62,6 +62,7 @@ fn middleware_modifies_drops_and_updates_metrics() {
 
     let mut data_layer = TelemetryDataLayer::new(
         trace_id,
+        None, // parent_span_id not needed in tests
         false,
         middlewares.into_iter(),
         consumers.into_iter(),
@@ -260,6 +261,7 @@ fn middleware_invocations_do_not_block_across_threads() {
 
     let mut data_layer = TelemetryDataLayer::new(
         trace_id,
+        None, // parent_span_id not needed in tests
         false,
         middlewares.into_iter(),
         consumers.into_iter(),

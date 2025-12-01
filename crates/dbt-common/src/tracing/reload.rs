@@ -59,6 +59,7 @@ where
     ) -> Result<(), Error> {
         let mut data_layer = TelemetryDataLayer::new(
             self.trace_id,
+            None,
             self.strip_code_location,
             middlewares.into_iter(),
             consumer_layers.into_iter(),
@@ -82,6 +83,7 @@ where
 {
     let mut data_layer = TelemetryDataLayer::new(
         trace_id,
+        None, // parent_span_id not needed in tests
         true, // always strip code location in tests
         middlewares.into_iter(),
         consumer_layers.into_iter(),

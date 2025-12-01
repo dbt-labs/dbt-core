@@ -21,10 +21,16 @@ impl TelemetryMiddleware for TelemetryMetricAggregator {
         data_provider: &mut DataProvider<'_>,
     ) -> Option<SpanEndInfo> {
         if let Some(invocation) = span.attributes.downcast_mut::<Invocation>() {
+            // The Invocation span should be the root of our tracing span tree.
+            // However, it may have a parent_span_id if one was explicitly provided via CLI
+            // for OTEL trace correlation. In that case, span.parent_span_id should match
+            // invocation.parent_span_id. If they differ, it means the span inherited a
+            // parent from the tracing context, which shouldn't happen for Invocation spans.
             debug_assert!(
-                span.parent_span_id.is_none(),
-                "Expected Invocation span to be root, found paren id: {:?}",
-                span.parent_span_id
+                span.parent_span_id.is_none() || span.parent_span_id == invocation.parent_span_id,
+                "Expected Invocation span to be root, found inherited parent id: {:?} (invocation parent: {:?})",
+                span.parent_span_id,
+                invocation.parent_span_id
             );
 
             // Aggregate node outcome metrics into top-level metrics on invocation end

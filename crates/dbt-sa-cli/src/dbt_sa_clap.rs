@@ -473,6 +473,7 @@ impl InitArgs {
                 is_compile: arg.command == FsCommand::Compile,
                 debug: arg.io.debug,
                 invocation_id: arg.io.invocation_id,
+                otel_parent_span_id: None,
                 send_anonymous_usage_stats: self.common_args.get_send_anonymous_usage_stats(),
                 status_reporter: arg.io.status_reporter.clone(),
                 log_format: self.common_args.log_format,
@@ -560,6 +561,7 @@ impl CommonArgs {
                 is_compile: arg.command == FsCommand::Compile,
                 debug: self.debug,
                 invocation_id: arg.io.invocation_id,
+                otel_parent_span_id: None,
                 in_dir: in_dir.to_path_buf(),
                 out_dir: out_dir.to_path_buf(),
                 send_anonymous_usage_stats: self.get_send_anonymous_usage_stats(),
@@ -646,6 +648,7 @@ pub fn from_main(cli: &Cli) -> SystemArgs {
         command,
         io: IoArgs {
             invocation_id: uuid::Uuid::new_v4(),
+            otel_parent_span_id: None,
             show: cli.common_args().show.iter().cloned().collect(),
             is_compile: command == FsCommand::Compile,
             debug: cli.common_args().debug,
@@ -691,6 +694,7 @@ pub fn from_lib(cli: &Cli) -> SystemArgs {
         command,
         io: IoArgs {
             invocation_id: uuid::Uuid::new_v4(),
+            otel_parent_span_id: None,
             show: cli.common_args().show.iter().cloned().collect(),
             is_compile: command == FsCommand::Compile,
             debug: cli.common_args().debug,

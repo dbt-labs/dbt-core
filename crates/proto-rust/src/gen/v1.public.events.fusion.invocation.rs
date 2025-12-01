@@ -139,6 +139,10 @@ pub struct Invocation {
     /// Aggregate invocation metrics.
     #[prost(message, optional, tag = "5")]
     pub metrics: ::core::option::Option<InvocationMetrics>,
+    /// Optional parent span ID for trace correlation.
+    /// This allows linking this invocation to an external trace.
+    #[prost(uint64, optional, tag = "6")]
+    pub parent_span_id: ::core::option::Option<u64>,
 }
 impl crate::StaticName for Invocation {
     const FULL_NAME: &'static str = "v1.public.events.fusion.invocation.Invocation";

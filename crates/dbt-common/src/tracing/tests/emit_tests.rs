@@ -32,6 +32,7 @@ fn test_create_span() {
         tracing::level_filters::LevelFilter::TRACE,
         TelemetryDataLayer::new(
             trace_id,
+            None,
             false,
             std::iter::empty(),
             std::iter::once(Box::new(test_layer) as ConsumerLayer),
@@ -225,6 +226,7 @@ fn test_emit_level_functions() {
         tracing::level_filters::LevelFilter::TRACE,
         TelemetryDataLayer::new(
             trace_id,
+            None,
             false,
             std::iter::empty(),
             std::iter::once(Box::new(test_layer) as ConsumerLayer),
@@ -376,6 +378,7 @@ fn test_convenience_log_message_functions() {
         tracing::level_filters::LevelFilter::TRACE,
         TelemetryDataLayer::new(
             trace_id,
+            None,
             false,
             std::iter::empty(),
             std::iter::once(Box::new(test_layer) as ConsumerLayer),

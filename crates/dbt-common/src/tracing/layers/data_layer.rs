@@ -120,6 +120,9 @@ where
     /// (essentially the root span and any buggy tracing calls missing proper invocation
     /// span tree in their context).
     fallback_trace_id: u128,
+    /// Optional parent span ID for trace correlation, used as fallback when creating
+    /// root spans without an explicit parent.
+    fallback_parent_span_id: Option<u64>,
     /// Whether to strip code location from span & log attributes.
     strip_code_location: bool,
     /// The telemetry middlewares to apply before notifying consumers.
@@ -140,12 +143,14 @@ where
 {
     pub(in crate::tracing) fn new(
         fallback_trace_id: u128,
+        fallback_parent_span_id: Option<u64>,
         strip_code_location: bool,
         middlewares: impl Iterator<Item = MiddlewareLayer>,
         consumers: impl Iterator<Item = ConsumerLayer>,
     ) -> Self {
         Self {
             fallback_trace_id,
+            fallback_parent_span_id,
             strip_code_location,
             middlewares: middlewares.collect(),
             consumers: consumers.collect(),
@@ -282,11 +287,15 @@ where
             .unwrap_or_else(|| {
                 // If no parent span is found, we have a couple possible scenarios:
                 // 1. This is the root span of the trace, in which case we use the fallback trace ID, and no parent span ID
-                // 2. This is an invocation span and we calculate the trace ID from `invocation_id` of the span
+                // 2. This is an invocation span and we calculate the trace ID from `invocation_id` of the span,
+                //    and optionally use the parent_span_id if provided via --parent-span-id CLI argument
                 // 3. This is a buggy tracing call missing proper invocation span tree in their context,
                 //  in which case we fallback to the fallback trace ID and no parent span ID
-                if let Some(Invocation { invocation_id, .. }) =
-                    &attributes.downcast_ref::<Invocation>()
+                if let Some(Invocation {
+                    invocation_id,
+                    parent_span_id,
+                    ..
+                }) = &attributes.downcast_ref::<Invocation>()
                 {
                     (
                         // We use proto's to define event structures, which doesn't allow
@@ -294,12 +303,17 @@ where
                         uuid::Uuid::parse_str(invocation_id)
                             .expect("invocation_id Must be a valid UUID string")
                             .as_u128(),
-                        None,
+                        *parent_span_id,
                         None,
                         FilterMask::empty(),
                     )
                 } else {
-                    (self.fallback_trace_id, None, None, FilterMask::empty())
+                    (
+                        self.fallback_trace_id,
+                        self.fallback_parent_span_id,
+                        None,
+                        FilterMask::empty(),
+                    )
                 }
             });
 

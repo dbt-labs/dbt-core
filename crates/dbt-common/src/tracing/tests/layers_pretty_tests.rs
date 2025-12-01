@@ -48,6 +48,7 @@ fn pretty_layer_applies_filter_and_formatting() {
         tracing::level_filters::LevelFilter::TRACE,
         TelemetryDataLayer::new(
             trace_id,
+            None,
             false,
             std::iter::empty(),
             vec![

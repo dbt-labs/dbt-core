@@ -104,6 +104,7 @@ fn test_record_span_attrs_and_status() {
         tracing::level_filters::LevelFilter::TRACE,
         TelemetryDataLayer::new(
             trace_id,
+            None, // parent_span_id not needed in tests
             false,
             std::iter::empty(),
             std::iter::once(Box::new(test_layer) as ConsumerLayer),

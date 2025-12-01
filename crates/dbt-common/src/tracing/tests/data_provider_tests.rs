@@ -66,6 +66,7 @@ fn data_provider_isolates_roots_and_shares_within_tree() {
         tracing::level_filters::LevelFilter::TRACE,
         TelemetryDataLayer::new(
             trace_id,
+            None,
             false,
             std::iter::once(Box::new(middleware) as MiddlewareLayer),
             std::iter::once(Box::new(test_layer) as ConsumerLayer),
@@ -216,6 +217,7 @@ fn data_provider_with_root_and_with_mut() {
         tracing::level_filters::LevelFilter::TRACE,
         TelemetryDataLayer::new(
             trace_id,
+            None,
             false,
             std::iter::once(Box::new(middleware) as MiddlewareLayer),
             std::iter::once(Box::new(test_layer) as ConsumerLayer),
@@ -282,6 +284,7 @@ fn data_provider_init_replaces_existing() {
         tracing::level_filters::LevelFilter::TRACE,
         TelemetryDataLayer::new(
             trace_id,
+            None,
             false,
             std::iter::once(Box::new(middleware) as MiddlewareLayer),
             std::iter::once(Box::new(test_layer) as ConsumerLayer),
@@ -333,6 +336,7 @@ fn data_provider_init_ancestor_data_on_matching_span() {
         tracing::level_filters::LevelFilter::TRACE,
         TelemetryDataLayer::new(
             trace_id,
+            None,
             false,
             std::iter::once(Box::new(middleware) as MiddlewareLayer),
             std::iter::once(Box::new(test_layer) as ConsumerLayer),
@@ -413,6 +417,7 @@ fn data_provider_with_ancestor_data_finds_closest() {
         tracing::level_filters::LevelFilter::TRACE,
         TelemetryDataLayer::new(
             trace_id,
+            None,
             false,
             std::iter::once(Box::new(middleware) as MiddlewareLayer),
             std::iter::once(Box::new(test_layer) as ConsumerLayer),
@@ -486,6 +491,7 @@ fn data_provider_with_ancestor_data_mut_modifies_closest() {
         tracing::level_filters::LevelFilter::TRACE,
         TelemetryDataLayer::new(
             trace_id,
+            None,
             false,
             std::iter::once(Box::new(middleware) as MiddlewareLayer),
             std::iter::once(Box::new(test_layer) as ConsumerLayer),
@@ -559,6 +565,7 @@ fn data_provider_ancestor_apis_return_none_when_not_found() {
         tracing::level_filters::LevelFilter::TRACE,
         TelemetryDataLayer::new(
             trace_id,
+            None,
             false,
             std::iter::empty::<MiddlewareLayer>(),
             std::iter::once(Box::new(test_layer) as ConsumerLayer),

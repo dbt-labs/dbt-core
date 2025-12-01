@@ -36,6 +36,7 @@ fn test_tracing_parquet_filtering() {
         tracing::level_filters::LevelFilter::TRACE,
         TelemetryDataLayer::new(
             trace_id,
+            None,
             false,
             std::iter::empty(),
             std::iter::once(parquet_layer),

@@ -30,6 +30,7 @@ fn test_tracing_jsonl() {
         tracing::level_filters::LevelFilter::TRACE,
         TelemetryDataLayer::new(
             trace_id,
+            None,
             false,
             std::iter::empty(),
             std::iter::once(jsonl_layer),
@@ -205,6 +206,7 @@ fn test_jsonl_dynamic_output_flags_filtering() {
         tracing::level_filters::LevelFilter::TRACE,
         TelemetryDataLayer::new(
             trace_id,
+            None,
             false,
             std::iter::empty(),
             std::iter::once(jsonl_layer),
@@ -296,6 +298,7 @@ fn test_jsonl_basic_follows_from() {
         tracing::level_filters::LevelFilter::TRACE,
         TelemetryDataLayer::new(
             trace_id,
+            None,
             false,
             std::iter::empty(),
             std::iter::once(jsonl_layer),
@@ -373,6 +376,7 @@ fn test_jsonl_multiple_follows_from() {
         tracing::level_filters::LevelFilter::TRACE,
         TelemetryDataLayer::new(
             trace_id,
+            None,
             false,
             std::iter::empty(),
             std::iter::once(jsonl_layer),
@@ -431,6 +435,7 @@ fn test_jsonl_missing_followed_span() {
         tracing::level_filters::LevelFilter::TRACE,
         TelemetryDataLayer::new(
             trace_id,
+            None,
             false,
             std::iter::empty(),
             std::iter::once(jsonl_layer),

@@ -64,6 +64,7 @@ pub fn create_invocation_attributes(package: &str, eval_arg: &EvalArgs) -> Invoc
 
     Invocation {
         invocation_id: eval_arg.io.invocation_id.to_string(),
+        parent_span_id: eval_arg.io.otel_parent_span_id,
         raw_command,
         eval_args: Some(create_invocation_eval_args(eval_arg)),
         process_info: Some(create_process_event_data(package)),

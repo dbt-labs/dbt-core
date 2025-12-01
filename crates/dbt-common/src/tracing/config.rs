@@ -61,6 +61,9 @@ pub struct FsTraceConfig {
     pub(super) log_file_name: Option<String>,
     /// Invocation ID. Used as trace ID for correlation
     pub(super) invocation_id: uuid::Uuid,
+    /// Optional parent span ID for OpenTelemetry trace correlation.
+    /// Used as fallback when creating root spans.
+    pub(super) parent_span_id: Option<u64>,
     /// If True, traces will be forwarded to OTLP endpoints, if any
     /// are set via OTEL environment variables. See `OTLPExporterLayer::new`
     pub(super) export_to_otlp: bool,
@@ -89,6 +92,7 @@ impl Default for FsTraceConfig {
             log_path: PathBuf::new(),
             log_file_name: None,
             invocation_id: uuid::Uuid::now_v7(),
+            parent_span_id: None,
             export_to_otlp: false,
             log_format: LogFormat::Default,
             enable_query_log: false,
@@ -145,6 +149,7 @@ impl FsTraceConfig {
     /// * `otel_parquet_file_name` - Optional filename for OpenTelemetry Parquet trace output.
     ///   If provided, creates trace file at `{target_path}/metadata/{otel_parquet_file_name}`
     /// * `invocation_id` - Unique identifier for this execution, used as trace ID for correlation
+    /// * `parent_span_id` - Optional parent span ID for OpenTelemetry trace correlation
     /// * `export_to_otlp` - If true, enables forwarding traces to OTLP endpoints configured
     ///   via OTEL environment variables
     /// * `log_format` - The log format being used
@@ -198,6 +203,7 @@ impl FsTraceConfig {
         otel_file_name: Option<&str>,
         otel_parquet_file_name: Option<&str>,
         invocation_id: uuid::Uuid,
+        parent_span_id: Option<u64>,
         export_to_otlp: bool,
         log_format: LogFormat,
         enable_query_log: bool,
@@ -231,6 +237,7 @@ impl FsTraceConfig {
             log_path: log_dir_path,
             log_file_name: log_file_name.map(|s| s.to_string()),
             invocation_id,
+            parent_span_id,
             export_to_otlp,
             log_format,
             enable_query_log,
@@ -270,6 +277,7 @@ impl FsTraceConfig {
             io_args.otel_file_name.as_deref(),
             io_args.otel_parquet_file_name.as_deref(),
             io_args.invocation_id,
+            io_args.otel_parent_span_id,
             io_args.export_to_otlp,
             io_args.log_format,
             true, // Always enable query log for now

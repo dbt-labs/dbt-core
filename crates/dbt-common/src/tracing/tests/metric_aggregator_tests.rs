@@ -21,6 +21,7 @@ fn warning_logs_increment_warning_metric() {
         tracing::level_filters::LevelFilter::TRACE,
         TelemetryDataLayer::new(
             trace_id,
+            None,
             false,
             std::iter::once(Box::new(TelemetryMetricAggregator) as MiddlewareLayer),
             std::iter::once(Box::new(test_layer) as ConsumerLayer),

@@ -97,8 +97,13 @@ fn filtered_middle_span_reparents_grandchild() {
 
     let consumers: Vec<ConsumerLayer> = vec![Box::new(baseline_layer), Box::new(filtered_consumer)];
 
-    let mut data_layer =
-        TelemetryDataLayer::new(trace_id, false, std::iter::empty(), consumers.into_iter());
+    let mut data_layer = TelemetryDataLayer::new(
+        trace_id,
+        None,
+        false,
+        std::iter::empty(),
+        consumers.into_iter(),
+    );
     data_layer.with_sequential_ids();
 
     let subscriber = create_tracing_subcriber_with_layer(LevelFilter::TRACE, data_layer);
@@ -184,8 +189,13 @@ fn level_filter_respects_span_and_log_levels() {
 
     let consumers: Vec<ConsumerLayer> = vec![Box::new(baseline_layer), Box::new(filtered_consumer)];
 
-    let mut data_layer =
-        TelemetryDataLayer::new(trace_id, false, std::iter::empty(), consumers.into_iter());
+    let mut data_layer = TelemetryDataLayer::new(
+        trace_id,
+        None,
+        false,
+        std::iter::empty(),
+        consumers.into_iter(),
+    );
     data_layer.with_sequential_ids();
 
     let subscriber = create_tracing_subcriber_with_layer(LevelFilter::TRACE, data_layer);
@@ -293,8 +303,13 @@ fn filter_combines_with_consumer_predicates() {
     let filtered_consumer = consumer.with_filter(telemetry_filter);
     let consumers: Vec<ConsumerLayer> = vec![Box::new(filtered_consumer)];
 
-    let mut data_layer =
-        TelemetryDataLayer::new(trace_id, false, std::iter::empty(), consumers.into_iter());
+    let mut data_layer = TelemetryDataLayer::new(
+        trace_id,
+        None,
+        false,
+        std::iter::empty(),
+        consumers.into_iter(),
+    );
     data_layer.with_sequential_ids();
 
     let subscriber = create_tracing_subcriber_with_layer(LevelFilter::TRACE, data_layer);

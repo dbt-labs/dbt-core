@@ -102,6 +102,7 @@ impl FsCommand {
 #[derive(Default, Clone)]
 pub struct IoArgs {
     pub invocation_id: uuid::Uuid,
+    pub otel_parent_span_id: Option<u64>,
     pub show: HashSet<ShowOptions>,
     pub is_compile: bool,
     pub in_dir: PathBuf,

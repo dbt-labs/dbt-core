@@ -23,6 +23,7 @@ fn metrics_are_scoped_to_root_span() {
         tracing::level_filters::LevelFilter::TRACE,
         TelemetryDataLayer::new(
             trace_id,
+            None,
             false,
             std::iter::empty(),
             std::iter::once(Box::new(test_layer) as ConsumerLayer),

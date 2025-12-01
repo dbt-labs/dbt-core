@@ -21,6 +21,9 @@ impl serde::Serialize for Invocation {
         if self.metrics.is_some() {
             len += 1;
         }
+        if self.parent_span_id.is_some() {
+            len += 1;
+        }
         let mut struct_ser = serializer.serialize_struct("v1.public.events.fusion.invocation.Invocation", len)?;
         if !self.invocation_id.is_empty() {
             struct_ser.serialize_field("invocation_id", &self.invocation_id)?;
@@ -36,6 +39,11 @@ impl serde::Serialize for Invocation {
         }
         if let Some(v) = self.metrics.as_ref() {
             struct_ser.serialize_field("metrics", v)?;
+        }
+        if let Some(v) = self.parent_span_id.as_ref() {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("parent_span_id", ToString::to_string(&v).as_str())?;
         }
         struct_ser.end()
     }
@@ -56,6 +64,8 @@ impl<'de> serde::Deserialize<'de> for Invocation {
             "process_info",
             "processInfo",
             "metrics",
+            "parent_span_id",
+            "parentSpanId",
         ];
 
         #[allow(clippy::enum_variant_names)]
@@ -65,6 +75,7 @@ impl<'de> serde::Deserialize<'de> for Invocation {
             EvalArgs,
             ProcessInfo,
             Metrics,
+            ParentSpanId,
             __SkipField__,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
@@ -92,6 +103,7 @@ impl<'de> serde::Deserialize<'de> for Invocation {
                             "evalArgs" | "eval_args" => Ok(GeneratedField::EvalArgs),
                             "processInfo" | "process_info" => Ok(GeneratedField::ProcessInfo),
                             "metrics" => Ok(GeneratedField::Metrics),
+                            "parentSpanId" | "parent_span_id" => Ok(GeneratedField::ParentSpanId),
                             _ => Ok(GeneratedField::__SkipField__),
                         }
                     }
@@ -116,6 +128,7 @@ impl<'de> serde::Deserialize<'de> for Invocation {
                 let mut eval_args__ = None;
                 let mut process_info__ = None;
                 let mut metrics__ = None;
+                let mut parent_span_id__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
                         GeneratedField::InvocationId => {
@@ -148,6 +161,14 @@ impl<'de> serde::Deserialize<'de> for Invocation {
                             }
                             metrics__ = map_.next_value()?;
                         }
+                        GeneratedField::ParentSpanId => {
+                            if parent_span_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("parentSpanId"));
+                            }
+                            parent_span_id__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
+                        }
                         GeneratedField::__SkipField__ => {
                             let _ = map_.next_value::<serde::de::IgnoredAny>()?;
                         }
@@ -159,6 +180,7 @@ impl<'de> serde::Deserialize<'de> for Invocation {
                     eval_args: eval_args__,
                     process_info: process_info__,
                     metrics: metrics__,
+                    parent_span_id: parent_span_id__,
                 })
             }
         }

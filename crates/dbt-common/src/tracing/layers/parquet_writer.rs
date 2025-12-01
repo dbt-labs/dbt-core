@@ -553,6 +553,7 @@ mod tests {
             tracing::level_filters::LevelFilter::TRACE,
             TelemetryDataLayer::new(
                 trace_id,
+                None,
                 false,
                 std::iter::empty(),
                 std::iter::once(Box::new(parquet_layer) as ConsumerLayer),
