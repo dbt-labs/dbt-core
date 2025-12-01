@@ -70,8 +70,6 @@ pub async fn load(
     iarg: &InvocationArgs,
     token: &CancellationToken,
 ) -> FsResult<(DbtState, Option<DbtCloudProjectConfig>)> {
-    let _pb = with_progress!(arg.io, spinner => LOADING);
-
     let (simplified_dbt_project, mut dbt_profile) =
         load_simplified_project_and_profiles(arg).await?;
 

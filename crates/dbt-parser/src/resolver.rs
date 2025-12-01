@@ -3,13 +3,13 @@
 use dbt_common::FsError;
 use dbt_common::adapter::AdapterType;
 use dbt_common::cancellation::CancellationToken;
-use dbt_common::constants::{DBT_GENERIC_TESTS_DIR_NAME, RESOLVING};
+use dbt_common::constants::DBT_GENERIC_TESTS_DIR_NAME;
 use dbt_common::io_args::FsCommand;
 use dbt_common::once_cell_vars::DISPATCH_CONFIG;
 use dbt_common::stdfs;
 use dbt_common::tracing::emit::{emit_error_log_from_fs_error, emit_warn_log_from_fs_error};
 use dbt_common::tracing::event_info::store_event_attributes;
-use dbt_common::{ErrorCode, FsResult, err, fs_err, with_progress};
+use dbt_common::{ErrorCode, FsResult, err, fs_err};
 use dbt_jinja_utils::invocation_args::InvocationArgs;
 use dbt_jinja_utils::listener::JinjaTypeCheckingEventListenerFactory;
 use dbt_jinja_utils::node_resolver::{NodeResolver, resolve_dependencies};
@@ -84,8 +84,6 @@ pub async fn resolve(
     token: &CancellationToken,
     jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
 ) -> FsResult<(ResolverState, Arc<JinjaEnv>)> {
-    let _pb = with_progress!(arg.io, spinner => RESOLVING);
-
     // Get the root project name
     let root_project_name = dbt_state.root_project_name();
 

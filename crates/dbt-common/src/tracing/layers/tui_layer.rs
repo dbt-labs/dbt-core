@@ -20,6 +20,7 @@ use crate::{
     io_args::{FsCommand, ShowOptions},
     logging::{LogFormat, StatEvent, TermEvent, with_suspended_progress_bars},
     tracing::{
+        constants::{BUILDING_TASK_GRAPH, LOADING, RESOLVING, SCHEDULING},
         data_provider::DataProvider,
         formatters::{
             invocation::format_invocation_summary,
@@ -242,6 +243,20 @@ fn get_progress_params(
     None
 }
 
+/// Get spinner UID for phases that display a spinner (no progress total)
+fn get_spinner_params(attributes: &TelemetryAttributes) -> Option<&'static str> {
+    if let Some(phase) = attributes.downcast_ref::<PhaseExecuted>() {
+        return match phase.phase() {
+            ExecutionPhase::LoadProject => Some(LOADING),
+            ExecutionPhase::Parse => Some(RESOLVING),
+            ExecutionPhase::Schedule => Some(SCHEDULING),
+            ExecutionPhase::TaskGraphBuild => Some(BUILDING_TASK_GRAPH),
+            _ => None,
+        };
+    }
+    None
+}
+
 impl TelemetryConsumer for TuiLayer {
     fn is_span_enabled(&self, span: &SpanStartInfo) -> bool {
         span.attributes
@@ -323,6 +338,15 @@ impl TelemetryConsumer for TuiLayer {
                 _ => {}
             };
         }
+
+        // Handle spinners for phases without progress totals
+        if let Some(spinner_uid) = get_spinner_params(&span.attributes) {
+            log::info!(
+                _TERM_ONLY_ = true,
+                _TERM_EVENT_:serde = TermEvent::start_spinner(spinner_uid.into());
+                "Starting spinner with uid: {spinner_uid}"
+            );
+        }
     }
 
     fn on_span_end(&self, span: &SpanEndInfo, data_provider: &mut DataProvider<'_>) {
@@ -395,6 +419,15 @@ impl TelemetryConsumer for TuiLayer {
                 }
                 _ => {}
             };
+        }
+
+        // Handle spinners for phases without progress totals
+        if let Some(spinner_uid) = get_spinner_params(&span.attributes) {
+            log::info!(
+                _TERM_ONLY_ = true,
+                _TERM_EVENT_:serde = TermEvent::remove_spinner(spinner_uid.into());
+                "Removing spinner with uid: {spinner_uid}"
+            );
         }
     }
 

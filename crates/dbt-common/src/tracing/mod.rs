@@ -1,7 +1,7 @@
 mod async_tracing;
 mod background_writer;
 mod config;
-mod constants;
+pub mod constants;
 pub mod convert;
 pub mod data_provider;
 pub mod emit;
