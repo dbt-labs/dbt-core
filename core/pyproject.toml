@@ -6,7 +6,7 @@ description = "With dbt, data analysts and engineers can build analytics the way
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
-license-files = { globs = ["../LICENSE"] }
+license-files = { globs = ["LICENSE"] }
 keywords = []
 authors = [
     { name = "dbt Labs", email = "info@dbtlabs.com" },
@@ -78,6 +78,9 @@ dbt = "dbt.cli.main:cli"
 
 [tool.hatch.version]
 path = "dbt/__version__.py"
+
+[tool.hatch.build.hooks.custom]
+path = "hatch_build.py"
 
 [build-system]
 requires = ["hatchling"]

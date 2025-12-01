@@ -11,6 +11,9 @@ artifacts = [
     "dbt/py.typed",
 ]
 
+[build.targets.wheel.force-include]
+"../LICENSE" = "LICENSE"
+
 [build.targets.sdist]
 include = [
     "/dbt",
