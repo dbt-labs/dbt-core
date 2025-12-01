@@ -660,8 +660,15 @@ class Compiler:
             raise GraphDependencyNotFoundError(node, to_expression)
 
         adapter = get_adapter(self.config)
-        relation_name = str(adapter.Relation.create_from(self.config, foreign_key_node))
-        return relation_name
+
+        if (
+            hasattr(foreign_key_node, "defer_relation")
+            and foreign_key_node.defer_relation
+            and self.config.args.defer
+        ):
+            return str(adapter.Relation.create_from(self.config, foreign_key_node.defer_relation))
+        else:
+            return str(adapter.Relation.create_from(self.config, foreign_key_node))
 
     # This method doesn't actually "compile" any of the nodes. That is done by the
     # "compile_node" method. This creates a Linker and builds the networkx graph,
