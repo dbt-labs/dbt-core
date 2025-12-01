@@ -657,6 +657,27 @@ sources:
       - name: customers
 """
 
+# Fixtures for test_removed_test_state.py
+sample_test_sql = """
+{% test sample_test(model, column_name) %}
+    select * from {{ model }} where {{ column_name }} is null
+{% endtest %}
+"""
+
+removed_test_model_sql = """
+select 1 as id
+"""
+
+removed_test_schema_yml = """
+version: 2
+models:
+  - name: model_a
+    columns:
+      - name: id
+        data_tests:
+          - sample_test
+"""
+
 # Fixtures for test_modified_state.py - varchar/numeric size changes
 varchar_size_contract_schema_yml = """
 version: 2
