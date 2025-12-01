@@ -4,4 +4,4 @@ body: ':bug: :snowman: Improve `dbt deps --add-package` duplicate detection with
 time: 2025-11-28T16:31:44.344099-05:00
 custom:
   Author: emmyoop
-  Issue: "12234"
+  Issue: "12239"
