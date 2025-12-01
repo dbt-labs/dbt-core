@@ -1,0 +1,6 @@
+kind: Fixes
+body: ":bug: :snowman: Fix long Python stack traces appearing when package dependencies have incompatible version requirements"
+time: 2025-11-27T14:13:08.082542-05:00
+custom:
+  Author: emmyoop
+  Issue: "12049"
