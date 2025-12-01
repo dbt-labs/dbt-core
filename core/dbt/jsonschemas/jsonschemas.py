@@ -1,5 +1,4 @@
 import json
-import os
 import re
 from datetime import date, datetime
 from pathlib import Path
@@ -141,9 +140,6 @@ def _get_allowed_config_fields_from_error_path(
 
 
 def _can_run_validations() -> bool:
-    if os.environ.get("DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS", "true").lower() == "false":
-        return False
-
     invocation_context = get_invocation_context()
     return invocation_context.adapter_types.issubset(_JSONSCHEMA_SUPPORTED_ADAPTERS)
 
