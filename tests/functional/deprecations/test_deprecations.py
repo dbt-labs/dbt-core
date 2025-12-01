@@ -316,7 +316,6 @@ class TestDeprecatedInvalidDeprecationDate:
             "models.yml": invalid_deprecation_date_yaml,
         }
 
-    @mock.patch.dict(os.environ, {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": "True"})
     def test_deprecated_invalid_deprecation_date(self, project):
         event_catcher = EventCatcher(GenericJSONSchemaValidationDeprecation)
         note_catcher = EventCatcher(Note)
@@ -362,7 +361,6 @@ class TestCustomKeyInConfigDeprecation:
         }
 
     @mock.patch("dbt.jsonschemas.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
-    @mock.patch.dict(os.environ, {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": "True"})
     def test_custom_key_in_config_deprecation(self, project):
         event_catcher = EventCatcher(CustomKeyInConfigDeprecation)
         run_dbt(
@@ -384,7 +382,6 @@ class TestCustomKeyInConfigSQLDeprecation:
         }
 
     @mock.patch("dbt.jsonschemas.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
-    @mock.patch.dict(os.environ, {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": "True"})
     def test_custom_key_in_config_sql_deprecation(self, project):
         event_catcher = EventCatcher(CustomKeyInConfigDeprecation)
         run_dbt(
@@ -415,7 +412,6 @@ class TestMultipleCustomKeysInConfigDeprecation:
         }
 
     @mock.patch("dbt.jsonschemas.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
-    @mock.patch.dict(os.environ, {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": "True"})
     def test_multiple_custom_keys_in_config_deprecation(self, project):
         event_catcher = EventCatcher(CustomKeyInConfigDeprecation)
         run_dbt(
@@ -442,7 +438,6 @@ class TestCustomKeyInObjectDeprecation:
         }
 
     @mock.patch("dbt.jsonschemas.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
-    @mock.patch.dict(os.environ, {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": "True"})
     def test_custom_key_in_object_deprecation(self, project):
         event_catcher = EventCatcher(CustomKeyInObjectDeprecation)
         run_dbt(["parse", "--no-partial-parse"], callbacks=[event_catcher.catch])
@@ -486,7 +481,6 @@ class TestCustomOutputPathInSourceFreshnessDeprecation:
 
 
 class TestHappyPathProjectHasNoDeprecations:
-    @mock.patch.dict(os.environ, {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": "True"})
     @mock.patch("dbt.jsonschemas.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
     def test_happy_path_project_has_no_deprecations(self, happy_path_project):
         event_cathcer = EventCatcher(DeprecationsSummary)
@@ -498,7 +492,6 @@ class TestHappyPathProjectHasNoDeprecations:
 
 
 class TestBaseProjectHasNoDeprecations:
-    @mock.patch.dict(os.environ, {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": "True"})
     @mock.patch("dbt.jsonschemas.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
     def test_base_project_has_no_deprecations(self, project):
         event_cathcer = EventCatcher(DeprecationsSummary)
@@ -707,7 +700,6 @@ class TestMissingPlusPrefixDeprecation:
     def project_config_update(self):
         return {"seeds": {"path": {"enabled": True}}}
 
-    @mock.patch.dict(os.environ, {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": "True"})
     @mock.patch("dbt.jsonschemas.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
     def test_missing_plus_prefix_deprecation(self, project):
         event_catcher = EventCatcher(MissingPlusPrefixDeprecation)
@@ -721,7 +713,6 @@ class TestMissingPlusPrefixDeprecationSubPath:
     def project_config_update(self):
         return {"seeds": {"path": {"+enabled": True, "sub_path": {"enabled": True}}}}
 
-    @mock.patch.dict(os.environ, {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": "True"})
     @mock.patch("dbt.jsonschemas.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
     def test_missing_plus_prefix_deprecation_sub_path(self, project):
         event_catcher = EventCatcher(MissingPlusPrefixDeprecation)
@@ -735,7 +726,6 @@ class TestMissingPlusPrefixDeprecationCustomConfig:
     def project_config_update(self):
         return {"seeds": {"path": {"custom_config": True, "sub_path": {"+enabled": True}}}}
 
-    @mock.patch.dict(os.environ, {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": "True"})
     @mock.patch("dbt.jsonschemas.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
     def test_missing_plus_prefix_deprecation_sub_path(self, project):
         event_catcher = EventCatcher(MissingPlusPrefixDeprecation)
@@ -749,7 +739,6 @@ class TestCustomConfigInDbtProjectYmlNoDeprecation:
     def project_config_update(self):
         return {"seeds": {"path": {"+custom_config": True}}}
 
-    @mock.patch.dict(os.environ, {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": "True"})
     @mock.patch("dbt.jsonschemas.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
     def test_missing_plus_prefix_deprecation_sub_path(self, project):
         note_catcher = EventCatcher(Note)
@@ -782,10 +771,6 @@ class TestJsonSchemaValidationGating:
         dbt_private_run_jsonschema_validations: bool,
         expected_events: int,
     ) -> None:
-        mocker.patch.dict(
-            os.environ,
-            {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": dbt_private_run_jsonschema_validations},
-        )
 
         if postgres_is_valid:
             supported_adapters_with_postgres = {
@@ -911,7 +896,6 @@ class TestPropertyMovedToConfigDeprecation:
             "models.yml": property_moved_to_config_yaml,
         }
 
-    @mock.patch.dict(os.environ, {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": "True"})
     @mock.patch("dbt.jsonschemas.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
     def test_property_moved_to_config_deprecation(self, project):
         event_catcher = EventCatcher(PropertyMovedToConfigDeprecation)

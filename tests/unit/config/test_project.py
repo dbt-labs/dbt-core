@@ -622,7 +622,6 @@ class TestGetRequiredVersion:
 
 class TestDeprecations:
 
-    @mock.patch.dict(os.environ, {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": "True"})
     def test_jsonschema_validate(self) -> None:
         from dbt.jsonschemas.jsonschemas import jsonschema_validate
 
