@@ -7,6 +7,8 @@ use crate::relation_object::{RelationObject, StaticBaseRelation};
 
 use arrow::array::RecordBatch;
 use dbt_common::{ErrorCode, FsResult, current_function_name, fs_err};
+use dbt_frontend_common::ident::Identifier;
+use dbt_schema_store::CanonicalFqn;
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::common::{DbtMaterialization, ResolvedQuoting};
 use dbt_schemas::schemas::relations::base::{
@@ -105,6 +107,25 @@ impl BaseRelationProperties for RedshiftRelation {
                 "identifier is required for redshift relation",
             )
         })
+    }
+
+    fn get_canonical_fqn(&self) -> FsResult<CanonicalFqn> {
+        let database = if self.quote_policy().database {
+            Identifier::new(self.get_database()?)
+        } else {
+            Identifier::new(self.get_database()?.to_ascii_lowercase())
+        };
+        let schema = if self.quote_policy().schema {
+            Identifier::new(self.get_schema()?)
+        } else {
+            Identifier::new(self.get_schema()?.to_ascii_lowercase())
+        };
+        let identifier = if self.quote_policy().identifier {
+            Identifier::new(self.get_identifier()?)
+        } else {
+            Identifier::new(self.get_identifier()?.to_ascii_lowercase())
+        };
+        Ok(CanonicalFqn::new(&database, &schema, &identifier))
     }
 }
 

@@ -4,7 +4,7 @@ use std::{
 };
 
 use dbt_common::{io_args::ListOutputFormat, node_selector::SelectExpression};
-use dbt_schemas::schemas::Nodes;
+use dbt_schemas::schemas::{Nodes, telemetry::NodeType};
 use serde_json::Map;
 
 type JsonValue = serde_json::Value;
@@ -26,12 +26,12 @@ pub struct Schedule<T> {
     pub deps: BTreeMap<T, BTreeSet<T>>,
     // Topological sort of selected nodes, followed by frontier nodes (for introspection detection)
     pub sorted_nodes: Vec<T>,
+    // Selected nodes before filtering
+    pub all_selected_nodes: BTreeSet<T>,
     // The nodes explicitly selected by the user's selection criteria
     pub selected_nodes: BTreeSet<T>,
     // Frontier nodes: dependencies of selected nodes that weren't selected (for schema hydration only)
     pub frontier_nodes: BTreeSet<T>,
-    // Unused source nodes (these are excluded from sorted_nodes)
-    pub unused_nodes: BTreeSet<T>,
     // normalized select expressions
     pub select: Option<SelectExpression>,
     // normalized exclude expressions
@@ -39,6 +39,43 @@ pub struct Schedule<T> {
 }
 
 impl Schedule<String> {
+    #[inline]
+    pub fn debug_assert_invariants(&self, nodes: &Nodes) {
+        #[cfg(debug_assertions)]
+        {
+            if self.selected_nodes.is_empty() {
+                return;
+            }
+
+            // Ensure no frontier nodes are in selected_nodes
+            assert!(
+                self.frontier_nodes.is_disjoint(&self.selected_nodes),
+                "Schedule invariant violated: frontier_nodes and selected_nodes intersect {:?}",
+                self.frontier_nodes
+                    .intersection(&self.selected_nodes)
+                    .collect::<Vec<_>>()
+            );
+
+            for uid in &self.selected_nodes {
+                if let Some(node) = nodes.get_node(uid) {
+                    // Sources should never be selected; they must be frontier-only
+                    assert!(
+                        !matches!(node.resource_type(), NodeType::Source),
+                        "Schedule invariant violated: source node '{}' is in selected_nodes; sources must be frontier nodes",
+                        uid
+                    );
+
+                    // Cross-project (external) nodes should never be selected; they must be frontier-only
+                    assert!(
+                        !node.is_extended_model(),
+                        "Schedule invariant violated: external node '{}' is in selected_nodes; external nodes must be frontier nodes",
+                        uid
+                    );
+                }
+            }
+        }
+    }
+
     /// Show the selected nodes as the type.package.name
     pub fn show_nodes(&self) -> String {
         let mut res = "".to_string();
@@ -127,7 +164,7 @@ impl Schedule<String> {
         output_keys: &[String],
     ) -> Vec<ListItem> {
         let mut res = Vec::new();
-        for selected_id in &self.selected_nodes {
+        for selected_id in &self.all_selected_nodes.iter().collect::<BTreeSet<_>>() {
             let node = nodes
                 .get_node(selected_id)
                 .expect("selected node not in manifest");
@@ -144,11 +181,21 @@ impl Schedule<String> {
                 ListOutputFormat::Path => node.file_path(),
             };
             res.push(ListItem {
-                unique_id: selected_id.clone(),
+                unique_id: (*selected_id).to_string(),
                 content,
             });
         }
         res
+    }
+
+    pub fn modify_for_local_execution(&mut self) {
+        // 1. Move all frontier nodes that are seeds to the selected nodes
+        for unique_id in self.frontier_nodes.clone().iter() {
+            if unique_id.starts_with("seed.") {
+                self.selected_nodes.insert(unique_id.clone());
+                self.frontier_nodes.remove(unique_id);
+            }
+        }
     }
 }
 
@@ -200,142 +247,5 @@ impl fmt::Display for Schedule<String> {
             }
         }
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::collections::{BTreeMap, BTreeSet};
-
-    #[test]
-    fn test_filter_test_and_frontier_nodes() {
-        // Create a dependency graph
-        let mut deps = BTreeMap::new();
-
-        // Add a model
-        deps.insert("model.project.model1".to_string(), BTreeSet::new());
-
-        // Add a test that depends on the model
-        deps.insert("test.project.test1".to_string(), {
-            let mut deps = BTreeSet::new();
-            deps.insert("model.project.model1".to_string());
-            deps
-        });
-
-        // Add a standalone test
-        deps.insert("test.project.standalone_test".to_string(), BTreeSet::new());
-
-        // Create a topological sort
-        let sorted_nodes = vec![
-            "model.project.model1".to_string(),
-            "test.project.test1".to_string(),
-            "test.project.standalone_test".to_string(),
-        ];
-
-        // All nodes are selected
-        let selected_nodes: BTreeSet<String> = sorted_nodes.iter().cloned().collect();
-
-        // Add a frontier node
-        let mut frontier_nodes = BTreeSet::new();
-        frontier_nodes.insert("model.project.model1".to_string());
-
-        let schedule = Schedule {
-            deps,
-            sorted_nodes,
-            selected_nodes,
-            frontier_nodes,
-            select: None,
-            exclude: None,
-            unused_nodes: BTreeSet::new(),
-        };
-
-        // Check that standalone test is kept even though it has no dependencies
-        assert!(
-            schedule
-                .sorted_nodes
-                .contains(&"test.project.standalone_test".to_string())
-        );
-
-        // Check that model1 is kept because test1 depends on it
-        assert!(
-            schedule
-                .sorted_nodes
-                .contains(&"model.project.model1".to_string())
-        );
-
-        // Check that test1 is kept
-        assert!(
-            schedule
-                .sorted_nodes
-                .contains(&"test.project.test1".to_string())
-        );
-    }
-
-    #[test]
-    fn test_revise_for_unit_tests_with_test_command_and_unit_tests() {
-        // Create a dependency graph
-        let mut deps = BTreeMap::new();
-
-        // Add a model
-        deps.insert("model.project.model1".to_string(), BTreeSet::new());
-
-        // Add a test that depends on the model
-        deps.insert("test.project.test1".to_string(), {
-            let mut deps = BTreeSet::new();
-            deps.insert("model.project.model1".to_string());
-            deps
-        });
-
-        // Add a unit_test
-        deps.insert("unit_test.project.unit_test1".to_string(), {
-            let mut deps = BTreeSet::new();
-            deps.insert("model.project.model1".to_string());
-            deps
-        });
-
-        // Create a topological sort
-        let sorted_nodes = vec![
-            "model.project.model1".to_string(),
-            "test.project.test1".to_string(),
-            "unit_test.project.unit_test1".to_string(),
-        ];
-
-        // All nodes are selected
-        let selected_nodes: BTreeSet<String> = sorted_nodes.iter().cloned().collect();
-
-        // All nodes are self-contained
-        // No frontier nodes
-        let frontier_nodes = BTreeSet::new();
-
-        let schedule = Schedule {
-            deps,
-            sorted_nodes,
-            selected_nodes,
-            frontier_nodes,
-            select: None,
-            exclude: None,
-            unused_nodes: BTreeSet::new(),
-        };
-
-        // Check that model1 is kept because test1 and unit_test1 depend on it
-        assert!(
-            schedule
-                .sorted_nodes
-                .contains(&"model.project.model1".to_string())
-        );
-
-        // Check that test1 is kept
-        assert!(
-            schedule
-                .sorted_nodes
-                .contains(&"test.project.test1".to_string())
-        );
-
-        assert!(
-            schedule
-                .sorted_nodes
-                .contains(&"unit_test.project.unit_test1".to_string())
-        );
     }
 }

@@ -20,6 +20,7 @@ members = [
   "crates/dbt-test-containers",
   "crates/dbt-parser",
   "crates/dbt-schemas",
+  "crates/dbt-schema-store",
   "crates/dbt-telemetry",
   "crates/dbt-selector-parser",
   "crates/dbt-proc-macros",
@@ -180,6 +181,7 @@ dbt-parser = { path = "crates/dbt-parser" }
 dbt-proc-macros = { path = "crates/dbt-proc-macros" }
 
 dbt-sample = { path = "crates/dbt-sample" }
+dbt-schema-store = { path = "crates/dbt-schema-store" }
 dbt-schemas = { path = "crates/dbt-schemas" }
 dbt-selector-parser = { path = "crates/dbt-selector-parser" }
 dbt-telemetry = { path = "crates/dbt-telemetry" }
@@ -407,6 +409,7 @@ rustyline = { version = "15.0.0", default-features = false, features = [
 # datatypes and algos
 base64 = "0.22.1"
 bigdecimal = "0.4.7"
+bimap = "0.6.3"
 bitflags = "2.9.4"
 blake3 = "1.5.0"
 chrono = { version = "0.4.41", features = ["std", "clock", "serde"] }

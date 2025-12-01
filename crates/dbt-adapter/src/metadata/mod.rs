@@ -13,6 +13,8 @@ use arrow::array::RecordBatch;
 use arrow_schema::{DataType, Field, Schema};
 use chrono::{DateTime, Utc};
 use dbt_common::FsResult;
+use dbt_frontend_common::ident::Identifier;
+use dbt_schema_store::CanonicalFqn;
 use dbt_schemas::schemas::{
     common::ResolvedQuoting,
     relations::base::{BaseRelation, BaseRelationProperties},
@@ -380,6 +382,14 @@ impl BaseRelationProperties for MockBaseRelation {
 
     fn get_identifier(&self) -> FsResult<String> {
         Ok(self.identifier.clone())
+    }
+
+    fn get_canonical_fqn(&self) -> FsResult<CanonicalFqn> {
+        Ok(CanonicalFqn::new(
+            &Identifier::new(self.get_database()?),
+            &Identifier::new(self.get_schema()?),
+            &Identifier::new(self.get_identifier()?),
+        ))
     }
 }
 

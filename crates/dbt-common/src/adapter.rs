@@ -1,31 +1,6 @@
-use arrow_schema::SchemaRef;
-use dbt_frontend_common::{FullyQualifiedName, dialect::Dialect};
+use dbt_frontend_common::dialect::Dialect;
 use serde::{Deserialize, Serialize};
 use strum::{AsRefStr, Display, EnumString};
-
-#[derive(Clone)]
-pub struct SchemaRegistryEntry {
-    /// The original schema from the source (e.g. the database driver).
-    pub original: Option<SchemaRef>,
-    /// The schema after SDF-specific transformations or a schema produced
-    /// by static analysis.
-    pub schema: SchemaRef,
-}
-
-impl SchemaRegistryEntry {
-    pub fn new(original: Option<SchemaRef>, schema: SchemaRef) -> Self {
-        Self { original, schema }
-    }
-}
-
-/// Schema registry access interface.
-pub trait SchemaRegistry: Send + Sync {
-    /// Get the schema of a table by its unique identifier.
-    fn get_schema_by_unique_id(&self, unique_id: &str) -> Option<SchemaRegistryEntry>;
-
-    /// Get the schema of a table by its fully-qualified name (FQN).
-    fn get_schema(&self, fqn: &FullyQualifiedName) -> Option<SchemaRegistryEntry>;
-}
 
 /// The type of the adapter.
 ///

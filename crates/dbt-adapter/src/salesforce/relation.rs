@@ -1,6 +1,7 @@
 use crate::relation_object::{RelationObject, StaticBaseRelation};
 
 use dbt_common::{ErrorCode, FsResult, fs_err};
+use dbt_schema_store::CanonicalFqn;
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::relations::base::{
@@ -80,6 +81,10 @@ impl BaseRelationProperties for SalesforceRelation {
                 "identifier is required for salesforce relation",
             )
         })
+    }
+
+    fn get_canonical_fqn(&self) -> FsResult<CanonicalFqn> {
+        unimplemented!("Salesforce get_canonical_fqn")
     }
 }
 

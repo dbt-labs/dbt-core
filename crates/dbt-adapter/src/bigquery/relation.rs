@@ -7,6 +7,8 @@ use crate::relation_object::{RelationObject, StaticBaseRelation};
 
 use arrow::array::RecordBatch;
 use dbt_common::{ErrorCode, FsResult, current_function_name, fs_err};
+use dbt_frontend_common::ident::Identifier;
+use dbt_schema_store::CanonicalFqn;
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::InternalDbtNodeWrapper;
 use dbt_schemas::schemas::common::ResolvedQuoting;
@@ -109,6 +111,13 @@ impl BaseRelationProperties for BigqueryRelation {
                 "identifier is required for bigquery relation",
             )
         })
+    }
+    fn get_canonical_fqn(&self) -> FsResult<CanonicalFqn> {
+        Ok(CanonicalFqn::new(
+            &Identifier::new(self.get_database()?),
+            &Identifier::new(self.get_schema()?),
+            &Identifier::new(self.get_identifier()?),
+        ))
     }
 }
 

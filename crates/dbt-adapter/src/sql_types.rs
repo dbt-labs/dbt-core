@@ -571,7 +571,7 @@ pub mod postgres {
             DataType::Time64(TimeUnit::Nanosecond) => out.push_str("time without time zone"),
             DataType::Interval(_) => out.push_str("interval"),
             DataType::Binary => out.push_str("binary"),
-            DataType::Utf8 | DataType::Utf8View => out.push_str("text"),
+            DataType::Utf8 | DataType::Utf8View => out.push_str("character varying"),
             DataType::List(_) => out.push_str("array"),
             DataType::Dictionary(key, value)
                 if key.as_ref() == &DataType::UInt16 && value.as_ref() == &DataType::Utf8 =>
@@ -815,6 +815,14 @@ pub fn numeric_precision_scale(
         }
 
         // For integer types (i.e. non-scaled numbers)
+        (Postgres, DataType::Int8) => Some((3, Some(0))),
+        (Postgres, DataType::Int16) => Some((5, Some(0))),
+        (Postgres, DataType::Int32) => Some((10, Some(0))),
+        (Postgres, DataType::Int64) => Some((19, Some(0))),
+        (Postgres, DataType::UInt8) => Some((3, Some(0))),
+        (Postgres, DataType::UInt16) => Some((5, Some(0))),
+        (Postgres, DataType::UInt32) => Some((10, Some(0))),
+        (Postgres, DataType::UInt64) => Some((20, Some(0))),
         (_, DataType::Int8) => Some((3, None)),
         (_, DataType::Int16) => Some((5, None)),
         (_, DataType::Int32) => Some((10, None)),

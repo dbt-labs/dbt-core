@@ -15,10 +15,10 @@ use crate::typed_adapter::TypedBaseAdapter;
 use crate::{AdapterResponse, AdapterResult, BaseAdapter, SqlEngine, relation_object};
 
 use dbt_agate::AgateTable;
-use dbt_common::adapter::SchemaRegistry;
 use dbt_common::behavior_flags::{Behavior, BehaviorFlag};
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::{FsError, FsResult, current_function_name};
+use dbt_schema_store::SchemaStoreTrait;
 use dbt_schemas::schemas::common::{DbtIncrementalStrategy, ResolvedQuoting};
 use dbt_schemas::schemas::dbt_column::{DbtColumn, DbtColumnRef};
 use dbt_schemas::schemas::manifest::{
@@ -131,7 +131,7 @@ impl Drop for ConnectionGuard<'_> {
 pub struct BridgeAdapter {
     pub(crate) typed_adapter: Arc<dyn TypedBaseAdapter>,
     #[allow(dead_code)]
-    db: Option<Arc<dyn SchemaRegistry>>,
+    schema_store: Option<Arc<dyn SchemaStoreTrait>>,
     relation_cache: Arc<RelationCache>,
 }
 
@@ -145,12 +145,12 @@ impl BridgeAdapter {
     /// Create a new bridge adapter
     pub fn new(
         typed_adapter: Arc<dyn TypedBaseAdapter>,
-        db: Option<Arc<dyn SchemaRegistry>>,
+        db: Option<Arc<dyn SchemaStoreTrait>>,
         relation_cache: Arc<RelationCache>,
     ) -> Self {
         Self {
             typed_adapter,
-            db,
+            schema_store: db,
             relation_cache,
         }
     }
@@ -724,7 +724,7 @@ impl BaseAdapter for BridgeAdapter {
         state: &State,
         relation: Arc<dyn BaseRelation>,
     ) -> Result<Value, MinijinjaError> {
-        let maybe_from_local = if let Some(db) = &self.db {
+        let maybe_from_local = if let Some(schema_store) = &self.schema_store {
             // Check if the relation being queried is the same as the one currently being rendered
             // Skip local compilation results for the current relation since the compiled sql
             // may represent a schema that the model will have when the run is done, not the current state
@@ -747,11 +747,12 @@ impl BaseAdapter for BridgeAdapter {
                 };
 
             if !is_current_relation {
-                let schema = db.get_schema(&relation.get_fqn().unwrap_or_default());
+                let schema =
+                    schema_store.get_schema(&relation.get_canonical_fqn().unwrap_or_default());
                 if let Some(schema) = &schema {
                     let from_local = self
                         .typed_adapter
-                        .schema_to_columns(schema.original.as_ref(), &schema.schema)?;
+                        .schema_to_columns(schema.original(), schema.inner())?;
 
                     #[cfg(debug_assertions)]
                     {

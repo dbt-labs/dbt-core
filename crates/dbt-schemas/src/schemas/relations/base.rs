@@ -5,7 +5,7 @@ use crate::schemas::common::ResolvedQuoting;
 
 use dbt_common::constants::DBT_CTE_PREFIX;
 use dbt_common::{FsResult, current_function_name};
-use dbt_frontend_common::FullyQualifiedName;
+use dbt_schema_store::CanonicalFqn;
 use minijinja::arg_utils::{ArgParser, ArgsIter};
 use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State, Value};
 use minijinja::{invalid_argument, invalid_argument_inner, jinja_err};
@@ -126,16 +126,10 @@ pub trait BaseRelationProperties {
 
     fn get_identifier(&self) -> FsResult<String>;
 
+    fn get_canonical_fqn(&self) -> FsResult<CanonicalFqn>;
+
     fn get_location(&self) -> FsResult<Option<String>> {
         Ok(None)
-    }
-
-    fn get_fqn(&self) -> FsResult<FullyQualifiedName> {
-        let catalog = self.get_database()?;
-        let schema = self.get_schema()?;
-        let table = self.get_identifier()?;
-        // TODO: should we add location here?
-        Ok(FullyQualifiedName::new(catalog, schema, table))
     }
 }
 
@@ -844,6 +838,7 @@ pub fn render_with_run_filter_as_str(
 mod tests {
     use crate::filter::Sample;
     use chrono::{DateTime, NaiveDate, Utc};
+    use dbt_frontend_common::ident::Identifier;
     use minijinja::value::Kwargs;
 
     use super::*;
@@ -880,6 +875,14 @@ mod tests {
 
         fn get_identifier(&self) -> FsResult<String> {
             Ok(self.identifier.clone())
+        }
+
+        fn get_canonical_fqn(&self) -> FsResult<CanonicalFqn> {
+            Ok(CanonicalFqn::new(
+                &Identifier::new(&self.database),
+                &Identifier::new(&self.schema),
+                &Identifier::new(&self.identifier),
+            ))
         }
     }
 

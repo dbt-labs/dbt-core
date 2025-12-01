@@ -257,6 +257,65 @@ impl SelectExpression {
     }
 }
 
+/// Converts every `column:` selector in the expression into an equivalent `fqn:` selector.
+///
+/// Returns the converted expression along with a boolean indicating whether any
+/// conversion occurred.
+pub fn convert_column_selectors_to_fqn(expr: SelectExpression) -> (SelectExpression, bool) {
+    match expr {
+        SelectExpression::Atom(mut criteria) => {
+            let mut converted = false;
+
+            if let Some(inner) = criteria.exclude.take() {
+                let (inner_converted, inner_changed) = convert_column_selectors_to_fqn(*inner);
+                criteria.exclude = Some(Box::new(inner_converted));
+                converted |= inner_changed;
+            }
+
+            if criteria.method == MethodName::Column {
+                converted = true;
+                let mut parts = criteria.value.rsplitn(2, '.');
+                let _column_part = parts.next().unwrap_or("");
+                let node_part = parts.next().unwrap_or("");
+                criteria.method = MethodName::Fqn;
+                criteria.value = node_part.to_string();
+            }
+
+            (SelectExpression::Atom(criteria), converted)
+        }
+        SelectExpression::And(expressions) => {
+            let mut converted = false;
+            let converted_exprs = expressions
+                .into_iter()
+                .map(|expr| {
+                    let (expr_converted, expr_changed) = convert_column_selectors_to_fqn(expr);
+                    converted |= expr_changed;
+                    expr_converted
+                })
+                .collect();
+            (SelectExpression::And(converted_exprs), converted)
+        }
+        SelectExpression::Or(expressions) => {
+            let mut converted = false;
+            let converted_exprs = expressions
+                .into_iter()
+                .map(|expr| {
+                    let (expr_converted, expr_changed) = convert_column_selectors_to_fqn(expr);
+                    converted |= expr_changed;
+                    expr_converted
+                })
+                .collect();
+            (SelectExpression::Or(converted_exprs), converted)
+        }
+        SelectExpression::Exclude(expr) => {
+            let (converted_expr, converted) = convert_column_selectors_to_fqn(*expr);
+            (
+                SelectExpression::Exclude(Box::new(converted_expr)),
+                converted,
+            )
+        }
+    }
+}
 // ------------------------------------------------------------------------------------------------
 pub fn conjoin_expression(
     maybe_select_expression: Option<SelectExpression>,

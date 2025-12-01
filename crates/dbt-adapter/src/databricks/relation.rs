@@ -1,6 +1,8 @@
 use crate::relation_object::{RelationObject, StaticBaseRelation};
 
 use dbt_common::{ErrorCode, FsResult, fs_err};
+use dbt_frontend_common::ident::Identifier;
+use dbt_schema_store::CanonicalFqn;
 use dbt_schemas::schemas::relations::base::{
     BaseRelation, BaseRelationProperties, Policy, RelationPath,
 };
@@ -117,6 +119,25 @@ impl BaseRelationProperties for DatabricksRelation {
                 "identifier is required for databricks relation",
             )
         })
+    }
+
+    fn get_canonical_fqn(&self) -> FsResult<CanonicalFqn> {
+        let database = if self.quote_policy().database {
+            Identifier::new(self.get_database()?)
+        } else {
+            Identifier::new(self.get_database()?.to_ascii_lowercase())
+        };
+        let schema = if self.quote_policy().schema {
+            Identifier::new(self.get_schema()?)
+        } else {
+            Identifier::new(self.get_schema()?.to_ascii_lowercase())
+        };
+        let identifier = if self.quote_policy().identifier {
+            Identifier::new(self.get_identifier()?)
+        } else {
+            Identifier::new(self.get_identifier()?.to_ascii_lowercase())
+        };
+        Ok(CanonicalFqn::new(&database, &schema, &identifier))
     }
 }
 

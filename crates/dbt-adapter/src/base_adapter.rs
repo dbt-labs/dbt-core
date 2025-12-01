@@ -9,9 +9,9 @@ use crate::{AdapterResponse, AdapterResult};
 
 use dbt_agate::AgateTable;
 use dbt_common::FsResult;
-use dbt_common::adapter::SchemaRegistry;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_args::ReplayMode;
+use dbt_schema_store::SchemaStoreTrait;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::project::QueryComment;
@@ -1118,7 +1118,7 @@ pub trait AdapterFactory: Send + Sync {
         config: dbt_serde_yaml::Mapping,
         replay_mode: Option<ReplayMode>,
         flags: BTreeMap<String, Value>,
-        db: Option<Arc<dyn SchemaRegistry>>,
+        schema_cache: Option<Arc<dyn SchemaStoreTrait>>,
         query_cache: Option<Arc<dyn QueryCache>>,
         quoting: ResolvedQuoting,
         query_comment: Option<QueryComment>,

@@ -273,28 +273,42 @@ impl ColumnBuilder {
     }
 
     fn build_postgres_like(field: &FieldRef, type_ops: &dyn TypeOps) -> Column {
-        let mut data_type = String::new();
-        match field.data_type() {
+        let data_type_ref = field.data_type();
+        let mut rendered_type = String::new();
+        match data_type_ref {
             // Mimic broken conversion that was here before just in case
             // something depends on it.
             // TODO: remove this broken formatting behavior
-            DataType::Timestamp(_, _) | DataType::Time64(_) => data_type.push_str("datetime"),
+            DataType::Timestamp(_, _) | DataType::Time64(_) => rendered_type.push_str("datetime"),
             _ => {
                 type_ops
-                    .format_arrow_type_as_sql(field.data_type(), &mut data_type)
+                    .format_arrow_type_as_sql(data_type_ref, &mut rendered_type)
                     .unwrap();
             }
         }
         if !field.is_nullable() {
-            data_type.push_str(" not null");
+            rendered_type.push_str(" not null");
         }
+
+        let (numeric_precision, numeric_scale) = {
+            let precision_scale =
+                sql_types::numeric_precision_scale(AdapterType::Postgres, data_type_ref)
+                    .ok()
+                    .flatten();
+            match precision_scale {
+                Some((p, Some(s))) => (Some(p as u64), Some(s as u64)),
+                Some((p, None)) => (Some(p as u64), None),
+                None => (None, None),
+            }
+        };
         Column::new(
             AdapterType::Postgres,
             field.name().to_string(),
-            data_type,
+            rendered_type,
             None, // char_size
-            None, // numeric_precision
-            None, // numeric_scale
+            numeric_precision,
+            // If it is an integer, the scale is 0, otherwise it is the scale of the number.
+            numeric_scale,
         )
     }
 

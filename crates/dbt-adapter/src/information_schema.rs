@@ -1,6 +1,8 @@
 use crate::relation_object::RelationObject;
 
 use dbt_common::FsResult;
+use dbt_frontend_common::ident::Identifier;
+use dbt_schema_store::CanonicalFqn;
 use dbt_schemas::{
     dbt_types::RelationType,
     schemas::relations::base::{BaseRelation, BaseRelationProperties, Policy},
@@ -60,6 +62,14 @@ impl BaseRelationProperties for InformationSchema {
 
     fn get_identifier(&self) -> FsResult<String> {
         Ok(self.identifier.clone().unwrap_or_default())
+    }
+
+    fn get_canonical_fqn(&self) -> FsResult<CanonicalFqn> {
+        Ok(CanonicalFqn::new(
+            &Identifier::new(self.get_database()?),
+            &Identifier::new(self.get_schema()?),
+            &Identifier::new(self.get_identifier()?),
+        ))
     }
 }
 
