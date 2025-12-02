@@ -269,6 +269,11 @@ def validate_model_config(config: Dict[str, Any], file_path: str) -> None:
             if len(error.path) == 0:
                 key_path = error_path_to_string(error)
                 for key in keys:
+                    # Special case for pre/post hook keys as they are updated during config parsing
+                    # from the user-provided pre_hook/post_hook to pre-hook/post-hook keys.
+                    # Avoids false positives as described in https://github.com/dbt-labs/dbt-core/issues/12087
+                    if key in ("post-hook", "pre-hook"):
+                        continue
                     deprecations.warn(
                         "custom-key-in-config-deprecation",
                         key=key,
