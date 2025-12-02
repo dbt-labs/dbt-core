@@ -34,6 +34,7 @@ use dbt_xdbc::bigquery::QUERY_LINK_FAILED_JOB;
 use dbt_xdbc::salesforce::DATA_TRANSFORM_RUN_TIMEOUT;
 use dbt_xdbc::{Connection, QueryCtx};
 use indexmap::IndexMap;
+use minijinja::value::ValueMap;
 use minijinja::{State, Value, args};
 
 use std::borrow::Cow;
@@ -427,65 +428,69 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         conn: &'_ mut dyn Connection,
         relation: Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
-        if self.adapter_type() == AdapterType::Snowflake {
-            let ctx = query_ctx_from_state(state)?.with_desc("describe_dynamic_table");
+        match self.adapter_type() {
+            AdapterType::Snowflake => {
+                let ctx = query_ctx_from_state(state)?.with_desc("describe_dynamic_table");
 
-            let quoting = relation.quote_policy();
+                let quoting = relation.quote_policy();
 
-            let schema = if quoting.schema {
-                relation.schema_as_quoted_str()?
-            } else {
-                relation.schema_as_str()?
-            };
+                let schema = if quoting.schema {
+                    relation.schema_as_quoted_str()?
+                } else {
+                    relation.schema_as_str()?
+                };
 
-            let database = if quoting.database {
-                relation.database_as_quoted_str()?
-            } else {
-                relation.database_as_str()?
-            };
+                let database = if quoting.database {
+                    relation.database_as_quoted_str()?
+                } else {
+                    relation.database_as_str()?
+                };
 
-            let show_sql = format!(
-                "show dynamic tables like '{}' in schema {database}.{schema}",
-                relation.identifier_as_str()?
-            );
+                let show_sql = format!(
+                    "show dynamic tables like '{}' in schema {database}.{schema}",
+                    relation.identifier_as_str()?
+                );
 
-            let (_, table) = self.query(&ctx, conn, &show_sql, None)?;
+                let (_, table) = self.query(&ctx, conn, &show_sql, None)?;
 
-            let renamed: BTreeMap<String, String> = table
-                .column_names()
-                .into_iter()
-                .map(|name| {
-                    let lowered = name.to_ascii_lowercase();
-                    (name, lowered)
-                })
-                .collect();
+                let new_column_names: Vec<String> = table
+                    .column_names()
+                    .into_iter()
+                    .map(|name| name.to_ascii_lowercase())
+                    .collect();
 
-            let table = table.rename(
-                Some(&Value::from_serialize(renamed)),
-                None,
-                false,
-                false,
-                &minijinja::value::Kwargs::default(),
-            )?;
+                let table = table
+                    .rename(Some(new_column_names), None, false, false)?
+                    .select(&[
+                        "name".to_string(),
+                        "schema_name".to_string(),
+                        "database_name".to_string(),
+                        "text".to_string(),
+                        "target_lag".to_string(),
+                        "warehouse".to_string(),
+                        "refresh_mode".to_string(),
+                    ]);
 
-            let columns_to_select = [
-                "name".to_string(),
-                "schema_name".to_string(),
-                "database_name".to_string(),
-                "text".to_string(),
-                "target_lag".to_string(),
-                "warehouse".to_string(),
-                "refresh_mode".to_string(),
-            ];
-
-            let table = table.select(&columns_to_select);
-
-            let mut result = HashMap::new();
-            result.insert("dynamic_table", Value::from_object(table));
-
-            return Ok(Value::from_serialize(result));
+                Ok(Value::from(ValueMap::from([(
+                    Value::from("dynamic_table"),
+                    Value::from_object(table),
+                )])))
+            }
+            AdapterType::Postgres
+            | AdapterType::Bigquery
+            | AdapterType::Databricks
+            | AdapterType::Redshift
+            | AdapterType::Salesforce => {
+                let err = format!(
+                    "describe_dynamic_table is not supported by the {} adapter",
+                    self.adapter_type()
+                );
+                Err(minijinja::Error::new(
+                    minijinja::ErrorKind::InvalidOperation,
+                    err,
+                ))
+            }
         }
-        unimplemented!("describe_dynamic_table is only available for the Snowflake adapter")
     }
 
     /// Drop relation
