@@ -77,6 +77,7 @@ from dbt.events.types import (
     InvalidDisabledTargetInTestNode,
     MicrobatchModelNoEventTimeInputs,
     NodeNotFoundOrDisabled,
+    PackageNodeDependsOnRootProjectNode,
     ParsedFileLoadFailed,
     ParsePerfInfoPath,
     PartialParsingError,
@@ -1636,6 +1637,19 @@ def invalid_target_fail_unless_test(
         )
 
 
+def warn_if_package_node_depends_on_root_project_node(
+    node: ManifestNode, target_model: ManifestNode, current_project: str
+) -> None:
+    if node.package_name != current_project and target_model.package_name == current_project:
+        warn_or_error(
+            PackageNodeDependsOnRootProjectNode(
+                node_name=node.name,
+                package_name=node.package_name,
+                root_project_unique_id=target_model.unique_id,
+            )
+        )
+
+
 def _build_model_names_to_versions(manifest: Manifest) -> Dict[str, Dict]:
     model_names_to_versions: Dict[str, Dict] = {}
     for node in manifest.nodes.values():
@@ -1892,6 +1906,9 @@ def _process_refs(
                 access=AccessType.Protected,
                 scope=target_model.package_name,
             )
+
+        if not get_flags().require_ref_prefers_node_package_to_root:
+            warn_if_package_node_depends_on_root_project_node(node, target_model, current_project)
 
         target_model_id = target_model.unique_id
         node.depends_on.add_node(target_model_id)
