@@ -553,6 +553,12 @@ select * from renamed
 
 """
 
+customers_yml = """
+models:
+  - name: customers
+    description: "This table contains customer data"
+"""
+
 model_four2_sql = """
 select fun from {{ ref('model_one') }}
 
@@ -686,6 +692,17 @@ select 1 as id, 'Jeremy' as first_name, 'Cohen' as last_name, 'indigo' as favori
 
 orders_sql = """
 select 1 as id, 101 as user_id, 'pending' as status
+
+"""
+
+orders_sql_modified = """
+select 1 as id, 101 as user_id, 'completed' as status
+
+"""
+
+orders_singular_test_sql = """
+select * from {{ ref('orders') }}
+where status = 'invalid'
 
 """
 
