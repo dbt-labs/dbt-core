@@ -11,6 +11,16 @@ from tests.functional.sources.fixtures import (
     disabled_source_level_schema_yml,
     disabled_source_table_schema_yml,
     invalid_config_source_schema_yml,
+    source_config_loaded_at_field_config_level,
+    source_config_loaded_at_field_top_level,
+    source_config_loaded_at_query_config_level,
+    source_config_loaded_at_query_top_level,
+    source_table_config_loaded_at_field_config_level,
+    source_table_config_loaded_at_query_config_level,
+    source_table_config_loaded_at_query_not_set_if_field_present,
+    source_table_config_loaded_at_query_not_set_if_field_present_top_level,
+    table_config_loaded_at_field_top_level,
+    table_config_loaded_at_query_top_level,
 )
 
 
@@ -179,3 +189,149 @@ class TestInvalidSourceConfig(SourceConfigTests):
             run_dbt(["parse"])
         expected_msg = "'True and False' is not of type 'boolean'"
         assert expected_msg in str(excinfo.value)
+
+
+class TestSourceLoadedAtFieldConfigLevel:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": source_config_loaded_at_field_config_level,
+        }
+
+    def test_loaded_at_field_config(self, project):
+        manifest = run_dbt(["parse"])
+        source = manifest.sources["source.test.test_source.test_table"]
+        assert source.loaded_at_field == "id"
+        assert source.config.loaded_at_field == "id"
+
+
+class TestSourceLoadedAtQueryConfigLevel:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": source_config_loaded_at_query_config_level,
+        }
+
+    def test_loaded_at_field_config(self, project):
+        manifest = run_dbt(["parse"])
+        source = manifest.sources["source.test.test_source.test_table"]
+        assert source.loaded_at_query == "select 1"
+        assert source.config.loaded_at_query == "select 1"
+
+
+class TestTableLoadedAtFieldConfigLevel:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": source_table_config_loaded_at_field_config_level,
+        }
+
+    def test_loaded_at_field_config(self, project):
+        manifest = run_dbt(["parse"])
+        source = manifest.sources["source.test.test_source.test_table"]
+        assert source.loaded_at_field == "id"
+        assert source.config.loaded_at_field == "id"
+
+
+class TestTableLoadedAtQueryConfigLevel:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": source_table_config_loaded_at_query_config_level,
+        }
+
+    def test_loaded_at_field_config(self, project):
+        manifest = run_dbt(["parse"])
+        source = manifest.sources["source.test.test_source.test_table"]
+        assert source.loaded_at_query == "select 1"
+        assert source.config.loaded_at_query == "select 1"
+
+
+class TestSourceLoadedAtFieldTopLevel:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": source_config_loaded_at_field_top_level,
+        }
+
+    def test_loaded_at_field_config(self, project):
+        manifest = run_dbt(["parse"])
+        source = manifest.sources["source.test.test_source.test_table"]
+        assert source.loaded_at_field == "id"
+        assert source.config.loaded_at_field == "id"
+
+
+class TestSourceLoadedAtQueryTopLevel:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": source_config_loaded_at_query_top_level,
+        }
+
+    def test_loaded_at_query_config(self, project):
+        manifest = run_dbt(["parse"])
+        source = manifest.sources["source.test.test_source.test_table"]
+        assert source.loaded_at_query == "select 1"
+        assert source.config.loaded_at_query == "select 1"
+
+
+class TestTableLoadedAtFieldTopLevel:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": table_config_loaded_at_field_top_level,
+        }
+
+    def test_loaded_at_field_config(self, project):
+        manifest = run_dbt(["parse"])
+        source = manifest.sources["source.test.test_source.test_table"]
+        assert source.loaded_at_field == "id"
+        assert source.config.loaded_at_field == "id"
+
+
+class TestTableLoadedAtQueryTopLevel:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": table_config_loaded_at_query_top_level,
+        }
+
+    def test_loaded_at_query_config(self, project):
+        manifest = run_dbt(["parse"])
+        source = manifest.sources["source.test.test_source.test_table"]
+        assert source.loaded_at_query == "select 1"
+        assert source.config.loaded_at_query == "select 1"
+
+
+class TestTableLoadedAtQueryNoneWhenFieldSetConfigLevel:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": source_table_config_loaded_at_query_not_set_if_field_present,
+        }
+
+    def test_loaded_at_query_config(self, project):
+        manifest = run_dbt(["parse"])
+        source = manifest.sources["source.test.test_source.test_table"]
+        assert source.loaded_at_field == "id"
+        assert source.config.loaded_at_field == "id"
+
+        assert source.loaded_at_query is None
+        assert source.config.loaded_at_query is None
+
+
+class TestTableLoadedAtQueryNoneWhenFieldSetTopLevel:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": source_table_config_loaded_at_query_not_set_if_field_present_top_level,
+        }
+
+    def test_loaded_at_query_config(self, project):
+        manifest = run_dbt(["parse"])
+        source = manifest.sources["source.test.test_source.test_table"]
+        assert source.loaded_at_field == "id"
+        assert source.config.loaded_at_field == "id"
+
+        assert source.loaded_at_query is None
+        assert source.config.loaded_at_query is None

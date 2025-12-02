@@ -1,9 +1,9 @@
 import os
 import random
 from argparse import Namespace
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Mapping
+from typing import Dict, Mapping
 
 import pytest  # type: ignore
 import yaml
@@ -17,6 +17,7 @@ from dbt.adapters.factory import (
 )
 from dbt.config.runtime import RuntimeConfig
 from dbt.context.providers import generate_runtime_macro_context
+from dbt.deprecations import reset_deprecations
 from dbt.events.logging import setup_event_logger
 from dbt.mp_context import get_mp_context
 from dbt.parser.manifest import ManifestLoader
@@ -75,7 +76,9 @@ from dbt_common.tests import enable_test_caching
 def prefix():
     # create a directory name that will be unique per test session
     _randint = random.randint(0, 9999)
-    _runtime_timedelta = datetime.utcnow() - datetime(1970, 1, 1, 0, 0, 0)
+    _runtime_timedelta = datetime.now(timezone.utc).replace(tzinfo=None) - datetime(
+        1970, 1, 1, 0, 0, 0
+    )
     _runtime = (int(_runtime_timedelta.total_seconds() * 1e6)) + _runtime_timedelta.microseconds
     prefix = f"test{_runtime}{_randint:04}"
     return prefix
@@ -384,6 +387,11 @@ def analyses():
     return {}
 
 
+@pytest.fixture(scope="class")
+def functions() -> Dict[str, str]:
+    return {}
+
+
 # Write out the files provided by models, macros, properties, snapshots, seeds, tests, analyses
 @pytest.fixture(scope="class")
 def project_files(
@@ -395,6 +403,7 @@ def project_files(
     seeds,
     tests,
     analyses,
+    functions,
     selectors_yml,
     dependencies_yml,
     packages_yml,
@@ -406,6 +415,7 @@ def project_files(
     write_project_files(project_root, "seeds", seeds)
     write_project_files(project_root, "tests", tests)
     write_project_files(project_root, "analyses", analyses)
+    write_project_files(project_root, "functions", functions)
 
 
 # We have a separate logs dir for every test
@@ -594,6 +604,7 @@ def project_setup(
         pass
     os.chdir(orig_cwd)
     cleanup_event_logger()
+    reset_deprecations()
 
 
 # This is the main fixture that is used in all functional tests. It pulls in the other

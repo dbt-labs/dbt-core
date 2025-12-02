@@ -14,9 +14,9 @@ from dbt.flags import set_from_args
 from dbt.parser.manifest import ManifestLoader, _warn_for_unused_resource_config_paths
 from dbt.parser.read_files import FileDiff
 from dbt.tracking import User
+from dbt_common.events.event_catcher import EventCatcher
 from dbt_common.events.event_manager_client import add_callback_to_manager
 from tests.unit.fixtures import model_node
-from tests.utils import EventCatcher
 
 
 class TestPartialParse:

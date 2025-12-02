@@ -1,0 +1,6 @@
+kind: Dependencies
+body: Use EventCatcher from dbt-common instead of maintaining a local copy
+time: 2025-11-18T15:53:54.284561+05:30
+custom:
+    Author: 3loka
+    Issue: "12124"

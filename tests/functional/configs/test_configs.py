@@ -57,7 +57,7 @@ class TestTargetConfigs(BaseConfigProject):
     @pytest.fixture(scope="class")
     def project_config_update(self):
         return {
-            "target-path": "target_{{ modules.datetime.datetime.utcnow().strftime('%Y%m%dT%H%M%S') }}",
+            "target-path": "target_{{ modules.datetime.datetime.now(modules.pytz.timezone('Etc/UTC')).strftime('%Y%m%dT%H%M%S') }}",
             "seeds": {
                 "quote_columns": False,
             },

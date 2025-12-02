@@ -27,6 +27,8 @@ class MaturityType(StrEnum):
 @dataclass
 class ExposureConfig(BaseConfig):
     enabled: bool = True
+    tags: List[str] = field(default_factory=list)
+    meta: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

@@ -691,3 +691,55 @@ class TestUnitTestSubfolderPath:
                 "target/compiled/test/models/subfolder/my_model.yml/models/subfolder/my_unit_test.sql"
             )
         )
+
+
+my_model_with_function_sql = """
+select {{ function('double_it') }}(1) as doubled_value
+"""
+
+test_my_model_with_function_yml = """
+unit_tests:
+  - name: test_my_model
+    model: my_model
+    given: []
+    expect:
+      rows:
+        - {doubled_value: 2}
+"""
+
+
+double_it_sql = """
+select value * 2
+"""
+
+double_it_yml = """
+functions:
+  - name: double_it
+    description: Doubles whatever number is passed in
+    arguments:
+      - name: value
+        data_type: float
+        description: A number to be doubled
+    returns:
+      data_type: float
+"""
+
+
+class TestUnitTestModelWithFunction:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model.sql": my_model_with_function_sql,
+            "test_my_model.yml": test_my_model_with_function_yml,
+        }
+
+    @pytest.fixture(scope="class")
+    def functions(self):
+        return {
+            "double_it.sql": double_it_sql,
+            "double_it.yml": double_it_yml,
+        }
+
+    def test_model_with_function(self, project):
+        run_dbt(["build", "--empty"])
+        run_dbt(["test"])

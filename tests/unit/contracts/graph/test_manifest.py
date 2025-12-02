@@ -3,7 +3,7 @@ import unittest
 from argparse import Namespace
 from collections import namedtuple
 from copy import deepcopy
-from datetime import datetime
+from datetime import datetime, timezone
 from itertools import product
 from unittest import mock
 
@@ -62,6 +62,7 @@ REQUIRED_PARSED_NODE_KEYS = frozenset(
         "refs",
         "sources",
         "metrics",
+        "functions",
         "meta",
         "depends_on",
         "database",
@@ -98,7 +99,6 @@ REQUIRED_PARSED_NODE_KEYS = frozenset(
         "defer_relation",
         "time_spine",
         "batch",
-        "freshness",
     }
 )
 
@@ -375,9 +375,12 @@ class ManifestTest(unittest.TestCase):
             disabled={},
             files={},
             exposures={},
+            functions={},
             metrics={},
             selectors={},
-            metadata=ManifestMetadata(generated_at=datetime.utcnow()),
+            metadata=ManifestMetadata(
+                generated_at=datetime.now(timezone.utc).replace(tzinfo=None)
+            ),
             semantic_models={},
             saved_queries={},
         )
@@ -393,6 +396,7 @@ class ManifestTest(unittest.TestCase):
                 "sources": {},
                 "macros": {},
                 "exposures": {},
+                "functions": {},
                 "metrics": {},
                 "groups": {},
                 "selectors": {},
@@ -408,6 +412,7 @@ class ManifestTest(unittest.TestCase):
                     "invocation_started_at": str(invocation_started_at).replace(" ", "T") + "Z",
                     "send_anonymous_usage_stats": False,
                     "user_id": "cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf",
+                    "quoting": {},
                 },
                 "docs": {},
                 "disabled": {},
@@ -433,7 +438,9 @@ class ManifestTest(unittest.TestCase):
             exposures={},
             metrics={},
             selectors={},
-            metadata=ManifestMetadata(generated_at=datetime.utcnow()),
+            metadata=ManifestMetadata(
+                generated_at=datetime.now(timezone.utc).replace(tzinfo=None)
+            ),
         )
         serialized = manifest.writable_manifest().to_dict(omit_none=True)
         self.assertEqual(serialized["metadata"]["generated_at"], "2018-02-14T09:15:13Z")
@@ -509,6 +516,7 @@ class ManifestTest(unittest.TestCase):
             set(
                 [
                     "exposures",
+                    "functions",
                     "groups",
                     "nodes",
                     "sources",
@@ -533,12 +541,14 @@ class ManifestTest(unittest.TestCase):
     def test_no_nodes_with_metadata(self, mock_user):
         mock_user.id = "cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf"
         dbt_common.invocation._INVOCATION_ID = "01234567-0123-0123-0123-0123456789ab"
-        dbt_common.invocation._INVOCATION_STARTED_AT = datetime.utcnow()
+        dbt_common.invocation._INVOCATION_STARTED_AT = datetime.now(timezone.utc).replace(
+            tzinfo=None
+        )
         set_from_args(Namespace(SEND_ANONYMOUS_USAGE_STATS=False), None)
         metadata = ManifestMetadata(
             project_id="098f6bcd4621d373cade4e832627b4f6",
             adapter_type="postgres",
-            generated_at=datetime.utcnow(),
+            generated_at=datetime.now(timezone.utc).replace(tzinfo=None),
             invocation_started_at=dbt_common.invocation._INVOCATION_STARTED_AT,
             user_id="cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf",
             send_anonymous_usage_stats=False,
@@ -553,6 +563,7 @@ class ManifestTest(unittest.TestCase):
             metadata=metadata,
             files={},
             exposures={},
+            functions={},
             semantic_models={},
             saved_queries={},
         )
@@ -567,6 +578,7 @@ class ManifestTest(unittest.TestCase):
                 "sources": {},
                 "macros": {},
                 "exposures": {},
+                "functions": {},
                 "metrics": {},
                 "groups": {},
                 "selectors": {},
@@ -585,6 +597,7 @@ class ManifestTest(unittest.TestCase):
                     "invocation_id": "01234567-0123-0123-0123-0123456789ab",
                     "invocation_started_at": invocation_started_at,
                     "env": {ENV_KEY_NAME: "value"},
+                    "quoting": {},
                 },
                 "disabled": {},
                 "semantic_models": {},
@@ -892,9 +905,9 @@ class MixedManifestTest(unittest.TestCase):
     def test_no_nodes(self, mock_user):
         mock_user.id = "cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf"
         set_from_args(Namespace(SEND_ANONYMOUS_USAGE_STATS=False), None)
-        invocation_started_at = datetime.utcnow()
+        invocation_started_at = datetime.now(timezone.utc).replace(tzinfo=None)
         metadata = ManifestMetadata(
-            generated_at=datetime.utcnow(),
+            generated_at=datetime.now(timezone.utc).replace(tzinfo=None),
             invocation_id="01234567-0123-0123-0123-0123456789ab",
             invocation_started_at=invocation_started_at,
         )
@@ -918,6 +931,7 @@ class MixedManifestTest(unittest.TestCase):
                 "macros": {},
                 "sources": {},
                 "exposures": {},
+                "functions": {},
                 "metrics": {},
                 "groups": {},
                 "selectors": {},
@@ -933,6 +947,7 @@ class MixedManifestTest(unittest.TestCase):
                     "env": {ENV_KEY_NAME: "value"},
                     "send_anonymous_usage_stats": False,
                     "user_id": "cfc9500f-dc7f-4c83-9ea7-2c581c1b38cf",
+                    "quoting": {},
                 },
                 "docs": {},
                 "disabled": {},
@@ -952,7 +967,9 @@ class MixedManifestTest(unittest.TestCase):
             docs={},
             disabled={},
             selectors={},
-            metadata=ManifestMetadata(generated_at=datetime.utcnow()),
+            metadata=ManifestMetadata(
+                generated_at=datetime.now(timezone.utc).replace(tzinfo=None)
+            ),
             files={},
             exposures={},
         )
@@ -1000,6 +1017,7 @@ class MixedManifestTest(unittest.TestCase):
         manifest = Manifest(
             nodes=nodes,
             sources={},
+            functions={},
             macros={},
             docs={},
             disabled={},
@@ -1017,6 +1035,7 @@ class MixedManifestTest(unittest.TestCase):
             set(
                 [
                     "exposures",
+                    "functions",
                     "groups",
                     "metrics",
                     "nodes",
@@ -1080,9 +1099,9 @@ class MixedManifestTest(unittest.TestCase):
 
 
 class TestManifestSearch(unittest.TestCase):
-    _macros = []
-    _nodes = []
-    _docs = []
+    _macros: list = []
+    _nodes: list = []
+    _docs: list = []
 
     @property
     def macros(self):

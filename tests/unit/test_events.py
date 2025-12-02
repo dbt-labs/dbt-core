@@ -159,6 +159,26 @@ sample_values = [
     core_types.MFTimespineWithoutYamlConfigurationDeprecation(),
     core_types.MFCumulativeTypeParamsDeprecation(),
     core_types.MicrobatchMacroOutsideOfBatchesDeprecation(),
+    core_types.GenericJSONSchemaValidationDeprecation(violation="", key_path="", file=""),
+    core_types.UnexpectedJinjaBlockDeprecation(msg="", file=""),
+    core_types.DuplicateYAMLKeysDeprecation(duplicate_description="", file=""),
+    core_types.CustomTopLevelKeyDeprecation(msg="", file=""),
+    core_types.CustomKeyInConfigDeprecation(key="", key_path="", file=""),
+    core_types.CustomKeyInObjectDeprecation(key="", key_path="", file=""),
+    core_types.DeprecationsSummary(summaries=[], show_all_hint=True),
+    core_types.CustomOutputPathInSourceFreshnessDeprecation(path=""),
+    core_types.SourceOverrideDeprecation(file="", source_name=""),
+    core_types.PropertyMovedToConfigDeprecation(key="", key_path="", file=""),
+    core_types.WEOIncludeExcludeDeprecation(found_include=True, found_exclude=True),
+    core_types.ModelParamUsageDeprecation(),
+    core_types.EnvironmentVariableNamespaceDeprecation(env_var="", reserved_prefix=""),
+    core_types.MissingPlusPrefixDeprecation(key="", key_path="", file=""),
+    core_types.ArgumentsPropertyInGenericTestDeprecation(test_name=""),
+    core_types.MissingArgumentsPropertyInGenericTestDeprecation(test_name=""),
+    core_types.ModulesItertoolsUsageDeprecation(),
+    core_types.DuplicateNameDistinctNodeTypesDeprecation(
+        resource_name="", package_name="", unique_id1="", unique_id2=""
+    ),
     # E - DB Adapter ======================
     adapter_types.AdapterEventDebug(),
     adapter_types.AdapterEventInfo(),
@@ -290,6 +310,7 @@ sample_values = [
     core_types.SemanticValidationFailure(msg=""),
     core_types.MicrobatchModelNoEventTimeInputs(model_name=""),
     core_types.InvalidConcurrentBatchesConfig(num_models=1, adapter_type=""),
+    core_types.InvalidMacroAnnotation(msg="", macro_file_path="", macro_unique_id=""),
     # M - Deps generation ======================
     core_types.GitSparseCheckoutSubdirectory(subdir=""),
     core_types.GitProgressCheckoutRevision(revision=""),
@@ -438,6 +459,13 @@ sample_values = [
         total_batches=0,
         execution_time=0,
     ),
+    core_types.LogFunctionResult(
+        description="",
+        status="",
+        index=0,
+        total=0,
+        execution_time=0,
+    ),
     # W - Node testing ======================
     core_types.CatchableExceptionOnRun(exc=""),
     core_types.InternalErrorOnRun(build_path="", exc=""),
@@ -488,6 +516,9 @@ sample_values = [
     core_types.ListCmdOut(),
     types.Note(msg="This is a note."),
     core_types.ResourceReport(),
+    core_types.ArtifactUploadSuccess(),
+    core_types.ArtifactUploadError(),
+    core_types.ArtifactUploadSkipped(),
 ]
 
 

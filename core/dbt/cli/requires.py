@@ -3,7 +3,7 @@ import os
 import time
 import traceback
 from functools import update_wrapper
-from typing import Optional
+from typing import Dict, Optional
 
 from click import Context
 
@@ -12,11 +12,15 @@ from dbt.adapters.factory import adapter_management, get_adapter, register_adapt
 from dbt.cli.exceptions import ExceptionExit, ResultExit
 from dbt.cli.flags import Flags
 from dbt.config import RuntimeConfig
+from dbt.config.catalogs import get_active_write_integration, load_catalogs
 from dbt.config.runtime import UnsetProfile, load_profile, load_project
 from dbt.context.providers import generate_runtime_macro_context
 from dbt.context.query_header import generate_query_header_context
+from dbt.deprecations import show_deprecations_summary
+from dbt.env_vars import KNOWN_ENGINE_ENV_VARS, validate_engine_env_vars
 from dbt.events.logging import setup_event_logger
 from dbt.events.types import (
+    ArtifactUploadError,
     CommandCompleted,
     MainEncounteredError,
     MainReportArgs,
@@ -26,17 +30,19 @@ from dbt.events.types import (
     ResourceReport,
 )
 from dbt.exceptions import DbtProjectError, FailFastError
-from dbt.flags import get_flag_dict, set_flags
+from dbt.flags import get_flag_dict, get_flags, set_flags
 from dbt.mp_context import get_mp_context
 from dbt.parser.manifest import parse_manifest
 from dbt.plugins import set_up_plugin_manager
 from dbt.profiler import profiler
 from dbt.tracking import active_user, initialize_from_flags, track_run
 from dbt.utils import try_get_max_rss_kb
+from dbt.utils.artifact_upload import upload_artifacts
 from dbt.version import installed as installed_version
 from dbt_common.clients.system import get_env
 from dbt_common.context import get_invocation_context, set_invocation_context
 from dbt_common.events.base_types import EventLevel
+from dbt_common.events.event_manager_client import get_event_manager
 from dbt_common.events.functions import LOG_VERSION, fire_event
 from dbt_common.events.helpers import get_json_string_utcnow
 from dbt_common.exceptions import DbtBaseException as DbtException
@@ -49,6 +55,17 @@ from dbt_common.record import (
     get_record_types_from_env,
 )
 from dbt_common.utils import cast_dict_to_dict_of_strings
+
+
+def _cross_propagate_engine_env_vars(env_dict: Dict[str, str]) -> None:
+    for env_var in KNOWN_ENGINE_ENV_VARS:
+        if env_var.old_name is not None:
+            # If the old name is in the env dict, and not the new name, set the new name based on the old name
+            if env_var.old_name in env_dict and env_var.name not in env_dict:
+                env_dict[env_var.name] = env_dict[env_var.old_name]
+            # If the new name is in the env dict, override the old name with it
+            elif env_var.name in env_dict:
+                env_dict[env_var.old_name] = env_dict[env_var.name]
 
 
 def preflight(func):
@@ -64,12 +81,17 @@ def preflight(func):
 
         # Must be set after record/replay is set up so that the env can be
         # recorded or replayed if needed.
-        get_invocation_context()._env = get_env()
+        env_dict = get_env()
+        _cross_propagate_engine_env_vars(env_dict)
+        get_invocation_context()._env = env_dict
 
         # Flags
         flags = Flags(ctx)
         ctx.obj["flags"] = flags
         set_flags(flags)
+        get_event_manager().require_warn_or_error_handling = (
+            flags.require_all_warnings_handled_by_warn_error
+        )
 
         # Reset invocation_id for each 'invocation' of a dbt command (can happen multiple times in a single process)
         reset_invocation_id()
@@ -88,7 +110,7 @@ def preflight(func):
         fire_event(MainReportArgs(args=flags_dict_str))
 
         # Deprecation warnings
-        flags.fire_deprecations()
+        flags.fire_deprecations(ctx)
 
         if active_user is not None:  # mypy appeasement, always true
             fire_event(MainTrackingUserState(user_state=active_user.state()))
@@ -99,6 +121,9 @@ def preflight(func):
 
         # Adapter management
         ctx.with_resource(adapter_management())
+
+        # Validate engine env var restricted name space
+        validate_engine_env_vars()
 
         return func(*args, **kwargs)
 
@@ -111,12 +136,16 @@ def setup_record_replay():
 
     recorder: Optional[Recorder] = None
     if rec_mode == RecorderMode.REPLAY:
-        previous_recording_path = os.environ.get("DBT_RECORDER_FILE_PATH")
+        previous_recording_path = os.environ.get(
+            "DBT_ENGINE_RECORDER_FILE_PATH"
+        ) or os.environ.get("DBT_RECORDER_FILE_PATH")
         recorder = Recorder(
             RecorderMode.REPLAY, types=rec_types, previous_recording_path=previous_recording_path
         )
     elif rec_mode == RecorderMode.DIFF:
-        previous_recording_path = os.environ.get("DBT_RECORDER_FILE_PATH")
+        previous_recording_path = os.environ.get(
+            "DBT_ENGINE_RECORDER_FILE_PATH"
+        ) or os.environ.get("DBT_RECORDER_FILE_PATH")
         # ensure types match the previous recording
         types = get_record_types_from_dict(previous_recording_path)
         recorder = Recorder(
@@ -164,6 +193,17 @@ def postflight(func):
         finally:
             # Fire ResourceReport, but only on systems which support the resource
             # module. (Skip it on Windows).
+            try:
+                if get_flags().upload_to_artifacts_ingest_api:
+                    upload_artifacts(
+                        get_flags().project_dir, get_flags().target_path, ctx.command.name
+                    )
+
+            except Exception as e:
+                fire_event(ArtifactUploadError(msg=str(e)))
+
+            show_deprecations_summary()
+
             if importlib.util.find_spec("resource") is not None:
                 import resource
 
@@ -231,6 +271,7 @@ def profile(func):
         threads = getattr(flags, "THREADS", None)
         profile = load_profile(flags.PROJECT_DIR, flags.VARS, flags.PROFILE, flags.TARGET, threads)
         ctx.obj["profile"] = profile
+        get_invocation_context().uses_adapter(profile.credentials.type)
 
         return func(*args, **kwargs)
 
@@ -248,8 +289,24 @@ def project(func):
             raise DbtProjectError("profile required for project")
 
         flags = ctx.obj["flags"]
+        # TODO deprecations warnings fired from loading the project will lack
+        # the project_id in the snowplow event.
+
+        # Determine if vars should be required during project loading.
+        # Commands that don't need vars evaluated (like 'deps', 'clean')
+        # should use lenient mode (require_vars=False) to allow missing vars.
+        # Commands that validate or execute (like 'run', 'compile', 'build', 'debug') should use
+        # strict mode (require_vars=True) to show helpful "Required var X not found" errors.
+        # If adding more commands to lenient mode, update this condition.
+        require_vars = flags.WHICH != "deps"
+
         project = load_project(
-            flags.PROJECT_DIR, flags.VERSION_CHECK, ctx.obj["profile"], flags.VARS
+            flags.PROJECT_DIR,
+            flags.VERSION_CHECK,
+            ctx.obj["profile"],
+            flags.VARS,
+            validate=True,
+            require_vars=require_vars,
         )
         ctx.obj["project"] = project
 
@@ -313,6 +370,29 @@ def runtime_config(func):
     return update_wrapper(wrapper, func)
 
 
+def catalogs(func):
+    """A decorator used by click command functions for loading catalogs"""
+
+    def wrapper(*args, **kwargs):
+        ctx = args[0]
+        assert isinstance(ctx, Context)
+
+        req_strs = ["flags", "profile", "project"]
+        reqs = [ctx.obj.get(req_str) for req_str in req_strs]
+        if None in reqs:
+            raise DbtProjectError("profile and flags required to load catalogs")
+
+        flags = ctx.obj["flags"]
+        ctx_project = ctx.obj["project"]
+
+        _catalogs = load_catalogs(flags.PROJECT_DIR, ctx_project.project_name, flags.VARS)
+        ctx.obj["catalogs"] = _catalogs
+
+        return func(*args, **kwargs)
+
+    return update_wrapper(wrapper, func)
+
+
 def manifest(*args0, write=True, write_perf_info=False):
     """A decorator used by click command functions for generating a manifest
     given a profile, project, and runtime config. This also registers the adapter
@@ -346,11 +426,19 @@ def setup_manifest(ctx: Context, write: bool = True, write_perf_info: bool = Fal
 
     runtime_config = ctx.obj["runtime_config"]
 
+    catalogs = ctx.obj["catalogs"] if "catalogs" in ctx.obj else []
+    active_integrations = [get_active_write_integration(catalog) for catalog in catalogs]
+
     # if a manifest has already been set on the context, don't overwrite it
     if ctx.obj.get("manifest") is None:
         ctx.obj["manifest"] = parse_manifest(
-            runtime_config, write_perf_info, write, ctx.obj["flags"].write_json
+            runtime_config,
+            write_perf_info,
+            write,
+            ctx.obj["flags"].write_json,
+            active_integrations,
         )
+        adapter = get_adapter(runtime_config)
     else:
         register_adapter(runtime_config, get_mp_context())
         adapter = get_adapter(runtime_config)

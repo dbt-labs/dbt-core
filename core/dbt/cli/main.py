@@ -56,6 +56,7 @@ class dbtRunner:
             dbt_ctx.obj = {
                 "manifest": self.manifest,
                 "callbacks": self.callbacks,
+                "dbt_runner_command_args": args,
             }
 
             for key, value in kwargs.items():
@@ -129,6 +130,7 @@ def global_flags(func):
     @p.record_timing_info
     @p.send_anonymous_usage_stats
     @p.single_threaded
+    @p.show_all_deprecations
     @p.state
     @p.static_parser
     @p.target
@@ -141,6 +143,7 @@ def global_flags(func):
     @p.warn_error_options
     @p.write_json
     @p.use_fast_test_edges
+    @p.upload_artifacts
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
         return func(*args, **kwargs)
@@ -191,6 +194,7 @@ def cli(ctx, **kwargs):
 @requires.preflight
 @requires.profile
 @requires.project
+@requires.catalogs
 @requires.runtime_config
 @requires.manifest
 def build(ctx, **kwargs):
@@ -537,6 +541,7 @@ cli.add_command(ls, "ls")
 @requires.preflight
 @requires.profile
 @requires.project
+@requires.catalogs
 @requires.runtime_config
 @requires.manifest(write_perf_info=True)
 def parse(ctx, **kwargs):
@@ -566,6 +571,7 @@ def parse(ctx, **kwargs):
 @requires.preflight
 @requires.profile
 @requires.project
+@requires.catalogs
 @requires.runtime_config
 @requires.manifest
 def run(ctx, **kwargs):
@@ -699,6 +705,7 @@ def run_operation(ctx, **kwargs):
 @requires.preflight
 @requires.profile
 @requires.project
+@requires.catalogs
 @requires.runtime_config
 @requires.manifest
 def seed(ctx, **kwargs):
@@ -732,6 +739,7 @@ def seed(ctx, **kwargs):
 @requires.preflight
 @requires.profile
 @requires.project
+@requires.catalogs
 @requires.runtime_config
 @requires.manifest
 def snapshot(ctx, **kwargs):

@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pytest
 
@@ -354,7 +354,7 @@ def run_and_generate(project, args=None):
     rm_file(project.project_root, "target", "manifest.json")
     rm_file(project.project_root, "target", "run_results.json")
 
-    start_time = datetime.utcnow()
+    start_time = datetime.now(timezone.utc).replace(tzinfo=None)
     run_args = ["docs", "generate"]
     if args:
         run_args.extend(args)
@@ -453,9 +453,30 @@ class BaseDocsGenerate(BaseGenerateProject):
         verify_catalog(project, expected_catalog, start_time)
 
         # Check that assets have been copied to the target directory for use in the docs html page
-        assert os.path.exists(os.path.join("", "target", "assets"))
-        assert os.path.exists(os.path.join("", "target", "assets", "lorem-ipsum.txt"))
-        assert not os.path.exists(os.path.join("", "target", "non-existent-assets"))
+        assert os.path.exists(os.path.join(project.project_root, "target", "assets"))
+        assert os.path.exists(
+            os.path.join(project.project_root, "target", "assets", "lorem-ipsum.txt")
+        )
+        assert not os.path.exists(
+            os.path.join(project.project_root, "target", "non-existent-assets")
+        )
+
+    # Test generic "docs generate" command
+    def test_locally_run_and_generate(self, project, expected_catalog):
+        os.chdir(
+            project.profiles_dir
+        )  # Change to random directory to test that assets doc generation works with project-dir
+        start_time = run_and_generate(project)
+        verify_catalog(project, expected_catalog, start_time)
+
+        # Check that assets have been copied to the target directory for use in the docs html page
+        assert os.path.exists(os.path.join(project.project_root, "target", "assets"))
+        assert os.path.exists(
+            os.path.join(project.project_root, "target", "assets", "lorem-ipsum.txt")
+        )
+        assert not os.path.exists(
+            os.path.join(project.project_root, "target", "non-existent-assets")
+        )
 
 
 class TestDocsGenerate(BaseDocsGenerate):

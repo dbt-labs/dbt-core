@@ -31,7 +31,7 @@ env:
 
 jobs:
   aggregate-release-data:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.UBUNTU_LATEST }}
 
     outputs:
       version_number: ${{ steps.nightly-release-version.outputs.number }}
@@ -39,7 +39,7 @@ jobs:
 
     steps:
       - name: "Checkout ${{ github.repository }} Branch ${{ env.RELEASE_BRANCH }}"
-        uses: actions/checkout@v4
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
         with:
           ref: ${{ env.RELEASE_BRANCH }}
 
@@ -76,7 +76,7 @@ jobs:
           echo "name=${{ env.RELEASE_BRANCH }}" >> $GITHUB_OUTPUT
 
   log-outputs-aggregate-release-data:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.UBUNTU_LATEST }}
     needs: [aggregate-release-data]
 
     steps:

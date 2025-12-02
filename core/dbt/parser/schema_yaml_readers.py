@@ -19,10 +19,10 @@ from dbt.artifacts.resources import (
     NonAdditiveDimension,
     QueryParams,
     SavedQueryConfig,
+    SemanticLayerElementConfig,
     WhereFilter,
     WhereFilterIntersection,
 )
-from dbt.artifacts.resources.v1.semantic_model import SemanticLayerElementConfig
 from dbt.clients.jinja import get_rendered
 from dbt.context.context_config import (
     BaseContextConfigGenerator,
@@ -117,6 +117,12 @@ class ExposureParser(YamlReader):
                 f"Calculated a {type(config)} for an exposure, but expected an ExposureConfig"
             )
 
+        tags = sorted(set(self.project.exposures.get("tags", []) + unparsed.tags + config.tags))
+        meta = {**self.project.exposures.get("meta", {}), **unparsed.meta, **config.meta}
+
+        config.tags = tags
+        config.meta = meta
+
         parsed = Exposure(
             resource_type=NodeType.Exposure,
             package_name=package_name,
@@ -127,8 +133,8 @@ class ExposureParser(YamlReader):
             name=unparsed.name,
             type=unparsed.type,
             url=unparsed.url,
-            meta=unparsed.meta,
-            tags=unparsed.tags,
+            meta=meta,
+            tags=tags,
             description=unparsed.description,
             label=unparsed.label,
             owner=unparsed.owner,
@@ -484,6 +490,10 @@ class GroupParser(YamlReader):
         unique_id = f"{NodeType.Group}.{package_name}.{unparsed.name}"
         path = self.yaml.path.relative_path
 
+        fqn = self.schema_parser.get_fqn_prefix(path)
+        fqn.append(unparsed.name)
+        config = self._generate_group_config(unparsed, fqn, package_name, True)
+
         parsed = Group(
             resource_type=NodeType.Group,
             package_name=package_name,
@@ -492,6 +502,8 @@ class GroupParser(YamlReader):
             unique_id=unique_id,
             name=unparsed.name,
             owner=unparsed.owner,
+            description=unparsed.description,
+            config=config,
         )
 
         assert isinstance(self.yaml.file, SchemaSourceFile)
@@ -506,6 +518,30 @@ class GroupParser(YamlReader):
                 raise YamlParseDictError(self.yaml.path, self.key, data, exc)
 
             self.parse_group(unparsed)
+
+    def _generate_group_config(
+        self, target: UnparsedGroup, fqn: List[str], package_name: str, rendered: bool
+    ):
+        generator: BaseContextConfigGenerator
+        if rendered:
+            generator = ContextConfigGenerator(self.root_project)
+        else:
+            generator = UnrenderedConfigGenerator(self.root_project)
+
+        # configs with precendence set
+        precedence_configs = dict()
+        # first apply metric configs
+        precedence_configs.update(target.config)
+
+        config = generator.calculate_node_config(
+            config_call_dict={},
+            fqn=fqn,
+            resource_type=NodeType.Group,
+            project_name=package_name,
+            base=False,
+            patch_config_dict=precedence_configs,
+        )
+        return config
 
 
 class SemanticModelParser(YamlReader):
@@ -597,14 +633,21 @@ class SemanticModelParser(YamlReader):
         measure: UnparsedMeasure,
         enabled: bool,
         semantic_model_name: str,
+        meta: Optional[Dict[str, Any]] = None,
     ) -> None:
+        config: Dict[str, Any] = {"enabled": enabled}
+        if meta is not None:
+            # Need to propagate meta to metric from measure during create_metric: True
+            config["meta"] = meta
         unparsed_metric = UnparsedMetric(
             name=measure.name,
             label=measure.label or measure.name,
             type="simple",
-            type_params=UnparsedMetricTypeParams(measure=measure.name, expr=measure.name),
+            type_params=UnparsedMetricTypeParams(
+                measure=measure.name, expr=measure.expr or measure.name  # type: ignore
+            ),
             description=measure.description or f"Metric created from measure {measure.name}",
-            config={"enabled": enabled},
+            config=config,
         )
 
         parser = MetricParser(self.schema_parser, yaml=self.yaml)
@@ -722,7 +765,10 @@ class SemanticModelParser(YamlReader):
         for measure in unparsed.measures:
             if measure.create_metric is True:
                 self._create_metric(
-                    measure=measure, enabled=parsed.config.enabled, semantic_model_name=parsed.name
+                    measure=measure,
+                    enabled=parsed.config.enabled,
+                    semantic_model_name=parsed.name,
+                    meta=config.meta if config is not None else None,
                 )
 
     def parse(self) -> None:

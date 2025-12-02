@@ -15,8 +15,8 @@ class ConfiguredContext(TargetContext):
     # subclasses are SchemaYamlContext, MacroResolvingContext, ManifestContext
     config: AdapterRequiredConfig
 
-    def __init__(self, config: AdapterRequiredConfig) -> None:
-        super().__init__(config.to_target_dict(), config.cli_vars)
+    def __init__(self, config: AdapterRequiredConfig, require_vars: bool = True) -> None:
+        super().__init__(config.to_target_dict(), config.cli_vars, require_vars=require_vars)
         self.config = config
 
     @contextproperty()

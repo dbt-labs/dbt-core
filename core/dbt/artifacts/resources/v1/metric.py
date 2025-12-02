@@ -6,6 +6,8 @@ from dbt.artifacts.resources.base import GraphResource
 from dbt.artifacts.resources.types import NodeType
 from dbt.artifacts.resources.v1.components import DependsOn, RefArgs
 from dbt.artifacts.resources.v1.semantic_layer_components import (
+    MeasureAggregationParameters,
+    NonAdditiveDimension,
     SourceFileMetadata,
     WhereFilterIntersection,
 )
@@ -13,6 +15,7 @@ from dbt_common.contracts.config.base import BaseConfig, CompareBehavior, MergeB
 from dbt_common.dataclass_schema import dbtClassMixin
 from dbt_semantic_interfaces.references import MeasureReference, MetricReference
 from dbt_semantic_interfaces.type_enums import (
+    AggregationType,
     ConversionCalculationType,
     MetricType,
     PeriodAggregation,
@@ -93,6 +96,17 @@ class CumulativeTypeParams(dbtClassMixin):
     window: Optional[MetricTimeWindow] = None
     grain_to_date: Optional[str] = None
     period_agg: PeriodAggregation = PeriodAggregation.FIRST
+    metric: Optional[MetricInput] = None
+
+
+@dataclass
+class MetricAggregationParams(dbtClassMixin):
+    semantic_model: str
+    agg: AggregationType
+    agg_params: Optional[MeasureAggregationParameters] = None
+    agg_time_dimension: Optional[str] = None
+    non_additive_dimension: Optional[NonAdditiveDimension] = None
+    expr: Optional[str] = None
 
 
 @dataclass
@@ -109,6 +123,7 @@ class MetricTypeParams(dbtClassMixin):
     metrics: Optional[List[MetricInput]] = None
     conversion_type_params: Optional[ConversionTypeParams] = None
     cumulative_type_params: Optional[CumulativeTypeParams] = None
+    metric_aggregation_params: Optional[MetricAggregationParams] = None
 
 
 @dataclass

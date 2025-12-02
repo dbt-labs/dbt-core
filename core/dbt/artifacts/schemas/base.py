@@ -1,6 +1,6 @@
 import dataclasses
 import functools
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, ClassVar, Dict, Optional, Type, TypeVar
 
 from mashumaro.jsonschema import build_json_schema
@@ -55,7 +55,9 @@ class Readable:
 class BaseArtifactMetadata(dbtClassMixin):
     dbt_schema_version: str
     dbt_version: str = __version__
-    generated_at: datetime = dataclasses.field(default_factory=datetime.utcnow)
+    generated_at: datetime = dataclasses.field(
+        default_factory=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
+    )
     invocation_id: Optional[str] = dataclasses.field(default_factory=get_invocation_id)
     invocation_started_at: Optional[datetime] = dataclasses.field(
         default_factory=get_invocation_started_at
@@ -179,3 +181,11 @@ def get_artifact_schema_version(dct: dict) -> int:
     # 4. Convert to int
     # TODO: If this gets more complicated, turn into a regex
     return int(schema_version.split("/")[-1].split(".")[0][1:])
+
+
+def get_artifact_dbt_version(dct: dict) -> Optional[str]:
+    dbt_version = dct.get("metadata", {}).get("dbt_version", None)
+    if dbt_version is None:
+        return None
+
+    return str(dbt_version)

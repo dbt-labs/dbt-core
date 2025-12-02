@@ -65,7 +65,7 @@ class InitTask(BaseTask):
         """Create the user's profiles directory if it doesn't already exist."""
         profiles_path = Path(profiles_dir)
         if not profiles_path.exists():
-            fire_event(ConfigFolderDirectory(dir=profiles_dir))
+            fire_event(ConfigFolderDirectory(dir=str(profiles_dir)))
             dbt_common.clients.system.make_directory(profiles_dir)
             return True
         return False

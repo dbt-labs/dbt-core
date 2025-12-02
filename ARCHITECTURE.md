@@ -6,7 +6,6 @@ Most of the python code in the repository is within the `core/dbt` directory.
 - [`single python files`](core/dbt/README.md): A number of individual files, such as 'compilation.py' and 'exceptions.py'
 
 The main subdirectories of core/dbt:
-- [`adapters`](core/dbt/adapters/README.md): Define base classes for behavior that is likely to differ across databases
 - [`clients`](core/dbt/clients/README.md): Interface with dependencies (agate, jinja) or across operating systems
 - [`config`](core/dbt/config/README.md): Reconcile user-supplied configuration from connection profiles, project files, and Jinja macros
 - [`context`](core/dbt/context/README.md): Build and expose dbt-specific Jinja functionality
@@ -14,7 +13,7 @@ The main subdirectories of core/dbt:
 - [`deps`](core/dbt/deps/README.md): Package installation and dependency resolution
 - [`events`](core/dbt/events/README.md): Logging events
 - [`graph`](core/dbt/graph/README.md): Produce a `networkx` DAG of project resources, and selecting those resources given user-supplied criteria
-- [`include`](core/dbt/include/README.md): The dbt "global project," which defines default implementations of Jinja2 macros
+- [`include`](core/dbt/include/README.md): Set up the starter project scaffold.
 - [`parser`](core/dbt/parser/README.md): Read project files, validate, construct python objects
 - [`task`](core/dbt/task/README.md): Set forth the actions that dbt can perform when invoked
 
@@ -32,7 +31,7 @@ This is the docs website code. It comes from the dbt-docs repository, and is gen
 ## Adapters
 
 dbt uses an adapter-plugin pattern to extend support to different databases, warehouses, query engines, etc. 
-Note: dbt-postgres used to exist in dbt-core but is now in [a separate repo](https://github.com/dbt-labs/dbt-adapters/dbt-postgres) 
+Note: dbt-postgres used to exist in dbt-core but is now in [the dbt-adapters repo](https://github.com/dbt-labs/dbt-adapters/tree/main/dbt-postgres) 
 
 Each adapter is a mix of python, Jinja2, and SQL. The adapter code also makes heavy use of Jinja2 to wrap modular chunks of SQL functionality, define default implementations, and allow plugins to override it.
 
@@ -40,7 +39,7 @@ Each adapter plugin is a standalone python package that includes:
 
 - `dbt/include/[name]`: A "sub-global" dbt project, of YAML and SQL files, that reimplements Jinja macros to use the adapter's supported SQL syntax
 - `dbt/adapters/[name]`: Python modules that inherit, and optionally reimplement, the base adapter classes defined in dbt-core
-- `setup.py`
+- `pyproject.toml`
 
 The Postgres adapter code is the most central, and many of its implementations are used as the default defined in the dbt-core global project. The greater the distance of a data technology from Postgres, the more its adapter plugin may need to reimplement.
 

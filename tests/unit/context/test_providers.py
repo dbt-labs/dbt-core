@@ -1,4 +1,3 @@
-import os
 from argparse import Namespace
 from datetime import datetime
 from typing import Any, Optional, Type, Union
@@ -6,7 +5,6 @@ from unittest import mock
 
 import pytest
 import pytz
-from pytest_mock import MockerFixture
 
 from dbt.adapters.base import BaseRelation
 from dbt.artifacts.resources import NodeConfig, Quoting, SeedConfig, SnapshotConfig
@@ -46,14 +44,193 @@ class TestBaseResolver:
         assert resolver.resolve_limit == expected_resolve_limit
 
     @pytest.mark.parametrize(
-        "use_microbatch_batches,materialized,incremental_strategy,sample_mode_available,sample,resolver_model_node,target_type,resolver_model_type,expect_filter",
+        "event_time_column,column_quote,source_quote,expected_field_name",
+        [
+            # Simple column name, no quoting needed
+            ("simple_column", None, None, "simple_column"),
+            ("no_quote_column", False, None, "no_quote_column"),
+            ("source_no_quote", None, False, "source_no_quote"),
+            ("both_no_quote", False, False, "both_no_quote"),
+            # Column-level quote configuration (takes precedence)
+            ("column_quoted", True, None, '"column_quoted"'),
+            ("column_quoted_source_no", True, False, '"column_quoted_source_no"'),
+            ("column_quoted_source_yes", True, True, '"column_quoted_source_yes"'),
+            # Source-level quote configuration (fallback when column-level is None)
+            ("source_quoted", None, True, '"source_quoted"'),
+            (
+                "source_quoted_override",
+                False,
+                True,
+                "source_quoted_override",
+            ),  # False overrides True
+            # Camel case and spaced column names
+            ("camelCaseColumn", None, None, "camelCaseColumn"),
+            ("camelCaseQuoted", True, None, '"camelCaseQuoted"'),
+            ("snake_case_column", None, None, "snake_case_column"),
+            ("snake_case_quoted", True, None, '"snake_case_quoted"'),
+            ("Spaced Column Name", None, None, "Spaced Column Name"),
+            ("Spaced Column Quoted", True, None, '"Spaced Column Quoted"'),
+            ("Spaced Column Source Quoted", None, True, '"Spaced Column Source Quoted"'),
+            # Edge cases
+            ("", None, None, ""),
+            ("", True, None, '""'),
+            ("edge_case_column", None, None, "edge_case_column"),
+            ("edge_case_quoted", True, None, '"edge_case_quoted"'),
+        ],
+    )
+    def test_resolve_event_time_field_name(
+        self, resolver, event_time_column, column_quote, source_quote, expected_field_name
+    ):
+        """Test the _resolve_event_time_field_name method with various quoting configurations."""
+        # Create a mock target with columns
+        target = mock.Mock()
+        target.config = mock.Mock()
+        target.config.event_time = event_time_column
+
+        # Mock columns dictionary
+        mock_column = mock.Mock()
+        mock_column.name = event_time_column
+        mock_column.data_type = "timestamp"
+
+        # Set column-level quote configuration
+        if column_quote is not None:
+            mock_column.quote = column_quote
+        else:
+            # Explicitly set to None to avoid Mock object being returned
+            mock_column.quote = None
+
+        target.columns = {event_time_column: mock_column}
+
+        # Set source-level quote configuration
+        if source_quote is not None:
+            target.quoting = mock.Mock()
+            target.quoting.column = source_quote
+        else:
+            # Explicitly set to None to avoid Mock object being returned
+            target.quoting = mock.Mock()
+            target.quoting.column = None
+
+        # Call the method
+        result = resolver._resolve_event_time_field_name(target)
+
+        # Assert the result
+        assert result == expected_field_name
+
+    @pytest.mark.parametrize(
+        "event_time_column,column_quote,source_quote,expected_field_name",
+        [
+            # Column not found in columns dict - should fall back to source-level quoting
+            ("missing_column", None, None, "missing_column"),
+            ("missing_column_source_quoted", None, True, '"missing_column_source_quoted"'),
+            ("missing_column_source_no_quote", None, False, "missing_column_source_no_quote"),
+            # Column found but no quote attribute - should fall back to source-level quoting
+            ("found_no_quote_attr", None, None, "found_no_quote_attr"),
+            (
+                "found_no_quote_attr_source_quoted",
+                None,
+                True,
+                '"found_no_quote_attr_source_quoted"',
+            ),
+            (
+                "found_no_quote_attr_source_no_quote",
+                None,
+                False,
+                "found_no_quote_attr_source_no_quote",
+            ),
+        ],
+    )
+    def test_resolve_event_time_field_name_column_not_found(
+        self, resolver, event_time_column, column_quote, source_quote, expected_field_name
+    ):
+        """Test _resolve_event_time_field_name when column is not found or has no quote attribute."""
+        # Create a mock target with different columns
+        target = mock.Mock()
+        target.config = mock.Mock()
+        target.config.event_time = event_time_column
+
+        # Mock columns dictionary with different column
+        mock_column = mock.Mock()
+        mock_column.name = "different_column_name"
+        mock_column.data_type = "timestamp"
+
+        # Set column-level quote configuration (but for different column)
+        if column_quote is not None:
+            mock_column.quote = column_quote
+        else:
+            # Explicitly set to None to avoid Mock object being returned
+            mock_column.quote = None
+
+        target.columns = {"different_column_name": mock_column}
+
+        # Set source-level quote configuration
+        if source_quote is not None:
+            target.quoting = mock.Mock()
+            target.quoting.column = source_quote
+        else:
+            # Explicitly set to None to avoid Mock object being returned
+            target.quoting = mock.Mock()
+            target.quoting.column = None
+
+        # Call the method
+        result = resolver._resolve_event_time_field_name(target)
+
+        # Assert the result
+        assert result == expected_field_name
+
+    def test_resolve_event_time_field_name_no_columns(self, resolver):
+        """Test _resolve_event_time_field_name when target has no columns attribute."""
+        # Create a mock target without columns
+        target = mock.Mock()
+        target.config = mock.Mock()
+        target.config.event_time = "no_columns_column"
+
+        # No columns attribute
+        target.columns = {}
+
+        # Set source-level quote configuration
+        target.quoting = mock.Mock()
+        target.quoting.column = True
+
+        # Call the method
+        result = resolver._resolve_event_time_field_name(target)
+
+        # Should return quoted column name when source-level quoting is True
+        assert result == '"no_columns_column"'
+
+    def test_resolve_event_time_field_name_no_quoting_attribute(self, resolver):
+        """Test _resolve_event_time_field_name when target has no quoting attribute."""
+        # Create a mock target without quoting
+        target = mock.Mock()
+        target.config = mock.Mock()
+        target.config.event_time = "no_quoting_attr_column"
+
+        # Mock columns dictionary
+        mock_column = mock.Mock()
+        mock_column.name = "no_quoting_attr_column"
+        mock_column.data_type = "timestamp"
+        # No quote attribute - explicitly set to None
+        mock_column.quote = None
+
+        target.columns = {"no_quoting_attr_column": mock_column}
+
+        # No quoting attribute - explicitly set to None
+        target.quoting = mock.Mock()
+        target.quoting.column = None
+
+        # Call the method
+        result = resolver._resolve_event_time_field_name(target)
+
+        # Should return unquoted column name
+        assert result == "no_quoting_attr_column"
+
+    @pytest.mark.parametrize(
+        "use_microbatch_batches,materialized,incremental_strategy,sample,resolver_model_node,target_type,resolver_model_type,expect_filter",
         [
             # Microbatch model without sample
             (
                 True,
                 "incremental",
                 "microbatch",
-                True,
                 None,
                 True,
                 NodeConfig,
@@ -65,7 +242,6 @@ class TestBaseResolver:
                 True,
                 "incremental",
                 "microbatch",
-                True,
                 SampleWindow(
                     start=datetime(2024, 1, 1, tzinfo=pytz.UTC),
                     end=datetime(2025, 1, 1, tzinfo=pytz.UTC),
@@ -80,7 +256,6 @@ class TestBaseResolver:
                 False,
                 "table",
                 None,
-                True,
                 SampleWindow(
                     start=datetime(2024, 1, 1, tzinfo=pytz.UTC),
                     end=datetime(2025, 1, 1, tzinfo=pytz.UTC),
@@ -95,7 +270,6 @@ class TestBaseResolver:
                 True,
                 "incremental",
                 "merge",
-                True,
                 SampleWindow(
                     start=datetime(2024, 1, 1, tzinfo=pytz.UTC),
                     end=datetime(2025, 1, 1, tzinfo=pytz.UTC),
@@ -104,28 +278,12 @@ class TestBaseResolver:
                 NodeConfig,
                 ModelNode,
                 True,
-            ),
-            # Normal model with sample, but sample mode not available
-            (
-                False,
-                "table",
-                None,
-                False,
-                SampleWindow(
-                    start=datetime(2024, 1, 1, tzinfo=pytz.UTC),
-                    end=datetime(2025, 1, 1, tzinfo=pytz.UTC),
-                ),
-                True,
-                NodeConfig,
-                ModelNode,
-                False,
             ),
             # Sample, but not model node
             (
                 False,
                 "table",
                 None,
-                True,
                 SampleWindow(
                     start=datetime(2024, 1, 1, tzinfo=pytz.UTC),
                     end=datetime(2025, 1, 1, tzinfo=pytz.UTC),
@@ -140,7 +298,6 @@ class TestBaseResolver:
                 True,
                 "incremental",
                 "microbatch",
-                False,
                 None,
                 False,
                 NodeConfig,
@@ -152,7 +309,6 @@ class TestBaseResolver:
                 False,
                 "incremental",
                 "microbatch",
-                False,
                 None,
                 True,
                 NodeConfig,
@@ -164,7 +320,6 @@ class TestBaseResolver:
                 True,
                 "table",
                 "microbatch",
-                False,
                 None,
                 True,
                 NodeConfig,
@@ -172,65 +327,38 @@ class TestBaseResolver:
                 False,
             ),
             # Incremental merge
-            (True, "incremental", "merge", False, None, True, NodeConfig, ModelNode, False),
+            (True, "incremental", "merge", None, True, NodeConfig, ModelNode, False),
             # Target seed node, with sample
             (
                 False,
                 "table",
                 None,
-                True,
                 SampleWindow.from_relative_string("2 days"),
                 True,
                 SeedConfig,
                 ModelNode,
                 True,
             ),
-            # Target seed node, with sample, but sample mode not availavle
-            (
-                False,
-                "table",
-                None,
-                False,
-                SampleWindow.from_relative_string("2 days"),
-                True,
-                SeedConfig,
-                ModelNode,
-                False,
-            ),
-            # Target seed node, without sample, but sample mode availavle
-            (False, "table", None, True, None, True, SeedConfig, ModelNode, False),
+            # Target seed node, without sample
+            (False, "table", None, None, True, SeedConfig, ModelNode, False),
             # Sample model from snapshot node
             (
                 False,
                 "table",
                 None,
-                True,
                 SampleWindow.from_relative_string("2 days"),
                 True,
                 NodeConfig,
                 SnapshotNode,
                 True,
             ),
-            # Try to sample model from snapshot, but sample mode not available
-            (
-                False,
-                "table",
-                None,
-                False,
-                SampleWindow.from_relative_string("2 days"),
-                True,
-                NodeConfig,
-                SnapshotNode,
-                False,
-            ),
-            # Target model from snapshot, without sample, but sample mode availavle
-            (False, "table", None, True, None, True, NodeConfig, SnapshotNode, False),
+            # Target model from snapshot, without sample
+            (False, "table", None, None, True, NodeConfig, SnapshotNode, False),
             # Target snapshot from model, with sample
             (
                 False,
                 "table",
                 None,
-                True,
                 SampleWindow.from_relative_string("2 days"),
                 True,
                 SnapshotConfig,
@@ -241,12 +369,10 @@ class TestBaseResolver:
     )
     def test_resolve_event_time_filter(
         self,
-        mocker: MockerFixture,
         resolver: ResolverSubclass,
         use_microbatch_batches: bool,
         materialized: str,
         incremental_strategy: Optional[str],
-        sample_mode_available: bool,
         sample: Optional[SampleWindow],
         resolver_model_node: bool,
         target_type: Any,
@@ -257,10 +383,6 @@ class TestBaseResolver:
         target = mock.Mock()
         target.config = mock.MagicMock(target_type)
         target.config.event_time = "created_at"
-
-        # Declare whether sample mode is available
-        if sample_mode_available:
-            mocker.patch.dict(os.environ, {"DBT_EXPERIMENTAL_SAMPLE_MODE": "1"})
 
         # Resolver mocking
         resolver.config.args.EVENT_TIME_END = None

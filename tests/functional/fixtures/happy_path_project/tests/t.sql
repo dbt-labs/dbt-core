@@ -1,1 +1,1 @@
-select 1 as id limit 0
+select 1 as id WHERE 1 = 2

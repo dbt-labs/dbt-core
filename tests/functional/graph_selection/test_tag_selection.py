@@ -1,6 +1,8 @@
 import pytest
 
+from dbt.events.types import NoNodesForSelectionCriteria
 from dbt.tests.util import check_result_nodes_by_name, run_dbt
+from dbt_common.events.event_catcher import EventCatcher
 from tests.functional.graph_selection.fixtures import SelectionFixtures
 
 selectors_yml = """
@@ -166,3 +168,26 @@ class TestTagSelection(SelectionFixtures):
             results,
             ["unique_users_rollup_gender", "unique_users_id", "not_null_emails_email"],
         )
+
+
+class TestTagSelectionNoMatch:
+    def test_no_match(self, project):
+        no_match_catcher = EventCatcher(event_to_catch=NoNodesForSelectionCriteria)
+
+        # check `run` command
+        run_dbt(["run", "--select", "tag:no_such_tag"], callbacks=[no_match_catcher.catch])
+        assert len(no_match_catcher.caught_events) == 1
+
+        # clear the catcher
+        no_match_catcher.flush()
+
+        # check `test` command
+        run_dbt(["test", "--select", "tag:no_such_tag"], callbacks=[no_match_catcher.catch])
+        assert len(no_match_catcher.caught_events) == 1
+
+        # clear the catcher
+        no_match_catcher.flush()
+
+        # check `build` command
+        run_dbt(["build", "--select", "tag:no_such_tag"], callbacks=[no_match_catcher.catch])
+        assert len(no_match_catcher.caught_events) == 1

@@ -233,7 +233,9 @@ class ModelParser(SimpleSQLParser[ModelNode]):
                 config_keys_defaults=config_keys_defaults,
             )
 
-    def render_update(self, node: ModelNode, config: ContextConfig) -> None:
+    def render_update(
+        self, node: ModelNode, config: ContextConfig, validate_config_call_dict: bool = False
+    ) -> None:
         self.manifest._parsing_info.static_analysis_path_count += 1
         flags = get_flags()
         if node.language == ModelLanguage.python:
@@ -241,7 +243,9 @@ class ModelParser(SimpleSQLParser[ModelNode]):
                 verify_python_model_code(node)
                 context = self._context_for(node, config)
                 self.parse_python_model(node, config, context)
-                self.update_parsed_node_config(node, config, context=context)
+                self.update_parsed_node_config(
+                    node, config, context=context, validate_config_call_dict=True
+                )
 
             except ValidationError as exc:
                 # we got a ValidationError - probably bad types in config()
@@ -346,7 +350,7 @@ class ModelParser(SimpleSQLParser[ModelNode]):
         # if the static parser didn't succeed, fall back to jinja
         else:
             # jinja rendering
-            super().render_update(node, config)
+            super().render_update(node, config, validate_config_call_dict=True)
 
             # if sampling, add the correct messages for tracking
             if exp_sample and isinstance(experimental_sample, str):
@@ -438,7 +442,7 @@ class ModelParser(SimpleSQLParser[ModelNode]):
 
         # if there are hooks present this, it WILL render jinja. Will need to change
         # when the experimental parser supports hooks
-        self.update_parsed_node_config(node, config)
+        self.update_parsed_node_config(node, config, validate_config_call_dict=True)
 
         # update the unrendered config with values from the file.
         # values from yaml files are in there already

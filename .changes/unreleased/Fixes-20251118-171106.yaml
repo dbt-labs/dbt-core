@@ -1,0 +1,6 @@
+kind: Fixes
+body: Restore DuplicateResourceNameError for intra-project node name duplication, behind behavior flag `require_unique_project_resource_names`
+time: 2025-11-18T17:11:06.454784-05:00
+custom:
+    Author: michelleark
+    Issue: "12152"

@@ -35,17 +35,13 @@ dev_req: ## Installs dbt-* packages in develop mode along with only development 
 .PHONY: dev
 dev: dev_req ## Installs dbt-* packages in develop mode along with development dependencies and pre-commit.
 	@\
-	pre-commit install
+	$(DOCKER_CMD) pre-commit install
 
 .PHONY: dev-uninstall
 dev-uninstall: ## Uninstall all packages in venv except for build tools
 	@\
     pip freeze | grep -v "^-e" | cut -d "@" -f1 | xargs pip uninstall -y; \
     pip uninstall -y dbt-core
-
-.PHONY: core_proto_types
-core_proto_types:  ## generates google protobuf python file from core_types.proto
-	protoc -I=./core/dbt/events --python_out=./core/dbt/events ./core/dbt/events/core_types.proto
 
 .PHONY: mypy
 mypy: .env ## Runs mypy against staged changes for static type checking.
@@ -101,8 +97,8 @@ interop: clean
 .PHONY: setup-db
 setup-db: ## Setup Postgres database with docker-compose for system testing.
 	@\
-	docker-compose up -d database && \
-	PGHOST=localhost PGUSER=root PGPASSWORD=password PGDATABASE=postgres bash test/setup_db.sh
+	docker compose up -d database && \
+	PGHOST=localhost PGUSER=root PGPASSWORD=password PGDATABASE=postgres SKIP_HOMEBREW=true bash test/setup_db.sh
 
 # This rule creates a file named .env that is used by docker-compose for passing
 # the USER_ID and GROUP_ID arguments to the Docker image.

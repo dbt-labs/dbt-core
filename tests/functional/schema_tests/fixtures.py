@@ -1273,3 +1273,31 @@ models:
     data_tests:
       - my_custom_test
 """
+
+store_failures_models__my_model_sql = """
+select 1 as id
+"""
+
+store_failures_models_true__config_yml = """
+version: 2
+models:
+  - name: my_model
+    columns:
+      - name: id
+        tests:
+          - not_null:
+              config:
+                store_failures: true
+"""
+
+store_failures_models_false__config_yml = """
+version: 2
+models:
+  - name: my_model
+    columns:
+      - name: id
+        tests:
+          - not_null:
+              config:
+                store_failures: false
+"""

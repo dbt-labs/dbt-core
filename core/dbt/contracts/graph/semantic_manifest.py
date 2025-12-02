@@ -193,6 +193,7 @@ class SemanticManifest:
                 PydanticSavedQuery.parse_obj(saved_query.to_dict())
             )
 
+        legacy_time_spine_model: Optional[ModelNode] = None
         if self.manifest.semantic_models:
             legacy_time_spine_model = self.manifest.ref_lookup.find(
                 LEGACY_TIME_SPINE_MODEL_NAME, None, None, self.manifest
@@ -217,8 +218,8 @@ class SemanticManifest:
                     "(https://docs.getdbt.com/docs/build/metricflow-time-spine)."
                 )
 
-            # For backward compatibility: if legacy time spine exists, include it in the manifest.
-            if legacy_time_spine_model:
+            # For backward compatibility: if legacy time spine exists without config, include it in the manifest.
+            if legacy_time_spine_model and legacy_time_spine_model.time_spine is None:
                 legacy_time_spine = LegacyTimeSpine(
                     location=legacy_time_spine_model.relation_name,
                     column_name="date_day",

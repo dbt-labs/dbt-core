@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Any, Dict, Generic, List, Optional, TypeVar, Union
 
-from dbt.artifacts.resources import ColumnInfo, NodeVersion
+from dbt.artifacts.resources import ColumnConfig, ColumnInfo, NodeVersion
 from dbt.contracts.graph.nodes import UnpatchedSourceDefinition
 from dbt.contracts.graph.unparsed import (
     HasColumnDocs,
@@ -10,6 +10,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedAnalysisUpdate,
     UnparsedColumn,
     UnparsedExposure,
+    UnparsedFunctionUpdate,
     UnparsedMacroUpdate,
     UnparsedModelUpdate,
     UnparsedNodeUpdate,
@@ -33,6 +34,7 @@ schema_file_keys_to_resource_types = {
     "metrics": NodeType.Metric,
     "semantic_models": NodeType.SemanticModel,
     "saved_queries": NodeType.SavedQuery,
+    "functions": NodeType.Function,
 }
 
 resource_types_to_schema_file_keys = {
@@ -59,6 +61,7 @@ Target = TypeVar(
     UnpatchedSourceDefinition,
     UnparsedExposure,
     UnparsedModelUpdate,
+    UnparsedFunctionUpdate,
     UnparsedSingularTestUpdate,
 )
 
@@ -222,16 +225,30 @@ class ParserRef:
         ):
             raise ParsingError(f"Invalid constraint type on column {column.name}")
 
+        # Merge meta and tags from column and config
+        column_config_meta = (
+            column.config["meta"] if isinstance(column.config.get("meta"), dict) else {}
+        )
+        column_config_tags = []
+        if "tags" in column.config:
+            if isinstance(column.config["tags"], list):
+                column_config_tags = column.config["tags"]
+            elif isinstance(column.config["tags"], str):
+                column_config_tags = [column.config["tags"]]
+
+        column_meta = {**column.meta, **column_config_meta}
+        column_tags = list(set(tags + column_config_tags))
         self.column_info[column.name] = ColumnInfo(
             name=column.name,
             description=column.description,
             data_type=column.data_type,
             constraints=[ColumnLevelConstraint.from_dict(c) for c in column.constraints],
-            meta=column.meta,
-            tags=tags,
+            meta=column_meta,
+            tags=column_tags,
             quote=quote,
             _extra=column.extra,
             granularity=granularity,
+            config=ColumnConfig(meta=column_meta, tags=column_tags),
         )
 
     @classmethod

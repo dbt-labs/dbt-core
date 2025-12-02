@@ -222,7 +222,7 @@ semantic_models:
 """
 
 
-schema_yml = """models:
+base_schema_yml = """models:
   - name: fct_revenue
     description: This is the model fct_revenue. It should be able to use doc blocks
 
@@ -249,6 +249,14 @@ semantic_models:
       - name: sum_of_things
         expr: 2
         agg: sum
+        agg_time_dimension: ds
+      - name: count_of_things
+        agg: count
+        expr: 1
+        agg_time_dimension: ds
+      - name: count_of_things_2
+        agg: count
+        expr: 1
         agg_time_dimension: ds
       - name: has_revenue
         expr: true
@@ -295,7 +303,49 @@ metrics:
     type: simple
     type_params:
       measure: sum_of_things
+  - name: test_cumulative_metric
+    label: Cumulative Metric
+    type: cumulative
+    type_params:
+      measure: sum_of_things
+      cumulative_type_params:
+        grain_to_date: day
+        period_agg: first
 """
+
+conversion_metric_yml = """
+  - name: test_conversion_metric
+    label: Conversion Metric
+    type: conversion
+    type_params:
+      conversion_type_params:
+        base_measure: count_of_things
+        conversion_measure: count_of_things_2
+        entity: user
+        calculation: conversion_rate
+"""
+
+ratio_metric_yml = """
+  - name: test_ratio_metric
+    label: Ratio Metric
+    type: ratio
+    type_params:
+      numerator: simple_metric
+      denominator: test_conversion_metric
+"""
+
+derived_metric_yml = """
+  - name: test_derived_metric
+    label: Derived Metric
+    type: derived
+    type_params:
+      metrics:
+        - simple_metric
+        - test_conversion_metric
+      expr: simple_metric + 1
+"""
+
+schema_yml = base_schema_yml + conversion_metric_yml + ratio_metric_yml + derived_metric_yml
 
 schema_without_semantic_model_yml = """models:
   - name: fct_revenue

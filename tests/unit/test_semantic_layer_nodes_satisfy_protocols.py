@@ -2,7 +2,7 @@ import copy
 from typing import Protocol, runtime_checkable
 
 import pytest
-from hypothesis import given
+from hypothesis import HealthCheck, given, settings
 from hypothesis.strategies import builds, none, text
 
 from dbt.artifacts.resources import (
@@ -506,5 +506,6 @@ def test_non_additive_dimension_satisfies_protocol(non_additive_dimension):
         metadata=builds(SourceFileMetadata) | none(),
     )
 )
+@settings(suppress_health_check=(HealthCheck.too_slow,))
 def test_saved_query_satisfies_protocol(saved_query: SavedQuery):
     assert isinstance(saved_query, SavedQuery)

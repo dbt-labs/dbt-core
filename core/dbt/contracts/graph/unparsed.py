@@ -15,10 +15,11 @@ from dbt.artifacts.resources import (
     ExposureType,
     ExternalTable,
     FreshnessThreshold,
+    FunctionArgument,
+    FunctionReturns,
     MacroArgument,
     MaturityType,
     MeasureAggregationParameters,
-    ModelFreshness,
     NodeVersion,
     Owner,
     Quoting,
@@ -27,8 +28,9 @@ from dbt.artifacts.resources import (
     UnitTestNodeVersions,
     UnitTestOutputFixture,
     UnitTestOverrides,
+    list_str,
+    metas,
 )
-from dbt.artifacts.resources.v1.config import list_str, metas
 from dbt.exceptions import ParsingError
 from dbt.node_types import NodeType
 from dbt_common.contracts.config.base import CompareBehavior, MergeBehavior
@@ -103,6 +105,7 @@ class HasColumnProps(AdditionalPropertiesMixin, ExtensibleDbtClassMixin):
     data_type: Optional[str] = None
     constraints: List[Dict[str, Any]] = field(default_factory=list)
     docs: Docs = field(default_factory=Docs)
+    config: Dict[str, Any] = field(default_factory=dict)
     _extra: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -118,20 +121,8 @@ class HasColumnAndTestProps(HasColumnProps):
 
 
 @dataclass
-class UnparsedColumn(HasColumnAndTestProps):
-    quote: Optional[bool] = None
-    tags: List[str] = field(default_factory=list)
-    granularity: Optional[str] = None  # str is really a TimeGranularity Enum
-
-
-@dataclass
 class HasColumnDocs(dbtClassMixin):
     columns: Sequence[HasColumnProps] = field(default_factory=list)
-
-
-@dataclass
-class HasColumnTests(dbtClassMixin):
-    columns: Sequence[UnparsedColumn] = field(default_factory=list)
 
 
 @dataclass
@@ -148,6 +139,18 @@ class HasYamlMetadata(dbtClassMixin):
 @dataclass
 class HasConfig:
     config: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class UnparsedColumn(HasConfig, HasColumnAndTestProps):
+    quote: Optional[bool] = None
+    tags: List[str] = field(default_factory=list)
+    granularity: Optional[str] = None  # str is really a TimeGranularity Enum
+
+
+@dataclass
+class HasColumnTests(dbtClassMixin):
+    columns: Sequence[UnparsedColumn] = field(default_factory=list)
 
 
 @dataclass
@@ -225,7 +228,6 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
     versions: Sequence[UnparsedVersion] = field(default_factory=list)
     deprecation_date: Optional[datetime.datetime] = None
     time_spine: Optional[TimeSpine] = None
-    freshness: Optional[ModelFreshness] = None
 
     def __post_init__(self) -> None:
         if self.latest_version:
@@ -636,11 +638,11 @@ class UnparsedMetric(dbtClassMixin):
                 errors.append("cannot contain more than 250 characters")
             if not (re.match(r"^[A-Za-z]", data["name"])):
                 errors.append("must begin with a letter")
-            if not (re.match(r"[\w-]+$", data["name"])):
+            if not (re.match(r"[\w]+$", data["name"])):
                 errors.append("must contain only letters, numbers and underscores")
 
             if errors:
-                raise ParsingError(
+                raise ValidationError(
                     f"The metric name '{data['name']}' is invalid.  It {', '.join(e for e in errors)}"
                 )
 
@@ -649,12 +651,25 @@ class UnparsedMetric(dbtClassMixin):
 class UnparsedGroup(dbtClassMixin):
     name: str
     owner: Owner
+    description: Optional[str] = None
+    config: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def validate(cls, data):
         super(UnparsedGroup, cls).validate(data)
         if data["owner"].get("name") is None and data["owner"].get("email") is None:
             raise ValidationError("Group owner must have at least one of 'name' or 'email'.")
+
+
+@dataclass
+class UnparsedFunctionReturns(dbtClassMixin):
+    returns: FunctionReturns
+
+
+@dataclass
+class UnparsedFunctionUpdate(HasConfig, HasColumnProps, HasYamlMetadata, UnparsedFunctionReturns):
+    access: Optional[str] = None
+    arguments: List[FunctionArgument] = field(default_factory=list)
 
 
 #

@@ -23,6 +23,7 @@ from dbt.adapters.contracts.connection import (
 )
 from dbt.adapters.contracts.relation import ComponentName
 from dbt.adapters.factory import get_include_paths, get_relation_class_by_name
+from dbt.artifacts.resources import Quoting
 from dbt.config.project import load_raw_project
 from dbt.contracts.graph.manifest import ManifestMetadata
 from dbt.contracts.project import Configuration
@@ -50,11 +51,13 @@ def load_project(
     version_check: bool,
     profile: HasCredentials,
     cli_vars: Optional[Dict[str, Any]] = None,
+    validate: bool = False,
+    require_vars: bool = True,
 ) -> Project:
     # get the project with all of the provided information
-    project_renderer = DbtProjectYamlRenderer(profile, cli_vars)
+    project_renderer = DbtProjectYamlRenderer(profile, cli_vars, require_vars=require_vars)
     project = Project.from_project_root(
-        project_root, project_renderer, verify_version=version_check
+        project_root, project_renderer, verify_version=version_check, validate=validate
     )
 
     # Save env_vars encountered in rendering for partial parsing
@@ -153,6 +156,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             analysis_paths=project.analysis_paths,
             docs_paths=project.docs_paths,
             asset_paths=project.asset_paths,
+            function_paths=project.function_paths,
             target_path=project.target_path,
             snapshot_paths=project.snapshot_paths,
             clean_targets=project.clean_targets,
@@ -178,13 +182,13 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             semantic_models=project.semantic_models,
             saved_queries=project.saved_queries,
             exposures=project.exposures,
+            functions=project.functions,
             vars=project.vars,
             config_version=project.config_version,
             unrendered=project.unrendered,
             project_env_vars=project.project_env_vars,
             restrict_access=project.restrict_access,
             profile_env_vars=profile.profile_env_vars,
-            secondary_profiles=profile.secondary_profiles,
             profile_name=profile.profile_name,
             target_name=profile.target_name,
             threads=profile.threads,
@@ -264,7 +268,14 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             args,
         )
         flags = get_flags()
-        project = load_project(project_root, bool(flags.VERSION_CHECK), profile, cli_vars)
+        # For dbt deps, use lenient var validation to allow missing vars
+        # For all other commands, use strict validation for helpful error messages
+        # If command is not set (e.g., during test setup), default to strict mode
+        # unless the command is explicitly "deps"
+        require_vars = getattr(flags, "WHICH", None) != "deps"
+        project = load_project(
+            project_root, bool(flags.VERSION_CHECK), profile, cli_vars, require_vars=require_vars
+        )
         return project, profile
 
     # Called in task/base.py, in BaseTask.from_args
@@ -296,6 +307,15 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
                 get_flags().SEND_ANONYMOUS_USAGE_STATS if tracking.active_user else None
             ),
             adapter_type=self.credentials.type,
+            quoting=Quoting(
+                database=self.quoting.get("database", None),
+                schema=self.quoting.get("schema", None),
+                identifier=self.quoting.get("identifier", None),
+                column=self.quoting.get("column", None),
+            ),
+            run_started_at=(
+                tracking.active_user.run_started_at if tracking.active_user is not None else None
+            ),
         )
 
     def _get_v2_config_paths(
@@ -343,6 +363,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             "semantic_models": self._get_config_paths(self.semantic_models),
             "saved_queries": self._get_config_paths(self.saved_queries),
             "exposures": self._get_config_paths(self.exposures),
+            "functions": self._get_config_paths(self.functions),
         }
 
     def warn_for_unused_resource_config_paths(

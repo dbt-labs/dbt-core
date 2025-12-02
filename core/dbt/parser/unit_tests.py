@@ -10,7 +10,7 @@ from dbt import utils
 from dbt.artifacts.resources import ModelConfig, UnitTestConfig, UnitTestFormat
 from dbt.config import RuntimeConfig
 from dbt.context.context_config import ContextConfig
-from dbt.context.providers import generate_parse_exposure, get_rendered
+from dbt.context.providers import generate_parser_unit_test_context, get_rendered
 from dbt.contracts.files import FileHash, SchemaSourceFile
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.model_config import UnitTestNodeConfig
@@ -100,12 +100,7 @@ class UnitTestManifestLoader:
             overrides=test_case.overrides,
         )
 
-        ctx = generate_parse_exposure(
-            unit_test_node,  # type: ignore
-            self.root_project,
-            self.manifest,
-            test_case.package_name,
-        )
+        ctx = generate_parser_unit_test_context(unit_test_node, self.root_project, self.manifest)
         get_rendered(unit_test_node.raw_code, ctx, unit_test_node, capture_macros=True)
         # unit_test_node now has a populated refs/sources
 
@@ -173,6 +168,10 @@ class UnitTestManifestLoader:
                     **common_fields,
                     source_name=original_input_node.source_name,  # needed for source lookup
                 )
+                # In the case of multiple sources with the same name, we add the source schema name to the unique id.
+                # This additionally prevents duplicate CTE names during compilation.
+                input_node.unique_id = f"model.{original_input_node.package_name}.{original_input_node.source_name}__{input_name}"
+
                 # Sources need to go in the sources dictionary in order to create the right lookup
                 self.unit_test_manifest.sources[input_node.unique_id] = input_node  # type: ignore
 
@@ -185,6 +184,12 @@ class UnitTestManifestLoader:
 
             # Add unique ids of input_nodes to depends_on
             unit_test_node.depends_on.nodes.append(input_node.unique_id)
+
+        # Add functions to the manifest and depends_on
+        for unique_id in tested_node.depends_on.nodes:
+            if unique_id in self.manifest.functions:
+                unit_test_node.depends_on.nodes.append(unique_id)
+                self.unit_test_manifest.functions[unique_id] = self.manifest.functions[unique_id]
 
     def _build_fixture_raw_code(self, rows, column_name_to_data_types, fixture_format) -> str:
         # We're not currently using column_name_to_data_types, but leaving here for
@@ -471,7 +476,7 @@ class UnitTestParser(YamlReader):
                     f"Unable to find seed '{package_name}.{seed_name}' for unit tests in directories: {self.project.seed_paths}"
                 )
 
-        seed_path = Path(seed_node.root_path) / seed_node.original_file_path
+        seed_path = Path(self.project.project_root) / seed_node.original_file_path
         with open(seed_path, "r") as f:
             for row in DictReader(f):
                 rows.append(row)

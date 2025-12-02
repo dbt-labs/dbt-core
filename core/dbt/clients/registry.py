@@ -1,6 +1,6 @@
 import functools
 import os
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import requests
 
@@ -34,9 +34,26 @@ def _get_url(name, registry_base_url=None):
     return "{}{}".format(registry_base_url, url)
 
 
-def _get_with_retries(package_name, registry_base_url=None):
+def _check_package_redirect(package_name: str, response: Dict[str, Any]) -> None:
+    # Either redirectnamespace or redirectname in the JSON response indicate a redirect
+    # redirectnamespace redirects based on package ownership
+    # redirectname redirects based on package name
+    # Both can be present at the same time, or neither. Fails gracefully to old name
+    if ("redirectnamespace" in response) or ("redirectname" in response):
+        use_namespace = response.get("redirectnamespace") or response["namespace"]
+        use_name = response.get("redirectname") or response["name"]
+
+        new_nwo = f"{use_namespace}/{use_name}"
+        deprecations.warn("package-redirect", old_name=package_name, new_name=new_nwo)
+
+
+def _get_package_with_retries(
+    package_name: str, registry_base_url: Optional[str] = None
+) -> Dict[str, Any]:
     get_fn = functools.partial(_get, package_name, registry_base_url)
-    return connection_exception_retry(get_fn, 5)
+    response: Dict[str, Any] = connection_exception_retry(get_fn, 5)
+    _check_package_redirect(package_name, response)
+    return response
 
 
 def _get(package_name, registry_base_url=None):
@@ -48,7 +65,7 @@ def _get(package_name, registry_base_url=None):
     resp.raise_for_status()
 
     # The response should always be a dictionary.  Anything else is unexpected, raise error.
-    # Raising this error will cause this function to retry (if called within _get_with_retries)
+    # Raising this error will cause this function to retry (if called within _get_package_with_retries)
     # and hopefully get a valid response.  This seems to happen when there's an issue with the Hub.
     # Since we control what we expect the HUB to return, this is safe.
     # See https://github.com/dbt-labs/dbt-core/issues/4577
@@ -96,29 +113,12 @@ def _get(package_name, registry_base_url=None):
     return response
 
 
-_get_cached = memoized(_get_with_retries)
+_get_cached = memoized(_get_package_with_retries)
 
 
 def package(package_name, registry_base_url=None) -> Dict[str, Any]:
     # returns a dictionary of metadata for all versions of a package
     response = _get_cached(package_name, registry_base_url)
-    # Either redirectnamespace or redirectname in the JSON response indicate a redirect
-    # redirectnamespace redirects based on package ownership
-    # redirectname redirects based on package name
-    # Both can be present at the same time, or neither. Fails gracefully to old name
-    if ("redirectnamespace" in response) or ("redirectname" in response):
-        if ("redirectnamespace" in response) and response["redirectnamespace"] is not None:
-            use_namespace = response["redirectnamespace"]
-        else:
-            use_namespace = response["namespace"]
-
-        if ("redirectname" in response) and response["redirectname"] is not None:
-            use_name = response["redirectname"]
-        else:
-            use_name = response["name"]
-
-        new_nwo = use_namespace + "/" + use_name
-        deprecations.warn("package-redirect", old_name=package_name, new_name=new_nwo)
     return response["versions"]
 
 

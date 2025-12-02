@@ -10,6 +10,17 @@ models_trivial__model_sql = """
 select 1 as id
 """
 
+models_custom_key_in_config_sql = """
+{{ config(my_custom_key="my_custom_value") }}
+select 1 as id
+"""
+
+models_custom_key_in_config_non_static_parser_sql = """
+{{ config(my_custom_key="my_custom_value") }}
+
+select {{ dbt.current_timestamp() }} as my_timestamp
+"""
+
 macros__custom_test_sql = """
 {% test custom(model) %}
   select * from {{ model }}
@@ -17,6 +28,11 @@ macros__custom_test_sql = """
 {% endtest %}
 """
 
+models_pre_post_hook_in_config_sql = """
+{{ config(post_hook="select 1", pre_hook="select 2") }}
+
+select 1 as id
+"""
 
 bad_name_yaml = """
 version: 2
@@ -138,3 +154,165 @@ local_dependency__seed_csv = """id,name
 2,Sam
 3,John
 """
+
+
+invalid_deprecation_date_yaml = """
+models:
+  - name: models_trivial
+    description: "This is a test model"
+    deprecation_date: 1
+"""
+
+duplicate_keys_yaml = """
+models:
+  - name: models_trivial
+    description: "This is a test model"
+    deprecation_date: 1999-01-01 00:00:00.00+00:00
+
+models:
+  - name: models_trivial
+    description: "This is a test model"
+    deprecation_date: 1999-01-01 00:00:00.00+00:00
+"""
+
+custom_key_in_config_yaml = """
+models:
+  - name: models_trivial
+    description: "This is a test model"
+    deprecation_date: 1999-01-01 00:00:00.00+00:00
+    config:
+      my_custom_key: "my_custom_value"
+"""
+
+multiple_custom_keys_in_config_yaml = """
+models:
+  - name: models_trivial
+    description: "This is a test model"
+    deprecation_date: 1999-01-01 00:00:00.00+00:00
+    config:
+      my_custom_key: "my_custom_value"
+      my_custom_key2: "my_custom_value2"
+"""
+
+custom_key_in_object_yaml = """
+models:
+  - name: models_trivial
+    description: "This is a test model"
+    deprecation_date: 1999-01-01 00:00:00.00+00:00
+    my_custom_property: "It's over, I have the high ground"
+"""
+
+
+pre_post_hook_in_config_yaml = """
+models:
+  - name: model_with_hook_configs
+    config:
+      post_hook: "select 1"
+      pre_hook: "select 2"
+"""
+
+
+property_moved_to_config_yaml = """
+models:
+  - name: models_trivial
+    description: "This is a test model"
+    access: public  # deprecated - should be in config
+    columns:
+      - name: id
+        tags: ["test"]  # deprecated - should be in config
+
+sources:
+  - name: seed_source
+    schema: "{{ var('schema_override', target.schema) }}"
+    tags: ["test"]  # deprecated - should be in config
+    freshness: # deprecated - should be in config
+      warn_after:
+        count: 1
+        period: day
+    tables:
+      - name: "seed"
+        tags: ["test"]  # deprecated - should be in config
+        freshness: # deprecated - should be in config
+          warn_after:
+            count: 1
+            period: day
+        columns:
+          - name: id
+            tags: ["test"]  # deprecated - should be in config
+      - name: "another_table"
+"""
+
+test_with_arguments_yaml = """
+models:
+  - name: models_trivial
+    tests:
+      - test_name: unique
+        arguments:
+          custom: arg
+      - custom_test:
+          arguments:
+            custom: arg
+      - unique
+      - not_null:
+          where: "1=1"
+"""
+
+
+test_with_arguments_yaml = """
+models:
+  - name: models_trivial
+    tests:
+      - test_name: unique
+        arguments:
+          custom: arg
+      - custom_test:
+          arguments:
+            custom: arg
+      - unique
+      - not_null:
+          where: "1=1"
+    columns:
+      - name: column
+        tests:
+          - test_name: unique
+            arguments:
+              custom: arg
+          - custom_test:
+              arguments:
+                custom: arg
+          - custom_test2_valid:
+              column_name: id
+              config:
+                where: "1=1"
+              custom: arg
+"""
+
+
+test_missing_arguments_property_yaml = """
+models:
+  - name: models_trivial
+    tests:
+      - test_name: unique
+        custom: arg
+      - custom_test:
+          custom: arg
+      - custom_test2_valid:
+          column_name: id
+          config:
+            where: "1=1"
+          arguments:
+            custom: arg
+    columns:
+      - name: column
+        tests:
+          - test_name: unique
+            custom: arg
+          - custom_test:
+              custom: arg
+          - custom_test2_valid:
+              column_name: id
+              config:
+                where: "1=1"
+              arguments:
+                custom: arg
+      """
