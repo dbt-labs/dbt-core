@@ -41,32 +41,26 @@ newlines:
   endOfVersion: 1
 
 custom:
-- key: Author
-  label: GitHub Username(s) (separated by a single space if multiple)
-  type: string
-  minLength: 3
-- key: Issue
-  label: GitHub Issue Number (separated by a single space if multiple)
-  type: string
-  minLength: 1
+  - key: Author
+    label: GitHub Username(s) (separated by a single space if multiple)
+    type: string
+    minLength: 3
+  - key: Issue
+    label: GitHub Issue Number (separated by a single space if multiple)
+    type: string
+    minLength: 1
 
 footerFormat: |
   {{- $contributorDict := dict }}
-  {{- /* ensure all names in this list are all lowercase for later matching purposes */}}
-  {{- $core_team := splitList " " .Env.CORE_TEAM }}
-  {{- /* ensure we always skip snyk and dependabot in addition to the core team */}}
-  {{- $maintainers := list "dependabot[bot]" "snyk-bot"}}
-  {{- range $team_member := $core_team }}
-    {{- $team_member_lower := lower $team_member }}
-    {{- $maintainers = append $maintainers $team_member_lower }}
-  {{- end }}
+  {{- /* ensure we always skip snyk and dependabot */}}
+  {{- $bots := list "dependabot[bot]" "snyk-bot"}}
   {{- range $change := .Changes }}
     {{- $authorList := splitList " " $change.Custom.Author }}
     {{- /* loop through all authors for a single changelog */}}
     {{- range $author := $authorList }}
       {{- $authorLower := lower $author }}
-      {{- /* we only want to include non-core team contributors */}}
-      {{- if not (has $authorLower $maintainers)}}
+      {{- /* we only want to include non-bot contributors */}}
+      {{- if not (has $authorLower $bots)}}
         {{- $changeList := splitList " " $change.Custom.Author }}
           {{- $IssueList := list }}
           {{- $changeLink := $change.Kind }}
