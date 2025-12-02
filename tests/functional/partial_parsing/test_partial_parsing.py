@@ -65,7 +65,9 @@ from tests.functional.partial_parsing.fixtures import (
     my_macro2_sql,
     my_macro_sql,
     my_test_sql,
+    orders_singular_test_sql,
     orders_sql,
+    orders_sql_modified,
     raw_customers_csv,
     ref_override2_sql,
     ref_override_sql,
@@ -669,7 +671,7 @@ class TestSnapshots:
         assert len(results) == 1
 
 
-class TestTests:
+class TestGenericTests:
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -721,6 +723,39 @@ class TestTests:
             "test.test.is_odd_orders_id.82834fdc5b",
         ]
         assert expected_nodes == list(manifest.nodes.keys())
+
+
+class TestSingularTests:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "orders.sql": orders_sql,
+            "schema.yml": generic_schema_yml,
+        }
+
+    @pytest.fixture(scope="class")
+    def tests(self):
+        # Make sure "generic" directory is created
+        return {"generic": {"readme.md": ""}}
+
+    def test_pp_singular_tests(self, project):
+
+        # initial run
+        results = run_dbt()
+        assert len(results) == 1
+        manifest = get_manifest(project.project_root)
+        expected_nodes = ["model.test.orders", "test.test.unique_orders_id.1360ecc70e"]
+        assert expected_nodes == list(manifest.nodes.keys())
+
+        # add singular test in test-path
+        write_file(orders_singular_test_sql, project.project_root, "tests", "singular_test.sql")
+        results = run_dbt(["--partial-parse", "run"])
+        assert len(results) == 1
+
+        # modify model being tested by singular test
+        write_file(orders_sql_modified, project.project_root, "models", "orders.sql")
+        results = run_dbt(["--partial-parse", "run"])
+        assert len(results) == 1
 
 
 class TestExternalModels:
