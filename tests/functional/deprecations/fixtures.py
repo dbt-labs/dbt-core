@@ -28,6 +28,11 @@ macros__custom_test_sql = """
 {% endtest %}
 """
 
+models_pre_post_hook_in_config_sql = """
+{{ config(post_hook="select 1", pre_hook="select 2") }}
+
+select 1 as id
+"""
 
 bad_name_yaml = """
 version: 2
@@ -196,6 +201,16 @@ models:
     deprecation_date: 1999-01-01 00:00:00.00+00:00
     my_custom_property: "It's over, I have the high ground"
 """
+
+
+pre_post_hook_in_config_yaml = """
+models:
+  - name: model_with_hook_configs
+    config:
+      post_hook: "select 1"
+      pre_hook: "select 2"
+"""
+
 
 property_moved_to_config_yaml = """
 models:

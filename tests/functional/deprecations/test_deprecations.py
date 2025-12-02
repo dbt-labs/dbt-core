@@ -40,8 +40,10 @@ from tests.functional.deprecations.fixtures import (
     invalid_deprecation_date_yaml,
     models_custom_key_in_config_non_static_parser_sql,
     models_custom_key_in_config_sql,
+    models_pre_post_hook_in_config_sql,
     models_trivial__model_sql,
     multiple_custom_keys_in_config_yaml,
+    pre_post_hook_in_config_yaml,
     property_moved_to_config_yaml,
     test_missing_arguments_property_yaml,
     test_with_arguments_yaml,
@@ -904,3 +906,21 @@ class TestPropertyMovedToConfigDeprecation:
             callbacks=[event_catcher.catch],
         )
         assert len(event_catcher.caught_events) == 7
+
+
+class TestPrePostHookNoFalsePositiveDeprecation:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "model_hook_configs.sql": models_pre_post_hook_in_config_sql,
+            "schema.yml": pre_post_hook_in_config_yaml,
+        }
+
+    @mock.patch("dbt.jsonschemas.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
+    def test_pre_post_hook_no_false_positive_deprecation(self, project):
+        event_catcher = EventCatcher(CustomKeyInConfigDeprecation)
+        run_dbt(
+            ["parse", "--no-partial-parse", "--show-all-deprecations"],
+            callbacks=[event_catcher.catch],
+        )
+        assert len(event_catcher.caught_events) == 0
