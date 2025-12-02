@@ -1,3 +1,4 @@
+use crate::adapter_engine::AdapterEngine;
 use crate::base_adapter::{AdapterType, AdapterTyping};
 use crate::column::Column;
 use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
@@ -5,7 +6,6 @@ use crate::funcs::execute_macro;
 use crate::metadata::*;
 use crate::postgres::relation::PostgresRelation;
 use crate::relation_object::RelationObject;
-use crate::sql_engine::SqlEngine;
 use crate::typed_adapter::TypedBaseAdapter;
 use arrow::array::{Array, StringArray};
 use dbt_schemas::dbt_types::RelationType;
@@ -21,11 +21,11 @@ use std::sync::Arc;
 /// An adapter for Postgres.
 #[derive(Clone)]
 pub struct PostgresAdapter {
-    engine: Arc<SqlEngine>,
+    engine: Arc<AdapterEngine>,
 }
 
 impl PostgresAdapter {
-    pub fn new(engine: Arc<SqlEngine>) -> Self {
+    pub fn new(engine: Arc<AdapterEngine>) -> Self {
         Self { engine }
     }
 }
@@ -39,7 +39,7 @@ impl AdapterTyping for PostgresAdapter {
         self
     }
 
-    fn engine(&self) -> &Arc<SqlEngine> {
+    fn engine(&self) -> &Arc<AdapterEngine> {
         &self.engine
     }
 }

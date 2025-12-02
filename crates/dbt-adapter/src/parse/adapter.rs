@@ -15,7 +15,7 @@ use crate::snapshots::SnapshotStrategy;
 use crate::sql_types::TypeOps;
 use crate::stmt_splitter::NaiveStmtSplitter;
 use crate::typed_adapter::TypedBaseAdapter;
-use crate::{AdapterResult, SqlEngine};
+use crate::{AdapterEngine, AdapterResult};
 
 use dashmap::{DashMap, DashSet};
 use dbt_agate::AgateTable;
@@ -47,11 +47,11 @@ use std::sync::Arc;
 #[derive(Clone)]
 pub struct ParseAdapter {
     adapter_type: AdapterType,
-    /// The SQL engine for the ParseAdapter
+    /// The engine for the ParseAdapter
     ///
     /// Not actually used to run SQL queries during parse, but needed since
     /// this object carries useful dependencies.
-    engine: Arc<SqlEngine>,
+    engine: Arc<AdapterEngine>,
     /// The call_get_relation method calls found during parse
     call_get_relation: DashMap<String, Vec<Value>>,
     /// The call_get_columns_in_relation method calls found during parse
@@ -114,7 +114,7 @@ impl ParseAdapter {
         let stmt_splitter = Arc::new(NaiveStmtSplitter {});
         let query_comment = QueryCommentConfig::from_query_comment(None, adapter_type, false);
 
-        let engine = SqlEngine::new(
+        let engine = AdapterEngine::new(
             adapter_type,
             auth,
             adapter_config,
@@ -263,7 +263,7 @@ impl AdapterTyping for ParseAdapter {
         true
     }
 
-    fn engine(&self) -> &Arc<SqlEngine> {
+    fn engine(&self) -> &Arc<AdapterEngine> {
         &self.engine
     }
 

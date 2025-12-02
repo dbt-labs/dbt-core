@@ -1,3 +1,4 @@
+use crate::adapter_engine::{AdapterEngine, Options as ExecuteOptions, execute_query_with_retry};
 use crate::column::{Column, ColumnBuilder};
 use crate::errors::{AdapterError, AdapterErrorKind};
 use crate::funcs::{execute_macro, none_value};
@@ -8,7 +9,6 @@ use crate::record_batch_utils::{extract_first_value_as_i64, get_column_values};
 use crate::relation_object::RelationObject;
 use crate::response::{AdapterResponse, ResultObject};
 use crate::snapshots::SnapshotStrategy;
-use crate::sql_engine::{Options as ExecuteOptions, SqlEngine, execute_query_with_retry};
 use crate::{AdapterResult, AdapterType, AdapterTyping};
 use crate::{execute_macro_wrapper_with_package, python};
 
@@ -119,7 +119,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     fn execute_inner(
         &self,
         dialect: Dialect,
-        engine: Arc<SqlEngine>,
+        engine: Arc<AdapterEngine>,
         state: Option<&State>,
         conn: &'_ mut dyn Connection,
         ctx: &QueryCtx,

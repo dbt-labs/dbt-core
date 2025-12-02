@@ -1,3 +1,4 @@
+use crate::adapter_engine::AdapterEngine;
 use crate::catalog_relation::CatalogRelation;
 use crate::column::Column;
 use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
@@ -6,7 +7,6 @@ use crate::load_catalogs;
 use crate::record_batch_utils::get_column_values;
 use crate::relation_object::RelationObject;
 use crate::snowflake::relation::SnowflakeRelation;
-use crate::sql_engine::SqlEngine;
 use crate::typed_adapter::TypedBaseAdapter;
 use crate::{AdapterTyping, metadata::*};
 
@@ -29,7 +29,7 @@ use std::sync::Arc;
 /// An adapter for interacting with Snowflake.
 #[derive(Clone)]
 pub struct SnowflakeAdapter {
-    pub engine: Arc<SqlEngine>,
+    pub engine: Arc<AdapterEngine>,
 }
 
 impl fmt::Debug for SnowflakeAdapter {
@@ -39,7 +39,7 @@ impl fmt::Debug for SnowflakeAdapter {
 }
 
 impl SnowflakeAdapter {
-    pub fn new(engine: Arc<SqlEngine>) -> Self {
+    pub fn new(engine: Arc<AdapterEngine>) -> Self {
         Self { engine }
     }
 }
@@ -52,7 +52,7 @@ impl AdapterTyping for SnowflakeAdapter {
         self
     }
 
-    fn engine(&self) -> &Arc<SqlEngine> {
+    fn engine(&self) -> &Arc<AdapterEngine> {
         &self.engine
     }
 }
@@ -361,7 +361,7 @@ mod tests {
 
     use minijinja::Environment;
 
-    fn engine() -> Arc<SqlEngine> {
+    fn engine() -> Arc<AdapterEngine> {
         let config = Mapping::from_iter([
             ("user".into(), "U".into()),
             ("password".into(), "P".into()),
@@ -372,7 +372,7 @@ mod tests {
             ("warehouse".into(), "warehouse".into()),
         ]);
         let auth = auth_for_backend(Backend::Snowflake);
-        SqlEngine::new(
+        AdapterEngine::new(
             AdapterType::Snowflake,
             auth.into(),
             AdapterConfig::new(config),
@@ -423,7 +423,7 @@ mod tests {
     fn test_quote_as_configured() -> AdapterResult<()> {
         let config = AdapterConfig::default();
         let auth = auth_for_backend(Backend::Snowflake);
-        let engine = SqlEngine::new(
+        let engine = AdapterEngine::new(
             AdapterType::Snowflake,
             auth.into(),
             config,

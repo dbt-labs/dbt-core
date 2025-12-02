@@ -1,9 +1,9 @@
+use crate::adapter_engine::AdapterEngine;
 use crate::cache::RelationCache;
 use crate::column::ColumnStatic;
 use crate::metadata::*;
 use crate::query_cache::QueryCache;
 use crate::snapshots::SnapshotStrategy;
-use crate::sql_engine::SqlEngine;
 use crate::typed_adapter::{ReplayAdapter, TypedBaseAdapter};
 use crate::{AdapterResponse, AdapterResult};
 
@@ -69,7 +69,7 @@ pub trait AdapterTyping {
     }
 
     /// Get the [SqlEngine]
-    fn engine(&self) -> &Arc<SqlEngine>;
+    fn engine(&self) -> &Arc<AdapterEngine>;
 
     /// Get the [ResolvedQuoting]
     fn quoting(&self) -> ResolvedQuoting {

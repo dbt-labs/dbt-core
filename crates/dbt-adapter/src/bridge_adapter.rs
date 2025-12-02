@@ -12,7 +12,7 @@ use crate::relation_object::RelationObject;
 use crate::render_constraint::render_model_constraint;
 use crate::snapshots::SnapshotStrategy;
 use crate::typed_adapter::TypedBaseAdapter;
-use crate::{AdapterResponse, AdapterResult, BaseAdapter, SqlEngine, relation_object};
+use crate::{AdapterEngine, AdapterResponse, AdapterResult, BaseAdapter, relation_object};
 
 use dbt_agate::AgateTable;
 use dbt_common::behavior_flags::{Behavior, BehaviorFlag};
@@ -201,7 +201,7 @@ impl AdapterTyping for BridgeAdapter {
         self.typed_adapter.column_type()
     }
 
-    fn engine(&self) -> &Arc<SqlEngine> {
+    fn engine(&self) -> &Arc<AdapterEngine> {
         self.typed_adapter.engine()
     }
 

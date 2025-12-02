@@ -1,8 +1,8 @@
+use crate::adapter_engine::AdapterEngine;
 use crate::base_adapter::backend_of;
 use crate::config::AdapterConfig;
 use crate::errors::AdapterResult;
 use crate::query_comment::QueryCommentConfig;
-use crate::sql_engine::SqlEngine;
 use crate::sql_types::TypeOps;
 use crate::statement::*;
 use crate::stmt_splitter::StmtSplitter;
@@ -410,7 +410,7 @@ pub struct RecordEngineInner {
     /// Path to recordings
     path: PathBuf,
     /// Actual (wrapped) engine
-    engine: Arc<SqlEngine>,
+    engine: Arc<AdapterEngine>,
 }
 
 /// Engine used for recording db interaction; recording engine is
@@ -419,7 +419,7 @@ pub struct RecordEngineInner {
 pub struct RecordEngine(Arc<RecordEngineInner>);
 
 impl RecordEngine {
-    pub fn new(path: PathBuf, engine: Arc<SqlEngine>) -> Self {
+    pub fn new(path: PathBuf, engine: Arc<AdapterEngine>) -> Self {
         let inner = RecordEngineInner { path, engine };
         RecordEngine(Arc::new(inner))
     }

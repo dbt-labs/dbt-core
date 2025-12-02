@@ -10,6 +10,7 @@ use crate::databricks::relation_configs::relation_api::get_from_relation_config;
 use crate::databricks::relation_configs::streaming_table::StreamingTableConfig;
 use crate::databricks::relation_configs::view::ViewConfig;
 
+use crate::adapter_engine::AdapterEngine;
 use crate::catalog_relation::CatalogRelation;
 use crate::column::Column;
 use crate::databricks::relation::DatabricksRelation;
@@ -20,7 +21,6 @@ use crate::metadata::*;
 use crate::query_ctx::query_ctx_from_state;
 use crate::record_batch_utils::get_column_values;
 use crate::relation_object::RelationObject;
-use crate::sql_engine::SqlEngine;
 use crate::typed_adapter::TypedBaseAdapter;
 use crate::{AdapterType, AdapterTyping};
 use arrow::array::{Array, StringArray};
@@ -56,7 +56,7 @@ static CREDENTIAL_IN_COPY_INTO_REGEX: Lazy<Regex> = Lazy::new(|| {
 /// An adapter for interacting with Databricks.
 #[derive(Clone)]
 pub struct DatabricksAdapter {
-    engine: Arc<SqlEngine>,
+    engine: Arc<AdapterEngine>,
 }
 
 impl fmt::Debug for DatabricksAdapter {
@@ -66,7 +66,7 @@ impl fmt::Debug for DatabricksAdapter {
 }
 
 impl DatabricksAdapter {
-    pub fn new(engine: Arc<SqlEngine>) -> Self {
+    pub fn new(engine: Arc<AdapterEngine>) -> Self {
         Self { engine }
     }
 
@@ -128,7 +128,7 @@ impl AdapterTyping for DatabricksAdapter {
         self
     }
 
-    fn engine(&self) -> &Arc<SqlEngine> {
+    fn engine(&self) -> &Arc<AdapterEngine> {
         &self.engine
     }
 }

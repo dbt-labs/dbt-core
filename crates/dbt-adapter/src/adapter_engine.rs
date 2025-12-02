@@ -94,7 +94,7 @@ impl Connection for NoopConnection {
     fn update_node_id(&mut self, _node_id: Option<String>) {}
 }
 
-pub struct ActualEngine {
+pub struct XdbcEngine {
     adapter_type: AdapterType,
     /// Auth configurator
     auth: Arc<dyn Auth>,
@@ -118,7 +118,7 @@ pub struct ActualEngine {
     cancellation_token: CancellationToken,
 }
 
-impl ActualEngine {
+impl XdbcEngine {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         adapter_type: AdapterType,
@@ -260,9 +260,9 @@ impl ActualEngine {
 
 /// A simple bridge between adapters and the drivers.
 #[derive(Clone)]
-pub enum SqlEngine {
-    /// Actual engine
-    Warehouse(Arc<ActualEngine>),
+pub enum AdapterEngine {
+    /// Xdbc engine
+    Xdbc(Arc<XdbcEngine>),
     /// Engine used for recording db interaction; recording engine is
     /// a wrapper around an actual engine
     Record(RecordEngine),
@@ -272,8 +272,8 @@ pub enum SqlEngine {
     Mock(AdapterType),
 }
 
-impl SqlEngine {
-    /// Create a new [`SqlEngine::Warehouse`] based on the given configuration.
+impl AdapterEngine {
+    /// Create a new [`SqlEngine::Xdbc`] based on the given configuration.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         adapter_type: AdapterType,
@@ -286,7 +286,7 @@ impl SqlEngine {
         type_ops: Box<dyn TypeOps>,
         token: CancellationToken,
     ) -> Arc<Self> {
-        let engine = ActualEngine::new(
+        let engine = XdbcEngine::new(
             adapter_type,
             auth,
             config,
@@ -297,7 +297,7 @@ impl SqlEngine {
             query_cache,
             token,
         );
-        Arc::new(SqlEngine::Warehouse(Arc::new(engine)))
+        Arc::new(AdapterEngine::Xdbc(Arc::new(engine)))
     }
 
     /// Create a new [`SqlEngine::Replay`] based on the given path and adapter type.
@@ -322,44 +322,44 @@ impl SqlEngine {
             type_ops,
             token,
         );
-        Arc::new(SqlEngine::Replay(engine))
+        Arc::new(AdapterEngine::Replay(engine))
     }
 
     /// Create a new [`SqlEngine::Record`] wrapping the given engine.
-    pub fn new_for_recording(path: PathBuf, engine: Arc<SqlEngine>) -> Arc<Self> {
+    pub fn new_for_recording(path: PathBuf, engine: Arc<AdapterEngine>) -> Arc<Self> {
         let engine = RecordEngine::new(path, engine);
-        Arc::new(SqlEngine::Record(engine))
+        Arc::new(AdapterEngine::Record(engine))
     }
 
     pub fn is_mock(&self) -> bool {
-        matches!(self, SqlEngine::Mock(_))
+        matches!(self, AdapterEngine::Mock(_))
     }
 
     pub fn quoting(&self) -> ResolvedQuoting {
         match self {
-            SqlEngine::Warehouse(engine) => engine.quoting,
-            SqlEngine::Record(engine) => engine.quoting(),
-            SqlEngine::Replay(engine) => engine.quoting(),
-            SqlEngine::Mock(_) => ResolvedQuoting::default(),
+            AdapterEngine::Xdbc(engine) => engine.quoting,
+            AdapterEngine::Record(engine) => engine.quoting(),
+            AdapterEngine::Replay(engine) => engine.quoting(),
+            AdapterEngine::Mock(_) => ResolvedQuoting::default(),
         }
     }
 
     /// Get the statement splitter for this engine
     pub fn splitter(&self) -> &dyn StmtSplitter {
         match self {
-            SqlEngine::Warehouse(engine) => engine.splitter.as_ref(),
-            SqlEngine::Record(engine) => engine.splitter(),
-            SqlEngine::Replay(engine) => engine.splitter(),
-            SqlEngine::Mock(_) => NAIVE_STMT_SPLITTER.as_ref(),
+            AdapterEngine::Xdbc(engine) => engine.splitter.as_ref(),
+            AdapterEngine::Record(engine) => engine.splitter(),
+            AdapterEngine::Replay(engine) => engine.splitter(),
+            AdapterEngine::Mock(_) => NAIVE_STMT_SPLITTER.as_ref(),
         }
     }
 
     pub fn type_ops(&self) -> &dyn TypeOps {
         match self {
-            SqlEngine::Warehouse(engine) => engine.type_ops.as_ref(),
-            SqlEngine::Record(engine) => engine.type_ops(),
-            SqlEngine::Replay(engine) => engine.type_ops(),
-            SqlEngine::Mock(_adapter_type) => NAIVE_TYPE_OPS.as_ref(),
+            AdapterEngine::Xdbc(engine) => engine.type_ops.as_ref(),
+            AdapterEngine::Record(engine) => engine.type_ops(),
+            AdapterEngine::Replay(engine) => engine.type_ops(),
+            AdapterEngine::Mock(_adapter_type) => NAIVE_TYPE_OPS.as_ref(),
         }
     }
 
@@ -380,10 +380,10 @@ impl SqlEngine {
     /// Get the query comment config for this engine
     pub fn query_comment(&self) -> &QueryCommentConfig {
         match self {
-            SqlEngine::Warehouse(engine) => &engine.query_comment,
-            SqlEngine::Record(engine) => engine.query_comment(),
-            SqlEngine::Replay(engine) => engine.query_comment(),
-            SqlEngine::Mock(_) => &EMPTY_CONFIG,
+            AdapterEngine::Xdbc(engine) => &engine.query_comment,
+            AdapterEngine::Record(engine) => engine.query_comment(),
+            AdapterEngine::Replay(engine) => engine.query_comment(),
+            AdapterEngine::Mock(_) => &EMPTY_CONFIG,
         }
     }
 
@@ -394,7 +394,7 @@ impl SqlEngine {
     ) -> AdapterResult<Box<dyn Connection>> {
         let _span = span!("ActualEngine::new_connection");
         let conn = match &self {
-            Self::Warehouse(actual_engine) => actual_engine.new_connection_with_config(config),
+            Self::Xdbc(actual_engine) => actual_engine.new_connection_with_config(config),
             // TODO: the record and replay engines should have a new_connection_with_config()
             // method instead of a new_connection method
             Self::Record(record_engine) => record_engine.new_connection(None, None),
@@ -407,19 +407,19 @@ impl SqlEngine {
     /// Get the adapter type for this engine
     pub fn adapter_type(&self) -> AdapterType {
         match self {
-            SqlEngine::Warehouse(actual_engine) => actual_engine.adapter_type(),
-            SqlEngine::Record(record_engine) => record_engine.adapter_type(),
-            SqlEngine::Replay(replay_engine) => replay_engine.adapter_type(),
-            SqlEngine::Mock(adapter_type) => *adapter_type,
+            AdapterEngine::Xdbc(actual_engine) => actual_engine.adapter_type(),
+            AdapterEngine::Record(record_engine) => record_engine.adapter_type(),
+            AdapterEngine::Replay(replay_engine) => replay_engine.adapter_type(),
+            AdapterEngine::Mock(adapter_type) => *adapter_type,
         }
     }
 
     pub fn backend(&self) -> Backend {
         match self {
-            SqlEngine::Warehouse(actual_engine) => actual_engine.auth.backend(),
-            SqlEngine::Record(record_engine) => record_engine.backend(),
-            SqlEngine::Replay(replay_engine) => replay_engine.backend(),
-            SqlEngine::Mock(adapter_type) => backend_of(*adapter_type),
+            AdapterEngine::Xdbc(actual_engine) => actual_engine.auth.backend(),
+            AdapterEngine::Record(record_engine) => record_engine.backend(),
+            AdapterEngine::Replay(replay_engine) => replay_engine.backend(),
+            AdapterEngine::Mock(adapter_type) => backend_of(*adapter_type),
         }
     }
 
@@ -430,7 +430,7 @@ impl SqlEngine {
         node_id: Option<String>,
     ) -> AdapterResult<Box<dyn Connection>> {
         match &self {
-            Self::Warehouse(actual_engine) => actual_engine.new_connection(state, node_id),
+            Self::Xdbc(actual_engine) => actual_engine.new_connection(state, node_id),
             Self::Record(record_engine) => record_engine.new_connection(state, node_id),
             Self::Replay(replay_engine) => replay_engine.new_connection(state, node_id),
             Self::Mock(_) => Ok(Box::new(NoopConnection)),
@@ -629,7 +629,7 @@ impl SqlEngine {
     /// always is Ok(None) for non Warehouse/Record variance
     pub fn config(&self, key: &str) -> Option<Cow<'_, str>> {
         match self {
-            Self::Warehouse(actual_engine) => actual_engine.config.get_string(key),
+            Self::Xdbc(actual_engine) => actual_engine.config.get_string(key),
             Self::Record(record_engine) => record_engine.config(key),
             Self::Replay(replay_engine) => replay_engine.config(key),
             Self::Mock(_) => None,
@@ -639,7 +639,7 @@ impl SqlEngine {
     // Get full config object
     pub fn get_config(&self) -> &AdapterConfig {
         match self {
-            Self::Warehouse(actual_engine) => &actual_engine.config,
+            Self::Xdbc(actual_engine) => &actual_engine.config,
             Self::Record(record_engine) => record_engine.get_config(),
             Self::Replay(replay_engine) => replay_engine.get_config(),
             Self::Mock(_) => unreachable!("Mock engine does not support get_config"),
@@ -649,7 +649,7 @@ impl SqlEngine {
     // Get query cache
     pub fn query_cache(&self) -> Option<&Arc<dyn QueryCache>> {
         match self {
-            Self::Warehouse(actual_engine) => actual_engine.query_cache.as_ref(),
+            Self::Xdbc(actual_engine) => actual_engine.query_cache.as_ref(),
             Self::Record(_record_engine) => None,
             Self::Replay(_replay_engine) => None,
             Self::Mock(_) => None,
@@ -658,7 +658,7 @@ impl SqlEngine {
 
     pub fn cancellation_token(&self) -> CancellationToken {
         match self {
-            Self::Warehouse(actual_engine) => actual_engine.cancellation_token(),
+            Self::Xdbc(actual_engine) => actual_engine.cancellation_token(),
             Self::Record(record_engine) => record_engine.cancellation_token(),
             Self::Replay(replay_engine) => replay_engine.cancellation_token(),
             Self::Mock(_) => never_cancels(),
@@ -672,7 +672,7 @@ impl SqlEngine {
 /// https://github.com/dbt-labs/dbt-adapters/blob/996a302fa9107369eb30d733dadfaf307023f33d/dbt-adapters/src/dbt/adapters/sql/connections.py#L84
 #[allow(clippy::too_many_arguments)]
 pub fn execute_query_with_retry(
-    engine: Arc<SqlEngine>,
+    engine: Arc<AdapterEngine>,
     state: Option<&State>,
     conn: &'_ mut dyn Connection,
     ctx: &QueryCtx,

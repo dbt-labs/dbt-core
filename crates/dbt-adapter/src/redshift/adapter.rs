@@ -1,3 +1,4 @@
+use crate::adapter_engine::AdapterEngine;
 use crate::base_adapter::AdapterTyping;
 use crate::column::Column;
 use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
@@ -5,7 +6,6 @@ use crate::funcs::execute_macro;
 use crate::metadata::*;
 use crate::redshift::relation::RedshiftRelation;
 use crate::relation_object::RelationObject;
-use crate::sql_engine::SqlEngine;
 use crate::typed_adapter::TypedBaseAdapter;
 use arrow::array::{Array, StringArray};
 use dbt_common::adapter::AdapterType;
@@ -24,7 +24,7 @@ use std::sync::Arc;
 /// An adapter for interacting with Redshift.
 #[derive(Clone)]
 pub struct RedshiftAdapter {
-    engine: Arc<SqlEngine>,
+    engine: Arc<AdapterEngine>,
 }
 
 impl Debug for RedshiftAdapter {
@@ -34,7 +34,7 @@ impl Debug for RedshiftAdapter {
 }
 
 impl RedshiftAdapter {
-    pub fn new(engine: Arc<SqlEngine>) -> Self {
+    pub fn new(engine: Arc<AdapterEngine>) -> Self {
         Self { engine }
     }
 }
@@ -48,7 +48,7 @@ impl AdapterTyping for RedshiftAdapter {
         self
     }
 
-    fn engine(&self) -> &Arc<SqlEngine> {
+    fn engine(&self) -> &Arc<AdapterEngine> {
         &self.engine
     }
 }
@@ -234,10 +234,10 @@ mod tests {
     use dbt_serde_yaml::Mapping;
     use dbt_xdbc::Backend;
 
-    fn engine() -> Arc<SqlEngine> {
+    fn engine() -> Arc<AdapterEngine> {
         let config = Mapping::new();
         let auth = auth_for_backend(Backend::Redshift);
-        SqlEngine::new(
+        AdapterEngine::new(
             AdapterType::Redshift,
             auth.into(),
             AdapterConfig::new(config),

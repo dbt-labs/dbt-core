@@ -1,4 +1,4 @@
-use crate::SqlEngine;
+use crate::AdapterEngine;
 use crate::base_adapter::{AdapterType, AdapterTyping};
 use crate::column::Column;
 use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
@@ -29,7 +29,7 @@ use std::sync::Arc;
 pub struct MockAdapter {
     /// Adapter type
     pub adapter_type: AdapterType,
-    engine: Arc<SqlEngine>,
+    engine: Arc<AdapterEngine>,
     /// Flags available in dbt_project.yml
     flags: BTreeMap<String, Value>,
     /// Quoting Policy
@@ -58,7 +58,7 @@ impl MockAdapter {
     ) -> Self {
         Self {
             adapter_type,
-            engine: Arc::new(SqlEngine::Mock(adapter_type)),
+            engine: Arc::new(AdapterEngine::Mock(adapter_type)),
             flags,
             quoting,
             cancellation_token: token,
@@ -79,7 +79,7 @@ impl AdapterTyping for MockAdapter {
         self
     }
 
-    fn engine(&self) -> &Arc<SqlEngine> {
+    fn engine(&self) -> &Arc<AdapterEngine> {
         &self.engine
     }
 

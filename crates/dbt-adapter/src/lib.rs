@@ -5,6 +5,7 @@
 #[macro_use]
 mod macros;
 
+pub mod adapter_engine;
 pub mod base_adapter;
 pub mod bridge_adapter;
 pub mod cache;
@@ -28,7 +29,6 @@ pub mod response;
 pub mod snapshots;
 /// Tokenizing and fuzzy diffing of SQL strings
 pub mod sql;
-pub mod sql_engine;
 pub mod sql_types;
 pub mod statement;
 pub mod stmt_splitter;
@@ -68,7 +68,7 @@ pub mod cast_util;
 pub mod relation_object;
 
 /// SqlEngine
-pub use sql_engine::SqlEngine;
+pub use adapter_engine::AdapterEngine;
 
 /// Functions exposed to jinja
 pub mod load_store;
@@ -83,7 +83,7 @@ pub use response::AdapterResponse;
 pub use typed_adapter::TypedBaseAdapter;
 
 // Exposing structs for testing
+pub use adapter_engine::AdapterEngine as SqlEngineForTesting;
 pub use dbt_auth::AdapterConfig as AdapterConfigForTesting;
 pub use postgres::adapter::PostgresAdapter as PostgresAdapterForTesting;
 pub use snowflake::adapter::SnowflakeAdapter as SnowflakeAdapterForTesting;
-pub use sql_engine::SqlEngine as SqlEngineForTesting;

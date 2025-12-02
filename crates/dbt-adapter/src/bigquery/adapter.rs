@@ -1,3 +1,4 @@
+use crate::adapter_engine::AdapterEngine;
 use crate::base_adapter::{AdapterType, AdapterTyping};
 use crate::bigquery::relation::BigqueryRelation;
 use crate::bigquery::relation_config::BigqueryMaterializedViewConfigObject;
@@ -19,7 +20,6 @@ use crate::query_ctx::query_ctx_from_state;
 use crate::record_batch_utils::get_column_values;
 use crate::relation_object::RelationObject;
 use crate::render_constraint::render_column_constraint;
-use crate::sql_engine::SqlEngine;
 use crate::typed_adapter::TypedBaseAdapter;
 use adbc_core::options::OptionValue;
 use arrow::array::StringArray;
@@ -258,7 +258,7 @@ pub(crate) fn get_table_options_value(
 /// An adapter for interacting with Bigquery.
 #[derive(Clone)]
 pub struct BigqueryAdapter {
-    engine: Arc<SqlEngine>,
+    engine: Arc<AdapterEngine>,
 }
 
 impl Debug for BigqueryAdapter {
@@ -268,7 +268,7 @@ impl Debug for BigqueryAdapter {
 }
 
 impl BigqueryAdapter {
-    pub fn new(engine: Arc<SqlEngine>) -> Self {
+    pub fn new(engine: Arc<AdapterEngine>) -> Self {
         Self { engine }
     }
 
@@ -293,7 +293,7 @@ impl AdapterTyping for BigqueryAdapter {
         self
     }
 
-    fn engine(&self) -> &Arc<SqlEngine> {
+    fn engine(&self) -> &Arc<AdapterEngine> {
         &self.engine
     }
 }
@@ -1202,10 +1202,10 @@ mod tests {
     use dbt_serde_yaml::Mapping;
     use dbt_xdbc::Backend;
 
-    fn engine() -> Arc<SqlEngine> {
+    fn engine() -> Arc<AdapterEngine> {
         let config = Mapping::default();
         let auth = auth_for_backend(Backend::BigQuery);
-        SqlEngine::new(
+        AdapterEngine::new(
             AdapterType::Bigquery,
             auth.into(),
             AdapterConfig::new(config),
