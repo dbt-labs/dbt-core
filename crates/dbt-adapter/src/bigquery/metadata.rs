@@ -10,12 +10,12 @@ use arrow_array::{
     Array, BooleanArray, Int64Array, RecordBatch, StringArray, TimestampMicrosecondArray,
 };
 use arrow_schema::{DataType, Field, Schema, SchemaBuilder, TimeUnit};
+use dbt_common::adapter::ExecutionPhase;
 use dbt_common::cancellation::Cancellable;
 use dbt_schemas::schemas::legacy_catalog::{
     CatalogNodeStats, CatalogTable, ColumnMetadata, TableMetadata,
 };
 use dbt_schemas::schemas::relations::base::{BaseRelation, RelationPattern};
-use dbt_xdbc::query_ctx::ExecutionPhase;
 use dbt_xdbc::{Connection, MapReduce, QueryCtx};
 
 use std::collections::btree_map::Entry;

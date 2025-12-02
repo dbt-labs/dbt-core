@@ -1,11 +1,10 @@
 //! Util methods for creating query context.
 
-use std::str::FromStr;
-
 use crate::errors::AdapterResult;
 
+use dbt_common::adapter::DBT_EXECUTION_PHASES;
 use dbt_schemas::schemas::{DbtModel, DbtSeed, DbtSnapshot, DbtTest, DbtUnitTest};
-use dbt_xdbc::{QueryCtx, query_ctx::ExecutionPhase};
+use dbt_xdbc::QueryCtx;
 use minijinja::{
     Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State,
     constants::CURRENT_EXECUTION_PHASE,
@@ -59,12 +58,11 @@ pub fn node_id_from_state(state: &State) -> Option<String> {
     }
 }
 
-pub fn execution_phase_from_state(state: &State) -> Option<ExecutionPhase> {
-    let phase = state.lookup(CURRENT_EXECUTION_PHASE).as_ref()?.clone();
-    if let Some(phase) = phase.as_str() {
-        debug_assert!(ExecutionPhase::from_str(phase).is_ok());
-        ExecutionPhase::from_str(phase).ok()
-    } else {
-        None
-    }
+pub fn execution_phase_from_state(state: &State) -> Option<&'static str> {
+    let value = state.lookup(CURRENT_EXECUTION_PHASE)?;
+    let s = value.as_str()?;
+    DBT_EXECUTION_PHASES
+        .iter()
+        .position(|&p| p == s)
+        .map(|idx| DBT_EXECUTION_PHASES[idx])
 }

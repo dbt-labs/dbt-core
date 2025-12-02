@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use adbc_core::{
     Optionable, PartitionedResult, Statement as _,
-    error::Result,
+    error::{Error, Result, Status},
     options::{OptionStatement, OptionValue},
 };
 use adbc_driver_manager::ManagedStatement as ManagedAdbcStatement;
@@ -16,7 +16,7 @@ use arrow_schema::Schema;
 
 #[cfg(feature = "odbc")]
 use crate::odbc::ManagedOdbcStatement;
-use crate::{Backend, QueryCtx, semaphore::Semaphore};
+use crate::{Backend, semaphore::Semaphore};
 
 /// XDBC Statement.
 ///
@@ -91,7 +91,7 @@ pub trait Statement: Send {
     ///
     /// The query can then be executed with [Statement::execute]. For queries
     /// expected to be executed repeatedly, call [Statement::prepare] first.
-    fn set_sql_query(&mut self, ctx: &QueryCtx, sql: &str) -> Result<()>;
+    fn set_sql_query(&mut self, sql: &str) -> Result<()>;
 
     /// Set the Substrait plan to execute.
     ///
@@ -195,7 +195,7 @@ impl Statement for AdbcStatement {
         self.1.prepare()
     }
 
-    fn set_sql_query(&mut self, _ctx: &QueryCtx, sql: &str) -> Result<()> {
+    fn set_sql_query(&mut self, sql: &str) -> Result<()> {
         // Because caller might hot have sql (e.g., ingest)
         match sql {
             "" => Ok(()),
@@ -214,10 +214,26 @@ impl Statement for AdbcStatement {
     // adbc_core::Optionable<Option = OptionStatement> functions -----------------------------
 
     fn set_option(&mut self, key: OptionStatement, value: OptionValue) -> Result<()> {
+        if let OptionStatement::Other(name) = &key
+            && name.starts_with("dbt.")
+        {
+            // some wrappers intercept dbt-specific options, but we ignore them here in case
+            // they reach the innermost [Statement] implementation
+            return Ok(());
+        }
         self.1.set_option(key, value)
     }
 
     fn get_option_string(&self, key: OptionStatement) -> Result<String> {
+        if let OptionStatement::Other(name) = &key
+            && name.starts_with("dbt.")
+        {
+            let message = format!(
+                "dbt-specific option '{}' is not queryable from AdbcStatement",
+                name
+            );
+            Error::with_message_and_status(message, Status::NotFound);
+        }
         self.1.get_option_string(key)
     }
 
@@ -282,7 +298,7 @@ impl Statement for OdbcStatement {
         self.1.prepare()
     }
 
-    fn set_sql_query(&mut self, _ctx: &QueryCtx, sql: &str) -> Result<()> {
+    fn set_sql_query(&mut self, sql: &str) -> Result<()> {
         self.1.set_sql_query(sql)
     }
 
@@ -301,11 +317,11 @@ impl Statement for OdbcStatement {
     }
 
     fn get_option_string(&self, _key: OptionStatement) -> Result<String> {
-        std::unimplemented!("OdbcStatement::set_option")
+        std::unimplemented!("OdbcStatement::get_option_string")
     }
 
     fn get_option_bytes(&self, _key: OptionStatement) -> Result<Vec<u8>> {
-        std::unimplemented!("OdbcStatement::set_option")
+        std::unimplemented!("OdbcStatement::get_option_bytes")
     }
 
     fn get_option_int(&self, _key: OptionStatement) -> Result<i64> {
@@ -313,7 +329,7 @@ impl Statement for OdbcStatement {
     }
 
     fn get_option_double(&self, _key: OptionStatement) -> Result<f64> {
-        std::unimplemented!("OdbcStatement::set_option")
+        std::unimplemented!("OdbcStatement::get_option_double")
     }
 
     fn debug_fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

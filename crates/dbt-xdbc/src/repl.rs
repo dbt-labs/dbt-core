@@ -12,7 +12,7 @@ use dbt_common::pretty_table::pretty_data_table;
 use dialoguer::{BasicHistory, Input, theme::ColorfulTheme};
 
 use crate::{
-    Backend, Connection, Database, Driver, QueryCtx, bigquery, connection,
+    Backend, Connection, Database, Driver, bigquery, connection,
     database::{self, LogLevel},
     driver, snowflake,
 };
@@ -125,10 +125,9 @@ impl ReplState {
             return Ok((0, 0));
         }
 
-        let ctx = QueryCtx::default();
         let conn = self.connection.as_mut();
         let mut stmt = conn.new_statement()?;
-        stmt.set_sql_query(&ctx, query)?;
+        stmt.set_sql_query(query)?;
         let reader = stmt.execute()?;
 
         let num_cols = reader.schema().fields().len();

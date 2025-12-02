@@ -10,6 +10,7 @@ use crate::{AdapterType, AdapterTyping};
 use arrow_array::{
     Array, BooleanArray, Decimal128Array, RecordBatch, StringArray, TimestampMillisecondArray,
 };
+use dbt_common::adapter::ExecutionPhase;
 use dbt_common::cancellation::Cancellable;
 
 use arrow_schema::Schema;
@@ -18,7 +19,6 @@ use dbt_schemas::schemas::legacy_catalog::{
     CatalogNodeStats, CatalogTable, ColumnMetadata, TableMetadata,
 };
 use dbt_schemas::schemas::relations::base::{BaseRelation, RelationPattern};
-use dbt_xdbc::query_ctx::ExecutionPhase;
 use dbt_xdbc::{Connection, MapReduce, QueryCtx};
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -385,7 +385,7 @@ impl MetadataAdapter for SnowflakeAdapter {
                 ctx = ctx.with_node_id(&node_id);
             }
             if let Some(phase) = phase {
-                ctx = ctx.with_phase(phase);
+                ctx = ctx.with_phase(phase.as_str());
             }
             let (_, table) = adapter.query(&ctx, conn, &sql, None)?;
             let batch = table.original_record_batch();

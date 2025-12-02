@@ -3,8 +3,8 @@ use crate::metadata::*;
 use crate::mock::adapter::MockAdapter;
 use arrow_schema::Schema;
 
+use dbt_common::adapter::ExecutionPhase;
 use dbt_schemas::schemas::relations::base::{BaseRelation, RelationPattern};
-use dbt_xdbc::query_ctx::ExecutionPhase;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 

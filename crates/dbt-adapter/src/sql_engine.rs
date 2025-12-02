@@ -1,3 +1,4 @@
+use crate::AdapterResponse;
 use crate::auth::Auth;
 use crate::base_adapter::backend_of;
 use crate::bigquery::adapter::ADBC_EXECUTE_INVOCATION_OPTION;
@@ -11,8 +12,8 @@ use crate::query_cache::QueryCache;
 use crate::query_comment::{EMPTY_CONFIG, QueryCommentConfig};
 use crate::record_and_replay::{RecordEngine, ReplayEngine};
 use crate::sql_types::{NaiveTypeOpsImpl, TypeOps};
+use crate::statement::*;
 use crate::stmt_splitter::StmtSplitter;
-use crate::{AdapterResponse, TrackedStatement};
 
 use adbc_core::options::{OptionStatement, OptionValue};
 use arrow::array::RecordBatch;
@@ -507,18 +508,29 @@ impl SqlEngine {
         > {
             use dbt_xdbc::statement::Statement as _;
 
-            let mut stmt = conn.new_statement()?;
             let mut stmt = match self.query_cache() {
-                Some(query_cache) => query_cache.new_statement(stmt, ctx.clone(), sql.to_string()),
-                None => {
-                    stmt.set_sql_query(ctx, sql.as_ref())?;
-                    stmt
+                Some(query_cache) => {
+                    let inner_stmt = conn.new_statement()?;
+                    query_cache.new_statement(inner_stmt)
                 }
+                None => conn.new_statement()?,
             };
-
+            if let Some(node_id) = ctx.node_id() {
+                stmt.set_option(
+                    OptionStatement::Other(DBT_NODE_ID.to_string()),
+                    OptionValue::String(node_id.clone()),
+                )?;
+            }
+            if let Some(p) = ctx.phase() {
+                stmt.set_option(
+                    OptionStatement::Other(DBT_EXECUTION_PHASE.to_string()),
+                    OptionValue::String(p.to_string()),
+                )?;
+            }
             options
                 .into_iter()
                 .try_for_each(|(key, value)| stmt.set_option(OptionStatement::Other(key), value))?;
+            stmt.set_sql_query(sql.as_ref())?;
 
             // Make sure we don't create more statements after global cancellation.
             token.check_cancellation()?;

@@ -1,114 +1,57 @@
-use std::fmt;
-use std::str::FromStr;
-
-use chrono::{DateTime, Utc};
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ExecutionPhase {
-    Unspecified,
-    Render,
-    Analyze,
-    Run,
-}
-
-impl FromStr for ExecutionPhase {
-    type Err = String;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "render" => Ok(ExecutionPhase::Render),
-            "analyze" => Ok(ExecutionPhase::Analyze),
-            "run" => Ok(ExecutionPhase::Run),
-            _ => Err("Invalid execution phase".to_string()),
-        }
-    }
-}
-
-impl fmt::Display for ExecutionPhase {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let s = match self {
-            ExecutionPhase::Unspecified => "unspecified",
-            ExecutionPhase::Render => "render",
-            ExecutionPhase::Analyze => "analyze",
-            ExecutionPhase::Run => "run",
-        };
-        s.fmt(f)
-    }
-}
-
 /// Context carrying metadata associated with a query.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct QueryCtx {
     // Model executing this query
     node_unique_id: Option<String>,
     // Execution Phase
-    phase: Option<ExecutionPhase>,
-    // Time this instance was created
-    created_at: DateTime<Utc>,
+    phase: Option<&'static str>,
     // Description (abribrary string) associated with the query
     desc: Option<String>,
 }
 
-impl Default for QueryCtx {
-    fn default() -> Self {
-        QueryCtx::create(None, None, None)
-    }
-}
-
 impl QueryCtx {
-    fn create(
-        node_unique_id: Option<String>,
-        phase: Option<ExecutionPhase>,
-        desc: Option<String>,
-    ) -> Self {
-        Self {
-            node_unique_id,
-            phase,
-            created_at: Utc::now(),
-            desc,
+    /// Create a new Query Context with a description.
+    pub fn new(description: impl Into<String>) -> Self {
+        QueryCtx {
+            node_unique_id: None,
+            phase: None,
+            desc: Some(description.into()),
         }
     }
 
-    /// Creates a new context by keeping other fields same but
-    /// updating unique node id.
-    pub fn with_node_id(self, node_unique_id: impl Into<String>) -> Self {
-        // We never allow unique id to be reassigned
-        assert!(self.node_unique_id.is_none());
-        Self::create(Some(node_unique_id.into()), self.phase, self.desc)
+    /// Set the unique node id associated with this context.
+    ///
+    /// Re-assigning the node id will panic in debug builds.
+    pub fn with_node_id(mut self, node_unique_id: impl Into<String>) -> Self {
+        debug_assert!(
+            self.node_unique_id.is_none(),
+            "unexpected reassignment of node_unique_id"
+        );
+        self.node_unique_id = Some(node_unique_id.into());
+        self
     }
 
-    /// Create a new context by keeping other fields same and using
-    /// the given description.
-    pub fn with_desc(self, desc: impl Into<String>) -> Self {
-        let mut ctx = self;
-        ctx.set_desc(desc.into());
-        ctx
+    pub fn with_desc(mut self, desc: impl Into<String>) -> Self {
+        self.set_desc(desc.into());
+        self
     }
 
     pub fn set_desc(&mut self, desc: impl Into<String>) {
-        // We never allow one to reassign description
-        assert!(self.desc.is_none());
+        debug_assert!(
+            self.desc.is_none(),
+            "unexpected reassignment of description"
+        );
         self.desc = Some(desc.into());
     }
 
-    /// Creates a new context by keeping other fields same and setting
-    /// the given execution phase.
-    pub fn with_phase(self, phase: ExecutionPhase) -> Self {
-        Self::create(self.node_unique_id, Some(phase), self.desc)
+    pub fn with_phase(mut self, phase: &'static str) -> Self {
+        self.phase = Some(phase);
+        self
     }
 
     /// Return unique node id associated with this context
     pub fn node_id(&self) -> Option<&String> {
         self.node_unique_id.as_ref()
-    }
-
-    /// Returns time this instance was created.
-    pub fn created_at(&self) -> DateTime<Utc> {
-        self.created_at
-    }
-
-    /// Returns time this instance was created as a string.
-    pub fn created_at_as_str(&self) -> String {
-        self.created_at.to_rfc3339()
     }
 
     /// Returns a clone of the description associated with the
@@ -118,7 +61,7 @@ impl QueryCtx {
     }
 
     /// Returns the Execution Phase
-    pub fn phase(&self) -> Option<ExecutionPhase> {
+    pub fn phase(&self) -> Option<&'static str> {
         self.phase
     }
 }

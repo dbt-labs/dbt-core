@@ -12,13 +12,13 @@ use arrow_array::{
     Array, BooleanArray, Int32Array, RecordBatch, StringArray, TimestampMicrosecondArray,
 };
 use arrow_schema::{Field, Schema};
+use dbt_common::adapter::ExecutionPhase;
 use dbt_common::cancellation::Cancellable;
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::legacy_catalog::{
     CatalogNodeStats, CatalogTable, ColumnMetadata, TableMetadata,
 };
 use dbt_schemas::schemas::relations::base::{BaseRelation, RelationPattern};
-use dbt_xdbc::query_ctx::ExecutionPhase;
 use dbt_xdbc::{Connection, MapReduce, QueryCtx};
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};

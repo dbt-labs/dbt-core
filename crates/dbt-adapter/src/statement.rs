@@ -8,8 +8,13 @@ use adbc_core::options::{OptionStatement, OptionValue};
 use arrow::array::{RecordBatch, RecordBatchReader};
 use arrow_schema::Schema;
 use crossbeam_skiplist::SkipMap;
+use dbt_xdbc::Statement;
 use dbt_xdbc::semaphore::AcquireAllSemaphore;
-use dbt_xdbc::{QueryCtx, Statement};
+
+/// Name of the [Statement] option that carries the dbt node unique ID.
+pub const DBT_NODE_ID: &str = "dbt.node_id";
+/// Name of the [Statement] option that carries the dbt execution phase.
+pub const DBT_EXECUTION_PHASE: &str = "dbt.execution_phase";
 
 /// Generate a unique statement ID for each [TrackedStatement]
 /// by incrementing this global atomic counter.
@@ -152,7 +157,6 @@ fn unregister_stmt(id: u64) {
     }
 }
 
-#[allow(dead_code)]
 pub struct TrackedStatement {
     stmt_id: u64,
     inner_ptr: &'static mut dyn Statement,
@@ -210,8 +214,8 @@ impl Statement for TrackedStatement {
     fn prepare(&mut self) -> Result<()> {
         self.inner_mut().prepare()
     }
-    fn set_sql_query(&mut self, ctx: &QueryCtx, sql: &str) -> Result<()> {
-        self.inner_mut().set_sql_query(ctx, sql)
+    fn set_sql_query(&mut self, sql: &str) -> Result<()> {
+        self.inner_mut().set_sql_query(sql)
     }
     fn set_substrait_plan(&mut self, plan: &[u8]) -> Result<()> {
         self.inner_mut().set_substrait_plan(plan)

@@ -17,12 +17,12 @@ use arrow::array::{RecordBatch, StringArray, TimestampMicrosecondArray};
 use arrow::datatypes::GenericStringType;
 use arrow_array::{Array, BooleanArray, Decimal128Array, GenericByteArray, Int32Array, Int64Array};
 use arrow_schema::Schema;
+use dbt_common::adapter::ExecutionPhase;
 use dbt_common::cancellation::Cancellable;
 use dbt_schemas::schemas::legacy_catalog::{
     CatalogNodeStats, CatalogTable, ColumnMetadata, TableMetadata,
 };
 use dbt_schemas::schemas::relations::base::{BaseRelation, RelationPattern};
-use dbt_xdbc::query_ctx::ExecutionPhase;
 use dbt_xdbc::{Connection, MapReduce, QueryCtx};
 
 use crate::sql_types::make_arrow_field_v2;

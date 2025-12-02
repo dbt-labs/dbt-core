@@ -6,11 +6,11 @@ use arrow_schema::Schema;
 
 use arrow_array::{Array, Decimal128Array, RecordBatch, StringArray};
 
+use dbt_common::adapter::ExecutionPhase;
 use dbt_schemas::schemas::{
     legacy_catalog::{CatalogNodeStats, CatalogTable, ColumnMetadata, TableMetadata},
     relations::base::{BaseRelation, RelationPattern},
 };
-use dbt_xdbc::query_ctx::ExecutionPhase;
 
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, BTreeSet, HashMap};

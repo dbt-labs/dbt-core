@@ -30,6 +30,7 @@ pub mod snapshots;
 pub mod sql;
 pub mod sql_engine;
 pub mod sql_types;
+pub mod statement;
 pub mod stmt_splitter;
 pub mod typed_adapter;
 
@@ -40,9 +41,6 @@ pub mod auth {
 pub mod config {
     pub use dbt_auth::AdapterConfig;
 }
-
-mod statement;
-pub use statement::{StmtCancellationReport, TrackedStatement, cancel_all_tracked_statements};
 
 // Adapters for warehouses / dbs
 /// Bigquery adapter

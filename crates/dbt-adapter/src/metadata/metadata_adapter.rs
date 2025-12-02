@@ -6,6 +6,7 @@ use crate::sql_types::{SdfSchema, arrow_schema_to_sdf_schema};
 use crate::typed_adapter::TypedBaseAdapter;
 
 use arrow::array::RecordBatch;
+use dbt_common::adapter::ExecutionPhase;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_schemas::schemas::{
     legacy_catalog::{CatalogTable, ColumnMetadata},
@@ -13,7 +14,6 @@ use dbt_schemas::schemas::{
 };
 use dbt_schemas::state::ResolverState;
 use dbt_schemas::stats::Stats;
-use dbt_xdbc::query_ctx::ExecutionPhase;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;

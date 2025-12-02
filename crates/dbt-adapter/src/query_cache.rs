@@ -1,3 +1,4 @@
+use dbt_common::adapter::{DBT_EXECUTION_PHASE_ANALYZE, DBT_EXECUTION_PHASES};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use scc::HashMap as SccHashMap;
@@ -10,14 +11,14 @@ use adbc_core::error::{Error as AdbcError, Result as AdbcResult, Status as AdbcS
 use adbc_core::options::{OptionStatement, OptionValue};
 use arrow::array::{RecordBatch, RecordBatchIterator, RecordBatchReader};
 use arrow_schema::{ArrowError, Field, Schema};
-use dbt_xdbc::query_ctx::ExecutionPhase;
-use dbt_xdbc::{QueryCtx, Statement};
+use dbt_xdbc::Statement;
 
 use parquet::arrow::ArrowWriter;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use parquet::file::properties::WriterProperties;
 
 use crate::sql::normalize::strip_sql_comments;
+use crate::statement::*;
 
 #[derive(Default, Clone)]
 pub enum QueryCacheMode {
@@ -28,19 +29,17 @@ pub enum QueryCacheMode {
 }
 
 pub trait QueryCache: Send + Sync {
-    fn new_statement(
-        &self,
-        stmt: Box<dyn Statement>,
-        ctx: QueryCtx,
-        sql: String,
-    ) -> Box<dyn Statement>;
+    fn new_statement(&self, inner_stmt: Box<dyn Statement>) -> Box<dyn Statement>;
 }
 
 pub struct QueryCacheStatement {
     query_cache_config: Arc<QueryCacheConfig>,
     counters: Arc<SccHashMap<String, usize>>,
     inner_stmt: Box<dyn Statement>,
-    query_ctx: QueryCtx,
+    /// Node ID associated with this query
+    node_id: Option<String>,
+    /// One of [DBT_EXECUTION_PHASES] or ""
+    execution_phase: &'static str,
     sql: String,
 }
 
@@ -67,9 +66,11 @@ impl QueryCacheStatement {
         format!("{hash:x}")[..8.min(format!("{hash:x}").len())].to_string()
     }
 
-    fn compute_file_index(&self, node_id: &str, phase: &ExecutionPhase, cache_key: &str) -> usize {
+    /// PRECONDITION: phase is one of [DBT_EXECUTION_PHASES]
+    fn compute_file_index(&self, node_id: &str, phase: &'static str, cache_key: &str) -> usize {
+        debug_assert!(DBT_EXECUTION_PHASES.contains(&phase));
         // If the phase is analyze, we need to find the max file index for the given cache_key
-        if matches!(phase, ExecutionPhase::Analyze) {
+        if phase == DBT_EXECUTION_PHASE_ANALYZE {
             let output_dir = self.construct_output_dir(node_id);
             // List all files in the directory prefixed by the cache_key, find the max file_index suffix
             if let Ok(files) = std::fs::read_dir(output_dir)
@@ -179,12 +180,14 @@ impl Statement for QueryCacheStatement {
     }
 
     fn execute<'a>(&'a mut self) -> AdbcResult<Box<dyn RecordBatchReader + Send + 'a>> {
-        self.inner_stmt.set_sql_query(&self.query_ctx, &self.sql)?;
-        let (node_id, phase) = if let Some(node_id) = self.query_ctx.node_id()
-            && let Some(phase) = self.query_ctx.phase()
-            && self.query_cache_config.phases.contains(&phase)
+        self.inner_stmt.set_sql_query(&self.sql)?;
+        let (node_id, phase) = if let Some(node_id) = &self.node_id
+            && self
+                .query_cache_config
+                .phases
+                .contains(&self.execution_phase)
         {
-            (node_id, phase)
+            (node_id, self.execution_phase)
         } else {
             return self.inner_stmt.execute();
         };
@@ -196,7 +199,7 @@ impl Statement for QueryCacheStatement {
             QueryCacheMode::ReadWrite => {
                 // First, compute the file name by hashing the query and suffixing the index
                 let sql_hash = self.compute_sql_hash();
-                let index = self.compute_file_index(node_id, &phase, &sql_hash);
+                let index = self.compute_file_index(node_id, phase, &sql_hash);
                 let path = self.construct_output_file_name(node_id, &sql_hash, index);
                 if path.exists() {
                     if self.check_ttl(&path)? {
@@ -244,8 +247,7 @@ impl Statement for QueryCacheStatement {
         self.inner_stmt.prepare()
     }
 
-    fn set_sql_query(&mut self, ctx: &QueryCtx, sql: &str) -> AdbcResult<()> {
-        self.query_ctx = ctx.clone();
+    fn set_sql_query(&mut self, sql: &str) -> AdbcResult<()> {
         self.sql = sql.to_string();
         Ok(())
     }
@@ -259,8 +261,49 @@ impl Statement for QueryCacheStatement {
     }
 
     fn set_option(&mut self, key: OptionStatement, value: OptionValue) -> AdbcResult<()> {
-        // TODO: Record options and then use those values when finding the file name
-        self.inner_stmt.set_option(key, value)
+        match (key, value) {
+            (OptionStatement::Other(name), OptionValue::String(node_id)) if name == DBT_NODE_ID => {
+                self.node_id = Some(node_id);
+                Ok(())
+            }
+            (OptionStatement::Other(name), OptionValue::String(execution_phase))
+                if name == DBT_EXECUTION_PHASE =>
+            {
+                // convert the String into one of the valid &'static str or "" if invalid
+                let phase_idx = DBT_EXECUTION_PHASES
+                    .iter()
+                    .position(|&p| p == execution_phase.as_str());
+                let execution_phase: &'static str = match phase_idx {
+                    Some(idx) => DBT_EXECUTION_PHASES[idx],
+                    None => {
+                        debug_assert!(false, "invalid execution phase: {}", execution_phase);
+                        ""
+                    }
+                };
+                self.execution_phase = execution_phase;
+                Ok(())
+            }
+            (OptionStatement::Other(name), _)
+                if [DBT_NODE_ID, DBT_EXECUTION_PHASE].contains(&name.as_str()) =>
+            {
+                debug_assert!(false, "expected string value for {} option", name);
+                Ok(())
+            }
+            (k, v) => self.inner_stmt.set_option(k, v),
+        }
+    }
+
+    fn get_option_string(&self, key: OptionStatement) -> AdbcResult<String> {
+        match key {
+            OptionStatement::Other(name) if name == DBT_NODE_ID => {
+                let node_id = self.node_id.as_deref().unwrap_or("");
+                Ok(node_id.to_string())
+            }
+            OptionStatement::Other(name) if name == DBT_EXECUTION_PHASE => {
+                Ok(self.execution_phase.to_string())
+            }
+            k => self.inner_stmt.get_option_string(k),
+        }
     }
 }
 
@@ -268,7 +311,7 @@ pub struct QueryCacheConfig {
     mode: QueryCacheMode,
     root_path: PathBuf,
     ttl: Option<Duration>,
-    phases: Vec<ExecutionPhase>,
+    phases: Vec<&'static str>,
 }
 
 impl QueryCacheConfig {
@@ -276,7 +319,7 @@ impl QueryCacheConfig {
         mode: QueryCacheMode,
         root_path: PathBuf,
         ttl: Option<Duration>,
-        phases: Vec<ExecutionPhase>,
+        phases: Vec<&'static str>,
     ) -> Self {
         Self {
             mode,
@@ -303,18 +346,14 @@ impl QueryCacheImpl {
 }
 
 impl QueryCache for QueryCacheImpl {
-    fn new_statement(
-        &self,
-        stmt: Box<dyn Statement>,
-        ctx: QueryCtx,
-        sql: String,
-    ) -> Box<dyn Statement> {
+    fn new_statement(&self, inner_stmt: Box<dyn Statement>) -> Box<dyn Statement> {
         Box::new(QueryCacheStatement {
             query_cache_config: self.config.clone(),
             counters: self.counters.clone(),
-            inner_stmt: stmt,
-            query_ctx: ctx,
-            sql,
+            inner_stmt,
+            node_id: None,
+            execution_phase: "",
+            sql: "".to_string(),
         })
     }
 }

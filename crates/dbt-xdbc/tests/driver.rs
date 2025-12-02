@@ -16,7 +16,7 @@ mod tests {
     use arrow_array::Array as _;
     use arrow_array::{cast::AsArray, types::*};
     use dbt_xdbc::{
-        Backend, Connection, Database, Driver, QueryCtx, Statement, bigquery, connection,
+        Backend, Connection, Database, Driver, Statement, bigquery, connection,
         database::{self, LogLevel},
         databricks, driver, redshift, salesforce, snowflake,
     };
@@ -216,10 +216,6 @@ mod tests {
         })
     }
 
-    fn unknown() -> QueryCtx {
-        QueryCtx::default()
-    }
-
     /// Check the returned info by the driver using the database methods.
     #[test_with::env(ADBC_DRIVER_TESTS)]
     #[test]
@@ -251,7 +247,7 @@ mod tests {
     /// Check execute of statement with `SELECT 21 + 21` query.
     fn execute_statement(backend: Backend) -> Result<()> {
         with_empty_statement(backend, |mut statement| {
-            statement.set_sql_query(&unknown(), "SELECT 21 + 21")?;
+            statement.set_sql_query("SELECT 21 + 21")?;
             let batch = statement
                 .execute()?
                 .next()
@@ -339,7 +335,7 @@ mod tests {
             // SqlExecute() returns SQL_SUCCESS on this statement instead of SQL_NO_DATA,
             // so we detect that no rows were returned by treating an error from SqlFetch()
             // as an indication that no rows were returned.
-            statement.set_sql_query(&unknown(), "CREATE TABLE IF NOT EXISTS my_table")?;
+            statement.set_sql_query("CREATE TABLE IF NOT EXISTS my_table")?;
             let mut batch_reader = statement.execute()?; // succeeds
             let batch = batch_reader.next(); // returns None
             assert!(batch.is_none());
@@ -352,10 +348,9 @@ mod tests {
     #[test]
     fn statement_execute_databricks_empty() -> Result<()> {
         with_empty_statement(Backend::DatabricksODBC, |mut statement| {
-            let ctx = QueryCtx::default();
             // SqlExecute() returns SQL_NO_DATA on this query making it very easy
             // to detect that no rows were returned but the query ran successfully.
-            statement.set_sql_query(&ctx, "SELECT 1 AS one WHERE 1 = 0")?;
+            statement.set_sql_query("SELECT 1 AS one WHERE 1 = 0")?;
             let mut batch_reader = statement.execute()?; // succeeds
             let batch = batch_reader.next(); // returns None
             assert!(batch.is_none());
@@ -368,9 +363,7 @@ mod tests {
     #[test]
     fn statement_execute_databricks_bool() -> Result<()> {
         with_empty_statement(Backend::DatabricksODBC, |mut statement| {
-            let ctx = QueryCtx::default();
             statement.set_sql_query(
-                &ctx,
                 r#"SELECT * FROM (
                      VALUES
                      (true, false, NULL),
@@ -410,7 +403,7 @@ mod tests {
     #[test]
     fn statement_execute_databricks_integer() -> Result<()> {
         with_empty_statement(Backend::DatabricksODBC, |mut statement| {
-            statement.set_sql_query(&unknown(), r#"SELECT * FROM (
+            statement.set_sql_query(r#"SELECT * FROM (
                     VALUES
                     (16::smallint,     32,                  64,                    32,                 64),
                     (NULL,             32,                  NULL,                  32,                 NULL),
@@ -464,7 +457,7 @@ mod tests {
     fn statement_execute_databricks_string() -> Result<()> {
         with_empty_statement(Backend::DatabricksODBC, |mut statement| {
             const REPEAT: usize = 16;
-            statement.set_sql_query(&unknown(), format!(r#"SELECT * FROM (
+            statement.set_sql_query(format!(r#"SELECT * FROM (
                 VALUES
                     (21 + 21, 'Snowman ☃'),
                     (43, NULL),
@@ -515,7 +508,6 @@ mod tests {
         with_empty_statement(Backend::DatabricksODBC, |mut statement| {
             use std::str;
             statement.set_sql_query(
-                &unknown(),
                 r#"SELECT * FROM (
                     VALUES
                     (X'68656C6C6F', NULL),
@@ -571,17 +563,16 @@ mod tests {
     fn statement_execute_redshift_wchar() -> Result<()> {
         with_connection(Backend::RedshiftODBC, |conn| {
             let mut stmt = conn.new_statement()?;
-            stmt.set_sql_query(&unknown(), r#"CREATE TABLE IF NOT EXISTS "special_ユーザー" (id BIGINT PRIMARY KEY, name TEXT NOT NULL)"#,
+            stmt.set_sql_query(r#"CREATE TABLE IF NOT EXISTS "special_ユーザー" (id BIGINT PRIMARY KEY, name TEXT NOT NULL)"#,
             )?;
             let _ = stmt.execute()?;
             let mut stmt = conn.new_statement()?;
-            stmt.set_sql_query(&unknown(), r#"CREATE TABLE IF NOT EXISTS "special_Usuário@Info" (id BIGINT PRIMARY KEY, name TEXT NOT NULL)"#,
+            stmt.set_sql_query(r#"CREATE TABLE IF NOT EXISTS "special_Usuário@Info" (id BIGINT PRIMARY KEY, name TEXT NOT NULL)"#,
             )?;
             let _ = stmt.execute()?;
 
             let mut stmt = conn.new_statement()?;
             stmt.set_sql_query(
-                &unknown(),
                 r#"SELECT schemaname AS schema, tablename AS object_name
                 FROM pg_catalog.pg_tables
                 WHERE tablename LIKE 'special_%'"#,
@@ -602,7 +593,7 @@ mod tests {
         with_connection(Backend::Snowflake, |conn| {
             conn.set_option(OptionConnection::AutoCommit, "false".into())?;
             let mut stmt = conn.new_statement()?;
-            stmt.set_sql_query(&unknown(), "SELECT 'could be an insert statement'")?;
+            stmt.set_sql_query("SELECT 'could be an insert statement'")?;
             let batch = stmt
                 .execute()?
                 .next()
@@ -622,7 +613,7 @@ mod tests {
     fn statement_execute_schema() -> Result<()> {
         let backend = Backend::Snowflake;
         with_empty_statement(backend, |mut statement| {
-            statement.set_sql_query(&unknown(), "SHOW WAREHOUSES")?;
+            statement.set_sql_query("SHOW WAREHOUSES")?;
             let schema = statement.execute_schema()?;
             let field_names = schema
                 .fields()

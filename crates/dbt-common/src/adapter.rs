@@ -40,3 +40,30 @@ impl From<AdapterType> for Dialect {
         }
     }
 }
+
+pub const DBT_EXECUTION_PHASE_RENDER: &str = "render";
+pub const DBT_EXECUTION_PHASE_ANALYZE: &str = "analyze";
+pub const DBT_EXECUTION_PHASE_RUN: &str = "run";
+
+pub const DBT_EXECUTION_PHASES: [&str; 3] = [
+    DBT_EXECUTION_PHASE_RENDER,
+    DBT_EXECUTION_PHASE_ANALYZE,
+    DBT_EXECUTION_PHASE_RUN,
+];
+
+#[derive(Clone, Copy, Debug)]
+pub enum ExecutionPhase {
+    Render,
+    Analyze,
+    Run,
+}
+
+impl ExecutionPhase {
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            ExecutionPhase::Render => DBT_EXECUTION_PHASE_RENDER,
+            ExecutionPhase::Analyze => DBT_EXECUTION_PHASE_ANALYZE,
+            ExecutionPhase::Run => DBT_EXECUTION_PHASE_RUN,
+        }
+    }
+}

@@ -4,6 +4,7 @@ use crate::errors::AdapterResult;
 use crate::query_comment::QueryCommentConfig;
 use crate::sql_engine::SqlEngine;
 use crate::sql_types::TypeOps;
+use crate::statement::*;
 use crate::stmt_splitter::StmtSplitter;
 
 use adbc_core::error::{Error as AdbcError, Result as AdbcResult, Status as AdbcStatus};
@@ -14,11 +15,11 @@ use arrow::ipc::writer::FileWriter as ArrowFileWriter;
 use arrow_schema::{ArrowError, DataType, Field, Schema, SchemaBuilder};
 use dashmap::DashMap;
 use dbt_common::ErrorCode;
-use dbt_common::adapter::AdapterType;
+use dbt_common::adapter::{AdapterType, DBT_EXECUTION_PHASES};
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::tracing::emit::emit_warn_log_message;
 use dbt_schemas::schemas::common::ResolvedQuoting;
-use dbt_xdbc::{Backend, Connection, QueryCtx, Statement};
+use dbt_xdbc::{Backend, Connection, Statement};
 use minijinja::State;
 use once_cell::sync::Lazy;
 use parquet::arrow::ArrowWriter;
@@ -68,8 +69,8 @@ fn checksum8(input: &str) -> String {
 // queries thus far. However, for pre-compile we do not have node id
 // and only sql content that we checksum and then append to it a
 // sequence number.
-fn compute_file_name(query_ctx: &QueryCtx, sql: Option<&str>) -> AdbcResult<String> {
-    let id = match query_ctx.node_id() {
+fn compute_file_name(node_id: Option<&String>, sql: Option<&str>) -> AdbcResult<String> {
+    let id = match node_id {
         Some(node_id) => node_id.to_owned(),
         None => match sql {
             Some(sql) => checksum8(sql),
@@ -543,7 +544,8 @@ impl Connection for RecordEngineConnection {
 struct RecordEngineStatement {
     record_engine: Arc<RecordEngineInner>,
     inner_stmt: Box<dyn Statement>,
-    query_ctx: Option<QueryCtx>,
+    node_id: Option<String>,
+    execution_phase: &'static str,
     sql: Option<String>,
 }
 
@@ -555,7 +557,8 @@ impl RecordEngineStatement {
         RecordEngineStatement {
             record_engine,
             inner_stmt,
-            query_ctx: None,
+            node_id: None,
+            execution_phase: "",
             sql: None,
         }
     }
@@ -571,11 +574,6 @@ impl Statement for RecordEngineStatement {
     }
 
     fn execute<'a>(&'a mut self) -> AdbcResult<Box<dyn RecordBatchReader + Send + 'a>> {
-        let query_ctx = self
-            .query_ctx
-            .clone()
-            .expect("query ctx has to be set before executing a statement");
-
         let sql = match &self.sql {
             Some(sql) => sql,
             None => "none",
@@ -587,7 +585,7 @@ impl Statement for RecordEngineStatement {
         let path = self.record_engine.path.clone();
         create_dir_all(&path).map_err(|e| from_fs_error(e.into(), Some(&path)))?;
 
-        let file_name = compute_file_name(&query_ctx, Some(sql))?;
+        let file_name = compute_file_name(self.node_id.as_ref(), Some(sql))?;
         let handler = FileHandler::new_for_record();
         let data_path = path.join(format!("{file_name}.{}", handler.extension()));
 
@@ -644,9 +642,8 @@ impl Statement for RecordEngineStatement {
         self.inner_stmt.prepare()
     }
 
-    fn set_sql_query(&mut self, ctx: &QueryCtx, sql: &str) -> AdbcResult<()> {
-        self.inner_stmt.set_sql_query(ctx, sql)?;
-        self.query_ctx = Some(ctx.clone());
+    fn set_sql_query(&mut self, sql: &str) -> AdbcResult<()> {
+        self.inner_stmt.set_sql_query(sql)?;
         self.sql = Some(sql.to_string());
         Ok(())
     }
@@ -660,8 +657,50 @@ impl Statement for RecordEngineStatement {
     }
 
     fn set_option(&mut self, key: OptionStatement, value: OptionValue) -> AdbcResult<()> {
-        // TODO: Record options and then use those values when finding the file name
-        self.inner_stmt.set_option(key, value)
+        match (key, value) {
+            (OptionStatement::Other(name), OptionValue::String(node_id)) if name == DBT_NODE_ID => {
+                self.node_id = Some(node_id);
+                Ok(())
+            }
+            (OptionStatement::Other(name), OptionValue::String(execution_phase))
+                if name == DBT_EXECUTION_PHASE =>
+            {
+                // convert the String into one of the valid &'static str or "" if invalid
+                let phase_idx = DBT_EXECUTION_PHASES
+                    .iter()
+                    .position(|&p| p == execution_phase.as_str());
+                let execution_phase: &'static str = match phase_idx {
+                    Some(idx) => DBT_EXECUTION_PHASES[idx],
+                    None => {
+                        debug_assert!(false, "invalid execution phase: {}", execution_phase);
+                        ""
+                    }
+                };
+                self.execution_phase = execution_phase;
+                Ok(())
+            }
+            (OptionStatement::Other(name), _)
+                if [DBT_NODE_ID, DBT_EXECUTION_PHASE].contains(&name.as_str()) =>
+            {
+                debug_assert!(false, "expected string value for {} option", name);
+                Ok(())
+            }
+            (k, v) => self.inner_stmt.set_option(k, v),
+        }
+    }
+
+    fn get_option_string(&self, key: OptionStatement) -> AdbcResult<String> {
+        match key {
+            OptionStatement::Other(name) if name == DBT_NODE_ID => {
+                let s = self.node_id.clone().unwrap_or_default();
+                Ok(s)
+            }
+            OptionStatement::Other(name) if name == DBT_EXECUTION_PHASE => {
+                // XXX: return the execution_phase
+                Ok("".to_string())
+            }
+            k => self.inner_stmt.get_option_string(k),
+        }
     }
 }
 
@@ -830,7 +869,8 @@ impl Connection for ReplayEngineConnection {
 
 struct ReplayEngineStatement {
     replay_engine: Arc<ReplayEngineInner>,
-    query_ctx: Option<QueryCtx>,
+    node_id: Option<String>,
+    execution_phase: &'static str,
     sql: Option<String>,
 }
 
@@ -838,7 +878,8 @@ impl ReplayEngineStatement {
     fn new(replay_engine: Arc<ReplayEngineInner>) -> ReplayEngineStatement {
         ReplayEngineStatement {
             replay_engine,
-            query_ctx: None,
+            node_id: None,
+            execution_phase: "",
             sql: None,
         }
     }
@@ -863,18 +904,13 @@ impl Statement for ReplayEngineStatement {
     }
 
     fn execute<'a>(&'a mut self) -> AdbcResult<Box<dyn RecordBatchReader + Send + 'a>> {
-        let query_ctx = self
-            .query_ctx
-            .clone()
-            .expect("query has to be set before executing a statement");
-
         let replay_sql = match &self.sql {
             Some(sql) => sql,
             None => "none",
         };
 
         let path = self.replay_engine.full_path();
-        let file_name = compute_file_name(&query_ctx, Some(replay_sql))?;
+        let file_name = compute_file_name(self.node_id.as_ref(), Some(replay_sql))?;
 
         // FIXME: Compat layer
         // Try Arrow IPC first, fall back to Parquet
@@ -948,8 +984,7 @@ impl Statement for ReplayEngineStatement {
         todo!("ReplayEngineStatement::prepare")
     }
 
-    fn set_sql_query(&mut self, ctx: &QueryCtx, sql: &str) -> AdbcResult<()> {
-        self.query_ctx = Some(ctx.clone());
+    fn set_sql_query(&mut self, sql: &str) -> AdbcResult<()> {
         self.sql = Some(sql.to_string());
         Ok(())
     }
@@ -962,9 +997,54 @@ impl Statement for ReplayEngineStatement {
         todo!("ReplayEngineStatement::cancel")
     }
 
-    fn set_option(&mut self, _key: OptionStatement, _value: OptionValue) -> AdbcResult<()> {
-        // TODO: Record options and then use those values when finding the file name
-        Ok(())
+    fn set_option(&mut self, key: OptionStatement, value: OptionValue) -> AdbcResult<()> {
+        match (key, value) {
+            (OptionStatement::Other(name), OptionValue::String(node_id)) if name == DBT_NODE_ID => {
+                self.node_id = Some(node_id);
+                Ok(())
+            }
+            (OptionStatement::Other(name), OptionValue::String(execution_phase))
+                if name == DBT_EXECUTION_PHASE =>
+            {
+                // convert the String into one of the valid &'static str or "" if invalid
+                let phase_idx = DBT_EXECUTION_PHASES
+                    .iter()
+                    .position(|&p| p == execution_phase.as_str());
+                let execution_phase: &'static str = match phase_idx {
+                    Some(idx) => DBT_EXECUTION_PHASES[idx],
+                    None => {
+                        debug_assert!(false, "invalid execution phase: {}", execution_phase);
+                        ""
+                    }
+                };
+                self.execution_phase = execution_phase;
+                Ok(())
+            }
+            (OptionStatement::Other(name), _)
+                if [DBT_NODE_ID, DBT_EXECUTION_PHASE].contains(&name.as_str()) =>
+            {
+                debug_assert!(false, "expected string value for {} option", name);
+                Ok(())
+            }
+            (_k, _v) => {
+                // TODO: Record options and then use those values when finding the file name
+                Ok(())
+            }
+        }
+    }
+
+    fn get_option_string(&self, key: OptionStatement) -> AdbcResult<String> {
+        match key {
+            OptionStatement::Other(name) if name == DBT_NODE_ID => {
+                let node_id = self.node_id.clone().unwrap_or_default();
+                Ok(node_id)
+            }
+            OptionStatement::Other(name) if name == DBT_EXECUTION_PHASE => {
+                debug_assert!(!self.execution_phase.is_empty());
+                Ok(self.execution_phase.to_string())
+            }
+            k => Statement::get_option_string(self, k),
+        }
     }
 }
 
