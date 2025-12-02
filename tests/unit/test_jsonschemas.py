@@ -1,6 +1,3 @@
-import os
-from unittest import mock
-
 from dbt.deprecations import (
     CustomKeyInConfigDeprecation,
     CustomKeyInObjectDeprecation,
@@ -14,7 +11,6 @@ from tests.utils import EventCatcher
 
 
 class TestValidateModelConfigNoError:
-    @mock.patch.dict(os.environ, {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": "True"})
     def test_validate_model_config_no_error(self):
         safe_set_invocation_context()
         get_invocation_context().uses_adapter("snowflake")
@@ -27,7 +23,6 @@ class TestValidateModelConfigNoError:
         validate_model_config(config, "test.yml")
         assert len(caught_events) == 0
 
-    @mock.patch.dict(os.environ, {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": "True"})
     def test_validate_model_config_error(self):
         safe_set_invocation_context()
         get_invocation_context().uses_adapter("snowflake")
