@@ -671,7 +671,7 @@ class TestSnapshots:
         assert len(results) == 1
 
 
-class TestTests:
+class TestGenericTests:
     @pytest.fixture(scope="class")
     def models(self):
         return {
@@ -723,6 +723,20 @@ class TestTests:
             "test.test.is_odd_orders_id.82834fdc5b",
         ]
         assert expected_nodes == list(manifest.nodes.keys())
+
+
+class TestSingularTests:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "orders.sql": orders_sql,
+            "schema.yml": generic_schema_yml,
+        }
+
+    @pytest.fixture(scope="class")
+    def tests(self):
+        # Make sure "generic" directory is created
+        return {"generic": {"readme.md": ""}}
 
     def test_pp_singular_tests(self, project):
 
