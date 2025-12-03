@@ -37,8 +37,8 @@ impl Object for RunConfig {
         _listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, MinijinjaError> {
         match name {
-            // At compile time, this will return the value of the config variable if it exists
-            // Here, we just return an empty string
+            // At runtime, this will return the value of the config variable if it exists
+            // If not found in config, checks config.meta for the key
             "get" => {
                 let mut args = ArgParser::new(args, None);
                 let name: String = args.get("name")?;
@@ -47,27 +47,60 @@ impl Object for RunConfig {
                     .unwrap_or_else(|| Value::from(None::<Option<String>>));
 
                 match self.model_config.get(&name) {
-                    Some(val) => {
-                        if val.is_none() {
-                            Ok(default)
-                        } else {
-                            Ok(val.clone())
+                    Some(val) if !val.is_none() => Ok(val.clone()),
+                    _ => {
+                        // If not found or None in model_config, check model_config.meta.<key>
+                        if let Some(meta_value) = self.model_config.get("meta") {
+                            if let Some(meta_obj) = meta_value.as_object() {
+                                if let Some(value) = meta_obj.get_value(&Value::from(name.clone()))
+                                {
+                                    if !value.is_none() {
+                                        return Ok(value);
+                                    }
+                                }
+                            }
                         }
+                        Ok(default)
                     }
-                    _ => Ok(default),
                 }
             }
-            // At compile time, this just returns an empty string
+            // At runtime, this just returns an empty string
             "set" => {
                 let mut args = ArgParser::new(args, None);
                 let _: String = args.get("name")?;
                 Ok(Value::from(""))
             }
-            // At compile time, this will throw an error if the config required does not exist
+            // At runtime, this will throw an error if the config required does not exist
+            // If not found in config, checks config.meta for the key
             "require" => {
                 let mut args = ArgParser::new(args, None);
-                let _: String = args.get("name")?;
-                Ok(Value::from(""))
+                let name: String = args.get("name")?;
+
+                // First, try to get the value from model_config.<key>
+                match self.model_config.get(&name) {
+                    Some(val) if !val.is_none() => Ok(val.clone()),
+                    _ => {
+                        // If not found or None in model_config, check model_config.meta.<key>
+                        if let Some(meta_value) = self.model_config.get("meta") {
+                            if let Some(meta_obj) = meta_value.as_object() {
+                                if let Some(value) = meta_obj.get_value(&Value::from(name.clone()))
+                                {
+                                    if !value.is_none() {
+                                        return Ok(value);
+                                    }
+                                }
+                            }
+                        }
+                        // If not found in either model_config or meta, throw an error
+                        Err(MinijinjaError::new(
+                            MinijinjaErrorKind::InvalidOperation,
+                            format!(
+                                "Required config key '{}' not found in config or config.meta",
+                                name
+                            ),
+                        ))
+                    }
+                }
             }
             "persist_relation_docs" => {
                 let default_value = Value::from(BTreeMap::<String, Value>::new());
