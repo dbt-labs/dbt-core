@@ -5,7 +5,13 @@ path = "dbt/__version__.py"
 packages = ["dbt"]
 only-packages = true
 artifacts = [
-    "dbt/include/**/*",
+    "dbt/include/**/*.py",
+    "dbt/include/**/*.sql",
+    "dbt/include/**/*.yml",
+    "dbt/include/**/*.html",
+    "dbt/include/**/*.md",
+    "dbt/include/**/.gitkeep",
+    "dbt/include/**/.gitignore",
     "dbt/task/docs/**/*.html",
     "dbt/jsonschemas/**/*.json",
     "dbt/py.typed",
