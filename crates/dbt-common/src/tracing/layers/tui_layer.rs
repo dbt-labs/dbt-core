@@ -6,11 +6,11 @@ use std::{
 
 use console::Term;
 use dbt_telemetry::{
-    AnyTelemetryEvent, ExecutionPhase, Invocation, ListItemOutput, LogMessage, LogRecordInfo,
-    NodeEvaluated, NodeOutcome, NodeProcessed, NodeSkipReason, NodeType, PhaseExecuted,
-    ProgressMessage, QueryExecuted, SeverityNumber, ShowDataOutput, SpanEndInfo, SpanStartInfo,
-    SpanStatus, StatusCode, TelemetryAttributes, TelemetryOutputFlags, UserLogMessage,
-    node_processed,
+    AnyTelemetryEvent, CompiledCodeInline, ExecutionPhase, Invocation, ListItemOutput, LogMessage,
+    LogRecordInfo, NodeEvaluated, NodeOutcome, NodeProcessed, NodeSkipReason, NodeType,
+    PhaseExecuted, ProgressMessage, QueryExecuted, SeverityNumber, ShowDataOutput, SpanEndInfo,
+    SpanStartInfo, SpanStatus, StatusCode, TelemetryAttributes, TelemetryOutputFlags,
+    UserLogMessage, node_processed,
 };
 
 use dbt_error::ErrorCode;
@@ -27,8 +27,8 @@ use crate::{
             layout::format_delimiter,
             log_message::format_log_message,
             node::{
-                format_node_evaluated_end, format_node_evaluated_start, format_node_processed_end,
-                format_skipped_test_group,
+                format_compiled_inline_code, format_node_evaluated_end,
+                format_node_evaluated_start, format_node_processed_end, format_skipped_test_group,
             },
             phase::get_phase_progress_text,
             progress::format_progress_message,
@@ -475,6 +475,12 @@ impl TelemetryConsumer for TuiLayer {
             return;
         }
 
+        // Handle CompiledCodeInline - show if Progress or Completed is enabled
+        if let Some(compiled_code) = log_record.attributes.downcast_ref::<CompiledCodeInline>() {
+            self.handle_compiled_code_inline(compiled_code);
+            return;
+        }
+
         // Handle StderrMessage
         if let Some(stderr_message) = log_record.attributes.downcast_ref::<StderrMessage>() {
             self.handle_stderr_message(stderr_message, log_record);
@@ -812,6 +818,26 @@ impl TuiLayer {
             stdout
                 .write_all(format!("{}\n", show_data.content).as_bytes())
                 .expect("failed to write show data to stdout");
+        });
+    }
+
+    fn handle_compiled_code_inline(&self, compiled_code: &CompiledCodeInline) {
+        // Only show if any Progress*, Completed or All option is enabled
+        let should_show = self.show_options.contains(&ShowOptions::Progress)
+            || self.show_options.contains(&ShowOptions::ProgressRender)
+            || self.show_options.contains(&ShowOptions::Completed)
+            || self.show_options.contains(&ShowOptions::All);
+
+        if !should_show {
+            return;
+        }
+
+        let formatted = format_compiled_inline_code(compiled_code, true);
+        with_suspended_progress_bars(|| {
+            io::stdout()
+                .lock()
+                .write_all(format!("{}\n", formatted).as_bytes())
+                .expect("failed to write compiled code to stdout");
         });
     }
 

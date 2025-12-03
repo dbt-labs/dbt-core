@@ -3,10 +3,11 @@ use std::{collections::HashMap, time::SystemTime};
 use chrono::Utc;
 use dbt_error::ErrorCode;
 use dbt_telemetry::{
-    ArtifactType, ArtifactWritten, ExecutionPhase, Invocation, ListItemOutput, LogMessage,
-    LogRecordInfo, NodeEvaluated, NodeEvent, NodeOutcome, NodeProcessed, NodeSkipReason, NodeType,
-    ProgressMessage, QueryExecuted, SeverityNumber, ShowDataOutput, SpanEndInfo, SpanStartInfo,
-    TelemetryOutputFlags, TestOutcome, UserLogMessage, get_test_outcome,
+    ArtifactType, ArtifactWritten, CompiledCodeInline, ExecutionPhase, Invocation, ListItemOutput,
+    LogMessage, LogRecordInfo, NodeEvaluated, NodeEvent, NodeOutcome, NodeProcessed,
+    NodeSkipReason, NodeType, ProgressMessage, QueryExecuted, SeverityNumber, ShowDataOutput,
+    SpanEndInfo, SpanStartInfo, TelemetryOutputFlags, TestOutcome, UserLogMessage,
+    get_test_outcome,
 };
 use serde_json::json;
 use tracing::level_filters::LevelFilter;
@@ -19,8 +20,9 @@ use super::super::{
         invocation::format_invocation_summary,
         log_message::format_log_message,
         node::{
-            format_node_evaluated_start, format_node_outcome_as_status, format_node_processed_end,
-            format_node_processed_start, get_num_failures,
+            format_compiled_inline_code, format_node_evaluated_start,
+            format_node_outcome_as_status, format_node_processed_end, format_node_processed_start,
+            get_num_failures,
         },
         progress::format_progress_message,
         query_log::format_query_log,
@@ -866,6 +868,40 @@ impl JsonCompatLayer {
 
         self.writer.writeln(value.as_str());
     }
+
+    /// Handle CompiledCodeInline events (from compile command with inline query)
+    /// Maps to CompiledNode (Q042) for dbt-core compatibility
+    fn emit_compiled_code_inline(
+        &self,
+        compiled_code: &CompiledCodeInline,
+        log_record: &LogRecordInfo,
+    ) {
+        let msg = format_compiled_inline_code(compiled_code, false);
+
+        let info_json = serde_json::to_value(self.build_core_event_info(
+            Some("Q042"),
+            Some("CompiledNode"),
+            &log_record.severity_text,
+            msg,
+        ))
+        .expect("Failed to serialize core event info to JSON");
+
+        let data_obj = json!({
+            "compiled": &compiled_code.sql,
+            "is_inline": true,
+            "node_name": "inline_query",
+            "output_format": "text",
+            "unique_id": "sql_operation.inline_query",
+        });
+
+        let value = json!({
+            "info": info_json,
+            "data": data_obj,
+        })
+        .to_string();
+
+        self.writer.writeln(value.as_str());
+    }
 }
 
 impl TelemetryConsumer for JsonCompatLayer {
@@ -953,6 +989,12 @@ impl TelemetryConsumer for JsonCompatLayer {
         // Dispatch to ShowDataOutput handler
         if let Some(inline_data) = log_record.attributes.downcast_ref::<ShowDataOutput>() {
             self.emit_show_data_output(inline_data, log_record);
+            return;
+        }
+
+        // Dispatch to CompiledCodeInline handler
+        if let Some(compiled_code) = log_record.attributes.downcast_ref::<CompiledCodeInline>() {
+            self.emit_compiled_code_inline(compiled_code, log_record);
         }
     }
 }

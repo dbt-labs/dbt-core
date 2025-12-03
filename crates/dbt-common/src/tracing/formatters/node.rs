@@ -1,8 +1,11 @@
 use dbt_telemetry::{
-    AnyNodeOutcomeDetail, NodeEvaluated, NodeEvent, NodeMaterialization, NodeOutcome,
-    NodeProcessed, NodeSkipReason, NodeType, TestOutcome, get_cache_detail,
+    AnyNodeOutcomeDetail, CompiledCodeInline, NodeEvaluated, NodeEvent, NodeMaterialization,
+    NodeOutcome, NodeProcessed, NodeSkipReason, NodeType, TestOutcome, get_cache_detail,
     get_node_outcome_detail, get_test_outcome,
 };
+
+/// Title used for compiled inline node output (matching dbt-core)
+pub const COMPILED_INLINE_NODE_TITLE: &str = "Compiled inline node is:";
 
 use super::{
     color::{BLUE, CYAN, GREEN, PLAIN, RED, YELLOW},
@@ -428,4 +431,17 @@ pub fn format_skipped_test_group(
         "{} [{}] {} {}",
         action_formatted, duration_formatted, resource_type_formatted, message
     )
+}
+
+/// Format compiled inline code output
+///
+/// Returns formatted string with title and SQL:
+/// `{title}\n{sql}`
+pub fn format_compiled_inline_code(compiled_code: &CompiledCodeInline, colorize: bool) -> String {
+    let title = if colorize {
+        BLUE.apply_to(COMPILED_INLINE_NODE_TITLE).to_string()
+    } else {
+        COMPILED_INLINE_NODE_TITLE.to_string()
+    };
+    format!("{}\n{}", title, compiled_code.sql)
 }

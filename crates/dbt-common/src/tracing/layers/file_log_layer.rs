@@ -1,9 +1,9 @@
 use dbt_error::ErrorCode;
 use dbt_telemetry::{
-    Invocation, ListItemOutput, LogMessage, LogRecordInfo, NodeEvaluated, NodeOutcome,
-    NodeProcessed, NodeType, PhaseExecuted, ProgressMessage, QueryExecuted, SeverityNumber,
-    ShowDataOutput, SpanEndInfo, SpanStartInfo, TelemetryOutputFlags, UserLogMessage,
-    node_processed,
+    CompiledCodeInline, Invocation, ListItemOutput, LogMessage, LogRecordInfo, NodeEvaluated,
+    NodeOutcome, NodeProcessed, NodeType, PhaseExecuted, ProgressMessage, QueryExecuted,
+    SeverityNumber, ShowDataOutput, SpanEndInfo, SpanStartInfo, TelemetryOutputFlags,
+    UserLogMessage, node_processed,
 };
 use std::{
     sync::atomic::{AtomicBool, Ordering},
@@ -21,8 +21,8 @@ use super::super::{
         log_message::format_log_message,
         meta::format_severity_fixed_width,
         node::{
-            format_node_evaluated_end, format_node_evaluated_start, format_node_processed_end,
-            format_node_processed_start,
+            format_compiled_inline_code, format_node_evaluated_end, format_node_evaluated_start,
+            format_node_processed_end, format_node_processed_start,
         },
         phase::{format_phase_executed_end, format_phase_executed_start},
         progress::format_progress_message,
@@ -183,6 +183,12 @@ impl TelemetryConsumer for FileLogLayer {
         // Handle ShowDataOutput events (from dbt show command or run with --show data)
         if let Some(show_data) = log_record.attributes.downcast_ref::<ShowDataOutput>() {
             self.handle_show_data_output(log_record, show_data);
+            return;
+        }
+
+        // Handle CompiledCodeInline events (from compile command with inline query)
+        if let Some(compiled_code) = log_record.attributes.downcast_ref::<CompiledCodeInline>() {
+            self.handle_compiled_code_inline(log_record, compiled_code);
         }
     }
 }
@@ -355,6 +361,20 @@ impl FileLogLayer {
             log_record.time_unix_nano,
             log_record.severity_number,
             std::slice::from_ref(&show_data.content),
+        );
+    }
+
+    fn handle_compiled_code_inline(
+        &self,
+        log_record: &LogRecordInfo,
+        compiled_code: &CompiledCodeInline,
+    ) {
+        // Write formatted compiled code to file log using the shared formatter
+        let formatted = format_compiled_inline_code(compiled_code, false);
+        self.write_log_lines(
+            log_record.time_unix_nano,
+            log_record.severity_number,
+            &[formatted],
         );
     }
 

@@ -10,11 +10,11 @@ use crate::tracing::{
     tests::mocks::MockDynSpanEvent,
 };
 use dbt_telemetry::{
-    ArtifactType, ArtifactWritten, ExecutionPhase, Invocation, InvocationEvalArgs, ListItemOutput,
-    ListOutputFormat, LogMessage, NodeEvaluated, NodeMaterialization, NodeOutcome,
-    NodeOutcomeDetail, NodeProcessed, NodeSkipReason, NodeSkipUpstreamDetail, NodeType,
-    ProgressMessage, QueryExecuted, QueryOutcome, SeverityNumber, ShowDataOutput,
-    ShowDataOutputFormat, TelemetryOutputFlags, UserLogMessage, node_processed,
+    ArtifactType, ArtifactWritten, CompiledCodeInline, ExecutionPhase, Invocation,
+    InvocationEvalArgs, ListItemOutput, ListOutputFormat, LogMessage, NodeEvaluated,
+    NodeMaterialization, NodeOutcome, NodeOutcomeDetail, NodeProcessed, NodeSkipReason,
+    NodeSkipUpstreamDetail, NodeType, ProgressMessage, QueryExecuted, QueryOutcome, SeverityNumber,
+    ShowDataOutput, ShowDataOutputFormat, TelemetryOutputFlags, UserLogMessage, node_processed,
 };
 use serde_json::{Value, json};
 use tracing::level_filters::LevelFilter;
@@ -1024,5 +1024,42 @@ fn test_progress_message_debug_cmd_out() {
                 }
             }),
         ],
+    );
+}
+
+#[test]
+fn test_compiled_code_inline() {
+    let invocation_id = Uuid::new_v4();
+
+    test_events(
+        "CompiledCodeInline",
+        invocation_id,
+        || {
+            emit_info_event(
+                CompiledCodeInline {
+                    sql: "SELECT 1 AS value".to_string(),
+                },
+                None,
+            );
+        },
+        &[],
+        vec![json!({
+            "info": {
+                "category": "",
+                "code": "Q042",
+                "invocation_id": invocation_id.to_string(),
+                "name": "CompiledNode",
+                "msg": "Compiled inline node is:\nSELECT 1 AS value",
+                "level": "info",
+                "extra": {}
+            },
+            "data": {
+                "compiled": "SELECT 1 AS value",
+                "is_inline": true,
+                "node_name": "inline_query",
+                "output_format": "text",
+                "unique_id": "sql_operation.inline_query"
+            }
+        })],
     );
 }
