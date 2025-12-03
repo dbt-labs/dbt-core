@@ -83,7 +83,7 @@ datafusion-common = { git = "https://github.com/sdf-labs/datafusion", rev = "c06
 datafusion-expr = { git = "https://github.com/sdf-labs/datafusion", rev = "c0627e28fdd64ad1e33e3e8f3d6515c7ecb886ed" } # @ sdf/50
 
 # sqlparser
-sqlparser = { git = "https://github.com/sdf-labs/datafusion-sqlparser-rs", rev = "8ff3844630d395f976b5d667eba5d2d6d65f52ff" } # @ sdf/0.58.0
+sqlparser = { git = "https://github.com/sdf-labs/datafusion-sqlparser-rs", rev = "36843ce564b129a0e0a15b58997d8c132b7ce6d4" } # @ sdf/0.58.0
 # OR, when working locally
 # sqlparser = { path = "../datafusion-sqlparser-rs" }
 
