@@ -21,6 +21,11 @@ models:
        meta_key: my_meta_value
 """
 
+meta_model_require_sql = """
+-- models/meta_model.sql
+select {{ config.require('meta_key') }} as col_value
+"""
+
 
 class TestConfigGetDefault:
     @pytest.fixture(scope="class")
@@ -48,6 +53,25 @@ class TestConfigGetMeta:
         }
 
     def test_config_with_meta_key(
+        self,
+        project,
+    ):
+        # This test runs a model with a config.get(key, default)
+        results = run_dbt(["run"], expect_pass=False)
+        assert len(results) == 1
+        assert str(results[0].status) == "error"
+        assert 'column "my_meta_value" does not exist' in results[0].message
+
+
+class TestConfigGetMetaRequire:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "meta_model.sql": meta_model_require_sql,
+            "schema.yml": schema_yml,
+        }
+
+    def test_config_with_meta_require(
         self,
         project,
     ):
