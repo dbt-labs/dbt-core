@@ -500,7 +500,10 @@ impl PyDateTime {
 
     /// Return .tzinfo. If naive => None
     pub fn tzinfo(&self) -> Option<Value> {
-        self.tzinfo.clone().map(Value::from_object)
+        match &self.tzinfo {
+            Some(tz) => Some(Value::from_object(tz.clone())),
+            None => Some(Value::from(())), // Return Python's None (not undefined)
+        }
     }
 
     /// "chrono_dt" is a helper method that returns a naive DateTime if we're naive,
@@ -788,16 +791,32 @@ impl PyDateTime {
     }
 
     /// dt.astimezone(tz)
-    /// If naive => error, or interpret as local
+    /// If naive => interpret as local time, then convert to tz (matches CPython behavior)
     /// If aware => do a real offset conversion from old tz to new tz
     pub fn astimezone(&self, tz: &PytzTimezone) -> Result<PyDateTime, Error> {
         match &self.state {
-            DateTimeState::Naive(_) => {
-                // Python 3.11 disallows astimezone on naive dt
-                Err(Error::new(
-                    ErrorKind::InvalidOperation,
-                    "astimezone() cannot be applied to a naive datetime",
-                ))
+            DateTimeState::Naive(naive_dt) => {
+                // Interpret naive datetime as local time (matches CPython behavior)
+                // This aligns with dbt Core's behavior for modules.datetime.datetime.utcnow().astimezone(modules.pytz.utc)
+                let local_dt = chrono::Local
+                    .from_local_datetime(naive_dt)
+                    .single()
+                    .ok_or_else(|| {
+                        Error::new(
+                            ErrorKind::InvalidOperation,
+                            "ambiguous or invalid local time for naive datetime",
+                        )
+                    })?;
+
+                // Convert to UTC, then to requested timezone
+                let dt_utc = local_dt.with_timezone(&chrono::Utc);
+                let new_aware = dt_utc.with_timezone(&tz.tz);
+
+                let py_dt = PyDateTime {
+                    state: DateTimeState::Aware(new_aware),
+                    tzinfo: Some(tz.clone()),
+                };
+                Ok(py_dt)
             }
             DateTimeState::Aware(old_dt) => {
                 // convert from old tz to new tz
@@ -1034,5 +1053,123 @@ mod tests {
         assert!(result.is_ok());
         let dt = result.unwrap();
         assert_eq!(dt.isoformat(), "2023-01-02T15:30:45.100000+01:00");
+    }
+
+    #[test]
+    fn test_tzinfo_property() {
+        // Test naive datetime - tzinfo should be None (not undefined)
+        let naive_dt = PyDateTime::new_naive(NaiveDateTime::new(
+            NaiveDate::from_ymd_opt(2023, 1, 1).unwrap(),
+            NaiveTime::from_hms_opt(12, 0, 0).unwrap(),
+        ));
+        let tzinfo_value = naive_dt.tzinfo();
+        assert!(tzinfo_value.is_some()); // Should return Some(Value) not None
+        assert!(tzinfo_value.unwrap().is_none()); // The Value should be Python's None
+
+        // Test aware datetime - tzinfo should be a PytzTimezone object
+        let tz = crate::modules::pytz::PytzTimezone::new(chrono_tz::UTC);
+        let aware_dt = PyDateTime::new_aware(
+            chrono_tz::UTC
+                .from_local_datetime(&NaiveDateTime::new(
+                    NaiveDate::from_ymd_opt(2023, 1, 1).unwrap(),
+                    NaiveTime::from_hms_opt(12, 0, 0).unwrap(),
+                ))
+                .unwrap(),
+            Some(tz),
+        );
+        let tzinfo_value = aware_dt.tzinfo();
+        assert!(tzinfo_value.is_some());
+        assert!(!tzinfo_value.unwrap().is_none()); // Should not be Python's None
+    }
+
+    #[test]
+    fn test_astimezone_naive_datetime() {
+        use crate::modules::pytz::PytzTimezone;
+
+        // Create a naive UTC datetime
+        let naive_dt = PyDateTime::new_naive(NaiveDateTime::new(
+            NaiveDate::from_ymd_opt(2023, 6, 15).unwrap(),
+            NaiveTime::from_hms_opt(12, 30, 0).unwrap(),
+        ));
+
+        // Convert to UTC - should interpret as local time then convert to UTC
+        let utc_tz = PytzTimezone::new(chrono_tz::UTC);
+        let result = naive_dt.astimezone(&utc_tz);
+        assert!(result.is_ok());
+
+        let aware_dt = result.unwrap();
+        // Should be aware with UTC timezone
+        assert!(aware_dt.tzinfo.is_some());
+        assert_eq!(aware_dt.tzinfo.unwrap().tz, chrono_tz::UTC);
+
+        // The datetime should have been interpreted as local time and converted to UTC
+        match aware_dt.state {
+            DateTimeState::Aware(_) => {} // Expected
+            _ => panic!("Expected aware datetime"),
+        }
+    }
+
+    #[test]
+    fn test_astimezone_aware_datetime() {
+        use crate::modules::pytz::PytzTimezone;
+
+        // Create an aware datetime in US/Eastern
+        let eastern_tz = PytzTimezone::new(chrono_tz::US::Eastern);
+        let naive = NaiveDateTime::new(
+            NaiveDate::from_ymd_opt(2023, 6, 15).unwrap(),
+            NaiveTime::from_hms_opt(12, 30, 0).unwrap(),
+        );
+        let eastern_dt = chrono_tz::US::Eastern.from_local_datetime(&naive).unwrap();
+        let aware_dt = PyDateTime::new_aware(eastern_dt, Some(eastern_tz));
+
+        // Convert to UTC
+        let utc_tz = PytzTimezone::new(chrono_tz::UTC);
+        let result = aware_dt.astimezone(&utc_tz);
+        assert!(result.is_ok());
+
+        let utc_aware = result.unwrap();
+        assert!(utc_aware.tzinfo.is_some());
+        assert_eq!(utc_aware.tzinfo.unwrap().tz, chrono_tz::UTC);
+
+        // The time should be converted from Eastern to UTC
+        // 12:30 EDT (UTC-4 in summer) should be 16:30 UTC
+        match utc_aware.state {
+            DateTimeState::Aware(dt) => {
+                assert_eq!(dt.hour(), 16); // 12:30 + 4 hours
+            }
+            _ => panic!("Expected aware datetime"),
+        }
+    }
+
+    #[test]
+    fn test_astimezone_different_timezones() {
+        use crate::modules::pytz::PytzTimezone;
+
+        // Create aware datetime in Tokyo
+        let tokyo_tz = PytzTimezone::new(chrono_tz::Asia::Tokyo);
+        let naive = NaiveDateTime::new(
+            NaiveDate::from_ymd_opt(2023, 12, 1).unwrap(),
+            NaiveTime::from_hms_opt(15, 0, 0).unwrap(),
+        );
+        let tokyo_dt = chrono_tz::Asia::Tokyo.from_local_datetime(&naive).unwrap();
+        let aware_dt = PyDateTime::new_aware(tokyo_dt, Some(tokyo_tz));
+
+        // Convert to US/Pacific
+        let pacific_tz = PytzTimezone::new(chrono_tz::US::Pacific);
+        let result = aware_dt.astimezone(&pacific_tz);
+        assert!(result.is_ok());
+
+        let pacific_aware = result.unwrap();
+        assert!(pacific_aware.tzinfo.is_some());
+        assert_eq!(pacific_aware.tzinfo.unwrap().tz, chrono_tz::US::Pacific);
+
+        // Tokyo (UTC+9) 15:00 -> UTC 06:00 -> Pacific (UTC-8 in winter) 22:00 previous day
+        match pacific_aware.state {
+            DateTimeState::Aware(dt) => {
+                assert_eq!(dt.day(), 30); // Previous day
+                assert_eq!(dt.hour(), 22); // 15:00 - 17 hours
+            }
+            _ => panic!("Expected aware datetime"),
+        }
     }
 }
