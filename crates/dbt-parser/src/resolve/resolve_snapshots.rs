@@ -453,17 +453,17 @@ pub async fn resolve_snapshots(
                 }
             }
 
-            if final_config.unique_key.is_none() || final_config.strategy.is_none() {
-                let e = fs_err!(
-                    code => ErrorCode::InvalidConfig,
-                    loc => dbt_asset.path.clone(),
-                    "Snapshot '{}' must be configured with a 'strategy' and 'unique_key'",
-                    snapshot_name
-                );
-                emit_error_log_from_fs_error(&e, arg.io.status_reporter.as_ref());
-            }
             match status {
                 ModelStatus::Enabled => {
+                    if final_config.unique_key.is_none() || final_config.strategy.is_none() {
+                        let e = fs_err!(
+                            code => ErrorCode::InvalidConfig,
+                            loc => dbt_asset.path.clone(),
+                            "Snapshot '{}' must be configured with a 'strategy' and 'unique_key'",
+                            snapshot_name
+                        );
+                        emit_error_log_from_fs_error(&e, arg.io.status_reporter.as_ref());
+                    }
                     if sql_file_info.execute && sql_defined_snapshots.contains(&dbt_asset.path) {
                         snapshots_with_execute.insert(unique_id.to_owned(), dbt_snapshot);
                     } else {
