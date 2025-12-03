@@ -2,7 +2,7 @@
 /// Aggregate invocation metrics.
 #[cfg_attr(any(test, feature = "test-utils"), derive(::fake::Dummy))]
 #[derive(crate::macros::ProtoNew)]
-#[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct InvocationMetrics {
     #[prost(uint64, optional, tag = "1")]
     pub total_errors: ::core::option::Option<u64>,
@@ -10,6 +10,18 @@ pub struct InvocationMetrics {
     pub total_warnings: ::core::option::Option<u64>,
     #[prost(uint64, optional, tag = "3")]
     pub autofix_suggestions: ::core::option::Option<u64>,
+    /// Counts of nodes processed by node type (e.g., "model", "test", "seed").
+    /// Key is the lowercase node type name.
+    #[prost(map = "string, uint64", tag = "4")]
+    pub node_type_counts: ::std::collections::HashMap<
+        ::prost::alloc::string::String,
+        u64,
+    >,
+    /// Counts of node outcomes by status category.
+    /// Keys are: "success", "warn", "error", "reused", "skipped", "canceled", "no_op".
+    /// Only non-zero counts are included.
+    #[prost(map = "string, uint64", tag = "5")]
+    pub status_counts: ::std::collections::HashMap<::prost::alloc::string::String, u64>,
 }
 impl crate::StaticName for InvocationMetrics {
     const FULL_NAME: &'static str = "v1.public.events.fusion.invocation.InvocationMetrics";
@@ -120,7 +132,7 @@ impl ::prost::Name for InvocationEvalArgs {
 /// Invocation event holding identifying info and flattened attributes.
 #[cfg_attr(any(test, feature = "test-utils"), derive(::fake::Dummy))]
 #[derive(crate::macros::ProtoNew)]
-#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+#[derive(Clone, PartialEq, ::prost::Message)]
 pub struct Invocation {
     /// UUID string for the invocation id, either as passed in via args or generated (UUIDv7 in that case).
     /// Note, that `trace_id` is the same value stored as bytes and generally preferred

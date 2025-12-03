@@ -10,6 +10,15 @@ message InvocationMetrics {
   optional uint64 total_errors = 1;
   optional uint64 total_warnings = 2;
   optional uint64 autofix_suggestions = 3;
+
+  // Counts of nodes processed by node type (e.g., "model", "test", "seed").
+  // Key is the lowercase node type name.
+  map<string, uint64> node_type_counts = 4;
+
+  // Counts of node outcomes by status category.
+  // Keys are: "success", "warn", "error", "reused", "skipped", "canceled", "no_op".
+  // Only non-zero counts are included.
+  map<string, uint64> status_counts = 5;
 }
 
 // Structured evaluation arguments for the invocation.

@@ -2,6 +2,7 @@ use dbt_telemetry::{
     Invocation, InvocationMetrics, LogMessage, LogRecordInfo, NodeOutcome, NodeProcessed,
     NodeSkipReason, SeverityNumber, SpanEndInfo, TestOutcome, node_processed::NodeOutcomeDetail,
 };
+use std::collections::HashMap;
 
 use crate::tracing::metrics::NodeOutcomeCountsKey;
 
@@ -103,6 +104,37 @@ impl TelemetryMiddleware for TelemetryMetricAggregator {
                 no_op,
             );
 
+            // Build node_type_counts hashmap from NodeCounts metrics
+            let node_type_counts: HashMap<String, u64> = data_provider
+                .get_all_metrics()
+                .iter()
+                .filter_map(|(key, count)| match key {
+                    MetricKey::NodeCounts(node_type) if *count > 0 => {
+                        Some((node_type.as_static_ref().to_string(), *count))
+                    }
+                    _ => None,
+                })
+                .collect();
+
+            // Build status_counts hashmap from aggregated node outcome totals
+            let mut status_counts = HashMap::new();
+
+            for (key, val) in &[
+                ("success", success),
+                ("warn", warning),
+                ("error", error),
+                ("reused", reused),
+                ("skipped", skipped),
+                ("canceled", canceled),
+                ("no_op", no_op),
+            ] {
+                if *val == 0 {
+                    continue;
+                }
+
+                status_counts.insert((*key).to_string(), *val);
+            }
+
             // Store totals in invocation attributes
             invocation.metrics = Some(InvocationMetrics {
                 total_errors: Some(data_provider.get_metric(MetricKey::InvocationMetric(
@@ -114,6 +146,8 @@ impl TelemetryMiddleware for TelemetryMetricAggregator {
                 autofix_suggestions: Some(data_provider.get_metric(MetricKey::InvocationMetric(
                     InvocationMetricKey::AutoFixSuggestions,
                 ))),
+                node_type_counts,
+                status_counts,
             });
         }
 

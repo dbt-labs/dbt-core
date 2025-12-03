@@ -712,6 +712,12 @@ impl serde::Serialize for InvocationMetrics {
         if self.autofix_suggestions.is_some() {
             len += 1;
         }
+        if !self.node_type_counts.is_empty() {
+            len += 1;
+        }
+        if !self.status_counts.is_empty() {
+            len += 1;
+        }
         let mut struct_ser = serializer.serialize_struct("v1.public.events.fusion.invocation.InvocationMetrics", len)?;
         if let Some(v) = self.total_errors.as_ref() {
             #[allow(clippy::needless_borrow)]
@@ -727,6 +733,16 @@ impl serde::Serialize for InvocationMetrics {
             #[allow(clippy::needless_borrow)]
             #[allow(clippy::needless_borrows_for_generic_args)]
             struct_ser.serialize_field("autofix_suggestions", ToString::to_string(&v).as_str())?;
+        }
+        if !self.node_type_counts.is_empty() {
+            let v: std::collections::HashMap<_, _> = self.node_type_counts.iter()
+                .map(|(k, v)| (k, v.to_string())).collect();
+            struct_ser.serialize_field("node_type_counts", &v)?;
+        }
+        if !self.status_counts.is_empty() {
+            let v: std::collections::HashMap<_, _> = self.status_counts.iter()
+                .map(|(k, v)| (k, v.to_string())).collect();
+            struct_ser.serialize_field("status_counts", &v)?;
         }
         struct_ser.end()
     }
@@ -744,6 +760,10 @@ impl<'de> serde::Deserialize<'de> for InvocationMetrics {
             "totalWarnings",
             "autofix_suggestions",
             "autofixSuggestions",
+            "node_type_counts",
+            "nodeTypeCounts",
+            "status_counts",
+            "statusCounts",
         ];
 
         #[allow(clippy::enum_variant_names)]
@@ -751,6 +771,8 @@ impl<'de> serde::Deserialize<'de> for InvocationMetrics {
             TotalErrors,
             TotalWarnings,
             AutofixSuggestions,
+            NodeTypeCounts,
+            StatusCounts,
             __SkipField__,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
@@ -776,6 +798,8 @@ impl<'de> serde::Deserialize<'de> for InvocationMetrics {
                             "totalErrors" | "total_errors" => Ok(GeneratedField::TotalErrors),
                             "totalWarnings" | "total_warnings" => Ok(GeneratedField::TotalWarnings),
                             "autofixSuggestions" | "autofix_suggestions" => Ok(GeneratedField::AutofixSuggestions),
+                            "nodeTypeCounts" | "node_type_counts" => Ok(GeneratedField::NodeTypeCounts),
+                            "statusCounts" | "status_counts" => Ok(GeneratedField::StatusCounts),
                             _ => Ok(GeneratedField::__SkipField__),
                         }
                     }
@@ -798,6 +822,8 @@ impl<'de> serde::Deserialize<'de> for InvocationMetrics {
                 let mut total_errors__ = None;
                 let mut total_warnings__ = None;
                 let mut autofix_suggestions__ = None;
+                let mut node_type_counts__ = None;
+                let mut status_counts__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
                         GeneratedField::TotalErrors => {
@@ -824,6 +850,24 @@ impl<'de> serde::Deserialize<'de> for InvocationMetrics {
                                 map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
                             ;
                         }
+                        GeneratedField::NodeTypeCounts => {
+                            if node_type_counts__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("nodeTypeCounts"));
+                            }
+                            node_type_counts__ = Some(
+                                map_.next_value::<std::collections::HashMap<_, ::pbjson::private::NumberDeserialize<u64>>>()?
+                                    .into_iter().map(|(k,v)| (k, v.0)).collect()
+                            );
+                        }
+                        GeneratedField::StatusCounts => {
+                            if status_counts__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("statusCounts"));
+                            }
+                            status_counts__ = Some(
+                                map_.next_value::<std::collections::HashMap<_, ::pbjson::private::NumberDeserialize<u64>>>()?
+                                    .into_iter().map(|(k,v)| (k, v.0)).collect()
+                            );
+                        }
                         GeneratedField::__SkipField__ => {
                             let _ = map_.next_value::<serde::de::IgnoredAny>()?;
                         }
@@ -833,6 +877,8 @@ impl<'de> serde::Deserialize<'de> for InvocationMetrics {
                     total_errors: total_errors__,
                     total_warnings: total_warnings__,
                     autofix_suggestions: autofix_suggestions__,
+                    node_type_counts: node_type_counts__.unwrap_or_default(),
+                    status_counts: status_counts__.unwrap_or_default(),
                 })
             }
         }
