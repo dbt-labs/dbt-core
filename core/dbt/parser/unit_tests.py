@@ -294,8 +294,6 @@ class UnitTestParser(YamlReader):
                 unit_test_definition.schema = tested_model_node.schema
                 if not tested_model_node.config.enabled:
                     unit_test_definition.config.enabled = False
-            else:
-                unit_test_definition.config.enabled = False
 
             # Check that format and type of rows matches for each given input,
             # convert rows to a list of dictionaries, and add the unique_id of
@@ -496,6 +494,13 @@ def find_tested_model_node(
     model_version = model_name_split[1] if len(model_name_split) == 2 else None
 
     tested_node = manifest.ref_lookup.find(model_name, current_project, model_version, manifest)
+    if not tested_node:
+        disabled_node = manifest.disabled_lookup.find(
+            model_name, current_project, model_version, [NodeType.Model]
+        )
+        if disabled_node:
+            tested_node = disabled_node[0]
+
     return tested_node
 
 
