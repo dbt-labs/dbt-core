@@ -292,6 +292,9 @@ class UnitTestParser(YamlReader):
             if tested_model_node:
                 unit_test_definition.depends_on.nodes.append(tested_model_node.unique_id)
                 unit_test_definition.schema = tested_model_node.schema
+                unit_test_definition.config.enabled = tested_model_node.config.enabled
+            else:
+                unit_test_definition.config.enabled = False
 
             # Check that format and type of rows matches for each given input,
             # convert rows to a list of dictionaries, and add the unique_id of
