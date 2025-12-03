@@ -3541,6 +3541,7 @@ impl AdapterAttr {
             AdapterType::Snowflake => {
                 AdapterAttr::default().with_snowflake_attr(Some(Box::new(SnowflakeAttr {
                     table_tag: config.table_tag.clone(),
+                    partition_by: config.partition_by.clone(),
                     row_access_policy: config.row_access_policy.clone(),
                     adapter_properties: config.adapter_properties.clone(),
                     external_volume: config.external_volume.clone(),
@@ -3628,6 +3629,7 @@ impl AdapterAttr {
                 AdapterAttr::default()
                     .with_snowflake_attr(Some(Box::new(SnowflakeAttr {
                         table_tag: config.table_tag.clone(),
+                        partition_by: config.partition_by.clone(),
                         row_access_policy: config.row_access_policy.clone(),
                         adapter_properties: config.adapter_properties.clone(),
                         external_volume: config.external_volume.clone(),
@@ -3714,6 +3716,7 @@ impl AdapterAttr {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SnowflakeAttr {
     pub adapter_properties: Option<BTreeMap<String, YmlValue>>,
+    pub partition_by: Option<PartitionConfig>,
     pub table_tag: Option<String>,
     pub row_access_policy: Option<String>,
     pub external_volume: Option<String>,
