@@ -35,7 +35,6 @@ dependencies = [
     "mypy>=1.9,<2.0",
     "flake8>=6.0,<7.0",
     "black>=24.3,<25.0",
-    "tox~=4.16",
 ]
 
 [envs.default.scripts]
@@ -61,11 +60,11 @@ mypy = "pre-commit run mypy-check --hook-stage manual --all-files"
 black = "pre-commit run black-check --hook-stage manual --all-files"
 
 # Testing commands
-unit-tests = "tox -e unit"
-integration-tests = "tox -e py-integration -- -nauto"
-integration-tests-fail-fast = "tox -e py-integration -- -x -nauto"
+unit-tests = "python -m pytest {args} ../tests/unit"
+integration-tests = "python -m pytest -nauto {args} ../tests/functional"
+integration-tests-fail-fast = "python -m pytest -x -nauto {args} ../tests/functional"
 test = [
-    "tox -e unit",
+    "python -m pytest ../tests/unit",
     "pre-commit run black-check --hook-stage manual --all-files",
     "pre-commit run flake8-check --hook-stage manual --all-files",
     "pre-commit run mypy-check --hook-stage manual --all-files",
@@ -82,7 +81,6 @@ clean = [
     "rm -f .coverage",
     "rm -f .coverage.*",
     "rm -rf .eggs/",
-    "rm -rf .tox/",
     "rm -rf build/",
     "rm -rf dbt.egg-info/",
     "rm -f dbt_project.yml",
@@ -118,23 +116,43 @@ check-sdist = [
     "dbt --version",
 ]
 
+# CI environment - isolated environment with test dependencies
 [envs.ci]
 dependencies = [
     "pytest>=7.0,<8.0",
+    "pytest-cov",
     "pytest-xdist~=3.6",
-    "tox~=4.16",
+    "pytest-csv~=3.0",
+    "pytest-dotenv",
+    "pytest-mock",
+    "pytest-split",
+    "ddtrace==2.21.3",
+    "flaky",
+    "freezegun>=1.5.1",
+    "hypothesis",
 ]
+pre-install-commands = [
+    "pip install -r ../dev-requirements.txt",
+    "pip install -e .",
+]
+
+[envs.ci.env-vars]
+DBT_TEST_USER_1 = "dbt_test_user_1"
+DBT_TEST_USER_2 = "dbt_test_user_2"
+DBT_TEST_USER_3 = "dbt_test_user_3"
 
 [envs.ci.scripts]
-unit-tests = "tox -e unit"
-integration-tests = "tox -- {args}"
-
-[envs.cd]
-dependencies = [
-    "pytest>=7.0,<8.0",
-    "pytest-xdist~=3.6",
+unit-tests = "python -m pytest --cov=dbt --cov-report=xml {args} ../tests/unit"
+integration-tests = [
+    "python -m pytest --cov=dbt --cov-append --cov-report=xml {args} ../tests/functional -k \"not tests/functional/graph_selection\"",
+    "python -m pytest --cov=dbt --cov-append --cov-report=xml {args} ../tests/functional/graph_selection",
 ]
 
-[envs.cd.scripts]
-unit-tests = "python -m pytest tests/unit"
-integration-tests = "python -m pytest tests/functional"
+# Matrix testing across Python versions
+[[envs.ci.matrix]]
+python = [
+    "3.10",
+    "3.11",
+    "3.12",
+    "3.13",
+]

@@ -24,7 +24,7 @@ pytest-mock
 pytest-split
 pytest-xdist
 sphinx
-tox>=3.13
+hatch
 types-docutils
 types-PyYAML
 types-Jinja2

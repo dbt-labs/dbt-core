@@ -20,9 +20,8 @@
   - [Testing](#testing)
     - [Initial setup](#initial-setup)
     - [Test commands](#test-commands)
-      - [Makefile](#makefile)
+      - [Hatch scripts](#hatch-scripts)
       - [`pre-commit`](#pre-commit)
-      - [`tox`](#tox)
       - [`pytest`](#pytest)
     - [Unit, Integration, Functional?](#unit-integration-functional)
   - [Debugging](#debugging)
@@ -74,15 +73,13 @@ There are some tools that will be helpful to you in developing locally. While th
 
 These are the tools used in `dbt-core` development and testing:
 
-- [`tox`](https://tox.readthedocs.io/en/latest/) to manage isolated test environments across python versions. We currently target the latest patch releases for Python 3.10, 3.11, 3.12, and 3.13
+- [`hatch`](https://hatch.pypa.io/) for build backend, environment management, and running tests across Python versions (3.10, 3.11, 3.12, and 3.13)
 - [`pytest`](https://docs.pytest.org/en/latest/) to define, discover, and run tests
 - [`flake8`](https://flake8.pycqa.org/en/latest/) for code linting
 - [`black`](https://github.com/psf/black) for code formatting
 - [`mypy`](https://mypy.readthedocs.io/en/stable/) for static type checking
 - [`pre-commit`](https://pre-commit.com) to easily run those checks
 - [`changie`](https://changie.dev/) to create changelog entries, without merge conflicts
-- [`hatchling`](https://hatch.pypa.io/) as the build backend for creating distribution packages
-- [`make`](https://users.cs.duke.edu/~ola/courses/programming/Makefiles/Makefiles.html) to run multiple setup or test steps in combination. Don't worry too much, nobody _really_ understands how `make` works, and our Makefile aims to be super simple.
 - [GitHub Actions](https://github.com/features/actions) for automating tests and checks, once a PR is pushed to the `dbt-core` repository
 
 A deep understanding of these tools in not required to effectively contribute to `dbt-core`, but we recommend checking out the attached documentation if you're interested in learning more about each one.
@@ -176,7 +173,7 @@ There are a few methods for running tests locally.
 
 #### Hatch scripts
 
-The primary way to run tests and checks is using hatch scripts (defined in `core/pyproject.toml`):
+The primary way to run tests and checks is using hatch scripts (defined in `core/hatch.toml`):
 
 ```sh
 cd core
@@ -206,15 +203,21 @@ hatch run code-quality
 hatch run clean
 ```
 
-> These hatch scripts handle virtualenv management and dependency installation automatically via [`tox`](https://tox.readthedocs.io/en/latest/) for unit/integration testing and `pre-commit` for code quality checks.
+Hatch manages isolated environments and dependencies automatically. To run tests across different Python versions, use the `ci` environment with a specific Python version:
+
+```sh
+cd core
+
+# Run unit tests with Python 3.11
+hatch run +py=3.11 ci:unit-tests
+
+# Run unit tests across all supported Python versions
+hatch run ci:unit-tests
+```
 
 #### `pre-commit`
 
 [`pre-commit`](https://pre-commit.com) takes care of running all code-checks for formatting and linting. Run `hatch run setup` (or `pip install -r dev-requirements.txt && pre-commit install`) to install `pre-commit` in your local environment (we recommend running this command with a python virtual environment active). This installs several pip executables including black, mypy, and flake8. Once installed, hooks will run automatically on `git commit`, or you can run them manually with `hatch run code-quality`.
-
-#### `tox`
-
-[`tox`](https://tox.readthedocs.io/en/latest/) takes care of managing isolated test environments and installing dependencies in order to run tests. You can also run tests in parallel, for example, you can run unit tests for Python 3.10, Python 3.11, Python 3.12 and Python 3.13 checks in parallel with `tox -p`. Also, you can run unit tests for specific python versions with `tox -e py310`. The configuration for these tests is located in `tox.ini`.
 
 #### `pytest`
 
