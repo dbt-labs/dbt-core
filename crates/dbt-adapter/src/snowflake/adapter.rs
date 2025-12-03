@@ -12,10 +12,7 @@ use crate::{AdapterTyping, metadata::*};
 
 use arrow::array::{Array as _, StringArray};
 use dbt_agate::AgateTable;
-use dbt_common::FsResult;
 use dbt_common::adapter::AdapterType;
-use dbt_common::behavior_flags::BehaviorFlag;
-use dbt_common::unexpected_fs_err;
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::common::{ConstraintSupport, ConstraintType};
 use dbt_schemas::schemas::relations::base::{BaseRelation, TableFormat};
@@ -58,49 +55,6 @@ impl AdapterTyping for SnowflakeAdapter {
 }
 
 impl TypedBaseAdapter for SnowflakeAdapter {
-    fn use_warehouse<'bridge>(
-        &self,
-        conn: &'_ mut dyn Connection,
-        warehouse: String,
-        node_id: &str,
-    ) -> FsResult<()> {
-        let ctx = QueryCtx::default().with_node_id(node_id);
-        let sql = format!("use warehouse {warehouse}");
-        self.exec_stmt(&ctx, conn, &sql, false)?;
-        Ok(())
-    }
-
-    fn restore_warehouse(&self, conn: &'_ mut dyn Connection, node_id: &str) -> FsResult<()> {
-        let warehouse = self
-            .get_db_config("warehouse")
-            .ok_or_else(|| unexpected_fs_err!("'warehouse' not found in Snowflake DB config"))?;
-        let ctx = QueryCtx::default().with_node_id(node_id);
-        let sql = format!("use warehouse {warehouse}");
-        self.exec_stmt(&ctx, conn, &sql, false)?;
-        Ok(())
-    }
-
-    /// [reference](https://github.com/dbt-labs/dbt-adapters/blob/917301379d4ece300d32a3366c71daf0c4ac44aa/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L87)
-    fn behavior(&self) -> Vec<BehaviorFlag> {
-        let flag = BehaviorFlag::new(
-            "enable_iceberg_materializations",
-            false,
-            Some(
-                "Enabling Iceberg materializations introduces latency to metadata queries, specifically within the list_relations_without_caching macro. Since Iceberg benefits only those actively using it, we've made this behavior opt-in to prevent unnecessary latency for other users.",
-            ),
-            Some(
-                r#"Enabling Iceberg materializations introduces latency to metadata queries,
-specifically within the list_relations_without_caching macro. Since Iceberg
-benefits only those actively using it, we've made this behavior opt-in to
-prevent unnecessary latency for other users."#,
-            ),
-            Some(
-                "https://docs.getdbt.com/reference/resource-configs/snowflake-configs#iceberg-table-format",
-            ),
-        );
-        vec![flag]
-    }
-
     // TODO: add_query does not appear to be necessary (few uses in
     // macros) and should be removed and replaced with `execute`.
     #[allow(clippy::too_many_arguments)]

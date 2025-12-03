@@ -16,9 +16,9 @@ use adbc_core::options::OptionValue;
 use arrow::array::{RecordBatch, StringArray, TimestampMillisecondArray};
 use arrow_schema::{DataType, Schema};
 use dbt_agate::AgateTable;
-use dbt_common::FsResult;
 use dbt_common::adapter::AdapterType;
 use dbt_common::behavior_flags::BehaviorFlag;
+use dbt_common::{FsResult, unexpected_fs_err};
 use dbt_frontend_common::dialect::Dialect;
 use dbt_schemas::schemas::common::Constraint;
 use dbt_schemas::schemas::common::ConstraintSupport;
@@ -49,16 +49,38 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     /// For other warehouses, this is noop
     fn use_warehouse(
         &self,
-        _conn: &'_ mut dyn Connection,
-        _warehouse: String,
-        _node_id: &str,
+        conn: &'_ mut dyn Connection,
+        warehouse: String,
+        node_id: &str,
     ) -> FsResult<()> {
+        if let Some(replay_adapter) = self.as_replay() {
+            return replay_adapter.replay_use_warehouse(conn, warehouse, node_id);
+        }
+        match self.adapter_type() {
+            AdapterType::Snowflake => {
+                let ctx = QueryCtx::default().with_node_id(node_id);
+                let sql = format!("use warehouse {warehouse}");
+                self.exec_stmt(&ctx, conn, &sql, false)?;
+            }
+            _ => debug_assert!(false, "only SnowflakeAdapter should call use_warehouse"),
+        }
         Ok(())
     }
 
     /// Execute `use warehouse [name]` statement for SnowflakeAdapter
     /// For other warehouses, this is noop
-    fn restore_warehouse(&self, _conn: &'_ mut dyn Connection, _node_id: &str) -> FsResult<()> {
+    fn restore_warehouse(&self, conn: &'_ mut dyn Connection, node_id: &str) -> FsResult<()> {
+        match self.adapter_type() {
+            AdapterType::Snowflake => {
+                let warehouse = self.get_db_config("warehouse").ok_or_else(|| {
+                    unexpected_fs_err!("'warehouse' not found in Snowflake DB config")
+                })?;
+                let ctx = QueryCtx::default().with_node_id(node_id);
+                let sql = format!("use warehouse {warehouse}");
+                self.exec_stmt(&ctx, conn, &sql, false)?;
+            }
+            _ => debug_assert!(false, "only SnowflakeAdapter should call restore_warehouse"),
+        }
         Ok(())
     }
 
@@ -1141,11 +1163,71 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     }
 
     /// Behavior (flags)
-    ///
-    /// By default no adapter has extra flags, but each adapter can
-    /// change this behavior
     fn behavior(&self) -> Vec<BehaviorFlag> {
-        vec![]
+        match self.adapter_type() {
+            AdapterType::Snowflake => {
+                // https://github.com/dbt-labs/dbt-adapters/blob/917301379d4ece300d32a3366c71daf0c4ac44aa/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L87
+                let flag = BehaviorFlag::new(
+                    "enable_iceberg_materializations",
+                    false,
+                    Some(
+                        "Enabling Iceberg materializations introduces latency to metadata queries, specifically within the list_relations_without_caching macro. Since Iceberg benefits only those actively using it, we've made this behavior opt-in to prevent unnecessary latency for other users.",
+                    ),
+                    Some(
+                        r#"Enabling Iceberg materializations introduces latency to metadata queries,
+specifically within the list_relations_without_caching macro. Since Iceberg
+benefits only those actively using it, we've made this behavior opt-in to
+prevent unnecessary latency for other users."#,
+                    ),
+                    Some(
+                        "https://docs.getdbt.com/reference/resource-configs/snowflake-configs#iceberg-table-format",
+                    ),
+                );
+                vec![flag]
+            }
+            AdapterType::Databricks => {
+                // https://github.com/databricks/dbt-databricks/blob/822b105b15e644676d9e1f47cbfd765cd4c1541f/dbt/adapters/databricks/impl.py#L87
+                let use_info_schema_for_columns = BehaviorFlag::new(
+                    "use_info_schema_for_columns",
+                    false,
+                    Some(
+                        "Use info schema to gather column information to ensure complex types are not truncated. Incurs some overhead, so disabled by default.",
+                    ),
+                    None,
+                    None,
+                );
+
+                let use_user_folder_for_python = BehaviorFlag::new(
+                    "use_user_folder_for_python",
+                    false,
+                    Some(
+                        "Use the user's home folder for uploading python notebooks. Shared folder use is deprecated due to governance concerns.",
+                    ),
+                    None,
+                    None,
+                );
+
+                let use_materialization_v2 = BehaviorFlag::new(
+                    "use_materialization_v2",
+                    false,
+                    Some(
+                        "Use revamped materializations based on separating create and insert. This allows more performant column comments, as well as new column features.",
+                    ),
+                    None,
+                    None,
+                );
+
+                vec![
+                    use_info_schema_for_columns,
+                    use_user_folder_for_python,
+                    use_materialization_v2,
+                ]
+            }
+            AdapterType::Bigquery
+            | AdapterType::Postgres
+            | AdapterType::Redshift
+            | AdapterType::Salesforce => vec![],
+        }
     }
 
     /// compare_dbr_version
@@ -1383,6 +1465,13 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
 ///
 /// NOTE: this is a growing interface that is currently growing.
 pub trait ReplayAdapter: TypedBaseAdapter {
+    fn replay_use_warehouse(
+        &self,
+        conn: &'_ mut dyn Connection,
+        warehouse: String,
+        node_id: &str,
+    ) -> FsResult<()>;
+
     fn replay_new_connection(
         &self,
         state: Option<&State>,

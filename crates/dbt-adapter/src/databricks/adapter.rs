@@ -25,7 +25,6 @@ use crate::typed_adapter::TypedBaseAdapter;
 use crate::{AdapterType, AdapterTyping};
 use arrow::array::{Array, StringArray};
 use dbt_agate::AgateTable;
-use dbt_common::behavior_flags::BehaviorFlag;
 
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::common::{ConstraintSupport, ConstraintType, DbtMaterialization};
@@ -134,45 +133,6 @@ impl AdapterTyping for DatabricksAdapter {
 }
 
 impl TypedBaseAdapter for DatabricksAdapter {
-    /// https://github.com/databricks/dbt-databricks/blob/822b105b15e644676d9e1f47cbfd765cd4c1541f/dbt/adapters/databricks/impl.py#L87
-    fn behavior(&self) -> Vec<BehaviorFlag> {
-        let use_info_schema_for_columns = BehaviorFlag::new(
-            "use_info_schema_for_columns",
-            false,
-            Some(
-                "Use info schema to gather column information to ensure complex types are not truncated. Incurs some overhead, so disabled by default.",
-            ),
-            None,
-            None,
-        );
-
-        let use_user_folder_for_python = BehaviorFlag::new(
-            "use_user_folder_for_python",
-            false,
-            Some(
-                "Use the user's home folder for uploading python notebooks. Shared folder use is deprecated due to governance concerns.",
-            ),
-            None,
-            None,
-        );
-
-        let use_materialization_v2 = BehaviorFlag::new(
-            "use_materialization_v2",
-            false,
-            Some(
-                "Use revamped materializations based on separating create and insert. This allows more performant column comments, as well as new column features.",
-            ),
-            None,
-            None,
-        );
-
-        vec![
-            use_info_schema_for_columns,
-            use_user_folder_for_python,
-            use_materialization_v2,
-        ]
-    }
-
     // TODO: add_query does not appear to be necessary (few uses in
     // macros) and should be removed and replaced with `execute`.
     #[allow(clippy::too_many_arguments)]
