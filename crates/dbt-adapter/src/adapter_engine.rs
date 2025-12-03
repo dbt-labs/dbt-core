@@ -11,7 +11,7 @@ use crate::errors::{
 use crate::query_cache::QueryCache;
 use crate::query_comment::{EMPTY_CONFIG, QueryCommentConfig};
 use crate::record_and_replay::{RecordEngine, ReplayEngine};
-use crate::sql_types::{NaiveTypeOpsImpl, TypeOps};
+use crate::sql_types::TypeOps;
 use crate::statement::*;
 use crate::stmt_splitter::StmtSplitter;
 
@@ -50,13 +50,6 @@ pub type Options = Vec<(String, OptionValue)>;
 /// TODO: remove when the full stmt splitter is available to this crate.
 static NAIVE_STMT_SPLITTER: LazyLock<Arc<dyn StmtSplitter>> =
     LazyLock::new(|| Arc::new(crate::stmt_splitter::NaiveStmtSplitter));
-
-/// Naive type parser/formatter used in the MockAdapter
-///
-/// IMPORTANT: not suitable for production use. DEFAULTS TO SNOWFLAKE ALSO.
-/// TODO: remove when the full parser/formatter is available to this crate.
-static NAIVE_TYPE_OPS: LazyLock<Box<dyn TypeOps>> =
-    LazyLock::new(|| Box::new(NaiveTypeOpsImpl::new(AdapterType::Snowflake)));
 
 #[derive(Default)]
 pub struct DatabaseMap {
@@ -258,6 +251,22 @@ impl XdbcEngine {
     }
 }
 
+/// Mock engine state for the MockAdapter
+#[derive(Clone)]
+pub struct MockEngine {
+    adapter_type: AdapterType,
+    type_ops: Arc<dyn TypeOps>,
+}
+
+impl MockEngine {
+    pub fn new(adapter_type: AdapterType, type_ops: Box<dyn TypeOps>) -> Self {
+        Self {
+            adapter_type,
+            type_ops: Arc::from(type_ops),
+        }
+    }
+}
+
 /// A simple bridge between adapters and the drivers.
 #[derive(Clone)]
 pub enum AdapterEngine {
@@ -269,7 +278,7 @@ pub enum AdapterEngine {
     /// Engine used for replaying db interaction
     Replay(ReplayEngine),
     /// Mock engine for the MockAdapter
-    Mock(AdapterType),
+    Mock(MockEngine),
 }
 
 impl AdapterEngine {
@@ -359,7 +368,7 @@ impl AdapterEngine {
             AdapterEngine::Xdbc(engine) => engine.type_ops.as_ref(),
             AdapterEngine::Record(engine) => engine.type_ops(),
             AdapterEngine::Replay(engine) => engine.type_ops(),
-            AdapterEngine::Mock(_adapter_type) => NAIVE_TYPE_OPS.as_ref(),
+            AdapterEngine::Mock(mock_engine) => mock_engine.type_ops.as_ref(),
         }
     }
 
@@ -410,7 +419,7 @@ impl AdapterEngine {
             AdapterEngine::Xdbc(actual_engine) => actual_engine.adapter_type(),
             AdapterEngine::Record(record_engine) => record_engine.adapter_type(),
             AdapterEngine::Replay(replay_engine) => replay_engine.adapter_type(),
-            AdapterEngine::Mock(adapter_type) => *adapter_type,
+            AdapterEngine::Mock(mock_engine) => mock_engine.adapter_type,
         }
     }
 
@@ -419,7 +428,7 @@ impl AdapterEngine {
             AdapterEngine::Xdbc(actual_engine) => actual_engine.auth.backend(),
             AdapterEngine::Record(record_engine) => record_engine.backend(),
             AdapterEngine::Replay(replay_engine) => replay_engine.backend(),
-            AdapterEngine::Mock(adapter_type) => backend_of(*adapter_type),
+            AdapterEngine::Mock(mock_engine) => backend_of(mock_engine.adapter_type),
         }
     }
 

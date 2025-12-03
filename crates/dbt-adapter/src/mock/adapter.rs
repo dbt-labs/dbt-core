@@ -1,4 +1,5 @@
 use crate::AdapterEngine;
+use crate::adapter_engine::MockEngine;
 use crate::base_adapter::{AdapterType, AdapterTyping};
 use crate::column::Column;
 use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
@@ -6,6 +7,7 @@ use crate::funcs::none_value;
 use crate::metadata::*;
 use crate::response::AdapterResponse;
 use crate::snowflake::relation::SnowflakeRelation;
+use crate::sql_types::TypeOps;
 use crate::typed_adapter::TypedBaseAdapter;
 use arrow::array::{ArrayRef, Decimal128Array};
 use arrow::datatypes::{DataType, Field, Schema};
@@ -54,11 +56,12 @@ impl MockAdapter {
         adapter_type: AdapterType,
         flags: BTreeMap<String, Value>,
         quoting: ResolvedQuoting,
+        type_ops: Box<dyn TypeOps>,
         token: CancellationToken,
     ) -> Self {
         Self {
             adapter_type,
-            engine: Arc::new(AdapterEngine::Mock(adapter_type)),
+            engine: Arc::new(AdapterEngine::Mock(MockEngine::new(adapter_type, type_ops))),
             flags,
             quoting,
             cancellation_token: token,
@@ -239,6 +242,7 @@ impl fmt::Display for MockAdapter {
 
 #[cfg(test)]
 mod tests {
+    use crate::sql_types::NaiveTypeOpsImpl;
     use dbt_common::cancellation::never_cancels;
     use dbt_schemas::schemas::relations::SNOWFLAKE_RESOLVED_QUOTING;
 
@@ -250,6 +254,7 @@ mod tests {
             AdapterType::Snowflake,
             BTreeMap::new(),
             SNOWFLAKE_RESOLVED_QUOTING,
+            Box::new(NaiveTypeOpsImpl::new(AdapterType::Snowflake)),
             never_cancels(),
         );
         assert_eq!(adapter.adapter_type(), AdapterType::Snowflake);
@@ -261,6 +266,7 @@ mod tests {
             AdapterType::Snowflake,
             BTreeMap::new(),
             SNOWFLAKE_RESOLVED_QUOTING,
+            Box::new(NaiveTypeOpsImpl::new(AdapterType::Snowflake)),
             never_cancels(),
         );
         let env = minijinja::Environment::new();
