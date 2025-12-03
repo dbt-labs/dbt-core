@@ -129,10 +129,6 @@ prevent unnecessary latency for other users."#,
         Ok(())
     }
 
-    fn quote(&self, _state: &State, identifier: &str) -> AdapterResult<String> {
-        Ok(format!("\"{identifier}\""))
-    }
-
     // https://github.com/dbt-labs/dbt-adapters/blob/ace1709df001df4232a66f9d5f331a5fda4d3389/dbt-snowflake/src/dbt/include/snowflake/macros/adapters.sql#L138
     fn get_relation(
         &self,

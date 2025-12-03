@@ -81,10 +81,6 @@ impl TypedBaseAdapter for RedshiftAdapter {
         Ok(())
     }
 
-    fn quote(&self, _state: &State, identifier: &str) -> AdapterResult<String> {
-        Ok(format!("\"{identifier}\""))
-    }
-
     fn verify_database(&self, database: String) -> AdapterResult<Value> {
         let ra3_node = self
             .engine

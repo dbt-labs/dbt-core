@@ -200,10 +200,6 @@ impl TypedBaseAdapter for DatabricksAdapter {
         Ok(())
     }
 
-    fn quote(&self, _state: &State, identifier: &str) -> AdapterResult<String> {
-        Ok(format!("`{identifier}`"))
-    }
-
     /// Get the full macro name for check_schema_exists
     ///
     /// # Returns

@@ -332,10 +332,6 @@ impl TypedBaseAdapter for BigqueryAdapter {
         ))
     }
 
-    fn quote(&self, _state: &State, identifier: &str) -> AdapterResult<String> {
-        Ok(format!("`{identifier}`"))
-    }
-
     fn get_relation(
         &self,
         state: &State,

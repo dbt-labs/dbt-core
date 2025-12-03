@@ -78,10 +78,6 @@ impl TypedBaseAdapter for PostgresAdapter {
         Ok(())
     }
 
-    fn quote(&self, _state: &State, identifier: &str) -> AdapterResult<String> {
-        Ok(format!("\"{identifier}\""))
-    }
-
     // reference: https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-postgres/src/dbt/include/postgres/macros/adapters.sql#L63
     fn get_columns_in_relation(
         &self,

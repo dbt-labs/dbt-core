@@ -9,7 +9,7 @@ use crate::record_batch_utils::{extract_first_value_as_i64, get_column_values};
 use crate::relation_object::RelationObject;
 use crate::response::{AdapterResponse, ResultObject};
 use crate::snapshots::SnapshotStrategy;
-use crate::{AdapterResult, AdapterType, AdapterTyping};
+use crate::{AdapterResult, AdapterTyping};
 use crate::{execute_macro_wrapper_with_package, python};
 
 use adbc_core::options::OptionValue;
@@ -17,6 +17,7 @@ use arrow::array::{RecordBatch, StringArray, TimestampMillisecondArray};
 use arrow_schema::{DataType, Schema};
 use dbt_agate::AgateTable;
 use dbt_common::FsResult;
+use dbt_common::adapter::AdapterType;
 use dbt_common::behavior_flags::BehaviorFlag;
 use dbt_frontend_common::dialect::Dialect;
 use dbt_schemas::schemas::common::Constraint;
@@ -377,7 +378,19 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     }
 
     /// Quote
-    fn quote(&self, state: &State, identifier: &str) -> AdapterResult<String>;
+    fn quote(&self, state: &State, identifier: &str) -> AdapterResult<String> {
+        if let Some(replay_adapter) = self.as_replay() {
+            return replay_adapter.replay_quote(state, identifier);
+        }
+        let s = match self.adapter_type() {
+            AdapterType::Snowflake
+            | AdapterType::Redshift
+            | AdapterType::Postgres
+            | AdapterType::Salesforce => format!("\"{identifier}\""),
+            AdapterType::Bigquery | AdapterType::Databricks => format!("`{identifier}`"),
+        };
+        Ok(s)
+    }
 
     /// List schemas from a [RecordBatch] result of `show schemas` or equivalent.
     fn list_schemas(&self, result_set: Arc<RecordBatch>) -> AdapterResult<Vec<String>> {
@@ -1388,6 +1401,8 @@ pub trait ReplayAdapter: TypedBaseAdapter {
         limit: Option<i64>,
         options: Option<HashMap<String, String>>,
     ) -> AdapterResult<(AdapterResponse, AgateTable)>;
+
+    fn replay_quote(&self, state: &State, identifier: &str) -> AdapterResult<String>;
 
     fn replay_convert_type(&self, state: &State, data_type: &DataType) -> AdapterResult<String>;
 
