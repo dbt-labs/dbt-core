@@ -598,17 +598,35 @@ impl AgateTable {
                 } else if let Some(map) = v.downcast_object_ref::<MutableMap>() {
                     let map: ValueMap = map.clone().into();
                     Ok(rename_columns_by_map!(map))
-                } else if let Some(array) = v.downcast_object_ref::<Vec<String>>() {
+                } else {
+                    // Try to treat it as a generic iterable
+                    let iter = match v.try_iter() {
+                        Ok(iter) => iter,
+                        Err(_) => {
+                            return Err(Error::new(
+                                ErrorKind::InvalidArgument,
+                                "Table.rename: column_names must be a map or an array",
+                            ));
+                        }
+                    };
                     let mut renamed = old;
-                    for (i, col) in array.iter().enumerate() {
-                        renamed[i] = col.to_string();
+                    for (i, value) in iter.enumerate() {
+                        if i >= renamed.len() {
+                            break;
+                        }
+                        if let Some(s) = value.as_str() {
+                            renamed[i] = s.to_string();
+                        } else {
+                            return Err(Error::new(
+                                ErrorKind::InvalidArgument,
+                                format!(
+                                    "Table.rename: column_names array must contain only strings, found: {}",
+                                    value
+                                ),
+                            ));
+                        }
                     }
                     Ok(renamed)
-                } else {
-                    Err(Error::new(
-                        ErrorKind::InvalidArgument,
-                        "Table.rename: column_names must be a map or an array",
-                    ))
                 }
             })
             .transpose()?;
@@ -648,20 +666,39 @@ impl AgateTable {
                     Ok(rename_rows_by_map!(map))
                 } else if let Some(map) = v.downcast_object_ref::<MutableMap>() {
                     Ok(rename_rows_by_map!(map))
-                } else if let Some(list) = v.downcast_object_ref::<Vec<String>>() {
+                } else {
+                    // Try to treat it as a generic iterable
+                    let iter = match v.try_iter() {
+                        Ok(iter) => iter,
+                        Err(_) => {
+                            return Err(Error::new(
+                                ErrorKind::InvalidArgument,
+                                "Table.rename: row_names must be a map or an array",
+                            ));
+                        }
+                    };
+
+                    // Collect the iterator values
+                    let values: Vec<_> = iter.collect();
+
                     for i in 0..self.num_rows() {
-                        if let Some(new_name) = list.get(i) {
-                            renamed.append_value(new_name);
+                        if let Some(value) = values.get(i) {
+                            if let Some(s) = value.as_str() {
+                                renamed.append_value(s);
+                            } else {
+                                return Err(Error::new(
+                                    ErrorKind::InvalidArgument,
+                                    format!(
+                                        "Table.rename: row_names array must contain only strings, found: {}",
+                                        value
+                                    ),
+                                ));
+                            }
                         } else {
                             renamed.append_option(old_row_name(i));
                         }
                     }
                     Ok(Arc::new(renamed.finish()))
-                } else {
-                    Err(Error::new(
-                        ErrorKind::InvalidArgument,
-                        "Table.rename: row_names must be a map or an array",
-                    ))
                 }
             })
             .transpose()?;
@@ -1767,6 +1804,49 @@ mod tests {
         assert_eq!(new_names.get(0).unwrap().as_str().unwrap(), "First Row");
         assert_eq!(new_names.get(1).unwrap().as_str().unwrap(), "Row 2");
         assert_eq!(new_names.get(2).unwrap().as_str().unwrap(), "Row 3");
+    }
+
+    #[test]
+    fn test_column_renaming_with_map_filter() {
+        // Test case for the dbt_profiler issue: using map filter to rename columns
+        let batch = simple_record_batch();
+        let table_val = AgateTable::from_record_batch(batch).into_value();
+
+        let env = Environment::new();
+        let state = env.empty_state();
+
+        // Simulate what happens in dbt_profiler:
+        // {% set information_schema_columns = information_schema_columns.rename(information_schema_columns.column_names | map('lower') | list) %}
+        // Get the table and its column_names
+        let column_names = table_val.get_attr("column_names").unwrap();
+
+        // The map filter returns an iterable that should work with rename
+        // We'll use call_method directly instead of template rendering
+        let rename_args = {
+            // Create the mapped column names list by iterating the tuple
+            let mut mapped_names = Vec::new();
+            let iter = column_names.try_iter().unwrap();
+            for name in iter {
+                if let Some(s) = name.as_str() {
+                    mapped_names.push(Value::from(s.to_lowercase()));
+                }
+            }
+            Value::from_iter(mapped_names)
+        };
+
+        // Call rename with the mapped column names (this should not error)
+        let result = table_val.call_method(&state, "rename", &[rename_args], &[]);
+
+        // Verify it doesn't throw an error about "column_names must be a map or an array"
+        assert!(
+            result.is_ok(),
+            "rename should accept iterable from map filter"
+        );
+
+        // Verify the columns were renamed
+        let renamed_table = result.unwrap().downcast_object::<AgateTable>().unwrap();
+        assert_eq!(renamed_table.column_name(0).unwrap(), "id");
+        assert_eq!(renamed_table.column_name(1).unwrap(), "country");
     }
 
     fn color_table() -> AgateTable {
