@@ -3,6 +3,7 @@ use crate::bigquery::relation_config::{
     BigqueryMaterializedViewConfigObject,
 };
 use crate::information_schema::InformationSchema;
+use crate::need_quotes::need_quotes;
 use crate::relation_object::{RelationObject, StaticBaseRelation};
 
 use arrow::array::RecordBatch;
@@ -16,6 +17,7 @@ use dbt_schemas::schemas::relations::base::{
     BaseRelation, BaseRelationProperties, Policy, RelationPath,
 };
 use dbt_schemas::schemas::serde::minijinja_value_to_typed_struct;
+use dbt_xdbc::Backend;
 use minijinja::arg_utils::{ArgParser, ArgsIter};
 use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State, Value};
 
@@ -275,6 +277,14 @@ impl BaseRelation for BigqueryRelation {
     ) -> Result<Value, MinijinjaError> {
         let mut info_schema = InformationSchema::try_from_relation(database.clone(), view_name)?;
 
+        let quote_if_needed = |identifier: &str| -> String {
+            if need_quotes(Backend::BigQuery, identifier) {
+                self.quoted(identifier)
+            } else {
+                identifier.to_string()
+            }
+        };
+
         // BigQuery INFORMATION_SCHEMA scoping rules:
         // - OBJECT_PRIVILEGES: project-level with region → project.`region-<loc>`.INFORMATION_SCHEMA.<view>
         // - Other views: dataset-level → dataset.INFORMATION_SCHEMA.<view> (using the relation's own dataset)
@@ -296,7 +306,7 @@ impl BaseRelation for BigqueryRelation {
 
             let project = database.or_else(|| self.path.database.clone());
             if let Some(proj) = project {
-                info_schema.database = Some(proj);
+                info_schema.database = Some(quote_if_needed(&proj));
                 info_schema.location = Some(loc.to_string());
             } else {
                 return Err(MinijinjaError::new(
@@ -310,8 +320,17 @@ impl BaseRelation for BigqueryRelation {
             let project = self.path.database.clone();
             let dataset = self.path.schema.clone();
             match (project, dataset) {
-                (Some(proj), Some(ds)) => info_schema.database = Some(format!("{}.{}", proj, ds)),
-                (None, Some(ds)) => info_schema.database = Some(ds),
+                (Some(proj), Some(ds)) => {
+                    info_schema.database = Some(format!(
+                        "{}.{}",
+                        quote_if_needed(&proj),
+                        quote_if_needed(&ds)
+                    ));
+                }
+                (Some(proj), None) => {
+                    info_schema.database = Some(quote_if_needed(&proj));
+                }
+                (None, Some(ds)) => info_schema.database = Some(quote_if_needed(&ds)),
                 _ => {}
             }
         }
@@ -457,6 +476,29 @@ mod tests {
     }
 
     #[test]
+    fn test_information_schema_quotes_project_identifier() {
+        let relation = BigqueryRelation::new(
+            Some("my-project-1a".to_string()),
+            Some("test_schema".to_string()),
+            Some("test_table".to_string()),
+            Some(RelationType::Table),
+            None,
+            DEFAULT_RESOLVED_QUOTING,
+        );
+
+        let info_schema = relation
+            .information_schema_inner(None, Some("TABLES"))
+            .unwrap();
+
+        let info_relation = info_schema.downcast_object::<RelationObject>().unwrap();
+        let rendered = info_relation.inner().render_self().unwrap();
+        assert_eq!(
+            rendered.as_str().unwrap(),
+            "`my-project-1a`.test_schema.INFORMATION_SCHEMA.TABLES"
+        );
+    }
+
+    #[test]
     fn test_object_privileges_requires_location() {
         let mut relation = BigqueryRelation::new(
             Some("test_db".to_string()),
@@ -489,6 +531,30 @@ mod tests {
         assert_eq!(
             rendered.as_str().unwrap(),
             "test_db.`region-US`.INFORMATION_SCHEMA.OBJECT_PRIVILEGES"
+        );
+    }
+
+    #[test]
+    fn test_object_privileges_quotes_project_identifier() {
+        let mut relation = BigqueryRelation::new(
+            Some("my-project-1a".to_string()),
+            Some("test_schema".to_string()),
+            Some("test_table".to_string()),
+            Some(RelationType::Table),
+            None,
+            DEFAULT_RESOLVED_QUOTING,
+        );
+        relation.location = Some("US".to_string());
+
+        let info_schema = relation
+            .information_schema_inner(Some("my-project-1a".to_string()), Some("OBJECT_PRIVILEGES"))
+            .unwrap();
+
+        let info_relation = info_schema.downcast_object::<RelationObject>().unwrap();
+        let rendered = info_relation.inner().render_self().unwrap();
+        assert_eq!(
+            rendered.as_str().unwrap(),
+            "`my-project-1a`.`region-US`.INFORMATION_SCHEMA.OBJECT_PRIVILEGES"
         );
     }
 
