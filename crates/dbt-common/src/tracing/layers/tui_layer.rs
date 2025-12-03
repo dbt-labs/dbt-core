@@ -8,8 +8,9 @@ use console::Term;
 use dbt_telemetry::{
     AnyTelemetryEvent, ExecutionPhase, Invocation, ListItemOutput, LogMessage, LogRecordInfo,
     NodeEvaluated, NodeOutcome, NodeProcessed, NodeSkipReason, NodeType, PhaseExecuted,
-    QueryExecuted, SeverityNumber, ShowDataOutput, SpanEndInfo, SpanStartInfo, SpanStatus,
-    StatusCode, TelemetryAttributes, TelemetryOutputFlags, UserLogMessage, node_processed,
+    ProgressMessage, QueryExecuted, SeverityNumber, ShowDataOutput, SpanEndInfo, SpanStartInfo,
+    SpanStatus, StatusCode, TelemetryAttributes, TelemetryOutputFlags, UserLogMessage,
+    node_processed,
 };
 
 use dbt_error::ErrorCode;
@@ -20,7 +21,6 @@ use crate::{
     io_args::{FsCommand, ShowOptions},
     logging::{LogFormat, StatEvent, TermEvent, with_suspended_progress_bars},
     tracing::{
-        constants::{BUILDING_TASK_GRAPH, LOADING, RESOLVING, SCHEDULING},
         data_provider::DataProvider,
         formatters::{
             invocation::format_invocation_summary,
@@ -30,6 +30,8 @@ use crate::{
                 format_node_evaluated_end, format_node_evaluated_start, format_node_processed_end,
                 format_skipped_test_group,
             },
+            phase::get_phase_progress_text,
+            progress::format_progress_message,
             test_result::format_test_failure,
         },
         layer::{ConsumerLayer, TelemetryConsumer},
@@ -244,13 +246,17 @@ fn get_progress_params(
 }
 
 /// Get spinner UID for phases that display a spinner (no progress total)
-fn get_spinner_params(attributes: &TelemetryAttributes) -> Option<&'static str> {
+fn get_spinner_params(attributes: &TelemetryAttributes) -> Option<String> {
     if let Some(phase) = attributes.downcast_ref::<PhaseExecuted>() {
-        return match phase.phase() {
-            ExecutionPhase::LoadProject => Some(LOADING),
-            ExecutionPhase::Parse => Some(RESOLVING),
-            ExecutionPhase::Schedule => Some(SCHEDULING),
-            ExecutionPhase::TaskGraphBuild => Some(BUILDING_TASK_GRAPH),
+        let phase = phase.phase();
+
+        // Some phases are not handled here, so we only return for the ones we care about
+        return match phase {
+            ExecutionPhase::LoadProject
+            | ExecutionPhase::Parse
+            | ExecutionPhase::Schedule
+            | ExecutionPhase::TaskGraphBuild
+            | ExecutionPhase::Debug => get_phase_progress_text(phase),
             _ => None,
         };
     }
@@ -340,7 +346,7 @@ impl TelemetryConsumer for TuiLayer {
         }
 
         // Handle spinners for phases without progress totals
-        if let Some(spinner_uid) = get_spinner_params(&span.attributes) {
+        if let Some(ref spinner_uid) = get_spinner_params(&span.attributes) {
             log::info!(
                 _TERM_ONLY_ = true,
                 _TERM_EVENT_:serde = TermEvent::start_spinner(spinner_uid.into());
@@ -422,7 +428,7 @@ impl TelemetryConsumer for TuiLayer {
         }
 
         // Handle spinners for phases without progress totals
-        if let Some(spinner_uid) = get_spinner_params(&span.attributes) {
+        if let Some(ref spinner_uid) = get_spinner_params(&span.attributes) {
             log::info!(
                 _TERM_ONLY_ = true,
                 _TERM_EVENT_:serde = TermEvent::remove_spinner(spinner_uid.into());
@@ -435,6 +441,12 @@ impl TelemetryConsumer for TuiLayer {
         // Check if this is a LogMessage (error/warning)
         if let Some(log_msg) = log_record.attributes.downcast_ref::<LogMessage>() {
             self.handle_log_message(log_msg, log_record, data_provider);
+            return;
+        }
+
+        // Handle ProgressMessage events (debug command progress, etc.)
+        if let Some(progress_msg) = log_record.attributes.downcast_ref::<ProgressMessage>() {
+            self.handle_progress_message(progress_msg, log_record.severity_number);
             return;
         }
 
@@ -819,6 +831,20 @@ impl TuiLayer {
                 .lock()
                 .write_all(format!("{formatted_message}\n").as_bytes())
                 .expect("failed to write to stderr");
+        });
+    }
+
+    fn handle_progress_message(
+        &self,
+        progress_msg: &ProgressMessage,
+        severity_number: SeverityNumber,
+    ) {
+        let formatted = format_progress_message(progress_msg, severity_number, true, true);
+        with_suspended_progress_bars(|| {
+            io::stdout()
+                .lock()
+                .write_all(format!("{}\n", formatted).as_bytes())
+                .expect("failed to write to stdout");
         });
     }
 }

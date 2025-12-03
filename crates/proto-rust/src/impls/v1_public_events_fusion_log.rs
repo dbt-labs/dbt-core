@@ -1,6 +1,6 @@
 use crate::v1::public::events::fusion::{
     compat::SeverityNumber,
-    log::{LogMessage, ShowDataOutput, ShowDataOutputFormat, UserLogMessage},
+    log::{LogMessage, ProgressMessage, ShowDataOutput, ShowDataOutputFormat, UserLogMessage},
 };
 
 impl LogMessage {
@@ -91,7 +91,7 @@ impl UserLogMessage {
     /// Creates a new `UserLogMessage` event for log(.., info=true) calls.
     ///
     /// This is a helper that creates a UserLogMessage with the appropriate
-    /// dbt core event code (I063 - JinjaLogDebug) and is_print set to false.    
+    /// dbt core event code (I063 - JinjaLogDebug) and is_print set to false.
     pub fn log_debug(
         package_name: Option<String>,
         line: Option<u32>,
@@ -108,6 +108,34 @@ impl UserLogMessage {
             // Auto-injected fields
             unique_id: None,
             phase: None,
+        }
+    }
+}
+
+impl ProgressMessage {
+    /// Creates a new `ProgressMessage` with a known legacy dbt-core event code.
+    ///
+    /// Arguments:
+    /// * `action` - The action being performed (e.g., "Debugging", "Loading").
+    /// * `target` - The text describing the target of the action (e.g., "project", "dependencies").
+    /// * `description` - Optional additional description providing more context.
+    /// * `dbt_core_event_code` - legacy dbt-core event code
+    pub fn new_with_code(
+        action: String,
+        target: String,
+        description: Option<String>,
+        dbt_core_event_code: String,
+    ) -> Self {
+        Self {
+            action,
+            target,
+            description,
+            dbt_core_event_code: Some(dbt_core_event_code),
+            // Auto-injected fields
+            unique_id: None,
+            phase: None,
+            file: None,
+            line: None,
         }
     }
 }

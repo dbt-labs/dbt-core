@@ -13,8 +13,8 @@ use dbt_telemetry::{
     ArtifactType, ArtifactWritten, ExecutionPhase, Invocation, InvocationEvalArgs, ListItemOutput,
     ListOutputFormat, LogMessage, NodeEvaluated, NodeMaterialization, NodeOutcome,
     NodeOutcomeDetail, NodeProcessed, NodeSkipReason, NodeSkipUpstreamDetail, NodeType,
-    QueryExecuted, QueryOutcome, SeverityNumber, ShowDataOutput, ShowDataOutputFormat,
-    TelemetryOutputFlags, UserLogMessage, node_processed,
+    ProgressMessage, QueryExecuted, QueryOutcome, SeverityNumber, ShowDataOutput,
+    ShowDataOutputFormat, TelemetryOutputFlags, UserLogMessage, node_processed,
 };
 use serde_json::{Value, json};
 use tracing::level_filters::LevelFilter;
@@ -962,6 +962,67 @@ fn test_node_events() {
             expected_log_result,
             expected_mark_skipped,
             expected_node_finished,
+        ],
+    );
+}
+
+#[test]
+fn test_progress_message_debug_cmd_out() {
+    let invocation_id = Uuid::new_v4();
+
+    test_events(
+        "ProgressMessage (DebugCmdOut Z047)",
+        invocation_id,
+        || {
+            emit_info_event(
+                ProgressMessage::new_with_code(
+                    "Debugging".to_string(),
+                    "profile: my_profile".to_string(),
+                    None,
+                    "Z047".to_string(),
+                ),
+                None,
+            );
+            emit_info_event(
+                ProgressMessage::new_with_code(
+                    "Debugged".to_string(),
+                    "All checks passed!".to_string(),
+                    None,
+                    "Z048".to_string(),
+                ),
+                None,
+            );
+        },
+        &[],
+        vec![
+            json!({
+                "info": {
+                    "category": "",
+                    "code": "Z047",
+                    "invocation_id": invocation_id.to_string(),
+                    "name": "DebugCmdOut",
+                    "msg": "Debugging profile: my_profile",
+                    "level": "info",
+                    "extra": {}
+                },
+                "data": {
+                    "msg": "Debugging profile: my_profile"
+                }
+            }),
+            json!({
+                "info": {
+                    "category": "",
+                    "code": "Z048",
+                    "invocation_id": invocation_id.to_string(),
+                    "name": "DebugCmdResult",
+                    "msg": "Debugged All checks passed!",
+                    "level": "info",
+                    "extra": {}
+                },
+                "data": {
+                    "msg": "Debugged All checks passed!"
+                }
+            }),
         ],
     );
 }

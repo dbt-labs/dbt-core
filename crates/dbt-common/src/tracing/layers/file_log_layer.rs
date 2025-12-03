@@ -1,8 +1,9 @@
 use dbt_error::ErrorCode;
 use dbt_telemetry::{
     Invocation, ListItemOutput, LogMessage, LogRecordInfo, NodeEvaluated, NodeOutcome,
-    NodeProcessed, NodeType, PhaseExecuted, QueryExecuted, SeverityNumber, ShowDataOutput,
-    SpanEndInfo, SpanStartInfo, TelemetryOutputFlags, UserLogMessage, node_processed,
+    NodeProcessed, NodeType, PhaseExecuted, ProgressMessage, QueryExecuted, SeverityNumber,
+    ShowDataOutput, SpanEndInfo, SpanStartInfo, TelemetryOutputFlags, UserLogMessage,
+    node_processed,
 };
 use std::{
     sync::atomic::{AtomicBool, Ordering},
@@ -24,6 +25,7 @@ use super::super::{
             format_node_processed_start,
         },
         phase::{format_phase_executed_end, format_phase_executed_start},
+        progress::format_progress_message,
         test_result::format_test_failure,
     },
     layer::{ConsumerLayer, TelemetryConsumer},
@@ -157,6 +159,12 @@ impl TelemetryConsumer for FileLogLayer {
         // Check if this is a LogMessage (error/warning)
         if let Some(log_msg) = log_record.attributes.downcast_ref::<LogMessage>() {
             self.handle_log_message(log_msg, log_record);
+            return;
+        }
+
+        // Handle ProgressMessage events (debug command progress, etc.)
+        if let Some(progress_msg) = log_record.attributes.downcast_ref::<ProgressMessage>() {
+            self.handle_progress_message(log_record, progress_msg);
             return;
         }
 
@@ -347,6 +355,16 @@ impl FileLogLayer {
             log_record.time_unix_nano,
             log_record.severity_number,
             std::slice::from_ref(&show_data.content),
+        );
+    }
+
+    fn handle_progress_message(&self, log_record: &LogRecordInfo, progress_msg: &ProgressMessage) {
+        let formatted =
+            format_progress_message(progress_msg, log_record.severity_number, false, false);
+        self.write_log_lines(
+            log_record.time_unix_nano,
+            log_record.severity_number,
+            &[formatted],
         );
     }
 }

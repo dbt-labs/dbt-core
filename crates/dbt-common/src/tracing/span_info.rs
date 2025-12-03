@@ -164,6 +164,31 @@ pub fn record_span_status(span: &Span, error_message: Option<&str>) {
     });
 }
 
+/// Extension trait to record span status on `Result` types, while
+/// passing through the original result.
+pub trait SpanStatusRecorder {
+    /// Records the status of the given span based on the `Result`.
+    /// If the result is `Ok`, the status code will be set to `Ok`,
+    /// otherwise it will be set to `Error` with the error message.
+    ///
+    /// Returns the original result.
+    fn record_status(self, span: &Span) -> Self;
+}
+
+impl<T, E> SpanStatusRecorder for Result<T, E>
+where
+    E: std::fmt::Display,
+{
+    fn record_status(self, span: &Span) -> Result<T, E> {
+        match self {
+            Ok(_) => record_span_status(span, None),
+            Err(ref e) => record_span_status(span, Some(&e.to_string())),
+        };
+
+        self
+    }
+}
+
 /// Updates attributes of the given span.
 ///
 /// The `attrs_updater` closure receives a mutable reference to the current

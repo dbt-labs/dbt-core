@@ -7,5 +7,6 @@ pub mod log_message;
 pub mod meta;
 pub mod node;
 pub mod phase;
+pub mod progress;
 pub mod query_log;
 pub mod test_result;

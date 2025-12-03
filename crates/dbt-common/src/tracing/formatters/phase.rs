@@ -1,48 +1,55 @@
 use dbt_telemetry::{ExecutionPhase, PhaseExecuted};
 
-use super::duration::format_duration_fixed_width;
+use super::{constants::ACTION_WIDTH, duration::format_duration_fixed_width};
 
-// Phase action constants (lowercase, no padding)
-pub const ANALYZING: &str = "analyzing";
-pub const RENDERING: &str = "rendering";
-pub const RUNNING: &str = "running";
-pub const HYDRATING: &str = "hydrating";
-pub const COMPARING: &str = "comparing";
-pub const CLEANING: &str = "cleaning";
-pub const LOADING_PROJECT: &str = "loading project";
-pub const PARSING: &str = "parsing";
-pub const SCHEDULING: &str = "scheduling";
-pub const INITIALIZING_ADAPTER: &str = "initializing adapter";
-pub const DEFER_HYDRATING: &str = "defer hydrating";
-pub const BUILDING_TASK_GRAPH: &str = "building task graph";
-pub const ANALYZING_FRESHNESS: &str = "analyzing freshness";
-pub const GENERATING_LINEAGE: &str = "generating lineage";
-pub const DEBUGGING: &str = "debugging";
-
-/// Get the phase action text for a given ExecutionPhase
-/// Returns empty string for phases that don't have a corresponding action constant
+/// Get the phase action text for a given `ExecutionPhase` (lowercase, no padding)
 pub fn get_phase_action(phase: ExecutionPhase) -> &'static str {
     match phase {
-        ExecutionPhase::Render => RENDERING,
-        ExecutionPhase::Analyze => ANALYZING,
-        ExecutionPhase::Run => RUNNING,
-        ExecutionPhase::NodeCacheHydration => HYDRATING,
-        ExecutionPhase::Compare => COMPARING,
-        ExecutionPhase::Clean => CLEANING,
-        ExecutionPhase::LoadProject => LOADING_PROJECT,
-        ExecutionPhase::Parse => PARSING,
-        ExecutionPhase::Schedule => SCHEDULING,
-        ExecutionPhase::InitAdapter => INITIALIZING_ADAPTER,
-        ExecutionPhase::DeferHydration => DEFER_HYDRATING,
-        ExecutionPhase::TaskGraphBuild => BUILDING_TASK_GRAPH,
-        ExecutionPhase::FreshnessAnalysis => ANALYZING_FRESHNESS,
-        ExecutionPhase::Lineage => GENERATING_LINEAGE,
-        ExecutionPhase::Debug => DEBUGGING,
+        ExecutionPhase::Analyze => "analyzing",
+        ExecutionPhase::Clean => "cleaning",
+        ExecutionPhase::Compare => "comparing",
+        ExecutionPhase::Debug => "debugging",
+        ExecutionPhase::DeferHydration => "defer hydrating",
+        ExecutionPhase::FreshnessAnalysis => "analyzing freshness",
+        ExecutionPhase::InitAdapter => "initializing adapter",
+        ExecutionPhase::Lineage => "generating lineage",
+        ExecutionPhase::LoadProject => "loading project",
+        ExecutionPhase::NodeCacheHydration => "hydrating",
+        ExecutionPhase::Parse => "parsing",
+        ExecutionPhase::Render => "rendering",
+        ExecutionPhase::Run => "running",
+        ExecutionPhase::Schedule => "scheduling",
+        ExecutionPhase::TaskGraphBuild => "building task graph",
         ExecutionPhase::Unspecified => "unknown phase",
     }
 }
 
-/// Format a PhaseExecuted event for the start of a phase
+/// Get the padded phase action text for the progress bar or spinner.
+/// Returns `None` for some phases as of now.
+pub fn get_phase_progress_text(phase: ExecutionPhase) -> Option<String> {
+    let action = match phase {
+        ExecutionPhase::Analyze => "Analyzing",
+        ExecutionPhase::Clean => "Cleaning",
+        ExecutionPhase::Compare => "Comparing",
+        ExecutionPhase::Debug => "Debugging",
+        ExecutionPhase::DeferHydration => "Hydrating",
+        ExecutionPhase::FreshnessAnalysis => "Analyzing",
+        ExecutionPhase::InitAdapter => return None,
+        ExecutionPhase::Lineage => "Generating",
+        ExecutionPhase::LoadProject => "Loading",
+        ExecutionPhase::NodeCacheHydration => "Hydrating",
+        ExecutionPhase::Parse => "Parsing",
+        ExecutionPhase::Render => "Rendering",
+        ExecutionPhase::Run => "Running",
+        ExecutionPhase::Schedule => "Scheduling",
+        ExecutionPhase::TaskGraphBuild => "Building",
+        ExecutionPhase::Unspecified => return None,
+    };
+
+    Some(format!("{:>width$}", action, width = ACTION_WIDTH))
+}
+
+/// Format a `PhaseExecuted` event for the start of a phase
 ///
 /// Returns formatted string in the pattern:
 /// `Started {phase_action}` or `Started {phase_action} ({total} nodes)` if total > 0

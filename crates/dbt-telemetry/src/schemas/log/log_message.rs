@@ -4,7 +4,9 @@ use crate::{
 };
 use prost::Name;
 pub use proto_rust::v1::public::events::fusion::compat::SeverityNumber;
-pub use proto_rust::v1::public::events::fusion::log::{LogMessage, UserLogMessage};
+pub use proto_rust::v1::public::events::fusion::log::{
+    LogMessage, ProgressMessage, UserLogMessage,
+};
 use serde_with::skip_serializing_none;
 use std::borrow::Cow;
 
@@ -211,6 +213,107 @@ impl ArrowSerializableTelemetryEvent for UserLogMessage {
                 .as_deref()
                 .map(str::to_string)
                 .or(json_payload.relative_path),
+        })
+    }
+}
+
+impl ProtoTelemetryEvent for ProgressMessage {
+    const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Log;
+    const OUTPUT_FLAGS: TelemetryOutputFlags = TelemetryOutputFlags::ALL;
+
+    fn event_display_name(&self) -> String {
+        format!("ProgressMessage: {} {}", self.action, self.target)
+    }
+
+    fn with_code_location(&mut self, location: RecordCodeLocation) {
+        // If we don't have a file yet, take it from the location.
+        if let (None, Some(f)) = (self.file.clone(), location.file) {
+            self.file = Some(f)
+        }
+
+        // If we don't have a line yet, take it from the location.
+        if let (None, Some(l)) = (self.line, location.line) {
+            self.line = Some(l)
+        }
+    }
+
+    fn has_sensitive_data(&self) -> bool {
+        false
+    }
+
+    fn with_context(&mut self, context: &TelemetryContext) {
+        // Inject unique_id if not set and provided by context
+        if self.unique_id.is_none() {
+            self.unique_id = context.unique_id.clone();
+        }
+
+        // Inject phase if not set and provided by context
+        if self.phase.is_none()
+            && let Some(p) = context.phase
+        {
+            self.phase = Some(p as i32);
+        }
+    }
+}
+
+/// Internal struct used for serializing/deserializing ProgressMessage fields as JSON payload.
+#[skip_serializing_none]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+struct ProgressMessageJsonPayload<'a> {
+    pub action: Cow<'a, str>,
+    pub target: Cow<'a, str>,
+    pub description: Option<Cow<'a, str>>,
+}
+
+impl ArrowSerializableTelemetryEvent for ProgressMessage {
+    fn to_arrow_record(&self) -> ArrowAttributes<'_> {
+        ArrowAttributes {
+            dbt_core_event_code: self.dbt_core_event_code.as_deref().map(Cow::Borrowed),
+            unique_id: self.unique_id.as_deref().map(Cow::Borrowed),
+            phase: self.phase.map(|_| self.phase()),
+            file: self.file.as_deref().map(Cow::Borrowed),
+            line: self.line,
+            json_payload: serde_json::to_string(&ProgressMessageJsonPayload {
+                action: self.action.as_str().into(),
+                target: self.target.as_str().into(),
+                description: self.description.as_deref().map(Cow::Borrowed),
+            })
+            .unwrap_or_else(|e| {
+                panic!(
+                    "Failed to serialize data in event type \"{}\" to JSON: {e:?}",
+                    Self::full_name()
+                )
+            })
+            .into(),
+            ..Default::default()
+        }
+    }
+
+    fn from_arrow_record(record: &ArrowAttributes) -> Result<Self, String> {
+        let json_payload: ProgressMessageJsonPayload =
+            serde_json::from_str(record.json_payload.as_ref().ok_or_else(|| {
+                format!(
+                    "Missing json payload for event type \"{}\"",
+                    Self::full_name()
+                )
+            })?)
+            .map_err(|e| {
+                format!(
+                    "Failed to deserialize data of event type \"{}\" from JSON payload: {}",
+                    Self::full_name(),
+                    e
+                )
+            })?;
+
+        Ok(Self {
+            dbt_core_event_code: record.dbt_core_event_code.as_deref().map(str::to_string),
+            action: json_payload.action.into_owned(),
+            target: json_payload.target.into_owned(),
+            description: json_payload.description.as_deref().map(str::to_string),
+            unique_id: record.unique_id.as_deref().map(str::to_string),
+            file: record.file.as_deref().map(str::to_string),
+            line: record.line,
+            phase: record.phase.map(|v| v as i32),
         })
     }
 }

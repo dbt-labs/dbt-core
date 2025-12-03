@@ -9,7 +9,7 @@ use crate::{
     schemas::{
         ArtifactWritten, CallTrace, CompiledCodeInline, Invocation, ListItemOutput, LogMessage,
         NodeEvaluated, NodeProcessed, OnboardingScreenShown, PackageUpdate, PhaseExecuted, Process,
-        QueryExecuted, ShowDataOutput, Unknown, UserLogMessage,
+        ProgressMessage, QueryExecuted, ShowDataOutput, Unknown, UserLogMessage,
     },
     serialize::arrow::ArrowAttributes,
 };
@@ -233,6 +233,12 @@ static PUBLIC_TELEMETRY_EVENT_REGISTRY: LazyLock<TelemetryEventTypeRegistry> = L
             arrow_deserialize_for_type::<UserLogMessage>,
             #[cfg(any(test, feature = "test-utils"))]
             faker_for_type::<UserLogMessage>,
+        );
+        registry.register(
+            ProgressMessage::FULL_NAME,
+            arrow_deserialize_for_type::<ProgressMessage>,
+            #[cfg(any(test, feature = "test-utils"))]
+            faker_for_type::<ProgressMessage>,
         );
         registry.register(
             CompiledCodeInline::FULL_NAME,

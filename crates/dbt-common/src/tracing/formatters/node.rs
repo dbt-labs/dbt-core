@@ -6,7 +6,9 @@ use dbt_telemetry::{
 
 use super::{
     color::{BLUE, CYAN, GREEN, PLAIN, RED, YELLOW},
-    constants::{MAX_SCHEMA_DISPLAY_LEN, MIN_NODE_TYPE_WIDTH, UNIT_TEST_SCHEMA_SUFFIX},
+    constants::{
+        ACTION_WIDTH, MAX_SCHEMA_DISPLAY_LEN, MIN_NODE_TYPE_WIDTH, UNIT_TEST_SCHEMA_SUFFIX,
+    },
     duration::format_duration_fixed_width,
     phase::get_phase_action,
 };
@@ -200,9 +202,12 @@ pub fn format_node_action(
         (NodeOutcome::Unspecified, _, _) => ("Finished", &PLAIN),
     };
 
-    // Right align and pad to 10 characters
-    debug_assert!(action.len() <= 10, "Action text too long for padding");
-    let action = format!("{:>10}", action);
+    // Right align and pad to ACTION_WIDTH characters
+    debug_assert!(
+        action.len() <= ACTION_WIDTH,
+        "Action text too long for padding"
+    );
+    let action = format!("{:>width$}", action, width = ACTION_WIDTH);
 
     if !colorize {
         return action;

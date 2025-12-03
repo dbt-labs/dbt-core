@@ -5,7 +5,7 @@ use dbt_error::ErrorCode;
 use dbt_telemetry::{
     ArtifactType, ArtifactWritten, ExecutionPhase, Invocation, ListItemOutput, LogMessage,
     LogRecordInfo, NodeEvaluated, NodeEvent, NodeOutcome, NodeProcessed, NodeSkipReason, NodeType,
-    QueryExecuted, SeverityNumber, ShowDataOutput, SpanEndInfo, SpanStartInfo,
+    ProgressMessage, QueryExecuted, SeverityNumber, ShowDataOutput, SpanEndInfo, SpanStartInfo,
     TelemetryOutputFlags, TestOutcome, UserLogMessage, get_test_outcome,
 };
 use serde_json::json;
@@ -22,6 +22,7 @@ use super::super::{
             format_node_evaluated_start, format_node_outcome_as_status, format_node_processed_end,
             format_node_processed_start, get_num_failures,
         },
+        progress::format_progress_message,
         query_log::format_query_log,
     },
     layer::{ConsumerLayer, TelemetryConsumer},
@@ -830,6 +831,41 @@ impl JsonCompatLayer {
         // Now write NodeFinished event
         self.writer.writeln(value.as_str());
     }
+
+    /// Handle ProgressMessage events (debug command progress, etc.)
+    /// If dbt_core_event_code is present, map to appropriate event
+    fn emit_progress_message(&self, progress_msg: &ProgressMessage, log_record: &LogRecordInfo) {
+        // Only emit if there's a dbt_core_event_code (otherwise skip for JSON compat)
+        let Some(event_code) = progress_msg.dbt_core_event_code.as_deref() else {
+            return;
+        };
+
+        let event_name = match event_code {
+            "Z047" => "DebugCmdOut",
+            "Z048" => "DebugCmdResult",
+            _ => return, // Should not happen, skip
+        };
+
+        let msg = format_progress_message(progress_msg, log_record.severity_number, false, false);
+
+        let info_json = serde_json::to_value(self.build_core_event_info(
+            Some(event_code),
+            Some(event_name),
+            &log_record.severity_text,
+            msg.clone(),
+        ))
+        .expect("Failed to serialize core event info to JSON");
+
+        let value = json!({
+            "info": info_json,
+            "data": {
+                "msg": msg,
+            }
+        })
+        .to_string();
+
+        self.writer.writeln(value.as_str());
+    }
 }
 
 impl TelemetryConsumer for JsonCompatLayer {
@@ -893,6 +929,12 @@ impl TelemetryConsumer for JsonCompatLayer {
         // Dispatch to LogMessage handler
         if let Some(log_msg) = log_record.attributes.downcast_ref::<LogMessage>() {
             self.emit_log_message(log_msg, log_record);
+            return;
+        }
+
+        // Dispatch to ProgressMessage handler
+        if let Some(progress_msg) = log_record.attributes.downcast_ref::<ProgressMessage>() {
+            self.emit_progress_message(progress_msg, log_record);
             return;
         }
 

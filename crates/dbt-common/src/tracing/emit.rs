@@ -9,7 +9,7 @@
 use std::{panic::Location, sync::Arc};
 
 use dbt_error::{ErrorCode, FsError, fs_err};
-use dbt_telemetry::{LogMessage, TelemetryAttributes, TelemetryEventRecType};
+use dbt_telemetry::{LogMessage, ProgressMessage, TelemetryAttributes, TelemetryEventRecType};
 
 use crate::{io_args::IoArgs, io_utils::StatusReporter};
 
@@ -393,17 +393,14 @@ pub fn emit_error_log_message(
     message: impl AsRef<str>,
     status_reporter: Option<&Arc<dyn StatusReporter + 'static>>,
 ) {
+    if let Some(status_reporter) = status_reporter {
+        status_reporter.collect_error(&fs_err!(code, "{}", message.as_ref()));
+    };
+
     emit_error_event(
         LogMessage::new_from_level_and_code(code as u32, tracing::Level::ERROR),
         Some(message.as_ref()),
     );
-
-    let Some(status_reporter) = status_reporter else {
-        // No status reporter, nothing more to do
-        return;
-    };
-
-    status_reporter.collect_error(&fs_err!(code, "{}", message.as_ref()));
 }
 
 /// Emit a log message event at ERROR level based on the given FsError.
@@ -414,17 +411,14 @@ pub fn emit_error_log_from_fs_error(
     error: &FsError,
     status_reporter: Option<&Arc<dyn StatusReporter + 'static>>,
 ) {
+    if let Some(status_reporter) = status_reporter {
+        status_reporter.collect_error(error);
+    };
+
     emit_error_event(
         LogMessage::new_from_level_and_code(error.code as u32, tracing::Level::ERROR),
         Some(error.message().as_str()),
     );
-
-    let Some(status_reporter) = status_reporter else {
-        // No status reporter, nothing more to do
-        return;
-    };
-
-    status_reporter.collect_error(error);
 }
 
 /// Emit a log message event at WARN level with the given code and message.
@@ -436,17 +430,14 @@ pub fn emit_warn_log_message(
     message: impl AsRef<str>,
     status_reporter: Option<&Arc<dyn StatusReporter + 'static>>,
 ) {
+    if let Some(status_reporter) = status_reporter {
+        status_reporter.collect_warning(&fs_err!(code, "{}", message.as_ref()));
+    };
+
     emit_warn_event(
         LogMessage::new_from_level_and_code(code as u32, tracing::Level::WARN),
         Some(message.as_ref()),
     );
-
-    let Some(status_reporter) = status_reporter else {
-        // No status reporter, nothing more to do
-        return;
-    };
-
-    status_reporter.collect_warning(&fs_err!(code, "{}", message.as_ref()));
 }
 
 /// Emit a log message event at WARN level based on the given FsError.
@@ -457,17 +448,14 @@ pub fn emit_warn_log_from_fs_error(
     warning: &FsError,
     status_reporter: Option<&Arc<dyn StatusReporter + 'static>>,
 ) {
+    if let Some(status_reporter) = status_reporter {
+        status_reporter.collect_warning(warning);
+    };
+
     emit_warn_event(
         LogMessage::new_from_level_and_code(warning.code as u32, tracing::Level::WARN),
         Some(warning.message().as_str()),
     );
-
-    let Some(status_reporter) = status_reporter else {
-        // No status reporter, nothing more to do
-        return;
-    };
-
-    status_reporter.collect_warning(warning);
 }
 
 /// Emit a log message related to parsing error based on the given FsError.
@@ -584,6 +572,24 @@ pub fn emit_strict_parse_error(
     } else {
         status_reporter.collect_error(error);
     }
+}
+
+// Progress messages
+/// Emit a regular progress message at INFO level.
+#[track_caller]
+pub fn emit_info_progress_message(
+    message: ProgressMessage,
+    status_reporter: Option<&Arc<dyn StatusReporter + 'static>>,
+) {
+    if let Some(status_reporter) = status_reporter {
+        status_reporter.show_progress(
+            message.action.as_str(),
+            message.target.as_str(),
+            message.description.as_deref(),
+        );
+    };
+
+    emit_info_event(message, None)
 }
 
 /// Print a message on a separate line to stdout only. This should be used instead of `println!`.

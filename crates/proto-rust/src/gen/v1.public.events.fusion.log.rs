@@ -110,7 +110,7 @@ pub struct LogMessage {
     #[prost(string, tag = "4")]
     pub original_severity_text: ::prost::alloc::string::String,
     /// If this log message is emitted in the context of a specific node,
-    /// this field should be set to the node's unique FQN.
+    /// this field should be set to the node's unique id.
     #[prost(string, optional, tag = "5")]
     pub unique_id: ::core::option::Option<::prost::alloc::string::String>,
     /// Fusion source code file name where the log was created. Only available in debug builds.
@@ -195,6 +195,60 @@ impl ::prost::Name for UserLogMessage {
     }
     fn type_url() -> ::prost::alloc::string::String {
         "/v1.public.events.fusion.log.UserLogMessage".into()
+    }
+}
+/// A variation of a log message indicating execution progress. Unlike regular
+/// log messages, progress messages specify an action and a target, as well
+/// as optional description.
+/// Used by various commands (debug, deps, etc.) to report progress steps.
+#[cfg_attr(any(test, feature = "test-utils"), derive(::fake::Dummy))]
+#[derive(crate::macros::ProtoNew)]
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ProgressMessage {
+    /// Optional legacy dbt-core code (e.g. "Z047" for DebugCmdOut) if this event has a strict mapping to a dbt core event.
+    #[prost(string, optional, tag = "1")]
+    pub dbt_core_event_code: ::core::option::Option<::prost::alloc::string::String>,
+    /// The action being performed (e.g., "Debugging", "Loading").
+    #[prost(string, tag = "2")]
+    pub action: ::prost::alloc::string::String,
+    /// The text describing the target of the action (e.g., "project", "dependencies").
+    #[prost(string, tag = "3")]
+    pub target: ::prost::alloc::string::String,
+    /// Optional additional description providing more context.
+    #[prost(string, optional, tag = "4")]
+    pub description: ::core::option::Option<::prost::alloc::string::String>,
+    /// If this progress message is emitted in the context of a specific node,
+    /// this field should be set to the node's unique id.
+    #[prost(string, optional, tag = "5")]
+    pub unique_id: ::core::option::Option<::prost::alloc::string::String>,
+    /// Fusion source code file name where the log was created. Only available in debug builds.
+    #[prost(string, optional, tag = "6")]
+    pub file: ::core::option::Option<::prost::alloc::string::String>,
+    /// Fusion source code file line number where the log was created. Only available in debug builds.
+    #[prost(uint32, optional, tag = "7")]
+    pub line: ::core::option::Option<u32>,
+    /// Execution phase (if known) during which this log was emitted.
+    #[prost(enumeration = "super::phase::ExecutionPhase", optional, tag = "8")]
+    #[cfg_attr(
+        any(test, feature = "test-utils"),
+        dummy(
+            expr = "Some(::fake::Fake::fake::<super::phase::ExecutionPhase>(&::fake::Faker) as i32)"
+        )
+    )]
+    pub phase: ::core::option::Option<i32>,
+}
+impl crate::StaticName for ProgressMessage {
+    const FULL_NAME: &'static str = "v1.public.events.fusion.log.ProgressMessage";
+    const TYPE_URL: &'static str = "/v1.public.events.fusion.log.ProgressMessage";
+}
+impl ::prost::Name for ProgressMessage {
+    const NAME: &'static str = "ProgressMessage";
+    const PACKAGE: &'static str = "v1.public.events.fusion.log";
+    fn full_name() -> ::prost::alloc::string::String {
+        "v1.public.events.fusion.log.ProgressMessage".into()
+    }
+    fn type_url() -> ::prost::alloc::string::String {
+        "/v1.public.events.fusion.log.ProgressMessage".into()
     }
 }
 /// Event emitted when displaying inline data (e.g., from show command).
