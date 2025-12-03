@@ -489,6 +489,7 @@ tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter", "json"] }
 
 # proc macro dependencies
+prettyplease = "0.2"
 proc-macro2 = "1"
 quote = "1"
 syn = { version = "2", features = ["full"] }
