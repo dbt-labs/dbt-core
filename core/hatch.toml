@@ -31,6 +31,7 @@ include = [
 "dbt/task/docs/index.html" = "dbt/task/docs/index.html"
 
 [envs.default]
+python = "3.12"
 dependencies = [
     # Git dependencies for development against main branches
     "dbt-adapters @ git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-adapters",
