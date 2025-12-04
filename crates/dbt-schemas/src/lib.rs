@@ -79,7 +79,7 @@ pub mod schemas {
         pub mod v11;
         pub mod v12;
 
-        pub mod common;
+        pub(crate) mod common;
         pub use bigquery_partition::{
             BigqueryClusterConfig, BigqueryPartitionConfig, BigqueryPartitionConfigInner,
             GrantAccessToTarget, PartitionConfig, Range, RangeConfig, TimeConfig,
