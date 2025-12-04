@@ -79,8 +79,6 @@ dbt = "dbt.cli.main:cli"
 [tool.hatch.version]
 path = "dbt/__version__.py"
 
-[tool.hatch.build.hooks.custom]
-path = "hatch_build.py"
 
 [build-system]
 requires = ["hatchling"]

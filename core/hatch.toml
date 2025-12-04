@@ -4,6 +4,9 @@ path = "dbt/__version__.py"
 [build.targets.wheel]
 packages = ["dbt"]
 only-packages = true
+exclude = [
+    "**/*.md",
+]
 artifacts = [
     "dbt/include/**/*.py",
     "dbt/include/**/*.sql",
@@ -19,6 +22,8 @@ artifacts = [
     "dbt/artifacts/resources/v1/**/*.py",
     "dbt/artifacts/utils/**/*.py",
     "dbt/event_time/**/*.py",
+    "dbt/docs/source/**/*.py",
+    "dbt/tests/util.py",
 ]
 
 [build.targets.sdist]
