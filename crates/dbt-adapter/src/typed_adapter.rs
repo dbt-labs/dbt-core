@@ -400,10 +400,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     }
 
     /// Quote
-    fn quote(&self, state: &State, identifier: &str) -> AdapterResult<String> {
-        if let Some(replay_adapter) = self.as_replay() {
-            return replay_adapter.replay_quote(state, identifier);
-        }
+    fn quote(&self, _state: &State, identifier: &str) -> AdapterResult<String> {
         let s = match self.adapter_type() {
             AdapterType::Snowflake
             | AdapterType::Redshift
