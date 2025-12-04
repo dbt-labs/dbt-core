@@ -15,6 +15,7 @@ pub struct PreviousState {
     pub run_results: Option<RunResultsArtifact>,
     pub source_freshness_results: Option<FreshnessResultsArtifact>,
     pub state_path: PathBuf,
+    pub target_path: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -36,6 +37,14 @@ impl fmt::Display for PreviousState {
 
 impl PreviousState {
     pub fn try_new(state_path: &Path, root_project_quoting: ResolvedQuoting) -> FsResult<Self> {
+        Self::try_new_with_target_path(state_path, root_project_quoting, None)
+    }
+
+    pub fn try_new_with_target_path(
+        state_path: &Path,
+        root_project_quoting: ResolvedQuoting,
+        target_path: Option<PathBuf>,
+    ) -> FsResult<Self> {
         // Try to load manifest.json, but make it optional
         let nodes = if let Ok(manifest) =
             typed_struct_from_json_file::<DbtManifest>(&state_path.join(DBT_MANIFEST_JSON))
@@ -63,6 +72,7 @@ impl PreviousState {
             source_freshness_results: typed_struct_from_json_file(&state_path.join("sources.json"))
                 .ok(),
             state_path: state_path.to_path_buf(),
+            target_path,
         })
     }
 
