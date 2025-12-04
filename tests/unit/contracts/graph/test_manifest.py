@@ -10,7 +10,6 @@ from unittest import mock
 import freezegun
 import pytest
 
-import dbt.flags
 import dbt.version
 import dbt_common.invocation
 from dbt import tracking
@@ -1931,6 +1930,13 @@ def _source_parameter_sets():
     ids=id_nodes,
 )
 def test_resolve_source(nodes, sources, package, version, expected):
+    set_from_args(
+        Namespace(
+            SEND_ANONYMOUS_USAGE_STATS=False,
+            REQUIRE_REF_SEARCHES_NODE_PACKAGE_BEFORE_ROOT=False,
+        ),
+        None,
+    )
     manifest = make_manifest(nodes=nodes, sources=sources)
     result = manifest.resolve_source(
         target_source_name="my_source",
