@@ -753,6 +753,9 @@ pub struct SalesforceDbConfig {
     #[serde(alias = "data_space", default = "default_salesforce_database")]
     pub database: Option<String>,
     pub client_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub private_key: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub private_key_path: Option<PathBuf>,
     pub login_url: Option<String>,
     pub username: Option<String>,
