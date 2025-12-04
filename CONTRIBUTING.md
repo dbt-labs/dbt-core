@@ -203,17 +203,23 @@ hatch run code-quality
 hatch run clean
 ```
 
-Hatch manages isolated environments and dependencies automatically. To run tests across different Python versions, use the `ci` environment with a specific Python version:
+Hatch manages isolated environments and dependencies automatically. The commands above use the `default` environment which is recommended for most local development.
+
+**Using the `ci` environment (optional)**
+
+If you need to replicate exactly what runs in GitHub Actions (e.g., with coverage reporting), use the `ci` environment:
 
 ```sh
 cd core
 
-# Run unit tests with Python 3.11
-hatch run +py=3.11 ci:unit-tests
-
-# Run unit tests across all supported Python versions
+# Run unit tests with coverage
 hatch run ci:unit-tests
+
+# Run unit tests with a specific Python version
+hatch run +py=3.11 ci:unit-tests
 ```
+
+> **Note:** Most developers should use the default environment (`hatch run unit-tests`). The `ci` environment is primarily for debugging CI failures or running tests with coverage.
 
 #### `pre-commit`
 

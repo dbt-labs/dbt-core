@@ -75,7 +75,7 @@ jobs:
           hatch run code-quality
 
   unit:
-    name: unit test / python ${{ matrix.python-version }}
+    name: "unit test / python ${{ matrix.python-version }}"
 
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -159,7 +159,7 @@ jobs:
           echo "include=${INCLUDE_GROUPS}" >> $GITHUB_OUTPUT
 
   integration-postgres:
-    name: (${{ matrix.split-group }}) integration test / python ${{ matrix.python-version }} / ${{ matrix.os }}
+    name: "(${{ matrix.split-group }}) integration test / python ${{ matrix.python-version }} / ${{ matrix.os }}"
 
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30

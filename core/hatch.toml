@@ -137,6 +137,7 @@ dependencies = [
     "freezegun>=1.5.1",
     "hypothesis",
 ]
+
 pre-install-commands = [
     "pip install -r ../dev-requirements.txt",
     "pip install -e .",
@@ -149,16 +150,12 @@ DBT_TEST_USER_3 = "dbt_test_user_3"
 
 [envs.ci.scripts]
 unit-tests = "python -m pytest --cov=dbt --cov-report=xml {args} ../tests/unit"
-integration-tests = [
-    "python -m pytest --cov=dbt --cov-append --cov-report=xml {args} ../tests/functional -k \"not tests/functional/graph_selection\"",
-    "python -m pytest --cov=dbt --cov-append --cov-report=xml {args} ../tests/functional/graph_selection",
-]
+# Run as single command to avoid pre-install-commands running twice
+integration-tests = """
+python -m pytest --cov=dbt --cov-append --cov-report=xml {args} ../tests/functional -k "not tests/functional/graph_selection" && \
+python -m pytest --cov=dbt --cov-append --cov-report=xml {args} ../tests/functional/graph_selection
+"""
 
-# Matrix testing across Python versions
-[[envs.ci.matrix]]
-python = [
-    "3.10",
-    "3.11",
-    "3.12",
-    "3.13",
-]
+# Note: Python version matrix is handled by GitHub Actions CI, not hatch.
+# This avoids running tests 4x per job. The CI sets up the Python version
+# and hatch uses whatever Python is active.
