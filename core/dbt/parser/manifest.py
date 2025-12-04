@@ -1907,7 +1907,7 @@ def _process_refs(
                 scope=target_model.package_name,
             )
 
-        if not get_flags().require_ref_prefers_node_package_to_root:
+        if not get_flags().require_ref_searches_node_package_before_root:
             warn_if_package_node_depends_on_root_project_node(node, target_model, current_project)
 
         target_model_id = target_model.unique_id
