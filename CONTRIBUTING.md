@@ -114,12 +114,7 @@ cd core
 hatch run setup
 ```
 
-This will install all development dependencies and set up pre-commit hooks. Alternatively, you can install dependencies directly:
-
-```sh
-pip install -r dev-requirements.txt -r editable-requirements.txt
-pre-commit install
-```
+This will install all development dependencies and set up pre-commit hooks.
 
 When installed in this way, any changes you make to your local copy of the source code will be reflected immediately in your next `dbt` run.
 
@@ -223,7 +218,7 @@ hatch run +py=3.11 ci:unit-tests
 
 #### `pre-commit`
 
-[`pre-commit`](https://pre-commit.com) takes care of running all code-checks for formatting and linting. Run `hatch run setup` (or `pip install -r dev-requirements.txt && pre-commit install`) to install `pre-commit` in your local environment (we recommend running this command with a python virtual environment active). This installs several pip executables including black, mypy, and flake8. Once installed, hooks will run automatically on `git commit`, or you can run them manually with `hatch run code-quality`.
+[`pre-commit`](https://pre-commit.com) takes care of running all code-checks for formatting and linting. Run `hatch run setup` to install `pre-commit` in your local environment (we recommend running this command with a python virtual environment active). This installs several pip executables including black, mypy, and flake8. Once installed, hooks will run automatically on `git commit`, or you can run them manually with `hatch run code-quality`.
 
 #### `pytest`
 

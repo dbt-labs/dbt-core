@@ -32,27 +32,58 @@ include = [
 
 [envs.default]
 dependencies = [
+    # Git dependencies for development against main branches
+    "dbt-adapters @ git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-adapters",
+    "dbt-tests-adapter @ git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-tests-adapter",
+    "dbt-common @ git+https://github.com/dbt-labs/dbt-common.git@main",
+    "dbt-postgres @ git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-postgres",
+    # Code quality
     "pre-commit~=3.7.0",
+    "black>=24.3,<25.0",
+    "flake8>=6.0,<7.0",
+    "mypy>=1.9,<2.0",
+    "isort==5.13.2",
+    # Testing
     "pytest>=7.0,<8.0",
     "pytest-xdist~=3.6",
     "pytest-csv~=3.0",
+    "pytest-cov",
+    "pytest-dotenv",
+    "pytest-mock",
+    "pytest-split",
     "pytest-logbook~=1.2",
     "logbook<1.9",
-    "mypy>=1.9,<2.0",
-    "flake8>=6.0,<7.0",
-    "black>=24.3,<25.0",
+    "flaky",
+    "freezegun>=1.5.1",
+    "hypothesis",
+    "mocker",
+    # Debugging
+    "ipdb",
+    "ddtrace==2.21.3",
+    # Documentation
+    "docutils",
+    "sphinx",
+    # Type stubs
+    "types-docutils",
+    "types-PyYAML",
+    "types-Jinja2",
+    "types-jsonschema",
+    "types-mock",
+    "types-protobuf>=5.0,<6.0",
+    "types-python-dateutil",
+    "types-pytz",
+    "types-requests",
+    "types-setuptools",
+    # Other
+    "pip-tools",
+    "protobuf>=6.0,<7.0",
 ]
 
 [envs.default.scripts]
 # Setup commands
 setup = [
-    "pip install -r ../dev-requirements.txt",
     "pip install -e .",
     "pre-commit install",
-]
-dev-req = [
-    "pip install -r ../dev-requirements.txt",
-    "pip install -e .",
 ]
 
 # Code quality commands
@@ -125,6 +156,12 @@ check-sdist = [
 # CI environment - isolated environment with test dependencies
 [envs.ci]
 dependencies = [
+    # Git dependencies for development against main branches
+    "dbt-adapters @ git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-adapters",
+    "dbt-tests-adapter @ git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-tests-adapter",
+    "dbt-common @ git+https://github.com/dbt-labs/dbt-common.git@main",
+    "dbt-postgres @ git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-postgres",
+    # Testing
     "pytest>=7.0,<8.0",
     "pytest-cov",
     "pytest-xdist~=3.6",
@@ -139,7 +176,6 @@ dependencies = [
 ]
 
 pre-install-commands = [
-    "pip install -r ../dev-requirements.txt",
     "pip install -e .",
 ]
 
