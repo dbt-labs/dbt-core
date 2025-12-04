@@ -3,7 +3,7 @@ use crate::column::{Column, ColumnBuilder};
 use crate::errors::{AdapterError, AdapterErrorKind};
 use crate::funcs::{execute_macro, none_value};
 use crate::information_schema::InformationSchema;
-use crate::metadata::CatalogAndSchema;
+use crate::metadata::{self, CatalogAndSchema};
 use crate::query_ctx::query_ctx_from_state;
 use crate::record_batch_utils::{extract_first_value_as_i64, get_column_values};
 use crate::relation_object::RelationObject;
@@ -447,7 +447,21 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         database: &str,
         schema: &str,
         identifier: &str,
-    ) -> AdapterResult<Option<Arc<dyn BaseRelation>>>;
+    ) -> AdapterResult<Option<Arc<dyn BaseRelation>>> {
+        if let Some(replay_adapter) = self.as_replay() {
+            return replay_adapter
+                .replay_get_relation(state, ctx, conn, database, schema, identifier);
+        }
+        metadata::get_relation::get_relation(
+            self.as_typed_base_adapter(),
+            state,
+            ctx,
+            conn,
+            database,
+            schema,
+            identifier,
+        )
+    }
 
     /// Get a catalog relation, which in Core is a serialized type.
     /// In Fusion, we treat it as a Jinja accessible flat container of values
@@ -1490,6 +1504,16 @@ pub trait ReplayAdapter: TypedBaseAdapter {
         limit: Option<i64>,
         options: Option<HashMap<String, String>>,
     ) -> AdapterResult<(AdapterResponse, AgateTable)>;
+
+    fn replay_get_relation(
+        &self,
+        state: &State,
+        query_ctx: &QueryCtx,
+        conn: &'_ mut dyn Connection,
+        database: &str,
+        schema: &str,
+        identifier: &str,
+    ) -> AdapterResult<Option<Arc<dyn BaseRelation>>>;
 
     fn replay_quote(&self, state: &State, identifier: &str) -> AdapterResult<String>;
 

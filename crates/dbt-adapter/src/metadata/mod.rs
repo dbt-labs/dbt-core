@@ -32,6 +32,9 @@ pub mod snowflake; // XXX: temporarily pub before the refactor is complete
 // is verticalized and moved to the metadata module.
 pub use metadata_adapter::*;
 
+/// Implementation of the `get_relation` function for all adapters.
+pub(crate) mod get_relation;
+
 pub const ARROW_FIELD_COMMENT_METADATA_KEY: &str = "comment";
 // XXX: use original_type_string() instead of querying for this constant
 pub const ARROW_FIELD_ORIGINAL_TYPE_METADATA_KEY: &str = "type_text";

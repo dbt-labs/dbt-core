@@ -1,21 +1,19 @@
 use crate::adapter_engine::AdapterEngine;
 use crate::catalog_relation::CatalogRelation;
 use crate::column::Column;
-use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
+use crate::errors::AdapterResult;
 use crate::funcs::execute_macro;
 use crate::load_catalogs;
 use crate::record_batch_utils::get_column_values;
 use crate::relation_object::RelationObject;
-use crate::snowflake::relation::SnowflakeRelation;
 use crate::typed_adapter::TypedBaseAdapter;
 use crate::{AdapterTyping, metadata::*};
 
-use arrow::array::{Array as _, StringArray};
+use arrow::array::StringArray;
 use dbt_agate::AgateTable;
 use dbt_common::adapter::AdapterType;
-use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::common::{ConstraintSupport, ConstraintType};
-use dbt_schemas::schemas::relations::base::{BaseRelation, TableFormat};
+use dbt_schemas::schemas::relations::base::BaseRelation;
 use dbt_xdbc::{Connection, QueryCtx};
 use minijinja::{State, Value};
 
@@ -81,122 +79,6 @@ impl TypedBaseAdapter for SnowflakeAdapter {
         )?;
 
         Ok(())
-    }
-
-    // https://github.com/dbt-labs/dbt-adapters/blob/ace1709df001df4232a66f9d5f331a5fda4d3389/dbt-snowflake/src/dbt/include/snowflake/macros/adapters.sql#L138
-    fn get_relation(
-        &self,
-        state: &State,
-        ctx: &QueryCtx,
-        conn: &'_ mut dyn Connection,
-        database: &str,
-        schema: &str,
-        identifier: &str,
-    ) -> AdapterResult<Option<Arc<dyn BaseRelation>>> {
-        let quoted_database = if self.quoting().database {
-            self.quote(state, database)?
-        } else {
-            database.to_string()
-        };
-        let quoted_schema = if self.quoting().schema {
-            self.quote(state, schema)?
-        } else {
-            schema.to_string()
-        };
-        let quoted_identifier = if self.quoting().identifier {
-            identifier.to_string()
-        } else {
-            identifier.to_uppercase()
-        };
-        // this is a case-insenstive search
-        let sql = format!(
-            "show objects like '{quoted_identifier}' in schema {quoted_database}.{quoted_schema}"
-        );
-
-        let batch = match self.engine.execute(Some(state), conn, ctx, &sql) {
-            Ok(b) => b,
-            Err(e) => {
-                // Previous versions of this code [1] checked the prefix of the error message
-                // and looked for "002043 (02000)", but now we can compare the SQLSTATE and
-                // vendor code directly.
-                //
-                // SQLSTATE "02000" means "no data" [1].
-                // "002043" is the Snowflake code for "object does not exist or is not found".
-                //
-                // This error happens specifically when the specified DATABASE.SCHEMA does not exist.
-                // If the schema does exist, then the query succeeds and will return zero or more rows.
-                //
-                // [1] https://github.com/dbt-labs/dbt-adapters/blob/5181389e4d4e2f9649026502bb685741a1c19a8e/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L259
-                // [2] https://en.wikipedia.org/wiki/SQLSTATE
-                if e.sqlstate() == "02000" && e.vendor_code().is_some_and(|code| code == 2043) {
-                    return Ok(None);
-                } else {
-                    // Other errors should be propagated
-                    return Err(e);
-                }
-            }
-        };
-
-        // Handle case where the query succeeds, but no rows are returned.
-        // This happens when no objects are LIKE the specified identifier.
-        if batch.num_rows() == 0 {
-            return Ok(None);
-        }
-
-        let kind_column = get_column_values::<StringArray>(&batch, "kind")?;
-
-        if kind_column.len() != 1 {
-            return Err(AdapterError::new(
-                AdapterErrorKind::UnexpectedResult,
-                "Did not find expected column 'kind' in 'show objects' query result",
-            ));
-        }
-
-        // Reference: https://github.com/dbt-labs/dbt-adapters/blob/61221f455f5960daf80024febfae6d6fb4b46251/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L309
-        // TODO: We'll have to revisit this when iceberg gets implemented.
-        let is_dynamic_column = get_column_values::<StringArray>(&batch, "is_dynamic")?;
-
-        if is_dynamic_column.len() != 1 {
-            return Err(AdapterError::new(
-                AdapterErrorKind::UnexpectedResult,
-                "Did not find expected column 'is_dynamic' in 'show objects' query result",
-            ));
-        }
-        let is_dynamic = is_dynamic_column.value(0);
-
-        let relation_type_name = kind_column.value(0);
-        let relation_type = if relation_type_name.eq_ignore_ascii_case("table") {
-            Some(snowflake::relation_type_from_table_flags(is_dynamic)?)
-        } else if relation_type_name.eq_ignore_ascii_case("view") {
-            Some(RelationType::View)
-        } else {
-            None
-        };
-
-        let is_iceberg_column = get_column_values::<StringArray>(&batch, "is_iceberg")?;
-
-        if is_iceberg_column.len() != 1 {
-            return Err(AdapterError::new(
-                AdapterErrorKind::UnexpectedResult,
-                "Did not find expected column 'is_iceberg' in 'show objects' query result",
-            ));
-        }
-
-        let is_iceberg = is_iceberg_column.value(0);
-        let table_format = if try_canonicalize_bool_column_field(is_iceberg)? {
-            TableFormat::Iceberg
-        } else {
-            TableFormat::Default
-        };
-
-        Ok(Some(Arc::new(SnowflakeRelation::new(
-            Some(database.to_string()),
-            Some(schema.to_string()),
-            Some(identifier.to_string()),
-            relation_type,
-            table_format,
-            self.quoting(),
-        ))))
     }
 
     fn build_catalog_relation(&self, model: &Value) -> AdapterResult<Value> {

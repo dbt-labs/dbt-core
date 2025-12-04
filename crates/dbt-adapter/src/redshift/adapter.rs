@@ -4,12 +4,9 @@ use crate::column::Column;
 use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
 use crate::funcs::execute_macro;
 use crate::metadata::*;
-use crate::redshift::relation::RedshiftRelation;
 use crate::relation_object::RelationObject;
 use crate::typed_adapter::TypedBaseAdapter;
-use arrow::array::{Array, StringArray};
 use dbt_common::adapter::AdapterType;
-use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::common::{ConstraintSupport, ConstraintType};
 use dbt_schemas::schemas::relations::base::BaseRelation;
 use dbt_xdbc::{Connection, QueryCtx};
@@ -110,83 +107,6 @@ impl TypedBaseAdapter for RedshiftAdapter {
         }
 
         Ok(Value::from(()))
-    }
-
-    fn get_relation(
-        &self,
-        state: &State,
-        ctx: &QueryCtx,
-        conn: &mut dyn Connection,
-        database: &str,
-        schema: &str,
-        identifier: &str,
-    ) -> AdapterResult<Option<Arc<dyn BaseRelation>>> {
-        let query_schema = if self.quoting().schema {
-            schema.to_string()
-        } else {
-            schema.to_lowercase()
-        };
-
-        // determine table, view, or materialized view
-        let sql = format!(
-            "WITH materialized_views AS (
-    SELECT TRIM(name) AS object_name, 'materialized_view'::text AS object_type
-    FROM svv_mv_info
-    WHERE TRIM(schema_name) ILIKE '{query_schema}'
-        AND TRIM(name) ILIKE '{identifier}'
-),
-all_objects AS (
-    SELECT table_name AS object_name,
-        CASE 
-            WHEN table_type ILIKE 'BASE TABLE' THEN 'table'::text
-            WHEN table_type ILIKE 'VIEW' THEN 'view'::text
-            ELSE 'table'
-        END AS object_type
-    FROM svv_tables
-    WHERE table_schema ILIKE '{query_schema}'
-        AND table_name ILIKE '{identifier}'
-)
-SELECT
-    COALESCE(mv.object_name, ao.object_name) AS object_name,
-    COALESCE(mv.object_type, ao.object_type) AS object_type
-FROM all_objects ao
-LEFT JOIN materialized_views mv
-    ON ao.object_name = mv.object_name"
-        );
-
-        let batch = self.engine.execute(Some(state), conn, ctx, &sql)?;
-
-        if batch.num_rows() == 0 {
-            // If there are no rows, then we did not find the object
-            return Ok(None);
-        }
-
-        let column = batch.column_by_name("object_type").unwrap();
-        let string_array = column.as_any().downcast_ref::<StringArray>().unwrap();
-
-        if string_array.len() != 1 {
-            return Err(AdapterError::new(
-                AdapterErrorKind::UnexpectedResult,
-                "Did not find 'object_type' for a relation",
-            ));
-        }
-
-        let relation_type_name = string_array.value(0).to_lowercase();
-        let relation_type = match relation_type_name.as_str() {
-            "table" => Some(RelationType::Table),
-            "view" => Some(RelationType::View),
-            "materialized_view" => Some(RelationType::MaterializedView),
-            _ => None,
-        };
-
-        Ok(Some(Arc::new(RedshiftRelation::new(
-            Some(database.to_string()),
-            Some(schema.to_string()),
-            Some(identifier.to_string()),
-            relation_type,
-            None,
-            self.quoting(),
-        ))))
     }
 
     fn get_columns_in_relation(

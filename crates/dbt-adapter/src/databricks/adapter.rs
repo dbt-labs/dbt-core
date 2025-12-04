@@ -1,6 +1,3 @@
-use crate::databricks::describe_table::DatabricksTableMetadata;
-use crate::databricks::version::DbrVersion;
-
 use crate::databricks::relation_configs::base::{
     DatabricksRelationConfigBase, DatabricksRelationConfigBaseObject,
 };
@@ -13,8 +10,7 @@ use crate::databricks::relation_configs::view::ViewConfig;
 use crate::adapter_engine::AdapterEngine;
 use crate::catalog_relation::CatalogRelation;
 use crate::column::Column;
-use crate::databricks::relation::DatabricksRelation;
-use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
+use crate::errors::AdapterResult;
 use crate::funcs::execute_macro_wrapper_with_package;
 use crate::load_catalogs;
 use crate::metadata::*;
@@ -26,6 +22,7 @@ use crate::{AdapterType, AdapterTyping};
 use arrow::array::{Array, StringArray};
 use dbt_agate::AgateTable;
 
+use dbt_common::{AdapterError, AdapterErrorKind};
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::common::{ConstraintSupport, ConstraintType, DbtMaterialization};
 use dbt_schemas::schemas::project::ModelConfig;
@@ -43,6 +40,8 @@ use std::fmt;
 use std::ops::DerefMut;
 use std::sync::Arc;
 use std::sync::OnceLock;
+
+use super::version::DbrVersion;
 
 static CREDENTIAL_IN_COPY_INTO_REGEX: Lazy<Regex> = Lazy::new(|| {
     // This is NOT the same as the Python regex used in dbt-databricks. Rust lacks lookaround.
@@ -174,82 +173,6 @@ impl TypedBaseAdapter for DatabricksAdapter {
             "dbt_spark".to_string(),
             "spark__check_schema_exists".to_string(),
         ))
-    }
-
-    fn get_relation(
-        &self,
-        state: &State,
-        ctx: &QueryCtx,
-        conn: &mut dyn Connection,
-        database: &str,
-        schema: &str,
-        identifier: &str,
-    ) -> AdapterResult<Option<Arc<dyn BaseRelation>>> {
-        // though _needs_information is used in dbt to decide if this may be related from relations cache
-        // since we don't implement relations cache, it's ignored for now
-        // see https://github.com/databricks/dbt-databricks/blob/822b105b15e644676d9e1f47cbfd765cd4c1541f/dbt/adapters/databricks/impl.py#L418
-
-        let query_catalog = if self.quoting().database {
-            self.quote(state, database)?
-        } else {
-            database.to_string()
-        };
-        let query_schema = if self.quoting().schema {
-            self.quote(state, schema)?
-        } else {
-            schema.to_string()
-        };
-        let query_identifier = if self.quoting().identifier {
-            self.quote(state, identifier)?
-        } else {
-            identifier.to_string()
-        };
-
-        // this deviates from what the existing dbt-adapter impl - here `AS JSON` is used
-        // and a critical reason is `DESCRIBE TABLE EXTENDED` returns different results
-        // for example, when database is set to the default `hive_metastore` it misses 'Provider' and 'Type' rows
-        // and we don't need to parse through rows, see reference https://github.com/databricks/dbt-databricks/blob/822b105b15e644676d9e1f47cbfd765cd4c1541f/dbt/adapters/databricks/impl.py#L433
-        //
-        // But this will lead to differences the metadata field
-        // more details see docs from DatabricksDescribeTableExtended::to_metadata
-        // WARNING: system tables from DBX only supports the basic "DESCRIBE TABLE"
-        // though I assume it's highly unlikely and unfathomable a user would want to call adapter.get_relation on a system table
-        let sql = format!(
-            "DESCRIBE TABLE EXTENDED {query_catalog}.{query_schema}.{query_identifier} AS JSON"
-        );
-
-        let batch = self.engine.execute(Some(state), conn, ctx, &sql);
-        if let Err(e) = &batch
-            && (e.to_string().contains("cannot be found")
-                || e.to_string().contains("TABLE_OR_VIEW_NOT_FOUND"))
-        {
-            return Ok(None);
-        }
-        let batch = batch?;
-        if batch.num_rows() == 0 {
-            return Ok(None);
-        }
-        debug_assert_eq!(batch.num_rows(), 1);
-
-        let json_metadata = DatabricksTableMetadata::from_record_batch(Arc::new(batch))?;
-        let is_delta = json_metadata.provider.as_deref() == Some("delta");
-        let relation_type = match json_metadata.type_.as_str() {
-            "VIEW" => Some(RelationType::View),
-            "MATERIALIZED_VIEW" => Some(RelationType::MaterializedView),
-            "STREAMING_TABLE" => Some(RelationType::StreamingTable),
-            _ => Some(RelationType::Table),
-        };
-
-        Ok(Some(Arc::new(DatabricksRelation::new(
-            Some(database.to_string()),
-            Some(schema.to_string()),
-            Some(identifier.to_string()),
-            relation_type,
-            None,
-            self.quoting(),
-            Some(json_metadata.into_metadata()),
-            is_delta,
-        ))))
     }
 
     /// Databricks inherits the implementation from the Spark adapter.

@@ -1,6 +1,5 @@
 use crate::adapter_engine::AdapterEngine;
 use crate::base_adapter::{AdapterType, AdapterTyping};
-use crate::bigquery::relation::BigqueryRelation;
 use crate::bigquery::relation_config::BigqueryMaterializedViewConfigObject;
 use crate::bigquery::relation_config::{
     BigqueryMaterializedViewConfig, BigqueryPartitionConfigExt, cluster_by_from_schema,
@@ -330,80 +329,6 @@ impl TypedBaseAdapter for BigqueryAdapter {
             AdapterErrorKind::NotSupported,
             "bigquery.truncate_relation",
         ))
-    }
-
-    fn get_relation(
-        &self,
-        state: &State,
-        ctx: &QueryCtx,
-        conn: &'_ mut dyn Connection,
-        database: &str,
-        schema: &str,
-        identifier: &str,
-    ) -> AdapterResult<Option<Arc<dyn BaseRelation>>> {
-        let query_database = if self.quoting().database {
-            self.quote(state, database)?
-        } else {
-            database.to_string()
-        };
-        let query_schema = if self.quoting().schema {
-            self.quote(state, schema)?
-        } else {
-            schema.to_string()
-        };
-
-        let query_identifier = if self.quoting().identifier {
-            identifier.to_string()
-        } else {
-            identifier.to_lowercase()
-        };
-
-        let sql = format!(
-            "SELECT table_catalog,
-                    table_schema,
-                    table_name,
-                    table_type
-                FROM {query_database}.{query_schema}.INFORMATION_SCHEMA.TABLES
-                WHERE table_name = '{query_identifier}';",
-        );
-
-        let result = self.engine.execute(Some(state), conn, ctx, &sql);
-        let batch = match result {
-            Ok(batch) => batch,
-            Err(err) => {
-                let err_msg = err.to_string();
-                if err_msg.contains("Dataset") && err_msg.contains("was not found") {
-                    return Ok(None);
-                } else {
-                    return Err(err);
-                }
-            }
-        };
-
-        if batch.num_rows() == 0 {
-            // If there are no rows, then we did not find the object
-            return Ok(None);
-        }
-
-        let column = batch.column_by_name("table_type").unwrap();
-        let string_array = column.as_any().downcast_ref::<StringArray>().unwrap();
-
-        let relation_type_name = string_array.value(0).to_uppercase();
-        let relation_type =
-            RelationType::from_adapter_type(AdapterType::Bigquery, &relation_type_name);
-
-        let mut relation = BigqueryRelation::new(
-            Some(database.to_string()),
-            Some(schema.to_string()),
-            Some(identifier.to_string()),
-            Some(relation_type),
-            None,
-            self.quoting(),
-        );
-        let relation_value = Value::from_object(RelationObject::new(Arc::new(relation.clone())));
-        let location = self.get_dataset_location(state, conn, relation_value)?;
-        relation.location = location;
-        Ok(Some(Arc::new(relation)))
     }
 
     /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L246-L255

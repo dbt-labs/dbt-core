@@ -4,11 +4,8 @@ use crate::column::Column;
 use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
 use crate::funcs::execute_macro;
 use crate::metadata::*;
-use crate::postgres::relation::PostgresRelation;
 use crate::relation_object::RelationObject;
 use crate::typed_adapter::TypedBaseAdapter;
-use arrow::array::{Array, StringArray};
-use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::common::{ConstraintSupport, ConstraintType};
 use dbt_schemas::schemas::relations::base::BaseRelation;
 use dbt_xdbc::{Connection, QueryCtx};
@@ -90,79 +87,6 @@ impl TypedBaseAdapter for PostgresAdapter {
             "get_columns_in_relation",
         )?;
         Ok(Column::vec_from_jinja_value(AdapterType::Postgres, result)?)
-    }
-
-    // reference: https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-postgres/src/dbt/include/postgres/macros/adapters.sql#L85
-    fn get_relation(
-        &self,
-        state: &State,
-        ctx: &QueryCtx,
-        conn: &'_ mut dyn Connection,
-        database: &str,
-        schema: &str,
-        identifier: &str,
-    ) -> AdapterResult<Option<Arc<dyn BaseRelation>>> {
-        let query_schema = if self.quoting().schema {
-            schema.to_string()
-        } else {
-            schema.to_lowercase()
-        };
-
-        let query_identifier = if self.quoting().identifier {
-            identifier.to_string()
-        } else {
-            identifier.to_lowercase()
-        };
-
-        let sql = format!(
-            r#"
-            select 'table' as type
-            from pg_tables
-            where schemaname = '{query_schema}'
-              and tablename = '{query_identifier}'
-            union all
-            select 'view' as type
-            from pg_views
-            where schemaname = '{query_schema}'
-              and viewname = '{query_identifier}'
-            union all
-            select 'materialized_view' as type
-            from pg_matviews
-            where schemaname = '{query_schema}'
-              and matviewname = '{query_identifier}'
-            "#,
-        );
-
-        let batch = self.engine.execute(Some(state), conn, ctx, &sql)?;
-        if batch.num_rows() == 0 {
-            return Ok(None);
-        }
-
-        let column = batch.column_by_name("type").unwrap();
-        let string_array = column.as_any().downcast_ref::<StringArray>().unwrap();
-
-        if string_array.len() != 1 {
-            return Err(AdapterError::new(
-                AdapterErrorKind::UnexpectedResult,
-                "Did not find 'type' for a relation",
-            ));
-        }
-
-        let relation_type = match string_array.value(0) {
-            "table" => Some(RelationType::Table),
-            "view" => Some(RelationType::View),
-            "materialized_view" => Some(RelationType::MaterializedView),
-            _ => return invalid_value!("Unsupported relation type {}", string_array.value(0)),
-        };
-
-        let relation = PostgresRelation::try_new(
-            Some(database.to_string()),
-            Some(schema.to_string()),
-            Some(identifier.to_string()),
-            relation_type,
-            self.quoting(),
-        )?;
-        Ok(Some(Arc::new(relation)))
     }
 
     fn verify_database(&self, database: String) -> AdapterResult<Value> {
