@@ -97,15 +97,17 @@ jobs:
       - name: "Check if using hatch"
         id: use_hatch
         run: |
-          # Extract major.minor from versions like 1.11.0a1 -> 1.11
-          INPUT_MAJ_MIN=$(echo "${{ inputs.version_number }}" | sed -E 's/^([0-9]+\.[0-9]+).*/\1/')
-          HATCH_MAJ_MIN=$(echo "${{ env.MIN_HATCH_VERSION }}" | sed -E 's/^([0-9]+\.[0-9]+).*/\1/')
+          # # Extract major.minor from versions like 1.11.0a1 -> 1.11
+          # INPUT_MAJ_MIN=$(echo "${{ inputs.version_number }}" | sed -E 's/^([0-9]+\.[0-9]+).*/\1/')
+          # HATCH_MAJ_MIN=$(echo "${{ env.MIN_HATCH_VERSION }}" | sed -E 's/^([0-9]+\.[0-9]+).*/\1/')
 
-          if [ $(echo "$INPUT_MAJ_MIN >= $HATCH_MAJ_MIN" | bc) -eq 1 ]; then
-            echo "use_hatch=true" >> $GITHUB_OUTPUT
-          else
-            echo "use_hatch=false" >> $GITHUB_OUTPUT
-          fi
+          # if [ $(echo "$INPUT_MAJ_MIN >= $HATCH_MAJ_MIN" | bc) -eq 1 ]; then
+          #   echo "use_hatch=true" >> $GITHUB_OUTPUT
+          # else
+          #   echo "use_hatch=false" >> $GITHUB_OUTPUT
+          # fi
+          # to force it to use setuptools for testing purposes
+          echo "use_hatch=false" >> $GITHUB_OUTPUT
 
       - name: "Notify if using hatch"
         run: |
