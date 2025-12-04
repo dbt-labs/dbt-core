@@ -11,7 +11,7 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         &str, // version
     ),
     &str, // checksum
-); 105] = [
+); 110] = [
     (
         ("bigquery", "apple-darwin", "aarch64", "0.18.0+dbt0.0.22"),
         "f6ebd9d429807722aa2c42822a0e5dc957914f91705dabd1c18113ce0aa13af3",
@@ -141,12 +141,20 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "ef8be74d82fd90855edcc484ff210567b499d999efa7dfde9bff6e61fe0cef43",
     ),
     (
+        ("duckdb", "apple-darwin", "aarch64", "0.21.0+dbt0.0.3"),
+        "297c14a63c51f83b939aecd796bdc860e5e8183051c65330be517825b63c95c7",
+    ),
+    (
         ("duckdb", "apple-darwin", "x86_64", "0.18.0+dbt0.0.1"),
         "9ff40bb5a6c6657599faaeb47ac938f21ceb572e9e8d488c08e8ffe32647d766",
     ),
     (
         ("duckdb", "apple-darwin", "x86_64", "0.21.0+dbt0.0.2"),
         "570387713a9788bf11c4aed7f7949d76414306c56d3984be8ed0a9a76af82b5b",
+    ),
+    (
+        ("duckdb", "apple-darwin", "x86_64", "0.21.0+dbt0.0.3"),
+        "6baabcf6e9ddb7c692172f2c587690c62ea3a71e6b6eb75dc66cb7af78bbd8f9",
     ),
     (
         ("duckdb", "manylinux_2_17-linux-gnu", "aarch64", "0.18.0+dbt0.0.1"),
@@ -157,6 +165,10 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "acef6dd1195d85ee05286b3b87d9863b02926f4b4a59deda84de8d625d96ff34",
     ),
     (
+        ("duckdb", "manylinux_2_17-linux-gnu", "aarch64", "0.21.0+dbt0.0.3"),
+        "8f8dd23b54b6f22c233d1071f87179c2cfe0b44d18847ed749d59b315fd9e345",
+    ),
+    (
         ("duckdb", "manylinux_2_17-linux-gnu", "x86_64", "0.18.0+dbt0.0.1"),
         "912b5c737963c7023891afc59b3ae47c73641197062316a83a2733e4275b85d5",
     ),
@@ -165,12 +177,20 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "872407a0cd10870cc70871f5bf6d92e5666ac6d4c83b143d8223ff0a1c1b4f47",
     ),
     (
+        ("duckdb", "manylinux_2_17-linux-gnu", "x86_64", "0.21.0+dbt0.0.3"),
+        "b6021038c9100cb1f61b3c325e98a6b4308682f3332b33fbf2400aeb8628a4ab",
+    ),
+    (
         ("duckdb", "pc-windows-msvc", "x86_64", "0.18.0+dbt0.0.1"),
         "acb8bbc8f477a072991345fe0ab0ee36b561e7668bdbf5b900189a35dd021888",
     ),
     (
         ("duckdb", "pc-windows-msvc", "x86_64", "0.21.0+dbt0.0.2"),
         "ed9b97311a5da6c9a81c2675e85a2fbe73d4e9ef392da16c0ce71b70e947146b",
+    ),
+    (
+        ("duckdb", "pc-windows-msvc", "x86_64", "0.21.0+dbt0.0.3"),
+        "ac016fe6a26f3758a2eb9203c45957264f4f34dc182c148b024da2cbab324a6f",
     ),
     (
         ("postgresql", "apple-darwin", "aarch64", "0.18.0+dbt0.0.3"),
