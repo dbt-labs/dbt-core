@@ -56,6 +56,7 @@ from dbt.parser.schemas import (
 )
 from dbt.parser.search import FileBlock
 from dbt.parser.sources import SourcePatcher
+from dbt.tests.util import safe_set_invocation_context
 from tests.unit.utils import (
     MockNode,
     config_from_parts_or_dicts,
@@ -112,6 +113,8 @@ class BaseParserTest(unittest.TestCase):
             ),
             None,
         )
+
+        safe_set_invocation_context()
         # HACK: this is needed since tracking events can
         # be sent when using the model parser
         tracking.do_not_track()
@@ -1232,6 +1235,15 @@ def model(dbt, session):
 class ModelParserTest(BaseParserTest):
     def setUp(self):
         super().setUp()
+        set_from_args(
+            Namespace(
+                warn_error=False,
+                state_modified_compare_more_unrendered_values=False,
+                require_generic_test_arguments_property=False,
+            ),
+            None,
+        )
+
         self.parser = ModelParser(
             project=self.snowplow_project_config,
             manifest=self.manifest,
