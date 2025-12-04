@@ -9,6 +9,8 @@ pub fn compare_sql(actual: &str, expected: &str) -> AdapterResult<()> {
     let expected = canonicalize_query_tag(expected);
     let actual = canonicalize_uuid_literals(&actual);
     let expected = canonicalize_uuid_literals(&expected);
+    let actual = canonicalize_elementary_tmp_suffix(&actual);
+    let expected = canonicalize_elementary_tmp_suffix(&expected);
 
     // Heuristic: treat queries as equal if they only differ by a top-level
     // "select * from ( ... )" wrapper and benign CTE boundary syntax.
@@ -76,6 +78,19 @@ fn canonicalize_uuid_literals(sql: &str) -> String {
         Regex::new(r"(?i)'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'").unwrap()
     });
     UUID_RE.replace_all(sql, "'UUID'").to_string()
+}
+
+/// Replace dynamic tmp suffixes produced by some packages (e.g., elementary) that append
+/// utc.now()-like timestamps to temporary table names, such as:
+///   dbt_sources__tmp_20251203160139043240  ->  dbt_sources__tmp_TIMESTAMP
+fn canonicalize_elementary_tmp_suffix(sql: &str) -> String {
+    // Case-insensitive; match "__tmp_" followed by a long digit run (timestamps/unique suffixes)
+    // Scope it to a plausible leading year 2000-2100 to avoid over-matching.
+    // Example matched: "__tmp_20251203160139043240"
+    static RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
+        Regex::new(r"(?i)(__tmp_)(?:20[0-9]{2}|2100)\d{8,}").unwrap()
+    });
+    RE.replace_all(sql, "${1}TIMESTAMP").to_string()
 }
 
 /// Check whether two SQL strings are identical modulo a top-level
@@ -1010,6 +1025,37 @@ from base
         assert!(
             result.is_ok(),
             "Wrapper-only difference with identical body should be ignored"
+        );
+    }
+
+    #[test]
+    fn test_compare_sql_elementary_tmp_suffix_ignored() {
+        let actual = r#"
+create or replace temporary table iamcurious_db.iamcurious_production_models_elementary.dbt_sources__tmp_20251203160139043240
+as (
+
+    SELECT
+        *
+    FROM iamcurious_db.iamcurious_production_models_elementary.dbt_sources
+    WHERE 1 = 0
+)
+;
+"#;
+        let expected = r#"
+create or replace temporary table iamcurious_db.iamcurious_production_models_elementary.dbt_sources__tmp_20240102030405060708
+as (
+
+    SELECT
+        *
+    FROM iamcurious_db.iamcurious_production_models_elementary.dbt_sources
+    WHERE 1 = 0
+)
+;
+"#;
+        let result = compare_sql(actual, expected);
+        assert!(
+            result.is_ok(),
+            "Dynamic tmp suffixes starting with a plausible year should be ignored"
         );
     }
 }
