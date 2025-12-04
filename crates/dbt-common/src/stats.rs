@@ -1,6 +1,8 @@
 use chrono::{DateTime, Local};
 use dbt_telemetry::NodeOutcome;
+use std::collections::hash_map::DefaultHasher;
 use std::fmt;
+use std::hash::{Hash, Hasher};
 use std::time::{Duration, SystemTime};
 use strum_macros::EnumString;
 
@@ -82,18 +84,22 @@ impl Stat {
         message: Option<String>,
     ) -> Self {
         let end_time = SystemTime::now();
+
+        // Hash the thread ID to get a stable u64 representation
+        let thread_id_hash = {
+            let id = std::thread::current().id();
+            let mut hasher = DefaultHasher::new();
+            id.hash(&mut hasher);
+            hasher.finish()
+        };
+
         Stat {
             unique_id,
             num_rows,
             start_time,
             end_time,
             status,
-            thread_id: format!(
-                "Thread-{}",
-                format!("{:?}", std::thread::current().id())
-                    .trim_start_matches("ThreadId(")
-                    .trim_end_matches(")")
-            ),
+            thread_id: format!("Thread-{}", thread_id_hash),
             message,
         }
     }
@@ -154,5 +160,36 @@ impl Stat {
             NodeStatus::ReusedStillFreshNoChanges(_) => "reused".to_string(),
             NodeStatus::NoOp => "skipped".to_string(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_thread_id_format() {
+        let stat = Stat::new(
+            "test.model".to_string(),
+            SystemTime::now(),
+            None,
+            NodeStatus::Succeeded,
+            None,
+        );
+
+        // Thread ID should be in format "Thread-<number>"
+        assert!(
+            stat.thread_id.starts_with("Thread-"),
+            "thread_id should start with 'Thread-', got: {}",
+            stat.thread_id
+        );
+
+        // Extract the number part and verify it's a valid number
+        let number_part = stat.thread_id.trim_start_matches("Thread-");
+        assert!(
+            number_part.parse::<u64>().is_ok(),
+            "thread_id should end with a number, got: {}",
+            stat.thread_id
+        );
     }
 }
