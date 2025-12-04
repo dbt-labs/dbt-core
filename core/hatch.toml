@@ -15,10 +15,11 @@ artifacts = [
     "dbt/task/docs/**/*.html",
     "dbt/jsonschemas/**/*.json",
     "dbt/py.typed",
+    # Directories without __init__.py (namespace packages)
+    "dbt/artifacts/resources/v1/**/*.py",
+    "dbt/artifacts/utils/**/*.py",
+    "dbt/event_time/**/*.py",
 ]
-
-[build.targets.wheel.force-include]
-"../LICENSE" = "LICENSE"
 
 [build.targets.sdist]
 include = [
@@ -27,11 +28,12 @@ include = [
 ]
 
 [build.targets.sdist.force-include]
-"../LICENSE" = "LICENSE"
 "dbt/task/docs/index.html" = "dbt/task/docs/index.html"
 
 [envs.default]
-python = "3.12"
+# Python 3.10-3.11 required locally due to flake8==4.0.1 compatibility
+# CI uses [envs.ci] which doesn't set python, allowing matrix testing
+python = "3.11"
 dependencies = [
     # Git dependencies for development against main branches
     "dbt-adapters @ git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-adapters",
@@ -41,8 +43,8 @@ dependencies = [
     # Code quality
     "pre-commit~=3.7.0",
     "black>=24.3,<25.0",
-    "flake8>=6.0,<7.0",
-    "mypy>=1.9,<2.0",
+    "flake8==4.0.1",  # requires python <3.12
+    "mypy==1.4.1",  # update requires code fixes
     "isort==5.13.2",
     # Testing
     "pytest>=7.0,<8.0",
@@ -129,6 +131,7 @@ clean = [
 json-schema = "python ../scripts/collect-artifact-schema.py --path ../schemas"
 
 [envs.build]
+python = "3.11"
 detached = true
 dependencies = [
     "wheel",

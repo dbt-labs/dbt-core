@@ -116,6 +116,15 @@ hatch run setup
 
 This will install all development dependencies and set up pre-commit hooks.
 
+By default, hatch will use whatever Python version is active in your environment. To specify a particular Python version, set the `HATCH_PYTHON` environment variable:
+
+```sh
+export HATCH_PYTHON=3.12
+hatch env create
+```
+
+Or add it to your shell profile (e.g., `~/.zshrc` or `~/.bashrc`) for persistence.
+
 When installed in this way, any changes you make to your local copy of the source code will be reflected immediately in your next `dbt` run.
 
 #### Building dbt-core
