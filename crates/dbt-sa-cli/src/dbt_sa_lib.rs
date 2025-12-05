@@ -24,7 +24,9 @@ use dbt_common::{
 };
 
 use dbt_schemas::schemas::Nodes;
-use dbt_schemas::state::Macros;
+use dbt_schemas::state::{
+    GetColumnsInRelationCalls, GetRelationCalls, Macros, PatternedDanglingSources,
+};
 #[allow(unused_imports)]
 use git_version::git_version;
 
@@ -237,6 +239,9 @@ async fn execute_all_phases(
         Arc::new(dbt_state),
         Macros::default(),
         Nodes::default(),
+        GetRelationCalls::default(),
+        GetColumnsInRelationCalls::default(),
+        PatternedDanglingSources::default(),
         token,
         Arc::new(DefaultJinjaTypeCheckEventListenerFactory::default()), // TODO: use option<>
     )

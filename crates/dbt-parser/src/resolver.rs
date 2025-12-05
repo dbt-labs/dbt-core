@@ -24,7 +24,10 @@ use dbt_schemas::schemas::properties::{MetricsProperties, ModelProperties};
 use dbt_schemas::schemas::{InternalDbtNode, Nodes};
 
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
-use dbt_schemas::state::{DbtPackage, GenericTestAsset, Macros, RenderResults};
+use dbt_schemas::state::{
+    DbtPackage, GenericTestAsset, GetColumnsInRelationCalls, GetRelationCalls, Macros,
+    PatternedDanglingSources, RenderResults,
+};
 use dbt_schemas::state::{DbtRuntimeConfig, Operations};
 use tracing::Instrument as _;
 
@@ -75,21 +78,27 @@ use dbt_serde_yaml::Value as YmlValue;
         _e = ?store_event_attributes(PhaseExecuted::start_general(ExecutionPhase::Parse)),
     )
 )]
+#[allow(clippy::too_many_arguments)]
 pub async fn resolve(
     arg: &ResolveArgs,
     invocation_args: &InvocationArgs,
     dbt_state: Arc<DbtState>,
     macros: Macros,
     nodes: Nodes,
+    get_relation_calls: GetRelationCalls,
+    get_columns_in_relation_calls: GetColumnsInRelationCalls,
+    patterned_dangling_sources: PatternedDanglingSources,
     token: &CancellationToken,
     jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
 ) -> FsResult<(ResolverState, Arc<JinjaEnv>)> {
     // Get the root project name
     let root_project_name = dbt_state.root_project_name();
 
-    // let mut macros = Macros::default();
     let mut macros = macros;
     let mut nodes = nodes;
+    let mut get_relation_calls = get_relation_calls;
+    let mut get_columns_in_relation_calls = get_columns_in_relation_calls;
+    let mut patterned_dangling_sources = patterned_dangling_sources;
 
     // First, resolve all of the macros from each package
     for package in &dbt_state.packages {
@@ -247,8 +256,14 @@ pub async fn resolve(
     let parse_adapter = jinja_env
         .get_parse_adapter()
         .expect("parse adapter must be initialized");
-    let (get_relation_calls, get_columns_in_relation_calls, patterned_dangling_sources) =
-        parse_adapter.relations_to_fetch();
+    let (
+        get_relation_calls_from_parse,
+        get_columns_in_relation_calls_from_parse,
+        patterned_dangling_sources_from_parse,
+    ) = parse_adapter.relations_to_fetch();
+    get_relation_calls.extend(get_relation_calls_from_parse?);
+    get_columns_in_relation_calls.extend(get_columns_in_relation_calls_from_parse?);
+    patterned_dangling_sources.extend(patterned_dangling_sources_from_parse);
 
     let root_runtime_config = all_runtime_configs
         .get(dbt_state.root_project_name())
@@ -309,8 +324,8 @@ pub async fn resolve(
             run_started_at: dbt_state.run_started_at,
             nodes_with_resolution_errors,
             node_resolver: Arc::new(node_resolver),
-            get_relation_calls: get_relation_calls?,
-            get_columns_in_relation_calls: get_columns_in_relation_calls?,
+            get_relation_calls,
+            get_columns_in_relation_calls,
             patterned_dangling_sources,
             runtime_config: root_runtime_config.clone(),
             manifest_selectors,

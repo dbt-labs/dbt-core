@@ -480,15 +480,6 @@ impl ResolverState {
         }
         reverse_deps
     }
-
-    pub fn to_resolved_nodes(&self) -> ResolvedNodes {
-        ResolvedNodes {
-            nodes: self.nodes.clone(),
-            disabled_nodes: self.disabled_nodes.clone(),
-            macros: self.macros.clone(),
-            operations: self.operations.clone(),
-        }
-    }
 }
 
 impl fmt::Display for ResolverState {
@@ -604,6 +595,18 @@ pub struct CacheState {
     pub unimpacted_resolved_nodes: ResolvedNodes,
     /// Only the unimpacted node statuses from file changes.
     pub unimpacted_node_statuses: HashMap<String, NodeStatus>,
+    /// Only the unimpacted relation calls from file changes.
+    /// Only needed for incremental compile.
+    /// This can be empty for the build cache.
+    pub unimpacted_get_relation_calls: GetRelationCalls,
+    /// Only the unimpacted columns in relation calls from file changes.
+    /// Only needed for incremental compile.
+    /// This can be empty for the build cache.
+    pub unimpacted_get_columns_in_relation_calls: GetColumnsInRelationCalls,
+    /// Only the unimpacted dangling sources from file changes.
+    /// Only needed for incremental compile.
+    /// This can be empty for the build cache.
+    pub unimpacted_patterned_dangling_sources: PatternedDanglingSources,
     /// The unchanged nodes, by unique id, based on file changes.
     /// This does not mean that these nodes are "unimpacted",
     /// it just means their correpsonding file was not changed.
