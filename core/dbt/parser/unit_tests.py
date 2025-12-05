@@ -290,9 +290,10 @@ class UnitTestParser(YamlReader):
             )
 
             if tested_model_node:
-                unit_test_definition.depends_on.nodes.append(tested_model_node.unique_id)
-                unit_test_definition.schema = tested_model_node.schema
-                if not tested_model_node.config.enabled:
+                if tested_model_node.config.enabled:
+                    unit_test_definition.depends_on.nodes.append(tested_model_node.unique_id)
+                    unit_test_definition.schema = tested_model_node.schema
+                else:
                     unit_test_definition.config.enabled = False
 
             # Check that format and type of rows matches for each given input,
