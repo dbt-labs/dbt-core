@@ -348,9 +348,12 @@ impl BaseAdapter for BridgeAdapter {
     #[tracing::instrument(skip_all, level = "trace")]
     fn render_raw_model_constraints(
         &self,
-        _state: &State,
+        state: &State,
         raw_constraints: &[ModelConstraint],
     ) -> Result<Value, MinijinjaError> {
+        if let Some(replay_adapter) = self.typed_adapter.as_replay() {
+            return replay_adapter.replay_render_raw_model_constraints(state, raw_constraints);
+        }
         let mut result = vec![];
         for constraint in raw_constraints {
             let rendered = render_model_constraint(self.adapter_type(), constraint.clone());
@@ -364,7 +367,7 @@ impl BaseAdapter for BridgeAdapter {
     #[tracing::instrument(skip_all, level = "trace")]
     fn render_raw_columns_constraints(
         &self,
-        _state: &State,
+        state: &State,
         args: &[Value],
     ) -> Result<Value, MinijinjaError> {
         let mut parser = ArgParser::new(args, None);
@@ -377,6 +380,11 @@ impl BaseAdapter for BridgeAdapter {
             MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
         })?;
 
+        if let Some(replay_adapter) = self.typed_adapter.as_replay() {
+            return Ok(Value::from(
+                replay_adapter.replay_render_raw_columns_constraints(state, columns)?,
+            ));
+        }
         let result = self.typed_adapter.render_raw_columns_constraints(columns)?;
 
         Ok(Value::from(result))

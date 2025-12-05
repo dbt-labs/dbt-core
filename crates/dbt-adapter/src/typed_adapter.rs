@@ -27,6 +27,7 @@ use dbt_schemas::schemas::common::DbtIncrementalStrategy;
 use dbt_schemas::schemas::dbt_column::{DbtColumn, DbtColumnRef};
 use dbt_schemas::schemas::manifest::{BigqueryClusterConfig, BigqueryPartitionConfig};
 use dbt_schemas::schemas::project::ModelConfig;
+use dbt_schemas::schemas::properties::ModelConstraint;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
 use dbt_schemas::schemas::relations::relation_configs::BaseRelationConfig;
 use dbt_schemas::schemas::{CommonAttributes, InternalDbtNodeAttributes, InternalDbtNodeWrapper};
@@ -1535,5 +1536,17 @@ pub trait ReplayAdapter: TypedBaseAdapter {
         state: &State,
         relation: Arc<dyn BaseRelation>,
         cache_result: Option<Vec<Column>>,
+    ) -> Result<Value, minijinja::Error>;
+
+    fn replay_render_raw_columns_constraints(
+        &self,
+        _state: &State,
+        _columns_map: IndexMap<String, DbtColumn>,
+    ) -> AdapterResult<Vec<String>>;
+
+    fn replay_render_raw_model_constraints(
+        &self,
+        _state: &State,
+        _raw_constraints: &[ModelConstraint],
     ) -> Result<Value, minijinja::Error>;
 }
