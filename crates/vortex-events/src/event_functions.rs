@@ -5,10 +5,7 @@ use dbt_common::{
 };
 use dbt_env::env::InternalEnv;
 use dbt_jinja_utils::invocation_args::InvocationArgs;
-use dbt_schemas::schemas::{
-    InternalDbtNodeAttributes,
-    manifest::{DbtManifest, DbtNode},
-};
+use dbt_schemas::{schemas::InternalDbtNodeAttributes, state::ResolverState};
 use proto_rust::v1::public::events::fusion::{
     AdapterInfo, AdapterInfoV2, Invocation, InvocationEnv, PackageInstall, ResourceCounts, RunModel,
 };
@@ -301,32 +298,22 @@ pub fn package_install_event(invocation_id: String, name: String, version: Strin
 }
 
 /// dbt-core core/dbt/compilation.py::print_compile_stats, track_resource_counts
-pub fn resource_counts_event(args: InvocationArgs, manifest: &DbtManifest) {
-    let mut model_count = 0;
-    let mut seed_count = 0;
-    let mut data_test_count = 0;
-    let mut snapshot_count = 0;
-    let mut operation_count = 0;
-    let mut analysis_count = 0;
+pub fn resource_counts_event(args: InvocationArgs, resolved_state: &ResolverState) {
+    let model_count = resolved_state.nodes.models.len() as i32;
+    let seed_count = resolved_state.nodes.seeds.len() as i32;
+    let data_test_count = resolved_state.nodes.tests.len() as i32;
+    let snapshot_count = resolved_state.nodes.snapshots.len() as i32;
+    let operation_count = (resolved_state.operations.on_run_start.len()
+        + resolved_state.operations.on_run_end.len()) as i32;
+    let analysis_count = resolved_state.nodes.analyses.len() as i32;
     // We need to add functions to ResourceCounts proto
-    let mut _function_count = 0;
-    for (_, node) in manifest.nodes.iter() {
-        match node {
-            DbtNode::Model(_) => model_count += 1,
-            DbtNode::Seed(_) => seed_count += 1,
-            DbtNode::Test(_) => data_test_count += 1,
-            DbtNode::Snapshot(_) => snapshot_count += 1,
-            DbtNode::Operation(_) => operation_count += 1,
-            DbtNode::Analysis(_) => analysis_count += 1,
-            DbtNode::Function(_) => _function_count += 1,
-        }
-    }
+    let _function_count = resolved_state.nodes.functions.len() as i32;
 
-    let source_count = manifest.sources.len() as i32;
-    let macro_count = manifest.macros.len() as i32;
-    let group_count = manifest.groups.len() as i32;
-    let unit_test_count = manifest.unit_tests.len() as i32;
-    let exposure_count = manifest.exposures.len() as i32;
+    let source_count = resolved_state.nodes.sources.len() as i32;
+    let macro_count = resolved_state.macros.macros.len() as i32;
+    let group_count = resolved_state.nodes.groups.len() as i32;
+    let unit_test_count = resolved_state.nodes.unit_tests.len() as i32;
+    let exposure_count = resolved_state.nodes.exposures.len() as i32;
 
     // to-be-implemented
     let metric_count = 0;
