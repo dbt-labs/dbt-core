@@ -591,6 +591,12 @@ pub struct ManifestModelConfig {
     pub sql_header: Option<String>,
     pub location: Option<String>,
     pub predicates: Option<Vec<String>>,
+    pub submission_method: Option<String>,
+    pub job_cluster_config: Option<BTreeMap<String, YmlValue>>,
+    pub create_notebook: Option<bool>,
+    pub index_url: Option<String>,
+    pub additional_libs: Option<Vec<YmlValue>>,
+    pub user_folder_for_python: Option<bool>,
     // Adapter specific configs
     pub __warehouse_specific_config__: WarehouseSpecificNodeConfig,
 }
@@ -724,6 +730,12 @@ impl From<ModelConfig> for ManifestModelConfig {
             sql_header: config.sql_header,
             location: config.location,
             predicates: config.predicates,
+            submission_method: config.submission_method.clone(),
+            job_cluster_config: config.job_cluster_config.clone(),
+            create_notebook: config.create_notebook,
+            index_url: config.index_url.clone(),
+            additional_libs: config.additional_libs.clone(),
+            user_folder_for_python: config.user_folder_for_python,
             __warehouse_specific_config__: config.__warehouse_specific_config__,
         }
     }
@@ -772,6 +784,12 @@ impl From<ManifestModelConfig> for ModelConfig {
             sql_header: config.sql_header,
             location: config.location,
             predicates: config.predicates,
+            submission_method: config.submission_method.clone(),
+            job_cluster_config: config.job_cluster_config.clone(),
+            create_notebook: config.create_notebook,
+            index_url: config.index_url.clone(),
+            additional_libs: config.additional_libs.clone(),
+            user_folder_for_python: config.user_folder_for_python,
             __warehouse_specific_config__: config.__warehouse_specific_config__,
         }
     }

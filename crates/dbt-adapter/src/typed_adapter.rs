@@ -1,16 +1,17 @@
 use crate::adapter_engine::{AdapterEngine, Options as ExecuteOptions, execute_query_with_retry};
 use crate::column::{Column, ColumnBuilder};
 use crate::errors::{AdapterError, AdapterErrorKind};
+use crate::execute_macro_wrapper_with_package;
 use crate::funcs::{execute_macro, none_value};
 use crate::information_schema::InformationSchema;
 use crate::metadata::{self, CatalogAndSchema};
+use crate::python;
 use crate::query_ctx::query_ctx_from_state;
 use crate::record_batch_utils::{extract_first_value_as_i64, get_column_values};
 use crate::relation_object::RelationObject;
 use crate::response::{AdapterResponse, ResultObject};
 use crate::snapshots::SnapshotStrategy;
 use crate::{AdapterResult, AdapterTyping};
-use crate::{execute_macro_wrapper_with_package, python};
 
 use adbc_core::options::OptionValue;
 use arrow::array::{RecordBatch, StringArray, TimestampMillisecondArray};
@@ -365,7 +366,23 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
                     Ok(response)
                 }
             }
-            // TODO: add support for Databricks
+            AdapterType::Databricks => {
+                //TODO: enable once https://github.com/dbt-labs/fs/issues/6547 is fixed
+                if let Some(_replay_adapter) = self.as_replay() {
+                    return Err(AdapterError::new(
+                        AdapterErrorKind::NotSupported,
+                        "replay mode not supported for python models on Databricks",
+                    ));
+                }
+                python::databricks::submit_python_job(
+                    self.as_typed_base_adapter(),
+                    ctx,
+                    conn,
+                    state,
+                    model,
+                    compiled_code,
+                )
+            }
             // https://docs.getdbt.com/docs/core/connect-data-platform/bigquery-setup#running-python-models-on-bigquery-dataframes
             // https://docs.getdbt.com/reference/resource-configs/bigquery-configs#python-model-configuration
             //
@@ -387,16 +404,15 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
                     compiled_code,
                 )
             }
-            AdapterType::Postgres
-            | AdapterType::Databricks
-            | AdapterType::Redshift
-            | AdapterType::Salesforce => Err(AdapterError::new(
-                AdapterErrorKind::Internal,
-                format!(
-                    "Python models are not supported for {} adapter",
-                    self.adapter_type()
-                ),
-            )),
+            AdapterType::Postgres | AdapterType::Redshift | AdapterType::Salesforce => {
+                Err(AdapterError::new(
+                    AdapterErrorKind::Internal,
+                    format!(
+                        "Python models are not supported for {} adapter",
+                        self.adapter_type()
+                    ),
+                ))
+            }
         }
     }
 

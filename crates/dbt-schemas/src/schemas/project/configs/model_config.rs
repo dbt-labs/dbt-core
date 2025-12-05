@@ -115,6 +115,26 @@ pub struct ProjectModelConfig {
     pub databricks_compute: Option<String>,
     #[serde(rename = "+databricks_tags")]
     pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
+    #[serde(rename = "+submission_method")]
+    pub submission_method: Option<String>,
+    #[serde(rename = "+job_cluster_config")]
+    pub job_cluster_config: Option<BTreeMap<String, YmlValue>>,
+    #[serde(
+        default,
+        rename = "+create_notebook",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub create_notebook: Option<bool>,
+    #[serde(rename = "+index_url")]
+    pub index_url: Option<String>,
+    #[serde(rename = "+additional_libs")]
+    pub additional_libs: Option<Vec<YmlValue>>,
+    #[serde(
+        default,
+        rename = "+user_folder_for_python",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub user_folder_for_python: Option<bool>,
 
     // NOTE: This is only for BigQuery materialized views
     #[serde(rename = "+description")]
@@ -418,6 +438,12 @@ pub struct ModelConfig {
     pub predicates: Option<Vec<String>>,
     // Adapter specific configs
     pub __warehouse_specific_config__: WarehouseSpecificNodeConfig,
+    pub submission_method: Option<String>,
+    pub job_cluster_config: Option<BTreeMap<String, YmlValue>>,
+    pub create_notebook: Option<bool>,
+    pub index_url: Option<String>,
+    pub additional_libs: Option<Vec<YmlValue>>,
+    pub user_folder_for_python: Option<bool>,
 }
 
 impl From<ProjectModelConfig> for ModelConfig {
@@ -427,6 +453,12 @@ impl From<ProjectModelConfig> for ModelConfig {
             alias: config.alias,
             batch_size: config.batch_size,
             begin: config.begin,
+            submission_method: config.submission_method.clone(),
+            job_cluster_config: config.job_cluster_config.clone(),
+            create_notebook: config.create_notebook,
+            index_url: config.index_url.clone(),
+            additional_libs: config.additional_libs.clone(),
+            user_folder_for_python: config.user_folder_for_python,
             catalog_name: config.catalog_name.clone(),
             column_types: config.column_types,
             concurrent_batches: config.concurrent_batches,
@@ -575,6 +607,12 @@ impl From<ModelConfig> for ProjectModelConfig {
             merge_exclude_columns: config.merge_exclude_columns,
             merge_update_columns: config.merge_update_columns,
             meta: Verbatim::from(config.meta),
+            submission_method: config.submission_method.clone(),
+            job_cluster_config: config.job_cluster_config.clone(),
+            create_notebook: config.create_notebook,
+            index_url: config.index_url.clone(),
+            additional_libs: config.additional_libs.clone(),
+            user_folder_for_python: config.user_folder_for_python,
             on_configuration_change: config.on_configuration_change,
             on_schema_change: config.on_schema_change,
             packages: config.packages,
@@ -731,6 +769,12 @@ impl DefaultTo<ModelConfig> for ModelConfig {
             sql_header,
             location,
             predicates,
+            submission_method,
+            job_cluster_config,
+            create_notebook,
+            index_url,
+            additional_libs,
+            user_folder_for_python,
         } = self;
 
         // Handle flattened configs
@@ -792,6 +836,12 @@ impl DefaultTo<ModelConfig> for ModelConfig {
                 sql_header,
                 location,
                 predicates,
+                submission_method,
+                job_cluster_config,
+                create_notebook,
+                index_url,
+                additional_libs,
+                user_folder_for_python,
             ]
         );
     }

@@ -26,6 +26,7 @@ arrow = { workspace = true }
 arrow-array = { workspace = true }
 arrow-ipc = { workspace = true }
 arrow-schema = { workspace = true }
+base64 = { workspace = true }
 parquet = { workspace = true }
 
 adbc-core = { workspace = true }
@@ -47,6 +48,7 @@ similar = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracy-client = { workspace = true }
+ureq = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]

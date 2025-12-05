@@ -3,6 +3,7 @@ use minijinja::State;
 use serde::Deserialize;
 
 pub mod adapter;
+pub mod api_client;
 /// Databricks constraint utilities
 pub mod constraints;
 pub mod metadata;
