@@ -1133,3 +1133,96 @@ class TestCheckForDuplicatePackagesWithBooleans(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertEqual(len(result["packages"]), 1)
         self.assertIn("dbt_amplitude", result["packages"][0]["git"])
+
+    def test_check_duplicate_underscore_hyphen_matching(self):
+        """Test that underscore and hyphen variants match (dbt_utils matches dbt-utils)"""
+        # Adding hub package with underscore should match git package with hyphen
+        mock_args = Namespace(
+            add_package={"name": "dbt-labs/dbt_utils", "version": "1.0.0"}, source="hub"
+        )
+
+        with mock.patch("dbt.task.deps.BaseTask.__init__"):
+            task = DepsTask.__new__(DepsTask)
+            task.args = mock_args
+
+        packages_yml = {
+            "packages": [
+                {
+                    "git": "https://github.com/dbt-labs/dbt-utils.git",  # hyphen in URL
+                    "revision": "1.0.0",
+                },
+            ]
+        }
+
+        # Should match because "dbt-utils" variant matches the git URL
+        with mock.patch("dbt_common.events.functions.fire_event"):
+            result = task.check_for_duplicate_packages(packages_yml)
+
+        self.assertIsNotNone(result)
+        self.assertEqual(len(result["packages"]), 0)  # Git package removed
+
+    def test_check_duplicate_no_partial_word_match(self):
+        """Test that partial word matches are rejected (dbt-core shouldn't match dbt-core-utils)"""
+        mock_args = Namespace(
+            add_package={"name": "dbt-labs/dbt-core", "version": "1.0.0"}, source="hub"
+        )
+
+        with mock.patch("dbt.task.deps.BaseTask.__init__"):
+            task = DepsTask.__new__(DepsTask)
+            task.args = mock_args
+
+        packages_yml = {
+            "packages": [
+                {
+                    "git": "https://github.com/dbt-labs/dbt-core-utils.git",
+                    "revision": "1.0.0",
+                },
+                {
+                    "package": "other-org/my-dbt-core-fork",
+                    "version": "2.0.0",
+                },
+            ]
+        }
+
+        # Should NOT match because "dbt-core" is part of a larger word
+        with mock.patch("dbt_common.events.functions.fire_event"):
+            result = task.check_for_duplicate_packages(packages_yml)
+
+        # Both packages should remain (no matches)
+        self.assertIsNotNone(result)
+        self.assertEqual(len(result["packages"]), 2)
+
+    def test_check_duplicate_exact_word_boundary_match(self):
+        """Test that exact matches with word boundaries work correctly"""
+        mock_args = Namespace(
+            add_package={"name": "dbt-labs/dbt-utils", "version": "1.0.0"}, source="hub"
+        )
+
+        with mock.patch("dbt.task.deps.BaseTask.__init__"):
+            task = DepsTask.__new__(DepsTask)
+            task.args = mock_args
+
+        packages_yml = {
+            "packages": [
+                {
+                    "git": "https://github.com/dbt-labs/dbt-utils.git",  # Should match
+                    "revision": "1.0.0",
+                },
+                {
+                    "git": "https://github.com/other/dbt-utils-extra.git",  # Should NOT match
+                    "revision": "2.0.0",
+                },
+                {
+                    "package": "dbt-labs/dbt_utils",  # Should match (underscore variant)
+                    "version": "0.9.0",
+                },
+            ]
+        }
+
+        with mock.patch("dbt_common.events.functions.fire_event"):
+            result = task.check_for_duplicate_packages(packages_yml)
+
+        # Only dbt-utils-extra should remain
+        self.assertIsNotNone(result)
+        self.assertEqual(len(result["packages"]), 1)
+        self.assertIn("dbt-utils-extra", result["packages"][0]["git"])
