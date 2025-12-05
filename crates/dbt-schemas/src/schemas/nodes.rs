@@ -184,7 +184,7 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
     fn serialize(&self) -> YmlValue {
         self.serialize_with_mode(crate::schemas::serialization_utils::SerializationMode::OmitNone)
     }
-    fn serialize_for_jinja(&self) -> YmlValue {
+    fn serialize_keep_none(&self) -> YmlValue {
         self.serialize_with_mode(crate::schemas::serialization_utils::SerializationMode::KeepNone)
     }
     fn serialize_with_mode(
@@ -2757,6 +2757,33 @@ fn upcast<T: InternalDbtNodeAttributes + 'static>(
     arc
 }
 
+/// Serialize Option<String> as empty string when None, otherwise as the string value.
+/// This ensures the field is always present in serialized output.
+pub fn serialize_none_as_empty_string<S>(
+    value: &Option<String>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    match value {
+        Some(s) => serializer.serialize_str(s),
+        None => serializer.serialize_str(""),
+    }
+}
+
+/// Deserialize Option<String>, treating empty string as None for consistency.
+pub fn deserialize_empty_string_as_none<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let s: Option<String> = Option::deserialize(deserializer)?;
+    Ok(match s {
+        Some(s) if s.is_empty() => None,
+        other => other,
+    })
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct CommonAttributes {
@@ -2776,6 +2803,11 @@ pub struct CommonAttributes {
     /// defined!
     pub original_file_path: PathBuf,
 
+    #[serde(
+        default,
+        serialize_with = "serialize_none_as_empty_string",
+        deserialize_with = "deserialize_empty_string_as_none"
+    )]
     pub raw_code: Option<String>,
     pub patch_path: Option<PathBuf>,
     pub name_span: dbt_common::Span,

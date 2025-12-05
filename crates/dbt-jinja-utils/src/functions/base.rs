@@ -1259,7 +1259,7 @@ pub fn build_flat_graph(nodes: &Nodes) -> MutableMap {
             (
                 unique_id.clone(),
                 Value::from_serialize(
-                    (Arc::as_ref(model) as &dyn InternalDbtNode).serialize_for_jinja(),
+                    (Arc::as_ref(model) as &dyn InternalDbtNode).serialize_keep_none(),
                 ),
             )
         })
@@ -1267,7 +1267,7 @@ pub fn build_flat_graph(nodes: &Nodes) -> MutableMap {
             (
                 unique_id.clone(),
                 Value::from_serialize(
-                    (Arc::as_ref(snapshot) as &dyn InternalDbtNode).serialize_for_jinja(),
+                    (Arc::as_ref(snapshot) as &dyn InternalDbtNode).serialize_keep_none(),
                 ),
             )
         }))
@@ -1275,7 +1275,7 @@ pub fn build_flat_graph(nodes: &Nodes) -> MutableMap {
             // For tests, update original_file_path to use patch_path if it exists
             // we also do this this when we write the test to the manifest
             // (indicates test was defined in a YAML file)
-            let mut serialized = (Arc::as_ref(test) as &dyn InternalDbtNode).serialize_for_jinja();
+            let mut serialized = (Arc::as_ref(test) as &dyn InternalDbtNode).serialize_keep_none();
             if let YmlValue::Mapping(ref mut map, _) = serialized
                 && let Some(patch_path) = &test.__common_attr__.patch_path
             {
@@ -1290,7 +1290,7 @@ pub fn build_flat_graph(nodes: &Nodes) -> MutableMap {
             (
                 unique_id.clone(),
                 Value::from_serialize(
-                    (Arc::as_ref(seed) as &dyn InternalDbtNode).serialize_for_jinja(),
+                    (Arc::as_ref(seed) as &dyn InternalDbtNode).serialize_keep_none(),
                 ),
             )
         }))
@@ -1304,7 +1304,7 @@ pub fn build_flat_graph(nodes: &Nodes) -> MutableMap {
             (
                 unique_id.clone(),
                 Value::from_serialize(
-                    (Arc::as_ref(source) as &dyn InternalDbtNode).serialize_for_jinja(),
+                    (Arc::as_ref(source) as &dyn InternalDbtNode).serialize_keep_none(),
                 ),
             )
         })
