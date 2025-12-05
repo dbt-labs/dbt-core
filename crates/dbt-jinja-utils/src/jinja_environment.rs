@@ -27,6 +27,29 @@ impl<'env: 'source, 'source> JinjaExpression<'env, 'source> {
         })?;
         Ok(result)
     }
+
+    /// Typecheck the expression
+    pub fn typecheck(
+        &self,
+        funcsigns: Arc<minijinja::compiler::typecheck::FunctionRegistry>,
+        builtins: Arc<dashmap::DashMap<String, minijinja::Type>>,
+        warning_printer: Rc<dyn minijinja::TypecheckingEventListener>,
+        typecheck_resolved_context: BTreeMap<String, Value>,
+    ) -> FsResult<()> {
+        self.0
+            .typecheck(
+                funcsigns,
+                builtins,
+                warning_printer,
+                typecheck_resolved_context,
+            )
+            .map_err(|e| {
+                Box::new(FsError::from_jinja_err(
+                    e,
+                    "Failed to typecheck the compiled Jinja expression",
+                ))
+            })
+    }
 }
 
 /// A struct that wraps a Minijinja Template.
@@ -47,6 +70,29 @@ impl<'env: 'source, 'source> JinjaTemplate<'env, 'source> {
             .eval_to_state(ctx, listeners)
             .map_err(|e| FsError::from_jinja_err(e, "Failed to render the Jinja template"))?;
         Ok(result)
+    }
+
+    /// Typecheck the template
+    pub fn typecheck(
+        &self,
+        funcsigns: Arc<minijinja::compiler::typecheck::FunctionRegistry>,
+        builtins: Arc<dashmap::DashMap<String, minijinja::Type>>,
+        warning_printer: Rc<dyn minijinja::TypecheckingEventListener>,
+        typecheck_resolved_context: BTreeMap<String, Value>,
+    ) -> FsResult<()> {
+        self.0
+            .typecheck(
+                funcsigns,
+                builtins,
+                warning_printer,
+                typecheck_resolved_context,
+            )
+            .map_err(|e| {
+                Box::new(FsError::from_jinja_err(
+                    e,
+                    "Failed to typecheck the compiled Jinja template",
+                ))
+            })
     }
 }
 
@@ -123,6 +169,13 @@ impl JinjaEnv {
     pub fn compile_expression<'a>(&self, expr: &'a str) -> FsResult<JinjaExpression<'_, 'a>> {
         Ok(JinjaExpression(self.env.compile_expression(expr).map_err(
             |e| FsError::from_jinja_err(e, "Failed to compile Jinja expression"),
+        )?))
+    }
+
+    /// Compile a template from a string.
+    pub fn template_from_str<'a>(&self, source: &'a str) -> FsResult<JinjaTemplate<'_, 'a>> {
+        Ok(JinjaTemplate(self.env.template_from_str(source).map_err(
+            |e| FsError::from_jinja_err(e, "Failed to compile Jinja template"),
         )?))
     }
 

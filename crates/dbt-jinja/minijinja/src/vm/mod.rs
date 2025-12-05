@@ -297,7 +297,7 @@ impl<'env> Vm<'env> {
             }};
         }
 
-        let namespace_registry = self.env.get_macro_namespace_registry();
+        let namespace_registry = self.env.get_macro_namespace_registry().unwrap_or_default();
         let root_package_name = self.env.get_root_package_name();
         let template_registry = self.env.get_macro_template_registry();
 

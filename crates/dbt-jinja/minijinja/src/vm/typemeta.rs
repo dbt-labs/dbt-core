@@ -1425,27 +1425,42 @@ impl<'src> TypeChecker<'src> {
                     typestate.stack.push(Type::String(None));
                 }
                 Instruction::ApplyFilter(name, arg_count, _local_id, span) => {
-                    // TYPECHECK: NO
+                    // TYPECHECK: YES - filter types are registered in function_registry
                     listener.set_span(span);
-                    if let Ok(Type::Object(funcsign)) = typestate
-                        .locals
-                        .get(name, listener.clone())
-                        .map(|t| t.inner)
-                    {
-                        if let Some(arg_cnt) = arg_count {
-                            let funcsign = funcsign.clone();
-                            let (args, kwargs) = typestate.get_call_args(*arg_cnt);
 
+                    if let Some(arg_cnt) = arg_count {
+                        let (args, kwargs) = typestate.get_call_args(*arg_cnt);
+
+                        // Try to call the filter if it's registered in locals
+                        if let Ok(Type::Object(funcsign)) = typestate
+                            .locals
+                            .get(name, listener.clone())
+                            .map(|t| t.inner)
+                        {
+                            let funcsign = funcsign.clone();
                             typestate.stack.push(funcsign.call(
                                 &args,
                                 &kwargs,
                                 listener.clone(),
                             )?);
+                        } else if let Some(funcsign) = self.function_registry.get(name.to_owned()) {
+                            // Try function_registry as fallback (for built-in filters like as_bool, as_number, etc.)
+                            typestate.stack.push(funcsign.call(
+                                &args,
+                                &kwargs,
+                                listener.clone(),
+                            )?);
+                        } else {
+                            // Filter not registered - warn and push Any type
+                            listener.warn(&format!(
+                                "Potential TypeError: Filter '{name}' is not defined."
+                            ));
+                            typestate.stack.push(Type::Any { hard: false });
                         }
                     } else {
                         // TODO: handle the case when arg_count is None
                         listener.warn(&format!(
-                            "Potential TypeError: Filter '{name}' is not defined."
+                            "Potential TypeError: Filter '{name}' requires arguments."
                         ));
                         typestate.stack.push(Type::Any { hard: false });
                     }
@@ -1616,15 +1631,23 @@ impl<'src> TypeChecker<'src> {
                         }
                     } else if let Some(arg_cnt) = arg_count {
                         let _ = typestate.get_call_args(*arg_cnt);
-                        listener.warn(&format!(
-                            "Potential TypeError: Function '{name}' is not defined."
-                        ));
+                        // Don't warn for known built-in functions
+                        let known_functions = ["doc", "var"];
+                        if !known_functions.contains(name) {
+                            listener.warn(&format!(
+                                "Potential TypeError: Function '{name}' is not defined."
+                            ));
+                        }
                         typestate.stack.push(Type::Any { hard: false });
                     } else {
                         // TODO: handle the case when arg_count is None
-                        listener.warn(&format!(
-                            "Potential TypeError: Function '{name}' is not defined."
-                        ));
+                        // Don't warn for known built-in functions
+                        let known_functions = ["doc", "var"];
+                        if !known_functions.contains(name) {
+                            listener.warn(&format!(
+                                "Potential TypeError: Function '{name}' is not defined."
+                            ));
+                        }
                         typestate.stack.push(Type::Any { hard: false });
                     }
                 }

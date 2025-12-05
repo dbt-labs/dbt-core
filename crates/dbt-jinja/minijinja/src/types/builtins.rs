@@ -20,9 +20,11 @@ use crate::{
 // Singleton for builtins registry
 static BUILTINS_REGISTRY: std::sync::OnceLock<Arc<DashMap<String, Type>>> =
     std::sync::OnceLock::new();
+static JINJA_BUILTINS_REGISTRY: std::sync::OnceLock<Arc<DashMap<String, Type>>> =
+    std::sync::OnceLock::new();
 
 /// Initialize built-in types registry (internal function)
-fn init_builtins(namespace_registry: Vec<String>) -> Arc<DashMap<String, Type>> {
+fn init_jinja_builtins() -> Arc<DashMap<String, Type>> {
     let definitions = minijinja_typecheck_builtins::get_definitions();
     let registry = Arc::new(DashMap::new()); // key is object id, value is Type
 
@@ -76,35 +78,67 @@ fn init_builtins(namespace_registry: Vec<String>) -> Arc<DashMap<String, Type>> 
         Type::Object(DynObject::new(Arc::new(BatchFunctionType::default()))),
     );
 
-    for name in namespace_registry {
-        registry.insert(name.clone(), Type::Namespace(name));
-    }
-
     registry
 }
 
-/// Load built-in types from yml (singleton version)
+/// Load built-in types with namespace registry
 ///
-/// This function returns a cached version of the built-in types registry.
+/// This function loads the Jinja built-in types and optionally extends them with
+/// namespace types from the provided namespace registry. The namespace registry
+/// contains package names that should be available as namespace types for macro
+/// resolution and dispatch.
+///
+/// The function uses caching to ensure the registry is initialized only once
+/// per unique namespace configuration and reused for subsequent calls.
+///
+/// # Arguments
+/// * `namespace_registry` - Optional registry containing package names as keys.
+///   If provided, each package name will be added as a `Type::Namespace`.
+///   If `None`, only the base Jinja built-ins are returned.
+///
+/// # Returns
+/// A shared reference to the cached map of type names to `Type` objects,
+/// including both Jinja built-ins and namespace types.
+///
+/// # Errors
+/// Returns a `crate::Error` if there are issues during type initialization.
+pub fn load_builtins_with_namespace(
+    namespace_registry: Option<Arc<IndexMap<Value, Value>>>,
+) -> Result<Arc<DashMap<String, Type>>, crate::Error> {
+    if let Some(namespace_registry) = namespace_registry {
+        Ok(BUILTINS_REGISTRY
+            .get_or_init(|| {
+                let namespace_registry = namespace_registry
+                    .keys()
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .iter()
+                    .map(|k| k.as_str().unwrap().to_string())
+                    .collect::<Vec<_>>();
+                let builtins = load_jinja_builtins();
+                for name in namespace_registry {
+                    builtins.insert(name.clone(), Type::Namespace(name));
+                }
+                builtins
+            })
+            .clone())
+    } else {
+        Ok(load_jinja_builtins())
+    }
+}
+
+/// load dbt jinja built-in types (singleton version)
+///
+/// Should be called before loading any pakcages.
+/// This function returns a cached version of the dbt jinja built-in types registry.
 /// The registry is initialized only once and reused for subsequent calls.
 ///
 /// # Returns
 /// A shared reference to the cached map of object id to Type.
-pub fn load_builtins(
-    namespace_registry: Arc<IndexMap<Value, Value>>,
-) -> Result<Arc<DashMap<String, Type>>, crate::Error> {
-    Ok(BUILTINS_REGISTRY
-        .get_or_init(|| {
-            let namespace_registry = namespace_registry
-                .keys()
-                .cloned()
-                .collect::<Vec<_>>()
-                .iter()
-                .map(|k| k.as_str().unwrap().to_string())
-                .collect::<Vec<_>>();
-            init_builtins(namespace_registry)
-        })
-        .clone())
+pub fn load_jinja_builtins() -> Arc<DashMap<String, Type>> {
+    JINJA_BUILTINS_REGISTRY
+        .get_or_init(init_jinja_builtins)
+        .clone()
 }
 
 #[derive(Clone)]

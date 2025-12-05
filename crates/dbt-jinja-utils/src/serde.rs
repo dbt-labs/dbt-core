@@ -84,7 +84,10 @@ use minijinja::listener::RenderingEventListener;
 use regex::Regex;
 use serde::{Serialize, de::DeserializeOwned};
 
-use crate::{jinja_environment::JinjaEnv, phases::load::secret_renderer::render_secrets};
+use crate::{
+    jinja_environment::JinjaEnv, phases::load::secret_renderer::render_secrets,
+    typecheck_listener::YamlTypecheckingEventListener,
+};
 
 pub use dbt_common::serde_utils::Omissible;
 
@@ -128,8 +131,14 @@ where
     T: DeserializeOwned,
     S: Serialize,
 {
-    let (res, errors) =
-        into_typed_with_jinja_error(value, should_render_secrets, env, ctx, listeners)?;
+    let (res, errors) = into_typed_with_jinja_error(
+        Some(io_args),
+        value,
+        should_render_secrets,
+        env,
+        ctx,
+        listeners,
+    )?;
 
     if show_errors_or_warnings {
         for error in errors {
@@ -162,7 +171,7 @@ where
     S: Serialize,
 {
     let (res, errors) =
-        into_typed_with_jinja_error(value, should_render_secrets, env, ctx, listeners)?;
+        into_typed_with_jinja_error(io_args, value, should_render_secrets, env, ctx, listeners)?;
 
     if let Some(io_args) = io_args {
         for error in errors {
@@ -339,6 +348,7 @@ fn value_from_str(
 /// Variant of into_typed_with_jinja which returns a Vec of warnings rather
 /// than firing them.
 fn into_typed_with_jinja_error<T, S>(
+    io_args: Option<&IoArgs>,
     value: Value,
     should_render_secrets: bool,
     env: &JinjaEnv,
@@ -350,10 +360,18 @@ where
     S: Serialize,
 {
     let jinja_renderer = |value: &Value| match value {
-        Value::String(s, span) => {
-            let expanded = render_jinja_str(s, should_render_secrets, env, ctx, listeners)
-                .map_err(|e| e.with_location(span.clone()))?;
-            Ok(Some(expanded.with_span(span.clone())))
+        Value::String(s, yaml_span) => {
+            let expanded = render_jinja_str(
+                io_args,
+                s,
+                should_render_secrets,
+                env,
+                ctx,
+                listeners,
+                yaml_span,
+            )
+            .map_err(|e| e.with_location(yaml_span.clone()))?;
+            Ok(Some(expanded.with_span(yaml_span.clone())))
         }
         _ => Ok(None),
     };
@@ -397,14 +415,27 @@ pub fn strip_dunder_fields_from_path(path: &str) -> String {
 
 /// Render a Jinja expression to a Value
 fn render_jinja_str<S: Serialize>(
+    io_args: Option<&IoArgs>,
     s: &str,
     should_render_secrets: bool,
     env: &JinjaEnv,
     ctx: &S,
     listeners: &[Rc<dyn RenderingEventListener>],
+    yaml_span: &dbt_serde_yaml::Span,
 ) -> FsResult<Value> {
     if check_single_expression_without_whitepsace_control(s) {
         let compiled = env.compile_expression(&s[2..s.len() - 2])?;
+
+        // Perform static type checking if we have io_args and span information
+        perform_typecheck(
+            io_args,
+            env,
+            yaml_span,
+            |funcsigns, builtins, listener, ctx| {
+                compiled.typecheck(funcsigns, builtins, listener, ctx)
+            },
+        );
+
         let eval = compiled.eval(ctx, listeners)?;
         let val = dbt_serde_yaml::to_value(eval).map_err(|e| {
             yaml_to_fs_error(
@@ -423,6 +454,19 @@ fn render_jinja_str<S: Serialize>(
         Ok(val)
     // Otherwise, process the entire string through Jinja
     } else {
+        // Compile template and perform typechecking
+        let template = env.template_from_str(s)?;
+
+        // Perform static type checking if we have io_args and span information
+        perform_typecheck(
+            io_args,
+            env,
+            yaml_span,
+            |funcsigns, builtins, listener, ctx| {
+                template.typecheck(funcsigns, builtins, listener, ctx)
+            },
+        );
+
         let compiled = env.render_str(s, ctx, listeners)?;
         let compiled = if should_render_secrets {
             render_secrets(compiled)?
@@ -430,6 +474,81 @@ fn render_jinja_str<S: Serialize>(
             compiled
         };
         Ok(Value::string(compiled))
+    }
+}
+
+/// Helper function to perform typechecking on Jinja expressions/templates
+fn perform_typecheck<F>(
+    io_args: Option<&IoArgs>,
+    env: &JinjaEnv,
+    yaml_span: &dbt_serde_yaml::Span,
+    typecheck_fn: F,
+) where
+    F: FnOnce(
+        std::sync::Arc<minijinja::compiler::typecheck::FunctionRegistry>,
+        std::sync::Arc<dashmap::DashMap<String, minijinja::Type>>,
+        Rc<dyn minijinja::TypecheckingEventListener>,
+        std::collections::BTreeMap<String, minijinja::Value>,
+    ) -> FsResult<()>,
+{
+    if let Some(io_args) = io_args {
+        // Get status reporter from io_args
+        let status_reporter = io_args.status_reporter.clone();
+
+        // Get file path from yaml_span
+        let path = yaml_span
+            .filename
+            .as_ref()
+            .map(|p| p.to_path_buf())
+            .unwrap_or_default();
+
+        // Create minijinja span from yaml span
+        let minijinja_span = minijinja::machinery::Span {
+            start_line: yaml_span.start.line as u32,
+            start_col: yaml_span.start.column as u32,
+            start_offset: yaml_span.start.index as u32,
+            end_line: yaml_span.end.line as u32,
+            end_col: yaml_span.end.column as u32,
+            end_offset: yaml_span.end.index as u32,
+        };
+
+        let typecheck_listener = Rc::new(YamlTypecheckingEventListener::new(
+            status_reporter,
+            path,
+            minijinja_span,
+        ));
+
+        // Load builtins from the macro namespace registry
+        let macro_namespace_registry = env.env.get_macro_namespace_registry();
+        if let Ok(builtins) = minijinja::load_builtins_with_namespace(macro_namespace_registry) {
+            // Build typecheck context with required values
+            let mut typecheck_resolved_context = std::collections::BTreeMap::new();
+            typecheck_resolved_context.insert(
+                "ROOT_PACKAGE_NAME".to_string(),
+                minijinja::Value::from("dbt"),
+            );
+
+            // Get DBT_AND_ADAPTERS_NAMESPACE directly from globals as a Value
+            let dbt_and_adapters = env
+                .env
+                .get_global("DBT_AND_ADAPTERS_NAMESPACE")
+                .unwrap_or_else(|| {
+                    minijinja::Value::from_object(indexmap::IndexMap::<
+                        minijinja::Value,
+                        minijinja::Value,
+                    >::new())
+                });
+            typecheck_resolved_context
+                .insert("DBT_AND_ADAPTERS_NAMESPACE".to_string(), dbt_and_adapters);
+
+            // Perform typecheck (ignore errors as they're already emitted as warnings)
+            let _ = typecheck_fn(
+                env.jinja_function_registry.clone(),
+                builtins,
+                typecheck_listener,
+                typecheck_resolved_context,
+            );
+        }
     }
 }
 

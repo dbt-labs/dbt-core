@@ -690,3 +690,135 @@ impl FunctionType for BatchFunctionType {
         ]
     }
 }
+
+/// Helper function to check if a type is a collection type that filters don't support
+fn is_unsupported_filter_input(input_type: &Type) -> Option<&'static str> {
+    match input_type {
+        Type::List(_) => Some("sequence"),
+        Type::Dict(_) => Some("map"),
+        Type::Iterable(_) => Some("iterable"),
+        Type::Tuple(_) => Some("sequence"),
+        Type::Plain => Some("plain"),
+        _ => None,
+    }
+}
+
+/// Filter type for `as_bool` - converts a value to boolean.
+///
+/// This filter does not support collection types (sequences, dicts, iterables, tuples, plain).
+#[derive(Default, Clone, Eq, PartialEq)]
+pub struct AsBoolFilterType;
+
+impl fmt::Debug for AsBoolFilterType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("as_bool")
+    }
+}
+
+impl FunctionType for AsBoolFilterType {
+    fn _resolve_arguments(
+        &self,
+        args: &[Type],
+        listener: Rc<dyn TypecheckingEventListener>,
+    ) -> Result<Type, crate::Error> {
+        if let Some(input_type) = args.first() {
+            if let Some(type_name) = is_unsupported_filter_input(input_type) {
+                listener.warn_filter(&format!("as_bool on {type_name} not supported"));
+            }
+        }
+        Ok(Type::Bool)
+    }
+
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("value", false)]
+    }
+}
+
+/// Filter type for `as_number` - converts a value to number (integer).
+///
+/// This filter does not support collection types (sequences, dicts, iterables, tuples, plain).
+#[derive(Default, Clone, Eq, PartialEq)]
+pub struct AsNumberFilterType;
+
+impl fmt::Debug for AsNumberFilterType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("as_number")
+    }
+}
+
+impl FunctionType for AsNumberFilterType {
+    fn _resolve_arguments(
+        &self,
+        args: &[Type],
+        listener: Rc<dyn TypecheckingEventListener>,
+    ) -> Result<Type, crate::Error> {
+        if let Some(input_type) = args.first() {
+            if let Some(type_name) = is_unsupported_filter_input(input_type) {
+                listener.warn_filter(&format!("as_number on {type_name} not supported"));
+            }
+        }
+        Ok(Type::Integer(None))
+    }
+
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("value", false)]
+    }
+}
+
+/// Filter type for `as_text` - converts a value to string.
+///
+/// This filter does not support collection types (sequences, dicts, iterables, tuples, plain).
+#[derive(Default, Clone, Eq, PartialEq)]
+pub struct AsTextFilterType;
+
+impl fmt::Debug for AsTextFilterType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("as_text")
+    }
+}
+
+impl FunctionType for AsTextFilterType {
+    fn _resolve_arguments(
+        &self,
+        args: &[Type],
+        listener: Rc<dyn TypecheckingEventListener>,
+    ) -> Result<Type, crate::Error> {
+        if let Some(input_type) = args.first() {
+            if let Some(type_name) = is_unsupported_filter_input(input_type) {
+                listener.warn_filter(&format!("as_text on {type_name} not supported"));
+            }
+        }
+        Ok(Type::String(None))
+    }
+
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("value", false)]
+    }
+}
+
+/// Filter type for `as_native` - passes through the value as-is.
+///
+/// This filter accepts any value and returns `Any { hard: true }`.
+#[derive(Default, Clone, Eq, PartialEq)]
+pub struct AsNativeFilterType;
+
+impl fmt::Debug for AsNativeFilterType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("as_native")
+    }
+}
+
+impl FunctionType for AsNativeFilterType {
+    fn _resolve_arguments(
+        &self,
+        _args: &[Type],
+        _listener: Rc<dyn TypecheckingEventListener>,
+    ) -> Result<Type, crate::Error> {
+        // as_native just passes through the value as-is
+        Ok(Type::Any { hard: true })
+    }
+
+    fn arg_specs(&self) -> Vec<ArgSpec> {
+        vec![ArgSpec::new("value", false)]
+    }
+}

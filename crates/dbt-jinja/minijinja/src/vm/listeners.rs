@@ -10,6 +10,10 @@ pub trait TypecheckingEventListener {
     /// Called when a warning is issued during typechecking.
     fn warn(&self, message: &str);
 
+    // TODO: Should merge into warn but doing this for now since warn is not fully online.
+    /// Called when a warning is issued for a filter.
+    fn warn_filter(&self, _message: &str) {}
+
     /// Called when a span is set during typechecking.
     fn set_span(&self, span: &crate::machinery::Span);
 

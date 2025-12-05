@@ -1,18 +1,25 @@
 use std::collections::{BTreeMap, HashSet};
 use std::fmt;
 use std::rc::Rc;
+use std::sync::Arc;
 
+use dashmap::DashMap;
 use serde::Serialize;
 
 use crate::compiler::ast;
+use crate::compiler::cfg::build_cfg;
 use crate::compiler::instructions::Instructions;
 use crate::compiler::meta::find_undeclared;
 use crate::compiler::parser::parse_expr;
+use crate::compiler::typecheck::FunctionRegistry;
 use crate::environment::Environment;
 use crate::error::Error;
 use crate::listener::RenderingEventListener;
 use crate::value::Value;
+use crate::vm::listeners::TypecheckingEventListener;
+use crate::vm::typemeta::TypeChecker;
 use crate::vm::Vm;
+use crate::Type;
 
 /// A handle to a compiled expression.
 ///
@@ -112,6 +119,34 @@ impl<'env, 'source> Expression<'env, 'source> {
             ),
             Err(_) => HashSet::new(),
         }
+    }
+
+    /// Typechecks the expression with the given context.
+    ///
+    /// This performs static type analysis on the compiled expression to catch potential
+    /// type errors before runtime execution.
+    pub fn typecheck(
+        &self,
+        funcsigns: Arc<FunctionRegistry>,
+        builtins: Arc<DashMap<String, Type>>,
+        warning_printer: Rc<dyn TypecheckingEventListener>,
+        typecheck_resolved_context: BTreeMap<String, Value>,
+    ) -> Result<(), Error> {
+        let instructions = self.instructions();
+        // build CFG
+        let cfg = build_cfg(&instructions.instructions);
+        // create a typechecker
+        let mut typechecker =
+            TypeChecker::new(&instructions.instructions, cfg, funcsigns, builtins);
+
+        typechecker
+            .check(warning_printer, typecheck_resolved_context)
+            .map_err(|err| {
+                Error::new(
+                    crate::error::ErrorKind::InvalidOperation,
+                    format!("Type checking failed: {err}"),
+                )
+            })
     }
 
     fn _eval(

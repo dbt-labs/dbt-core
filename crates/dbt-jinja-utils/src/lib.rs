@@ -36,3 +36,6 @@ pub mod node_resolver;
 
 /// Module for the typechecking
 pub mod typecheck;
+
+/// TypecheckingEventListener implementation for YAML Jinja type checking
+pub mod typecheck_listener;

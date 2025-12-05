@@ -905,11 +905,11 @@ impl<'source> Environment<'source> {
     }
 
     /// package_name -> macro_names
-    pub fn get_macro_namespace_registry(&self) -> Arc<ValueMap> {
-        self.get_global(MACRO_NAMESPACE_REGISTRY)
-            .unwrap_or_default()
-            .downcast_object::<ValueMap>()
-            .unwrap_or_else(|| Arc::new(ValueMap::new()))
+    pub fn get_macro_namespace_registry(&self) -> Option<Arc<ValueMap>> {
+        self.get_global(MACRO_NAMESPACE_REGISTRY).map(|x| {
+            x.downcast_object::<ValueMap>()
+                .unwrap_or_else(|| Arc::new(ValueMap::new()))
+        })
     }
 
     /// The name of the root project

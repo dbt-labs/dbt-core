@@ -2,7 +2,8 @@ use crate::{functions::register_base_functions, jinja_environment::JinjaEnv};
 use dbt_adapter::BaseAdapter;
 use dbt_common::{ErrorCode, FsError, FsResult, fs_err, io_args::IoArgs, unexpected_fs_err};
 use minijinja::{
-    AdapterDispatchFunction, Argument, DynTypeObject, Environment, Error as MinijinjaError,
+    AdapterDispatchFunction, Argument, AsBoolFilterType, AsNativeFilterType, AsNumberFilterType,
+    AsTextFilterType, DynTypeObject, Environment, Error as MinijinjaError,
     ErrorKind as MinijinjaErrorKind, UndefinedFunctionType, UserDefinedFunctionType, Value,
     compiler::typecheck::FunctionRegistry,
     constants::{
@@ -10,7 +11,7 @@ use minijinja::{
         NON_INTERNAL_PACKAGES, ROOT_PACKAGE_NAME,
     },
     dispatch_object::get_internal_packages,
-    funcsign_parser, load_builtins,
+    funcsign_parser, load_builtins_with_namespace,
     macro_unit::MacroUnit,
     value::{ValueKind, ValueMap},
 };
@@ -139,9 +140,12 @@ impl JinjaEnvBuilder {
             Value::from_object(macro_namespace_registry),
         );
 
-        let macro_namespace_registry = self.env.get_macro_namespace_registry();
+        let macro_namespace_registry = self
+            .env
+            .get_macro_namespace_registry()
+            .expect("macro namespace registry set above");
         // Load jinja typecheck builtins
-        let builtins = load_builtins(macro_namespace_registry.clone())
+        let builtins = load_builtins_with_namespace(Some(macro_namespace_registry.clone()))
             .map_err(|e| unexpected_fs_err!("Failed to load jinja typecheck builtins: {}", e))?;
         for (package_name, macro_units) in macros.macros {
             // Internal packages (dbt, dbt_postgres, etc.)
@@ -306,6 +310,10 @@ impl JinjaEnvBuilder {
         // Register tests
         self.register_tests();
 
+        // Register filter types in function_registry
+        // This must be done before register_base_functions which consumes io_args
+        let function_registry = self.register_filter_types();
+
         // Register "base" dbt style functions.
         register_base_functions(&mut self.env, self.io_args);
 
@@ -328,9 +336,31 @@ impl JinjaEnvBuilder {
         if let Some(adapter) = self.adapter {
             jinja_env.set_adapter(adapter);
         }
-        jinja_env.jinja_function_registry = self.function_registry.clone();
+        jinja_env.jinja_function_registry = function_registry;
 
         jinja_env
+    }
+
+    /// Registers filter types in the function registry
+    fn register_filter_types(&self) -> Arc<FunctionRegistry> {
+        let mut registry = (*self.function_registry).clone();
+        registry.insert(
+            "as_bool".to_string(),
+            DynTypeObject::new(Arc::new(AsBoolFilterType)),
+        );
+        registry.insert(
+            "as_number".to_string(),
+            DynTypeObject::new(Arc::new(AsNumberFilterType)),
+        );
+        registry.insert(
+            "as_text".to_string(),
+            DynTypeObject::new(Arc::new(AsTextFilterType)),
+        );
+        registry.insert(
+            "as_native".to_string(),
+            DynTypeObject::new(Arc::new(AsNativeFilterType)),
+        );
+        Arc::new(registry)
     }
 
     fn register_filters(&mut self) {
@@ -360,7 +390,7 @@ impl JinjaEnvBuilder {
             });
 
         self.env
-            .add_filter("as_bool", |value: Value| match value.kind() {
+            .add_filter("as_bool",  |value: Value| match value.kind() {
                 ValueKind::Undefined => Ok(Value::UNDEFINED),
                 ValueKind::None => Ok(Value::from(false)),
                 ValueKind::Bool | ValueKind::Number => Ok(value),

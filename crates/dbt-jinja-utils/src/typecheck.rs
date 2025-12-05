@@ -2,7 +2,7 @@ use crate::{jinja_environment::JinjaEnv, listener};
 use dbt_common::{
     ErrorCode, FsError, FsResult, io_args::IoArgs, tracing::emit::emit_error_log_message,
 };
-use minijinja::{Value, compiler::codegen::CodeGenerationProfile, load_builtins};
+use minijinja::{Value, compiler::codegen::CodeGenerationProfile, load_builtins_with_namespace};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     path::{Path, PathBuf},
@@ -27,7 +27,7 @@ pub fn typecheck(
     let function_signatures = env.jinja_function_registry.clone();
     let mut jinja_typecheck_env = env.env.clone();
     let macro_namespace_registry = env.env.get_macro_namespace_registry();
-    let builtins = load_builtins(macro_namespace_registry)
+    let builtins = load_builtins_with_namespace(macro_namespace_registry)
         .map_err(|e| FsError::from_jinja_err(e, "Failed to load built-ins"))?;
 
     let mut typecheck_resolved_context: BTreeMap<String, Value> = BTreeMap::new();
