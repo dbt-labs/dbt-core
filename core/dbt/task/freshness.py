@@ -26,7 +26,7 @@ from dbt.graph import ResourceTypeSelector
 from dbt.node_types import NodeType, RunHookType
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.functions import fire_event
-from dbt_common.events.types import Note
+from dbt_common.events.types import Formatting, Note
 from dbt_common.exceptions import DbtInternalError, DbtRuntimeError
 
 from .base import BaseRunner
@@ -261,16 +261,72 @@ class FreshnessTask(RunTask):
         )
 
     def task_end_messages(self, results) -> None:
+        errors, warnings = [], []
+        
         for result in results:
-            if result.status in (
-                FreshnessStatus.Error,
-                FreshnessStatus.RuntimeErr,
-                RunStatus.Error,
-            ):
-                print_run_result_error(result)
-
+            if result.status in (FreshnessStatus.Error, FreshnessStatus.RuntimeErr):
+                errors.append(result)
+            elif result.status == FreshnessStatus.Warn:
+                warnings.append(result)
+        
+        # Print summary if there are errors or warnings
+        if errors or warnings:
+            fire_event(Formatting(""))
+            fire_event(
+                Note(
+                    msg=f"Completed with {len(errors)} error{'s' if len(errors) != 1 else ''} and {len(warnings)} warning{'s' if len(warnings) != 1 else ''}:"
+                ),
+                EventLevel.INFO,
+            )
+            
+            # Print each error
+            for error in errors:
+                fire_event(Formatting(""))
+                if hasattr(error, 'node'):
+                    source_name = error.node.source_name
+                    table_name = error.node.name
+                    fire_event(
+                        Note(msg=f"Failure in source {source_name}.{table_name}"),
+                        EventLevel.ERROR,
+                    )
+                else:
+                    fire_event(
+                        Note(msg=f"Failure in source {error.source_name}.{error.table_name}"),
+                        EventLevel.ERROR,
+                    )
+            
+            # Print each warning
+            for warning in warnings:
+                fire_event(Formatting(""))
+                if hasattr(warning, 'node'):
+                    source_name = warning.node.source_name
+                    table_name = warning.node.name
+                    fire_event(
+                        Note(msg=f"Warning in source {source_name}.{table_name}"),
+                        EventLevel.WARN,
+                    )
+                else:
+                    fire_event(
+                        Note(msg=f"Warning in source {warning.source_name}.{warning.table_name}"),
+                        EventLevel.WARN,
+                    )
+        
+        # Print final stats
+        pass_count = sum(1 for r in results if r.status == FreshnessStatus.Pass)
+        warn_count = len(warnings)
+        error_count = len(errors)
+        skip_count = sum(1 for r in results if r.status == FreshnessStatus.Skip)
+        total_count = len(results)
+        
+        fire_event(Formatting(""))
+        fire_event(
+            Note(
+                msg=f"Done. PASS={pass_count} WARN={warn_count} ERROR={error_count} SKIP={skip_count} TOTAL={total_count}"
+            ),
+            EventLevel.INFO,
+        )
+        
         fire_event(FreshnessCheckComplete())
-
     def get_hooks_by_type(self, hook_type: RunHookType) -> List[HookNode]:
         hooks = super().get_hooks_by_type(hook_type)
         if self.args.source_freshness_run_project_hooks:
