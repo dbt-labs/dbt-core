@@ -290,6 +290,9 @@ class UnitTestParser(YamlReader):
             )
 
             if tested_model_node:
+                print(tested_model_node.name)
+                print(tested_model_node.config.enabled)
+                print("--------------------------------")
                 if tested_model_node.config.enabled:
                     unit_test_definition.depends_on.nodes.append(tested_model_node.unique_id)
                     unit_test_definition.schema = tested_model_node.schema
@@ -519,8 +522,11 @@ def process_models_for_unit_test(
                 f"Unable to find model '{current_project}.{unit_test_def.model}' for "
                 f"unit test '{unit_test_def.name}' in {unit_test_def.original_file_path}"
             )
-        unit_test_def.depends_on.nodes.append(tested_node.unique_id)
-        unit_test_def.schema = tested_node.schema
+        if tested_node.config.enabled:
+            unit_test_def.depends_on.nodes.append(tested_node.unique_id)
+            unit_test_def.schema = tested_node.schema
+        else:
+            unit_test_def.config.enabled = False
 
     # The UnitTestDefinition should only have one "depends_on" at this point,
     # the one that's found by the "model" field.
