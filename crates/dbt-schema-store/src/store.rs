@@ -5,7 +5,7 @@
 //! which understands the different entry classes (analyzed, frontier, deferred,
 //! external) and maps them to their respective on-disk namespaces.
 
-use crate::{CanonicalFqn, SchemaEntry, SchemaStoreResult, SchemaStoreTrait};
+use crate::{CanonicalFqn, DataStoreTrait, SchemaEntry, SchemaStoreResult, SchemaStoreTrait};
 use arrow::{
     array::RecordBatch, ipc::reader::StreamReader as ArrowIpcStreamReader,
     ipc::writer::StreamWriter as ArrowIpcStreamWriter,
@@ -107,7 +107,8 @@ struct SchemaStoreState {
 
 impl SchemaStoreState {
     /// Pre-populates the state with any schemas already persisted on disk.
-    pub fn init(cache_dir: &Path, cache_fmt: StoreFormat, entries: &[LookupEntry]) -> Self {
+    pub fn init(target_dir: &Path, cache_fmt: StoreFormat, entries: &[LookupEntry]) -> Self {
+        let store_dir = target_dir.join(SCHEMA_DIR_NAME);
         // For each selected and frontier, check if a cache entry exists or not
         let cached_schemas = SccHashMap::new();
         for entry in entries {
@@ -115,10 +116,10 @@ impl SchemaStoreState {
             if matches!(entry, LookupEntry::Selected(..)) {
                 continue;
             }
-            Self::try_register_entry_inner(cache_dir, &cached_schemas, entry);
+            Self::try_register_entry_inner(&store_dir, &cached_schemas, entry);
         }
         Self {
-            store_dir: cache_dir.to_path_buf(),
+            store_dir,
             store_fmt: cache_fmt,
             cached_entries: cached_schemas,
         }
@@ -166,7 +167,7 @@ impl SchemaStoreState {
         if !overwrite && self.exists(entry) {
             return Ok(self.get_schema(entry).expect("Entry should exist"));
         }
-        let path = Self::resolve_entry_path(&self.store_dir, entry, false);
+        let path = Self::resolve_entry_path(&self.store_dir, entry);
         std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| {
             ArrowError::IoError(format!("Failed to create directory: {}", path.display()), e)
         })?;
@@ -179,44 +180,6 @@ impl SchemaStoreState {
         Ok(schema_entry)
     }
 
-    /// Persists batches of materialized data for the lookup entry.
-    pub fn persist_data(
-        &self,
-        entry: &LookupEntry,
-        schema: SchemaRef,
-        batches: Vec<RecordBatch>,
-    ) -> SchemaStoreResult<usize> {
-        let path = Self::resolve_entry_path(&self.store_dir, entry, true);
-        std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| {
-            ArrowError::IoError(format!("Failed to create directory: {}", path.display()), e)
-        })?;
-        let num_rows = persist_data_as_parquet_file(schema, true, batches, &path)?;
-        Ok(num_rows)
-    }
-
-    /// Async variant of [`SchemaStoreState::persist_data`].
-    pub async fn persist_data_async(
-        &self,
-        entry: &LookupEntry,
-        schema: SchemaRef,
-        stream: std::pin::Pin<
-            Box<dyn futures::Stream<Item = SchemaStoreResult<RecordBatch>> + Send + 'static>,
-        >,
-    ) -> SchemaStoreResult<usize> {
-        let path = Self::resolve_entry_path(&self.store_dir, entry, true);
-        std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| {
-            ArrowError::IoError(format!("Failed to create directory: {}", path.display()), e)
-        })?;
-        let num_rows = persist_data_as_parquet_file_async(schema, true, stream, &path).await?;
-
-        Ok(num_rows)
-    }
-
-    /// Computes the canonical filesystem path for the lookup entry's data.
-    pub fn get_path_to_data(&self, entry: &LookupEntry) -> PathBuf {
-        Self::resolve_entry_path(&self.store_dir, entry, true)
-    }
-
     /// Hydrates the schema on-demand and caches it in the underlying [`OnceLock`].
     fn try_get_or_init_schema(
         &self,
@@ -227,7 +190,7 @@ impl SchemaStoreState {
             if let Some(schema_entry) = schema_entry_wrapper.schema_entry.get() {
                 schema_entry.clone()
             } else {
-                let path = Self::resolve_entry_path(&self.store_dir, entry, false);
+                let path = Self::resolve_entry_path(&self.store_dir, entry);
                 let (schema_entry, _) = self
                     .read_cached_schema(&path)
                     .expect("Failed to read cached schema");
@@ -274,28 +237,27 @@ impl SchemaStoreState {
     /// deferred, and external nodes use the `schemas/sourced_remote/...`
     /// hierarchy described in the crate-level documentation.  Data paths swap
     /// `schemas/` for `data/`.
-    fn resolve_entry_path(cache_dir: &Path, entry: &LookupEntry, data: bool) -> PathBuf {
-        let root_path = cache_dir.join(if data { DATA_DIR_NAME } else { SCHEMA_DIR_NAME });
+    fn resolve_entry_path(cache_dir: &Path, entry: &LookupEntry) -> PathBuf {
         match entry {
-            LookupEntry::Frontier(cfqn) => root_path
+            LookupEntry::Frontier(cfqn) => cache_dir
                 .join(REMOTE_DIR_NAME)
                 .join(INTERNAL_DIR_NAME)
                 .join(cfqn.catalog())
                 .join(cfqn.schema())
                 .join(cfqn.table())
                 .join("output.parquet"),
-            LookupEntry::Selected(unique_id) => root_path
+            LookupEntry::Selected(unique_id) => cache_dir
                 .join(ANALYZED_DIR_NAME)
                 .join(unique_id)
                 .join("output.parquet"),
-            LookupEntry::Deferred(cfqn) => root_path
+            LookupEntry::Deferred(cfqn) => cache_dir
                 .join(REMOTE_DIR_NAME)
                 .join(DEFERRED_DIR_NAME)
                 .join(cfqn.catalog())
                 .join(cfqn.schema())
                 .join(cfqn.table())
                 .join("output.parquet"),
-            LookupEntry::External(cfqn) => root_path
+            LookupEntry::External(cfqn) => cache_dir
                 .join(REMOTE_DIR_NAME)
                 .join(EXTERNAL_DIR_NAME)
                 .join(cfqn.catalog())
@@ -311,7 +273,7 @@ impl SchemaStoreState {
         cached_schemas: &SccHashMap<LookupEntry, Arc<SchemaEntryWrapper>>,
         entry: &LookupEntry,
     ) -> Option<Arc<SchemaEntryWrapper>> {
-        let path = Self::resolve_entry_path(cache_dir, entry, false);
+        let path = Self::resolve_entry_path(cache_dir, entry);
         let timestamp = get_timestamp(&path);
         if let Some(timestamp) = timestamp {
             let schema_entry_wrapper = Arc::new(SchemaEntryWrapper::empty(timestamp));
@@ -490,20 +452,41 @@ impl SchemaStoreTrait for SchemaStore {
         }
         Ok(schema)
     }
+}
 
+#[derive(Debug)]
+pub struct DataStore {
+    store_dir: PathBuf,
+    store_fmt: StoreFormat,
+}
+
+impl DataStore {
+    pub fn new(target_dir: PathBuf, store_fmt: StoreFormat) -> Self {
+        let store_dir = target_dir.join(DATA_DIR_NAME);
+        Self {
+            store_dir,
+            store_fmt,
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl DataStoreTrait for DataStore {
     fn persist_data(
         &self,
         cfqn: &CanonicalFqn,
         schema: SchemaRef,
         batches: Vec<RecordBatch>,
     ) -> SchemaStoreResult<usize> {
-        let entry = if let Some(entry) = self.resolve_lookup_entry_by_cfqn(cfqn) {
-            entry
-        } else {
-            // Must be external
-            LookupEntry::External(cfqn.clone())
-        };
-        self.state.persist_data(&entry, schema, batches)
+        let path = self.get_path_to_data(cfqn);
+        std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| {
+            ArrowError::IoError(format!("Failed to create directory: {}", path.display()), e)
+        })?;
+        match self.store_fmt {
+            StoreFormat::ArrowIpc => unimplemented!(),
+            StoreFormat::Parquet => persist_data_as_parquet_file(schema, true, batches, &path),
+            StoreFormat::Yaml => unimplemented!(),
+        }
     }
 
     async fn persist_data_async(
@@ -514,23 +497,27 @@ impl SchemaStoreTrait for SchemaStore {
             Box<dyn futures::Stream<Item = SchemaStoreResult<RecordBatch>> + Send + 'static>,
         >,
     ) -> SchemaStoreResult<usize> {
-        let entry = if let Some(entry) = self.resolve_lookup_entry_by_cfqn(cfqn) {
-            entry
-        } else {
-            // Must be external
-            LookupEntry::External(cfqn.clone())
-        };
-        self.state.persist_data_async(&entry, schema, stream).await
+        let path = self.get_path_to_data(cfqn);
+        std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| {
+            ArrowError::IoError(format!("Failed to create directory: {}", path.display()), e)
+        })?;
+        match self.store_fmt {
+            StoreFormat::ArrowIpc => unimplemented!(),
+            StoreFormat::Parquet => {
+                persist_data_as_parquet_file_async(schema, true, stream, &path).await
+            }
+            StoreFormat::Yaml => unimplemented!(),
+        }
     }
 
     fn get_path_to_data(&self, cfqn: &CanonicalFqn) -> PathBuf {
-        let entry = if let Some(entry) = self.resolve_lookup_entry_by_cfqn(cfqn) {
-            entry
-        } else {
-            // Must be external
-            LookupEntry::External(cfqn.clone())
-        };
-        self.state.get_path_to_data(&entry)
+        // XXX: Normalize to lowercase to ensure case-insensitive lookups work on
+        // case-sensitive filesystems. Using file paths to encode case sensitivity is volatile
+        self.store_dir
+            .join(cfqn.catalog().to_ascii_lowercase())
+            .join(cfqn.schema().to_ascii_lowercase())
+            .join(cfqn.table().to_ascii_lowercase())
+            .join("output.parquet")
     }
 }
 

@@ -1,4 +1,4 @@
-use crate::{CanonicalFqn, SchemaEntry, SchemaStoreResult, SchemaStoreTrait};
+use crate::{CanonicalFqn, DataStoreTrait, SchemaEntry, SchemaStoreResult, SchemaStoreTrait};
 use arrow::array::RecordBatch;
 use arrow_schema::SchemaRef;
 use std::collections::HashMap;
@@ -93,7 +93,23 @@ impl SchemaStoreTrait for MockSchemaStore {
         map.insert(cfqn.clone(), entry.clone());
         Ok(entry)
     }
+}
 
+#[derive(Debug, Default)]
+pub struct MockDataStore {
+    data_by_cfqn: RwLock<HashMap<CanonicalFqn, PathBuf>>,
+}
+
+impl MockDataStore {
+    pub fn new() -> Self {
+        Self {
+            data_by_cfqn: RwLock::new(HashMap::new()),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl DataStoreTrait for MockDataStore {
     fn persist_data(
         &self,
         _cfqn: &CanonicalFqn,
@@ -113,8 +129,12 @@ impl SchemaStoreTrait for MockSchemaStore {
     ) -> SchemaStoreResult<usize> {
         unimplemented!()
     }
-
-    fn get_path_to_data(&self, _cfqn: &CanonicalFqn) -> PathBuf {
-        unimplemented!()
+    fn get_path_to_data(&self, cfqn: &CanonicalFqn) -> PathBuf {
+        self.data_by_cfqn
+            .read()
+            .unwrap()
+            .get(cfqn)
+            .cloned()
+            .unwrap()
     }
 }

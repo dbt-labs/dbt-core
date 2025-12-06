@@ -183,9 +183,13 @@ pub trait SchemaStoreTrait: std::fmt::Debug + Send + Sync {
         sdf_schema: SchemaRef,
         overwrite: bool,
     ) -> SchemaStoreResult<SchemaEntry>;
+}
 
-    /// Persists materialized data for the given canonical FQN using the schema
-    /// that static analysis generated.
+/// Abstraction for reading and writing materialized data maintained alongside
+/// canonical schemas.
+#[async_trait::async_trait]
+pub trait DataStoreTrait: std::fmt::Debug + Send + Sync {
+    /// Persists materialized data for the given canonical FQN using the provided schema.
     fn persist_data(
         &self,
         cfqn: &CanonicalFqn,
@@ -198,13 +202,13 @@ pub trait SchemaStoreTrait: std::fmt::Debug + Send + Sync {
         &self,
         cfqn: &CanonicalFqn,
         schema: SchemaRef,
-        mut stream: std::pin::Pin<
+        stream: std::pin::Pin<
             Box<dyn futures::Stream<Item = SchemaStoreResult<RecordBatch>> + Send + 'static>,
         >,
     ) -> SchemaStoreResult<usize>;
 
-    /// Returns the canonical filesystem location for a table's materialized
-    /// data.  This is a temporary escape hatch while full data lifecycle
-    /// management is being designed.
+    /// Returns the canonical filesystem location for a table's materialized data.
+    /// This normalizes to lowercase in order to ensure consistency between
+    /// file systems
     fn get_path_to_data(&self, cfqn: &CanonicalFqn) -> PathBuf;
 }
