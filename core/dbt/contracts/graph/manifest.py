@@ -558,7 +558,10 @@ def _packages_to_search(
     elif current_project == node_package:
         return [current_project, None]
     else:
-        return [current_project, node_package, None]
+        if get_flags().require_ref_searches_node_package_before_root:
+            return [node_package, current_project, None]
+        else:
+            return [current_project, node_package, None]
 
 
 def _sort_values(dct):
