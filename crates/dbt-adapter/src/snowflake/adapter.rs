@@ -1,9 +1,7 @@
 use crate::adapter_engine::AdapterEngine;
-use crate::catalog_relation::CatalogRelation;
 use crate::column::Column;
 use crate::errors::AdapterResult;
 use crate::funcs::execute_macro;
-use crate::load_catalogs;
 use crate::record_batch_utils::get_column_values;
 use crate::relation_object::RelationObject;
 use crate::typed_adapter::TypedBaseAdapter;
@@ -14,8 +12,7 @@ use dbt_agate::AgateTable;
 use dbt_common::adapter::AdapterType;
 use dbt_schemas::schemas::common::{ConstraintSupport, ConstraintType};
 use dbt_schemas::schemas::relations::base::BaseRelation;
-use dbt_xdbc::{Connection, QueryCtx};
-use minijinja::{State, Value};
+use minijinja::State;
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -53,44 +50,6 @@ impl AdapterTyping for SnowflakeAdapter {
 }
 
 impl TypedBaseAdapter for SnowflakeAdapter {
-    // TODO: add_query does not appear to be necessary (few uses in
-    // macros) and should be removed and replaced with `execute`.
-    #[allow(clippy::too_many_arguments)]
-    fn add_query(
-        &self,
-        ctx: &QueryCtx,
-        conn: &'_ mut dyn Connection,
-        sql: &str,
-        auto_begin: bool,
-        _bindings: Option<&Value>,
-        _abridge_sql_log: bool,
-    ) -> AdapterResult<()> {
-        self.execute_inner(
-            self.adapter_type().into(),
-            self.engine.clone(),
-            None,
-            conn,
-            ctx,
-            sql,
-            auto_begin,
-            false, // fetch
-            None,
-            None,
-        )?;
-
-        Ok(())
-    }
-
-    fn build_catalog_relation(&self, model: &Value) -> AdapterResult<Value> {
-        Ok(Value::from_object(
-            CatalogRelation::from_model_config_and_catalogs(
-                &self.adapter_type(),
-                model,
-                load_catalogs::fetch_catalogs(),
-            )?,
-        ))
-    }
-
     /// reference: https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L329-L330
     fn standardize_grants_dict(
         &self,
@@ -145,20 +104,6 @@ impl TypedBaseAdapter for SnowflakeAdapter {
         )?)
     }
 
-    /// Snowflake is special and defaults quoting to false if config is not provided
-    fn quote_seed_column(
-        &self,
-        state: &State,
-        column: &str,
-        quote_config: Option<bool>,
-    ) -> AdapterResult<String> {
-        if quote_config.unwrap_or(false) {
-            self.quote(state, column)
-        } else {
-            Ok(column.to_string())
-        }
-    }
-
     /// https://github.com/dbt-labs/dbt-adapters/blob/aa1de3d16267a456326a36045701fb48a61a6b6c/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L74
     fn get_constraint_support(&self, ct: ConstraintType) -> ConstraintSupport {
         match ct {
@@ -167,12 +112,6 @@ impl TypedBaseAdapter for SnowflakeAdapter {
             ConstraintType::Unique | ConstraintType::PrimaryKey => ConstraintSupport::NotEnforced,
             _ => ConstraintSupport::NotSupported,
         }
-    }
-}
-
-impl fmt::Display for SnowflakeAdapter {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "SnowflakeAdapter({})", self.adapter_type())
     }
 }
 

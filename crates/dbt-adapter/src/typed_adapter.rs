@@ -1,17 +1,18 @@
 use crate::adapter_engine::{AdapterEngine, Options as ExecuteOptions, execute_query_with_retry};
+use crate::catalog_relation::CatalogRelation;
 use crate::column::{Column, ColumnBuilder};
 use crate::errors::{AdapterError, AdapterErrorKind};
-use crate::execute_macro_wrapper_with_package;
 use crate::funcs::{execute_macro, none_value};
 use crate::information_schema::InformationSchema;
 use crate::metadata::{self, CatalogAndSchema};
-use crate::python;
 use crate::query_ctx::query_ctx_from_state;
 use crate::record_batch_utils::{extract_first_value_as_i64, get_column_values};
 use crate::relation_object::RelationObject;
 use crate::response::{AdapterResponse, ResultObject};
 use crate::snapshots::SnapshotStrategy;
-use crate::{AdapterResult, AdapterTyping};
+use crate::{
+    AdapterResult, AdapterTyping, execute_macro_wrapper_with_package, load_catalogs, python,
+};
 
 use adbc_core::options::OptionValue;
 use arrow::array::{RecordBatch, StringArray, TimestampMillisecondArray};
@@ -318,9 +319,49 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         conn: &'_ mut dyn Connection,
         sql: &str,
         auto_begin: bool,
-        _bindings: Option<&Value>,
+        bindings: Option<&Value>,
         abridge_sql_log: bool,
-    ) -> AdapterResult<()>;
+    ) -> AdapterResult<()> {
+        if let Some(replay_adapter) = self.as_replay() {
+            return replay_adapter.replay_add_query(
+                ctx,
+                conn,
+                sql,
+                auto_begin,
+                bindings,
+                abridge_sql_log,
+            );
+        }
+        match self.adapter_type() {
+            AdapterType::Bigquery => {
+                // Bigquery does not support add_query
+                // https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L476-L477
+                Err(AdapterError::new(
+                    AdapterErrorKind::NotSupported,
+                    "bigquery.add_query",
+                ))
+            }
+            AdapterType::Postgres
+            | AdapterType::Snowflake
+            | AdapterType::Databricks
+            | AdapterType::Redshift
+            | AdapterType::Salesforce => {
+                self.execute_inner(
+                    self.adapter_type().into(),
+                    Arc::clone(self.engine()),
+                    None,
+                    conn,
+                    ctx,
+                    sql,
+                    auto_begin,
+                    false, // fetch: default to false as in dispatch_adapter_calls()
+                    None,
+                    None,
+                )?;
+                Ok(())
+            }
+        }
+    }
 
     /// Submit Python job
     ///
@@ -480,8 +521,12 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     /// Get a catalog relation, which in Core is a serialized type.
     /// In Fusion, we treat it as a Jinja accessible flat container of values
     /// needed for Iceberg ddl generation.
-    fn build_catalog_relation(&self, _model: &Value) -> AdapterResult<Value> {
-        unimplemented!("only available with Bigquery, Databricks, and Snowflake adapters")
+    fn build_catalog_relation(&self, model: &Value) -> AdapterResult<CatalogRelation> {
+        CatalogRelation::from_model_config_and_catalogs(
+            &self.adapter_type(),
+            model,
+            load_catalogs::fetch_catalogs(),
+        )
     }
 
     /// Get all relevant metadata about a dynamic table
@@ -700,17 +745,35 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     }
 
     /// Quote seed column, default to true if not provided
-    /// reference: https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1072
     fn quote_seed_column(
         &self,
         state: &State,
         column: &str,
         quote_config: Option<bool>,
     ) -> AdapterResult<String> {
-        if quote_config.unwrap_or(true) {
-            self.quote(state, column)
-        } else {
-            Ok(column.to_string())
+        if let Some(replay_adapter) = self.as_replay() {
+            return replay_adapter.replay_quote_seed_column(state, column, quote_config);
+        }
+        match self.adapter_type() {
+            AdapterType::Snowflake | AdapterType::Salesforce => {
+                // Snowflake is special and defaults quoting to false if config is not provided
+                if quote_config.unwrap_or(false) {
+                    self.quote(state, column)
+                } else {
+                    Ok(column.to_string())
+                }
+            }
+            AdapterType::Postgres
+            | AdapterType::Bigquery
+            | AdapterType::Databricks
+            | AdapterType::Redshift => {
+                // https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1072
+                if quote_config.unwrap_or(true) {
+                    self.quote(state, column)
+                } else {
+                    Ok(column.to_string())
+                }
+            }
         }
     }
 
@@ -1519,6 +1582,16 @@ pub trait ReplayAdapter: TypedBaseAdapter {
         options: Option<HashMap<String, String>>,
     ) -> AdapterResult<(AdapterResponse, AgateTable)>;
 
+    fn replay_add_query(
+        &self,
+        ctx: &QueryCtx,
+        conn: &'_ mut dyn Connection,
+        sql: &str,
+        auto_begin: bool,
+        bindings: Option<&Value>,
+        abridge_sql_log: bool,
+    ) -> AdapterResult<()>;
+
     fn replay_get_relation(
         &self,
         state: &State,
@@ -1530,6 +1603,13 @@ pub trait ReplayAdapter: TypedBaseAdapter {
     ) -> AdapterResult<Option<Arc<dyn BaseRelation>>>;
 
     fn replay_quote(&self, state: &State, identifier: &str) -> AdapterResult<String>;
+
+    fn replay_quote_seed_column(
+        &self,
+        state: &State,
+        column: &str,
+        quote_config: Option<bool>,
+    ) -> AdapterResult<String>;
 
     fn replay_convert_type(&self, state: &State, data_type: &DataType) -> AdapterResult<String>;
 

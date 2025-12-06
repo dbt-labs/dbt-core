@@ -9,7 +9,6 @@ use crate::typed_adapter::TypedBaseAdapter;
 use dbt_common::adapter::AdapterType;
 use dbt_schemas::schemas::common::{ConstraintSupport, ConstraintType};
 use dbt_schemas::schemas::relations::base::BaseRelation;
-use dbt_xdbc::{Connection, QueryCtx};
 use minijinja::{State, Value};
 
 use std::borrow::Cow;
@@ -51,33 +50,6 @@ impl AdapterTyping for RedshiftAdapter {
 }
 
 impl TypedBaseAdapter for RedshiftAdapter {
-    // TODO: add_query does not appear to be necessary (few uses in
-    // macros) and should be removed and replaced with `execute`.
-    #[allow(clippy::too_many_arguments)]
-    fn add_query(
-        &self,
-        ctx: &QueryCtx,
-        conn: &'_ mut dyn Connection,
-        sql: &str,
-        auto_begin: bool,
-        _bindings: Option<&Value>,
-        _abridge_sql_log: bool,
-    ) -> AdapterResult<()> {
-        self.execute_inner(
-            self.adapter_type().into(),
-            self.engine.clone(),
-            None,
-            conn,
-            ctx,
-            sql,
-            auto_begin,
-            false,
-            None,
-            None,
-        )?;
-        Ok(())
-    }
-
     fn verify_database(&self, database: String) -> AdapterResult<Value> {
         let ra3_node = self
             .engine

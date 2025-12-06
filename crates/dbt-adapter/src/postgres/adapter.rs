@@ -8,7 +8,6 @@ use crate::relation_object::RelationObject;
 use crate::typed_adapter::TypedBaseAdapter;
 use dbt_schemas::schemas::common::{ConstraintSupport, ConstraintType};
 use dbt_schemas::schemas::relations::base::BaseRelation;
-use dbt_xdbc::{Connection, QueryCtx};
 
 use minijinja::{State, Value};
 use std::fmt;
@@ -48,33 +47,6 @@ impl Debug for PostgresAdapter {
 }
 
 impl TypedBaseAdapter for PostgresAdapter {
-    // TODO: add_query does not appear to be necessary (few uses in
-    // macros) and should be removed and replaced with `execute`.
-    #[allow(clippy::too_many_arguments)]
-    fn add_query(
-        &self,
-        ctx: &QueryCtx,
-        conn: &'_ mut dyn Connection,
-        sql: &str,
-        auto_begin: bool,
-        _bindings: Option<&Value>,
-        _abridge_sql_log: bool,
-    ) -> AdapterResult<()> {
-        let _ = self.execute_inner(
-            self.adapter_type().into(),
-            self.engine.clone(),
-            None,
-            conn,
-            ctx,
-            sql,
-            auto_begin,
-            false, // default for fetch as in dispatch_adapter_calls()
-            None,
-            None,
-        )?;
-        Ok(())
-    }
-
     // reference: https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-postgres/src/dbt/include/postgres/macros/adapters.sql#L63
     fn get_columns_in_relation(
         &self,
@@ -118,11 +90,5 @@ impl TypedBaseAdapter for PostgresAdapter {
             ConstraintType::Unique | ConstraintType::PrimaryKey => ConstraintSupport::NotEnforced,
             _ => ConstraintSupport::NotSupported,
         }
-    }
-}
-
-impl fmt::Display for PostgresAdapter {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "PostgresAdapter({})", self.adapter_type())
     }
 }

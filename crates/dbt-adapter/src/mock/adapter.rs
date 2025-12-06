@@ -234,12 +234,6 @@ impl TypedBaseAdapter for MockAdapter {
     }
 }
 
-impl fmt::Display for MockAdapter {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "MockAdapter")
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use crate::sql_types::NaiveTypeOpsImpl;

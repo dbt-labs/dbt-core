@@ -132,33 +132,6 @@ impl AdapterTyping for DatabricksAdapter {
 }
 
 impl TypedBaseAdapter for DatabricksAdapter {
-    // TODO: add_query does not appear to be necessary (few uses in
-    // macros) and should be removed and replaced with `execute`.
-    #[allow(clippy::too_many_arguments)]
-    fn add_query(
-        &self,
-        ctx: &QueryCtx,
-        conn: &'_ mut dyn Connection,
-        sql: &str,
-        auto_begin: bool,
-        _bindings: Option<&Value>,
-        _abridge_sql_log: bool,
-    ) -> AdapterResult<()> {
-        let _ = self.execute_inner(
-            self.adapter_type().into(),
-            self.engine.clone(),
-            None,
-            conn,
-            ctx,
-            sql,
-            auto_begin,
-            false, // default for fetch as in dispatch_adapter_calls()
-            None,
-            None,
-        )?;
-        Ok(())
-    }
-
     /// Get the full macro name for check_schema_exists
     ///
     /// # Returns
@@ -481,14 +454,12 @@ impl TypedBaseAdapter for DatabricksAdapter {
         Ok(result)
     }
 
-    fn build_catalog_relation(&self, model: &Value) -> AdapterResult<Value> {
-        Ok(Value::from_object(
-            CatalogRelation::from_model_config_and_catalogs(
-                &self.adapter_type(),
-                model,
-                load_catalogs::fetch_catalogs(),
-            )?,
-        ))
+    fn build_catalog_relation(&self, model: &Value) -> AdapterResult<CatalogRelation> {
+        CatalogRelation::from_model_config_and_catalogs(
+            &self.adapter_type(),
+            model,
+            load_catalogs::fetch_catalogs(),
+        )
     }
 
     /// Given a model, parse and build its configurations

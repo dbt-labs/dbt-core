@@ -348,13 +348,12 @@ impl BaseAdapter for ParseAdapter {
     }
 
     fn build_catalog_relation(&self, model: &Value) -> Result<Value, MinijinjaError> {
-        Ok(Value::from_object(
-            CatalogRelation::from_model_config_and_catalogs(
-                &self.adapter_type,
-                model,
-                self.catalogs.clone(),
-            )?,
-        ))
+        let relation = CatalogRelation::from_model_config_and_catalogs(
+            &self.adapter_type,
+            model,
+            self.catalogs.clone(),
+        )?;
+        Ok(Value::from_object(relation))
     }
 
     fn get_columns_in_relation(
@@ -887,12 +886,6 @@ impl BaseAdapter for ParseAdapter {
             .into_iter()
             .collect::<HashMap<_, _>>();
         Ok(Value::from_serialize(map))
-    }
-}
-
-impl fmt::Display for ParseAdapter {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "ParseAdapter({})", self.adapter_type)
     }
 }
 

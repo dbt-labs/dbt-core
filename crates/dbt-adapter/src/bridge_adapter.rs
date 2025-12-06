@@ -710,7 +710,8 @@ impl BaseAdapter for BridgeAdapter {
 
     #[tracing::instrument(skip(self), level = "trace")]
     fn build_catalog_relation(&self, model: &Value) -> Result<Value, MinijinjaError> {
-        Ok(self.typed_adapter.build_catalog_relation(model)?)
+        let relation = self.typed_adapter.build_catalog_relation(model)?;
+        Ok(Value::from_object(relation))
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
@@ -1592,12 +1593,6 @@ impl BaseAdapter for BridgeAdapter {
         let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
         self.typed_adapter
             .describe_dynamic_table(state, conn.as_mut(), relation)
-    }
-}
-
-impl fmt::Display for BridgeAdapter {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "BridgeAdapter({})", self.adapter_type())
     }
 }
 

@@ -102,7 +102,7 @@ pub trait AdapterTyping {
 }
 
 /// Base adapter
-pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
+pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
     /// Commit
     ///
     /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L000
@@ -1102,6 +1102,23 @@ pub trait BaseAdapter: fmt::Display + fmt::Debug + AdapterTyping + Send + Sync {
     /// Used internally to identify if a relation is already cached
     fn is_cached(&self, _relation: &Arc<dyn BaseRelation>) -> bool {
         false
+    }
+}
+
+impl fmt::Display for dyn BaseAdapter {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}({})",
+            if self.is_parse() {
+                "ParseAdapter"
+            } else if self.as_replay().is_some() {
+                "DbtReplayAdapter"
+            } else {
+                "Adapter"
+            },
+            self.adapter_type()
+        )
     }
 }
 

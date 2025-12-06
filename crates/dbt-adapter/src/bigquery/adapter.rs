@@ -298,25 +298,6 @@ impl AdapterTyping for BigqueryAdapter {
 }
 
 impl TypedBaseAdapter for BigqueryAdapter {
-    /// Bigquery does not support add_query
-    ///
-    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L476-L477
-    #[allow(clippy::too_many_arguments)]
-    fn add_query(
-        &self,
-        _ctx: &QueryCtx,
-        _conn: &'_ mut dyn Connection,
-        _sql: &str,
-        _auto_begin: bool,
-        _bindings: Option<&Value>,
-        _abridge_sql_log: bool,
-    ) -> AdapterResult<()> {
-        Err(AdapterError::new(
-            AdapterErrorKind::NotSupported,
-            "bigquery.add_query",
-        ))
-    }
-
     /// BigQuery does not support truncate_relation
     ///
     /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L173-L174
@@ -978,16 +959,6 @@ impl TypedBaseAdapter for BigqueryAdapter {
             }
             _ => ConstraintSupport::NotSupported,
         }
-    }
-
-    fn build_catalog_relation(&self, model_config: &Value) -> AdapterResult<Value> {
-        Ok(Value::from_object(
-            CatalogRelation::from_model_config_and_catalogs(
-                &self.adapter_type(),
-                model_config,
-                load_catalogs::fetch_catalogs(),
-            )?,
-        ))
     }
 }
 
