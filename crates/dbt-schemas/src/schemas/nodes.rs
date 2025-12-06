@@ -2898,6 +2898,7 @@ pub struct DbtSeedAttr {
     pub column_types: Option<BTreeMap<Spanned<String>, String>>,
     pub delimiter: Option<String>,
     pub root_path: Option<PathBuf>,
+    pub catalog_name: Option<String>,
 }
 
 fn is_false(b: &bool) -> bool {

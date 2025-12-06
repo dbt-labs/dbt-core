@@ -610,6 +610,7 @@ pub struct ManifestSeedConfig {
     #[serde(alias = "dataset")]
     pub schema: Option<String>,
     pub alias: Option<String>,
+    pub catalog_name: Option<String>,
     pub docs: Option<DocsConfig>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
@@ -641,6 +642,7 @@ impl From<SeedConfig> for ManifestSeedConfig {
             alias: config.alias,
             database: config.database,
             schema: config.schema,
+            catalog_name: config.catalog_name,
             docs: config.docs,
             grants: config.grants,
             quote_columns: config.quote_columns,
@@ -668,6 +670,7 @@ impl From<ManifestSeedConfig> for SeedConfig {
             alias: config.alias,
             database: config.database,
             schema: config.schema,
+            catalog_name: config.catalog_name,
             docs: config.docs,
             grants: config.grants,
             quote_columns: config.quote_columns,

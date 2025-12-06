@@ -257,6 +257,7 @@ pub fn resolve_seeds(
                 column_types: properties_config.column_types.clone(),
                 delimiter: properties_config.delimiter.clone().map(|d| d.into_inner()),
                 root_path: Some(seed_file.base_path.clone()),
+                catalog_name: properties_config.catalog_name.clone(),
             },
             __other__: BTreeMap::new(),
             deprecated_config: properties_config.clone(),

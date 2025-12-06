@@ -792,6 +792,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                             column_types: seed.config.column_types.clone(),
                             delimiter: seed.config.delimiter.clone().map(|d| d.into_inner()),
                             root_path: seed.root_path,
+                            catalog_name: seed.config.catalog_name.clone(),
                         },
                         deprecated_config: seed.config.into(),
                         __other__: seed.__other__,

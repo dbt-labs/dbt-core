@@ -281,6 +281,7 @@ pub struct SeedConfig {
     #[serde(alias = "dataset")]
     pub schema: Option<String>,
     pub alias: Option<String>,
+    pub catalog_name: Option<String>,
     pub docs: Option<DocsConfig>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
@@ -311,6 +312,7 @@ impl From<ProjectSeedConfig> for SeedConfig {
             database: config.database,
             schema: config.schema,
             alias: config.alias,
+            catalog_name: config.catalog_name.clone(),
             docs: config.docs,
             enabled: config.enabled,
             grants: config.grants,
@@ -539,6 +541,7 @@ impl DefaultTo<SeedConfig> for SeedConfig {
             database,
             schema,
             alias,
+            catalog_name,
             docs,
             enabled,
             grants,
@@ -577,6 +580,7 @@ impl DefaultTo<SeedConfig> for SeedConfig {
                 database,
                 schema,
                 alias,
+                catalog_name,
                 docs,
                 enabled,
                 quote_columns,
