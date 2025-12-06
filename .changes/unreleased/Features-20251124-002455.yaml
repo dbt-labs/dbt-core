@@ -1,0 +1,6 @@
+kind: Features
+body: Introduce DBT_SELECTOR as environment variable for --selector
+time: 2025-11-24T00:24:55.698098+01:00
+custom:
+    Author: fornwall
+    Issue: "12193"
