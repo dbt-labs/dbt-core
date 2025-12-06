@@ -427,6 +427,128 @@ def test_select_config_meta(manifest):
     assert not search_manifest_using_method(manifest, list_method, "other") == {"table_model"}
 
 
+def test_select_config_enabled_on_all_nodes(manifest):
+    """Test that ConfigSelectorMethod can find enabled property on all node types.
+
+    This test verifies that the change from configurable_nodes() to all_nodes()
+    allows the ConfigSelectorMethod to search through all node types, not just
+    the previous subset of parsed_nodes and source_nodes.
+    """
+    methods = MethodManager(manifest, None)
+    method = methods.get_method("config", ["enabled"])
+    assert isinstance(method, ConfigSelectorMethod)
+    assert method.arguments == ["enabled"]
+
+    # All nodes should have enabled: true by default
+    enabled_nodes = search_manifest_using_method(manifest, method, "true")
+
+    # Should include traditional configurable nodes (models, sources)
+    assert "table_model" in enabled_nodes
+    assert "view_model" in enabled_nodes
+    assert "ext_raw.ext_source" in enabled_nodes
+
+    # Should now also include the new node types that were added via all_nodes()
+    # Metrics, semantic models, saved queries should all have enabled: true by default
+    assert "my_metric" in enabled_nodes
+    assert "test_semantic_model" in enabled_nodes
+    assert "test_saved_query" in enabled_nodes
+
+
+def test_select_config_searches_more_nodes_than_before(manifest):
+    """Test that ConfigSelectorMethod now searches more node types than before.
+
+    This test verifies that the change from configurable_nodes() to all_nodes()
+    actually expands the set of searchable nodes beyond just models and sources.
+    """
+    methods = MethodManager(manifest, None)
+
+    # Test that we can search for config properties that exist on various node types
+    enabled_method = methods.get_method("config", ["enabled"])
+    all_enabled_nodes = search_manifest_using_method(manifest, enabled_method, "true")
+
+    # Verify specific new node types are found (these were not in configurable_nodes())
+    metrics = [node for node in all_enabled_nodes if "my_metric" in node]
+    semantic_models = [node for node in all_enabled_nodes if "test_semantic_model" in node]
+    saved_queries = [node for node in all_enabled_nodes if "test_saved_query" in node]
+
+    # With all_nodes(), we should find these new node types
+    assert len(metrics) > 0, "Should find metric nodes (new with all_nodes)"
+    assert len(semantic_models) > 0, "Should find semantic model nodes (new with all_nodes)"
+    assert len(saved_queries) > 0, "Should find saved query nodes (new with all_nodes)"
+
+    # Specifically check that these new node types are found
+    assert "my_metric" in all_enabled_nodes, "Metric should be searchable with config selector"
+    assert (
+        "test_semantic_model" in all_enabled_nodes
+    ), "Semantic model should be searchable with config selector"
+    assert (
+        "test_saved_query" in all_enabled_nodes
+    ), "Saved query should be searchable with config selector"
+
+    # The total should include many types of nodes due to all_nodes() expansion
+    total_nodes = len(all_enabled_nodes)
+    assert (
+        total_nodes > 20
+    ), f"Should find many nodes with all_nodes() expansion, found {total_nodes}"
+
+
+def test_config_selector_finds_nodes_not_in_old_configurable_nodes(manifest):
+    """Test that ConfigSelectorMethod now finds nodes that were excluded by configurable_nodes().
+
+    Before the change, ConfigSelectorMethod.search() used configurable_nodes() which only
+    included parsed_nodes() and source_nodes(). Now it uses all_nodes() which includes
+    exposure_nodes(), metric_nodes(), unit_tests(), semantic_model_nodes(), and saved_query_nodes().
+
+    This test verifies that the new node types are now searchable.
+    """
+    methods = MethodManager(manifest, None)
+    method = methods.get_method("config", ["enabled"])
+
+    # Search for enabled nodes
+    enabled_nodes = search_manifest_using_method(manifest, method, "true")
+
+    # These node types were NOT included in the old configurable_nodes() method
+    # but should now be found via all_nodes()
+
+    # Metrics should be found (they have MetricConfig with enabled property)
+    # search_name for metrics is just the metric name, not the full unique_id
+    assert (
+        "my_metric" in enabled_nodes
+    ), "Specific metric should be found by config selector (new functionality)"
+
+    # Semantic models should be found (they have SemanticModelConfig with enabled property)
+    assert (
+        "test_semantic_model" in enabled_nodes
+    ), "Specific semantic model should be found by config selector (new functionality)"
+
+    # Saved queries should be found (they have SavedQueryConfig with enabled property)
+    assert (
+        "test_saved_query" in enabled_nodes
+    ), "Specific saved query should be found by config selector (new functionality)"
+
+    # Unit tests should also be found (they have config.enabled)
+    unit_tests_found = [node for node in enabled_nodes if "unit_test" in node]
+    assert (
+        len(unit_tests_found) > 0
+    ), "Unit tests should be found by config selector (new functionality)"
+
+    # Count the new node types we can find
+    new_node_types = 0
+    if "my_metric" in enabled_nodes:
+        new_node_types += 1
+    if "test_semantic_model" in enabled_nodes:
+        new_node_types += 1
+    if "test_saved_query" in enabled_nodes:
+        new_node_types += 1
+    new_node_types += len(unit_tests_found)
+
+    # This demonstrates the key change: ConfigSelectorMethod can now search through
+    # many more node types than just the traditional "configurable" nodes
+    assert (
+        new_node_types >= 4
+    ), f"Should find at least 4 nodes from newly included types, found {new_node_types}"
+
+
 def test_select_test_name(manifest):
     methods = MethodManager(manifest, None)
     method = methods.get_method("test_name", [])
