@@ -193,3 +193,100 @@ class TestLinker:
             linker.dependency(l, r)
 
         assert linker.find_cycles() is None
+
+
+class TestCompilerSuffixGeneration:
+    """Test the suffix generation for test failure tables."""
+    
+    def test_suffix_generation_disabled(self):
+        """Test that no suffix is generated when store_failures_unique is False."""
+        from dbt.compilation import Compiler
+        from dbt.contracts.graph.nodes import GenericTestNode
+        from dbt.artifacts.resources.v1.config import TestConfig
+        
+        mock_config = mock.MagicMock()
+        compiler = Compiler(mock_config)
+        
+        test_node = GenericTestNode(
+            unique_id="test.myproject.test_name",
+            name="test_name",
+            database="test_db",
+            schema="test_schema",
+            alias="test_name",
+            resource_type="test",
+            package_name="myproject",
+            path="test.sql",
+            original_file_path="test.sql",
+            config=TestConfig(
+                store_failures=True,
+                store_failures_unique=False
+            ),
+            fqn=["myproject", "test_name"],
+            checksum={"name": "sha256", "checksum": "abc123"}
+        )
+        
+        suffix = compiler._get_test_table_suffix(test_node)
+        assert suffix is None
+    
+    def test_suffix_generation_invocation_id(self):
+        """Test invocation_id suffix strategy."""
+        from dbt.compilation import Compiler
+        from dbt.contracts.graph.nodes import GenericTestNode
+        from dbt.artifacts.resources.v1.config import TestConfig
+        
+        mock_config = mock.MagicMock()
+        compiler = Compiler(mock_config)
+        
+        test_node = GenericTestNode(
+            unique_id="test.myproject.test_name",
+            name="test_name",
+            database="test_db",
+            schema="test_schema",
+            alias="test_name",
+            resource_type="test",
+            package_name="myproject",
+            path="test.sql",
+            original_file_path="test.sql",
+            config=TestConfig(
+                store_failures=True,
+                store_failures_unique=True,
+                store_failures_suffix='invocation_id'
+            ),
+            fqn=["myproject", "test_name"],
+            checksum={"name": "sha256", "checksum": "abc123"}
+        )
+        
+        with mock.patch('dbt.compilation.get_invocation_id', return_value='abcd1234-5678-90ef'):
+            suffix = compiler._get_test_table_suffix(test_node)
+            assert suffix == 'abcd1234'
+    
+    def test_suffix_generation_custom(self):
+        """Test custom suffix strategy."""
+        from dbt.compilation import Compiler
+        from dbt.contracts.graph.nodes import GenericTestNode
+        from dbt.artifacts.resources.v1.config import TestConfig
+        
+        mock_config = mock.MagicMock()
+        compiler = Compiler(mock_config)
+        
+        test_node = GenericTestNode(
+            unique_id="test.myproject.test_name",
+            name="test_name",
+            database="test_db",
+            schema="test_schema",
+            alias="test_name",
+            resource_type="test",
+            package_name="myproject",
+            path="test.sql",
+            original_file_path="test.sql",
+            config=TestConfig(
+                store_failures=True,
+                store_failures_unique=True,
+                store_failures_suffix='my_custom_suffix'
+            ),
+            fqn=["myproject", "test_name"],
+            checksum={"name": "sha256", "checksum": "abc123"}
+        )
+        
+        suffix = compiler._get_test_table_suffix(test_node)
+        assert suffix == 'my_custom_suffix'
