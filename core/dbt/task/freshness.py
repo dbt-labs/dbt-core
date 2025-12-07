@@ -260,6 +260,33 @@ class FreshnessTask(RunTask):
             elapsed_time=elapsed_time, generated_at=generated_at, results=results
         )
 
+    def _print_freshness_result(self, result, level, prefix):
+        """Helper to print a freshness result message
+        
+        Handles two cases:
+        1. result.node exists (standard freshness results)
+        2. result has source_name and table_name attributes directly (edge cases)
+        """
+        fire_event(Formatting(""))
+        if hasattr(result, 'node') and result.node:
+            source_name = result.node.source_name
+            table_name = result.node.name
+        elif hasattr(result, 'source_name') and hasattr(result, 'table_name'):
+            source_name = result.source_name
+            table_name = result.table_name
+        else:
+            # Fallback for unexpected result structure
+            fire_event(
+                Note(msg=f"{prefix} in unknown source"),
+                level,
+            )
+            return
+        
+        fire_event(
+            Note(msg=f"{prefix} in source {source_name}.{table_name}"),
+            level,
+        )
+
     def task_end_messages(self, results) -> None:
         errors, warnings = [], []
         
@@ -279,37 +306,13 @@ class FreshnessTask(RunTask):
                 EventLevel.INFO,
             )
             
-            # Print each error
+            # Print each error using helper
             for error in errors:
-                fire_event(Formatting(""))
-                if hasattr(error, 'node'):
-                    source_name = error.node.source_name
-                    table_name = error.node.name
-                    fire_event(
-                        Note(msg=f"Failure in source {source_name}.{table_name}"),
-                        EventLevel.ERROR,
-                    )
-                else:
-                    fire_event(
-                        Note(msg=f"Failure in source {error.source_name}.{error.table_name}"),
-                        EventLevel.ERROR,
-                    )
+                self._print_freshness_result(error, EventLevel.ERROR, "Failure")
             
-            # Print each warning
+            # Print each warning using helper
             for warning in warnings:
-                fire_event(Formatting(""))
-                if hasattr(warning, 'node'):
-                    source_name = warning.node.source_name
-                    table_name = warning.node.name
-                    fire_event(
-                        Note(msg=f"Warning in source {source_name}.{table_name}"),
-                        EventLevel.WARN,
-                    )
-                else:
-                    fire_event(
-                        Note(msg=f"Warning in source {warning.source_name}.{warning.table_name}"),
-                        EventLevel.WARN,
-                    )
+                self._print_freshness_result(warning, EventLevel.WARN, "Warning")
         
         # Print final stats
         pass_count = sum(1 for r in results if r.status == FreshnessStatus.Pass)
@@ -327,6 +330,7 @@ class FreshnessTask(RunTask):
         )
         
         fire_event(FreshnessCheckComplete())
+
     def get_hooks_by_type(self, hook_type: RunHookType) -> List[HookNode]:
         hooks = super().get_hooks_by_type(hook_type)
         if self.args.source_freshness_run_project_hooks:
