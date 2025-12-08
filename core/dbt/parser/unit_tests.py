@@ -523,6 +523,7 @@ def process_models_for_unit_test(
             unit_test_def.depends_on.nodes.append(tested_node.unique_id)
             unit_test_def.schema = tested_node.schema
         else:
+            # If the model is disabled, the unit test should be disabled
             unit_test_def.config.enabled = False
 
     # The UnitTestDefinition should only have one "depends_on" at this point,
@@ -530,7 +531,7 @@ def process_models_for_unit_test(
     target_model_id = unit_test_def.depends_on.nodes[0]
     if target_model_id not in manifest.nodes:
         if target_model_id in manifest.disabled:
-            # Ensure the unit test is disabled if the model is disabled
+            # If the model is disabled, the unit test should be disabled
             unit_test_def.config.enabled = False
         else:
             # If we've reached here and the model is not disabled, throw an error
@@ -539,6 +540,7 @@ def process_models_for_unit_test(
             )
 
     if not unit_test_def.config.enabled:
+        # Ensure the unit test is disabled in the manifest
         if unit_test_def.unique_id in manifest.unit_tests:
             manifest.unit_tests.pop(unit_test_def.unique_id)
         if unit_test_def.unique_id not in manifest.disabled:
