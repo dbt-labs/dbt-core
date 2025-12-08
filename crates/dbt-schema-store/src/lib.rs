@@ -183,6 +183,19 @@ pub trait SchemaStoreTrait: std::fmt::Debug + Send + Sync {
         sdf_schema: SchemaRef,
         overwrite: bool,
     ) -> SchemaStoreResult<SchemaEntry>;
+
+    /// Returns the names of all catalogs tracked by this store.
+    fn catalog_names(&self) -> Vec<CanonicalIdentifier>;
+
+    /// Returns the schema names registered within the given catalog.
+    fn schema_names(&self, catalog: &CanonicalIdentifier) -> Vec<CanonicalIdentifier>;
+
+    /// Returns the table names registered within the given catalog + schema.
+    fn table_names(
+        &self,
+        catalog: &CanonicalIdentifier,
+        schema: &CanonicalIdentifier,
+    ) -> Vec<CanonicalIdentifier>;
 }
 
 /// Abstraction for reading and writing materialized data maintained alongside

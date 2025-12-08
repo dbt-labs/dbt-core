@@ -5,7 +5,10 @@
 //! which understands the different entry classes (analyzed, frontier, deferred,
 //! external) and maps them to their respective on-disk namespaces.
 
-use crate::{CanonicalFqn, DataStoreTrait, SchemaEntry, SchemaStoreResult, SchemaStoreTrait};
+use crate::{
+    CanonicalFqn, CanonicalIdentifier, DataStoreTrait, SchemaEntry, SchemaStoreResult,
+    SchemaStoreTrait,
+};
 use arrow::{
     array::RecordBatch, ipc::reader::StreamReader as ArrowIpcStreamReader,
     ipc::writer::StreamWriter as ArrowIpcStreamWriter,
@@ -19,7 +22,7 @@ use parquet::arrow::{
 };
 use scc::{HashMap as SccHashMap, HashSet as SccHashSet};
 use std::{
-    collections::HashMap,
+    collections::{BTreeSet, HashMap},
     panic::{AssertUnwindSafe, catch_unwind},
     path::{Path, PathBuf},
     sync::{Arc, OnceLock},
@@ -385,6 +388,27 @@ impl SchemaStore {
             false
         }
     }
+
+    fn visit_cfqn<F>(&self, mut f: F)
+    where
+        F: FnMut(&CanonicalFqn),
+    {
+        for (cfqn, _) in self.selected.iter() {
+            f(cfqn);
+        }
+        for (cfqn, _) in self.frontier.iter() {
+            f(cfqn);
+        }
+        if let Some(deferred) = self.deferred.get() {
+            for (cfqn, _) in deferred.iter() {
+                f(cfqn);
+            }
+        }
+        self.external.iter_sync(|cfqn| {
+            f(cfqn);
+            true
+        });
+    }
 }
 
 #[async_trait::async_trait]
@@ -451,6 +475,38 @@ impl SchemaStoreTrait for SchemaStore {
             let _ = self.external.insert_sync(cfqn);
         }
         Ok(schema)
+    }
+
+    fn catalog_names(&self) -> Vec<CanonicalIdentifier> {
+        let mut catalogs = BTreeSet::new();
+        self.visit_cfqn(|cfqn| {
+            catalogs.insert(cfqn.catalog().clone());
+        });
+        catalogs.into_iter().collect()
+    }
+
+    fn schema_names(&self, catalog: &CanonicalIdentifier) -> Vec<CanonicalIdentifier> {
+        let mut schemas = BTreeSet::new();
+        self.visit_cfqn(|cfqn| {
+            if cfqn.catalog() == catalog {
+                schemas.insert(cfqn.schema().clone());
+            }
+        });
+        schemas.into_iter().collect()
+    }
+
+    fn table_names(
+        &self,
+        catalog: &CanonicalIdentifier,
+        schema: &CanonicalIdentifier,
+    ) -> Vec<CanonicalIdentifier> {
+        let mut tables = BTreeSet::new();
+        self.visit_cfqn(|cfqn| {
+            if cfqn.catalog() == catalog && cfqn.schema() == schema {
+                tables.insert(cfqn.table().clone());
+            }
+        });
+        tables.into_iter().collect()
     }
 }
 

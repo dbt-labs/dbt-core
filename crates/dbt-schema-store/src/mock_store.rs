@@ -1,7 +1,10 @@
-use crate::{CanonicalFqn, DataStoreTrait, SchemaEntry, SchemaStoreResult, SchemaStoreTrait};
+use crate::{
+    CanonicalFqn, CanonicalIdentifier, DataStoreTrait, SchemaEntry, SchemaStoreResult,
+    SchemaStoreTrait,
+};
 use arrow::array::RecordBatch;
 use arrow_schema::SchemaRef;
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 use std::path::PathBuf;
 use std::sync::RwLock;
 
@@ -92,6 +95,41 @@ impl SchemaStoreTrait for MockSchemaStore {
         let entry = SchemaEntry::from_sdf_arrow_schema(original_schema, sdf_schema);
         map.insert(cfqn.clone(), entry.clone());
         Ok(entry)
+    }
+
+    fn catalog_names(&self) -> Vec<CanonicalIdentifier> {
+        let map = self.schemas_by_cfqn.read().unwrap();
+        let mut catalogs = BTreeSet::new();
+        for cfqn in map.keys() {
+            catalogs.insert(cfqn.catalog().clone());
+        }
+        catalogs.into_iter().collect()
+    }
+
+    fn schema_names(&self, catalog: &CanonicalIdentifier) -> Vec<CanonicalIdentifier> {
+        let map = self.schemas_by_cfqn.read().unwrap();
+        let mut schemas = BTreeSet::new();
+        for cfqn in map.keys() {
+            if cfqn.catalog() == catalog {
+                schemas.insert(cfqn.schema().clone());
+            }
+        }
+        schemas.into_iter().collect()
+    }
+
+    fn table_names(
+        &self,
+        catalog: &CanonicalIdentifier,
+        schema: &CanonicalIdentifier,
+    ) -> Vec<CanonicalIdentifier> {
+        let map = self.schemas_by_cfqn.read().unwrap();
+        let mut tables = BTreeSet::new();
+        for cfqn in map.keys() {
+            if cfqn.catalog() == catalog && cfqn.schema() == schema {
+                tables.insert(cfqn.table().clone());
+            }
+        }
+        tables.into_iter().collect()
     }
 }
 
