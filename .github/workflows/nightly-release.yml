@@ -46,7 +46,7 @@ jobs:
       - name: "Get Current Version Number"
         id: version-number-sources
         run: |
-          current_version=`awk -F"current_version = " '{print $2}' .bumpversion.cfg | tr '\n' ' '`
+          current_version=$(grep '^version = ' core/dbt/__version__.py | sed 's/version = "\(.*\)"/\1/')
           echo "current_version=$current_version" >> $GITHUB_OUTPUT
 
       - name: "Audit Version And Parse Into Parts"

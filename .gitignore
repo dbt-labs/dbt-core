@@ -15,6 +15,7 @@ build/
 !core/dbt/docs/build
 develop-eggs/
 dist/
+dist-*/
 downloads/
 eggs/
 .eggs/
@@ -95,6 +96,7 @@ target/
 # pycharm
 .idea/
 venv/
+.venv*/
 
 # AWS credentials
 .aws/

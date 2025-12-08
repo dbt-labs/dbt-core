@@ -60,16 +60,22 @@ jobs:
         run: |
           python -m pip install --user --upgrade pip
           python -m pip --version
-          make dev
-          make dev_req
-          mypy --version
-          dbt --version
+          python -m pip install hatch
+          cd core
+          hatch run setup
+
+      - name: Verify dbt installation
+        run: |
+          cd core
+          hatch run dbt --version
 
       - name: Run pre-commit hooks
-        run: pre-commit run --all-files --show-diff-on-failure
+        run: |
+          cd core
+          hatch run code-quality
 
   unit:
-    name: unit test / python ${{ matrix.python-version }}
+    name: "unit test / python ${{ matrix.python-version }}"
 
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -78,9 +84,6 @@ jobs:
       fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
-
-    env:
-      TOXENV: "unit"
 
     steps:
       - name: Check out the repository
@@ -95,15 +98,15 @@ jobs:
         run: |
           python -m pip install --user --upgrade pip
           python -m pip --version
-          python -m pip install tox
-          tox --version
+          python -m pip install hatch
+          hatch --version
 
       - name: Run unit tests
         uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # nick-fields/retry@v3
         with:
           timeout_minutes: 10
           max_attempts: 3
-          command: tox -e unit
+          command: cd core && hatch run ci:unit-tests
 
       - name: Get current date
         if: always()
@@ -156,7 +159,7 @@ jobs:
           echo "include=${INCLUDE_GROUPS}" >> $GITHUB_OUTPUT
 
   integration-postgres:
-    name: (${{ matrix.split-group }}) integration test / python ${{ matrix.python-version }} / ${{ matrix.os }}
+    name: "(${{ matrix.split-group }}) integration test / python ${{ matrix.python-version }} / ${{ matrix.os }}"
 
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
@@ -169,7 +172,6 @@ jobs:
         os: ["ubuntu-latest"]
         split-group: ${{ fromJson(needs.integration-metadata.outputs.split-groups) }}
     env:
-      TOXENV: integration
       DBT_INVOCATION_ENV: github-actions
       DBT_TEST_USER_1: dbt_test_user_1
       DBT_TEST_USER_2: dbt_test_user_2
@@ -219,17 +221,16 @@ jobs:
         run: |
           python -m pip install --user --upgrade pip
           python -m pip --version
-          python -m pip install tox
-          tox --version
+          python -m pip install hatch
+          hatch --version
 
       - name: Run integration tests
         uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # nick-fields/retry@v3
         with:
           timeout_minutes: 30
           max_attempts: 3
-          command: tox -- --ddtrace
-        env:
-          PYTEST_ADDOPTS: ${{ format('--splits {0} --group {1}', env.PYTHON_INTEGRATION_TEST_WORKERS, matrix.split-group) }}
+          shell: bash
+          command: cd core && hatch run ci:integration-tests -- --ddtrace --splits ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }} --group ${{ matrix.split-group }}
 
       - name: Get current date
         if: always()
@@ -265,7 +266,6 @@ jobs:
         # already includes split group and runs mac + windows
         include: ${{ fromJson(needs.integration-metadata.outputs.include) }}
     env:
-      TOXENV: integration
       DBT_INVOCATION_ENV: github-actions
       DBT_TEST_USER_1: dbt_test_user_1
       DBT_TEST_USER_2: dbt_test_user_2
@@ -302,17 +302,16 @@ jobs:
         run: |
           python -m pip install --user --upgrade pip
           python -m pip --version
-          python -m pip install tox
-          tox --version
+          python -m pip install hatch
+          hatch --version
 
       - name: Run integration tests
         uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # nick-fields/retry@v3
         with:
           timeout_minutes: 30
           max_attempts: 3
-          command: tox -- --ddtrace
-        env:
-          PYTEST_ADDOPTS: ${{ format('--splits {0} --group {1}', env.PYTHON_INTEGRATION_TEST_WORKERS, matrix.split-group) }}
+          shell: bash
+          command: cd core && hatch run ci:integration-tests -- --ddtrace --splits ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }} --group ${{ matrix.split-group }}
 
       - name: Get current date
         if: always()
@@ -369,7 +368,7 @@ jobs:
       - name: Install python dependencies
         run: |
           python -m pip install --user --upgrade pip
-          python -m pip install --upgrade setuptools wheel twine check-wheel-contents
+          python -m pip install --upgrade hatch twine check-wheel-contents
           python -m pip --version
 
       - name: Build distributions
@@ -378,27 +377,7 @@ jobs:
       - name: Show distributions
         run: ls -lh dist/
 
-      - name: Check distribution descriptions
+      - name: Check and verify distributions
         run: |
-          twine check dist/*
-
-      - name: Check wheel contents
-        run: |
-          check-wheel-contents dist/*.whl --ignore W007,W008
-
-      - name: Install wheel distributions
-        run: |
-          find ./dist/*.whl -maxdepth 1 -type f | xargs python -m pip install --force-reinstall --find-links=dist/
-
-      - name: Check wheel distributions
-        run: |
-          dbt --version
-
-      - name: Install source distributions
-        # ignore dbt-1.0.0, which intentionally raises an error when installed from source
-        run: |
-          find ./dist/*.gz -maxdepth 1 -type f | xargs python -m pip install --force-reinstall --find-links=dist/
-
-      - name: Check source distributions
-        run: |
-          dbt --version
+          cd core
+          hatch run build:check-all
