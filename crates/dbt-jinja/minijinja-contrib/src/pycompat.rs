@@ -25,6 +25,7 @@ use regex::Regex;
 /// * `dict.items`
 /// * `dict.keys`
 /// * `dict.values`
+/// * `dict.to_dict`
 /// * `list.count`
 /// * `list.index`
 /// * `list.union`
@@ -381,6 +382,11 @@ fn map_methods(value: &Value, method: &str, args: &[Value]) -> Result<Value, Err
                 Some(value) if !value.is_none() => value,
                 _ => default.cloned().unwrap_or_else(|| Value::from(())),
             })
+        }
+        "to_dict" => {
+            let () = from_args(args)?;
+            // to_dict() on a dict just returns the dict itself
+            Ok(value.clone())
         }
         _ => Err(Error::from(ErrorKind::UnknownMethod)),
     }
