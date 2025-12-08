@@ -290,9 +290,6 @@ class UnitTestParser(YamlReader):
             )
 
             if tested_model_node:
-                print(tested_model_node.name)
-                print(tested_model_node.config.enabled)
-                print("--------------------------------")
                 if tested_model_node.config.enabled:
                     unit_test_definition.depends_on.nodes.append(tested_model_node.unique_id)
                     unit_test_definition.schema = tested_model_node.schema
@@ -533,13 +530,22 @@ def process_models_for_unit_test(
     target_model_id = unit_test_def.depends_on.nodes[0]
     if target_model_id not in manifest.nodes:
         if target_model_id in manifest.disabled:
-            # The model is disabled, so we don't need to do anything (#10540)
-            return
+            # Ensure the unit test is disabled if the model is disabled
+            unit_test_def.config.enabled = False
         else:
             # If we've reached here and the model is not disabled, throw an error
             raise ParsingError(
                 f"Unit test '{unit_test_def.name}' references a model that does not exist: {target_model_id}"
             )
+
+    if not unit_test_def.config.enabled:
+        if unit_test_def.unique_id in manifest.unit_tests:
+            manifest.unit_tests.pop(unit_test_def.unique_id)
+        if unit_test_def.unique_id not in manifest.disabled:
+            manifest.add_disabled(manifest.files[unit_test_def.file_id], unit_test_def)
+
+        # The unit test is disabled, so we don't need to do any further processing (#10540)
+        return
 
     target_model = manifest.nodes[target_model_id]
     assert isinstance(target_model, ModelNode)
