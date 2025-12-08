@@ -12,6 +12,7 @@ use dbt_error::{ErrorCode, FsError, fs_err};
 use dbt_telemetry::{LogMessage, ProgressMessage, TelemetryAttributes, TelemetryEventRecType};
 
 use crate::{io_args::IoArgs, io_utils::StatusReporter};
+use std::ffi::OsStr;
 
 use super::{constants::ROOT_SPAN_NAME, event_info::store_event_attributes, shared::Recordable};
 
@@ -384,6 +385,50 @@ pub fn emit_trace_log_message(message: impl FnOnce() -> String) {
     })
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FsErrorLogSeverity {
+    Error,
+    Warning,
+}
+
+fn severity_for_fs_error(error: &FsError) -> FsErrorLogSeverity {
+    if is_markdown_file(error.location.as_ref()) {
+        FsErrorLogSeverity::Warning
+    } else {
+        FsErrorLogSeverity::Error
+    }
+}
+
+#[track_caller]
+fn emit_fs_error_with_severity(
+    error: &FsError,
+    severity: FsErrorLogSeverity,
+    status_reporter: Option<&Arc<dyn StatusReporter + 'static>>,
+) {
+    match severity {
+        FsErrorLogSeverity::Error => {
+            if let Some(status_reporter) = status_reporter {
+                status_reporter.collect_error(error);
+            };
+
+            emit_error_event(
+                LogMessage::new_from_level_and_code(error.code as u32, tracing::Level::ERROR),
+                Some(error.message().as_str()),
+            );
+        }
+        FsErrorLogSeverity::Warning => {
+            if let Some(status_reporter) = status_reporter {
+                status_reporter.collect_warning(error);
+            };
+
+            emit_warn_event(
+                LogMessage::new_from_level_and_code(error.code as u32, tracing::Level::WARN),
+                Some(error.message().as_str()),
+            );
+        }
+    }
+}
+
 /// Emit a log message event at ERROR level with the given code and message.
 ///
 /// This will also report the error to the provided status reporter, if any.
@@ -411,14 +456,15 @@ pub fn emit_error_log_from_fs_error(
     error: &FsError,
     status_reporter: Option<&Arc<dyn StatusReporter + 'static>>,
 ) {
-    if let Some(status_reporter) = status_reporter {
-        status_reporter.collect_error(error);
-    };
+    emit_fs_error_with_severity(error, severity_for_fs_error(error), status_reporter);
+}
 
-    emit_error_event(
-        LogMessage::new_from_level_and_code(error.code as u32, tracing::Level::ERROR),
-        Some(error.message().as_str()),
-    );
+fn is_markdown_file(location: Option<&crate::CodeLocation>) -> bool {
+    location
+        .and_then(|loc| loc.file.extension())
+        .and_then(OsStr::to_str)
+        .map(|ext| ext.eq_ignore_ascii_case("md"))
+        .unwrap_or(false)
 }
 
 /// Emit a log message event at WARN level with the given code and message.
@@ -448,14 +494,7 @@ pub fn emit_warn_log_from_fs_error(
     warning: &FsError,
     status_reporter: Option<&Arc<dyn StatusReporter + 'static>>,
 ) {
-    if let Some(status_reporter) = status_reporter {
-        status_reporter.collect_warning(warning);
-    };
-
-    emit_warn_event(
-        LogMessage::new_from_level_and_code(warning.code as u32, tracing::Level::WARN),
-        Some(warning.message().as_str()),
-    );
+    emit_fs_error_with_severity(warning, FsErrorLogSeverity::Warning, status_reporter);
 }
 
 /// Emit a log message related to parsing error based on the given FsError.

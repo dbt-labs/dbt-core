@@ -1,3 +1,4 @@
+use crate::{CodeLocation, fs_err};
 use dbt_error::ErrorCode;
 use dbt_telemetry::{
     CallTrace, LogMessage, RecordCodeLocation, SeverityNumber, TelemetryAttributes,
@@ -9,8 +10,8 @@ use std::panic::Location;
 use crate::tracing::{
     emit::{
         create_info_span, create_root_info_span, emit_debug_event, emit_error_event,
-        emit_error_log_message, emit_info_event, emit_trace_event, emit_warn_event,
-        emit_warn_log_message,
+        emit_error_log_from_fs_error, emit_error_log_message, emit_info_event, emit_trace_event,
+        emit_warn_event, emit_warn_log_message,
     },
     init::create_tracing_subcriber_with_layer,
     layer::ConsumerLayer,
@@ -471,4 +472,100 @@ fn test_convenience_log_message_functions() {
     } else {
         panic!("Expected LogMessage attributes");
     }
+}
+
+#[test]
+fn test_emit_error_log_from_fs_error_md_reports_warning() {
+    let trace_id = rand::random::<u128>();
+    let (test_layer, _, _, log_records) = TestLayer::new();
+
+    let subscriber = create_tracing_subcriber_with_layer(
+        tracing::level_filters::LevelFilter::TRACE,
+        TelemetryDataLayer::new(
+            trace_id,
+            None,
+            false,
+            std::iter::empty(),
+            std::iter::once(Box::new(test_layer) as ConsumerLayer),
+        ),
+    );
+
+    tracing::subscriber::with_default(subscriber, || {
+        let _rs = create_root_info_span(MockDynSpanEvent {
+            name: "root".to_string(),
+            flags: TelemetryOutputFlags::ALL,
+            ..Default::default()
+        })
+        .entered();
+
+        let err = fs_err!(ErrorCode::MacroSyntaxError, "md parse error")
+            .with_location(CodeLocation::new(1, 1, 0, "models/README.md"));
+        emit_error_log_from_fs_error(&err, None);
+    });
+
+    let log_records = {
+        let lr = log_records.lock().expect("Should have no locks");
+        lr.clone()
+    };
+
+    assert_eq!(log_records.len(), 1);
+    let record = &log_records[0];
+    assert_eq!(record.severity_number, SeverityNumber::Warn);
+    assert_eq!(record.severity_text, "WARN");
+    assert!(
+        record.body.contains("md parse error"),
+        "Expected body to contain error message"
+    );
+    assert!(
+        record.body.contains("models/README.md"),
+        "Expected body to include file path"
+    );
+}
+
+#[test]
+fn test_emit_error_log_from_fs_error_sql_reports_error() {
+    let trace_id = rand::random::<u128>();
+    let (test_layer, _, _, log_records) = TestLayer::new();
+
+    let subscriber = create_tracing_subcriber_with_layer(
+        tracing::level_filters::LevelFilter::TRACE,
+        TelemetryDataLayer::new(
+            trace_id,
+            None,
+            false,
+            std::iter::empty(),
+            std::iter::once(Box::new(test_layer) as ConsumerLayer),
+        ),
+    );
+
+    tracing::subscriber::with_default(subscriber, || {
+        let _rs = create_root_info_span(MockDynSpanEvent {
+            name: "root".to_string(),
+            flags: TelemetryOutputFlags::ALL,
+            ..Default::default()
+        })
+        .entered();
+
+        let err = fs_err!(ErrorCode::MacroSyntaxError, "sql parse error")
+            .with_location(CodeLocation::new(1, 1, 0, "models/view.sql"));
+        emit_error_log_from_fs_error(&err, None);
+    });
+
+    let log_records = {
+        let lr = log_records.lock().expect("Should have no locks");
+        lr.clone()
+    };
+
+    assert_eq!(log_records.len(), 1);
+    let record = &log_records[0];
+    assert_eq!(record.severity_number, SeverityNumber::Error);
+    assert_eq!(record.severity_text, "ERROR");
+    assert!(
+        record.body.contains("sql parse error"),
+        "Expected body to contain error message"
+    );
+    assert!(
+        record.body.contains("models/view.sql"),
+        "Expected body to include file path"
+    );
 }

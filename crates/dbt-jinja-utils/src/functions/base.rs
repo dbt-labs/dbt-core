@@ -152,15 +152,24 @@ impl Object for DocMacro {
         let arg1 = args.get::<String>("");
         let arg2 = args.get_optional::<String>("");
 
-        let doc = match (&arg1, &arg2) {
+        let (doc, target_package, doc_name) = match (&arg1, &arg2) {
             // Two arguments: explicit package and doc name
-            (Ok(package_name), Some(doc_name)) => self.lookup_doc(package_name, doc_name),
+            (Ok(package_name), Some(doc_name)) => (
+                self.lookup_doc(package_name, doc_name),
+                package_name.clone(),
+                doc_name.clone(),
+            ),
             // One argument: search in current package first, then others
             (Ok(doc_name), None) => {
-                self.lookup_doc(&self.package_name, doc_name).or_else(|| {
-                    // If not found in current package, look in other packages
-                    self.lookup_doc_in_packages(doc_name)
-                })
+                if let Some(doc) = self.lookup_doc(&self.package_name, doc_name) {
+                    (Some(doc), self.package_name.clone(), doc_name.clone())
+                } else {
+                    (
+                        self.lookup_doc_in_packages(doc_name),
+                        self.package_name.clone(),
+                        doc_name.clone(),
+                    )
+                }
             }
 
             _ => {
@@ -173,21 +182,13 @@ impl Object for DocMacro {
 
         match doc {
             Some(content) => Ok(Value::from_serialize(content)),
-            None => Err(Error::new(
-                ErrorKind::InvalidOperation,
-                match arg2 {
-                    Some(_) => format!(
-                        "doc: doc '{}' not found for package '{}'",
-                        arg1.unwrap_or_default(),
-                        arg2.unwrap_or_default()
-                    ),
-                    None => format!(
-                        "doc: doc '{}' not found for package '{}'",
-                        arg1.unwrap_or_default(),
-                        self.package_name
-                    ),
-                },
-            )),
+            None => {
+                self.warn_missing_doc(&target_package, &doc_name);
+                Ok(Value::from(Self::missing_doc_placeholder(
+                    &target_package,
+                    &doc_name,
+                )))
+            }
         }
     }
 }
@@ -211,6 +212,23 @@ pub fn var_fn(
             ));
         };
         Ok(value)
+    }
+}
+
+impl DocMacro {
+    fn warn_missing_doc(&self, package_name: &str, doc_name: &str) {
+        emit_warn_log_message(
+            ErrorCode::InvalidConfig,
+            format!(
+                "doc macro reference '{}' not found for package '{}'",
+                doc_name, package_name
+            ),
+            None,
+        );
+    }
+
+    fn missing_doc_placeholder(package_name: &str, doc_name: &str) -> String {
+        format!("<missing doc('{}', package='{}')>", doc_name, package_name)
     }
 }
 
@@ -1484,6 +1502,24 @@ mod tests {
         let tmpl = env.template_from_str(template_source).unwrap();
         let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
         assert_eq!(output.trim(), "a: 1\nb: 2");
+    }
+
+    #[test]
+    fn doc_macro_missing_doc_returns_placeholder() {
+        let mut env = Environment::new();
+        let docs = BTreeMap::<(String, String), String>::new();
+        env.add_global(
+            "doc",
+            Value::from_object(DocMacro::new("pkg".to_string(), docs)),
+        );
+
+        let template_source = "{{ doc('unknown') }}";
+        let tmpl = env.template_from_str(template_source).unwrap();
+        let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
+        assert!(
+            output.contains("<missing doc('unknown', package='pkg')>"),
+            "expected placeholder, got {output}"
+        );
     }
 
     #[test]
