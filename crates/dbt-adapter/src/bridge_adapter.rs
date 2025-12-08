@@ -287,7 +287,7 @@ impl BaseAdapter for BridgeAdapter {
         Ok(none_value())
     }
 
-    #[tracing::instrument(skip(self, _state))]
+    #[tracing::instrument(skip(self, _state), level = "trace")]
     fn cache_dropped(
         &self,
         _state: &State,
@@ -297,7 +297,7 @@ impl BaseAdapter for BridgeAdapter {
         Ok(none_value())
     }
 
-    #[tracing::instrument(skip(self, _state))]
+    #[tracing::instrument(skip(self, _state), level = "trace")]
     fn cache_renamed(
         &self,
         _state: &State,
