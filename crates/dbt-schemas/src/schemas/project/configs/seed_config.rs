@@ -365,6 +365,7 @@ impl From<ProjectSeedConfig> for SeedConfig {
                 timeout: None,
                 batch_id: None,
                 dataproc_cluster_name: None,
+                notebook_template_id: None,
                 file_format: config.file_format,
                 catalog_name: config.catalog_name,
                 location_root: config.location_root,

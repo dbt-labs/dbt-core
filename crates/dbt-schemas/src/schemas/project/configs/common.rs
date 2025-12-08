@@ -194,6 +194,7 @@ pub struct WarehouseSpecificNodeConfig {
     pub timeout: Option<u64>,
     pub batch_id: Option<String>,
     pub dataproc_cluster_name: Option<String>,
+    pub notebook_template_id: Option<String>,
 
     // Used by both Databricks and Bigquery
     pub file_format: Option<String>,
@@ -305,6 +306,7 @@ impl DefaultTo<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConfig {
             timeout,
             batch_id,
             dataproc_cluster_name,
+            notebook_template_id,
 
             // Databricks
             file_format,
@@ -419,6 +421,7 @@ impl DefaultTo<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConfig {
                 timeout,
                 batch_id,
                 dataproc_cluster_name,
+                notebook_template_id,
                 // Snowflake
                 table_tag,
                 row_access_policy,

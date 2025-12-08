@@ -6,12 +6,17 @@ use dbt_serde_yaml::Value::Mapping;
 use dbt_serde_yaml::{Error, Value as YmlValue};
 use dbt_xdbc::bigquery::{
     CREATE_BATCH_REQ_BATCH_ID, CREATE_BATCH_REQ_BATCH_YML, CREATE_BATCH_REQ_PARENT,
+    CREATE_NOTEBOOK_EXECUTE_JOB_REQ_GSC_BUCKET, CREATE_NOTEBOOK_EXECUTE_JOB_REQ_GSC_PATH,
+    CREATE_NOTEBOOK_EXECUTE_JOB_REQ_MODEL_FILE_NAME, CREATE_NOTEBOOK_EXECUTE_JOB_REQ_MODEL_NAME,
+    CREATE_NOTEBOOK_EXECUTE_JOB_REQ_PARENT, CREATE_NOTEBOOK_EXECUTE_JOB_REQ_PROJECT,
+    CREATE_NOTEBOOK_EXECUTE_JOB_REQ_REGION, CREATE_NOTEBOOK_EXECUTE_JOB_REQ_TEMPLATE_ID,
     DATAPROC_POOLING_TIMEOUT, DATAPROC_PROJECT, DATAPROC_REGION,
     DATAPROC_SUBMIT_JOB_REQ_CLUSTER_NAME, DATAPROC_SUBMIT_JOB_REQ_GCS_PATH, WRITE_GCS_BUCKET,
     WRITE_GCS_CONTENT, WRITE_GCS_OBJECT_NAME,
 };
 use dbt_xdbc::{Connection, QueryCtx};
 use minijinja::{State, Value};
+use uuid::Uuid;
 
 const DEFAULT_JAR_FILE_URI: &str =
     "gs://spark-lib/bigquery/spark-bigquery-with-dependencies_2.13-0.34.0.jar";
@@ -41,6 +46,17 @@ pub struct ServerlessJobParams<'a> {
     pub project: &'a str,
     pub region: &'a str,
     pub gcs_path: &'a str,
+    pub batch_id: &'a str,
+    pub timeout: i64,
+}
+
+pub struct BigframesJobParams<'a> {
+    pub project: &'a str,
+    pub region: &'a str,
+    pub gcs_path: &'a str,
+    pub model_file_name: &'a str,
+    pub model_name: &'a str,
+    pub gsc_bucket: &'a str,
     pub batch_id: &'a str,
     pub timeout: i64,
 }
@@ -135,26 +151,47 @@ pub fn submit_python_job(
                 .expect("job_execution_timeout_seconds must be a valid integer")
         });
 
+    let default_timeout = if submission_method == SubmissionMethod::BigFrames {
+        60 * 60
+    } else {
+        24 * 60 * 60
+    };
+
     let timeout = config
         .get_attr("timeout")
         .ok()
         .and_then(|v| v.as_i64())
         .or(job_execution_timeout)
-        .unwrap_or(24 * 60 * 60);
+        .unwrap_or(default_timeout);
+
+    let packages: Vec<String> = config
+        .get_attr("packages")
+        .ok()
+        .and_then(|v| v.try_iter().ok())
+        .map(|iter| {
+            iter.filter_map(|item| item.as_str().map(|s| s.to_string()))
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
 
     let batch_id = config
         .get_attr("batch_id")
         .ok()
         .and_then(|v| v.as_str().map(|s| s.to_string()))
-        .unwrap_or_else(|| uuid::Uuid::new_v4().to_string());
+        .unwrap_or_else(|| Uuid::new_v4().to_string());
+
+    let compiled_code = preprocess_compiled_code(&submission_method, compiled_code, &packages)?;
 
     let model_file_name = format!("{}/{}.py", schema, alias);
-    let gcs_path = format!("gs://{}/{}", gcs_bucket, model_file_name);
+    let gcs_path = format!("gs://{}/{}", &gcs_bucket, model_file_name);
 
     let options: HashMap<_, _> = vec![
-        (WRITE_GCS_BUCKET.to_string(), gcs_bucket),
-        (WRITE_GCS_OBJECT_NAME.to_string(), model_file_name),
-        (WRITE_GCS_CONTENT.to_string(), compiled_code.to_string()),
+        (WRITE_GCS_BUCKET.to_string(), gcs_bucket.clone()),
+        (
+            WRITE_GCS_OBJECT_NAME.to_string(),
+            model_file_name.to_string(),
+        ),
+        (WRITE_GCS_CONTENT.to_string(), compiled_code),
     ]
     .into_iter()
     .collect();
@@ -197,10 +234,31 @@ pub fn submit_python_job(
             };
             submit_serverless_job(job_ctx, params)
         }
-        SubmissionMethod::BigFrames => Err(AdapterError::new(
-            AdapterErrorKind::Internal,
-            "submission_method=bigframes is not implemented yet. use submission_method=serverless or submission_method=cluster instead",
-        )),
+        SubmissionMethod::BigFrames => {
+            let params = BigframesJobParams {
+                project: execution_project.as_str(),
+                region: compute_region.as_str(),
+                gcs_path: gcs_path.as_str(),
+                model_file_name: &model_file_name,
+                model_name: &alias,
+                gsc_bucket: &gcs_bucket,
+                batch_id: batch_id.as_str(),
+                timeout,
+            };
+            submit_bigframes_job(job_ctx, params)
+        }
+    }
+}
+
+fn preprocess_compiled_code(
+    submission_method: &SubmissionMethod,
+    compiled_code: &str,
+    packages: &[String],
+) -> AdapterResult<String> {
+    match submission_method {
+        SubmissionMethod::Cluster => Ok(compiled_code.to_string()),
+        SubmissionMethod::Serverless => Ok(compiled_code.to_string()),
+        SubmissionMethod::BigFrames => convert_py_to_ipynb(compiled_code, packages),
     }
 }
 
@@ -362,4 +420,211 @@ fn merge_yaml(base: &mut YmlValue, overrides: &YmlValue) {
             *base_slot = new_val.clone();
         }
     }
+}
+
+fn submit_bigframes_job(
+    job_ctx: JobContext,
+    params: BigframesJobParams,
+) -> AdapterResult<AdapterResponse> {
+    let notebook_template_id = job_ctx
+        .config
+        .get_attr("notebook_template_id")
+        .ok()
+        .and_then(|v| v.as_str().map(|s| s.to_string()));
+
+    let mut options: HashMap<_, _> = vec![
+        (
+            CREATE_NOTEBOOK_EXECUTE_JOB_REQ_GSC_PATH.to_string(),
+            params.gcs_path.to_string(),
+        ),
+        (
+            CREATE_NOTEBOOK_EXECUTE_JOB_REQ_MODEL_FILE_NAME.to_string(),
+            params.model_file_name.to_string(),
+        ),
+        (
+            CREATE_NOTEBOOK_EXECUTE_JOB_REQ_MODEL_NAME.to_string(),
+            params.model_name.to_string(),
+        ),
+        (
+            CREATE_NOTEBOOK_EXECUTE_JOB_REQ_GSC_BUCKET.to_string(),
+            params.gsc_bucket.to_string(),
+        ),
+        (
+            CREATE_NOTEBOOK_EXECUTE_JOB_REQ_PARENT.to_string(),
+            format!("projects/{}/locations/{}", params.project, params.region),
+        ),
+        (
+            CREATE_NOTEBOOK_EXECUTE_JOB_REQ_PROJECT.to_string(),
+            params.project.to_string(),
+        ),
+        (
+            CREATE_NOTEBOOK_EXECUTE_JOB_REQ_REGION.to_string(),
+            params.region.to_string(),
+        ),
+        (
+            CREATE_BATCH_REQ_BATCH_ID.to_string(),
+            params.batch_id.to_string(),
+        ),
+        (
+            DATAPROC_POOLING_TIMEOUT.to_string(),
+            params.timeout.to_string(),
+        ),
+    ]
+    .into_iter()
+    .collect();
+
+    if let Some(notebook_template_id) = notebook_template_id {
+        options.insert(
+            CREATE_NOTEBOOK_EXECUTE_JOB_REQ_TEMPLATE_ID.to_string(),
+            notebook_template_id,
+        );
+    }
+
+    let response = job_ctx.adapter.execute(
+        None,
+        job_ctx.conn,
+        job_ctx.ctx,
+        "SELECT 1",
+        false,
+        true,
+        None,
+        Some(options),
+    )?;
+
+    Ok(response.0)
+}
+
+fn short_uuid() -> String {
+    let full = Uuid::new_v4().simple().to_string();
+    full[..8].to_string()
+}
+
+fn convert_py_to_ipynb(compiled_code: &str, packages: &[String]) -> AdapterResult<String> {
+    let full_code = if !packages.is_empty() {
+        let install_packages_source = get_install_packages_function_source();
+        let packages_list = format!(
+            "[{}]",
+            packages
+                .iter()
+                .map(|p| format!("'{}'", p))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        format!(
+            "{}\n_install_packages({})\n{}",
+            install_packages_source, packages_list, compiled_code
+        )
+    } else {
+        compiled_code.to_string()
+    };
+
+    let notebook = serde_json::json!({
+        "cells": [
+            {
+                "cell_type": "code",
+                "execution_count": null,
+                "id": short_uuid(),
+                "metadata": {},
+                "outputs": [],
+                "source": full_code
+            }
+        ],
+        "metadata": {},
+        "nbformat": 4,
+        "nbformat_minor": 5
+    });
+
+    serde_json::to_string_pretty(&notebook).map_err(|e| {
+        AdapterError::new(
+            AdapterErrorKind::Internal,
+            format!("Failed to serialize notebook: {}", e),
+        )
+    })
+}
+
+fn get_install_packages_function_source() -> &'static str {
+    r#"def _install_packages(packages: list[str]) -> None:
+    """Checks and installs packages via pip in a separate environment.
+
+    Parses requirement strings (e.g., 'pandas>=1.0', 'numpy==2.1.1') using the
+    'packaging' library to check against installed versions. It only installs
+    packages that are not already present in the environment. Existing packages
+    will not be updated, even if a different version is requested.
+
+    NOTE: This function is not intended for direct invocation. Instead, its
+    source code is extracted using inspect.getsource for execution in a separate
+    environment.
+    """
+    import sys
+    import subprocess
+    import importlib.metadata
+    from packaging.requirements import Requirement
+    from packaging.version import Version
+    from typing import Optional, Tuple
+
+    def _is_package_installed(
+        requirement: Requirement,
+    ) -> Tuple[bool, Optional[Version]]:
+        try:
+            version = importlib.metadata.version(requirement.name)
+            return True, Version(version)
+        except Exception:
+            # Unable to determine the version.
+            return False, None
+
+    # Check the installation of individual packages first.
+    packages_to_install = []
+    for package in packages:
+        requirement = Requirement(package)
+        installed, version = _is_package_installed(requirement)
+
+        if installed:
+            if (
+                version
+                and requirement.specifier
+                and version not in requirement.specifier
+            ):
+                print(
+                    f"Package '{requirement.name}' is already installed and cannot be updated. Skipping."
+                    f"The installed version: {version}."
+                )
+            else:
+                print(
+                    f"Package '{requirement.name}' is already installed. Skipping."
+                    f"The installed version: {version}."
+                )
+        else:
+            packages_to_install.append(package)
+
+    # All packages have been installed with certain version.
+    if not packages_to_install:
+        return
+
+    # Try to pip install the uninstalled packages.
+    pip_command = [sys.executable, "-m", "pip", "install"] + packages_to_install
+    print(
+        f"Attempting to install the following packages: {', '.join(packages_to_install)}"
+    )
+
+    try:
+        result = subprocess.run(
+            pip_command,
+            capture_output=True,
+            text=True,
+            check=True,
+            encoding="utf-8",
+        )
+        if result.stdout:
+            print(f"pip output:\n{result.stdout.strip()}")
+        if result.stderr:
+            print(f"pip warnings/errors:\n{result.stderr.strip()}")
+        print(
+            f"Successfully installed the following packages: {', '.join(packages_to_install)}"
+        )
+
+    except Exception as e:
+        raise RuntimeError(
+            f"An unexpected error occurred during package installation: {e}"
+        )
+"#
 }

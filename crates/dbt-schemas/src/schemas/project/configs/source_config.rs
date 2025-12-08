@@ -321,6 +321,7 @@ impl From<ProjectSourceConfig> for SourceConfig {
                 timeout: None,
                 batch_id: None,
                 dataproc_cluster_name: None,
+                notebook_template_id: None,
 
                 file_format: config.file_format,
                 catalog_name: config.catalog_name,

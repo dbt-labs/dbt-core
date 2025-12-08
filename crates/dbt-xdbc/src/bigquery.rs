@@ -92,3 +92,19 @@ pub const DATAPROC_SUBMIT_JOB_REQ_GCS_PATH: &str = "adbc.bigquery.dataproc.submi
 pub const WRITE_GCS_BUCKET: &str = "adbc.bigquery.write_gcs.bucket";
 pub const WRITE_GCS_OBJECT_NAME: &str = "adbc.bigquery.write_gcs.object_name";
 pub const WRITE_GCS_CONTENT: &str = "adbc.bigquery.write_gcs.content";
+pub const CREATE_NOTEBOOK_EXECUTE_JOB_REQ_GSC_PATH: &str =
+    "adbc.bigquery.notebook_execute_job.gsc_path";
+pub const CREATE_NOTEBOOK_EXECUTE_JOB_REQ_MODEL_FILE_NAME: &str =
+    "adbc.bigquery.notebook_execute_job.model_file_name";
+pub const CREATE_NOTEBOOK_EXECUTE_JOB_REQ_MODEL_NAME: &str =
+    "adbc.bigquery.notebook_execute_job.model_name";
+pub const CREATE_NOTEBOOK_EXECUTE_JOB_REQ_GSC_BUCKET: &str =
+    "adbc.bigquery.notebook_execute_job.gsc_bucket";
+pub const CREATE_NOTEBOOK_EXECUTE_JOB_REQ_TEMPLATE_ID: &str =
+    "adbc.bigquery.notebook_execute_job.template_id";
+pub const CREATE_NOTEBOOK_EXECUTE_JOB_REQ_PARENT: &str =
+    "adbc.bigquery.notebook_execute_job.parent";
+pub const CREATE_NOTEBOOK_EXECUTE_JOB_REQ_PROJECT: &str =
+    "adbc.bigquery.notebook_execute_job.project";
+pub const CREATE_NOTEBOOK_EXECUTE_JOB_REQ_REGION: &str =
+    "adbc.bigquery.notebook_execute_job.region";

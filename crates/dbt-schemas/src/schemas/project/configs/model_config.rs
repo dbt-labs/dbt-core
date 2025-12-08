@@ -221,6 +221,8 @@ pub struct ProjectModelConfig {
     pub batch_id: Option<String>,
     #[serde(rename = "+dataproc_cluster_name")]
     pub dataproc_cluster_name: Option<String>,
+    #[serde(rename = "+notebook_template_id")]
+    pub notebook_template_id: Option<String>,
     #[serde(rename = "+merge_exclude_columns")]
     pub merge_exclude_columns: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+merge_update_columns")]
@@ -532,6 +534,7 @@ impl From<ProjectModelConfig> for ModelConfig {
                 timeout: config.timeout,
                 batch_id: config.batch_id,
                 dataproc_cluster_name: config.dataproc_cluster_name,
+                notebook_template_id: config.notebook_template_id,
 
                 file_format: config.file_format,
                 catalog_name: config.catalog_name,
@@ -647,6 +650,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             timeout: config.__warehouse_specific_config__.timeout,
             batch_id: config.__warehouse_specific_config__.batch_id,
             dataproc_cluster_name: config.__warehouse_specific_config__.dataproc_cluster_name,
+            notebook_template_id: config.__warehouse_specific_config__.notebook_template_id,
             copy_grants: config.__warehouse_specific_config__.copy_grants,
             secure: config.__warehouse_specific_config__.secure,
             partition_by: config.__warehouse_specific_config__.partition_by,
