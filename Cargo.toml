@@ -514,9 +514,6 @@ opentelemetry_sdk = "0.30.0"
 # Tracy profiler: https://github.com/wolfpld/tracy
 tracy-client = { version = "0.18.0", default-features = false }
 
-# duckdb
-duckdb = { version = "1.4.0", features = ["bundled"] }
-
 # axum dependency
 axum = "0.8.5"
 tower-http = { version = "0.6", features = ["trace"] }
