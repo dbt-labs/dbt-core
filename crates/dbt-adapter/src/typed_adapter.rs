@@ -728,6 +728,18 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         state: &State,
         relation: Arc<dyn BaseRelation>,
     ) -> AdapterResult<Vec<Column>> {
+        // Mock adapter: return fake column without executing jinja macro
+        if self.engine().is_mock() {
+            return Ok(vec![Column::new(
+                self.adapter_type(),
+                "one".to_string(),
+                "text".to_string(),
+                Some(256),
+                None,
+                None,
+            )]);
+        }
+
         let macro_execution_result: AdapterResult<Value> = match self.adapter_type() {
             AdapterType::Databricks => execute_macro_with_package(
                 state,
