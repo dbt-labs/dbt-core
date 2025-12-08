@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::AdapterResult;
@@ -7,7 +8,7 @@ use arrow::array::{
     Array, Decimal128Array, Int8Array, Int16Array, Int32Array, Int64Array, UInt8Array, UInt16Array,
     UInt32Array, UInt64Array,
 };
-use arrow::datatypes::DataType;
+use arrow::datatypes::{DataType, Schema};
 use arrow::record_batch::RecordBatch;
 
 pub fn extract_first_value_as_i64(batch: &RecordBatch) -> Option<i64> {
@@ -86,13 +87,66 @@ where
         .to_owned())
 }
 
+/// Deduplicate column names in a RecordBatch by appending `_2`, `_3`, etc. to duplicate names.
+///
+/// This mirrors the behavior of dbt-core's `process_results` method in `SQLConnectionManager`
+/// which renames duplicate columns to ensure each column has a unique name.
+///
+/// For example, columns `["A", "B", "A", "A"]` become `["A", "B", "A_2", "A_3"]`.
+pub fn deduplicate_column_names(batch: RecordBatch) -> RecordBatch {
+    let schema = batch.schema();
+    let fields = schema.fields();
+
+    // Track occurrences of each column name
+    let mut name_counts: HashMap<&str, usize> = HashMap::new();
+    let mut new_names: Vec<String> = Vec::with_capacity(fields.len());
+
+    for field in fields.iter() {
+        let name = field.name().as_str();
+        let count = name_counts.entry(name).or_insert(0);
+        *count += 1;
+
+        if *count > 1 {
+            new_names.push(format!("{}_{}", name, count));
+        } else {
+            new_names.push(name.to_string());
+        }
+    }
+
+    // Check if any names changed - if not, return original batch to avoid unnecessary allocation
+    let names_changed = new_names
+        .iter()
+        .zip(fields.iter())
+        .any(|(new_name, field)| new_name != field.name());
+
+    if !names_changed {
+        return batch;
+    }
+
+    // Build new schema with deduplicated names
+    let new_fields: Vec<_> = fields
+        .iter()
+        .zip(new_names.iter())
+        .map(|(field, new_name)| Arc::new(field.as_ref().clone().with_name(new_name.clone())))
+        .collect();
+
+    let new_schema = Arc::new(Schema::new_with_metadata(
+        new_fields,
+        schema.metadata().clone(),
+    ));
+
+    // Create new RecordBatch with the new schema but same column data
+    RecordBatch::try_new(new_schema, batch.columns().to_vec())
+        .expect("deduplicate_column_names: schema and columns should be compatible")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use arrow::array::{Float64Array, Int32Array, StringArray};
-    use arrow::datatypes::{DataType, Field, Schema};
+    use arrow::datatypes::{DataType, Field};
     use dbt_test_primitives::assert_contains;
-    use std::sync::{Arc, LazyLock};
+    use std::sync::LazyLock;
 
     static TEST_DATA: LazyLock<RecordBatch> = LazyLock::new(|| {
         let schema = Schema::new(vec![
@@ -141,5 +195,73 @@ mod tests {
         assert!(error.message().contains(
             "arrow_array::array::primitive_array::PrimitiveArray<arrow_array::types::Int32Type>"
         ));
+    }
+
+    #[test]
+    fn test_deduplicate_column_names_no_duplicates() {
+        let schema = Schema::new(vec![
+            Field::new("a", DataType::Int32, false),
+            Field::new("b", DataType::Int32, false),
+            Field::new("c", DataType::Int32, false),
+        ]);
+        let a = Int32Array::from(vec![1, 2, 3]);
+        let b = Int32Array::from(vec![4, 5, 6]);
+        let c = Int32Array::from(vec![7, 8, 9]);
+        let batch = RecordBatch::try_new(
+            Arc::new(schema),
+            vec![Arc::new(a), Arc::new(b), Arc::new(c)],
+        )
+        .unwrap();
+
+        let result = deduplicate_column_names(batch);
+        let schema = result.schema();
+        let names: Vec<_> = schema.fields().iter().map(|f| f.name().as_str()).collect();
+        assert_eq!(names, vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn test_deduplicate_column_names_with_duplicates() {
+        // Test case from dbt-core: ["A", "B", "A", "A"] -> ["A", "B", "A_2", "A_3"]
+        let schema = Schema::new(vec![
+            Field::new("A", DataType::Int32, false),
+            Field::new("B", DataType::Int32, false),
+            Field::new("A", DataType::Int32, false),
+            Field::new("A", DataType::Int32, false),
+        ]);
+        let a1 = Int32Array::from(vec![1, 2, 3]);
+        let b = Int32Array::from(vec![4, 5, 6]);
+        let a2 = Int32Array::from(vec![7, 8, 9]);
+        let a3 = Int32Array::from(vec![10, 11, 12]);
+        let batch = RecordBatch::try_new(
+            Arc::new(schema),
+            vec![Arc::new(a1), Arc::new(b), Arc::new(a2), Arc::new(a3)],
+        )
+        .unwrap();
+
+        let result = deduplicate_column_names(batch);
+        let schema = result.schema();
+        let names: Vec<_> = schema.fields().iter().map(|f| f.name().as_str()).collect();
+        assert_eq!(names, vec!["A", "B", "A_2", "A_3"]);
+    }
+
+    #[test]
+    fn test_deduplicate_column_names_multiple_duplicates() {
+        // Test with multiple different duplicate column names
+        let schema = Schema::new(vec![
+            Field::new("x", DataType::Int32, false),
+            Field::new("y", DataType::Int32, false),
+            Field::new("x", DataType::Int32, false),
+            Field::new("y", DataType::Int32, false),
+            Field::new("x", DataType::Int32, false),
+        ]);
+        let cols: Vec<_> = (0..5)
+            .map(|_| Arc::new(Int32Array::from(vec![1])) as _)
+            .collect();
+        let batch = RecordBatch::try_new(Arc::new(schema), cols).unwrap();
+
+        let result = deduplicate_column_names(batch);
+        let schema = result.schema();
+        let names: Vec<_> = schema.fields().iter().map(|f| f.name().as_str()).collect();
+        assert_eq!(names, vec!["x", "y", "x_2", "y_2", "x_3"]);
     }
 }

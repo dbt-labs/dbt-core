@@ -218,6 +218,16 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         let last_batch = last_batch.expect("last_batch should never be None");
 
         let response = AdapterResponse::new(&last_batch, self.adapter_type());
+
+        // Deduplicate column names to match dbt-core's behavior, which renames
+        // duplicate columns to `col_2`, `col_3`, etc.
+        // BigQuery is the exception to this deduping
+        let last_batch = if self.adapter_type() != AdapterType::Bigquery {
+            crate::record_batch_utils::deduplicate_column_names(last_batch)
+        } else {
+            last_batch
+        };
+
         let table = AgateTable::from_record_batch(Arc::new(last_batch));
 
         Ok((response, table))
