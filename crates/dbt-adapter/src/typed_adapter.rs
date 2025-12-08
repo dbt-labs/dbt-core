@@ -2,7 +2,7 @@ use crate::adapter_engine::{AdapterEngine, Options as ExecuteOptions, execute_qu
 use crate::catalog_relation::CatalogRelation;
 use crate::column::{Column, ColumnBuilder};
 use crate::errors::{AdapterError, AdapterErrorKind};
-use crate::funcs::{execute_macro, none_value};
+use crate::funcs::{convert_macro_result_to_record_batch, execute_macro, none_value};
 use crate::information_schema::InformationSchema;
 use crate::metadata::{self, CatalogAndSchema};
 use crate::query_ctx::query_ctx_from_state;
@@ -11,11 +11,13 @@ use crate::relation_object::RelationObject;
 use crate::response::{AdapterResponse, ResultObject};
 use crate::snapshots::SnapshotStrategy;
 use crate::{
-    AdapterResult, AdapterTyping, execute_macro_wrapper_with_package, load_catalogs, python,
+    AdapterResult, AdapterTyping, execute_macro_with_package, execute_macro_wrapper_with_package,
+    load_catalogs, python,
 };
 
 use adbc_core::options::OptionValue;
 use arrow::array::{RecordBatch, StringArray, TimestampMillisecondArray};
+use arrow_array::Array as _;
 use arrow_schema::{DataType, Schema};
 use dbt_agate::AgateTable;
 use dbt_common::adapter::AdapterType;
@@ -715,7 +717,116 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         &self,
         state: &State,
         relation: Arc<dyn BaseRelation>,
-    ) -> AdapterResult<Vec<Column>>;
+    ) -> AdapterResult<Vec<Column>> {
+        let macro_execution_result: AdapterResult<Value> = match self.adapter_type() {
+            AdapterType::Databricks => execute_macro_with_package(
+                state,
+                &[RelationObject::new(relation).as_value()],
+                "get_columns_comments",
+                "dbt_databricks",
+            ),
+            AdapterType::Postgres
+            | AdapterType::Snowflake
+            | AdapterType::Bigquery
+            | AdapterType::Redshift => execute_macro(
+                state,
+                &[RelationObject::new(relation).as_value()],
+                "get_columns_in_relation",
+            ),
+            AdapterType::Salesforce => {
+                unimplemented!("Salesforce get_columns_in_relation not implemented")
+            }
+        };
+
+        match self.adapter_type() {
+            AdapterType::Postgres | AdapterType::Redshift => {
+                let result = macro_execution_result?;
+                Ok(Column::vec_from_jinja_value(self.adapter_type(), result)?)
+            }
+            AdapterType::Snowflake => {
+                // https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L191-L198
+                let result = match macro_execution_result {
+                    Ok(result) => result,
+                    Err(err) => {
+                        // TODO: switch to checking the vendor error code when available.
+                        // See https://github.com/dbt-labs/fs/pull/4267#discussion_r2182835729
+                        if err.message().contains("does not exist or not authorized") {
+                            return Ok(Vec::new());
+                        }
+                        return Err(err);
+                    }
+                };
+
+                Ok(Column::vec_from_jinja_value(
+                    AdapterType::Snowflake,
+                    result,
+                )?)
+            }
+            AdapterType::Bigquery => {
+                // https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L246-L255
+                // TODO(serramatutu): once this is moved over to Arrow, let's remove the fallback to DbtCoreBaseColumn
+                // from Column::vec_from_jinja_value for BigQuery
+                // FIXME(harry): the Python version uses googleapi GetTable, that doesn't return pseudocolumn like _PARTITIONDATE or _PARTITIONTIME
+                let result = match macro_execution_result {
+                    Ok(result) => result,
+                    Err(err) => {
+                        // Handle NotFound errors
+                        if err.kind() == AdapterErrorKind::NotFound
+                            || (err.kind() == AdapterErrorKind::UnexpectedResult
+                                && err.message().contains("Error 404: Not found"))
+                        {
+                            return Ok(Vec::new());
+                        }
+                        return Err(err);
+                    }
+                };
+                Ok(Column::vec_from_jinja_value(AdapterType::Bigquery, result)?)
+            }
+            AdapterType::Databricks => {
+                // Databricks inherits the implementation from the Spark adapter.
+                //
+                // Spark implementation also implicitly filters out known HUDI metadata columns,
+                // which we currently do not.
+                //
+                // https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-spark/src/dbt/adapters/spark/impl.py#L317-L336
+                let result = match macro_execution_result
+                    .and_then(|r| convert_macro_result_to_record_batch(&r))
+                {
+                    Ok(result) => result,
+                    Err(err) => {
+                        // TODO: switch to checking the vendor error code when available.
+                        // See https://github.com/dbt-labs/fs/pull/4267#discussion_r2182835729
+                        // Only checks for the observed Databricks error message, avoiding
+                        // all messages in the reference python Spark adapter.
+                        if err.message().contains("[TABLE_OR_VIEW_NOT_FOUND]") {
+                            return Ok(Vec::new());
+                        }
+                        return Err(err);
+                    }
+                };
+
+                let name_string_array = get_column_values::<StringArray>(&result, "col_name")?;
+                let dtype_string_array = get_column_values::<StringArray>(&result, "data_type")?;
+
+                let columns = (0..name_string_array.len())
+                    .map(|i| {
+                        Column::new(
+                            AdapterType::Databricks,
+                            name_string_array.value(i).to_string(),
+                            dtype_string_array.value(i).to_string(),
+                            None, // char_size
+                            None, // numeric_precision
+                            None, // numeric_scale
+                        )
+                    })
+                    .collect::<Vec<_>>();
+                Ok(columns)
+            }
+            AdapterType::Salesforce => {
+                unimplemented!("Salesforce get_columns_in_relation not implemented")
+            }
+        }
+    }
 
     /// Truncate relation
     /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/sql/impl.py#L147

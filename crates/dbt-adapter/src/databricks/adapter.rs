@@ -7,18 +7,16 @@ use crate::databricks::relation_configs::relation_api::get_from_relation_config;
 use crate::databricks::relation_configs::streaming_table::StreamingTableConfig;
 use crate::databricks::relation_configs::view::ViewConfig;
 
+use crate::AdapterTyping;
 use crate::adapter_engine::AdapterEngine;
 use crate::catalog_relation::CatalogRelation;
 use crate::column::Column;
 use crate::errors::AdapterResult;
-use crate::funcs::execute_macro_wrapper_with_package;
 use crate::load_catalogs;
 use crate::metadata::*;
 use crate::query_ctx::query_ctx_from_state;
 use crate::record_batch_utils::get_column_values;
-use crate::relation_object::RelationObject;
 use crate::typed_adapter::TypedBaseAdapter;
-use crate::{AdapterType, AdapterTyping};
 use arrow::array::{Array, StringArray};
 use dbt_agate::AgateTable;
 
@@ -147,55 +145,6 @@ impl TypedBaseAdapter for DatabricksAdapter {
             "spark__check_schema_exists".to_string(),
         ))
     }
-
-    /// Databricks inherits the implementation from the Spark adapter.
-    ///
-    /// Spark implementation also implicitly filters out known HUDI metadata columns,
-    /// which we currently do not.
-    ///
-    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-spark/src/dbt/adapters/spark/impl.py#L317-L336
-    fn get_columns_in_relation(
-        &self,
-        state: &State,
-        relation: Arc<dyn BaseRelation>,
-    ) -> AdapterResult<Vec<Column>> {
-        let result = match execute_macro_wrapper_with_package(
-            state,
-            &[RelationObject::new(relation).as_value()],
-            "get_columns_comments",
-            "dbt_databricks",
-        ) {
-            Ok(result) => result,
-            Err(err) => {
-                // TODO: switch to checking the vendor error code when available.
-                // See https://github.com/dbt-labs/fs/pull/4267#discussion_r2182835729
-                // Only checks for the observed Databricks error message, avoiding
-                // all messages in the reference python Spark adapter.
-                if err.message().contains("[TABLE_OR_VIEW_NOT_FOUND]") {
-                    return Ok(Vec::new());
-                }
-                return Err(err);
-            }
-        };
-
-        let name_string_array = get_column_values::<StringArray>(&result, "col_name")?;
-        let dtype_string_array = get_column_values::<StringArray>(&result, "data_type")?;
-
-        let columns = (0..name_string_array.len())
-            .map(|i| {
-                Column::new(
-                    AdapterType::Databricks,
-                    name_string_array.value(i).to_string(),
-                    dtype_string_array.value(i).to_string(),
-                    None, // char_size
-                    None, // numeric_precision
-                    None, // numeric_scale
-                )
-            })
-            .collect::<Vec<_>>();
-        Ok(columns)
-    }
-
     /// https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/connections.py#L226-L227
     fn compare_dbr_version(
         &self,

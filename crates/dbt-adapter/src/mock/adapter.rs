@@ -1,7 +1,6 @@
 use crate::AdapterEngine;
 use crate::adapter_engine::MockEngine;
 use crate::base_adapter::{AdapterType, AdapterTyping};
-use crate::column::Column;
 use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
 use crate::funcs::none_value;
 use crate::metadata::*;
@@ -189,21 +188,6 @@ impl TypedBaseAdapter for MockAdapter {
                 self.adapter_type()
             ),
         ))
-    }
-
-    fn get_columns_in_relation(
-        &self,
-        _state: &State,
-        _relation: Arc<dyn BaseRelation>,
-    ) -> AdapterResult<Vec<Column>> {
-        Ok(vec![Column::new(
-            self.adapter_type(),
-            "one".to_string(),  // name
-            "text".to_string(), // dtype
-            Some(256),          // char_size
-            None,               // numeric_precision
-            None,               // numeric_scale
-        )])
     }
 
     fn convert_type(

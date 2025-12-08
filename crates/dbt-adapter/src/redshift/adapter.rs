@@ -1,15 +1,10 @@
 use crate::adapter_engine::AdapterEngine;
 use crate::base_adapter::AdapterTyping;
-use crate::column::Column;
 use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
-use crate::funcs::execute_macro;
 use crate::metadata::*;
-use crate::relation_object::RelationObject;
 use crate::typed_adapter::TypedBaseAdapter;
-use dbt_common::adapter::AdapterType;
 use dbt_schemas::schemas::common::{ConstraintSupport, ConstraintType};
-use dbt_schemas::schemas::relations::base::BaseRelation;
-use minijinja::{State, Value};
+use minijinja::Value;
 
 use std::borrow::Cow;
 use std::fmt;
@@ -81,19 +76,6 @@ impl TypedBaseAdapter for RedshiftAdapter {
         Ok(Value::from(()))
     }
 
-    fn get_columns_in_relation(
-        &self,
-        state: &State,
-        relation: Arc<dyn BaseRelation>,
-    ) -> AdapterResult<Vec<Column>> {
-        let result = execute_macro(
-            state,
-            &[RelationObject::new(relation).as_value()],
-            "get_columns_in_relation",
-        )?;
-        Ok(Column::vec_from_jinja_value(AdapterType::Redshift, result)?)
-    }
-
     /// https://github.com/dbt-labs/dbt-adapters/blob/2a94cc75dba1f98fa5caff1f396f5af7ee444598/dbt-redshift/src/dbt/adapters/redshift/impl.py#L53
     fn get_constraint_support(&self, ct: ConstraintType) -> ConstraintSupport {
         match ct {
@@ -121,6 +103,7 @@ mod tests {
     use dbt_schemas::schemas::relations::DEFAULT_RESOLVED_QUOTING;
     use dbt_serde_yaml::Mapping;
     use dbt_xdbc::Backend;
+    use minijinja::State;
 
     fn engine() -> Arc<AdapterEngine> {
         let config = Mapping::new();

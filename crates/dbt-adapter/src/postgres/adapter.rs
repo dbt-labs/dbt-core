@@ -1,15 +1,11 @@
 use crate::adapter_engine::AdapterEngine;
-use crate::base_adapter::{AdapterType, AdapterTyping};
-use crate::column::Column;
+use crate::base_adapter::AdapterTyping;
 use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
-use crate::funcs::execute_macro;
 use crate::metadata::*;
-use crate::relation_object::RelationObject;
 use crate::typed_adapter::TypedBaseAdapter;
 use dbt_schemas::schemas::common::{ConstraintSupport, ConstraintType};
-use dbt_schemas::schemas::relations::base::BaseRelation;
 
-use minijinja::{State, Value};
+use minijinja::Value;
 use std::fmt;
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -47,20 +43,6 @@ impl Debug for PostgresAdapter {
 }
 
 impl TypedBaseAdapter for PostgresAdapter {
-    // reference: https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-postgres/src/dbt/include/postgres/macros/adapters.sql#L63
-    fn get_columns_in_relation(
-        &self,
-        state: &State,
-        relation: Arc<dyn BaseRelation>,
-    ) -> AdapterResult<Vec<Column>> {
-        let result = execute_macro(
-            state,
-            &[RelationObject::new(relation).as_value()],
-            "get_columns_in_relation",
-        )?;
-        Ok(Column::vec_from_jinja_value(AdapterType::Postgres, result)?)
-    }
-
     fn verify_database(&self, database: String) -> AdapterResult<Value> {
         let configured_database = self.engine.get_configured_database_name();
         if let Some(configured_database) = configured_database {

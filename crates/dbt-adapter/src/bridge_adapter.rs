@@ -18,7 +18,7 @@ use dbt_agate::AgateTable;
 use dbt_common::behavior_flags::{Behavior, BehaviorFlag};
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::{FsError, FsResult, current_function_name};
-use dbt_schema_store::SchemaStoreTrait;
+use dbt_schema_store::{SchemaEntry, SchemaStoreTrait};
 use dbt_schemas::schemas::common::{DbtIncrementalStrategy, ResolvedQuoting};
 use dbt_schemas::schemas::dbt_column::{DbtColumn, DbtColumnRef};
 use dbt_schemas::schemas::manifest::{
@@ -181,6 +181,36 @@ impl BridgeAdapter {
     /// Get a reference to the [TypedBaseAdapter]
     pub fn typed_adapter(&self) -> &dyn TypedBaseAdapter {
         self.typed_adapter.as_ref()
+    }
+
+    /// Checks if the given [BaseRelation] matches the node currently being rendered
+    fn matches_current_relation(&self, state: &State, relation: &Arc<dyn BaseRelation>) -> bool {
+        if let Some((database, schema, alias)) = state.database_schema_alias_from_state() {
+            // Lowercase name comparison because relation names from the local project
+            // are user specified, whereas the input relation may have been a normalized name
+            // from the warehouse
+            relation
+                .database_as_str()
+                .is_ok_and(|s| s.eq_ignore_ascii_case(&database))
+                && relation
+                    .schema_as_str()
+                    .is_ok_and(|s| s.eq_ignore_ascii_case(&schema))
+                && relation
+                    .identifier_as_str()
+                    .is_ok_and(|s| s.eq_ignore_ascii_case(&alias))
+        } else {
+            false
+        }
+    }
+
+    /// Loads a schema from the schema cache
+    fn get_schema_from_cache(&self, relation: &Arc<dyn BaseRelation>) -> Option<SchemaEntry> {
+        let schema_store = match &self.schema_store {
+            Some(schema_store) => schema_store,
+            None => return None,
+        };
+
+        schema_store.get_schema(&relation.get_canonical_fqn().unwrap_or_default())
     }
 }
 
@@ -733,92 +763,37 @@ impl BaseAdapter for BridgeAdapter {
         state: &State,
         relation: Arc<dyn BaseRelation>,
     ) -> Result<Value, MinijinjaError> {
-        let maybe_from_local = if let Some(schema_store) = &self.schema_store {
-            // Check if the relation being queried is the same as the one currently being rendered
-            // Skip local compilation results for the current relation since the compiled sql
-            // may represent a schema that the model will have when the run is done, not the current state
-            let is_current_relation =
-                if let Some((database, schema, alias)) = state.database_schema_alias_from_state() {
-                    // Lowercase name comparison because relation names from the local project
-                    // are user specified, whereas the input relation may have been a normalized name
-                    // from the warehouse
-                    relation
-                        .database_as_str()
-                        .is_ok_and(|s| s.eq_ignore_ascii_case(&database))
-                        && relation
-                            .schema_as_str()
-                            .is_ok_and(|s| s.eq_ignore_ascii_case(&schema))
-                        && relation
-                            .identifier_as_str()
-                            .is_ok_and(|s| s.eq_ignore_ascii_case(&alias))
-                } else {
-                    false
-                };
+        // Check if the relation being queried is the same as the one currently being rendered
+        // Skip local compilation results for the current relation since the compiled sql
+        // may represent a schema that the model will have when the run is done, not the current state
+        let is_current_relation = self.matches_current_relation(state, &relation);
 
-            if !is_current_relation {
-                let schema =
-                    schema_store.get_schema(&relation.get_canonical_fqn().unwrap_or_default());
-                if let Some(schema) = &schema {
-                    let from_local = self
-                        .typed_adapter
-                        .schema_to_columns(schema.original(), schema.inner())?;
-
-                    #[cfg(debug_assertions)]
-                    {
-                        if std::env::var("DEBUG_COMPARE_LOCAL_REMOTE_COLUMNS_TYPES").is_ok() {
-                            match self
-                                .typed_adapter
-                                .get_columns_in_relation(state, relation.clone())
-                            {
-                                Ok(mut from_remote) => {
-                                    from_remote.sort_by(|a, b| a.name().cmp(b.name()));
-
-                                    let mut from_local = from_local.clone();
-                                    from_local.sort_by(|a, b| a.name().cmp(b.name()));
-
-                                    println!("local  remote mismatches");
-                                    if !from_remote.is_empty() {
-                                        assert_eq!(from_local.len(), from_remote.len());
-                                        for (local, remote) in
-                                            from_local.iter().zip(from_remote.iter())
-                                        {
-                                            let mismatch = (local.dtype() != remote.dtype())
-                                                || (local.name() != remote.name());
-                                            if mismatch {
-                                                println!(
-                                                    "adapter.get_columns_in_relation for {}",
-                                                    relation.semantic_fqn()
-                                                );
-                                                println!(
-                                                    "{}:{}  {}:{}",
-                                                    local.name(),
-                                                    local.dtype(),
-                                                    remote.name(),
-                                                    remote.dtype()
-                                                );
-                                            }
-                                        }
-                                    } else {
-                                        println!("WARNING: from_remote is empty");
-                                    }
-                                }
-                                Err(e) => {
-                                    println!("Error getting columns in relation from remote: {e}");
-                                }
-                            }
-                        }
-                    }
-                    Some(from_local)
-                } else {
-                    None
-                }
-            } else {
-                None
-            }
+        let maybe_from_cache = if !is_current_relation {
+            self.get_schema_from_cache(&relation)
         } else {
             None
         };
 
+        // Convert Arrow schemas to dbt Columns
+        let maybe_from_local = if let Some(schema) = &maybe_from_cache {
+            let from_local = self
+                .typed_adapter
+                .schema_to_columns(schema.original(), schema.inner())?;
+
+            #[cfg(debug_assertions)]
+            debug_compare_column_types(
+                state,
+                relation.clone(),
+                &self.typed_adapter,
+                from_local.clone(),
+            );
+
+            Some(from_local)
+        } else {
+            None
+        };
+
+        // Replay Mode: Re-use recordings and compare with cache result
         if let Some(replay_adapter) = self.typed_adapter.as_replay() {
             return replay_adapter.replay_get_columns_in_relation(
                 state,
@@ -827,13 +802,16 @@ impl BaseAdapter for BridgeAdapter {
             );
         }
 
+        // Cache Hit: Re-use values
         if let Some(from_local) = maybe_from_local {
             return Ok(Value::from(from_local));
         }
 
+        // Cache Miss: Issue warehouse specific behavior to fetch columns
         let from_remote = self
             .typed_adapter
             .get_columns_in_relation(state, relation)?;
+
         Ok(Value::from(from_remote))
     }
 
@@ -1630,6 +1608,51 @@ fn builtin_incremental_strategies(
         result.push(DbtIncrementalStrategy::Microbatch)
     }
     result
+}
+
+#[cfg(debug_assertions)]
+fn debug_compare_column_types(
+    state: &State,
+    relation: Arc<dyn BaseRelation>,
+    typed_adapter: &Arc<dyn TypedBaseAdapter>,
+    mut from_local: Vec<Column>,
+) {
+    if std::env::var("DEBUG_COMPARE_LOCAL_REMOTE_COLUMNS_TYPES").is_ok() {
+        match typed_adapter.get_columns_in_relation(state, relation.clone()) {
+            Ok(mut from_remote) => {
+                from_remote.sort_by(|a, b| a.name().cmp(b.name()));
+
+                from_local.sort_by(|a, b| a.name().cmp(b.name()));
+
+                println!("local  remote mismatches");
+                if !from_remote.is_empty() {
+                    assert_eq!(from_local.len(), from_remote.len());
+                    for (local, remote) in from_local.iter().zip(from_remote.iter()) {
+                        let mismatch =
+                            (local.dtype() != remote.dtype()) || (local.name() != remote.name());
+                        if mismatch {
+                            println!(
+                                "adapter.get_columns_in_relation for {}",
+                                relation.semantic_fqn()
+                            );
+                            println!(
+                                "{}:{}  {}:{}",
+                                local.name(),
+                                local.dtype(),
+                                remote.name(),
+                                remote.dtype()
+                            );
+                        }
+                    }
+                } else {
+                    println!("WARNING: from_remote is empty");
+                }
+            }
+            Err(e) => {
+                println!("Error getting columns in relation from remote: {e}");
+            }
+        }
+    }
 }
 
 mod pri {

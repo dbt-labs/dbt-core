@@ -12,12 +12,11 @@ use crate::errors::{
     AdapterError, AdapterErrorKind, AdapterResult, adbc_error_to_adapter_error,
     arrow_error_to_adapter_error,
 };
-use crate::funcs::{execute_macro, none_value};
+use crate::funcs::none_value;
 use crate::load_catalogs;
 use crate::metadata::*;
 use crate::query_ctx::query_ctx_from_state;
 use crate::record_batch_utils::get_column_values;
-use crate::relation_object::RelationObject;
 use crate::render_constraint::render_column_constraint;
 use crate::typed_adapter::TypedBaseAdapter;
 use adbc_core::options::OptionValue;
@@ -310,35 +309,6 @@ impl TypedBaseAdapter for BigqueryAdapter {
             AdapterErrorKind::NotSupported,
             "bigquery.truncate_relation",
         ))
-    }
-
-    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L246-L255
-    fn get_columns_in_relation(
-        &self,
-        state: &State,
-        relation: Arc<dyn BaseRelation>,
-    ) -> AdapterResult<Vec<Column>> {
-        // TODO(serramatutu): once this is moved over to Arrow, let's remove the fallback to DbtCoreBaseColumn
-        // from Column::vec_from_jinja_value for BigQuery
-        // FIXME(harry): the Python version uses googleapi GetTable, that doesn't return pseudocolumn like _PARTITIONDATE or _PARTITIONTIME
-        let result = match execute_macro(
-            state,
-            &[RelationObject::new(relation).as_value()],
-            "get_columns_in_relation",
-        ) {
-            Ok(result) => result,
-            Err(err) => {
-                // Handle NotFound errors
-                if err.kind() == AdapterErrorKind::NotFound
-                    || (err.kind() == AdapterErrorKind::UnexpectedResult
-                        && err.message().contains("Error 404: Not found"))
-                {
-                    return Ok(Vec::new());
-                }
-                return Err(err);
-            }
-        };
-        Ok(Column::vec_from_jinja_value(AdapterType::Bigquery, result)?)
     }
 
     /// This only supports non-nested columns additions

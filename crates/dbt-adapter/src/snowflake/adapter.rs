@@ -1,18 +1,12 @@
 use crate::adapter_engine::AdapterEngine;
-use crate::column::Column;
-use crate::errors::AdapterResult;
-use crate::funcs::execute_macro;
 use crate::record_batch_utils::get_column_values;
-use crate::relation_object::RelationObject;
 use crate::typed_adapter::TypedBaseAdapter;
 use crate::{AdapterTyping, metadata::*};
 
 use arrow::array::StringArray;
 use dbt_agate::AgateTable;
-use dbt_common::adapter::AdapterType;
+use dbt_common::AdapterResult;
 use dbt_schemas::schemas::common::{ConstraintSupport, ConstraintType};
-use dbt_schemas::schemas::relations::base::BaseRelation;
-use minijinja::State;
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -76,34 +70,6 @@ impl TypedBaseAdapter for SnowflakeAdapter {
         Ok(result)
     }
 
-    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L191-L198
-    fn get_columns_in_relation(
-        &self,
-        state: &State,
-        relation: Arc<dyn BaseRelation>,
-    ) -> AdapterResult<Vec<Column>> {
-        let result = match execute_macro(
-            state,
-            &[RelationObject::new(relation).as_value()],
-            "get_columns_in_relation",
-        ) {
-            Ok(result) => result,
-            Err(err) => {
-                // TODO: switch to checking the vendor error code when available.
-                // See https://github.com/dbt-labs/fs/pull/4267#discussion_r2182835729
-                if err.message().contains("does not exist or not authorized") {
-                    return Ok(Vec::new());
-                }
-                return Err(err);
-            }
-        };
-
-        Ok(Column::vec_from_jinja_value(
-            AdapterType::Snowflake,
-            result,
-        )?)
-    }
-
     /// https://github.com/dbt-labs/dbt-adapters/blob/aa1de3d16267a456326a36045701fb48a61a6b6c/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L74
     fn get_constraint_support(&self, ct: ConstraintType) -> ConstraintSupport {
         match ct {
@@ -118,6 +84,7 @@ impl TypedBaseAdapter for SnowflakeAdapter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::AdapterType;
     use crate::sql_types::NaiveTypeOpsImpl;
     use crate::stmt_splitter::NaiveStmtSplitter;
 
@@ -130,7 +97,7 @@ mod tests {
     use dbt_serde_yaml::Mapping;
     use dbt_xdbc::Backend;
 
-    use minijinja::Environment;
+    use minijinja::{Environment, State};
 
     fn engine() -> Arc<AdapterEngine> {
         let config = Mapping::from_iter([
