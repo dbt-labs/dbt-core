@@ -95,7 +95,7 @@ class TestUnitTestListDisabled:
             "my_model_disabled_yml.sql": "select 1 as id",
             "my_model_disabled_sql.sql": my_model_disabled_sql,
             "my_model_disabled_yml.yml": my_model_disabled_yml,
-            "zdisabled_my_model_tests.yml": disabled_my_model_tests_yml,
+            "disabled_my_model_tests.yml": disabled_my_model_tests_yml,
         }
 
     def test_disabled_unit_tests(self, project):
