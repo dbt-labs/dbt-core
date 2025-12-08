@@ -290,8 +290,11 @@ class UnitTestParser(YamlReader):
             )
 
             if tested_model_node:
-                unit_test_definition.depends_on.nodes.append(tested_model_node.unique_id)
-                unit_test_definition.schema = tested_model_node.schema
+                if tested_model_node.config.enabled:
+                    unit_test_definition.depends_on.nodes.append(tested_model_node.unique_id)
+                    unit_test_definition.schema = tested_model_node.schema
+                else:
+                    unit_test_definition.config.enabled = False
 
             # Check that format and type of rows matches for each given input,
             # convert rows to a list of dictionaries, and add the unique_id of
@@ -302,7 +305,7 @@ class UnitTestParser(YamlReader):
             # for calculating state:modified
             unit_test_definition.build_unit_test_checksum()
             assert isinstance(self.yaml.file, SchemaSourceFile)
-            if unit_test_config.enabled:
+            if unit_test_definition.config.enabled:
                 self.manifest.add_unit_test(self.yaml.file, unit_test_definition)
             else:
                 self.manifest.add_disabled(self.yaml.file, unit_test_definition)
@@ -492,6 +495,13 @@ def find_tested_model_node(
     model_version = model_name_split[1] if len(model_name_split) == 2 else None
 
     tested_node = manifest.ref_lookup.find(model_name, current_project, model_version, manifest)
+    if not tested_node:
+        disabled_node = manifest.disabled_lookup.find(
+            model_name, current_project, model_version, [NodeType.Model]
+        )
+        if disabled_node:
+            tested_node = disabled_node[0]
+
     return tested_node
 
 
@@ -509,21 +519,35 @@ def process_models_for_unit_test(
                 f"Unable to find model '{current_project}.{unit_test_def.model}' for "
                 f"unit test '{unit_test_def.name}' in {unit_test_def.original_file_path}"
             )
-        unit_test_def.depends_on.nodes.append(tested_node.unique_id)
-        unit_test_def.schema = tested_node.schema
+        if tested_node.config.enabled:
+            unit_test_def.depends_on.nodes.append(tested_node.unique_id)
+            unit_test_def.schema = tested_node.schema
+        else:
+            # If the model is disabled, the unit test should be disabled
+            unit_test_def.config.enabled = False
 
     # The UnitTestDefinition should only have one "depends_on" at this point,
     # the one that's found by the "model" field.
     target_model_id = unit_test_def.depends_on.nodes[0]
     if target_model_id not in manifest.nodes:
         if target_model_id in manifest.disabled:
-            # The model is disabled, so we don't need to do anything (#10540)
-            return
+            # If the model is disabled, the unit test should be disabled
+            unit_test_def.config.enabled = False
         else:
             # If we've reached here and the model is not disabled, throw an error
             raise ParsingError(
                 f"Unit test '{unit_test_def.name}' references a model that does not exist: {target_model_id}"
             )
+
+    if not unit_test_def.config.enabled:
+        # Ensure the unit test is disabled in the manifest
+        if unit_test_def.unique_id in manifest.unit_tests:
+            manifest.unit_tests.pop(unit_test_def.unique_id)
+        if unit_test_def.unique_id not in manifest.disabled:
+            manifest.add_disabled(manifest.files[unit_test_def.file_id], unit_test_def)
+
+        # The unit test is disabled, so we don't need to do any further processing (#10540)
+        return
 
     target_model = manifest.nodes[target_model_id]
     assert isinstance(target_model, ModelNode)
