@@ -3,6 +3,7 @@
 use std::{collections::BTreeMap, rc::Rc, slice, sync::Arc};
 
 use dashmap::DashMap;
+use dbt_common::{ErrorCode, tracing::emit::emit_warn_log_message};
 use minijinja::{
     Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State, Value,
     arg_utils::ArgParser,
@@ -47,6 +48,7 @@ impl Object for CompileConfig {
         Enumerator::Iter(Box::new(keys.into_iter()))
     }
 
+    #[allow(clippy::cognitive_complexity)]
     fn call_method(
         self: &Arc<Self>,
         state: &State<'_, '_>,
@@ -75,6 +77,17 @@ impl Object for CompileConfig {
                                 if let Some(value) = meta_obj.get_value(&Value::from(name.clone()))
                                 {
                                     if !value.is_none() {
+                                        // Emit deprecation warning
+                                        emit_warn_log_message(
+                                            ErrorCode::Generic,
+                                            format!(
+                                                "DeprecationWarning: Custom config found under \"meta\" using config.get(\"{}\"). \
+                                                Please replace this with config.meta_get(\"{}\") to avoid collisions with \
+                                                configs introduced by dbt.",
+                                                name, name
+                                            ),
+                                            None,
+                                        );
                                         // Return the value from meta
                                         value
                                     } else {
@@ -127,6 +140,17 @@ impl Object for CompileConfig {
                                 if let Some(value) = meta_obj.get_value(&Value::from(name.clone()))
                                 {
                                     if !value.is_none() {
+                                        // Emit deprecation warning
+                                        emit_warn_log_message(
+                                            ErrorCode::Generic,
+                                            format!(
+                                                "DeprecationWarning: Custom config found under \"meta\" using config.require(\"{}\"). \
+                                                Please replace this with config.meta_require(\"{}\") to avoid collisions with \
+                                                configs introduced by dbt.",
+                                                name, name
+                                            ),
+                                            None,
+                                        );
                                         return Ok(value);
                                     }
                                 }
@@ -182,6 +206,62 @@ impl Object for CompileConfig {
                 Ok(persist_docs_map
                     .get_value(&Value::from("columns"))
                     .unwrap_or_else(|| Value::from(false)))
+            }
+            // New method that only checks config.meta
+            "meta_get" => {
+                let mut args = ArgParser::new(args, None);
+                let name: String = args.get("name")?;
+                let default = args
+                    .get_optional::<Value>("default")
+                    .unwrap_or_else(|| Value::from(None::<Option<String>>));
+
+                // Get the value from meta or use default
+                let result = if let Some(meta_value) = self.config.get("meta") {
+                    let meta = meta_value.value();
+                    if let Some(meta_obj) = meta.as_object() {
+                        if let Some(value) = meta_obj.get_value(&Value::from(name)) {
+                            if !value.is_none() { value } else { default }
+                        } else {
+                            default
+                        }
+                    } else {
+                        default
+                    }
+                } else {
+                    default
+                };
+
+                // Handle validator if provided (same as in get method)
+                let validator = args.get_optional::<Value>("validator");
+                if let Some(validator) = validator {
+                    // Pass the actual value to the validator
+                    let validated = validator.call(state, slice::from_ref(&result), listeners);
+                    validated?;
+                }
+
+                Ok(result)
+            }
+            // New method that only checks config.meta and requires the key
+            "meta_require" => {
+                let mut args = ArgParser::new(args, None);
+                let name: String = args.get("name")?;
+
+                // Only check config.meta.<key>
+                if let Some(meta_value) = self.config.get("meta") {
+                    let meta = meta_value.value();
+                    if let Some(meta_obj) = meta.as_object() {
+                        if let Some(value) = meta_obj.get_value(&Value::from(name.clone())) {
+                            if !value.is_none() {
+                                return Ok(value);
+                            }
+                        }
+                    }
+                }
+                // If not found in meta, throw an error
+                Err(MinijinjaError::new(
+                    MinijinjaErrorKind::InvalidOperation,
+                    format!("Required config key '{}' not found in config.meta", name),
+                ))
             }
             _ => Err(MinijinjaError::new(
                 MinijinjaErrorKind::UnknownMethod,

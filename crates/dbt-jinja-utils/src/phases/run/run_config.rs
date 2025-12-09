@@ -3,6 +3,7 @@
 use indexmap::IndexMap;
 use std::{collections::BTreeMap, rc::Rc, sync::Arc};
 
+use dbt_common::{ErrorCode, tracing::emit::emit_warn_log_message};
 use minijinja::{
     Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State, Value,
     arg_utils::ArgParser,
@@ -55,6 +56,17 @@ impl Object for RunConfig {
                                 if let Some(value) = meta_obj.get_value(&Value::from(name.clone()))
                                 {
                                     if !value.is_none() {
+                                        // Emit deprecation warning
+                                        emit_warn_log_message(
+                                            ErrorCode::Generic,
+                                            format!(
+                                                "DeprecationWarning: Custom config found under \"meta\" using config.get(\"{}\"). \
+                                                Please replace this with config.meta_get(\"{}\") to avoid collisions with \
+                                                configs introduced by dbt.",
+                                                name, name
+                                            ),
+                                            None,
+                                        );
                                         return Ok(value);
                                     }
                                 }
@@ -86,6 +98,17 @@ impl Object for RunConfig {
                                 if let Some(value) = meta_obj.get_value(&Value::from(name.clone()))
                                 {
                                     if !value.is_none() {
+                                        // Emit deprecation warning
+                                        emit_warn_log_message(
+                                            ErrorCode::Generic,
+                                            format!(
+                                                "DeprecationWarning: Custom config found under \"meta\" using config.require(\"{}\"). \
+                                                Please replace this with config.meta_require(\"{}\") to avoid collisions with \
+                                                configs introduced by dbt.",
+                                                name, name
+                                            ),
+                                            None,
+                                        );
                                         return Ok(value);
                                     }
                                 }
@@ -141,6 +164,47 @@ impl Object for RunConfig {
                 Ok(persist_docs_map
                     .get_value(&Value::from("columns"))
                     .unwrap_or_else(|| Value::from(false)))
+            }
+            // New method that only checks config.meta
+            "meta_get" => {
+                let mut args = ArgParser::new(args, None);
+                let name: String = args.get("name")?;
+                let default = args
+                    .get_optional::<Value>("default")
+                    .unwrap_or_else(|| Value::from(None::<Option<String>>));
+
+                // Only check model_config.meta.<key>
+                if let Some(meta_value) = self.model_config.get("meta") {
+                    if let Some(meta_obj) = meta_value.as_object() {
+                        if let Some(value) = meta_obj.get_value(&Value::from(name)) {
+                            if !value.is_none() {
+                                return Ok(value);
+                            }
+                        }
+                    }
+                }
+                Ok(default)
+            }
+            // New method that only checks config.meta and requires the key
+            "meta_require" => {
+                let mut args = ArgParser::new(args, None);
+                let name: String = args.get("name")?;
+
+                // Only check model_config.meta.<key>
+                if let Some(meta_value) = self.model_config.get("meta") {
+                    if let Some(meta_obj) = meta_value.as_object() {
+                        if let Some(value) = meta_obj.get_value(&Value::from(name.clone())) {
+                            if !value.is_none() {
+                                return Ok(value);
+                            }
+                        }
+                    }
+                }
+                // If not found in meta, throw an error
+                Err(MinijinjaError::new(
+                    MinijinjaErrorKind::InvalidOperation,
+                    format!("Required config key '{}' not found in config.meta", name),
+                ))
             }
             _ => Err(MinijinjaError::new(
                 MinijinjaErrorKind::UnknownMethod,

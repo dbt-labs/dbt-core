@@ -788,6 +788,18 @@ impl<T: DefaultTo<T>> Object for ParseConfig<T> {
                 let _: String = args.get("name")?;
                 Ok(MinijinjaValue::from(""))
             }
+            // At parse time, this just returns an empty string (for consistency with compile/run configs)
+            "meta_get" => {
+                let mut args = ArgParser::new(args, None);
+                let _: String = args.get("name")?;
+                Ok(MinijinjaValue::from(""))
+            }
+            // At parse time, this just returns an empty string (for consistency with compile/run configs)
+            "meta_require" => {
+                let mut args = ArgParser::new(args, None);
+                let _: String = args.get("name")?;
+                Ok(MinijinjaValue::from(""))
+            }
             _ => Err(MinijinjaError::new(
                 MinijinjaErrorKind::UnknownMethod,
                 format!("Unknown method on parse: {name}"),
