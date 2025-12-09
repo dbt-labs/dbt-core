@@ -801,7 +801,23 @@ pub fn dispatch_adapter_calls(
 
             adapter.redact_credentials(state, sql)
         }
-        // only available for DataBricks
+        // only available for databricks
+        "is_cluster" => {
+            if adapter.adapter_type() != AdapterType::Databricks {
+                return Err(MinijinjaError::new(
+                    MinijinjaErrorKind::InvalidOperation,
+                    "adapter.is_cluster is only available with the Databricks adapter",
+                ));
+            }
+            if adapter.is_parse() {
+                return Ok(Value::from(false));
+            }
+            let is_cluster = adapter
+                .as_typed_base_adapter()
+                .is_cluster()
+                .map_err(MinijinjaError::from)?;
+            Ok(Value::from(is_cluster))
+        }
         "compare_dbr_version" => adapter.compare_dbr_version(state, args),
         "compute_external_path" => adapter.compute_external_path(state, args),
         "update_tblproperties_for_uniform_iceberg" => {

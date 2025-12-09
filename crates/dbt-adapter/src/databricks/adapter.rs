@@ -144,6 +144,29 @@ impl TypedBaseAdapter for DatabricksAdapter {
             "spark__check_schema_exists".to_string(),
         ))
     }
+
+    /// https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/utils.py#L94
+    fn is_cluster(&self) -> AdapterResult<bool> {
+        let http_path = self
+            .engine()
+            .get_config()
+            .get_string("http_path")
+            .ok_or_else(|| {
+                AdapterError::new(
+                    AdapterErrorKind::Configuration,
+                    "http_path is required to determine Databricks compute type",
+                )
+            })?;
+
+        let normalized = http_path.trim().to_ascii_lowercase();
+        if normalized.contains("/warehouses/") {
+            return Ok(false);
+        }
+        if normalized.contains("/protocolv1/") {
+            return Ok(true);
+        }
+        Ok(false)
+    }
     /// https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/connections.py#L226-L227
     fn compare_dbr_version(
         &self,

@@ -682,6 +682,15 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         Ok(("dbt".to_string(), "check_schema_exists".to_string()))
     }
 
+    /// Determine if the current Databricks connection points to a classic
+    /// cluster (as opposed to a SQL warehouse).
+    fn is_cluster(&self) -> AdapterResult<bool> {
+        Err(AdapterError::new(
+            AdapterErrorKind::NotSupported,
+            "is_cluster is only available for the Databricks adapter",
+        ))
+    }
+
     /// Rename relation
     fn rename_relation(
         &self,
