@@ -712,7 +712,7 @@ class ModelParamUsageDeprecation(WarnLevel):
 
     def message(self) -> str:
         description = "Usage of `--models`, `--model`, and `-m` is deprecated in favor of `--select` or `-s`."
-        return line_wrap_message(deprecation_tag(description))
+        return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
 
 
 class ModulesItertoolsUsageDeprecation(WarnLevel):
@@ -723,7 +723,7 @@ class ModulesItertoolsUsageDeprecation(WarnLevel):
         description = (
             "Usage of itertools modules is deprecated. Please use the built-in functions instead."
         )
-        return line_wrap_message(deprecation_tag(description))
+        return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
 
 
 class SourceOverrideDeprecation(WarnLevel):
@@ -732,7 +732,7 @@ class SourceOverrideDeprecation(WarnLevel):
 
     def message(self) -> str:
         description = f"The source property `overrides` is deprecated but was found on source `{self.source_name}` in file `{self.file}`. Instead, `enabled` should be used to disable the unwanted source."
-        return line_wrap_message(deprecation_tag(description))
+        return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
 
 
 class EnvironmentVariableNamespaceDeprecation(WarnLevel):
@@ -741,7 +741,7 @@ class EnvironmentVariableNamespaceDeprecation(WarnLevel):
 
     def message(self) -> str:
         description = f"Found custom environment variable `{self.env_var}` in the environment. The prefix `{self.reserved_prefix}` is reserved for dbt engine environment variables. Custom environment variables with the prefix `{self.reserved_prefix}` may cause collisions and runtime errors."
-        return line_wrap_message(deprecation_tag(description))
+        return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
 
 
 class MissingPlusPrefixDeprecation(WarnLevel):
@@ -777,7 +777,7 @@ class DuplicateNameDistinctNodeTypesDeprecation(WarnLevel):
 
     def message(self) -> str:
         description = f"Found resources with the same name '{self.resource_name}' in package '{self.package_name}': '{self.unique_id1}' and '{self.unique_id2}'. Please update one of the resources to have a unique name."
-        return line_wrap_message(deprecation_tag(description))
+        return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
 
 
 # =======================================================
