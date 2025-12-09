@@ -1,5 +1,6 @@
 //! Module for configuring the jinja environment for the run phase
 
+mod lazy_model;
 mod run_config;
 mod run_node_context;
 

@@ -31,6 +31,7 @@ use minijinja::machinery::Span;
 use minijinja::{Error, ErrorKind, Value as MinijinjaValue, value::Object};
 use serde::Serialize;
 
+use super::lazy_model::LazyModelWrapper;
 use crate::phases::MacroLookupContext;
 
 use super::run_config::RunConfig;
@@ -163,11 +164,22 @@ async fn extend_with_model_context<S: Serialize>(
         MinijinjaValue::from_object(node_config),
     );
 
-    base_context.insert(
-        "model".to_owned(),
-        MinijinjaValue::from_object(model_map.clone()),
-    );
-    base_context.insert("node".to_owned(), MinijinjaValue::from_object(model_map));
+    // Create the lazy wrapper for the model with the compiled path
+    let compiled_path = io_args
+        .out_dir
+        .join(DBT_COMPILED_DIR_NAME)
+        .join(&common_attr.path);
+    let lazy_model = LazyModelWrapper::new(model_map.clone(), compiled_path);
+
+    base_context.insert("model".to_owned(), MinijinjaValue::from_object(lazy_model));
+    // For "node", we'll use the same lazy model wrapper
+    let node_compiled_path = io_args
+        .out_dir
+        .join(DBT_COMPILED_DIR_NAME)
+        .join(&common_attr.path);
+    let lazy_node = LazyModelWrapper::new(model_map, node_compiled_path);
+
+    base_context.insert("node".to_owned(), MinijinjaValue::from_object(lazy_node));
     base_context.insert("connection_name".to_owned(), MinijinjaValue::from(""));
 }
 
