@@ -1,4 +1,4 @@
-use dbt_adapter::relation_object::create_relation_internal;
+use dbt_adapter::relation::create_relation_internal;
 use dbt_adapter::{AdapterTyping, ParseAdapter};
 use dbt_common::{ErrorCode, FsError, fs_err, stdfs};
 use dbt_common::{FsResult, constants::DBT_CTE_PREFIX, error::MacroSpan, tokiofs};

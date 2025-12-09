@@ -1,11 +1,9 @@
-use crate::databricks::relation_configs::base::{
-    DatabricksRelationConfigBase, DatabricksRelationConfigBaseObject,
-};
-use crate::databricks::relation_configs::incremental::IncrementalTableConfig;
-use crate::databricks::relation_configs::materialized_view::MaterializedViewConfig;
-use crate::databricks::relation_configs::relation_api::get_from_relation_config;
-use crate::databricks::relation_configs::streaming_table::StreamingTableConfig;
-use crate::databricks::relation_configs::view::ViewConfig;
+use crate::relation::databricks::base::*;
+use crate::relation::databricks::incremental::IncrementalTableConfig;
+use crate::relation::databricks::materialized_view::MaterializedViewConfig;
+use crate::relation::databricks::relation_api::get_from_relation_config;
+use crate::relation::databricks::streaming_table::StreamingTableConfig;
+use crate::relation::databricks::view::ViewConfig;
 
 use crate::AdapterTyping;
 use crate::adapter_engine::AdapterEngine;
@@ -16,6 +14,7 @@ use crate::load_catalogs;
 use crate::metadata::*;
 use crate::query_ctx::query_ctx_from_state;
 use crate::record_batch_utils::get_column_values;
+use crate::relation::BaseRelationConfig;
 use crate::typed_adapter::TypedBaseAdapter;
 use arrow::array::{Array, StringArray};
 use dbt_agate::AgateTable;
@@ -25,7 +24,7 @@ use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::common::{ConstraintSupport, ConstraintType, DbtMaterialization};
 use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::relations::base::BaseRelation;
-use dbt_schemas::schemas::{BaseRelationConfig, InternalDbtNodeAttributes, InternalDbtNodeWrapper};
+use dbt_schemas::schemas::{InternalDbtNodeAttributes, InternalDbtNodeWrapper};
 use dbt_xdbc::{Connection, QueryCtx};
 use indexmap::IndexMap;
 use minijinja::{State, Value};
@@ -447,18 +446,13 @@ impl TypedBaseAdapter for DatabricksAdapter {
         &self,
         model: &dyn InternalDbtNodeAttributes,
     ) -> AdapterResult<Value> {
-        use crate::databricks::relation_configs::base::DatabricksComponentProcessor;
-        use crate::databricks::relation_configs::column_tags::{
-            ColumnTagsConfig, ColumnTagsProcessor,
-        };
+        use crate::relation::databricks::base::DatabricksComponentProcessor;
+        use crate::relation::databricks::column_tags::{ColumnTagsConfig, ColumnTagsProcessor};
         use std::collections::BTreeMap;
 
         let processor = ColumnTagsProcessor;
-        if let Some(
-            crate::databricks::relation_configs::base::DatabricksComponentConfig::ColumnTags(
-                column_tags,
-            ),
-        ) = processor.from_relation_config(model)?
+        if let Some(DatabricksComponentConfig::ColumnTags(column_tags)) =
+            processor.from_relation_config(model)?
         {
             let value = Value::from_serialize(&column_tags);
             return Ok(value);

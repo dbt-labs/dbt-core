@@ -24,6 +24,7 @@ pub mod query_cache;
 pub mod query_comment;
 pub mod query_ctx;
 pub mod record_and_replay;
+pub mod relation;
 pub mod render_constraint;
 pub mod response;
 pub mod snapshots;
@@ -53,8 +54,6 @@ pub mod parse;
 pub mod postgres;
 /// Redshift adapter
 pub mod redshift;
-/// Salesforce adapter
-pub mod salesforce;
 /// Snowflake adapter
 pub mod snowflake;
 
@@ -64,8 +63,6 @@ pub mod mock;
 pub mod record_batch_utils;
 
 pub mod cast_util;
-/// Utils
-pub mod relation_object;
 
 /// SqlEngine
 pub use adapter_engine::AdapterEngine;

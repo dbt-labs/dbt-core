@@ -3,7 +3,6 @@ use crate::snowflake::adapter::SnowflakeAdapter;
 use crate::errors::{AdapterError, AdapterResult, AsyncAdapterResult};
 use crate::metadata::*;
 use crate::record_batch_utils::get_column_values;
-use crate::relation_object::create_relation;
 use crate::sql_types::{TypeOps, make_arrow_field};
 use crate::typed_adapter::TypedBaseAdapter;
 use crate::{AdapterType, AdapterTyping};
@@ -741,7 +740,7 @@ fn build_schemas_from_information_schema(
             current_table = fully_qualified_name;
             current_fields = Vec::new();
 
-            let relation = match create_relation(
+            let relation = match crate::relation::create_relation(
                 type_ops.adapter_type(),
                 catalog.to_string(),
                 schema.to_string(),

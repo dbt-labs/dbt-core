@@ -4,9 +4,7 @@ use std::{
     iter::Iterator,
 };
 
-use dbt_adapter::relation_object::{
-    RelationObject, create_relation_from_node, create_relation_internal,
-};
+use dbt_adapter::relation::{RelationObject, create_relation_from_node, create_relation_internal};
 use dbt_common::{
     CodeLocation, ErrorCode, FsResult,
     adapter::AdapterType,

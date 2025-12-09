@@ -6,7 +6,7 @@ use std::{
 };
 
 use dashmap::DashMap;
-use dbt_adapter::{AdapterType, load_store::ResultStore, relation_object::create_relation};
+use dbt_adapter::{AdapterType, load_store::ResultStore};
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::serde_utils::convert_yml_to_dash_map;
 use dbt_schemas::{
@@ -112,7 +112,7 @@ where
             let ref_name = model.common().name.clone();
             // for repl, we use the just create a relation on spot using model passed in.
             if ref_name == REPL_MODEL_NAME {
-                create_relation(
+                dbt_adapter::relation::create_relation(
                     adapter_type,
                     model.base().database.clone(),
                     model.base().schema.clone(),
@@ -146,7 +146,7 @@ where
                 }
             }
         }
-        _ => create_relation(
+        _ => dbt_adapter::relation::create_relation(
             adapter_type,
             model.base().database.clone(),
             model.base().schema.clone(),

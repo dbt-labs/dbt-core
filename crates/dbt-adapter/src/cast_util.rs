@@ -1,5 +1,5 @@
 //! A set of util functions for casting from/to Value
-use crate::relation_object::RelationObject;
+use crate::relation::RelationObject;
 
 use dbt_schemas::schemas::relations::base::BaseRelation;
 use minijinja::Error as MinijinjaError;

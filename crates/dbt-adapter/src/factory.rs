@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
 use crate::AdapterType;
-use crate::bigquery::relation::BigqueryRelationType;
-use crate::databricks::relation::DatabricksRelationType;
-use crate::postgres::relation::PostgresRelationType;
-use crate::redshift::relation::RedshiftRelationType;
-use crate::relation_object::StaticBaseRelationObject;
-use crate::salesforce::relation::SalesforceRelationType;
-use crate::snowflake::relation::SnowflakeRelationType;
+use crate::relation::StaticBaseRelationObject;
+use crate::relation::bigquery::BigqueryRelationType;
+use crate::relation::databricks::DatabricksRelationType;
+use crate::relation::postgres::PostgresRelationType;
+use crate::relation::redshift::RedshiftRelationType;
+use crate::relation::salesforce::SalesforceRelationType;
+use crate::relation::snowflake::SnowflakeRelationType;
 
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use minijinja::Value;

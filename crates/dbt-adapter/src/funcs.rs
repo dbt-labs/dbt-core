@@ -1,11 +1,11 @@
 use crate::AdapterType;
 use crate::base_adapter::BaseAdapter;
 use crate::cast_util::downcast_value_to_dyn_base_relation;
-use crate::databricks::relation::DEFAULT_DATABRICKS_DATABASE;
 use crate::errors::AdapterResult;
 use crate::errors::{AdapterError, AdapterErrorKind};
 use crate::factory::create_static_relation;
 use crate::formatter::SqlLiteralFormatter;
+use crate::relation::databricks::DEFAULT_DATABRICKS_DATABASE;
 use crate::response::ResultObject;
 use crate::snapshots::SnapshotStrategy;
 

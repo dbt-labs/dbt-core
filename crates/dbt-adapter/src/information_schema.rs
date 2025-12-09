@@ -1,4 +1,4 @@
-use crate::relation_object::RelationObject;
+use crate::relation::RelationObject;
 
 use dbt_common::FsResult;
 use dbt_frontend_common::ident::Identifier;

@@ -7,9 +7,9 @@ use crate::funcs::{
     empty_vec_value, none_value,
 };
 use crate::metadata::MetadataAdapter;
-use crate::parse::relation::EmptyRelation;
 use crate::query_comment::QueryCommentConfig;
-use crate::relation_object::{RelationObject, create_relation};
+use crate::relation::parse::EmptyRelation;
+use crate::relation::{RelationObject, create_relation};
 use crate::response::AdapterResponse;
 use crate::snapshots::SnapshotStrategy;
 use crate::sql_types::TypeOps;

@@ -8,7 +8,7 @@ use dbt_xdbc::{Connection, QueryCtx};
 
 use crate::errors::{AdapterError, AdapterErrorKind};
 use crate::record_batch_utils::get_column_values;
-use crate::snowflake::relation::SnowflakeRelation;
+use crate::relation::snowflake::SnowflakeRelation;
 use crate::{AdapterResult, AdapterTyping};
 
 pub const ARROW_FIELD_SNOWFLAKE_FIELD_WIDTH_METADATA_KEY: &str = "SNOWFLAKE:field_width";

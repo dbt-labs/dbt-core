@@ -1,9 +1,12 @@
 use std::sync::Arc;
 
 use dashmap::DashMap;
-use dbt_schemas::schemas::relations::{base::BaseRelation, relation_configs::BaseRelationConfig};
+use dbt_schemas::schemas::relations::base::BaseRelation;
 
-use crate::metadata::{CatalogAndSchema, RelationVec};
+use crate::{
+    metadata::{CatalogAndSchema, RelationVec},
+    relation::BaseRelationConfig,
+};
 
 type RelationCacheKey = String;
 /// Represents a [BaseRelation] and any associated [BaseRelationConfig] if available
@@ -242,7 +245,7 @@ mod tests {
 
     #[test]
     fn test_different_key_creation() {
-        use crate::relation_object::create_relation;
+        use crate::relation::create_relation;
 
         let cache = RelationCache::default();
 
@@ -331,7 +334,7 @@ mod tests {
 
     #[test]
     fn test_quoting_policy_affects_cache_keys() {
-        use crate::relation_object::create_relation;
+        use crate::relation::create_relation;
 
         let cache = RelationCache::default();
 
@@ -398,7 +401,7 @@ mod tests {
     #[test]
     fn test_concurrent_mixed_operations_no_race_condition() {
         use crate::metadata::CatalogAndSchema;
-        use crate::relation_object::create_relation;
+        use crate::relation::create_relation;
         use std::sync::Arc;
         use std::thread;
 

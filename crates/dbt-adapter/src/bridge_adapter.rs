@@ -8,11 +8,11 @@ use crate::funcs::{
 };
 use crate::metadata::*;
 use crate::query_ctx::{node_id_from_state, query_ctx_from_state};
-use crate::relation_object::RelationObject;
+use crate::relation::RelationObject;
 use crate::render_constraint::render_model_constraint;
 use crate::snapshots::SnapshotStrategy;
 use crate::typed_adapter::TypedBaseAdapter;
-use crate::{AdapterEngine, AdapterResponse, AdapterResult, BaseAdapter, relation_object};
+use crate::{AdapterEngine, AdapterResponse, AdapterResult, BaseAdapter};
 
 use dbt_agate::AgateTable;
 use dbt_common::behavior_flags::{Behavior, BehaviorFlag};
@@ -670,7 +670,7 @@ impl BaseAdapter for BridgeAdapter {
         // Skip cache in replay mode
         let is_replay = self.typed_adapter.as_replay().is_some();
         if !is_replay {
-            let temp_relation = relation_object::create_relation(
+            let temp_relation = crate::relation::create_relation(
                 self.typed_adapter.adapter_type(),
                 database.to_string(),
                 schema.to_string(),

@@ -6,9 +6,9 @@ use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::relations::base::BaseRelation;
 use dbt_xdbc::{Connection, QueryCtx};
 
-use crate::bigquery::relation::BigqueryRelation;
 use crate::metadata::CatalogAndSchema;
 use crate::record_batch_utils::get_column_values;
+use crate::relation::bigquery::BigqueryRelation;
 use crate::{AdapterResult, AdapterTyping};
 
 pub fn list_relations(

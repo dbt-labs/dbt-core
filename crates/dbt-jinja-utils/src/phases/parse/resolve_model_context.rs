@@ -13,9 +13,7 @@ use std::{
 
 use chrono::TimeZone;
 use chrono_tz::{Europe::London, Tz};
-use dbt_adapter::{
-    cast_util::THIS_RELATION_KEY, load_store::ResultStore, relation_object::create_relation,
-};
+use dbt_adapter::{cast_util::THIS_RELATION_KEY, load_store::ResultStore};
 use dbt_common::{
     adapter::AdapterType,
     io_args::{IoArgs, StaticAnalysisKind},
@@ -87,7 +85,7 @@ pub fn build_resolve_model_context<T: DefaultTo<T> + 'static>(
     let mut context = BTreeMap::new();
     let sql_resources_clone = sql_resources.clone();
     let this_relation = ResolveThisFunction {
-        relation: create_relation(
+        relation: dbt_adapter::relation::create_relation(
             adapter_type,
             database.to_string(),
             schema.to_string(),
@@ -433,7 +431,7 @@ impl<T: DefaultTo<T>> Object for ResolveRefFunction<T> {
             location,
         )));
 
-        let relation = create_relation(
+        let relation = dbt_adapter::relation::create_relation(
             self.adapter_type,
             self.database.clone(),
             self.schema.clone(),
@@ -497,7 +495,7 @@ impl<T: DefaultTo<T>> Object for ResolveSourceFunction<T> {
                 )));
 
             // At resolve time, fqn do not have to be accurate
-            Ok(create_relation(
+            Ok(dbt_adapter::relation::create_relation(
                 self.adapter_type,
                 self.database.clone(),
                 self.schema.clone(),
@@ -584,7 +582,7 @@ impl<T: DefaultTo<T>> Object for ResolveFunctionFunction<T> {
                 location,
             )));
 
-        let relation = create_relation(
+        let relation = dbt_adapter::relation::create_relation(
             self.adapter_type,
             self.database.clone(),
             self.schema.clone(),

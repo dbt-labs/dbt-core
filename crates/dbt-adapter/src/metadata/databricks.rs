@@ -6,9 +6,9 @@ use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::relations::base::BaseRelation;
 use dbt_xdbc::{Connection, QueryCtx};
 
-use crate::databricks::relation::DatabricksRelation;
 use crate::metadata::CatalogAndSchema;
 use crate::record_batch_utils::get_column_values;
+use crate::relation::databricks::DatabricksRelation;
 use crate::{AdapterResult, AdapterTyping};
 
 // Reference: https://github.com/databricks/dbt-databricks/blob/92f1442faabe0fce6f0375b95e46ebcbfcea4c67/dbt/include/databricks/macros/adapters/metadata.sql

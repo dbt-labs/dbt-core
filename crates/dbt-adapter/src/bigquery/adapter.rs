@@ -1,10 +1,5 @@
 use crate::adapter_engine::AdapterEngine;
 use crate::base_adapter::{AdapterType, AdapterTyping};
-use crate::bigquery::relation_config::BigqueryMaterializedViewConfigObject;
-use crate::bigquery::relation_config::{
-    BigqueryMaterializedViewConfig, BigqueryPartitionConfigExt, cluster_by_from_schema,
-    partitions_match,
-};
 use crate::cast_util::downcast_value_to_dyn_base_relation;
 use crate::catalog_relation::CatalogRelation;
 use crate::column::{BigqueryColumnMode, Column, ColumnBuilder};
@@ -17,6 +12,7 @@ use crate::load_catalogs;
 use crate::metadata::*;
 use crate::query_ctx::query_ctx_from_state;
 use crate::record_batch_utils::get_column_values;
+use crate::relation::bigquery::*;
 use crate::render_constraint::render_column_constraint;
 use crate::typed_adapter::TypedBaseAdapter;
 use adbc_core::options::OptionValue;

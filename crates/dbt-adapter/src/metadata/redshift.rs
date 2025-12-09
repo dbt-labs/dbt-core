@@ -6,7 +6,7 @@ use dbt_schemas::schemas::relations::base::BaseRelation;
 use dbt_xdbc::{Connection, QueryCtx};
 
 use crate::record_batch_utils::get_column_values;
-use crate::redshift::relation::RedshiftRelation;
+use crate::relation::redshift::RedshiftRelation;
 use crate::{AdapterResult, AdapterTyping};
 
 /// Reference: https://github.com/dbt-labs/dbt-adapters/blob/87e81a47baa11c312003377091a9efc0ab72d88e/dbt-redshift/src/dbt/include/redshift/macros/adapters.sql#L226

@@ -35,12 +35,6 @@ pub mod schemas {
         TimingInfo,
     };
 
-    // Add re-exports from relation_configs
-    pub use relations::relation_configs::{
-        BaseRelationChangeSet, BaseRelationConfig, ComponentConfig, RelationChangeSet,
-        RelationConfigFactory,
-    };
-
     pub mod nodes;
     pub use nodes::{
         CommonAttributes, DbtAnalysis, DbtAnalysisAttr, DbtExposure, DbtExposureAttr, DbtFunction,

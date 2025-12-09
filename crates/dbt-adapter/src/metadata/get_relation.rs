@@ -9,16 +9,16 @@ use dbt_xdbc::{Connection, QueryCtx};
 use minijinja::{State, Value};
 
 use crate::TypedBaseAdapter;
-use crate::bigquery::relation::BigqueryRelation;
 use crate::databricks::describe_table::DatabricksTableMetadata;
-use crate::databricks::relation::DatabricksRelation;
 use crate::metadata::{snowflake, try_canonicalize_bool_column_field};
-use crate::postgres::relation::PostgresRelation;
 use crate::record_batch_utils::get_column_values;
-use crate::redshift::relation::RedshiftRelation;
-use crate::relation_object::RelationObject;
-use crate::salesforce::relation::SalesforceRelation;
-use crate::snowflake::relation::SnowflakeRelation;
+use crate::relation::RelationObject;
+use crate::relation::bigquery::BigqueryRelation;
+use crate::relation::databricks::DatabricksRelation;
+use crate::relation::postgres::PostgresRelation;
+use crate::relation::redshift::RedshiftRelation;
+use crate::relation::salesforce::SalesforceRelation;
+use crate::relation::snowflake::SnowflakeRelation;
 
 // TODO: turn this into a struct and collapse all the common code from X_get_relation functions
 

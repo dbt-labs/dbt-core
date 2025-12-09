@@ -17,7 +17,6 @@ use dbt_common::io_args::IoArgs;
 use dbt_common::serde_utils::convert_yml_to_value_map;
 
 use dbt_adapter::load_store::ResultStore;
-use dbt_adapter::relation_object::create_relation;
 use dbt_common::tokiofs;
 use dbt_common::tracing::emit::emit_warn_log_message;
 use dbt_schemas::schemas::CommonAttributes;
@@ -52,7 +51,7 @@ async fn extend_with_model_context<S: Serialize>(
     sql_header: Option<MinijinjaValue>,
 ) {
     // Create a relation for 'this' using config values
-    let this_relation = create_relation(
+    let this_relation = dbt_adapter::relation::create_relation(
         adapter_type,
         base_attr.database.clone(),
         base_attr.schema.clone(),

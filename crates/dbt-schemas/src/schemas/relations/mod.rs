@@ -3,7 +3,6 @@ use dbt_common::adapter::AdapterType;
 use crate::schemas::common::{DbtQuoting, ResolvedQuoting};
 
 pub mod base;
-pub mod relation_configs;
 
 pub static DEFAULT_RESOLVED_QUOTING: ResolvedQuoting = ResolvedQuoting {
     database: true,

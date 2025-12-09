@@ -7,10 +7,6 @@ pub mod api_client;
 /// Databricks constraint utilities
 pub mod constraints;
 pub mod metadata;
-/// Databricks relation
-pub mod relation;
-/// Databricks relation config
-pub mod relation_configs;
 /// serde schemas for Databricks
 pub mod schemas;
 

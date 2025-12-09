@@ -1,7 +1,7 @@
 use crate::errors::{AdapterError, AdapterResult, AsyncAdapterResult};
 use crate::funcs::execute_macro;
 use crate::metadata::*;
-use crate::relation_object::{create_relation, create_relation_internal};
+use crate::relation::{create_relation, create_relation_internal};
 use crate::sql_types::{SdfSchema, arrow_schema_to_sdf_schema};
 use crate::typed_adapter::TypedBaseAdapter;
 

@@ -457,7 +457,7 @@ fn build_schema_from_basic_describe_table(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::databricks::relation::DatabricksRelation;
+    use crate::relation::databricks::DatabricksRelation;
     use dbt_schemas::dbt_types::RelationType;
     use dbt_schemas::schemas::common::ResolvedQuoting;
     use dbt_schemas::schemas::relations::base::BaseRelation;

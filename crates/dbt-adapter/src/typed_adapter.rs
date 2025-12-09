@@ -7,7 +7,8 @@ use crate::information_schema::InformationSchema;
 use crate::metadata::{self, CatalogAndSchema};
 use crate::query_ctx::query_ctx_from_state;
 use crate::record_batch_utils::{extract_first_value_as_i64, get_column_values};
-use crate::relation_object::RelationObject;
+use crate::relation::BaseRelationConfig;
+use crate::relation::RelationObject;
 use crate::response::{AdapterResponse, ResultObject};
 use crate::snapshots::SnapshotStrategy;
 use crate::{
@@ -33,7 +34,6 @@ use dbt_schemas::schemas::manifest::{BigqueryClusterConfig, BigqueryPartitionCon
 use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::properties::ModelConstraint;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
-use dbt_schemas::schemas::relations::relation_configs::BaseRelationConfig;
 use dbt_schemas::schemas::{CommonAttributes, InternalDbtNodeAttributes, InternalDbtNodeWrapper};
 use dbt_serde_yaml::Value as YmlValue;
 use dbt_xdbc::bigquery::QUERY_LINK_FAILED_JOB;
