@@ -160,7 +160,6 @@ impl JinjaEnvBuilder {
                 non_internal_packages
                     .insert(Value::from(package_name.clone()), macro_names.clone());
             }
-
             for macro_unit in macro_units {
                 let filename = macro_unit.info.path.to_string_lossy().to_string();
                 let offset = dbt_frontend_common::error::CodeLocation::new(
