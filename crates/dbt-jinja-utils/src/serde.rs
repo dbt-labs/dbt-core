@@ -104,7 +104,7 @@ pub fn value_from_file(
     let input = try_read_yml_to_str(path)?;
     value_from_str(
         io_args,
-        &input,
+        dbt_sanitize_yml(&input),
         Some(path),
         show_errors_or_warnings,
         dependency_package_name,
@@ -224,7 +224,7 @@ where
 {
     let value = value_from_str(
         io_args,
-        input,
+        dbt_sanitize_yml(input),
         error_display_path,
         show_errors_or_warnings,
         dependency_package_name,
@@ -243,59 +243,34 @@ where
     Ok(res)
 }
 
-fn detect_yaml_indentation(input: &str) -> Option<usize> {
-    for line in input.lines() {
-        if let Some((indentation, _)) = line.char_indices().find(|&(_, c)| !c.is_whitespace())
-            && (indentation == 2 || indentation == 4)
-        {
-            return Some(indentation);
-        }
-    }
+/// Apply pre-processing to the Yaml input string to compat with dbt's YAML
+/// behavior.
+fn dbt_sanitize_yml(input: &str) -> &str {
+    // Remove any UTF-8 BOM from the beginning of the input string -- the YAML
+    // parser confuses it with a document separator:
+    let input = input.strip_prefix('\u{feff}').unwrap_or(input);
 
-    None
-}
-fn replace_tabs_with_spaces(input: &str) -> String {
-    // check if we have "\t"
-    if input.contains("\t") {
-        // detect the indentation spaces
-        let indentation = detect_yaml_indentation(input).unwrap_or(2);
-        input.replace("\t", &" ".repeat(indentation))
+    // Trim trailing whitespace
+    let input = input.trim_end();
+
+    // If the fist non-empty line has leading whitespaces, then trim leading
+    // whitespaces as well
+    if let Some(first_non_empty_line) = input.lines().find(|line| !line.trim().is_empty())
+        && first_non_empty_line
+            .chars()
+            .next()
+            .map(|c| c.is_whitespace())
+            .unwrap_or(false)
+    {
+        // Note: if the input contains leading blank lines, this would cause all
+        // line numbers to be off by the number of leading blank lines. The
+        // better way is to retain the leading blank lines while trimming only
+        // the first line. However since these inputs are invalid YAML anyway,
+        // we won't bother for now.
+        input.trim_start()
     } else {
-        input.to_string()
+        input
     }
-}
-
-fn trim_beginning_whitespace_for_first_line_with_content(input: &str) -> String {
-    let mut lines = input.lines();
-
-    // Find the first line with content
-    while let Some(line) = lines.next() {
-        if line.trim().is_empty() {
-            continue;
-        }
-
-        // Found a line with content, trim its beginning whitespace
-        if let Some((whitespace_len, _)) = line.char_indices().find(|&(_, c)| !c.is_whitespace()) {
-            // Return the first line with leading whitespace removed, followed by the rest of the input
-            let rest_of_input = lines.collect::<Vec<&str>>().join("\n");
-            if rest_of_input.is_empty() {
-                return line[whitespace_len..].to_string();
-            } else {
-                return format!("{}\n{}", &line[whitespace_len..], rest_of_input);
-            }
-        }
-
-        // If we get here, the line has content but no leading whitespace
-        return input.to_string();
-    }
-
-    // If we get here, the input is empty or only contains empty lines
-    input.to_string()
-}
-
-/// Strips the UTF-8 BOM from the beginning of the input string.
-fn strip_utf8_bom(input: &str) -> &str {
-    input.strip_prefix('\u{feff}').unwrap_or(input)
 }
 
 /// Internal function that deserializes a YAML string into a `Value`.
@@ -312,12 +287,7 @@ fn value_from_str(
 ) -> FsResult<Value> {
     let _f = dbt_serde_yaml::with_filename(error_display_path.map(PathBuf::from));
 
-    // strip utf8 bom and replace tabs with spaces
-    // trim beginning whitespace for the first line with content
-    let input = strip_utf8_bom(input);
-    let input = replace_tabs_with_spaces(input);
-    let input = trim_beginning_whitespace_for_first_line_with_content(&input);
-    let mut value = Value::from_str(&input, |path, key, existing_key| {
+    let mut value = Value::from_str(input, |path, key, existing_key| {
         let key_repr = dbt_serde_yaml::to_string(&key).unwrap_or_else(|_| "<opaque>".to_string());
         let path = strip_dunder_fields_from_path(&path.to_string());
         let duplicate_key_error = fs_err!(
@@ -589,11 +559,11 @@ mod tests {
     }
 
     #[test]
-    fn test_value_from_str_strips_utf8_bom_and_parses_ok() {
+    fn test_from_yaml_raw_strips_utf8_bom_and_parses_ok() {
         // \u{feff} is the UTF-8 BOM. BOM at start should be ignored and parsing should succeed.
         let io = IoArgs::default();
         let input = "\u{feff}version: 2\nmodels:\n  - name: dim_bom_test\n";
-        let res = value_from_str(&io, input, None, false, None);
+        let res = from_yaml_raw(&io, input, None, false, None);
         assert!(
             res.is_ok(),
             "Expected BOM-prefixed YAML to parse successfully, got: {:?}",
