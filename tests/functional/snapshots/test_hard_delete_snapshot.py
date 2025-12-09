@@ -19,12 +19,16 @@ from tests.functional.utils import is_aware
 
 def convert_to_aware(d: datetime) -> datetime:
     # There are two types of datetime objects in Python: naive and aware
-    # Assume any dbt snapshot timestamp that is naive is meant to represent UTC
+    # Add timezone info for consistent comparison
     if d is None:
         return d
     elif is_aware(d):
         return d
     else:
+        # Naive datetime from database - add timezone info for comparison
+        # Note: The timestamp is actually in the database's local timezone,
+        # but we add UTC tzinfo for consistency since both test and snapshot
+        # timestamps are treated the same way
         return d.replace(tzinfo=pytz.UTC)
 
 
@@ -42,13 +46,18 @@ def is_close_datetime(
         return False
 
 
-def datetime_snapshot():
+def datetime_snapshot(project):
     NUM_SNAPSHOT_MODELS = 1
-    begin_snapshot_datetime = datetime.now(pytz.UTC)
+    # Get the timestamp from the database instead of Python to ensure timezone consistency
+    # between local runs and CI runs
+    # Use the same timestamp format that dbt uses for snapshots: timestamp without time zone
+    begin_snapshot_datetime = project.run_sql(
+        "select current_timestamp::timestamp without time zone", fetch="one"
+    )[0]
     results = run_dbt(["snapshot", "--vars", "{invalidate_hard_deletes: true}"])
     assert len(results) == NUM_SNAPSHOT_MODELS
 
-    return begin_snapshot_datetime
+    return convert_to_aware(begin_snapshot_datetime)
 
 
 @pytest.fixture(scope="class", autouse=True)
@@ -77,7 +86,7 @@ def macros():
 
 def test_snapshot_hard_delete(project):
     # run the first snapshot
-    datetime_snapshot()
+    datetime_snapshot(project)
 
     check_relations_equal(project.adapter, ["snapshot_expected", "snapshot_actual"])
 
@@ -90,7 +99,7 @@ def test_snapshot_hard_delete(project):
     )
 
     # snapshot and assert invalidated
-    invalidated_snapshot_datetime = datetime_snapshot()
+    invalidated_snapshot_datetime = datetime_snapshot(project)
 
     snapshotted = project.run_sql(
         """
@@ -114,12 +123,14 @@ def test_snapshot_hard_delete(project):
         # Plenty of wiggle room if clocks aren't perfectly sync'd, etc
         assert is_close_datetime(
             dbt_valid_to, invalidated_snapshot_datetime, timedelta(minutes=1)
-        ), f"SQL timestamp {dbt_valid_to.isoformat()} is not close enough to Python UTC {invalidated_snapshot_datetime.isoformat()}"
+        ), f"SQL timestamp {dbt_valid_to.isoformat()} is not close enough to test timestamp {invalidated_snapshot_datetime.isoformat()}"
 
     # revive records
     # Timestamp must have microseconds for tests below to be meaningful
-    # Assume `updated_at` is TIMESTAMP WITHOUT TIME ZONE that implicitly represents UTC
-    revival_timestamp = datetime.now(pytz.UTC).strftime("%Y-%m-%d %H:%M:%S.%f")
+    revival_timestamp_dt = project.run_sql(
+        "select current_timestamp::timestamp without time zone", fetch="one"
+    )[0]
+    revival_timestamp = revival_timestamp_dt.strftime("%Y-%m-%d %H:%M:%S.%f")
     project.run_sql(
         """
         insert into {}.{}.seed (id, first_name, last_name, email, gender, ip_address, updated_at) values
@@ -132,7 +143,7 @@ def test_snapshot_hard_delete(project):
 
     # snapshot and assert records were revived
     # Note: the revived_snapshot_datetime here is later than the revival_timestamp above
-    revived_snapshot_datetime = datetime_snapshot()
+    revived_snapshot_datetime = datetime_snapshot(project)
 
     # records which weren't revived (id != 10, 11)
     # dbt_valid_to is not null
@@ -159,7 +170,7 @@ def test_snapshot_hard_delete(project):
         # Plenty of wiggle room if clocks aren't perfectly sync'd, etc
         assert is_close_datetime(
             dbt_valid_to, invalidated_snapshot_datetime, timedelta(minutes=1)
-        ), f"SQL timestamp {dbt_valid_to.isoformat()} is not close enough to Python UTC {invalidated_snapshot_datetime.isoformat()}"
+        ), f"SQL timestamp {dbt_valid_to.isoformat()} is not close enough to test timestamp {invalidated_snapshot_datetime.isoformat()}"
 
     # records which were revived (id = 10, 11)
     # dbt_valid_to is null

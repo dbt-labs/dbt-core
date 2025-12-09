@@ -72,12 +72,15 @@ defaults:
   run:
     shell: bash
 
+env:
+  MIN_HATCH_VERSION: "1.11.0"
+
 jobs:
   job-setup:
     name: Log Inputs
     runs-on: ${{ vars.UBUNTU_LATEST }}
     outputs:
-      starting_sha: ${{ steps.set_sha.outputs.starting_sha }}
+      use_hatch: ${{ steps.use_hatch.outputs.use_hatch }}
     steps:
       - name: "[DEBUG] Print Variables"
         run: |
@@ -88,19 +91,29 @@ jobs:
           echo Nightly release:                    ${{ inputs.nightly_release }}
           echo Only Docker:                        ${{ inputs.only_docker }}
 
-      - name: "Checkout target branch"
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.target_branch }}
-
-      # release-prep.yml really shouldn't take in the sha but since core + all adapters
-      # depend on it now this workaround lets us not input it manually with risk of error.
-      # The changes always get merged into the head so we can't use a specific commit for
-      # releases anyways.
-      - name: "Capture sha"
-        id: set_sha
+      # In version env.HATCH_VERSION we started to use hatch for build tooling.  Before that we used setuptools.
+      # This needs to check if we're using hatch or setuptools based on the version being released.  We should
+      # check if the version is greater than or equal to env.HATCH_VERSION.  If it is, we use hatch, otherwise we use setuptools.
+      - name: "Check if using hatch"
+        id: use_hatch
         run: |
-          echo "starting_sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+          # Extract major.minor from versions like 1.11.0a1 -> 1.11
+          INPUT_MAJ_MIN=$(echo "${{ inputs.version_number }}" | sed -E 's/^([0-9]+\.[0-9]+).*/\1/')
+          HATCH_MAJ_MIN=$(echo "${{ env.MIN_HATCH_VERSION }}" | sed -E 's/^([0-9]+\.[0-9]+).*/\1/')
+
+          if [ $(echo "$INPUT_MAJ_MIN >= $HATCH_MAJ_MIN" | bc) -eq 1 ]; then
+            echo "use_hatch=true" >> $GITHUB_OUTPUT
+          else
+            echo "use_hatch=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: "Notify if using hatch"
+        run: |
+          if [ ${{ steps.use_hatch.outputs.use_hatch }} = "true" ]; then
+            echo "::notice title="Using Hatch": $title::Using Hatch for release"
+          else
+            echo "::notice title="Using Setuptools": $title::Using Setuptools for release"
+          fi
 
   bump-version-generate-changelog:
     name: Bump package version, Generate changelog
@@ -110,12 +123,13 @@ jobs:
     uses: dbt-labs/dbt-release/.github/workflows/release-prep.yml@main
 
     with:
-      sha: ${{ needs.job-setup.outputs.starting_sha }}
       version_number: ${{ inputs.version_number }}
+      hatch_directory: "core"
       target_branch: ${{ inputs.target_branch }}
       env_setup_script_path: "scripts/env-setup.sh"
       test_run: ${{ inputs.test_run }}
       nightly_release: ${{ inputs.nightly_release }}
+      use_hatch: ${{ needs.job-setup.outputs.use_hatch == 'true' }}  # workflow outputs are strings...
 
     secrets: inherit
 
@@ -143,16 +157,13 @@ jobs:
     with:
       sha: ${{ needs.bump-version-generate-changelog.outputs.final_sha }}
       version_number: ${{ inputs.version_number }}
+      hatch_directory: "core"
       changelog_path: ${{ needs.bump-version-generate-changelog.outputs.changelog_path }}
       build_script_path: "scripts/build-dist.sh"
-      s3_bucket_name: "core-team-artifacts"
       package_test_command: "dbt --version"
       test_run: ${{ inputs.test_run }}
       nightly_release: ${{ inputs.nightly_release }}
-
-    secrets:
-      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      use_hatch: ${{ needs.job-setup.outputs.use_hatch == 'true' }}  # workflow outputs are strings...
 
   github-release:
     name: GitHub Release

@@ -136,12 +136,16 @@ def setup_record_replay():
 
     recorder: Optional[Recorder] = None
     if rec_mode == RecorderMode.REPLAY:
-        previous_recording_path = os.environ.get("DBT_RECORDER_FILE_PATH")
+        previous_recording_path = os.environ.get(
+            "DBT_ENGINE_RECORDER_FILE_PATH"
+        ) or os.environ.get("DBT_RECORDER_FILE_PATH")
         recorder = Recorder(
             RecorderMode.REPLAY, types=rec_types, previous_recording_path=previous_recording_path
         )
     elif rec_mode == RecorderMode.DIFF:
-        previous_recording_path = os.environ.get("DBT_RECORDER_FILE_PATH")
+        previous_recording_path = os.environ.get(
+            "DBT_ENGINE_RECORDER_FILE_PATH"
+        ) or os.environ.get("DBT_RECORDER_FILE_PATH")
         # ensure types match the previous recording
         types = get_record_types_from_dict(previous_recording_path)
         recorder = Recorder(
@@ -287,8 +291,22 @@ def project(func):
         flags = ctx.obj["flags"]
         # TODO deprecations warnings fired from loading the project will lack
         # the project_id in the snowplow event.
+
+        # Determine if vars should be required during project loading.
+        # Commands that don't need vars evaluated (like 'deps', 'clean')
+        # should use lenient mode (require_vars=False) to allow missing vars.
+        # Commands that validate or execute (like 'run', 'compile', 'build', 'debug') should use
+        # strict mode (require_vars=True) to show helpful "Required var X not found" errors.
+        # If adding more commands to lenient mode, update this condition.
+        require_vars = flags.WHICH != "deps"
+
         project = load_project(
-            flags.PROJECT_DIR, flags.VERSION_CHECK, ctx.obj["profile"], flags.VARS, validate=True
+            flags.PROJECT_DIR,
+            flags.VERSION_CHECK,
+            ctx.obj["profile"],
+            flags.VARS,
+            validate=True,
+            require_vars=require_vars,
         )
         ctx.obj["project"] = project
 

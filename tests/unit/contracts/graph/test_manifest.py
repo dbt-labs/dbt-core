@@ -62,6 +62,7 @@ REQUIRED_PARSED_NODE_KEYS = frozenset(
         "refs",
         "sources",
         "metrics",
+        "functions",
         "meta",
         "depends_on",
         "database",
@@ -374,6 +375,7 @@ class ManifestTest(unittest.TestCase):
             disabled={},
             files={},
             exposures={},
+            functions={},
             metrics={},
             selectors={},
             metadata=ManifestMetadata(
@@ -394,6 +396,7 @@ class ManifestTest(unittest.TestCase):
                 "sources": {},
                 "macros": {},
                 "exposures": {},
+                "functions": {},
                 "metrics": {},
                 "groups": {},
                 "selectors": {},
@@ -513,6 +516,7 @@ class ManifestTest(unittest.TestCase):
             set(
                 [
                     "exposures",
+                    "functions",
                     "groups",
                     "nodes",
                     "sources",
@@ -559,6 +563,7 @@ class ManifestTest(unittest.TestCase):
             metadata=metadata,
             files={},
             exposures={},
+            functions={},
             semantic_models={},
             saved_queries={},
         )
@@ -573,6 +578,7 @@ class ManifestTest(unittest.TestCase):
                 "sources": {},
                 "macros": {},
                 "exposures": {},
+                "functions": {},
                 "metrics": {},
                 "groups": {},
                 "selectors": {},
@@ -925,6 +931,7 @@ class MixedManifestTest(unittest.TestCase):
                 "macros": {},
                 "sources": {},
                 "exposures": {},
+                "functions": {},
                 "metrics": {},
                 "groups": {},
                 "selectors": {},
@@ -1010,6 +1017,7 @@ class MixedManifestTest(unittest.TestCase):
         manifest = Manifest(
             nodes=nodes,
             sources={},
+            functions={},
             macros={},
             docs={},
             disabled={},
@@ -1027,6 +1035,7 @@ class MixedManifestTest(unittest.TestCase):
             set(
                 [
                     "exposures",
+                    "functions",
                     "groups",
                     "metrics",
                     "nodes",

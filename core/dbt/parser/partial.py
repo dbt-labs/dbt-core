@@ -11,7 +11,13 @@ from dbt.contracts.files import (
     parse_file_type_to_parser,
 )
 from dbt.contracts.graph.manifest import Manifest
-from dbt.contracts.graph.nodes import AnalysisNode, ModelNode, SeedNode, SnapshotNode
+from dbt.contracts.graph.nodes import (
+    AnalysisNode,
+    GenericTestNode,
+    ModelNode,
+    SeedNode,
+    SnapshotNode,
+)
 from dbt.events.types import PartialParsingEnabled, PartialParsingFile
 from dbt.node_types import NodeType
 from dbt_common.context import get_invocation_context
@@ -37,6 +43,7 @@ key_to_prefix = {
     "seeds": "seed",
     "snapshots": "snapshot",
     "analyses": "analysis",
+    "sources": "source",
 }
 
 
@@ -57,6 +64,7 @@ special_override_macros = [
     "generate_schema_name",
     "generate_database_name",
     "generate_alias_name",
+    "function",
 ]
 
 
@@ -178,6 +186,10 @@ class PartialParsing:
             self.add_to_saved(file_id)
         # Need to process schema files next, because the dictionaries
         # need to be in place for handling SQL file changes
+        # The reverse sort here is just to ensure that the schema file
+        # processing order test case works, because otherwise the order
+        # of processing the schema files is not guaranteed.
+        self.file_diff["changed_schema_files"].sort(reverse=True)
         for file_id in self.file_diff["changed_schema_files"]:
             self.processing_file = file_id
             self.change_schema_file(file_id)
@@ -244,6 +256,10 @@ class PartialParsing:
                 # be properly patched
                 if "overrides" in source:
                     self.remove_source_override_target(source)
+        if "models" in source_file.pp_dict:
+            for model in source_file.pp_dict["models"]:
+                if "versions" in model:
+                    self.versioned_model_delete_schema_mssa_links(source_file, "models", model)
 
     def delete_disabled(self, unique_id, file_id):
         # This node/metric/exposure is disabled. Find it and remove it from disabled dictionary.
@@ -286,6 +302,10 @@ class PartialParsing:
         if saved_source_file.parse_file_type == ParseFileType.Fixture:
             self.delete_fixture_node(saved_source_file)
 
+        # functions
+        if saved_source_file.parse_file_type == ParseFileType.Function:
+            self.delete_function_node(saved_source_file)
+
         fire_event(PartialParsingFile(operation="deleted", file_id=file_id))
 
     # Updates for non-schema files
@@ -301,6 +321,8 @@ class PartialParsing:
             self.update_doc_in_saved(new_source_file, old_source_file)
         elif new_source_file.parse_file_type == ParseFileType.Fixture:
             self.update_fixture_in_saved(new_source_file, old_source_file)
+        elif new_source_file.parse_file_type == ParseFileType.Function:
+            self.update_function_in_saved(new_source_file, old_source_file)
         else:
             raise Exception(f"Invalid parse_file_type in source_file {file_id}")
         fire_event(PartialParsingFile(operation="updated", file_id=file_id))
@@ -393,6 +415,15 @@ class PartialParsing:
         if self.already_scheduled_for_parsing(old_source_file):
             return
         self.delete_fixture_node(old_source_file)
+        self.saved_files[new_source_file.file_id] = deepcopy(new_source_file)
+        self.add_to_pp_files(new_source_file)
+
+    def update_function_in_saved(
+        self, new_source_file: SourceFile, old_source_file: SourceFile
+    ) -> None:
+        if self.already_scheduled_for_parsing(old_source_file):
+            return
+        self.delete_function_node(old_source_file)
         self.saved_files[new_source_file.file_id] = deepcopy(new_source_file)
         self.add_to_pp_files(new_source_file)
 
@@ -621,6 +652,42 @@ class PartialParsing:
             source_file.unit_tests.remove(unique_id)
         self.saved_manifest.files.pop(source_file.file_id)
 
+    def delete_function_node(self, source_file: SourceFile) -> None:
+        # There should always be a node for a Function file
+        if not isinstance(source_file, SourceFile) or not source_file.functions:
+            return
+
+        # There can only be one node of a function
+        function_unique_id = source_file.functions[0]
+
+        # Remove the function node from the saved manifest
+        function_node = self.saved_manifest.functions.pop(function_unique_id)
+
+        # Remove the function node from the source file so that it's not viewed as a
+        # duplicate when it's re-added
+        source_file.functions.remove(function_unique_id)
+
+        # If this function had a schema patch, schedule that schema element to be reapplied.
+        patch_path = function_node.patch_path
+        if (
+            patch_path is not None
+            and patch_path in self.saved_files
+            and patch_path not in self.file_diff["deleted_schema_files"]
+        ):
+            schema_file = self.saved_files[patch_path]
+            # Only proceed if this is a schema file
+            if isinstance(schema_file, SchemaSourceFile):
+                elements = schema_file.dict_from_yaml.get("functions", [])
+                schema_element = self.get_schema_element(elements, function_node.name)
+                if schema_element:
+                    # Remove any previous links and re-merge the patch to pp_dict so it gets reparsed
+                    self.delete_schema_function(schema_file, schema_element)
+                    self.merge_patch(schema_file, "functions", schema_element)
+
+        # Finally, remove the deleted function file from saved files
+        if source_file.file_id in self.saved_manifest.files:
+            self.saved_manifest.files.pop(source_file.file_id)
+
     # Schema files -----------------------
     # Changed schema files
     def change_schema_file(self, file_id):
@@ -628,7 +695,8 @@ class PartialParsing:
         new_schema_file = deepcopy(self.new_files[file_id])
         saved_yaml_dict = saved_schema_file.dict_from_yaml
         new_yaml_dict = new_schema_file.dict_from_yaml
-        saved_schema_file.pp_dict = {}
+        if saved_schema_file.pp_dict is None:
+            saved_schema_file.pp_dict = {}
         self.handle_schema_file_changes(saved_schema_file, saved_yaml_dict, new_yaml_dict)
 
         # copy from new schema_file to saved_schema_file to preserve references
@@ -675,6 +743,8 @@ class PartialParsing:
                     self.delete_schema_mssa_links(schema_file, dict_key, elem)
             if key_diff["added"]:
                 for elem in key_diff["added"]:
+                    if dict_key == "models" and "versions" in elem:
+                        self.versioned_model_delete_schema_mssa_links(schema_file, dict_key, elem)
                     self.merge_patch(schema_file, dict_key, elem, True)
             # Handle schema file updates due to env_var changes
             if dict_key in env_var_changes and dict_key in new_yaml_dict:
@@ -732,6 +802,7 @@ class PartialParsing:
         handle_change("unit_tests", self.delete_schema_unit_test)
         handle_change("saved_queries", self.delete_schema_saved_query)
         handle_change("data_tests", self.delete_schema_data_test_patch)
+        handle_change("functions", self.delete_schema_function)
 
     def _handle_element_change(
         self, schema_file, saved_yaml_dict, new_yaml_dict, env_var_changes, dict_key: str, delete
@@ -837,7 +908,19 @@ class PartialParsing:
             elem_name = parts[2]
             if elem_name == elem["name"]:
                 elem_unique_ids.append(unique_id)
+        self._delete_schema_mssa_links(schema_file, dict_key, elem, elem_unique_ids)
 
+    def versioned_model_delete_schema_mssa_links(self, schema_file, dict_key, elem) -> None:
+        elem_unique_ids = []
+        # We need to look up possible existing models that this new or modified patch applies to
+        unique_id = f"model.{schema_file.project_name}.{elem['name']}"
+        if unique_id in self.saved_manifest.nodes:
+            elem_unique_ids.append(unique_id)
+        if not elem_unique_ids:
+            return
+        self._delete_schema_mssa_links(schema_file, dict_key, elem, elem_unique_ids)
+
+    def _delete_schema_mssa_links(self, schema_file, dict_key, elem, elem_unique_ids):
         # remove elem node and remove unique_id from node_patches
         for elem_unique_id in elem_unique_ids:
             # might have been already removed
@@ -886,6 +969,17 @@ class PartialParsing:
             if test_unique_id in self.saved_manifest.nodes:
                 self.saved_manifest.nodes.pop(test_unique_id)
         schema_file.remove_tests(dict_key, name)
+        # We also need to remove tests in other schema files that
+        # reference this node.
+        unique_id = f"{key_to_prefix[dict_key]}.{schema_file.project_name}.{name}"
+        if unique_id in self.saved_manifest.child_map:
+            for child_id in self.saved_manifest.child_map[unique_id]:
+                if child_id.startswith("test") and child_id in self.saved_manifest.nodes:
+                    child_test = self.saved_manifest.nodes[child_id]
+                    if isinstance(child_test, GenericTestNode) and child_test.attached_node:
+                        if child_test.attached_node in self.saved_manifest.nodes:
+                            attached_node = self.saved_manifest.nodes[child_test.attached_node]
+                            self.update_in_saved(attached_node.file_id)
 
     def delete_yaml_snapshot(self, schema_file, snapshot_dict):
         snapshot_name = snapshot_dict["name"]
@@ -1044,6 +1138,24 @@ class PartialParsing:
                     self.saved_manifest.unit_tests.pop(unique_id)
                     schema_file.unit_tests.remove(unique_id)
             # No disabled unit tests yet
+
+    def delete_schema_function(self, schema_file: SchemaSourceFile, function_dict: dict) -> None:
+        function_name = function_dict["name"]
+        functions = schema_file.node_patches.copy()
+        for unique_id in functions:
+            if unique_id in self.saved_manifest.functions:
+                function = self.saved_manifest.functions[unique_id]
+                if function.name == function_name:
+                    removed_function = self.saved_manifest.functions.pop(unique_id)
+                    # For schema patches, recorded unique_ids live in node_patches (ndp)
+                    if unique_id in schema_file.node_patches:
+                        schema_file.node_patches.remove(unique_id)
+                    # Schedule the function's SQL file for reparsing so the node is re-added
+                    file_id = removed_function.file_id
+                    if file_id and file_id in self.new_files:
+                        self.saved_files[file_id] = deepcopy(self.new_files[file_id])
+                    if file_id and file_id in self.saved_files:
+                        self.add_to_pp_files(self.saved_files[file_id])
 
     def get_schema_element(self, elem_list, elem_name):
         for element in elem_list:

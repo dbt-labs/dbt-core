@@ -1,6 +1,0 @@
-kind: Features
-body: Deprecate `overrides` property for sources
-time: 2025-07-01T16:49:57.979871-05:00
-custom:
-  Author: peterallenwebb
-  Issue: "11566"

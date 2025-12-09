@@ -633,14 +633,21 @@ class SemanticModelParser(YamlReader):
         measure: UnparsedMeasure,
         enabled: bool,
         semantic_model_name: str,
+        meta: Optional[Dict[str, Any]] = None,
     ) -> None:
+        config: Dict[str, Any] = {"enabled": enabled}
+        if meta is not None:
+            # Need to propagate meta to metric from measure during create_metric: True
+            config["meta"] = meta
         unparsed_metric = UnparsedMetric(
             name=measure.name,
             label=measure.label or measure.name,
             type="simple",
-            type_params=UnparsedMetricTypeParams(measure=measure.name, expr=measure.name),
+            type_params=UnparsedMetricTypeParams(
+                measure=measure.name, expr=measure.expr or measure.name  # type: ignore
+            ),
             description=measure.description or f"Metric created from measure {measure.name}",
-            config={"enabled": enabled},
+            config=config,
         )
 
         parser = MetricParser(self.schema_parser, yaml=self.yaml)
@@ -758,7 +765,10 @@ class SemanticModelParser(YamlReader):
         for measure in unparsed.measures:
             if measure.create_metric is True:
                 self._create_metric(
-                    measure=measure, enabled=parsed.config.enabled, semantic_model_name=parsed.name
+                    measure=measure,
+                    enabled=parsed.config.enabled,
+                    semantic_model_name=parsed.name,
+                    meta=config.meta if config is not None else None,
                 )
 
     def parse(self) -> None:

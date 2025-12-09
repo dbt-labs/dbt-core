@@ -14,34 +14,33 @@ on:
   workflow_dispatch:
     inputs:
       branch:
-        description: 'Branch to check out'
+        description: "Branch to check out"
         type: string
         required: true
-        default: 'main'
+        default: "main"
       test_path:
-        description: 'Path to single test to run (ex: tests/functional/retry/test_retry.py::TestRetry::test_fail_fast)'
+        description: "Path to single test to run (ex: tests/functional/retry/test_retry.py::TestRetry::test_fail_fast)"
         type: string
         required: true
-        default: 'tests/functional/...'
+        default: "tests/functional/..."
       python_version:
-        description: 'Version of Python to Test Against'
+        description: "Version of Python to Test Against"
         type: choice
         options:
-          - '3.9'
-          - '3.10'
-          - '3.11'
+          - "3.10"
+          - "3.11"
       os:
-        description: 'OS to run test in'
+        description: "OS to run test in"
         type: choice
         options:
-          - 'ubuntu-latest'
-          - 'macos-14'
-          - 'windows-latest'
+          - "ubuntu-latest"
+          - "macos-14"
+          - "windows-latest"
       num_runs_per_batch:
-        description: 'Max number of times to run the test per batch.  We always run 10 batches.'
+        description: "Max number of times to run the test per batch.  We always run 10 batches."
         type: number
         required: true
-        default: '50'
+        default: "50"
 
 permissions: read-all
 
@@ -82,26 +81,33 @@ jobs:
 
     steps:
       - name: "Checkout code"
-        uses: actions/checkout@v4
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
         with:
           ref: ${{ inputs.branch }}
 
       - name: "Setup Python"
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # actions/setup-python@v6
         with:
           python-version: "${{ inputs.python_version }}"
 
+      - name: "Install hatch"
+        run: python -m pip install --user --upgrade pip hatch
+
       - name: "Setup Dev Environment"
-        run: make dev
+        run: |
+          cd core
+          hatch run setup
 
       - name: "Set up postgres (linux)"
         if: inputs.os == '${{ vars.UBUNTU_LATEST }}'
-        run: make setup-db
+        run: |
+          cd core
+          hatch run setup-db
 
         # mac and windows don't use make due to limitations with docker with those runners in GitHub
       - name: Set up postgres (macos)
         if: runner.os == 'macOS'
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # nick-fields/retry@v3
         with:
           timeout_minutes: 10
           max_attempts: 3
@@ -154,5 +160,5 @@ jobs:
       - name: "Error for Failures"
         if: ${{ steps.pytest.outputs.failure }}
         run: |
-            echo "Batch ${{ matrix.batch }} failed ${{ steps.pytest.outputs.failure }} of ${{ inputs.num_runs_per_batch }} tests"
-            exit 1
+          echo "Batch ${{ matrix.batch }} failed ${{ steps.pytest.outputs.failure }} of ${{ inputs.num_runs_per_batch }} tests"
+          exit 1

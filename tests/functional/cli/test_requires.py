@@ -5,7 +5,7 @@ from pytest_mock import MockerFixture
 
 from dbt.events.types import JinjaLogInfo
 from dbt.tests.util import run_dbt
-from tests.utils import EventCatcher
+from dbt_common.events.event_catcher import EventCatcher
 
 model_one_sql = """
     {{ log("DBT_ENGINE_SHOW_RESOURCE_REPORT: " ~ env_var('DBT_ENGINE_SHOW_RESOURCE_REPORT', default="0"), info=True) }}

@@ -20,7 +20,7 @@ from typing_extensions import Protocol
 
 from dbt import selected_resources
 from dbt.adapters.base.column import Column
-from dbt.adapters.base.relation import EventTimeFilter
+from dbt.adapters.base.relation import EventTimeFilter, RelationType
 from dbt.adapters.contracts.connection import AdapterResponse
 from dbt.adapters.exceptions import MissingConfigError
 from dbt.adapters.factory import (
@@ -56,6 +56,7 @@ from dbt.contracts.graph.metrics import MetricReference, ResolvedMetricReference
 from dbt.contracts.graph.nodes import (
     AccessType,
     Exposure,
+    FunctionNode,
     Macro,
     ManifestNode,
     ModelNode,
@@ -242,9 +243,59 @@ class BaseResolver(metaclass=abc.ABCMeta):
     def resolve_limit(self) -> Optional[int]:
         return 0 if getattr(self.config.args, "EMPTY", False) else None
 
+    def _resolve_event_time_field_name(self, target: ManifestNode) -> str:
+        """Get the event time field name with proper quoting based on configuration."""
+        # Default to False for quoting
+        should_quote = False
+        column_found = False
+        column = None
+
+        # Check if config has event_time attribute
+        if not hasattr(target.config, "event_time") or target.config.event_time is None:
+            return ""
+
+        # Check column-level quote configuration first (overrides source-level)
+        if hasattr(target, "columns") and target.columns and isinstance(target.columns, dict):
+            for _, column_info in target.columns.items():
+                if column_info.name == target.config.event_time:
+                    column_found = True
+                    # Create the column object
+                    column = Column.create(
+                        column_info.name, column_info.data_type if column_info.data_type else ""
+                    )
+                    # Column-level quote setting takes precedence
+                    if hasattr(column_info, "quote") and column_info.quote is not None:
+                        should_quote = column_info.quote
+                    # Fallback to source-level quote setting
+                    elif (
+                        hasattr(target, "quoting")
+                        and hasattr(target.quoting, "column")
+                        and target.quoting.column is not None
+                    ):
+                        should_quote = target.quoting.column
+                    break
+
+        # If column not found, fall back to source-level quote setting
+        if not column_found:
+            if (
+                hasattr(target, "quoting")
+                and hasattr(target.quoting, "column")
+                and target.quoting.column is not None
+            ):
+                should_quote = target.quoting.column
+            # Create column object for quoting
+            column = Column.create(target.config.event_time, "")
+
+        # Apply quoting logic
+        if should_quote and column is not None:
+            return column.quoted
+        else:
+            return target.config.event_time
+
     def resolve_event_time_filter(self, target: ManifestNode) -> Optional[EventTimeFilter]:
         event_time_filter = None
         sample_mode = getattr(self.config.args, "sample", None) is not None
+        field_name = self._resolve_event_time_field_name(target)
 
         # TODO The number of branches here is getting rough. We should consider ways to simplify
         # what is going on to make it easier to maintain
@@ -277,7 +328,7 @@ class BaseResolver(metaclass=abc.ABCMeta):
                         else self.model.batch.event_time_end
                     )
                     event_time_filter = EventTimeFilter(
-                        field_name=target.config.event_time,
+                        field_name=field_name,
                         start=start,
                         end=end,
                     )
@@ -285,7 +336,7 @@ class BaseResolver(metaclass=abc.ABCMeta):
                 # Regular microbatch models
                 else:
                     event_time_filter = EventTimeFilter(
-                        field_name=target.config.event_time,
+                        field_name=field_name,
                         start=self.model.batch.event_time_start,
                         end=self.model.batch.event_time_end,
                     )
@@ -293,7 +344,7 @@ class BaseResolver(metaclass=abc.ABCMeta):
             # Sample mode _non_ microbatch models
             elif sample_mode:
                 event_time_filter = EventTimeFilter(
-                    field_name=target.config.event_time,
+                    field_name=field_name,
                     start=self.config.args.sample.start,
                     end=self.config.args.sample.end,
                 )
@@ -404,6 +455,41 @@ class BaseMetricResolver(BaseResolver):
             package, name = args
         else:
             raise MetricArgsError(node=self.model, args=args)
+        self.validate_args(name, package)
+        return self.resolve(name, package)
+
+
+class BaseFunctionResolver(BaseResolver):
+    @abc.abstractmethod
+    def resolve(self, name: str, package: Optional[str] = None): ...
+
+    def _repack_args(self, name: str, package: Optional[str]) -> List[str]:
+        if package is None:
+            return [name]
+        else:
+            return [package, name]
+
+    def validate_args(self, name: str, package: Optional[str]):
+        if not isinstance(name, str):
+            raise CompilationError(
+                f"The name argument to function() must be a string, got {type(name)}"
+            )
+
+        if package is not None and not isinstance(package, str):
+            raise CompilationError(
+                f"The package argument to function() must be a string or None, got {type(package)}"
+            )
+
+    def __call__(self, *args: str):
+        name: str
+        package: Optional[str] = None
+
+        if len(args) == 1:
+            name = args[0]
+        elif len(args) == 2:
+            package, name = args
+        else:
+            raise RefArgsError(node=self.model, args=args)
         self.validate_args(name, package)
         return self.resolve(name, package)
 
@@ -768,7 +854,12 @@ class RuntimeUnitTestSourceResolver(BaseSourceResolver):
         # we just need to set_cte, but skipping it confuses typing. We *do* need
         # the relation in the "this" property.
         self.model.set_cte(target_source.unique_id, None)
-        return self.Relation.create_ephemeral_from(target_source)
+
+        identifier = self.Relation.add_ephemeral_prefix(target_source.cte_name)
+        return self.Relation.create(
+            type=self.Relation.CTE,
+            identifier=identifier,
+        ).quote(identifier=False)
 
 
 # metric` implementations
@@ -862,6 +953,51 @@ class UnitTestVar(RuntimeVar):
         super().__init__(context, config_copy or config, node=node)
 
 
+# `function` implementations.
+class ParseFunctionResolver(BaseFunctionResolver):
+    def resolve(self, name: str, package: Optional[str] = None):
+        # When you call function(), this is what happens at parse time
+        self.model.functions.append(self._repack_args(name, package))
+        return self.Relation.create_from(self.config, self.model, type=RelationType.Function)
+
+
+class RuntimeFunctionResolver(BaseFunctionResolver):
+    def resolve(self, name: str, package: Optional[str] = None):
+        target_function = self.manifest.resolve_function(
+            name,
+            package,
+            self.current_project,
+            self.model.package_name,
+        )
+
+        if target_function is None or isinstance(target_function, Disabled):
+            raise TargetNotFoundError(
+                node=self.model,
+                target_name=name,
+                target_kind="function",
+                disabled=(isinstance(target_function, Disabled)),
+            )
+
+        # Source quoting does _not_ respect global configs in dbt_project.yml, as documented here:
+        # https://docs.getdbt.com/reference/project-configs/quoting
+        # Use an object with an empty quoting field to bypass any settings in self.
+        class SourceQuotingBaseConfig:
+            quoting: Dict[str, Any] = {}
+
+        return self.Relation.create_from(
+            SourceQuotingBaseConfig(),
+            target_function,
+            limit=self.resolve_limit,
+            event_time_filter=self.resolve_event_time_filter(target_function),
+            type=RelationType.Function,
+        )
+
+
+# TODO: Right now the RuntimeUnitTestProvider uses the RuntimeFunctionResolver for functions,
+# but for CT-12025 we'll likely need to create a separate RuntimeUnitTestFunctionResolver to
+# handle function overrides (mocking functions)
+
+
 # Providers
 class Provider(Protocol):
     execute: bool
@@ -871,6 +1007,7 @@ class Provider(Protocol):
     ref: Type[BaseRefResolver]
     source: Type[BaseSourceResolver]
     metric: Type[BaseMetricResolver]
+    function: Type[BaseFunctionResolver]
 
 
 class ParseProvider(Provider):
@@ -881,6 +1018,7 @@ class ParseProvider(Provider):
     ref = ParseRefResolver
     source = ParseSourceResolver
     metric = ParseMetricResolver
+    function = ParseFunctionResolver
 
 
 class GenerateNameProvider(Provider):
@@ -891,6 +1029,7 @@ class GenerateNameProvider(Provider):
     ref = ParseRefResolver
     source = ParseSourceResolver
     metric = ParseMetricResolver
+    function = ParseFunctionResolver
 
 
 class RuntimeProvider(Provider):
@@ -901,6 +1040,7 @@ class RuntimeProvider(Provider):
     ref = RuntimeRefResolver
     source = RuntimeSourceResolver
     metric = RuntimeMetricResolver
+    function = RuntimeFunctionResolver
 
 
 class RuntimeUnitTestProvider(Provider):
@@ -911,6 +1051,7 @@ class RuntimeUnitTestProvider(Provider):
     ref = RuntimeUnitTestRefResolver
     source = RuntimeUnitTestSourceResolver
     metric = RuntimeMetricResolver
+    function = RuntimeFunctionResolver
 
 
 class OperationProvider(RuntimeProvider):
@@ -1152,6 +1293,10 @@ class ProviderContext(ManifestContext):
     @contextproperty()
     def metric(self) -> Callable:
         return self.provider.metric(self.db_wrapper, self.model, self.config, self.manifest)
+
+    @contextproperty()
+    def function(self) -> Callable:
+        return self.provider.function(self.db_wrapper, self.model, self.config, self.manifest)
 
     @contextproperty("config")
     def ctx_config(self) -> Config:
@@ -1741,6 +1886,14 @@ class UnitTestContext(ModelContext):
         return None
 
 
+class FunctionContext(ModelContext):
+    model: FunctionNode
+
+    @contextproperty()
+    def this(self) -> Optional[RelationProxy]:
+        return self.db_wrapper.Relation.create_from(self.config, self.model)
+
+
 # This is called by '_context_for', used in 'render_with_context'
 def generate_parser_model_context(
     model: ManifestNode,
@@ -1754,6 +1907,21 @@ def generate_parser_model_context(
     ctx = ModelContext(model, config, manifest, ParseProvider(), context_config)
     # The 'to_dict' method in ManifestContext moves all of the macro names
     # in the macro 'namespace' up to top level keys
+    return ctx.to_dict()
+
+
+def generate_parser_unit_test_context(
+    unit_test: UnitTestNode, config: RuntimeConfig, manifest: Manifest
+) -> Dict[str, Any]:
+    context_config = ContextConfig(
+        config,
+        unit_test.fqn,
+        NodeType.Unit,
+        config.project_name,
+    )
+
+    ctx = UnitTestContext(unit_test, config, manifest, ParseProvider(), context_config)
+
     return ctx.to_dict()
 
 
@@ -1836,6 +2004,15 @@ def generate_runtime_unit_test_context(
                 ctx_dict["dbt"][macro_name] = macro_override_value
 
     return ctx_dict
+
+
+def generate_runtime_function_context(
+    function: FunctionNode,
+    config: RuntimeConfig,
+    manifest: Manifest,
+) -> Dict[str, Any]:
+    ctx = FunctionContext(function, config, manifest, OperationProvider(), None)
+    return ctx.to_dict()
 
 
 class ExposureRefResolver(BaseResolver):

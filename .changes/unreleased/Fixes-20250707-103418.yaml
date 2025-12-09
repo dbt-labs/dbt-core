@@ -1,7 +1,0 @@
-kind: Fixes
-body: Update jsonschema definitions with nested config defs, cloud info, and dropping
-  source overrides
-time: 2025-07-07T10:34:18.982725-05:00
-custom:
-  Author: QMalcolm
-  Issue: N/A

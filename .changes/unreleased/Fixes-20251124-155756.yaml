@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix generation of deprecations summary
+time: 2025-11-24T15:57:56.544123-08:00
+custom:
+    Author: asiunov
+    Issue: "12146"

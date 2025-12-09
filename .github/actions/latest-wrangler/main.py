@@ -1,8 +1,9 @@
 import os
-from packaging.version import Version, parse
-import requests
 import sys
 from typing import List
+
+import requests
+from packaging.version import Version, parse
 
 
 def main():

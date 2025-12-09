@@ -7,7 +7,7 @@ from dbt.cli.main import dbtRunner
 from dbt.cli.types import Command
 from dbt.events.types import NoNodesSelected
 from dbt.tests.util import run_dbt
-from tests.utils import EventCatcher
+from dbt_common.events.event_catcher import EventCatcher
 
 """
 Testing different commands against the happy path fixture

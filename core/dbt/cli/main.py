@@ -541,6 +541,7 @@ cli.add_command(ls, "ls")
 @requires.preflight
 @requires.profile
 @requires.project
+@requires.catalogs
 @requires.runtime_config
 @requires.manifest(write_perf_info=True)
 def parse(ctx, **kwargs):
@@ -704,6 +705,7 @@ def run_operation(ctx, **kwargs):
 @requires.preflight
 @requires.profile
 @requires.project
+@requires.catalogs
 @requires.runtime_config
 @requires.manifest
 def seed(ctx, **kwargs):
@@ -737,6 +739,7 @@ def seed(ctx, **kwargs):
 @requires.preflight
 @requires.profile
 @requires.project
+@requires.catalogs
 @requires.runtime_config
 @requires.manifest
 def snapshot(ctx, **kwargs):

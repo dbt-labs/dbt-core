@@ -41,12 +41,21 @@ models:
 
 macros__alter_timezone_sql = """
 {% macro alter_timezone(timezone='America/Los_Angeles') %}
+{{ print('running a macro!') }}
+
 {% set sql %}
     SET TimeZone='{{ timezone }}';
 {% endset %}
 
 {% do run_query(sql) %}
 {% do log("Timezone set to: " + timezone, info=True) %}
+{% endmacro %}
+"""
+
+macros__success_macro_sql = """
+{% macro success_macro() %}
+{{ print('running a macro!') }}
+select 1
 {% endmacro %}
 """
 

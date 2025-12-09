@@ -1,11 +1,14 @@
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple, Union
 from uuid import UUID
 
+from dbt import tracking
 from dbt.artifacts.resources import (
     Analysis,
     Documentation,
     Exposure,
+    Function,
     GenericTest,
     Group,
     HookNode,
@@ -25,23 +28,21 @@ from dbt.artifacts.resources.v1.components import Quoting
 from dbt.artifacts.schemas.base import (
     ArtifactMixin,
     BaseArtifactMetadata,
+    get_artifact_dbt_version,
     get_artifact_schema_version,
     schema_version,
 )
-from dbt.artifacts.schemas.upgrades import upgrade_manifest_json
+from dbt.artifacts.schemas.upgrades import (
+    upgrade_manifest_json,
+    upgrade_manifest_json_dbt_version,
+)
+from dbt.version import __version__
 from dbt_common.exceptions import DbtInternalError
 
 NodeEdgeMap = Dict[str, List[str]]
 UniqueID = str
 ManifestResource = Union[
-    Seed,
-    Analysis,
-    SingularTest,
-    HookNode,
-    Model,
-    SqlOperation,
-    GenericTest,
-    Snapshot,
+    Seed, Analysis, SingularTest, HookNode, Model, SqlOperation, GenericTest, Snapshot, Function
 ]
 DisabledManifestResource = Union[
     ManifestResource,
@@ -92,6 +93,10 @@ class ManifestMetadata(BaseArtifactMetadata):
     quoting: Optional[Quoting] = field(
         default_factory=Quoting,
         metadata=dict(description="The quoting configuration for the project"),
+    )
+    run_started_at: Optional[datetime] = field(
+        default=tracking.active_user.run_started_at if tracking.active_user is not None else None,
+        metadata=dict(description="The timestamp when the run started"),
     )
 
     @classmethod
@@ -164,6 +169,10 @@ class WritableManifest(ArtifactMixin):
             description="The unit tests defined in the project",
         )
     )
+    functions: Mapping[UniqueID, Function] = field(
+        default_factory=dict,
+        metadata=dict(description=("The functions defined in the dbt project")),
+    )
 
     @classmethod
     def compatible_previous_versions(cls) -> Iterable[Tuple[str, int]]:
@@ -185,6 +194,10 @@ class WritableManifest(ArtifactMixin):
         manifest_schema_version = get_artifact_schema_version(data)
         if manifest_schema_version < cls.dbt_schema_version.version:
             data = upgrade_manifest_json(data, manifest_schema_version)
+
+        manifest_dbt_version = get_artifact_dbt_version(data)
+        if manifest_dbt_version and manifest_dbt_version != __version__:
+            data = upgrade_manifest_json_dbt_version(data)
         return cls.from_dict(data)
 
     @classmethod

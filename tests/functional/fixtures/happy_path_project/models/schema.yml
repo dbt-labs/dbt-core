@@ -36,6 +36,11 @@ models:
     columns:
       - name: id
         description: The id value
+        config:
+          tags:
+            - "column_level_tag"
+          meta:
+            column_meta: "column_meta_value"
         data_tests:
           - unique
           - not_null:
@@ -127,7 +132,7 @@ models:
         columns: ["id"]
         expression: "id > 0"
         name: "Check that id is greater than 0"
-    deprecation_date: "2052-05-01"
+    deprecation_date: "2052-05-01 00:00:00-04:00"
     description: A model with lots of configs
 
 sources:

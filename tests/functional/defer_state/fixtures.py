@@ -656,3 +656,151 @@ sources:
     tables:
       - name: customers
 """
+
+# Fixtures for test_removed_test_state.py
+sample_test_sql = """
+{% test sample_test(model, column_name) %}
+    select * from {{ model }} where {{ column_name }} is null
+{% endtest %}
+"""
+
+removed_test_model_sql = """
+select 1 as id
+"""
+
+removed_test_schema_yml = """
+version: 2
+models:
+  - name: model_a
+    columns:
+      - name: id
+        data_tests:
+          - sample_test
+"""
+
+# Fixtures for test_modified_state.py - varchar/numeric size changes
+varchar_size_contract_schema_yml = """
+version: 2
+models:
+  - name: table_model
+    config:
+      contract:
+        enforced: true
+    versions:
+      - v: 1
+    columns:
+      - name: id
+        data_type: integer
+      - name: name
+        data_type: varchar(5)
+"""
+
+varchar_size_increased_contract_schema_yml = """
+version: 2
+models:
+  - name: table_model
+    config:
+      contract:
+        enforced: true
+    versions:
+      - v: 1
+    columns:
+      - name: id
+        data_type: integer
+      - name: name
+        data_type: varchar(20)
+"""
+
+numeric_precision_contract_schema_yml = """
+version: 2
+models:
+  - name: table_model
+    config:
+      contract:
+        enforced: true
+    versions:
+      - v: 1
+    columns:
+      - name: id
+        data_type: integer
+      - name: amount
+        data_type: numeric(10,2)
+"""
+
+numeric_precision_increased_contract_schema_yml = """
+version: 2
+models:
+  - name: table_model
+    config:
+      contract:
+        enforced: true
+    versions:
+      - v: 1
+    columns:
+      - name: id
+        data_type: integer
+      - name: amount
+        data_type: numeric(12,4)
+"""
+
+# Case sensitivity test fixtures
+varchar_size_uppercase_contract_schema_yml = """
+version: 2
+models:
+  - name: table_model
+    config:
+      contract:
+        enforced: true
+    versions:
+      - v: 1
+    columns:
+      - name: id
+        data_type: integer
+      - name: name
+        data_type: VARCHAR(5)
+"""
+
+varchar_size_lowercase_increased_contract_schema_yml = """
+version: 2
+models:
+  - name: table_model
+    config:
+      contract:
+        enforced: true
+    versions:
+      - v: 1
+    columns:
+      - name: id
+        data_type: integer
+      - name: name
+        data_type: varchar(20)
+"""
+
+# Unversioned model fixtures
+varchar_size_unversioned_contract_schema_yml = """
+version: 2
+models:
+  - name: table_model
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: id
+        data_type: integer
+      - name: name
+        data_type: varchar(5)
+"""
+
+varchar_size_unversioned_increased_contract_schema_yml = """
+version: 2
+models:
+  - name: table_model
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: id
+        data_type: integer
+      - name: name
+        data_type: varchar(20)
+"""

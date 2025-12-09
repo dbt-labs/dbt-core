@@ -89,21 +89,21 @@ jobs:
 
     steps:
       - name: checkout dev
-        uses: actions/checkout@v4
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
         with:
           persist-credentials: false
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # actions/setup-python@v6
         with:
-          python-version: "3.9"
+          python-version: "3.10"
 
       - name: Install python dependencies
         run: |
           pip install --user --upgrade pip
           pip --version
-          pip install tox
-          tox --version
+          pip install hatch
+          hatch --version
 
       - name: Run postgres setup script
         run: |
@@ -119,11 +119,11 @@ jobs:
       # integration tests generate a ton of logs in different files. the next step will find them all.
       # we actually care if these pass, because the normal test run doesn't usually include many json log outputs
       - name: Run integration tests
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # nick-fields/retry@v3
         with:
           timeout_minutes: 30
           max_attempts: 3
-          command: tox -e integration -- -nauto
+          command: cd core && hatch run ci:integration-tests -- -nauto
         env:
           PYTEST_ADDOPTS: ${{ format('--splits {0} --group {1}', env.PYTHON_INTEGRATION_TEST_WORKERS, matrix.split-group) }}
 

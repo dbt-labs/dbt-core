@@ -1,6 +1,0 @@
-kind: Features
-body: Deprecate top-level argument properties in generic tests
-time: 2025-07-21T17:31:00.960402-04:00
-custom:
-    Author: michelleark
-    Issue: "11847"

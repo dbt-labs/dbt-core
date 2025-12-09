@@ -32,6 +32,8 @@ from dbt.artifacts.resources import (
 from dbt.artifacts.resources import Documentation as DocumentationResource
 from dbt.artifacts.resources import Exposure as ExposureResource
 from dbt.artifacts.resources import FileHash
+from dbt.artifacts.resources import Function as FunctionResource
+from dbt.artifacts.resources import FunctionArgument, FunctionReturns
 from dbt.artifacts.resources import GenericTest as GenericTestResource
 from dbt.artifacts.resources import GraphResource
 from dbt.artifacts.resources import Group as GroupResource
@@ -695,6 +697,36 @@ class ModelNode(ModelResource, CompiledNode):
                 )
             )
 
+    @staticmethod
+    def _normalize_data_type_for_comparison(data_type: Optional[str]) -> Optional[str]:
+        """
+        Normalize a data type string by removing size, precision, and scale parameters.
+        This allows comparison of base types while ignoring non-breaking parameter changes.
+
+        Examples:
+            varchar(10) -> varchar
+            VARCHAR(5) -> varchar
+            numeric(10,2) -> numeric
+            text -> text
+            decimal(5) -> decimal
+            None -> None
+
+        Per dbt documentation, changes to size/precision/scale should not be
+        considered breaking changes for contracts.
+        See: https://docs.getdbt.com/reference/resource-configs/contract#size-precision-and-scale
+
+        Note: Comparison is case-insensitive. Type aliases (e.g., 'varchar' vs
+        'character varying') are not automatically resolved - users should use
+        consistent type names in their contracts to avoid false positives.
+        """
+        if not data_type:
+            return data_type
+
+        # Split on the first '(' to get the base type without parameters
+        # Convert to lowercase for case-insensitive comparison
+        base_type, _, _ = data_type.partition("(")
+        return base_type.strip().lower()
+
     def same_contract(self, old, adapter_type=None) -> bool:
         # If the contract wasn't previously enforced:
         if old.contract.enforced is False and self.contract.enforced is False:
@@ -736,13 +768,23 @@ class ModelNode(ModelResource, CompiledNode):
                 columns_removed.append(old_value.name)
             # Has this column's data type changed?
             elif old_value.data_type != self.columns[old_key].data_type:
-                column_type_changes.append(
-                    {
-                        "column_name": str(old_value.name),
-                        "previous_column_type": str(old_value.data_type),
-                        "current_column_type": str(self.columns[old_key].data_type),
-                    }
+                # Compare normalized data types (without size/precision/scale)
+                # to determine if this is a breaking change
+                old_normalized = self._normalize_data_type_for_comparison(old_value.data_type)
+                new_normalized = self._normalize_data_type_for_comparison(
+                    self.columns[old_key].data_type
                 )
+
+                # Only consider it a breaking change if the base types differ
+                # Changes like varchar(3) -> varchar(10) are not breaking
+                if old_normalized != new_normalized:
+                    column_type_changes.append(
+                        {
+                            "column_name": str(old_value.name),
+                            "previous_column_type": str(old_value.data_type),
+                            "current_column_type": str(self.columns[old_key].data_type),
+                        }
+                    )
 
             # track if there are any column level constraints for the materialization check late
             if old_value.constraints:
@@ -1055,6 +1097,10 @@ class GenericTestNode(GenericTestResource, TestShouldStoreFailures, CompiledNode
 class UnitTestSourceDefinition(ModelNode):
     source_name: str = "undefined"
     quoting: QuotingResource = field(default_factory=QuotingResource)
+
+    @property
+    def cte_name(self):
+        return self.unique_id.split(".")[-1]
 
     @property
     def search_name(self):
@@ -1537,6 +1583,19 @@ class Group(GroupResource, BaseNode):
 
 
 # ====================================
+# Function node
+# ====================================
+
+
+@dataclass
+class FunctionNode(CompiledNode, FunctionResource):
+
+    @classmethod
+    def resource_class(cls) -> Type[FunctionResource]:
+        return FunctionResource
+
+
+# ====================================
 # SemanticModel node
 # ====================================
 
@@ -1708,6 +1767,20 @@ class ParsedNodePatch(ParsedPatch):
 
 
 @dataclass
+class ParsedFunctionPatchRequired:
+    returns: FunctionReturns
+
+
+# TODO: Maybe this shouldn't be a subclass of ParsedNodePatch, but ParsedPatch instead
+# Currently, `functions` have the fields like `columns`, `access`, `version`, and etc,
+# but they don't actually do anything. If we remove those properties from FunctionNode,
+# we can remove this class and use ParsedPatch instead.
+@dataclass
+class ParsedFunctionPatch(ParsedNodePatch, ParsedFunctionPatchRequired):
+    arguments: List[FunctionArgument] = field(default_factory=list)
+
+
+@dataclass
 class ParsedMacroPatch(ParsedPatch):
     arguments: List[MacroArgument] = field(default_factory=list)
 
@@ -1726,6 +1799,7 @@ class ParsedSingularTestPatch(ParsedPatch):
 # SQL related attributes
 ManifestSQLNode = Union[
     AnalysisNode,
+    FunctionNode,
     SingularTestNode,
     HookNode,
     ModelNode,

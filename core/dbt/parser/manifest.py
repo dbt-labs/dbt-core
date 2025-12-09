@@ -90,6 +90,7 @@ from dbt.events.types import (
 )
 from dbt.exceptions import (
     AmbiguousAliasError,
+    DuplicateResourceNameError,
     InvalidAccessTypeError,
     TargetNotFoundError,
     scrub_secrets,
@@ -101,6 +102,7 @@ from dbt.parser.analysis import AnalysisParser
 from dbt.parser.base import Parser
 from dbt.parser.docs import DocumentationParser
 from dbt.parser.fixtures import FixtureParser
+from dbt.parser.functions import FunctionParser
 from dbt.parser.generic_test import GenericTestParser
 from dbt.parser.hooks import HookParser
 from dbt.parser.macros import MacroParser
@@ -418,6 +420,7 @@ class ManifestLoader:
                 DocumentationParser,
                 HookParser,
                 FixtureParser,
+                FunctionParser,
             ]
             for project in self.all_projects.values():
                 if project.project_name not in project_parser_files:
@@ -479,6 +482,7 @@ class ManifestLoader:
             self.process_metrics(self.root_project)
             self.process_saved_queries(self.root_project)
             self.process_model_inferred_primary_keys()
+            self.process_functions(self.root_project.project_name)
             self.check_valid_group_config()
             self.check_valid_access_property()
             self.check_valid_snapshot_config()
@@ -522,6 +526,7 @@ class ManifestLoader:
         self.check_for_microbatch_deprecations()
         self.check_forcing_batch_concurrency()
         self.check_microbatch_model_has_a_filtered_input()
+        self.check_function_default_arguments_ordering()
 
         return self.manifest
 
@@ -533,6 +538,9 @@ class ManifestLoader:
         self.skip_parsing = self.partial_parser.skip_parsing()
         if self.skip_parsing:
             # nothing changed, so we don't need to generate project_parser_files
+            fire_event(
+                Note(msg="Nothing changed, skipping partial parsing."), level=EventLevel.DEBUG
+            )
             self.manifest = self.saved_manifest  # type: ignore[assignment]
         else:
             # create child_map and parent_map
@@ -1161,6 +1169,10 @@ class ManifestLoader:
                 continue
             _process_refs(self.manifest, current_project, semantic_model, dependencies)
             self.update_semantic_model(semantic_model)
+        for function in self.manifest.functions.values():
+            if function.created_at < self.started_at:
+                continue
+            _process_refs(self.manifest, current_project, function, dependencies)
 
     # Takes references in 'metrics' array of nodes and exposures, finds the target
     # node, and updates 'depends_on.nodes' with the unique id
@@ -1346,6 +1358,20 @@ class ManifestLoader:
                 self.manifest, current_project, unit_test, models_to_versions
             )
 
+    # Loops through all nodes, for each element in
+    # 'functions' array finds the node and updates the
+    # 'depends_on.nodes' array with the unique id
+    def process_functions(self, current_project: str):
+        for node in self.manifest.nodes.values():
+            if node.created_at < self.started_at:
+                continue
+            _process_functions_for_node(self.manifest, current_project, node)
+
+        for function in self.manifest.functions.values():
+            if function.created_at < self.started_at:
+                continue
+            _process_functions_for_node(self.manifest, current_project, function)
+
     def cleanup_disabled(self):
         # make sure the nodes are in the manifest.nodes or the disabled dict,
         # correctly now that the schema files are also parsed
@@ -1526,6 +1552,17 @@ class ManifestLoader:
                     if not has_input_with_event_time_config:
                         fire_event(MicrobatchModelNoEventTimeInputs(model_name=node.name))
 
+    def check_function_default_arguments_ordering(self):
+        for function in self.manifest.functions.values():
+            found_default_value = False
+            for argument in function.arguments:
+                if not found_default_value and argument.default_value is not None:
+                    found_default_value = True
+                elif found_default_value and argument.default_value is None:
+                    raise dbt.exceptions.ParsingError(
+                        f"Non-defaulted argument '{argument.name}' of function '{function.name}' comes after a defaulted argument. Non-defaulted arguments cannot come after defaulted arguments. "
+                    )
+
     def write_perf_info(self, target_path: str):
         path = os.path.join(target_path, PERF_INFO_FILE_NAME)
         write_file(path, json.dumps(self._perf_info, cls=dbt.utils.JSONEncoder, indent=4))
@@ -1614,12 +1651,26 @@ def _check_resource_uniqueness(
     alias_resources: Dict[str, ManifestNode] = {}
     name_resources: Dict[str, Dict] = {}
 
-    for resource, node in manifest.nodes.items():
+    for _, node in manifest.nodes.items():
         if not node.is_relational:
             continue
 
         if node.package_name not in name_resources:
             name_resources[node.package_name] = {"ver": {}, "unver": {}}
+
+        existing_unversioned_node = name_resources[node.package_name]["unver"].get(node.name)
+        if existing_unversioned_node is not None and not node.is_versioned:
+            if get_flags().require_unique_project_resource_names:
+                raise DuplicateResourceNameError(existing_unversioned_node, node)
+            else:
+                dbt.deprecations.warn(
+                    "duplicate-name-distinct-node-types-deprecation",
+                    resource_name=node.name,
+                    unique_id1=existing_unversioned_node.unique_id,
+                    unique_id2=node.unique_id,
+                    package_name=node.package_name,
+                )
+
         if node.is_versioned:
             name_resources[node.package_name]["ver"][node.name] = node
         else:
@@ -1919,7 +1970,7 @@ def _process_metric_node(
 
             if target_metric is None:
                 raise dbt.exceptions.ParsingError(
-                    f"The metric `{input_metric.name}` does not exist but was referenced.",
+                    f"The metric `{input_metric.name}` does not exist but was referenced by metric `{metric.name}`.",
                     node=metric,
                 )
             elif isinstance(target_metric, Disabled):
@@ -2070,6 +2121,49 @@ def _process_sources_for_node(manifest: Manifest, current_project: str, node: Ma
             continue
         target_source_id = target_source.unique_id
         node.depends_on.add_node(target_source_id)
+
+
+def _process_functions_for_node(
+    manifest: Manifest, current_project: str, node: ManifestNode
+) -> None:
+    """Given a manifest and node in that manifest, process its functions"""
+
+    if isinstance(node, SeedNode):
+        return
+
+    for function_args in node.functions:
+        target_function_name: str
+        target_function_package: Optional[str] = None
+        if len(function_args) == 1:
+            target_function_name = function_args[0]
+        elif len(function_args) == 2:
+            target_function_package, target_function_name = function_args
+        else:
+            raise dbt.exceptions.DbtInternalError(
+                f"Functions should always be 1 or 2 arguments - got {len(function_args)}"
+            )
+
+        target_function = manifest.resolve_function(
+            target_function_name,
+            target_function_package,
+            current_project,
+            node.package_name,
+        )
+
+        if target_function is None or isinstance(target_function, Disabled):
+            node.config.enabled = False
+            invalid_target_fail_unless_test(
+                node=node,
+                target_name=target_function_name,
+                target_kind="function",
+                target_package=target_function_package,
+                disabled=(isinstance(target_function, Disabled)),
+                should_warn_if_disabled=False,
+            )
+
+            continue
+
+        node.depends_on.add_node(target_function.unique_id)
 
 
 # This is called in task.rpc.sql_commands when a "dynamic" node is

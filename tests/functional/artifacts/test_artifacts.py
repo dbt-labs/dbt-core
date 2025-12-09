@@ -15,6 +15,7 @@ from dbt.tests.util import (
     run_dbt,
     run_dbt_and_capture,
 )
+from dbt_common.events.event_catcher import EventCatcher
 from tests.functional.artifacts.expected_manifest import (
     expected_references_manifest,
     expected_seeded_manifest,
@@ -25,7 +26,6 @@ from tests.functional.artifacts.expected_run_results import (
     expected_run_results,
     expected_versions_run_results,
 )
-from tests.utils import EventCatcher
 
 models__schema_yml = """
 version: 2
@@ -475,6 +475,7 @@ def verify_manifest(project, expected_manifest, start_time, manifest_schema_path
         "docs",
         "disabled",
         "exposures",
+        "functions",
         "selectors",
         "semantic_models",
         "unit_tests",

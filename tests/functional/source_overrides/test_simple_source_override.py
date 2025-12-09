@@ -1,4 +1,3 @@
-import os
 from datetime import datetime, timedelta, timezone
 from unittest import mock
 
@@ -98,8 +97,7 @@ class TestSourceOverride:
 
         return insert_id + 1
 
-    @mock.patch("dbt.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
-    @mock.patch.dict(os.environ, {"DBT_ENV_PRIVATE_RUN_JSONSCHEMA_VALIDATIONS": "True"})
+    @mock.patch("dbt.jsonschemas.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
     def test_source_overrides(self, project):
         insert_id = 101
 

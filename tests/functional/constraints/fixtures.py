@@ -113,3 +113,10 @@ models:
           to: source('test_source', 'test_table')
           to_columns: [id]
 """
+
+
+stateful_generate_alias_name_macros_sql = """
+{% macro generate_alias_name(custom_alias_name, node) -%}
+    {{ node.name }}_{{ var("state", "dev") }}
+{%- endmacro %}
+"""

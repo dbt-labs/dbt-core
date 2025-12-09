@@ -18,6 +18,7 @@ from typing import (
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import (
     Exposure,
+    FunctionNode,
     GenericTestNode,
     ManifestNode,
     Metric,
@@ -34,7 +35,7 @@ from dbt.contracts.state import PreviousState
 from dbt.node_types import NodeType
 from dbt_common.dataclass_schema import StrEnum
 from dbt_common.events.contextvars import get_project_root
-from dbt_common.exceptions import DbtInternalError, DbtRuntimeError
+from dbt_common.exceptions import CompilationError, DbtInternalError, DbtRuntimeError
 
 from .graph import UniqueId
 
@@ -192,6 +193,15 @@ class SelectorMethod(metaclass=abc.ABCMeta):
                 continue
             yield unique_id, saved_query
 
+    def function_nodes(
+        self, included_nodes: Set[UniqueId]
+    ) -> Iterator[Tuple[UniqueId, FunctionNode]]:
+        for key, function in self.manifest.functions.items():
+            unique_id = UniqueId(key)
+            if unique_id not in included_nodes:
+                continue
+            yield unique_id, function
+
     def all_nodes(
         self, included_nodes: Set[UniqueId]
     ) -> Iterator[Tuple[UniqueId, SelectorTarget]]:
@@ -203,6 +213,7 @@ class SelectorMethod(metaclass=abc.ABCMeta):
             self.unit_tests(included_nodes),
             self.semantic_model_nodes(included_nodes),
             self.saved_query_nodes(included_nodes),
+            self.function_nodes(included_nodes),
         )
 
     def configurable_nodes(
@@ -221,6 +232,7 @@ class SelectorMethod(metaclass=abc.ABCMeta):
             self.unit_tests(included_nodes),
             self.semantic_model_nodes(included_nodes),
             self.saved_query_nodes(included_nodes),
+            self.function_nodes(included_nodes),
         )
 
     def groupable_nodes(
@@ -643,6 +655,16 @@ class StateSelectorMethod(SelectorMethod):
                 continue
             visited_macros.append(macro_uid)
 
+            # If macro_uid is None, it means the macro/test was removed but is still referenced.
+            # Raise a clear error to match the behavior of regular dbt run.
+            if macro_uid is None:
+                raise CompilationError(
+                    f"Node '{node.name}' (in {node.original_file_path}) depends on a macro or test "
+                    f"that does not exist. This can happen when a macro or generic test is removed "
+                    f"but is still referenced. Check for typos and/or install package dependencies "
+                    f"with 'dbt deps'."
+                )
+
             if macro_uid in self.modified_macros:
                 return True
 
@@ -787,6 +809,8 @@ class StateSelectorMethod(SelectorMethod):
                 previous_node = UnitTestDefinition.from_resource(manifest.unit_tests[unique_id])
             elif unique_id in manifest.saved_queries:
                 previous_node = SavedQuery.from_resource(manifest.saved_queries[unique_id])
+            elif unique_id in manifest.functions:
+                previous_node = FunctionNode.from_resource(manifest.functions[unique_id])
 
             if checker.__name__ in [
                 "same_contract",

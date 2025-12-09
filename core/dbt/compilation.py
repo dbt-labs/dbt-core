@@ -26,6 +26,7 @@ from dbt.contracts.graph.nodes import (
     SeedNode,
     UnitTestDefinition,
     UnitTestNode,
+    UnitTestSourceDefinition,
 )
 from dbt.events.types import FoundStats, WritingInjectedSQLForNode
 from dbt.exceptions import (
@@ -181,6 +182,8 @@ class Linker:
                 self.dependency(node.unique_id, (manifest.metrics[dependency].unique_id))
             elif dependency in manifest.semantic_models:
                 self.dependency(node.unique_id, (manifest.semantic_models[dependency].unique_id))
+            elif dependency in manifest.functions:
+                self.dependency(node.unique_id, (manifest.functions[dependency].unique_id))
             else:
                 raise GraphDependencyNotFoundError(node, dependency)
 
@@ -193,6 +196,8 @@ class Linker:
             self.link_node(semantic_model, manifest)
         for exposure in manifest.exposures.values():
             self.link_node(exposure, manifest)
+        for function in manifest.functions.values():
+            self.link_node(function, manifest)
         for metric in manifest.metrics.values():
             self.link_node(metric, manifest)
         for unit_test in manifest.unit_tests.values():
@@ -562,7 +567,12 @@ class Compiler:
 
             _extend_prepended_ctes(prepended_ctes, new_prepended_ctes)
 
-            new_cte_name = self.add_ephemeral_prefix(cte_model.identifier)
+            cte_name = (
+                cte_model.cte_name
+                if isinstance(cte_model, UnitTestSourceDefinition)
+                else cte_model.identifier
+            )
+            new_cte_name = self.add_ephemeral_prefix(cte_name)
             rendered_sql = cte_model._pre_injected_sql or cte_model.compiled_code
             sql = f" {new_cte_name} as (\n{rendered_sql}\n)"
 
@@ -595,7 +605,7 @@ class Compiler:
         if extra_context is None:
             extra_context = {}
 
-        if node.language == ModelLanguage.python:
+        if node.language == ModelLanguage.python and node.resource_type == NodeType.Model:
             context = self._create_node_context(node, manifest, extra_context)
 
             postfix = jinja.get_rendered(
@@ -650,8 +660,15 @@ class Compiler:
             raise GraphDependencyNotFoundError(node, to_expression)
 
         adapter = get_adapter(self.config)
-        relation_name = str(adapter.Relation.create_from(self.config, foreign_key_node))
-        return relation_name
+
+        if (
+            hasattr(foreign_key_node, "defer_relation")
+            and foreign_key_node.defer_relation
+            and self.config.args.defer
+        ):
+            return str(adapter.Relation.create_from(self.config, foreign_key_node.defer_relation))
+        else:
+            return str(adapter.Relation.create_from(self.config, foreign_key_node))
 
     # This method doesn't actually "compile" any of the nodes. That is done by the
     # "compile_node" method. This creates a Linker and builds the networkx graph,

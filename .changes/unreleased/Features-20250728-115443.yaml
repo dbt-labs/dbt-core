@@ -1,6 +1,0 @@
-kind: Features
-body: Deprecate {{ modules.itertools }} usage
-time: 2025-07-28T11:54:43.28275-04:00
-custom:
-    Author: michelleark
-    Issue: "11725"

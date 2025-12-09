@@ -1,5 +1,6 @@
-from typing import Dict, List, Optional, Set, Type
+from typing import Dict, Iterable, List, Optional, Set, Type
 
+from dbt.adapters.base import BaseRelation
 from dbt.artifacts.schemas.results import NodeStatus
 from dbt.artifacts.schemas.run import RunResult
 from dbt.cli.flags import Flags
@@ -13,6 +14,7 @@ from dbt.runners import SavedQueryRunner as saved_query_runner
 from dbt.task.base import BaseRunner, resource_types_from_args
 from dbt.task.run import MicrobatchModelRunner
 
+from .function import FunctionRunner as function_runner
 from .run import ModelRunner as run_model_runner
 from .run import RunTask
 from .seed import SeedRunner as seed_runner
@@ -43,6 +45,7 @@ class BuildTask(RunTask):
         NodeType.Unit: test_runner,
         NodeType.SavedQuery: saved_query_runner,
         NodeType.Exposure: exposure_runner,
+        NodeType.Function: function_runner,
     }
     ALL_RESOURCE_VALUES = frozenset({x for x in RUNNER_MAP.keys()})
 
@@ -62,6 +65,22 @@ class BuildTask(RunTask):
             resource_types.remove(NodeType.Unit)
         return list(resource_types)
 
+    def get_model_schemas(self, adapter, selected_uids: Iterable[str]) -> Set[BaseRelation]:
+
+        # Get model schemas as usual
+        model_schemas = super().get_model_schemas(adapter, selected_uids)
+
+        # Get function schemas
+        function_schemas: Set[BaseRelation] = set()
+        for function in (
+            self.manifest.functions.values() if self.manifest else []
+        ):  # functionally the manifest will never be None as we do an assert in super().get_model_schemas(...)
+            if function.unique_id in selected_uids:
+                relation = adapter.Relation.create_from(self.config, function)
+                function_schemas.add(relation.without_identifier())
+
+        return model_schemas.union(function_schemas)
+
     # overrides get_graph_queue in runnable.py
     def get_graph_queue(self) -> GraphQueue:
         # Following uses self.selection_arg and self.exclusion_arg
@@ -70,12 +89,14 @@ class BuildTask(RunTask):
         # selector including unit tests
         full_selector = self.get_node_selector(no_unit_tests=False)
         # selected node unique_ids with unit_tests
-        full_selected_nodes = full_selector.get_selected(spec)
+        full_selected_nodes = full_selector.get_selected(spec=spec, warn_on_no_nodes=False)
 
         # This selector removes the unit_tests from the selector
         selector_wo_unit_tests = self.get_node_selector(no_unit_tests=True)
         # selected node unique_ids without unit_tests
-        selected_nodes_wo_unit_tests = selector_wo_unit_tests.get_selected(spec)
+        selected_nodes_wo_unit_tests = selector_wo_unit_tests.get_selected(
+            spec=spec, warn_on_no_nodes=False
+        )
 
         # Get the difference in the sets of nodes with and without unit tests and
         # save it

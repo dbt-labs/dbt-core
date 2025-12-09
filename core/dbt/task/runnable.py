@@ -186,9 +186,11 @@ class GraphRunnableTask(ConfiguredTask):
                 self._flattened_nodes.append(self.manifest.unit_tests[uid])
             elif uid in self.manifest.exposures:
                 self._flattened_nodes.append(self.manifest.exposures[uid])
+            elif uid in self.manifest.functions:
+                self._flattened_nodes.append(self.manifest.functions[uid])
             else:
                 raise DbtInternalError(
-                    f"Node selection returned {uid}, expected a node, a source, or a unit test"
+                    f"Node selection returned {uid}, expected an exposure, a function, a node, a saved query, a source, or a unit test"
                 )
 
         self.num_nodes = len([n for n in self._flattened_nodes if not n.is_ephemeral_model])
@@ -233,11 +235,14 @@ class GraphRunnableTask(ConfiguredTask):
                     node_info=runner.node.node_info,
                 )
             )
+
+            result = None
+            thread_exception: Optional[Union[KeyboardInterrupt, SystemExit, Exception]] = None
             try:
                 result = runner.run_with_hooks(self.manifest)
             except (KeyboardInterrupt, SystemExit) as exe:
                 result = None
-                thread_exception: Union[KeyboardInterrupt, SystemExit, Exception] = exe
+                thread_exception = exe
                 raise
             except Exception as e:
                 result = None

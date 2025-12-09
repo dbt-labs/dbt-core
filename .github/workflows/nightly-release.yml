@@ -39,14 +39,14 @@ jobs:
 
     steps:
       - name: "Checkout ${{ github.repository }} Branch ${{ env.RELEASE_BRANCH }}"
-        uses: actions/checkout@v4
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
         with:
           ref: ${{ env.RELEASE_BRANCH }}
 
       - name: "Get Current Version Number"
         id: version-number-sources
         run: |
-          current_version=`awk -F"current_version = " '{print $2}' .bumpversion.cfg | tr '\n' ' '`
+          current_version=$(grep '^version = ' core/dbt/__version__.py | sed 's/version = "\(.*\)"/\1/')
           echo "current_version=$current_version" >> $GITHUB_OUTPUT
 
       - name: "Audit Version And Parse Into Parts"

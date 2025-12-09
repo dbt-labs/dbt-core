@@ -1,3 +1,7 @@
+# Root-level pyproject.toml for tool configurations
+# Packaging configuration is in core/pyproject.toml
+# This file exists so tools like mypy and black can find their config when run from root
+
 [tool.mypy]
 # TODO: widen range of files as we fix issues
 files = 'core/dbt'

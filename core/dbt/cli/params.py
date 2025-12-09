@@ -235,6 +235,7 @@ exclude_resource_type = _create_option_and_track_env_var(
             "exposure",
             "snapshot",
             "seed",
+            "function",
             "default",
         ],
         case_sensitive=False,
@@ -527,6 +528,7 @@ resource_type = _create_option_and_track_env_var(
             "saved_query",
             "source",
             "analysis",
+            "function",
             "model",
             "test",
             "unit_test",
@@ -549,7 +551,6 @@ sample = _create_option_and_track_env_var(
     help="Run in sample mode with given SAMPLE_WINDOW spec, such that ref/source calls are sampled by the sample window.",
     default=None,
     type=SampleType(),
-    hidden=True,  # TODO: Unhide
 )
 
 # `--select` and `--models` are analogous for most commands except `dbt list` for legacy reasons.

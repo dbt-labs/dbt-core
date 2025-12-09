@@ -771,6 +771,15 @@ class MissingArgumentsPropertyInGenericTestDeprecation(WarnLevel):
         return line_wrap_message(deprecation_tag(description, self.__class__.__name__))
 
 
+class DuplicateNameDistinctNodeTypesDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D040"
+
+    def message(self) -> str:
+        description = f"Found resources with the same name '{self.resource_name}' in package '{self.package_name}': '{self.unique_id1}' and '{self.unique_id2}'. Please update one of the resources to have a unique name."
+        return line_wrap_message(deprecation_tag(description))
+
+
 # =======================================================
 # I - Project parsing
 # =======================================================
@@ -2056,6 +2065,31 @@ class LogBatchResult(DynamicLevel):
             execution_time=self.execution_time,
         )
         return f"Batch {formatted}"
+
+
+class LogFunctionResult(DynamicLevel):
+    def code(self) -> str:
+        return "Q047"
+
+    def message(self) -> str:
+        if self.status == "error":
+            info = "ERROR creating"
+            status = red(self.status.upper())
+        elif self.status == "skipped":
+            info = "SKIP"
+            status = yellow(self.status.upper())
+        else:
+            info = "OK created"
+            status = green(self.status.upper())
+
+        msg = f"{info} {self.description}"
+        return format_fancy_output_line(
+            msg=msg,
+            status=status,
+            index=self.index,
+            total=self.total,
+            execution_time=self.execution_time,
+        )
 
 
 # =======================================================

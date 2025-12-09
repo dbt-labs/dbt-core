@@ -1,0 +1,6 @@
+kind: Fixes
+body: Allow dbt deps to run when vars lack defaults in dbt_project.yml
+time: 2025-11-17T18:50:25.759091+05:30
+custom:
+    Author: 3loka
+    Issue: "8913"

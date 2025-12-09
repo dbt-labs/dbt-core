@@ -3,11 +3,13 @@ import importlib
 import importlib.util
 import json
 import os
+from importlib import metadata as importlib_metadata
 from typing import Iterator, List, Optional, Tuple
 
 import requests
 
 import dbt_common.semver as semver
+from dbt.__version__ import version as __version_string
 from dbt_common.ui import green, yellow
 
 PYPI_VERSION_URL = "https://pypi.org/pypi/dbt-core/json"
@@ -226,5 +228,13 @@ def _get_adapter_plugin_names() -> Iterator[str]:
             yield plugin_name
 
 
-__version__ = "1.11.0a1"
+def _resolve_version() -> str:
+    try:
+        return importlib_metadata.version("dbt-core")
+    except importlib_metadata.PackageNotFoundError:
+        # When running from source (not installed), use version from __version__.py
+        return __version_string
+
+
+__version__ = _resolve_version()
 installed = get_installed_version()

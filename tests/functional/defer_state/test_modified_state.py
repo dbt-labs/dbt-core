@@ -31,6 +31,8 @@ from tests.functional.defer_state.fixtures import (
     modified_model_constraint_schema_yml,
     modified_semantic_model_schema_yml,
     no_contract_schema_yml,
+    numeric_precision_contract_schema_yml,
+    numeric_precision_increased_contract_schema_yml,
     schema_yml,
     seed_csv,
     semantic_model_schema_yml,
@@ -38,6 +40,12 @@ from tests.functional.defer_state.fixtures import (
     table_model_now_view_sql,
     table_model_sql,
     unenforced_contract_schema_yml,
+    varchar_size_contract_schema_yml,
+    varchar_size_increased_contract_schema_yml,
+    varchar_size_lowercase_increased_contract_schema_yml,
+    varchar_size_unversioned_contract_schema_yml,
+    varchar_size_unversioned_increased_contract_schema_yml,
+    varchar_size_uppercase_contract_schema_yml,
     versioned_contract_schema_yml,
     versioned_modified_contract_schema_yml,
     versioned_no_contract_schema_yml,
@@ -1161,3 +1169,95 @@ class TestChangedSemanticModelContents(BaseModifiedState):
         write_file(modified_semantic_model_schema_yml, "models", "schema.yml")
         results = run_dbt(["list", "-s", "state:modified", "--state", "./state"])
         assert len(results) == 1
+
+
+class TestVersionedContractVarcharSizeChange(BaseModifiedState):
+    """
+    Test that changing varchar size (e.g., varchar(5) to varchar(20))
+    does not trigger a breaking change error for versioned models.
+    Per dbt docs, size/precision/scale changes should NOT be breaking changes.
+    Reproduces issue: https://github.com/dbt-labs/dbt-core/issues/11186
+    """
+
+    MODEL_UNIQUE_ID = "model.test.table_model.v1"
+
+    def test_varchar_size_increase_not_breaking(self, project):
+        # Start with varchar(5)
+        write_file(varchar_size_contract_schema_yml, "models", "schema.yml")
+        self.run_and_save_state()
+
+        # Change to varchar(20) - should NOT be a breaking change
+        write_file(varchar_size_increased_contract_schema_yml, "models", "schema.yml")
+
+        # This should PASS without errors or breaking change warnings
+        _, logs = run_dbt_and_capture(
+            ["run", "--models", "state:modified.contract", "--state", "./state"]
+        )
+        # Verify no breaking change warning/error
+        assert "breaking change" not in logs.lower()
+        assert "ContractBreakingChangeError" not in logs
+
+    def test_varchar_case_sensitivity_not_breaking(self, project):
+        # Start with VARCHAR(5) - uppercase
+        write_file(varchar_size_uppercase_contract_schema_yml, "models", "schema.yml")
+        self.run_and_save_state()
+
+        # Change to varchar(20) - lowercase with different size
+        # Should NOT be a breaking change (case-insensitive comparison)
+        write_file(varchar_size_lowercase_increased_contract_schema_yml, "models", "schema.yml")
+
+        # This should PASS without errors or breaking change warnings
+        _, logs = run_dbt_and_capture(
+            ["run", "--models", "state:modified.contract", "--state", "./state"]
+        )
+        # Verify no breaking change warning/error
+        assert "breaking change" not in logs.lower()
+        assert "ContractBreakingChangeError" not in logs
+
+    def test_numeric_precision_increase_not_breaking(self, project):
+        # Start with numeric(10,2)
+        write_file(numeric_precision_contract_schema_yml, "models", "schema.yml")
+        # Need to modify the table_model.sql to have an amount column instead of name
+        modified_table_model = """
+select 1 as id, 100.50 as amount
+"""
+        write_file(modified_table_model, "models", "table_model.sql")
+        self.run_and_save_state()
+
+        # Change to numeric(12,4) - should NOT be a breaking change
+        write_file(numeric_precision_increased_contract_schema_yml, "models", "schema.yml")
+
+        # This should PASS without errors or breaking change warnings
+        _, logs = run_dbt_and_capture(
+            ["run", "--models", "state:modified.contract", "--state", "./state"]
+        )
+        # Verify no breaking change warning/error
+        assert "breaking change" not in logs.lower()
+        assert "ContractBreakingChangeError" not in logs
+
+
+class TestUnversionedContractVarcharSizeChange(BaseModifiedState):
+    """
+    Test that changing varchar size for UNVERSIONED models behaves correctly.
+    Unversioned models should also NOT issue warnings for size-only changes.
+    This ensures versioned and unversioned models handle size changes consistently.
+    """
+
+    MODEL_UNIQUE_ID = "model.test.table_model"
+
+    def test_varchar_size_increase_not_breaking_unversioned(self, project):
+        # Start with varchar(5) - no version
+        write_file(varchar_size_unversioned_contract_schema_yml, "models", "schema.yml")
+        self.run_and_save_state()
+
+        # Change to varchar(20) - should NOT be a breaking change
+        write_file(varchar_size_unversioned_increased_contract_schema_yml, "models", "schema.yml")
+
+        # For unversioned models, should also have no breaking change warnings
+        _, logs = run_dbt_and_capture(
+            ["run", "--models", "state:modified.contract", "--state", "./state"]
+        )
+        # Verify no breaking change warning (consistent with versioned behavior)
+        assert "breaking change" not in logs.lower()
+        # Model should still be detected as modified and run successfully
+        assert "Completed successfully" in logs
