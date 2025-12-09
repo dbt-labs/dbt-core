@@ -3,7 +3,7 @@ use crate::dbt_project_config::init_project_config;
 use crate::resolve::resolve_properties::MinimalPropertiesEntry;
 use crate::utils::get_node_fqn;
 use crate::utils::get_unique_id;
-use dbt_common::CodeLocation;
+use dbt_common::CodeLocationWithFile;
 use dbt_common::ErrorCode;
 use dbt_common::FsResult;
 use dbt_common::adapter::AdapterType;
@@ -94,7 +94,7 @@ pub fn resolve_unit_tests(
         // - but we should not serialize it
         // - for now just use the global ones
 
-        let location = CodeLocation::default(); // TODO
+        let location = CodeLocationWithFile::default(); // TODO
         let model_name = format!("model.{}.{}", package_name, unit_test.model);
         let (database, schema, alias, model_found) = match models.get(&model_name) {
             Some(model) => (
@@ -141,7 +141,7 @@ pub fn resolve_unit_tests(
             name: unit_test.model.to_owned(),
             package: Some(package_name.to_owned()),
             version: None,
-            location: Some(CodeLocation::default()),
+            location: Some(CodeLocationWithFile::default()),
         }];
 
         // Process unit test given inputs to extract ref nodes

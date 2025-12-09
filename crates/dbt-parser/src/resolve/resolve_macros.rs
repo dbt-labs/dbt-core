@@ -261,11 +261,11 @@ mod tests {
 
     #[derive(Default)]
     struct MockStatusReporter {
-        warnings: Mutex<Vec<(ErrorCode, Option<dbt_common::CodeLocation>)>>,
+        warnings: Mutex<Vec<(ErrorCode, Option<dbt_common::CodeLocationWithFile>)>>,
     }
 
     impl MockStatusReporter {
-        fn warnings(&self) -> Vec<(ErrorCode, Option<dbt_common::CodeLocation>)> {
+        fn warnings(&self) -> Vec<(ErrorCode, Option<dbt_common::CodeLocationWithFile>)> {
             self.warnings.lock().unwrap().clone()
         }
     }
@@ -371,7 +371,7 @@ mod tests {
             {
                 assert_eq!(warning.0, case.expected_code);
                 assert_eq!(
-                    warning.1.as_ref().map(|loc| loc.file.clone()),
+                    warning.1.as_ref().map(|loc| loc.file.as_ref().clone()),
                     Some(PathBuf::from(expected_path)),
                     "expected warning location for case {}",
                     case.name

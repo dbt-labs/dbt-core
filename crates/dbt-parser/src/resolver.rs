@@ -382,7 +382,7 @@ fn check_access(
 fn check_node_access<F>(
     arg: &ResolveArgs,
     unique_id: &str,
-    node_dependencies: &[(String, dbt_common::CodeLocation)],
+    node_dependencies: &[(String, dbt_common::CodeLocationWithFile)],
     node_package_name: &str,
     nodes: &Nodes,
     all_runtime_configs: &BTreeMap<String, Arc<DbtRuntimeConfig>>,

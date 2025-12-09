@@ -62,14 +62,14 @@ fn do_sql_find_statement_delimiters<'input>(
             let start_token_ = start_token.unwrap();
             let span = Span::new(
                 CodeLocation::new(
-                    start_token_.get_line() as usize,
-                    start_token_.get_column() as usize,
-                    start_token_.get_start() as usize,
+                    start_token_.get_line() as u32,
+                    start_token_.get_column() as u32,
+                    start_token_.get_start() as u32,
                 ),
                 CodeLocation::new(
-                    token.get_line() as usize,
-                    token.get_column() as usize,
-                    token.get_start() as usize,
+                    token.get_line() as u32,
+                    token.get_column() as u32,
+                    token.get_start() as u32,
                 ),
             );
             result.push(span);
@@ -87,14 +87,14 @@ fn do_sql_find_statement_delimiters<'input>(
         if start_token.get_start() != last_token.get_start() {
             result.push(Span::new(
                 CodeLocation::new(
-                    start_token.get_line() as usize,
-                    start_token.get_column() as usize,
-                    start_token.get_start() as usize,
+                    start_token.get_line() as u32,
+                    start_token.get_column() as u32,
+                    start_token.get_start() as u32,
                 ),
                 CodeLocation::new(
-                    last_token.get_line() as usize,
-                    last_token.get_column() as usize,
-                    last_token.get_start() as usize,
+                    last_token.get_line() as u32,
+                    last_token.get_column() as u32,
+                    last_token.get_start() as u32,
                 ),
             ));
         }

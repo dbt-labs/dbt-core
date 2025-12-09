@@ -176,7 +176,7 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
     fn is_versioned(&self) -> bool {
         false
     }
-    fn defined_at(&self) -> Option<&dbt_common::CodeLocation> {
+    fn defined_at(&self) -> Option<&dbt_common::CodeLocationWithFile> {
         None
     }
     fn resource_type(&self) -> NodeType;
@@ -301,11 +301,7 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
                     defined_at.file.display().to_string()
                 };
 
-                (
-                    relative_path,
-                    Some(defined_at.line as u32),
-                    Some(defined_at.col as u32),
-                )
+                (relative_path, Some(defined_at.line), Some(defined_at.col))
             },
         );
 
@@ -367,11 +363,7 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
                     defined_at.file.display().to_string()
                 };
 
-                (
-                    relative_path,
-                    Some(defined_at.line as u32),
-                    Some(defined_at.col as u32),
-                )
+                (relative_path, Some(defined_at.line), Some(defined_at.col))
             },
         );
 
@@ -1116,7 +1108,7 @@ impl InternalDbtNode for DbtTest {
         self
     }
 
-    fn defined_at(&self) -> Option<&dbt_common::CodeLocation> {
+    fn defined_at(&self) -> Option<&dbt_common::CodeLocationWithFile> {
         self.defined_at.as_ref()
     }
 
@@ -3001,7 +2993,7 @@ pub struct DbtTest {
     pub __common_attr__: CommonAttributes,
     pub __base_attr__: NodeBaseAttributes,
     pub __test_attr__: DbtTestAttr,
-    pub defined_at: Option<dbt_common::CodeLocation>,
+    pub defined_at: Option<dbt_common::CodeLocationWithFile>,
 
     // not to be confused with __common_attr__.original_file_path, which is the path to the generated sql file
     pub manifest_original_file_path: PathBuf,

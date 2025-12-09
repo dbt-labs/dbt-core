@@ -75,7 +75,7 @@ use std::{
 };
 
 use dbt_common::{
-    CodeLocation, ErrorCode, FsError, FsResult, fs_err, io_args::IoArgs,
+    CodeLocationWithFile, ErrorCode, FsError, FsResult, fs_err, io_args::IoArgs,
     io_utils::try_read_yml_to_str, tracing::emit::emit_strict_parse_error,
 };
 use dbt_schemas::schemas::serde::yaml_to_fs_error;
@@ -199,8 +199,9 @@ where
 
     if show_errors_or_warnings {
         for error in errors {
-            let error =
-                error.with_location(CodeLocation::from(error_path.clone().unwrap_or_default()));
+            let error = error.with_location(CodeLocationWithFile::from(
+                error_path.clone().unwrap_or_default(),
+            ));
             emit_strict_parse_error(&error, dependency_package_name, io_args);
         }
     }

@@ -1,8 +1,9 @@
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 use std::str::FromStr;
+use std::sync::Arc;
 
-use dbt_common::{CodeLocation, ErrorCode, FsError, FsResult, stdfs};
+use dbt_common::{CodeLocationWithFile, ErrorCode, FsError, FsResult, stdfs};
 use dbt_serde_yaml::{JsonSchema, Spanned, UntaggedEnumDeserialize};
 use serde::{
     self, Deserialize, Deserializer, Serialize,
@@ -69,9 +70,9 @@ pub fn yaml_to_fs_error(err: dbt_serde_yaml::Error, filename: Option<&Path>) -> 
     let msg = err.display_no_mark().to_string();
     let location = err
         .span()
-        .map_or_else(CodeLocation::default, CodeLocation::from);
+        .map_or_else(CodeLocationWithFile::default, CodeLocationWithFile::from);
     let location = if let Some(filename) = filename {
-        location.with_file(filename)
+        location.with_file(Arc::new(filename.into()))
     } else {
         location
     };

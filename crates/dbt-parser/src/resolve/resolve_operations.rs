@@ -6,7 +6,7 @@ use std::{
 
 use crate::utils::get_original_file_path;
 use dbt_common::{
-    CodeLocation, ErrorCode, FsResult, fs_err,
+    CodeLocationWithFile, ErrorCode, FsResult, fs_err,
     io_args::{IoArgs, StaticAnalysisKind},
 };
 use dbt_common::{adapter::AdapterType, tracing::emit::emit_warn_log_from_fs_error};
@@ -209,7 +209,7 @@ fn new_operation(
                                     name,
                                     package,
                                     version: version.map(|v| v.into()),
-                                    location: Some(CodeLocation::new(
+                                    location: Some(CodeLocationWithFile::new(
                                         location.line,
                                         location.col,
                                         location.index,
@@ -220,7 +220,7 @@ fn new_operation(
                             SqlResource::Source((source_name, table_name, location)) => {
                                 operation.__base_attr__.sources.push(DbtSourceWrapper {
                                     source: vec![source_name, table_name],
-                                    location: Some(CodeLocation::new(
+                                    location: Some(CodeLocationWithFile::new(
                                         location.line,
                                         location.col,
                                         location.index,

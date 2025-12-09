@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::str::FromStr;
 
 use dbt_common::adapter::AdapterType;
-use dbt_common::{CodeLocation, ErrorCode, FsError, FsResult, err, fs_err};
+use dbt_common::{CodeLocationWithFile, ErrorCode, FsError, FsResult, err, fs_err};
 use dbt_frontend_common::Dialect;
 use dbt_serde_yaml::{JsonSchema, Spanned, UntaggedEnumDeserialize, Verbatim};
 use dbt_telemetry::NodeMaterialization;
@@ -367,7 +367,7 @@ pub struct NodeDependsOn {
     #[serde(default)]
     pub nodes: Vec<String>,
     #[serde(default)]
-    pub nodes_with_ref_location: Vec<(String, CodeLocation)>,
+    pub nodes_with_ref_location: Vec<(String, CodeLocationWithFile)>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Copy, JsonSchema)]
@@ -1042,7 +1042,7 @@ pub struct NodeInfoWrapper {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub skipped_nodes: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub defined_at: Option<CodeLocation>,
+    pub defined_at: Option<CodeLocationWithFile>,
     pub node_info: NodeInfo,
 }
 

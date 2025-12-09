@@ -88,7 +88,7 @@ pub trait JinjaTypeCheckingEventListenerFactory: Send + Sync {
     fn create_listener(
         &self,
         args: &IoArgs,
-        offset: dbt_common::CodeLocation,
+        offset: dbt_common::CodeLocationWithFile,
         noqa_comments: Option<HashSet<u32>>,
         unique_id: &str,
     ) -> Rc<dyn TypecheckingEventListener>;
@@ -114,7 +114,7 @@ impl JinjaTypeCheckingEventListenerFactory for DefaultJinjaTypeCheckEventListene
     fn create_listener(
         &self,
         _args: &IoArgs,
-        _offset: dbt_common::CodeLocation,
+        _offset: dbt_common::CodeLocationWithFile,
         _noqa_comments: Option<HashSet<u32>>,
         unique_id: &str,
     ) -> Rc<dyn TypecheckingEventListener> {

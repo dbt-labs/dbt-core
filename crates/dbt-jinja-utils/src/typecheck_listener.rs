@@ -1,5 +1,5 @@
 use dbt_common::tracing::emit::emit_warn_log_from_fs_error;
-use dbt_common::{CodeLocation, ErrorCode, FsError, io_utils::StatusReporter};
+use dbt_common::{CodeLocationWithFile, ErrorCode, FsError, io_utils::StatusReporter};
 use minijinja::TypecheckingEventListener;
 use minijinja::machinery::Span;
 use std::path::PathBuf;
@@ -44,10 +44,10 @@ impl TypecheckingEventListener for YamlTypecheckingEventListener {
         // Adjust span with current_span offset
         let adjusted_span = self.current_span;
 
-        let location = CodeLocation::new(
-            adjusted_span.start_line as usize,
-            adjusted_span.start_col as usize,
-            adjusted_span.start_offset as usize,
+        let location = CodeLocationWithFile::new(
+            adjusted_span.start_line,
+            adjusted_span.start_col,
+            adjusted_span.start_offset,
             self.current_path.clone(),
         );
 

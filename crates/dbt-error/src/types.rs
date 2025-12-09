@@ -10,7 +10,7 @@ use std::{
     fmt::{self, Debug, Display, Formatter},
     io, panic,
     path::{Path, PathBuf},
-    sync::LazyLock,
+    sync::{Arc, LazyLock},
 };
 use tokio::task::JoinError;
 
@@ -32,7 +32,7 @@ impl<'a> Display for StackTraceFormatter<'a> {
 
 pub struct FsError {
     pub code: ErrorCode,
-    pub location: Option<super::CodeLocation>,
+    pub location: Option<super::CodeLocationWithFile>,
     pub context: String,
     cause: Option<WrappedError>,
     backtrace: Backtrace,
@@ -170,7 +170,7 @@ impl FsError {
                     .location()
                     .with_offset(&location_offset)
                     .with_file(file)
-                    .with_macro_spans(macro_spans, expanded_file);
+                    .with_macro_spans(macro_spans, expanded_file.map(|x| Arc::new(x.into())));
                 let cause = err.cause.map(|e| (*e).into());
                 let context = match &cause {
                     // Make sure the "Available are.." message gets formatted
@@ -294,10 +294,12 @@ impl FsError {
 
         let expanded_file = expanded_file.map(|f| f.into());
         self.for_each_mut(|e| {
-            let location = e
-                .location
-                .take()
-                .map(|loc| loc.with_macro_spans(macro_spans, expanded_file.clone()));
+            let location = e.location.take().map(|loc| {
+                loc.with_macro_spans(
+                    macro_spans,
+                    expanded_file.as_ref().map(|x| Arc::new(x.into())),
+                )
+            });
             e.location = location
         });
         self
@@ -316,7 +318,7 @@ impl FsError {
     }
 
     /// Adds a location to this error, replacing an existing location if it's more specific
-    pub fn with_location(self, location: impl Into<super::CodeLocation>) -> FsError {
+    pub fn with_location(self, location: impl Into<super::CodeLocationWithFile>) -> FsError {
         let location = location.into();
         let location = if location.has_position() {
             location
@@ -327,10 +329,10 @@ impl FsError {
             // We can extract the line/column info from certain types of inner
             // error:
             match wrapped_err {
-                WrappedError::Frontend(e) => e.location().with_file(location.file),
+                WrappedError::Frontend(e) => e.location().with_arc_file(location.file),
                 WrappedError::FrontendInternal(e) => {
                     if let Some(loc) = &e.location {
-                        loc.with_file(location.file)
+                        loc.with_arc_file(location.file)
                     } else {
                         location
                     }
@@ -359,7 +361,7 @@ impl FsError {
     /// TODO: implement Span support in serde-yaml
     pub fn with_hacky_yml_location(
         self,
-        location: Option<impl Into<super::CodeLocation>>,
+        location: Option<impl Into<super::CodeLocationWithFile>>,
     ) -> FsError {
         if location.is_none() {
             return self;
@@ -391,12 +393,13 @@ impl FsError {
             };
 
             if let Some(token) = token
-                && in_dir.join(file).exists()
+                && in_dir.join(file.as_path()).exists()
             {
                 // patch up trying to find the line/column of the token
-                match crate::utils::find_locations(&token, Path::new(&in_dir.join(file))) {
+                match crate::utils::find_locations(&token, Path::new(&in_dir.join(file.as_path())))
+                {
                     Ok(Some((line, col, index))) => {
-                        super::CodeLocation::new(line, col, index, file)
+                        super::CodeLocationWithFile::new_with_arc(line, col, index, file.clone())
                     }
                     _ => location,
                 }
@@ -501,9 +504,14 @@ impl FsError {
 
     pub fn with_relative_path(mut self, path: &str) -> Self {
         if let Some(ref mut location) = self.location {
-            location.file = PathBuf::from(path);
+            location.file = Arc::new(PathBuf::from(path));
         } else {
-            self.location = Some(super::CodeLocation::new(1, 1, 0, path));
+            self.location = Some(super::CodeLocationWithFile::new(
+                1,
+                1,
+                0,
+                PathBuf::from(path),
+            ));
         }
         self
     }
@@ -1145,7 +1153,7 @@ pub trait ContextableResult<T>: private::Sealed {
 #[derive(Debug, Clone)]
 pub struct ErrContext {
     pub code: Option<ErrorCode>,
-    pub location: Option<super::CodeLocation>,
+    pub location: Option<super::CodeLocationWithFile>,
     pub context: Option<String>,
 }
 

@@ -459,7 +459,7 @@ pub fn emit_error_log_from_fs_error(
     emit_fs_error_with_severity(error, severity_for_fs_error(error), status_reporter);
 }
 
-fn is_markdown_file(location: Option<&crate::CodeLocation>) -> bool {
+fn is_markdown_file(location: Option<&crate::CodeLocationWithFile>) -> bool {
     location
         .and_then(|loc| loc.file.extension())
         .and_then(OsStr::to_str)

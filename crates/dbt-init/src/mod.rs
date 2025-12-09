@@ -6,6 +6,6 @@ pub mod yaml_utils;
 
 pub extern crate dbt_error as error;
 pub use dbt_error::{
-    CodeLocation, ErrContext, ErrorCode, FsError, FsResult, LiftableResult, MacroSpan, Span, ectx,
-    err, fs_err, not_implemented_err, unexpected_err, unexpected_fs_err,
+    CodeLocationWithFile, ErrContext, ErrorCode, FsError, FsResult, LiftableResult, MacroSpan,
+    Span, ectx, err, fs_err, not_implemented_err, unexpected_err, unexpected_fs_err,
 };

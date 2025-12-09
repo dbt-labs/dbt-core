@@ -165,7 +165,7 @@ impl<'a, T: DefaultTo<T>> DbtPythonVisitor<'a, T> {
                         version_from_kwargs,
                         // TODO: add column and index
                         CodeLocation {
-                            line: range_line,
+                            line: range_line as u32,
                             col: 0,
                             index: 0,
                         },
@@ -181,7 +181,7 @@ impl<'a, T: DefaultTo<T>> DbtPythonVisitor<'a, T> {
                         version_from_kwargs,
                         // TODO: add column and index
                         CodeLocation {
-                            line: range_line,
+                            line: range_line as u32,
                             col: 0,
                             index: 0,
                         },
@@ -200,7 +200,7 @@ impl<'a, T: DefaultTo<T>> DbtPythonVisitor<'a, T> {
                         Some(package),
                         Some(version),
                         CodeLocation {
-                            line: range_line,
+                            line: range_line as u32,
                             col: 0,
                             index: 0,
                         },
@@ -228,7 +228,7 @@ impl<'a, T: DefaultTo<T>> DbtPythonVisitor<'a, T> {
                     table_name,
                     // TODO: add column and index
                     CodeLocation {
-                        line: range_line,
+                        line: range_line as u32,
                         col: 0,
                         index: 0,
                     },

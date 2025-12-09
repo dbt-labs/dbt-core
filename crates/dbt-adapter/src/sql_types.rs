@@ -333,9 +333,7 @@ impl SdfSchemaBuilder {
                     sdf_fields.push(sdf_field);
                 }
                 // preserve original metadata
-                let schema_metadata = self.original.metadata().clone();
-                let sdf_arrow_schema =
-                    Arc::new(Schema::new_with_metadata(sdf_fields, schema_metadata));
+                let sdf_arrow_schema = Arc::new(Schema::new(sdf_fields));
                 // build the SdfSchema
                 let sdf_schema =
                     SdfSchema::from_sdf_arrow_schema(Some(self.original), sdf_arrow_schema);

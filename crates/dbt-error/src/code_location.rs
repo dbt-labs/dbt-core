@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 
 use dbt_serde_yaml::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -7,22 +7,24 @@ use crate::utils;
 
 use super::preprocessor_location;
 
+type CodeLocation = dbt_frontend_common::error::CodeLocation;
+
 /// Represents a concrete location in some source file.
 #[derive(Clone, Default, Debug, Eq, PartialEq, Serialize, Deserialize, Hash, JsonSchema)]
-pub struct CodeLocation {
-    pub line: usize,
-    pub col: usize,
-    pub index: usize,
-    pub file: PathBuf,
+pub struct CodeLocationWithFile {
+    pub line: u32,
+    pub col: u32,
+    pub index: u32,
+    pub file: Arc<PathBuf>,
     // An optional pointer to a corresponding location in some intermediate
     // preprocessed code, for example after macro expansion. Mainly intended for
     // debugging purposes.
-    expanded: Option<Box<CodeLocation>>,
+    expanded: Option<Box<CodeLocationWithFile>>,
 }
 
-impl From<CodeLocation> for dbt_frontend_common::error::CodeLocation {
-    fn from(location: CodeLocation) -> Self {
-        dbt_frontend_common::error::CodeLocation {
+impl From<CodeLocationWithFile> for CodeLocation {
+    fn from(location: CodeLocationWithFile) -> Self {
+        CodeLocation {
             line: location.line,
             col: location.col,
             index: location.index,
@@ -30,13 +32,13 @@ impl From<CodeLocation> for dbt_frontend_common::error::CodeLocation {
     }
 }
 
-impl PartialOrd for CodeLocation {
+impl PartialOrd for CodeLocationWithFile {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl Ord for CodeLocation {
+impl Ord for CodeLocationWithFile {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.file
             .cmp(&other.file)
@@ -44,11 +46,23 @@ impl Ord for CodeLocation {
     }
 }
 
-impl CodeLocation {
+impl CodeLocationWithFile {
     /// Constructs a new [CodeLocation] with the specified line, column and file
     /// path.
-    pub fn new(line: usize, column: usize, index: usize, file: impl Into<PathBuf>) -> Self {
-        CodeLocation {
+    pub fn new(line: u32, column: u32, index: u32, file: impl Into<PathBuf>) -> Self {
+        CodeLocationWithFile {
+            line,
+            col: column,
+            index,
+            file: Arc::new(file.into()),
+            expanded: None,
+        }
+    }
+
+    /// Constructs a new [CodeLocation] with the specified line, column and file
+    /// path.
+    pub fn new_with_arc(line: u32, column: u32, index: u32, file: impl Into<Arc<PathBuf>>) -> Self {
+        CodeLocationWithFile {
             line,
             col: column,
             index,
@@ -62,13 +76,16 @@ impl CodeLocation {
     pub fn with_macro_spans(
         self,
         spans: &[preprocessor_location::MacroSpan],
-        expanded_file: Option<impl Into<PathBuf>>,
+        expanded_file: impl Into<Option<Arc<PathBuf>>>,
     ) -> Self {
-        let expanded = expanded_file
-            .map(|path| Box::new(CodeLocation::new(self.line, self.col, self.index, path)));
-        CodeLocation {
+        let expanded = expanded_file.into().map(|path| {
+            Box::new(CodeLocationWithFile::new_with_arc(
+                self.line, self.col, self.index, path,
+            ))
+        });
+        CodeLocationWithFile {
             expanded,
-            ..self.get_source_location(spans).with_file(self.file)
+            ..self.get_source_location_with_file(spans)
         }
     }
 
@@ -81,11 +98,11 @@ impl CodeLocation {
     pub fn get_source_location(
         &self,
         macro_spans: &[preprocessor_location::MacroSpan],
-    ) -> dbt_frontend_common::error::CodeLocation {
+    ) -> CodeLocation {
         let location = self.to_owned().into();
 
-        let mut prev_macro_end = dbt_frontend_common::error::CodeLocation::new(1, 1, 0);
-        let mut prev_expanded_end = dbt_frontend_common::error::CodeLocation::new(1, 1, 0);
+        let mut prev_macro_end = CodeLocation::new(1, 1, 0);
+        let mut prev_expanded_end = CodeLocation::new(1, 1, 0);
         for macro_span in macro_spans {
             if macro_span.expanded_span.contains(&location) {
                 return macro_span.macro_span.start.to_owned();
@@ -98,14 +115,49 @@ impl CodeLocation {
         prev_macro_end + (location.to_owned() - prev_expanded_end)
     }
 
-    pub fn with_file(self, file: impl Into<PathBuf>) -> Self {
-        CodeLocation {
-            file: file.into(),
-            ..self
+    pub fn get_source_location_with_file(
+        &self,
+        macro_spans: &[preprocessor_location::MacroSpan],
+    ) -> CodeLocationWithFile {
+        let location = self.to_owned().into();
+
+        let mut prev_macro_end = CodeLocation::new(1, 1, 0);
+        let mut prev_expanded_end = CodeLocation::new(1, 1, 0);
+        for macro_span in macro_spans {
+            if macro_span.expanded_span.contains(&location) {
+                let location = macro_span.macro_span.start.to_owned();
+                return CodeLocationWithFile::new_with_arc(
+                    location.line,
+                    location.col,
+                    location.index,
+                    self.file.clone(),
+                );
+            } else if location < macro_span.expanded_span.start {
+                let location = prev_macro_end + (location - prev_expanded_end);
+                return CodeLocationWithFile::new_with_arc(
+                    location.line,
+                    location.col,
+                    location.index,
+                    self.file.clone(),
+                );
+            }
+            prev_macro_end.clone_from(&macro_span.macro_span.stop);
+            prev_expanded_end.clone_from(&macro_span.expanded_span.stop);
         }
+        let location = prev_macro_end + (location.to_owned() - prev_expanded_end);
+        CodeLocationWithFile::new_with_arc(
+            location.line,
+            location.col,
+            location.index,
+            self.file.clone(),
+        )
     }
 
-    pub fn with_offset(self, offset: dbt_frontend_common::error::CodeLocation) -> Self {
+    pub fn with_file(self, file: Arc<PathBuf>) -> Self {
+        CodeLocationWithFile { file, ..self }
+    }
+
+    pub fn with_offset(self, offset: CodeLocation) -> Self {
         let line = self.line + offset.line - 1;
         let col = if self.line == 1 {
             self.col + offset.col - 1
@@ -113,7 +165,7 @@ impl CodeLocation {
             self.col
         };
         let index = self.index + offset.index;
-        CodeLocation {
+        CodeLocationWithFile {
             line,
             col,
             index,
@@ -122,58 +174,58 @@ impl CodeLocation {
     }
 }
 
-impl From<PathBuf> for CodeLocation {
+impl From<PathBuf> for CodeLocationWithFile {
     fn from(file: PathBuf) -> Self {
-        CodeLocation {
-            file,
+        CodeLocationWithFile {
+            file: Arc::new(file),
             ..Default::default()
         }
     }
 }
 
-impl From<dbt_serde_yaml::Span> for CodeLocation {
+impl From<dbt_serde_yaml::Span> for CodeLocationWithFile {
     fn from(span: dbt_serde_yaml::Span) -> Self {
-        CodeLocation::new(
-            span.start.line,
-            span.start.column,
-            span.start.index,
+        CodeLocationWithFile::new_with_arc(
+            span.start.line as u32,
+            span.start.column as u32,
+            span.start.index as u32,
             span.filename
-                .as_deref()
-                .map_or_else(|| PathBuf::from("<unknown>"), PathBuf::from),
+                .unwrap_or_else(|| PathBuf::from("<unknown>").into()),
         )
     }
 }
 
 pub struct MiniJinjaErrorWrapper(pub minijinja::Error);
 
-impl From<MiniJinjaErrorWrapper> for CodeLocation {
+impl From<MiniJinjaErrorWrapper> for CodeLocationWithFile {
     fn from(err: MiniJinjaErrorWrapper) -> Self {
         if let Some(span) = err.0.significant_span() {
-            CodeLocation {
-                file: err.0.significant_name().unwrap_or_default().into(),
-                line: span.start_line as usize,
-                col: span.start_col as usize,
-                index: span.start_offset as usize,
+            CodeLocationWithFile {
+                file: Arc::new(err.0.significant_name().unwrap_or_default().into()),
+                line: span.start_line,
+                col: span.start_col,
+                index: span.start_offset,
                 expanded: None,
             }
         } else {
-            CodeLocation {
-                file: err.0.name().unwrap_or_default().into(),
+            CodeLocationWithFile {
+                file: Arc::new(err.0.name().unwrap_or_default().into()),
                 ..Default::default()
             }
         }
     }
 }
 
-impl std::fmt::Display for CodeLocation {
+impl std::fmt::Display for CodeLocationWithFile {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let relative_path = if self.file.is_relative() {
-            self.file.to_owned()
+            self.file.as_ref().to_owned()
         } else if let Ok(cwd) = std::env::current_dir() {
             let cwd = utils::canonicalize(cwd.as_path()).unwrap_or(cwd);
-            pathdiff::diff_paths(&self.file, &cwd).unwrap_or_else(|| self.file.to_owned())
+            pathdiff::diff_paths(self.file.as_ref(), &cwd)
+                .unwrap_or_else(|| self.file.as_ref().to_owned())
         } else {
-            self.file.to_owned()
+            self.file.as_ref().to_owned()
         };
 
         if !self.has_position() {
@@ -195,24 +247,64 @@ impl std::fmt::Display for CodeLocation {
 /// Can be converted to a concrete [CodeLocation] by calling
 /// [AbstractLocation::with_file].
 pub trait AbstractLocation {
-    fn with_file(&self, file: impl Into<PathBuf>) -> CodeLocation;
+    fn with_file(&self, file: impl Into<PathBuf>) -> CodeLocationWithFile;
+    fn with_arc_file(&self, file: impl Into<Arc<PathBuf>>) -> CodeLocationWithFile;
 }
 
 impl AbstractLocation for dbt_frontend_common::error::CodeLocation {
-    fn with_file(&self, file: impl Into<PathBuf>) -> CodeLocation {
-        CodeLocation::new(self.line, self.col, self.index, file)
+    fn with_file(&self, file: impl Into<PathBuf>) -> CodeLocationWithFile {
+        self.with_arc_file(Arc::new(file.into()))
+    }
+    fn with_arc_file(&self, file: impl Into<Arc<PathBuf>>) -> CodeLocationWithFile {
+        CodeLocationWithFile::new_with_arc(self.line, self.col, self.index, file.into())
     }
 }
 
-impl AbstractLocation for (usize, usize, usize) {
-    fn with_file(&self, file: impl Into<PathBuf>) -> CodeLocation {
-        CodeLocation::new(self.0, self.1, self.2, file)
+impl AbstractLocation for (u32, u32, u32) {
+    fn with_file(&self, file: impl Into<PathBuf>) -> CodeLocationWithFile {
+        self.with_arc_file(Arc::new(file.into()))
+    }
+    fn with_arc_file(&self, file: impl Into<Arc<PathBuf>>) -> CodeLocationWithFile {
+        CodeLocationWithFile::new_with_arc(self.0, self.1, self.2, file.into())
+    }
+}
+
+trait CodeLocationExtension {
+    fn with_macro_spans(self, spans: &[preprocessor_location::MacroSpan]) -> CodeLocation;
+    fn get_source_location(&self, macro_spans: &[preprocessor_location::MacroSpan])
+    -> CodeLocation;
+}
+
+impl CodeLocationExtension for CodeLocation {
+    /// Using the specified span information.
+    fn with_macro_spans(self, spans: &[preprocessor_location::MacroSpan]) -> Self {
+        self.get_source_location(spans)
+    }
+
+    fn get_source_location(
+        &self,
+        macro_spans: &[preprocessor_location::MacroSpan],
+    ) -> CodeLocation {
+        let location = self.to_owned();
+
+        let mut prev_macro_end = dbt_frontend_common::error::CodeLocation::new(1, 1, 0);
+        let mut prev_expanded_end = dbt_frontend_common::error::CodeLocation::new(1, 1, 0);
+        for macro_span in macro_spans {
+            if macro_span.expanded_span.contains(&location) {
+                return macro_span.macro_span.start.to_owned();
+            } else if location < macro_span.expanded_span.start {
+                return prev_macro_end + (location - prev_expanded_end);
+            }
+            prev_macro_end.clone_from(&macro_span.macro_span.stop);
+            prev_expanded_end.clone_from(&macro_span.expanded_span.stop);
+        }
+        prev_macro_end + (location.to_owned() - prev_expanded_end)
     }
 }
 
 #[derive(Clone, Default, Debug, Eq, PartialEq, Serialize, Deserialize, Hash, PartialOrd, Ord)]
 pub struct Span {
-    pub start: CodeLocation,
+    pub start: CodeLocationWithFile,
     pub stop: CodeLocation,
 }
 
@@ -220,46 +312,51 @@ impl Span {
     pub fn with_macro_spans(
         self,
         spans: &[preprocessor_location::MacroSpan],
-        expanded_file: Option<impl Into<PathBuf>>,
+        expanded_file: Option<Arc<PathBuf>>,
     ) -> Self {
-        let expanded_file: Option<PathBuf> = expanded_file.map(|path| path.into());
         Span {
-            start: self.start.with_macro_spans(spans, expanded_file.to_owned()),
-            stop: self.stop.with_macro_spans(spans, expanded_file),
+            start: self.start.with_macro_spans(spans, expanded_file),
+            stop: self.stop.with_macro_spans(spans),
         }
     }
 
-    pub fn with_offset(self, offset: dbt_frontend_common::error::CodeLocation) -> Self {
+    pub fn with_offset(self, offset: CodeLocation) -> Self {
         Span {
             start: self.start.with_offset(offset),
-            stop: self.stop.with_offset(offset),
+            stop: self.stop.with_offset(&offset),
         }
     }
 
     pub fn from_serde_span(span: dbt_serde_yaml::Span, file: impl Into<PathBuf>) -> Self {
-        let file = file.into();
         Span {
-            start: CodeLocation::new(
-                span.start.line,
-                span.start.column,
-                span.start.index,
-                file.clone(),
+            start: CodeLocationWithFile::new(
+                span.start.line as u32,
+                span.start.column as u32,
+                span.start.index as u32,
+                file,
             ),
-            stop: CodeLocation::new(span.end.line, span.end.column, span.end.index, file),
+            stop: CodeLocation::new(
+                span.end.line as u32,
+                span.end.column as u32,
+                span.end.index as u32,
+            ),
         }
     }
 }
 
 pub trait AbstractSpan {
     fn with_file(&self, file: impl Into<PathBuf>) -> Span;
+    fn with_arc_file(&self, file: impl Into<Arc<PathBuf>>) -> Span;
 }
 
 impl AbstractSpan for dbt_frontend_common::span::Span {
     fn with_file(&self, file: impl Into<PathBuf>) -> Span {
-        let file = file.into();
+        self.with_arc_file(Arc::new(file.into()))
+    }
+    fn with_arc_file(&self, file: impl Into<Arc<PathBuf>>) -> Span {
         Span {
-            start: self.start.with_file(file.to_owned()),
-            stop: self.stop.with_file(file),
+            start: self.start.with_arc_file(file),
+            stop: self.stop,
         }
     }
 }

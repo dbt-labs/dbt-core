@@ -5,11 +5,11 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub struct CodeLocation {
     /// 1-based line number
-    pub line: usize,
+    pub line: u32,
     /// 1-based column number(unicode characters)
-    pub col: usize,
+    pub col: u32,
     /// 0-based offset(byte characters)
-    pub index: usize,
+    pub index: u32,
 }
 
 impl Ord for CodeLocation {
@@ -29,7 +29,7 @@ impl Ord for CodeLocation {
 
 impl CodeLocation {
     /// Create a new CodeLocation with the given line and column
-    pub fn new(line: usize, column: usize, index: usize) -> Self {
+    pub fn new(line: u32, column: u32, index: u32) -> Self {
         CodeLocation {
             line,
             col: column,
@@ -99,7 +99,7 @@ impl CodeLocation {
                 col += 1;
             }
         }
-        CodeLocation::new(line, col, self.index + s.len())
+        CodeLocation::new(line, col, self.index + (s.len() as u32))
     }
 }
 
@@ -158,9 +158,9 @@ impl ops::Add<LocationDiff> for CodeLocation {
         };
         let pos = (self.index as isize + other.pos) as usize;
         CodeLocation {
-            line,
-            col,
-            index: pos,
+            line: line as u32,
+            col: col as u32,
+            index: pos as u32,
         }
     }
 }

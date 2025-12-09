@@ -115,7 +115,7 @@ pub struct GenericTestAsset {
     pub resource_name: String,
     pub resource_type: String,
     pub test_name: String,
-    pub defined_at: dbt_common::CodeLocation,
+    pub defined_at: dbt_common::CodeLocationWithFile,
     // Structured metadata for generic tests (optional; not used for singular tests)
     pub test_metadata_name: Option<String>,
     pub test_metadata_namespace: Option<String>,

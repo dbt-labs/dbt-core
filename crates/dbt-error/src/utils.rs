@@ -15,7 +15,7 @@ pub fn find_enclosed_substring(msg: &str, re: &Regex) -> Option<String> {
 }
 
 /// Finds line, column, and index positions of a token in a file
-pub fn find_locations(token: &str, file: &Path) -> FsResult<Option<(usize, usize, usize)>> {
+pub fn find_locations(token: &str, file: &Path) -> FsResult<Option<(u32, u32, u32)>> {
     let output = None;
     // the token might be a dotted name, first try to find the full name, then the last part
     let tokens = token.split('.').collect::<Vec<&str>>();
@@ -42,7 +42,7 @@ pub fn find_locations(token: &str, file: &Path) -> FsResult<Option<(usize, usize
     Ok(output)
 }
 
-fn find_token_positions_in_file(file: &Path, token: &str) -> FsResult<Vec<(usize, usize, usize)>> {
+fn find_token_positions_in_file(file: &Path, token: &str) -> FsResult<Vec<(u32, u32, u32)>> {
     let file = std::fs::File::open(file).map_err(|e| {
         FsError::new(
             ErrorCode::IoError,
@@ -52,18 +52,18 @@ fn find_token_positions_in_file(file: &Path, token: &str) -> FsResult<Vec<(usize
     let reader = BufReader::new(file);
 
     let mut positions = Vec::new();
-    let mut pos = 0;
+    let mut pos: u32 = 0;
     for (line_number, line) in reader.lines().enumerate() {
         let line = line
             .map_err(|e| FsError::new(ErrorCode::IoError, format!("Failed to read line: {e}")))?;
-        let column_number = 0;
+        let column_number: u32 = 0;
         let remaining_line = &line[..];
 
         if let Some(index) = remaining_line.find(token) {
-            let start_column = column_number + index;
-            positions.push((line_number + 1, start_column + 1, pos + index));
+            let start_column = column_number + index as u32;
+            positions.push((line_number as u32 + 1, start_column + 1, pos + index as u32));
         }
-        pos += line.len() + 1; // TODO: 1 means the newline character, maybe \r\n
+        pos += line.len() as u32 + 1; // TODO: 1 means the newline character, maybe \r\n
     }
 
     Ok(positions)

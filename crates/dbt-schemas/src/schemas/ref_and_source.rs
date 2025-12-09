@@ -1,4 +1,4 @@
-use dbt_common::CodeLocation;
+use dbt_common::CodeLocationWithFile;
 use dbt_serde_yaml::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize};
 
@@ -11,13 +11,13 @@ pub struct DbtRef {
     pub package: Option<String>,
     pub version: Option<StringOrInteger>,
     #[serde(skip_serializing)]
-    pub location: Option<CodeLocation>,
+    pub location: Option<CodeLocationWithFile>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DbtSourceWrapper {
     pub source: Vec<String>,
-    pub location: Option<CodeLocation>,
+    pub location: Option<CodeLocationWithFile>,
 }
 
 impl Serialize for DbtSourceWrapper {

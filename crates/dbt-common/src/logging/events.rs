@@ -12,7 +12,7 @@
 use std::time::Duration;
 
 use crate::{
-    CodeLocation,
+    CodeLocationWithFile,
     constants::{
         ANALYZING, COMPILING, DEBUGGED, FAILED, HYDRATING, PARSING, PASSED, PREVIEWING, RENDERED,
         RENDERING, REUSED, RUNNING, SKIPPED, SUCCEEDED, WARNED,
@@ -97,7 +97,7 @@ impl StatEvent {
 pub struct ErrorEvent {
     pub severity: Severity,
     pub code: u16,
-    pub location: Option<CodeLocation>,
+    pub location: Option<CodeLocationWithFile>,
     pub message: String,
 }
 
@@ -106,7 +106,7 @@ impl ErrorEvent {
     pub fn new(
         severity: Severity,
         code: u16,
-        location: Option<CodeLocation>,
+        location: Option<CodeLocationWithFile>,
         message: impl Into<String>,
     ) -> Self {
         ErrorEvent {

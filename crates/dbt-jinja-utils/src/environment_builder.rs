@@ -163,9 +163,9 @@ impl JinjaEnvBuilder {
             for macro_unit in macro_units {
                 let filename = macro_unit.info.path.to_string_lossy().to_string();
                 let offset = dbt_frontend_common::error::CodeLocation::new(
-                    macro_unit.info.span.start_line as usize,
-                    macro_unit.info.span.start_col as usize,
-                    macro_unit.info.span.start_offset as usize,
+                    macro_unit.info.span.start_line,
+                    macro_unit.info.span.start_col,
+                    macro_unit.info.span.start_offset,
                 );
                 let macro_name = macro_unit.info.name.clone();
                 let template_name = format!("{package_name}.{macro_name}");
@@ -234,8 +234,8 @@ impl JinjaEnvBuilder {
                     None => DynTypeObject::new(Arc::new(UndefinedFunctionType::new(
                         &macro_name,
                         minijinja::CodeLocation::new(
-                            offset.line as u32,
-                            offset.col as u32,
+                            offset.line,
+                            offset.col,
                             PathBuf::from(filename.clone()),
                         ),
                         &macro_unit.info.path,

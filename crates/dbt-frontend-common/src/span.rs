@@ -25,7 +25,7 @@ impl Span {
         // input[self.start.index..self.stop.index + 1].to_string()
         // because macro span is exclusive, we removed +1
         // be careful lint fix is inclusive, lint fix will break
-        input[self.start.index..self.stop.index].to_string()
+        input[self.start.index as usize..self.stop.index as usize].to_string()
     }
 
     pub fn with_offset(&self, start_location: &CodeLocation) -> Self {

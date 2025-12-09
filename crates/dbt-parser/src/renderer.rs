@@ -270,7 +270,7 @@ pub async fn render_unresolved_sql_files_sequentially<
                 MinijinjaValue::from_dyn_object(jinja_env.env.get_dbt_and_adapters_namespace()),
                 &display_path,
                 &sql,
-                &dbt_common::CodeLocation::new(1, 1, 0, display_path.clone()),
+                &dbt_common::CodeLocationWithFile::new(1, 1, 0, display_path.clone()),
                 unique_id,
             );
         }
@@ -662,7 +662,7 @@ pub async fn render_unresolved_sql_files<
                             ),
                             &display_path,
                             &sql,
-                            &dbt_common::CodeLocation::new(1, 1, 0, display_path.clone()),
+                            &dbt_common::CodeLocationWithFile::new(1, 1, 0, display_path.clone()),
                             unique_id,
                         );
                     }
@@ -1166,7 +1166,7 @@ pub fn collect_hook_dependencies_from_config<T: DefaultTo<T> + 'static>(
                 MinijinjaValue::from_dyn_object(jinja_env.env.get_dbt_and_adapters_namespace()),
                 resource_path,
                 sql,
-                &dbt_common::CodeLocation::new(1, 1, 0, resource_path.to_path_buf()),
+                &dbt_common::CodeLocationWithFile::new(1, 1, 0, resource_path.to_path_buf()),
                 unique_id,
             );
         }

@@ -418,10 +418,10 @@ impl<T: DefaultTo<T>> Object for ResolveRefFunction<T> {
         let model_name = name;
         let namespace = package;
         let location: MinijinjaValue = parser.get("location")?;
-        let (source_line, source_col, source_index): (usize, usize, usize) = (
-            location.get_item_by_index(0).unwrap().as_usize().unwrap(),
-            location.get_item_by_index(1).unwrap().as_usize().unwrap(),
-            location.get_item_by_index(2).unwrap().as_usize().unwrap(),
+        let (source_line, source_col, source_index): (u32, u32, u32) = (
+            location.get_item_by_index(0).unwrap().as_usize().unwrap() as u32,
+            location.get_item_by_index(1).unwrap().as_usize().unwrap() as u32,
+            location.get_item_by_index(2).unwrap().as_usize().unwrap() as u32,
         );
         let location = CodeLocation::new(source_line, source_col, source_index);
         self.sql_resources.lock().unwrap().push(SqlResource::Ref((
@@ -476,10 +476,10 @@ impl<T: DefaultTo<T>> Object for ResolveSourceFunction<T> {
             let name = parser.get::<String>("name")?;
             let table_name = parser.get::<String>("table_name")?;
             let location: MinijinjaValue = parser.get("location")?;
-            let (source_line, source_col, source_index): (usize, usize, usize) = (
-                location.get_item_by_index(0).unwrap().as_usize().unwrap(),
-                location.get_item_by_index(1).unwrap().as_usize().unwrap(),
-                location.get_item_by_index(2).unwrap().as_usize().unwrap(),
+            let (source_line, source_col, source_index): (u32, u32, u32) = (
+                location.get_item_by_index(0).unwrap().as_usize().unwrap() as u32,
+                location.get_item_by_index(1).unwrap().as_usize().unwrap() as u32,
+                location.get_item_by_index(2).unwrap().as_usize().unwrap() as u32,
             );
             let location = CodeLocation::new(source_line, source_col, source_index);
             // https://github.com/dbt-labs/dbt-core/blob/8a8857a85c0cc66c7e3de9eb7e9ca7fd63d553a4/core/dbt/context/providers.py#L666
@@ -567,10 +567,10 @@ impl<T: DefaultTo<T>> Object for ResolveFunctionFunction<T> {
         let function_name = name;
         let namespace = package;
         let location: MinijinjaValue = parser.get("location")?;
-        let (source_line, source_col, source_index): (usize, usize, usize) = (
-            location.get_item_by_index(0).unwrap().as_usize().unwrap(),
-            location.get_item_by_index(1).unwrap().as_usize().unwrap(),
-            location.get_item_by_index(2).unwrap().as_usize().unwrap(),
+        let (source_line, source_col, source_index): (u32, u32, u32) = (
+            location.get_item_by_index(0).unwrap().as_usize().unwrap() as u32,
+            location.get_item_by_index(1).unwrap().as_usize().unwrap() as u32,
+            location.get_item_by_index(2).unwrap().as_usize().unwrap() as u32,
         );
         let location = CodeLocation::new(source_line, source_col, source_index);
         self.sql_resources

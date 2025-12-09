@@ -2,11 +2,12 @@ use std::{
     any::Any,
     collections::{BTreeMap, HashSet},
     iter::Iterator,
+    sync::Arc,
 };
 
 use dbt_adapter::relation::{RelationObject, create_relation_from_node, create_relation_internal};
 use dbt_common::{
-    CodeLocation, ErrorCode, FsResult,
+    CodeLocationWithFile, ErrorCode, FsResult,
     adapter::AdapterType,
     err, fs_err,
     io_args::IoArgs,
@@ -749,9 +750,9 @@ pub fn resolve_dependencies(
         } in node_base.refs.iter()
         {
             let location = if let Some(location) = location {
-                location.clone().with_file(&node_path)
+                location.clone().with_file(Arc::new(node_path.clone()))
             } else {
-                CodeLocation::default()
+                CodeLocationWithFile::default()
             };
             match node_resolver.lookup_ref(
                 package,
@@ -806,9 +807,9 @@ pub fn resolve_dependencies(
             let table_name = source[1].clone();
 
             let location = if let Some(location) = location {
-                location.clone().with_file(&node_path)
+                location.clone().with_file(Arc::new(node_path.clone()))
             } else {
-                CodeLocation::default()
+                CodeLocationWithFile::default()
             };
 
             match node_resolver.lookup_source(&node_package_name, &source_name, &table_name) {
@@ -850,9 +851,9 @@ pub fn resolve_dependencies(
         } in node_base.functions.iter()
         {
             let location = if let Some(location) = location {
-                location.clone().with_file(&node_path)
+                location.clone().with_file(Arc::new(node_path.clone()))
             } else {
-                CodeLocation::default()
+                CodeLocationWithFile::default()
             };
 
             match node_resolver.lookup_function(node_package_name_value, name, package) {
@@ -900,12 +901,13 @@ pub fn resolve_dependencies(
 
                 // Process refs
                 operation.__base_attr__.refs.iter().for_each(|dbt_ref| {
-                    let location = dbt_ref
-                        .location
-                        .as_ref()
-                        .map_or_else(CodeLocation::default, |loc| {
-                            loc.clone().with_file(&operation.__common_attr__.path)
-                        });
+                    let location = dbt_ref.location.as_ref().map_or_else(
+                        CodeLocationWithFile::default,
+                        |loc| {
+                            loc.clone()
+                                .with_file(Arc::new(operation.__common_attr__.path.clone()))
+                        },
+                    );
 
                     match node_resolver.lookup_ref(
                         &dbt_ref.package,
@@ -945,12 +947,13 @@ pub fn resolve_dependencies(
                     .for_each(|source_wrapper| {
                         let source_name = &source_wrapper.source[0];
                         let table_name = &source_wrapper.source[1];
-                        let location = source_wrapper
-                            .location
-                            .as_ref()
-                            .map_or_else(CodeLocation::default, |loc| {
-                                loc.clone().with_file(&operation.__common_attr__.path)
-                            });
+                        let location = source_wrapper.location.as_ref().map_or_else(
+                            CodeLocationWithFile::default,
+                            |loc| {
+                                loc.clone()
+                                    .with_file(Arc::new(operation.__common_attr__.path.clone()))
+                            },
+                        );
 
                         match node_resolver.lookup_source(
                             &operation_package,

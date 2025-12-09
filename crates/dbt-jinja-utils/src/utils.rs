@@ -255,26 +255,26 @@ pub fn macro_spans_to_macro_span_vec(macro_spans: &MacroSpans) -> Vec<MacroSpan>
         .map(|(source, expanded)| MacroSpan {
             macro_span: Span {
                 start: CodeLocation {
-                    line: source.start_line as usize,
-                    col: source.start_col as usize,
-                    index: source.start_offset as usize,
+                    line: source.start_line,
+                    col: source.start_col,
+                    index: source.start_offset,
                 },
                 stop: CodeLocation {
-                    line: source.end_line as usize,
-                    col: source.end_col as usize,
-                    index: source.end_offset as usize,
+                    line: source.end_line,
+                    col: source.end_col,
+                    index: source.end_offset,
                 },
             },
             expanded_span: Span {
                 start: CodeLocation {
-                    line: expanded.start_line as usize,
-                    col: expanded.start_col as usize,
-                    index: expanded.start_offset as usize,
+                    line: expanded.start_line,
+                    col: expanded.start_col,
+                    index: expanded.start_offset,
                 },
                 stop: CodeLocation {
-                    line: expanded.end_line as usize,
-                    col: expanded.end_col as usize,
-                    index: expanded.end_offset as usize,
+                    line: expanded.end_line,
+                    col: expanded.end_col,
+                    index: expanded.end_offset,
                 },
             },
         })
@@ -509,14 +509,11 @@ pub fn render_extract_ref_or_source_expr<T: DefaultTo<T>>(
     let expr = jinja_env
         .compile_expression(ref_str.as_str())
         .map_err(|e| {
-            e.with_location(dbt_common::CodeLocation::new(
-                span.start.line,
-                span.start.column,
-                span.start.index,
-                span.filename
-                    .as_ref()
-                    .map(|p| p.as_ref().clone())
-                    .unwrap_or_default(),
+            e.with_location(dbt_common::CodeLocationWithFile::new_with_arc(
+                span.start.line as u32,
+                span.start.column as u32,
+                span.start.index as u32,
+                span.filename.clone().unwrap_or_default(),
             ))
         })?;
     let _ = expr.eval(resolve_model_context, &[])?;

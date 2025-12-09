@@ -21,7 +21,7 @@ pub fn typecheck(
     dbt_and_adapters_namespace: Value,
     relative_file_path: &Path,
     content: &str,
-    offset: &dbt_common::CodeLocation,
+    offset: &dbt_common::CodeLocationWithFile,
     unique_id: &str,
 ) -> FsResult<()> {
     let function_signatures = env.jinja_function_registry.clone();

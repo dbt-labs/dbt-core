@@ -12,7 +12,7 @@ mod utils;
 pub use adapter_errors::{
     AdapterError, AdapterErrorKind, AdapterResult, AsyncAdapterResult, into_fs_error,
 };
-pub use code_location::{AbstractLocation, AbstractSpan, CodeLocation, Span};
+pub use code_location::{AbstractLocation, AbstractSpan, CodeLocationWithFile, Span};
 pub use codes::ErrorCode;
 pub use codes::Warnings;
 pub use preprocessor_location::MacroSpan;

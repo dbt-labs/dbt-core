@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
-use error::CodeLocation;
+use error::CodeLocationWithFile;
 
 use crate::{io_utils::StatusReporter, logging::LogEvent, stats::NodeStatus};
 
 pub fn report_completed(
     node_status: &NodeStatus,
-    defined_at: Option<CodeLocation>,
+    defined_at: Option<CodeLocationWithFile>,
     display_path: &str,
     with_cache: bool,
     status_reporter: Option<&Arc<dyn StatusReporter + 'static>>,
