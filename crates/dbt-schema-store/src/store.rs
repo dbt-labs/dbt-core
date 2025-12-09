@@ -746,7 +746,22 @@ async fn persist_data_as_parquet_file_async(
     let mut parquet_writer = make_parquet_writer(schema, delete_on_error, output_path)?;
     let mut num_rows = 0;
     while let Some(res) = stream.next().await {
-        let batch = res?;
+        let batch = match res {
+            Ok(batch) => batch,
+            Err(e) => {
+                parquet_writer.close().map_err(|e| {
+                    ArrowError::ParquetError(format!(
+                        "Failed to close ParquetArrowWriter at {}: {}",
+                        output_path.display(),
+                        e,
+                    ))
+                })?;
+                return Err(ArrowError::ParquetError(format!(
+                    "Failed to read record batch: {}",
+                    e,
+                )));
+            }
+        };
         num_rows += batch.num_rows();
         parquet_writer.write(&batch)?;
     }
