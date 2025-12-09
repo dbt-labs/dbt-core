@@ -296,7 +296,7 @@ impl Task for SedTask {
                 .replace(&self.from.to_lowercase(), &self.to)
                 .replace(&self.from.to_uppercase(), &self.to.to_uppercase())
         };
-        let mut replace_timestamps = move |path: &Path| -> TestResult<()> {
+        let replace_timestamps = move |path: &Path| -> TestResult<()> {
             if path
                 .extension()
                 .map(|ext| {
@@ -398,12 +398,12 @@ impl Task for SedTask {
             Ok(())
         };
 
-        iter_files_recursively(&test_env.golden_dir, &mut replace_timestamps).await?;
+        iter_files_recursively(&test_env.golden_dir, &replace_timestamps).await?;
         if let Some(ref dir) = self.dir {
-            iter_files_recursively(dir, &mut replace_timestamps).await?;
+            iter_files_recursively(dir, &replace_timestamps).await?;
         }
 
-        let mut replace_query_comments = move |path: &Path| -> TestResult<()> {
+        let replace_query_comments = move |path: &Path| -> TestResult<()> {
             if path.extension().map(|ext| ext == "sql").unwrap_or(false) {
                 let content = fs::read_to_string(path)?;
                 // A query comment only appears either at the beginning or the end of a query.
@@ -424,9 +424,9 @@ impl Task for SedTask {
         };
 
         if self.strip_comments {
-            iter_files_recursively(&test_env.golden_dir, &mut replace_query_comments).await?;
+            iter_files_recursively(&test_env.golden_dir, &replace_query_comments).await?;
             if let Some(ref dir) = self.dir {
-                iter_files_recursively(dir, &mut replace_query_comments).await?;
+                iter_files_recursively(dir, &replace_query_comments).await?;
             }
         }
 

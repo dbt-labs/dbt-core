@@ -6,7 +6,6 @@ use dbt_common::constants::{
     DBT_CATALOGS_YML, DBT_DEPENDENCIES_YML, DBT_PACKAGES_LOCK_FILE, DBT_PACKAGES_YML,
 };
 use dbt_common::once_cell_vars::DISPATCH_CONFIG;
-use dbt_common::tracing::emit::emit_warn_log_from_fs_error;
 use dbt_jinja_utils::invocation_args::InvocationArgs;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::phases::load::init::initialize_load_jinja_environment;
@@ -49,9 +48,6 @@ use crate::utils::{collect_file_info, identify_package_dependencies};
 use crate::{
     load_internal_packages, load_packages, load_profiles, load_vars, persist_internal_packages,
 };
-
-// Temporary opt-in switch for unreleased Python model support.
-const PYTHON_MODELS_ENV_VAR: &str = "DBT_ENABLE_BETA_PYTHON_MODELS";
 
 use dbt_jinja_utils::phases::load::secret_renderer::secret_context_env_var;
 use dbt_jinja_utils::serde::{into_typed_with_jinja, value_from_file};
@@ -582,20 +578,9 @@ pub async fn load_inner(
         &["py"],
         &all_files,
     );
-    if python_models_feature_enabled() {
-        if !python_model_files.is_empty() {
-            model_sql_files.extend(python_model_files);
-            model_sql_files.sort_by(|a, b| a.path.cmp(&b.path));
-        }
-    } else if !python_model_files.is_empty() {
-        for file in python_model_files {
-            let err = fs_err!(
-                code => ErrorCode::UnsupportedFileExtension,
-                loc => file.path.clone(),
-                "Python models are not currently supported"
-            );
-            emit_warn_log_from_fs_error(&err, arg.io.status_reporter.as_ref());
-        }
+    if !python_model_files.is_empty() {
+        model_sql_files.extend(python_model_files);
+        model_sql_files.sort_by(|a, b| a.path.cmp(&b.path));
     }
     let function_sql_files = find_files_by_kind_and_extension(
         package_path,
@@ -736,22 +721,6 @@ fn find_files_by_kind_and_extension(
         .collect::<Vec<_>>();
     paths.sort_by(|a, b| a.path.cmp(&b.path));
     paths
-}
-
-fn python_models_feature_enabled() -> bool {
-    let is_on = std::env::var(PYTHON_MODELS_ENV_VAR)
-        .map(|value| {
-            let trimmed = value.trim();
-            trimmed == "1"
-                || trimmed.eq_ignore_ascii_case("true")
-                || trimmed.eq_ignore_ascii_case("yes")
-                || trimmed.eq_ignore_ascii_case("on")
-        })
-        .unwrap_or(false);
-    if is_on {
-        eprintln!("WARNING: Python models feature is enabled via environment variable");
-    }
-    is_on
 }
 
 /// Loads the .dbtignore file if it exists in the given path

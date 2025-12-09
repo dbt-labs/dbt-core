@@ -15,7 +15,7 @@ impl Task for CheckCompiledFiles {
                 .join(DBT_COMPILED_DIR_NAME)
                 .join("models")
                 .as_path(),
-            &mut |abs_path| {
+            &|abs_path| {
                 if abs_path
                     .as_os_str()
                     .to_str()

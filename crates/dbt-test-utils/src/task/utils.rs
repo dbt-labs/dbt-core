@@ -140,9 +140,9 @@ pub fn redirect_buffer_to_stdin(buffer_content: &str) -> TestResult<File> {
 
 /// Iterates over file paths in the directory and subdirectories,
 /// invoking a handler for each file.
-pub async fn iter_files_recursively<'a, F>(root: &'a Path, handler: &'a mut F) -> TestResult<()>
+pub async fn iter_files_recursively<'a, F>(root: &'a Path, handler: &'a F) -> TestResult<()>
 where
-    F: FnMut(&Path) -> TestResult<()> + Send,
+    F: Fn(&Path) -> TestResult<()> + Send,
 {
     let mut read_dir = tokiofs::read_dir(root).await?;
     while let Some(entry) = read_dir.next_entry().await? {
