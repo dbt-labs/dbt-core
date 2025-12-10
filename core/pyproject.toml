@@ -1,38 +1,12 @@
-[tool.setuptools]
-package-dir = {"" = "."}
-include-package-data = true
-zip-safe = false
-
-[tool.setuptools.packages.find]
-where = ["."]
-include = [
-    "dbt",
-    "dbt.*",
-]
-
-# this needs to match MANIFEST.in for the wheels
-[tool.setuptools.package-data]
-"dbt" = [
-    "include/**/*.py",
-    "include/**/*.sql",
-    "include/**/*.yml",
-    "include/**/*.html",
-    "include/**/*.md",
-    "include/**/.gitkeep",
-    "include/**/.gitignore",
-    "task/docs/**/*.html",
-    "jsonschemas/**/*.json",
-    "py.typed",
-]
 
 [project]
 name = "dbt-core"
-version = "1.12.0a1"
+dynamic = ["version"]
 description = "With dbt, data analysts and engineers can build analytics the way engineers build applications."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
-license-files = ["License.md"]  # License.md copied to core/ by build script even though it lives at the root by convention
+license-files = { globs = ["LICENSE"] }
 keywords = []
 authors = [
     { name = "dbt Labs", email = "info@dbtlabs.com" },
@@ -102,9 +76,10 @@ Changelog = "https://github.com/dbt-labs/dbt-core/blob/main/CHANGELOG.md"
 [project.scripts]
 dbt = "dbt.cli.main:cli"
 
+[tool.hatch.version]
+path = "dbt/__version__.py"
+
+
 [build-system]
-requires = [
-    "setuptools>=61",
-    "wheel",
-]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"

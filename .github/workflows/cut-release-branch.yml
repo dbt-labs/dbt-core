@@ -200,16 +200,15 @@ jobs:
 
       - name: "Install Python Dependencies"
         run: |
-          python -m venv env
-          source env/bin/activate
           python -m pip install --upgrade pip
+          python -m pip install hatch
 
       - name: "Bump Version To ${{ needs.cleanup_changelog.outputs.next-version }}"
         run: |
-          source env/bin/activate
-          python -m pip install -r dev-requirements.txt
-          env/bin/bumpversion --allow-dirty --new-version ${{ needs.cleanup_changelog.outputs.next-version }} major
-          git status
+          cd core
+          hatch version ${{ needs.cleanup_changelog.outputs.next-version }}
+          hatch run dev-req
+          dbt --version
 
       - name: "Commit Version Bump to Branch"
         run: |
@@ -250,13 +249,13 @@ jobs:
       - name: "Cleanup - Remove Trailing Whitespace Via Pre-commit"
         continue-on-error: true
         run: |
-          pre-commit run trailing-whitespace --files .bumpversion.cfg CHANGELOG.md .changes/* || true
+          pre-commit run trailing-whitespace --files CHANGELOG.md .changes/* || true
 
       # this step will fail on newline errors but also correct them
       - name: "Cleanup - Remove Extra Newlines Via Pre-commit"
         continue-on-error: true
         run: |
-          pre-commit run end-of-file-fixer --files .bumpversion.cfg CHANGELOG.md .changes/* || true
+          pre-commit run end-of-file-fixer --files CHANGELOG.md .changes/* || true
 
       - name: "Commit Version Bump to Branch"
         run: |

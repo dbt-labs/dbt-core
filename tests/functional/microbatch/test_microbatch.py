@@ -598,6 +598,15 @@ class TestMicrobatchJinjaContextVarsAvailable(BaseMicrobatchTest):
         assert "batch.event_time_end: 2020-01-03 13:57:00+00:00" in logs
         assert "batch.id: 20200103" in logs
 
+        # compile does not have access to populated batch context vars, but should not break on access
+        with patch_microbatch_end_time("2020-01-03 13:57:00"):
+            _, compile_logs = run_dbt_and_capture(["compile"])
+
+        assert "start:" in compile_logs
+        assert "end:" in compile_logs
+        assert "batch.event_time_start:" not in compile_logs
+        assert "batch.event_time_end:" not in compile_logs
+
 
 microbatch_model_failing_incremental_partition_sql = """
 {{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day', begin=modules.datetime.datetime(2020, 1, 1, 0, 0, 0)) }}

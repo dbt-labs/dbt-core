@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Add add_catalog_integration call even if we have a pre-existing manifest
+time: 2025-12-09T13:18:57.043254-08:00
+custom:
+  Author: colin-rogers-dbt
+  Issue: "12262"

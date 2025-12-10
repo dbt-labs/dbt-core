@@ -5,7 +5,7 @@ set -e
 
 repo=$1
 ref=$2
-target_req_file="dev-requirements.txt"
+target_req_file="core/hatch.toml"
 
 req_sed_pattern="s|${repo}.git@main|${repo}.git@${ref}|g"
 if [[ "$OSTYPE" == darwin* ]]; then
