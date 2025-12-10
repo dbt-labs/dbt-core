@@ -62,7 +62,7 @@ jobs:
           python -m pip --version
           python -m pip install hatch
           cd core
-          hatch run setup
+          hatch -v run setup
 
       - name: Verify dbt installation
         run: |
@@ -106,7 +106,7 @@ jobs:
         with:
           timeout_minutes: 10
           max_attempts: 3
-          command: cd core && hatch run ci:unit-tests
+          command: cd core && hatch -v run ci:unit-tests
 
       - name: Get current date
         if: always()
@@ -230,7 +230,7 @@ jobs:
           timeout_minutes: 30
           max_attempts: 3
           shell: bash
-          command: cd core && hatch run ci:integration-tests -- --ddtrace --splits ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }} --group ${{ matrix.split-group }}
+          command: cd core && hatch -v run ci:integration-tests -- --ddtrace --splits ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }} --group ${{ matrix.split-group }}
 
       - name: Get current date
         if: always()
@@ -311,7 +311,7 @@ jobs:
           timeout_minutes: 30
           max_attempts: 3
           shell: bash
-          command: cd core && hatch run ci:integration-tests -- --ddtrace --splits ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }} --group ${{ matrix.split-group }}
+          command: cd core && hatch -v run ci:integration-tests -- --ddtrace --splits ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }} --group ${{ matrix.split-group }}
 
       - name: Get current date
         if: always()
@@ -326,7 +326,7 @@ jobs:
           name: logs_${{ matrix.python-version }}_${{ matrix.os }}_${{ matrix.split-group }}_${{ steps.date.outputs.date }}
           path: ./logs
 
-      - name: Upload Integration Test Coverage to Codecov
+      - name: Upload Integration Test Coverage
         if: ${{ matrix.python-version == '3.11' }}
         uses: codecov/codecov-action@5a1091511ad55cbe89839c7260b706298ca349f7 # codecov/codecov-action@v5
         with:
@@ -380,4 +380,4 @@ jobs:
       - name: Check and verify distributions
         run: |
           cd core
-          hatch run build:check-all
+          hatch -v run build:check-all
