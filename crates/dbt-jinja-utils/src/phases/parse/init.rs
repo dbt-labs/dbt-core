@@ -22,7 +22,7 @@ use dbt_schemas::{
     state::DbtVars,
 };
 use minijinja::{
-    dispatch_object::THREAD_LOCAL_DEPENDENCIES, macro_unit::MacroUnit,
+    AutoEscape, dispatch_object::THREAD_LOCAL_DEPENDENCIES, macro_unit::MacroUnit,
     value::Value as MinijinjaValue,
 };
 use minijinja_contrib::modules::{py_datetime::datetime::PyDateTime, pytz::PytzTimezone};
@@ -127,7 +127,7 @@ pub fn initialize_parse_jinja_environment(
         catalogs,
     );
 
-    let env = JinjaEnvBuilder::new()
+    let mut env = JinjaEnvBuilder::new()
         .with_undefined_behavior(minijinja::UndefinedBehavior::AllowAll)
         .with_adapter(Arc::new(adapter) as Arc<dyn BaseAdapter>)
         .with_root_package(project_name.to_string())
@@ -135,5 +135,10 @@ pub fn initialize_parse_jinja_environment(
         .with_io_args(io_args)
         .try_with_macros(MacroUnitsWrapper::new(macro_units))?
         .build();
+
+    // This ensures consistent quoting behavior for rendering same string in call block vs directly
+    // example: {{ target.database }} vs {{ call statement(None, auto_begin=false, fetch_result=false) }}{{ target.database }}{{ endcall }}
+    // if we directly render the first one, it will add double quotes around the string, but the second one will not.
+    env.env.set_auto_escape_callback(|_| AutoEscape::None);
     Ok(env)
 }
