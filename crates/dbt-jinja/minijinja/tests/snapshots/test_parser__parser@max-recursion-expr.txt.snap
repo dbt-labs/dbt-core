@@ -7,6 +7,5 @@ Err(
     Error {
         kind: SyntaxError,
         detail: "template exceeds maximum recursion limits",
-        name: "max-recursion-expr.txt",
     },
 )

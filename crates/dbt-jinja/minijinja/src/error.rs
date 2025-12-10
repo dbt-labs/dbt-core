@@ -264,14 +264,6 @@ impl Error {
         }
     }
 
-    pub(crate) fn insert_filename_and_span(&mut self, filename: &str, span: Span) {
-        let item = ErrorStackItem {
-            filename: filename.into(),
-            span,
-        };
-        self.repr.stack.push(item);
-    }
-
     pub(crate) fn new_not_found(name: &str) -> Error {
         Error::new(
             ErrorKind::TemplateNotFound,

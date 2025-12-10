@@ -64,7 +64,9 @@ pub fn typecheck(
     );
 
     let source = content.to_string();
-    let tmpl = match jinja_typecheck_env.template_from_str(&source) {
+    let tmpl = match jinja_typecheck_env
+        .template_from_named_str(relative_file_path.to_str().unwrap(), &source)
+    {
         Ok(tmpl) => tmpl,
         Err(e) => {
             emit_error_log_message(

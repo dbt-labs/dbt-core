@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 use std::ops::ControlFlow;
+use std::path::Path;
 
 use crate::compiler::tokens::{Span, Token};
 use crate::error::{Error, ErrorKind};
@@ -423,9 +424,8 @@ impl<'s> Tokenizer<'s> {
             span.end_col += 1;
             span.end_offset += 1;
         }
-        let mut err = Error::new(ErrorKind::SyntaxError, msg);
-        err.insert_filename_and_span(self.filename, span);
-        err
+        let err = Error::new(ErrorKind::SyntaxError, msg);
+        err.with_span(Path::new(self.filename), &span)
     }
 
     fn eat_number(&mut self) -> Result<(Token<'s>, Span), Error> {

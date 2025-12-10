@@ -4,12 +4,12 @@ description: "{% macro two_args(a, b) %}\n  {% block foo %}{% endblock %}\n{% en
 info:
   __minijinja_current_path: err_block_in_macro.txt
   __minijinja_current_span:
-    end_col: 1
-    end_line: 1
-    end_offset: 0
-    start_col: 1
     start_line: 1
+    start_col: 1
     start_offset: 0
+    end_line: 1
+    end_col: 1
+    end_offset: 0
 input_file: fs/sa/crates/dbt-jinja/minijinja/tests/inputs/err_block_in_macro.txt
 ---
 !!!SYNTAX ERROR!!!
@@ -21,4 +21,4 @@ Error {
 }
 
 syntax error: block tags in macros are not allowed
-(in err_block_in_macro.txt:1:1)
+(in err_block_in_macro.txt:2:12)

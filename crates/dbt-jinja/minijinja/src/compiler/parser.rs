@@ -58,11 +58,11 @@ fn syntax_error(msg: Cow<'static, str>) -> Error {
 }
 
 macro_rules! syntax_error {
-    ($msg:expr) => {{
-        return Err(syntax_error(Cow::Borrowed($msg)));
+    ($msg:expr, $filename:expr, $span:expr) => {{
+        return Err(syntax_error(Cow::Borrowed($msg)).with_span(&PathBuf::from($filename), $span));
     }};
-    ($msg:expr, $($tt:tt)*) => {{
-        return Err(syntax_error(Cow::Owned(format!($msg, $($tt)*))));
+    ($msg:expr, $filename:expr, $span:expr, $($tt:tt)*) => {{
+        return Err(syntax_error(Cow::Owned(format!($msg, $($tt)*))).with_span($filename, $span));
     }};
 }
 
@@ -76,14 +76,20 @@ macro_rules! expect_token {
     ($parser:expr, $match:pat, $expectation:expr) => {{
         match ok!($parser.stream.next()) {
             Some((token @ $match, span)) => (token, span),
-            Some((token, _)) => return Err(unexpected(token, $expectation)),
+            Some((token, span)) => {
+                return Err(unexpected(token, $expectation)
+                    .with_span(&PathBuf::from($parser.filename()), &span))
+            }
             None => return Err(unexpected_eof($expectation)),
         }
     }};
     ($parser:expr, $match:pat => $target:expr, $expectation:expr) => {{
         match ok!($parser.stream.next()) {
             Some(($match, span)) => ($target, span),
-            Some((token, _)) => return Err(unexpected(token, $expectation)),
+            Some((token, span)) => {
+                return Err(unexpected(token, $expectation)
+                    .with_span(&PathBuf::from($parser.filename()), &span))
+            }
             None => return Err(unexpected_eof($expectation)),
         }
     }};
@@ -284,27 +290,27 @@ impl<'a> Parser<'a> {
     /// Parses a template.
     pub fn parse(&mut self) -> Result<ast::Stmt<'a>, Error> {
         let span = self.stream.last_span();
-        self.subparse(&|_| false)
-            .map(|children| {
-                ast::Stmt::Template(Spanned::new(
-                    ast::Template { children },
-                    self.stream.expand_span(span),
-                ))
-            })
-            .map_err(|err| err.with_span(&self.filename, &span))
+        self.subparse(&|_| false).map(|children| {
+            ast::Stmt::Template(Spanned::new(
+                ast::Template { children },
+                self.stream.expand_span(span),
+            ))
+        })
     }
 
     /// Parses an expression and asserts that there is no more input after it.
     pub fn parse_standalone_expr(&mut self) -> Result<ast::Expr<'a>, Error> {
-        self.parse_expr()
-            .and_then(|result| {
-                if ok!(self.stream.next()).is_some() {
-                    syntax_error!("unexpected input after expression")
-                } else {
-                    Ok(result)
-                }
-            })
-            .map_err(|err| err.with_span(&self.filename, &Span::default()))
+        self.parse_expr().and_then(|result| {
+            if ok!(self.stream.next()).is_some() {
+                syntax_error!(
+                    "unexpected input after expression",
+                    &self.filename,
+                    &self.stream.current_span()
+                )
+            } else {
+                Ok(result)
+            }
+        })
     }
 
     /// Returns the current filename.
@@ -693,7 +699,11 @@ impl<'a> Parser<'a> {
             // in parts because the opcodes can only express 2**16 as argument
             // count.
             if args.len() > 2000 {
-                syntax_error!("Too many arguments in function call")
+                syntax_error!(
+                    "Too many arguments in function call",
+                    &self.filename,
+                    &self.stream.current_span()
+                )
             }
         }
 
@@ -739,7 +749,7 @@ impl<'a> Parser<'a> {
             Token::ParenOpen => self.parse_tuple_or_expression(span),
             Token::BracketOpen => self.parse_list_expr(span),
             Token::BraceOpen => self.parse_map_expr(span),
-            token => syntax_error!("unexpected {}", token),
+            token => syntax_error!("unexpected {}", &self.filename, &span, token),
         }
     }
 
@@ -866,7 +876,12 @@ impl<'a> Parser<'a> {
 
         let ident = match token {
             Token::Ident(ident) => ident,
-            token => syntax_error!("unknown {}, expected statement", token),
+            token => syntax_error!(
+                "unknown {}, expected statement",
+                &self.filename,
+                &span,
+                token
+            ),
         };
 
         Ok(match ident {
@@ -927,14 +942,22 @@ impl<'a> Parser<'a> {
             #[cfg(feature = "loop_controls")]
             "continue" => {
                 if !self.in_loop {
-                    syntax_error!("'continue' must be placed inside a loop");
+                    syntax_error!(
+                        "'continue' must be placed inside a loop",
+                        &self.filename,
+                        &span
+                    )
                 }
                 ast::Stmt::Continue(respan!(ast::Continue))
             }
             #[cfg(feature = "loop_controls")]
             "break" => {
                 if !self.in_loop {
-                    syntax_error!("'break' must be placed inside a loop");
+                    syntax_error!(
+                        "'break' must be placed inside a loop",
+                        &self.filename,
+                        &span
+                    )
                 }
                 ast::Stmt::Break(respan!(ast::Break))
             }
@@ -957,7 +980,7 @@ impl<'a> Parser<'a> {
                     self.skip_until_block_end()?;
                     ast::Stmt::Comment(Spanned::new(ast::Comment, self.stream.expand_span(span)))
                 } else {
-                    syntax_error!("unknown statement {}", name);
+                    syntax_error!("unknown statement {}", &self.filename, &span, name)
                 }
             }
         })
@@ -966,7 +989,12 @@ impl<'a> Parser<'a> {
     fn parse_assign_name(&mut self, dotted: bool) -> Result<ast::Expr<'a>, Error> {
         let (id, span) = expect_token!(self, Token::Ident(name) => name, "identifier");
         if RESERVED_NAMES.contains(&id) {
-            syntax_error!("cannot assign to reserved variable name {}", id);
+            syntax_error!(
+                "cannot assign to reserved variable name {}",
+                &self.filename,
+                &span,
+                id
+            )
         }
         let mut rv = ast::Expr::Var(Spanned::new(ast::Var { id }, span));
         if dotted {
@@ -1194,12 +1222,21 @@ impl<'a> Parser<'a> {
     #[cfg(feature = "multi_template")]
     fn parse_block(&mut self) -> Result<ast::Block<'a>, Error> {
         if self.in_macro {
-            syntax_error!("block tags in macros are not allowed");
+            syntax_error!(
+                "block tags in macros are not allowed",
+                &self.filename,
+                &self.stream.current_span()
+            )
         }
         let old_in_loop = std::mem::replace(&mut self.in_loop, false);
         let (name, _) = expect_token!(self, Token::Ident(name) => name, "identifier");
         if !self.blocks.insert(name) {
-            syntax_error!("block '{}' defined twice", name);
+            syntax_error!(
+                "block '{}' defined twice",
+                &self.filename,
+                &self.stream.current_span(),
+                name
+            )
         }
 
         expect_token!(self, Token::BlockEnd, "end of block");
@@ -1210,6 +1247,8 @@ impl<'a> Parser<'a> {
             if *trailing_name != name {
                 syntax_error!(
                     "mismatching name on block. Got `{}`, expected `{}`",
+                    &self.filename,
+                    &self.stream.current_span(),
                     *trailing_name,
                     name
                 );
@@ -1605,6 +1644,8 @@ impl<'a> Parser<'a> {
             ast::Expr::Call(call) => call,
             expr => syntax_error!(
                 "expected call expression in call block, got {}",
+                &self.filename,
+                &self.stream.current_span(),
                 expr.description()
             ),
         };
@@ -1671,7 +1712,11 @@ impl<'a> Parser<'a> {
                 Token::BlockStart => {
                     let (tok, _span) = match ok!(self.stream.current()) {
                         Some(rv) => rv,
-                        None => syntax_error!("unexpected end of input, expected keyword"),
+                        None => syntax_error!(
+                            "unexpected end of input, expected keyword",
+                            &self.filename,
+                            &self.stream.current_span()
+                        ),
                     };
                     if end_check(tok) {
                         return Ok(rv);
@@ -1724,7 +1769,6 @@ impl<'a> Parser<'a> {
                     self.stream.expand_span(span),
                 ))
             })
-            .map_err(|err| err.with_span(&self.filename, &span))
     }
 
     fn subparse_top_level(
@@ -1738,7 +1782,11 @@ impl<'a> Parser<'a> {
                 Token::BlockStart => {
                     let (tok, _span) = match ok!(self.stream.current()) {
                         Some(rv) => rv,
-                        None => syntax_error!("unexpected end of input, expected keyword"),
+                        None => syntax_error!(
+                            "unexpected end of input, expected keyword",
+                            &self.filename,
+                            &self.stream.current_span()
+                        ),
                     };
 
                     if end_check(tok) {
@@ -1750,7 +1798,12 @@ impl<'a> Parser<'a> {
                         if statement_type.contains(ident) {
                             rv.push(ok!(self.parse_stmt()));
                         } else if ENDBLOCK_IDENT.contains(ident) {
-                            syntax_error!("unexpected '{}' end of block identifier", ident);
+                            syntax_error!(
+                                "unexpected '{}' end of block identifier",
+                                &self.filename,
+                                &self.stream.current_span(),
+                                ident
+                            );
                         } else {
                             // Skip until we find the end of this block ignoring any and all errors
                             self.ignore_unknown_stmts = true;

@@ -4,12 +4,12 @@ description: "{% break %}"
 info:
   __minijinja_current_path: err_toplevel_break.txt
   __minijinja_current_span:
-    end_col: 1
-    end_line: 1
-    end_offset: 0
-    start_col: 1
     start_line: 1
+    start_col: 1
     start_offset: 0
+    end_line: 1
+    end_col: 1
+    end_offset: 0
 input_file: fs/sa/crates/dbt-jinja/minijinja/tests/inputs/err_toplevel_break.txt
 ---
 !!!SYNTAX ERROR!!!
