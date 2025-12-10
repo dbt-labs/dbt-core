@@ -1008,7 +1008,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         &self,
         _state: &State,
         _conn: &'_ mut dyn Connection,
-        _relation: Value,
+        _relation: Arc<dyn BaseRelation>,
         _columns: IndexMap<String, DbtColumn>,
     ) -> AdapterResult<Value> {
         unimplemented!("only available with BigQuery adapter")
@@ -1163,7 +1163,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         &self,
         _state: &State,
         _conn: &'_ mut dyn Connection,
-        _relation: Value,
+        _relation: Arc<dyn BaseRelation>,
     ) -> AdapterResult<Option<String>> {
         unimplemented!("only available with BigQuery adapter")
     }
@@ -1203,7 +1203,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         &self,
         _state: &State,
         _conn: &'_ mut dyn Connection,
-        _relation: Value,
+        _relation: Arc<dyn BaseRelation>,
         _columns: Value,
     ) -> AdapterResult<Value> {
         unimplemented!("only available with BigQuery adapter")

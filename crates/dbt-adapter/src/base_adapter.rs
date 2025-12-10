@@ -14,10 +14,12 @@ use dbt_common::io_args::ReplayMode;
 use dbt_schema_store::SchemaStoreTrait;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_schemas::schemas::common::ResolvedQuoting;
+use dbt_schemas::schemas::dbt_column::DbtColumn;
 use dbt_schemas::schemas::project::QueryComment;
 use dbt_schemas::schemas::properties::ModelConstraint;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
 use dbt_xdbc::{Backend, Connection};
+use indexmap::IndexMap;
 use minijinja::dispatch_object::DispatchObject;
 use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State, Value};
 
@@ -521,11 +523,9 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
     /// List relations without caching.
     fn list_relations_without_caching(
         &self,
-        _state: &State,
-        _args: &[Value],
-    ) -> Result<Value, MinijinjaError> {
-        unimplemented!("Only available with BigQuery adapter")
-    }
+        state: &State,
+        schema_relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, MinijinjaError>;
 
     /// Create schema.
     ///
@@ -847,23 +847,38 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
     }
 
     /// copy_table
-    fn copy_table(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError>;
+    fn copy_table(
+        &self,
+        state: &State,
+        tmp_relation_partitioned: Arc<dyn BaseRelation>,
+        target_relation_partitioned: Arc<dyn BaseRelation>,
+        materialization: &str,
+    ) -> Result<Value, MinijinjaError>;
 
     /// update_columns
-    fn update_columns(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError>;
+    fn update_columns(
+        &self,
+        state: &State,
+        relation: Arc<dyn BaseRelation>,
+        columns: IndexMap<String, DbtColumn>,
+    ) -> Result<Value, MinijinjaError>;
 
     /// update_table_description
     fn update_table_description(
         &self,
-        _state: &State,
-        _args: &[Value],
+        state: &State,
+        database: &str,
+        schema: &str,
+        identifier: &str,
+        description: &str,
     ) -> Result<Value, MinijinjaError>;
 
     /// alter_table_add_columns
     fn alter_table_add_columns(
         &self,
-        _state: &State,
-        _args: &[Value],
+        state: &State,
+        relation: Arc<dyn BaseRelation>,
+        columns: &Value,
     ) -> Result<Value, MinijinjaError>;
 
     /// load_dataframe
@@ -925,9 +940,11 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
     }
 
     /// get_bq_table
-    fn get_bq_table(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
-        unimplemented!("only available with BigQuery adapter")
-    }
+    fn get_bq_table(
+        &self,
+        state: &State,
+        relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, MinijinjaError>;
 
     /// describe_relation
     fn describe_relation(
@@ -937,16 +954,22 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
     ) -> Result<Value, MinijinjaError>;
 
     /// grant_access_to
-    fn grant_access_to(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError>;
+    fn grant_access_to(
+        &self,
+        state: &State,
+        entity: Arc<dyn BaseRelation>,
+        entity_type: &str,
+        role: Option<&str>,
+        database: &str,
+        schema: &str,
+    ) -> Result<Value, MinijinjaError>;
 
     /// get_dataset_location
     fn get_dataset_location(
         &self,
-        _state: &State,
-        _args: &[Value],
-    ) -> Result<Value, MinijinjaError> {
-        unimplemented!("only available with BigQuery adapter")
-    }
+        state: &State,
+        relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, MinijinjaError>;
 
     /// compare_dbr_version
     fn compare_dbr_version(&self, _state: &State, _args: &[Value])

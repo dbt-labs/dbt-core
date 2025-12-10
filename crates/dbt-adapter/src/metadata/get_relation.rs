@@ -6,13 +6,12 @@ use dbt_common::{AdapterError, AdapterErrorKind, AdapterResult};
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::relations::base::{BaseRelation, TableFormat};
 use dbt_xdbc::{Connection, QueryCtx};
-use minijinja::{State, Value};
+use minijinja::State;
 
 use crate::TypedBaseAdapter;
 use crate::databricks::describe_table::DatabricksTableMetadata;
 use crate::metadata::{snowflake, try_canonicalize_bool_column_field};
 use crate::record_batch_utils::get_column_values;
-use crate::relation::RelationObject;
 use crate::relation::bigquery::BigqueryRelation;
 use crate::relation::databricks::DatabricksRelation;
 use crate::relation::postgres::PostgresRelation;
@@ -238,8 +237,7 @@ fn bigquery_get_relation(
         None,
         adapter.quoting(),
     );
-    let relation_value = Value::from_object(RelationObject::new(Arc::new(relation.clone())));
-    let location = adapter.get_dataset_location(state, conn, relation_value)?;
+    let location = adapter.get_dataset_location(state, conn, Arc::new(relation.clone()))?;
     relation.location = location;
     Ok(Some(Arc::new(relation)))
 }

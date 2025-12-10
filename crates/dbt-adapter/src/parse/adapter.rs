@@ -26,9 +26,11 @@ use dbt_common::cancellation::CancellationToken;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_schemas::schemas::common::{DbtQuoting, ResolvedQuoting};
 use dbt_schemas::schemas::dbt_catalogs::DbtCatalogs;
+use dbt_schemas::schemas::dbt_column::DbtColumn;
 use dbt_schemas::schemas::properties::ModelConstraint;
 use dbt_schemas::schemas::relations::base::{BaseRelation, RelationPattern};
 use dbt_xdbc::Connection;
+use indexmap::IndexMap;
 use minijinja::Value;
 use minijinja::constants::TARGET_UNIQUE_ID;
 use minijinja::listener::RenderingEventListener;
@@ -582,26 +584,40 @@ impl BaseAdapter for ParseAdapter {
         Ok(empty_map_value())
     }
 
-    fn update_columns(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn update_columns(
+        &self,
+        _state: &State,
+        _relation: Arc<dyn BaseRelation>,
+        _columns: IndexMap<String, DbtColumn>,
+    ) -> Result<Value, MinijinjaError> {
         Ok(none_value())
     }
 
     fn list_relations_without_caching(
         &self,
         _state: &State,
-        _args: &[Value],
+        _schema_relation: Arc<dyn BaseRelation>,
     ) -> Result<Value, MinijinjaError> {
         Ok(empty_vec_value())
     }
 
-    fn copy_table(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn copy_table(
+        &self,
+        _state: &State,
+        _tmp_relation_partitioned: Arc<dyn BaseRelation>,
+        _target_relation_partitioned: Arc<dyn BaseRelation>,
+        _materialization: &str,
+    ) -> Result<Value, MinijinjaError> {
         Ok(none_value())
     }
 
     fn update_table_description(
         &self,
         _state: &State,
-        _args: &[Value],
+        _database: &str,
+        _schema: &str,
+        _identifier: &str,
+        _description: &str,
     ) -> Result<Value, MinijinjaError> {
         Ok(none_value())
     }
@@ -609,7 +625,8 @@ impl BaseAdapter for ParseAdapter {
     fn alter_table_add_columns(
         &self,
         _state: &State,
-        _args: &[Value],
+        _relation: Arc<dyn BaseRelation>,
+        _columns: &Value,
     ) -> Result<Value, MinijinjaError> {
         Ok(none_value())
     }
@@ -660,7 +677,11 @@ impl BaseAdapter for ParseAdapter {
         Ok(none_value())
     }
 
-    fn get_bq_table(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn get_bq_table(
+        &self,
+        _state: &State,
+        _relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, MinijinjaError> {
         Ok(none_value())
     }
 
@@ -672,14 +693,22 @@ impl BaseAdapter for ParseAdapter {
         Ok(none_value())
     }
 
-    fn grant_access_to(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn grant_access_to(
+        &self,
+        _state: &State,
+        _entity: Arc<dyn BaseRelation>,
+        _entity_type: &str,
+        _role: Option<&str>,
+        _database: &str,
+        _schema: &str,
+    ) -> Result<Value, MinijinjaError> {
         Ok(none_value())
     }
 
     fn get_dataset_location(
         &self,
         _state: &State,
-        _args: &[Value],
+        _relation: Arc<dyn BaseRelation>,
     ) -> Result<Value, MinijinjaError> {
         Ok(none_value())
     }

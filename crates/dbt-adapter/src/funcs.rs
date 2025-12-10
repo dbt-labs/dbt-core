@@ -11,11 +11,13 @@ use crate::snapshots::SnapshotStrategy;
 
 use arrow::array::RecordBatch;
 use dbt_agate::AgateTable;
+use dbt_schemas::schemas::dbt_column::DbtColumn;
 use dbt_schemas::schemas::manifest::{
-    BigqueryClusterConfig, BigqueryPartitionConfig, PartitionConfig,
+    BigqueryClusterConfig, BigqueryPartitionConfig, GrantAccessToTarget, PartitionConfig,
 };
 use dbt_schemas::schemas::properties::ModelConstraint;
 use dbt_schemas::schemas::serde::minijinja_value_to_typed_struct;
+use indexmap::IndexMap;
 use minijinja::arg_utils::ArgsIter;
 use minijinja::listener::RenderingEventListener;
 use minijinja::value::ValueKind;
@@ -599,11 +601,90 @@ pub fn dispatch_adapter_calls(
 
             adapter.is_replaceable(state, relation, partition_by, cluster_by)
         }
-        "list_relations_without_caching" => adapter.list_relations_without_caching(state, args),
-        "copy_table" => adapter.copy_table(state, args),
-        "update_columns" => adapter.update_columns(state, args),
-        "update_table_description" => adapter.update_table_description(state, args),
-        "alter_table_add_columns" => adapter.alter_table_add_columns(state, args),
+        "list_relations_without_caching" => {
+            // schema_relation: BaseRelation
+            let iter = ArgsIter::new(name, &["schema_relation"], args);
+            let schema_relation = iter.next_arg::<&Value>()?;
+            let schema_relation = downcast_value_to_dyn_base_relation(schema_relation)?;
+            iter.finish()?;
+
+            adapter.list_relations_without_caching(state, schema_relation)
+        }
+        "copy_table" => {
+            // tmp_relation_partitioned: BaseRelation, target_relation_partitioned: BaseRelation, materialization: str
+            let iter = ArgsIter::new(
+                name,
+                &[
+                    "tmp_relation_partitioned",
+                    "target_relation_partitioned",
+                    "materialization",
+                ],
+                args,
+            );
+            let tmp_relation_partitioned = iter.next_arg::<&Value>()?;
+            let tmp_relation_partitioned =
+                downcast_value_to_dyn_base_relation(tmp_relation_partitioned)?;
+            let target_relation_partitioned = iter.next_arg::<&Value>()?;
+            let target_relation_partitioned =
+                downcast_value_to_dyn_base_relation(target_relation_partitioned)?;
+            let materialization = iter.next_arg::<&str>()?;
+            iter.finish()?;
+
+            adapter.copy_table(
+                state,
+                tmp_relation_partitioned,
+                target_relation_partitioned,
+                materialization,
+            )
+        }
+        "update_columns" => {
+            // relation: BaseRelation, columns: Dict[str, DbtColumn]
+            let iter = ArgsIter::new(name, &["relation", "columns"], args);
+            let relation = iter.next_arg::<&Value>()?;
+            let relation = downcast_value_to_dyn_base_relation(relation)?;
+            let columns = iter.next_arg::<&Value>()?;
+            let columns =
+                minijinja_value_to_typed_struct::<IndexMap<String, DbtColumn>>(columns.clone())
+                    .map_err(|e| {
+                        MinijinjaError::new(
+                            MinijinjaErrorKind::SerdeDeserializeError,
+                            e.to_string(),
+                        )
+                    })?;
+            iter.finish()?;
+
+            adapter.update_columns(state, relation, columns)
+        }
+        "update_table_description" => {
+            // In parse mode, skip parameter extraction and return early
+            if adapter.is_parse() {
+                return Ok(none_value());
+            }
+
+            // database: str, schema: str, identifier: str, description: str
+            let iter = ArgsIter::new(
+                name,
+                &["database", "schema", "identifier", "description"],
+                args,
+            );
+            let database = iter.next_arg::<&str>()?;
+            let schema = iter.next_arg::<&str>()?;
+            let identifier = iter.next_arg::<&str>()?;
+            let description = iter.next_arg::<&str>()?;
+            iter.finish()?;
+
+            adapter.update_table_description(state, database, schema, identifier, description)
+        }
+        "alter_table_add_columns" => {
+            // relation: BaseRelation, columns: Value
+            let iter = ArgsIter::new(name, &["relation", "columns"], args);
+            let relation = iter.next_arg::<&Value>()?;
+            let relation = downcast_value_to_dyn_base_relation(relation)?;
+            let columns = iter.next_arg::<&Value>()?;
+            iter.finish()?;
+
+            adapter.alter_table_add_columns(state, relation, columns)
+        }
         "load_dataframe" => {
             let iter = ArgsIter::new(
                 name,
@@ -644,7 +725,15 @@ pub fn dispatch_adapter_calls(
             )
         }
         "upload_file" => adapter.upload_file(state, args),
-        "get_bq_table" => adapter.get_bq_table(state, args),
+        "get_bq_table" => {
+            // relation: BaseRelation
+            let iter = ArgsIter::new(name, &["relation"], args);
+            let relation = iter.next_arg::<&Value>()?;
+            let relation = downcast_value_to_dyn_base_relation(relation)?;
+            iter.finish()?;
+
+            adapter.get_bq_table(state, relation)
+        }
         "describe_relation" => {
             // relation: BaseRelation
             let iter = ArgsIter::new(name, &["relation"], args);
@@ -654,8 +743,62 @@ pub fn dispatch_adapter_calls(
 
             adapter.describe_relation(state, relation)
         }
-        "grant_access_to" => adapter.grant_access_to(state, args),
-        "get_dataset_location" => adapter.get_dataset_location(state, args),
+        "grant_access_to" => {
+            // entity: BaseRelation, entity_type: str, role: Optional[str], grant_target_dict: GrantAccessToTarget
+            let iter = ArgsIter::new(
+                name,
+                &["entity", "entity_type", "role", "grant_target_dict"],
+                args,
+            );
+            let entity = iter.next_arg::<&Value>()?;
+            let entity_type = iter.next_arg::<&str>()?;
+            let role = iter.next_arg::<&Value>()?;
+            let grant_target_dict = iter.next_arg::<&Value>()?;
+            let grant_target =
+                minijinja_value_to_typed_struct::<GrantAccessToTarget>(grant_target_dict.clone())
+                    .map_err(|e| {
+                    MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
+                })?;
+            iter.finish()?;
+
+            let (database, schema) = (
+                grant_target.project.as_deref().ok_or_else(|| {
+                    MinijinjaError::new(
+                        MinijinjaErrorKind::InvalidOperation,
+                        "project in a GrantAccessToTarget cannot be empty",
+                    )
+                })?,
+                grant_target.dataset.as_deref().ok_or_else(|| {
+                    MinijinjaError::new(
+                        MinijinjaErrorKind::InvalidOperation,
+                        "dataset in a GrantAccessToTarget cannot be empty",
+                    )
+                })?,
+            );
+
+            let role = if role.is_none() || role.is_undefined() {
+                None
+            } else {
+                Some(role.as_str().ok_or_else(|| {
+                    MinijinjaError::new(
+                        MinijinjaErrorKind::InvalidOperation,
+                        "role must be a string",
+                    )
+                })?)
+            };
+
+            let entity_relation = downcast_value_to_dyn_base_relation(entity)?;
+            adapter.grant_access_to(state, entity_relation, entity_type, role, database, schema)
+        }
+        "get_dataset_location" => {
+            // relation: BaseRelation
+            let iter = ArgsIter::new(name, &["relation"], args);
+            let relation = iter.next_arg::<&Value>()?;
+            let relation = downcast_value_to_dyn_base_relation(relation)?;
+            iter.finish()?;
+
+            adapter.get_dataset_location(state, relation)
+        }
         "get_column_schema_from_query" => {
             // sql: str
             let iter = ArgsIter::new(name, &["sql"], args);
