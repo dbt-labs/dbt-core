@@ -4,14 +4,6 @@ use std::borrow::Cow;
 
 use dbt_xdbc::{Backend, database, databricks};
 
-/// User agent name provided to dbx for Fusion.
-///
-/// Official guidance is <isv-name+product-name> but dbt Core provides 'dbt' only
-/// and we follow suit.
-///
-/// Ref: https://github.com/databricks/databricks-sql-go/blob/56b8a73b09908454e3070fe513ff2563c85ba214/connector.go#L214
-const USER_AGENT_NAME: &str = "dbt";
-
 pub struct DatabricksAuth;
 
 impl Auth for DatabricksAuth {
@@ -30,7 +22,6 @@ impl Auth for DatabricksAuth {
         let http_path = resolve_http_path(config)?;
 
         let mut builder = database::Builder::new(self.backend());
-        builder.with_named_option(databricks::USER_AGENT, USER_AGENT_NAME)?;
 
         if self.backend() == Backend::DatabricksODBC {
             use databricks::odbc;
@@ -65,12 +56,37 @@ impl Auth for DatabricksAuth {
             builder.with_named_option(databricks::HOST, config.require_string("host")?)?;
             builder.with_named_option(databricks::SCHEMA, config.require_string("schema")?)?;
             builder.with_named_option(databricks::CATALOG, config.require_string("database")?)?;
-            builder.with_named_option(databricks::HTTP_PATH, http_path)?;
 
+            // http_path is of the form:
+            //  /sql/1.0/warehouses/<warehouse-id
+            //  /sql/protocolv1/o/<instance>/<cluster-id>
+            // we need to extract the warehouse-id or cluster-id from the http_path
+            // warehouses and clusters are separate concepts and endpoints in Databricks
+            if http_path.contains("warehouses") {
+                let warehouse_id = http_path.split("/warehouses/").nth(1).unwrap();
+                builder.with_named_option(databricks::WAREHOUSE, warehouse_id)?;
+            } else if http_path.contains("protocolv1") {
+                let cluster_id = http_path.split("/").nth(4).unwrap();
+                builder.with_named_option(databricks::CLUSTER, cluster_id)?;
+            } else {
+                return Err(AuthError::config(format!("Invalid http_path: {http_path}")));
+            }
             // Personal Access Token
             if let Some(token) = config.get_string("token") {
                 builder.with_named_option(databricks::TOKEN, token)?;
                 builder.with_named_option(databricks::AUTH_TYPE, databricks::auth_type::PAT)?;
+            }
+            // Azure Client Secret Oauth
+            else if let Some(azure_client_id) = config.get_string("azure_client_id") {
+                builder.with_named_option(databricks::AZURE_CLIENT_ID, azure_client_id)?;
+                builder.with_named_option(
+                    databricks::AZURE_CLIENT_SECRET,
+                    config.require_string("azure_client_secret")?,
+                )?;
+                builder.with_named_option(
+                    databricks::AUTH_TYPE,
+                    databricks::auth_type::AZURE_CLIENT_SECRET,
+                )?;
             }
             // External Browser Oauth - U2M Oauth
             else if !config.contains_key("client_secret") {
@@ -222,9 +238,8 @@ mod tests {
             (databricks::TOKEN, "T"),
             (databricks::SCHEMA, "S"),
             (databricks::HOST, "H"),
-            (databricks::HTTP_PATH, "/sql/1.0/warehouses/warehouse-id"),
+            (databricks::WAREHOUSE, "warehouse-id"),
             (databricks::CATALOG, "C"),
-            (databricks::USER_AGENT, USER_AGENT_NAME),
             (databricks::AUTH_TYPE, databricks::auth_type::PAT),
         ];
         run_config_test(config, &expected).unwrap();
@@ -247,13 +262,38 @@ mod tests {
             (databricks::TOKEN, "T"),
             (databricks::SCHEMA, "S"),
             (databricks::HOST, "H"),
-            (
-                databricks::HTTP_PATH,
-                "sql/protocolv1/o/1030i40i30i50i3/my-cluster-id",
-            ),
+            (databricks::CLUSTER, "my-cluster-id"),
             (databricks::CATALOG, "C"),
-            (databricks::USER_AGENT, USER_AGENT_NAME),
             (databricks::AUTH_TYPE, databricks::auth_type::PAT),
+        ];
+        run_config_test(config, &expected).unwrap();
+    }
+
+    #[test]
+    fn test_azure_client_secret() {
+        let config = Mapping::from_iter([
+            ("host".into(), "H".into()),
+            ("schema".into(), "S".into()),
+            (
+                "http_path".into(),
+                "sql/protocolv1/o/1030i40i30i50i3/my-cluster-id".into(),
+            ),
+            ("azure_client_id".into(), "A".into()),
+            ("azure_client_secret".into(), "A".into()),
+            ("database".into(), "C".into()),
+            ("auth_type".into(), "oauth".into()),
+        ]);
+        let expected = vec![
+            (databricks::AZURE_CLIENT_ID, "A"),
+            (databricks::AZURE_CLIENT_SECRET, "A"),
+            (databricks::SCHEMA, "S"),
+            (databricks::HOST, "H"),
+            (databricks::CLUSTER, "my-cluster-id"),
+            (databricks::CATALOG, "C"),
+            (
+                databricks::AUTH_TYPE,
+                databricks::auth_type::AZURE_CLIENT_SECRET,
+            ),
         ];
         run_config_test(config, &expected).unwrap();
     }
@@ -278,12 +318,8 @@ mod tests {
             (databricks::CLIENT_SECRET, "O"),
             (databricks::SCHEMA, "S"),
             (databricks::HOST, "H"),
-            (
-                databricks::HTTP_PATH,
-                "sql/protocolv1/o/1030i40i30i50i3/my-cluster-id",
-            ),
+            (databricks::CLUSTER, "my-cluster-id"),
             (databricks::CATALOG, "C"),
-            (databricks::USER_AGENT, USER_AGENT_NAME),
             (databricks::AUTH_TYPE, databricks::auth_type::OAUTH_M2M),
         ];
         run_config_test(config, &expected).unwrap();
@@ -305,13 +341,9 @@ mod tests {
         let expected = vec![
             (databricks::SCHEMA, "S"),
             (databricks::HOST, "H"),
-            (
-                databricks::HTTP_PATH,
-                "sql/protocolv1/o/1030i40i30i50i3/my-cluster-id",
-            ),
+            (databricks::CLUSTER, "my-cluster-id"),
             (databricks::CATALOG, "C"),
             (databricks::CLIENT_ID, "O"),
-            (databricks::USER_AGENT, USER_AGENT_NAME),
             (
                 databricks::AUTH_TYPE,
                 databricks::auth_type::EXTERNAL_BROWSER,
@@ -335,12 +367,8 @@ mod tests {
         let expected = vec![
             (databricks::SCHEMA, "S"),
             (databricks::HOST, "H"),
-            (
-                databricks::HTTP_PATH,
-                "sql/protocolv1/o/1030i40i30i50i3/my-cluster-id",
-            ),
+            (databricks::CLUSTER, "my-cluster-id"),
             (databricks::CATALOG, "C"),
-            (databricks::USER_AGENT, USER_AGENT_NAME),
             (
                 databricks::AUTH_TYPE,
                 databricks::auth_type::EXTERNAL_BROWSER,
