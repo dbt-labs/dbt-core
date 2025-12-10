@@ -16,13 +16,13 @@ from dbt_common.events.format import (
     pluralize,
     timestamp_to_datetime_string,
 )
-from dbt_common.ui import deprecation_tag as deprecation_tag_less_trict
+from dbt_common.ui import deprecation_tag as deprecation_tag_less_strict
 from dbt_common.ui import error_tag, green, line_wrap_message, red, warning_tag, yellow
 
 
 # This makes it so that mypy will complain if a deprecation tag is used without an event name
 def _deprecation_tag(description: str, event_name: str) -> str:
-    return deprecation_tag_less_trict(description, event_name)
+    return deprecation_tag_less_strict(description, event_name)
 
 
 # Event codes have prefixes which follow this table
@@ -277,7 +277,7 @@ class PackageRedirectDeprecation(WarnLevel):
         if require_event_names_in_deprecations():
             return line_wrap_message(_deprecation_tag(description, self.__class__.__name__))
         else:
-            return line_wrap_message(deprecation_tag_less_trict(description))
+            return line_wrap_message(deprecation_tag_less_strict(description))
 
 
 class PackageInstallPathDeprecation(WarnLevel):
@@ -294,7 +294,7 @@ class PackageInstallPathDeprecation(WarnLevel):
         if require_event_names_in_deprecations():
             return line_wrap_message(_deprecation_tag(description, self.__class__.__name__))
         else:
-            return line_wrap_message(deprecation_tag_less_trict(description))
+            return line_wrap_message(deprecation_tag_less_strict(description))
 
 
 class ConfigSourcePathDeprecation(WarnLevel):
@@ -310,7 +310,7 @@ class ConfigSourcePathDeprecation(WarnLevel):
         if require_event_names_in_deprecations():
             return line_wrap_message(_deprecation_tag(description, self.__class__.__name__))
         else:
-            return line_wrap_message(deprecation_tag_less_trict(description))
+            return line_wrap_message(deprecation_tag_less_strict(description))
 
 
 class ConfigDataPathDeprecation(WarnLevel):
@@ -326,7 +326,7 @@ class ConfigDataPathDeprecation(WarnLevel):
         if require_event_names_in_deprecations():
             return line_wrap_message(_deprecation_tag(description, self.__class__.__name__))
         else:
-            return line_wrap_message(deprecation_tag_less_trict(description))
+            return line_wrap_message(deprecation_tag_less_strict(description))
 
 
 class MetricAttributesRenamed(WarnLevel):
@@ -346,7 +346,7 @@ class MetricAttributesRenamed(WarnLevel):
         if require_event_names_in_deprecations():
             return line_wrap_message(_deprecation_tag(description, self.__class__.__name__))
         else:
-            return deprecation_tag_less_trict(description)
+            return deprecation_tag_less_strict(description)
 
 
 class ExposureNameDeprecation(WarnLevel):
@@ -365,7 +365,7 @@ class ExposureNameDeprecation(WarnLevel):
         if require_event_names_in_deprecations():
             return line_wrap_message(_deprecation_tag(description, self.__class__.__name__))
         else:
-            return line_wrap_message(deprecation_tag_less_trict(description))
+            return line_wrap_message(deprecation_tag_less_strict(description))
 
 
 class InternalDeprecation(WarnLevel):
@@ -402,7 +402,7 @@ class EnvironmentVariableRenamed(WarnLevel):
         if require_event_names_in_deprecations():
             return line_wrap_message(_deprecation_tag(description, self.__class__.__name__))
         else:
-            return line_wrap_message(deprecation_tag_less_trict(description))
+            return line_wrap_message(deprecation_tag_less_strict(description))
 
 
 class ConfigLogPathDeprecation(WarnLevel):
@@ -423,7 +423,7 @@ class ConfigLogPathDeprecation(WarnLevel):
         if require_event_names_in_deprecations():
             return line_wrap_message(_deprecation_tag(description, self.__class__.__name__))
         else:
-            return line_wrap_message(deprecation_tag_less_trict(description))
+            return line_wrap_message(deprecation_tag_less_strict(description))
 
 
 class ConfigTargetPathDeprecation(WarnLevel):
@@ -444,7 +444,7 @@ class ConfigTargetPathDeprecation(WarnLevel):
         if require_event_names_in_deprecations():
             return line_wrap_message(_deprecation_tag(description, self.__class__.__name__))
         else:
-            return line_wrap_message(deprecation_tag_less_trict(description))
+            return line_wrap_message(deprecation_tag_less_strict(description))
 
 
 # Note: this deprecation has been removed, but we are leaving
@@ -463,7 +463,7 @@ class TestsConfigDeprecation(WarnLevel):
         if require_event_names_in_deprecations():
             return line_wrap_message(_deprecation_tag(description, self.__class__.__name__))
         else:
-            return line_wrap_message(deprecation_tag_less_trict(description))
+            return line_wrap_message(deprecation_tag_less_strict(description))
 
 
 class ProjectFlagsMovedDeprecation(WarnLevel):
@@ -479,7 +479,7 @@ class ProjectFlagsMovedDeprecation(WarnLevel):
         if require_event_names_in_deprecations():
             return _deprecation_tag(description, self.__class__.__name__)
         else:
-            return deprecation_tag_less_trict(description)
+            return deprecation_tag_less_strict(description)
 
 
 class SpacesInResourceNameDeprecation(DynamicLevel):
