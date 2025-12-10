@@ -10,7 +10,6 @@ from unittest import mock
 import freezegun
 import pytest
 
-import dbt.flags
 import dbt.version
 import dbt_common.invocation
 from dbt import tracking
@@ -1788,6 +1787,19 @@ def _ambiguous_ref_parameter_sets():
     return sets
 
 
+def _duplicate_node_name_across_packages_ref_parameter_sets():
+    sets = [
+        FindNodeSpec(
+            nodes=[MockNode("project_a", "my_model"), MockNode("root", "my_model")],
+            sources=[],
+            package=None,
+            version=None,
+            expected=("project_a", "my_model"),
+        ),
+    ]
+    return sets
+
+
 def id_nodes(arg):
     if isinstance(arg, list):
         node_names = "__".join(f"{n.package_name}_{n.search_name}" for n in arg)
@@ -1847,6 +1859,60 @@ def test_resolve_ref_ambiguous_resource_name_across_packages(
             current_project="root",
             node_package="root",
         )
+
+
+@pytest.mark.parametrize(
+    "nodes,sources,package,version,expected",
+    _duplicate_node_name_across_packages_ref_parameter_sets(),
+    ids=id_nodes,
+)
+def test_resolve_ref_with_node_package_legacy(nodes, sources, package, version, expected):
+    set_from_args(
+        Namespace(
+            SEND_ANONYMOUS_USAGE_STATS=False,
+            REQUIRE_REF_SEARCHES_NODE_PACKAGE_BEFORE_ROOT=False,
+        ),
+        None,
+    )
+    manifest = make_manifest(nodes=nodes, sources=sources)
+    result = manifest.resolve_ref(
+        source_node=None,
+        target_model_name="my_model",
+        target_model_package=package,
+        target_model_version=version,
+        current_project="root",
+        node_package="project_a",
+    )
+
+    assert result.name == "my_model"
+    assert result.package_name == "root"
+
+
+@pytest.mark.parametrize(
+    "nodes,sources,package,version,expected",
+    _duplicate_node_name_across_packages_ref_parameter_sets(),
+    ids=id_nodes,
+)
+def test_resolve_ref_with_node_package(nodes, sources, package, version, expected):
+    set_from_args(
+        Namespace(
+            SEND_ANONYMOUS_USAGE_STATS=False,
+            REQUIRE_REF_SEARCHES_NODE_PACKAGE_BEFORE_ROOT=True,
+        ),
+        None,
+    )
+    manifest = make_manifest(nodes=nodes, sources=sources)
+    result = manifest.resolve_ref(
+        source_node=None,
+        target_model_name="my_model",
+        target_model_package=package,
+        target_model_version=version,
+        current_project="root",
+        node_package="project_a",
+    )
+
+    assert result.name == "my_model"
+    assert result.package_name == "project_a"
 
 
 def _source_parameter_sets():
@@ -1931,6 +1997,13 @@ def _source_parameter_sets():
     ids=id_nodes,
 )
 def test_resolve_source(nodes, sources, package, version, expected):
+    set_from_args(
+        Namespace(
+            SEND_ANONYMOUS_USAGE_STATS=False,
+            REQUIRE_REF_SEARCHES_NODE_PACKAGE_BEFORE_ROOT=False,
+        ),
+        None,
+    )
     manifest = make_manifest(nodes=nodes, sources=sources)
     result = manifest.resolve_source(
         target_source_name="my_source",
