@@ -562,6 +562,12 @@ impl MetadataAdapter for BigqueryAdapter {
                     }
                 }
 
+                if let Some(schema_type) = schema.metadata().get("Type") {
+                    if schema_type == "EXTERNAL" {
+                        schema_builder.push(Field::new("_FILE_NAME", DataType::Utf8, true));
+                    }
+                }
+
                 Ok(Arc::new(schema_builder.finish()))
             }
         };
