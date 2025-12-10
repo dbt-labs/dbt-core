@@ -310,7 +310,7 @@ mod tests {
 
         fn collect_node_evaluation(
             &self,
-            _file_path: PathBuf,
+            _unique_id: &str,
             _execution_phase: dbt_telemetry::ExecutionPhase,
             _node_outcome: dbt_telemetry::NodeOutcome,
             _upstream_target: Option<(String, String, bool)>,

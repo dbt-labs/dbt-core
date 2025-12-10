@@ -282,7 +282,7 @@ mod tests {
 
         fn collect_node_evaluation(
             &self,
-            _file_path: PathBuf,
+            _unique_id: &str,
             _execution_phase: ExecutionPhase,
             _node_outcome: NodeOutcome,
             _upstream_target: Option<(String, String, bool)>,

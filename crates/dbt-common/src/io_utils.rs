@@ -21,7 +21,7 @@ pub trait StatusReporter: Any + Send + Sync {
     fn collect_warning(&self, warning: &FsError);
     fn collect_node_evaluation(
         &self,
-        file_path: PathBuf,
+        unique_id: &str,
         execution_phase: ExecutionPhase,
         node_outcome: NodeOutcome,
         upstream_target: Option<(String, String, bool)>,
