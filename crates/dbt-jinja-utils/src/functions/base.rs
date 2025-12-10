@@ -898,13 +898,9 @@ pub fn print_fn() -> impl Fn(&State<'_, '_>, &[Value], Kwargs) -> Result<Value, 
             ));
         }
 
-        // TODO: fusion print is different from dbt print due to this is printing Debug
-        // for example print('string')
-        // fusion: 'string' // things are always wrapped in single quotes
-        // dbt: string
-        // changed to format!("{}", args[0]); if we have to make them consistent
-        // Format the message
-        let msg = format!("{:?}", args[0]);
+        // Format the message using Display formatting (not Debug) to match dbt's behavior
+        // This ensures strings aren't wrapped in quotes (e.g., "string" instead of "'string'")
+        let msg = format!("{}", args[0]);
 
         // Get metadata for the event
         let current_package_name = state
