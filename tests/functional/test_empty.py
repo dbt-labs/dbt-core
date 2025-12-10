@@ -92,8 +92,13 @@ class TestEmptyFlag:
         assert result[0] == expected_row_count
 
     def test_run_with_empty(self, project):
-        # create source from seed
+        # Test seed with --empty flag
+        run_dbt(["seed", "--empty"])
+        self.assert_row_count(project, "raw_source", 0)
+
+        # Create source from seed for run and build command testing
         run_dbt(["seed"])
+        self.assert_row_count(project, "raw_source", 1)
 
         # run without empty - 3 expected rows in output - 1 from each input
         run_dbt(["run"])

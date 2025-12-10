@@ -1218,7 +1218,7 @@ class ProviderContext(ManifestContext):
             raise CompilationError(message_if_exception, self.model)
 
     @contextmember()
-    def load_agate_table(self) -> "agate.Table":
+    def load_agate_table(self, row_limit: Optional[int] = None) -> "agate.Table":
         from dbt_common.clients import agate_helper
 
         if not isinstance(self.model, SeedNode):
@@ -1239,6 +1239,10 @@ class ProviderContext(ManifestContext):
         delimiter = self.model.config.delimiter
         try:
             table = agate_helper.from_csv(path, text_columns=column_types, delimiter=delimiter)
+            if row_limit:
+                table = table.limit(row_limit)  # type: ignore
+            elif self.config.args.empty:
+                table = table.limit(0)  # type: ignore
         except ValueError as e:
             raise LoadAgateTableValueError(e, node=self.model)
         # this is used by some adapters
