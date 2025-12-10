@@ -635,23 +635,24 @@ class ManifestLoader:
     def check_for_spaces_in_resource_names(self):
         """Validates that resource names do not contain spaces
 
-        If `DEBUG` flag is `False`, logs only first bad model name
+        If `DEBUG` flag is `False`, logs only first bad model name, unless `REQUIRE_RESOURCE_NAMES_WITHOUT_SPACES` is `True` as error will indicate all bad model names
         If `DEBUG` flag is `True`, logs every bad model name
         If `REQUIRE_RESOURCE_NAMES_WITHOUT_SPACES` is `True`, logs are `ERROR` level and an exception is raised if any names are bad
         If `REQUIRE_RESOURCE_NAMES_WITHOUT_SPACES` is `False`, logs are `WARN` level
         """
-        improper_resource_names = 0
-        level = (
-            EventLevel.ERROR
-            if self.root_project.args.REQUIRE_RESOURCE_NAMES_WITHOUT_SPACES
-            else EventLevel.WARN
+        improper_resource_names_unique_ids = set()
+        error_on_invalid_resource_name = (
+            self.root_project.args.REQUIRE_RESOURCE_NAMES_WITHOUT_SPACES
         )
+        level = EventLevel.ERROR if error_on_invalid_resource_name else EventLevel.WARN
 
         flags = get_flags()
 
         for node in self.manifest.nodes.values():
             if " " in node.name:
-                if improper_resource_names == 0 or flags.DEBUG:
+                if (
+                    not improper_resource_names_unique_ids and not error_on_invalid_resource_name
+                ) or flags.DEBUG:
                     fire_event(
                         SpacesInResourceNameDeprecation(
                             unique_id=node.unique_id,
@@ -659,17 +660,23 @@ class ManifestLoader:
                         ),
                         level=level,
                     )
-                improper_resource_names += 1
+                improper_resource_names_unique_ids.add(node.unique_id)
 
-        if improper_resource_names > 0:
+        if improper_resource_names_unique_ids:
             if level == EventLevel.WARN:
                 dbt.deprecations.warn(
                     "resource-names-with-spaces",
-                    count_invalid_names=improper_resource_names,
+                    count_invalid_names=len(improper_resource_names_unique_ids),
                     show_debug_hint=(not flags.DEBUG),
                 )
             else:  # ERROR level
-                raise DbtValidationError("Resource names cannot contain spaces")
+                formatted_resources_with_spaces = "\n".join(
+                    f"  * '{unique_id}' ({self.manifest.nodes[unique_id].original_file_path})"
+                    for unique_id in improper_resource_names_unique_ids
+                )
+                raise DbtValidationError(
+                    f"Resource names cannot contain spaces:\n{formatted_resources_with_spaces}\nPlease rename the invalid model(s) so that their name(s) do not contain any spaces."
+                )
 
     def check_for_microbatch_deprecations(self) -> None:
         if not get_flags().require_batched_execution_for_custom_microbatch_strategy:
