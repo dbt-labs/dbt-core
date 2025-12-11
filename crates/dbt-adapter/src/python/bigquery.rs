@@ -130,18 +130,19 @@ pub fn submit_python_job(
         ));
     }
 
-    let submission_method = match adapter
-        .get_db_config("submission_method")
-        .map(|v| v.to_string())
-    {
-        None => SubmissionMethod::Serverless,
-        Some(v) => SubmissionMethod::from_str(&v.to_string()).ok_or_else(|| {
-            AdapterError::new(
-                AdapterErrorKind::Internal,
-                format!("Invalid submission method: {}", v),
-            )
-        })?,
-    };
+    let submission_method = SubmissionMethod::from_str(
+        &config
+            .get_attr("submission_method")
+            .ok()
+            .and_then(|v| v.as_str().map(|s| s.to_string()))
+            .unwrap_or_else(|| {
+                adapter
+                    .get_db_config("submission_method")
+                    .map(|v| v.to_string())
+                    .unwrap_or_else(|| "serverless".to_string())
+            }),
+    )
+    .ok_or_else(|| AdapterError::new(AdapterErrorKind::Internal, "Invalid submission method"))?;
 
     let job_execution_timeout = adapter
         .get_db_config("job_execution_timeout_seconds")
