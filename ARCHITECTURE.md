@@ -17,10 +17,6 @@ The main subdirectories of core/dbt:
 - [`parser`](core/dbt/parser/README.md): Read project files, validate, construct python objects
 - [`task`](core/dbt/task/README.md): Set forth the actions that dbt can perform when invoked
 
-Legacy tests are found in the 'test' directory:
-- [`unit tests`](core/dbt/test/unit/README.md): Unit tests
-- [`integration tests`](core/dbt/test/integration/README.md): Integration tests
-
 ### Invoking dbt
 
 The "tasks" map to top-level dbt commands. So `dbt run` => task.run.RunTask, etc. Some are more like abstract base classes (GraphRunnableTask, for example) but all the concrete types outside of task should map to tasks. Currently one executes at a time. The tasks kick off their “Runners” and those do execute in parallel. The parallelism is managed via a thread pool, in GraphRunnableTask.
