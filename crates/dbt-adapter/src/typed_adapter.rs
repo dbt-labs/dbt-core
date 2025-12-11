@@ -223,7 +223,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         // duplicate columns to `col_2`, `col_3`, etc.
         // BigQuery is the exception to this deduping
         let last_batch = if self.adapter_type() != AdapterType::Bigquery {
-            crate::record_batch_utils::deduplicate_column_names(last_batch)
+            crate::record_batch_utils::disambiguate_column_names(last_batch)
         } else {
             last_batch
         };

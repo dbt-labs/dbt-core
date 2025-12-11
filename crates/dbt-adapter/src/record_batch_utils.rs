@@ -93,7 +93,7 @@ where
 /// which renames duplicate columns to ensure each column has a unique name.
 ///
 /// For example, columns `["A", "B", "A", "A"]` become `["A", "B", "A_2", "A_3"]`.
-pub fn deduplicate_column_names(batch: RecordBatch) -> RecordBatch {
+pub fn disambiguate_column_names(batch: RecordBatch) -> RecordBatch {
     let schema = batch.schema();
     let fields = schema.fields();
 
@@ -137,7 +137,7 @@ pub fn deduplicate_column_names(batch: RecordBatch) -> RecordBatch {
 
     // Create new RecordBatch with the new schema but same column data
     RecordBatch::try_new(new_schema, batch.columns().to_vec())
-        .expect("deduplicate_column_names: schema and columns should be compatible")
+        .expect("disambiguate_column_names: schema and columns should be compatible")
 }
 
 #[cfg(test)]
@@ -198,7 +198,7 @@ mod tests {
     }
 
     #[test]
-    fn test_deduplicate_column_names_no_duplicates() {
+    fn test_disambiguate_column_names_no_duplicates() {
         let schema = Schema::new(vec![
             Field::new("a", DataType::Int32, false),
             Field::new("b", DataType::Int32, false),
@@ -213,14 +213,14 @@ mod tests {
         )
         .unwrap();
 
-        let result = deduplicate_column_names(batch);
+        let result = disambiguate_column_names(batch);
         let schema = result.schema();
         let names: Vec<_> = schema.fields().iter().map(|f| f.name().as_str()).collect();
         assert_eq!(names, vec!["a", "b", "c"]);
     }
 
     #[test]
-    fn test_deduplicate_column_names_with_duplicates() {
+    fn test_disambiguate_column_names_with_duplicates() {
         // Test case from dbt-core: ["A", "B", "A", "A"] -> ["A", "B", "A_2", "A_3"]
         let schema = Schema::new(vec![
             Field::new("A", DataType::Int32, false),
@@ -238,14 +238,14 @@ mod tests {
         )
         .unwrap();
 
-        let result = deduplicate_column_names(batch);
+        let result = disambiguate_column_names(batch);
         let schema = result.schema();
         let names: Vec<_> = schema.fields().iter().map(|f| f.name().as_str()).collect();
         assert_eq!(names, vec!["A", "B", "A_2", "A_3"]);
     }
 
     #[test]
-    fn test_deduplicate_column_names_multiple_duplicates() {
+    fn test_disambiguate_column_names_multiple_duplicates() {
         // Test with multiple different duplicate column names
         let schema = Schema::new(vec![
             Field::new("x", DataType::Int32, false),
@@ -259,7 +259,7 @@ mod tests {
             .collect();
         let batch = RecordBatch::try_new(Arc::new(schema), cols).unwrap();
 
-        let result = deduplicate_column_names(batch);
+        let result = disambiguate_column_names(batch);
         let schema = result.schema();
         let names: Vec<_> = schema.fields().iter().map(|f| f.name().as_str()).collect();
         assert_eq!(names, vec!["x", "y", "x_2", "y_2", "x_3"]);
