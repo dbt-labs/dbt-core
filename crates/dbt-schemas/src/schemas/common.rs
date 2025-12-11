@@ -682,7 +682,10 @@ pub struct DbtChecksumObject {
 
 impl Default for DbtChecksum {
     fn default() -> Self {
-        Self::String("".to_string())
+        Self::Object(DbtChecksumObject {
+            name: "".to_string(),
+            checksum: "".to_string(),
+        })
     }
 }
 
