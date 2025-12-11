@@ -31,8 +31,9 @@ use dbt_schemas::schemas::relations::base::BaseRelation;
 use dbt_schemas::schemas::serde::minijinja_value_to_typed_struct;
 use dbt_schemas::schemas::{CommonAttributes, InternalDbtNodeWrapper};
 use dbt_xdbc::bigquery::{
-    INGEST_FILE_DELIMITER, INGEST_PATH, INGEST_SCHEMA, QUERY_DESTINATION_TABLE,
-    UPDATE_DATASET_AUTHORIZE_VIEW_TO_DATASETS, UPDATE_TABLE_COLUMNS_DESCRIPTION,
+    COPY_TABLE_DESTINATION, COPY_TABLE_SOURCE, COPY_TABLE_WRITE_DISPOSITION, INGEST_FILE_DELIMITER,
+    INGEST_PATH, INGEST_SCHEMA, QUERY_DESTINATION_TABLE, UPDATE_DATASET_AUTHORIZE_VIEW_TO_DATASETS,
+    UPDATE_TABLE_COLUMNS_DESCRIPTION,
 };
 use dbt_xdbc::{Connection, QueryCtx};
 use indexmap::IndexMap;
@@ -843,6 +844,9 @@ impl TypedBaseAdapter for BigqueryAdapter {
     }
 
     /// https://github.com/dbt-labs/dbt-adapters/blob/4a00354a497214d9043bf4122810fe2d04de17bb/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L415
+    ///
+    /// This uses the BigQuery SDK's copy_table API instead of SQL to properly handle partitioned tables.
+    /// Reference: https://cloud.google.com/python/docs/reference/bigquery/latest/google.cloud.bigquery.client.Client.html#google_cloud_bigquery_client_Client_copy_table
     fn copy_table(
         &self,
         state: &State,
@@ -860,53 +864,46 @@ impl TypedBaseAdapter for BigqueryAdapter {
             ));
         }
 
-        let source_fqn = source.render_self_as_str();
+        let source_fqn = format!(
+            "{}.{}.{}",
+            source.database_as_str()?,
+            source.schema_as_str()?,
+            source.identifier_as_str()?
+        );
+        let dest_fqn = format!(
+            "{}.{}.{}",
+            dest.database_as_str()?,
+            dest.schema_as_str()?,
+            dest.identifier_as_str()?
+        );
 
-        let dest_schema = dest.schema_as_str()?;
-        let dest_identifier = dest.identifier_as_str()?;
-        let dest_fqn = dest.render_self_as_str();
-
-        // CREATE TABLE CLONE errors when the dest relation already exists
-        // CREATE TABLE CLONE is the same as `bq cp` but with writeDisposition set to "WRITE_EMPTY",
-        // more details see https://cloud.google.com/bigquery/docs/table-clones-create#api
-        //
-        // but the existing bigquery-adapter uses other options WRITE_TRUNCATE and WRITE_APPEND depending on the materialization value
-        // it uses https://cloud.google.com/python/docs/reference/bigquery/latest/google.cloud.bigquery.client.Client.html#google_cloud_bigquery_client_Client_copy_table
-        // more details see
-        // a copy_table parameter - https://cloud.google.com/python/docs/reference/bigquery/latest/google.cloud.bigquery.job.CopyJobConfig
-        // TODO: revisit the quoting used here after https://github.com/dbt-labs/fs/pull/2724 is merged
-        let sql = if truncate {
-            // truncate
-            format!(
-                "IF EXISTS (SELECT 1 FROM {dest_schema}.INFORMATION_SCHEMA.TABLES WHERE table_name = '{dest_identifier}') THEN
-                    DELETE FROM {dest_fqn} WHERE 1=1;
-                    INSERT INTO {dest_fqn}
-                    SELECT * FROM {source_fqn};
-                ELSE
-                    CREATE TABLE {dest_fqn} CLONE {source_fqn};
-                END IF;",
-            )
+        // Determine write disposition based on materialization
+        // WRITE_TRUNCATE for table materialization, WRITE_APPEND for incremental
+        let write_disposition = if truncate {
+            "WRITE_TRUNCATE"
         } else {
-            // append
-            format!(
-                "IF EXISTS (SELECT 1 FROM {dest_schema}.INFORMATION_SCHEMA.TABLES WHERE table_name = '{dest_identifier}') THEN
-                    INSERT INTO {dest_fqn}
-                    SELECT * FROM {source_fqn};
-                ELSE
-                    CREATE TABLE {dest_fqn} CLONE {source_fqn};
-                END IF;"
-            )
+            "WRITE_APPEND"
         };
 
+        let mut options = self.get_adbc_execute_options(state);
+        options.extend(vec![
+            (
+                COPY_TABLE_SOURCE.to_string(),
+                OptionValue::String(source_fqn),
+            ),
+            (
+                COPY_TABLE_DESTINATION.to_string(),
+                OptionValue::String(dest_fqn),
+            ),
+            (
+                COPY_TABLE_WRITE_DISPOSITION.to_string(),
+                OptionValue::String(write_disposition.to_string()),
+            ),
+        ]);
+
         let ctx = query_ctx_from_state(state)?.with_desc("copy_table adapter call");
-        self.engine.execute_with_options(
-            Some(state),
-            &ctx,
-            conn,
-            &sql,
-            self.get_adbc_execute_options(state),
-            false,
-        )?;
+        self.engine
+            .execute_with_options(Some(state), &ctx, conn, "", options, false)?;
 
         Ok(())
     }

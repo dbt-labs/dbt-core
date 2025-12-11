@@ -9,7 +9,7 @@
 	type='table'
    ) -%}
 
-  {# The options here are unstable and susceptible to breaking changes #}
+  {# Though adapter.execute supports passing the Arrow ADBC Statement options, it is not recommended to use in any user defined macros. #}
   {% do adapter.execute(
     sql=compiled_code,
     auto_begin=False,

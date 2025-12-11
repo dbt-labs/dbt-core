@@ -8,7 +8,7 @@ use dbt_schemas::schemas::relations::base::{
 };
 use dbt_schemas::schemas::serde::minijinja_value_to_typed_struct;
 use dbt_schemas::schemas::{InternalDbtNodeAttributes, InternalDbtNodeWrapper};
-use minijinja::arg_utils::{ArgParser, ArgsIter};
+use minijinja::arg_utils::ArgsIter;
 use minijinja::value::{Enumerator, Object, ValueKind};
 use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State};
 use minijinja::{Value, listener::RenderingEventListener};
@@ -390,12 +390,13 @@ pub trait StaticBaseRelation: fmt::Debug + Send + Sync {
     /// Create a new relation from the given arguments
     /// impl for api.Relation.create
     fn create(&self, args: &[Value]) -> Result<Value, MinijinjaError> {
-        let mut args = ArgParser::new(args, None);
-        let database: Option<String> = args.get("database").ok();
-        let schema: Option<String> = args.get("schema").ok();
-        let identifier: Option<String> = args.get("identifier").ok();
-        let relation_type: Option<String> = args.get("type").ok();
-        let custom_quoting: Option<Value> = args.get("quote_policy").ok();
+        let iter = ArgsIter::new("Relation.create", &[], args);
+        let database = iter.next_kwarg::<Option<String>>("database")?;
+        let schema = iter.next_kwarg::<Option<String>>("schema")?;
+        let identifier = iter.next_kwarg::<Option<String>>("identifier")?;
+        let relation_type = iter.next_kwarg::<Option<Value>>("type")?;
+        let custom_quoting = iter.next_kwarg::<Option<Value>>("quote_policy")?;
+        iter.finish()?;
 
         // error is intentionally silenced
         let custom_quoting = custom_quoting
@@ -411,16 +412,24 @@ pub trait StaticBaseRelation: fmt::Debug + Send + Sync {
             database,
             schema,
             identifier,
-            relation_type.map(|s: String| RelationType::from(s.as_str())),
+            relation_type.and_then(|v: Value| {
+                if v.is_none() || v.is_undefined() {
+                    None
+                } else {
+                    Some(RelationType::from(v.as_str().unwrap_or_default()))
+                }
+            }),
             custom_quoting,
         )
     }
 
     /// Get the SCD arguments for the relation
     fn scd_args(&self, args: &[Value]) -> Result<Value, MinijinjaError> {
-        let mut args = ArgParser::new(args, None);
-        let primary_key: Value = args.get("primary_key").unwrap();
-        let updated_at: String = args.get("updated_at").unwrap();
+        let iter = ArgsIter::new("Relation.scd_args", &[], args);
+        let primary_key = iter.next_kwarg::<Value>("primary_key")?;
+        let updated_at = iter.next_kwarg::<String>("updated_at")?;
+        iter.finish()?;
+
         let mut scd_args = vec![];
         // Check if minijinja value is a vector
         match primary_key.kind() {

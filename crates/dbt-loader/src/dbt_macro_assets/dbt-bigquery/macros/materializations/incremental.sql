@@ -76,10 +76,10 @@
   {%- set full_refresh_mode = (should_full_refresh()) -%}
   {%- set language = model['language'] %}
 
-  {%- set target_relation = this %}
-  {%- set existing_relation = load_relation(this) %}
   {# Deviation from Core: we require the temp relation to have a type #}
-  {%- set tmp_relation = make_temp_relation(this).incorporate(type='table') %}
+  {%- set target_relation = this.incorporate(type='table') %}
+  {%- set existing_relation = load_relation(this) %}
+  {%- set tmp_relation = make_temp_relation(this) %}
 
   {#-- Validate early so we don't run SQL if the strategy is invalid --#}
   {% set strategy = dbt_bigquery_validate_get_incremental_strategy(config) -%}
@@ -165,8 +165,6 @@
   {% endif %}
 
   {{ run_hooks(post_hooks) }}
-
-  {% set target_relation = this.incorporate(type='table') %}
 
   {% set should_revoke = should_revoke(existing_relation, full_refresh_mode) %}
   {% do apply_grants(target_relation, grant_config, should_revoke) %}

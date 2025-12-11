@@ -108,3 +108,6 @@ pub const CREATE_NOTEBOOK_EXECUTE_JOB_REQ_PROJECT: &str =
     "adbc.bigquery.notebook_execute_job.project";
 pub const CREATE_NOTEBOOK_EXECUTE_JOB_REQ_REGION: &str =
     "adbc.bigquery.notebook_execute_job.region";
+pub const COPY_TABLE_SOURCE: &str = "adbc.bigquery.copy_table.source";
+pub const COPY_TABLE_DESTINATION: &str = "adbc.bigquery.copy_table.destination";
+pub const COPY_TABLE_WRITE_DISPOSITION: &str = "adbc.bigquery.copy_table.write_disposition";

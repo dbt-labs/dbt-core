@@ -100,7 +100,7 @@
   tmp_relation, target_relation, sql, unique_key, partition_by, dest_columns, tmp_relation_exists, copy_partitions
   ) %}
   {%- if tmp_relation_exists is false -%}
-  {# We run temp table creation in a separated script to move to partitions copy if it doesn't already exist #}
+  {# We run temp table creation in a separated script to move to partitions copy if it does not already exist #}
     {%- call statement('create_tmp_relation_for_copy', language='sql') -%}
       {{ bq_create_table_as(partition_by, True, tmp_relation, sql, 'sql')
     }}
@@ -110,7 +110,14 @@
     select distinct {{ partition_by.render_wrapped() }}
     from {{ tmp_relation }}
   {%- endset -%}
-  {%- set partitions = run_query(partitions_sql).columns[0].values() -%}
+  {# INTENTIONAL DIVERGENCE since otherwise the query will be executed using a client with the Storage Read API enabled #}
+  {# that would return null values for the partition pseudo-columns #}
+  {%- set partitions = _run_query_with_options(
+    partitions_sql,
+    options={
+      "adbc.bigquery.sql.query.use_storage_api_disabled_client": "1"
+    }
+  ).columns[0].values() -%}
   {# We copy the partitions #}
   {%- do bq_copy_partitions(tmp_relation, target_relation, partitions, partition_by) -%}
   -- Clean up the temp table
