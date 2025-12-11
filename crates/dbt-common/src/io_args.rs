@@ -349,6 +349,8 @@ pub struct EvalArgs {
     pub local_execution_backend: LocalExecutionBackendKind,
     /// Does not apply to interactive checkpoints.
     pub skip_checkpoints: bool,
+    /// Skip installation of private dependencies (useful for build conformance testing)
+    pub skip_private_deps: bool,
 }
 impl fmt::Debug for EvalArgs {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

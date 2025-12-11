@@ -41,6 +41,7 @@ pub async fn get_or_install_packages(
     lock: bool,
     vars: BTreeMap<String, dbt_serde_yaml::Value>,
     version_check: bool,
+    skip_private_deps: bool,
     token: &CancellationToken,
 ) -> FsResult<(DbtPackagesLock, Vec<UpstreamProject>)> {
     let hub_url_from_env = std::env::var("DBT_PACKAGE_HUB_URL");
@@ -94,6 +95,7 @@ pub async fn get_or_install_packages(
                 &mut hub_registry,
                 dbt_packages,
                 version_check,
+                skip_private_deps,
                 token,
             )
             .await?
@@ -138,6 +140,7 @@ pub async fn get_or_install_packages(
             env,
             &dbt_packages_lock,
             packages_install_path,
+            skip_private_deps,
         )
         .await?;
     }
@@ -175,6 +178,7 @@ pub async fn get_or_install_packages(
                 env,
                 &dbt_packages_lock,
                 packages_install_path,
+                skip_private_deps,
             )
             .await?;
             for package in dbt_packages_lock.packages.iter() {

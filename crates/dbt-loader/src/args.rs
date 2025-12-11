@@ -47,6 +47,8 @@ pub struct LoadArgs {
     /// Setting this will cause the 'load' phase to skip a lot of work
     /// and only check the file in the root package.
     pub prev_dbt_state: Option<Arc<DbtState>>,
+    /// Skip installation of private dependencies
+    pub skip_private_deps: bool,
 }
 
 impl LoadArgs {
@@ -71,6 +73,7 @@ impl LoadArgs {
             inline_sql: None, // Will be set separately when needed
             enable_persist_compare_package: arg.command == FsCommand::Extension("compare"),
             prev_dbt_state: None,
+            skip_private_deps: arg.skip_private_deps,
         }
     }
 

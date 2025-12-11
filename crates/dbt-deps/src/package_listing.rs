@@ -4,6 +4,7 @@ use std::{
     path::Path,
 };
 
+use dbt_common::tracing::emit::emit_info_log_message;
 use dbt_common::{ErrorCode, FsResult, err, io_args::IoArgs, unexpected_fs_err};
 use dbt_jinja_utils::{
     jinja_environment::JinjaEnv, phases::load::LoadContext, serde::into_typed_with_jinja,
@@ -72,6 +73,7 @@ pub struct PackageListing {
     pub io_args: IoArgs,
     pub vars: BTreeMap<String, dbt_serde_yaml::Value>,
     pub packages: HashMap<String, UnpinnedPackage>,
+    pub skip_private_deps: bool,
 }
 
 impl PackageListing {
@@ -80,7 +82,13 @@ impl PackageListing {
             io_args,
             vars,
             packages: HashMap::new(),
+            skip_private_deps: false,
         }
+    }
+
+    pub fn with_skip_private_deps(mut self, skip: bool) -> Self {
+        self.skip_private_deps = skip;
+        self
     }
 
     pub fn in_dir(&self) -> &Path {
@@ -273,6 +281,15 @@ impl PackageListing {
                 }?;
 
                 private_package.private = Verbatim::from(private_package_private);
+
+                if self.skip_private_deps {
+                    // Skip private packages when skip_private_deps is enabled
+                    emit_info_log_message(format!(
+                        "Skipping private package {} due to --skip-private-deps flag",
+                        private_package.private.as_ref()
+                    ));
+                    return Ok(());
+                }
 
                 let private_package_url = get_resolved_url(&private_package)?;
 

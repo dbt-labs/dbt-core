@@ -222,6 +222,7 @@ pub async fn load(
         arg.lock,
         arg.vars.clone(),
         arg.version_check,
+        arg.skip_private_deps,
         token,
     )
     .await?;

@@ -34,6 +34,7 @@ pub async fn install_packages(
     jinja_env: &JinjaEnv,
     dbt_packages_lock: &DbtPackagesLock,
     packages_install_path: &Path,
+    skip_private_deps: bool,
 ) -> FsResult<()> {
     // Cleanup package-lock.yml
     let package_lock_str = dbt_serde_yaml::to_string(&dbt_packages_lock).unwrap();
@@ -67,7 +68,8 @@ pub async fn install_packages(
     if dbt_packages_lock.packages.is_empty() {
         return Ok(());
     }
-    let mut package_listing = PackageListing::new(io_args.clone(), vars.clone());
+    let mut package_listing = PackageListing::new(io_args.clone(), vars.clone())
+        .with_skip_private_deps(skip_private_deps);
 
     // Collect fusion-schema-compat upgrade suggestions
     let mut fusion_compat_suggestions: Vec<(String, String, String)> = Vec::new();
@@ -226,6 +228,16 @@ pub async fn install_packages(
                 }
             }
             UnpinnedPackage::Private(private_unpinned_package) => {
+                if skip_private_deps {
+                    emit_info_log_message(format!(
+                        "Skipping private package {} due to --skip-private-deps flag",
+                        private_unpinned_package
+                            .name
+                            .as_ref()
+                            .unwrap_or(&private_unpinned_package.private)
+                    ));
+                    continue;
+                }
                 let (tmp_dir, checkout_path, commit_sha) = handle_git_like_package(
                     &private_unpinned_package.private,
                     &private_unpinned_package.revisions,

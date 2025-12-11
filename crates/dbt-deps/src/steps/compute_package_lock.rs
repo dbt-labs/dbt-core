@@ -19,6 +19,7 @@ use crate::{hub_client::HubClient, package_listing::PackageListing};
 
 use super::load_dbt_packages;
 
+#[allow(clippy::too_many_arguments)]
 pub async fn compute_package_lock(
     io: &IoArgs,
     vars: &BTreeMap<String, dbt_serde_yaml::Value>,
@@ -26,14 +27,17 @@ pub async fn compute_package_lock(
     hub_registry: &mut HubClient,
     dbt_packages: &DbtPackages,
     version_check: bool,
+    skip_private_deps: bool,
     token: &CancellationToken,
 ) -> FsResult<DbtPackagesLock> {
     let sha1_hash = sha1_hash_packages(&dbt_packages.packages);
     // First step, is to flatten into a single list of packages
     let mut dbt_packages_lock = DbtPackagesLock::default();
-    let mut package_listing = PackageListing::new(io.clone(), vars.clone());
+    let mut package_listing =
+        PackageListing::new(io.clone(), vars.clone()).with_skip_private_deps(skip_private_deps);
     package_listing.hydrate_dbt_packages(dbt_packages, jinja_env)?;
-    let mut final_listing = PackageListing::new(io.clone(), vars.clone());
+    let mut final_listing =
+        PackageListing::new(io.clone(), vars.clone()).with_skip_private_deps(skip_private_deps);
     hub_registry.hydrate_index().await?;
     resolve_packages(
         io,
@@ -152,7 +156,8 @@ async fn resolve_packages(
     version_check: bool,
     token: &CancellationToken,
 ) -> FsResult<()> {
-    let mut next_listing = PackageListing::new(io.clone(), vars.clone());
+    let mut next_listing = PackageListing::new(io.clone(), vars.clone())
+        .with_skip_private_deps(package_listing.skip_private_deps);
     for unpinned_package in package_listing.packages.values_mut() {
         token.check_cancellation()?;
         match unpinned_package {
