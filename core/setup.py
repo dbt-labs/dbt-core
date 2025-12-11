@@ -72,9 +72,9 @@ setup(
         "dbt-extractor>=0.5.0,<=0.6",
         "dbt-semantic-interfaces>=0.9.0,<0.10",
         # Minor versions for these are expected to be backwards-compatible
-        "dbt-common>=1.27.0,<2.0",
+        "dbt-common>=1.37.0,<2.0",
         "dbt-adapters>=1.15.5,<2.0",
-        "dbt-protos>=1.0.346,<2.0",
+        "dbt-protos>=1.0.405,<2.0",
         "pydantic<3",
         # ----
         # Expect compatibility with all new versions of these packages, so lower bounds only.
