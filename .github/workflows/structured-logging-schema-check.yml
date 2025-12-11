@@ -107,7 +107,7 @@ jobs:
 
       - name: Run postgres setup script
         run: |
-          ./tests/setup_db.sh
+          ./scripts/setup_db.sh
         env:
           PGHOST: localhost
           PGPORT: 5432
