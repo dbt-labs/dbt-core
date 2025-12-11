@@ -11,7 +11,7 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         &str, // version
     ),
     &str, // checksum
-); 115] = [
+); 105] = [
     (
         ("bigquery", "apple-darwin", "aarch64", "0.21.0+dbt0.21.2"),
         "1e605796f25451099ff4717358fd4e8950e33aa8a68e11935ac20cd8f53c8fe9",
@@ -73,64 +73,24 @@ pub static SORTED_CDN_DRIVER_CHECKSUMS: [(
         "3c8142b54d5dade4b6a0bf7973b8f300933a93c0cffa6127c1e2cbc1bd09c2ce",
     ),
     (
-        ("databricks", "apple-darwin", "aarch64", "0.18.0+dbt0.0.4"),
-        "3e21c4c8f547c99bc97751b46654cffa0a2be4d2522af8428ea02ea4b1ed6146",
+        ("databricks", "apple-darwin", "aarch64", "0.21.0+dbt0.21.4"),
+        "cf8df5107e40ff4615c014089e90b0f21f5b07ead8f242ff53c374778ba7bffb",
     ),
     (
-        ("databricks", "apple-darwin", "aarch64", "0.18.0+dbt0.0.5"),
-        "76aa60a979bb141dff6af4ecdf6881b7c341d02364552d2274e954add5f52cb8",
+        ("databricks", "apple-darwin", "x86_64", "0.21.0+dbt0.21.4"),
+        "907b430ca6aac75f613f72b365d7a436d46c8b7a42adbccf51b22dfbd4d885be",
     ),
     (
-        ("databricks", "apple-darwin", "aarch64", "0.18.0+dbt0.0.6"),
-        "747891eaeef3d058a2829aafc3b69ef3f4d07f9998ebe56b3add4d5041b7c6e9",
+        ("databricks", "manylinux_2_17-linux-gnu", "aarch64", "0.21.0+dbt0.21.4"),
+        "7b4be0b85c904fcf98805f5ef3b1b6d8988cdedbe33306c71f451465cd19c5df",
     ),
     (
-        ("databricks", "apple-darwin", "x86_64", "0.18.0+dbt0.0.4"),
-        "bcb45c92249b6fc57a7dc98259f2d5d18016466e820f1a423212bc919316cc5b",
+        ("databricks", "manylinux_2_17-linux-gnu", "x86_64", "0.21.0+dbt0.21.4"),
+        "1fe82029720c5e2192c388ca10a9251e9cffdc0453798eb2f270dcbc3865a5a8",
     ),
     (
-        ("databricks", "apple-darwin", "x86_64", "0.18.0+dbt0.0.5"),
-        "2c420960835c8ed7e792937f01022213ca07a975e2c1a0a5b0ad7ad7f8e37851",
-    ),
-    (
-        ("databricks", "apple-darwin", "x86_64", "0.18.0+dbt0.0.6"),
-        "ff2dedef48b7fade19c403635354436c39c352ae8549fbfa7cdc3953ff86bcdd",
-    ),
-    (
-        ("databricks", "manylinux_2_17-linux-gnu", "aarch64", "0.18.0+dbt0.0.4"),
-        "cc1e2112a2571c77924602829963055d1b7ae64df16bd827a177bc7ecb6cbe55",
-    ),
-    (
-        ("databricks", "manylinux_2_17-linux-gnu", "aarch64", "0.18.0+dbt0.0.5"),
-        "83fdc2dc6dd1f821a6a1975ff27fd73cd0b8a43d15ab2a43f874d044e7590dd9",
-    ),
-    (
-        ("databricks", "manylinux_2_17-linux-gnu", "aarch64", "0.18.0+dbt0.0.6"),
-        "158a093844214dab63bf4ac3e1eb3ceba6956a7bb87265ff6874d4f26d11f023",
-    ),
-    (
-        ("databricks", "manylinux_2_17-linux-gnu", "x86_64", "0.18.0+dbt0.0.4"),
-        "7fdd7616dfbbc114e0f57fa3c7abe5a2d312562678e295bdc44a5c308c7952ed",
-    ),
-    (
-        ("databricks", "manylinux_2_17-linux-gnu", "x86_64", "0.18.0+dbt0.0.5"),
-        "bb9a5773f5ae12f2bf46e113dc9f559e182b0833fe0e9174356ed8145e529996",
-    ),
-    (
-        ("databricks", "manylinux_2_17-linux-gnu", "x86_64", "0.18.0+dbt0.0.6"),
-        "a2ad1eda57b708ead1843dd1e07dea10639f90e478dad058dbe1dd11eea0265b",
-    ),
-    (
-        ("databricks", "pc-windows-msvc", "x86_64", "0.18.0+dbt0.0.4"),
-        "934e8eef44da53431bb7bd7539a0049de83f5254e5db9567ceee327c4acb01c0",
-    ),
-    (
-        ("databricks", "pc-windows-msvc", "x86_64", "0.18.0+dbt0.0.5"),
-        "2e55c582a0de81b17f2d5fbd3ddf373e2c404b51c4a7ef6bf9c522b0591c4f66",
-    ),
-    (
-        ("databricks", "pc-windows-msvc", "x86_64", "0.18.0+dbt0.0.6"),
-        "ed516f0aedde04c97f079628a18ca3c1a683c18c3ffc218a5faca511c2e27c05",
+        ("databricks", "pc-windows-msvc", "x86_64", "0.21.0+dbt0.21.4"),
+        "21c2e0bb9cb8d42431243681bb05b4abea75f3708ca51983d0888795e18b3a94",
     ),
     (
         ("duckdb", "apple-darwin", "aarch64", "0.18.0+dbt0.0.1"),
