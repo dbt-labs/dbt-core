@@ -3,7 +3,6 @@ use crate::base_adapter::AdapterTyping;
 use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
 use crate::metadata::*;
 use crate::typed_adapter::TypedBaseAdapter;
-use dbt_schemas::schemas::common::{ConstraintSupport, ConstraintType};
 use minijinja::Value;
 
 use std::borrow::Cow;
@@ -74,18 +73,6 @@ impl TypedBaseAdapter for RedshiftAdapter {
         }
 
         Ok(Value::from(()))
-    }
-
-    /// https://github.com/dbt-labs/dbt-adapters/blob/2a94cc75dba1f98fa5caff1f396f5af7ee444598/dbt-redshift/src/dbt/adapters/redshift/impl.py#L53
-    fn get_constraint_support(&self, ct: ConstraintType) -> ConstraintSupport {
-        match ct {
-            ConstraintType::Check => ConstraintSupport::NotSupported,
-            ConstraintType::NotNull => ConstraintSupport::Enforced,
-            ConstraintType::Unique | ConstraintType::PrimaryKey | ConstraintType::ForeignKey => {
-                ConstraintSupport::NotEnforced
-            }
-            _ => ConstraintSupport::NotSupported,
-        }
     }
 }
 

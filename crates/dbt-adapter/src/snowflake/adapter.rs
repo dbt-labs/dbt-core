@@ -6,7 +6,6 @@ use crate::{AdapterTyping, metadata::*};
 use arrow::array::StringArray;
 use dbt_agate::AgateTable;
 use dbt_common::AdapterResult;
-use dbt_schemas::schemas::common::{ConstraintSupport, ConstraintType};
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -68,16 +67,6 @@ impl TypedBaseAdapter for SnowflakeAdapter {
         }
 
         Ok(result)
-    }
-
-    /// https://github.com/dbt-labs/dbt-adapters/blob/aa1de3d16267a456326a36045701fb48a61a6b6c/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L74
-    fn get_constraint_support(&self, ct: ConstraintType) -> ConstraintSupport {
-        match ct {
-            ConstraintType::Check => ConstraintSupport::NotSupported,
-            ConstraintType::NotNull | ConstraintType::ForeignKey => ConstraintSupport::Enforced,
-            ConstraintType::Unique | ConstraintType::PrimaryKey => ConstraintSupport::NotEnforced,
-            _ => ConstraintSupport::NotSupported,
-        }
     }
 }
 

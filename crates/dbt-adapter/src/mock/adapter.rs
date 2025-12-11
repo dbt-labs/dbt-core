@@ -14,7 +14,7 @@ use arrow::record_batch::RecordBatch;
 use dbt_agate::AgateTable;
 use dbt_common::behavior_flags::BehaviorFlag;
 use dbt_common::cancellation::CancellationToken;
-use dbt_schemas::schemas::common::{ConstraintSupport, ConstraintType, ResolvedQuoting};
+use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::relations::base::{BaseRelation, TableFormat};
 use dbt_xdbc::{Connection, QueryCtx};
 use minijinja::{State, Value};
@@ -211,10 +211,6 @@ impl TypedBaseAdapter for MockAdapter {
             BehaviorFlag::new("is_unknown", is_unknown, None, None, None),
         ];
         flags
-    }
-
-    fn get_constraint_support(&self, _ct: ConstraintType) -> ConstraintSupport {
-        unimplemented!("constraint support detection in MockAdapter")
     }
 }
 

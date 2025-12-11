@@ -3,7 +3,6 @@ use crate::base_adapter::AdapterTyping;
 use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
 use crate::metadata::*;
 use crate::typed_adapter::TypedBaseAdapter;
-use dbt_schemas::schemas::common::{ConstraintSupport, ConstraintType};
 
 use minijinja::Value;
 use std::fmt;
@@ -62,15 +61,6 @@ impl TypedBaseAdapter for PostgresAdapter {
         } else {
             // Replay engine does not have a configured database
             Ok(Value::from(()))
-        }
-    }
-
-    fn get_constraint_support(&self, ct: ConstraintType) -> ConstraintSupport {
-        match ct {
-            ConstraintType::Check => ConstraintSupport::NotSupported,
-            ConstraintType::NotNull | ConstraintType::ForeignKey => ConstraintSupport::Enforced,
-            ConstraintType::Unique | ConstraintType::PrimaryKey => ConstraintSupport::NotEnforced,
-            _ => ConstraintSupport::NotSupported,
         }
     }
 }

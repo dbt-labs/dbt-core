@@ -13,7 +13,6 @@ use crate::query_ctx::query_ctx_from_state;
 use crate::record_batch_utils::get_column_values;
 use crate::relation::RelationObject;
 use crate::relation::bigquery::*;
-use crate::render_constraint::render_column_constraint;
 use crate::typed_adapter::TypedBaseAdapter;
 use adbc_core::options::OptionValue;
 use arrow::array::StringArray;
@@ -23,7 +22,6 @@ use dashmap::DashMap;
 use dbt_agate::AgateTable;
 use dbt_common::serde_utils::convert_yml_to_value_map;
 use dbt_schemas::dbt_types::RelationType;
-use dbt_schemas::schemas::common::{ConstraintSupport, ConstraintType};
 use dbt_schemas::schemas::dbt_column::DbtColumn;
 use dbt_schemas::schemas::manifest::{
     BigqueryClusterConfig, BigqueryPartitionConfig, PartitionConfig,
@@ -567,34 +565,6 @@ impl TypedBaseAdapter for BigqueryAdapter {
         Ok(none_value())
     }
 
-    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L924
-    fn render_raw_columns_constraints(
-        &self,
-        columns_map: IndexMap<String, DbtColumn>,
-    ) -> AdapterResult<Vec<String>> {
-        let mut rendered_constraints: BTreeMap<String, String> = BTreeMap::new();
-        for (_, column) in columns_map.iter() {
-            for constraint in &column.constraints {
-                if let Some(rendered) =
-                    render_column_constraint(self.adapter_type(), constraint.clone())
-                {
-                    if let Some(s) = rendered_constraints.get_mut(&rendered) {
-                        s.push_str(&format!(" {rendered}"));
-                    } else {
-                        rendered_constraints.insert(column.name.clone(), rendered);
-                    }
-                }
-            }
-        }
-        let nested_columns =
-            self.nest_column_data_types(columns_map, Some(rendered_constraints))?;
-        let result = nested_columns
-            .into_values()
-            .map(|column| format!("{} {}", column.name, column.data_type.unwrap_or_default()))
-            .collect();
-        Ok(result)
-    }
-
     /// Example:
     /// columns: {
     ///     "a": {"name": "a", "data_type": "string", "description": ...},
@@ -1014,18 +984,6 @@ impl TypedBaseAdapter for BigqueryAdapter {
                     Err(e)
                 }
             }
-        }
-    }
-
-    /// https://github.com/dbt-labs/dbt-adapters/blob/4a00354a497214d9043bf4122810fe2d04de17bb/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L132
-    fn get_constraint_support(&self, ct: ConstraintType) -> ConstraintSupport {
-        match ct {
-            ConstraintType::Check | ConstraintType::Unique => ConstraintSupport::NotSupported,
-            ConstraintType::NotNull => ConstraintSupport::Enforced,
-            ConstraintType::PrimaryKey | ConstraintType::ForeignKey => {
-                ConstraintSupport::NotEnforced
-            }
-            _ => ConstraintSupport::NotSupported,
         }
     }
 }

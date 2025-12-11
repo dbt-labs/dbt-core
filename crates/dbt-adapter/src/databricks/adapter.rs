@@ -21,7 +21,7 @@ use dbt_agate::AgateTable;
 
 use dbt_common::{AdapterError, AdapterErrorKind};
 use dbt_schemas::dbt_types::RelationType;
-use dbt_schemas::schemas::common::{ConstraintSupport, ConstraintType, DbtMaterialization};
+use dbt_schemas::schemas::common::DbtMaterialization;
 use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::relations::base::BaseRelation;
 use dbt_schemas::schemas::{InternalDbtNodeAttributes, InternalDbtNodeWrapper};
@@ -504,18 +504,6 @@ impl TypedBaseAdapter for DatabricksAdapter {
             }
         }
         Ok(result)
-    }
-
-    /// https://github.com/databricks/dbt-databricks/blob/822b105b15e644676d9e1f47cbfd765cd4c1541f/dbt/adapters/databricks/constraints.py#L17
-    fn get_constraint_support(&self, ct: ConstraintType) -> ConstraintSupport {
-        match ct {
-            ConstraintType::Check | ConstraintType::NotNull => ConstraintSupport::Enforced,
-            ConstraintType::Unique => ConstraintSupport::NotSupported,
-            ConstraintType::PrimaryKey | ConstraintType::ForeignKey => {
-                ConstraintSupport::NotEnforced
-            }
-            _ => ConstraintSupport::NotSupported,
-        }
     }
 
     /// https://github.com/databricks/dbt-databricks/blob/4d82bd225df81296165b540d34ad5be43b45e44a/dbt/adapters/databricks/impl.py#L831

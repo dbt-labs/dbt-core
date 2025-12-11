@@ -9,6 +9,7 @@ use crate::query_ctx::query_ctx_from_state;
 use crate::record_batch_utils::{extract_first_value_as_i64, get_column_values};
 use crate::relation::BaseRelationConfig;
 use crate::relation::RelationObject;
+use crate::render_constraint::render_column_constraint;
 use crate::response::{AdapterResponse, ResultObject};
 use crate::snapshots::SnapshotStrategy;
 use crate::{
@@ -1015,29 +1016,63 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     }
 
     /// render_raw_columns_constraints
-    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1783
     fn render_raw_columns_constraints(
         &self,
         columns_map: IndexMap<String, DbtColumn>,
     ) -> AdapterResult<Vec<String>> {
-        let mut result = vec![];
-        for (_, column) in columns_map {
-            // TODO: handle quote
-            let col_name = column.name.clone();
-            let mut rendered_column_constraint = vec![format!(
-                "{} {}",
-                col_name,
-                column.data_type.as_deref().unwrap_or_default()
-            )];
-            for constraint in column.constraints {
-                let rendered = self.render_column_constraint(constraint);
-                if let Some(rendered) = rendered {
-                    rendered_column_constraint.push(rendered);
+        match self.adapter_type() {
+            AdapterType::Postgres
+            | AdapterType::Snowflake
+            | AdapterType::Databricks
+            | AdapterType::Redshift
+            | AdapterType::Salesforce => {
+                // https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1783
+                let mut result = vec![];
+                for (_, column) in columns_map {
+                    // TODO: handle quote
+                    let col_name = column.name.clone();
+                    let mut rendered_column_constraint = vec![format!(
+                        "{} {}",
+                        col_name,
+                        column.data_type.as_deref().unwrap_or_default()
+                    )];
+                    for constraint in column.constraints {
+                        let rendered = self.render_column_constraint(constraint);
+                        if let Some(rendered) = rendered {
+                            rendered_column_constraint.push(rendered);
+                        }
+                    }
+                    result.push(rendered_column_constraint.join(" ").to_string())
                 }
+                Ok(result)
             }
-            result.push(rendered_column_constraint.join(" ").to_string())
+            AdapterType::Bigquery => {
+                // https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L924
+                let mut rendered_constraints: BTreeMap<String, String> = BTreeMap::new();
+                for (_, column) in columns_map.iter() {
+                    for constraint in &column.constraints {
+                        if let Some(rendered) =
+                            render_column_constraint(self.adapter_type(), constraint.clone())
+                        {
+                            if let Some(s) = rendered_constraints.get_mut(&rendered) {
+                                s.push_str(&format!(" {rendered}"));
+                            } else {
+                                rendered_constraints.insert(column.name.clone(), rendered);
+                            }
+                        }
+                    }
+                }
+                let nested_columns =
+                    self.nest_column_data_types(columns_map, Some(rendered_constraints))?;
+                let result = nested_columns
+                    .into_values()
+                    .map(|column| {
+                        format!("{} {}", column.name, column.data_type.unwrap_or_default())
+                    })
+                    .collect();
+                Ok(result)
+            }
         }
-        Ok(result)
     }
 
     fn render_column_constraint(&self, constraint: Constraint) -> Option<String> {
@@ -1088,11 +1123,57 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     /// Given a constraint, return the support status of the constraint on this adapter.
     /// https://github.com/dbt-labs/dbt-adapters/blob/5379513bad9c75661b990a5ed5f32ac9c62a0758/dbt-adapters/src/dbt/adapters/base/impl.py#L293
     fn get_constraint_support(&self, ct: ConstraintType) -> ConstraintSupport {
-        match ct {
-            ConstraintType::Check => ConstraintSupport::NotSupported,
-            ConstraintType::NotNull | ConstraintType::ForeignKey => ConstraintSupport::Enforced,
-            ConstraintType::Unique | ConstraintType::PrimaryKey => ConstraintSupport::NotEnforced,
-            _ => ConstraintSupport::NotSupported,
+        use AdapterType::*;
+        use ConstraintSupport::*;
+        use ConstraintType::*;
+
+        match (self.adapter_type(), ct) {
+            // Postgres
+            (Postgres, NotNull) => Enforced,
+            (Postgres, ForeignKey) => Enforced,
+            (Postgres, Unique) => NotEnforced,
+            (Postgres, PrimaryKey) => NotEnforced,
+            (Postgres, Check) => NotSupported,
+            (Postgres, Custom) => NotSupported,
+
+            // Snowflake
+            // https://github.com/dbt-labs/dbt-adapters/blob/aa1de3d16267a456326a36045701fb48a61a6b6c/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L74
+            (Snowflake, NotNull) => Enforced,
+            (Snowflake, ForeignKey) => Enforced,
+            (Snowflake, Unique) => NotEnforced,
+            (Snowflake, PrimaryKey) => NotEnforced,
+            (Snowflake, Check) => NotSupported,
+            (Snowflake, Custom) => NotSupported,
+
+            // BigQuery
+            // https://github.com/dbt-labs/dbt-adapters/blob/4a00354a497214d9043bf4122810fe2d04de17bb/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L132
+            (Bigquery, NotNull) => Enforced,
+            (Bigquery, Unique) => NotSupported,
+            (Bigquery, PrimaryKey) => NotEnforced,
+            (Bigquery, ForeignKey) => NotEnforced,
+            (Bigquery, Check) => NotSupported,
+            (Bigquery, Custom) => NotSupported,
+
+            // Databricks
+            // https://github.com/databricks/dbt-databricks/blob/822b105b15e644676d9e1f47cbfd765cd4c1541f/dbt/adapters/databricks/constraints.py#L17
+            (Databricks, NotNull) => Enforced,
+            (Databricks, Unique) => NotSupported,
+            (Databricks, PrimaryKey) => NotEnforced,
+            (Databricks, ForeignKey) => NotEnforced,
+            (Databricks, Check) => Enforced,
+            (Databricks, Custom) => NotSupported,
+
+            // Redshift
+            // https://github.com/dbt-labs/dbt-adapters/blob/2a94cc75dba1f98fa5caff1f396f5af7ee444598/dbt-redshift/src/dbt/adapters/redshift/impl.py#L53
+            (Redshift, NotNull) => Enforced,
+            (Redshift, Unique) => NotEnforced,
+            (Redshift, PrimaryKey) => NotEnforced,
+            (Redshift, ForeignKey) => NotEnforced,
+            (Redshift, Check) => NotSupported,
+            (Redshift, Custom) => NotSupported,
+
+            // Salesforce
+            (Salesforce, _) => unimplemented!("Salesforce constraint support not implemented"),
         }
     }
 
