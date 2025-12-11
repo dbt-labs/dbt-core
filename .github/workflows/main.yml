@@ -292,7 +292,7 @@ jobs:
         with:
           timeout_minutes: 10
           max_attempts: 3
-          command: ./tests/setup_db.sh
+          command: ./scripts/setup_db.sh
 
       - name: Set up postgres (windows)
         if: runner.os == 'Windows'
