@@ -211,7 +211,7 @@ jobs:
 
       - name: Run postgres setup script
         run: |
-          ./test/setup_db.sh
+          ./scripts/setup_db.sh
         env:
           PGHOST: localhost
           PGPORT: 5432
@@ -292,7 +292,7 @@ jobs:
         with:
           timeout_minutes: 10
           max_attempts: 3
-          command: ./test/setup_db.sh
+          command: ./tests/setup_db.sh
 
       - name: Set up postgres (windows)
         if: runner.os == 'Windows'

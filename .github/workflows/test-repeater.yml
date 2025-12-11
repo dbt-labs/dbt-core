@@ -111,7 +111,7 @@ jobs:
         with:
           timeout_minutes: 10
           max_attempts: 3
-          command: ./test/setup_db.sh
+          command: ./tests/setup_db.sh
 
       - name: "Set up postgres (windows)"
         if: inputs.os == 'windows-latest'
