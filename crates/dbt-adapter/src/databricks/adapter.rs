@@ -17,7 +17,6 @@ use crate::record_batch_utils::get_column_values;
 use crate::relation::BaseRelationConfig;
 use crate::typed_adapter::TypedBaseAdapter;
 use arrow::array::{Array, StringArray};
-use dbt_agate::AgateTable;
 
 use dbt_common::{AdapterError, AdapterErrorKind};
 use dbt_schemas::dbt_types::RelationType;
@@ -537,30 +536,5 @@ impl TypedBaseAdapter for DatabricksAdapter {
         let redacted_sql = sql.replacen(full_parens, &format!("({redacted_pairs})"), 1);
 
         Ok(redacted_sql)
-    }
-    /// https://github.com/dbt-labs/dbt-adapters/blob/c16cc7047e8678f8bb88ae294f43da2c68e9f5cc/dbt-spark/src/dbt/adapters/spark/impl.py#L500
-    fn standardize_grants_dict(
-        &self,
-        grants_table: Arc<AgateTable>,
-    ) -> AdapterResult<BTreeMap<String, Vec<String>>> {
-        let record_batch = grants_table.original_record_batch();
-
-        let grantee_cols = get_column_values::<StringArray>(&record_batch, "Principal")?;
-        let privilege_cols = get_column_values::<StringArray>(&record_batch, "ActionType")?;
-        let object_type_cols = get_column_values::<StringArray>(&record_batch, "ObjectType")?;
-
-        let mut result = BTreeMap::new();
-        for i in 0..record_batch.num_rows() {
-            let privilege = privilege_cols.value(i);
-            let grantee = grantee_cols.value(i);
-            let object_type = object_type_cols.value(i);
-
-            if object_type == "TABLE" && privilege != "OWN" {
-                let list = result.entry(privilege.to_string()).or_insert_with(Vec::new);
-                list.push(grantee.to_string());
-            }
-        }
-
-        Ok(result)
     }
 }

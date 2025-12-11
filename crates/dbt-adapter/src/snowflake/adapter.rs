@@ -1,13 +1,7 @@
 use crate::adapter_engine::AdapterEngine;
-use crate::record_batch_utils::get_column_values;
 use crate::typed_adapter::TypedBaseAdapter;
 use crate::{AdapterTyping, metadata::*};
 
-use arrow::array::StringArray;
-use dbt_agate::AgateTable;
-use dbt_common::AdapterResult;
-
-use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::Arc;
 
@@ -42,33 +36,7 @@ impl AdapterTyping for SnowflakeAdapter {
     }
 }
 
-impl TypedBaseAdapter for SnowflakeAdapter {
-    /// reference: https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L329-L330
-    fn standardize_grants_dict(
-        &self,
-        grants_table: Arc<AgateTable>,
-    ) -> AdapterResult<BTreeMap<String, Vec<String>>> {
-        let record_batch = grants_table.original_record_batch();
-
-        let grantee_cols = get_column_values::<StringArray>(&record_batch, "grantee_name")?;
-        let granted_to_cols = get_column_values::<StringArray>(&record_batch, "granted_to")?;
-        let privilege_cols = get_column_values::<StringArray>(&record_batch, "privilege")?;
-
-        let mut result = BTreeMap::new();
-        for i in 0..record_batch.num_rows() {
-            let privilege = privilege_cols.value(i);
-            let grantee = grantee_cols.value(i);
-            let granted_to = granted_to_cols.value(i);
-
-            if privilege != "OWNERSHIP" && granted_to != "SHARE" && granted_to != "DATABASE_ROLE" {
-                let list = result.entry(privilege.to_string()).or_insert_with(Vec::new);
-                list.push(grantee.to_string());
-            }
-        }
-
-        Ok(result)
-    }
-}
+impl TypedBaseAdapter for SnowflakeAdapter {}
 
 #[cfg(test)]
 mod tests {
@@ -80,7 +48,7 @@ mod tests {
     use crate::config::AdapterConfig;
     use crate::query_comment::QueryCommentConfig;
     use dbt_auth::auth_for_backend;
-    use dbt_common::cancellation::never_cancels;
+    use dbt_common::{AdapterResult, cancellation::never_cancels};
     use dbt_schemas::schemas::relations::SNOWFLAKE_RESOLVED_QUOTING;
     use dbt_schemas::schemas::relations::base::ComponentName;
     use dbt_serde_yaml::Mapping;

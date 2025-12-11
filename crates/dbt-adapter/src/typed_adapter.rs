@@ -1201,19 +1201,70 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     ) -> AdapterResult<BTreeMap<String, Vec<String>>> {
         let record_batch = grants_table.original_record_batch();
 
-        let grantee_cols = get_column_values::<StringArray>(&record_batch, "grantee")?;
-        let privilege_cols = get_column_values::<StringArray>(&record_batch, "privilege_type")?;
+        match self.adapter_type() {
+            AdapterType::Postgres | AdapterType::Bigquery | AdapterType::Redshift => {
+                let grantee_cols = get_column_values::<StringArray>(&record_batch, "grantee")?;
+                let privilege_cols =
+                    get_column_values::<StringArray>(&record_batch, "privilege_type")?;
 
-        let mut result = BTreeMap::new();
-        for i in 0..record_batch.num_rows() {
-            let privilege = privilege_cols.value(i);
-            let grantee = grantee_cols.value(i);
+                let mut result = BTreeMap::new();
+                for i in 0..record_batch.num_rows() {
+                    let privilege = privilege_cols.value(i);
+                    let grantee = grantee_cols.value(i);
 
-            let list = result.entry(privilege.to_string()).or_insert_with(Vec::new);
-            list.push(grantee.to_string());
+                    let list = result.entry(privilege.to_string()).or_insert_with(Vec::new);
+                    list.push(grantee.to_string());
+                }
+
+                Ok(result)
+            }
+            AdapterType::Snowflake => {
+                // reference: https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L329-L330
+                let grantee_cols = get_column_values::<StringArray>(&record_batch, "grantee_name")?;
+                let granted_to_cols =
+                    get_column_values::<StringArray>(&record_batch, "granted_to")?;
+                let privilege_cols = get_column_values::<StringArray>(&record_batch, "privilege")?;
+
+                let mut result = BTreeMap::new();
+                for i in 0..record_batch.num_rows() {
+                    let privilege = privilege_cols.value(i);
+                    let grantee = grantee_cols.value(i);
+                    let granted_to = granted_to_cols.value(i);
+
+                    if privilege != "OWNERSHIP"
+                        && granted_to != "SHARE"
+                        && granted_to != "DATABASE_ROLE"
+                    {
+                        let list = result.entry(privilege.to_string()).or_insert_with(Vec::new);
+                        list.push(grantee.to_string());
+                    }
+                }
+
+                Ok(result)
+            }
+            AdapterType::Databricks => {
+                // https://github.com/dbt-labs/dbt-adapters/blob/c16cc7047e8678f8bb88ae294f43da2c68e9f5cc/dbt-spark/src/dbt/adapters/spark/impl.py#L500
+                let grantee_cols = get_column_values::<StringArray>(&record_batch, "Principal")?;
+                let privilege_cols = get_column_values::<StringArray>(&record_batch, "ActionType")?;
+                let object_type_cols =
+                    get_column_values::<StringArray>(&record_batch, "ObjectType")?;
+
+                let mut result = BTreeMap::new();
+                for i in 0..record_batch.num_rows() {
+                    let privilege = privilege_cols.value(i);
+                    let grantee = grantee_cols.value(i);
+                    let object_type = object_type_cols.value(i);
+
+                    if object_type == "TABLE" && privilege != "OWN" {
+                        let list = result.entry(privilege.to_string()).or_insert_with(Vec::new);
+                        list.push(grantee.to_string());
+                    }
+                }
+
+                Ok(result)
+            }
+            AdapterType::Salesforce => unimplemented!("Salesforce grants not implemented"),
         }
-
-        Ok(result)
     }
 
     /// Docs see the impl of this method from bigquery/adapter.rs
