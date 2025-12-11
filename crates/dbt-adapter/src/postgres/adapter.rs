@@ -1,10 +1,8 @@
 use crate::adapter_engine::AdapterEngine;
 use crate::base_adapter::AdapterTyping;
-use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
 use crate::metadata::*;
 use crate::typed_adapter::TypedBaseAdapter;
 
-use minijinja::Value;
 use std::fmt;
 use std::fmt::Debug;
 use std::sync::Arc;
@@ -41,26 +39,4 @@ impl Debug for PostgresAdapter {
     }
 }
 
-impl TypedBaseAdapter for PostgresAdapter {
-    fn verify_database(&self, database: String) -> AdapterResult<Value> {
-        let configured_database = self.engine.get_configured_database_name();
-        if let Some(configured_database) = configured_database {
-            if database != configured_database {
-                Err(AdapterError::new(
-                    AdapterErrorKind::UnexpectedDbReference,
-                    format!(
-                        "Cross-db references not allowed in the {} adapter ({} vs {})",
-                        self.adapter_type(),
-                        database,
-                        configured_database
-                    ),
-                ))
-            } else {
-                Ok(Value::from(()))
-            }
-        } else {
-            // Replay engine does not have a configured database
-            Ok(Value::from(()))
-        }
-    }
-}
+impl TypedBaseAdapter for PostgresAdapter {}

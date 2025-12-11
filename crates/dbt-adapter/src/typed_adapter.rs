@@ -47,6 +47,7 @@ use minijinja::{State, Value, args};
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt;
+use std::str::FromStr;
 use std::sync::Arc;
 
 /// Adapter with typed functions.
@@ -1380,8 +1381,66 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     }
 
     /// Used by redshift and postgres to check if the database string is consistent with what's in the project `config`
-    fn verify_database(&self, _database: String) -> AdapterResult<Value> {
-        unimplemented!("only available with either Postgres or Redshift adapter")
+    fn verify_database(&self, database: String) -> AdapterResult<Value> {
+        match self.adapter_type() {
+            AdapterType::Postgres => {
+                let configured_database = self.engine().get_configured_database_name();
+                if let Some(configured_database) = configured_database {
+                    if database != configured_database {
+                        Err(AdapterError::new(
+                            AdapterErrorKind::UnexpectedDbReference,
+                            format!(
+                                "Cross-db references not allowed in the {} adapter ({} vs {})",
+                                self.adapter_type(),
+                                database,
+                                configured_database
+                            ),
+                        ))
+                    } else {
+                        Ok(Value::from(()))
+                    }
+                } else {
+                    // Replay engine does not have a configured database
+                    Ok(Value::from(()))
+                }
+            }
+            AdapterType::Redshift => {
+                let ra3_node = self
+                    .engine()
+                    .config("ra3_node")
+                    .unwrap_or(Cow::Borrowed("false"));
+
+                // We have no guarantees that `database` is unquoted, but we do know that `configured_database` will be unquoted.
+                // For the Redshift adapter, we can just trim the `"` character per `self.quote`.
+                let database = database.trim_matches('\"');
+                let configured_database = self.engine().config("database");
+
+                if let Some(configured_database) = configured_database {
+                    let ra3_node: bool = FromStr::from_str(&ra3_node).map_err(|_| {
+                        AdapterError::new(
+                            AdapterErrorKind::Configuration,
+                            r#"Failed to parse ra3_node, expected "true" or "false""#,
+                        )
+                    })?;
+                    if !database.eq_ignore_ascii_case(&configured_database) && !ra3_node {
+                        return Err(AdapterError::new(
+                            AdapterErrorKind::UnexpectedDbReference,
+                            format!(
+                                "Cross-db references allowed only in RA3.* node ({database} vs {configured_database})"
+                            ),
+                        ));
+                    }
+                }
+
+                Ok(Value::from(()))
+            }
+            AdapterType::Snowflake
+            | AdapterType::Bigquery
+            | AdapterType::Databricks
+            | AdapterType::Salesforce => {
+                unimplemented!("only available with either Postgres or Redshift adapter")
+            }
+        }
     }
 
     /// is_replaceable

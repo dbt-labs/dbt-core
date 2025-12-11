@@ -1,14 +1,10 @@
 use crate::adapter_engine::AdapterEngine;
 use crate::base_adapter::AdapterTyping;
-use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
 use crate::metadata::*;
 use crate::typed_adapter::TypedBaseAdapter;
-use minijinja::Value;
 
-use std::borrow::Cow;
 use std::fmt;
 use std::fmt::Debug;
-use std::str::FromStr;
 use std::sync::Arc;
 
 /// An adapter for interacting with Redshift.
@@ -43,38 +39,7 @@ impl AdapterTyping for RedshiftAdapter {
     }
 }
 
-impl TypedBaseAdapter for RedshiftAdapter {
-    fn verify_database(&self, database: String) -> AdapterResult<Value> {
-        let ra3_node = self
-            .engine
-            .config("ra3_node")
-            .unwrap_or(Cow::Borrowed("false"));
-
-        // We have no guarantees that `database` is unquoted, but we do know that `configured_database` will be unquoted.
-        // For the Redshift adapter, we can just trim the `"` character per `self.quote`.
-        let database = database.trim_matches('\"');
-        let configured_database = self.engine.config("database");
-
-        if let Some(configured_database) = configured_database {
-            let ra3_node: bool = FromStr::from_str(&ra3_node).map_err(|_| {
-                AdapterError::new(
-                    AdapterErrorKind::Configuration,
-                    r#"Failed to parse ra3_node, expected "true" or "false""#,
-                )
-            })?;
-            if !database.eq_ignore_ascii_case(&configured_database) && !ra3_node {
-                return Err(AdapterError::new(
-                    AdapterErrorKind::UnexpectedDbReference,
-                    format!(
-                        "Cross-db references allowed only in RA3.* node ({database} vs {configured_database})"
-                    ),
-                ));
-            }
-        }
-
-        Ok(Value::from(()))
-    }
-}
+impl TypedBaseAdapter for RedshiftAdapter {}
 
 #[cfg(test)]
 mod tests {
