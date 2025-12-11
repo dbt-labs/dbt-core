@@ -1,0 +1,6 @@
+kind: Features
+body: Implement config.meta_get and config.meta_require
+time: 2025-12-10T20:20:01.354288-05:00
+custom:
+    Author: gshank
+    Issue: "12012"
