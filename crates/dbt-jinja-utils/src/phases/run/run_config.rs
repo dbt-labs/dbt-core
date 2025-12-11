@@ -3,7 +3,9 @@
 use indexmap::IndexMap;
 use std::{collections::BTreeMap, rc::Rc, sync::Arc};
 
-use dbt_common::{ErrorCode, tracing::emit::emit_warn_log_message};
+use dbt_common::{
+    CodeLocationWithFile, ErrorCode, fs_err, tracing::emit::emit_warn_log_from_fs_error,
+};
 use minijinja::{
     Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State, Value,
     arg_utils::ArgParser,
@@ -32,7 +34,7 @@ impl Object for RunConfig {
 
     fn call_method(
         self: &Arc<Self>,
-        _state: &State<'_, '_>,
+        state: &State<'_, '_>,
         name: &str,
         args: &[Value],
         _listeners: &[Rc<dyn RenderingEventListener>],
@@ -56,17 +58,23 @@ impl Object for RunConfig {
                                 if let Some(value) = meta_obj.get_value(&Value::from(name.clone()))
                                 {
                                     if !value.is_none() {
-                                        // Emit deprecation warning
-                                        emit_warn_log_message(
-                                            ErrorCode::Generic,
-                                            format!(
-                                                "DeprecationWarning: Custom config found under \"meta\" using config.get(\"{}\"). \
-                                                Please replace this with config.meta_get(\"{}\") to avoid collisions with \
-                                                configs introduced by dbt.",
-                                                name, name
-                                            ),
-                                            None,
+                                        // Emit deprecation warning with location information
+                                        let span = state.current_span();
+                                        let path = state.current_path();
+                                        let location = CodeLocationWithFile::new(
+                                            span.start_line,
+                                            span.start_col,
+                                            span.start_offset,
+                                            path.clone(),
                                         );
+                                        let error = fs_err!(
+                                            ErrorCode::Generic,
+                                            "DeprecationWarning: Custom config found under \"meta\" using config.get(\"{}\"). \
+                                            Please replace this with config.meta_get(\"{}\") to avoid collisions with \
+                                            configs introduced by dbt.",
+                                            name, name
+                                        ).with_location(location);
+                                        emit_warn_log_from_fs_error(&error, None);
                                         return Ok(value);
                                     }
                                 }
@@ -98,17 +106,23 @@ impl Object for RunConfig {
                                 if let Some(value) = meta_obj.get_value(&Value::from(name.clone()))
                                 {
                                     if !value.is_none() {
-                                        // Emit deprecation warning
-                                        emit_warn_log_message(
-                                            ErrorCode::Generic,
-                                            format!(
-                                                "DeprecationWarning: Custom config found under \"meta\" using config.require(\"{}\"). \
-                                                Please replace this with config.meta_require(\"{}\") to avoid collisions with \
-                                                configs introduced by dbt.",
-                                                name, name
-                                            ),
-                                            None,
+                                        // Emit deprecation warning with location information
+                                        let span = state.current_span();
+                                        let path = state.current_path();
+                                        let location = CodeLocationWithFile::new(
+                                            span.start_line,
+                                            span.start_col,
+                                            span.start_offset,
+                                            path.clone(),
                                         );
+                                        let error = fs_err!(
+                                            ErrorCode::Generic,
+                                            "DeprecationWarning: Custom config found under \"meta\" using config.require(\"{}\"). \
+                                            Please replace this with config.meta_require(\"{}\") to avoid collisions with \
+                                            configs introduced by dbt.",
+                                            name, name
+                                        ).with_location(location);
+                                        emit_warn_log_from_fs_error(&error, None);
                                         return Ok(value);
                                     }
                                 }
