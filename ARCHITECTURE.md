@@ -41,7 +41,7 @@ The Postgres adapter code is the most central, and many of its implementations a
 
 ## Testing dbt
 
-The [`test/`](test/) subdirectory includes unit and integration tests that run as continuous integration checks against open pull requests. Unit tests check mock inputs and outputs of specific python functions. Integration tests perform end-to-end dbt invocations against real adapters (Postgres, Redshift, Snowflake, BigQuery) and assert that the results match expectations. See [the contributing guide](CONTRIBUTING.md) for a step-by-step walkthrough of setting up a local development and testing environment.
+The [`tests/`](tests/) subdirectory includes unit and fuctional tests that run as continuous integration checks against open pull requests. Unit tests check mock inputs and outputs of specific python functions. Functional tests perform end-to-end dbt invocations against real adapters (Postgres) and assert that the results match expectations. See [the contributing guide](CONTRIBUTING.md) for a step-by-step walkthrough of setting up a local development and testing environment.
 
 ## Everything else
 
