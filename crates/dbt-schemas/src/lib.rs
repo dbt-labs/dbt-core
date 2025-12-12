@@ -40,9 +40,10 @@ pub mod schemas {
         CommonAttributes, DbtAnalysis, DbtAnalysisAttr, DbtExposure, DbtExposureAttr, DbtFunction,
         DbtFunctionAttr, DbtModel, DbtModelAttr, DbtSeed, DbtSeedAttr, DbtSnapshot,
         DbtSnapshotAttr, DbtSource, DbtSourceAttr, DbtTest, DbtTestAttr, DbtUnitTest,
-        DbtUnitTestAttr, InternalDbtNode, InternalDbtNodeAttributes, InternalDbtNodeWrapper,
-        IntrospectionKind, NodeBaseAttributes, Nodes, TestMetadata, TimeSpine,
-        TimeSpinePrimaryColumn, deserialize_empty_string_as_none, serialize_none_as_empty_string,
+        DbtUnitTestAttr, ExposureType, InternalDbtNode, InternalDbtNodeAttributes,
+        InternalDbtNodeWrapper, IntrospectionKind, NodeBaseAttributes, Nodes, TestMetadata,
+        TimeSpine, TimeSpinePrimaryColumn, deserialize_empty_string_as_none,
+        serialize_none_as_empty_string,
     };
 
     pub use sources::{FreshnessResultsArtifact, FreshnessResultsMetadata, FreshnessResultsNode};

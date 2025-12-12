@@ -2912,6 +2912,20 @@ pub struct DbtExposure {
     pub deprecated_config: ExposureConfig,
 }
 
+#[derive(
+    Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq, dbt_serde_yaml::JsonSchema,
+)]
+#[serde(rename_all = "lowercase")]
+pub enum ExposureType {
+    #[default]
+    Dashboard,
+    Notebook,
+    Analysis,
+    #[serde(rename = "ml")]
+    ML,
+    Application,
+}
+
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
@@ -2920,7 +2934,7 @@ pub struct DbtExposureAttr {
     pub label: Option<String>,
     pub maturity: Option<String>,
     #[serde(rename = "type")]
-    pub type_: String,
+    pub type_: ExposureType,
     pub url: Option<String>,
     pub unrendered_config: BTreeMap<String, YmlValue>,
     pub created_at: Option<f64>,

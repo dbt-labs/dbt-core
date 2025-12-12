@@ -1,4 +1,5 @@
 use crate::schemas::manifest::common::DbtOwner;
+use crate::schemas::nodes::ExposureType;
 use dbt_serde_yaml::{JsonSchema, Spanned};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
@@ -16,6 +17,6 @@ pub struct ExposureProperties {
     pub name: String,
     pub owner: DbtOwner,
     #[serde(rename = "type")]
-    pub type_: String,
+    pub type_: ExposureType,
     pub url: Option<String>,
 }

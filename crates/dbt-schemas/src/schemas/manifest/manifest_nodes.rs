@@ -36,7 +36,7 @@ use crate::schemas::{
         metric::{MeasureAggregationParameters, MetricTypeParams, NonAdditiveDimension},
         semantic_model::{NodeRelation, SemanticEntity, SemanticMeasure, SemanticModelDefaults},
     },
-    nodes::TestMetadata,
+    nodes::{ExposureType, TestMetadata},
     project::{
         AnalysesConfig, DataTestConfig, ExposureConfig, FunctionConfig, MetricConfig, ModelConfig,
         SavedQueryConfig, SeedConfig, SemanticModelConfig, SnapshotConfig, SourceConfig,
@@ -1080,7 +1080,7 @@ pub struct ManifestExposure {
     pub label: Option<String>,
     pub maturity: Option<String>,
     #[serde(rename = "type")]
-    pub type_: String,
+    pub type_: ExposureType,
     pub url: Option<String>,
     pub config: ExposureConfig,
 

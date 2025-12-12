@@ -186,9 +186,9 @@ pub async fn resolve_exposures(
                 },
                 __exposure_attr__: DbtExposureAttr {
                     owner: exposure.owner,
-                    label: exposure.label.to_owned(),
-                    maturity: exposure.maturity.to_owned(),
-                    type_: exposure.type_.to_owned(),
+                    label: exposure.label.clone(),
+                    maturity: exposure.maturity.clone(),
+                    type_: exposure.type_.clone(),
                     url: exposure.url,
                     unrendered_config: BTreeMap::new(),
                     created_at: Default::default(),
