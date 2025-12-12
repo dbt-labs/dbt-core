@@ -941,7 +941,14 @@ impl Statement for ReplayEngineStatement {
         let record_sql = handler
             .read_sql(&path, &file_name)
             .map_err(|e| from_fs_error(e, Some(&path)))?;
-        if normalize_dbt_tmp_name(&record_sql) != normalize_dbt_tmp_name(replay_sql) {
+        if normalize_dbt_tmp_name(&record_sql)
+            != normalize_dbt_tmp_name(replay_sql)
+                // we need to normalize
+                // in CI, FUSION_SLT_WAREHOUSE is used,
+                // locally, FUSION_ADAPTER_TESTING is used,
+                .replace("FUSION_ADAPTER_TESTING", "[MASKED_WH]")
+                .replace("FUSION_SLT_WAREHOUSE", "[MASKED_WH]")
+        {
             panic!(
                 "Recorded query ({record_sql}) and actual query ({replay_sql}) do not match ({sql_path:?})"
             );

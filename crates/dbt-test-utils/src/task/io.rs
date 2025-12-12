@@ -403,6 +403,27 @@ impl Task for SedTask {
             iter_files_recursively(dir, &replace_timestamps).await?;
         }
 
+        // replace warehouse names
+        let replace_warehouse_names = move |path: &Path| -> TestResult<()> {
+            if path.extension().map(|ext| ext == "sql").unwrap_or(false) {
+                let content = fs::read_to_string(path)?;
+                // we need to normalize
+                // in CI, FUSION_SLT_WAREHOUSE is used,
+                // locally, FUSION_ADAPTER_TESTING is used,
+                let new_content = content
+                    .replace("FUSION_ADAPTER_TESTING", "[MASKED_WH]")
+                    .replace("FUSION_SLT_WAREHOUSE", "[MASKED_WH]");
+
+                fs::write(path, new_content)?;
+            }
+            Ok(())
+        };
+
+        iter_files_recursively(&test_env.golden_dir, &replace_warehouse_names).await?;
+        if let Some(ref dir) = self.dir {
+            iter_files_recursively(dir, &replace_warehouse_names).await?;
+        }
+
         let replace_query_comments = move |path: &Path| -> TestResult<()> {
             if path.extension().map(|ext| ext == "sql").unwrap_or(false) {
                 let content = fs::read_to_string(path)?;
