@@ -45,6 +45,11 @@ pub fn compare_sql(actual: &str, expected: &str) -> AdapterResult<()> {
         return Ok(());
     }
 
+    // lightweight structural comparison
+    if compare_sql_structurally(&actual, &expected) {
+        return Ok(());
+    }
+
     // SQL differs, generate visual diff information
     let diff_info = generate_visual_sql_diff(&actual, &expected);
 
@@ -52,6 +57,300 @@ pub fn compare_sql(actual: &str, expected: &str) -> AdapterResult<()> {
         AdapterErrorKind::UnexpectedResult,
         format!("SQL mismatch detected:\n\n{diff_info}"),
     ))
+}
+
+/// Lightweight structural comparator for SQL to relax overly strict mismatches.
+/// Rules:
+/// - Normalize whitespace significance by skipping it during parsing (inputs themselves are not mutated).
+/// - If both look like: `select * from (<subquery>) <rest>` then recursively compare both `<subquery>` and `<rest>`.
+/// - Else, if both look like: `with n1 as (<sub1>), ..., nk as (<subk>) <sub>` then
+///   ensure corresponding names match and recursively compare each `<subi>`, then compare `<sub>`.
+/// - Else, if both look like a `union all` chain at top level, split into components,
+///   sort components, and recursively compare pair-wise.
+/// - All recursive comparisons call back into `compare_sql`.
+fn compare_sql_structurally(actual: &str, expected: &str) -> bool {
+    // Quick trims to reduce edge whitespace noise
+    let a = actual.trim();
+    let b = expected.trim();
+    if a.is_empty() && b.is_empty() {
+        return true;
+    }
+
+    // 1) select * from (<subquery>) <rest>
+    if let (Some((a_sub, a_rest)), Some((b_sub, b_rest))) = (
+        parse_select_star_from_parenthesized(a),
+        parse_select_star_from_parenthesized(b),
+    ) {
+        return compare_sql(a_sub, b_sub).is_ok() && compare_sql(a_rest, b_rest).is_ok();
+    }
+
+    // 2) with n1 as (<sub1>), ..., nk as (<subk>) <sub>
+    if let (Some((a_ctes, a_tail)), Some((b_ctes, b_tail))) =
+        (parse_with_clause(a), parse_with_clause(b))
+    {
+        if a_ctes.len() != b_ctes.len() {
+            return false;
+        }
+        for ((a_name, a_sql), (b_name, b_sql)) in a_ctes.iter().zip(b_ctes.iter()) {
+            // Compare CTE names for equality (case-sensitive as a conservative choice)
+            if a_name != b_name {
+                return false;
+            }
+            if compare_sql(a_sql, b_sql).is_err() {
+                return false;
+            }
+        }
+        return compare_sql(a_tail, b_tail).is_ok();
+    }
+
+    // 3) CREATE [OR REPLACE] <stuff> AS (<subquery>)
+    if let (Some((a_stuff, a_sub)), Some((b_stuff, b_sub))) =
+        (parse_create_as_subquery(a), parse_create_as_subquery(b))
+    {
+        return a_stuff == b_stuff && compare_sql(a_sub, b_sub).is_ok();
+    }
+
+    // 4) <sub1> union all <sub2> ... union all <sub_q>
+    if let (Some(mut a_parts), Some(mut b_parts)) =
+        (split_union_all_top_level(a), split_union_all_top_level(b))
+    {
+        if a_parts.len() > 1 && b_parts.len() > 1 && a_parts.len() == b_parts.len() {
+            // Key-less lexicographic sort for deterministic pairing
+            a_parts.sort();
+            b_parts.sort();
+
+            for (ax, bx) in a_parts.iter().zip(b_parts.iter()) {
+                if compare_sql(ax, bx).is_err() {
+                    return false;
+                }
+            }
+            return true;
+        }
+    }
+
+    false
+}
+
+fn skip_ws(s: &str, mut i: usize) -> usize {
+    let bytes = s.as_bytes();
+    while i < bytes.len() && (bytes[i] as char).is_whitespace() {
+        i += 1;
+    }
+    i
+}
+
+fn starts_with_ci(s: &str, i: usize, kw: &str) -> bool {
+    s[i..]
+        .to_ascii_lowercase()
+        .starts_with(&kw.to_ascii_lowercase())
+}
+
+fn eat_keyword_ci(s: &str, mut i: usize, kw: &str) -> Option<usize> {
+    if starts_with_ci(s, i, kw) {
+        i += kw.len();
+        Some(i)
+    } else {
+        None
+    }
+}
+
+fn find_matching_paren(s: &str, open_idx: usize) -> Option<usize> {
+    let mut depth = 0usize;
+    for (idx, ch) in s.char_indices().skip(open_idx) {
+        if ch == '(' {
+            depth += 1;
+        } else if ch == ')' {
+            depth = depth.saturating_sub(1);
+            if depth == 0 {
+                return Some(idx);
+            }
+        }
+    }
+    None
+}
+
+fn parse_select_star_from_parenthesized(s: &str) -> Option<(&str, &str)> {
+    // Recognize: select * from ( <subquery> ) <rest>
+    let mut i = skip_ws(s, 0);
+    i = eat_keyword_ci(s, i, "select")?;
+    i = skip_ws(s, i);
+    // Expect '*'
+    let b = s.as_bytes();
+    if i >= b.len() || b[i] as char != '*' {
+        return None;
+    }
+    i += 1;
+    i = skip_ws(s, i);
+    i = eat_keyword_ci(s, i, "from")?;
+    i = skip_ws(s, i);
+    // Expect '('
+    if i >= b.len() || b[i] as char != '(' {
+        return None;
+    }
+    let open = i;
+    let close = find_matching_paren(s, open)?;
+    let sub = &s[open + 1..close];
+    let rest = s[close + 1..].trim();
+    Some((sub, rest))
+}
+
+fn parse_with_clause(s: &str) -> Option<(Vec<(String, String)>, &str)> {
+    // Recognize: with n1 as (<sub1>), ..., nk as (<subk>) <tail>
+    let mut i = skip_ws(s, 0);
+    i = eat_keyword_ci(s, i, "with")?;
+    let mut ctes: Vec<(String, String)> = Vec::new();
+    let bytes = s.as_bytes();
+    loop {
+        i = skip_ws(s, i);
+        // Parse CTE name up to 'as' (case-insensitive) that precedes '('
+        let name_start = i;
+        // Find 'as' while ensuring the following non-ws is '('
+        let mut as_pos: Option<usize> = None;
+        let mut j = i;
+        while j < bytes.len() {
+            // stop if we hit a top-level '(' before finding 'as' -> invalid for name
+            if bytes[j] as char == '(' {
+                break;
+            }
+            // try to match 'as'
+            if starts_with_ci(s, j, "as") {
+                // consume 'as' and any whitespace, then require '('
+                let mut k = j + 2;
+                k = skip_ws(s, k);
+                if k < bytes.len() && bytes[k] as char == '(' {
+                    as_pos = Some(j);
+                    break;
+                }
+            }
+            j += 1;
+        }
+        let as_pos = as_pos?;
+        let name = s[name_start..as_pos].trim();
+        if name.is_empty() {
+            return None;
+        }
+        // Move to '('
+        i = as_pos + 2;
+        i = skip_ws(s, i);
+        if i >= bytes.len() || bytes[i] as char != '(' {
+            return None;
+        }
+        let open = i;
+        let close = find_matching_paren(s, open)?;
+        let sub = s[open + 1..close].trim().to_string();
+        ctes.push((name.to_string(), sub));
+        i = close + 1;
+        i = skip_ws(s, i);
+        if i < bytes.len() && bytes[i] as char == ',' {
+            i += 1; // continue parsing next CTE
+            continue;
+        } else {
+            // End of CTE list; the rest is the tail query
+            let tail = s[i..].trim();
+            return Some((ctes, tail));
+        }
+    }
+}
+
+fn split_union_all_top_level(s: &str) -> Option<Vec<&str>> {
+    // Split on top-level "union all" (case-insensitive)
+    let mut parts: Vec<&str> = Vec::new();
+    let mut depth = 0usize;
+    let mut start = 0usize;
+    let lower = s.to_ascii_lowercase();
+    let bytes = lower.as_bytes();
+    let mut i = 0usize;
+    while i < bytes.len() {
+        let ch = bytes[i] as char;
+        if ch == '(' {
+            depth += 1;
+            i += 1;
+            continue;
+        } else if ch == ')' {
+            depth = depth.saturating_sub(1);
+            i += 1;
+            continue;
+        }
+        if depth == 0 && lower[i..].starts_with("union") {
+            // ensure it is "union all"
+            let k = i + "union".len();
+            // require at least one whitespace
+            let k_after_ws = skip_ws(&lower, k);
+            if k_after_ws > k && lower[k_after_ws..].starts_with("all") {
+                // boundary found
+                let left = s[start..i].trim();
+                parts.push(left);
+                // advance past "union all"
+                i = k_after_ws + "all".len();
+                start = i;
+                continue;
+            }
+        }
+        i += 1;
+    }
+    // push final segment
+    let last = s[start..].trim();
+    if !parts.is_empty() {
+        parts.push(last);
+        return Some(parts);
+    }
+    // If there were no splits, return None
+    None
+}
+
+fn parse_create_as_subquery(s: &str) -> Option<(&str, &str)> {
+    // Recognize: CREATE [OR REPLACE] <stuff> AS (<subquery>)
+    // Case-insensitive for keywords; preserve exact <stuff> for equality check
+    let mut i = skip_ws(s, 0);
+    i = eat_keyword_ci(s, i, "create")?;
+    i = skip_ws(s, i);
+    // Optional "or replace"
+    if let Some(mut j) = eat_keyword_ci(s, i, "or") {
+        j = skip_ws(s, j);
+        if let Some(k) = eat_keyword_ci(s, j, "replace") {
+            i = k;
+        } // if "or" not followed by "replace", keep original i (treat as not present)
+    }
+    let stuff_start = i;
+    // Find 'as' followed by '(' (case-insensitive), not inside parentheses
+    let lower = s.to_ascii_lowercase();
+    let bytes = lower.as_bytes();
+    let mut depth = 0usize;
+    let mut as_pos: Option<usize> = None;
+    let mut j = i;
+    while j < bytes.len() {
+        let ch = bytes[j] as char;
+        if ch == '(' {
+            depth += 1;
+            j += 1;
+            continue;
+        } else if ch == ')' {
+            depth = depth.saturating_sub(1);
+            j += 1;
+            continue;
+        }
+        if depth == 0 && lower[j..].starts_with("as") {
+            let mut k = j + 2;
+            k = skip_ws(&lower, k);
+            if k < bytes.len() && (lower.as_bytes()[k] as char) == '(' {
+                as_pos = Some(j);
+                break;
+            }
+        }
+        j += 1;
+    }
+    let as_pos = as_pos?;
+    let stuff = s[stuff_start..as_pos].trim();
+    // Move to '('
+    let mut k = as_pos + 2;
+    k = skip_ws(s, k);
+    if k >= s.len() || s.as_bytes()[k] as char != '(' {
+        return None;
+    }
+    let open = k;
+    let close = find_matching_paren(s, open)?;
+    let sub = s[open + 1..close].trim();
+    Some((stuff, sub))
 }
 
 /// Replace the payload of `ALTER SESSION SET QUERY_TAG = '...';` with a fixed placeholder,
@@ -1031,23 +1330,23 @@ from base
     #[test]
     fn test_compare_sql_elementary_tmp_suffix_ignored() {
         let actual = r#"
-create or replace temporary table iamcurious_db.iamcurious_production_models_elementary.dbt_sources__tmp_20251203160139043240
+create or replace temporary table abc_db.abc_production_models_elementary.dbt_sources__tmp_20251203160139043240
 as (
 
     SELECT
         *
-    FROM iamcurious_db.iamcurious_production_models_elementary.dbt_sources
+    FROM abc_db.abc_production_models_elementary.dbt_sources
     WHERE 1 = 0
 )
 ;
 "#;
         let expected = r#"
-create or replace temporary table iamcurious_db.iamcurious_production_models_elementary.dbt_sources__tmp_20240102030405060708
+create or replace temporary table abc_db.abc_production_models_elementary.dbt_sources__tmp_20240102030405060708
 as (
 
     SELECT
         *
-    FROM iamcurious_db.iamcurious_production_models_elementary.dbt_sources
+    FROM abc_db.abc_production_models_elementary.dbt_sources
     WHERE 1 = 0
 )
 ;
@@ -1056,6 +1355,807 @@ as (
         assert!(
             result.is_ok(),
             "Dynamic tmp suffixes starting with a plausible year should be ignored"
+        );
+    }
+
+    #[test]
+    fn test_structural_union_ordering_equivalence() {
+        let actual = r#"select * from (
+        
+
+
+
+with filtered_information_schema_columns as (
+    
+    
+        (
+    
+
+    select
+        upper(table_catalog || '.' || table_schema || '.' || table_name) as full_table_name,
+        upper(table_catalog) as database_name,
+        upper(table_schema) as schema_name,
+        upper(table_name) as table_name,
+        upper(column_name) as column_name,
+        data_type
+    from raw.INFORMATION_SCHEMA.COLUMNS
+    where upper(table_schema) = upper('aftership')
+
+)
+        
+            union all
+        
+    
+        (
+    
+
+    select
+        upper(table_catalog || '.' || table_schema || '.' || table_name) as full_table_name,
+        upper(table_catalog) as database_name,
+        upper(table_schema) as schema_name,
+        upper(table_name) as table_name,
+        upper(column_name) as column_name,
+        data_type
+    from iamcurious_db.INFORMATION_SCHEMA.COLUMNS
+    where upper(table_schema) = upper('iamcurious_production_staging')
+
+)
+        
+            union all
+        
+    
+        (
+    
+
+    select
+        upper(table_catalog || '.' || table_schema || '.' || table_name) as full_table_name,
+        upper(table_catalog) as database_name,
+        upper(table_schema) as schema_name,
+        upper(table_name) as table_name,
+        upper(column_name) as column_name,
+        data_type
+    from raw.INFORMATION_SCHEMA.COLUMNS
+    where upper(table_schema) = upper('google_ads')
+
+)
+        
+            union all
+        
+    
+        (
+    
+
+    select
+        upper(table_catalog || '.' || table_schema || '.' || table_name) as full_table_name,
+        upper(table_catalog) as database_name,
+        upper(table_schema) as schema_name,
+        upper(table_name) as table_name,
+        upper(column_name) as column_name,
+        data_type
+    from raw.INFORMATION_SCHEMA.COLUMNS
+    where upper(table_schema) = upper('google_analytics')
+
+)
+        
+            union all
+        
+    
+        (
+    
+
+    select
+        upper(table_catalog || '.' || table_schema || '.' || table_name) as full_table_name,
+        upper(table_catalog) as database_name,
+        upper(table_schema) as schema_name,
+        upper(table_name) as table_name,
+        upper(column_name) as column_name,
+        data_type
+    from iamcurious_db.INFORMATION_SCHEMA.COLUMNS
+    where upper(table_schema) = upper('iamcurious_production')
+
+)
+        
+            union all
+        
+    
+        (
+    
+
+    select
+        upper(table_catalog || '.' || table_schema || '.' || table_name) as full_table_name,
+        upper(table_catalog) as database_name,
+        upper(table_schema) as schema_name,
+        upper(table_name) as table_name,
+        upper(column_name) as column_name,
+        data_type
+    from raw.INFORMATION_SCHEMA.COLUMNS
+    where upper(table_schema) = upper('klaviyo')
+
+)
+        
+            union all
+        
+    
+        (
+    
+
+    select
+        upper(table_catalog || '.' || table_schema || '.' || table_name) as full_table_name,
+        upper(table_catalog) as database_name,
+        upper(table_schema) as schema_name,
+        upper(table_name) as table_name,
+        upper(column_name) as column_name,
+        data_type
+    from raw.INFORMATION_SCHEMA.COLUMNS
+    where upper(table_schema) = upper('macroeconomic_data')
+
+)
+        
+            union all
+        
+    
+        (
+    
+
+    select
+        upper(table_catalog || '.' || table_schema || '.' || table_name) as full_table_name,
+        upper(table_catalog) as database_name,
+        upper(table_schema) as schema_name,
+        upper(table_name) as table_name,
+        upper(column_name) as column_name,
+        data_type
+    from raw.INFORMATION_SCHEMA.COLUMNS
+    where upper(table_schema) = upper('mailchimp')
+
+)
+        
+            union all
+        
+    
+        (
+    
+
+    select
+        upper(table_catalog || '.' || table_schema || '.' || table_name) as full_table_name,
+        upper(table_catalog) as database_name,
+        upper(table_schema) as schema_name,
+        upper(table_name) as table_name,
+        upper(column_name) as column_name,
+        data_type
+    from machine_learning.INFORMATION_SCHEMA.COLUMNS
+    where upper(table_schema) = upper('predictions')
+
+)
+        
+            union all
+        
+    
+        (
+    
+
+    select
+        upper(table_catalog || '.' || table_schema || '.' || table_name) as full_table_name,
+        upper(table_catalog) as database_name,
+        upper(table_schema) as schema_name,
+        upper(table_name) as table_name,
+        upper(column_name) as column_name,
+        data_type
+    from raw.INFORMATION_SCHEMA.COLUMNS
+    where upper(table_schema) = upper('mongodb')
+
+)
+        
+            union all
+        
+    
+        (
+    
+
+    select
+        upper(table_catalog || '.' || table_schema || '.' || table_name) as full_table_name,
+        upper(table_catalog) as database_name,
+        upper(table_schema) as schema_name,
+        upper(table_name) as table_name,
+        upper(column_name) as column_name,
+        data_type
+    from raw.INFORMATION_SCHEMA.COLUMNS
+    where upper(table_schema) = upper('postgres_rds')
+
+)
+        
+            union all
+        
+    
+        (
+    
+
+    select
+        upper(table_catalog || '.' || table_schema || '.' || table_name) as full_table_name,
+        upper(table_catalog) as database_name,
+        upper(table_schema) as schema_name,
+        upper(table_name) as table_name,
+        upper(column_name) as column_name,
+        data_type
+    from iamcurious_db.INFORMATION_SCHEMA.COLUMNS
+    where upper(table_schema) = upper('iamcurious_schema')
+
+)
+        
+            union all
+        
+    
+        (
+    
+
+    select
+        upper(table_catalog || '.' || table_schema || '.' || table_name) as full_table_name,
+        upper(table_catalog) as database_name,
+        upper(table_schema) as schema_name,
+        upper(table_name) as table_name,
+        upper(column_name) as column_name,
+        data_type
+    from raw.INFORMATION_SCHEMA.COLUMNS
+    where upper(table_schema) = upper('resmagic_api')
+
+)
+        
+            union all
+        
+    
+        (
+    
+
+    select
+        upper(table_catalog || '.' || table_schema || '.' || table_name) as full_table_name,
+        upper(table_catalog) as database_name,
+        upper(table_schema) as schema_name,
+        upper(table_name) as table_name,
+        upper(column_name) as column_name,
+        data_type
+    from raw.INFORMATION_SCHEMA.COLUMNS
+    where upper(table_schema) = upper('returnly')
+
+)
+        
+            union all
+        
+    
+        (
+    
+
+    select
+        upper(table_catalog || '.' || table_schema || '.' || table_name) as full_table_name,
+        upper(table_catalog) as database_name,
+        upper(table_schema) as schema_name,
+        upper(table_name) as table_name,
+        upper(column_name) as column_name,
+        data_type
+    from raw.INFORMATION_SCHEMA.COLUMNS
+    where upper(table_schema) = upper('sendgrid')
+
+)
+        
+            union all
+        
+    
+        (
+    
+
+    select
+        upper(table_catalog || '.' || table_schema || '.' || table_name) as full_table_name,
+        upper(table_catalog) as database_name,
+        upper(table_schema) as schema_name,
+        upper(table_name) as table_name,
+        upper(column_name) as column_name,
+        data_type
+    from raw.INFORMATION_SCHEMA.COLUMNS
+    where upper(table_schema) = upper('shopify')
+
+)
+        
+            union all
+        
+    
+        (
+    
+
+    select
+        upper(table_catalog || '.' || table_schema || '.' || table_name) as full_table_name,
+        upper(table_catalog) as database_name,
+        upper(table_schema) as schema_name,
+        upper(table_name) as table_name,
+        upper(column_name) as column_name,
+        data_type
+    from raw.INFORMATION_SCHEMA.COLUMNS
+    where upper(table_schema) = upper('information_schema')
+
+)
+        
+            union all
+        
+    
+        (
+    
+
+    select
+        upper(table_catalog || '.' || table_schema || '.' || table_name) as full_table_name,
+        upper(table_catalog) as database_name,
+        upper(table_schema) as schema_name,
+        upper(table_name) as table_name,
+        upper(column_name) as column_name,
+        data_type
+    from raw.INFORMATION_SCHEMA.COLUMNS
+    where upper(table_schema) = upper('stripe')
+
+)
+        
+            union all
+        
+    
+        (
+    
+
+    select
+        upper(table_catalog || '.' || table_schema || '.' || table_name) as full_table_name,
+        upper(table_catalog) as database_name,
+        upper(table_schema) as schema_name,
+        upper(table_name) as table_name,
+        upper(column_name) as column_name,
+        data_type
+    from raw.INFORMATION_SCHEMA.COLUMNS
+    where upper(table_schema) = upper('zendesk')
+
+)
+        
+            union all
+        
+    
+        (
+    
+
+    select
+        upper(table_catalog || '.' || table_schema || '.' || table_name) as full_table_name,
+        upper(table_catalog) as database_name,
+        upper(table_schema) as schema_name,
+        upper(table_name) as table_name,
+        upper(column_name) as column_name,
+        data_type
+    from raw.INFORMATION_SCHEMA.COLUMNS
+    where upper(table_schema) = upper('zucc_meta')
+
+)
+        
+            union all
+        
+    
+        (
+    
+
+    select
+        upper(table_catalog || '.' || table_schema || '.' || table_name) as full_table_name,
+        upper(table_catalog) as database_name,
+        upper(table_schema) as schema_name,
+        upper(table_name) as table_name,
+        upper(column_name) as column_name,
+        data_type
+    from iamcurious_db.INFORMATION_SCHEMA.COLUMNS
+    where upper(table_schema) = upper('iamcurious_production_models')
+
+)
+        
+    
+
+
+)
+
+select *
+from filtered_information_schema_columns
+where full_table_name is not null
+    ) as __dbt_sbq
+    where false
+    limit 0
+        "#;
+
+        let expected = r#"select * from (
+        
+
+
+
+with filtered_information_schema_columns as (
+    
+    
+        (
+    
+
+    select
+        upper(table_catalog || '.' || table_schema || '.' || table_name) as full_table_name,
+        upper(table_catalog) as database_name,
+        upper(table_schema) as schema_name,
+        upper(table_name) as table_name,
+        upper(column_name) as column_name,
+        data_type
+    from raw.INFORMATION_SCHEMA.COLUMNS
+    where upper(table_schema) = upper('aftership')
+
+)
+        
+            union all
+        
+    
+        (
+    
+
+    select
+        upper(table_catalog || '.' || table_schema || '.' || table_name) as full_table_name,
+        upper(table_catalog) as database_name,
+        upper(table_schema) as schema_name,
+        upper(table_name) as table_name,
+        upper(column_name) as column_name,
+        data_type
+    from iamcurious_db.INFORMATION_SCHEMA.COLUMNS
+    where upper(table_schema) = upper('iamcurious_production_staging')
+
+)
+        
+            union all
+        
+    
+        (
+    
+
+    select
+        upper(table_catalog || '.' || table_schema || '.' || table_name) as full_table_name,
+        upper(table_catalog) as database_name,
+        upper(table_schema) as schema_name,
+        upper(table_name) as table_name,
+        upper(column_name) as column_name,
+        data_type
+    from raw.INFORMATION_SCHEMA.COLUMNS
+    where upper(table_schema) = upper('google_ads')
+
+)
+        
+            union all
+        
+    
+        (
+    
+
+    select
+        upper(table_catalog || '.' || table_schema || '.' || table_name) as full_table_name,
+        upper(table_catalog) as database_name,
+        upper(table_schema) as schema_name,
+        upper(table_name) as table_name,
+        upper(column_name) as column_name,
+        data_type
+    from raw.INFORMATION_SCHEMA.COLUMNS
+    where upper(table_schema) = upper('google_analytics')
+
+)
+        
+            union all
+        
+    
+        (
+    
+
+    select
+        upper(table_catalog || '.' || table_schema || '.' || table_name) as full_table_name,
+        upper(table_catalog) as database_name,
+        upper(table_schema) as schema_name,
+        upper(table_name) as table_name,
+        upper(column_name) as column_name,
+        data_type
+    from iamcurious_db.INFORMATION_SCHEMA.COLUMNS
+    where upper(table_schema) = upper('iamcurious_production')
+
+)
+        
+            union all
+        
+    
+        (
+    
+
+    select
+        upper(table_catalog || '.' || table_schema || '.' || table_name) as full_table_name,
+        upper(table_catalog) as database_name,
+        upper(table_schema) as schema_name,
+        upper(table_name) as table_name,
+        upper(column_name) as column_name,
+        data_type
+    from raw.INFORMATION_SCHEMA.COLUMNS
+    where upper(table_schema) = upper('klaviyo')
+
+)
+        
+            union all
+        
+    
+        (
+    
+
+    select
+        upper(table_catalog || '.' || table_schema || '.' || table_name) as full_table_name,
+        upper(table_catalog) as database_name,
+        upper(table_schema) as schema_name,
+        upper(table_name) as table_name,
+        upper(column_name) as column_name,
+        data_type
+    from raw.INFORMATION_SCHEMA.COLUMNS
+    where upper(table_schema) = upper('macroeconomic_data')
+
+)
+        
+            union all
+        
+    
+        (
+    
+
+    select
+        upper(table_catalog || '.' || table_schema || '.' || table_name) as full_table_name,
+        upper(table_catalog) as database_name,
+        upper(table_schema) as schema_name,
+        upper(table_name) as table_name,
+        upper(column_name) as column_name,
+        data_type
+    from raw.INFORMATION_SCHEMA.COLUMNS
+    where upper(table_schema) = upper('mailchimp')
+
+)
+        
+            union all
+        
+    
+        (
+    
+
+    select
+        upper(table_catalog || '.' || table_schema || '.' || table_name) as full_table_name,
+        upper(table_catalog) as database_name,
+        upper(table_schema) as schema_name,
+        upper(table_name) as table_name,
+        upper(column_name) as column_name,
+        data_type
+    from machine_learning.INFORMATION_SCHEMA.COLUMNS
+    where upper(table_schema) = upper('predictions')
+
+)
+        
+            union all
+        
+    
+        (
+    
+
+    select
+        upper(table_catalog || '.' || table_schema || '.' || table_name) as full_table_name,
+        upper(table_catalog) as database_name,
+        upper(table_schema) as schema_name,
+        upper(table_name) as table_name,
+        upper(column_name) as column_name,
+        data_type
+    from iamcurious_db.INFORMATION_SCHEMA.COLUMNS
+    where upper(table_schema) = upper('iamcurious_schema')
+
+)
+        
+            union all
+        
+    
+        (
+    
+
+    select
+        upper(table_catalog || '.' || table_schema || '.' || table_name) as full_table_name,
+        upper(table_catalog) as database_name,
+        upper(table_schema) as schema_name,
+        upper(table_name) as table_name,
+        upper(column_name) as column_name,
+        data_type
+    from raw.INFORMATION_SCHEMA.COLUMNS
+    where upper(table_schema) = upper('returnly')
+
+)
+        
+            union all
+        
+    
+        (
+    
+
+    select
+        upper(table_catalog || '.' || table_schema || '.' || table_name) as full_table_name,
+        upper(table_catalog) as database_name,
+        upper(table_schema) as schema_name,
+        upper(table_name) as table_name,
+        upper(column_name) as column_name,
+        data_type
+    from raw.INFORMATION_SCHEMA.COLUMNS
+    where upper(table_schema) = upper('sendgrid')
+
+)
+        
+            union all
+        
+    
+        (
+    
+
+    select
+        upper(table_catalog || '.' || table_schema || '.' || table_name) as full_table_name,
+        upper(table_catalog) as database_name,
+        upper(table_schema) as schema_name,
+        upper(table_name) as table_name,
+        upper(column_name) as column_name,
+        data_type
+    from raw.INFORMATION_SCHEMA.COLUMNS
+    where upper(table_schema) = upper('information_schema')
+
+)
+        
+            union all
+        
+    
+        (
+    
+
+    select
+        upper(table_catalog || '.' || table_schema || '.' || table_name) as full_table_name,
+        upper(table_catalog) as database_name,
+        upper(table_schema) as schema_name,
+        upper(table_name) as table_name,
+        upper(column_name) as column_name,
+        data_type
+    from raw.INFORMATION_SCHEMA.COLUMNS
+    where upper(table_schema) = upper('shopify')
+
+)
+        
+            union all
+        
+    
+        (
+    
+
+    select
+        upper(table_catalog || '.' || table_schema || '.' || table_name) as full_table_name,
+        upper(table_catalog) as database_name,
+        upper(table_schema) as schema_name,
+        upper(table_name) as table_name,
+        upper(column_name) as column_name,
+        data_type
+    from raw.INFORMATION_SCHEMA.COLUMNS
+    where upper(table_schema) = upper('stripe')
+
+)
+        
+            union all
+        
+    
+        (
+    
+
+    select
+        upper(table_catalog || '.' || table_schema || '.' || table_name) as full_table_name,
+        upper(table_catalog) as database_name,
+        upper(table_schema) as schema_name,
+        upper(table_name) as table_name,
+        upper(column_name) as column_name,
+        data_type
+    from raw.INFORMATION_SCHEMA.COLUMNS
+    where upper(table_schema) = upper('zendesk')
+
+)
+        
+            union all
+        
+    
+        (
+    
+
+    select
+        upper(table_catalog || '.' || table_schema || '.' || table_name) as full_table_name,
+        upper(table_catalog) as database_name,
+        upper(table_schema) as schema_name,
+        upper(table_name) as table_name,
+        upper(column_name) as column_name,
+        data_type
+    from raw.INFORMATION_SCHEMA.COLUMNS
+    where upper(table_schema) = upper('zucc_meta')
+
+)
+        
+            union all
+        
+    
+        (
+    
+
+    select
+        upper(table_catalog || '.' || table_schema || '.' || table_name) as full_table_name,
+        upper(table_catalog) as database_name,
+        upper(table_schema) as schema_name,
+        upper(table_name) as table_name,
+        upper(column_name) as column_name,
+        data_type
+    from raw.INFORMATION_SCHEMA.COLUMNS
+    where upper(table_schema) = upper('mongodb')
+
+)
+        
+            union all
+        
+    
+        (
+    
+
+    select
+        upper(table_catalog || '.' || table_schema || '.' || table_name) as full_table_name,
+        upper(table_catalog) as database_name,
+        upper(table_schema) as schema_name,
+        upper(table_name) as table_name,
+        upper(column_name) as column_name,
+        data_type
+    from raw.INFORMATION_SCHEMA.COLUMNS
+    where upper(table_schema) = upper('postgres_rds')
+
+)
+        
+            union all
+        
+    
+        (
+    
+
+    select
+        upper(table_catalog || '.' || table_schema || '.' || table_name) as full_table_name,
+        upper(table_catalog) as database_name,
+        upper(table_schema) as schema_name,
+        upper(table_name) as table_name,
+        upper(column_name) as column_name,
+        data_type
+    from raw.INFORMATION_SCHEMA.COLUMNS
+    where upper(table_schema) = upper('resmagic_api')
+
+)
+        
+            union all
+        
+    
+        (
+    
+
+    select
+        upper(table_catalog || '.' || table_schema || '.' || table_name) as full_table_name,
+        upper(table_catalog) as database_name,
+        upper(table_schema) as schema_name,
+        upper(table_name) as table_name,
+        upper(column_name) as column_name,
+        data_type
+    from iamcurious_db.INFORMATION_SCHEMA.COLUMNS
+    where upper(table_schema) = upper('iamcurious_production_models')
+
+)
+        
+    
+
+
+)
+
+select *
+from filtered_information_schema_columns
+where full_table_name is not null
+    ) as __dbt_sbq
+    where false
+    limit 0
+        "#;
+
+        let result = compare_sql(actual, expected);
+        assert!(
+            result.is_ok(),
+            "Should treat union-all sets equal regardless of order within the CTE body"
         );
     }
 }
