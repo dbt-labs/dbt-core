@@ -59,11 +59,6 @@ defaults:
   run:
     shell: bash
 
-# top-level adjustments can be made here
-env:
-  # number of parallel processes to spawn for python integration testing
-  PYTHON_INTEGRATION_TEST_WORKERS: 5
-
 jobs:
   job-prep:
     # This allow us to run the workflow on pull_requests as well so we can always run unit tests
@@ -111,245 +106,62 @@ jobs:
           echo "dbt-postgres-ref=${{ steps.core-ref.outputs.ref }}"
           echo "dbt-core-ref=${{ steps.common-ref.outputs.ref }}"
 
-  dbt-postgres-unit-test:
-    name: "dbt-postgres unit tests"
+  integration-tests-postgres:
+    name: "dbt-postgres integration tests"
     needs: [job-prep]
-
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    steps:
-      - name: "Check out dbt-postgres@${{ needs.job-prep.outputs.dbt-postgres-ref }}"
-        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
-        with:
-          repository: dbt-labs/dbt-postgres
-          ref: ${{ needs.job-prep.outputs.dbt-postgres-ref }}
-
-      - name: "Set up Python 3.11"
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: "Upgrade pip, install hatch"
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip --version
-          python -m pip install hatch
-          hatch --version
-
-      - name: "Update dbt-core dependency to ${{ needs.job-prep.outputs.dbt-core-ref }}"
-        run: |
-          ./scripts/update_dev_packages.sh ${{ github.repository.name}} ${{ needs.job-prep.outputs.dbt-core-ref }}
-
-      - name: "Run unit tests"
-        # Doing the check here instead of the top level because this is job a required check, the
-        # label just means we should skip the tests
-        if: ${{ !contains(github.event.label.name, 'Skip Postgres Testing')}}
-        run: cd dbt-postgres && hatch run ci:unit-tests
-
-      - name: "Check installed versions"
-        run: pip freeze
-
-  dbt-postgres-integration-metadata:
-    name: "integration test metadata generation"
-    runs-on: ubuntu-latest
-    if: ${{ github.event_name != 'pull_request' && !contains(github.event.label.name, 'Skip Postgres Testing')}}
-    outputs:
-      split-groups: ${{ steps.generate-split-groups.outputs.split-groups }}
-      include: ${{ steps.generate-include.outputs.include }}
-
-    steps:
-      - name: "generate split-groups"
-        id: generate-split-groups
-        run: |
-          MATRIX_JSON="["
-          for B in $(seq 1 ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }}); do
-              MATRIX_JSON+=$(sed 's/^/"/;s/$/"/' <<< "${B}")
-          done
-          MATRIX_JSON="${MATRIX_JSON//\"\"/\", \"}"
-          MATRIX_JSON+="]"
-          echo "split-groups=${MATRIX_JSON}"
-          echo "split-groups=${MATRIX_JSON}" >> $GITHUB_OUTPUT
-
-      - name: "generate include"
-        id: generate-include
-        run: |
-          INCLUDE=('"python-version":"3.10","os":"windows-latest"' '"python-version":"3.10","os":"macos-14"' )
-          INCLUDE_GROUPS="["
-          for include in ${INCLUDE[@]}; do
-              for group in $(seq 1 ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }}); do
-                  INCLUDE_GROUPS+=$(sed 's/$/, /' <<< "{\"split-group\":\"${group}\",${include}}")
-              done
-          done
-          INCLUDE_GROUPS=$(echo $INCLUDE_GROUPS | sed 's/,*$//g')
-          INCLUDE_GROUPS+="]"
-          echo "include=${INCLUDE_GROUPS}"
-          echo "include=${INCLUDE_GROUPS}" >> $GITHUB_OUTPUT
-
-  dbt-postgres-integration-tests-ubuntu:
-    name: "(${{ matrix.split-group }}) integration test / python ${{ matrix.python-version }} / ${{ matrix.os }}"
-    if: ${{ github.event_name != 'pull_request' && !contains(github.event.label.name, 'Skip Postgres Testing')}}
-
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
-    needs: [job-prep, dbt-postgres-integration-metadata]
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
-        os: [ubuntu-latest]
-        split-group: ${{ fromJson(needs.dbt-postgres-integration-metadata.outputs.split-groups) }}
+    defaults:
+      run:
+        working-directory: "./dbt-postgres"
+    environment:
+      name: "dbt-postgres"
     env:
-      DBT_INVOCATION_ENV: github-actions
-      DBT_TEST_USER_1: dbt_test_user_1
-      DBT_TEST_USER_2: dbt_test_user_2
-      DBT_TEST_USER_3: dbt_test_user_3
-      DD_CIVISIBILITY_AGENTLESS_ENABLED: true
-      DD_API_KEY: ${{ secrets.DATADOG_API_KEY }}
-      DD_SITE: datadoghq.com
-      DD_ENV: ci
-      DD_SERVICE: ${{ github.event.repository.name }}
+      POSTGRES_TEST_HOST: ${{ vars.POSTGRES_TEST_HOST }}
+      POSTGRES_TEST_PORT: ${{ vars.POSTGRES_TEST_PORT }}
+      POSTGRES_TEST_USER: ${{ vars.POSTGRES_TEST_USER }}
+      POSTGRES_TEST_PASS: ${{ secrets.POSTGRES_TEST_PASS }}
+      POSTGRES_TEST_DATABASE: ${{ vars.POSTGRES_TEST_DATABASE }}
+      POSTGRES_TEST_THREADS: ${{ vars.POSTGRES_TEST_THREADS }}
     services:
-      # Label used to access the service container
       postgres:
-        # Docker Hub image
-        image: postgres
-        # Provide the password for postgres
-        env:
-          POSTGRES_PASSWORD: password
-          POSTGRES_USER: postgres
-        # Set health checks to wait until postgres has started
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-
+          image: postgres
+          env:
+            POSTGRES_PASSWORD: postgres
+          options: >-
+              --health-cmd pg_isready
+              --health-interval 10s
+              --health-timeout 5s
+              --health-retries 5
+          ports:
+            - ${{ vars.POSTGRES_TEST_PORT }}:5432
     steps:
-      - name: "Check out the repository@${{ needs.job-prep.outputs.dbt-postgres-ref }}"
+      - name: "Check out dbt-adapters@${{ needs.job-prep.outputs.dbt-postgres-ref }}"
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
         with:
           repository: dbt-labs/dbt-adapters
           ref: ${{ needs.job-prep.outputs.dbt-postgres-ref }}
 
-      - name: "Set up Python ${{ matrix.python-version }}"
+      - name: "Set up Python"
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
+            python-version: ${{ inputs.python-version }}
 
-      - name: Run postgres setup script
+      - name: "Set environment variables"
         run: |
-          ./scripts/setup_db.sh
+            echo "HATCH_PYTHON=${{ inputs.python-version }}" >> $GITHUB_ENV
+            echo "PIP_ONLY_BINARY=psycopg2-binary" >> $GITHUB_ENV
+
+      - name: "Setup test database"
+        run: psql -f ./scripts/setup_test_database.sql
         env:
-          PGHOST: localhost
-          PGPORT: 5432
-          PGPASSWORD: password
+            PGHOST: ${{ vars.POSTGRES_TEST_HOST }}
+            PGPORT: ${{ vars.POSTGRES_TEST_PORT }}
+            PGUSER: postgres
+            PGPASSWORD: postgres
+            PGDATABASE: postgres
 
-      - name: "Upgrade pip, install hatch"
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip --version
-          python -m pip install hatch
-          hatch --version
+      - name: "Install hatch"
+        uses: pypa/hatch@257e27e51a6a5616ed08a39a408a21c35c9931bc # pypa/hatch@install
 
-      - name: "Update dbt-core dependency to ${{ needs.job-prep.outputs.dbt-core-ref }}"
-        run: |
-          ./scripts/update_dev_packages.sh ${{ github.repository.name}} ${{ needs.job-prep.outputs.dbt-core-ref }}
-
-      - name: "Run Functional tests"
-        run: cd dbt-postgres && hatch run ci:integration-tests -- --ddtrace --splits ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }} --group ${{ matrix.split-group }}
-
-      - name: "Check installed versions"
-        run: pip freeze
-
-  dbt-postgres-integration-tests-mac-windows:
-    name: "(${{ matrix.split-group }}) integration test / python ${{ matrix.python-version }} / ${{ matrix.os }}"
-    if: ${{ github.event_name != 'pull_request' && !contains(github.event.label.name, 'Skip Postgres Testing')}}
-
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
-    needs: [job-prep, dbt-postgres-integration-metadata]
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJson(needs.dbt-postgres-integration-metadata.outputs.include) }}
-    env:
-      DBT_INVOCATION_ENV: github-actions
-      DBT_TEST_USER_1: dbt_test_user_1
-      DBT_TEST_USER_2: dbt_test_user_2
-      DBT_TEST_USER_3: dbt_test_user_3
-      DD_CIVISIBILITY_AGENTLESS_ENABLED: true
-      DD_API_KEY: ${{ secrets.DATADOG_API_KEY }}
-      DD_SITE: datadoghq.com
-      DD_ENV: ci
-      DD_SERVICE: ${{ github.event.repository.name }}
-    steps:
-      - name: "Check out the repository@${{ needs.job-prep.outputs.dbt-postgres-ref }}"
-        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
-        with:
-          repository: dbt-labs/dbt-adapters
-          ref: ${{ needs.job-prep.outputs.dbt-postgres-ref }}
-
-      - name: "Set up Python ${{ matrix.python-version }}"
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
-
-      - name: "Set up postgres (macos)"
-        if: runner.os == 'macOS'
-        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # nick-fields/retry@v3
-        with:
-          timeout_minutes: 10
-          max_attempts: 3
-          command: ./scripts/setup_db.sh
-
-      - name: "Set up postgres (windows)"
-        if: runner.os == 'Windows'
-        uses: ./.github/actions/setup-postgres-windows
-
-      - name: "Upgrade pip, install hatch"
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip --version
-          python -m pip install hatch
-          hatch --version
-
-      - name: "Update dbt-core dependency to ${{ needs.job-prep.outputs.dbt-core-ref }}"
-        run: |
-          ./scripts/update_dev_packages.sh ${{ github.repository.name}} ${{ needs.job-prep.outputs.dbt-core-ref }}
-
-      - name: "Run Functional tests"
-        run: cd dbt-postgres && hatch run ci:integration-tests -- --ddtrace --splits ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }} --group ${{ matrix.split-group }}
-
-      - name: "Check installed versions"
-        run: pip freeze
-
-  integration-report:
-    if: ${{ always() }}
-    name: "dbt-postgres Integration Test Suite Report"
-    runs-on: ubuntu-latest
-    needs: [dbt-postgres-integration-tests-ubuntu, dbt-postgres-integration-tests-mac-windows]
-    steps:
-      - name: "Integration Tests Failed"
-        if: ${{ contains(needs.dbt-postgres-integration-tests-ubuntu.result, 'failure') || contains(needs.dbt-postgres-integration-tests-ubuntu.result, 'cancelled') || contains(needs.dbt-postgres-integration-tests-mac-windows.result, 'failure') || contains(needs.dbt-postgres-integration-tests-mac-windows.result, 'cancelled') }}
-        # when this is true the next step won't execute
-        run: |
-          echo "::notice title='Integration test suite failed'"
-          exit 1
-
-      - name: "Integration Tests Passed"
-        if: ${{ github.event_name != 'pull_request' }}
-        run: |
-          echo "::notice title='Integration test suite passed'"
-
-      - name: "Integration Tests Skipped on Pull Request"
-        if: ${{ github.event_name == 'pull_request' &&  !contains(github.event.label.name, 'Skip Postgres Testing')}}
-        run: |
-          echo "::notice title='Integration test suite skipped on Pull Requests - they will run on merge'"
-
-      - name: "Integration Tests Skipped by Label"
-        if: ${{ contains(github.event.label.name, 'Skip Postgres Testing')}}
-        run: |
-          echo "::notice title='dbt-postgres test suite skipped due to Skip Postgres Testing label'"
+      - name: "Run integration tests"
+        run: hatch run ${{ inputs.hatch-env }}:integration-tests
