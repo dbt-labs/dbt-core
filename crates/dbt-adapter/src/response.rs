@@ -62,6 +62,11 @@ impl AdapterResponse {
                 .metadata()
                 .get("BIGQUERY:query_id")
                 .map(|query_id: &String| query_id.to_string()),
+            AdapterType::Databricks => batch
+                .schema()
+                .metadata()
+                .get("DATABRICKS_QUERY_ID")
+                .map(|query_id: &String| query_id.to_string()),
             _ => None,
         }
     }
