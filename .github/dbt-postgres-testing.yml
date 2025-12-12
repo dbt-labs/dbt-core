@@ -22,9 +22,11 @@ on:
   push:
     branches:
       - "main"
+      - "*.latest"
+      - "releases/*"
+  pull_request:
   merge_group:
     types: [checks_requested]
-  pull_request:
   workflow_dispatch:
     inputs:
       dbt-postgres-ref:
