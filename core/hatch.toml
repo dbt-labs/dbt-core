@@ -118,7 +118,7 @@ test = [
 # Database setup
 setup-db = [
     "docker compose up -d database",
-    "bash ../test/setup_db.sh",
+    "bash ../scripts/setup_db.sh",
 ]
 
 # Utility commands
