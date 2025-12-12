@@ -81,7 +81,7 @@ pub trait AdapterTyping {
     /// Quote a component of a relation
     fn quote_component(
         &self,
-        state: &State,
+        _state: &State,
         identifier: &str,
         component: ComponentName,
     ) -> AdapterResult<String> {
@@ -92,7 +92,7 @@ pub trait AdapterTyping {
         };
         if quoted {
             let adapter = self.as_typed_base_adapter();
-            adapter.quote(state, identifier)
+            Ok(adapter.quote(identifier))
         } else {
             Ok(identifier.to_string())
         }

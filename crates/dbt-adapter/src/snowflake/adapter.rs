@@ -89,9 +89,7 @@ mod tests {
     #[test]
     fn test_quote() {
         let adapter = SnowflakeAdapter::new(engine());
-        let env = Environment::new();
-        let state = State::new_for_env(&env);
-        assert_eq!(adapter.quote(&state, "abc").unwrap(), "\"abc\"");
+        assert_eq!(adapter.quote("abc"), "\"abc\"");
     }
 
     #[test]

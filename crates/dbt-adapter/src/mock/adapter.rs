@@ -143,8 +143,8 @@ impl TypedBaseAdapter for MockAdapter {
         unimplemented!("query addition to connection in MockAdapter")
     }
 
-    fn quote(&self, _state: &State, identifier: &str) -> AdapterResult<String> {
-        Ok(format!("\"{identifier}\""))
+    fn quote(&self, identifier: &str) -> String {
+        format!("\"{identifier}\"")
     }
 
     fn get_relation(
@@ -243,8 +243,6 @@ mod tests {
             Box::new(NaiveTypeOpsImpl::new(AdapterType::Snowflake)),
             never_cancels(),
         );
-        let env = minijinja::Environment::new();
-        let state = State::new_for_env(&env);
-        assert_eq!(adapter.quote(&state, "abc").unwrap(), "\"abc\"");
+        assert_eq!(adapter.quote("abc"), "\"abc\"");
     }
 }

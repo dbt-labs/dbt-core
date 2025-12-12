@@ -65,12 +65,12 @@ fn snowflake_get_relation(
     identifier: &str,
 ) -> AdapterResult<Option<Arc<dyn BaseRelation>>> {
     let quoted_database = if adapter.quoting().database {
-        adapter.quote(state, database)?
+        adapter.quote(database)
     } else {
         database.to_string()
     };
     let quoted_schema = if adapter.quoting().schema {
-        adapter.quote(state, schema)?
+        adapter.quote(schema)
     } else {
         schema.to_string()
     };
@@ -180,12 +180,12 @@ fn bigquery_get_relation(
     identifier: &str,
 ) -> AdapterResult<Option<Arc<dyn BaseRelation>>> {
     let query_database = if adapter.quoting().database {
-        adapter.quote(state, database)?
+        adapter.quote(database)
     } else {
         database.to_string()
     };
     let query_schema = if adapter.quoting().schema {
-        adapter.quote(state, schema)?
+        adapter.quote(schema)
     } else {
         schema.to_string()
     };
@@ -257,17 +257,17 @@ fn databricks_get_relation(
     // see https://github.com/databricks/dbt-databricks/blob/822b105b15e644676d9e1f47cbfd765cd4c1541f/dbt/adapters/databricks/impl.py#L418
 
     let query_catalog = if adapter.quoting().database {
-        adapter.quote(state, database)?
+        adapter.quote(database)
     } else {
         database.to_string()
     };
     let query_schema = if adapter.quoting().schema {
-        adapter.quote(state, schema)?
+        adapter.quote(schema)
     } else {
         schema.to_string()
     };
     let query_identifier = if adapter.quoting().identifier {
-        adapter.quote(state, identifier)?
+        adapter.quote(identifier)
     } else {
         identifier.to_string()
     };

@@ -472,15 +472,14 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     }
 
     /// Quote
-    fn quote(&self, _state: &State, identifier: &str) -> AdapterResult<String> {
-        let s = match self.adapter_type() {
+    fn quote(&self, identifier: &str) -> String {
+        match self.adapter_type() {
             AdapterType::Snowflake
             | AdapterType::Redshift
             | AdapterType::Postgres
             | AdapterType::Salesforce => format!("\"{identifier}\""),
             AdapterType::Bigquery | AdapterType::Databricks => format!("`{identifier}`"),
-        };
-        Ok(s)
+        }
     }
 
     /// List schemas from a [RecordBatch] result of `show schemas` or equivalent.
@@ -877,12 +876,12 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     /// Quote as configured
     fn quote_as_configured(
         &self,
-        state: &State,
+        _state: &State,
         identifier: &str,
         quote_key: &ComponentName,
     ) -> AdapterResult<String> {
         if self.quoting().get_part(quote_key) {
-            self.quote(state, identifier)
+            Ok(self.quote(identifier))
         } else {
             Ok(identifier.to_string())
         }
@@ -902,7 +901,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             AdapterType::Snowflake | AdapterType::Salesforce => {
                 // Snowflake is special and defaults quoting to false if config is not provided
                 if quote_config.unwrap_or(false) {
-                    self.quote(state, column)
+                    Ok(self.quote(column))
                 } else {
                     Ok(column.to_string())
                 }
@@ -913,7 +912,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             | AdapterType::Redshift => {
                 // https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1072
                 if quote_config.unwrap_or(true) {
-                    self.quote(state, column)
+                    Ok(self.quote(column))
                 } else {
                     Ok(column.to_string())
                 }
@@ -1030,8 +1029,11 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
                 // https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1783
                 let mut result = vec![];
                 for (_, column) in columns_map {
-                    // TODO: handle quote
-                    let col_name = column.name.clone();
+                    let col_name = if column.quote.unwrap_or(false) {
+                        self.quote(&column.name)
+                    } else {
+                        column.name.clone()
+                    };
                     let mut rendered_column_constraint = vec![format!(
                         "{} {}",
                         col_name,
@@ -1068,7 +1070,15 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
                 let result = nested_columns
                     .into_values()
                     .map(|column| {
-                        format!("{} {}", column.name, column.data_type.unwrap_or_default())
+                        format!(
+                            "{} {}",
+                            if column.quote.unwrap_or(false) {
+                                self.quote(&column.name)
+                            } else {
+                                column.name.clone()
+                            },
+                            column.data_type.unwrap_or_default()
+                        )
                     })
                     .collect();
                 Ok(result)

@@ -320,8 +320,8 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip_all, level = "trace")]
-    fn quote(&self, state: &State, identifier: &str) -> Result<Value, MinijinjaError> {
-        let quoted_identifier = self.typed_adapter.quote(state, identifier)?;
+    fn quote(&self, _state: &State, identifier: &str) -> Result<Value, MinijinjaError> {
+        let quoted_identifier = self.typed_adapter.quote(identifier);
         Ok(Value::from(quoted_identifier))
     }
 

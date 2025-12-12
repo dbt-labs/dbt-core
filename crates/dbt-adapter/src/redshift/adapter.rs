@@ -55,7 +55,6 @@ mod tests {
     use dbt_schemas::schemas::relations::DEFAULT_RESOLVED_QUOTING;
     use dbt_serde_yaml::Mapping;
     use dbt_xdbc::Backend;
-    use minijinja::State;
 
     fn engine() -> Arc<AdapterEngine> {
         let config = Mapping::new();
@@ -76,8 +75,6 @@ mod tests {
     #[test]
     fn test_quote() {
         let adapter = RedshiftAdapter::new(engine());
-        let env = minijinja::Environment::new();
-        let state = State::new_for_env(&env);
-        assert_eq!(adapter.quote(&state, "abc").unwrap(), "\"abc\"");
+        assert_eq!(adapter.quote("abc"), "\"abc\"");
     }
 }

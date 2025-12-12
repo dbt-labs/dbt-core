@@ -1151,7 +1151,7 @@ impl Object for Exceptions {
                     .with_max_columns(50)
                     .with_max_column_width(50);
                 let message = format_args!(
-                    "This model has an enforced contract that failed.\n Please ensure the name, data_type, and number of columns in your contract match the columns in your model's definition.\n\n {column_diff_display}"
+                    "This model has an enforced contract that failed.\n Please ensure the name, data_type, and number of columns in your contract match the columns in your model's definition.\n\n{column_diff_display}"
                 );
                 if let Some((node_id, file_path)) = node_metadata_from_state(state) {
                     Err(Error::new(

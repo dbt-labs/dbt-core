@@ -306,8 +306,8 @@ impl TypedBaseAdapter for BigqueryAdapter {
         ))
     }
 
-    fn quote(&self, _state: &State, identifier: &str) -> AdapterResult<String> {
-        Ok(format!("`{identifier}`"))
+    fn quote(&self, identifier: &str) -> String {
+        format!("`{identifier}`")
     }
 
     fn get_relation(
@@ -320,12 +320,12 @@ impl TypedBaseAdapter for BigqueryAdapter {
         identifier: &str,
     ) -> AdapterResult<Option<Arc<dyn BaseRelation>>> {
         let query_database = if self.quoting().database {
-            self.quote(state, database)?
+            self.quote(database)
         } else {
             database.to_string()
         };
         let query_schema = if self.quoting().schema {
-            self.quote(state, schema)?
+            self.quote(schema)
         } else {
             schema.to_string()
         };
@@ -1135,10 +1135,8 @@ mod tests {
 
     #[test]
     fn test_quote() {
-        let env = minijinja::Environment::new();
-        let state = State::new_for_env(&env);
         let adapter = BigqueryAdapter::new(engine());
-        assert_eq!(adapter.quote(&state, "abc").unwrap(), "`abc`");
+        assert_eq!(adapter.quote("abc"), "`abc`");
     }
 
     #[test]
