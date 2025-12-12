@@ -318,13 +318,12 @@ class FreshnessTask(RunTask):
         pass_count = sum(1 for r in results if r.status == FreshnessStatus.Pass)
         warn_count = len(warnings)
         error_count = len(errors)
-        skip_count = sum(1 for r in results if r.status == FreshnessStatus.Skip)
         total_count = len(results)
         
         fire_event(Formatting(""))
         fire_event(
             Note(
-                msg=f"Done. PASS={pass_count} WARN={warn_count} ERROR={error_count} SKIP={skip_count} TOTAL={total_count}"
+                msg=f"Done. PASS={pass_count} WARN={warn_count} ERROR={error_count} TOTAL={total_count}"
             ),
             EventLevel.INFO,
         )
