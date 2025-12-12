@@ -33,6 +33,9 @@ pub mod sql;
 pub mod sql_types;
 pub mod statement;
 pub mod stmt_splitter;
+
+/// Cross-Version Record/Replay System
+pub mod time_machine;
 pub mod typed_adapter;
 
 // Re-export types and modules that were moved to dbt_auth

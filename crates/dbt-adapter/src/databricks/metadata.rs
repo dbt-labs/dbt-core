@@ -193,7 +193,7 @@ impl MetadataAdapter for DatabricksAdapter {
         Ok(columns_by_relation)
     }
 
-    fn list_relations_schemas(
+    fn list_relations_schemas_inner(
         &self,
         _unique_id: Option<String>,
         _phase: Option<ExecutionPhase>,
@@ -282,14 +282,14 @@ impl MetadataAdapter for DatabricksAdapter {
         map_reduce.run(Arc::new(relations.to_vec()), token)
     }
 
-    fn list_relations_schemas_by_patterns(
+    fn list_relations_schemas_by_patterns_inner(
         &self,
         _patterns: &[RelationPattern],
     ) -> AsyncAdapterResult<'_, Vec<(String, AdapterResult<RelationSchemaPair>)>> {
         todo!("DatabricksAdapter::list_relations_schemas_by_patterns")
     }
 
-    fn freshness(
+    fn freshness_inner(
         &self,
         relations: &[Arc<dyn BaseRelation>],
     ) -> AsyncAdapterResult<'_, BTreeMap<String, MetadataFreshness>> {
@@ -383,7 +383,7 @@ impl MetadataAdapter for DatabricksAdapter {
         create_schemas_if_not_exists(Arc::new(self.clone()), state, catalog_schemas)
     }
 
-    fn list_relations_in_parallel(
+    fn list_relations_in_parallel_inner(
         &self,
         db_schemas: &[CatalogAndSchema],
     ) -> AsyncAdapterResult<'_, BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>> {

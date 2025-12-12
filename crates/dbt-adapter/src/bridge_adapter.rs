@@ -38,7 +38,7 @@ use minijinja::{Value, invalid_argument, invalid_argument_inner};
 use tracing;
 use tracy_client::span;
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::marker::PhantomData;
@@ -46,6 +46,13 @@ use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 use std::str::FromStr;
 use std::sync::{Arc, LazyLock};
+
+// Thread-local counter to track adapter call depth.
+// Used to avoid recording/replaying nested adapter calls (e.g., truncate_relation calling execute).
+// Only the outermost call is recorded/replayed.
+thread_local! {
+    static ADAPTER_CALL_DEPTH: Cell<usize> = const { Cell::new(0) };
+}
 
 // Thread-local connection.
 //
@@ -131,6 +138,8 @@ pub struct BridgeAdapter {
     #[allow(dead_code)]
     schema_store: Option<Arc<dyn SchemaStoreTrait>>,
     relation_cache: Arc<RelationCache>,
+    /// Optional time machine for cross-version snapshots
+    time_machine: Option<crate::time_machine::TimeMachine>,
 }
 
 impl fmt::Debug for BridgeAdapter {
@@ -150,7 +159,28 @@ impl BridgeAdapter {
             typed_adapter,
             schema_store: db,
             relation_cache,
+            time_machine: None,
         }
+    }
+
+    /// Create a new bridge adapter with time machine enabled.
+    pub fn with_time_machine(
+        typed_adapter: Arc<dyn TypedBaseAdapter>,
+        db: Option<Arc<dyn SchemaStoreTrait>>,
+        relation_cache: Arc<RelationCache>,
+        time_machine: crate::time_machine::TimeMachine,
+    ) -> Self {
+        Self {
+            typed_adapter,
+            schema_store: db,
+            relation_cache,
+            time_machine: Some(time_machine),
+        }
+    }
+
+    /// Get a reference to the time machine, if enabled.
+    pub fn time_machine(&self) -> Option<&crate::time_machine::TimeMachine> {
+        self.time_machine.as_ref()
     }
 
     /// Borrow the current thread-local connection or create one if it's not set yet.
@@ -1543,7 +1573,89 @@ impl Object for BridgeAdapter {
         args: &[Value],
         listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, MinijinjaError> {
-        dispatch_adapter_calls(&**self, state, name, args, listeners)
+        // NOTE(jason): This function uses the time machine - cross version Fusion snapshot tests
+        // not to be confused with conformance ReplayAdapter or RecordEngine/ReplayEngine
+        let node_id = node_id_from_state(state).unwrap_or_else(|| "global".to_string());
+
+        // Determine the semantic category of this call for time machine handling.
+        // Pure categories are not recorded and do not increment the call depth tracker.
+        let call_category = crate::time_machine::SemanticCategory::from_adapter_method(name);
+        let is_pure_or_cache = matches!(
+            call_category,
+            crate::time_machine::SemanticCategory::Pure
+                | crate::time_machine::SemanticCategory::Cache
+        );
+
+        // Track call depth for handling nested adapter calls in time machine record mode.
+        // Methods might internally call execute via macros,
+        // which would cause the inner call to be recorded before the outer one.
+        // Only the outermost call should be recorded/replayed.
+        // Pure/Cache operations don't increment depth since they may dispatch.
+        let (depth, _guard) = if is_pure_or_cache {
+            (0, None)
+        } else {
+            let depth = ADAPTER_CALL_DEPTH.with(|d| {
+                let current = d.get();
+                d.set(current + 1);
+                current
+            });
+
+            // RAII guard to decrement depth on exit
+            struct DepthGuard;
+            impl Drop for DepthGuard {
+                fn drop(&mut self) {
+                    ADAPTER_CALL_DEPTH.with(|d| d.set(d.get().saturating_sub(1)));
+                }
+            }
+            (depth, Some(DepthGuard))
+        };
+        let is_outermost = depth == 0;
+
+        // Check if we should replay instead of executing.
+        if !is_pure_or_cache
+            && let Some(ref tm) = self.time_machine
+            && let Some(replay_result) = tm.try_replay(&node_id, name, args)
+        {
+            return replay_result.map_err(|e| {
+                MinijinjaError::new(MinijinjaErrorKind::InvalidOperation, e.to_string())
+            });
+        }
+
+        // Execute the actual adapter call
+        // Pre-condition: In Replay mode leaked calls are safe because this adapter should not have an actual connection
+        // to the warehouse.
+        // If replaying, assert the engine is mock (for safety)
+        if let Some(ref tm) = self.time_machine
+            && tm.is_replaying()
+        {
+            assert!(
+                self.engine().is_mock(),
+                "Replay mode requires mock engine; attempted on non-mock engine which risks leaking queries"
+            );
+        }
+        let result = dispatch_adapter_calls(&**self, state, name, args, listeners);
+
+        // Record if time machine is in recording mode
+        if !is_pure_or_cache
+            && is_outermost
+            && let Some(ref tm) = self.time_machine
+        {
+            let (result_json, success, error) = match &result {
+                Ok(value) => (crate::time_machine::serialize_value(value), true, None),
+                Err(e) => (serde_json::Value::Null, false, Some(e.to_string())),
+            };
+
+            tm.record_call(
+                node_id,
+                name,
+                crate::time_machine::serialize_args(args),
+                result_json,
+                success,
+                error,
+            );
+        }
+
+        result
     }
 
     fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {

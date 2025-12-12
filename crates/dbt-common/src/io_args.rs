@@ -741,6 +741,104 @@ pub enum ReplayMode {
     DbtReplay(PathBuf),
     FsRecord(PathBuf),
     FsReplay(PathBuf),
+    /// Time Machine mode for cross-version compatibility testing
+    TimeMachine(TimeMachineMode),
+}
+
+impl ReplayMode {
+    /// Returns the time machine mode if this is a TimeMachine variant.
+    pub fn as_time_machine(&self) -> Option<&TimeMachineMode> {
+        match self {
+            ReplayMode::TimeMachine(mode) => Some(mode),
+            _ => None,
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Time Machine Args
+// -----------------------------------------------------------------------------
+
+/// Time Machine operating mode for cross-version compatibility testing.
+///
+/// This system records adapter-level behavior during a run and can replay
+/// those recordings against newer versions to detect breaking changes.
+#[derive(Debug, Clone)]
+pub enum TimeMachineMode {
+    /// Record adapter calls to a directory for later replay
+    Record(TimeMachineRecordConfig),
+    /// Replay adapter calls from a recorded artifact
+    Replay(TimeMachineReplayConfig),
+}
+
+/// Configuration for Time Machine record mode.
+#[derive(Debug, Clone)]
+pub struct TimeMachineRecordConfig {
+    /// Output directory for the recording.
+    /// The CLI defaults this to `<project_target_dir>/time_machine`.
+    pub output_path: PathBuf,
+    /// The invocation ID for this run (used as the subdirectory name).
+    pub invocation_id: uuid::Uuid,
+}
+
+/// Configuration for Time Machine replay mode.
+#[derive(Debug, Clone, Default)]
+pub struct TimeMachineReplayConfig {
+    /// Path to the recorded artifact directory
+    pub artifact_path: PathBuf,
+    /// Replay ordering mode (strict vs semantic)
+    pub ordering: TimeMachineReplayOrdering,
+}
+
+/// Replay ordering mode for Time Machine.
+///
+/// Controls how recorded events are matched during replay.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Default, ValueEnum, Display, Serialize, Deserialize,
+)]
+#[serde(rename_all = "lowercase")]
+#[clap(rename_all = "lowercase")]
+pub enum TimeMachineReplayOrdering {
+    /// Events must match in exact recorded sequence order.
+    /// This is the most restrictive mode and ensures deterministic replay.
+    #[default]
+    Strict,
+
+    /// Events are matched based on semantic constraints.
+    /// Write operations must match in sequence
+    /// Read operations between writes can match flexibly
+    /// This mode tolerates minor ordering variations between code versions.
+    Semantic,
+}
+
+/// Parse TIME_MACHINE_MODE from string (for env var parsing).
+impl FromStr for TimeMachineModeKind {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "record" => Ok(TimeMachineModeKind::Record),
+            "replay" => Ok(TimeMachineModeKind::Replay),
+            "off" | "" => Ok(TimeMachineModeKind::Off),
+            _ => Err(format!(
+                "Invalid TIME_MACHINE_MODE: '{}'. Expected: record, replay, or off",
+                s
+            )),
+        }
+    }
+}
+
+/// Simple enum for CLI/env var parsing (the full config is built from multiple args).
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, Default, ValueEnum, Display, Serialize, Deserialize,
+)]
+#[serde(rename_all = "lowercase")]
+#[clap(rename_all = "lowercase")]
+pub enum TimeMachineModeKind {
+    #[default]
+    Off,
+    Record,
+    Replay,
 }
 
 #[derive(

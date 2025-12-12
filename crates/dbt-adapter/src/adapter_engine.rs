@@ -256,13 +256,19 @@ impl XdbcEngine {
 pub struct MockEngine {
     adapter_type: AdapterType,
     type_ops: Arc<dyn TypeOps>,
+    quoting: ResolvedQuoting,
 }
 
 impl MockEngine {
-    pub fn new(adapter_type: AdapterType, type_ops: Box<dyn TypeOps>) -> Self {
+    pub fn new(
+        adapter_type: AdapterType,
+        type_ops: Box<dyn TypeOps>,
+        quoting: ResolvedQuoting,
+    ) -> Self {
         Self {
             adapter_type,
             type_ops: Arc::from(type_ops),
+            quoting,
         }
     }
 }
@@ -349,7 +355,7 @@ impl AdapterEngine {
             AdapterEngine::Xdbc(engine) => engine.quoting,
             AdapterEngine::Record(engine) => engine.quoting(),
             AdapterEngine::Replay(engine) => engine.quoting(),
-            AdapterEngine::Mock(_) => ResolvedQuoting::default(),
+            AdapterEngine::Mock(engine) => engine.quoting,
         }
     }
 

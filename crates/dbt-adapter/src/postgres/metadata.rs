@@ -132,7 +132,7 @@ impl MetadataAdapter for PostgresAdapter {
         Ok(columns_by_relation)
     }
 
-    fn list_relations_schemas(
+    fn list_relations_schemas_inner(
         &self,
         _unique_id: Option<String>,
         _phase: Option<ExecutionPhase>,
@@ -142,14 +142,14 @@ impl MetadataAdapter for PostgresAdapter {
         Box::pin(future)
     }
 
-    fn list_relations_schemas_by_patterns(
+    fn list_relations_schemas_by_patterns_inner(
         &self,
         _patterns: &[RelationPattern],
     ) -> AsyncAdapterResult<'_, Vec<(String, AdapterResult<RelationSchemaPair>)>> {
         todo!("PostgresAdapter::list_relations_schemas_by_patterns")
     }
 
-    fn freshness(
+    fn freshness_inner(
         &self,
         _relations: &[Arc<dyn BaseRelation>],
     ) -> AsyncAdapterResult<'_, BTreeMap<String, MetadataFreshness>> {
@@ -164,7 +164,7 @@ impl MetadataAdapter for PostgresAdapter {
         todo!("PostgresAdapter::create_schemas_if_not_exists")
     }
 
-    fn list_relations_in_parallel(
+    fn list_relations_in_parallel_inner(
         &self,
         _db_schemas: &[CatalogAndSchema],
     ) -> AsyncAdapterResult<'_, BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>> {

@@ -249,7 +249,7 @@ impl MetadataAdapter for SnowflakeAdapter {
         Ok(columns_by_relation)
     }
 
-    fn list_user_defined_functions(
+    fn list_user_defined_functions_inner(
         &self,
         catalog_schemas: &BTreeMap<String, BTreeSet<String>>,
     ) -> AsyncAdapterResult<'_, Vec<UDF>> {
@@ -353,7 +353,7 @@ impl MetadataAdapter for SnowflakeAdapter {
         map_reduce.run(Arc::new(queries), token)
     }
 
-    fn list_relations_schemas(
+    fn list_relations_schemas_inner(
         &self,
         unique_id: Option<String>,
         phase: Option<ExecutionPhase>,
@@ -409,7 +409,7 @@ impl MetadataAdapter for SnowflakeAdapter {
     }
 
     /// List relations schemas by patterns (use information schema query)
-    fn list_relations_schemas_by_patterns(
+    fn list_relations_schemas_by_patterns_inner(
         &self,
         relations_pattern: &[RelationPattern],
     ) -> AsyncAdapterResult<'_, Vec<(String, AdapterResult<RelationSchemaPair>)>> {
@@ -506,7 +506,7 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
         create_schemas_if_not_exists(Arc::new(self.clone()), state, catalog_schemas)
     }
 
-    fn freshness(
+    fn freshness_inner(
         &self,
         relations: &[Arc<dyn BaseRelation>],
     ) -> AsyncAdapterResult<'_, BTreeMap<String, MetadataFreshness>> {
@@ -594,7 +594,7 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
     }
 
     /// Reference: https://github.com/dbt-labs/dbt-adapters/blob/f492c919d3bd415bf5065b3cd8cd1af23562feb0/dbt-snowflake/src/dbt/include/snowflake/macros/metadata/list_relations_without_caching.sql
-    fn list_relations_in_parallel(
+    fn list_relations_in_parallel_inner(
         &self,
         db_schemas: &[CatalogAndSchema],
     ) -> AsyncAdapterResult<'_, BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>> {

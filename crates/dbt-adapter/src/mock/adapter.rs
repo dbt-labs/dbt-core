@@ -60,7 +60,11 @@ impl MockAdapter {
     ) -> Self {
         Self {
             adapter_type,
-            engine: Arc::new(AdapterEngine::Mock(MockEngine::new(adapter_type, type_ops))),
+            engine: Arc::new(AdapterEngine::Mock(MockEngine::new(
+                adapter_type,
+                type_ops,
+                quoting,
+            ))),
             flags,
             quoting,
             cancellation_token: token,
