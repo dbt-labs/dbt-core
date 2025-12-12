@@ -108,62 +108,62 @@ jobs:
           echo "dbt-postgres-ref=${{ steps.core-ref.outputs.ref }}"
           echo "dbt-core-ref=${{ steps.common-ref.outputs.ref }}"
 
-  # integration-tests-postgres:
-  #   name: "dbt-postgres integration tests"
-  #   needs: [job-prep]
-  #   runs-on: ubuntu-latest
-  #   defaults:
-  #     run:
-  #       working-directory: "./dbt-postgres"
-  #   environment:
-  #     name: "dbt-postgres"
-  #   env:
-  #     POSTGRES_TEST_HOST: ${{ vars.POSTGRES_TEST_HOST }}
-  #     POSTGRES_TEST_PORT: ${{ vars.POSTGRES_TEST_PORT }}
-  #     POSTGRES_TEST_USER: ${{ vars.POSTGRES_TEST_USER }}
-  #     POSTGRES_TEST_PASS: ${{ secrets.POSTGRES_TEST_PASS }}
-  #     POSTGRES_TEST_DATABASE: ${{ vars.POSTGRES_TEST_DATABASE }}
-  #     POSTGRES_TEST_THREADS: ${{ vars.POSTGRES_TEST_THREADS }}
-  #   services:
-  #     postgres:
-  #         image: postgres
-  #         env:
-  #           POSTGRES_PASSWORD: postgres
-  #         options: >-
-  #             --health-cmd pg_isready
-  #             --health-interval 10s
-  #             --health-timeout 5s
-  #             --health-retries 5
-  #         ports:
-  #           - ${{ vars.POSTGRES_TEST_PORT }}:5432
-  #   steps:
-  #     - name: "Check out dbt-adapters@${{ needs.job-prep.outputs.dbt-postgres-ref }}"
-  #       uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
-  #       with:
-  #         repository: dbt-labs/dbt-adapters
-  #         ref: ${{ needs.job-prep.outputs.dbt-postgres-ref }}
+  integration-tests-postgres:
+    name: "dbt-postgres integration tests"
+    needs: [job-prep]
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: "./dbt-postgres"
+    environment:
+      name: "dbt-postgres"
+    env:
+      POSTGRES_TEST_HOST: ${{ vars.POSTGRES_TEST_HOST }}
+      POSTGRES_TEST_PORT: ${{ vars.POSTGRES_TEST_PORT }}
+      POSTGRES_TEST_USER: ${{ vars.POSTGRES_TEST_USER }}
+      POSTGRES_TEST_PASS: ${{ secrets.POSTGRES_TEST_PASS }}
+      POSTGRES_TEST_DATABASE: ${{ vars.POSTGRES_TEST_DATABASE }}
+      POSTGRES_TEST_THREADS: ${{ vars.POSTGRES_TEST_THREADS }}
+    services:
+      postgres:
+          image: postgres
+          env:
+            POSTGRES_PASSWORD: postgres
+          options: >-
+              --health-cmd pg_isready
+              --health-interval 10s
+              --health-timeout 5s
+              --health-retries 5
+          ports:
+            - ${{ vars.POSTGRES_TEST_PORT }}:5432
+    steps:
+      - name: "Check out dbt-adapters@${{ needs.job-prep.outputs.dbt-postgres-ref }}"
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
+        with:
+          repository: dbt-labs/dbt-adapters
+          ref: ${{ needs.job-prep.outputs.dbt-postgres-ref }}
 
-  #     - name: "Set up Python"
-  #       uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # actions/setup-python@v5
-  #       with:
-  #           python-version: ${{ inputs.python-version }}
+      - name: "Set up Python"
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # actions/setup-python@v5
+        with:
+            python-version: ${{ inputs.python-version }}
 
-  #     - name: "Set environment variables"
-  #       run: |
-  #           echo "HATCH_PYTHON=${{ inputs.python-version }}" >> $GITHUB_ENV
-  #           echo "PIP_ONLY_BINARY=psycopg2-binary" >> $GITHUB_ENV
+      - name: "Set environment variables"
+        run: |
+            echo "HATCH_PYTHON=${{ inputs.python-version }}" >> $GITHUB_ENV
+            echo "PIP_ONLY_BINARY=psycopg2-binary" >> $GITHUB_ENV
 
-  #     - name: "Setup test database"
-  #       run: psql -f ./scripts/setup_test_database.sql
-  #       env:
-  #           PGHOST: ${{ vars.POSTGRES_TEST_HOST }}
-  #           PGPORT: ${{ vars.POSTGRES_TEST_PORT }}
-  #           PGUSER: postgres
-  #           PGPASSWORD: postgres
-  #           PGDATABASE: postgres
+      - name: "Setup test database"
+        run: psql -f ./scripts/setup_test_database.sql
+        env:
+            PGHOST: ${{ vars.POSTGRES_TEST_HOST }}
+            PGPORT: ${{ vars.POSTGRES_TEST_PORT }}
+            PGUSER: postgres
+            PGPASSWORD: postgres
+            PGDATABASE: postgres
 
-  #     - name: "Install hatch"
-  #       uses: pypa/hatch@257e27e51a6a5616ed08a39a408a21c35c9931bc # pypa/hatch@install
+      - name: "Install hatch"
+        uses: pypa/hatch@257e27e51a6a5616ed08a39a408a21c35c9931bc # pypa/hatch@install
 
-  #     - name: "Run integration tests"
-  #       run: hatch run ${{ inputs.hatch-env }}:integration-tests
+      - name: "Run integration tests"
+        run: hatch run ${{ inputs.hatch-env }}:integration-tests
