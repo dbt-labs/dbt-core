@@ -31,3 +31,5 @@ pub const CURRENT_EXECUTION_PHASE: &str = "__minijinja_current_execution_phase";
 pub const DBT_PACKAGES_DIR_NAME: &str = "dbt_packages";
 /// The name of the dbt internal packages directory
 pub const DBT_INTERNAL_PACKAGES_DIR_NAME: &str = "dbt_internal_packages";
+/// "Unique worker id" that represents something similar to thead_id in python
+pub const THREAD_ID: &str = "thread_id";

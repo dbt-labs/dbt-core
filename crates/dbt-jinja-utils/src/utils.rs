@@ -5,11 +5,17 @@ use dbt_common::{FsResult, constants::DBT_CTE_PREFIX, error::MacroSpan, tokiofs}
 use dbt_frontend_common::{error::CodeLocation, span::Span};
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::project::DefaultTo;
-use dbt_schemas::schemas::{DbtModel, DbtSeed, DbtSnapshot, DbtTest, DbtUnitTest, InternalDbtNode};
+use dbt_schemas::schemas::{
+    CommonAttributes, DbtModel, DbtSeed, DbtSnapshot, DbtTest, DbtUnitTest, InternalDbtNode,
+};
 use dbt_serde_yaml::Spanned;
 use minijinja::arg_utils::ArgParser;
-use minijinja::constants::{ROOT_PACKAGE_NAME, TARGET_PACKAGE_NAME};
-use minijinja::{Error, ErrorKind, MacroSpans, State, Value, functions::debug, value::Rest};
+use minijinja::constants::{ROOT_PACKAGE_NAME, TARGET_PACKAGE_NAME, TARGET_UNIQUE_ID, THREAD_ID};
+use minijinja::{
+    Error, ErrorKind, MacroSpans, State, Value,
+    functions::debug,
+    value::{Rest, Value as MinijinjaValue},
+};
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -543,4 +549,24 @@ pub fn dependency_package_name_from_ctx<'a>(
                 None
             }
         })
+}
+
+/// Add common context vars for tasks
+pub fn add_task_context(
+    base_context: &mut BTreeMap<String, Value>,
+    common: &CommonAttributes,
+    thread_id: &i32,
+) {
+    base_context.insert(
+        TARGET_PACKAGE_NAME.to_string(),
+        MinijinjaValue::from(common.package_name.clone()),
+    );
+    base_context.insert(
+        TARGET_UNIQUE_ID.to_string(),
+        MinijinjaValue::from(common.unique_id.clone()),
+    );
+    base_context.insert(
+        THREAD_ID.to_string(),
+        MinijinjaValue::from(format!("Thread-{}", thread_id)),
+    );
 }

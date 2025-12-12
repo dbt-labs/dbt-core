@@ -27,6 +27,7 @@ use dbt_schemas::{
     state::DbtRuntimeConfig,
 };
 use dbt_serde_yaml::Spanned;
+use minijinja::constants::TARGET_PACKAGE_NAME;
 
 /// Empty config type used for operations (they don't have traditional config)
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
@@ -170,7 +171,7 @@ fn new_operation(
 
             // Set TARGET_PACKAGE_NAME for var lookups
             operation_ctx.insert(
-                "TARGET_PACKAGE_NAME".to_string(),
+                TARGET_PACKAGE_NAME.to_string(),
                 minijinja::Value::from(operation.__common_attr__.package_name.clone()),
             );
 

@@ -2,7 +2,12 @@ use crate::{jinja_environment::JinjaEnv, listener};
 use dbt_common::{
     ErrorCode, FsError, FsResult, io_args::IoArgs, tracing::emit::emit_error_log_message,
 };
-use minijinja::{Value, compiler::codegen::CodeGenerationProfile, load_builtins_with_namespace};
+use minijinja::{
+    Value,
+    compiler::codegen::CodeGenerationProfile,
+    constants::{DBT_AND_ADAPTERS_NAMESPACE, ROOT_PACKAGE_NAME, TARGET_PACKAGE_NAME},
+    load_builtins_with_namespace,
+};
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
     path::{Path, PathBuf},
@@ -34,18 +39,18 @@ pub fn typecheck(
 
     if let Some(target_package_name) = target_package_name {
         typecheck_resolved_context.insert(
-            "TARGET_PACKAGE_NAME".to_string(),
+            TARGET_PACKAGE_NAME.to_string(),
             Value::from(target_package_name),
         );
     }
 
     typecheck_resolved_context.insert(
-        "ROOT_PACKAGE_NAME".to_string(),
+        ROOT_PACKAGE_NAME.to_string(),
         Value::from(root_package_name.to_string()),
     );
 
     typecheck_resolved_context.insert(
-        "DBT_AND_ADAPTERS_NAMESPACE".to_string(),
+        DBT_AND_ADAPTERS_NAMESPACE.to_string(),
         dbt_and_adapters_namespace,
     );
 

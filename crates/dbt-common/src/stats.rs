@@ -1,8 +1,6 @@
 use chrono::{DateTime, Local};
 use dbt_telemetry::NodeOutcome;
-use std::collections::hash_map::DefaultHasher;
 use std::fmt;
-use std::hash::{Hash, Hasher};
 use std::time::{Duration, SystemTime};
 use strum_macros::EnumString;
 
@@ -82,16 +80,9 @@ impl Stat {
         num_rows: Option<usize>,
         status: NodeStatus,
         message: Option<String>,
+        thread_id: i32,
     ) -> Self {
         let end_time = SystemTime::now();
-
-        // Hash the thread ID to get a stable u64 representation
-        let thread_id_hash = {
-            let id = std::thread::current().id();
-            let mut hasher = DefaultHasher::new();
-            id.hash(&mut hasher);
-            hasher.finish()
-        };
 
         Stat {
             unique_id,
@@ -99,7 +90,7 @@ impl Stat {
             start_time,
             end_time,
             status,
-            thread_id: format!("Thread-{}", thread_id_hash),
+            thread_id: format!("Thread-{}", thread_id),
             message,
         }
     }
@@ -175,6 +166,7 @@ mod tests {
             None,
             NodeStatus::Succeeded,
             None,
+            1,
         );
 
         // Thread ID should be in format "Thread-<number>"

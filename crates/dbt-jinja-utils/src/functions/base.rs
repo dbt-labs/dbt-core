@@ -1,8 +1,7 @@
 //! Core functions that are shared across all contexts
 
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet, hash_map::DefaultHasher},
-    hash::{Hash, Hasher},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     rc::Rc,
     sync::Arc,
 };
@@ -57,7 +56,6 @@ pub fn register_base_functions(env: &mut Environment, io_args: IoArgs) {
     env.add_function("zip_strict", zip_strict_fn());
     // TODO: log
     // env.add_global("invocation_id", panic!("TODO_INVOCATION_ID"));
-    env.add_function("thread_id", thread_id_fn());
     // TODO: modules
     // TODO: flags
     env.add_function("print", print_fn());
@@ -852,28 +850,6 @@ pub fn zip_strict_fn() -> impl Fn(&[Value], Kwargs) -> Result<Value, Error> {
     }
 }
 
-/// Returns an identifier for the current Python thread.
-/// Useful for debugging concurrent operations.
-///
-/// Example:
-/// ```jinja
-/// {% set tid = thread_id() %}
-/// ```
-pub fn thread_id_fn() -> impl Fn() -> Result<Value, Error> {
-    move || -> Result<Value, Error> {
-        // Hash the thread ID to get a stable u64 representation
-        let thread_id_hash = {
-            let id = std::thread::current().id();
-            let mut hasher = DefaultHasher::new();
-            id.hash(&mut hasher);
-            hasher.finish()
-        };
-        // Format thread_id to match the format used in run results: "Thread-{number}"
-        let formatted_thread_id = format!("Thread-{}", thread_id_hash);
-        Ok(Value::from(formatted_thread_id))
-    }
-}
-
 /// Print a message to the log file and stdout.
 ///
 /// Args:
@@ -1529,30 +1505,5 @@ mod tests {
             .unwrap();
         let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
         assert_eq!(output.trim(), "i_am_string");
-    }
-
-    #[test]
-    fn test_thread_id_format() {
-        let mut env = Environment::new();
-        env.add_function("thread_id", thread_id_fn());
-
-        let template_source = r#"{{ thread_id() }}"#;
-        let tmpl = env.template_from_str(template_source).unwrap();
-        let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
-
-        // Thread ID should be in format "Thread-<number>"
-        assert!(
-            output.trim().starts_with("Thread-"),
-            "thread_id should start with 'Thread-', got: {}",
-            output.trim()
-        );
-
-        // Extract the number part and verify it's a valid number
-        let number_part = output.trim().trim_start_matches("Thread-");
-        assert!(
-            number_part.parse::<u64>().is_ok(),
-            "thread_id should end with a number, got: {}",
-            output.trim()
-        );
     }
 }
