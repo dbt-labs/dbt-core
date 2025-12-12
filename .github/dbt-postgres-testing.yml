@@ -19,6 +19,9 @@ run-name: >-
   || 'dbt-postgres@main with dbt-core branch' }}
 
 on:
+  push:
+    branches:
+      - "main"
   merge_group:
     types: [checks_requested]
   pull_request:
