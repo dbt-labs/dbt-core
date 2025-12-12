@@ -244,6 +244,10 @@ message NodeEvaluated {
 
   // Optional legacy dbt core event code (e.g. "Q018") if this event has a strict mapping to a dbt core event.
   optional string dbt_core_event_code = 40;
+
+  // Number of rows affected by this node evaluation, if available.
+  // Only set for successful outcomes where row count is known (e.g., models, seeds).
+  optional uint64 rows_affected = 41;
 }
 
 // Span event tracking full processing of a node across all phases.
@@ -339,4 +343,8 @@ message NodeProcessed {
   // Some node's maybe be anaklyzed but not selected for execution. This flag indicates
   // whether the node was in the selection set.
   bool in_selection = 42;
+
+  // Number of rows affected by this node processing, if available.
+  // Only set for successful outcomes where row count is known (e.g., models, seeds).
+  optional uint64 rows_affected = 43;
 }

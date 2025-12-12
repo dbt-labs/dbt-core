@@ -305,11 +305,12 @@ impl NodeEvaluated {
             defined_at_column,
             node_checksum,
             Some(false), // whether sao_enabled or not is only known at task runtime
-            None,
-            None,
-            None,
+            None,        // node_error_type
+            None,        // node_cancel_reason
+            None,        // node_skip_reason
             dbt_core_event_code_for_node_evaluation(phase).map(str::to_string),
-            None,
+            None, // rows_affected
+            None, // node_outcome_detail
         )
     }
 }
@@ -375,6 +376,7 @@ impl NodeProcessed {
             "Q024".to_string(), // dbt_core_event_code
             None,        // duration_ms will be calculated during task execution
             in_selection,
+            None, // rows_affected
             None, // node_outcome_detail
         )
     }

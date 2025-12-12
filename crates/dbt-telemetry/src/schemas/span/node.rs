@@ -115,6 +115,7 @@ impl ArrowSerializableTelemetryEvent for NodeEvaluated {
                     )
                 })
             }),
+            rows_affected: self.rows_affected,
             ..Default::default()
         }
     }
@@ -169,7 +170,8 @@ impl ArrowSerializableTelemetryEvent for NodeEvaluated {
                     .as_deref()
                     .map(str::to_string)
                     // pre-preview.70 we haven't stored node_checksum in arrow, so default to "<missing>"
-                    .unwrap_or_else(|| "<missing>".to_string())
+                    .unwrap_or_else(|| "<missing>".to_string()),
+                rows_affected: record.rows_affected,
             }
         )
     }
@@ -263,6 +265,7 @@ impl ArrowSerializableTelemetryEvent for NodeProcessed {
             })
             .into(),
             duration_ms: self.duration_ms,
+            rows_affected: self.rows_affected,
             ..Default::default()
         }
     }
@@ -357,6 +360,7 @@ impl ArrowSerializableTelemetryEvent for NodeProcessed {
                 })?,
             duration_ms: record.duration_ms,
             in_selection: json_payload.in_selection,
+            rows_affected: record.rows_affected,
         })
     }
 }

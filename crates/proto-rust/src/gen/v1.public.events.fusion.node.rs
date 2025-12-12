@@ -210,6 +210,10 @@ pub struct NodeEvaluated {
     /// Optional legacy dbt core event code (e.g. "Q018") if this event has a strict mapping to a dbt core event.
     #[prost(string, optional, tag = "40")]
     pub dbt_core_event_code: ::core::option::Option<::prost::alloc::string::String>,
+    /// Number of rows affected by this node evaluation, if available.
+    /// Only set for successful outcomes where row count is known (e.g., models, seeds).
+    #[prost(uint64, optional, tag = "41")]
+    pub rows_affected: ::core::option::Option<u64>,
     /// Node type specific details (e.g. test fail counts, cache use reasons).
     #[prost(oneof = "node_evaluated::NodeOutcomeDetail", tags = "30, 31, 32, 33")]
     pub node_outcome_detail: ::core::option::Option<node_evaluated::NodeOutcomeDetail>,
@@ -364,6 +368,10 @@ pub struct NodeProcessed {
     /// whether the node was in the selection set.
     #[prost(bool, tag = "42")]
     pub in_selection: bool,
+    /// Number of rows affected by this node processing, if available.
+    /// Only set for successful outcomes where row count is known (e.g., models, seeds).
+    #[prost(uint64, optional, tag = "43")]
+    pub rows_affected: ::core::option::Option<u64>,
     /// Node type specific details (e.g. test fail counts, cache use reasons).
     #[prost(oneof = "node_processed::NodeOutcomeDetail", tags = "30, 31, 32, 33")]
     pub node_outcome_detail: ::core::option::Option<node_processed::NodeOutcomeDetail>,

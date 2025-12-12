@@ -135,6 +135,8 @@ pub struct ArrowAttributes<'a> {
     pub content: Option<Cow<'a, str>>,
     // Node processing duration
     pub duration_ms: Option<u64>,
+    // Number of rows affected by this event (e.g. node operation)
+    pub rows_affected: Option<u64>,
 }
 
 #[inline]
@@ -451,6 +453,8 @@ fn create_arrow_schema() -> (Vec<FieldRef>, Vec<FieldRef>) {
         large_utf8_field("content", true),
         // Node processing duration
         Field::new("duration_ms", DataType::UInt64, true),
+        // Number of rows affected by this event
+        Field::new("rows_affected", DataType::UInt64, true),
     ]);
 
     // Top-level fields for ArrowTelemetryRecord

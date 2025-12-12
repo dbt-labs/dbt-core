@@ -421,6 +421,9 @@ impl serde::Serialize for NodeEvaluated {
         if self.dbt_core_event_code.is_some() {
             len += 1;
         }
+        if self.rows_affected.is_some() {
+            len += 1;
+        }
         if self.node_outcome_detail.is_some() {
             len += 1;
         }
@@ -496,6 +499,11 @@ impl serde::Serialize for NodeEvaluated {
         if let Some(v) = self.dbt_core_event_code.as_ref() {
             struct_ser.serialize_field("dbt_core_event_code", v)?;
         }
+        if let Some(v) = self.rows_affected.as_ref() {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("rows_affected", ToString::to_string(&v).as_str())?;
+        }
         if let Some(v) = self.node_outcome_detail.as_ref() {
             match v {
                 node_evaluated::NodeOutcomeDetail::NodeCacheDetail(v) => {
@@ -554,6 +562,8 @@ impl<'de> serde::Deserialize<'de> for NodeEvaluated {
             "nodeSkipReason",
             "dbt_core_event_code",
             "dbtCoreEventCode",
+            "rows_affected",
+            "rowsAffected",
             "node_cache_detail",
             "nodeCacheDetail",
             "node_test_detail",
@@ -585,6 +595,7 @@ impl<'de> serde::Deserialize<'de> for NodeEvaluated {
             NodeCancelReason,
             NodeSkipReason,
             DbtCoreEventCode,
+            RowsAffected,
             NodeCacheDetail,
             NodeTestDetail,
             NodeFreshnessOutcome,
@@ -630,6 +641,7 @@ impl<'de> serde::Deserialize<'de> for NodeEvaluated {
                             "nodeCancelReason" | "node_cancel_reason" => Ok(GeneratedField::NodeCancelReason),
                             "nodeSkipReason" | "node_skip_reason" => Ok(GeneratedField::NodeSkipReason),
                             "dbtCoreEventCode" | "dbt_core_event_code" => Ok(GeneratedField::DbtCoreEventCode),
+                            "rowsAffected" | "rows_affected" => Ok(GeneratedField::RowsAffected),
                             "nodeCacheDetail" | "node_cache_detail" => Ok(GeneratedField::NodeCacheDetail),
                             "nodeTestDetail" | "node_test_detail" => Ok(GeneratedField::NodeTestDetail),
                             "nodeFreshnessOutcome" | "node_freshness_outcome" => Ok(GeneratedField::NodeFreshnessOutcome),
@@ -672,6 +684,7 @@ impl<'de> serde::Deserialize<'de> for NodeEvaluated {
                 let mut node_cancel_reason__ = None;
                 let mut node_skip_reason__ = None;
                 let mut dbt_core_event_code__ = None;
+                let mut rows_affected__ = None;
                 let mut node_outcome_detail__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
@@ -793,6 +806,14 @@ impl<'de> serde::Deserialize<'de> for NodeEvaluated {
                             }
                             dbt_core_event_code__ = map_.next_value()?;
                         }
+                        GeneratedField::RowsAffected => {
+                            if rows_affected__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("rowsAffected"));
+                            }
+                            rows_affected__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
+                        }
                         GeneratedField::NodeCacheDetail => {
                             if node_outcome_detail__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("nodeCacheDetail"));
@@ -846,6 +867,7 @@ impl<'de> serde::Deserialize<'de> for NodeEvaluated {
                     node_cancel_reason: node_cancel_reason__,
                     node_skip_reason: node_skip_reason__,
                     dbt_core_event_code: dbt_core_event_code__,
+                    rows_affected: rows_affected__,
                     node_outcome_detail: node_outcome_detail__,
                 })
             }
@@ -1117,6 +1139,9 @@ impl serde::Serialize for NodeProcessed {
         if self.in_selection {
             len += 1;
         }
+        if self.rows_affected.is_some() {
+            len += 1;
+        }
         if self.node_outcome_detail.is_some() {
             len += 1;
         }
@@ -1200,6 +1225,11 @@ impl serde::Serialize for NodeProcessed {
         if self.in_selection {
             struct_ser.serialize_field("in_selection", &self.in_selection)?;
         }
+        if let Some(v) = self.rows_affected.as_ref() {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("rows_affected", ToString::to_string(&v).as_str())?;
+        }
         if let Some(v) = self.node_outcome_detail.as_ref() {
             match v {
                 node_processed::NodeOutcomeDetail::NodeCacheDetail(v) => {
@@ -1263,6 +1293,8 @@ impl<'de> serde::Deserialize<'de> for NodeProcessed {
             "durationMs",
             "in_selection",
             "inSelection",
+            "rows_affected",
+            "rowsAffected",
             "node_cache_detail",
             "nodeCacheDetail",
             "node_test_detail",
@@ -1296,6 +1328,7 @@ impl<'de> serde::Deserialize<'de> for NodeProcessed {
             DbtCoreEventCode,
             DurationMs,
             InSelection,
+            RowsAffected,
             NodeCacheDetail,
             NodeTestDetail,
             NodeFreshnessOutcome,
@@ -1343,6 +1376,7 @@ impl<'de> serde::Deserialize<'de> for NodeProcessed {
                             "dbtCoreEventCode" | "dbt_core_event_code" => Ok(GeneratedField::DbtCoreEventCode),
                             "durationMs" | "duration_ms" => Ok(GeneratedField::DurationMs),
                             "inSelection" | "in_selection" => Ok(GeneratedField::InSelection),
+                            "rowsAffected" | "rows_affected" => Ok(GeneratedField::RowsAffected),
                             "nodeCacheDetail" | "node_cache_detail" => Ok(GeneratedField::NodeCacheDetail),
                             "nodeTestDetail" | "node_test_detail" => Ok(GeneratedField::NodeTestDetail),
                             "nodeFreshnessOutcome" | "node_freshness_outcome" => Ok(GeneratedField::NodeFreshnessOutcome),
@@ -1387,6 +1421,7 @@ impl<'de> serde::Deserialize<'de> for NodeProcessed {
                 let mut dbt_core_event_code__ = None;
                 let mut duration_ms__ = None;
                 let mut in_selection__ = None;
+                let mut rows_affected__ = None;
                 let mut node_outcome_detail__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
@@ -1522,6 +1557,14 @@ impl<'de> serde::Deserialize<'de> for NodeProcessed {
                             }
                             in_selection__ = Some(map_.next_value()?);
                         }
+                        GeneratedField::RowsAffected => {
+                            if rows_affected__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("rowsAffected"));
+                            }
+                            rows_affected__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
+                        }
                         GeneratedField::NodeCacheDetail => {
                             if node_outcome_detail__.is_some() {
                                 return Err(serde::de::Error::duplicate_field("nodeCacheDetail"));
@@ -1577,6 +1620,7 @@ impl<'de> serde::Deserialize<'de> for NodeProcessed {
                     dbt_core_event_code: dbt_core_event_code__.unwrap_or_default(),
                     duration_ms: duration_ms__,
                     in_selection: in_selection__.unwrap_or_default(),
+                    rows_affected: rows_affected__,
                     node_outcome_detail: node_outcome_detail__,
                 })
             }
