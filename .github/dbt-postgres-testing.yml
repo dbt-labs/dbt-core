@@ -1,0 +1,352 @@
+# **what?**
+# Runs all tests in dbt-postgres with this branch of dbt-core to ensure nothing is broken
+
+# **why?**
+# Ensure dbt-core changes do not break dbt-postgres, as a basic proxy for other adapters
+
+# **when?**
+# This will run when trying to merge a PR into main.
+# It can also be manually triggered.
+
+# This workflow can be skipped by adding the "Skip Postgres Testing" label to the PR.  This is
+# useful when making a change in both `dbt-postgres` and `dbt-core` where the changes are dependant
+# and cause the other repository to break.
+
+name: "dbt-postgres Tests"
+run-name: >-
+  ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call')
+  && format('dbt-postgres@{0} with dbt-core@{1}', inputs.dbt-postgres-ref, inputs.dbt-core-ref)
+  || 'dbt-postgres@main with dbt-core branch' }}
+
+on:
+  merge_group:
+    types: [checks_requested]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      dbt-postgres-ref:
+        description: "The branch of dbt-postgres to test against"
+        default: "main"
+      dbt-core-ref:
+        description: "The branch of dbt-core to test against"
+        default: "main"
+  workflow_call:
+    inputs:
+      dbt-postgres-ref:
+        description: "The branch of dbt-postgres to test against"
+        type: string
+        required: true
+        default: "main"
+      dbt-core-ref:
+        description: "The branch of dbt-core to test against"
+        type: string
+        required: true
+        default: "main"
+
+permissions: read-all
+
+# will cancel previous workflows triggered by the same event
+# and for the same ref for PRs/merges or same SHA otherwise
+# and for the same inputs on workflow_dispatch or workflow_call
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ contains(fromJson('["pull_request", "merge_group"]'), github.event_name) && github.event.pull_request.head.ref || github.sha }}-${{ contains(fromJson('["workflow_call", "workflow_dispatch"]'), github.event_name) && github.event.inputs.dbt-postgres-ref && github.event.inputs.dbt-core-ref || github.sha }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+# top-level adjustments can be made here
+env:
+  # number of parallel processes to spawn for python integration testing
+  PYTHON_INTEGRATION_TEST_WORKERS: 5
+
+jobs:
+  job-prep:
+    # This allow us to run the workflow on pull_requests as well so we can always run unit tests
+    # and only run integration tests on merge for time purposes
+    name: Setup Repo Refs
+    runs-on: ubuntu-latest
+    outputs:
+      dbt-postgres-ref: ${{ steps.core-ref.outputs.ref }}
+      dbt-core-ref: ${{ steps.common-ref.outputs.ref }}
+
+    steps:
+      - name: "Input Refs"
+        id: job-inputs
+        run: |
+          echo "inputs.dbt-postgres-ref=${{ inputs.dbt-postgres-ref }}"
+          echo "inputs.dbt-core-ref=${{ inputs.dbt-core-ref }}"
+
+      - name: "Determine dbt-postgres ref"
+        id: core-ref
+        run: |
+          if [[ -z "${{ inputs.dbt-postgres-ref }}" ]]; then
+            REF="main"
+          else
+            REF=${{ inputs.dbt-postgres-ref }}
+          fi
+          echo "ref=$REF" >> $GITHUB_OUTPUT
+
+      - name: "Determine dbt-core ref"
+        id: common-ref
+        run: |
+          if [[ -z "${{ inputs.dbt-core-ref }}" ]]; then
+            # these will be commits instead of branches
+            if [[ "${{ github.event_name }}" == "merge_group" ]]; then
+              REF=${{ github.event.merge_group.head_sha }}
+            else
+              REF=${{ github.event.pull_request.base.sha }}
+            fi
+          else
+            REF=${{ inputs.dbt-core-ref }}
+          fi
+          echo "ref=$REF" >> $GITHUB_OUTPUT
+
+      - name: "Final Refs"
+        run: |
+          echo "dbt-postgres-ref=${{ steps.core-ref.outputs.ref }}"
+          echo "dbt-core-ref=${{ steps.common-ref.outputs.ref }}"
+
+  dbt-postgres-unit-test:
+    name: "dbt-postgres unit tests"
+    needs: [job-prep]
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: "Check out dbt-postgres@${{ needs.job-prep.outputs.dbt-postgres-ref }}"
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
+        with:
+          repository: dbt-labs/dbt-postgres
+          ref: ${{ needs.job-prep.outputs.dbt-postgres-ref }}
+
+      - name: "Set up Python 3.11"
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: "Upgrade pip, install hatch"
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip --version
+          python -m pip install hatch
+          hatch --version
+
+      - name: "Update dbt-core dependency to ${{ needs.job-prep.outputs.dbt-core-ref }}"
+        run: |
+          ./scripts/update_dev_packages.sh ${{ github.repository.name}} ${{ needs.job-prep.outputs.dbt-core-ref }}
+
+      - name: "Run unit tests"
+        # Doing the check here instead of the top level because this is job a required check, the
+        # label just means we should skip the tests
+        if: ${{ !contains(github.event.label.name, 'Skip Postgres Testing')}}
+        run: cd dbt-postgres && hatch run ci:unit-tests
+
+      - name: "Check installed versions"
+        run: pip freeze
+
+  dbt-postgres-integration-metadata:
+    name: "integration test metadata generation"
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'pull_request' && !contains(github.event.label.name, 'Skip Postgres Testing')}}
+    outputs:
+      split-groups: ${{ steps.generate-split-groups.outputs.split-groups }}
+      include: ${{ steps.generate-include.outputs.include }}
+
+    steps:
+      - name: "generate split-groups"
+        id: generate-split-groups
+        run: |
+          MATRIX_JSON="["
+          for B in $(seq 1 ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }}); do
+              MATRIX_JSON+=$(sed 's/^/"/;s/$/"/' <<< "${B}")
+          done
+          MATRIX_JSON="${MATRIX_JSON//\"\"/\", \"}"
+          MATRIX_JSON+="]"
+          echo "split-groups=${MATRIX_JSON}"
+          echo "split-groups=${MATRIX_JSON}" >> $GITHUB_OUTPUT
+
+      - name: "generate include"
+        id: generate-include
+        run: |
+          INCLUDE=('"python-version":"3.10","os":"windows-latest"' '"python-version":"3.10","os":"macos-14"' )
+          INCLUDE_GROUPS="["
+          for include in ${INCLUDE[@]}; do
+              for group in $(seq 1 ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }}); do
+                  INCLUDE_GROUPS+=$(sed 's/$/, /' <<< "{\"split-group\":\"${group}\",${include}}")
+              done
+          done
+          INCLUDE_GROUPS=$(echo $INCLUDE_GROUPS | sed 's/,*$//g')
+          INCLUDE_GROUPS+="]"
+          echo "include=${INCLUDE_GROUPS}"
+          echo "include=${INCLUDE_GROUPS}" >> $GITHUB_OUTPUT
+
+  dbt-postgres-integration-tests-ubuntu:
+    name: "(${{ matrix.split-group }}) integration test / python ${{ matrix.python-version }} / ${{ matrix.os }}"
+    if: ${{ github.event_name != 'pull_request' && !contains(github.event.label.name, 'Skip Postgres Testing')}}
+
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    needs: [job-prep, dbt-postgres-integration-metadata]
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        os: [ubuntu-latest]
+        split-group: ${{ fromJson(needs.dbt-postgres-integration-metadata.outputs.split-groups) }}
+    env:
+      DBT_INVOCATION_ENV: github-actions
+      DBT_TEST_USER_1: dbt_test_user_1
+      DBT_TEST_USER_2: dbt_test_user_2
+      DBT_TEST_USER_3: dbt_test_user_3
+      DD_CIVISIBILITY_AGENTLESS_ENABLED: true
+      DD_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+      DD_SITE: datadoghq.com
+      DD_ENV: ci
+      DD_SERVICE: ${{ github.event.repository.name }}
+    services:
+      # Label used to access the service container
+      postgres:
+        # Docker Hub image
+        image: postgres
+        # Provide the password for postgres
+        env:
+          POSTGRES_PASSWORD: password
+          POSTGRES_USER: postgres
+        # Set health checks to wait until postgres has started
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: "Check out the repository@${{ needs.job-prep.outputs.dbt-postgres-ref }}"
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
+        with:
+          repository: dbt-labs/dbt-adapters
+          ref: ${{ needs.job-prep.outputs.dbt-postgres-ref }}
+
+      - name: "Set up Python ${{ matrix.python-version }}"
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Run postgres setup script
+        run: |
+          ./scripts/setup_db.sh
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGPASSWORD: password
+
+      - name: "Upgrade pip, install hatch"
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip --version
+          python -m pip install hatch
+          hatch --version
+
+      - name: "Update dbt-core dependency to ${{ needs.job-prep.outputs.dbt-core-ref }}"
+        run: |
+          ./scripts/update_dev_packages.sh ${{ github.repository.name}} ${{ needs.job-prep.outputs.dbt-core-ref }}
+
+      - name: "Run Functional tests"
+        run: cd dbt-postgres && hatch run ci:integration-tests -- --ddtrace --splits ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }} --group ${{ matrix.split-group }}
+
+      - name: "Check installed versions"
+        run: pip freeze
+
+  dbt-postgres-integration-tests-mac-windows:
+    name: "(${{ matrix.split-group }}) integration test / python ${{ matrix.python-version }} / ${{ matrix.os }}"
+    if: ${{ github.event_name != 'pull_request' && !contains(github.event.label.name, 'Skip Postgres Testing')}}
+
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    needs: [job-prep, dbt-postgres-integration-metadata]
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.dbt-postgres-integration-metadata.outputs.include) }}
+    env:
+      DBT_INVOCATION_ENV: github-actions
+      DBT_TEST_USER_1: dbt_test_user_1
+      DBT_TEST_USER_2: dbt_test_user_2
+      DBT_TEST_USER_3: dbt_test_user_3
+      DD_CIVISIBILITY_AGENTLESS_ENABLED: true
+      DD_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+      DD_SITE: datadoghq.com
+      DD_ENV: ci
+      DD_SERVICE: ${{ github.event.repository.name }}
+    steps:
+      - name: "Check out the repository@${{ needs.job-prep.outputs.dbt-postgres-ref }}"
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
+        with:
+          repository: dbt-labs/dbt-adapters
+          ref: ${{ needs.job-prep.outputs.dbt-postgres-ref }}
+
+      - name: "Set up Python ${{ matrix.python-version }}"
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: "Set up postgres (macos)"
+        if: runner.os == 'macOS'
+        uses: nick-fields/retry@ce71cc2ab81d554ebbe88c79ab5975992d79ba08 # nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          command: ./scripts/setup_db.sh
+
+      - name: "Set up postgres (windows)"
+        if: runner.os == 'Windows'
+        uses: ./.github/actions/setup-postgres-windows
+
+      - name: "Upgrade pip, install hatch"
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip --version
+          python -m pip install hatch
+          hatch --version
+
+      - name: "Update dbt-core dependency to ${{ needs.job-prep.outputs.dbt-core-ref }}"
+        run: |
+          ./scripts/update_dev_packages.sh ${{ github.repository.name}} ${{ needs.job-prep.outputs.dbt-core-ref }}
+
+      - name: "Run Functional tests"
+        run: cd dbt-postgres && hatch run ci:integration-tests -- --ddtrace --splits ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }} --group ${{ matrix.split-group }}
+
+      - name: "Check installed versions"
+        run: pip freeze
+
+  integration-report:
+    if: ${{ always() }}
+    name: "dbt-postgres Integration Test Suite Report"
+    runs-on: ubuntu-latest
+    needs: [dbt-postgres-integration-tests-ubuntu, dbt-postgres-integration-tests-mac-windows]
+    steps:
+      - name: "Integration Tests Failed"
+        if: ${{ contains(needs.dbt-postgres-integration-tests-ubuntu.result, 'failure') || contains(needs.dbt-postgres-integration-tests-ubuntu.result, 'cancelled') || contains(needs.dbt-postgres-integration-tests-mac-windows.result, 'failure') || contains(needs.dbt-postgres-integration-tests-mac-windows.result, 'cancelled') }}
+        # when this is true the next step won't execute
+        run: |
+          echo "::notice title='Integration test suite failed'"
+          exit 1
+
+      - name: "Integration Tests Passed"
+        if: ${{ github.event_name != 'pull_request' }}
+        run: |
+          echo "::notice title='Integration test suite passed'"
+
+      - name: "Integration Tests Skipped on Pull Request"
+        if: ${{ github.event_name == 'pull_request' &&  !contains(github.event.label.name, 'Skip Postgres Testing')}}
+        run: |
+          echo "::notice title='Integration test suite skipped on Pull Requests - they will run on merge'"
+
+      - name: "Integration Tests Skipped by Label"
+        if: ${{ contains(github.event.label.name, 'Skip Postgres Testing')}}
+        run: |
+          echo "::notice title='dbt-postgres test suite skipped due to Skip Postgres Testing label'"
