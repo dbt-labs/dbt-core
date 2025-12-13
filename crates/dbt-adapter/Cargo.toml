@@ -20,6 +20,7 @@ dbt-frontend-common = { workspace = true }
 dbt-schema-store = { workspace = true }
 dbt-schemas = { workspace = true }
 dbt-serde_yaml = { workspace = true }
+dbt-telemetry = { workspace = true }
 dbt-xdbc = { workspace = true }
 
 arrow = { workspace = true }
