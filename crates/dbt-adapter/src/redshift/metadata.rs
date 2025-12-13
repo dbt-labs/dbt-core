@@ -16,7 +16,7 @@ use crate::{
 use arrow::array::{RecordBatch, StringArray, TimestampMicrosecondArray};
 use arrow::datatypes::GenericStringType;
 use arrow_array::{Array, BooleanArray, Decimal128Array, GenericByteArray, Int32Array, Int64Array};
-use arrow_schema::Schema;
+use arrow_schema::{DataType, Field, Schema};
 use dbt_common::adapter::ExecutionPhase;
 use dbt_common::cancellation::Cancellable;
 use dbt_schemas::schemas::legacy_catalog::{
@@ -573,12 +573,22 @@ impl MetadataAdapter for RedshiftAdapter {
             let schema = relation.schema_as_str()?;
             let identifier = relation.identifier_as_str()?;
 
+            // Use EXISTS with r_SVV_EXTERNAL_TABLES (presumably small, only external tables compared to SVV_TABLES)
+            // https://docs.aws.amazon.com/redshift/latest/dg/r_SVV_EXTERNAL_TABLES.html
+            // SUBQUERY is more performant, it's 650 ms vs 3.3 s from JOIN on the redshift_spectrum_path test project
             let sql = format!(
-                "SELECT column_name, data_type, is_nullable, remarks
-    FROM SVV_ALL_COLUMNS
-    WHERE database_name = '{catalog}'
-    AND schema_name = '{schema}'
-    AND table_name = '{identifier}'"
+                "SELECT
+    column_name,
+    data_type,
+    is_nullable,
+    remarks,
+    EXISTS(SELECT 1 FROM SVV_EXTERNAL_TABLES
+           WHERE schemaname = '{schema}'
+           AND tablename = '{identifier}') AS is_external
+FROM SVV_ALL_COLUMNS
+WHERE database_name = '{catalog}'
+AND schema_name = '{schema}'
+AND table_name = '{identifier}'"
             );
 
             let ctx = QueryCtx::default().with_desc("Get table schema");
@@ -590,38 +600,52 @@ impl MetadataAdapter for RedshiftAdapter {
             let data_types = get_column_values::<StringArray>(&batch, "data_type")?;
             let is_nullables = get_column_values::<StringArray>(&batch, "is_nullable")?;
             let comments = get_column_values::<StringArray>(&batch, "remarks")?;
+            let is_external_flags = get_column_values::<BooleanArray>(&batch, "is_external")?;
 
-            let table_schema = {
-                for i in 0..batch.num_rows() {
-                    let name = column_names.value(i);
-                    let data_type = data_types.value(i);
-                    let is_nullable = is_nullables.value(i) == "YES";
-                    let comment = match comments.value(i) {
-                        "" => None,
-                        c => Some(c.to_string()),
-                    };
+            let is_external = if batch.num_rows() > 0 {
+                is_external_flags.value(0)
+            } else {
+                false
+            };
 
-                    let field = make_arrow_field_v2(
-                        adapter.engine().type_ops(),
-                        String::from(name),
-                        data_type,
-                        Some(is_nullable),
-                        comment,
-                    )?;
+            for i in 0..batch.num_rows() {
+                let name = column_names.value(i);
+                let data_type = data_types.value(i);
+                let is_nullable = is_nullables.value(i) == "YES";
+                let comment = match comments.value(i) {
+                    "" => None,
+                    c => Some(c.to_string()),
+                };
 
-                    fields.push(field);
-                }
+                let field = make_arrow_field_v2(
+                    adapter.engine().type_ops(),
+                    String::from(name),
+                    data_type,
+                    Some(is_nullable),
+                    comment,
+                )?;
+
+                fields.push(field);
+            }
+
+            if fields.is_empty() {
+                return Err(AdapterError::new(
+                    AdapterErrorKind::UnexpectedResult,
+                    format!("No schema in SVV_COLUMNS for {catalog}.{schema}.{identifier}"),
+                ));
+            }
+
+            let table_schema = if is_external {
+                // Add Redshift Spectrum pseudo columns for external tables
+                // https://docs.aws.amazon.com/redshift/latest/dg/c-spectrum-external-tables.html#r_spectrum_pseudo_columns
+                fields.push(Field::new("$path", DataType::Utf8, true));
+                fields.push(Field::new("$size", DataType::Int64, true));
+                Arc::new(Schema::new(fields))
+            } else {
                 Arc::new(Schema::new(fields))
             };
 
-            if table_schema.fields().is_empty() {
-                Err(AdapterError::new(
-                    AdapterErrorKind::UnexpectedResult,
-                    format!("No schema in SVV_COLUMNS for {catalog}.{schema}.{identifier}"),
-                ))
-            } else {
-                Ok(table_schema)
-            }
+            Ok(table_schema)
         };
         let reduce_f = |acc: &mut Acc,
                         relation: Arc<dyn BaseRelation>,
