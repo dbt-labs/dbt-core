@@ -220,10 +220,16 @@ models_yml = """
 models:
   - name: abcd
     description: "abcd model"
+    versions:
+      - v: 1
   - name: efgh
     description: "efgh model"
+    versions:
+      - v: 1
   - name: ijkl
     description: "ijkl model"
+    versions:
+      - v: 1
 """
 
 append_sources_yml = """
@@ -233,6 +239,8 @@ append_sources_yml = """
 append_models_yml = """
   - name: mnop
     description: "mnop model"
+    versions:
+      - v: 1
 """
 
 mnop_sql = """
@@ -245,9 +253,9 @@ class TestSourcesAndSchemaFiles:
     def models(self):
         return {
             "sources.yml": sources_yml,
-            "abcd.sql": abcd_sql,
-            "efgh.sql": efgh_sql,
-            "ijkl.sql": ijkl_sql,
+            "abcd_v1.sql": abcd_sql,
+            "efgh_v1.sql": efgh_sql,
+            "ijkl_v1.sql": ijkl_sql,
             "_models.yml": models_yml,
         }
 
@@ -258,7 +266,7 @@ class TestSourcesAndSchemaFiles:
         assert len(manifest.nodes) == 3
 
         write_file(models_yml + append_models_yml, project.project_root, "models", "_models.yml")
-        write_file(mnop_sql, project.project_root, "models", "mnop.sql")
+        write_file(mnop_sql, project.project_root, "models", "mnop_v1.sql")
         write_file(sources_yml + append_sources_yml, project.project_root, "models", "sources.yml")
 
         manifest = run_dbt(["parse"])
@@ -268,3 +276,4 @@ class TestSourcesAndSchemaFiles:
         # the patch updates, including description, so description will be ""
         for node in manifest.nodes.values():
             assert node.description == f"{node.name} model"
+            assert node.unique_id.endswith(".v1")
