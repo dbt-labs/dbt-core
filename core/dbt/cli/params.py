@@ -561,7 +561,7 @@ select = _create_option_and_track_env_var(*select_decls, *model_decls, **select_
 
 selector = _create_option_and_track_env_var(
     "--selector",
-    envvar=None,
+    envvar="DBT_SELECTOR",
     help="The selector name to use, as defined in selectors.yml",
 )
 
