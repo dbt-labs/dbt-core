@@ -19,6 +19,7 @@ use crate::listener::RenderingEventListener;
 use crate::machinery::Span;
 use crate::output::{CaptureMode, Output};
 use crate::utils::{untrusted_size_hint, AutoEscape};
+use crate::value::mutable_map::MutableMap;
 use crate::value::mutable_vec::MutableVec;
 use crate::value::namespace_name::NamespaceName;
 use crate::value::namespace_object::Namespace;
@@ -386,7 +387,14 @@ impl<'env> Vm<'env> {
                         .map_err(|e| state.with_span_error(e, span))?;
                 }
                 Instruction::StoreLocal(name, _) => {
-                    state.ctx.store(name, stack.pop());
+                    let value = stack.pop();
+                    // check if the value is a Map, if so, convert it to MutableMap
+                    if let Some(value_map) = value.downcast_object_ref::<ValueMap>() {
+                        let mutable_map = MutableMap::from(value_map.clone());
+                        state.ctx.store(name, Value::from_object(mutable_map));
+                    } else {
+                        state.ctx.store(name, value);
+                    }
                 }
                 Instruction::Lookup(name, _) => {
                     if state.lookup(name).is_some()
