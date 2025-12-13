@@ -7,9 +7,10 @@ use super::traits::AnyTelemetryEvent;
 use crate::{
     attributes::traits::ArrowSerializableTelemetryEvent,
     schemas::{
-        ArtifactWritten, CallTrace, CompiledCodeInline, Invocation, ListItemOutput, LogMessage,
-        NodeEvaluated, NodeProcessed, OnboardingScreenShown, PackageUpdate, PhaseExecuted, Process,
-        ProgressMessage, QueryExecuted, ShowDataOutput, Unknown, UserLogMessage,
+        ArtifactWritten, CallTrace, CompiledCodeInline, DepsAddPackage, DepsAllPackagesInstalled,
+        DepsPackageInstalled, Invocation, ListItemOutput, LogMessage, NodeEvaluated, NodeProcessed,
+        OnboardingScreenShown, PackageUpdate, PhaseExecuted, Process, ProgressMessage,
+        QueryExecuted, ShowDataOutput, Unknown, UserLogMessage,
     },
     serialize::arrow::ArrowAttributes,
 };
@@ -182,6 +183,24 @@ static PUBLIC_TELEMETRY_EVENT_REGISTRY: LazyLock<TelemetryEventTypeRegistry> = L
             faker_for_node_evaluated,
             NodeEvaluated,
             proto_rust::v1::public::events::fusion::node::node_evaluated::NodeOutcomeDetail => node_outcome_detail
+        );
+        registry.register(
+            DepsAddPackage::FULL_NAME,
+            arrow_deserialize_for_type::<DepsAddPackage>,
+            #[cfg(any(test, feature = "test-utils"))]
+            faker_for_type::<DepsAddPackage>,
+        );
+        registry.register(
+            DepsPackageInstalled::FULL_NAME,
+            arrow_deserialize_for_type::<DepsPackageInstalled>,
+            #[cfg(any(test, feature = "test-utils"))]
+            faker_for_type::<DepsPackageInstalled>,
+        );
+        registry.register(
+            DepsAllPackagesInstalled::FULL_NAME,
+            arrow_deserialize_for_type::<DepsAllPackagesInstalled>,
+            #[cfg(any(test, feature = "test-utils"))]
+            faker_for_type::<DepsAllPackagesInstalled>,
         );
         registry.register(
             NodeEvaluated::FULL_NAME,

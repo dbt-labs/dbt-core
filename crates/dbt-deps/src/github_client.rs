@@ -91,7 +91,10 @@ pub fn checkout(clone_dir: &PathBuf, revision: &str) -> FsResult<String> {
         .arg(spec)
         .output()
         .map_err(|e| fs_err!(ErrorCode::RuntimeError, "Error getting revision: {e}"))?;
-    Ok(String::from_utf8(commit_sha.stdout).expect("Git output should be UTF-8"))
+    Ok(String::from_utf8(commit_sha.stdout)
+        .expect("Git output should be UTF-8")
+        .trim()
+        .to_string())
 }
 
 pub fn clone(

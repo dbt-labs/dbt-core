@@ -3,7 +3,7 @@ use dbt_telemetry::{ProgressMessage, SeverityNumber};
 
 use super::{
     color::{GREEN, PLAIN, RED, YELLOW, maybe_apply_color},
-    constants::ACTION_WIDTH,
+    layout::right_align_action,
 };
 
 /// Map severity number to corresponding color style.
@@ -36,7 +36,7 @@ pub fn format_progress_message(
 ) -> String {
     // Right-pad action to ACTION_WIDTH characters
     let maybe_padded_action = if pad_action {
-        format!("{:>width$}", progress.action, width = ACTION_WIDTH)
+        right_align_action(progress.action.as_str())
     } else {
         progress.action.clone()
     };

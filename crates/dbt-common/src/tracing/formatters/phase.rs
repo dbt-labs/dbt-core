@@ -1,6 +1,6 @@
 use dbt_telemetry::{ExecutionPhase, PhaseExecuted};
 
-use super::{constants::ACTION_WIDTH, duration::format_duration_fixed_width};
+use super::{duration::format_duration_fixed_width, layout::right_align_action};
 
 /// Get the phase action text for a given `ExecutionPhase` (lowercase, no padding)
 pub fn get_phase_action(phase: ExecutionPhase) -> &'static str {
@@ -46,7 +46,7 @@ pub fn get_phase_progress_text(phase: ExecutionPhase) -> Option<String> {
         ExecutionPhase::Unspecified => return None,
     };
 
-    Some(format!("{:>width$}", action, width = ACTION_WIDTH))
+    Some(right_align_action(action))
 }
 
 /// Format a `PhaseExecuted` event for the start of a phase

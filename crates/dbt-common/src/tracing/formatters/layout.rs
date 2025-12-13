@@ -1,6 +1,6 @@
 use super::{
     color::{DIM, maybe_apply_color},
-    constants::DEFAULT_TERMINAL_WIDTH,
+    constants::{ACTION_WIDTH, DEFAULT_TERMINAL_WIDTH},
 };
 
 /// Formats a centered delimiter line with '=' padding characters and optional DIM color.
@@ -22,4 +22,26 @@ pub fn format_delimiter(text: &str, width: Option<usize>, colorize: bool) -> Str
     let width = width.unwrap_or(DEFAULT_TERMINAL_WIDTH);
     let raw = format!("{:=^width$}", text, width = width);
     maybe_apply_color(&DIM, &raw, colorize)
+}
+
+/// Right aligns the given action text to a fixed width defined by ACTION_WIDTH.
+///
+/// Use it for the first column of progress messages.
+///
+/// # Arguments
+/// * `action` - The action text to right align
+///
+/// # Returns
+/// A right-aligned string padded to ACTION_WIDTH characters
+///
+/// # Panics
+/// Panics if the action text exceeds ACTION_WIDTH characters.
+pub fn right_align_action(action: &str) -> String {
+    // Right align and pad to ACTION_WIDTH characters
+    debug_assert!(
+        action.len() <= ACTION_WIDTH,
+        "Action text too long for padding"
+    );
+
+    format!("{:>width$}", action, width = ACTION_WIDTH)
 }

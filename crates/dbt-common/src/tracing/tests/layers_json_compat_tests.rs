@@ -6,15 +6,16 @@ use crate::tracing::{
     },
     init::create_tracing_subcriber_with_layer,
     layers::{data_layer::TelemetryDataLayer, json_compat_layer::build_json_compat_layer},
-    span_info::record_span_status_from_attrs,
+    span_info::{record_span_status_from_attrs, update_span_attrs},
     tests::mocks::MockDynSpanEvent,
 };
 use dbt_telemetry::{
-    ArtifactType, ArtifactWritten, CompiledCodeInline, ExecutionPhase, Invocation,
-    InvocationEvalArgs, ListItemOutput, ListOutputFormat, LogMessage, NodeEvaluated,
-    NodeMaterialization, NodeOutcome, NodeOutcomeDetail, NodeProcessed, NodeSkipReason,
-    NodeSkipUpstreamDetail, NodeType, ProgressMessage, QueryExecuted, QueryOutcome, SeverityNumber,
-    ShowDataOutput, ShowDataOutputFormat, TelemetryOutputFlags, UserLogMessage, node_processed,
+    ArtifactType, ArtifactWritten, CompiledCodeInline, DepsAddPackage, DepsPackageInstalled,
+    ExecutionPhase, Invocation, InvocationEvalArgs, ListItemOutput, ListOutputFormat, LogMessage,
+    NodeEvaluated, NodeMaterialization, NodeOutcome, NodeOutcomeDetail, NodeProcessed,
+    NodeSkipReason, NodeSkipUpstreamDetail, NodeType, PackageType, ProgressMessage, QueryExecuted,
+    QueryOutcome, SeverityNumber, ShowDataOutput, ShowDataOutputFormat, TelemetryOutputFlags,
+    UserLogMessage, node_processed,
 };
 use serde_json::{Value, json};
 use tracing::level_filters::LevelFilter;
@@ -1061,5 +1062,102 @@ fn test_compiled_code_inline() {
                 "unique_id": "sql_operation.inline_query"
             }
         })],
+    );
+}
+
+#[test]
+fn test_deps_package_installed() {
+    let invocation_id = Uuid::new_v4();
+
+    test_events(
+        "DepsPackageInstalled (DepsStartPackageInstall M014, DepsInstallInfo M015)",
+        invocation_id,
+        || {
+            // Create a span for a hub package installation
+            let span = create_info_span(DepsPackageInstalled {
+                package_name: Some("dbt-utils".to_string()),
+                package_type: PackageType::Hub as i32,
+                package_version: None,
+                package_url_or_path: None,
+                dbt_core_event_code: "M014".to_string(),
+            });
+
+            update_span_attrs(&span, |ev: &mut DepsPackageInstalled| {
+                ev.package_version = Some("1.2.0".to_string());
+                ev.dbt_core_event_code = "M015".to_string();
+            });
+        },
+        &[],
+        vec![
+            // DepsStartPackageInstall (M014) - emitted on span start
+            json!({
+                "info": {
+                    "category": "",
+                    "code": "M014",
+                    "invocation_id": invocation_id.to_string(),
+                    "msg": "Installing dbt-utils",
+                    "name": "DepsStartPackageInstall",
+                    "level": "info",
+                    "extra": {}
+                },
+                "data": {
+                    "package_name": "dbt-utils"
+                }
+            }),
+            // DepsInstallInfo (M015) - emitted on span end
+            json!({
+                "info": {
+                    "category": "",
+                    "code": "M015",
+                    "invocation_id": invocation_id.to_string(),
+                    "msg": " Installed dbt-utils: 1.2.0",
+                    "name": "DepsInstallInfo",
+                    "level": "info",
+                    "extra": {}
+                },
+                "data": {
+                    "version_name": "1.2.0"
+                }
+            }),
+        ],
+    );
+}
+
+#[test]
+fn test_deps_add_package() {
+    let invocation_id = Uuid::new_v4();
+
+    test_events(
+        "DepsAddPackage (M032 DepsAddPackage)",
+        invocation_id,
+        || {
+            // Create a span for a hub package addition
+            let _span = create_info_span(DepsAddPackage {
+                package_name: "dbt-utils".to_string(),
+                package_type: PackageType::Hub as i32,
+                package_version: Some("1.3.0".to_string()),
+                dbt_core_event_code: "M032".to_string(),
+            });
+        },
+        &[],
+        vec![
+            // DepsAddPackage (M032) - emitted only on successful span end
+            // Message format matches dbt-core: "Added new package <name>@<version>"
+            json!({
+                "info": {
+                    "category": "",
+                    "code": "M032",
+                    "invocation_id": invocation_id.to_string(),
+                    "msg": "Added new package dbt-utils@1.3.0",
+                    "name": "DepsAddPackage",
+                    "level": "info",
+                    "extra": {}
+                },
+                "data": {
+                    "package_name": "dbt-utils",
+                    "version": "1.3.0"
+                }
+            }),
+        ],
     );
 }

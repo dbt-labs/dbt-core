@@ -6,11 +6,12 @@ use std::{
 
 use console::Term;
 use dbt_telemetry::{
-    AnyTelemetryEvent, CompiledCodeInline, ExecutionPhase, Invocation, ListItemOutput, LogMessage,
-    LogRecordInfo, NodeEvaluated, NodeOutcome, NodeProcessed, NodeSkipReason, NodeType,
-    PhaseExecuted, ProgressMessage, QueryExecuted, SeverityNumber, ShowDataOutput, SpanEndInfo,
-    SpanStartInfo, SpanStatus, StatusCode, TelemetryAttributes, TelemetryOutputFlags,
-    UserLogMessage, node_processed,
+    AnyTelemetryEvent, CompiledCodeInline, DepsAddPackage, DepsAllPackagesInstalled,
+    DepsPackageInstalled, ExecutionPhase, Invocation, ListItemOutput, LogMessage, LogRecordInfo,
+    NodeEvaluated, NodeOutcome, NodeProcessed, NodeSkipReason, NodeType, PhaseExecuted,
+    ProgressMessage, QueryExecuted, SeverityNumber, ShowDataOutput, SpanEndInfo, SpanStartInfo,
+    SpanStatus, StatusCode, TelemetryAttributes, TelemetryOutputFlags, UserLogMessage,
+    node_processed,
 };
 
 use dbt_error::ErrorCode;
@@ -23,6 +24,12 @@ use crate::{
     tracing::{
         data_provider::DataProvider,
         formatters::{
+            deps::{
+                INSTALLING_ACTION, format_package_add_end, format_package_add_start,
+                format_package_install_end, format_package_install_start,
+                format_package_installed_end, format_package_installed_start,
+                get_package_display_name,
+            },
             invocation::format_invocation_summary,
             layout::format_delimiter,
             log_message::format_log_message,
@@ -176,6 +183,9 @@ pub struct TuiLayer {
     list_header_emitted: AtomicBool,
     /// Whether to group skipped tests under TuiAllProcessingNodesGroup spans
     group_skipped_tests: bool,
+    /// Whether running in NEXTEST mode (checked once at init for test purposes)
+    #[cfg(debug_assertions)]
+    is_nextest: bool,
 }
 
 impl TuiLayer {
@@ -189,7 +199,8 @@ impl TuiLayer {
         let is_interactive = is_interactive && stdout_term.is_term();
         let max_term_line_width = stdout_term.size_checked().map(|(_, cols)| cols as usize);
 
-        Self {
+        #[cfg(debug_assertions)]
+        let res = Self {
             max_log_verbosity,
             max_term_line_width,
             is_interactive,
@@ -197,7 +208,21 @@ impl TuiLayer {
             command,
             list_header_emitted: AtomicBool::new(false),
             group_skipped_tests: is_interactive && max_log_verbosity < LevelFilter::DEBUG,
-        }
+            is_nextest: std::env::var("NEXTEST").is_ok(),
+        };
+
+        #[cfg(not(debug_assertions))]
+        let res = Self {
+            max_log_verbosity,
+            max_term_line_width,
+            is_interactive,
+            show_options,
+            command,
+            list_header_emitted: AtomicBool::new(false),
+            group_skipped_tests: is_interactive && max_log_verbosity < LevelFilter::DEBUG,
+        };
+
+        res
     }
 }
 
@@ -315,6 +340,23 @@ impl TelemetryConsumer for TuiLayer {
             }
         }
 
+        if let Some(ev) = span.attributes.downcast_ref::<DepsAllPackagesInstalled>() {
+            self.handle_deps_all_packages_installing_start(ev);
+            return;
+        }
+
+        // Handle PackageInstalled
+        if let Some(pkg) = span.attributes.downcast_ref::<DepsPackageInstalled>() {
+            self.handle_dep_installed_start(pkg);
+            return;
+        }
+
+        // Handle DepsAddPackage
+        if let Some(pkg) = span.attributes.downcast_ref::<DepsAddPackage>() {
+            self.handle_package_add_start(pkg);
+            return;
+        }
+
         if !self.is_interactive {
             // Non-interactive mode does not have progress bars
             return;
@@ -372,6 +414,23 @@ impl TelemetryConsumer for TuiLayer {
             if let Some(ne) = span.attributes.downcast_ref::<NodeEvaluated>() {
                 self.handle_node_evaluated_end(span, ne);
             }
+        }
+
+        if let Some(ev) = span.attributes.downcast_ref::<DepsAllPackagesInstalled>() {
+            self.handle_deps_all_packages_installing_end(ev);
+            return;
+        }
+
+        // Handle PackageInstalled
+        if let Some(pkg) = span.attributes.downcast_ref::<DepsPackageInstalled>() {
+            self.handle_dep_installed_end(span, pkg);
+            return;
+        }
+
+        // Handle DepsAddPackage
+        if let Some(pkg) = span.attributes.downcast_ref::<DepsAddPackage>() {
+            self.handle_package_add_end(span, pkg);
+            return;
         }
 
         // Handle close of TuiAllProcessingNodesGroup in case we have pending skipped tests to emit
@@ -870,6 +929,226 @@ impl TuiLayer {
             io::stdout()
                 .lock()
                 .write_all(format!("{}\n", formatted).as_bytes())
+                .expect("failed to write to stdout");
+        });
+    }
+
+    fn handle_deps_all_packages_installing_start(&self, ev: &DepsAllPackagesInstalled) {
+        // Do not show anything if ShowOptions::Progress is not enabled
+        if !self.show_options.contains(&ShowOptions::Progress)
+            && !self.show_options.contains(&ShowOptions::All)
+        {
+            return;
+        }
+
+        if self.is_interactive {
+            // In interactive mode, start a progress bar via log
+            log::info!(
+                _TERM_ONLY_ = true,
+                _TERM_EVENT_:serde = TermEvent::start_bar(INSTALLING_ACTION.clone(), ev.package_count);
+                ""
+            );
+
+            // In interactive non-debug mode, skip the "Installing packages" message
+            // since the progress bar will show context items for each package
+            if self.max_log_verbosity < LevelFilter::DEBUG {
+                return;
+            }
+        }
+
+        // In non-interactive mode (or debug mode) - print static message when starting
+        let formatted_message = format_package_install_start(ev, true);
+
+        // Print immediately to stdout
+        with_suspended_progress_bars(|| {
+            io::stdout()
+                .lock()
+                .write_all(format!("{}\n", formatted_message).as_bytes())
+                .expect("failed to write to stdout");
+        });
+    }
+
+    fn handle_deps_all_packages_installing_end(&self, ev: &DepsAllPackagesInstalled) {
+        // Do not show anything if ShowOptions::Progress is not enabled
+        if !self.show_options.contains(&ShowOptions::Progress)
+            && !self.show_options.contains(&ShowOptions::All)
+        {
+            return;
+        }
+
+        if self.is_interactive {
+            // In interactive mode, stop the progress bar via log
+            log::info!(
+                _TERM_ONLY_ = true,
+                _TERM_EVENT_:serde = TermEvent::remove_bar(INSTALLING_ACTION.clone());
+                ""
+            )
+        }
+
+        // Regardless of the mode - print static message when finished
+        let formatted_message = format_package_install_end(ev, true);
+
+        // Print immediately to stdout
+        with_suspended_progress_bars(|| {
+            io::stdout()
+                .lock()
+                .write_all(format!("{}\n", formatted_message).as_bytes())
+                .expect("failed to write to stdout");
+        });
+    }
+
+    fn handle_dep_installed_start(&self, pkg: &DepsPackageInstalled) {
+        // Only show if ShowOptions::Progress is enabled
+        if !self.show_options.contains(&ShowOptions::Progress)
+            && !self.show_options.contains(&ShowOptions::All)
+        {
+            return;
+        }
+
+        // In interactive add the package as a context item to the progress bar
+        if self.is_interactive {
+            if let Some(display_name) = get_package_display_name(pkg) {
+                log::info!(
+                    _TERM_ONLY_ = true,
+                    _TERM_EVENT_:serde = TermEvent::add_bar_context_item(
+                        INSTALLING_ACTION.clone(),
+                        display_name.to_string()
+                    );
+                    ""
+                );
+            }
+
+            // In non-debug mode, skip the "Installing package" message
+            if self.max_log_verbosity < LevelFilter::DEBUG {
+                return;
+            }
+        }
+
+        #[cfg(debug_assertions)]
+        {
+            // In debug builds, skip printing package installed messages in NEXTEST mode
+            // This was historically done to avoid unstable order of these in test output
+            if self.is_nextest {
+                return;
+            }
+        }
+
+        // In non-interactive mode (or debug mode) - print static message
+        let formatted_message = format_package_installed_start(pkg, true);
+
+        // Print immediately to stdout
+        with_suspended_progress_bars(|| {
+            io::stdout()
+                .lock()
+                .write_all(format!("{}\n", formatted_message).as_bytes())
+                .expect("failed to write to stdout");
+        });
+    }
+
+    fn handle_dep_installed_end(&self, span: &SpanEndInfo, pkg: &DepsPackageInstalled) {
+        // Only process if ShowOptions::Progress is enabled
+        if !self.show_options.contains(&ShowOptions::Progress)
+            && !self.show_options.contains(&ShowOptions::All)
+        {
+            return;
+        }
+
+        // In interactive mode, update the progress bar
+        if self.is_interactive {
+            if let Some(display_name) = get_package_display_name(pkg) {
+                let status = if let Some(SpanStatus {
+                    code: StatusCode::Error,
+                    ..
+                }) = &span.status
+                {
+                    "failed"
+                } else {
+                    "succeeded"
+                };
+                log::info!(
+                    _TERM_ONLY_ = true,
+                    _STAT_EVENT_:serde = StatEvent::counter(status, 1),
+                    _TERM_EVENT_:serde = TermEvent::finish_bar_context_item(
+                        INSTALLING_ACTION.clone(),
+                        display_name.to_string()
+                    );
+                    ""
+                );
+            } else {
+                // Just increment the progress bar counter if we can't get a display name
+                log::info!(
+                    _TERM_ONLY_ = true,
+                    _TERM_EVENT_:serde = TermEvent::inc_bar(INSTALLING_ACTION.clone(), 1u64);
+                    ""
+                );
+            };
+        }
+
+        #[cfg(debug_assertions)]
+        {
+            // In debug builds, skip printing package installed messages in NEXTEST mode
+            // This was historically done to avoid unstable order of these in test output
+            if self.is_nextest {
+                return;
+            }
+        }
+
+        // Format with shared formatter (colorize = true for TUI)
+        let formatted_message = format_package_installed_end(
+            pkg,
+            span.status.as_ref().map_or(StatusCode::Unset, |s| s.code),
+            true,
+        );
+
+        // Print immediately to stdout
+        with_suspended_progress_bars(|| {
+            io::stdout()
+                .lock()
+                .write_all(format!("{}\n", formatted_message).as_bytes())
+                .expect("failed to write to stdout");
+        });
+    }
+
+    fn handle_package_add_start(&self, pkg: &DepsAddPackage) {
+        // Only show if ShowOptions::Progress is enabled
+        if !self.show_options.contains(&ShowOptions::Progress)
+            && !self.show_options.contains(&ShowOptions::All)
+        {
+            return;
+        }
+
+        // Format with shared formatter (colorize = true for TUI)
+        let formatted_message = format_package_add_start(pkg, true);
+
+        // Print immediately to stdout
+        with_suspended_progress_bars(|| {
+            io::stdout()
+                .lock()
+                .write_all(format!("{}\n", formatted_message).as_bytes())
+                .expect("failed to write to stdout");
+        });
+    }
+
+    fn handle_package_add_end(&self, span: &SpanEndInfo, pkg: &DepsAddPackage) {
+        // Only process if ShowOptions::Progress is enabled
+        if !self.show_options.contains(&ShowOptions::Progress)
+            && !self.show_options.contains(&ShowOptions::All)
+        {
+            return;
+        }
+
+        // Format with shared formatter (colorize = true for TUI)
+        let formatted_message = format_package_add_end(
+            pkg,
+            span.status.as_ref().map_or(StatusCode::Unset, |s| s.code),
+            true,
+        );
+
+        // Print immediately to stdout
+        with_suspended_progress_bars(|| {
+            io::stdout()
+                .lock()
+                .write_all(format!("{}\n", formatted_message).as_bytes())
                 .expect("failed to write to stdout");
         });
     }

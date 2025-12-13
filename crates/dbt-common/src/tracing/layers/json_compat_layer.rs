@@ -3,12 +3,13 @@ use std::{collections::HashMap, time::SystemTime};
 use chrono::Utc;
 use dbt_error::ErrorCode;
 use dbt_telemetry::{
-    ArtifactType, ArtifactWritten, CompiledCodeInline, ExecutionPhase, Invocation, ListItemOutput,
-    LogMessage, LogRecordInfo, NodeEvaluated, NodeEvent, NodeOutcome, NodeProcessed,
-    NodeSkipReason, NodeType, ProgressMessage, QueryExecuted, SeverityNumber, ShowDataOutput,
-    SpanEndInfo, SpanStartInfo, TelemetryOutputFlags, TestOutcome, UserLogMessage,
-    get_test_outcome,
+    ArtifactType, ArtifactWritten, CompiledCodeInline, DepsAddPackage, DepsPackageInstalled,
+    ExecutionPhase, Invocation, ListItemOutput, LogMessage, LogRecordInfo, NodeEvaluated,
+    NodeEvent, NodeOutcome, NodeProcessed, NodeSkipReason, NodeType, ProgressMessage,
+    QueryExecuted, SeverityNumber, ShowDataOutput, SpanEndInfo, SpanStartInfo, StatusCode,
+    TelemetryOutputFlags, TestOutcome, UserLogMessage, get_test_outcome,
 };
+
 use serde_json::json;
 use tracing::level_filters::LevelFilter;
 
@@ -16,6 +17,7 @@ use super::super::{
     background_writer::BackgroundWriter,
     data_provider::DataProvider,
     formatters::{
+        deps::{format_package_installed_end, format_package_installed_start, format_package_spec},
         duration::format_timestamp_utc_zulu,
         invocation::format_invocation_summary,
         log_message::format_log_message,
@@ -869,6 +871,105 @@ impl JsonCompatLayer {
         self.writer.writeln(value.as_str());
     }
 
+    /// Handle DepsPackageInstalled span start events
+    fn emit_dep_installed_start(&self, pkg: &DepsPackageInstalled, span: &SpanStartInfo) {
+        // Format with shared formatter
+        let formatted_message = format_package_installed_start(pkg, false);
+
+        // Use dbt-core event code M014 and name DepsStartPackageInstall
+        let info_json = serde_json::to_value(self.build_core_event_info(
+            Some("M014"),
+            Some("DepsStartPackageInstall"),
+            &span.severity_text,
+            formatted_message,
+        ))
+        .expect("Failed to serialize core event info to JSON");
+
+        // dbt-core's DepsStartPackageInstall only has package_name field
+        let package_name = pkg
+            .package_name
+            .as_deref()
+            .or(pkg.package_url_or_path.as_deref())
+            .unwrap_or("unknown");
+
+        let value = json!({
+            "info": info_json,
+            "data": {
+                "package_name": package_name,
+            }
+        })
+        .to_string();
+
+        self.writer.writeln(value.as_str());
+    }
+
+    /// Handle DepsPackageInstalled span end events
+    fn emit_dep_installed_end(&self, pkg: &DepsPackageInstalled, span: &SpanEndInfo) {
+        // Only emit if the span ended successfully
+        let status = span.status.as_ref().map_or(StatusCode::Unset, |s| s.code);
+        if status == StatusCode::Error {
+            return;
+        }
+
+        // Format with shared formatter
+        let formatted_message = format_package_installed_end(pkg, status, false);
+
+        // Use dbt-core event code M015 and name DepsInstallInfo
+        let info_json = serde_json::to_value(self.build_core_event_info(
+            Some("M015"),
+            Some("DepsInstallInfo"),
+            &span.severity_text,
+            formatted_message,
+        ))
+        .expect("Failed to serialize core event info to JSON");
+
+        // dbt-core's DepsInstallInfo only has version_name field
+        let value = json!({
+            "info": info_json,
+            "data": {
+                "version_name": pkg.package_version.as_deref().unwrap_or_default(),
+            }
+        })
+        .to_string();
+
+        self.writer.writeln(value.as_str());
+    }
+
+    /// Handle DepsAddPackage span end events - only emits on successful completion
+    fn emit_package_add_end(&self, pkg: &DepsAddPackage, span: &SpanEndInfo) {
+        // Only emit if the span ended successfully
+        let status = span.status.as_ref().map_or(StatusCode::Unset, |s| s.code);
+        if status == StatusCode::Error {
+            return;
+        }
+
+        // Format package spec (name@version or just name)
+        let package_spec = format_package_spec(&pkg.package_name, pkg.package_version.as_deref());
+
+        // Message format matching dbt-core: "Added new package <spec>"
+        let formatted_message = format!("Added new package {}", package_spec);
+
+        // Use dbt-core event code M032 and name DepsAddPackage
+        let info_json = serde_json::to_value(self.build_core_event_info(
+            Some("M032"),
+            Some("DepsAddPackage"),
+            &span.severity_text,
+            formatted_message,
+        ))
+        .expect("Failed to serialize core event info to JSON");
+
+        let value = json!({
+            "info": info_json,
+            "data": {
+                "package_name": &pkg.package_name,
+                "version": pkg.package_version.as_deref().unwrap_or_default(),
+            }
+        })
+        .to_string();
+
+        self.writer.writeln(value.as_str());
+    }
+
     /// Handle CompiledCodeInline events (from compile command with inline query)
     /// Maps to CompiledNode (Q042) for dbt-core compatibility
     fn emit_compiled_code_inline(
@@ -933,6 +1034,12 @@ impl TelemetryConsumer for JsonCompatLayer {
         // Dispatch to NodeProcessed handler
         if let Some(node_processed) = span.attributes.downcast_ref::<NodeProcessed>() {
             self.emit_node_processed_start(node_processed, span);
+            return;
+        }
+
+        // Dispatch to DepsPackageInstalled handler
+        if let Some(pkg) = span.attributes.downcast_ref::<DepsPackageInstalled>() {
+            self.emit_dep_installed_start(pkg, span);
         }
     }
 
@@ -958,6 +1065,18 @@ impl TelemetryConsumer for JsonCompatLayer {
         // Dispatch to Invocation handler
         if let Some(invocation) = span.attributes.downcast_ref::<Invocation>() {
             self.emit_invocation_completed(invocation, span, data_provider);
+            return;
+        }
+
+        // Dispatch to DepsPackageInstalled handler
+        if let Some(pkg) = span.attributes.downcast_ref::<DepsPackageInstalled>() {
+            self.emit_dep_installed_end(pkg, span);
+            return;
+        }
+
+        // Dispatch to DepsAddPackage handler
+        if let Some(pkg) = span.attributes.downcast_ref::<DepsAddPackage>() {
+            self.emit_package_add_end(pkg, span);
         }
     }
 

@@ -9,10 +9,9 @@ pub const COMPILED_INLINE_NODE_TITLE: &str = "Compiled inline node is:";
 
 use super::{
     color::{BLUE, CYAN, GREEN, PLAIN, RED, YELLOW},
-    constants::{
-        ACTION_WIDTH, MAX_SCHEMA_DISPLAY_LEN, MIN_NODE_TYPE_WIDTH, UNIT_TEST_SCHEMA_SUFFIX,
-    },
+    constants::{MAX_SCHEMA_DISPLAY_LEN, MIN_NODE_TYPE_WIDTH, UNIT_TEST_SCHEMA_SUFFIX},
     duration::format_duration_fixed_width,
+    layout::right_align_action,
     phase::get_phase_action,
 };
 
@@ -205,12 +204,8 @@ pub fn format_node_action(
         (NodeOutcome::Unspecified, _, _) => ("Finished", &PLAIN),
     };
 
-    // Right align and pad to ACTION_WIDTH characters
-    debug_assert!(
-        action.len() <= ACTION_WIDTH,
-        "Action text too long for padding"
-    );
-    let action = format!("{:>width$}", action, width = ACTION_WIDTH);
+    // Right align action
+    let action = right_align_action(action);
 
     if !colorize {
         return action;

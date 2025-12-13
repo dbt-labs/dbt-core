@@ -13,21 +13,24 @@ pub mod utils;
 
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::DBT_PROJECT_YML;
-use dbt_common::fsinfo;
 use dbt_common::io_args::IoArgs;
+use dbt_common::tracing::span_info::SpanStatusRecorder as _;
 use dbt_common::{
     ErrorCode, FsResult,
-    constants::{FETCHING, INSTALLING, LOADING},
+    constants::{FETCHING, LOADING},
     err, show_progress, stdfs,
 };
+use dbt_common::{create_info_span, fsinfo};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_schemas::schemas::packages::{DbtPackagesLock, UpstreamProject};
+use dbt_telemetry::DepsAllPackagesInstalled;
 use hub_client::{DBT_HUB_URL, HubClient};
 use std::{collections::BTreeMap, path::Path};
 use steps::{
     compute_package_lock, install_packages, load_dbt_packages,
     load_dbt_packages_lock_without_validation, try_load_valid_dbt_packages_lock,
 };
+use tracing::Instrument as _;
 
 /// Loads and installs packages, and returns the packages lock and the dependencies map
 #[allow(clippy::cognitive_complexity, clippy::too_many_arguments)]
@@ -126,13 +129,20 @@ pub async fn get_or_install_packages(
     };
 
     if install_deps && !lock && !dbt_packages_lock.packages.is_empty() {
-        // Write out the lock file
-        show_progress!(io, fsinfo!(INSTALLING.into(), "packages".to_string()));
-        // check if the packages install path exists
-        if !packages_install_path.exists() {
-            // Create the directory
-            stdfs::create_dir_all(packages_install_path).unwrap();
-        }
+        // Start install span. Note that actual package count may end up being less
+        // then in the package lock due to package incorporation logic
+        let install_span = create_info_span(DepsAllPackagesInstalled::start(
+            dbt_packages_lock.packages.len() as u64,
+        ));
+
+        install_span.in_scope(|| {
+            // check if the packages install path exists
+            if !packages_install_path.exists() {
+                // Create the directory
+                stdfs::create_dir_all(packages_install_path).unwrap();
+            }
+        });
+
         install_packages(
             io,
             &vars,
@@ -142,7 +152,9 @@ pub async fn get_or_install_packages(
             packages_install_path,
             skip_private_deps,
         )
-        .await?;
+        .instrument(install_span.clone())
+        .await
+        .record_status(&install_span)?;
     }
 
     // A package is considered "missing" if the 'dbt_project.yml' file for that
@@ -164,13 +176,20 @@ pub async fn get_or_install_packages(
     // Auto install missing packages if not installing deps
     if !lock && !missing_packages.is_empty() {
         if !install_deps {
-            // check if the packages install path exists
-            if !packages_install_path.exists() {
-                // Create the directory
-                stdfs::create_dir_all(packages_install_path).unwrap();
-            }
-            // try to install the missing packages
-            show_progress!(io, fsinfo!(INSTALLING.into(), "packages".to_string()));
+            // Start install span. Note that actual package count may end up being less
+            // then in the package lock due to package incorporation logic
+            let install_span = create_info_span(DepsAllPackagesInstalled::start(
+                dbt_packages_lock.packages.len() as u64,
+            ));
+
+            install_span.in_scope(|| {
+                // check if the packages install path exists
+                if !packages_install_path.exists() {
+                    // Create the directory
+                    stdfs::create_dir_all(packages_install_path).unwrap();
+                }
+            });
+
             install_packages(
                 io,
                 &vars,
@@ -180,7 +199,10 @@ pub async fn get_or_install_packages(
                 packages_install_path,
                 skip_private_deps,
             )
-            .await?;
+            .instrument(install_span.clone())
+            .await
+            .record_status(&install_span)?;
+
             for package in dbt_packages_lock.packages.iter() {
                 if !packages_install_path.join(package.package_name()).exists() {
                     missing_packages_after_auto_install.push(package.package_name());

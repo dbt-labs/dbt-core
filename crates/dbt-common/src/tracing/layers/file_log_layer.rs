@@ -1,9 +1,9 @@
 use dbt_error::ErrorCode;
 use dbt_telemetry::{
-    CompiledCodeInline, Invocation, ListItemOutput, LogMessage, LogRecordInfo, NodeEvaluated,
-    NodeOutcome, NodeProcessed, NodeType, PhaseExecuted, ProgressMessage, QueryExecuted,
-    SeverityNumber, ShowDataOutput, SpanEndInfo, SpanStartInfo, TelemetryOutputFlags,
-    UserLogMessage, node_processed,
+    CompiledCodeInline, DepsAddPackage, DepsAllPackagesInstalled, DepsPackageInstalled, Invocation,
+    ListItemOutput, LogMessage, LogRecordInfo, NodeEvaluated, NodeOutcome, NodeProcessed, NodeType,
+    PhaseExecuted, ProgressMessage, QueryExecuted, SeverityNumber, ShowDataOutput, SpanEndInfo,
+    SpanStartInfo, StatusCode, TelemetryOutputFlags, UserLogMessage, node_processed,
 };
 use std::{
     sync::atomic::{AtomicBool, Ordering},
@@ -15,6 +15,11 @@ use super::super::{
     background_writer::BackgroundWriter,
     data_provider::DataProvider,
     formatters::{
+        deps::{
+            format_package_add_end, format_package_add_start, format_package_install_end,
+            format_package_install_start, format_package_installed_end,
+            format_package_installed_start,
+        },
         duration::{format_timestamp_time_only, format_timestamp_utc_zulu},
         invocation::format_invocation_summary,
         layout::format_delimiter,
@@ -109,21 +114,42 @@ impl TelemetryConsumer for FileLogLayer {
         // Write header line when invocation starts
         if let Some(invocation) = span.attributes.downcast_ref::<Invocation>() {
             self.handle_invocation_start(span, invocation);
+            return;
         }
 
         // Handle PhaseExecuted start
         if let Some(phase) = span.attributes.downcast_ref::<PhaseExecuted>() {
             self.handle_phase_executed_start(span, phase);
+            return;
         }
 
         // Handle NodeEvaluated start
         if let Some(ne) = span.attributes.downcast_ref::<NodeEvaluated>() {
             self.handle_node_evaluated_start(span, ne);
+            return;
         }
 
         // Handle NodeProcessed start
         if let Some(node_processed) = span.attributes.downcast_ref::<NodeProcessed>() {
             self.handle_node_processed_start(span, node_processed);
+            return;
+        }
+
+        // Handle DepsAllPackagesInstalled start
+        if let Some(ev) = span.attributes.downcast_ref::<DepsAllPackagesInstalled>() {
+            self.handle_deps_all_packages_installing_start(span, ev);
+            return;
+        }
+
+        // Handle DepsPackageInstalled start
+        if let Some(pkg) = span.attributes.downcast_ref::<DepsPackageInstalled>() {
+            self.handle_dep_installed_start(span, pkg);
+            return;
+        }
+
+        // Handle DepsAddPackage start
+        if let Some(pkg) = span.attributes.downcast_ref::<DepsAddPackage>() {
+            self.handle_package_add_start(span, pkg);
         }
     }
 
@@ -137,21 +163,42 @@ impl TelemetryConsumer for FileLogLayer {
         // Handle PhaseExecuted end
         if let Some(phase) = span.attributes.downcast_ref::<PhaseExecuted>() {
             self.handle_phase_executed_end(span, phase);
+            return;
         }
 
         // Handle NodeProcessed events for completed nodes
         if let Some(node_processed) = span.attributes.downcast_ref::<NodeProcessed>() {
             self.handle_node_processed(span, node_processed);
+            return;
         }
 
         // Handle NodeEvaluated events
         if let Some(ne) = span.attributes.downcast_ref::<NodeEvaluated>() {
             self.handle_node_evaluated(span, ne);
+            return;
         }
 
         // Invocation end
         if let Some(invocation) = span.attributes.downcast_ref::<Invocation>() {
             self.handle_invocation_end(span, invocation, data_provider);
+            return;
+        }
+
+        // Handle DepsAllPackagesInstalled end
+        if let Some(ev) = span.attributes.downcast_ref::<DepsAllPackagesInstalled>() {
+            self.handle_deps_all_packages_installing_end(span, ev);
+            return;
+        }
+
+        // Handle DepsPackageInstalled end
+        if let Some(pkg) = span.attributes.downcast_ref::<DepsPackageInstalled>() {
+            self.handle_dep_installed_end(span, pkg);
+            return;
+        }
+
+        // Handle DepsAddPackage end
+        if let Some(pkg) = span.attributes.downcast_ref::<DepsAddPackage>() {
+            self.handle_package_add_end(span, pkg);
         }
     }
 
@@ -385,6 +432,88 @@ impl FileLogLayer {
             log_record.time_unix_nano,
             log_record.severity_number,
             &[formatted],
+        );
+    }
+
+    fn handle_deps_all_packages_installing_start(
+        &self,
+        span: &SpanStartInfo,
+        ev: &DepsAllPackagesInstalled,
+    ) {
+        // Format with shared formatter
+        let formatted_message = format_package_install_start(ev, false);
+
+        self.write_log_lines(
+            span.start_time_unix_nano,
+            span.severity_number,
+            &[formatted_message],
+        );
+    }
+
+    fn handle_deps_all_packages_installing_end(
+        &self,
+        span: &SpanEndInfo,
+        ev: &DepsAllPackagesInstalled,
+    ) {
+        // Format with shared formatter
+        let formatted_message = format_package_install_end(ev, false);
+
+        self.write_log_lines(
+            span.end_time_unix_nano,
+            span.severity_number,
+            &[formatted_message],
+        );
+    }
+
+    fn handle_dep_installed_start(&self, span: &SpanStartInfo, pkg: &DepsPackageInstalled) {
+        // Format with shared formatter
+        let formatted_message = format_package_installed_start(pkg, false);
+
+        self.write_log_lines(
+            span.start_time_unix_nano,
+            span.severity_number,
+            &[formatted_message],
+        );
+    }
+
+    fn handle_dep_installed_end(&self, span: &SpanEndInfo, pkg: &DepsPackageInstalled) {
+        // Format with shared formatter
+        let formatted_message = format_package_installed_end(
+            pkg,
+            span.status.as_ref().map_or(StatusCode::Unset, |s| s.code),
+            false,
+        );
+
+        self.write_log_lines(
+            span.end_time_unix_nano,
+            span.severity_number,
+            &[formatted_message],
+        );
+    }
+
+    fn handle_package_add_start(&self, span: &SpanStartInfo, pkg: &DepsAddPackage) {
+        // Format with shared formatter
+        let formatted_message = format_package_add_start(pkg, false);
+
+        self.write_log_lines(
+            span.start_time_unix_nano,
+            span.severity_number,
+            &[formatted_message],
+        );
+    }
+
+    fn handle_package_add_end(&self, span: &SpanEndInfo, pkg: &DepsAddPackage) {
+        // Format with shared formatter
+        let formatted_message = format_package_add_end(
+            pkg,
+            span.status.as_ref().map_or(StatusCode::Unset, |s| s.code),
+            false,
+        );
+
+        self.write_log_lines(
+            span.end_time_unix_nano,
+            span.severity_number,
+            &[formatted_message],
         );
     }
 }

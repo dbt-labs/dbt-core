@@ -75,6 +75,7 @@ pub struct ExecuteOnly {
     cmd_vec: Vec<String>,
     func: Arc<CommandFn>,
     redirect_outputs: bool,
+    allow_failure: bool,
     stdout: Arc<Mutex<String>>,
     stderr: Arc<Mutex<String>>,
     exit_code: AtomicI32,
@@ -96,10 +97,16 @@ impl ExecuteOnly {
             cmd_vec,
             func,
             redirect_outputs,
+            allow_failure: false,
             stdout: Arc::new(Mutex::new(String::default())),
             stderr: Arc::new(Mutex::new(String::default())),
             exit_code: AtomicI32::new(0),
         }
+    }
+
+    pub fn with_allow_failure(mut self, allow_failure: bool) -> Self {
+        self.allow_failure = allow_failure;
+        self
     }
 
     pub fn get_exit_code(&self) -> i32 {
@@ -162,18 +169,25 @@ impl Task for ExecuteOnly {
             stderr_file,
             test_env.get_tracing_handle(),
         )
-        .await?;
+        .await;
 
-        // Store stdout and stderr contents contents in the struct for later access if needed
+        // Store stdout and stderr contents in the struct for later access if needed
         *self.stdout.lock().unwrap() = stdfs::read_to_string(&stdout_path)?;
         *self.stderr.lock().unwrap() = stdfs::read_to_string(&stderr_path)?;
 
-        // Store exit code
-        self.exit_code
-            .store(res, std::sync::atomic::Ordering::SeqCst);
-
-        // Don't compare with goldie files
-        Ok(())
+        match res {
+            Ok(exit_code) => {
+                self.exit_code
+                    .store(exit_code, std::sync::atomic::Ordering::SeqCst);
+                Ok(())
+            }
+            Err(_e) if self.allow_failure => {
+                // We still want access to captured stdout/stderr even if the command failed.
+                self.exit_code.store(1, std::sync::atomic::Ordering::SeqCst);
+                Ok(())
+            }
+            Err(e) => Err(e.into()),
+        }
     }
 
     fn is_counted(&self) -> bool {

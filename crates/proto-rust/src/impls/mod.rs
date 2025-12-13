@@ -2,6 +2,8 @@
 
 #[path = "v1_public_events_fusion_compat.rs"]
 pub mod compat;
+#[path = "v1_public_events_fusion_deps.rs"]
+pub mod deps;
 #[path = "v1_public_events_fusion_dev.rs"]
 pub mod dev;
 #[path = "v1_public_events_fusion_log.rs"]
