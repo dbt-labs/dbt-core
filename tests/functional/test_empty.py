@@ -154,4 +154,7 @@ class TestEmptyFlagSeed(BaseTestEmptyFlag):
         run_dbt(["seed", "--empty"])
         self.assert_row_count(project, "raw_seed", 0)
 
-        run_dbt(["build"])
+        results = run_dbt(["build", "--empty"])
+        self.assert_row_count(project, "raw_seed", 0)
+
+        assert len(results) == 3
