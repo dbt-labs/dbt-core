@@ -43,7 +43,7 @@ from dbt.clients.jinja import (
 )
 from dbt.clients.jinja_static import statically_parse_unrendered_config
 from dbt.config import IsFQNResource, Project, RuntimeConfig
-from dbt.constants import DEFAULT_ENV_PLACEHOLDER
+from dbt.constants import DEFAULT_ENV_PLACEHOLDER, EMPTY_SEED_SIZE
 from dbt.context.base import Var, contextmember, contextproperty
 from dbt.context.configured import FQNLookup
 from dbt.context.context_config import ContextConfig
@@ -1248,7 +1248,7 @@ class ProviderContext(ManifestContext):
             raise CompilationError(message_if_exception, self.model)
 
     @contextmember()
-    def load_agate_table(self, row_limit: Optional[int] = None) -> "agate.Table":
+    def load_agate_table(self) -> "agate.Table":
         from dbt_common.clients import agate_helper
 
         if not isinstance(self.model, SeedNode):
@@ -1269,10 +1269,8 @@ class ProviderContext(ManifestContext):
         delimiter = self.model.config.delimiter
         try:
             table = agate_helper.from_csv(path, text_columns=column_types, delimiter=delimiter)
-            if row_limit:
-                table = table.limit(row_limit)  # type: ignore
-            elif getattr(self.config.args, "EMPTY", False):
-                table = table.limit(0)  # type: ignore
+            if getattr(self.config.args, "EMPTY", False):
+                table = table.limit(EMPTY_SEED_SIZE)  # type: ignore
         except ValueError as e:
             raise LoadAgateTableValueError(e, node=self.model)
         # this is used by some adapters

@@ -15,6 +15,10 @@ raw_source_csv = """id
 3
 """
 
+raw_seed_csv = """a,b,c,d,e,f
+3.2,3,US,2025-01-01,none,false
+4.5,4,UK,2025-01-02,2,true
+"""
 
 model_sql = """
 select *
@@ -67,8 +71,29 @@ unit_tests:
         2
 """
 
+unit_tests_seed_yml = """
+unit_tests:
+  - name: test_my_seed
+    model: model
+    given:
+      - input: ref('raw_seed')
+    expect:
+      format: csv
+      rows: |
+        a,b,c,d,e,f
+        3.2,3,US,2025-01-01,none,false
+        4.5,4,UK,2025-01-02,2,true
+"""
 
-class TestEmptyFlag:
+
+class BaseTestEmptyFlag:
+    def assert_row_count(self, project, relation_name: str, expected_row_count: int):
+        relation = relation_from_name(project.adapter, relation_name)
+        result = project.run_sql(f"select count(*) as num_rows from {relation}", fetch="one")
+        assert result[0] == expected_row_count
+
+
+class TestEmptyFlag(BaseTestEmptyFlag):
     @pytest.fixture(scope="class")
     def seeds(self):
         return {
@@ -86,16 +111,7 @@ class TestEmptyFlag:
             "unit_tests.yml": unit_tests_yml,
         }
 
-    def assert_row_count(self, project, relation_name: str, expected_row_count: int):
-        relation = relation_from_name(project.adapter, relation_name)
-        result = project.run_sql(f"select count(*) as num_rows from {relation}", fetch="one")
-        assert result[0] == expected_row_count
-
     def test_run_with_empty(self, project):
-        # Test seed with --empty flag
-        run_dbt(["seed", "--empty"])
-        self.assert_row_count(project, "raw_source", 0)
-
         # Create source from seed for run and build command testing
         run_dbt(["seed"])
         self.assert_row_count(project, "raw_source", 1)
@@ -118,3 +134,24 @@ class TestEmptyFlag:
 
         # ensure dbt compile supports --empty flag
         run_dbt(["compile", "--empty"])
+
+
+class TestEmptyFlagSeed(BaseTestEmptyFlag):
+    @pytest.fixture(scope="class")
+    def seeds(self):
+        return {
+            "raw_seed.csv": raw_seed_csv,
+        }
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "model.sql": "select * from {{ ref('raw_seed') }}",
+            "unit_tests.yml": unit_tests_seed_yml,
+        }
+
+    def test_run_with_empty(self, project):
+        run_dbt(["seed", "--empty"])
+        self.assert_row_count(project, "raw_seed", 0)
+
+        run_dbt(["build"])
