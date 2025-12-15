@@ -1,5 +1,5 @@
 use dbt_common::io_args::StaticAnalysisKind;
-use dbt_serde_yaml::{JsonSchema, ShouldBe, Spanned};
+use dbt_serde_yaml::{JsonSchema, ShouldBe, Spanned, Verbatim};
 use serde::{Deserialize, Serialize};
 // Type aliases for clarity
 type YmlValue = dbt_serde_yaml::Value;
@@ -34,7 +34,7 @@ pub struct ProjectSourceConfig {
     #[serde(rename = "+quoting")]
     pub quoting: Option<DbtQuoting>,
     #[serde(rename = "+loaded_at_query")]
-    pub loaded_at_query: Option<String>,
+    pub loaded_at_query: Verbatim<Option<String>>,
     #[serde(rename = "+loaded_at_field")]
     pub loaded_at_field: Option<String>,
     #[serde(rename = "+static_analysis")]
@@ -266,7 +266,7 @@ pub struct SourceConfig {
     pub tags: Option<StringOrArrayOfStrings>,
     pub quoting: Option<DbtQuoting>,
     pub loaded_at_field: Option<String>,
-    pub loaded_at_query: Option<String>,
+    pub loaded_at_query: Verbatim<Option<String>>,
     pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
     // Adapter specific configs
     pub __warehouse_specific_config__: WarehouseSpecificNodeConfig,

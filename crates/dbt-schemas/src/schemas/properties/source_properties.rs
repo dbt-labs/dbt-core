@@ -6,7 +6,7 @@ use crate::schemas::project::SourceConfig;
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::bool_or_string_bool;
 use dbt_common::serde_utils::Omissible;
-use dbt_serde_yaml::JsonSchema;
+use dbt_serde_yaml::{JsonSchema, Verbatim};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
@@ -55,5 +55,5 @@ pub struct TablesConfig {
     pub freshness: Omissible<Option<FreshnessDefinition>>,
     pub tags: Option<StringOrArrayOfStrings>,
     pub loaded_at_field: Option<String>,
-    pub loaded_at_query: Option<String>,
+    pub loaded_at_query: Verbatim<Option<String>>,
 }

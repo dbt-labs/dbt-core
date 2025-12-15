@@ -149,8 +149,9 @@ pub fn resolve_sources(
         let merged_loaded_at_query = Some(
             table_config
                 .loaded_at_query
+                .0
                 .clone()
-                .or_else(|| source_properties_config.loaded_at_query.clone())
+                .or_else(|| source_properties_config.loaded_at_query.0.clone())
                 .unwrap_or_default(),
         );
         if !merged_loaded_at_field.as_ref().unwrap().is_empty()
@@ -259,7 +260,7 @@ pub fn resolve_sources(
         merged_configs.enabled = Some(is_enabled);
         merged_configs.freshness = merged_freshness.clone();
         merged_configs.loaded_at_field = merged_loaded_at_field.clone();
-        merged_configs.loaded_at_query = merged_loaded_at_query.clone();
+        merged_configs.loaded_at_query = merged_loaded_at_query.clone().into();
         merged_configs.event_time = merged_event_time.clone();
 
         let dbt_source = DbtSource {
