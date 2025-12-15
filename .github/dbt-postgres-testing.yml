@@ -1,0 +1,169 @@
+# **what?**
+# Runs all tests in dbt-postgres with this branch of dbt-core to ensure nothing is broken
+
+# **why?**
+# Ensure dbt-core changes do not break dbt-postgres, as a basic proxy for other adapters
+
+# **when?**
+# This will run when trying to merge a PR into main.
+# It can also be manually triggered.
+
+# This workflow can be skipped by adding the "Skip Postgres Testing" label to the PR.  This is
+# useful when making a change in both `dbt-postgres` and `dbt-core` where the changes are dependant
+# and cause the other repository to break.
+
+name: "dbt-postgres Tests"
+run-name: >-
+  ${{ (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call')
+  && format('dbt-postgres@{0} with dbt-core@{1}', inputs.dbt-postgres-ref, inputs.dbt-core-ref)
+  || 'dbt-postgres@main with dbt-core branch' }}
+
+on:
+  push:
+    branches:
+      - "main"
+      - "*.latest"
+      - "releases/*"
+  pull_request:
+  merge_group:
+    types: [checks_requested]
+  workflow_dispatch:
+    inputs:
+      dbt-postgres-ref:
+        description: "The branch of dbt-postgres to test against"
+        default: "main"
+      dbt-core-ref:
+        description: "The branch of dbt-core to test against"
+        default: "main"
+  workflow_call:
+    inputs:
+      dbt-postgres-ref:
+        description: "The branch of dbt-postgres to test against"
+        type: string
+        required: true
+        default: "main"
+      dbt-core-ref:
+        description: "The branch of dbt-core to test against"
+        type: string
+        required: true
+        default: "main"
+
+permissions: read-all
+
+# will cancel previous workflows triggered by the same event
+# and for the same ref for PRs/merges or same SHA otherwise
+# and for the same inputs on workflow_dispatch or workflow_call
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ contains(fromJson('["pull_request", "merge_group"]'), github.event_name) && github.event.pull_request.head.ref || github.sha }}-${{ contains(fromJson('["workflow_call", "workflow_dispatch"]'), github.event_name) && github.event.inputs.dbt-postgres-ref && github.event.inputs.dbt-core-ref || github.sha }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  job-prep:
+    # This allow us to run the workflow on pull_requests as well so we can always run unit tests
+    # and only run integration tests on merge for time purposes
+    name: Setup Repo Refs
+    runs-on: ubuntu-latest
+    outputs:
+      dbt-postgres-ref: ${{ steps.core-ref.outputs.ref }}
+      dbt-core-ref: ${{ steps.common-ref.outputs.ref }}
+
+    steps:
+      - name: "Input Refs"
+        id: job-inputs
+        run: |
+          echo "inputs.dbt-postgres-ref=${{ inputs.dbt-postgres-ref }}"
+          echo "inputs.dbt-core-ref=${{ inputs.dbt-core-ref }}"
+
+      - name: "Determine dbt-postgres ref"
+        id: core-ref
+        run: |
+          if [[ -z "${{ inputs.dbt-postgres-ref }}" ]]; then
+            REF="main"
+          else
+            REF=${{ inputs.dbt-postgres-ref }}
+          fi
+          echo "ref=$REF" >> $GITHUB_OUTPUT
+
+      - name: "Determine dbt-core ref"
+        id: common-ref
+        run: |
+          if [[ -z "${{ inputs.dbt-core-ref }}" ]]; then
+            # these will be commits instead of branches
+            if [[ "${{ github.event_name }}" == "merge_group" ]]; then
+              REF=${{ github.event.merge_group.head_sha }}
+            else
+              REF=${{ github.event.pull_request.base.sha }}
+            fi
+          else
+            REF=${{ inputs.dbt-core-ref }}
+          fi
+          echo "ref=$REF" >> $GITHUB_OUTPUT
+
+      - name: "Final Refs"
+        run: |
+          echo "dbt-postgres-ref=${{ steps.core-ref.outputs.ref }}"
+          echo "dbt-core-ref=${{ steps.common-ref.outputs.ref }}"
+
+  # integration-tests-postgres:
+  #   name: "dbt-postgres integration tests"
+  #   needs: [job-prep]
+  #   runs-on: ubuntu-latest
+  #   defaults:
+  #     run:
+  #       working-directory: "./dbt-postgres"
+  #   environment:
+  #     name: "dbt-postgres"
+  #   env:
+  #     POSTGRES_TEST_HOST: ${{ vars.POSTGRES_TEST_HOST }}
+  #     POSTGRES_TEST_PORT: ${{ vars.POSTGRES_TEST_PORT }}
+  #     POSTGRES_TEST_USER: ${{ vars.POSTGRES_TEST_USER }}
+  #     POSTGRES_TEST_PASS: ${{ secrets.POSTGRES_TEST_PASS }}
+  #     POSTGRES_TEST_DATABASE: ${{ vars.POSTGRES_TEST_DATABASE }}
+  #     POSTGRES_TEST_THREADS: ${{ vars.POSTGRES_TEST_THREADS }}
+  #   services:
+  #     postgres:
+  #         image: postgres
+  #         env:
+  #           POSTGRES_PASSWORD: postgres
+  #         options: >-
+  #             --health-cmd pg_isready
+  #             --health-interval 10s
+  #             --health-timeout 5s
+  #             --health-retries 5
+  #         ports:
+  #           - ${{ vars.POSTGRES_TEST_PORT }}:5432
+  #   steps:
+  #     - name: "Check out dbt-adapters@${{ needs.job-prep.outputs.dbt-postgres-ref }}"
+  #       uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
+  #       with:
+  #         repository: dbt-labs/dbt-adapters
+  #         ref: ${{ needs.job-prep.outputs.dbt-postgres-ref }}
+
+  #     - name: "Set up Python"
+  #       uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # actions/setup-python@v5
+  #       with:
+  #           python-version: ${{ inputs.python-version }}
+
+  #     - name: "Set environment variables"
+  #       run: |
+  #           echo "HATCH_PYTHON=${{ inputs.python-version }}" >> $GITHUB_ENV
+  #           echo "PIP_ONLY_BINARY=psycopg2-binary" >> $GITHUB_ENV
+
+  #     - name: "Setup test database"
+  #       run: psql -f ./scripts/setup_test_database.sql
+  #       env:
+  #           PGHOST: ${{ vars.POSTGRES_TEST_HOST }}
+  #           PGPORT: ${{ vars.POSTGRES_TEST_PORT }}
+  #           PGUSER: postgres
+  #           PGPASSWORD: postgres
+  #           PGDATABASE: postgres
+
+  #     - name: "Install hatch"
+  #       uses: pypa/hatch@257e27e51a6a5616ed08a39a408a21c35c9931bc # pypa/hatch@install
+
+  #     - name: "Run integration tests"
+  #       run: hatch run ${{ inputs.hatch-env }}:integration-tests

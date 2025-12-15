@@ -46,5 +46,4 @@ The [`tests/`](tests/) subdirectory includes unit and fuctional tests that run a
 ## Everything else
 
 - [docker](docker/): All dbt versions are published as Docker images on DockerHub. This subfolder contains the `Dockerfile` (constant) and `requirements.txt` (one for each version).
-- [etc](etc/): Images for README
 - [scripts](scripts/): Helper scripts for testing, releasing, and producing JSON schemas. These are not included in distributions of dbt, nor are they rigorously tested—they're just handy tools for the dbt maintainers :)
