@@ -33,7 +33,7 @@ select {{ config.require('meta_key') }} as col_value
 
 meta_model_meta_require_sql = """
 -- models/meta_model.sql
-select {{ config.require('meta_key') }} as col_value
+select {{ config.meta_require('meta_key') }} as col_value
 """
 
 
@@ -95,10 +95,10 @@ class TestConfigGetMetaRequire:
         results = run_dbt(["run"], expect_pass=False)
         assert len(results) == 1
         assert str(results[0].status) == "error"
-        assert 'column "my_meta_value" does not exist' in results[0].message
+        assert "does not define a required config parameter 'meta_key'" in results[0].message
 
         write_file(meta_model_meta_require_sql, "models", "meta_model.sql")
         results = run_dbt(["run"], expect_pass=False)
         assert len(results) == 1
         assert str(results[0].status) == "error"
-        assert 'column "my_meta_value" does not exist' in results[0].message
+        assert 'column "none" does not exist' in results[0].message
