@@ -29,7 +29,7 @@ use crate::schemas::project::configs::common::default_quoting;
 use crate::schemas::project::configs::common::default_to_grants;
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::bool_or_string_bool;
-use crate::schemas::serde::{f64_or_string_f64, u64_or_string_u64};
+use crate::schemas::serde::{f64_or_string_f64, serialize_string_or_array_map, u64_or_string_u64};
 
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
@@ -50,7 +50,7 @@ pub struct ProjectSeedConfig {
     pub event_time: Option<String>,
     #[serde(rename = "+full_refresh")]
     pub full_refresh: Option<bool>,
-    #[serde(rename = "+grants")]
+    #[serde(rename = "+grants", serialize_with = "serialize_string_or_array_map")]
     pub grants: Option<BTreeMap<String, StringOrArrayOfStrings>>,
     #[serde(rename = "+group")]
     pub group: Option<String>,
@@ -285,6 +285,7 @@ pub struct SeedConfig {
     pub docs: Option<DocsConfig>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
+    #[serde(default, serialize_with = "serialize_string_or_array_map")]
     pub grants: Option<BTreeMap<String, StringOrArrayOfStrings>>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub quote_columns: Option<bool>,

@@ -38,7 +38,8 @@ use crate::schemas::project::dbt_project::TypedRecursiveConfig;
 use crate::schemas::properties::ModelFreshness;
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::{
-    bool_or_string_bool, default_type, f64_or_string_f64, u64_or_string_u64,
+    bool_or_string_bool, default_type, f64_or_string_f64, serialize_string_or_array_map,
+    u64_or_string_u64,
 };
 use dbt_serde_yaml::ShouldBe;
 
@@ -167,7 +168,7 @@ pub struct ProjectModelConfig {
     pub full_refresh: Option<bool>,
     #[serde(rename = "+grant_access_to")]
     pub grant_access_to: Option<Vec<GrantAccessToTarget>>,
-    #[serde(rename = "+grants")]
+    #[serde(rename = "+grants", serialize_with = "serialize_string_or_array_map")]
     pub grants: Option<BTreeMap<String, StringOrArrayOfStrings>>,
     #[serde(rename = "+group")]
     pub group: Option<String>,
@@ -420,6 +421,7 @@ pub struct ModelConfig {
     pub unique_key: Option<DbtUniqueKey>,
     pub on_schema_change: Option<OnSchemaChange>,
     pub on_configuration_change: Option<OnConfigurationChange>,
+    #[serde(serialize_with = "serialize_string_or_array_map")]
     pub grants: Option<BTreeMap<String, StringOrArrayOfStrings>>,
     pub packages: Option<StringOrArrayOfStrings>,
     pub python_version: Option<String>,

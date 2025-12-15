@@ -26,7 +26,7 @@ use crate::schemas::project::dbt_project::DefaultTo;
 use crate::schemas::project::dbt_project::TypedRecursiveConfig;
 use crate::schemas::properties::{FunctionKind, Volatility};
 use crate::schemas::serde::StringOrArrayOfStrings;
-use crate::schemas::serde::{bool_or_string_bool, default_type};
+use crate::schemas::serde::{bool_or_string_bool, default_type, serialize_string_or_array_map};
 
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
@@ -43,7 +43,7 @@ pub struct ProjectFunctionConfig {
     pub docs: Option<DocsConfig>,
     #[serde(default, rename = "+enabled", deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
-    #[serde(rename = "+grants")]
+    #[serde(rename = "+grants", serialize_with = "serialize_string_or_array_map")]
     pub grants: Option<BTreeMap<String, StringOrArrayOfStrings>>,
     #[serde(rename = "+group")]
     pub group: Option<String>,
@@ -170,6 +170,7 @@ pub struct FunctionConfig {
     pub meta: Option<BTreeMap<String, YmlValue>>,
     pub group: Option<String>,
     pub docs: Option<DocsConfig>,
+    #[serde(serialize_with = "serialize_string_or_array_map")]
     pub grants: Option<BTreeMap<String, StringOrArrayOfStrings>>,
     pub quoting: Option<DbtQuoting>,
     pub language: Option<String>,

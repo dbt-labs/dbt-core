@@ -1,14 +1,13 @@
+use dbt_common::{CodeLocationWithFile, ErrorCode, FsError, FsResult, stdfs};
+use dbt_serde_yaml::{JsonSchema, Spanned, UntaggedEnumDeserialize};
+use serde::{
+    self, Deserialize, Deserializer, Serialize, Serializer,
+    de::{self, DeserializeOwned},
+};
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
-
-use dbt_common::{CodeLocationWithFile, ErrorCode, FsError, FsResult, stdfs};
-use dbt_serde_yaml::{JsonSchema, Spanned, UntaggedEnumDeserialize};
-use serde::{
-    self, Deserialize, Deserializer, Serialize,
-    de::{self, DeserializeOwned},
-};
 // Type aliases for clarity
 type YmlValue = dbt_serde_yaml::Value;
 type MinijinjaValue = minijinja::Value;
@@ -353,6 +352,53 @@ impl From<StringOrArrayOfStrings> for Vec<String> {
         }
     }
 }
+
+/// Wrapper that serializes `StringOrArrayOfStrings` as an array without allocation.
+struct AsArray<'a>(&'a StringOrArrayOfStrings);
+
+impl Serialize for AsArray<'_> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        use serde::ser::SerializeSeq;
+
+        match self.0 {
+            StringOrArrayOfStrings::ArrayOfStrings(vec) => vec.serialize(serializer),
+            StringOrArrayOfStrings::String(s) => {
+                let mut seq = serializer.serialize_seq(Some(1))?;
+                seq.serialize_element(s)?;
+                seq.end()
+            }
+        }
+    }
+}
+
+/// Serialize a map of `StringOrArrayOfStrings` values, normalizing all values to arrays.
+/// This is useful for config fields like `grants` where the input can be
+/// either a single string or an array of strings, but should always serialize as an array.
+/// If the value is `None`, serializes as an empty map `{}`.
+pub fn serialize_string_or_array_map<S>(
+    value: &Option<BTreeMap<String, StringOrArrayOfStrings>>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    use serde::ser::SerializeMap;
+
+    match value {
+        Some(map) => {
+            let mut map_ser = serializer.serialize_map(Some(map.len()))?;
+            for (k, v) in map {
+                map_ser.serialize_entry(k, &AsArray(v))?;
+            }
+            map_ser.end()
+        }
+        None => serializer.serialize_map(Some(0))?.end(),
+    }
+}
+
 impl StringOrArrayOfStrings {
     pub fn to_strings(&self) -> Vec<String> {
         match self {
@@ -457,5 +503,71 @@ impl std::fmt::Display for FloatOrString {
             FloatOrString::Number(n) => write!(f, "{n}"),
             FloatOrString::String(s) => write!(f, "{s}"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Serialize, Deserialize, Default)]
+    struct TestConfig {
+        #[serde(default, serialize_with = "serialize_string_or_array_map")]
+        grants: Option<BTreeMap<String, StringOrArrayOfStrings>>,
+    }
+
+    #[test]
+    fn test_serialize_string_or_array_map_normalizes_string_to_array() {
+        let mut grants: BTreeMap<String, StringOrArrayOfStrings> = BTreeMap::new();
+        grants.insert(
+            "select".to_string(),
+            StringOrArrayOfStrings::String("ROLE_A".to_string()),
+        );
+
+        let config = TestConfig {
+            grants: Some(grants),
+        };
+        let json = serde_json::to_string(&config).unwrap();
+
+        // String should be normalized to array
+        assert_eq!(json, r#"{"grants":{"select":["ROLE_A"]}}"#);
+    }
+
+    #[test]
+    fn test_serialize_string_or_array_map_preserves_array() {
+        let mut grants = BTreeMap::new();
+        grants.insert(
+            "select".to_string(),
+            StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "ROLE_A".to_string(),
+                "ROLE_B".to_string(),
+            ]),
+        );
+
+        let config = TestConfig {
+            grants: Some(grants),
+        };
+        let json = serde_json::to_string(&config).unwrap();
+
+        assert_eq!(json, r#"{"grants":{"select":["ROLE_A","ROLE_B"]}}"#);
+    }
+
+    #[test]
+    fn test_serialize_string_or_array_map_none_becomes_empty_map() {
+        let config = TestConfig { grants: None };
+        let json = serde_json::to_string(&config).unwrap();
+
+        // None should serialize as empty map, not null
+        assert_eq!(json, r#"{"grants":{}}"#);
+    }
+
+    #[test]
+    fn test_serialize_string_or_array_map_empty_map() {
+        let config = TestConfig {
+            grants: Some(BTreeMap::new()),
+        };
+        let json = serde_json::to_string(&config).unwrap();
+
+        assert_eq!(json, r#"{"grants":{}}"#);
     }
 }

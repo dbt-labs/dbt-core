@@ -49,7 +49,7 @@ use crate::schemas::{
     },
     ref_and_source::{DbtRef, DbtSourceWrapper},
     semantic_layer::semantic_manifest::SemanticLayerElementConfig,
-    serde::{StringOrArrayOfStrings, StringOrInteger},
+    serde::{StringOrArrayOfStrings, StringOrInteger, serialize_string_or_array_map},
 };
 
 use dbt_common::io_args::StaticAnalysisKind;
@@ -573,6 +573,7 @@ pub struct ManifestModelConfig {
     pub unique_key: Option<DbtUniqueKey>,
     pub on_schema_change: Option<OnSchemaChange>,
     pub on_configuration_change: Option<OnConfigurationChange>,
+    #[serde(rename = "+grants", serialize_with = "serialize_string_or_array_map")]
     pub grants: Option<BTreeMap<String, StringOrArrayOfStrings>>,
     pub packages: Option<StringOrArrayOfStrings>,
     pub python_version: Option<String>,
@@ -614,6 +615,7 @@ pub struct ManifestSeedConfig {
     pub docs: Option<DocsConfig>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
+    #[serde(default, serialize_with = "serialize_string_or_array_map")]
     pub grants: Option<BTreeMap<String, StringOrArrayOfStrings>>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub quote_columns: Option<bool>,
