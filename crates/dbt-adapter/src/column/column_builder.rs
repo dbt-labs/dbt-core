@@ -112,7 +112,15 @@ impl ColumnBuilder {
         static PRECISION_REGEX: LazyLock<Regex> =
             LazyLock::new(|| Regex::new(r"\(.*?\)$").unwrap());
         match data_type {
-            DataType::Decimal128(_, _) => {
+            DataType::Int8
+            | DataType::Int16
+            | DataType::Int32
+            | DataType::Int64
+            | DataType::UInt8
+            | DataType::UInt16
+            | DataType::UInt32
+            | DataType::UInt64
+            | DataType::Decimal128(_, _) => {
                 dtype.clear();
                 dtype.push_str("NUMBER");
             }
