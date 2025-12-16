@@ -672,51 +672,12 @@ fn generate_visual_sql_diff(actual: &str, expected: &str) -> String {
     diff_output.push_str("Expected:\n");
     diff_output.push_str(&format!("{expected}\n\n"));
 
-    // Show normalized comparison with visual markers
-    let diff_markers = create_normalized_diff_markers(&actual_normalized, &expected_normalized);
-
-    diff_output.push_str("Normalized Comparison (whitespace removed):\n");
-    diff_output.push_str("-------------------------------------------\n");
-    diff_output.push_str(&format!("Actual  : {actual_normalized}\n"));
-    diff_output.push_str(&format!("Expected: {expected_normalized}\n"));
-
-    if !diff_markers.trim().is_empty() {
-        diff_output.push_str(&format!("Diff    : {diff_markers}\n"));
-    }
-
     diff_output
-}
-
-fn create_normalized_diff_markers(actual: &str, expected: &str) -> String {
-    use similar::{ChangeTag, TextDiff};
-
-    let diff = TextDiff::from_chars(actual, expected);
-    let mut result = String::new();
-
-    for change in diff.iter_all_changes() {
-        match change.tag() {
-            ChangeTag::Equal => {
-                // Common parts - use spaces
-                result.push_str(&" ".repeat(change.value().len()));
-            }
-            ChangeTag::Delete => {
-                // Deleted from actual (missing in expected) - don't add markers for expected
-                // since we're showing markers for the expected string
-            }
-            ChangeTag::Insert => {
-                // Inserted in expected (extra in expected) - mark as different
-                result.push_str(&"-".repeat(change.value().len()));
-            }
-        }
-    }
-
-    result
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use dbt_test_primitives::assert_contains;
 
     #[test]
     fn test_compare_sql_identical_ignore_whitespace() {
@@ -767,8 +728,6 @@ mod tests {
         // Test that it shows both original and normalized versions
         assert!(diff.contains(sql1));
         assert!(diff.contains(sql2));
-        assert_contains!(diff, "SELECTid,nameFROMusers");
-        assert_contains!(diff, "SELECTid,emailFROMusers");
     }
 
     #[test]
@@ -827,53 +786,6 @@ mod tests {
     }
 
     #[test]
-    fn test_smart_diff_markers_with_similar() {
-        let actual = "SELECT name FROM users";
-        let expected = "SELECT email FROM users";
-
-        let actual_norm = actual
-            .chars()
-            .filter(|c| !c.is_whitespace())
-            .collect::<String>();
-        let expected_norm = expected
-            .chars()
-            .filter(|c| !c.is_whitespace())
-            .collect::<String>();
-        let markers = create_normalized_diff_markers(&actual_norm, &expected_norm);
-
-        // Test that normalized strings are what we expect
-        assert_eq!(actual_norm, "SELECTnameFROMusers");
-        assert_eq!(expected_norm, "SELECTemailFROMusers");
-
-        // Test that markers are generated (using similar crate's intelligent diff)
-        assert!(!markers.is_empty(), "Should generate diff markers");
-
-        // With similar crate, we expect:
-        // - Common parts (SELECT, FROMusers) marked with spaces
-        // - Different parts (name vs email) marked appropriately
-
-        // The exact pattern depends on similar's algorithm, but we can test basic properties
-        let marker_chars: Vec<char> = markers.chars().collect();
-        let expected_chars: Vec<char> = expected_norm.chars().collect();
-
-        assert_eq!(
-            marker_chars.len(),
-            expected_chars.len(),
-            "Marker length should match expected string length"
-        );
-
-        // Check that we have both spaces (common parts) and other markers (different parts)
-        let has_spaces = marker_chars.contains(&' ');
-        let has_diff_markers = marker_chars.contains(&' ');
-
-        assert!(has_spaces, "Should have spaces for common parts");
-        assert!(
-            has_diff_markers,
-            "Should have difference markers for different parts"
-        );
-    }
-
-    #[test]
     fn test_placeholder_replacement_differences() {
         let actual = "SELECT %s, %s FROM table";
         let expected = "SELECT 1, 'test' FROM table";
@@ -883,10 +795,6 @@ mod tests {
             result.is_err(),
             "Should detect placeholder vs value differences"
         );
-
-        let diff = generate_visual_sql_diff(actual, expected);
-        assert_contains!(diff, "SELECT%s,%sFROMtable");
-        assert_contains!(diff, "SELECT1,'test'FROMtable");
     }
 
     #[test]
@@ -961,14 +869,6 @@ mod tests {
         assert!(
             result.is_err(),
             "Should detect difference between simple SELECT and WITH clause"
-        );
-
-        // Verify the diff shows the WITH clause difference
-        let diff = generate_visual_sql_diff(simple_select, with_clause_select);
-        assert_contains!(diff, "SELECT*FROMusers");
-        assert_contains!(
-            diff,
-            "WITHtemp_tableAS(SELECTid,nameFROMcustomers)SELECT*FROMusers"
         );
     }
 
