@@ -23,9 +23,7 @@ use dbt_agate::AgateTable;
 use dbt_common::serde_utils::convert_yml_to_value_map;
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::dbt_column::DbtColumn;
-use dbt_schemas::schemas::manifest::{
-    BigqueryClusterConfig, BigqueryPartitionConfig, PartitionConfig,
-};
+use dbt_schemas::schemas::manifest::{BigqueryPartitionConfig, PartitionConfig};
 use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::relations::base::BaseRelation;
 use dbt_schemas::schemas::serde::minijinja_value_to_typed_struct;
@@ -939,49 +937,6 @@ impl TypedBaseAdapter for BigqueryAdapter {
         }
 
         Ok(None)
-    }
-
-    /// Check if a given partition and clustering column spec for a table
-    /// can replace an existing relation in the database. BigQuery does not
-    /// allow tables to be replaced with another table that has a different
-    /// partitioning spec. This method returns True if the given config spec is
-    /// identical to that of the existing table.
-    ///
-    /// reference: https://github.com/dbt-labs/dbt-adapters/blob/4a00354a497214d9043bf4122810fe2d04de17bb/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L541
-    fn is_replaceable(
-        &self,
-        conn: &'_ mut dyn Connection,
-        relation: Arc<dyn BaseRelation>,
-        local_partition_by: Option<BigqueryPartitionConfig>,
-        local_cluster_by: Option<BigqueryClusterConfig>,
-    ) -> AdapterResult<bool> {
-        match get_table_schema(conn, relation.clone()) {
-            Ok(schema) => {
-                let is_partition_match = partitions_match(
-                    BigqueryPartitionConfig::try_from_schema(&schema, self.engine().type_ops())
-                        .map_err(|err| {
-                            AdapterError::new(AdapterErrorKind::UnexpectedResult, err)
-                        })?,
-                    local_partition_by,
-                );
-
-                let local_cluster_by = local_cluster_by
-                    .map(|c| c.into_fields())
-                    .unwrap_or_default();
-                let remote_cluster_by = cluster_by_from_schema(&schema)
-                    .map_err(|err| AdapterError::new(AdapterErrorKind::UnexpectedResult, err))?;
-                let is_cluster_match = local_cluster_by == remote_cluster_by;
-
-                Ok(is_partition_match && is_cluster_match)
-            }
-            Err(e) => {
-                if e.kind() == AdapterErrorKind::NotFound {
-                    Ok(true)
-                } else {
-                    Err(e)
-                }
-            }
-        }
     }
 }
 

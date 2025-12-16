@@ -1,7 +1,7 @@
 use crate::adapter_engine::{AdapterEngine, Options as ExecuteOptions, execute_query_with_retry};
 use crate::catalog_relation::CatalogRelation;
 use crate::column::{Column, ColumnBuilder};
-use crate::errors::{AdapterError, AdapterErrorKind};
+use crate::errors::{AdapterError, AdapterErrorKind, adbc_error_to_adapter_error};
 use crate::funcs::{convert_macro_result_to_record_batch, execute_macro, none_value};
 use crate::information_schema::InformationSchema;
 use crate::metadata::{self, CatalogAndSchema};
@@ -9,6 +9,9 @@ use crate::query_ctx::query_ctx_from_state;
 use crate::record_batch_utils::{extract_first_value_as_i64, get_column_values};
 use crate::relation::BaseRelationConfig;
 use crate::relation::RelationObject;
+use crate::relation::bigquery::{
+    BigqueryPartitionConfigExt, cluster_by_from_schema, partitions_match,
+};
 use crate::render_constraint::render_column_constraint;
 use crate::response::{AdapterResponse, ResultObject};
 use crate::snapshots::SnapshotStrategy;
@@ -1504,15 +1507,75 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         }
     }
 
-    /// is_replaceable
+    /// Check if a given partition and clustering column spec for a table
+    /// can replace an existing relation in the database. BigQuery does not
+    /// allow tables to be replaced with another table that has a different
+    /// partitioning spec. This method returns True if the given config spec is
+    /// identical to that of the existing table.
+    ///
+    /// reference: https://github.com/dbt-labs/dbt-adapters/blob/4a00354a497214d9043bf4122810fe2d04de17bb/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L541
     fn is_replaceable(
         &self,
-        _conn: &'_ mut dyn Connection,
-        _relation: Arc<dyn BaseRelation>,
-        _partition_by: Option<BigqueryPartitionConfig>,
-        _cluster_by: Option<BigqueryClusterConfig>,
+        conn: &'_ mut dyn Connection,
+        relation: Arc<dyn BaseRelation>,
+        local_partition_by: Option<BigqueryPartitionConfig>,
+        local_cluster_by: Option<BigqueryClusterConfig>,
     ) -> AdapterResult<bool> {
-        unimplemented!("only available with BigQuery adapter")
+        match self.adapter_type() {
+            AdapterType::Bigquery => {
+                // FIXME: conn.get_table_schema mirrors self.connections.get_bq_table in dbt-bigquery
+                // which currently escapes dbt-core recordings
+                // https://github.com/dbt-labs/dbt-adapters/blob/860e16891bd610d9cfde0ce5b576569d6585813b/dbt-bigquery/src/dbt/adapters/bigquery/impl.py
+                match conn
+                    .get_table_schema(
+                        Some(&relation.database_as_str()?),
+                        Some(&relation.schema_as_str()?),
+                        &relation.identifier_as_str()?,
+                    )
+                    .map_err(adbc_error_to_adapter_error)
+                {
+                    Ok(schema) => {
+                        let is_partition_match = partitions_match(
+                            BigqueryPartitionConfig::try_from_schema(
+                                &schema,
+                                self.engine().type_ops(),
+                            )
+                            .map_err(|err| {
+                                AdapterError::new(AdapterErrorKind::UnexpectedResult, err)
+                            })?,
+                            local_partition_by,
+                        );
+
+                        let local_cluster_by = local_cluster_by
+                            .map(|c| c.into_fields())
+                            .unwrap_or_default();
+                        let remote_cluster_by = cluster_by_from_schema(&schema).map_err(|err| {
+                            AdapterError::new(AdapterErrorKind::UnexpectedResult, err)
+                        })?;
+                        let is_cluster_match = local_cluster_by == remote_cluster_by;
+
+                        Ok(is_partition_match && is_cluster_match)
+                    }
+                    Err(e) => {
+                        if e.kind() == AdapterErrorKind::NotFound {
+                            Ok(true)
+                        } else {
+                            Err(e)
+                        }
+                    }
+                }
+            }
+            AdapterType::Postgres
+            | AdapterType::Snowflake
+            | AdapterType::Databricks
+            | AdapterType::Redshift
+            | AdapterType::Salesforce => {
+                unimplemented!(
+                    "is_replaceable is only available with BigQuery adapter, not {}",
+                    self.adapter_type()
+                )
+            }
+        }
     }
 
     /// parse_partition_by
