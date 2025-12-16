@@ -55,6 +55,17 @@ class TestDbtRunner:
         dbt.invoke(["debug"])
         mock_callback.assert_called()
 
+    def test_callback_node_finished_exceptions_are_raised(self, project):
+        from dbt_common.events.base_types import EventMsg
+
+        def callback_with_exception(event: EventMsg):
+            if event.info.name == "NodeFinished":
+                raise Exception("This should let continue the execution registering the failure")
+
+        dbt = dbtRunner(callbacks=[callback_with_exception])
+        result = dbt.invoke(["run", "--select", "models"])
+        assert result is not None
+
     def test_invoke_kwargs(self, project, dbt):
         res = dbt.invoke(
             ["run"],
