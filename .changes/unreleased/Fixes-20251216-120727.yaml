@@ -1,0 +1,6 @@
+kind: Fixes
+body: ':bug: :snowman:Propagate exceptions for NodeFinished callbacks in dbtRunner'
+time: 2025-12-16T12:07:27.576087-05:00
+custom:
+    Author: michelleark
+    Issue: "11612"
