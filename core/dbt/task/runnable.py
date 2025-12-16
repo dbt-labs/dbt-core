@@ -249,34 +249,17 @@ class GraphRunnableTask(ConfiguredTask):
                 thread_exception = e
             finally:
                 if result is not None:
-                    fire_event(
-                        NodeFinished(
-                            node_info=runner.node.node_info,
-                            run_result=result.to_msg_dict(),
+                    try:
+                        fire_event(
+                            NodeFinished(
+                                node_info=runner.node.node_info,
+                                run_result=result.to_msg_dict(),
+                            )
                         )
-                    )
+                    except Exception as e:
+                        result = self._handle_thread_exception(runner, e)
                 else:
-                    msg = f"Exception on worker thread. {thread_exception}"
-
-                    fire_event(
-                        GenericExceptionOnRun(
-                            unique_id=runner.node.unique_id,
-                            exc=str(thread_exception),
-                            node_info=runner.node.node_info,
-                        )
-                    )
-
-                    result = RunResult(
-                        status=RunStatus.Error,  # type: ignore
-                        timing=[],
-                        thread_id="",
-                        execution_time=0.0,
-                        adapter_response={},
-                        message=msg,
-                        failures=None,
-                        batch_results=None,
-                        node=runner.node,
-                    )
+                    result = self._handle_thread_exception(runner, thread_exception)
 
             # `_event_status` dict is only used for logging.  Make sure
             # it gets deleted when we're done with it
@@ -364,6 +347,32 @@ class GraphRunnableTask(ConfiguredTask):
             runner.do_skip(cause=cause)
         args = [runner]
         self._submit(pool, args, callback)
+
+    def _handle_thread_exception(
+        self,
+        runner: BaseRunner,
+        thread_exception: Optional[Union[KeyboardInterrupt, SystemExit, Exception]],
+    ) -> RunResult:
+        msg = f"Exception on worker thread. {thread_exception}"
+        fire_event(
+            GenericExceptionOnRun(
+                unique_id=runner.node.unique_id,
+                exc=str(thread_exception),
+                node_info=runner.node.node_info,
+            )
+        )
+
+        return RunResult(
+            status=RunStatus.Error,  # type: ignore
+            timing=[],
+            thread_id="",
+            execution_time=0.0,
+            adapter_response={},
+            message=msg,
+            failures=None,
+            batch_results=None,
+            node=runner.node,
+        )
 
     def _handle_result(self, result: RunResult) -> None:
         """Mark the result as completed, insert the `CompileResultNode` into
