@@ -64,7 +64,12 @@ class TestDbtRunner:
 
         dbt = dbtRunner(callbacks=[callback_with_exception])
         result = dbt.invoke(["run", "--select", "models"])
+
         assert result is not None
+        assert (
+            result.result.results[0].message
+            == "Exception on worker thread. This should let continue the execution registering the failure"
+        )
 
     def test_invoke_kwargs(self, project, dbt):
         res = dbt.invoke(
