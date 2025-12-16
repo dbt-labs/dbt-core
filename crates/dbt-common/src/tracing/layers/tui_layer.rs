@@ -166,6 +166,36 @@ struct DelayedMessages {
     errors_and_warnings: Vec<DelayedMessage>,
 }
 
+/// Determines whether a progress message should be shown based on its phase and configured ShowOptions.
+///
+/// The filtering logic maps specific execution phases to their corresponding ShowOptions:
+/// - Parse phase -> ProgressParse
+/// - Render phase -> ProgressRender
+/// - Analyze phase -> ProgressAnalyze
+/// - Run phase -> ProgressRun
+/// - Hydration phases -> ProgressHydrate
+/// - All other phases (including unspecified) -> Progress
+///
+/// Messages are also shown if ShowOptions::All is enabled.
+pub fn should_show_progress_message(
+    phase: Option<ExecutionPhase>,
+    show_options: &HashSet<ShowOptions>,
+) -> bool {
+    let phase_allows = match phase {
+        Some(ExecutionPhase::Parse) => show_options.contains(&ShowOptions::ProgressParse),
+        Some(ExecutionPhase::Render) => show_options.contains(&ShowOptions::ProgressRender),
+        Some(ExecutionPhase::Analyze) => show_options.contains(&ShowOptions::ProgressAnalyze),
+        Some(ExecutionPhase::Run) => show_options.contains(&ShowOptions::ProgressRun),
+        Some(ExecutionPhase::NodeCacheHydration | ExecutionPhase::DeferHydration) => {
+            show_options.contains(&ShowOptions::ProgressHydrate)
+        }
+        // All other phases (including no Phase and Unspecified) match the general Progress option
+        _ => show_options.contains(&ShowOptions::Progress),
+    };
+
+    phase_allows || show_options.contains(&ShowOptions::All)
+}
+
 /// A tracing layer that handles all terminal user interface on stdout and stderr, including progress bars.
 ///
 /// As of today this is a bridge into existing logging-based setup, but eventually
@@ -924,6 +954,10 @@ impl TuiLayer {
         progress_msg: &ProgressMessage,
         severity_number: SeverityNumber,
     ) {
+        if !should_show_progress_message(Some(progress_msg.phase()), &self.show_options) {
+            return;
+        }
+
         let formatted = format_progress_message(progress_msg, severity_number, true, true);
         with_suspended_progress_bars(|| {
             io::stdout()

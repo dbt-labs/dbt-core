@@ -68,7 +68,7 @@ impl UserLogMessage {
     /// Creates a new `UserLogMessage` event for log(.., info=true) calls.
     ///
     /// This is a helper that creates a UserLogMessage with the appropriate
-    /// dbt core event code (I062 - JinjaLogInfo) and is_print set to false.    
+    /// dbt core event code (I062 - JinjaLogInfo) and is_print set to false.
     pub fn log_info(
         package_name: Option<String>,
         line: Option<u32>,
@@ -113,6 +113,25 @@ impl UserLogMessage {
 }
 
 impl ProgressMessage {
+    /// Creates a new `ProgressMessage` without a description and legacy dbt-core event code.
+    ///
+    /// Arguments:
+    /// * `action` - The action being performed (e.g., "Debugging", "Loading").
+    /// * `target` - The text describing the target of the action (e.g., "project", "dependencies").
+    pub fn new_from_action_and_target(action: String, target: String) -> Self {
+        Self {
+            action,
+            target,
+            description: None,
+            dbt_core_event_code: None,
+            // Auto-injected fields
+            unique_id: None,
+            phase: None,
+            file: None,
+            line: None,
+        }
+    }
+
     /// Creates a new `ProgressMessage` with a known legacy dbt-core event code.
     ///
     /// Arguments:
