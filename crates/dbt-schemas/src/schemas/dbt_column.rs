@@ -113,7 +113,6 @@ pub struct ColumnProperties {
     pub granularity: Option<Granularity>,
     pub policy_tags: Option<Vec<String>>,
     pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
-    pub tags: Option<Vec<String>>,
     pub quote: Option<bool>,
     pub config: Option<ColumnConfig>,
 
@@ -242,10 +241,8 @@ pub fn process_columns(
                         description: cp.description.clone(),
                         constraints: cp.constraints.clone().unwrap_or_default(),
                         meta: cp_meta.or_else(|| meta.clone()).unwrap_or_default(),
-                        tags: cp
-                            .tags
-                            .clone()
-                            .or_else(|| cp_tags.map(|t| t.into()))
+                        tags: cp_tags
+                            .map(|t| t.into())
                             .or_else(|| tags.clone())
                             .unwrap_or_default(),
                         policy_tags: cp.policy_tags.clone(),
