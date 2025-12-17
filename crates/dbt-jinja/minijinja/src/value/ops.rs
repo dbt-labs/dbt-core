@@ -219,11 +219,11 @@ impl Printf for PrintfValue<'_> {
     fn format(&self, spec: &ConversionSpecifier) -> Result<String, PrintfError> {
         match spec.conversion_type {
             ConversionType::DecInt => i64::try_from(self.0.clone())
-                .map(|n| n.to_string())
-                .map_err(|_| PrintfError::WrongType),
+                .map(|n| n.format(spec))
+                .map_err(|_| PrintfError::WrongType)?,
             ConversionType::DecFloatLower | ConversionType::DecFloatUpper => as_f64(self.0, true)
-                .map(|n| n.to_string())
-                .ok_or(PrintfError::WrongType),
+                .map(|n| n.format(spec))
+                .ok_or(PrintfError::WrongType)?,
             ConversionType::String | ConversionType::Char => Ok(self.0.to_string()),
             _ => Err(PrintfError::WrongType),
         }
@@ -615,10 +615,36 @@ mod tests {
             Value::from("42")
         );
 
+        // Test integer formatting
+        assert_eq!(
+            format_string("%02d", &[Value::from(1)]).unwrap(),
+            Value::from("01")
+        );
+
+        assert_eq!(
+            format_string("%05d", &[Value::from(42)]).unwrap(),
+            Value::from("00042")
+        );
+
+        assert_eq!(
+            format_string("%+d", &[Value::from(42)]).unwrap(),
+            Value::from("+42")
+        );
+
         // Test float formatting
         assert_eq!(
             format_string("%f", &[Value::from(3.14)]).unwrap(),
-            Value::from("3.14")
+            Value::from("3.140000")
+        );
+
+        assert_eq!(
+            format_string("%.1f", &[Value::from(3.14)]).unwrap(),
+            Value::from("3.1")
+        );
+
+        assert_eq!(
+            format_string("%10f", &[Value::from(3.14)]).unwrap(),
+            Value::from("  3.140000")
         );
 
         // Test multiple arguments
@@ -628,7 +654,7 @@ mod tests {
                 &[Value::from("test"), Value::from(42), Value::from(3.14)]
             )
             .unwrap(),
-            Value::from("test 42 3.14")
+            Value::from("test 42 3.140000")
         );
 
         // Test escaped percent
