@@ -29,13 +29,19 @@ pub(crate) struct TestModelColumn {
 
 #[derive(Default)]
 pub(crate) struct TestModelConfig {
+    // This will be used once we actually implement liquid clustering
+    #[expect(dead_code)]
     pub auto_cluster: bool,
+    // This will be used once we actually implement liquid clustering
+    #[expect(dead_code)]
     pub cluster_by: Vec<String>,
     pub columns: Vec<TestModelColumn>,
     pub cron: Option<String>,
     pub partition_by: Vec<String>,
     pub persist_column_comments: bool,
     pub persist_relation_comments: bool,
+    // This will be used once we actually implement query
+    #[expect(dead_code)]
     pub query: Option<String>,
     pub relation_comment: Option<String>,
     pub tags: HashMap<String, String>,

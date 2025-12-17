@@ -1,3 +1,5 @@
+// TODO(serramatutu): revisit this expect dead_code once all this code is being used for real
+#[expect(dead_code)]
 pub(crate) mod components;
 pub(crate) mod relation_types;
 
@@ -9,11 +11,13 @@ use std::collections::HashMap;
 
 #[derive(Debug, Eq, PartialEq, Hash)]
 pub(crate) enum DatabricksRelationMetadataKey {
+    #[expect(dead_code)]
     InfoSchemaViews,
     InfoSchemaRelationTags,
     InfoSchemaColumnTags,
     DescribeExtended,
     ShowTblProperties,
+    #[expect(dead_code)]
     ColumnMasks,
     PrimaryKeyConstraints,
     ForeignKeyConstraints,

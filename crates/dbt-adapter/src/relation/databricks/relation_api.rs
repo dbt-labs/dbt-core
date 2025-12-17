@@ -1,3 +1,4 @@
+// TODO(serramatutu): delete this file once v2 is flipped on
 use crate::relation::databricks::{DatabricksRelationConfig, base::from_relation_config};
 
 use crate::AdapterResult;
