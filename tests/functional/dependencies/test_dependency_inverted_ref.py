@@ -47,7 +47,12 @@ class TestInvertedRefDependency(BaseInvertedRefDependencyTest):
         assert manifest.nodes["model.inverted_ref_dependency.b"].depends_on.nodes == [
             "model.inverted_ref_dependency.a"
         ]
-        # No inverted refwarning raised
+        # If a package explicitly references a root project node, it still resolves to root project
+        manifest.nodes["model.inverted_ref_dependency.b_root_package_in_ref"].depends_on.nodes == [
+            "model.test.a"
+        ]
+
+        # No inverted ref warning raised
         assert len(event_catcher.caught_events) == 0
 
 
