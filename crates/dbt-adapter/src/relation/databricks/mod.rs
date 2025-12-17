@@ -26,8 +26,12 @@ pub mod refresh;
 pub mod tags;
 pub mod tblproperties;
 
-mod configs;
+pub(crate) mod configs;
 pub use configs::*;
+
+// NOTE: this is currently being tested, eventually we'll flip the actual code to use these
+#[cfg(test)]
+pub mod config_v2;
 
 mod relation;
 pub use relation::{DEFAULT_DATABRICKS_DATABASE, INFORMATION_SCHEMA_SCHEMA, SYSTEM_DATABASE};

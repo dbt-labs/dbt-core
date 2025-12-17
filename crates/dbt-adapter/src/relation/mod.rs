@@ -1,6 +1,6 @@
 //! Relation and RelationConfig implementations for different data warehouses.
-//!
-mod config;
+
+pub(crate) mod config;
 pub use config::{BaseRelationChangeSet, BaseRelationConfig, ComponentConfig, RelationChangeSet};
 
 // Relation and RelationConfig for different data warehouses
@@ -17,3 +17,7 @@ pub use relation_object::{
     RelationObject, StaticBaseRelation, StaticBaseRelationObject, create_relation,
     create_relation_from_node, create_relation_internal,
 };
+
+// TODO(serramatutu): this is currently being used for tests only
+#[cfg(test)]
+pub(crate) mod config_v2;

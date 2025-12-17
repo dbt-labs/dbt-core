@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 /// and custom constraints. Each variant includes optional naming and validation logic.
 ///
 /// Reference: https://github.com/databricks/dbt-databricks/blob/e7099a2c75a92fa5240989b19d246a0ca8a313ef/dbt/adapters/databricks/constraints.py#L33-L138
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum TypedConstraint {
     Check {
         name: Option<String>,

@@ -1,0 +1,167 @@
+//! https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/relation_configs/comment.py
+
+use crate::relation::config_v2::{
+    ComponentConfig, ComponentConfigLoader, SimpleComponentConfigImpl, diff,
+};
+use crate::relation::databricks::config_v2::{
+    DatabricksRelationMetadata, DatabricksRelationMetadataKey,
+};
+
+use dbt_schemas::schemas::InternalDbtNodeAttributes;
+use minijinja::Value;
+use std::sync::Arc;
+
+pub(crate) const TYPE_NAME: &str = "relation_comment";
+
+pub(crate) type RelationComment = SimpleComponentConfigImpl<Option<String>>;
+
+fn new(comment: Option<String>) -> RelationComment {
+    RelationComment {
+        type_name: TYPE_NAME,
+        diff_fn: diff::desired_state,
+        value: comment,
+    }
+}
+
+fn from_remote_state(results: &DatabricksRelationMetadata) -> RelationComment {
+    let Some(describe_extended) = results.get(&DatabricksRelationMetadataKey::DescribeExtended)
+    else {
+        return new(None);
+    };
+
+    for row in describe_extended.rows() {
+        if let (Ok(key_val), Ok(value_val)) =
+            (row.get_item(&Value::from(0)), row.get_item(&Value::from(1)))
+            && let (Some(key_str), Some(value_str)) = (key_val.as_str(), value_val.as_str())
+            && key_str == "Comment"
+        {
+            let comment = if !value_str.is_empty() {
+                Some(value_str.to_string())
+            } else {
+                None
+            };
+
+            return new(comment);
+        }
+    }
+
+    new(None)
+}
+
+fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> RelationComment {
+    let persist = relation_config
+        .base()
+        .persist_docs
+        .as_ref()
+        .map(|pd| pd.relation.unwrap_or(false))
+        .unwrap_or(false);
+
+    let comment_str = if persist {
+        relation_config.common().description.clone()
+    } else {
+        None
+    };
+
+    new(comment_str)
+}
+
+pub(crate) struct RelationCommentLoader;
+
+impl RelationCommentLoader {
+    pub fn new(comment: Option<String>) -> Arc<dyn ComponentConfig> {
+        Arc::new(new(comment))
+    }
+
+    pub fn type_name() -> &'static str {
+        TYPE_NAME
+    }
+}
+
+impl ComponentConfigLoader<DatabricksRelationMetadata> for RelationCommentLoader {
+    fn type_name(&self) -> &'static str {
+        TYPE_NAME
+    }
+
+    fn from_remote_state(
+        &self,
+        remote_state: &DatabricksRelationMetadata,
+    ) -> Arc<dyn ComponentConfig> {
+        Arc::new(from_remote_state(remote_state))
+    }
+
+    fn from_local_config(
+        &self,
+        relation_config: &dyn InternalDbtNodeAttributes,
+    ) -> Arc<dyn ComponentConfig> {
+        Arc::new(from_local_config(relation_config))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::relation::databricks::config_v2::test_helpers;
+    use dbt_agate::AgateTable;
+    use dbt_schemas::schemas::DbtModel;
+    use std::collections::HashMap;
+
+    fn create_mock_describe_extended_table(comment: Option<&str>) -> AgateTable {
+        let mut rows = Vec::new();
+        if let Some(comment_text) = comment {
+            rows.push(("Comment", comment_text));
+        }
+
+        test_helpers::create_mock_describe_extended_table([], rows)
+    }
+
+    fn create_mock_dbt_model(persist: bool, comment: Option<&str>) -> DbtModel {
+        let cfg = test_helpers::TestModelConfig {
+            relation_comment: comment.map(|c| c.to_string()),
+            persist_relation_comments: persist,
+            ..Default::default()
+        };
+        test_helpers::create_mock_dbt_model(cfg)
+    }
+
+    #[test]
+    fn test_from_remote_state_with_comment() {
+        let table = create_mock_describe_extended_table(Some("DESC"));
+        let results = HashMap::from([(DatabricksRelationMetadataKey::DescribeExtended, table)]);
+        let comment_config = from_remote_state(&results);
+
+        assert_eq!(comment_config.value.unwrap(), "DESC");
+    }
+
+    #[test]
+    fn test_from_remote_state_no_comment() {
+        let table = create_mock_describe_extended_table(None);
+        let results = HashMap::from([(DatabricksRelationMetadataKey::DescribeExtended, table)]);
+        let comment_config = from_remote_state(&results);
+
+        assert_eq!(comment_config.value, None);
+    }
+
+    #[test]
+    fn test_from_local_config_with_comment_no_persist() {
+        let model = create_mock_dbt_model(false, Some("DESC"));
+        let comment_config = from_local_config(&model);
+
+        assert!(comment_config.value.is_none());
+    }
+
+    #[test]
+    fn test_from_local_config_with_comment_persist() {
+        let model = create_mock_dbt_model(true, Some("DESC"));
+        let comment_config = from_local_config(&model);
+
+        assert_eq!(comment_config.value.unwrap(), "DESC");
+    }
+
+    #[test]
+    fn test_from_local_config_no_comment_persist() {
+        let model = create_mock_dbt_model(true, None);
+        let comment_config = from_local_config(&model);
+
+        assert_eq!(comment_config.value, None);
+    }
+}
