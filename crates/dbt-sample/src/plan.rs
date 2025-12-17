@@ -28,7 +28,7 @@ pub struct SamplerPlan {
     pub entry_unique_ids: BTreeSet<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SamplerRel {
     pub database: String,
     pub schema: String,
