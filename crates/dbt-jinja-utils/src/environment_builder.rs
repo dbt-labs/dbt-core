@@ -1,4 +1,6 @@
-use crate::{functions::register_base_functions, jinja_environment::JinjaEnv};
+use crate::{
+    functions::register_base_functions, jinja_environment::JinjaEnv, utils::set_status_reporter,
+};
 use dbt_adapter::BaseAdapter;
 use dbt_common::{ErrorCode, FsError, FsResult, fs_err, io_args::IoArgs, unexpected_fs_err};
 use minijinja::{
@@ -300,6 +302,8 @@ impl JinjaEnvBuilder {
 
     /// Build the Minijinja Environment with all configured settings.
     pub fn build(mut self) -> JinjaEnv {
+        let status_reporter = self.io_args.status_reporter.as_ref().map(|x| x.clone());
+
         // Register filters (as_bool, as_number, as_native, as_text)
         // These are used to convert values to the appropriate type that might be
         // expected by the jinja template.
@@ -330,6 +334,8 @@ impl JinjaEnvBuilder {
         // Pull in the pycompat methods
         self.env
             .set_unknown_method_callback(minijinja_contrib::pycompat::unknown_method_callback);
+
+        set_status_reporter(&mut self.env, status_reporter);
 
         let mut jinja_env = JinjaEnv::new(self.env);
         if let Some(adapter) = self.adapter {

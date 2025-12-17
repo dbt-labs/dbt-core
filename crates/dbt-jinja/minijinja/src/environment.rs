@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::fmt;
@@ -70,6 +71,10 @@ pub struct Environment<'source> {
     recursion_limit: usize,
     /// The code generation profile for this environment.
     pub profile: CodeGenerationProfile,
+    /// The status reporter to collect warnings.
+    /// REVIEW: This is [Any] because we cannot reference the trait StatusReporter in this crate.
+    ///         Doing so would cause a cyclic dependency since dbt-common depends on minijinja.
+    pub status_reporter: Option<Arc<dyn Any + Send + Sync>>,
 }
 
 impl Default for Environment<'_> {
@@ -125,6 +130,7 @@ impl<'source> Environment<'source> {
             fuel: None,
             recursion_limit: MAX_RECURSION,
             profile,
+            status_reporter: None,
         }
     }
 
@@ -156,6 +162,7 @@ impl<'source> Environment<'source> {
             fuel: None,
             recursion_limit: MAX_RECURSION,
             profile: CodeGenerationProfile::Render,
+            status_reporter: None,
         }
     }
 

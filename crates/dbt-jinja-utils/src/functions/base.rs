@@ -8,9 +8,12 @@ use std::{
 
 use dbt_agate::AgateTable;
 use dbt_common::{
-    ErrorCode,
+    CodeLocationWithFile, ErrorCode, fs_err,
     io_args::IoArgs,
-    tracing::emit::{emit_debug_event, emit_info_event, emit_warn_log_message},
+    io_utils::StatusReporter,
+    tracing::emit::{
+        emit_debug_event, emit_info_event, emit_warn_log_from_fs_error, emit_warn_log_message,
+    },
 };
 use dbt_schemas::schemas::{InternalDbtNode, Nodes};
 use dbt_telemetry::UserLogMessage;
@@ -28,7 +31,8 @@ use minijinja::{
 };
 type YmlValue = dbt_serde_yaml::Value;
 use crate::utils::{
-    DBT_INTERNAL_ENV_VAR_PREFIX, ENV_VARS, SECRET_ENV_VAR_PREFIX, node_metadata_from_state,
+    DBT_INTERNAL_ENV_VAR_PREFIX, ENV_VARS, SECRET_ENV_VAR_PREFIX, get_status_reporter,
+    node_metadata_from_state,
 };
 
 use crate::functions::contract_error::get_contract_mismatches;
@@ -142,7 +146,7 @@ impl Object for DocMacro {
     /// Implements the call method on the var object
     fn call(
         self: &Arc<Self>,
-        _state: &State<'_, '_>,
+        state: &State<'_, '_>,
         args: &[Value],
         _listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, Error> {
@@ -181,7 +185,16 @@ impl Object for DocMacro {
         match doc {
             Some(content) => Ok(Value::from_serialize(content)),
             None => {
-                self.warn_missing_doc(&target_package, &doc_name);
+                let status_reporter = get_status_reporter(state.env());
+                let current_span = state.current_span();
+                let current_file_path = state.current_path().clone();
+                let location = CodeLocationWithFile::new(
+                    current_span.start_line,
+                    current_span.start_col,
+                    current_span.start_offset,
+                    current_file_path,
+                );
+                self.warn_missing_doc(&target_package, &doc_name, location, status_reporter);
                 Ok(Value::from(Self::missing_doc_placeholder(
                     &target_package,
                     &doc_name,
@@ -214,15 +227,20 @@ pub fn var_fn(
 }
 
 impl DocMacro {
-    fn warn_missing_doc(&self, package_name: &str, doc_name: &str) {
-        emit_warn_log_message(
-            ErrorCode::InvalidConfig,
-            format!(
-                "doc macro reference '{}' not found for package '{}'",
-                doc_name, package_name
-            ),
-            None,
+    fn warn_missing_doc(
+        &self,
+        package_name: &str,
+        doc_name: &str,
+        location: CodeLocationWithFile,
+        status_reporter: Option<&Arc<dyn StatusReporter>>,
+    ) {
+        let code = ErrorCode::InvalidConfig;
+        let message = format!(
+            "doc macro reference '{}' not found for package '{}'",
+            doc_name, package_name
         );
+        let warning = fs_err!(code, "{}", message).with_location(location);
+        emit_warn_log_from_fs_error(&warning, status_reporter)
     }
 
     fn missing_doc_placeholder(package_name: &str, doc_name: &str) -> String {
