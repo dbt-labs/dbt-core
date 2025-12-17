@@ -102,8 +102,8 @@ jobs:
         run: |
           pip install --user --upgrade pip
           pip --version
-          pip install tox
-          tox --version
+          pip install hatch
+          hatch --version
 
       - name: Run postgres setup script
         run: |

@@ -4,10 +4,13 @@ import os
 import pytest
 from fixtures import (  # noqa: F401
     datetime_test,
+    disabled_my_model_tests_yml,
     my_model_a_sql,
     my_model_b_sql,
+    my_model_disabled_sql,
+    my_model_disabled_yml,
     my_model_vars_sql,
-    test_disabled_my_model_yml,
+    test_disabled_unit_test_my_model_yml,
     test_my_model_yml,
 )
 
@@ -22,7 +25,7 @@ class TestUnitTestList:
             "my_model_a.sql": my_model_a_sql,
             "my_model_b.sql": my_model_b_sql,
             "test_my_model.yml": test_my_model_yml + datetime_test,
-            "test_disabled_my_model.yml": test_disabled_my_model_yml,
+            "test_disabled_my_model.yml": test_disabled_unit_test_my_model_yml,
         }
 
     @pytest.fixture(scope="class")
@@ -83,3 +86,18 @@ class TestUnitTestList:
         for result in results:
             json_result = json.loads(result)
             assert json_result["model"] == "my_model"
+
+
+class TestUnitTestListDisabled:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "my_model_disabled_yml.sql": "select 1 as id",
+            "my_model_disabled_sql.sql": my_model_disabled_sql,
+            "my_model_disabled_yml.yml": my_model_disabled_yml,
+            "disabled_my_model_tests.yml": disabled_my_model_tests_yml,
+        }
+
+    def test_disabled_unit_tests(self, project):
+        results = run_dbt(["test", "--select", "test_type:unit"])
+        assert len(results) == 0
