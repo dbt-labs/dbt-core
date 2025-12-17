@@ -37,6 +37,10 @@ _HIERARCHICAL_CONFIG_KEYS = {
     "unit_tests",
 }
 
+_ADAPTER_TO_CONFIG_ALIASES = {
+    "bigquery": ["dataset", "project"],
+}
+
 
 def load_json_from_package(jsonschema_type: str, filename: str) -> Dict[str, Any]:
     """Loads a JSON file from within a package."""
@@ -106,6 +110,16 @@ def _validate_with_schema(
     return validator.iter_errors(json)
 
 
+def _get_allowed_config_key_aliases() -> List[str]:
+    config_aliases = []
+    invocation_context = get_invocation_context()
+    for adapter in invocation_context.adapter_types:
+        if adapter in _ADAPTER_TO_CONFIG_ALIASES:
+            config_aliases.extend(_ADAPTER_TO_CONFIG_ALIASES[adapter])
+
+    return config_aliases
+
+
 def _get_allowed_config_fields_from_error_path(
     yml_schema: Dict[str, Any], error_path: List[Union[str, int]]
 ) -> Optional[List[str]]:
@@ -135,6 +149,7 @@ def _get_allowed_config_fields_from_error_path(
     ][0]["$ref"].split("/")[-1]
 
     allowed_config_fields = list(set(yml_schema["definitions"][config_field_name]["properties"]))
+    allowed_config_fields.extend(_get_allowed_config_key_aliases())
 
     return allowed_config_fields
 
@@ -169,7 +184,6 @@ def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path:
                         continue
 
                     if key == "overrides" and key_path.startswith("sources"):
-
                         deprecations.warn(
                             "source-override-deprecation",
                             source_name=key_path.split(".")[-1],
@@ -205,6 +219,9 @@ def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path:
                         keys = _additional_properties_violation_keys(sub_error)
                         key_path = error_path_to_string(error)
                         for key in keys:
+                            if key in _get_allowed_config_key_aliases():
+                                continue
+
                             deprecations.warn(
                                 "custom-key-in-config-deprecation",
                                 key=key,
