@@ -37,14 +37,8 @@ _HIERARCHICAL_CONFIG_KEYS = {
     "unit_tests",
 }
 
-_JSONSCHEMA_FIELD_NAME_TO_CONFIG_ALIASES = {
-    "bigquery": {
-        "ModelConfig": ["dataset", "project"],
-        "SeedConfig": ["dataset", "project"],
-        "SnapshotConfig": ["dataset", "project"],
-        "TestConfig": ["dataset", "project"],
-        "SourceConfig": ["schema", "database"],
-    },
+_ADAPTER_TO_CONFIG_ALIASES = {
+    "bigquery": ["dataset", "project"],
 }
 
 
@@ -116,15 +110,12 @@ def _validate_with_schema(
     return validator.iter_errors(json)
 
 
-def _get_allowed_config_aliases(field_name: str) -> List[str]:
+def _get_allowed_config_aliases() -> List[str]:
     config_aliases = []
     invocation_context = get_invocation_context()
     for adapter in invocation_context.adapter_types:
-        if adapter in _JSONSCHEMA_FIELD_NAME_TO_CONFIG_ALIASES:
-            if field_name in _JSONSCHEMA_FIELD_NAME_TO_CONFIG_ALIASES[adapter]:
-                config_aliases.extend(
-                    _JSONSCHEMA_FIELD_NAME_TO_CONFIG_ALIASES[adapter][field_name]
-                )
+        if adapter in _ADAPTER_TO_CONFIG_ALIASES:
+            config_aliases.extend(_ADAPTER_TO_CONFIG_ALIASES[adapter])
 
     return config_aliases
 
@@ -158,7 +149,7 @@ def _get_allowed_config_fields_from_error_path(
     ][0]["$ref"].split("/")[-1]
 
     allowed_config_fields = list(set(yml_schema["definitions"][config_field_name]["properties"]))
-    allowed_config_fields.extend(_get_allowed_config_aliases(config_field_name))
+    allowed_config_fields.extend(_get_allowed_config_aliases())
 
     return allowed_config_fields
 
@@ -228,6 +219,9 @@ def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path:
                         keys = _additional_properties_violation_keys(sub_error)
                         key_path = error_path_to_string(error)
                         for key in keys:
+                            if key in _get_allowed_config_aliases():
+                                continue
+
                             deprecations.warn(
                                 "custom-key-in-config-deprecation",
                                 key=key,
