@@ -110,7 +110,7 @@ def _validate_with_schema(
     return validator.iter_errors(json)
 
 
-def _get_allowed_config_aliases() -> List[str]:
+def _get_allowed_config_key_aliases() -> List[str]:
     config_aliases = []
     invocation_context = get_invocation_context()
     for adapter in invocation_context.adapter_types:
@@ -149,7 +149,7 @@ def _get_allowed_config_fields_from_error_path(
     ][0]["$ref"].split("/")[-1]
 
     allowed_config_fields = list(set(yml_schema["definitions"][config_field_name]["properties"]))
-    allowed_config_fields.extend(_get_allowed_config_aliases())
+    allowed_config_fields.extend(_get_allowed_config_key_aliases())
 
     return allowed_config_fields
 
@@ -219,7 +219,7 @@ def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path:
                         keys = _additional_properties_violation_keys(sub_error)
                         key_path = error_path_to_string(error)
                         for key in keys:
-                            if key in _get_allowed_config_aliases():
+                            if key in _get_allowed_config_key_aliases():
                                 continue
 
                             deprecations.warn(
