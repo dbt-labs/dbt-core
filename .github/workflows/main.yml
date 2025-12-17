@@ -60,10 +60,14 @@ jobs:
         run: |
           python -m pip install --user --upgrade pip
           python -m pip --version
-          make dev
-          make dev_req
-          mypy --version
-          dbt --version
+          python -m pip install hatch
+          cd core
+          hatch -v run setup
+
+      - name: Verify dbt installation
+        run: |
+          cd core
+          hatch run dbt --version
 
       - name: Run pre-commit hooks
         run: pre-commit run --all-files --show-diff-on-failure
@@ -103,7 +107,7 @@ jobs:
         with:
           timeout_minutes: 10
           max_attempts: 3
-          command: tox -e unit
+          command: cd core && hatch -v run ci:unit-tests
 
       - name: Get current date
         if: always()
@@ -227,9 +231,8 @@ jobs:
         with:
           timeout_minutes: 30
           max_attempts: 3
-          command: tox -- --ddtrace
-        env:
-          PYTEST_ADDOPTS: ${{ format('--splits {0} --group {1}', env.PYTHON_INTEGRATION_TEST_WORKERS, matrix.split-group) }}
+          shell: bash
+          command: cd core && hatch -v run ci:integration-tests -- --ddtrace --splits ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }} --group ${{ matrix.split-group }}
 
       - name: Get current date
         if: always()
@@ -310,9 +313,8 @@ jobs:
         with:
           timeout_minutes: 30
           max_attempts: 3
-          command: tox -- --ddtrace
-        env:
-          PYTEST_ADDOPTS: ${{ format('--splits {0} --group {1}', env.PYTHON_INTEGRATION_TEST_WORKERS, matrix.split-group) }}
+          shell: bash
+          command: cd core && hatch -v run ci:integration-tests -- --ddtrace --splits ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }} --group ${{ matrix.split-group }}
 
       - name: Get current date
         if: always()
@@ -327,7 +329,7 @@ jobs:
           name: logs_${{ matrix.python-version }}_${{ matrix.os }}_${{ matrix.split-group }}_${{ steps.date.outputs.date }}
           path: ./logs
 
-      - name: Upload Integration Test Coverage to Codecov
+      - name: Upload Integration Test Coverage
         if: ${{ matrix.python-version == '3.11' }}
         uses: codecov/codecov-action@5a1091511ad55cbe89839c7260b706298ca349f7 # codecov/codecov-action@v5
         with:
@@ -380,25 +382,5 @@ jobs:
 
       - name: Check distribution descriptions
         run: |
-          twine check dist/*
-
-      - name: Check wheel contents
-        run: |
-          check-wheel-contents dist/*.whl --ignore W007,W008
-
-      - name: Install wheel distributions
-        run: |
-          find ./dist/*.whl -maxdepth 1 -type f | xargs python -m pip install --force-reinstall --find-links=dist/
-
-      - name: Check wheel distributions
-        run: |
-          dbt --version
-
-      - name: Install source distributions
-        # ignore dbt-1.0.0, which intentionally raises an error when installed from source
-        run: |
-          find ./dist/*.gz -maxdepth 1 -type f | xargs python -m pip install --force-reinstall --find-links=dist/
-
-      - name: Check source distributions
-        run: |
-          dbt --version
+          cd core
+          hatch -v run build:check-all
