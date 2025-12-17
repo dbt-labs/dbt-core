@@ -1,0 +1,6 @@
+kind: Dependencies
+body: Upgrading dbt-semantic-interfaces to 0.10.x
+time: 2025-12-17T15:13:49.721737-05:00
+custom:
+    Author: WilliamDee
+    Issue: None
