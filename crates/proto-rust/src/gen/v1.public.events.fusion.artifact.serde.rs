@@ -9,6 +9,7 @@ impl serde::Serialize for ArtifactType {
             Self::Manifest => "ARTIFACT_TYPE_MANIFEST",
             Self::SemanticManifest => "ARTIFACT_TYPE_SEMANTIC_MANIFEST",
             Self::Catalog => "ARTIFACT_TYPE_CATALOG",
+            Self::Sources => "ARTIFACT_TYPE_SOURCES",
         };
         serializer.serialize_str(variant)
     }
@@ -24,6 +25,7 @@ impl<'de> serde::Deserialize<'de> for ArtifactType {
             "ARTIFACT_TYPE_MANIFEST",
             "ARTIFACT_TYPE_SEMANTIC_MANIFEST",
             "ARTIFACT_TYPE_CATALOG",
+            "ARTIFACT_TYPE_SOURCES",
         ];
 
         struct GeneratedVisitor;
@@ -68,6 +70,7 @@ impl<'de> serde::Deserialize<'de> for ArtifactType {
                     "ARTIFACT_TYPE_MANIFEST" => Ok(ArtifactType::Manifest),
                     "ARTIFACT_TYPE_SEMANTIC_MANIFEST" => Ok(ArtifactType::SemanticManifest),
                     "ARTIFACT_TYPE_CATALOG" => Ok(ArtifactType::Catalog),
+                    "ARTIFACT_TYPE_SOURCES" => Ok(ArtifactType::Sources),
                     _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
                 }
             }

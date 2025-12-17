@@ -156,7 +156,8 @@ impl fmt::Display for SelectionCriteria {
         }
 
         if let Some(depth) = self.parents_depth {
-            if depth > 0 {
+            // Only show explicit depth numbers, not u32::MAX which represents "all"
+            if depth > 0 && depth != u32::MAX {
                 result.push_str(&depth.to_string());
             }
             result.push('+');
@@ -174,7 +175,8 @@ impl fmt::Display for SelectionCriteria {
 
         if let Some(depth) = self.children_depth {
             result.push('+');
-            if depth > 0 {
+            // Only show explicit depth numbers, not u32::MAX which represents "all"
+            if depth > 0 && depth != u32::MAX {
                 result.push_str(&depth.to_string());
             }
         }
@@ -994,6 +996,63 @@ mod tests {
             },
             _ => panic!("Expected SelectExpr::Or expression with 2 atoms"),
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_display_selector_with_unbounded_plus() -> FsResult<()> {
+        // Test that u32::MAX is not displayed as a number (should just be "+")
+        let criteria = SelectionCriteria {
+            method: MethodName::Fqn,
+            method_args: vec![],
+            value: "model_a".to_string(),
+            childrens_parents: false,
+            parents_depth: None,
+            children_depth: Some(u32::MAX),
+            indirect: Some(IndirectSelection::default()),
+            exclude: None,
+        };
+        assert_eq!(criteria.to_string(), "fqn:model_a+");
+
+        // Test with explicit depth number
+        let criteria_with_depth = SelectionCriteria {
+            method: MethodName::Fqn,
+            method_args: vec![],
+            value: "model_a".to_string(),
+            childrens_parents: false,
+            parents_depth: None,
+            children_depth: Some(3),
+            indirect: Some(IndirectSelection::default()),
+            exclude: None,
+        };
+        assert_eq!(criteria_with_depth.to_string(), "fqn:model_a+3");
+
+        // Test with unbounded parents
+        let criteria_parents = SelectionCriteria {
+            method: MethodName::Fqn,
+            method_args: vec![],
+            value: "model_a".to_string(),
+            childrens_parents: false,
+            parents_depth: Some(u32::MAX),
+            children_depth: None,
+            indirect: Some(IndirectSelection::default()),
+            exclude: None,
+        };
+        assert_eq!(criteria_parents.to_string(), "+fqn:model_a");
+
+        // Test with both unbounded
+        let criteria_both = SelectionCriteria {
+            method: MethodName::Fqn,
+            method_args: vec![],
+            value: "model_a".to_string(),
+            childrens_parents: false,
+            parents_depth: Some(u32::MAX),
+            children_depth: Some(u32::MAX),
+            indirect: Some(IndirectSelection::default()),
+            exclude: None,
+        };
+        assert_eq!(criteria_both.to_string(), "+fqn:model_a+");
 
         Ok(())
     }
