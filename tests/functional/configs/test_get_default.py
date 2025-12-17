@@ -101,4 +101,4 @@ class TestConfigGetMetaRequire:
         results = run_dbt(["run"], expect_pass=False)
         assert len(results) == 1
         assert str(results[0].status) == "error"
-        assert 'column "none" does not exist' in results[0].message
+        assert 'column "my_meta_value" does not exist' in results[0].message
