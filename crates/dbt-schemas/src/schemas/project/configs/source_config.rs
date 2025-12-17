@@ -6,6 +6,7 @@ type YmlValue = dbt_serde_yaml::Value;
 use std::collections::BTreeMap;
 use std::collections::btree_map::Iter;
 
+use super::config_keys::ConfigKeys;
 use crate::default_to;
 use crate::schemas::common::{DbtQuoting, FreshnessDefinition, ScheduleConfig};
 use crate::schemas::manifest::GrantAccessToTarget;
@@ -511,4 +512,9 @@ impl DefaultTo<SourceConfig> for SourceConfig {
             ]
         );
     }
+}
+
+impl ConfigKeys for SourceConfig {
+    // The default implementation from the trait will handle
+    // extracting field names via serialization automatically
 }

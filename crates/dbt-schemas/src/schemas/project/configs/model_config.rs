@@ -6,9 +6,10 @@ use dbt_serde_yaml::Verbatim;
 use serde::{Deserialize, Serialize};
 // Type aliases for clarity
 type YmlValue = dbt_serde_yaml::Value;
-use std::collections::BTreeMap;
 use std::collections::btree_map::Iter;
+use std::collections::{BTreeMap, HashSet};
 
+use super::config_keys::ConfigKeys;
 use super::omissible_utils::handle_omissible_override;
 
 use crate::default_to;
@@ -929,6 +930,45 @@ impl ModelConfig {
             && self.location == other.location
             && self.predicates == other.predicates
             && same_warehouse_config(&self.__warehouse_specific_config__, &other.__warehouse_specific_config__)
+    }
+}
+
+impl ConfigKeys for ModelConfig {
+    fn valid_field_names() -> HashSet<String> {
+        let default_instance = Self::default();
+        let serialized = dbt_serde_yaml::to_value(&default_instance)
+            .expect("Failed to serialize ModelConfig for field extraction");
+
+        let mut field_names = HashSet::new();
+
+        if let YmlValue::Mapping(map, _) = serialized {
+            for (key, value) in map {
+                if let YmlValue::String(key_str, _) = key {
+                    // Extract top-level fields
+                    field_names.insert(key_str.clone());
+
+                    // Also include warehouse-specific fields from __warehouse_specific_config__
+                    if key_str == "__warehouse_specific_config__" {
+                        if let YmlValue::Mapping(warehouse_map, _) = value {
+                            for (warehouse_key, _) in warehouse_map {
+                                if let YmlValue::String(warehouse_key_str, _) = warehouse_key {
+                                    field_names.insert(warehouse_key_str);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Add known aliases that might not show up in serialization
+        field_names.insert("project".to_string()); // alias for database
+        field_names.insert("data_space".to_string()); // alias for database
+        field_names.insert("dataset".to_string()); // alias for schema
+        field_names.insert("post-hook".to_string()); // might be serialized as post_hook
+        field_names.insert("pre-hook".to_string()); // might be serialized as pre_hook
+
+        field_names
     }
 }
 

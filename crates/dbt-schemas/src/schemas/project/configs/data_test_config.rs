@@ -6,6 +6,7 @@ type YmlValue = dbt_serde_yaml::Value;
 use std::collections::BTreeMap;
 use std::collections::btree_map::Iter;
 
+use super::config_keys::ConfigKeys;
 use crate::default_to;
 use crate::schemas::common::{
     DbtMaterialization, DbtQuoting, ScheduleConfig, Severity, StoreFailuresAs,
@@ -608,4 +609,9 @@ impl DefaultTo<DataTestConfig> for DataTestConfig {
     fn alias(&self) -> Option<String> {
         self.alias.clone()
     }
+}
+
+impl ConfigKeys for DataTestConfig {
+    // The default implementation from the trait will handle
+    // extracting field names via serialization automatically
 }

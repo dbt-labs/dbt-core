@@ -24,6 +24,7 @@ use minijinja::{
 
 use crate::phases::MacroLookupContext;
 use crate::phases::compile_and_run_context::FunctionFunction;
+use dbt_schemas::schemas::project::ConfigKeys;
 
 use super::super::compile_and_run_context::RefFunction;
 use super::compile_config::CompileConfig;
@@ -172,8 +173,25 @@ where
     );
 
     let config_map = Arc::new(convert_yml_to_dash_map(model.serialized_config()));
+
+    // Get valid config keys based on resource type
+    let valid_keys = match model.resource_type() {
+        NodeType::Model => dbt_schemas::schemas::project::ModelConfig::valid_field_names(),
+        NodeType::Seed => dbt_schemas::schemas::project::SeedConfig::valid_field_names(),
+        NodeType::Test => dbt_schemas::schemas::project::DataTestConfig::valid_field_names(),
+        NodeType::Snapshot => dbt_schemas::schemas::project::SnapshotConfig::valid_field_names(),
+        NodeType::Source => dbt_schemas::schemas::project::SourceConfig::valid_field_names(),
+        NodeType::UnitTest => dbt_schemas::schemas::project::UnitTestConfig::valid_field_names(),
+        NodeType::Function => dbt_schemas::schemas::project::FunctionConfig::valid_field_names(),
+        _ => {
+            // For other types, use an empty set to avoid warnings
+            std::collections::HashSet::new()
+        }
+    };
+
     let compile_config = CompileConfig {
         config: config_map.clone(),
+        valid_keys,
     };
 
     ctx.insert(

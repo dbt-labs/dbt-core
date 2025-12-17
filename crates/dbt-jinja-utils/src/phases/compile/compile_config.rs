@@ -1,6 +1,11 @@
 //! Module for the parse config object to be used during parsing
 
-use std::{collections::BTreeMap, rc::Rc, slice, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashSet},
+    rc::Rc,
+    slice,
+    sync::Arc,
+};
 
 use dashmap::DashMap;
 use dbt_common::{
@@ -18,6 +23,8 @@ use minijinja::{
 pub struct CompileConfig {
     /// A map of config values to be used during compile time
     pub config: Arc<DashMap<String, Value>>,
+    /// Set of valid config field names for this config type
+    pub valid_keys: HashSet<String>,
 }
 
 impl Object for CompileConfig {
@@ -72,44 +79,35 @@ impl Object for CompileConfig {
                 let result = match self.config.get(&name) {
                     Some(val) if !val.is_none() => val.clone(),
                     _ => {
-                        // If not found or None in config, check config.meta.<key>
+                        // Check if key exists in meta and warn if it's a custom config
                         if let Some(meta_value) = self.config.get("meta") {
                             let meta = meta_value.value();
-                            if let Some(meta_obj) = meta.as_object() {
-                                if let Some(value) = meta_obj.get_value(&Value::from(name.clone()))
-                                {
-                                    if !value.is_none() {
-                                        // Emit deprecation warning with location information
-                                        let span = state.current_span();
-                                        let path = state.current_path();
-                                        let location = CodeLocationWithFile::new(
-                                            span.start_line,
-                                            span.start_col,
-                                            span.start_offset,
-                                            path.clone(),
-                                        );
-                                        let error = fs_err!(
-                                            ErrorCode::Generic,
-                                            "DeprecationWarning: Custom config found under \"meta\" using config.get(\"{}\"). \
-                                            Please replace this with config.meta_get(\"{}\") to avoid collisions with \
-                                            configs introduced by dbt.",
-                                            name, name,
-                                        ).with_location(location);
-                                        emit_warn_log_from_fs_error(&error, None);
-                                        // Return the value from meta
-                                        value
-                                    } else {
-                                        default
-                                    }
-                                } else {
-                                    default
-                                }
-                            } else {
-                                default
+                            if let Some(meta_obj) = meta.as_object()
+                                && let Some(value) = meta_obj.get_value(&Value::from(name.clone()))
+                                && !value.is_none()
+                                && !self.valid_keys.contains(&name)
+                            {
+                                // Emit warning with location information
+                                let span = state.current_span();
+                                let path = state.current_path();
+                                let location = CodeLocationWithFile::new(
+                                    span.start_line,
+                                    span.start_col,
+                                    span.start_offset,
+                                    path.clone(),
+                                );
+                                let error = fs_err!(
+                                    ErrorCode::Generic,
+                                    "The key '{}' was not found using config.get('{}'), but was detected as a custom config under 'meta'. \
+                                    Please use config.meta_get('{}') or config.meta_require('{}') instead of config.get('{}') \
+                                    to access the custom config value if intended.",
+                                    name, name, name, name, name
+                                ).with_location(location);
+                                emit_warn_log_from_fs_error(&error, None);
                             }
-                        } else {
-                            default
                         }
+                        // Always return default, don't return meta values
+                        default
                     }
                 };
 
@@ -141,42 +139,37 @@ impl Object for CompileConfig {
                 match self.config.get(&name) {
                     Some(val) if !val.is_none() => Ok(val.clone()),
                     _ => {
-                        // If not found or None in config, check config.meta.<key>
+                        // Check if key exists in meta and warn if it's a custom config
                         if let Some(meta_value) = self.config.get("meta") {
                             let meta = meta_value.value();
-                            if let Some(meta_obj) = meta.as_object() {
-                                if let Some(value) = meta_obj.get_value(&Value::from(name.clone()))
-                                {
-                                    if !value.is_none() {
-                                        // Emit deprecation warning with location information
-                                        let span = state.current_span();
-                                        let path = state.current_path();
-                                        let location = CodeLocationWithFile::new(
-                                            span.start_line,
-                                            span.start_col,
-                                            span.start_offset,
-                                            path.clone(),
-                                        );
-                                        let error = fs_err!(
-                                            ErrorCode::Generic,
-                                            "DeprecationWarning: Custom config found under \"meta\" using config.require(\"{}\"). \
-                                            Please replace this with config.meta_require(\"{}\") to avoid collisions with \
-                                            configs introduced by dbt.",
-                                            name, name
-                                        ).with_location(location);
-                                        emit_warn_log_from_fs_error(&error, None);
-                                        return Ok(value);
-                                    }
-                                }
+                            if let Some(meta_obj) = meta.as_object()
+                                && let Some(value) = meta_obj.get_value(&Value::from(name.clone()))
+                                && !value.is_none()
+                                && !self.valid_keys.contains(&name)
+                            {
+                                // Emit warning with location information
+                                let span = state.current_span();
+                                let path = state.current_path();
+                                let location = CodeLocationWithFile::new(
+                                    span.start_line,
+                                    span.start_col,
+                                    span.start_offset,
+                                    path.clone(),
+                                );
+                                let error = fs_err!(
+                                    ErrorCode::Generic,
+                                    "The key '{}' was not found using config.require('{}'), but was detected as a custom config under 'meta'. \
+                                    Please use config.meta_get('{}') or config.meta_require('{}') instead of config.require('{}') \
+                                    to access the custom config value if intended.",
+                                    name, name, name, name, name
+                                ).with_location(location);
+                                emit_warn_log_from_fs_error(&error, None);
                             }
                         }
-                        // If not found in either config or meta, throw an error
+                        // Always throw an error, don't return meta values
                         Err(MinijinjaError::new(
                             MinijinjaErrorKind::InvalidOperation,
-                            format!(
-                                "Required config key '{}' not found in config or config.meta",
-                                name
-                            ),
+                            format!("Required config key '{}' not found in config", name),
                         ))
                     }
                 }

@@ -34,6 +34,7 @@ use super::lazy_model::LazyModelWrapper;
 use crate::phases::MacroLookupContext;
 
 use super::run_config::RunConfig;
+use dbt_schemas::schemas::project::ConfigKeys;
 
 type YmlValue = dbt_serde_yaml::Value;
 
@@ -153,9 +154,25 @@ async fn extend_with_model_context<S: Serialize>(
         };
     }
 
+    // Get valid config keys based on resource type
+    let valid_keys = match resource_type {
+        NodeType::Model => dbt_schemas::schemas::project::ModelConfig::valid_field_names(),
+        NodeType::Seed => dbt_schemas::schemas::project::SeedConfig::valid_field_names(),
+        NodeType::Test => dbt_schemas::schemas::project::DataTestConfig::valid_field_names(),
+        NodeType::Snapshot => dbt_schemas::schemas::project::SnapshotConfig::valid_field_names(),
+        NodeType::Source => dbt_schemas::schemas::project::SourceConfig::valid_field_names(),
+        NodeType::UnitTest => dbt_schemas::schemas::project::UnitTestConfig::valid_field_names(),
+        NodeType::Function => dbt_schemas::schemas::project::FunctionConfig::valid_field_names(),
+        _ => {
+            // For other types, use an empty set to avoid warnings
+            std::collections::HashSet::new()
+        }
+    };
+
     let node_config = RunConfig {
         model_config: config_map,
         model: model_map.clone(),
+        valid_keys,
     };
 
     base_context.insert(

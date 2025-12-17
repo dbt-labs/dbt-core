@@ -9,6 +9,7 @@ use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
 use std::collections::btree_map::Iter;
 
+use super::config_keys::ConfigKeys;
 use crate::default_to;
 use crate::schemas::common::DbtMaterialization;
 use crate::schemas::common::DbtQuoting;
@@ -607,4 +608,9 @@ impl DefaultTo<SeedConfig> for SeedConfig {
     fn alias(&self) -> Option<String> {
         self.alias.clone()
     }
+}
+
+impl ConfigKeys for SeedConfig {
+    // The default implementation from the trait will handle
+    // extracting field names via serialization automatically
 }

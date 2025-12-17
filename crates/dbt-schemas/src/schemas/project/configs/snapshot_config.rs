@@ -11,6 +11,7 @@ use std::collections::btree_map::Iter;
 // Type aliases for clarity
 type YmlValue = dbt_serde_yaml::Value;
 
+use super::config_keys::ConfigKeys;
 use crate::default_to;
 use crate::schemas::common::DbtMaterialization;
 use crate::schemas::common::DbtQuoting;
@@ -805,4 +806,9 @@ impl DefaultTo<SnapshotConfig> for SnapshotConfig {
     fn alias(&self) -> Option<String> {
         self.alias.clone()
     }
+}
+
+impl ConfigKeys for SnapshotConfig {
+    // The default implementation from the trait will handle
+    // extracting field names via serialization automatically
 }

@@ -1,7 +1,11 @@
 //! Module for the parse config object to be used during parsing
 
 use indexmap::IndexMap;
-use std::{collections::BTreeMap, rc::Rc, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashSet},
+    rc::Rc,
+    sync::Arc,
+};
 
 use dbt_common::{
     CodeLocationWithFile, ErrorCode, fs_err, tracing::emit::emit_warn_log_from_fs_error,
@@ -21,6 +25,8 @@ pub struct RunConfig {
     pub model_config: IndexMap<String, Value>,
     /// A model's attributes/config values (converted from a DbtModel value)
     pub model: IndexMap<String, Value>,
+    /// Set of valid config field names for this config type
+    pub valid_keys: HashSet<String>,
 }
 
 impl Object for RunConfig {
@@ -52,13 +58,13 @@ impl Object for RunConfig {
                 match self.model_config.get(&name) {
                     Some(val) if !val.is_none() => Ok(val.clone()),
                     _ => {
-                        // If not found or None in model_config, check model_config.meta.<key>
+                        // Check if key exists in meta and warn if it's a custom config
                         if let Some(meta_value) = self.model_config.get("meta") {
                             if let Some(meta_obj) = meta_value.as_object() {
                                 if let Some(value) = meta_obj.get_value(&Value::from(name.clone()))
                                 {
-                                    if !value.is_none() {
-                                        // Emit deprecation warning with location information
+                                    if !value.is_none() && !self.valid_keys.contains(&name) {
+                                        // Emit warning with location information
                                         let span = state.current_span();
                                         let path = state.current_path();
                                         let location = CodeLocationWithFile::new(
@@ -69,17 +75,17 @@ impl Object for RunConfig {
                                         );
                                         let error = fs_err!(
                                             ErrorCode::Generic,
-                                            "DeprecationWarning: Custom config found under \"meta\" using config.get(\"{}\"). \
-                                            Please replace this with config.meta_get(\"{}\") to avoid collisions with \
-                                            configs introduced by dbt.",
-                                            name, name
+                                            "The key '{}' was not found using config.get('{}'), but was detected as a custom config under 'meta'. \
+                                            Please use config.meta_get('{}') or config.meta_require('{}') instead of config.get('{}') \
+                                            to access the custom config value if intended.",
+                                            name, name, name, name, name
                                         ).with_location(location);
                                         emit_warn_log_from_fs_error(&error, None);
-                                        return Ok(value);
                                     }
                                 }
                             }
                         }
+                        // Always return default, don't return meta values
                         Ok(default)
                     }
                 }
@@ -100,13 +106,13 @@ impl Object for RunConfig {
                 match self.model_config.get(&name) {
                     Some(val) if !val.is_none() => Ok(val.clone()),
                     _ => {
-                        // If not found or None in model_config, check model_config.meta.<key>
+                        // Check if key exists in meta and warn if it's a custom config
                         if let Some(meta_value) = self.model_config.get("meta") {
                             if let Some(meta_obj) = meta_value.as_object() {
                                 if let Some(value) = meta_obj.get_value(&Value::from(name.clone()))
                                 {
-                                    if !value.is_none() {
-                                        // Emit deprecation warning with location information
+                                    if !value.is_none() && !self.valid_keys.contains(&name) {
+                                        // Emit warning with location information
                                         let span = state.current_span();
                                         let path = state.current_path();
                                         let location = CodeLocationWithFile::new(
@@ -117,24 +123,20 @@ impl Object for RunConfig {
                                         );
                                         let error = fs_err!(
                                             ErrorCode::Generic,
-                                            "DeprecationWarning: Custom config found under \"meta\" using config.require(\"{}\"). \
-                                            Please replace this with config.meta_require(\"{}\") to avoid collisions with \
-                                            configs introduced by dbt.",
-                                            name, name
+                                            "The key '{}' was not found using config.require('{}'), but was detected as a custom config under 'meta'. \
+                                            Please use config.meta_get('{}') or config.meta_require('{}') instead of config.require('{}') \
+                                            to access the custom config value if intended.",
+                                            name, name, name, name, name
                                         ).with_location(location);
                                         emit_warn_log_from_fs_error(&error, None);
-                                        return Ok(value);
                                     }
                                 }
                             }
                         }
-                        // If not found in either model_config or meta, throw an error
+                        // Always throw an error, don't return meta values
                         Err(MinijinjaError::new(
                             MinijinjaErrorKind::InvalidOperation,
-                            format!(
-                                "Required config key '{}' not found in config or config.meta",
-                                name
-                            ),
+                            format!("Required config key '{}' not found in config", name),
                         ))
                     }
                 }

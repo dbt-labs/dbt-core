@@ -16,6 +16,7 @@ use crate::{
         project::{
             DefaultTo, TypedRecursiveConfig,
             configs::common::{WarehouseSpecificNodeConfig, default_meta_and_tags},
+            configs::config_keys::ConfigKeys,
         },
         serde::{
             StringOrArrayOfStrings, bool_or_string_bool, f64_or_string_f64, u64_or_string_u64,
@@ -472,4 +473,9 @@ impl DefaultTo<UnitTestConfig> for UnitTestConfig {
 
         default_to!(parent, [enabled, static_analysis]);
     }
+}
+
+impl ConfigKeys for UnitTestConfig {
+    // The default implementation from the trait will handle
+    // extracting field names via serialization automatically
 }

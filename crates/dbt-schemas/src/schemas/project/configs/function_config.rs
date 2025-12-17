@@ -9,6 +9,7 @@ use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
 use std::collections::btree_map::Iter;
 
+use super::config_keys::ConfigKeys;
 use super::omissible_utils::handle_omissible_override;
 
 use crate::default_to;
@@ -296,4 +297,9 @@ impl FunctionConfig {
             && access_eq(&self.access, &other.access)                // Custom comparison for access
             && same_warehouse_config(&self.__warehouse_specific_config__, &other.__warehouse_specific_config__)
     }
+}
+
+impl ConfigKeys for FunctionConfig {
+    // The default implementation from the trait will handle
+    // extracting field names via serialization automatically
 }

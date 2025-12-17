@@ -113,6 +113,7 @@ pub mod schemas {
         pub(crate) mod configs {
             pub mod analysis_config;
             pub mod common;
+            pub mod config_keys;
             pub mod data_test_config;
             pub mod exposure_config;
             pub mod function_config;
@@ -130,6 +131,7 @@ pub mod schemas {
 
         pub use configs::analysis_config::{AnalysesConfig, ProjectAnalysisConfig};
         pub use configs::common::{WarehouseSpecificNodeConfig, same_warehouse_config};
+        pub use configs::config_keys::ConfigKeys;
         pub use configs::data_test_config::{DataTestConfig, ProjectDataTestConfig};
         pub use configs::exposure_config::{ExposureConfig, ProjectExposureConfig};
         pub use configs::function_config::{FunctionConfig, ProjectFunctionConfig};
