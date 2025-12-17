@@ -1638,9 +1638,23 @@ def invalid_target_fail_unless_test(
 
 
 def warn_if_package_node_depends_on_root_project_node(
-    node: ManifestNode, target_model: ManifestNode, current_project: str
+    node: ManifestNode,
+    target_model: ManifestNode,
+    ref_package_name: Optional[str],
+    current_project: str,
 ) -> None:
-    if node.package_name != current_project and target_model.package_name == current_project:
+    """
+    Args:
+        node: The node that specifies the ref
+        target_model: The node that is being ref'd to
+        ref_package_name: The package name specified in the ref
+        current_project: The root project
+    """
+    if (
+        node.package_name != current_project
+        and target_model.package_name == current_project
+        and ref_package_name != current_project
+    ):
         warn_or_error(
             PackageNodeDependsOnRootProjectNode(
                 node_name=node.name,
@@ -1908,7 +1922,9 @@ def _process_refs(
             )
 
         if not get_flags().require_ref_searches_node_package_before_root:
-            warn_if_package_node_depends_on_root_project_node(node, target_model, current_project)
+            warn_if_package_node_depends_on_root_project_node(
+                node, target_model, ref.package, current_project
+            )
 
         target_model_id = target_model.unique_id
         node.depends_on.add_node(target_model_id)

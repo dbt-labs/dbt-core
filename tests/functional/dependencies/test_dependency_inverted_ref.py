@@ -42,7 +42,7 @@ class TestInvertedRefDependency(BaseInvertedRefDependencyTest):
 
         manifest = run_dbt(["parse"], callbacks=[event_catcher.catch])
 
-        assert len(manifest.nodes) == 3
+        assert len(manifest.nodes) == 4
         # Correct behavior - package node depends on node from same package
         assert manifest.nodes["model.inverted_ref_dependency.b"].depends_on.nodes == [
             "model.inverted_ref_dependency.a"
@@ -58,10 +58,16 @@ class TestInvertedRefDependencyLegacy(BaseInvertedRefDependencyTest):
 
         manifest = run_dbt(["parse"], callbacks=[event_catcher.catch])
 
-        assert len(manifest.nodes) == 3
+        assert len(manifest.nodes) == 4
         # Legacy behavior - package node depends on node from root project
         assert manifest.nodes["model.inverted_ref_dependency.b"].depends_on.nodes == [
             "model.test.a"
         ]
-        # Inverted ref warning raised
+        assert manifest.nodes[
+            "model.inverted_ref_dependency.b_root_package_in_ref"
+        ].depends_on.nodes == ["model.test.a"]
+
+        # Inverted ref warning raised - only for b, not b_root_package_in_ref
         assert len(event_catcher.caught_events) == 1
+        assert event_catcher.caught_events[0].data.node_name == "b"
+        assert event_catcher.caught_events[0].data.package_name == "inverted_ref_dependency"
