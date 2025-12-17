@@ -1,0 +1,6 @@
+kind: Fixes
+body: Do not raise deprecation warning when encountering dataset or project configs for bigquery
+time: 2025-12-17T10:59:18.372968-05:00
+custom:
+    Author: michelleark
+    Issue: "12285"
