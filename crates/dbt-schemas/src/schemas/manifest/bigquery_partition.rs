@@ -115,9 +115,9 @@ pub struct RangeConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
 pub struct Range {
-    pub start: u64,
-    pub end: u64,
-    pub interval: u64,
+    pub start: i64,
+    pub end: i64,
+    pub interval: i64,
 }
 
 /// dbt-core allows either of the variants for the `cluster_by`

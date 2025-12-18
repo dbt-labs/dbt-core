@@ -92,21 +92,21 @@ impl BigqueryPartitionConfigExt for BigqueryPartitionConfig {
                     range: Range {
                         start: metadata
                             .get_or_err("RangePartitioning.Range.Start")?
-                            .parse::<u64>()
+                            .parse::<i64>()
                             .map_err(|_err| {
-                                "Could not parse 'RangePartitioning.Range.Start' as u64".to_string()
+                                "Could not parse 'RangePartitioning.Range.Start' as i64".to_string()
                             })?,
                         end: metadata
                             .get_or_err("RangePartitioning.Range.End")?
-                            .parse::<u64>()
+                            .parse::<i64>()
                             .map_err(|_err| {
-                                "Could not parse 'RangePartitioning.Range.End' as u64".to_string()
+                                "Could not parse 'RangePartitioning.Range.End' as i64".to_string()
                             })?,
                         interval: metadata
                             .get_or_err("RangePartitioning.Range.Interval")?
-                            .parse::<u64>()
+                            .parse::<i64>()
                             .map_err(|_err| {
-                                "Could not parse 'RangePartitioning.Range.Interval' as u64"
+                                "Could not parse 'RangePartitioning.Range.Interval' as i64"
                                     .to_string()
                             })?,
                     },
