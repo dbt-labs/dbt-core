@@ -36,6 +36,53 @@ use crate::utils::{
 };
 
 use crate::functions::contract_error::get_contract_mismatches;
+use serde::Serialize;
+
+/// A JSON formatter that matches Python's json.dumps() default style:
+/// - Compact (no newlines or indentation)
+/// - Space after colons (e.g., `{"key": "value"}` instead of `{"key":"value"}`)
+/// - Space after commas (e.g., `{"a": 1, "b": 2}` instead of `{"a": 1,"b": 2}`)
+struct PythonStyleFormatter;
+
+impl serde_json::ser::Formatter for PythonStyleFormatter {
+    fn begin_object_key<W>(&mut self, writer: &mut W, first: bool) -> std::io::Result<()>
+    where
+        W: ?Sized + std::io::Write,
+    {
+        if first {
+            Ok(())
+        } else {
+            writer.write_all(b", ")
+        }
+    }
+
+    fn begin_object_value<W>(&mut self, writer: &mut W) -> std::io::Result<()>
+    where
+        W: ?Sized + std::io::Write,
+    {
+        writer.write_all(b": ")
+    }
+
+    fn begin_array_value<W>(&mut self, writer: &mut W, first: bool) -> std::io::Result<()>
+    where
+        W: ?Sized + std::io::Write,
+    {
+        if first {
+            Ok(())
+        } else {
+            writer.write_all(b", ")
+        }
+    }
+}
+
+/// Serialize a value to JSON string with Python-style formatting (space after colon)
+fn to_json_string_python_style<T: Serialize>(value: &T) -> Result<String, serde_json::Error> {
+    let mut buf = Vec::new();
+    let mut ser = serde_json::Serializer::with_formatter(&mut buf, PythonStyleFormatter);
+    value.serialize(&mut ser)?;
+    // Safe because serde_json only produces valid UTF-8
+    Ok(unsafe { String::from_utf8_unchecked(buf) })
+}
 
 /// The default placeholder for environment variables when the default value is used
 pub const DEFAULT_ENV_PLACEHOLDER: &str = "__dbt_placeholder__";
@@ -408,24 +455,22 @@ pub fn tojson(_state: &State, args: &[Value]) -> Result<Value, Error> {
         };
     }
 
-    match serde_json::to_string(&value) {
-        Ok(mut json_str) => {
-            if sort_keys {
-                // Parse the JSON string back to a Value to sort keys
-                if let Ok(mut json_value) = serde_json::from_str::<serde_json::Value>(&json_str)
-                    && let Some(obj) = json_value.as_object_mut()
-                {
-                    let sorted: serde_json::Map<String, serde_json::Value> = obj
-                        .iter()
-                        .collect::<BTreeMap<_, _>>()
-                        .into_iter()
-                        .map(|(k, v)| (k.clone(), v.clone()))
-                        .collect();
-                    json_value = serde_json::Value::Object(sorted);
-                    json_str =
-                        serde_json::to_string(&json_value).unwrap_or_else(|_| "{}".to_string());
-                }
+    // First convert to serde_json::Value for consistent serialization
+    match serde_json::to_value(value) {
+        Ok(mut json_value) => {
+            if sort_keys && let Some(obj) = json_value.as_object_mut() {
+                // Sort the keys using BTreeMap
+                let sorted: serde_json::Map<String, serde_json::Value> = obj
+                    .iter()
+                    .collect::<BTreeMap<_, _>>()
+                    .into_iter()
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect();
+                json_value = serde_json::Value::Object(sorted);
             }
+            // Use Python-style formatting (space after colon)
+            let json_str =
+                to_json_string_python_style(&json_value).unwrap_or_else(|_| "{}".to_string());
             Ok(Value::from_safe_string(json_str))
         }
         Err(err) => match default {
@@ -1436,7 +1481,7 @@ mod tests {
         let template_source = r#"{{ tojson({'a': 1, 'b': 'hello'}) }}"#;
         let tmpl = env.template_from_str(template_source).unwrap();
         let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
-        assert_eq!(output.trim(), r#"{"a":1,"b":"hello"}"#);
+        assert_eq!(output.trim(), r#"{"a": 1, "b": "hello"}"#);
     }
 
     #[test]
@@ -1447,7 +1492,7 @@ mod tests {
         let template_source = r#"{{ tojson({'a': 1, 'b': {'c': 3}}) }}"#;
         let tmpl = env.template_from_str(template_source).unwrap();
         let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
-        assert_eq!(output.trim(), r#"{"a":1,"b":{"c":3}}"#);
+        assert_eq!(output.trim(), r#"{"a": 1, "b": {"c": 3}}"#);
     }
 
     #[test]
@@ -1458,7 +1503,7 @@ mod tests {
         let template_source = r#"{{ tojson({'b': 2, 'a': 1}, sort_keys=True) }}"#;
         let tmpl = env.template_from_str(template_source).unwrap();
         let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
-        assert_eq!(output.trim(), r#"{"a":1,"b":2}"#);
+        assert_eq!(output.trim(), r#"{"a": 1, "b": 2}"#);
     }
 
     #[test]
