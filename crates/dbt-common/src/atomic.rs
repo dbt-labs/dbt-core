@@ -1,5 +1,28 @@
-use arc_swap::ArcSwapOption;
+use arc_swap::{ArcSwap, ArcSwapOption};
 use std::sync::Arc;
+
+#[derive(Debug)]
+pub struct Atomic<T> {
+    value: ArcSwap<T>,
+}
+
+impl<T> Atomic<T> {
+    pub fn new(value: Arc<T>) -> Self {
+        Self {
+            value: ArcSwap::new(value),
+        }
+    }
+
+    /// Loads the underlying value atomically.
+    pub fn load(&self) -> Arc<T> {
+        self.value.load_full()
+    }
+
+    /// Sets the underlying value atomically.
+    pub fn store(&self, value: Arc<T>) {
+        self.value.store(value)
+    }
+}
 
 #[derive(Debug)]
 pub struct AtomicOption<T> {
