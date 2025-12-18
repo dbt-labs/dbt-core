@@ -236,7 +236,7 @@ macro_rules! unaryop {
                 _ => return self.$next()
             };
             ok!(self.stream.next());
-            let mut expr = ok!(self.$next());
+            let mut expr = ok!(self.$func());
             expr = ok!(self.parse_postfix(expr, span));
             Ok(ast::Expr::UnaryOp(Spanned::new(
                 ast::UnaryOp { op, expr },
