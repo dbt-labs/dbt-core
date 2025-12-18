@@ -203,8 +203,13 @@ pub fn find_all_upstream_deps(
     all_deps
 }
 
-// Given a subset of nodes, return the subset of deps
-pub fn restrict<T, U>(
+/// Build a restricted subgraph for the included nodes and restore any transitive
+/// dependencies that were lost due to filtered intermediate nodes.
+///
+/// For the SavedQuery -> Metric -> SemanticModel -> Model dependency, SemanticModel nodes
+/// are removed since they're neither selected nor frontier nodes, but we want to make sure
+/// that we still capture the SavedQuery -> Model dependencies.
+pub fn restrict_with_transitive<T, U>(
     deps: &BTreeMap<T, BTreeSet<U>>,
     subset: &BTreeSet<T>,
 ) -> BTreeMap<T, BTreeSet<U>>
@@ -212,19 +217,55 @@ where
     T: Hash + PartialEq + Eq + Clone + Ord + Into<U>,
     U: Hash + PartialEq + Eq + Clone + Ord + Into<T>,
 {
-    let mut res = BTreeMap::new();
-    for (k, v) in deps {
-        if subset.contains(k) {
-            let mut new_v = BTreeSet::new();
-            for elem in v {
-                if subset.contains(&elem.to_owned().into()) {
-                    new_v.insert(elem.to_owned());
+    // Compute the nearest upstream ancestors that are also included
+    fn first_upstream_included<T, U>(
+        node: &T,
+        full_deps: &BTreeMap<T, BTreeSet<U>>,
+        subset: &BTreeSet<T>,
+        memoized: &mut BTreeMap<T, BTreeSet<U>>,
+        visiting: &mut BTreeSet<T>,
+    ) -> BTreeSet<U>
+    where
+        T: Hash + PartialEq + Eq + Clone + Ord + Into<U>,
+        U: Hash + PartialEq + Eq + Clone + Ord + Into<T>,
+    {
+        if let Some(cached) = memoized.get(node) {
+            return cached.clone();
+        }
+        // Guard against cycles
+        if !visiting.insert(node.clone()) {
+            return BTreeSet::new();
+        }
+
+        let mut result = BTreeSet::new();
+        if let Some(parents) = full_deps.get(node) {
+            for parent in parents {
+                let parent_t: T = parent.clone().into();
+                if subset.contains(&parent_t) {
+                    // Direct parent is included -> keep it
+                    result.insert(parent.clone());
+                } else {
+                    // Parent was filtered out -> climb upstream to the first included ancestors
+                    let upstream =
+                        first_upstream_included(&parent_t, full_deps, subset, memoized, visiting);
+                    result.extend(upstream);
                 }
             }
-            res.insert(k.to_owned(), new_v);
         }
+
+        visiting.remove(node);
+        memoized.insert(node.clone(), result.clone());
+        result
     }
-    res
+
+    let mut memoized = BTreeMap::new();
+    let mut out = BTreeMap::new();
+    for node in subset.iter() {
+        let parents =
+            first_upstream_included(node, deps, subset, &mut memoized, &mut BTreeSet::new());
+        out.insert(node.clone(), parents);
+    }
+    out
 }
 
 pub fn sinks<T, U>(
@@ -805,5 +846,27 @@ mod tests {
         let subset = BTreeSet::new();
         let result = get_all_upstream_deps(&deps, &subset);
         assert_eq!(result.len(), 0); // Should be empty
+    }
+
+    #[test]
+    fn test_restrict_with_transitive() {
+        // a - b - d - e
+        //       \
+        //         c
+        let mut deps: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
+        deps.insert("a", BTreeSet::from(["b"]));
+        deps.insert("b", BTreeSet::from(["c", "d"]));
+        deps.insert("d", BTreeSet::from(["e"]));
+
+        let subset = BTreeSet::from(["a", "c", "d", "e"]);
+        let subgraph = restrict_with_transitive(&deps, &subset);
+
+        // expected
+        //     a - d - e
+        //       \
+        //         c
+        assert_eq!(*subgraph.get("a").unwrap(), BTreeSet::from(["c", "d"]));
+        assert_eq!(*subgraph.get("c").unwrap(), BTreeSet::new());
+        assert_eq!(*subgraph.get("d").unwrap(), BTreeSet::from(["e"]));
     }
 }
