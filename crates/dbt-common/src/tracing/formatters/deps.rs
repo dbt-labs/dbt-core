@@ -6,27 +6,27 @@ use dbt_telemetry::{
 
 use super::{
     color::{GREEN, RED, maybe_apply_color},
-    layout::right_align_action,
+    layout::right_align_static_action,
 };
 
 pub static INSTALLING_ACTION: LazyLock<String> = LazyLock::new(|| {
     // Use shared function for consistent column width even if this is a static string
-    right_align_action("Installing")
+    right_align_static_action("Installing")
 });
 
 pub static INSTALLED_ACTION: LazyLock<String> = LazyLock::new(|| {
     // Use shared function for consistent column width even if this is a static string
-    right_align_action("Installed")
+    right_align_static_action("Installed")
 });
 
 pub static ADDING_ACTION: LazyLock<String> = LazyLock::new(|| {
     // Use shared function for consistent column width even if this is a static string
-    right_align_action("Adding")
+    right_align_static_action("Adding")
 });
 
 pub static ADDED_ACTION: LazyLock<String> = LazyLock::new(|| {
     // Use shared function for consistent column width even if this is a static string
-    right_align_action("Added")
+    right_align_static_action("Added")
 });
 
 /// Formats a package specification as "name@version" or just "name" if no version.

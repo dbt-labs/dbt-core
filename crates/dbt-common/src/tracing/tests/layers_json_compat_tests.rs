@@ -1029,6 +1029,73 @@ fn test_progress_message_debug_cmd_out() {
 }
 
 #[test]
+fn test_progress_message_generic_fallback() {
+    let invocation_id = Uuid::new_v4();
+
+    test_events(
+        "ProgressMessage (generic fallback without dbt_core_event_code)",
+        invocation_id,
+        || {
+            // Progress message without dbt_core_event_code and without unique_id
+            emit_info_event(
+                ProgressMessage::new_with_description(
+                    "Loading".to_string(),
+                    "dependencies".to_string(),
+                    "Resolving package versions".to_string(),
+                ),
+                None,
+            );
+            // Progress message without dbt_core_event_code but with unique_id
+            emit_info_event(
+                ProgressMessage::new_with_description_and_unique_id(
+                    "Compiling".to_string(),
+                    "model".to_string(),
+                    "Rendering Jinja templates".to_string(),
+                    "model.my_project.my_model".to_string(),
+                ),
+                None,
+            );
+        },
+        &[],
+        vec![
+            // Generic event without unique_id
+            json!({
+                "info": {
+                    "category": "",
+                    "code": "",
+                    "invocation_id": invocation_id.to_string(),
+                    "name": "Generic",
+                    "msg": "Loading dependencies (Resolving package versions)",
+                    "level": "info",
+                    "extra": {}
+                },
+                "data": {
+                    "msg": "Loading dependencies (Resolving package versions)"
+                }
+            }),
+            // Generic event with unique_id in node_info
+            json!({
+                "info": {
+                    "category": "",
+                    "code": "",
+                    "invocation_id": invocation_id.to_string(),
+                    "name": "Generic",
+                    "msg": "Compiling model (Rendering Jinja templates)",
+                    "level": "info",
+                    "extra": {}
+                },
+                "data": {
+                    "msg": "Compiling model (Rendering Jinja templates)",
+                    "node_info": {
+                        "unique_id": "model.my_project.my_model"
+                    }
+                }
+            }),
+        ],
+    );
+}
+
+#[test]
 fn test_compiled_code_inline() {
     let invocation_id = Uuid::new_v4();
 

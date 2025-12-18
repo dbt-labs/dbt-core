@@ -1,7 +1,9 @@
 use dbt_common::io_args::IoArgs;
-use dbt_common::{ErrorCode, FsResult, fs_err, fsinfo, show_progress};
+use dbt_common::tracing::emit::emit_info_progress_message;
+use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_schemas::schemas::DbtCloudProjectConfig;
 use dbt_schemas::schemas::packages::UpstreamProject;
+use dbt_telemetry::ProgressMessage;
 use std::time::SystemTime;
 
 const DOWNLOAD_INTERVAL: u64 = 3600; // 1 hour
@@ -130,12 +132,12 @@ pub(crate) async fn download_publication_artifacts(
         );
 
         // Log download attempt
-        show_progress!(
-            io,
-            fsinfo!(
-                "DOWNLOADING".into(),
-                format!("publication artifact for {}", upstream_project.name)
-            )
+        emit_info_progress_message(
+            ProgressMessage::new_from_action_and_target(
+                "DOWNLOADING".to_string(),
+                format!("publication artifact for {}", upstream_project.name),
+            ),
+            io.status_reporter.as_ref(),
         );
 
         // Execute HTTP request
@@ -218,16 +220,16 @@ pub(crate) async fn download_publication_artifacts(
             .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to write info file: {}", e))?;
 
         // Log successful download
-        show_progress!(
-            io,
-            fsinfo!(
-                "DOWNLOADED".into(),
+        emit_info_progress_message(
+            ProgressMessage::new_from_action_and_target(
+                "DOWNLOADED".to_string(),
                 format!(
                     "publication artifact for {} to {}",
                     upstream_project.name,
                     artifact_path.display()
-                )
-            )
+                ),
+            ),
+            io.status_reporter.as_ref(),
         );
     }
 

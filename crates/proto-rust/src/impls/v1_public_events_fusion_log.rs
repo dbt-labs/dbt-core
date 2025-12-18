@@ -132,6 +132,52 @@ impl ProgressMessage {
         }
     }
 
+    /// Creates a new `ProgressMessage` with a description but no legacy dbt-core event code.
+    ///
+    /// Arguments:
+    /// * `action` - The action being performed (e.g., "Debugging", "Loading").
+    /// * `target` - The text describing the target of the action (e.g., "project", "dependencies").
+    /// * `description` - Additional description providing more context.
+    pub fn new_with_description(action: String, target: String, description: String) -> Self {
+        Self {
+            action,
+            target,
+            description: Some(description),
+            dbt_core_event_code: None,
+            // Auto-injected fields
+            unique_id: None,
+            phase: None,
+            file: None,
+            line: None,
+        }
+    }
+
+    /// Creates a new `ProgressMessage` with a description and unique_id.
+    ///
+    /// Arguments:
+    /// * `action` - The action being performed (e.g., "Debugging", "Loading").
+    /// * `target` - The text describing the target of the action (e.g., "project", "dependencies").
+    /// * `description` - Additional description providing more context.
+    /// * `unique_id` - The unique_id of the node this progress message relates to.
+    pub fn new_with_description_and_unique_id(
+        action: String,
+        target: String,
+        description: String,
+        unique_id: String,
+    ) -> Self {
+        Self {
+            action,
+            target,
+            description: Some(description),
+            dbt_core_event_code: None,
+            unique_id: Some(unique_id),
+            // Auto-injected fields
+            phase: None,
+            file: None,
+            line: None,
+        }
+    }
+
     /// Creates a new `ProgressMessage` with a known legacy dbt-core event code.
     ///
     /// Arguments:

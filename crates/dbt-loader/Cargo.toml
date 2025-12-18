@@ -22,6 +22,7 @@ dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-jinja-utils = { workspace = true }
 dbt-schemas = { workspace = true }
 dbt-serde_yaml = { workspace = true }
+dbt-telemetry = { workspace = true }
 dirs = { workspace = true }
 flate2 = { workspace = true }
 ignore = { workspace = true }

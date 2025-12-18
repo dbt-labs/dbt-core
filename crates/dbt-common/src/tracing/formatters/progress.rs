@@ -35,17 +35,19 @@ pub fn format_progress_message(
     colorize: bool,
 ) -> String {
     // Right-pad action to ACTION_WIDTH characters
+    let unpadded_action = progress.action.as_str().into();
+
     let maybe_padded_action = if pad_action {
-        right_align_action(progress.action.as_str())
+        right_align_action(unpadded_action)
     } else {
-        progress.action.clone()
+        unpadded_action
     };
 
     let action = if colorize {
         let style = severity_to_color_style(message_severity);
-        maybe_apply_color(style, &maybe_padded_action, colorize)
+        maybe_apply_color(style, maybe_padded_action.as_ref(), colorize)
     } else {
-        maybe_padded_action
+        maybe_padded_action.to_string()
     };
 
     match progress.description.as_ref() {

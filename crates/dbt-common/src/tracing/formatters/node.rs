@@ -11,7 +11,7 @@ use super::{
     color::{BLUE, CYAN, GREEN, PLAIN, RED, YELLOW},
     constants::{MAX_SCHEMA_DISPLAY_LEN, MIN_NODE_TYPE_WIDTH, UNIT_TEST_SCHEMA_SUFFIX},
     duration::format_duration_fixed_width,
-    layout::right_align_action,
+    layout::right_align_static_action,
     phase::get_phase_action,
 };
 
@@ -205,7 +205,7 @@ pub fn format_node_action(
     };
 
     // Right align action
-    let action = right_align_action(action);
+    let action = right_align_static_action(action);
 
     if !colorize {
         return action;

@@ -80,11 +80,8 @@ pub const ANALYZING: &str = " Analyzing";
 pub const LOADING: &str = "   Loading";
 pub const FETCHING: &str = "  Fetching";
 pub const INSTALLING: &str = "Installing";
-pub const EXTENDING: &str = " Extending";
 pub const RESOLVING: &str = " Resolving";
 pub const PARSING: &str = "   Parsing";
-pub const REMOVING: &str = "  Removing";
-pub const CACHING: &str = "   Caching";
 // not being issued right now
 pub const SCHEDULING: &str = "Scheduling";
 //

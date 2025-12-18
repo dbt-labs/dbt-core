@@ -2,7 +2,9 @@ use crate::dbt_sa_clap::{Cli, Commands, ProjectTemplate};
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::create_root_info_span;
 use dbt_common::io_utils::checkpoint_maybe_exit;
-use dbt_common::tracing::emit::{emit_error_log_from_fs_error, emit_info_log_message};
+use dbt_common::tracing::emit::{
+    emit_error_log_from_fs_error, emit_info_log_message, emit_info_progress_message,
+};
 use dbt_common::tracing::invocation::create_invocation_attributes;
 use dbt_common::tracing::metrics::get_exit_code_from_error_counter;
 use dbt_init::init;
@@ -10,16 +12,17 @@ use dbt_jinja_utils::invocation_args::InvocationArgs;
 use dbt_jinja_utils::listener::DefaultJinjaTypeCheckEventListenerFactory;
 use dbt_loader::clean::execute_clean_command;
 use dbt_schemas::man::execute_man_command;
+use dbt_telemetry::ProgressMessage;
 
 use dbt_common::io_args::{EvalArgs, EvalArgsBuilder};
 use dbt_common::{
     ErrorCode, FsResult,
     constants::{DBT_MANIFEST_JSON, INSTALLING, VALIDATING},
-    fs_err, fsinfo,
+    fs_err,
     io_args::{Phases, SystemArgs},
     logging::init_logger,
     pretty_string::GREEN,
-    show_progress, show_result_with_default_title, stdfs,
+    show_result_with_default_title, stdfs,
     tracing::span_info::record_span_status,
 };
 
@@ -85,12 +88,12 @@ async fn do_execute_fs(eval_arg: &EvalArgs, cli: Cli, token: CancellationToken) 
         // Handle init command
         use dbt_init::init::run_init_workflow;
 
-        show_progress!(
-            &eval_arg.io,
-            fsinfo!(
-                INSTALLING.into(),
-                "dbt project and profile setup".to_string()
-            )
+        emit_info_progress_message(
+            ProgressMessage::new_from_action_and_target(
+                INSTALLING.to_string(),
+                "dbt project and profile setup".to_string(),
+            ),
+            eval_arg.io.status_reporter.as_ref(),
         );
 
         let project_name = if init_args.project_name == "jaffle_shop" {
@@ -174,8 +177,10 @@ async fn execute_setup_and_all_phases(
         } else {
             "".to_string()
         };
-        let info = fsinfo!(DBT_SA_CLI.into(), build_time);
-        show_progress!(&eval_arg.io, info);
+        emit_info_progress_message(
+            ProgressMessage::new_from_action_and_target(DBT_SA_CLI.to_string(), build_time),
+            eval_arg.io.status_reporter.as_ref(),
+        );
     }
 
     // Check if the command is `Clean`

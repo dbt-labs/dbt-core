@@ -837,34 +837,52 @@ impl JsonCompatLayer {
     }
 
     /// Handle ProgressMessage events (debug command progress, etc.)
-    /// If dbt_core_event_code is present, map to appropriate event
+    /// If dbt_core_event_code is present, map to appropriate event, otherwise emit as generic
     fn emit_progress_message(&self, progress_msg: &ProgressMessage, log_record: &LogRecordInfo) {
-        // Only emit if there's a dbt_core_event_code (otherwise skip for JSON compat)
-        let Some(event_code) = progress_msg.dbt_core_event_code.as_deref() else {
-            return;
-        };
-
-        let event_name = match event_code {
-            "Z047" => "DebugCmdOut",
-            "Z048" => "DebugCmdResult",
-            _ => return, // Should not happen, skip
-        };
-
         let msg = format_progress_message(progress_msg, log_record.severity_number, false, false);
 
+        // Determine event code and name based on dbt_core_event_code
+        let (event_code, event_name) = match progress_msg.dbt_core_event_code.as_deref() {
+            Some("Z047") => (Some("Z047"), Some("DebugCmdOut")),
+            Some("Z048") => (Some("Z048"), Some("DebugCmdResult")),
+            Some(_) => {
+                // In debug build panic for unknown codes to catch missing mappings, in prod just skip
+                #[cfg(debug_assertions)]
+                panic!(
+                    "Unhandled dbt_core_event_code '{}' in ProgressMessage. Add mapping in JsonCompatLayer `emit_progress_message` function.",
+                    progress_msg.dbt_core_event_code.as_deref().unwrap()
+                );
+                #[cfg(not(debug_assertions))]
+                return;
+            }
+            None => (None, None), // Fall back to generic handling
+        };
+
         let info_json = serde_json::to_value(self.build_core_event_info(
-            Some(event_code),
-            Some(event_name),
+            event_code,
+            event_name,
             &log_record.severity_text,
             msg.clone(),
         ))
         .expect("Failed to serialize core event info to JSON");
 
+        let mut data_obj = json!({
+            "msg": msg,
+        });
+
+        // Include unique_id in node_info if available
+        if let Some(unique_id) = progress_msg.unique_id.as_deref() {
+            data_obj.as_object_mut().unwrap().insert(
+                "node_info".to_string(),
+                json!({
+                    "unique_id": unique_id
+                }),
+            );
+        }
+
         let value = json!({
             "info": info_json,
-            "data": {
-                "msg": msg,
-            }
+            "data": data_obj
         })
         .to_string();
 

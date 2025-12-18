@@ -1,9 +1,10 @@
-use dbt_common::tracing::emit::emit_warn_log_message;
+use dbt_common::tracing::emit::{emit_info_progress_message, emit_warn_log_message};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
+use dbt_telemetry::ProgressMessage;
 
-use dbt_common::constants::{DBT_PROFILES_YML, LOADING};
+use dbt_common::constants::DBT_PROFILES_YML;
 use dbt_common::stdfs::canonicalize;
-use dbt_common::{ErrorCode, FsResult, err, fs_err, fsinfo, show_progress};
+use dbt_common::{ErrorCode, FsResult, err, fs_err};
 
 use pathdiff::diff_paths;
 use std::path::PathBuf;
@@ -59,9 +60,12 @@ pub fn load_profiles<S: Serialize>(
         relative_profile_path.clone()
     };
 
-    show_progress!(
-        arg.io,
-        fsinfo!(LOADING.into(), show_path.display().to_string())
+    emit_info_progress_message(
+        ProgressMessage::new_from_action_and_target(
+            "Loading".to_string(),
+            show_path.display().to_string(),
+        ),
+        arg.io.status_reporter.as_ref(),
     );
 
     // Load just the keys -> values from the profiles.yml file

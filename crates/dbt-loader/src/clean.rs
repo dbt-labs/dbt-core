@@ -8,18 +8,19 @@ use std::{collections::BTreeMap, path::Path};
 use dbt_common::{
     ErrorCode, FsResult,
     cancellation::CancellationToken,
-    constants::{DBT_PROJECT_YML, REMOVING},
-    err, fs_err, fsinfo,
+    constants::DBT_PROJECT_YML,
+    err, fs_err,
     io_args::{EvalArgs, EvalArgsBuilder, IoArgs},
-    show_progress, stdfs,
+    stdfs,
     tracing::{
-        emit::{emit_error_log_from_fs_error, emit_trace_log_message},
+        emit::{emit_error_log_from_fs_error, emit_info_progress_message, emit_trace_log_message},
         metrics::get_exit_code_from_error_counter,
     },
 };
 use dbt_jinja_utils::{
     invocation_args::InvocationArgs, phases::load::init::initialize_load_jinja_environment,
 };
+use dbt_telemetry::ProgressMessage;
 
 pub async fn execute_clean_command(
     arg: &EvalArgs,
@@ -89,8 +90,13 @@ pub async fn execute_clean_command(
     if all_safe {
         paths_to_delete.iter().try_for_each(|path| {
             if path.exists() {
-                let info = fsinfo!(REMOVING.into(), arg.io.format_display_path(path));
-                show_progress!(&arg.io, info);
+                emit_info_progress_message(
+                    ProgressMessage::new_from_action_and_target(
+                        "Removing".to_string(),
+                        arg.io.format_display_path(path),
+                    ),
+                    arg.io.status_reporter.as_ref(),
+                );
                 stdfs::remove_dir_all(path)
             } else {
                 emit_trace_log_message(|| {

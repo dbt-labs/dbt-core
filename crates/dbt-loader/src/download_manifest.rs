@@ -1,8 +1,9 @@
 use dbt_common::constants::{DBT_MANIFEST_INFO, DBT_MANIFEST_JSON};
 use dbt_common::io_args::IoArgs;
-use dbt_common::tracing::emit::emit_warn_log_message;
-use dbt_common::{ErrorCode, FsResult, fs_err, fsinfo, show_progress};
+use dbt_common::tracing::emit::{emit_info_progress_message, emit_warn_log_message};
+use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_schemas::schemas::DbtCloudProjectConfig;
+use dbt_telemetry::ProgressMessage;
 use flate2::read::GzDecoder;
 use reqwest_middleware::ClientBuilder;
 use reqwest_retry::{
@@ -93,12 +94,12 @@ pub async fn hydrate_or_download_manifest_from_cloud(
     // Otherwise, use the manifest/latest/ path which will use the default staging > prod precedence
     let manifest_path_suffix = match &dbt_cloud_config.defer_env_id {
         Some(env_id) => {
-            show_progress!(
-                io,
-                fsinfo!(
-                    "INFO".into(),
-                    format!("Using defer_env_id '{}' for manifest download", env_id)
-                )
+            emit_info_progress_message(
+                ProgressMessage::new_from_action_and_target(
+                    "INFO".to_string(),
+                    format!("Using defer_env_id '{}' for manifest download", env_id),
+                ),
+                io.status_reporter.as_ref(),
             );
             format!("manifest/{env_id}/")
         }
@@ -117,9 +118,12 @@ pub async fn hydrate_or_download_manifest_from_cloud(
     );
 
     // Log download attempt
-    show_progress!(
-        io,
-        fsinfo!("DOWNLOADING".into(), "deferral manifest".to_string())
+    emit_info_progress_message(
+        ProgressMessage::new_from_action_and_target(
+            "DOWNLOADING".to_string(),
+            "deferral manifest".to_string(),
+        ),
+        io.status_reporter.as_ref(),
     );
 
     // First request to get presigned URL
@@ -251,12 +255,12 @@ pub async fn hydrate_or_download_manifest_from_cloud(
         Some(json) => {
             // Log if we had to decompress
             if json.len() != manifest_bytes.len() {
-                show_progress!(
-                    io,
-                    fsinfo!(
-                        "INFO".into(),
-                        "Decompressed gzip-encoded deferral manifest".to_string()
-                    )
+                emit_info_progress_message(
+                    ProgressMessage::new_from_action_and_target(
+                        "INFO".to_string(),
+                        "Decompressed gzip-encoded deferral manifest".to_string(),
+                    ),
+                    io.status_reporter.as_ref(),
                 );
             }
             json
@@ -288,12 +292,12 @@ pub async fn hydrate_or_download_manifest_from_cloud(
         .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to write info file: {}", e))?;
 
     // Log successful download
-    show_progress!(
-        io,
-        fsinfo!(
-            "DOWNLOADED".into(),
-            format!("deferral manifest to {}", manifest_path.display())
-        )
+    emit_info_progress_message(
+        ProgressMessage::new_from_action_and_target(
+            "DOWNLOADED".to_string(),
+            format!("deferral manifest to {}", manifest_path.display()),
+        ),
+        io.status_reporter.as_ref(),
     );
 
     Ok(Some(default_dir))

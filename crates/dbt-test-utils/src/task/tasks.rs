@@ -580,6 +580,68 @@ impl ExecuteAndCompareTelemetry {
         None
     }
 
+    /// Navigate a JSON value by path and apply a transformation to the found value.
+    fn apply_by_path<F>(value: &mut serde_json::Value, key: &str, mut transform: F)
+    where
+        F: FnMut(&mut serde_json::Value),
+    {
+        let parts: Vec<&str> = key.split('.').collect();
+
+        fn apply_by_path_inner<F: FnMut(&mut serde_json::Value)>(
+            value: &mut serde_json::Value,
+            path: &[&str],
+            mut transform: F,
+        ) {
+            if path.is_empty() {
+                return;
+            }
+            if let Some(obj) = value.as_object_mut() {
+                if path.len() == 1 {
+                    if let Some(v) = obj.get_mut(path[0]) {
+                        transform(v);
+                    }
+                } else if let Some(next) = obj.get_mut(path[0]) {
+                    apply_by_path_inner(next, &path[1..], transform);
+                }
+            }
+        }
+
+        apply_by_path_inner(value, parts.as_slice(), &mut transform);
+    }
+
+    /// Normalize a JSON value by replacing it with a type-appropriate default.
+    fn normalize_value(v: &mut serde_json::Value) {
+        if v.is_string() {
+            *v = serde_json::Value::String("<normalized>".to_string());
+        } else if v.is_number() {
+            *v = serde_json::Value::Number(serde_json::Number::from(0));
+        } else if v.is_array() {
+            *v = serde_json::Value::Array(vec![]);
+        } else if v.is_object() {
+            *v = serde_json::Value::Object(serde_json::Map::new());
+        } else if v.is_boolean() {
+            *v = serde_json::Value::Bool(false);
+        } else if v.is_null() {
+            // do nothing
+        }
+    }
+
+    fn find_key_and_normalize(value: &mut serde_json::Value, key: &str) {
+        if let Some(obj) = value.as_object_mut() {
+            if let Some(v) = obj.get_mut(key) {
+                Self::normalize_value(v);
+            } else {
+                for (_k, v) in obj.iter_mut() {
+                    Self::find_key_and_normalize(v, key);
+                }
+            }
+        } else if let Some(arr) = value.as_array_mut() {
+            for v in arr.iter_mut() {
+                Self::find_key_and_normalize(v, key);
+            }
+        }
+    }
+
     /// Normalize environment-dependent keys in JSONL content to make tests reproducible.
     fn normalize_volatile_keys(content: String) -> String {
         const KEYS: &[&str] = &[
@@ -604,33 +666,12 @@ impl ExecuteAndCompareTelemetry {
             "version",
         ];
 
-        fn find_key_and_normalize(value: &mut serde_json::Value, key: &str) {
-            if let Some(obj) = value.as_object_mut() {
-                if let Some(v) = obj.get_mut(key) {
-                    if v.is_string() {
-                        *v = serde_json::Value::String("<normalized>".to_string());
-                    } else if v.is_number() {
-                        *v = serde_json::Value::Number(serde_json::Number::from(0));
-                    } else if v.is_array() {
-                        *v = serde_json::Value::Array(vec![]);
-                    } else if v.is_object() {
-                        *v = serde_json::Value::Object(serde_json::Map::new());
-                    } else if v.is_boolean() {
-                        *v = serde_json::Value::Bool(false);
-                    } else if v.is_null() {
-                        // do nothing
-                    }
-                } else {
-                    for (_k, v) in obj.iter_mut() {
-                        find_key_and_normalize(v, key);
-                    }
-                }
-            } else if let Some(arr) = value.as_array_mut() {
-                for v in arr.iter_mut() {
-                    find_key_and_normalize(v, key);
-                }
-            }
-        }
+        // Keys to normalize with regex patterns, format: (key_path, regex_pattern, replacement)
+        const REGEX_KEYS: &[(&str, &str, &str)] = &[(
+            "attributes.target",
+            r"\d+\.\d+\.\d+(-[a-zA-Z]+\.\d+)?",
+            "dbt-fusion-version",
+        )];
 
         content
             .lines()
@@ -642,8 +683,22 @@ impl ExecuteAndCompareTelemetry {
                 let mut json: serde_json::Value = serde_json::from_str(line)
                     .unwrap_or_else(|_| panic!("Failed to parse jsonl line: {line}"));
 
+                // Normalize unconditional keys
                 for key in KEYS {
-                    find_key_and_normalize(&mut json, key);
+                    Self::find_key_and_normalize(&mut json, key);
+                }
+
+                // Apply regex-based normalization
+                for (key_path, pattern, replacement) in REGEX_KEYS {
+                    let re = regex::Regex::new(pattern)
+                        .unwrap_or_else(|_| panic!("Invalid regex pattern: {pattern}"));
+                    Self::apply_by_path(&mut json, key_path, |v| {
+                        if let Some(s) = v.as_str() {
+                            *v = serde_json::Value::String(
+                                re.replace_all(s, *replacement).to_string(),
+                            );
+                        }
+                    });
                 }
 
                 serde_json::to_string(&json).expect("Failed to serialize modified jsonl line")
@@ -657,19 +712,6 @@ impl ExecuteAndCompareTelemetry {
         // Keys whose values we strip because the replay mechanism cannot reproduce them
         const KEYS: &[&str] = &["attributes.query_id"];
 
-        fn remove_key_by_path(value: &mut serde_json::Value, path: &[&str]) {
-            if path.is_empty() {
-                return;
-            }
-            if let Some(obj) = value.as_object_mut() {
-                if path.len() == 1 {
-                    obj.remove(path[0]);
-                } else if let Some(next) = obj.get_mut(path[0]) {
-                    remove_key_by_path(next, &path[1..]);
-                }
-            }
-        }
-
         content
             .lines()
             .map(|line| {
@@ -681,8 +723,7 @@ impl ExecuteAndCompareTelemetry {
                     .unwrap_or_else(|_| panic!("Failed to parse jsonl line: {line}"));
 
                 for key in KEYS {
-                    let parts: Vec<&str> = key.split('.').collect();
-                    remove_key_by_path(&mut json, &parts);
+                    Self::apply_by_path(&mut json, key, |v| *v = serde_json::Value::Null);
                 }
 
                 serde_json::to_string(&json).expect("Failed to serialize modified jsonl line")
