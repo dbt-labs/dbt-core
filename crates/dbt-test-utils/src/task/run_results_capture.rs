@@ -1,57 +1,51 @@
 use super::{ProjectEnv, Task, TestEnv, TestResult};
 use crate::task::{ArtifactComparisonTask, TestError};
 use async_trait::async_trait;
-use dbt_common::constants::DBT_MANIFEST_JSON;
-use dbt_schemas::schemas::manifest::DbtManifest;
+use dbt_schemas::schemas::RunResultsArtifact;
+use dbt_schemas::schemas::serde::typed_struct_from_json_file;
 use std::sync::{Arc, Mutex};
 
-/// A task that captures the DbtManifest from the target directory
-pub struct CaptureDbtManifest {
-    captured_manifest: Arc<Mutex<Option<DbtManifest>>>,
+/// Task that captures the `run_results.json` artifact from the target directory.
+pub struct CaptureRunResults {
+    captured: Arc<Mutex<Option<RunResultsArtifact>>>,
 }
 
-impl CaptureDbtManifest {
-    /// Create a new manifest capturing task
+impl CaptureRunResults {
     pub fn new() -> Self {
         Self {
-            captured_manifest: Arc::new(Mutex::new(None)),
+            captured: Arc::new(Mutex::new(None)),
         }
     }
 
-    /// Get the captured manifest after execution
-    pub fn get_manifest(&self) -> Option<DbtManifest> {
-        self.captured_manifest.lock().unwrap().take()
+    pub fn get_run_results(&self) -> Option<RunResultsArtifact> {
+        self.captured.lock().unwrap().take()
     }
 }
 
-impl Default for CaptureDbtManifest {
+impl Default for CaptureRunResults {
     fn default() -> Self {
         Self::new()
     }
 }
 
 #[async_trait]
-impl Task for CaptureDbtManifest {
+impl Task for CaptureRunResults {
     async fn run(
         &self,
         _project_env: &ProjectEnv,
         test_env: &TestEnv,
         _task_index: usize,
     ) -> TestResult<()> {
-        // Read the manifest from the target directory
         let target_dir = test_env.temp_dir.join("target");
-        let manifest: DbtManifest = dbt_schemas::schemas::serde::typed_struct_from_json_file(
-            target_dir.join(DBT_MANIFEST_JSON).as_path(),
-        )?;
-        // Store the captured manifest
-        *self.captured_manifest.lock().unwrap() = Some(manifest);
-
+        let run_results =
+            typed_struct_from_json_file(target_dir.join("run_results.json").as_path())?;
+        *self.captured.lock().unwrap() = Some(run_results);
         Ok(())
     }
 }
 
 #[async_trait]
-impl Task for Arc<CaptureDbtManifest> {
+impl Task for Arc<CaptureRunResults> {
     async fn run(
         &self,
         project_env: &ProjectEnv,
@@ -66,25 +60,25 @@ impl Task for Arc<CaptureDbtManifest> {
     }
 }
 
-pub struct CompareDbtManifest {
-    captured_manifest: Arc<CaptureDbtManifest>,
+pub struct CompareRunResults {
+    captured_run_results: Arc<CaptureRunResults>,
     pub ignored_field_paths: Vec<String>,
 }
 
-impl CompareDbtManifest {
+impl CompareRunResults {
     pub fn new(
-        captured_manifest: Arc<CaptureDbtManifest>,
+        captured_run_results: Arc<CaptureRunResults>,
         ignored_field_paths: Vec<String>,
     ) -> Self {
         Self {
-            captured_manifest,
+            captured_run_results,
             ignored_field_paths,
         }
     }
 }
 
 #[async_trait]
-impl Task for CompareDbtManifest {
+impl Task for CompareRunResults {
     async fn run(
         &self,
         project_env: &ProjectEnv,
@@ -92,11 +86,11 @@ impl Task for CompareDbtManifest {
         task_index: usize,
     ) -> TestResult<()> {
         let manifest = self
-            .captured_manifest
-            .get_manifest()
-            .ok_or_else(|| TestError::new("missing captured manifest"))?;
+            .captured_run_results
+            .get_run_results()
+            .ok_or_else(|| TestError::new("missing captured run results"))?;
         ArtifactComparisonTask::new(
-            "target/manifest.json",
+            "target/run_results.json",
             manifest,
             self.ignored_field_paths.clone(),
             true,

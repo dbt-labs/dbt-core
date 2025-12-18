@@ -64,6 +64,10 @@ pub const DBT_PACKAGES_YML: &str = "packages.yml";
 pub const DBT_DEPENDENCIES_YML: &str = "dependencies.yml";
 
 // ----------------------------------------------------------------------------------------------
+// aggregated generic tests
+pub const DBT_AGGREGATED_GENERIC_TEST_CONTEXT: &str = "aggregated_test_skip_column_names";
+
+// ----------------------------------------------------------------------------------------------
 // dbt console output
 pub const ERROR: &str = "error:";
 pub const WARNING: &str = "warning:";

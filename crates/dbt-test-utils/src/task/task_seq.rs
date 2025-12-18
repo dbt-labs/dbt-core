@@ -148,7 +148,9 @@ impl TaskSeq {
         // We use fixed fallback trace ID of 1 for all tests for reproducibility.
         let (data_layer, reload_handle) = create_data_layer_for_tests(1u128, vec![], vec![]);
 
-        let _ = init_tracing_with_consumer_layer(
+        // Keep the guard alive for the duration of the test run so the process span
+        // remains available to worker threads emitting telemetry.
+        let process_span_guard = init_tracing_with_consumer_layer(
             tracing::level_filters::LevelFilter::TRACE,
             "dbt-tests",
             data_layer,
@@ -160,6 +162,9 @@ impl TaskSeq {
         let _cwd_guard = CurrentWorkingDirGuard::new(&project_env.absolute_project_dir);
 
         run_test_tasks(&self.tasks, project_env, &test_env, set_env).await?;
+
+        // Explicitly drop the guard only after all telemetry-producing work finishes.
+        drop(process_span_guard);
 
         Ok(())
     }

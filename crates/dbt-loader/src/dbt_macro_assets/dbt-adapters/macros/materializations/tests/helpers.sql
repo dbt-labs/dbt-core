@@ -43,3 +43,25 @@ select * from dbt_internal_unit_test_actual
 union all
 select * from dbt_internal_unit_test_expected
 {%- endmacro %}
+
+-- funcsign: (string) -> string
+{% macro get_aggregated_test_sql(main_sql) -%}
+  {{ adapter.dispatch('get_aggregated_test_sql', 'dbt')(main_sql) }}
+{%- endmacro %}
+
+-- funcsign: (string) -> string
+{% macro default__get_aggregated_test_sql(main_sql) -%}
+    -- Process aggregated test results by column
+    -- Expects the main_sql to have a column_name column and rows with test failures
+    with aggregated_data as (
+      {{ main_sql }}
+    )
+    select
+      column_name,
+      count(*) as failures,
+      count(*) > 0 as should_warn,
+      count(*) > 0 as should_error
+    from aggregated_data
+    group by column_name
+    order by column_name
+{%- endmacro %}

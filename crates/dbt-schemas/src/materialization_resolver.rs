@@ -14,6 +14,7 @@ const BUILTIN_MATERIALIZATIONS: &[&str] = &[
     "incremental",
     "materialized_view",
     "test",
+    "aggregated_test",
     "unit",
     "snapshot",
     "seed",

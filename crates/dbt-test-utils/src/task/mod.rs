@@ -8,6 +8,7 @@ mod log_capture;
 mod manifest_capture;
 mod profiles;
 mod record_and_replay;
+mod run_results_capture;
 mod task_seq;
 
 pub mod goldie;
@@ -83,8 +84,11 @@ pub use dbt::DbtRecordTask;
 pub use io::{CpFromTargetTask, FileWriteTask, RmDirTask, RmTask, SedTask};
 pub use log_capture::{ExecuteAndCaptureLogs, JsonLogEvent};
 pub use manifest_capture::CaptureDbtManifest;
+pub use manifest_capture::CompareDbtManifest;
 pub use profiles::HydrateProfilesTask;
 pub use record_and_replay::RrTask;
+pub use run_results_capture::CaptureRunResults;
+pub use run_results_capture::CompareRunResults;
 pub use tasks::prepare_command_vec;
 pub use tasks::{ExecuteAndCompare, ExecuteAndCompareTelemetry};
 

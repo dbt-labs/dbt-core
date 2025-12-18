@@ -323,6 +323,7 @@ pub struct EvalArgs {
     pub export_saved_queries: bool,
     pub task_cache_url: String,
     pub run_cache_mode: RunCacheMode,
+    pub optimize_tests: HashSet<OptimizeTestsOptions>,
     pub show_scans: bool,
     pub max_depth: usize,
     pub use_fqtn: bool,
@@ -362,6 +363,7 @@ impl fmt::Debug for EvalArgs {
             .field("target", &self.target)
             .field("vars", &self.vars)
             .field("show", &self.io.show)
+            .field("optimize_tests", &self.optimize_tests)
             .field("stage", &self.phase)
             .field("format", &self.format)
             .field("limit", &self.limit)
@@ -965,6 +967,15 @@ impl FromStr for RunCacheMode {
         }
     }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ValueEnum, EnumIter)]
+#[serde(rename_all = "lowercase")]
+#[clap(rename_all = "lowercase")]
+pub enum OptimizeTestsOptions {
+    TestAggregation,
+    TestReuse,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, ValueEnum, EnumIter)]
 #[serde(rename_all = "lowercase")]
 #[clap(rename_all = "lowercase")]
