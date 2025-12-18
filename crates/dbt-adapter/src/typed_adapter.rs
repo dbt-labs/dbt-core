@@ -6,6 +6,7 @@ use crate::databricks::adapter::DatabricksAdapter;
 use crate::errors::{AdapterError, AdapterErrorKind, adbc_error_to_adapter_error};
 use crate::funcs::{convert_macro_result_to_record_batch, execute_macro, none_value};
 use crate::information_schema::InformationSchema;
+use crate::metadata::salesforce::SalesforceMetadataAdapter;
 use crate::metadata::snowflake::SnowflakeMetadataAdapter;
 use crate::metadata::{self, CatalogAndSchema, MetadataAdapter};
 use crate::postgres::adapter::PostgresAdapter;
@@ -1999,9 +2000,9 @@ impl AdapterTyping for ConcreteAdapter {
             AdapterType::Redshift => {
                 Box::new(RedshiftAdapter::new(engine)) as Box<dyn MetadataAdapter>
             }
-            AdapterType::Salesforce => unimplemented!(
-                "ConcreteAdapter is being used for Salesforce and this hasn't been updated"
-            ),
+            AdapterType::Salesforce => {
+                Box::new(SalesforceMetadataAdapter::new(engine)) as Box<dyn MetadataAdapter>
+            }
             AdapterType::Postgres => {
                 Box::new(PostgresAdapter::new(engine)) as Box<dyn MetadataAdapter>
             }

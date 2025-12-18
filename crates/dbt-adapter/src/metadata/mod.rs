@@ -25,6 +25,7 @@ pub(crate) mod bigquery;
 pub(crate) mod databricks;
 pub(crate) mod metadata_adapter;
 pub(crate) mod redshift;
+pub(crate) mod salesforce;
 pub mod snowflake; // XXX: temporarily pub before the refactor is complete
 
 // Re-export `metadata_adapter` symbols
