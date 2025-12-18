@@ -48,8 +48,8 @@ pub trait AdapterTyping {
         self.engine().adapter_type()
     }
 
-    /// Get a reference to the metadata adapter if supported.
-    fn as_metadata_adapter(&self) -> Option<&dyn MetadataAdapter>;
+    /// Build an instance of the metadata adapter if supported.
+    fn metadata_adapter(&self) -> Option<Box<dyn MetadataAdapter>>;
 
     /// Get a reference to the typed base adapter if supported.
     fn as_typed_base_adapter(&self) -> &dyn TypedBaseAdapter;

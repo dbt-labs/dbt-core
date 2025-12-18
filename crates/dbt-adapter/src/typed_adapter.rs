@@ -1,12 +1,17 @@
 use crate::adapter_engine::{AdapterEngine, Options as ExecuteOptions, execute_query_with_retry};
+use crate::bigquery::adapter::BigqueryAdapter;
 use crate::catalog_relation::CatalogRelation;
 use crate::column::{Column, ColumnBuilder};
+use crate::databricks::adapter::DatabricksAdapter;
 use crate::errors::{AdapterError, AdapterErrorKind, adbc_error_to_adapter_error};
 use crate::funcs::{convert_macro_result_to_record_batch, execute_macro, none_value};
 use crate::information_schema::InformationSchema;
-use crate::metadata::{self, CatalogAndSchema};
+use crate::metadata::snowflake::SnowflakeMetadataAdapter;
+use crate::metadata::{self, CatalogAndSchema, MetadataAdapter};
+use crate::postgres::adapter::PostgresAdapter;
 use crate::query_ctx::query_ctx_from_state;
 use crate::record_batch_utils::{extract_first_value_as_i64, get_column_values};
+use crate::redshift::adapter::RedshiftAdapter;
 use crate::relation::BaseRelationConfig;
 use crate::relation::RelationObject;
 use crate::relation::bigquery::{
@@ -55,8 +60,8 @@ use std::sync::Arc;
 
 /// Adapter with typed functions.
 pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
-    /// Execute `use warehouse [name]` statement for SnowflakeAdapter
-    /// For other warehouses, this is noop
+    /// Execute `use warehouse [name]` statement for Snowflake.
+    /// For other warehouses, this is noop.
     fn use_warehouse(
         &self,
         conn: &'_ mut dyn Connection,
@@ -72,13 +77,13 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
                 let sql = format!("use warehouse {warehouse}");
                 self.exec_stmt(&ctx, conn, &sql, false)?;
             }
-            _ => debug_assert!(false, "only SnowflakeAdapter should call use_warehouse"),
+            _ => debug_assert!(false, "use_warehouse is Snowflake-specific"),
         }
         Ok(())
     }
 
-    /// Execute `use warehouse [name]` statement for SnowflakeAdapter
-    /// For other warehouses, this is noop
+    /// Execute `use warehouse [name]` statement for Snowflake.
+    /// For other warehouses, this is noop.
     fn restore_warehouse(&self, conn: &'_ mut dyn Connection, node_id: &str) -> FsResult<()> {
         match self.adapter_type() {
             AdapterType::Snowflake => {
@@ -89,7 +94,10 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
                 let sql = format!("use warehouse {warehouse}");
                 self.exec_stmt(&ctx, conn, &sql, false)?;
             }
-            _ => debug_assert!(false, "only SnowflakeAdapter should call restore_warehouse"),
+            _ => debug_assert!(
+                false,
+                "only Snowflake adapter should call restore_warehouse"
+            ),
         }
         Ok(())
     }
@@ -1958,6 +1966,64 @@ prevent unnecessary latency for other users."#,
     }
 }
 
+/// Temporary before the [TypedBaseAdapter] trait becomes *the* adapter implementation struct.
+///
+/// Which will be possible when all the implementations of the trait
+/// are verticalized in [TypedBaseAdapter].
+#[derive(Clone)]
+pub struct ConcreteAdapter {
+    pub engine: Arc<AdapterEngine>,
+}
+
+impl ConcreteAdapter {
+    pub fn new(engine: Arc<AdapterEngine>) -> Self {
+        Self { engine }
+    }
+}
+
+impl TypedBaseAdapter for ConcreteAdapter {}
+
+impl AdapterTyping for ConcreteAdapter {
+    fn metadata_adapter(&self) -> Option<Box<dyn MetadataAdapter>> {
+        let engine = Arc::clone(&self.engine);
+        let metadata_adapter = match self.adapter_type() {
+            AdapterType::Snowflake => {
+                Box::new(SnowflakeMetadataAdapter::new(engine)) as Box<dyn MetadataAdapter>
+            }
+            AdapterType::Bigquery => {
+                Box::new(BigqueryAdapter::new(engine)) as Box<dyn MetadataAdapter>
+            }
+            AdapterType::Databricks => {
+                Box::new(DatabricksAdapter::new(engine)) as Box<dyn MetadataAdapter>
+            }
+            AdapterType::Redshift => {
+                Box::new(RedshiftAdapter::new(engine)) as Box<dyn MetadataAdapter>
+            }
+            AdapterType::Salesforce => unimplemented!(
+                "ConcreteAdapter is being used for Salesforce and this hasn't been updated"
+            ),
+            AdapterType::Postgres => {
+                Box::new(PostgresAdapter::new(engine)) as Box<dyn MetadataAdapter>
+            }
+        };
+        Some(metadata_adapter)
+    }
+
+    fn as_typed_base_adapter(&self) -> &dyn TypedBaseAdapter {
+        self
+    }
+
+    fn engine(&self) -> &Arc<AdapterEngine> {
+        &self.engine
+    }
+}
+
+impl fmt::Debug for ConcreteAdapter {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.adapter_type())
+    }
+}
+
 /// Abstract interface for the concrete replay adapter implementation.
 ///
 /// NOTE: this is a growing interface that is currently growing.
@@ -2051,4 +2117,115 @@ pub trait ReplayAdapter: TypedBaseAdapter {
         _state: &State,
         _raw_constraints: &[ModelConstraint],
     ) -> Result<Value, minijinja::Error>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::AdapterType;
+    use crate::sql_types::NaiveTypeOpsImpl;
+    use crate::stmt_splitter::NaiveStmtSplitter;
+
+    use crate::config::AdapterConfig;
+    use crate::query_comment::QueryCommentConfig;
+    use dbt_auth::auth_for_backend;
+    use dbt_common::{AdapterResult, cancellation::never_cancels};
+    use dbt_schemas::schemas::relations::SNOWFLAKE_RESOLVED_QUOTING;
+    use dbt_schemas::schemas::relations::base::ComponentName;
+    use dbt_serde_yaml::Mapping;
+    use dbt_xdbc::Backend;
+
+    use minijinja::{Environment, State};
+
+    fn snowflake_engine() -> Arc<AdapterEngine> {
+        let config = Mapping::from_iter([
+            ("user".into(), "U".into()),
+            ("password".into(), "P".into()),
+            ("account".into(), "A".into()),
+            ("database".into(), "D".into()),
+            ("schema".into(), "S".into()),
+            ("role".into(), "role".into()),
+            ("warehouse".into(), "warehouse".into()),
+        ]);
+        let auth = auth_for_backend(Backend::Snowflake);
+        AdapterEngine::new(
+            AdapterType::Snowflake,
+            auth.into(),
+            AdapterConfig::new(config),
+            SNOWFLAKE_RESOLVED_QUOTING,
+            Arc::new(NaiveStmtSplitter),
+            None,
+            QueryCommentConfig::from_query_comment(None, AdapterType::Snowflake, false),
+            Box::new(NaiveTypeOpsImpl::new(AdapterType::Snowflake)), // XXX: NaiveTypeOpsImpl
+            never_cancels(),
+        )
+    }
+
+    #[test]
+    fn test_adapter_type() {
+        let adapter = ConcreteAdapter::new(snowflake_engine());
+        assert_eq!(adapter.adapter_type(), AdapterType::Snowflake);
+    }
+
+    #[test]
+    fn test_quote_for_snowflake() {
+        let adapter = ConcreteAdapter::new(snowflake_engine());
+        assert_eq!(adapter.quote("abc"), "\"abc\"");
+    }
+
+    #[test]
+    fn test_quote_seed_column_for_snowflake() -> AdapterResult<()> {
+        let adapter = ConcreteAdapter::new(snowflake_engine());
+        let env = Environment::new();
+        let state = State::new_for_env(&env);
+        let quoted = adapter
+            .quote_seed_column(&state, "my_column", None)
+            .unwrap();
+        assert_eq!(quoted, "my_column");
+        let quoted = adapter
+            .quote_seed_column(&state, "my_column", Some(false))
+            .unwrap();
+        assert_eq!(quoted, "my_column");
+        let quoted = adapter
+            .quote_seed_column(&state, "my_column", Some(true))
+            .unwrap();
+        assert_eq!(quoted, "\"my_column\"");
+        Ok(())
+    }
+
+    #[test]
+    fn test_quote_as_configured_for_snowflake() -> AdapterResult<()> {
+        let config = AdapterConfig::default();
+        let auth = auth_for_backend(Backend::Snowflake);
+        let engine = AdapterEngine::new(
+            AdapterType::Snowflake,
+            auth.into(),
+            config,
+            SNOWFLAKE_RESOLVED_QUOTING,
+            Arc::new(NaiveStmtSplitter),
+            None,
+            QueryCommentConfig::from_query_comment(None, AdapterType::Snowflake, false),
+            Box::new(NaiveTypeOpsImpl::new(AdapterType::Snowflake)),
+            never_cancels(),
+        );
+        let adapter = ConcreteAdapter::new(engine);
+
+        let env = Environment::new();
+        let state = State::new_for_env(&env);
+        let quoted = adapter
+            .quote_as_configured(&state, "my_schema", &ComponentName::Schema)
+            .unwrap();
+        assert_eq!(quoted, "my_schema");
+
+        let quoted = adapter
+            .quote_as_configured(&state, "my_database", &ComponentName::Database)
+            .unwrap();
+        assert_eq!(quoted, "my_database");
+
+        let quoted = adapter
+            .quote_as_configured(&state, "my_table", &ComponentName::Identifier)
+            .unwrap();
+        assert_eq!(quoted, "my_table");
+        Ok(())
+    }
 }

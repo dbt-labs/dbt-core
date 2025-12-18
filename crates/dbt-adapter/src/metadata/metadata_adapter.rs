@@ -49,20 +49,18 @@ pub const MAX_CONNECTIONS: usize = 128;
 ///     }
 /// }
 /// ```
-pub trait MetadataAdapter: TypedBaseAdapter + Send + Sync {
+pub trait MetadataAdapter: Send + Sync {
+    fn adapter(&self) -> &dyn TypedBaseAdapter;
+
     fn build_schemas_from_stats_sql(
         &self,
         _: Arc<RecordBatch>,
-    ) -> AdapterResult<BTreeMap<String, CatalogTable>> {
-        unimplemented!()
-    }
+    ) -> AdapterResult<BTreeMap<String, CatalogTable>>;
 
     fn build_columns_from_get_columns(
         &self,
         _: Arc<RecordBatch>,
-    ) -> AdapterResult<BTreeMap<String, BTreeMap<String, ColumnMetadata>>> {
-        unimplemented!()
-    }
+    ) -> AdapterResult<BTreeMap<String, BTreeMap<String, ColumnMetadata>>>;
 
     /// Check if the returned error is due to insufficient permissions.
     fn is_permission_error(&self, e: &AdapterError) -> bool {
@@ -257,7 +255,10 @@ pub trait MetadataAdapter: TypedBaseAdapter + Send + Sync {
                     map.into_iter()
                         .map(|(k, v)| {
                             let v = v.and_then(|schema| {
-                                arrow_schema_to_sdf_schema(schema, self.engine().type_ops())
+                                arrow_schema_to_sdf_schema(
+                                    schema,
+                                    self.adapter().engine().type_ops(),
+                                )
                             });
                             (k, v)
                         })
@@ -365,7 +366,8 @@ pub trait MetadataAdapter: TypedBaseAdapter + Send + Sync {
 /// before using it to create schemas
 #[allow(clippy::type_complexity)]
 pub fn create_schemas_if_not_exists(
-    adapter: Arc<dyn MetadataAdapter>,
+    adapter: &dyn TypedBaseAdapter,
+    metadata_adapter: &dyn MetadataAdapter,
     state: &State,
     catalog_schemas: &BTreeMap<String, BTreeSet<String>>,
 ) -> AdapterResult<Vec<(String, String, AdapterResult<()>)>> {
@@ -384,7 +386,7 @@ pub fn create_schemas_if_not_exists(
         match execute_macro(state, &[mock_relation.as_value()], "create_schema") {
             Ok(_) => Ok(()),
             Err(e) => {
-                if adapter.is_permission_error(&e) {
+                if metadata_adapter.is_permission_error(&e) {
                     Ok(())
                 } else if adapter.adapter_type() == AdapterType::Bigquery {
                     Err(e)

@@ -1,3 +1,4 @@
+use crate::TypedBaseAdapter;
 use crate::postgres::adapter::PostgresAdapter;
 use crate::{
     AdapterResult, errors::AsyncAdapterResult, metadata::*, record_batch_utils::get_column_values,
@@ -17,6 +18,10 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 
 impl MetadataAdapter for PostgresAdapter {
+    fn adapter(&self) -> &dyn TypedBaseAdapter {
+        self
+    }
+
     fn build_schemas_from_stats_sql(
         &self,
         stats_sql_result: Arc<RecordBatch>,

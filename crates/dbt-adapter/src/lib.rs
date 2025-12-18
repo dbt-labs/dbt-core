@@ -37,6 +37,8 @@ pub mod stmt_splitter;
 /// Cross-Version Record/Replay System
 pub mod time_machine;
 pub mod typed_adapter;
+#[allow(dead_code)]
+mod use_warehouse;
 
 // Re-export types and modules that were moved to dbt_auth
 pub mod auth {
@@ -57,8 +59,6 @@ pub mod parse;
 pub mod postgres;
 /// Redshift adapter
 pub mod redshift;
-/// Snowflake adapter
-pub mod snowflake;
 
 pub mod mock;
 
@@ -86,4 +86,4 @@ pub use typed_adapter::TypedBaseAdapter;
 pub use adapter_engine::AdapterEngine as SqlEngineForTesting;
 pub use dbt_auth::AdapterConfig as AdapterConfigForTesting;
 pub use postgres::adapter::PostgresAdapter as PostgresAdapterForTesting;
-pub use snowflake::adapter::SnowflakeAdapter as SnowflakeAdapterForTesting;
+pub use typed_adapter::ConcreteAdapter as ConcreteAdapterForTesting;

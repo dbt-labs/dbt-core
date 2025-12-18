@@ -247,8 +247,8 @@ impl AdapterTyping for BridgeAdapter {
         self.typed_adapter.adapter_type()
     }
 
-    fn as_metadata_adapter(&self) -> Option<&dyn MetadataAdapter> {
-        self.typed_adapter.as_metadata_adapter()
+    fn metadata_adapter(&self) -> Option<Box<dyn MetadataAdapter>> {
+        self.typed_adapter.metadata_adapter()
     }
 
     fn as_typed_base_adapter(&self) -> &dyn TypedBaseAdapter {

@@ -1,14 +1,34 @@
 use crate::errors::{AdapterResult, AsyncAdapterResult};
-use crate::metadata::*;
 use crate::mock::adapter::MockAdapter;
+use crate::{TypedBaseAdapter, metadata::*};
+use arrow_array::RecordBatch;
 use arrow_schema::Schema;
 
 use dbt_common::adapter::ExecutionPhase;
+use dbt_schemas::schemas::legacy_catalog::{CatalogTable, ColumnMetadata};
 use dbt_schemas::schemas::relations::base::{BaseRelation, RelationPattern};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 
 impl MetadataAdapter for MockAdapter {
+    fn adapter(&self) -> &dyn TypedBaseAdapter {
+        self
+    }
+
+    fn build_schemas_from_stats_sql(
+        &self,
+        _: Arc<RecordBatch>,
+    ) -> AdapterResult<BTreeMap<String, CatalogTable>> {
+        unimplemented!("build_schemas_from_stats_sql in MockAdapter")
+    }
+
+    fn build_columns_from_get_columns(
+        &self,
+        _: Arc<RecordBatch>,
+    ) -> AdapterResult<BTreeMap<String, BTreeMap<String, ColumnMetadata>>> {
+        unimplemented!("build_columns_from_get_columns in MockAdapter")
+    }
+
     fn list_relations_schemas_inner(
         &self,
         _unique_id: Option<String>,

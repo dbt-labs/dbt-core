@@ -77,7 +77,7 @@ impl AdapterTyping for MockAdapter {
         self.adapter_type
     }
 
-    fn as_metadata_adapter(&self) -> Option<&dyn MetadataAdapter> {
+    fn metadata_adapter(&self) -> Option<Box<dyn MetadataAdapter>> {
         None // TODO: implement metadata_adapter() for MockAdapter
     }
 

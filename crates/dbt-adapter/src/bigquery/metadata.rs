@@ -174,6 +174,10 @@ fn make_map_f(
 }
 
 impl MetadataAdapter for BigqueryAdapter {
+    fn adapter(&self) -> &dyn TypedBaseAdapter {
+        self
+    }
+
     fn build_schemas_from_stats_sql(
         &self,
         stats_sql_result: Arc<RecordBatch>,
@@ -665,7 +669,7 @@ impl MetadataAdapter for BigqueryAdapter {
         state: &minijinja::State<'_, '_>,
         catalog_schemas: &BTreeMap<String, BTreeSet<String>>,
     ) -> AdapterResult<Vec<(String, String, AdapterResult<()>)>> {
-        create_schemas_if_not_exists(Arc::new(self.clone()), state, catalog_schemas)
+        create_schemas_if_not_exists(self, self, state, catalog_schemas)
     }
 
     fn list_relations_in_parallel_inner(

@@ -484,8 +484,8 @@ impl DatabricksAdapter {
 }
 
 impl AdapterTyping for DatabricksAdapter {
-    fn as_metadata_adapter(&self) -> Option<&dyn MetadataAdapter> {
-        Some(self)
+    fn metadata_adapter(&self) -> Option<Box<dyn MetadataAdapter>> {
+        Some(Box::new(self.clone()))
     }
 
     fn as_typed_base_adapter(&self) -> &dyn TypedBaseAdapter {

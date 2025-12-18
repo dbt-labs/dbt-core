@@ -64,6 +64,10 @@ fn build_relation_clauses_redshift(
 }
 
 impl MetadataAdapter for RedshiftAdapter {
+    fn adapter(&self) -> &dyn TypedBaseAdapter {
+        self
+    }
+
     fn build_schemas_from_stats_sql(
         &self,
         stats_sql_result: Arc<RecordBatch>,
@@ -676,7 +680,7 @@ AND table_name = '{identifier}'"
         state: &minijinja::State<'_, '_>,
         catalog_schemas: &BTreeMap<String, BTreeSet<String>>,
     ) -> AdapterResult<Vec<(String, String, AdapterResult<()>)>> {
-        create_schemas_if_not_exists(Arc::new(self.clone()), state, catalog_schemas)
+        create_schemas_if_not_exists(self, self, state, catalog_schemas)
     }
 
     fn freshness_inner(
