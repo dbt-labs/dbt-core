@@ -1,6 +1,9 @@
 use crate::v1::public::events::fusion::{
     compat::SeverityNumber,
-    log::{LogMessage, ProgressMessage, ShowDataOutput, ShowDataOutputFormat, UserLogMessage},
+    log::{
+        LogMessage, ProgressMessage, ShowDataOutput, ShowDataOutputFormat, ShowResult,
+        ShowResultOutputFormat, UserLogMessage,
+    },
 };
 
 impl LogMessage {
@@ -236,7 +239,7 @@ impl ShowDataOutput {
 }
 
 impl ShowDataOutputFormat {
-    pub fn as_str(&self) -> &str {
+    pub fn as_static_str(&self) -> &str {
         match self {
             ShowDataOutputFormat::Text => "text",
             ShowDataOutputFormat::Csv => "csv",
@@ -245,6 +248,34 @@ impl ShowDataOutputFormat {
             ShowDataOutputFormat::Ndjson => "ndjson",
             ShowDataOutputFormat::Unspecified => "unspecified",
             ShowDataOutputFormat::Yml => "yml",
+        }
+    }
+}
+
+impl ShowResult {
+    /// Creates a new `ShowResult` message not associated with a specific node
+    /// with text (pretty) format.
+    ///
+    /// Arguments:
+    /// * `content` - The content to display
+    /// * `result_type` - Type/category of the result (e.g., "manifest", "schedule", "stats")
+    /// * `title` - Title to display above the content (without ANSI color codes)
+    pub fn new_text(content: String, result_type: &str, title: &str) -> Self {
+        Self {
+            output_format: ShowResultOutputFormat::Text as i32,
+            content,
+            result_type: result_type.to_string(),
+            title: title.to_string(),
+            unique_id: None,
+        }
+    }
+}
+
+impl ShowResultOutputFormat {
+    pub fn as_static_str(&self) -> &str {
+        match self {
+            ShowResultOutputFormat::Text => "text",
+            ShowResultOutputFormat::Unspecified => "unspecified",
         }
     }
 }

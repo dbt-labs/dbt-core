@@ -2,8 +2,8 @@ use dbt_error::ErrorCode;
 use dbt_telemetry::{
     CompiledCodeInline, DepsAddPackage, DepsAllPackagesInstalled, DepsPackageInstalled, Invocation,
     ListItemOutput, LogMessage, LogRecordInfo, NodeEvaluated, NodeOutcome, NodeProcessed, NodeType,
-    PhaseExecuted, ProgressMessage, QueryExecuted, SeverityNumber, ShowDataOutput, SpanEndInfo,
-    SpanStartInfo, StatusCode, TelemetryOutputFlags, UserLogMessage, node_processed,
+    PhaseExecuted, ProgressMessage, QueryExecuted, SeverityNumber, ShowDataOutput, ShowResult,
+    SpanEndInfo, SpanStartInfo, StatusCode, TelemetryOutputFlags, UserLogMessage, node_processed,
 };
 use std::{
     sync::atomic::{AtomicBool, Ordering},
@@ -15,6 +15,7 @@ use super::super::{
     background_writer::BackgroundWriter,
     data_provider::DataProvider,
     formatters::{
+        constants::SELECTED_NODES_TITLE,
         deps::{
             format_package_add_end, format_package_add_start, format_package_install_end,
             format_package_install_start, format_package_installed_end,
@@ -37,7 +38,6 @@ use super::super::{
     shared_writer::SharedWriter,
     shutdown::TelemetryShutdownItem,
 };
-use crate::io_args::ShowOptions;
 
 const HEADER_SEPARATOR: &str = "====================";
 
@@ -233,6 +233,12 @@ impl TelemetryConsumer for FileLogLayer {
             return;
         }
 
+        // Handle ShowResult events (verbose/diagnostic output controlled by --show flag)
+        if let Some(show_result) = log_record.attributes.downcast_ref::<ShowResult>() {
+            self.handle_show_result(log_record, show_result);
+            return;
+        }
+
         // Handle CompiledCodeInline events (from compile command with inline query)
         if let Some(compiled_code) = log_record.attributes.downcast_ref::<CompiledCodeInline>() {
             self.handle_compiled_code_inline(log_record, compiled_code);
@@ -390,7 +396,7 @@ impl FileLogLayer {
     fn handle_list_item_output(&self, log_record: &LogRecordInfo, list_item: &ListItemOutput) {
         // Emit header once before first list item
         if !self.list_header_emitted.swap(true, Ordering::Relaxed) {
-            let header = format_delimiter(&ShowOptions::Nodes.title(), None, false);
+            let header = format_delimiter(SELECTED_NODES_TITLE, None, false);
             self.writer.writeln(&header);
         }
 
@@ -408,6 +414,19 @@ impl FileLogLayer {
             log_record.time_unix_nano,
             log_record.severity_number,
             std::slice::from_ref(&show_data.content),
+        );
+    }
+
+    fn handle_show_result(&self, log_record: &LogRecordInfo, show_result: &ShowResult) {
+        // Write title and content to file log (without color codes for file output)
+        let lines = vec![
+            show_result.title.clone(),
+            console::strip_ansi_codes(show_result.content.as_str()).to_string(),
+        ];
+        self.write_log_lines(
+            log_record.time_unix_nano,
+            log_record.severity_number,
+            &lines,
         );
     }
 

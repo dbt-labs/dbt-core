@@ -9,9 +9,9 @@ use dbt_telemetry::{
     AnyTelemetryEvent, CompiledCodeInline, DepsAddPackage, DepsAllPackagesInstalled,
     DepsPackageInstalled, ExecutionPhase, Invocation, ListItemOutput, LogMessage, LogRecordInfo,
     NodeEvaluated, NodeOutcome, NodeProcessed, NodeSkipReason, NodeType, PhaseExecuted,
-    ProgressMessage, QueryExecuted, SeverityNumber, ShowDataOutput, SpanEndInfo, SpanStartInfo,
-    SpanStatus, StatusCode, TelemetryAttributes, TelemetryOutputFlags, UserLogMessage,
-    node_processed,
+    ProgressMessage, QueryExecuted, SeverityNumber, ShowDataOutput, ShowResult, SpanEndInfo,
+    SpanStartInfo, SpanStatus, StatusCode, TelemetryAttributes, TelemetryOutputFlags,
+    UserLogMessage, node_processed,
 };
 
 use dbt_error::ErrorCode;
@@ -24,6 +24,8 @@ use crate::{
     tracing::{
         data_provider::DataProvider,
         formatters::{
+            color::BLUE,
+            constants::SELECTED_NODES_TITLE,
             deps::{
                 INSTALLING_ACTION, format_package_add_end, format_package_add_start,
                 format_package_install_end, format_package_install_start,
@@ -564,6 +566,12 @@ impl TelemetryConsumer for TuiLayer {
             return;
         }
 
+        // Handle ShowResult - always show unconditionally. Call-sites decide whether to emit or not.
+        if let Some(show_result) = log_record.attributes.downcast_ref::<ShowResult>() {
+            self.handle_show_result(show_result);
+            return;
+        }
+
         // Handle CompiledCodeInline - show if Progress or Completed is enabled
         if let Some(compiled_code) = log_record.attributes.downcast_ref::<CompiledCodeInline>() {
             self.handle_compiled_code_inline(compiled_code);
@@ -882,11 +890,8 @@ impl TuiLayer {
 
                 // Emit header once before first list item
                 if !self.list_header_emitted.swap(true, Ordering::Relaxed) {
-                    let header = format_delimiter(
-                        &ShowOptions::Nodes.title(),
-                        self.max_term_line_width,
-                        true,
-                    );
+                    let header =
+                        format_delimiter(SELECTED_NODES_TITLE, self.max_term_line_width, true);
                     stdout
                         .write_all(format!("{}\n", header).as_bytes())
                         .expect("failed to write header to stdout");
@@ -907,6 +912,19 @@ impl TuiLayer {
             stdout
                 .write_all(format!("{}\n", show_data.content).as_bytes())
                 .expect("failed to write show data to stdout");
+        });
+    }
+
+    fn handle_show_result(&self, show_result: &ShowResult) {
+        with_suspended_progress_bars(|| {
+            let mut stdout = io::stdout().lock();
+
+            // Apply blue coloring to title
+            let colored_title = BLUE.apply_to(&show_result.title);
+
+            stdout
+                .write_all(format!("\n{}\n{}\n", colored_title, show_result.content).as_bytes())
+                .expect("failed to write show result to stdout");
         });
     }
 

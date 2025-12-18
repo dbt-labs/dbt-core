@@ -46,42 +46,6 @@ macro_rules! fsinfo {
 // ------------------------------------------------------------------------------------------------
 
 #[macro_export]
-macro_rules! show_result_with_default_title {
-    ( $io:expr, $option:expr, $artifact:expr) => {{
-        use $crate::io_args::ShowOptions;
-        if $io.should_show($option) {
-            let output = format!("\n{}\n{}", $option.title(), $artifact);
-            $crate::_log!(
-                $crate::macros::log_adapter::log::Level::Info,
-                _INVOCATION_ID_ = $io.invocation_id.as_u128();
-                "{}",
-                 output
-            );
-        }
-    }};
-}
-
-#[macro_export]
-macro_rules! show_result_with_title {
-    ( $io:expr, $option:expr, $title: expr, $artifact:expr) => {{
-        use $crate::io_args::ShowOptions;
-        use $crate::pretty_string::BLUE;
-            use dbt_common::constants::INLINE_NODE;
-        use serde_json::json;
-        if $io.should_show($option) {
-            let output = format!("\n{}\n{}", $title, $artifact);
-            $crate::_log!(
-                $crate::macros::log_adapter::log::Level::Info,
-                _INVOCATION_ID_ = $io.invocation_id.as_u128(),
-                name= "ShowNode",
-                data:serde = json!({ "preview": $artifact.to_string(), "unique_id": INLINE_NODE });
-                "{}", output
-            );
-        }
-    }};
-}
-
-#[macro_export]
 macro_rules! show_progress {
     ( $io:expr, $info:expr) => {{
         use $crate::io_args::ShowOptions;

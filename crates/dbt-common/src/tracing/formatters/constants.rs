@@ -12,3 +12,6 @@ pub(super) const UNIT_TEST_SCHEMA_SUFFIX: &str = "_dbt_test__audit";
 
 /// Width for action labels
 pub(super) const ACTION_WIDTH: usize = 10;
+
+/// Selected nodes delimeter title
+pub(in crate::tracing) const SELECTED_NODES_TITLE: &str = "Selected nodes";

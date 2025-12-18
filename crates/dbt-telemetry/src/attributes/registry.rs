@@ -10,7 +10,7 @@ use crate::{
         ArtifactWritten, CallTrace, CompiledCodeInline, DepsAddPackage, DepsAllPackagesInstalled,
         DepsPackageInstalled, Invocation, ListItemOutput, LogMessage, NodeEvaluated, NodeProcessed,
         OnboardingScreenShown, PackageUpdate, PhaseExecuted, Process, ProgressMessage,
-        QueryExecuted, ShowDataOutput, Unknown, UserLogMessage,
+        QueryExecuted, ShowDataOutput, ShowResult, Unknown, UserLogMessage,
     },
     serialize::arrow::ArrowAttributes,
 };
@@ -276,6 +276,12 @@ static PUBLIC_TELEMETRY_EVENT_REGISTRY: LazyLock<TelemetryEventTypeRegistry> = L
             arrow_deserialize_for_type::<ShowDataOutput>,
             #[cfg(any(test, feature = "test-utils"))]
             faker_for_type::<ShowDataOutput>,
+        );
+        registry.register(
+            ShowResult::FULL_NAME,
+            arrow_deserialize_for_type::<ShowResult>,
+            #[cfg(any(test, feature = "test-utils"))]
+            faker_for_type::<ShowResult>,
         );
         registry.register(
             PackageUpdate::FULL_NAME,

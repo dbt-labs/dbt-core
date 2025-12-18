@@ -19,12 +19,13 @@ use dbt_common::{
     ErrorCode, FsResult,
     constants::{DBT_MANIFEST_JSON, INSTALLING, VALIDATING},
     fs_err,
-    io_args::{Phases, SystemArgs},
+    io_args::{Phases, ShowOptions, SystemArgs},
     logging::init_logger,
     pretty_string::GREEN,
-    show_result_with_default_title, stdfs,
-    tracing::span_info::record_span_status,
+    stdfs,
+    tracing::{emit::emit_info_event, span_info::record_span_status},
 };
+use dbt_telemetry::ShowResult;
 
 use dbt_schemas::schemas::Nodes;
 use dbt_schemas::state::{
@@ -225,7 +226,12 @@ async fn execute_all_phases(
         )
         .build();
 
-    show_result_with_default_title!(&arg.io, ShowOptions::InputFiles, &dbt_state.to_string());
+    if arg.io.should_show(ShowOptions::InputFiles) {
+        emit_info_event(
+            ShowResult::new_text(dbt_state.to_string(), "input_files", "Input files"),
+            None,
+        );
+    }
 
     // This also exits the init command b/c init `to_eval_args` sets the phase to debug
     if let Some(exit_code) = checkpoint_maybe_exit(&arg, Phases::Debug) {
@@ -260,11 +266,12 @@ async fn execute_all_phases(
         stdfs::write(dbt_manifest_path, serde_json::to_string(&dbt_manifest)?)?;
     }
 
-    show_result_with_default_title!(
-        &arg.io,
-        ShowOptions::Manifest,
-        to_string_pretty(&dbt_manifest)?
-    );
+    if arg.io.should_show(ShowOptions::Manifest) {
+        emit_info_event(
+            ShowResult::new_text(to_string_pretty(&dbt_manifest)?, "manifest", "Manifest"),
+            None,
+        );
+    }
 
     Ok(get_exit_code_from_error_counter())
 }

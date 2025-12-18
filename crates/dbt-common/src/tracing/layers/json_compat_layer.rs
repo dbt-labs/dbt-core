@@ -6,8 +6,8 @@ use dbt_telemetry::{
     ArtifactType, ArtifactWritten, CompiledCodeInline, DepsAddPackage, DepsPackageInstalled,
     ExecutionPhase, Invocation, ListItemOutput, LogMessage, LogRecordInfo, NodeEvaluated,
     NodeEvent, NodeOutcome, NodeProcessed, NodeSkipReason, NodeType, ProgressMessage,
-    QueryExecuted, SeverityNumber, ShowDataOutput, SpanEndInfo, SpanStartInfo, StatusCode,
-    TelemetryOutputFlags, TestOutcome, UserLogMessage, get_test_outcome,
+    QueryExecuted, SeverityNumber, ShowDataOutput, ShowResult, SpanEndInfo, SpanStartInfo,
+    StatusCode, TelemetryOutputFlags, TestOutcome, UserLogMessage, get_test_outcome,
 };
 
 use serde_json::json;
@@ -535,10 +535,46 @@ impl JsonCompatLayer {
             "node_name": &inline_data.node_name,
             "preview": &inline_data.content,
             "is_inline": inline_data.is_inline,
-            "output_format": inline_data.output_format().as_str(),
+            "output_format": inline_data.output_format().as_static_str(),
             "unique_id": inline_data.unique_id.as_deref().unwrap_or("sql_operation.inline_query"),
             "columns": &inline_data.columns,
         });
+
+        let value = json!({
+            "info": info_json,
+            "data": data_obj,
+        })
+        .to_string();
+
+        self.writer.writeln(value.as_str());
+    }
+
+    /// Handle ShowResult events (verbose/diagnostic output controlled by --show flag)
+    fn emit_show_result(&self, show_result: &ShowResult, log_record: &LogRecordInfo) {
+        let info_json = serde_json::to_value(self.build_core_event_info(
+            None,
+            None,
+            &log_record.severity_text,
+            format!(
+                "{}\n{}",
+                show_result.title,
+                console::strip_ansi_codes(show_result.content.as_str())
+            ),
+        ))
+        .expect("Failed to serialize core event info to JSON");
+
+        let mut data_obj = json!({
+            "result_type": &show_result.result_type,
+            "content": &show_result.content,
+            "output_format": show_result.output_format().as_static_str(),
+        });
+
+        if let Some(unique_id) = &show_result.unique_id {
+            data_obj
+                .as_object_mut()
+                .unwrap()
+                .insert("unique_id".to_string(), json!(unique_id));
+        }
 
         let value = json!({
             "info": info_json,
@@ -1126,6 +1162,12 @@ impl TelemetryConsumer for JsonCompatLayer {
         // Dispatch to ShowDataOutput handler
         if let Some(inline_data) = log_record.attributes.downcast_ref::<ShowDataOutput>() {
             self.emit_show_data_output(inline_data, log_record);
+            return;
+        }
+
+        // Dispatch to ShowResult handler
+        if let Some(show_result) = log_record.attributes.downcast_ref::<ShowResult>() {
+            self.emit_show_result(show_result, log_record);
             return;
         }
 

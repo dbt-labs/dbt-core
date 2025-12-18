@@ -341,3 +341,77 @@ impl ShowDataOutputFormat {
         }
     }
 }
+/// Event emitted when displaying verbose/diagnostic output controlled by --show flag.
+/// This includes internal structures like manifests, schedules, stats, task graphs, etc.
+#[cfg_attr(any(test, feature = "test-utils"), derive(::fake::Dummy))]
+#[derive(crate::macros::ProtoNew)]
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct ShowResult {
+    /// Format of the output content.
+    #[prost(enumeration = "ShowResultOutputFormat", tag = "1")]
+    #[cfg_attr(
+        any(test, feature = "test-utils"),
+        dummy(
+            expr = "::fake::Fake::fake::<ShowResultOutputFormat>(&::fake::Faker) as i32"
+        )
+    )]
+    pub output_format: i32,
+    /// The content to display in the specified format.
+    #[prost(string, tag = "2")]
+    pub content: ::prost::alloc::string::String,
+    /// Type/category of the result being shown (e.g., "manifest", "schedule", "stats").
+    /// This is expected to be a short identifier.
+    #[prost(string, tag = "3")]
+    pub result_type: ::prost::alloc::string::String,
+    /// Title to display above the content. This should NOT include ANSI color codes -
+    /// coloring is applied by the output layers.
+    #[prost(string, tag = "4")]
+    pub title: ::prost::alloc::string::String,
+    /// The unique_id of the node for which information is being shown, if applicable.
+    /// Unset for non-node-specific results like manifest or schedule.
+    #[prost(string, optional, tag = "5")]
+    pub unique_id: ::core::option::Option<::prost::alloc::string::String>,
+}
+impl crate::StaticName for ShowResult {
+    const FULL_NAME: &'static str = "v1.public.events.fusion.log.ShowResult";
+    const TYPE_URL: &'static str = "/v1.public.events.fusion.log.ShowResult";
+}
+impl ::prost::Name for ShowResult {
+    const NAME: &'static str = "ShowResult";
+    const PACKAGE: &'static str = "v1.public.events.fusion.log";
+    fn full_name() -> ::prost::alloc::string::String {
+        "v1.public.events.fusion.log.ShowResult".into()
+    }
+    fn type_url() -> ::prost::alloc::string::String {
+        "/v1.public.events.fusion.log.ShowResult".into()
+    }
+}
+/// Output format for ShowResult content.
+#[cfg_attr(any(test, feature = "test-utils"), derive(::fake::Dummy))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum ShowResultOutputFormat {
+    Unspecified = 0,
+    /// Pretty-printed text format suitable for terminal display.
+    Text = 1,
+}
+impl ShowResultOutputFormat {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "SHOW_RESULT_OUTPUT_FORMAT_UNSPECIFIED",
+            Self::Text => "SHOW_RESULT_OUTPUT_FORMAT_TEXT",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "SHOW_RESULT_OUTPUT_FORMAT_UNSPECIFIED" => Some(Self::Unspecified),
+            "SHOW_RESULT_OUTPUT_FORMAT_TEXT" => Some(Self::Text),
+            _ => None,
+        }
+    }
+}

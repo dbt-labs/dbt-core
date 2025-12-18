@@ -37,7 +37,6 @@ use crate::{
         IndirectSelection, SelectExpression, SelectionCriteria, conjoin_expression,
         parse_model_specifiers,
     },
-    pretty_string::BLUE,
     tracing::invocation::with_invocation_mut,
 };
 
@@ -1003,37 +1002,6 @@ pub enum ShowOptions {
     // hidden internal-only:
     RawLineage,
     TaskGraph,
-}
-
-impl ShowOptions {
-    pub fn title(&self) -> String {
-        match self {
-            ShowOptions::InputFiles => BLUE.apply_to("Input files").to_string(),
-            ShowOptions::Manifest => BLUE.apply_to("Manifest").to_string(),
-            ShowOptions::Schedule => BLUE.apply_to("Schedule").to_string(),
-            ShowOptions::Instructions => BLUE.apply_to("Instruction").to_string(),
-            ShowOptions::SourcedSchemas => BLUE.apply_to("Sourced schemas").to_string(),
-            ShowOptions::Nodes => "Selected nodes".to_string(),
-            // remark: we don't use this case, but use compile time and runtime stats
-            ShowOptions::Stats => BLUE.apply_to("Statistics").to_string(),
-            // remark: these come with own titles..
-            ShowOptions::Progress
-            | ShowOptions::ProgressHydrate
-            | ShowOptions::ProgressRun
-            | ShowOptions::ProgressParse
-            | ShowOptions::ProgressRender
-            | ShowOptions::ProgressAnalyze
-            | ShowOptions::Schema
-            | ShowOptions::Data
-            | ShowOptions::Verdict
-            | ShowOptions::Lineage
-            | ShowOptions::All
-            | ShowOptions::RawLineage
-            | ShowOptions::TaskGraph
-            | ShowOptions::Completed
-            | ShowOptions::None => "".to_string(),
-        }
-    }
 }
 
 #[derive(ValueEnum, Clone, Debug, Serialize, Deserialize, Default)]

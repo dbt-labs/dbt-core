@@ -14,8 +14,8 @@ use dbt_telemetry::{
     ExecutionPhase, Invocation, InvocationEvalArgs, ListItemOutput, ListOutputFormat, LogMessage,
     NodeEvaluated, NodeMaterialization, NodeOutcome, NodeOutcomeDetail, NodeProcessed,
     NodeSkipReason, NodeSkipUpstreamDetail, NodeType, PackageType, ProgressMessage, QueryExecuted,
-    QueryOutcome, SeverityNumber, ShowDataOutput, ShowDataOutputFormat, TelemetryOutputFlags,
-    UserLogMessage, node_processed,
+    QueryOutcome, SeverityNumber, ShowDataOutput, ShowDataOutputFormat, ShowResult,
+    ShowResultOutputFormat, TelemetryOutputFlags, UserLogMessage, node_processed,
 };
 use serde_json::{Value, json};
 use tracing::level_filters::LevelFilter;
@@ -1223,6 +1223,74 @@ fn test_deps_add_package() {
                 "data": {
                     "package_name": "dbt-utils",
                     "version": "1.3.0"
+                }
+            }),
+        ],
+    );
+}
+
+#[test]
+fn test_show_result() {
+    let invocation_id = Uuid::new_v4();
+
+    test_events(
+        "ShowResult",
+        invocation_id,
+        || {
+            emit_info_event(
+                ShowResult {
+                    output_format: ShowResultOutputFormat::Text as i32,
+                    content: "key: value\nother: data".to_string(),
+                    result_type: "config".to_string(),
+                    title: "Node Configuration".to_string(),
+                    unique_id: Some("model.my_project.my_model".to_string()),
+                },
+                Some("Node Configuration\nkey: value\nother: data"),
+            );
+            emit_info_event(
+                ShowResult {
+                    output_format: ShowResultOutputFormat::Text as i32,
+                    content: "manifest content here".to_string(),
+                    result_type: "manifest".to_string(),
+                    title: "Manifest".to_string(),
+                    unique_id: None,
+                },
+                Some("Manifest\nmanifest content here"),
+            );
+        },
+        &[],
+        vec![
+            json!({
+                "info": {
+                    "category": "",
+                    "code": "",
+                    "invocation_id": invocation_id.to_string(),
+                    "name": "Generic",
+                    "msg": "Node Configuration\nkey: value\nother: data",
+                    "level": "info",
+                    "extra": {}
+                },
+                "data": {
+                    "result_type": "config",
+                    "content": "key: value\nother: data",
+                    "output_format": "text",
+                    "unique_id": "model.my_project.my_model"
+                }
+            }),
+            json!({
+                "info": {
+                    "category": "",
+                    "code": "",
+                    "invocation_id": invocation_id.to_string(),
+                    "name": "Generic",
+                    "msg": "Manifest\nmanifest content here",
+                    "level": "info",
+                    "extra": {}
+                },
+                "data": {
+                    "result_type": "manifest",
+                    "content": "manifest content here",
+                    "output_format": "text"
                 }
             }),
         ],
