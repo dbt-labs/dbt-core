@@ -168,7 +168,7 @@ Alternatively, you can run the setup commands directly:
 
 ```sh
 docker-compose up -d database
-PGHOST=localhost PGUSER=root PGPASSWORD=password PGDATABASE=postgres bash test/setup_db.sh
+PGHOST=localhost PGUSER=root PGPASSWORD=password PGDATABASE=postgres bash scripts/setup_db.sh
 ```
 
 ### Test commands
