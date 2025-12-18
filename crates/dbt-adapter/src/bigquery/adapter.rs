@@ -6,12 +6,11 @@ use crate::errors::{
     AdapterError, AdapterErrorKind, AdapterResult, adbc_error_to_adapter_error,
     arrow_error_to_adapter_error,
 };
-use crate::funcs::{execute_macro, none_value};
+use crate::funcs::none_value;
 use crate::load_catalogs;
 use crate::metadata::*;
 use crate::query_ctx::query_ctx_from_state;
 use crate::record_batch_utils::get_column_values;
-use crate::relation::RelationObject;
 use crate::relation::bigquery::*;
 use crate::typed_adapter::TypedBaseAdapter;
 use adbc_core::options::OptionValue;
@@ -262,17 +261,6 @@ impl BigqueryAdapter {
     pub fn new(engine: Arc<AdapterEngine>) -> Self {
         Self { engine }
     }
-
-    /// reference: https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L750-L751
-    pub fn get_common_table_options(
-        &self,
-        state: &State,
-        config: ModelConfig,
-        common_attr: &CommonAttributes,
-        temporary: bool,
-    ) -> BTreeMap<String, Value> {
-        get_common_table_options_value(state, config, common_attr, temporary)
-    }
 }
 
 impl AdapterTyping for BigqueryAdapter {
@@ -302,112 +290,6 @@ impl TypedBaseAdapter for BigqueryAdapter {
             AdapterErrorKind::NotSupported,
             "bigquery.truncate_relation",
         ))
-    }
-
-    fn quote(&self, identifier: &str) -> String {
-        format!("`{identifier}`")
-    }
-
-    fn get_relation(
-        &self,
-        state: &State,
-        ctx: &QueryCtx,
-        conn: &'_ mut dyn Connection,
-        database: &str,
-        schema: &str,
-        identifier: &str,
-    ) -> AdapterResult<Option<Arc<dyn BaseRelation>>> {
-        let query_database = if self.quoting().database {
-            self.quote(database)
-        } else {
-            database.to_string()
-        };
-        let query_schema = if self.quoting().schema {
-            self.quote(schema)
-        } else {
-            schema.to_string()
-        };
-
-        let query_identifier = if self.quoting().identifier {
-            identifier.to_string()
-        } else {
-            identifier.to_lowercase()
-        };
-
-        let sql = format!(
-            "SELECT table_catalog,
-                    table_schema,
-                    table_name,
-                    table_type
-                FROM {query_database}.{query_schema}.INFORMATION_SCHEMA.TABLES
-                WHERE table_name = '{query_identifier}';",
-        );
-
-        let result = self.engine.execute(Some(state), conn, ctx, &sql);
-        let batch = match result {
-            Ok(batch) => batch,
-            Err(err) => {
-                let err_msg = err.to_string();
-                if err_msg.contains("Dataset") && err_msg.contains("was not found") {
-                    return Ok(None);
-                } else {
-                    return Err(err);
-                }
-            }
-        };
-
-        if batch.num_rows() == 0 {
-            // If there are no rows, then we did not find the object
-            return Ok(None);
-        }
-
-        let column = batch.column_by_name("table_type").unwrap();
-        let string_array = column.as_any().downcast_ref::<StringArray>().unwrap();
-
-        let relation_type_name = string_array.value(0).to_uppercase();
-        let relation_type =
-            RelationType::from_adapter_type(AdapterType::Bigquery, &relation_type_name);
-
-        let mut relation = BigqueryRelation::new(
-            Some(database.to_string()),
-            Some(schema.to_string()),
-            Some(identifier.to_string()),
-            Some(relation_type),
-            None,
-            self.quoting(),
-        );
-        let location = self.get_dataset_location(state, conn, Arc::new(relation.clone()))?;
-        relation.location = location;
-        Ok(Some(Arc::new(relation)))
-    }
-
-    /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L246-L255
-    fn get_columns_in_relation(
-        &self,
-        state: &State,
-        relation: Arc<dyn BaseRelation>,
-    ) -> AdapterResult<Vec<Column>> {
-        // TODO(serramatutu): once this is moved over to Arrow, let's remove the fallback to DbtCoreBaseColumn
-        // from Column::vec_from_jinja_value for BigQuery
-        // FIXME(harry): the Python version uses googleapi GetTable, that doesn't return pseudocolumn like _PARTITIONDATE or _PARTITIONTIME
-        let result = match execute_macro(
-            state,
-            &[RelationObject::new(relation).as_value()],
-            "get_columns_in_relation",
-        ) {
-            Ok(result) => result,
-            Err(err) => {
-                // Handle NotFound errors
-                if err.kind() == AdapterErrorKind::NotFound
-                    || (err.kind() == AdapterErrorKind::UnexpectedResult
-                        && err.message().contains("Error 404: Not found"))
-                {
-                    return Ok(Vec::new());
-                }
-                return Err(err);
-            }
-        };
-        Ok(Column::vec_from_jinja_value(AdapterType::Bigquery, result)?)
     }
 
     /// This only supports non-nested columns additions
