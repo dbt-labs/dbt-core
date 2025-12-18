@@ -1,6 +1,7 @@
 use crate::relation::{RelationObject, StaticBaseRelation};
 
 use dbt_common::{ErrorCode, FsResult, fs_err};
+use dbt_frontend_common::ident::Identifier;
 use dbt_schema_store::CanonicalFqn;
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::common::ResolvedQuoting;
@@ -70,8 +71,11 @@ impl BaseRelationProperties for SalesforceRelation {
         })
     }
 
+    // FIXME: this will cause trouble in a few known places
+    // In unit_test.rs, where this sed to build SQL literals
+    // In schema_cache where we expect 3 part fqn, non-applicable for now since static analysis is unsupported for Salesforce
     fn get_schema(&self) -> FsResult<String> {
-        unimplemented!("Salesforce schema")
+        Ok(String::new())
     }
 
     fn get_identifier(&self) -> FsResult<String> {
@@ -84,7 +88,22 @@ impl BaseRelationProperties for SalesforceRelation {
     }
 
     fn get_canonical_fqn(&self) -> FsResult<CanonicalFqn> {
-        unimplemented!("Salesforce get_canonical_fqn")
+        let database = if self.quote_policy().database {
+            Identifier::new(self.get_database()?)
+        } else {
+            Identifier::new(self.get_database()?.to_ascii_uppercase())
+        };
+        let schema = if self.quote_policy().schema {
+            Identifier::new(self.get_schema()?)
+        } else {
+            Identifier::new(self.get_schema()?.to_ascii_uppercase())
+        };
+        let identifier = if self.quote_policy().identifier {
+            Identifier::new(self.get_identifier()?)
+        } else {
+            Identifier::new(self.get_identifier()?.to_ascii_uppercase())
+        };
+        Ok(CanonicalFqn::new(&database, &schema, &identifier))
     }
 }
 
@@ -130,16 +149,6 @@ impl BaseRelation for SalesforceRelation {
     /// Returns the identifier name
     fn identifier(&self) -> Value {
         Value::from(self.path.identifier.clone())
-    }
-
-    /// Helper: is this relation renamable?
-    fn can_be_renamed(&self) -> bool {
-        unimplemented!("Salesforce can_be_renamed")
-    }
-
-    /// Helper: is this relation replaceable?
-    fn can_be_replaced(&self) -> bool {
-        unimplemented!("Salesforce can_be_replaced")
     }
 
     /// Returns the relation type
