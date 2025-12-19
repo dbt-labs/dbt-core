@@ -1,6 +1,6 @@
 use std::ops::Deref;
 
-use antlr_rust::{
+use dbt_antlr4::{
     char_stream::{CharStream, InputData},
     int_stream::{self, IntStream},
 };
@@ -67,7 +67,7 @@ where
     }
 
     #[inline]
-    fn la(&mut self, mut offset: isize) -> isize {
+    fn la(&mut self, mut offset: isize) -> i32 {
         assert!(offset != 0, "offset must not be 0");
 
         if offset == 1 {

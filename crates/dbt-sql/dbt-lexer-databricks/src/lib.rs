@@ -13,10 +13,10 @@ pub use generated::databricks::*;
 
 pub(crate) mod lexer_support {
     use super::*;
-    use antlr_rust::BaseLexer;
-    use antlr_rust::char_stream::CharStream;
-    use antlr_rust::token_factory::TokenFactory;
     use databrickslexer::{DatabricksLexerActions, LocalTokenFactory};
+    use dbt_antlr4::BaseLexer;
+    use dbt_antlr4::char_stream::CharStream;
+    use dbt_antlr4::token_factory::TokenFactory;
 
     type From<'a> = <LocalTokenFactory<'a> as TokenFactory<'a>>::From;
 
@@ -27,13 +27,13 @@ pub(crate) mod lexer_support {
         let input = recog.input.as_mut().expect("Input not set");
         let next = input.la(1);
 
-        if next >= 'A' as isize && next <= 'Z' as isize {
+        if next >= 'A' as i32 && next <= 'Z' as i32 {
             return false;
         }
-        if next >= '0' as isize && next <= '9' as isize {
+        if next >= '0' as i32 && next <= '9' as i32 {
             return false;
         }
-        if next == '_' as isize {
+        if next == '_' as i32 {
             return false;
         }
         true

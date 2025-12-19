@@ -1,4 +1,4 @@
-use antlr_rust::{
+use dbt_antlr4::{
     InputStream,
     char_stream::{CharStream, InputData as _},
     int_stream::{self, IntStream},
@@ -115,7 +115,7 @@ struct MaskedInputStream<'input> {
     visible_spans: Vec<minijinja::machinery::Span>,
     name: String,
     index: isize,
-    last_item: Option<isize>,
+    last_item: Option<i32>,
 }
 
 impl<'input> MaskedInputStream<'input> {
@@ -201,7 +201,7 @@ impl IntStream for MaskedInputStream<'_> {
     }
 
     #[inline]
-    fn la(&mut self, offset: isize) -> isize {
+    fn la(&mut self, offset: isize) -> i32 {
         if offset == 1 {
             return self.data.item(self.index).unwrap_or(int_stream::EOF);
         }
@@ -288,7 +288,7 @@ pub fn is_empty_or_comment_only(statement: &str, dialect: Option<Dialect>) -> bo
     }
 
     use super::CaseInsensitiveInputStream;
-    use antlr_rust::{TokenSource, int_stream::EOF, token_factory::ArenaCommonFactory};
+    use dbt_antlr4::{TokenSource, int_stream::EOF, token_factory::ArenaCommonFactory};
 
     let tf = ArenaCommonFactory::default();
     let input_stream = CaseInsensitiveInputStream::new(trimmed);

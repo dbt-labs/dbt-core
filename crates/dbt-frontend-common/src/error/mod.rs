@@ -399,10 +399,10 @@ impl FrontendError {
     }
 }
 
-use antlr_rust::errors::ANTLRError;
 use datafusion_common::DFSchema;
 use datafusion_common::error::DataFusionError;
 use datafusion_expr::expr::Expr;
+use dbt_antlr4::errors::ANTLRError;
 
 #[derive(Debug)]
 pub struct SchemaError {

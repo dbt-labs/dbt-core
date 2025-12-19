@@ -16,8 +16,8 @@ workspace = true
 path = "src/lib.rs"
 
 [dependencies]
-antlr-rust = { workspace = true }
 better_any = "0.2.0-dev.1"
+dbt-antlr4 = { workspace = true }
 minijinja = { workspace = true }
 
 dbt-frontend-common = { workspace = true }
