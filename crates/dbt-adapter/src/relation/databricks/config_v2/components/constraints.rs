@@ -13,7 +13,6 @@ use crate::relation::databricks::config_v2::{
 
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
 
 pub(crate) const TYPE_NAME: &str = "constraints";
 
@@ -313,8 +312,8 @@ impl ConstraintsLoader {
         unset_non_nulls: HashSet<String>,
         set_constraints: HashSet<TypedConstraint>,
         unset_constraints: HashSet<TypedConstraint>,
-    ) -> Arc<dyn ComponentConfig> {
-        Arc::new(Constraints::new(
+    ) -> Box<dyn ComponentConfig> {
+        Box::new(Constraints::new(
             set_non_nulls,
             unset_non_nulls,
             set_constraints,
@@ -335,15 +334,15 @@ impl ComponentConfigLoader<DatabricksRelationMetadata> for ConstraintsLoader {
     fn from_remote_state(
         &self,
         remote_state: &DatabricksRelationMetadata,
-    ) -> Arc<dyn ComponentConfig> {
-        Arc::new(Constraints::from_remote_state(remote_state))
+    ) -> Box<dyn ComponentConfig> {
+        Box::new(Constraints::from_remote_state(remote_state))
     }
 
     fn from_local_config(
         &self,
         relation_config: &dyn InternalDbtNodeAttributes,
-    ) -> Arc<dyn ComponentConfig> {
-        Arc::new(Constraints::from_local_config(relation_config))
+    ) -> Box<dyn ComponentConfig> {
+        Box::new(Constraints::from_local_config(relation_config))
     }
 }
 
@@ -358,10 +357,10 @@ impl ComponentConfig for Constraints {
     fn diff_from(
         &self,
         current_state: Option<&dyn ComponentConfig>,
-    ) -> Option<Arc<dyn ComponentConfig>> {
+    ) -> Option<Box<dyn ComponentConfig>> {
         // If the config was just introduced, we want to apply the entirety of `self`
         let Some(current_state) = current_state else {
-            return Some(Arc::new(self.clone()));
+            return Some(Box::new(self.clone()));
         };
 
         // The config is not if type `Constraints`, so we can't diff
@@ -398,7 +397,7 @@ impl ComponentConfig for Constraints {
             || !constraints_to_unset.is_empty()
             || !non_nulls_to_unset.is_empty()
         {
-            Some(Arc::new(Self::new(
+            Some(Box::new(Self::new(
                 set_non_nulls,
                 non_nulls_to_unset,
                 set_constraints,

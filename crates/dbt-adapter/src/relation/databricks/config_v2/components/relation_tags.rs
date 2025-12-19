@@ -10,7 +10,7 @@ use dbt_schemas::schemas::DbtModel;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_serde_yaml::Value as YmlValue;
 use minijinja::Value;
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
 pub(crate) const TYPE_NAME: &str = "relation_tags";
 
@@ -72,8 +72,8 @@ fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> Relatio
 pub(crate) struct RelationTagsLoader;
 
 impl RelationTagsLoader {
-    pub fn new(tags: HashMap<String, String>) -> Arc<dyn ComponentConfig> {
-        Arc::new(new(tags))
+    pub fn new(tags: HashMap<String, String>) -> Box<dyn ComponentConfig> {
+        Box::new(new(tags))
     }
 
     pub fn type_name() -> &'static str {
@@ -89,15 +89,15 @@ impl ComponentConfigLoader<DatabricksRelationMetadata> for RelationTagsLoader {
     fn from_remote_state(
         &self,
         remote_state: &DatabricksRelationMetadata,
-    ) -> Arc<dyn ComponentConfig> {
-        Arc::new(from_remote_state(remote_state))
+    ) -> Box<dyn ComponentConfig> {
+        Box::new(from_remote_state(remote_state))
     }
 
     fn from_local_config(
         &self,
         relation_config: &dyn InternalDbtNodeAttributes,
-    ) -> Arc<dyn ComponentConfig> {
-        Arc::new(from_local_config(relation_config))
+    ) -> Box<dyn ComponentConfig> {
+        Box::new(from_local_config(relation_config))
     }
 }
 

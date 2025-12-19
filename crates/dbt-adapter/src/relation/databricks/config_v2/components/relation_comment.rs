@@ -9,7 +9,6 @@ use crate::relation::databricks::config_v2::{
 
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use minijinja::Value;
-use std::sync::Arc;
 
 pub(crate) const TYPE_NAME: &str = "relation_comment";
 
@@ -68,8 +67,8 @@ fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> Relatio
 pub(crate) struct RelationCommentLoader;
 
 impl RelationCommentLoader {
-    pub fn new(comment: Option<String>) -> Arc<dyn ComponentConfig> {
-        Arc::new(new(comment))
+    pub fn new(comment: Option<String>) -> Box<dyn ComponentConfig> {
+        Box::new(new(comment))
     }
 
     pub fn type_name() -> &'static str {
@@ -85,15 +84,15 @@ impl ComponentConfigLoader<DatabricksRelationMetadata> for RelationCommentLoader
     fn from_remote_state(
         &self,
         remote_state: &DatabricksRelationMetadata,
-    ) -> Arc<dyn ComponentConfig> {
-        Arc::new(from_remote_state(remote_state))
+    ) -> Box<dyn ComponentConfig> {
+        Box::new(from_remote_state(remote_state))
     }
 
     fn from_local_config(
         &self,
         relation_config: &dyn InternalDbtNodeAttributes,
-    ) -> Arc<dyn ComponentConfig> {
-        Arc::new(from_local_config(relation_config))
+    ) -> Box<dyn ComponentConfig> {
+        Box::new(from_local_config(relation_config))
     }
 }
 

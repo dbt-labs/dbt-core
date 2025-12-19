@@ -26,7 +26,6 @@ use std::{
     any::Any,
     collections::{HashMap, hash_map::Iter as HashMapIter},
     fmt,
-    sync::Arc,
 };
 
 pub(crate) trait ComponentConfig: fmt::Debug + Send + Sync + Any {
@@ -36,7 +35,7 @@ pub(crate) trait ComponentConfig: fmt::Debug + Send + Sync + Any {
     fn diff_from(
         &self,
         current_state: Option<&dyn ComponentConfig>,
-    ) -> Option<Arc<dyn ComponentConfig>>;
+    ) -> Option<Box<dyn ComponentConfig>>;
 
     /// The unique name that identifies this component's type
     fn type_name(&self) -> &'static str;
@@ -110,10 +109,10 @@ impl<T: fmt::Debug + Send + Sync + Any + Clone> ComponentConfig for SimpleCompon
     fn diff_from(
         &self,
         current_state: Option<&dyn ComponentConfig>,
-    ) -> Option<Arc<dyn ComponentConfig>> {
+    ) -> Option<Box<dyn ComponentConfig>> {
         let current_state = match current_state {
             Some(current_state) => current_state.as_any().downcast_ref::<Self>(),
-            None => return Some(Arc::new(self.clone())),
+            None => return Some(Box::new(self.clone())),
         };
 
         let value = match current_state {
@@ -134,7 +133,7 @@ impl<T: fmt::Debug + Send + Sync + Any + Clone> ComponentConfig for SimpleCompon
                 value: diff,
             };
 
-            Some(Arc::new(self_clone))
+            Some(Box::new(self_clone))
         } else {
             None
         }
@@ -150,10 +149,10 @@ impl<T: fmt::Debug + Send + Sync + Any + Clone> ComponentConfig for SimpleCompon
 }
 
 /// Represents a change in a certain configuration by comparing the applied state with the desired state
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub(crate) enum ComponentConfigChange {
     /// The config has changed
-    Some(Arc<dyn ComponentConfig>),
+    Some(Box<dyn ComponentConfig>),
     /// The config used to exist but has been dropped
     Drop,
     /// There were no detected changes
@@ -164,15 +163,15 @@ pub(crate) enum ComponentConfigChange {
 /// those will require a full refresh
 pub(crate) type RequiresFullRefreshFn = fn(&HashMap<&'static str, ComponentConfigChange>) -> bool;
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub(crate) struct RelationConfig(
-    HashMap<&'static str, Arc<dyn ComponentConfig>>,
+    HashMap<&'static str, Box<dyn ComponentConfig>>,
     RequiresFullRefreshFn,
 );
 
 impl RelationConfig {
     pub fn new(
-        configs: impl IntoIterator<Item = Arc<dyn ComponentConfig>>,
+        configs: impl IntoIterator<Item = Box<dyn ComponentConfig>>,
         requires_full_refresh: RequiresFullRefreshFn,
     ) -> Self {
         Self(
@@ -228,14 +227,14 @@ impl Object for RelationConfig {}
 pub(crate) trait ComponentConfigLoader<R> {
     /// Load the current applied state for the component given the remote state
     #[expect(clippy::wrong_self_convention)]
-    fn from_remote_state(&self, remote_state: &R) -> Arc<dyn ComponentConfig>;
+    fn from_remote_state(&self, remote_state: &R) -> Box<dyn ComponentConfig>;
 
     /// Load the desired component state from local dbt configs
     #[expect(clippy::wrong_self_convention)]
     fn from_local_config(
         &self,
         relation_config: &dyn InternalDbtNodeAttributes,
-    ) -> Arc<dyn ComponentConfig>;
+    ) -> Box<dyn ComponentConfig>;
 
     /// The unique type name of the component loaded by this loader
     fn type_name(&self) -> &'static str;
@@ -288,7 +287,7 @@ impl<R> RelationConfigLoader<R> {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub(crate) struct RelationComponentConfigChangeSet(
     HashMap<&'static str, ComponentConfigChange>,
     RequiresFullRefreshFn,
@@ -343,7 +342,7 @@ mod tests {
         if diff != 0 { Some(diff) } else { None }
     }
 
-    fn assert_dyn_eq<T: Clone + Eq + fmt::Debug + 'static>(a: T, b: Arc<dyn ComponentConfig>) {
+    fn assert_dyn_eq<T: Clone + Eq + fmt::Debug + 'static>(a: T, b: Box<dyn ComponentConfig>) {
         assert_eq!(
             a,
             b.as_ref()
@@ -444,31 +443,37 @@ mod tests {
 
     #[test]
     fn test_relation_config_diff_created() {
-        let next_component = Arc::new(MockComponent {
+        let next_component = MockComponent {
             type_name: TYPE_NAME,
             diff_fn: diff::desired_state,
             value: 10,
-        }) as Arc<dyn ComponentConfig>;
+        };
         let prev = RelationConfig::new([], return_true);
-        let next = RelationConfig::new([next_component.clone()], return_true);
+        let next = RelationConfig::new(
+            [Box::new(next_component.clone()) as Box<dyn ComponentConfig>],
+            return_true,
+        );
         let changeset = RelationConfig::diff(&next, &prev);
         assert!(changeset.requires_full_refresh());
         assert_eq!(changeset.0.len(), 1);
         let change = changeset.get(TYPE_NAME);
         assert_component_config_change_eq::<MockComponent>(
             change,
-            &ComponentConfigChange::Some(next_component),
+            &ComponentConfigChange::Some(Box::new(next_component) as Box<dyn ComponentConfig>),
         );
     }
 
     #[test]
     fn test_relation_config_diff_no_changes() {
-        let component = Arc::new(MockComponent {
+        let component = MockComponent {
             type_name: TYPE_NAME,
             diff_fn: diff::desired_state,
             value: 10,
-        }) as Arc<dyn ComponentConfig>;
-        let relation_config = RelationConfig::new([component.clone()], return_true);
+        };
+        let relation_config = RelationConfig::new(
+            [Box::new(component) as Box<dyn ComponentConfig>],
+            return_true,
+        );
         let changeset = RelationConfig::diff(&relation_config, &relation_config);
         assert!(changeset.requires_full_refresh());
         assert_eq!(changeset.0.len(), 0);
@@ -478,36 +483,45 @@ mod tests {
 
     #[test]
     fn test_relation_config_diff_with_changes() {
-        let prev_component = Arc::new(MockComponent {
+        let prev_component = MockComponent {
             type_name: TYPE_NAME,
             diff_fn: diff::desired_state,
             value: 1,
-        }) as Arc<dyn ComponentConfig>;
-        let next_component = Arc::new(MockComponent {
+        };
+        let next_component = MockComponent {
             type_name: TYPE_NAME,
             diff_fn: diff::desired_state,
             value: 10,
-        }) as Arc<dyn ComponentConfig>;
-        let prev = RelationConfig::new([prev_component.clone()], return_true);
-        let next = RelationConfig::new([next_component.clone()], return_true);
+        };
+        let prev = RelationConfig::new(
+            [Box::new(prev_component) as Box<dyn ComponentConfig>],
+            return_true,
+        );
+        let next = RelationConfig::new(
+            [Box::new(next_component.clone()) as Box<dyn ComponentConfig>],
+            return_true,
+        );
         let changeset = RelationConfig::diff(&next, &prev);
         assert!(changeset.requires_full_refresh());
         assert_eq!(changeset.0.len(), 1);
         let change = changeset.get(TYPE_NAME);
         assert_component_config_change_eq::<MockComponent>(
             change,
-            &ComponentConfigChange::Some(next_component),
+            &ComponentConfigChange::Some(Box::new(next_component) as Box<dyn ComponentConfig>),
         );
     }
 
     #[test]
     fn test_relation_config_diff_drop() {
-        let prev_component = Arc::new(MockComponent {
+        let prev_component = MockComponent {
             type_name: TYPE_NAME,
             diff_fn: diff::desired_state,
             value: 1,
-        }) as Arc<dyn ComponentConfig>;
-        let prev = RelationConfig::new([prev_component.clone()], return_true);
+        };
+        let prev = RelationConfig::new(
+            [Box::new(prev_component) as Box<dyn ComponentConfig>],
+            return_true,
+        );
         let next = RelationConfig::new([], return_true);
         let changeset = RelationConfig::diff(&next, &prev);
         assert!(changeset.requires_full_refresh());

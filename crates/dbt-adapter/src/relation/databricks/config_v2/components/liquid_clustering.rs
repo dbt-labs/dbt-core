@@ -6,7 +6,6 @@ use crate::relation::config_v2::{
     ComponentConfig, ComponentConfigLoader, SimpleComponentConfigImpl, diff,
 };
 use crate::relation::databricks::config_v2::DatabricksRelationMetadata;
-use std::sync::Arc;
 
 pub(crate) const TYPE_NAME: &str = "liquid_clustering";
 
@@ -43,8 +42,8 @@ fn from_local_config(_relation_config: &dyn InternalDbtNodeAttributes) -> Liquid
 pub(crate) struct LiquidClusteringLoader;
 
 impl LiquidClusteringLoader {
-    pub fn new(auto_cluster: bool, cluster_by: Vec<String>) -> Arc<dyn ComponentConfig> {
-        Arc::new(new(auto_cluster, cluster_by))
+    pub fn new(auto_cluster: bool, cluster_by: Vec<String>) -> Box<dyn ComponentConfig> {
+        Box::new(new(auto_cluster, cluster_by))
     }
 
     pub fn type_name() -> &'static str {
@@ -60,14 +59,14 @@ impl ComponentConfigLoader<DatabricksRelationMetadata> for LiquidClusteringLoade
     fn from_remote_state(
         &self,
         remote_state: &DatabricksRelationMetadata,
-    ) -> Arc<dyn ComponentConfig> {
-        Arc::new(from_remote_state(remote_state))
+    ) -> Box<dyn ComponentConfig> {
+        Box::new(from_remote_state(remote_state))
     }
 
     fn from_local_config(
         &self,
         relation_config: &dyn InternalDbtNodeAttributes,
-    ) -> Arc<dyn ComponentConfig> {
-        Arc::new(from_local_config(relation_config))
+    ) -> Box<dyn ComponentConfig> {
+        Box::new(from_local_config(relation_config))
     }
 }

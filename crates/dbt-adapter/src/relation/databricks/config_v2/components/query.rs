@@ -5,7 +5,6 @@ use crate::relation::config_v2::{
 };
 use crate::relation::databricks::config_v2::DatabricksRelationMetadata;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
-use std::sync::Arc;
 
 pub(crate) const TYPE_NAME: &str = "query";
 
@@ -36,8 +35,8 @@ fn from_local_config(_relation_config: &dyn InternalDbtNodeAttributes) -> Query 
 pub(crate) struct QueryLoader;
 
 impl QueryLoader {
-    pub fn new(query: &str) -> Arc<dyn ComponentConfig> {
-        Arc::new(new(query))
+    pub fn new(query: &str) -> Box<dyn ComponentConfig> {
+        Box::new(new(query))
     }
 
     pub fn type_name() -> &'static str {
@@ -53,14 +52,14 @@ impl ComponentConfigLoader<DatabricksRelationMetadata> for QueryLoader {
     fn from_remote_state(
         &self,
         remote_state: &DatabricksRelationMetadata,
-    ) -> Arc<dyn ComponentConfig> {
-        Arc::new(from_remote_state(remote_state))
+    ) -> Box<dyn ComponentConfig> {
+        Box::new(from_remote_state(remote_state))
     }
 
     fn from_local_config(
         &self,
         relation_config: &dyn InternalDbtNodeAttributes,
-    ) -> Arc<dyn ComponentConfig> {
-        Arc::new(from_local_config(relation_config))
+    ) -> Box<dyn ComponentConfig> {
+        Box::new(from_local_config(relation_config))
     }
 }

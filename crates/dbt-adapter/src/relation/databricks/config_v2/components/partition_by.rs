@@ -10,7 +10,6 @@ use dbt_schemas::schemas::DbtModel;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_schemas::schemas::manifest::PartitionConfig;
 use minijinja::Value;
-use std::sync::Arc;
 
 pub(crate) const TYPE_NAME: &str = "partition_by";
 
@@ -83,8 +82,8 @@ fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> Partiti
 pub(crate) struct PartitionByLoader;
 
 impl PartitionByLoader {
-    pub fn new(partition_by: Vec<String>) -> Arc<dyn ComponentConfig> {
-        Arc::new(new(partition_by))
+    pub fn new(partition_by: Vec<String>) -> Box<dyn ComponentConfig> {
+        Box::new(new(partition_by))
     }
 
     pub fn type_name() -> &'static str {
@@ -100,15 +99,15 @@ impl ComponentConfigLoader<DatabricksRelationMetadata> for PartitionByLoader {
     fn from_remote_state(
         &self,
         remote_state: &DatabricksRelationMetadata,
-    ) -> Arc<dyn ComponentConfig> {
-        Arc::new(from_remote_state(remote_state))
+    ) -> Box<dyn ComponentConfig> {
+        Box::new(from_remote_state(remote_state))
     }
 
     fn from_local_config(
         &self,
         relation_config: &dyn InternalDbtNodeAttributes,
-    ) -> Arc<dyn ComponentConfig> {
-        Arc::new(from_local_config(relation_config))
+    ) -> Box<dyn ComponentConfig> {
+        Box::new(from_local_config(relation_config))
     }
 }
 
@@ -118,12 +117,12 @@ mod tests {
     use crate::relation::databricks::config_v2::test_helpers;
     use dbt_agate::AgateTable;
     use std::collections::HashMap;
+    use std::sync::Arc;
 
     fn create_mock_describe_extended_table(partition_columns: Vec<&str>) -> AgateTable {
         use arrow::csv::ReaderBuilder;
         use arrow_schema::{DataType, Field, Schema};
         use std::io;
-        use std::sync::Arc;
 
         let mut csv_data = "key,value\n".to_string();
 

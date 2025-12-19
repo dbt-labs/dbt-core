@@ -10,10 +10,7 @@ use dbt_schemas::schemas::DbtModel;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_serde_yaml::Value as YmlValue;
 use minijinja::Value;
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::collections::{HashMap, HashSet};
 
 pub(crate) const TYPE_NAME: &str = "tbl_properties";
 
@@ -156,8 +153,8 @@ fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> TblProp
 pub(crate) struct TblPropertiesLoader;
 
 impl TblPropertiesLoader {
-    pub fn new(properties: HashMap<String, String>) -> Arc<dyn ComponentConfig> {
-        Arc::new(new(properties))
+    pub fn new(properties: HashMap<String, String>) -> Box<dyn ComponentConfig> {
+        Box::new(new(properties))
     }
 
     pub fn type_name() -> &'static str {
@@ -173,15 +170,15 @@ impl ComponentConfigLoader<DatabricksRelationMetadata> for TblPropertiesLoader {
     fn from_remote_state(
         &self,
         remote_state: &DatabricksRelationMetadata,
-    ) -> Arc<dyn ComponentConfig> {
-        Arc::new(from_remote_state(remote_state))
+    ) -> Box<dyn ComponentConfig> {
+        Box::new(from_remote_state(remote_state))
     }
 
     fn from_local_config(
         &self,
         relation_config: &dyn InternalDbtNodeAttributes,
-    ) -> Arc<dyn ComponentConfig> {
-        Arc::new(from_local_config(relation_config))
+    ) -> Box<dyn ComponentConfig> {
+        Box::new(from_local_config(relation_config))
     }
 }
 
@@ -192,12 +189,12 @@ mod tests {
     use dbt_agate::AgateTable;
     use dbt_schemas::schemas::DbtModel;
     use std::collections::HashMap;
+    use std::sync::Arc;
 
     fn create_mock_show_tblproperties_table(properties: Vec<(&str, &str)>) -> AgateTable {
         use arrow::csv::ReaderBuilder;
         use arrow_schema::{DataType, Field, Schema};
         use std::io;
-        use std::sync::Arc;
 
         let mut csv_data = "key,value\n".to_string();
         for (key, value) in properties {

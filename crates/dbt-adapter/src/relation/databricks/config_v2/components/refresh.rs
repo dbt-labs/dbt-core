@@ -10,7 +10,6 @@ use dbt_schemas::schemas::DbtModel;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use minijinja::Value;
 use regex::Regex;
-use std::sync::Arc;
 
 pub(crate) const TYPE_NAME: &str = "refresh";
 
@@ -99,8 +98,8 @@ fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> Refresh
 pub(crate) struct RefreshLoader;
 
 impl RefreshLoader {
-    pub fn new(cron: Option<String>, time_zone_value: Option<String>) -> Arc<dyn ComponentConfig> {
-        Arc::new(new(cron, time_zone_value))
+    pub fn new(cron: Option<String>, time_zone_value: Option<String>) -> Box<dyn ComponentConfig> {
+        Box::new(new(cron, time_zone_value))
     }
 
     pub fn type_name() -> &'static str {
@@ -116,15 +115,15 @@ impl ComponentConfigLoader<DatabricksRelationMetadata> for RefreshLoader {
     fn from_remote_state(
         &self,
         remote_state: &DatabricksRelationMetadata,
-    ) -> Arc<dyn ComponentConfig> {
-        Arc::new(from_remote_state(remote_state))
+    ) -> Box<dyn ComponentConfig> {
+        Box::new(from_remote_state(remote_state))
     }
 
     fn from_local_config(
         &self,
         relation_config: &dyn InternalDbtNodeAttributes,
-    ) -> Arc<dyn ComponentConfig> {
-        Arc::new(from_local_config(relation_config))
+    ) -> Box<dyn ComponentConfig> {
+        Box::new(from_local_config(relation_config))
     }
 }
 

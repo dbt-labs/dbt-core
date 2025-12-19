@@ -9,7 +9,7 @@ use crate::relation::databricks::config_v2::{
 
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
 pub(crate) const TYPE_NAME: &str = "column_comments";
 
@@ -101,8 +101,8 @@ fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> ColumnC
 pub(crate) struct ColumnCommentsLoader;
 
 impl ColumnCommentsLoader {
-    pub fn new(column_comments: HashMap<String, String>) -> Arc<dyn ComponentConfig> {
-        Arc::new(new(column_comments))
+    pub fn new(column_comments: HashMap<String, String>) -> Box<dyn ComponentConfig> {
+        Box::new(new(column_comments))
     }
 
     pub fn type_name() -> &'static str {
@@ -118,15 +118,15 @@ impl ComponentConfigLoader<DatabricksRelationMetadata> for ColumnCommentsLoader 
     fn from_remote_state(
         &self,
         remote_state: &DatabricksRelationMetadata,
-    ) -> Arc<dyn ComponentConfig> {
-        Arc::new(from_remote_state(remote_state))
+    ) -> Box<dyn ComponentConfig> {
+        Box::new(from_remote_state(remote_state))
     }
 
     fn from_local_config(
         &self,
         relation_config: &dyn InternalDbtNodeAttributes,
-    ) -> Arc<dyn ComponentConfig> {
-        Arc::new(from_local_config(relation_config))
+    ) -> Box<dyn ComponentConfig> {
+        Box::new(from_local_config(relation_config))
     }
 }
 
