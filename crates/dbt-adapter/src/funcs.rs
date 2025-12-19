@@ -443,7 +443,14 @@ pub fn dispatch_adapter_calls(
 
             adapter.convert_type(state, &table, col_idx)
         }
-        "render_raw_columns_constraints" => adapter.render_raw_columns_constraints(state, args),
+        "render_raw_columns_constraints" => {
+            // raw_columns: dict
+            let iter = ArgsIter::new(name, &["raw_columns"], args);
+            let raw_columns = iter.next_arg::<&Value>()?;
+            iter.finish()?;
+
+            adapter.render_raw_columns_constraints(state, raw_columns)
+        }
         "verify_database" => {
             // database: str
             let iter = ArgsIter::new(name, &["database"], args);
@@ -494,8 +501,15 @@ pub fn dispatch_adapter_calls(
                 excluded_schemas,
             )
         }
-        // only available for Bigquery
-        "nest_column_data_types" => adapter.nest_column_data_types(state, args),
+        // only available for BigQuery
+        "nest_column_data_types" => {
+            // columns: dict
+            let iter = ArgsIter::new(name, &["columns"], args);
+            let columns = iter.next_arg::<&Value>()?;
+            iter.finish()?;
+
+            adapter.nest_column_data_types(state, columns)
+        }
         "add_time_ingestion_partition_column" => {
             // In parse mode, return stub value early without validation
             if adapter.is_parse() {
@@ -961,8 +975,46 @@ pub fn dispatch_adapter_calls(
                 .map_err(MinijinjaError::from)?;
             Ok(Value::from(is_cluster))
         }
-        "compare_dbr_version" => adapter.compare_dbr_version(state, args),
-        "compute_external_path" => adapter.compute_external_path(state, args),
+        "compare_dbr_version" => {
+            // major: i64, minor: i64
+            let iter = ArgsIter::new(name, &["major", "minor"], args);
+            let major = iter.next_arg::<i64>()?;
+            let minor = iter.next_arg::<i64>()?;
+            iter.finish()?;
+
+            adapter.compare_dbr_version(state, major, minor)
+        }
+        "compute_external_path" => {
+            // config: dict, model: dict, is_incremental: Optional[bool] = False
+            let iter = ArgsIter::new(name, &["config", "model"], args);
+            let config_val = iter.next_arg::<&Value>()?;
+            let model_val = iter.next_arg::<&Value>()?;
+            let is_incremental = iter
+                .next_kwarg::<Option<bool>>("is_incremental")?
+                .unwrap_or(false);
+            iter.finish()?;
+
+            let config = minijinja_value_to_typed_struct::<
+                dbt_schemas::schemas::project::ModelConfig,
+            >(config_val.clone())
+            .map_err(|e| {
+                MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
+            })?;
+
+            let node = minijinja_value_to_typed_struct::<
+                dbt_schemas::schemas::InternalDbtNodeWrapper,
+            >(model_val.clone())
+            .map_err(|e| {
+                MinijinjaError::new(
+                    MinijinjaErrorKind::SerdeDeserializeError,
+                    format!(
+                        "adapter.compute_external_path expected an InternalDbtNodeWrapper: {e}"
+                    ),
+                )
+            })?;
+
+            adapter.compute_external_path(state, config, &node, is_incremental)
+        }
         "update_tblproperties_for_uniform_iceberg" => {
             // config: dict, tblproperties: Optional[str] = None
             let iter = ArgsIter::new(name, &["config"], args);
@@ -1027,10 +1079,48 @@ pub fn dispatch_adapter_calls(
 
             adapter.is_uniform(state, config, &node_wrapper)
         }
-        "valid_incremental_strategies" => adapter.valid_incremental_strategies(state, args),
-        "get_relation_config" => adapter.get_relation_config(state, args),
-        "get_config_from_model" => adapter.get_config_from_model(state, args),
-        "get_persist_doc_columns" => adapter.get_persist_doc_columns(state, args),
+        "valid_incremental_strategies" => {
+            // No arguments required
+            adapter.valid_incremental_strategies(state)
+        }
+        "get_relation_config" => {
+            // relation: BaseRelation
+            let iter = ArgsIter::new(name, &["relation"], args);
+            let relation = iter.next_arg::<&Value>()?;
+            let relation = downcast_value_to_dyn_base_relation(relation)?;
+            iter.finish()?;
+
+            adapter.get_relation_config(state, relation)
+        }
+        "get_config_from_model" => {
+            // model: dict
+            let iter = ArgsIter::new(name, &["model"], args);
+            let model = iter.next_arg::<Value>()?;
+            iter.finish()?;
+
+            let deserialized_node = minijinja_value_to_typed_struct::<
+                dbt_schemas::schemas::InternalDbtNodeWrapper,
+            >(model)
+            .map_err(|e| {
+                MinijinjaError::new(
+                    MinijinjaErrorKind::SerdeDeserializeError,
+                    format!(
+                        "adapter.get_config_from_model expected an InternalDbtNodeWrapper: {e}"
+                    ),
+                )
+            })?;
+
+            adapter.get_config_from_model(state, &deserialized_node)
+        }
+        "get_persist_doc_columns" => {
+            // existing_columns: List[Column], model_columns: dict
+            let iter = ArgsIter::new(name, &["existing_columns", "model_columns"], args);
+            let existing_columns = iter.next_arg::<&Value>()?;
+            let model_columns = iter.next_arg::<&Value>()?;
+            iter.finish()?;
+
+            adapter.get_persist_doc_columns(state, existing_columns, model_columns)
+        }
         "get_column_tags_from_model" => {
             let iter = ArgsIter::new(name, &["model"], args);
             let model = iter.next_arg::<Value>()?;
@@ -1050,10 +1140,40 @@ pub fn dispatch_adapter_calls(
             adapter.get_column_tags_from_model(state, deserialized_node.as_internal_node())
         }
         "generate_unique_temporary_table_suffix" => {
-            adapter.generate_unique_temporary_table_suffix(state, args)
+            // suffix_initial: Optional[str] = None
+            let iter = ArgsIter::new(name, &[], args);
+            let suffix_initial = iter.next_kwarg::<Option<String>>("suffix_initial")?;
+            iter.finish()?;
+
+            adapter.generate_unique_temporary_table_suffix(state, suffix_initial)
         }
-        "parse_columns_and_constraints" => adapter.parse_columns_and_constraints(state, args),
-        "clean_sql" => adapter.clean_sql(args),
+        "parse_columns_and_constraints" => {
+            // existing_columns: List[Column], model_columns: dict, model_constraints: List[dict]
+            let iter = ArgsIter::new(
+                name,
+                &["existing_columns", "model_columns", "model_constraints"],
+                args,
+            );
+            let existing_columns = iter.next_arg::<&Value>()?;
+            let model_columns = iter.next_arg::<&Value>()?;
+            let model_constraints = iter.next_arg::<&Value>()?;
+            iter.finish()?;
+
+            adapter.parse_columns_and_constraints(
+                state,
+                existing_columns,
+                model_columns,
+                model_constraints,
+            )
+        }
+        "clean_sql" => {
+            // sql: str
+            let iter = ArgsIter::new(name, &["sql"], args);
+            let sql = iter.next_arg::<&str>()?;
+            iter.finish()?;
+
+            adapter.clean_sql(sql)
+        }
         _ => Err(MinijinjaError::new(
             MinijinjaErrorKind::InvalidOperation,
             format!("Unknown method on adapter object: '{name}'"),

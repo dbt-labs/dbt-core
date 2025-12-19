@@ -1,6 +1,5 @@
 use crate::base_adapter::{AdapterType, AdapterTyping};
 use crate::cache::RelationCache;
-use crate::cast_util::downcast_value_to_dyn_base_relation;
 use crate::column::Column;
 use crate::funcs::{
     dispatch_adapter_calls, dispatch_adapter_get_value, execute_macro, execute_macro_wrapper,
@@ -17,7 +16,7 @@ use crate::{AdapterEngine, AdapterResponse, AdapterResult, BaseAdapter};
 use dbt_agate::AgateTable;
 use dbt_common::behavior_flags::{Behavior, BehaviorFlag};
 use dbt_common::cancellation::CancellationToken;
-use dbt_common::{FsError, FsResult, current_function_name};
+use dbt_common::{FsError, FsResult};
 use dbt_schema_store::{SchemaEntry, SchemaStoreTrait};
 use dbt_schemas::schemas::common::{DbtIncrementalStrategy, ResolvedQuoting};
 use dbt_schemas::schemas::dbt_column::{DbtColumn, DbtColumnRef};
@@ -29,7 +28,6 @@ use dbt_schemas::schemas::serde::{minijinja_value_to_typed_struct, yml_value_to_
 use dbt_schemas::schemas::{InternalDbtNodeAttributes, InternalDbtNodeWrapper};
 use dbt_xdbc::Connection;
 use indexmap::IndexMap;
-use minijinja::arg_utils::{ArgParser, check_num_args};
 use minijinja::dispatch_object::DispatchObject;
 use minijinja::listener::RenderingEventListener;
 use minijinja::value::{Kwargs, Object};
@@ -426,17 +424,13 @@ impl BaseAdapter for BridgeAdapter {
     fn render_raw_columns_constraints(
         &self,
         state: &State,
-        args: &[Value],
+        raw_columns: &Value,
     ) -> Result<Value, MinijinjaError> {
-        let mut parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 1, 1)?;
-
-        let raw_columns = parser.get::<Value>("raw_columns")?;
-
-        let columns = minijinja_value_to_typed_struct::<IndexMap<String, DbtColumn>>(raw_columns)
-            .map_err(|e| {
-            MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
-        })?;
+        let columns =
+            minijinja_value_to_typed_struct::<IndexMap<String, DbtColumn>>(raw_columns.clone())
+                .map_err(|e| {
+                    MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
+                })?;
 
         if let Some(replay_adapter) = self.typed_adapter.as_replay() {
             return Ok(Value::from(
@@ -939,18 +933,14 @@ impl BaseAdapter for BridgeAdapter {
     fn nest_column_data_types(
         &self,
         _state: &State,
-        args: &[Value],
+        columns: &Value,
     ) -> Result<Value, MinijinjaError> {
-        let mut parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 1, 2)?;
-
         // TODO: 'constraints' arg are ignored; didn't find an usage example, implement later
-        let columns = parser.get::<Value>("columns")?;
-
-        let columns = minijinja_value_to_typed_struct::<IndexMap<String, DbtColumn>>(columns)
-            .map_err(|e| {
-                MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
-            })?;
+        let columns =
+            minijinja_value_to_typed_struct::<IndexMap<String, DbtColumn>>(columns.clone())
+                .map_err(|e| {
+                    MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
+                })?;
 
         let nested_columns = self.typed_adapter.nest_column_data_types(columns, None)?;
         let result = IndexMap::<String, Value>::from_iter(
@@ -1198,13 +1188,12 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, state), level = "trace")]
-    fn compare_dbr_version(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
-        let mut parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 2, 2)?;
-
-        let major = parser.get::<i64>("major")?;
-        let minor = parser.get::<i64>("minor")?;
-
+    fn compare_dbr_version(
+        &self,
+        state: &State,
+        major: i64,
+        minor: i64,
+    ) -> Result<Value, MinijinjaError> {
         let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
         let result = self
             .typed_adapter
@@ -1216,32 +1205,10 @@ impl BaseAdapter for BridgeAdapter {
     fn compute_external_path(
         &self,
         _state: &State,
-        args: &[Value],
+        config: ModelConfig,
+        node: &InternalDbtNodeWrapper,
+        is_incremental: bool,
     ) -> Result<Value, MinijinjaError> {
-        let mut parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 2, 3)?;
-
-        let config = parser.get::<Value>("config")?;
-
-        let model = parser.get::<Value>("model")?;
-        let is_incremental = parser
-            .get_optional::<bool>("is_incremental")
-            .unwrap_or_default();
-
-        let config = minijinja_value_to_typed_struct::<ModelConfig>(config).map_err(|e| {
-            MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
-        })?;
-
-        let node =
-            minijinja_value_to_typed_struct::<InternalDbtNodeWrapper>(model).map_err(|e| {
-                MinijinjaError::new(
-                    MinijinjaErrorKind::SerdeDeserializeError,
-                    format!(
-                        "adapter.compute_external_path expected an InternalDbtNodeWrapper: {e}"
-                    ),
-                )
-            })?;
-
         let result = self.typed_adapter.compute_external_path(
             config,
             node.as_internal_node(),
@@ -1349,13 +1316,8 @@ impl BaseAdapter for BridgeAdapter {
     fn generate_unique_temporary_table_suffix(
         &self,
         _state: &State,
-        args: &[Value],
+        suffix_initial: Option<String>,
     ) -> Result<Value, MinijinjaError> {
-        let mut parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 0, 1)?;
-
-        let suffix_initial = parser.get_optional::<String>("suffix_initial");
-
         let suffix = self
             .typed_adapter()
             .generate_unique_temporary_table_suffix(suffix_initial)?;
@@ -1364,11 +1326,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip(self, _state), level = "trace")]
-    fn valid_incremental_strategies(
-        &self,
-        _state: &State,
-        args: &[Value],
-    ) -> Result<Value, MinijinjaError> {
+    fn valid_incremental_strategies(&self, _state: &State) -> Result<Value, MinijinjaError> {
         Ok(Value::from_serialize(
             self.typed_adapter.valid_incremental_strategies(),
         ))
@@ -1394,24 +1352,20 @@ impl BaseAdapter for BridgeAdapter {
     fn get_persist_doc_columns(
         &self,
         _state: &State,
-        args: &[Value],
+        existing_columns: &Value,
+        model_columns: &Value,
     ) -> Result<Value, MinijinjaError> {
-        let mut parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 2, 2)?;
-
-        let existing_columns = parser.get::<Value>("existing_columns")?;
-
-        let model_columns = parser.get::<Value>("model_columns")?;
-
         let existing_columns =
-            Column::vec_from_jinja_value(AdapterType::Databricks, existing_columns).map_err(
-                |e| MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string()),
-            )?;
-        let model_columns =
-            minijinja_value_to_typed_struct::<IndexMap<String, DbtColumnRef>>(model_columns)
+            Column::vec_from_jinja_value(AdapterType::Databricks, existing_columns.clone())
                 .map_err(|e| {
                     MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
                 })?;
+        let model_columns = minijinja_value_to_typed_struct::<IndexMap<String, DbtColumnRef>>(
+            model_columns.clone(),
+        )
+        .map_err(|e| {
+            MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
+        })?;
 
         let persist_doc_columns = self
             .typed_adapter
@@ -1436,13 +1390,11 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip_all, level = "trace")]
-    fn get_relation_config(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError> {
-        let mut parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 1, 1)?;
-
-        let relation = parser.get::<Value>("relation")?;
-        let relation = downcast_value_to_dyn_base_relation(&relation)?;
-
+    fn get_relation_config(
+        &self,
+        state: &State,
+        relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, MinijinjaError> {
         let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
         let config =
             self.typed_adapter
@@ -1455,26 +1407,11 @@ impl BaseAdapter for BridgeAdapter {
     fn get_config_from_model(
         &self,
         _state: &State,
-        args: &[Value],
+        node: &InternalDbtNodeWrapper,
     ) -> Result<Value, MinijinjaError> {
-        let mut parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 1, 1)?;
-
-        let model = parser.get::<Value>("model")?;
-
-        let deserialized_node = minijinja_value_to_typed_struct::<InternalDbtNodeWrapper>(model)
-            .map_err(|e| {
-                MinijinjaError::new(
-                    MinijinjaErrorKind::SerdeDeserializeError,
-                    format!(
-                        "adapter.get_config_from_model expected an InternalDbtNodeWrapper: {e}"
-                    ),
-                )
-            })?;
-
         Ok(self
             .typed_adapter
-            .get_config_from_model(deserialized_node.as_internal_node())?)
+            .get_config_from_model(node.as_internal_node())?)
     }
 
     #[tracing::instrument(skip_all, level = "trace")]
@@ -1492,13 +1429,8 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip_all, level = "trace")]
-    fn clean_sql(&self, args: &[Value]) -> Result<Value, MinijinjaError> {
-        let mut parser = ArgParser::new(args, None);
-        check_num_args(current_function_name!(), &parser, 1, 1)?;
-
-        let sql = parser.get::<String>("sql")?;
-
-        Ok(Value::from(self.typed_adapter.clean_sql(&sql)?))
+    fn clean_sql(&self, sql: &str) -> Result<Value, MinijinjaError> {
+        Ok(Value::from(self.typed_adapter.clean_sql(sql)?))
     }
 
     #[tracing::instrument(skip(self), level = "trace")]

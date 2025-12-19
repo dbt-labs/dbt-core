@@ -536,7 +536,7 @@ impl BaseAdapter for ParseAdapter {
     fn render_raw_columns_constraints(
         &self,
         _state: &State,
-        _args: &[Value],
+        _raw_columns: &Value,
     ) -> Result<Value, MinijinjaError> {
         Ok(empty_vec_value())
     }
@@ -579,7 +579,7 @@ impl BaseAdapter for ParseAdapter {
     fn nest_column_data_types(
         &self,
         _state: &State,
-        _args: &[Value],
+        _columns: &Value,
     ) -> Result<Value, MinijinjaError> {
         Ok(empty_map_value())
     }
@@ -755,7 +755,8 @@ impl BaseAdapter for ParseAdapter {
     fn compare_dbr_version(
         &self,
         _state: &State,
-        _args: &[Value],
+        _major: i64,
+        _minor: i64,
     ) -> Result<Value, MinijinjaError> {
         Ok(Value::from(0))
     }
@@ -763,7 +764,9 @@ impl BaseAdapter for ParseAdapter {
     fn compute_external_path(
         &self,
         _state: &State,
-        _args: &[Value],
+        _config: dbt_schemas::schemas::project::ModelConfig,
+        _node: &dbt_schemas::schemas::InternalDbtNodeWrapper,
+        _is_incremental: bool,
     ) -> Result<Value, MinijinjaError> {
         Ok(empty_string_value())
     }
@@ -806,7 +809,7 @@ impl BaseAdapter for ParseAdapter {
     fn generate_unique_temporary_table_suffix(
         &self,
         _state: &State,
-        _args: &[Value],
+        _suffix_initial: Option<String>,
     ) -> Result<Value, MinijinjaError> {
         Ok(Value::from(""))
     }
@@ -814,7 +817,7 @@ impl BaseAdapter for ParseAdapter {
     fn get_config_from_model(
         &self,
         _state: &State,
-        _args: &[Value],
+        _node: &dbt_schemas::schemas::InternalDbtNodeWrapper,
     ) -> Result<Value, MinijinjaError> {
         Ok(none_value())
     }
@@ -830,7 +833,8 @@ impl BaseAdapter for ParseAdapter {
     fn get_persist_doc_columns(
         &self,
         _state: &State,
-        _args: &[Value],
+        _existing_columns: &Value,
+        _model_columns: &Value,
     ) -> Result<Value, MinijinjaError> {
         Ok(none_value())
     }
@@ -846,7 +850,7 @@ impl BaseAdapter for ParseAdapter {
     fn get_relation_config(
         &self,
         _state: &State,
-        _args: &[Value],
+        _relation: Arc<dyn BaseRelation>,
     ) -> Result<Value, MinijinjaError> {
         Ok(none_value())
     }
@@ -867,15 +871,11 @@ impl BaseAdapter for ParseAdapter {
         Ok(Value::from(""))
     }
 
-    fn valid_incremental_strategies(
-        &self,
-        _state: &State,
-        _args: &[Value],
-    ) -> Result<Value, MinijinjaError> {
-        Ok(empty_string_value())
+    fn valid_incremental_strategies(&self, _state: &State) -> Result<Value, MinijinjaError> {
+        Ok(empty_vec_value())
     }
 
-    fn clean_sql(&self, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn clean_sql(&self, _sql: &str) -> Result<Value, MinijinjaError> {
         unimplemented!("clean_sql")
     }
 

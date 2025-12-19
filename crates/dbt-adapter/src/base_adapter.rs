@@ -713,11 +713,13 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
         relation: Arc<dyn BaseRelation>,
     ) -> Result<Value, MinijinjaError>;
 
-    /// Render raw columns constants.
+    /// Render raw columns constraints.
+    ///
+    /// Used by BigQuery adapter to render column constraints.
     fn render_raw_columns_constraints(
         &self,
         state: &State,
-        args: &[Value],
+        raw_columns: &Value,
     ) -> Result<Value, MinijinjaError>;
 
     /// Check if schema exists
@@ -837,11 +839,14 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
         unimplemented!("only available with BigQuery adapter")
     }
 
-    /// nest_column_data_types
+    /// Nest column data types for BigQuery STRUCT/ARRAY types.
+    ///
+    /// Converts flat column definitions into nested structures.
+    /// Only available with BigQuery adapter.
     fn nest_column_data_types(
         &self,
         _state: &State,
-        _args: &[Value],
+        _columns: &Value,
     ) -> Result<Value, MinijinjaError> {
         unimplemented!("only available with BigQuery adapter")
     }
@@ -971,15 +976,30 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
         relation: Arc<dyn BaseRelation>,
     ) -> Result<Value, MinijinjaError>;
 
-    /// compare_dbr_version
-    fn compare_dbr_version(&self, _state: &State, _args: &[Value])
-    -> Result<Value, MinijinjaError>;
+    /// Compare Databricks Runtime version.
+    ///
+    /// https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/connections.py#L226-L227
+    ///
+    /// Returns:
+    /// - 1 if current version > expected
+    /// - 0 if current version == expected
+    /// - -1 if current version < expected
+    fn compare_dbr_version(
+        &self,
+        _state: &State,
+        _major: i64,
+        _minor: i64,
+    ) -> Result<Value, MinijinjaError>;
 
-    /// compute_external_path
+    /// Compute external path for Databricks external tables.
+    ///
+    /// https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/impl.py#L208-L209
     fn compute_external_path(
         &self,
         _state: &State,
-        _args: &[Value],
+        _config: dbt_schemas::schemas::project::ModelConfig,
+        _node: &dbt_schemas::schemas::InternalDbtNodeWrapper,
+        _is_incremental: bool,
     ) -> Result<Value, MinijinjaError>;
 
     /// Add UniForm Iceberg table properties.
@@ -1013,28 +1033,30 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
         _node: &dbt_schemas::schemas::InternalDbtNodeWrapper,
     ) -> Result<Value, MinijinjaError>;
 
-    /// generate_unique_temporary_table_suffix
+    /// Generate a unique temporary table suffix.
+    ///
+    /// https://github.com/dbt-labs/dbt-adapters/blob/4dc395b42dae78e895adf9c66ad6811534e879a6/dbt-athena/src/dbt/adapters/athena/impl.py#L445
     fn generate_unique_temporary_table_suffix(
         &self,
         _state: &State,
-        _args: &[Value],
+        _suffix_initial: Option<String>,
     ) -> Result<Value, MinijinjaError>;
 
-    /// parse_columns_and_constraints
+    /// Parse columns and constraints for table creation.
+    ///
+    /// Used by Databricks adapter for table creation with constraints.
     fn parse_columns_and_constraints(
         &self,
         _state: &State,
-        _args: &[Value],
+        _existing_columns: &Value,
+        _model_columns: &Value,
+        _model_constraints: &Value,
     ) -> Result<Value, MinijinjaError> {
         unimplemented!("only available with Databricks adapter")
     }
 
-    /// valid_incremental_strategies
-    fn valid_incremental_strategies(
-        &self,
-        _state: &State,
-        _args: &[Value],
-    ) -> Result<Value, MinijinjaError>;
+    /// Get the list of valid incremental strategies for this adapter.
+    fn valid_incremental_strategies(&self, _state: &State) -> Result<Value, MinijinjaError>;
 
     /// get_partitions_metadata
     fn get_partitions_metadata(
@@ -1043,11 +1065,15 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
         _relation: Arc<dyn BaseRelation>,
     ) -> Result<Value, MinijinjaError>;
 
-    /// get_persist_doc_columns
+    /// Get columns to persist documentation for.
+    ///
+    /// Given existing columns and columns from the model, determines which columns
+    /// to update and persist docs for. Only supported by Databricks.
     fn get_persist_doc_columns(
         &self,
         _state: &State,
-        _args: &[Value],
+        _existing_columns: &Value,
+        _model_columns: &Value,
     ) -> Result<Value, MinijinjaError>;
 
     fn get_column_tags_from_model(
@@ -1056,18 +1082,28 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
         _node: &dyn InternalDbtNodeAttributes,
     ) -> Result<Value, MinijinjaError>;
 
-    /// clean_sql
-    fn clean_sql(&self, _args: &[Value]) -> Result<Value, MinijinjaError>;
+    /// Clean SQL by removing extra whitespace and normalizing format.
+    ///
+    /// Only available with Databricks adapter.
+    fn clean_sql(&self, _sql: &str) -> Result<Value, MinijinjaError>;
 
-    /// get_relation_config
-    fn get_relation_config(&self, _state: &State, _args: &[Value])
-    -> Result<Value, MinijinjaError>;
+    /// Get the configuration of an existing relation from the remote data warehouse.
+    ///
+    /// https://github.com/databricks/dbt-databricks/blob/13686739eb59566c7a90ee3c357d12fe52ec02ea/dbt/adapters/databricks/impl.py#L797
+    fn get_relation_config(
+        &self,
+        _state: &State,
+        _relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, MinijinjaError>;
 
-    /// get_config_from_model
+    /// Get configuration from a model node.
+    ///
+    /// Given a model, parse and build its configurations.
+    /// https://github.com/databricks/dbt-databricks/blob/13686739eb59566c7a90ee3c357d12fe52ec02ea/dbt/adapters/databricks/impl.py#L810
     fn get_config_from_model(
         &self,
         _state: &State,
-        _args: &[Value],
+        _node: &dbt_schemas::schemas::InternalDbtNodeWrapper,
     ) -> Result<Value, MinijinjaError>;
 
     /// get_relations_without_caching
