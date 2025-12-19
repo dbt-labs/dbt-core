@@ -3,8 +3,8 @@ use crate::cast_util::downcast_value_to_dyn_base_relation;
 use crate::catalog_relation::CatalogRelation;
 use crate::errors::{AdapterError, AdapterErrorKind};
 use crate::funcs::{
-    dispatch_adapter_calls, empty_map_value, empty_mutable_vec_value, empty_string_value,
-    empty_vec_value, none_value,
+    dispatch_adapter_calls, dispatch_adapter_get_value, empty_map_value, empty_mutable_vec_value,
+    empty_string_value, empty_vec_value, none_value,
 };
 use crate::metadata::MetadataAdapter;
 use crate::query_comment::QueryCommentConfig;
@@ -927,5 +927,9 @@ impl Object for ParseAdapter {
         listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, MinijinjaError> {
         dispatch_adapter_calls(&**self, state, name, args, listeners)
+    }
+
+    fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
+        dispatch_adapter_get_value(&**self, key)
     }
 }
