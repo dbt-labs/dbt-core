@@ -162,10 +162,11 @@ pub(crate) fn abstract_tokenize(tokens: Vec<Token>) -> Vec<AbstractToken> {
                 abstract_tokens.push(AbstractToken::Token(token.clone()));
             }
             index += 1;
-        } else if token.value.len() >= 19
-            && timestamp_regex.is_match(&token.value[token.value.len() - 19..])
+        } else if token.value.chars().count() >= 19
+            && let Some(start_byte) = token.value.char_indices().rev().nth(18).map(|(i, _)| i)
+            && timestamp_regex.is_match(&token.value[start_byte..])
         {
-            let (first, last) = token.value.split_at(token.value.len() - 19);
+            let (first, last) = token.value.split_at(start_byte);
             if !first.is_empty() {
                 abstract_tokens.push(AbstractToken::Token(Token {
                     value: first.to_string(),
@@ -186,10 +187,11 @@ pub(crate) fn abstract_tokenize(tokens: Vec<Token>) -> Vec<AbstractToken> {
             abstract_tokens.push(AbstractToken::Timestamp {
                 value: timestamp_token,
             });
-        } else if token.value.len() >= 18
-            && timestamp_regex_ignore_t.is_match(&token.value[token.value.len() - 18..])
+        } else if token.value.chars().count() >= 18
+            && let Some(start_byte) = token.value.char_indices().rev().nth(17).map(|(i, _)| i)
+            && timestamp_regex_ignore_t.is_match(&token.value[start_byte..])
         {
-            let (first, last) = token.value.split_at(token.value.len() - 18);
+            let (first, last) = token.value.split_at(start_byte);
             if !first.is_empty() {
                 abstract_tokens.push(AbstractToken::Token(Token {
                     value: first.to_string(),
@@ -212,10 +214,11 @@ pub(crate) fn abstract_tokenize(tokens: Vec<Token>) -> Vec<AbstractToken> {
                 });
                 index += 1;
             }
-        } else if token.value.len() >= 10
-            && date_regex.is_match(&token.value[token.value.len() - 10..])
+        } else if token.value.chars().count() >= 10
+            && let Some(start_byte) = token.value.char_indices().rev().nth(9).map(|(i, _)| i)
+            && date_regex.is_match(&token.value[start_byte..])
         {
-            let (first, last) = token.value.split_at(token.value.len() - 10);
+            let (first, last) = token.value.split_at(start_byte);
             if !first.is_empty() {
                 abstract_tokens.push(AbstractToken::Token(Token {
                     value: first.to_string(),
@@ -273,4 +276,64 @@ pub(crate) fn abstract_tokenize(tokens: Vec<Token>) -> Vec<AbstractToken> {
     }
 
     abstract_tokens
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_tokenize_basic() {
+        let input = "hello world";
+        let tokens = tokenize(input);
+        assert_eq!(tokens.len(), 2);
+        assert_eq!(tokens[0].value, "hello");
+        assert_eq!(tokens[1].value, "world");
+    }
+
+    #[test]
+    fn test_abstract_tokenize_with_unicode_date() {
+        // Test that unicode characters in tokens don't cause boundary errors
+        // when checking date patterns at the end
+        let tokens = vec![
+            Token {
+                value: "prefix日2023-01-01".to_string(),
+                maybe_hash: false,
+            },
+            Token {
+                value: "12:34:56".to_string(),
+                maybe_hash: false,
+            },
+        ];
+        let abstract_tokens = abstract_tokenize(tokens);
+        // Should split into Token("prefix日") and Timestamp("2023-01-01T12:34:56")
+        assert_eq!(abstract_tokens.len(), 2);
+        match &abstract_tokens[0] {
+            AbstractToken::Token(t) => assert_eq!(t.value, "prefix日"),
+            _ => panic!("Expected Token"),
+        }
+        match &abstract_tokens[1] {
+            AbstractToken::Timestamp { value } => assert_eq!(value, "2023-01-01T12:34:56"),
+            _ => panic!("Expected Timestamp"),
+        }
+    }
+
+    #[test]
+    fn test_abstract_tokenize_with_unicode_timestamp() {
+        // Test timestamp with unicode in prefix
+        let token = Token {
+            value: "prefix日2023-01-01T12:34:56".to_string(),
+            maybe_hash: false,
+        };
+        let abstract_tokens = abstract_tokenize(vec![token]);
+        assert_eq!(abstract_tokens.len(), 2);
+        match &abstract_tokens[0] {
+            AbstractToken::Token(t) => assert_eq!(t.value, "prefix日"),
+            _ => panic!("Expected Token"),
+        }
+        match &abstract_tokens[1] {
+            AbstractToken::Timestamp { value } => assert_eq!(value, "2023-01-01T12:34:56"),
+            _ => panic!("Expected Timestamp"),
+        }
+    }
 }
