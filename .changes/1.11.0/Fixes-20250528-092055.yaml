@@ -1,6 +1,0 @@
-kind: Fixes
-body: Don't warn for metricflow_time_spine with non-day grain
-time: 2025-05-28T09:20:55.866514-07:00
-custom:
-  Author: courtneyholcomb
-  Issue: "11690"

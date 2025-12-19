@@ -1,6 +1,0 @@
-kind: Fixes
-body: ':bug: :snowman: Fix ref resolution within package when duplicate nodes exist, behind require_ref_searches_node_package_before_root behavior change flag'
-time: 2025-12-04T09:47:53.349428-08:00
-custom:
-    Author: michelleark
-    Issue: "11351"

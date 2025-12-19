@@ -1,6 +1,0 @@
-kind: Fixes
-body: For metric names, fix bug allowing hyphens (not allowed in metricflow already), make validation throw ValidationErrors (not ParsingErrors), and add tests.
-time: 2025-11-07T16:05:15.946331-08:00
-custom:
-    Author: theyostalservice
-    Issue: n/a

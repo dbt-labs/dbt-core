@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Ensure dbt-core modules aren't importing versioned artifact resources directly
-time: 2025-08-22T16:27:52.403177-05:00
-custom:
-  Author: QMalcolm
-  Issue: "11951"

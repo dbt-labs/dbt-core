@@ -1,6 +1,0 @@
-kind: Fixes
-body: Remove duplicative PropertyMovedToConfigDeprecation for source freshness
-time: 2025-08-05T10:43:09.502585-04:00
-custom:
-    Author: michelleark
-    Issue: "11880"

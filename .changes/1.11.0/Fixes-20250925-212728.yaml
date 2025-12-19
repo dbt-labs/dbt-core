@@ -1,6 +1,0 @@
-kind: Fixes
-body: Fix errors in partial parsing when working with versioned models
-time: 2025-09-25T21:27:28.591187-04:00
-custom:
-    Author: gshank
-    Issue: "11869"

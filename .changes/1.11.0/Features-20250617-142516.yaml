@@ -1,7 +1,0 @@
-kind: Features
-body: Update jsonschemas with builtin data test properties and exposure configs in
-  dbt_project.yml for more accurate deprecations
-time: 2025-06-17T14:25:16.976867-04:00
-custom:
-  Author: michelleark
-  Issue: "11335"

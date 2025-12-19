@@ -1,6 +1,0 @@
-kind: Features
-body: Support loaded_at_query and loaded_at_field on source and table configs
-time: 2025-06-23T11:31:30.897805-04:00
-custom:
-  Author: michelleark
-  Issue: "11659"

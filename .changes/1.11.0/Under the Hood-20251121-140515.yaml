@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: Replace setuptools and tox with hatch for build, test, and environment management.
-time: 2025-11-21T14:05:15.838252-05:00
-custom:
-  Author: emmyoop
-  Issue: "12151"

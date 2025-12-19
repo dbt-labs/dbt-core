@@ -1,6 +1,0 @@
-kind: Dependencies
-body: Upgrade to dbt-semantic-interfaces==0.9.0 for more robust saved query support.
-time: 2025-07-09T13:22:13.688162-07:00
-custom:
-  Author: courtneyholcomb
-  Issue: "11809"
