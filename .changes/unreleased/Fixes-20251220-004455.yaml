@@ -1,0 +1,6 @@
+kind: Fixes
+body: fixing issue introduced by new sqlparse version
+time: 2025-12-20T00:44:55.878918+01:00
+custom:
+    Author: corsettigyg
+    Issue: "12302"
