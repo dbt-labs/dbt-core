@@ -1,6 +1,0 @@
-kind: Fixes
-body: Guarantee instantiation result and thread_exception prior to access to avoid thread hangs
-time: 2025-09-12T14:51:13.355232-04:00
-custom:
-    Author: michelleark
-    Issue: "12013"

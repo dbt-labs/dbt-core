@@ -1,6 +1,0 @@
-kind: Under the Hood
-body: add dbt/jsonschemas to manifest.in
-time: 2025-10-28T16:34:13.943289-04:00
-custom:
-    Author: michelleark
-    Issue: "12126"
