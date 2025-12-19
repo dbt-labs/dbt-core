@@ -132,7 +132,7 @@ mod tests {
     use super::*;
     use crate::relation::databricks::config_v2::test_helpers;
     use dbt_agate::AgateTable;
-    use std::collections::HashMap;
+    use indexmap::IndexMap;
 
     fn create_mock_describe_extended_table(schedule_info: Option<&str>) -> AgateTable {
         let comment_text = schedule_info.unwrap_or("MANUAL");
@@ -152,7 +152,7 @@ mod tests {
     #[test]
     fn test_from_remote_state_manual() {
         let table = create_mock_describe_extended_table(None); // MANUAL by default
-        let results = HashMap::from([(DatabricksRelationMetadataKey::DescribeExtended, table)]);
+        let results = IndexMap::from([(DatabricksRelationMetadataKey::DescribeExtended, table)]);
         let config = from_remote_state(&results);
 
         assert_eq!(config.value.cron, None);
@@ -163,7 +163,7 @@ mod tests {
     fn test_from_remote_state_cron_schedule() {
         let table =
             create_mock_describe_extended_table(Some("CRON '0 */6 * * *' AT TIME ZONE 'UTC'"));
-        let results = HashMap::from([(DatabricksRelationMetadataKey::DescribeExtended, table)]);
+        let results = IndexMap::from([(DatabricksRelationMetadataKey::DescribeExtended, table)]);
         let config = from_remote_state(&results);
 
         assert_eq!(config.value.cron, Some("0 */6 * * *".to_string()));

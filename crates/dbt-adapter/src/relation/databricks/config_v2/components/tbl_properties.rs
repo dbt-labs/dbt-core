@@ -9,8 +9,8 @@ use crate::relation::databricks::config_v2::{
 use dbt_schemas::schemas::DbtModel;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_serde_yaml::Value as YmlValue;
+use indexmap::{IndexMap, IndexSet};
 use minijinja::Value;
-use std::collections::{HashMap, HashSet};
 
 pub(crate) const TYPE_NAME: &str = "tbl_properties";
 
@@ -49,10 +49,10 @@ const EQ_IGNORE_LIST: [&str; 24] = [
 
 /// Component for Databricks table properties
 ///
-/// Holds a HashMap of tag key and values.
-pub type TblProperties = SimpleComponentConfigImpl<HashMap<String, String>>;
+/// Holds a IndexMap of tag key and values.
+pub type TblProperties = SimpleComponentConfigImpl<IndexMap<String, String>>;
 
-fn new(properties: HashMap<String, String>) -> TblProperties {
+fn new(properties: IndexMap<String, String>) -> TblProperties {
     TblProperties {
         type_name: TYPE_NAME,
         diff_fn: diff,
@@ -62,16 +62,16 @@ fn new(properties: HashMap<String, String>) -> TblProperties {
 
 /// Takes the diff between two `TblProperties` by only comparing the non-ignored keys
 fn diff(
-    next: &HashMap<String, String>,
-    prev: &HashMap<String, String>,
-) -> Option<HashMap<String, String>> {
-    let all_keys: HashSet<_> = next
+    next: &IndexMap<String, String>,
+    prev: &IndexMap<String, String>,
+) -> Option<IndexMap<String, String>> {
+    let all_keys: IndexSet<_> = next
         .keys()
         .chain(prev.keys())
         .filter(|key| !EQ_IGNORE_LIST.contains(&key.as_str()))
         .collect();
 
-    let changed_keys: HashMap<String, String> = all_keys
+    let changed_keys: IndexMap<String, String> = all_keys
         .into_iter()
         .filter_map(|key| {
             let next_val = next.get(key.as_str());
@@ -93,10 +93,10 @@ fn diff(
 
 fn from_remote_state(results: &DatabricksRelationMetadata) -> TblProperties {
     let Some(table) = results.get(&DatabricksRelationMetadataKey::ShowTblProperties) else {
-        return new(HashMap::new());
+        return new(IndexMap::new());
     };
 
-    let mut tblproperties = HashMap::new();
+    let mut tblproperties = IndexMap::new();
     for row in table.rows() {
         if let (Ok(key_val), Ok(value_val)) =
             (row.get_item(&Value::from(0)), row.get_item(&Value::from(1)))
@@ -113,10 +113,10 @@ fn from_remote_state(results: &DatabricksRelationMetadata) -> TblProperties {
 
 fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> TblProperties {
     let Some(model) = relation_config.as_any().downcast_ref::<DbtModel>() else {
-        return new(HashMap::new());
+        return new(IndexMap::new());
     };
 
-    let mut tblproperties = HashMap::new();
+    let mut tblproperties = IndexMap::new();
 
     // Extract tblproperties from databricks_attr
     if let Some(databricks_attr) = &model.__adapter_attr__.databricks_attr
@@ -153,7 +153,7 @@ fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> TblProp
 pub(crate) struct TblPropertiesLoader;
 
 impl TblPropertiesLoader {
-    pub fn new(properties: HashMap<String, String>) -> Box<dyn ComponentConfig> {
+    pub fn new(properties: IndexMap<String, String>) -> Box<dyn ComponentConfig> {
         Box::new(new(properties))
     }
 
@@ -188,7 +188,7 @@ mod tests {
     use crate::relation::databricks::config_v2::test_helpers;
     use dbt_agate::AgateTable;
     use dbt_schemas::schemas::DbtModel;
-    use std::collections::HashMap;
+    use indexmap::IndexMap;
     use std::sync::Arc;
 
     fn create_mock_show_tblproperties_table(properties: Vec<(&str, &str)>) -> AgateTable {
@@ -216,7 +216,7 @@ mod tests {
     }
 
     fn create_mock_dbt_model(
-        tblproperties: HashMap<&str, &str>,
+        tblproperties: IndexMap<&str, &str>,
         table_format: Option<&str>,
     ) -> DbtModel {
         let cfg = test_helpers::TestModelConfig {
@@ -232,14 +232,14 @@ mod tests {
 
     #[test]
     fn test_diff_changed_databricks_keys() {
-        let prev = HashMap::from_iter([
+        let prev = IndexMap::from_iter([
             (
                 "pipelines.pipelineId".to_string(),
                 "pipeline123".to_string(),
             ),
             ("delta.enableChangeDataFeed".to_string(), "true".to_string()),
         ]);
-        let next = HashMap::from_iter([
+        let next = IndexMap::from_iter([
             (
                 "pipelines.pipelineId".to_string(),
                 "pipeline123456".to_string(),
@@ -256,7 +256,7 @@ mod tests {
 
     #[test]
     fn test_diff_changed_custom_keys() {
-        let prev = HashMap::from_iter([
+        let prev = IndexMap::from_iter([
             (
                 "pipelines.pipelineId".to_string(),
                 "pipeline123".to_string(),
@@ -264,7 +264,7 @@ mod tests {
             ("custom.change".to_string(), "old".to_string()),
             ("custom.drop".to_string(), "old".to_string()),
         ]);
-        let next = HashMap::from_iter([
+        let next = IndexMap::from_iter([
             (
                 "pipelines.pipelineId".to_string(),
                 "pipeline123456".to_string(),
@@ -291,7 +291,7 @@ mod tests {
             ("delta.enableChangeDataFeed", "true"), // Should be ignored
         ]);
 
-        let results = HashMap::from([(DatabricksRelationMetadataKey::ShowTblProperties, table)]);
+        let results = IndexMap::from([(DatabricksRelationMetadataKey::ShowTblProperties, table)]);
         let config = from_remote_state(&results);
 
         assert_eq!(config.value.len(), 4); // Ignores delta properties
@@ -316,7 +316,7 @@ mod tests {
 
     #[test]
     fn test_from_local_config() {
-        let props = HashMap::from_iter([
+        let props = IndexMap::from_iter([
             ("streaming.checkpointLocation", "/tmp/checkpoint"),
             ("streaming.outputMode", "append"),
             ("custom.property", "test_value"),
@@ -342,7 +342,7 @@ mod tests {
 
     #[test]
     fn test_from_local_config_iceberg() {
-        let props = HashMap::from_iter([("custom.property", "test_value")]);
+        let props = IndexMap::from_iter([("custom.property", "test_value")]);
         let model = create_mock_dbt_model(props, Some("iceberg"));
         let config = from_local_config(&model);
 
@@ -363,7 +363,7 @@ mod tests {
 
     #[test]
     fn test_from_local_config_empty() {
-        let model = create_mock_dbt_model(HashMap::new(), None);
+        let model = create_mock_dbt_model(IndexMap::new(), None);
         let config = from_local_config(&model);
 
         assert!(config.value.is_empty());

@@ -9,16 +9,16 @@ use crate::relation::databricks::config_v2::{
 
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 
-use std::collections::HashMap;
+use indexmap::IndexMap;
 
 pub(crate) const TYPE_NAME: &str = "column_comments";
 
 /// Component for Databricks column comments
 ///
 /// Holds a mapping of lowercase column names to the column comment.
-pub(crate) type ColumnComments = SimpleComponentConfigImpl<HashMap<String, String>>;
+pub(crate) type ColumnComments = SimpleComponentConfigImpl<IndexMap<String, String>>;
 
-fn new(column_comments: HashMap<String, String>) -> ColumnComments {
+fn new(column_comments: IndexMap<String, String>) -> ColumnComments {
     let normalized_comments = column_comments
         .into_iter()
         .map(|(column_name, comment)| {
@@ -37,9 +37,9 @@ fn new(column_comments: HashMap<String, String>) -> ColumnComments {
 fn from_remote_state(results: &DatabricksRelationMetadata) -> ColumnComments {
     let Some(describe_extended) = results.get(&DatabricksRelationMetadataKey::DescribeExtended)
     else {
-        return new(HashMap::new());
+        return new(IndexMap::new());
     };
-    let mut comments = HashMap::new();
+    let mut comments = IndexMap::new();
 
     // Iterate through rows looking for column information
     for row in describe_extended.rows().into_iter() {
@@ -81,7 +81,7 @@ fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> ColumnC
         .map(|pd| pd.relation.unwrap_or(false))
         .unwrap_or(false);
 
-    let mut comments = HashMap::new();
+    let mut comments = IndexMap::new();
     if persist {
         for column in columns {
             comments.insert(
@@ -101,7 +101,7 @@ fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> ColumnC
 pub(crate) struct ColumnCommentsLoader;
 
 impl ColumnCommentsLoader {
-    pub fn new(column_comments: HashMap<String, String>) -> Box<dyn ComponentConfig> {
+    pub fn new(column_comments: IndexMap<String, String>) -> Box<dyn ComponentConfig> {
         Box::new(new(column_comments))
     }
 
@@ -173,7 +173,7 @@ email,string,\n\
         AgateTable::from_record_batch(Arc::new(batch))
     }
 
-    fn create_mock_dbt_model(comments: HashMap<&str, &str>, persist_relation: bool) -> DbtModel {
+    fn create_mock_dbt_model(comments: IndexMap<&str, &str>, persist_relation: bool) -> DbtModel {
         let cfg = test_helpers::TestModelConfig {
             columns: comments
                 .into_iter()
@@ -193,7 +193,7 @@ email,string,\n\
     #[test]
     fn test_from_remote_state() {
         let table = create_mock_describe_extended_table();
-        let results = HashMap::from([(DatabricksRelationMetadataKey::DescribeExtended, table)]);
+        let results = IndexMap::from([(DatabricksRelationMetadataKey::DescribeExtended, table)]);
         let config = from_remote_state(&results);
 
         assert_eq!(config.value.len(), 3);
@@ -207,7 +207,7 @@ email,string,\n\
 
     #[test]
     fn test_from_remote_state_missing_describe_extended() {
-        let results = HashMap::new();
+        let results = IndexMap::new();
         let config = from_remote_state(&results);
 
         assert!(config.value.is_empty());
@@ -225,7 +225,7 @@ email,string,\n\
         )
         .unwrap();
         let table = AgateTable::from_record_batch(Arc::new(record_batch));
-        let results = HashMap::from([(DatabricksRelationMetadataKey::DescribeExtended, table)]);
+        let results = IndexMap::from([(DatabricksRelationMetadataKey::DescribeExtended, table)]);
         let config = from_remote_state(&results);
 
         assert_eq!(config.value.len(), 0);
@@ -241,7 +241,7 @@ email,string,\n\
         let mut reader = create_reader(file);
         let batch = reader.next().unwrap().unwrap();
         let table = AgateTable::from_record_batch(Arc::new(batch));
-        let results = HashMap::from([(DatabricksRelationMetadataKey::DescribeExtended, table)]);
+        let results = IndexMap::from([(DatabricksRelationMetadataKey::DescribeExtended, table)]);
         let config = from_remote_state(&results);
 
         assert_eq!(config.value.len(), 3);
@@ -263,7 +263,7 @@ email,string,\n\
         let mut reader = create_reader(file);
         let batch = reader.next().unwrap().unwrap();
         let table = AgateTable::from_record_batch(Arc::new(batch));
-        let results = HashMap::from([(DatabricksRelationMetadataKey::DescribeExtended, table)]);
+        let results = IndexMap::from([(DatabricksRelationMetadataKey::DescribeExtended, table)]);
         let config = from_remote_state(&results);
 
         // Should stop at first # delimiter, so only 'id' should be included
@@ -291,7 +291,7 @@ email,string,\n\
         .unwrap();
         let batch = reader.next().unwrap().unwrap();
         let table = AgateTable::from_record_batch(Arc::new(batch));
-        let results = HashMap::from([(DatabricksRelationMetadataKey::DescribeExtended, table)]);
+        let results = IndexMap::from([(DatabricksRelationMetadataKey::DescribeExtended, table)]);
         let config = from_remote_state(&results);
 
         assert_eq!(config.value.len(), 2);
@@ -311,7 +311,7 @@ email,string,\n\
         let mut reader = create_reader(file);
         let batch = reader.next().unwrap().unwrap();
         let table = AgateTable::from_record_batch(Arc::new(batch));
-        let results = HashMap::from([(DatabricksRelationMetadataKey::DescribeExtended, table)]);
+        let results = IndexMap::from([(DatabricksRelationMetadataKey::DescribeExtended, table)]);
         let config = from_remote_state(&results);
 
         // Should only have 2 valid columns, skipping empty and whitespace-only names
@@ -324,7 +324,7 @@ email,string,\n\
 
     #[test]
     fn test_from_local_config_with_persist() {
-        let columns = HashMap::from_iter([("id", "Primary key"), ("name", "User name")]);
+        let columns = IndexMap::from_iter([("id", "Primary key"), ("name", "User name")]);
         let mock_node = create_mock_dbt_model(columns, true);
         let config = from_local_config(&mock_node);
 
@@ -335,7 +335,7 @@ email,string,\n\
 
     #[test]
     fn test_from_local_config_without_persist() {
-        let columns = HashMap::from_iter([("id", "Primary key")]);
+        let columns = IndexMap::from_iter([("id", "Primary key")]);
         let mock_node = create_mock_dbt_model(columns, false);
         let config = from_local_config(&mock_node);
 
@@ -345,7 +345,7 @@ email,string,\n\
 
     #[test]
     fn test_column_comments_diff_no_changes() {
-        let mut comments = HashMap::new();
+        let mut comments = IndexMap::new();
         comments.insert("id".to_string(), "Primary key".to_string());
         comments.insert("name".to_string(), "User name".to_string());
         let config = new(comments);
@@ -356,12 +356,12 @@ email,string,\n\
 
     #[test]
     fn test_column_comments_diff_with_changes() {
-        let mut new_comments = HashMap::new();
+        let mut new_comments = IndexMap::new();
         new_comments.insert("id".to_string(), "Updated primary key".to_string());
         new_comments.insert("name".to_string(), "User name".to_string());
         let new_config = new(new_comments);
 
-        let mut old_comments = HashMap::new();
+        let mut old_comments = IndexMap::new();
         old_comments.insert("id".to_string(), "Primary key".to_string());
         old_comments.insert("name".to_string(), "User name".to_string());
         let old_config = new(old_comments);
@@ -382,11 +382,11 @@ email,string,\n\
 
     #[test]
     fn test_column_comments_diff_with_dropped_comment() {
-        let mut new_comments = HashMap::new();
+        let mut new_comments = IndexMap::new();
         new_comments.insert("id".to_string(), "Primary key".to_string());
         let new_config = new(new_comments);
 
-        let mut old_comments = HashMap::new();
+        let mut old_comments = IndexMap::new();
         old_comments.insert("id".to_string(), "Primary key".to_string());
         old_comments.insert("name".to_string(), "User name".to_string());
         let old_config = new(old_comments);

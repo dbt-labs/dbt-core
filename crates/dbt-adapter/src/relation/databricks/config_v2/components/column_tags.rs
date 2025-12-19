@@ -9,17 +9,17 @@ use crate::relation::databricks::config_v2::{
 use dbt_schemas::schemas::DbtModel;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_serde_yaml::Value as YmlValue;
+use indexmap::IndexMap;
 use minijinja::Value;
-use std::collections::HashMap;
 
 pub(crate) const TYPE_NAME: &str = "column_tags";
 
 /// Component for Databricks column tags
 ///
-/// Holds a HashMap of column name to column tags.
-pub type ColumnTags = SimpleComponentConfigImpl<HashMap<String, HashMap<String, String>>>;
+/// Holds a IndexMap of column name to column tags.
+pub type ColumnTags = SimpleComponentConfigImpl<IndexMap<String, IndexMap<String, String>>>;
 
-fn new(tags: HashMap<String, HashMap<String, String>>) -> ColumnTags {
+fn new(tags: IndexMap<String, IndexMap<String, String>>) -> ColumnTags {
     ColumnTags {
         type_name: TYPE_NAME,
         diff_fn: merge_tags_diff,
@@ -28,9 +28,9 @@ fn new(tags: HashMap<String, HashMap<String, String>>) -> ColumnTags {
 }
 
 fn merge_tags_diff(
-    desired_state: &HashMap<String, HashMap<String, String>>,
-    current_state: &HashMap<String, HashMap<String, String>>,
-) -> Option<HashMap<String, HashMap<String, String>>> {
+    desired_state: &IndexMap<String, IndexMap<String, String>>,
+    current_state: &IndexMap<String, IndexMap<String, String>>,
+) -> Option<IndexMap<String, IndexMap<String, String>>> {
     let mut merged = current_state.clone();
 
     for (column_name, column_tag_map) in desired_state {
@@ -48,7 +48,7 @@ fn merge_tags_diff(
 }
 
 fn from_remote_state(results: &DatabricksRelationMetadata) -> ColumnTags {
-    let mut column_tags: HashMap<String, HashMap<String, String>> = HashMap::new();
+    let mut column_tags: IndexMap<String, IndexMap<String, String>> = IndexMap::new();
     if let Some(column_tags_table) =
         results.get(&DatabricksRelationMetadataKey::InfoSchemaColumnTags)
     {
@@ -74,12 +74,12 @@ fn from_remote_state(results: &DatabricksRelationMetadata) -> ColumnTags {
 }
 
 fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> ColumnTags {
-    let mut column_tags = HashMap::new();
+    let mut column_tags = IndexMap::new();
 
     if let Some(model) = relation_config.as_any().downcast_ref::<DbtModel>() {
         for column in &model.__base_attr__.columns {
             if let Some(column_databricks_tags) = &column.databricks_tags {
-                let mut column_tag_map = HashMap::new();
+                let mut column_tag_map = IndexMap::new();
                 for (tag_name, tag_value) in column_databricks_tags {
                     if let YmlValue::String(value_str, _) = tag_value {
                         column_tag_map.insert(tag_name.clone(), value_str.clone());
@@ -98,7 +98,7 @@ fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> ColumnT
 pub(crate) struct ColumnTagsLoader;
 
 impl ColumnTagsLoader {
-    pub fn new(tags: HashMap<String, HashMap<String, String>>) -> Box<dyn ComponentConfig> {
+    pub fn new(tags: IndexMap<String, IndexMap<String, String>>) -> Box<dyn ComponentConfig> {
         Box::new(new(tags))
     }
 
@@ -133,17 +133,17 @@ mod tests {
 
     #[test]
     fn test_get_diff_column_tags() {
-        let mut old_column_tags = HashMap::new();
-        let mut old_col1_tags = HashMap::new();
+        let mut old_column_tags = IndexMap::new();
+        let mut old_col1_tags = IndexMap::new();
         old_col1_tags.insert("old_tag".to_string(), "old_value".to_string());
         old_column_tags.insert("col1".to_string(), old_col1_tags);
 
-        let mut new_column_tags = HashMap::new();
-        let mut new_col1_tags = HashMap::new();
+        let mut new_column_tags = IndexMap::new();
+        let mut new_col1_tags = IndexMap::new();
         new_col1_tags.insert("new_tag".to_string(), "new_value".to_string());
         new_column_tags.insert("col1".to_string(), new_col1_tags);
 
-        let mut new_col2_tags = HashMap::new();
+        let mut new_col2_tags = IndexMap::new();
         new_col2_tags.insert("col2_tag".to_string(), "col2_value".to_string());
         new_column_tags.insert("col2".to_string(), new_col2_tags);
 
@@ -159,8 +159,8 @@ mod tests {
 
     #[test]
     fn test_get_diff_no_change() {
-        let mut column_tags = HashMap::new();
-        let mut col_tags = HashMap::new();
+        let mut column_tags = IndexMap::new();
+        let mut col_tags = IndexMap::new();
         col_tags.insert("tag1".to_string(), "value1".to_string());
         column_tags.insert("col1".to_string(), col_tags);
 

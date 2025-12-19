@@ -116,7 +116,7 @@ mod tests {
     use super::*;
     use crate::relation::databricks::config_v2::test_helpers;
     use dbt_agate::AgateTable;
-    use std::collections::HashMap;
+    use indexmap::IndexMap;
     use std::sync::Arc;
 
     fn create_mock_describe_extended_table(partition_columns: Vec<&str>) -> AgateTable {
@@ -168,7 +168,7 @@ mod tests {
     #[test]
     fn test_from_remote_state_with_partitions() {
         let table = create_mock_describe_extended_table(vec!["event_name", "user_id"]);
-        let results = HashMap::from([(DatabricksRelationMetadataKey::DescribeExtended, table)]);
+        let results = IndexMap::from([(DatabricksRelationMetadataKey::DescribeExtended, table)]);
         let config = from_remote_state(&results);
 
         assert_eq!(config.value, vec!["event_name", "user_id"]);
@@ -177,7 +177,7 @@ mod tests {
     #[test]
     fn test_from_remote_state_no_partitions() {
         let table = create_mock_describe_extended_table(vec![]);
-        let results = HashMap::from([(DatabricksRelationMetadataKey::DescribeExtended, table)]);
+        let results = IndexMap::from([(DatabricksRelationMetadataKey::DescribeExtended, table)]);
         let config = from_remote_state(&results);
 
         assert!(config.value.is_empty());

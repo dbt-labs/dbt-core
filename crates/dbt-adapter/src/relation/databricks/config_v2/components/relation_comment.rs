@@ -102,7 +102,7 @@ mod tests {
     use crate::relation::databricks::config_v2::test_helpers;
     use dbt_agate::AgateTable;
     use dbt_schemas::schemas::DbtModel;
-    use std::collections::HashMap;
+    use indexmap::IndexMap;
 
     fn create_mock_describe_extended_table(comment: Option<&str>) -> AgateTable {
         let mut rows = Vec::new();
@@ -125,7 +125,7 @@ mod tests {
     #[test]
     fn test_from_remote_state_with_comment() {
         let table = create_mock_describe_extended_table(Some("DESC"));
-        let results = HashMap::from([(DatabricksRelationMetadataKey::DescribeExtended, table)]);
+        let results = IndexMap::from([(DatabricksRelationMetadataKey::DescribeExtended, table)]);
         let comment_config = from_remote_state(&results);
 
         assert_eq!(comment_config.value.unwrap(), "DESC");
@@ -134,7 +134,7 @@ mod tests {
     #[test]
     fn test_from_remote_state_no_comment() {
         let table = create_mock_describe_extended_table(None);
-        let results = HashMap::from([(DatabricksRelationMetadataKey::DescribeExtended, table)]);
+        let results = IndexMap::from([(DatabricksRelationMetadataKey::DescribeExtended, table)]);
         let comment_config = from_remote_state(&results);
 
         assert_eq!(comment_config.value, None);

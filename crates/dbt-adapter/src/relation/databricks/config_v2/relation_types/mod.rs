@@ -1,5 +1,5 @@
 use crate::relation::config_v2::ComponentConfigChange;
-use std::collections::HashMap;
+use indexmap::IndexMap;
 
 pub(crate) mod incremental_table;
 pub(crate) mod materialized_view;
@@ -23,7 +23,7 @@ pub(super) enum MaterializationType {
 /// optimizations.
 pub(super) fn requires_full_refresh(
     materialization_type: MaterializationType,
-    components: &HashMap<&'static str, ComponentConfigChange>,
+    components: &IndexMap<&'static str, ComponentConfigChange>,
 ) -> bool {
     use crate::relation::databricks::config_v2::components::*;
 

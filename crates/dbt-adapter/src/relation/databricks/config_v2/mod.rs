@@ -7,7 +7,7 @@ pub(crate) mod relation_types;
 pub(crate) mod test_helpers;
 
 use dbt_agate::AgateTable;
-use std::collections::HashMap;
+use indexmap::IndexMap;
 
 #[derive(Debug, Eq, PartialEq, Hash)]
 pub(crate) enum DatabricksRelationMetadataKey {
@@ -54,4 +54,4 @@ impl From<DatabricksRelationMetadataKey> for String {
     }
 }
 
-pub(crate) type DatabricksRelationMetadata = HashMap<DatabricksRelationMetadataKey, AgateTable>;
+pub(crate) type DatabricksRelationMetadata = IndexMap<DatabricksRelationMetadataKey, AgateTable>;

@@ -9,18 +9,18 @@ use crate::relation::databricks::config_v2::{
 use dbt_schemas::schemas::DbtModel;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_serde_yaml::Value as YmlValue;
+use indexmap::IndexMap;
 use minijinja::Value;
-use std::collections::HashMap;
 
 pub(crate) const TYPE_NAME: &str = "relation_tags";
 
 // TODO(serramatutu): reuse this for `tags` and `labels` in other warehouses
 /// Component for Databricks tags
 ///
-/// Holds a HashMap of tag key and values.
-pub type RelationTags = SimpleComponentConfigImpl<HashMap<String, String>>;
+/// Holds a IndexMap of tag key and values.
+pub type RelationTags = SimpleComponentConfigImpl<IndexMap<String, String>>;
 
-fn new(tags: HashMap<String, String>) -> RelationTags {
+fn new(tags: IndexMap<String, String>) -> RelationTags {
     RelationTags {
         type_name: TYPE_NAME,
         diff_fn: diff::desired_state,
@@ -31,10 +31,10 @@ fn new(tags: HashMap<String, String>) -> RelationTags {
 fn from_remote_state(results: &DatabricksRelationMetadata) -> RelationTags {
     let Some(remote_tags) = results.get(&DatabricksRelationMetadataKey::InfoSchemaRelationTags)
     else {
-        return new(HashMap::new());
+        return new(IndexMap::new());
     };
 
-    let mut tags = HashMap::new();
+    let mut tags = IndexMap::new();
 
     for row in remote_tags.rows() {
         if let (Ok(tag_name_val), Ok(tag_value_val)) =
@@ -51,10 +51,10 @@ fn from_remote_state(results: &DatabricksRelationMetadata) -> RelationTags {
 
 fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> RelationTags {
     let Some(model) = relation_config.as_any().downcast_ref::<DbtModel>() else {
-        return new(HashMap::new());
+        return new(IndexMap::new());
     };
 
-    let mut tags = HashMap::new();
+    let mut tags = IndexMap::new();
 
     if let Some(databricks_attr) = &model.__adapter_attr__.databricks_attr
         && let Some(tags_map) = &databricks_attr.databricks_tags
@@ -72,7 +72,7 @@ fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> Relatio
 pub(crate) struct RelationTagsLoader;
 
 impl RelationTagsLoader {
-    pub fn new(tags: HashMap<String, String>) -> Box<dyn ComponentConfig> {
+    pub fn new(tags: IndexMap<String, String>) -> Box<dyn ComponentConfig> {
         Box::new(new(tags))
     }
 
@@ -108,11 +108,11 @@ mod tests {
 
     #[test]
     fn test_get_diff_add_or_update() {
-        let mut old_tags = HashMap::new();
+        let mut old_tags = IndexMap::new();
         old_tags.insert("a".to_string(), "1".to_string());
         old_tags.insert("b".to_string(), "2".to_string());
 
-        let mut new_tags = HashMap::new();
+        let mut new_tags = IndexMap::new();
         new_tags.insert("b".to_string(), "3".to_string());
         new_tags.insert("c".to_string(), "4".to_string());
 
@@ -128,7 +128,7 @@ mod tests {
 
     #[test]
     fn test_get_diff_no_change() {
-        let mut tags = HashMap::new();
+        let mut tags = IndexMap::new();
         tags.insert("a".to_string(), "1".to_string());
         tags.insert("b".to_string(), "2".to_string());
 

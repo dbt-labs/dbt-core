@@ -12,24 +12,24 @@ use crate::relation::databricks::config_v2::{
 };
 
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
-use std::collections::{HashMap, HashSet};
+use indexmap::{IndexMap, IndexSet};
 
 pub(crate) const TYPE_NAME: &str = "constraints";
 
 #[derive(Debug, Default, Clone)]
 pub struct Constraints {
-    pub set_non_nulls: HashSet<String>,
-    pub unset_non_nulls: HashSet<String>,
-    pub set_constraints: HashSet<TypedConstraint>,
-    pub unset_constraints: HashSet<TypedConstraint>,
+    pub set_non_nulls: IndexSet<String>,
+    pub unset_non_nulls: IndexSet<String>,
+    pub set_constraints: IndexSet<TypedConstraint>,
+    pub unset_constraints: IndexSet<TypedConstraint>,
 }
 
 impl Constraints {
     fn new(
-        set_non_nulls: HashSet<String>,
-        unset_non_nulls: HashSet<String>,
-        set_constraints: HashSet<TypedConstraint>,
-        unset_constraints: HashSet<TypedConstraint>,
+        set_non_nulls: IndexSet<String>,
+        unset_non_nulls: IndexSet<String>,
+        set_constraints: IndexSet<TypedConstraint>,
+        unset_constraints: IndexSet<TypedConstraint>,
     ) -> Self {
         Self {
             set_non_nulls,
@@ -91,8 +91,8 @@ impl Constraints {
     /// Based on: https://github.com/databricks/dbt-databricks/blob/e7099a2c75a92fa5240989b19d246a0ca8a313ef/dbt/adapters/databricks/relation_configs/constraints.py#L53
     fn process_check_constraints(
         table_properties: Option<&dbt_agate::AgateTable>,
-    ) -> HashSet<TypedConstraint> {
-        let mut check_constraints = HashSet::new();
+    ) -> IndexSet<TypedConstraint> {
+        let mut check_constraints = IndexSet::new();
         if let Some(table) = table_properties {
             for row in table.rows() {
                 if let (Ok(property_name), Ok(property_value)) = (
@@ -121,10 +121,10 @@ impl Constraints {
     /// Based on: https://github.com/databricks/dbt-databricks/blob/e7099a2c75a92fa5240989b19d246a0ca8a313ef/dbt/adapters/databricks/relation_configs/constraints.py#L69
     fn process_primary_key_constraints(
         pk_table: Option<&dbt_agate::AgateTable>,
-    ) -> HashSet<TypedConstraint> {
-        let mut pk_constraints = HashSet::new();
+    ) -> IndexSet<TypedConstraint> {
+        let mut pk_constraints = IndexSet::new();
         if let Some(table) = pk_table {
-            let mut constraint_columns: HashMap<String, Vec<String>> = HashMap::new();
+            let mut constraint_columns: IndexMap<String, Vec<String>> = IndexMap::new();
 
             for row in table.rows() {
                 if let (Ok(constraint_name), Ok(column_name)) =
@@ -155,10 +155,10 @@ impl Constraints {
     /// Based on: https://github.com/databricks/dbt-databricks/blob/e7099a2c75a92fa5240989b19d246a0ca8a313ef/dbt/adapters/databricks/relation_configs/constraints.py#L87
     fn process_foreign_key_constraints(
         fk_table: Option<&dbt_agate::AgateTable>,
-    ) -> HashSet<TypedConstraint> {
-        let mut fk_constraints = HashSet::new();
+    ) -> IndexSet<TypedConstraint> {
+        let mut fk_constraints = IndexSet::new();
         if let Some(table) = fk_table {
-            let mut fk_data: HashMap<String, FkData> = HashMap::new();
+            let mut fk_data: IndexMap<String, FkData> = IndexMap::new();
 
             for row in table.rows() {
                 if let (
@@ -239,7 +239,7 @@ impl Constraints {
                                     .filter(|s| !s.is_empty() && s != "undefined")
                             })
                     })
-                    .collect::<HashSet<_>>()
+                    .collect::<IndexSet<_>>()
             })
             .unwrap_or_default();
 
@@ -258,16 +258,16 @@ impl Constraints {
             results.get(&DatabricksRelationMetadataKey::ForeignKeyConstraints),
         );
 
-        let mut all_constraints = HashSet::new();
+        let mut all_constraints = IndexSet::new();
         all_constraints.extend(check_constraints);
         all_constraints.extend(pk_constraints);
         all_constraints.extend(fk_constraints);
 
         Self::new(
             non_null_columns,
-            HashSet::new(),
+            IndexSet::new(),
             all_constraints,
-            HashSet::new(),
+            IndexSet::new(),
         )
     }
 
@@ -291,15 +291,15 @@ impl Constraints {
             return Self::default();
         };
 
-        let constraints_set: HashSet<_> = other_constraints.into_iter().collect();
+        let constraints_set: IndexSet<_> = other_constraints.into_iter().collect();
 
-        // FIXME(serramatutu): make `parse_constraints` return `HashSet` directly once old code
+        // FIXME(serramatutu): make `parse_constraints` return `IndexSet` directly once old code
         // that relies on `BTreeSet` is deleted
         Self::new(
-            HashSet::from_iter(not_null_columns),
-            HashSet::new(),
-            HashSet::from_iter(constraints_set),
-            HashSet::new(),
+            IndexSet::from_iter(not_null_columns),
+            IndexSet::new(),
+            IndexSet::from_iter(constraints_set),
+            IndexSet::new(),
         )
     }
 }
@@ -308,10 +308,10 @@ pub(crate) struct ConstraintsLoader;
 
 impl ConstraintsLoader {
     pub fn new(
-        set_non_nulls: HashSet<String>,
-        unset_non_nulls: HashSet<String>,
-        set_constraints: HashSet<TypedConstraint>,
-        unset_constraints: HashSet<TypedConstraint>,
+        set_non_nulls: IndexSet<String>,
+        unset_non_nulls: IndexSet<String>,
+        set_constraints: IndexSet<TypedConstraint>,
+        unset_constraints: IndexSet<TypedConstraint>,
     ) -> Box<dyn ComponentConfig> {
         Box::new(Constraints::new(
             set_non_nulls,
@@ -367,13 +367,13 @@ impl ComponentConfig for Constraints {
         let current_state = current_state.as_any().downcast_ref::<Self>()?;
 
         // Normalize constraints for comparison (like Python implementation)
-        let next_set_constraints_normalized: HashSet<_> = self
+        let next_set_constraints_normalized: IndexSet<_> = self
             .set_constraints
             .iter()
             .map(Self::normalize_constraint)
             .collect();
 
-        let prev_set_constraints_normalized: HashSet<_> = current_state
+        let prev_set_constraints_normalized: IndexSet<_> = current_state
             .set_constraints
             .iter()
             .map(Self::normalize_constraint)
@@ -435,7 +435,7 @@ mod tests {
         nodes::DbtModel,
     };
     use dbt_test_primitives::assert_contains;
-    use std::collections::{HashMap, HashSet};
+    use indexmap::{IndexMap, IndexSet};
     use std::io;
     use std::sync::Arc;
 
@@ -510,7 +510,7 @@ fk_composite,parent_type,main,default,parents,type
     }
 
     fn create_mock_dbt_model_with_constraints(
-        constraints: HashMap<&str, Vec<Constraint>>,
+        constraints: IndexMap<&str, Vec<Constraint>>,
     ) -> DbtModel {
         let cfg = test_helpers::TestModelConfig {
             columns: constraints
@@ -528,13 +528,13 @@ fk_composite,parent_type,main,default,parents,type
 
     #[test]
     fn test_constraints_config_diff_no_changes() {
-        let non_nulls = HashSet::from(["id".to_string()]);
-        let constraints = HashSet::from([TypedConstraint::Check {
+        let non_nulls = IndexSet::from(["id".to_string()]);
+        let constraints = IndexSet::from([TypedConstraint::Check {
             name: Some("positive_id".to_string()),
             expression: "id > 0".to_string(),
             columns: None,
         }]);
-        let a = Constraints::new(non_nulls, HashSet::new(), constraints, HashSet::new());
+        let a = Constraints::new(non_nulls, IndexSet::new(), constraints, IndexSet::new());
         let diff = Constraints::diff_from(&a, Some(&a));
 
         assert!(diff.is_none());
@@ -542,15 +542,15 @@ fk_composite,parent_type,main,default,parents,type
 
     #[test]
     fn test_constraints_config_diff_with_changes() {
-        let old_non_nulls = HashSet::from(["id".to_string()]);
-        let old_constraints = HashSet::from([TypedConstraint::Check {
+        let old_non_nulls = IndexSet::from(["id".to_string()]);
+        let old_constraints = IndexSet::from([TypedConstraint::Check {
             name: Some("old_check".to_string()),
             expression: "id > 0".to_string(),
             columns: None,
         }]);
 
-        let new_non_nulls = HashSet::from(["id".to_string(), "name".to_string()]);
-        let new_constraints = HashSet::from([
+        let new_non_nulls = IndexSet::from(["id".to_string(), "name".to_string()]);
+        let new_constraints = IndexSet::from([
             TypedConstraint::Check {
                 name: Some("positive_id".to_string()),
                 expression: "id > 0".to_string(),
@@ -565,15 +565,15 @@ fk_composite,parent_type,main,default,parents,type
 
         let old_config = Constraints::new(
             old_non_nulls,
-            HashSet::new(),
+            IndexSet::new(),
             old_constraints,
-            HashSet::new(),
+            IndexSet::new(),
         );
         let new_config = Constraints::new(
             new_non_nulls,
-            HashSet::new(),
+            IndexSet::new(),
             new_constraints,
-            HashSet::new(),
+            IndexSet::new(),
         );
 
         let diff = Constraints::diff_from(&new_config, Some(&old_config));
@@ -590,7 +590,7 @@ fk_composite,parent_type,main,default,parents,type
     #[test]
     fn test_from_remote_state_with_non_null_constraints() {
         let non_null_table = create_mock_non_null_constraints_table();
-        let results = HashMap::from([(
+        let results = IndexMap::from([(
             DatabricksRelationMetadataKey::NonNullConstraints,
             non_null_table,
         )]);
@@ -606,7 +606,7 @@ fk_composite,parent_type,main,default,parents,type
     fn test_from_remote_state_with_check_constraints() {
         let check_table = create_mock_check_constraints_table();
 
-        let results = HashMap::from([(
+        let results = IndexMap::from([(
             DatabricksRelationMetadataKey::ShowTblProperties,
             check_table,
         )]);
@@ -634,7 +634,7 @@ fk_composite,parent_type,main,default,parents,type
     fn test_from_remote_state_with_primary_key_constraints() {
         let pk_table = create_mock_primary_key_constraints_table();
 
-        let results = HashMap::from([(
+        let results = IndexMap::from([(
             DatabricksRelationMetadataKey::PrimaryKeyConstraints,
             pk_table,
         )]);
@@ -659,7 +659,7 @@ fk_composite,parent_type,main,default,parents,type
     fn test_from_remote_state_with_foreign_key_constraints() {
         let fk_table = create_mock_foreign_key_constraints_table();
 
-        let results = HashMap::from([(
+        let results = IndexMap::from([(
             DatabricksRelationMetadataKey::ForeignKeyConstraints,
             fk_table,
         )]);
@@ -695,7 +695,7 @@ fk_composite,parent_type,main,default,parents,type
         let pk_table = create_mock_primary_key_constraints_table();
         let fk_table = create_mock_foreign_key_constraints_table();
 
-        let results = HashMap::from([
+        let results = IndexMap::from([
             (
                 DatabricksRelationMetadataKey::NonNullConstraints,
                 non_null_table,
@@ -721,7 +721,7 @@ fk_composite,parent_type,main,default,parents,type
 
     #[test]
     fn test_from_local_config_with_column_constraints() {
-        let constraints = HashMap::from_iter([
+        let constraints = IndexMap::from_iter([
             (
                 "id",
                 Vec::from([Constraint {
@@ -750,7 +750,7 @@ fk_composite,parent_type,main,default,parents,type
 
     #[test]
     fn test_from_local_config_no_constraints() {
-        let columns = HashMap::new();
+        let columns = IndexMap::new();
         let mock_node = create_mock_dbt_model_with_constraints(columns);
         let config = Constraints::from_local_config(&mock_node);
 
@@ -774,16 +774,16 @@ fk_composite,parent_type,main,default,parents,type
         };
 
         let prev = Constraints::new(
-            HashSet::new(),
-            HashSet::new(),
+            IndexSet::new(),
+            IndexSet::new(),
             [prev_constraint].into_iter().collect(),
-            HashSet::new(),
+            IndexSet::new(),
         );
         let next = Constraints::new(
-            HashSet::new(),
-            HashSet::new(),
+            IndexSet::new(),
+            IndexSet::new(),
             [next_constraint].into_iter().collect(),
-            HashSet::new(),
+            IndexSet::new(),
         );
 
         // The diff should be None because after normalization they should be considered equal

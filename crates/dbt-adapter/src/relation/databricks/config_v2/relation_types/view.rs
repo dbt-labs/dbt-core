@@ -3,9 +3,9 @@
 use crate::relation::config_v2::ComponentConfigChange;
 use crate::relation::config_v2::{ComponentConfigLoader, RelationConfigLoader};
 use crate::relation::databricks::config_v2::{DatabricksRelationMetadata, components};
-use std::collections::HashMap;
+use indexmap::IndexMap;
 
-fn requires_full_refresh(components: &HashMap<&'static str, ComponentConfigChange>) -> bool {
+fn requires_full_refresh(components: &IndexMap<&'static str, ComponentConfigChange>) -> bool {
     super::requires_full_refresh(super::MaterializationType::View, components)
 }
 
@@ -31,7 +31,7 @@ mod tests {
         components,
         test_helpers::{TestCase, TestModelColumn, TestModelConfig, run_test_cases},
     };
-    use std::collections::HashMap;
+    use indexmap::IndexMap;
 
     fn create_test_cases() -> Vec<TestCase<rc_v1::view::ViewConfig>> {
         vec![
@@ -59,11 +59,11 @@ mod tests {
                             ..Default::default()
                         },
                     ],
-                    tags: HashMap::from_iter([
+                    tags: IndexMap::from_iter([
                         ("a_tag".to_string(), "old".to_string()),
                         ("b_tag".to_string(), "old".to_string()),
                     ]),
-                    tbl_properties: HashMap::from_iter([
+                    tbl_properties: IndexMap::from_iter([
                         ("delta.enableRowTracking".to_string(), "false".to_string()),
                         (
                             "pipelines.pipelineId".to_string(),
@@ -89,11 +89,11 @@ mod tests {
                             ..Default::default()
                         },
                     ],
-                    tags: HashMap::from_iter([
+                    tags: IndexMap::from_iter([
                         ("a_tag".to_string(), "new".to_string()),
                         ("b_tag".to_string(), "old".to_string()),
                     ]),
-                    tbl_properties: HashMap::from_iter([
+                    tbl_properties: IndexMap::from_iter([
                         // changing these key should not result in anything as these should be ignored
                         ("delta.enableRowTracking".to_string(), "true".to_string()),
                         (
@@ -112,7 +112,7 @@ mod tests {
                         (
                             components::ColumnCommentsLoader::type_name(),
                             ComponentConfigChange::Some(components::ColumnCommentsLoader::new(
-                                HashMap::from_iter([(
+                                IndexMap::from_iter([(
                                     "a_column".to_string(),
                                     "new comment".to_string(),
                                 )]),
@@ -121,7 +121,7 @@ mod tests {
                         (
                             components::RelationTagsLoader::type_name(),
                             ComponentConfigChange::Some(components::RelationTagsLoader::new(
-                                HashMap::from_iter([
+                                IndexMap::from_iter([
                                     ("a_tag".to_string(), "new".to_string()),
                                     ("b_tag".to_string(), "old".to_string()),
                                 ]),
@@ -137,7 +137,7 @@ mod tests {
                         (
                             components::TblPropertiesLoader::type_name(),
                             ComponentConfigChange::Some(components::TblPropertiesLoader::new(
-                                HashMap::from_iter([
+                                IndexMap::from_iter([
                                     ("customKey".to_string(), "new".to_string()),
                                     ("customKey2".to_string(), "value".to_string()),
                                 ]),

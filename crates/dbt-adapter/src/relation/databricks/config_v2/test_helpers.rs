@@ -14,7 +14,7 @@ use dbt_schemas::schemas::{
     common::*, dbt_column::DbtColumn, manifest::PartitionConfig, nodes::*, project::*,
 };
 use dbt_serde_yaml::{Spanned, Value as YmlValue};
-use std::collections::HashMap;
+use indexmap::IndexMap;
 use std::io;
 use std::marker::PhantomData;
 use std::sync::Arc;
@@ -24,7 +24,7 @@ pub(crate) struct TestModelColumn {
     pub name: String,
     pub comment: Option<String>,
     pub constraints: Vec<Constraint>,
-    pub tags: HashMap<String, String>,
+    pub tags: IndexMap<String, String>,
 }
 
 #[derive(Default)]
@@ -44,8 +44,8 @@ pub(crate) struct TestModelConfig {
     #[expect(dead_code)]
     pub query: Option<String>,
     pub relation_comment: Option<String>,
-    pub tags: HashMap<String, String>,
-    pub tbl_properties: HashMap<String, String>,
+    pub tags: IndexMap<String, String>,
+    pub tbl_properties: IndexMap<String, String>,
     pub table_format: Option<String>,
     pub time_zone: Option<String>,
 }

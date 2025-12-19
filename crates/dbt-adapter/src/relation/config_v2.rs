@@ -21,12 +21,9 @@
 //!    adapters.
 
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
+use indexmap::{IndexMap, map::Iter as IndexMapIter};
 use minijinja::value::Object;
-use std::{
-    any::Any,
-    collections::{HashMap, hash_map::Iter as HashMapIter},
-    fmt,
-};
+use std::{any::Any, fmt};
 
 pub(crate) trait ComponentConfig: fmt::Debug + Send + Sync + Any {
     /// Assuming self is the desired state, get the diff that takes the current state to the desired state.
@@ -69,14 +66,14 @@ pub(crate) mod diff {
     /// 3. whose value is not present in the desired state but it is in current state,
     ///    (new state assumes Default).
     pub(crate) fn changed_keys<K, V>(
-        desired_state: &HashMap<K, V>,
-        current_state: &HashMap<K, V>,
-    ) -> Option<HashMap<K, V>>
+        desired_state: &IndexMap<K, V>,
+        current_state: &IndexMap<K, V>,
+    ) -> Option<IndexMap<K, V>>
     where
         K: Clone + Eq + Hash,
         V: Clone + Eq + Default,
     {
-        let mut diff: HashMap<K, V> = desired_state
+        let mut diff: IndexMap<K, V> = desired_state
             .iter()
             .filter_map(|(k, v)| {
                 if Some(v) != current_state.get(k) {
@@ -161,11 +158,11 @@ pub(crate) enum ComponentConfigChange {
 
 /// A function that evaluates a set of components that have been changed and returns whether or not
 /// those will require a full refresh
-pub(crate) type RequiresFullRefreshFn = fn(&HashMap<&'static str, ComponentConfigChange>) -> bool;
+pub(crate) type RequiresFullRefreshFn = fn(&IndexMap<&'static str, ComponentConfigChange>) -> bool;
 
 #[derive(Debug)]
 pub(crate) struct RelationConfig(
-    HashMap<&'static str, Box<dyn ComponentConfig>>,
+    IndexMap<&'static str, Box<dyn ComponentConfig>>,
     RequiresFullRefreshFn,
 );
 
@@ -198,7 +195,7 @@ impl RelationConfig {
         desired_state: &RelationConfig,
         current_state: &RelationConfig,
     ) -> RelationComponentConfigChangeSet {
-        let mut diffs = HashMap::new();
+        let mut diffs = IndexMap::new();
 
         for (type_name, desired_component) in &desired_state.0 {
             let current_component = current_state.get(type_name);
@@ -289,13 +286,13 @@ impl<R> RelationConfigLoader<R> {
 
 #[derive(Debug)]
 pub(crate) struct RelationComponentConfigChangeSet(
-    HashMap<&'static str, ComponentConfigChange>,
+    IndexMap<&'static str, ComponentConfigChange>,
     RequiresFullRefreshFn,
 );
 
 impl RelationComponentConfigChangeSet {
     pub fn new(
-        changes: impl Into<HashMap<&'static str, ComponentConfigChange>>,
+        changes: impl Into<IndexMap<&'static str, ComponentConfigChange>>,
         requires_full_refresh: RequiresFullRefreshFn,
     ) -> Self {
         Self(changes.into(), requires_full_refresh)
@@ -306,7 +303,7 @@ impl RelationComponentConfigChangeSet {
         self.0.len()
     }
 
-    pub fn iter(&self) -> HashMapIter<'_, &'static str, ComponentConfigChange> {
+    pub fn iter(&self) -> IndexMapIter<'_, &'static str, ComponentConfigChange> {
         self.0.iter()
     }
 
@@ -366,7 +363,7 @@ mod tests {
         }
     }
 
-    fn return_true(_: &HashMap<&'static str, ComponentConfigChange>) -> bool {
+    fn return_true(_: &IndexMap<&'static str, ComponentConfigChange>) -> bool {
         true
     }
 
@@ -532,27 +529,27 @@ mod tests {
 
     #[test]
     fn test_diff_changed_keys_no_changes() {
-        let hashmap = HashMap::from([("a", 1), ("b", 2)]);
+        let hashmap = IndexMap::from([("a", 1), ("b", 2)]);
         let diff = diff::changed_keys(&hashmap, &hashmap);
         assert!(diff.is_none());
     }
 
     #[test]
     fn test_diff_changed_keys_with_changes() {
-        let prev = HashMap::from([("a", 1), ("b", 2)]);
-        let next = HashMap::from([("a", 1), ("b", 3)]);
+        let prev = IndexMap::from([("a", 1), ("b", 2)]);
+        let next = IndexMap::from([("a", 1), ("b", 3)]);
         let diff = diff::changed_keys(&next, &prev);
-        let expected = Some(HashMap::from([("b", 3)]));
+        let expected = Some(IndexMap::from([("b", 3)]));
         assert_eq!(diff, expected);
     }
 
     #[test]
     fn test_diff_changed_keys_dropped_key() {
-        let prev = HashMap::from([("a", 1), ("b", 2)]);
-        let next = HashMap::from([("a", 1)]);
+        let prev = IndexMap::from([("a", 1), ("b", 2)]);
+        let next = IndexMap::from([("a", 1)]);
         let diff = diff::changed_keys(&next, &prev);
         // Dropping key resets the value to the default
-        let expected = Some(HashMap::from([("b", 0)]));
+        let expected = Some(IndexMap::from([("b", 0)]));
         assert_eq!(diff, expected);
     }
 }

@@ -3,9 +3,9 @@
 use crate::relation::config_v2::ComponentConfigChange;
 use crate::relation::config_v2::{ComponentConfigLoader, RelationConfigLoader};
 use crate::relation::databricks::config_v2::{DatabricksRelationMetadata, components};
-use std::collections::HashMap;
+use indexmap::IndexMap;
 
-fn requires_full_refresh(components: &HashMap<&'static str, ComponentConfigChange>) -> bool {
+fn requires_full_refresh(components: &IndexMap<&'static str, ComponentConfigChange>) -> bool {
     super::requires_full_refresh(super::MaterializationType::MaterializedView, components)
 }
 
@@ -33,7 +33,7 @@ mod tests {
         components,
         test_helpers::{TestCase, TestModelConfig, run_test_cases},
     };
-    use std::collections::HashMap;
+    use indexmap::IndexMap;
 
     fn create_test_cases() -> Vec<TestCase<rc_v1::materialized_view::MaterializedViewConfig>> {
         vec![
@@ -49,7 +49,7 @@ mod tests {
                 current_state: TestModelConfig {
                     persist_relation_comments: true,
                     query: Some("SELECT 1".to_string()),
-                    tbl_properties: HashMap::from_iter([
+                    tbl_properties: IndexMap::from_iter([
                         ("delta.enableRowTracking".to_string(), "false".to_string()),
                         (
                             "pipelines.pipelineId".to_string(),
@@ -63,7 +63,7 @@ mod tests {
                 desired_state: TestModelConfig {
                     persist_relation_comments: true,
                     query: Some("SELECT 1000".to_string()),
-                    tbl_properties: HashMap::from_iter([
+                    tbl_properties: IndexMap::from_iter([
                         ("delta.enableRowTracking".to_string(), "true".to_string()),
                         (
                             "pipelines.pipelineId".to_string(),
@@ -79,7 +79,10 @@ mod tests {
                         (
                             components::TblPropertiesLoader::type_name(),
                             ComponentConfigChange::Some(components::TblPropertiesLoader::new(
-                                HashMap::from_iter([("custom.key".to_string(), "new".to_string())]),
+                                IndexMap::from_iter([(
+                                    "custom.key".to_string(),
+                                    "new".to_string(),
+                                )]),
                             )),
                         ),
                         (
@@ -105,7 +108,7 @@ mod tests {
                 current_state: TestModelConfig {
                     cron: Some("* * * * *".to_string()),
                     time_zone: Some("UTC".to_string()),
-                    tags: HashMap::from_iter([
+                    tags: IndexMap::from_iter([
                         ("a_tag".to_string(), "old".to_string()),
                         ("b_tag".to_string(), "old".to_string()),
                     ]),
@@ -114,7 +117,7 @@ mod tests {
                 desired_state: TestModelConfig {
                     cron: Some("*/60 * * * *".to_string()),
                     time_zone: Some("UTC".to_string()),
-                    tags: HashMap::from_iter([("a_tag".to_string(), "new".to_string())]),
+                    tags: IndexMap::from_iter([("a_tag".to_string(), "new".to_string())]),
                     ..Default::default()
                 },
                 expected_changeset: RelationComponentConfigChangeSet::new(
@@ -129,7 +132,7 @@ mod tests {
                         (
                             components::RelationTagsLoader::type_name(),
                             ComponentConfigChange::Some(components::RelationTagsLoader::new(
-                                HashMap::from_iter([("a_tag".to_string(), "new".to_string())]),
+                                IndexMap::from_iter([("a_tag".to_string(), "new".to_string())]),
                             )),
                         ),
                     ],
