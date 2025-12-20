@@ -116,7 +116,7 @@ use std::sync::Arc;
 
 use crate::error::Error;
 use crate::utils::{write_escaped, SealedMarker};
-use crate::value::{ArgType, FunctionArgs, FunctionResult, Value};
+use crate::value::{mutable_vec, ArgType, FunctionArgs, FunctionResult, Value};
 use crate::vm::State;
 use crate::{AutoEscape, Output};
 
@@ -986,6 +986,12 @@ mod builtins {
     /// ```
     #[cfg_attr(docsrs, doc(cfg(feature = "builtins")))]
     pub fn sort(state: &State, value: Value, kwargs: Kwargs) -> Result<Value, Error> {
+        // Check if the input is a tuple (immutable Vec<Value>)
+        let is_tuple = value
+            .downcast_object_ref::<Vec<Value>>()
+            .map(|_| !value.is_mutable())
+            .unwrap_or(false);
+
         let mut items = ok!(state.undefined_behavior().try_iter(value).map_err(|err| {
             Error::new(ErrorKind::InvalidOperation, "cannot convert value to list").with_source(err)
         }))
@@ -1003,7 +1009,13 @@ mod builtins {
             items.reverse();
         }
         ok!(kwargs.assert_all_used());
-        Ok(Value::from(items))
+
+        // Preserve tuple type if input was a tuple
+        if is_tuple {
+            Ok(Value::from_tuple(items))
+        } else {
+            Ok(Value::from_object(mutable_vec::MutableVec::from(items)))
+        }
     }
 
     /// Converts the input value into a list.
