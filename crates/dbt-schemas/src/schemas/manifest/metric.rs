@@ -86,7 +86,8 @@ pub struct MetricAggregationParameters {
 pub struct NonAdditiveDimension {
     pub name: String,
     pub window_choice: WindowChoice,
-    pub window_groupings: Option<Vec<String>>,
+    #[serde(default)]
+    pub window_groupings: Vec<String>,
 }
 
 impl From<MetricPropertiesNonAdditiveDimension> for NonAdditiveDimension {
@@ -94,7 +95,7 @@ impl From<MetricPropertiesNonAdditiveDimension> for NonAdditiveDimension {
         Self {
             name: source.name,
             window_choice: source.window_agg,
-            window_groupings: source.group_by,
+            window_groupings: source.group_by.unwrap_or_default(),
         }
     }
 }
