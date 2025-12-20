@@ -21,6 +21,7 @@ pub fn create_re_namespace() -> BTreeMap<String, Value> {
     re_module.insert("findall".to_string(), Value::from_function(re_findall));
     re_module.insert("split".to_string(), Value::from_function(re_split));
     re_module.insert("sub".to_string(), Value::from_function(re_sub));
+    re_module.insert("escape".to_string(), Value::from_function(re_escape));
 
     re_module
 }
@@ -297,6 +298,35 @@ fn re_sub(args: &[Value]) -> Result<Value, Error> {
     }
 }
 
+/// Python `re.escape(pattern)`.
+/// Escapes special characters in a string so it can be used as a literal pattern in a regex.
+/// According to Python 3.7+ behavior, escapes these characters: \ . ^ $ * + ? { } [ ] ( ) |
+fn re_escape(args: &[Value]) -> Result<Value, Error> {
+    if args.is_empty() {
+        return Err(Error::new(
+            ErrorKind::MissingArgument,
+            "escape() requires a pattern string argument",
+        ));
+    }
+
+    let pattern = args[0].to_string();
+    let mut escaped = String::with_capacity(pattern.len() * 2);
+
+    for ch in pattern.chars() {
+        match ch {
+            '\\' | '.' | '^' | '$' | '*' | '+' | '?' | '{' | '}' | '[' | ']' | '(' | ')' | '|' => {
+                escaped.push('\\');
+                escaped.push(ch);
+            }
+            _ => {
+                escaped.push(ch);
+            }
+        }
+    }
+
+    Ok(Value::from(escaped))
+}
+
 /// Extract either a compiled regex from arg[0] *or* compile arg[0], plus read `string` from arg[1].
 fn get_or_compile_regex_and_text(args: &[Value]) -> Result<(Box<Regex>, &str), Error> {
     if args.len() < 2 {
@@ -499,5 +529,38 @@ mod tests {
         let compiled_pattern = re_compile(&[Value::from(".*".to_string())]).unwrap();
         let result = re_search(&[compiled_pattern, Value::from("xyz".to_string())]).unwrap();
         assert!(result.is_true());
+    }
+
+    #[test]
+    fn test_re_escape() {
+        // Test basic special character escaping
+        let result = re_escape(&[Value::from("hello.world")]).unwrap();
+        assert_eq!(result.to_string(), r"hello\.world");
+
+        // Test multiple special characters
+        let result = re_escape(&[Value::from("$100+")]).unwrap();
+        assert_eq!(result.to_string(), r"\$100\+");
+
+        // Test all metacharacters
+        let result = re_escape(&[Value::from(r"\^$.*+?{}[]|()")]).unwrap();
+        assert_eq!(result.to_string(), r"\\\^\$\.\*\+\?\{\}\[\]\|\(\)");
+
+        // Test string with no special characters
+        let result = re_escape(&[Value::from("hello")]).unwrap();
+        assert_eq!(result.to_string(), "hello");
+
+        // Test empty string
+        let result = re_escape(&[Value::from("")]).unwrap();
+        assert_eq!(result.to_string(), "");
+
+        // Test typical suffix pattern (the use case from the issue)
+        let result = re_escape(&[Value::from("_usd$")]).unwrap();
+        assert_eq!(result.to_string(), r"_usd\$");
+    }
+
+    #[test]
+    fn test_re_escape_missing_argument() {
+        let result = re_escape(&[]);
+        assert!(result.is_err());
     }
 }
