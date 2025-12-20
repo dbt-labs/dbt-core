@@ -6,6 +6,9 @@ SECRET_PLACEHOLDER = "$$$DBT_SECRET_START$$${}$$$DBT_SECRET_END$$$"
 
 MAXIMUM_SEED_SIZE = 1 * 1024 * 1024
 MAXIMUM_SEED_SIZE_NAME = "1MB"
+# Number of rows to load as agate table to obtain column types for empty seed table creation
+# Seed materializations themselves avoid loading the data to the warehouse
+EMPTY_SEED_SIZE = 5
 
 PIN_PACKAGE_URL = (
     "https://docs.getdbt.com/docs/package-management#section-specifying-package-versions"
