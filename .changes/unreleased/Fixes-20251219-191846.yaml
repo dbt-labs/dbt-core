@@ -1,0 +1,6 @@
+kind: Fixes
+body: Upper bound sqlmesh to  <0.5.5
+time: 2025-12-19T19:18:46.898991-05:00
+custom:
+    Author: michelleark
+    Issue: "12311"
