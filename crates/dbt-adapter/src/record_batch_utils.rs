@@ -12,9 +12,18 @@ use arrow::datatypes::{DataType, Schema};
 use arrow::record_batch::RecordBatch;
 
 pub fn extract_first_value_as_i64(batch: &RecordBatch) -> Option<i64> {
-    let column = batch.column(0);
+    let column = batch.columns().first()?;
+    let field = batch.schema_ref().fields().first()?;
 
-    match batch.schema().field(0).data_type() {
+    if column.is_empty() || column.is_null(0) {
+        return None;
+    }
+
+    match field.data_type() {
+        DataType::Boolean => column
+            .as_any()
+            .downcast_ref::<arrow::array::BooleanArray>()
+            .map(|arr| if arr.value(0) { 1 } else { 0 }),
         DataType::Int8 => column
             .as_any()
             .downcast_ref::<Int8Array>()
@@ -51,7 +60,14 @@ pub fn extract_first_value_as_i64(batch: &RecordBatch) -> Option<i64> {
             .as_any()
             .downcast_ref::<Decimal128Array>()
             .map(|arr| arr.value(0) as i64),
-        _ => None,
+        _ => {
+            debug_assert!(
+                false,
+                "extract_first_value_as_i64: unsupported data type {:?}",
+                field.data_type()
+            );
+            None
+        }
     }
 }
 
