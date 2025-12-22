@@ -8,13 +8,13 @@ use crate::errors::{
 };
 use crate::funcs::{convert_macro_result_to_record_batch, execute_macro, none_value};
 use crate::information_schema::InformationSchema;
+use crate::metadata::redshift::RedshiftMetadataAdapter;
 use crate::metadata::salesforce::SalesforceMetadataAdapter;
 use crate::metadata::snowflake::SnowflakeMetadataAdapter;
 use crate::metadata::{self, CatalogAndSchema, MetadataAdapter};
 use crate::postgres::adapter::PostgresAdapter;
 use crate::query_ctx::query_ctx_from_state;
 use crate::record_batch_utils::{extract_first_value_as_i64, get_column_values};
-use crate::redshift::adapter::RedshiftAdapter;
 use crate::relation::BaseRelationConfig;
 use crate::relation::RelationObject;
 use crate::relation::bigquery::*;
@@ -2516,7 +2516,7 @@ impl AdapterTyping for ConcreteAdapter {
                 Box::new(DatabricksAdapter::new(engine)) as Box<dyn MetadataAdapter>
             }
             AdapterType::Redshift => {
-                Box::new(RedshiftAdapter::new(engine)) as Box<dyn MetadataAdapter>
+                Box::new(RedshiftMetadataAdapter::new(engine)) as Box<dyn MetadataAdapter>
             }
             AdapterType::Salesforce => {
                 Box::new(SalesforceMetadataAdapter::new(engine)) as Box<dyn MetadataAdapter>
@@ -2654,60 +2654,71 @@ pub trait ReplayAdapter: TypedBaseAdapter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::AdapterType;
+    use crate::base_adapter::backend_of;
+    use crate::config::AdapterConfig;
+    use crate::query_comment::QueryCommentConfig;
     use crate::sql_types::NaiveTypeOpsImpl;
     use crate::stmt_splitter::NaiveStmtSplitter;
 
-    use crate::config::AdapterConfig;
-    use crate::query_comment::QueryCommentConfig;
     use dbt_auth::auth_for_backend;
+    use dbt_common::adapter::AdapterType;
     use dbt_common::{AdapterResult, cancellation::never_cancels};
-    use dbt_schemas::schemas::relations::SNOWFLAKE_RESOLVED_QUOTING;
     use dbt_schemas::schemas::relations::base::ComponentName;
+    use dbt_schemas::schemas::relations::{DEFAULT_RESOLVED_QUOTING, SNOWFLAKE_RESOLVED_QUOTING};
     use dbt_serde_yaml::Mapping;
-    use dbt_xdbc::Backend;
 
     use minijinja::{Environment, State};
 
-    fn snowflake_engine() -> Arc<AdapterEngine> {
-        let config = Mapping::from_iter([
-            ("user".into(), "U".into()),
-            ("password".into(), "P".into()),
-            ("account".into(), "A".into()),
-            ("database".into(), "D".into()),
-            ("schema".into(), "S".into()),
-            ("role".into(), "role".into()),
-            ("warehouse".into(), "warehouse".into()),
-        ]);
-        let auth = auth_for_backend(Backend::Snowflake);
+    use AdapterType::*;
+
+    fn engine(adapter_type: AdapterType) -> Arc<AdapterEngine> {
+        let backend = backend_of(adapter_type);
+        let config = match adapter_type {
+            Snowflake => Mapping::from_iter([
+                ("user".into(), "U".into()),
+                ("password".into(), "P".into()),
+                ("account".into(), "A".into()),
+                ("database".into(), "D".into()),
+                ("schema".into(), "S".into()),
+                ("role".into(), "role".into()),
+                ("warehouse".into(), "warehouse".into()),
+            ]),
+            Redshift => Mapping::new(),
+            _ => unimplemented!("mock config for adapter type {:?}", adapter_type),
+        };
+        let auth = auth_for_backend(backend);
+        let resolved_quoting = match adapter_type {
+            Snowflake => SNOWFLAKE_RESOLVED_QUOTING,
+            _ => DEFAULT_RESOLVED_QUOTING,
+        };
         AdapterEngine::new(
-            AdapterType::Snowflake,
+            adapter_type,
             auth.into(),
             AdapterConfig::new(config),
-            SNOWFLAKE_RESOLVED_QUOTING,
+            resolved_quoting,
             Arc::new(NaiveStmtSplitter),
             None,
-            QueryCommentConfig::from_query_comment(None, AdapterType::Snowflake, false),
-            Box::new(NaiveTypeOpsImpl::new(AdapterType::Snowflake)), // XXX: NaiveTypeOpsImpl
+            QueryCommentConfig::from_query_comment(None, adapter_type, false),
+            Box::new(NaiveTypeOpsImpl::new(adapter_type)), // XXX: NaiveTypeOpsImpl
             never_cancels(),
         )
     }
 
     #[test]
     fn test_adapter_type() {
-        let adapter = ConcreteAdapter::new(snowflake_engine());
-        assert_eq!(adapter.adapter_type(), AdapterType::Snowflake);
+        let adapter = ConcreteAdapter::new(engine(Snowflake));
+        assert_eq!(adapter.adapter_type(), Snowflake);
     }
 
     #[test]
     fn test_quote_for_snowflake() {
-        let adapter = ConcreteAdapter::new(snowflake_engine());
+        let adapter = ConcreteAdapter::new(engine(Snowflake));
         assert_eq!(adapter.quote("abc"), "\"abc\"");
     }
 
     #[test]
     fn test_quote_seed_column_for_snowflake() -> AdapterResult<()> {
-        let adapter = ConcreteAdapter::new(snowflake_engine());
+        let adapter = ConcreteAdapter::new(engine(Snowflake));
         let env = Environment::new();
         let state = State::new_for_env(&env);
         let quoted = adapter
@@ -2727,20 +2738,7 @@ mod tests {
 
     #[test]
     fn test_quote_as_configured_for_snowflake() -> AdapterResult<()> {
-        let config = AdapterConfig::default();
-        let auth = auth_for_backend(Backend::Snowflake);
-        let engine = AdapterEngine::new(
-            AdapterType::Snowflake,
-            auth.into(),
-            config,
-            SNOWFLAKE_RESOLVED_QUOTING,
-            Arc::new(NaiveStmtSplitter),
-            None,
-            QueryCommentConfig::from_query_comment(None, AdapterType::Snowflake, false),
-            Box::new(NaiveTypeOpsImpl::new(AdapterType::Snowflake)),
-            never_cancels(),
-        );
-        let adapter = ConcreteAdapter::new(engine);
+        let adapter = ConcreteAdapter::new(engine(Snowflake));
 
         let env = Environment::new();
         let state = State::new_for_env(&env);
@@ -2759,5 +2757,11 @@ mod tests {
             .unwrap();
         assert_eq!(quoted, "my_table");
         Ok(())
+    }
+
+    #[test]
+    fn test_redshift_quote() {
+        let adapter = ConcreteAdapter::new(engine(Redshift));
+        assert_eq!(adapter.quote("abc"), "\"abc\"");
     }
 }

@@ -57,8 +57,6 @@ pub mod databricks;
 pub mod parse;
 /// Postgres adapter
 pub mod postgres;
-/// Redshift adapter
-pub mod redshift;
 
 pub mod mock;
 
