@@ -15,7 +15,7 @@ use dbt_telemetry::{
 };
 use dbt_telemetry::{LogRecordInfo, SpanEndInfo, SpanStartInfo, TelemetryOutputFlags};
 
-use opentelemetry::{KeyValue, global, logs::LoggerProvider, trace::TracerProvider};
+use opentelemetry::{KeyValue, logs::LoggerProvider, trace::TracerProvider};
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::Resource;
 use opentelemetry_sdk::logs::{SdkLogger, SdkLoggerProvider};
@@ -71,10 +71,6 @@ impl OTLPExporterLayer {
             .with_resource(resource)
             .with_batch_exporter(log_exporter)
             .build();
-
-        // Set the global tracer provider. Clone is necessary but cheap, as it is a reference
-        // to the same object.
-        global::set_tracer_provider(tracer_provider.clone());
 
         // Get tracer
         let tracer = tracer_provider.tracer(DBT_FUSION);
