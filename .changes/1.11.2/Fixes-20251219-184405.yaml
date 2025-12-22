@@ -1,6 +1,0 @@
-kind: Fixes
-body: Pin sqlparse <0.5.5 to avoid max tokens issue
-time: 2025-12-19T18:44:05.216329-05:00
-custom:
-    Author: michelleark
-    Issue: "12303"
