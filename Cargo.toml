@@ -258,7 +258,7 @@ adbc-driver-manager = { git = "https://github.com/dbt-labs/arrow-adbc", package 
 dbt-xdbc = { path = "crates/dbt-xdbc" }
 
 # antlr for frontend
-dbt-antlr4 = "0.50.2"
+dbt-antlr4 = "0.51.0"
 # dbt-antlr4 = { path = "../antlr4.dev/runtime/Rust" }
 
 # datafusion
