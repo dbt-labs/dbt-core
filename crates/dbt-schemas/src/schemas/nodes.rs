@@ -3660,7 +3660,7 @@ impl AdapterAttr {
                     merge_with_schema_evolution: config.merge_with_schema_evolution,
                     skip_matched_step: config.skip_matched_step,
                     skip_not_matched_step: config.skip_not_matched_step,
-                    schedule: config.schedule.clone(),
+                    schedule: config.schedule.as_ref().map(|s| s.to_schedule_config()),
                 })))
             }
             _ => {
@@ -3743,7 +3743,7 @@ impl AdapterAttr {
                         merge_with_schema_evolution: config.merge_with_schema_evolution,
                         skip_matched_step: config.skip_matched_step,
                         skip_not_matched_step: config.skip_not_matched_step,
-                        schedule: config.schedule.clone(),
+                        schedule: config.schedule.as_ref().map(|s| s.to_schedule_config()),
                     })))
             }
         }

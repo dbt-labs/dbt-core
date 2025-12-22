@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, btree_map::Iter};
 use crate::{
     default_to,
     schemas::{
-        common::ScheduleConfig,
+        common::Schedule,
         manifest::{
             BigqueryClusterConfig, GrantAccessToTarget, PartitionConfig, postgres::PostgresIndex,
         },
@@ -201,7 +201,7 @@ pub struct ProjectUnitTestConfig {
     pub skip_not_matched_step: Option<bool>,
     // Schedule (Databricks streaming tables)
     #[serde(rename = "+schedule")]
-    pub schedule: Option<ScheduleConfig>,
+    pub schedule: Option<Schedule>,
 
     // Redshift specific fields
     #[serde(

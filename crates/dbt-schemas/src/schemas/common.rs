@@ -805,6 +805,30 @@ pub struct ScheduleConfig {
     pub time_zone_value: Option<String>,
 }
 
+/// Schedule configuration that accepts both string and structured formats.
+/// This allows users to specify schedule as either:
+/// - A string: `schedule: "USING CRON 0,15,30,45 * * * * UTC"`
+/// - A structured config: `schedule: { cron: "0 * * * *", time_zone_value: "UTC" }`
+#[derive(UntaggedEnumDeserialize, Serialize, Debug, Clone, PartialEq, Eq, JsonSchema)]
+#[serde(untagged)]
+pub enum Schedule {
+    String(String),
+    ScheduleConfig(ScheduleConfig),
+}
+
+impl Schedule {
+    /// Convert Schedule to ScheduleConfig
+    pub fn to_schedule_config(&self) -> ScheduleConfig {
+        match self {
+            Schedule::String(s) => ScheduleConfig {
+                cron: Some(s.clone()),
+                time_zone_value: None,
+            },
+            Schedule::ScheduleConfig(config) => config.clone(),
+        }
+    }
+}
+
 #[derive(UntaggedEnumDeserialize, Serialize, Debug, Clone, PartialEq, Eq, JsonSchema)]
 #[serde(untagged)]
 pub enum Hooks {
@@ -1332,5 +1356,89 @@ mod tests {
         let (actual_identifier, actual_quoting) = result;
         assert_eq!(actual_identifier, expected_identifier);
         assert_eq!(actual_quoting, expected_quoting);
+    }
+
+    #[test]
+    fn test_schedule_parses_string_format() {
+        // Test parsing schedule as a plain string (the format that was failing before)
+        let yaml = r#"schedule: "USING CRON 0,15,30,45 * * * * UTC""#;
+        #[derive(Deserialize)]
+        struct TestConfig {
+            schedule: Schedule,
+        }
+        let config: TestConfig = dbt_serde_yaml::from_str(yaml).unwrap();
+
+        // Verify it parsed as Schedule::String
+        assert!(matches!(config.schedule, Schedule::String(_)));
+
+        // Verify to_schedule_config() works correctly
+        let schedule_config = config.schedule.to_schedule_config();
+        assert_eq!(
+            schedule_config.cron,
+            Some("USING CRON 0,15,30,45 * * * * UTC".to_string())
+        );
+        assert_eq!(schedule_config.time_zone_value, None);
+    }
+
+    #[test]
+    fn test_schedule_parses_struct_format() {
+        // Test parsing schedule as a structured config
+        let yaml = r#"
+schedule:
+  cron: "0 */6 * * *"
+  time_zone_value: "UTC"
+"#;
+        #[derive(Deserialize)]
+        struct TestConfig {
+            schedule: Schedule,
+        }
+        let config: TestConfig = dbt_serde_yaml::from_str(yaml).unwrap();
+
+        // Verify it parsed as Schedule::ScheduleConfig
+        assert!(matches!(config.schedule, Schedule::ScheduleConfig(_)));
+
+        // Verify to_schedule_config() works correctly
+        let schedule_config = config.schedule.to_schedule_config();
+        assert_eq!(schedule_config.cron, Some("0 */6 * * *".to_string()));
+        assert_eq!(schedule_config.time_zone_value, Some("UTC".to_string()));
+    }
+
+    #[test]
+    fn test_schedule_in_model_config_string_format() {
+        // Test the exact YAML format from the bug report:
+        // models:
+        //   - name: decrypt_drivers_license_number_task
+        //     config:
+        //       schedule: "USING CRON 0,15,30,45 * * * * UTC"
+        let yaml = r#"
+models:
+  - name: some_scheduled_task
+    config:
+      schedule: "USING CRON 0,15,30,45 * * * * UTC"
+"#;
+        #[derive(Deserialize)]
+        struct ModelsFile {
+            models: Vec<ModelEntry>,
+        }
+        #[derive(Deserialize)]
+        struct ModelEntry {
+            name: String,
+            config: ModelConfigInner,
+        }
+        #[derive(Deserialize)]
+        struct ModelConfigInner {
+            schedule: Schedule,
+        }
+
+        let parsed: ModelsFile = dbt_serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(parsed.models.len(), 1);
+        assert_eq!(parsed.models[0].name, "some_scheduled_task");
+
+        let schedule_config = parsed.models[0].config.schedule.to_schedule_config();
+        assert_eq!(
+            schedule_config.cron,
+            Some("USING CRON 0,15,30,45 * * * * UTC".to_string())
+        );
+        assert_eq!(schedule_config.time_zone_value, None);
     }
 }

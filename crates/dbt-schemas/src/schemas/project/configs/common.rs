@@ -11,7 +11,7 @@ use crate::default_to;
 use crate::schemas::common::Hooks;
 use crate::schemas::common::merge_meta;
 use crate::schemas::common::merge_tags;
-use crate::schemas::common::{DbtQuoting, DocsConfig, ScheduleConfig};
+use crate::schemas::common::{DbtQuoting, DocsConfig, Schedule};
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::manifest::postgres::PostgresIndex;
 use crate::schemas::manifest::{BigqueryClusterConfig, PartitionConfig};
@@ -227,7 +227,7 @@ pub struct WarehouseSpecificNodeConfig {
     pub skip_matched_step: Option<bool>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub skip_not_matched_step: Option<bool>,
-    pub schedule: Option<ScheduleConfig>,
+    pub schedule: Option<Schedule>,
 
     // Snowflake
     pub table_tag: Option<String>,

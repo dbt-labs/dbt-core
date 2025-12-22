@@ -19,7 +19,7 @@ use crate::schemas::common::DbtIncrementalStrategy;
 use crate::schemas::common::DbtMaterialization;
 use crate::schemas::common::DbtUniqueKey;
 use crate::schemas::common::PersistDocsConfig;
-use crate::schemas::common::{Access, DbtQuoting, ScheduleConfig};
+use crate::schemas::common::{Access, DbtQuoting, Schedule};
 use crate::schemas::common::{DocsConfig, OnConfigurationChange};
 use crate::schemas::common::{Hooks, OnSchemaChange, hooks_equal};
 use crate::schemas::manifest::GrantAccessToTarget;
@@ -358,7 +358,7 @@ pub struct ProjectModelConfig {
 
     // Schedule (Databricks streaming tables)
     #[serde(rename = "+schedule")]
-    pub schedule: Option<ScheduleConfig>,
+    pub schedule: Option<Schedule>,
 
     // Primary Key (Salesforce)
     #[serde(rename = "+primary_key")]

@@ -162,14 +162,14 @@ mod tests {
     }
 
     fn create_mock_dbt_model(schedule: Option<serde_json::Value>) -> DbtModel {
-        use dbt_schemas::schemas::common::ScheduleConfig;
+        use dbt_schemas::schemas::common::{Schedule, ScheduleConfig};
         use dbt_schemas::schemas::nodes::AdapterAttr;
 
         let schedule_config = if let Some(schedule_value) = schedule {
             if let Ok(schedule_obj) =
                 serde_json::from_value::<serde_json::Map<String, serde_json::Value>>(schedule_value)
             {
-                Some(ScheduleConfig {
+                Some(Schedule::ScheduleConfig(ScheduleConfig {
                     cron: schedule_obj
                         .get("cron")
                         .and_then(|v| v.as_str())
@@ -178,7 +178,7 @@ mod tests {
                         .get("time_zone_value")
                         .and_then(|v| v.as_str())
                         .map(|s| s.to_string()),
-                })
+                }))
             } else {
                 None
             }

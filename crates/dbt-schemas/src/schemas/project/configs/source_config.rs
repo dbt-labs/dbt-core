@@ -8,7 +8,7 @@ use std::collections::btree_map::Iter;
 
 use super::config_keys::ConfigKeys;
 use crate::default_to;
-use crate::schemas::common::{DbtQuoting, FreshnessDefinition, ScheduleConfig};
+use crate::schemas::common::{DbtQuoting, FreshnessDefinition, Schedule};
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::manifest::postgres::PostgresIndex;
 use crate::schemas::manifest::{BigqueryClusterConfig, PartitionConfig};
@@ -240,7 +240,7 @@ pub struct ProjectSourceConfig {
 
     // Schedule (Databricks streaming tables)
     #[serde(rename = "+schedule")]
-    pub schedule: Option<ScheduleConfig>,
+    pub schedule: Option<Schedule>,
 
     // Flattened fields
     pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectSourceConfig>>,

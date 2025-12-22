@@ -102,10 +102,10 @@ pub(crate) fn create_mock_dbt_model(cfg: TestModelConfig) -> DbtModel {
                 .collect(),
         ),
         partition_by: Some(PartitionConfig::List(cfg.partition_by)),
-        schedule: Some(ScheduleConfig {
+        schedule: Some(Schedule::ScheduleConfig(ScheduleConfig {
             cron: cfg.cron,
             time_zone_value: cfg.time_zone,
-        }),
+        })),
         databricks_tags: Some(
             cfg.tags
                 .into_iter()

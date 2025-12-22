@@ -19,7 +19,7 @@ use crate::schemas::common::DocsConfig;
 use crate::schemas::common::HardDeletes;
 use crate::schemas::common::Hooks;
 use crate::schemas::common::PersistDocsConfig;
-use crate::schemas::common::ScheduleConfig;
+use crate::schemas::common::Schedule;
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::manifest::postgres::PostgresIndex;
 use crate::schemas::manifest::{BigqueryClusterConfig, PartitionConfig};
@@ -304,7 +304,7 @@ pub struct ProjectSnapshotConfig {
 
     // Schedule (Databricks streaming tables)
     #[serde(rename = "+schedule")]
-    pub schedule: Option<ScheduleConfig>,
+    pub schedule: Option<Schedule>,
     // Flattened field:
     pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectSnapshotConfig>>,
 }
