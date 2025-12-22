@@ -711,11 +711,22 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     /// Rename relation
     fn rename_relation(
         &self,
-        _conn: &'_ mut dyn Connection,
-        _from_relation: Arc<dyn BaseRelation>,
-        _to_relation: Arc<dyn BaseRelation>,
-    ) -> AdapterResult<()> {
-        unimplemented!("reserved for _rename_relation in bridge.rs")
+        state: &State,
+        from_relation: Arc<dyn BaseRelation>,
+        to_relation: Arc<dyn BaseRelation>,
+    ) -> AdapterResult<Value> {
+        if let Some(replay_adapter) = self.as_replay() {
+            return replay_adapter.replay_rename_relation(state, from_relation, to_relation);
+        }
+
+        // Execute the macro with the relation objects
+        let args = vec![
+            RelationObject::new(from_relation).as_value(),
+            RelationObject::new(to_relation).as_value(),
+        ];
+
+        let _empty_retval = execute_macro(state, &args, "rename_relation")?;
+        Ok(none_value())
     }
 
     /// Returns the columns that exist in the source_relations but not in the target_relations
@@ -1856,11 +1867,16 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
 
     /// Used by redshift and postgres to check if the database string is consistent with what's in the project `config`
     fn verify_database(&self, database: String) -> AdapterResult<Value> {
+        if let Some(replay_adapter) = self.as_replay() {
+            return replay_adapter.replay_verify_database(&database);
+        }
+
         match self.adapter_type() {
             AdapterType::Postgres => {
-                let configured_database = self.engine().get_configured_database_name();
-                if let Some(configured_database) = configured_database {
-                    if database != configured_database {
+                if let Some(configured_database) = self.engine().get_configured_database_name() {
+                    if database == configured_database {
+                        Ok(Value::from(()))
+                    } else {
                         Err(AdapterError::new(
                             AdapterErrorKind::UnexpectedDbReference,
                             format!(
@@ -1870,11 +1886,8 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
                                 configured_database
                             ),
                         ))
-                    } else {
-                        Ok(Value::from(()))
                     }
                 } else {
-                    // Replay engine does not have a configured database
                     Ok(Value::from(()))
                 }
             }
@@ -2554,6 +2567,8 @@ pub trait ReplayAdapter: TypedBaseAdapter {
         node_id: &str,
     ) -> FsResult<()>;
 
+    fn replay_verify_database(&self, database: &str) -> AdapterResult<Value>;
+
     fn replay_new_connection(
         &self,
         state: Option<&State>,
@@ -2616,6 +2631,13 @@ pub trait ReplayAdapter: TypedBaseAdapter {
         conn: &'_ mut dyn Connection,
         db_schema: &CatalogAndSchema,
     ) -> AdapterResult<Vec<Arc<dyn BaseRelation>>>;
+
+    fn replay_rename_relation(
+        &self,
+        state: &State,
+        from_relation: Arc<dyn BaseRelation>,
+        to_relation: Arc<dyn BaseRelation>,
+    ) -> AdapterResult<Value>;
 
     fn replay_get_column_schema_from_query(
         &self,

@@ -538,22 +538,10 @@ impl BaseAdapter for BridgeAdapter {
     ) -> Result<Value, MinijinjaError> {
         // Update cache
         self.cache_renamed(state, from_relation.clone(), to_relation.clone())?;
-        if self.typed_adapter.as_replay().is_some() {
-            // TODO: move this logic to the [ReplayAdapter]
-            let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
-            self.typed_adapter.rename_relation(
-                conn.as_mut(),
-                from_relation.clone(),
-                to_relation.clone(),
-            )?;
-        }
-        // Execute the macro with the relation objects
-        let args = vec![
-            RelationObject::new(from_relation).as_value(),
-            RelationObject::new(to_relation).as_value(),
-        ];
-        execute_macro(state, &args, "rename_relation")?;
-        Ok(none_value())
+
+        self.typed_adapter
+            .rename_relation(state, from_relation.clone(), to_relation.clone())?;
+        Ok(Value::from(()))
     }
 
     /// Expand the to_relation table's column types to match the schema of from_relation.
