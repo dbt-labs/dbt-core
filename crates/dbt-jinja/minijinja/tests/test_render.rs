@@ -38,8 +38,10 @@ fn test_set_append() {
         )
         .unwrap();
     // would be None in dbt-core but this should be just cosmetic
-    assert_snapshot!(rv, @r"none
-['x', 'y']");
+    assert_snapshot!(rv, @r"
+    None
+    ['x', 'y']
+    ");
 }
 
 #[test]

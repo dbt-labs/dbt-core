@@ -83,7 +83,7 @@ sort-case-insensitive-mixed: [false, true, 0, 1, 'false', 'False', 'true', 'True
 sort-case-sensitive-mixed: [false, true, 0, 1, 'False', 'True', 'false', 'true']
 sort-attribute [{'name': 'a'}, {'name': 'b'}]
 d: True
-json: {"a":"b","c":"d"}
+json: {"a": "b", "c": "d"}
 json-pretty: {
   "a": "b",
   "c": "d"
@@ -115,9 +115,9 @@ reject-attr: ({'active': false, 'key': 2},)
 select-attr: ({'active': false, 'key': 2},)
 reject-attr: ({'active': true, 'key': 1},)
 map-maps: (1, 2, 3, 4, 5)
-map-attr: (1, 2, none)
+map-attr: (1, 2, None)
 map-attr-undefined: (1, 2, undefined)
-map-attr-deep: (1, 2, none)
+map-attr-deep: (1, 2, None)
 map-attr-int: (999, 2)
 attr-filter: b
 unique-filter: (1, 4, 3, 0, 5)

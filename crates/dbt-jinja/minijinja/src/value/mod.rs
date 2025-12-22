@@ -474,7 +474,7 @@ impl fmt::Debug for ValueRepr {
             ValueRepr::U64(val) => fmt::Debug::fmt(val, f),
             ValueRepr::I64(val) => fmt::Debug::fmt(val, f),
             ValueRepr::F64(val) => fmt::Debug::fmt(val, f),
-            ValueRepr::None => f.write_str("none"),
+            ValueRepr::None => f.write_str("None"),
             ValueRepr::Invalid(ref val) => write!(f, "<invalid value: {val}>"),
             ValueRepr::U128(val) => fmt::Debug::fmt(&{ val.0 }, f),
             ValueRepr::I128(val) => fmt::Debug::fmt(&{ val.0 }, f),
@@ -690,7 +690,7 @@ impl fmt::Display for Value {
                     write!(f, "{num}")
                 }
             }
-            ValueRepr::None => f.write_str("none"),
+            ValueRepr::None => f.write_str("None"),
             ValueRepr::Invalid(ref val) => write!(f, "<invalid value: {val}>"),
             ValueRepr::I128(val) => write!(f, "{}", { val.0 }),
             ValueRepr::String(val, _) => write!(f, "{val}"),

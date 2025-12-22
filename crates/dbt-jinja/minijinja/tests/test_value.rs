@@ -71,7 +71,7 @@ fn test_sort_different_types() {
     insta::assert_debug_snapshot!(&v, @r"
     [
         undefined,
-        none,
+        None,
         false,
         true,
         -inf,
@@ -1388,7 +1388,7 @@ fn test_sorting() {
     assert_debug_snapshot!(&values, @r"
     [
         undefined,
-        none,
+        None,
         false,
         true,
         -inf,
