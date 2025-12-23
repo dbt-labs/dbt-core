@@ -19,12 +19,22 @@ pub fn downcast_value_to_dyn_base_relation(
         Ok(relation_object.inner())
     } else if let Some(relation_object) = value
         .as_object()
-        .expect("relation must be an object")
+        .ok_or_else(|| {
+            MinijinjaError::new(
+                MinijinjaErrorKind::InvalidOperation,
+                "relation must be an object",
+            )
+        })?
         .get_value(&MinijinjaValue::from(THIS_RELATION_KEY))
     {
         Ok(relation_object
             .downcast_object::<RelationObject>()
-            .expect("this must be a BaseRelation object")
+            .ok_or_else(|| {
+                MinijinjaError::new(
+                    MinijinjaErrorKind::InvalidOperation,
+                    "this must be a BaseRelation object",
+                )
+            })?
             .inner())
     } else {
         Err(MinijinjaError::new(
