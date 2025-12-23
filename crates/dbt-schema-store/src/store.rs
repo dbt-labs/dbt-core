@@ -116,7 +116,12 @@ impl SchemaStoreState {
         let cached_schemas = SccHashMap::new();
         for entry in entries {
             // Do not register selected entries, these will be registered during compile
-            if matches!(entry, LookupEntry::Selected(..)) {
+            if let LookupEntry::Selected(unique_id) = entry
+                // HACK: This is a temporary hack to avoid re-fetching snapshots from the remote
+                // Snapshots reference themselves, meaning they can exist in both analyzed and remote at the same time.
+                // We need to handle this kind of scenario gracefully.
+                && !unique_id.starts_with("snapshot")
+            {
                 continue;
             }
             Self::try_register_entry_inner(&store_dir, &cached_schemas, entry);
