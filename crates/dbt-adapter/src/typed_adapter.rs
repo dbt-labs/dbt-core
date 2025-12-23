@@ -8,11 +8,11 @@ use crate::errors::{
 };
 use crate::funcs::{convert_macro_result_to_record_batch, execute_macro, none_value};
 use crate::information_schema::InformationSchema;
+use crate::metadata::postgres::PostgresMetadataAdapter;
 use crate::metadata::redshift::RedshiftMetadataAdapter;
 use crate::metadata::salesforce::SalesforceMetadataAdapter;
 use crate::metadata::snowflake::SnowflakeMetadataAdapter;
 use crate::metadata::{self, CatalogAndSchema, MetadataAdapter};
-use crate::postgres::adapter::PostgresAdapter;
 use crate::query_ctx::query_ctx_from_state;
 use crate::record_batch_utils::{extract_first_value_as_i64, get_column_values};
 use crate::relation::BaseRelationConfig;
@@ -2535,7 +2535,7 @@ impl AdapterTyping for ConcreteAdapter {
                 Box::new(SalesforceMetadataAdapter::new(engine)) as Box<dyn MetadataAdapter>
             }
             AdapterType::Postgres => {
-                Box::new(PostgresAdapter::new(engine)) as Box<dyn MetadataAdapter>
+                Box::new(PostgresMetadataAdapter::new(engine)) as Box<dyn MetadataAdapter>
             }
         };
         Some(metadata_adapter)

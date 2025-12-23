@@ -1,5 +1,5 @@
-use crate::TypedBaseAdapter;
-use crate::postgres::adapter::PostgresAdapter;
+use crate::typed_adapter::ConcreteAdapter;
+use crate::{AdapterEngine, TypedBaseAdapter};
 use crate::{
     AdapterResult, errors::AsyncAdapterResult, metadata::*, record_batch_utils::get_column_values,
 };
@@ -12,14 +12,26 @@ use dbt_schemas::schemas::{
     legacy_catalog::{CatalogNodeStats, CatalogTable, ColumnMetadata, TableMetadata},
     relations::base::{BaseRelation, RelationPattern},
 };
+use minijinja::State;
 
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 
-impl MetadataAdapter for PostgresAdapter {
+pub struct PostgresMetadataAdapter {
+    adapter: ConcreteAdapter,
+}
+
+impl PostgresMetadataAdapter {
+    pub fn new(engine: Arc<AdapterEngine>) -> Self {
+        let adapter = ConcreteAdapter::new(engine);
+        Self { adapter }
+    }
+}
+
+impl MetadataAdapter for PostgresMetadataAdapter {
     fn adapter(&self) -> &dyn TypedBaseAdapter {
-        self
+        &self.adapter
     }
 
     fn build_schemas_from_stats_sql(
@@ -163,7 +175,7 @@ impl MetadataAdapter for PostgresAdapter {
 
     fn create_schemas_if_not_exists(
         &self,
-        _state: &minijinja::State<'_, '_>,
+        _state: &State<'_, '_>,
         _catalog_schemas: &BTreeMap<String, BTreeSet<String>>,
     ) -> AdapterResult<Vec<(String, String, AdapterResult<()>)>> {
         todo!("PostgresAdapter::create_schemas_if_not_exists")

@@ -55,8 +55,6 @@ pub mod bigquery;
 pub mod databricks;
 /// Parse adapter
 pub mod parse;
-/// Postgres adapter
-pub mod postgres;
 
 pub mod mock;
 
@@ -83,5 +81,4 @@ pub use typed_adapter::TypedBaseAdapter;
 // Exposing structs for testing
 pub use adapter_engine::AdapterEngine as SqlEngineForTesting;
 pub use dbt_auth::AdapterConfig as AdapterConfigForTesting;
-pub use postgres::adapter::PostgresAdapter as PostgresAdapterForTesting;
 pub use typed_adapter::ConcreteAdapter as ConcreteAdapterForTesting;
