@@ -227,7 +227,8 @@ pub fn resolve_seeds(
                 patch_path: patch_path.clone(),
                 unique_id: unique_id.clone(),
                 fqn,
-                description: seed.description.clone(),
+                // dbt-core: description is always default ''
+                description: Some(seed.description.clone().unwrap_or_default()),
                 raw_code: None,
                 language: None,
                 tags: properties_config

@@ -226,7 +226,8 @@ pub fn resolve_unit_tests(
                 name_span: dbt_common::Span::default(),
                 unique_id: base_unique_id.clone(),
                 fqn,
-                description: unit_test.description.to_owned(),
+                // dbt-core: description is always default ''
+                description: Some(unit_test.description.to_owned().unwrap_or_default()),
                 patch_path: None,
                 checksum: DbtChecksum::default(),
                 raw_code: None,

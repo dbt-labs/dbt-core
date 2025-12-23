@@ -409,7 +409,8 @@ pub async fn resolve_models(
                 patch_path: patch_path.clone(),
                 unique_id: unique_id.clone(),
                 fqn,
-                description: properties.description.clone(),
+                // dbt-core: description is always default ''
+                description: Some(properties.description.clone().unwrap_or_default()),
                 checksum: sql_file_info.checksum.clone(),
                 // NOTE: raw_code has to be this value for dbt-evaluator to return truthy
                 // hydrating it with get_original_file_contents would actually break dbt-evaluator

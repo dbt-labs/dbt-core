@@ -75,7 +75,13 @@ impl DatabricksComponentProcessor for CommentProcessor {
             .map(|pd| pd.relation.unwrap_or(false))
             .unwrap_or(false);
 
-        let comment = relation_config.common().description.clone();
+        let comment = if let Some(description) = &relation_config.common().description
+            && !description.is_empty()
+        {
+            Some(description.clone())
+        } else {
+            None
+        };
 
         Ok(Some(DatabricksComponentConfig::Comment(
             CommentConfig::new(comment, persist),

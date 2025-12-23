@@ -152,6 +152,7 @@ pub async fn resolve_exposures(
                     original_file_path: mpe.relative_path.clone(),
                     unique_id: unique_id.clone(),
                     fqn,
+                    // dbt-core: description is always default ''
                     description: Some(exposure.description.unwrap_or_default()),
                     patch_path: None,
                     checksum: Default::default(),

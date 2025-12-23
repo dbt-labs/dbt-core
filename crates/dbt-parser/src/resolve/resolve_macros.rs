@@ -145,8 +145,9 @@ pub fn resolve_macros(
                             unique_id: unique_id.clone(),
                             macro_sql: split_macro_sql.to_string(),
                             depends_on: MacroDependsOn { macros: vec![] }, // Populate as needed
-                            description: String::new(),                    // Populate as needed
-                            meta: BTreeMap::new(),                         // Populate as needed
+                            // dbt-core: description is always default ''
+                            description: String::new(), // Populate as needed
+                            meta: BTreeMap::new(),      // Populate as needed
                             patch_path: None,
                             funcsign: None,
                             args: vec![],

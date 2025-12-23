@@ -354,7 +354,8 @@ pub async fn resolve_data_tests(
                 patch_path,
                 unique_id: unique_id.clone(),
                 fqn,
-                description: properties.description.clone(),
+                // dbt-core: description is always default ''
+                description: Some(properties.description.clone().unwrap_or_default()),
                 checksum: DbtChecksum::hash(rendered_sql.trim().as_bytes()),
                 // TODO: hydrate for generic + singular tests
                 // Examples in Mantle:
