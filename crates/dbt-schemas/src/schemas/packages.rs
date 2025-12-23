@@ -1,5 +1,6 @@
 use std::{
     collections::{BTreeMap, HashMap},
+    fmt::Display,
     path::PathBuf,
 };
 
@@ -143,6 +144,16 @@ pub enum PackageVersion {
     Number(f64),
     String(String),
     Array(Vec<String>),
+}
+
+impl Display for PackageVersion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PackageVersion::Number(number) => write!(f, "{}", number),
+            PackageVersion::String(string) => write!(f, "{}", string),
+            PackageVersion::Array(array) => write!(f, "[{}]", array.join(",")),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]

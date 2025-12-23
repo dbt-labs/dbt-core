@@ -7,12 +7,16 @@ use dbt_common::{
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::serde::from_yaml_raw;
 use dbt_schemas::schemas::packages::{
-    DbtPackageLock, DbtPackages, DbtPackagesLock, DeprecatedDbtPackageLock,
-    DeprecatedDbtPackagesLock, GitPackageLock, HubPackageLock, LocalPackageLock,
+    DbtPackageEntry, DbtPackageLock, DbtPackages, DbtPackagesLock, DeprecatedDbtPackageLock,
+    DeprecatedDbtPackagesLock, GitPackageLock, HubPackageLock, LocalPackageLock, PackageVersion,
 };
-use std::{collections::BTreeMap, collections::HashSet, path::Path};
+use std::{
+    collections::BTreeMap, collections::HashMap, collections::HashSet, path::Path, str::FromStr,
+};
 
-use crate::utils::{read_and_validate_dbt_project, sha1_hash_packages};
+use crate::semver::{Version, VersionSpecifier, versions_compatible};
+use crate::types::HubUnpinnedPackage;
+use crate::utils::{fusion_sha1_hash_packages, read_and_validate_dbt_project};
 
 pub fn try_load_valid_dbt_packages_lock(
     io: &IoArgs,
@@ -22,7 +26,7 @@ pub fn try_load_valid_dbt_packages_lock(
     vars: &BTreeMap<String, dbt_serde_yaml::Value>,
 ) -> FsResult<Option<DbtPackagesLock>> {
     let packages_lock_path = io.in_dir.join(DBT_PACKAGES_LOCK_FILE);
-    let sha1_hash = sha1_hash_packages(&dbt_packages.packages);
+    let sha1_hash = fusion_sha1_hash_packages(&dbt_packages.packages);
     if packages_lock_path.exists() {
         let yml_str = try_read_yml_to_str(&packages_lock_path)?;
         let rendered_yml: DbtPackagesLock =
@@ -35,6 +39,7 @@ pub fn try_load_valid_dbt_packages_lock(
                         return try_load_from_deprecated_dbt_packages_lock(
                             io,
                             dbt_packages_dir,
+                            Some(dbt_packages),
                             &yml_str,
                             jinja_env,
                             vars,
@@ -59,6 +64,7 @@ pub fn try_load_valid_dbt_packages_lock(
 fn try_load_from_deprecated_dbt_packages_lock(
     io: &IoArgs,
     dbt_packages_dir: &Path,
+    dbt_packages: Option<&DbtPackages>,
     yml_str: &str,
     jinja_env: &JinjaEnv,
     vars: &BTreeMap<String, dbt_serde_yaml::Value>,
@@ -202,10 +208,26 @@ fn try_load_from_deprecated_dbt_packages_lock(
                     }
                 }
             }
-            Ok(Some(DbtPackagesLock {
+            let dbt_packages_lock = DbtPackagesLock {
                 packages,
                 sha1_hash,
-            }))
+            };
+            // HACK: This is a temporary hack to ensure the old package lock format is invalidated (i.e. not loaded)
+            // when it conflicts with the packages.yml spec (ex. a version constraint conflicts)
+            // We only validate hub packages for now to aid the most common autofix upgrade scenario
+            if let Some(dbt_packages) = dbt_packages {
+                if let Err(e) = validate_deprecated_hub_lock_hack(dbt_packages, &dbt_packages_lock)
+                {
+                    emit_warn_log_message(
+                        ErrorCode::InvalidConfig,
+                        e.to_string(),
+                        io.status_reporter.as_ref(),
+                    );
+                    return Ok(None);
+                }
+            }
+
+            Ok(Some(dbt_packages_lock))
         }
         Err(e) => {
             err!(
@@ -245,6 +267,7 @@ pub fn load_dbt_packages_lock_without_validation(
                     return try_load_from_deprecated_dbt_packages_lock(
                         io,
                         dbt_packages_dir,
+                        None,
                         &yml_str,
                         jinja_env,
                         vars,
@@ -259,4 +282,62 @@ pub fn load_dbt_packages_lock_without_validation(
         };
 
     Ok(Some(rendered_yml))
+}
+
+/// Iterates over the packages in the packages.yml and validates the version constraints against the version in the package-lock.yml
+fn validate_deprecated_hub_lock_hack(
+    dbt_packages: &DbtPackages,
+    dbt_packages_lock: &DbtPackagesLock,
+) -> FsResult<()> {
+    // Build a HashMap for O(1) lookup instead of O(n) linear search per package
+    let lock_hub_packages: HashMap<&str, &HubPackageLock> = dbt_packages_lock
+        .packages
+        .iter()
+        .filter_map(|lock| match lock {
+            DbtPackageLock::Hub(hub_lock) => Some((hub_lock.package.as_str(), hub_lock)),
+            _ => None,
+        })
+        .collect();
+
+    for hub_package in dbt_packages
+        .packages
+        .iter()
+        .filter_map(|entry| match entry {
+            DbtPackageEntry::Hub(hub) => Some(hub),
+            _ => None,
+        })
+    {
+        let Some(lock_entry) = lock_hub_packages.get(hub_package.package.as_str()) else {
+            return err!(
+                ErrorCode::InvalidConfig,
+                "Old format package-lock.yml missing hub package '{}'",
+                hub_package.package
+            );
+        };
+
+        let unpinned_package: HubUnpinnedPackage = hub_package.clone().try_into()?;
+        let mut versions = unpinned_package.versions;
+        versions.push(Version::Spec(lock_version_spec(&lock_entry.version)?));
+        if !versions_compatible(&versions) {
+            return err!(
+                ErrorCode::InvalidConfig,
+                "Version '{}' in old format package-lock.yml for package '{}' does not satisfy packages.yml constraint",
+                lock_entry.version,
+                hub_package.package
+            );
+        }
+    }
+
+    Ok(())
+}
+
+fn lock_version_spec(package_version: &PackageVersion) -> FsResult<VersionSpecifier> {
+    match package_version {
+        PackageVersion::String(version) => VersionSpecifier::from_str(version),
+        _ => err!(
+            ErrorCode::InvalidConfig,
+            "Expected a single resolved version in package-lock.yml, found '{}'",
+            package_version
+        ),
+    }
 }

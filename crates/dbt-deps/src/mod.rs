@@ -69,13 +69,6 @@ pub async fn get_or_install_packages(
     // This gets the package entries from packages.yml or dependencies.yml
     let (package_def, package_yml_name) = load_dbt_packages(io, &io.in_dir)?;
 
-    // Store projects for later use if package_def exists
-    let projects = if let Some(ref packages) = package_def {
-        packages.projects.clone()
-    } else {
-        Vec::new()
-    };
-
     let dbt_packages_lock = if let Some(ref dbt_packages) = package_def {
         if !upgrade
             && !lock
@@ -224,5 +217,8 @@ pub async fn get_or_install_packages(
         }
     }
 
-    Ok((dbt_packages_lock, projects))
+    Ok((
+        dbt_packages_lock,
+        package_def.map(|p| p.projects).unwrap_or_default(),
+    ))
 }

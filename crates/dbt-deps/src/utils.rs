@@ -27,7 +27,7 @@ pub fn get_local_package_full_path(in_dir: &Path, local_package: &LocalPackage) 
     }
 }
 
-pub fn sha1_hash_packages(packages: &[DbtPackageEntry]) -> String {
+pub fn fusion_sha1_hash_packages(packages: &[DbtPackageEntry]) -> String {
     let mut package_strs = packages
         .iter()
         .map(|p| serde_json::to_string(p).unwrap())
@@ -37,6 +37,12 @@ pub fn sha1_hash_packages(packages: &[DbtPackageEntry]) -> String {
         "{:x}",
         sha1::Sha1::digest(package_strs.join("\n").as_bytes())
     )
+}
+
+// TODO: Implement the proper core sha1 hash
+#[allow(dead_code)]
+pub fn core_sha1_hash_packages(_packages: &[DbtPackageEntry]) -> String {
+    unimplemented!()
 }
 
 pub fn handle_git_like_package(

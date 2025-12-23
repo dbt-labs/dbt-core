@@ -12,7 +12,7 @@ use crate::{
     package_listing::UnpinnedPackage,
     tarball_client::TarballClient,
     types::{GitPinnedPackage, LocalPinnedPackage, PrivatePinnedPackage, TarballPinnedPackage},
-    utils::{handle_git_like_package, read_and_validate_dbt_project, sha1_hash_packages},
+    utils::{fusion_sha1_hash_packages, handle_git_like_package, read_and_validate_dbt_project},
 };
 
 use crate::{hub_client::HubClient, package_listing::PackageListing};
@@ -30,7 +30,7 @@ pub async fn compute_package_lock(
     skip_private_deps: bool,
     token: &CancellationToken,
 ) -> FsResult<DbtPackagesLock> {
-    let sha1_hash = sha1_hash_packages(&dbt_packages.packages);
+    let sha1_hash = fusion_sha1_hash_packages(&dbt_packages.packages);
     // First step, is to flatten into a single list of packages
     let mut dbt_packages_lock = DbtPackagesLock::default();
     let mut package_listing =
