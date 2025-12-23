@@ -735,7 +735,8 @@ fn process_python_models(
     for python_asset in python_files {
         // Read and parse Python source
         let absolute_path = python_asset.base_path.join(&python_asset.path);
-        let source = std::fs::read_to_string(&absolute_path)?;
+        // Strip leading/trailing whitespace to match dbt-core's behavior (load_file_contents with strip=True)
+        let source = std::fs::read_to_string(&absolute_path)?.trim().to_string();
 
         let stmts = match parse_python(&source, &python_asset.path) {
             Ok(stmts) => stmts,
