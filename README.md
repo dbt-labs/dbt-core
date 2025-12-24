@@ -53,27 +53,35 @@ Legend:
 
 ## Timeline
 
-| Target Date | Milestone                   | Description                                  |
-|-------------|-----------------------------|----------------------------------------------|
-| 2025-05-28  | Initial release of Fusion   | Published source code of parser, schemas, dbt-jinja, and Snowflake ADBC driver. |
-| 2025-06-09  | Databricks Adapter release  | Databricks ADBC driver, and adapter for Fusion |
-| 2025-06-30  | BigQuery Adapter release    | BigQuery ADBC driver, and adapter for Fusion |
-| 2025-07-31  | Redshift Adapter release    | Redshift ADBC driver, and adapter for Fusion |
-| 2025-08-30  | ANTLR Grammars release + SQL Parser  | The SQL grammar used by the ANTLR parser generator.  |
+| Target Date | Milestone                   | Description                                                                     |
+|-------------|-----------------------------|---------------------------------------------------------------------------------|
+| 2025-05-28  | Initial release of Fusion   | Published source code of parser, schemas, dbt-jinja, and Snowflake ADBC driver  |
+| 2025-06-09  | Databricks Adapter release  | Databricks ADBC driver, and adapter for Fusion                                  |
+| 2025-06-30  | BigQuery Adapter release    | BigQuery ADBC driver, and adapter for Fusion                                    |
+| 2025-07-31  | Redshift Adapter release    | Redshift ADBC driver, and adapter for Fusion                                    |
+| 2025-09-30  | OSS Adapters                | Adapter components published under Apache 2.0 license                           |
+| TBD         | ANTLR Grammars              | SQL dialect grammars used by the ANTLR parser generator                         |
 
 ### Top Level Components Released to Date
 Releases of various Fusion components will be iterative as each component reaches maturity & readiness for contribution.
 
 - [x] `dbt-jinja` - All Rust extension of mini-jinja to support dbt's jinja functions & other capabilities
 - [x] `dbt-parser` - Rust parser for dbt projects
-- [x] `dbt-snowflake` - database driver
-- [x] `dbt-schemas` - complete, correct, machine generated json schemas for dbt's authoring surface
+- [x] `dbt-schemas` - Complete, correct, machine-generated jsonschemas for dbt's properties and configurations
+- [x] `dbt-adapter` - adapters for supported data warehouses
+  - [x] snowflake
+  - [x] databricks
+  - [x] bigquery
+  - [x] redshift
+- [x] `dbt-xdbc` - Rust wrapper for ADBC and ODBC drivers
+- [x] `dbt-auth` - Auth for all supported warehouses and database systems
+- [x] `dbt-agate` - Rust port of the Python agate library
 - [ ] `dbt-sql` - ANTLR grammars and generated parsers
-  - [ ] snowflake.g4 
   - [ ] bigquery.g4
-  - [ ] redshift.g4
   - [ ] databricks.g4
-- [ ] Fusion: the comprehensive dbt fusion engine release.
+  - [ ] redshift.g4
+  - [ ] snowflake.g4 
+- [ ] Fusion: comprehensive release of the (source-available) dbt Fusion engine.
 
 ## FAQ
 
