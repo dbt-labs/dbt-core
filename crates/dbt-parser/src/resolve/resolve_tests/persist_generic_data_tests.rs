@@ -214,6 +214,11 @@ fn persist_inner(
                 .filter_map(|v| v.as_str().map(|s| s.to_string()))
                 .collect()
         });
+    // Extract model kwarg and wrap with {{ }} for Jinja expression
+    let test_metadata_model = kwargs
+        .get("model")
+        .and_then(|v| v.as_str())
+        .map(|s| format!("{{{{ {} }}}}", s));
 
     Ok(GenericTestAsset {
         dbt_asset,
@@ -226,6 +231,7 @@ fn persist_inner(
         test_metadata_namespace: meta_namespace,
         test_metadata_column_name: column_name,
         test_metadata_combination_of_columns: combination_of_columns,
+        test_metadata_model,
     })
 }
 

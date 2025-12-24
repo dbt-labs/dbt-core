@@ -3,6 +3,7 @@ use dbt_serde_yaml::{JsonSchema, ShouldBe, Spanned, Verbatim};
 use serde::{Deserialize, Serialize};
 // Type aliases for clarity
 type YmlValue = dbt_serde_yaml::Value;
+use indexmap::IndexMap;
 use std::collections::BTreeMap;
 use std::collections::btree_map::Iter;
 
@@ -27,7 +28,7 @@ pub struct ProjectSourceConfig {
     #[serde(rename = "+event_time")]
     pub event_time: Option<String>,
     #[serde(rename = "+meta")]
-    pub meta: Option<BTreeMap<String, YmlValue>>,
+    pub meta: Option<IndexMap<String, YmlValue>>,
     #[serde(rename = "+freshness")]
     pub freshness: Option<FreshnessDefinition>,
     #[serde(rename = "+tags")]
@@ -262,7 +263,7 @@ pub struct SourceConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
     pub event_time: Option<String>,
-    pub meta: Option<BTreeMap<String, YmlValue>>,
+    pub meta: Option<IndexMap<String, YmlValue>>,
     pub freshness: Option<FreshnessDefinition>,
     pub tags: Option<StringOrArrayOfStrings>,
     pub quoting: Option<DbtQuoting>,

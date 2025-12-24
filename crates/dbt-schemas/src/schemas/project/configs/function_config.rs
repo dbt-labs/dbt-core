@@ -5,6 +5,7 @@ use dbt_serde_yaml::ShouldBe;
 use serde::{Deserialize, Serialize};
 // Type aliases for clarity
 type YmlValue = dbt_serde_yaml::Value;
+use indexmap::IndexMap;
 use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
 use std::collections::btree_map::Iter;
@@ -51,7 +52,7 @@ pub struct ProjectFunctionConfig {
     #[serde(rename = "+language")]
     pub language: Option<String>,
     #[serde(rename = "+meta")]
-    pub meta: Option<BTreeMap<String, YmlValue>>,
+    pub meta: Option<IndexMap<String, YmlValue>>,
     #[serde(rename = "+on_configuration_change")]
     pub on_configuration_change: Option<String>,
     #[serde(rename = "+quoting")]
@@ -168,7 +169,7 @@ pub struct FunctionConfig {
     pub tags: Option<StringOrArrayOfStrings>,
     // need default to ensure None if field is not set
     #[serde(default, deserialize_with = "default_type")]
-    pub meta: Option<BTreeMap<String, YmlValue>>,
+    pub meta: Option<IndexMap<String, YmlValue>>,
     pub group: Option<String>,
     pub docs: Option<DocsConfig>,
     #[serde(serialize_with = "serialize_string_or_array_map")]

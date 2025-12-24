@@ -1,5 +1,6 @@
 use crate::schemas::project::TypedRecursiveConfig;
 use dbt_serde_yaml::{JsonSchema, ShouldBe};
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::collections::btree_map::Iter;
@@ -19,7 +20,7 @@ use crate::{
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq)]
 pub struct ProjectExposureConfig {
     #[serde(rename = "+meta")]
-    pub meta: Option<BTreeMap<String, YmlValue>>,
+    pub meta: Option<IndexMap<String, YmlValue>>,
     #[serde(rename = "+tags")]
     pub tags: Option<StringOrArrayOfStrings>,
     #[serde(default, rename = "+enabled", deserialize_with = "bool_or_string_bool")]
@@ -42,7 +43,7 @@ impl TypedRecursiveConfig for ProjectExposureConfig {
 pub struct ExposureConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
-    pub meta: Option<BTreeMap<String, YmlValue>>,
+    pub meta: Option<IndexMap<String, YmlValue>>,
     pub tags: Option<StringOrArrayOfStrings>,
 }
 

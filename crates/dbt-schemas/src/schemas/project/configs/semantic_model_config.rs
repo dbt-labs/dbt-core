@@ -1,5 +1,6 @@
 use crate::schemas::serde::bool_or_string_bool;
 use dbt_serde_yaml::{JsonSchema, ShouldBe};
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, btree_map::Iter};
 
@@ -22,7 +23,7 @@ pub struct ProjectSemanticModelConfig {
     #[serde(rename = "+group")]
     pub group: Option<String>,
     #[serde(rename = "+meta")]
-    pub meta: Option<BTreeMap<String, YmlValue>>,
+    pub meta: Option<IndexMap<String, YmlValue>>,
     #[serde(rename = "+tags")]
     pub tags: Option<StringOrArrayOfStrings>,
 
@@ -44,7 +45,7 @@ impl TypedRecursiveConfig for ProjectSemanticModelConfig {
 pub struct SemanticModelConfig {
     pub enabled: Option<bool>,
     pub group: Option<String>,
-    pub meta: Option<BTreeMap<String, YmlValue>>,
+    pub meta: Option<IndexMap<String, YmlValue>>,
     pub tags: Option<StringOrArrayOfStrings>,
 }
 

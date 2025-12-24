@@ -363,7 +363,7 @@ num_cpus = "1.16.0"
 pathdiff = "0.2.3"
 run_script = "0.11.0"
 rust-embed = { version = "8.5.0" }
-schemars = "0.8.22"
+schemars = { version = "0.8.22", features = ["indexmap2"] }
 shellexpand = "3.1.1"
 stringmetrics = "2.2.2"
 tar = "0.4.40"

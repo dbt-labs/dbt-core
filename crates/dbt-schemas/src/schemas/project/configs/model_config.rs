@@ -6,6 +6,7 @@ use dbt_serde_yaml::Verbatim;
 use serde::{Deserialize, Serialize};
 // Type aliases for clarity
 type YmlValue = dbt_serde_yaml::Value;
+use indexmap::IndexMap;
 use std::collections::btree_map::Iter;
 use std::collections::{BTreeMap, HashSet};
 
@@ -236,7 +237,7 @@ pub struct ProjectModelConfig {
     )]
     pub merge_with_schema_evolution: Option<bool>,
     #[serde(rename = "+meta")]
-    pub meta: Verbatim<Option<BTreeMap<String, YmlValue>>>,
+    pub meta: Verbatim<Option<IndexMap<String, YmlValue>>>,
     #[serde(rename = "+not_matched_by_source_action")]
     pub not_matched_by_source_action: Option<String>,
     #[serde(rename = "+not_matched_by_source_condition")]
@@ -404,7 +405,7 @@ pub struct ModelConfig {
     pub catalog_name: Option<String>,
     // need default to ensure None if field is not set
     #[serde(default, deserialize_with = "default_type")]
-    pub meta: Option<BTreeMap<String, YmlValue>>,
+    pub meta: Option<IndexMap<String, YmlValue>>,
     pub group: Option<String>,
     pub materialized: Option<DbtMaterialization>,
     pub incremental_strategy: Option<DbtIncrementalStrategy>,

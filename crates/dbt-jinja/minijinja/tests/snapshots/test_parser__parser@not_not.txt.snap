@@ -1,6 +1,5 @@
 ---
 source: fs/sa/crates/dbt-jinja/minijinja/tests/test_parser.rs
-assertion_line: 14
 description: "{{ not x }}\n{{ not not x }}\n{{ not not not x }}\n{{ not true }}\n{{ not not true }}\n{{ not not false }}\n{{ config(enabled=not not foo) }}\n{{ not (not x) }}\n{{ not not x and y }}\n{{ x or not not y }}"
 input_file: fs/sa/crates/dbt-jinja/minijinja/tests/parser-inputs/not_not.txt
 ---
@@ -53,7 +52,7 @@ Ok(
                 expr: UnaryOp {
                     op: Not,
                     expr: Const {
-                        value: true,
+                        value: True,
                     } @ 4:8-4:12,
                 } @ 4:1-4:15,
             } @ 4:1-4:15,
@@ -66,7 +65,7 @@ Ok(
                     expr: UnaryOp {
                         op: Not,
                         expr: Const {
-                            value: true,
+                            value: True,
                         } @ 5:12-5:16,
                     } @ 5:8-5:16,
                 } @ 5:1-5:19,
@@ -80,7 +79,7 @@ Ok(
                     expr: UnaryOp {
                         op: Not,
                         expr: Const {
-                            value: false,
+                            value: False,
                         } @ 6:12-6:17,
                     } @ 6:8-6:17,
                 } @ 6:1-6:20,
@@ -169,4 +168,3 @@ Ok(
         ],
     } @ 1:1-11:1,
 )
-

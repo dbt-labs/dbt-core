@@ -10,7 +10,7 @@ Ok(
                 expr: BinOp {
                     op: Concat,
                     left: Const {
-                        value: ''',
+                        value: "'",
                     } @ 1:3-1:7,
                     right: Const {
                         value: 'foo',
@@ -24,7 +24,7 @@ Ok(
                 expr: BinOp {
                     op: Concat,
                     left: Const {
-                        value: ''',
+                        value: "'",
                     } @ 2:3-2:7,
                     right: Const {
                         value: 'foo',
@@ -36,7 +36,7 @@ Ok(
             } @ 2:17-3:1,
             EmitExpr {
                 expr: Const {
-                    value: ''',
+                    value: "'",
                 } @ 3:1-3:9,
             } @ 3:1-3:9,
         ],

@@ -165,8 +165,8 @@ State {
 None
 ---
 [
-    true,
-    false,
+    True,
+    False,
     42,
 ]
 ---

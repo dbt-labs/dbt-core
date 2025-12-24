@@ -1,4 +1,5 @@
 use core::fmt;
+use indexmap::IndexMap;
 use std::str::FromStr;
 use std::{any::Any, collections::BTreeMap, fmt::Display, path::PathBuf, sync::Arc};
 
@@ -445,7 +446,7 @@ pub trait InternalDbtNodeAttributes: InternalDbtNode {
         self.common().tags.clone()
     }
 
-    fn meta(&self) -> BTreeMap<String, YmlValue> {
+    fn meta(&self) -> IndexMap<String, YmlValue> {
         self.common().meta.clone()
     }
 
@@ -831,7 +832,7 @@ fn seed_configs_equal(left: &SeedConfig, right: &SeedConfig) -> bool {
     // left.delimiter == right.delimiter && // TODO: re-enable when no longer using mantle/core manifests in IA
     left.event_time == right.event_time &&
     left.full_refresh == right.full_refresh &&
-    btree_map_yml_value_equal(&left.meta, &right.meta) &&
+    indexmap_yml_value_equal(&left.meta, &right.meta) &&
     persist_docs_configs_equal(&left.persist_docs, &right.persist_docs) &&
     hooks_equal(&left.post_hook, &right.post_hook) &&
     hooks_equal(&left.pre_hook, &right.pre_hook) &&
@@ -877,10 +878,10 @@ fn btree_map_string_or_array_equal(
     }
 }
 
-/// Compare BTreeMap<String, YmlValue> considering None vs Some(empty) as equal
-fn btree_map_yml_value_equal(
-    left: &Option<BTreeMap<String, YmlValue>>,
-    right: &Option<BTreeMap<String, YmlValue>>,
+/// Compare IndexMap<String, YmlValue> considering None vs Some(empty) as equal
+fn indexmap_yml_value_equal(
+    left: &Option<IndexMap<String, YmlValue>>,
+    right: &Option<IndexMap<String, YmlValue>>,
 ) -> bool {
     match (left, right) {
         (None, None) => true,
@@ -1640,7 +1641,7 @@ impl InternalDbtNodeAttributes for DbtSnapshot {
         self.__common_attr__.tags.clone()
     }
 
-    fn meta(&self) -> BTreeMap<String, YmlValue> {
+    fn meta(&self) -> IndexMap<String, YmlValue> {
         self.__common_attr__.meta.clone()
     }
 
@@ -1716,7 +1717,7 @@ impl InternalDbtNodeAttributes for DbtExposure {
     fn tags(&self) -> Vec<String> {
         self.__common_attr__.tags.clone()
     }
-    fn meta(&self) -> BTreeMap<String, YmlValue> {
+    fn meta(&self) -> IndexMap<String, YmlValue> {
         self.__common_attr__.meta.clone()
     }
     fn serialized_config(&self) -> YmlValue {
@@ -2813,7 +2814,7 @@ pub struct CommonAttributes {
 
     // Tags and Meta
     pub tags: Vec<String>,
-    pub meta: BTreeMap<String, YmlValue>,
+    pub meta: IndexMap<String, YmlValue>,
 }
 
 #[skip_serializing_none]

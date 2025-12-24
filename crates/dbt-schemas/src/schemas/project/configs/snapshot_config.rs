@@ -3,6 +3,7 @@ use dbt_serde_yaml::JsonSchema;
 use dbt_serde_yaml::ShouldBe;
 use dbt_serde_yaml::Spanned;
 use dbt_serde_yaml::Verbatim;
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
@@ -92,7 +93,7 @@ pub struct ProjectSnapshotConfig {
     #[serde(rename = "+static_analysis")]
     pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
     #[serde(rename = "+meta")]
-    pub meta: Option<BTreeMap<String, YmlValue>>,
+    pub meta: Option<IndexMap<String, YmlValue>>,
     #[serde(rename = "+group")]
     pub group: Option<String>,
     #[serde(
@@ -356,7 +357,7 @@ pub struct SnapshotConfig {
     pub event_time: Option<String>,
     pub quoting: Option<DbtQuoting>,
     pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
-    pub meta: Option<BTreeMap<String, YmlValue>>,
+    pub meta: Option<IndexMap<String, YmlValue>>,
     pub group: Option<String>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub quote_columns: Option<bool>,

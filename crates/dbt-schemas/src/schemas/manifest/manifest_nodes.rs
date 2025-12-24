@@ -1,3 +1,4 @@
+use indexmap::IndexMap;
 use std::{collections::BTreeMap, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -88,7 +89,7 @@ pub struct ManifestCommonAttributes {
     pub tags: Vec<String>,
 
     #[serde(default)]
-    pub meta: BTreeMap<String, YmlValue>,
+    pub meta: IndexMap<String, YmlValue>,
 }
 
 /// Common attributes for materializable nodes, i.e. models, sources, snapshots, tests, etc.
@@ -115,7 +116,7 @@ pub struct ManifestMaterializableCommonAttributes {
     #[serde(default)]
     pub tags: Vec<String>,
     #[serde(default)]
-    pub meta: BTreeMap<String, YmlValue>,
+    pub meta: IndexMap<String, YmlValue>,
 }
 
 #[skip_serializing_none]
@@ -553,7 +554,7 @@ pub struct ManifestModelConfig {
     pub catalog_name: Option<String>,
     // need default to ensure None if field is not set
     #[serde(default, deserialize_with = "default_type")]
-    pub meta: Option<BTreeMap<String, YmlValue>>,
+    pub meta: Option<IndexMap<String, YmlValue>>,
     pub group: Option<String>,
     pub materialized: Option<DbtMaterialization>,
     pub incremental_strategy: Option<DbtIncrementalStrategy>,
@@ -623,7 +624,7 @@ pub struct ManifestSeedConfig {
     pub event_time: Option<String>,
     pub full_refresh: Option<bool>,
     pub group: Option<String>,
-    pub meta: Option<BTreeMap<String, YmlValue>>,
+    pub meta: Option<IndexMap<String, YmlValue>>,
     pub persist_docs: Option<PersistDocsConfig>,
     #[serde(alias = "post-hook")]
     pub post_hook: Verbatim<Option<Hooks>>,
@@ -1205,7 +1206,7 @@ impl From<DbtMetric> for ManifestMetric {
 pub struct ManifestMetricConfig {
     pub enabled: bool,
 
-    pub meta: Option<BTreeMap<String, YmlValue>>,
+    pub meta: Option<IndexMap<String, YmlValue>>,
 
     #[serde(skip_serializing_if = "Vec::is_empty", default)]
     pub tags: Vec<String>,
@@ -1249,7 +1250,7 @@ pub struct ManifestSemanticModelNodeBaseAttributes {
 pub struct ManifestSemanticModelConfig {
     pub enabled: bool,
 
-    pub meta: Option<BTreeMap<String, YmlValue>>,
+    pub meta: Option<IndexMap<String, YmlValue>>,
 
     pub group: Option<String>,
 }

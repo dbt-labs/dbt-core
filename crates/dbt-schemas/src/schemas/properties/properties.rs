@@ -5,6 +5,7 @@ use crate::schemas::serde::{FloatOrString, bool_or_string_bool, string_or_array}
 use dbt_serde_yaml::JsonSchema;
 use dbt_serde_yaml::Spanned;
 use dbt_serde_yaml::Verbatim;
+use indexmap::IndexMap;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
@@ -99,7 +100,7 @@ pub struct AnalysesConfig {
     pub tags: Option<Vec<String>>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
-    pub meta: Option<BTreeMap<String, YmlValue>>,
+    pub meta: Option<IndexMap<String, YmlValue>>,
     pub docs: Option<DocsConfig>,
     pub group: Option<String>,
 }
@@ -116,7 +117,7 @@ pub struct GroupProperties {
 #[skip_serializing_none]
 #[derive(Deserialize, Default, Serialize, Debug, Clone, JsonSchema)]
 pub struct GroupConfig {
-    pub meta: Option<BTreeMap<String, YmlValue>>,
+    pub meta: Option<IndexMap<String, YmlValue>>,
 }
 
 #[skip_serializing_none]

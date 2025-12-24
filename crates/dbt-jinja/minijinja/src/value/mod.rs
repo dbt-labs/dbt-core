@@ -470,7 +470,7 @@ impl fmt::Debug for ValueRepr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ValueRepr::Undefined => f.write_str("undefined"),
-            ValueRepr::Bool(val) => fmt::Debug::fmt(val, f),
+            ValueRepr::Bool(val) => write!(f, "{}", if *val { "True" } else { "False" }),
             ValueRepr::U64(val) => fmt::Debug::fmt(val, f),
             ValueRepr::I64(val) => fmt::Debug::fmt(val, f),
             ValueRepr::F64(val) => fmt::Debug::fmt(val, f),
@@ -478,8 +478,22 @@ impl fmt::Debug for ValueRepr {
             ValueRepr::Invalid(ref val) => write!(f, "<invalid value: {val}>"),
             ValueRepr::U128(val) => fmt::Debug::fmt(&{ val.0 }, f),
             ValueRepr::I128(val) => fmt::Debug::fmt(&{ val.0 }, f),
-            ValueRepr::String(val, _) => write!(f, "'{val}'"),
-            ValueRepr::SmallStr(val) => write!(f, "'{}'", val.as_str()),
+            ValueRepr::String(val, _) => {
+                // Use double quotes if string contains single quotes, like Python
+                if val.contains('\'') {
+                    write!(f, "\"{val}\"")
+                } else {
+                    write!(f, "'{val}'")
+                }
+            }
+            ValueRepr::SmallStr(val) => {
+                let s = val.as_str();
+                if s.contains('\'') {
+                    write!(f, "\"{s}\"")
+                } else {
+                    write!(f, "'{s}'")
+                }
+            }
             ValueRepr::Bytes(val) => {
                 write!(f, "b'")?;
                 for &b in val.iter() {

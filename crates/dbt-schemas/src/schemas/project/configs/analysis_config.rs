@@ -1,4 +1,5 @@
 use dbt_serde_yaml::{JsonSchema, Spanned};
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
@@ -21,7 +22,7 @@ pub struct ProjectAnalysisConfig {
     #[serde(rename = "+static_analysis")]
     pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
     #[serde(rename = "+meta")]
-    pub meta: Option<BTreeMap<String, YmlValue>>,
+    pub meta: Option<IndexMap<String, YmlValue>>,
     #[serde(rename = "+tags")]
     pub tags: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+docs")]
@@ -61,7 +62,7 @@ pub struct AnalysesConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
     pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
-    pub meta: Option<BTreeMap<String, YmlValue>>,
+    pub meta: Option<IndexMap<String, YmlValue>>,
     pub tags: Option<StringOrArrayOfStrings>,
     pub description: Option<String>,
     pub docs: Option<DocsConfig>,

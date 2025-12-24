@@ -20,10 +20,7 @@ use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::listener::DefaultJinjaTypeCheckEventListenerFactory;
 use dbt_jinja_utils::node_resolver::NodeResolver;
 use dbt_jinja_utils::serde::into_typed_with_jinja;
-use dbt_schemas::schemas::common::{
-    DbtChecksum, DbtMaterialization, DbtQuoting, NodeDependsOn,
-    conform_normalized_snapshot_raw_code_to_mantle_format, normalize_sql,
-};
+use dbt_schemas::schemas::common::{DbtChecksum, DbtMaterialization, DbtQuoting, NodeDependsOn};
 use dbt_schemas::schemas::dbt_column::process_columns;
 use dbt_schemas::schemas::macros::DbtMacro;
 use dbt_schemas::schemas::nodes::AdapterAttr;
@@ -527,12 +524,8 @@ async fn recalculate_snapshot_checksum(
     let original_absolute_path = arg.io.in_dir.join(original_path);
     match tokiofs::read_to_string(&original_absolute_path).await {
         Ok(original_sql) => {
-            // First normalize: remove all whitespace and lowercase
-            let normalized_full = normalize_sql(&original_sql);
-
-            let normalized_sql =
-                conform_normalized_snapshot_raw_code_to_mantle_format(&normalized_full);
-            DbtChecksum::hash(normalized_sql.as_bytes())
+            // Hash the original SQL directly without normalization to match mantle behavior
+            DbtChecksum::hash(original_sql.as_bytes())
         }
         Err(e) => {
             // Fallback to sql_file_info checksum if original file can't be read

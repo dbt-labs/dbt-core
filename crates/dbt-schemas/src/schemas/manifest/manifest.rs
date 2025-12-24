@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use dbt_common::{Span, adapter::AdapterType, io_args::StaticAnalysisKind};
 use dbt_serde_yaml::{Spanned, UntaggedEnumDeserialize};
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::PathBuf, str::FromStr as _, sync::Arc};
 // Type aliases for clarity
@@ -965,7 +966,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     language: None,
                     raw_code: None,
                     tags: vec![],
-                    meta: BTreeMap::new(),
+                    meta: IndexMap::new(),
                 },
                 __base_attr__: NodeBaseAttributes {
                     database: "".to_string(),
@@ -1144,7 +1145,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     language: None,
                     raw_code: None,
                     tags: vec![],
-                    meta: BTreeMap::new(),
+                    meta: IndexMap::new(),
                 },
                 __base_attr__: NodeBaseAttributes {
                     database: "".to_string(),

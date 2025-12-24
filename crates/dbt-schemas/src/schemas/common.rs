@@ -1,5 +1,6 @@
 //! Common Definitions for use in serializing and deserializing dbt nodes
 
+use indexmap::IndexMap;
 use std::collections::{BTreeMap, HashMap};
 use std::str::FromStr;
 
@@ -1140,9 +1141,9 @@ pub fn normalize_sql(sql: &str) -> String {
 
 /// Merge two meta maps, with the second map's values taking precedence on key conflicts.
 pub fn merge_meta(
-    base_meta: Option<BTreeMap<String, YmlValue>>,
-    update_meta: Option<BTreeMap<String, YmlValue>>,
-) -> Option<BTreeMap<String, YmlValue>> {
+    base_meta: Option<IndexMap<String, YmlValue>>,
+    update_meta: Option<IndexMap<String, YmlValue>>,
+) -> Option<IndexMap<String, YmlValue>> {
     match (base_meta, update_meta) {
         (Some(base_map), Some(update_map)) => {
             let mut merged = base_map;

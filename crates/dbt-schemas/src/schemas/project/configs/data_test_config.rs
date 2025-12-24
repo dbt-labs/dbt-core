@@ -3,6 +3,7 @@ use dbt_serde_yaml::{JsonSchema, ShouldBe, Spanned};
 use serde::{Deserialize, Serialize};
 // Type aliases for clarity
 type YmlValue = dbt_serde_yaml::Value;
+use indexmap::IndexMap;
 use std::collections::BTreeMap;
 use std::collections::btree_map::Iter;
 
@@ -44,7 +45,7 @@ pub struct ProjectDataTestConfig {
     #[serde(rename = "+limit")]
     pub limit: Option<i32>,
     #[serde(rename = "+meta")]
-    pub meta: Option<BTreeMap<String, YmlValue>>,
+    pub meta: Option<IndexMap<String, YmlValue>>,
     #[serde(rename = "+schema", alias = "+dataset")]
     pub schema: Option<String>,
     #[serde(rename = "+severity")]
@@ -299,7 +300,7 @@ pub struct DataTestConfig {
     pub full_refresh: Option<bool>,
     pub group: Option<String>,
     pub limit: Option<i32>,
-    pub meta: Option<BTreeMap<String, YmlValue>>,
+    pub meta: Option<IndexMap<String, YmlValue>>,
     pub severity: Option<Severity>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub store_failures: Option<bool>,

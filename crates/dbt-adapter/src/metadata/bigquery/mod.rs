@@ -252,7 +252,7 @@ pub fn nest_column_data_types(
                     data_type: Some(data_type.to_owned()),
                     description: None,
                     constraints: vec![],
-                    meta: BTreeMap::new(),
+                    meta: IndexMap::new(),
                     tags: vec![],
                     policy_tags: None,
                     databricks_tags: None,

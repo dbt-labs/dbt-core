@@ -65,6 +65,57 @@ use std::path::PathBuf;
 use std::str::FromStr as _;
 use std::sync::Arc;
 
+/// Build a Python-like repr of the test metadata for hashing.
+/// This matches Mantle's `repr(get_hashable_md(test_metadata))` where:
+/// - test_metadata = {"namespace": ..., "name": ..., "kwargs": {...}}
+/// - kwargs contains column_name, model, combination_of_columns, etc.
+///
+/// The keys are sorted alphabetically to match Python's sorted dict behavior.
+fn build_test_metadata_repr(asset: &GenericTestAsset) -> String {
+    // Build kwargs dict repr - keys must be sorted alphabetically
+    let mut kwargs_parts: Vec<String> = Vec::new();
+
+    // column_name (sorted first)
+    if let Some(col) = &asset.test_metadata_column_name {
+        kwargs_parts.push(format!("'column_name': '{}'", col));
+    }
+
+    // combination_of_columns (sorted second if present)
+    if let Some(cols) = &asset.test_metadata_combination_of_columns {
+        let cols_repr: Vec<String> = cols.iter().map(|c| format!("'{}'", c)).collect();
+        kwargs_parts.push(format!(
+            "'combination_of_columns': [{}]",
+            cols_repr.join(", ")
+        ));
+    }
+
+    // model (sorted after column_name/combination_of_columns)
+    // Use double quotes if the value contains single quotes, like Python's repr
+    if let Some(model) = &asset.test_metadata_model {
+        if model.contains('\'') {
+            kwargs_parts.push(format!("'model': \"{}\"", model));
+        } else {
+            kwargs_parts.push(format!("'model': '{}'", model));
+        }
+    }
+
+    let kwargs_repr = format!("{{{}}}", kwargs_parts.join(", "));
+
+    // Build the full metadata dict repr with sorted keys: kwargs, name, namespace
+    let name = asset.test_metadata_name.as_deref().unwrap_or("");
+    // In Python, repr(None) is 'None' (unquoted), not "'None'"
+    let namespace_repr = match &asset.test_metadata_namespace {
+        Some(ns) => format!("'{}'", ns),
+        None => "'None'".to_string(),
+    };
+
+    // Keys are sorted: kwargs, name, namespace
+    format!(
+        "{{'kwargs': {}, 'name': '{}', 'namespace': {}}}",
+        kwargs_repr, name, namespace_repr
+    )
+}
+
 fn test_metadata_from_asset(asset: &GenericTestAsset) -> Option<TestMetadata> {
     if let Some(name) = &asset.test_metadata_name {
         let mut kwargs = BTreeMap::new();
@@ -81,6 +132,9 @@ fn test_metadata_from_asset(asset: &GenericTestAsset) -> Option<TestMetadata> {
                 "combination_of_columns".to_string(),
                 YmlValue::Sequence(seq, Default::default()),
             );
+        }
+        if let Some(model) = &asset.test_metadata_model {
+            kwargs.insert("model".to_string(), YmlValue::string(model.clone()));
         }
         return Some(TestMetadata {
             name: name.clone(),
@@ -266,15 +320,22 @@ pub async fn resolve_data_tests(
         };
 
         // To conform to the unique_id format in dbt-core, we need to hash the test name
-        // append the last 10 characters of the hash to the unique_id.
+        // plus the test metadata (namespace, name, kwargs) and append the last 10 characters
+        // of the hash to the unique_id.
         // See the `create_test_node` function in
         // https://github.com/dbt-labs/dbt-core/blob/3de3b827bfffdc43845780f484d4d53011f20a37/core/dbt/parser/schema_generic_tests.py#L132
-        // Note that fusion does not produce the same hash as dbt-core since dbt-core
-        // performs a hash of serialized python data strutures whereas fusion
-        // performs a hash of soe of the contents of what was in the python data structs.
-        // See https://github.com/dbt-labs/fs/pull/4725#issuecomment-3133476096 for more details.
         const HASH_LENGTH: usize = 10;
-        let hash_hex = format!("{:x}", md5::compute(&test_name));
+        let hash_string = if let Some(test_asset) = test_path_to_test_asset.get(&dbt_asset.path) {
+            // Generic test - hash name + metadata repr (matching Mantle's algorithm)
+            // Mantle does: hash_string = "".join([name, repr(get_hashable_md(test_metadata))])
+            // where test_metadata = {"namespace": ..., "name": ..., "kwargs": {...}}
+            let metadata_repr = build_test_metadata_repr(test_asset);
+            format!("{}{}", test_name, metadata_repr)
+        } else {
+            // Singular test - just hash the test name
+            test_name.clone()
+        };
+        let hash_hex = format!("{:x}", md5::compute(&hash_string));
         let test_hash = hash_hex[hash_hex.len() - HASH_LENGTH..].to_string();
 
         let unique_id = format!("test.{package_name}.{test_name}.{test_hash}");
@@ -303,12 +364,29 @@ pub async fn resolve_data_tests(
             .clone()
             .unwrap_or_else(|| StaticAnalysisKind::On.into());
 
-        let macro_depends_on = all_depends_on
-            .get(&format!("{package_name}.{test_name}"))
-            .cloned()
-            .unwrap_or_default()
-            .into_iter()
-            .collect();
+        // For generic tests, only add the test macro itself to depends_on_macros
+        // (matching Mantle behavior). For singular tests, use all macros from Jinja rendering.
+        let macro_depends_on: Vec<String> =
+            if let Some(test_asset) = test_path_to_test_asset.get(&dbt_asset.path) {
+                // Generic test - construct the test macro unique_id
+                let namespace = test_asset
+                    .test_metadata_namespace
+                    .as_deref()
+                    .unwrap_or("dbt");
+                let test_name = test_asset
+                    .test_metadata_name
+                    .as_deref()
+                    .unwrap_or(&test_asset.test_name);
+                vec![format!("macro.{}.test_{}", namespace, test_name)]
+            } else {
+                // Singular test - use all macros from Jinja rendering
+                all_depends_on
+                    .get(&format!("{package_name}.{test_name}"))
+                    .cloned()
+                    .unwrap_or_default()
+                    .into_iter()
+                    .collect()
+            };
 
         // NOTE: This says get_original_file_path but for tests this is the path to the generated sql file
         let generated_file_path =
@@ -536,6 +614,7 @@ mod tests {
             test_metadata_namespace: None,
             test_metadata_column_name: Some("id".to_string()),
             test_metadata_combination_of_columns: None,
+            test_metadata_model: None,
         };
         let md = test_metadata_from_asset(&asset).expect("metadata");
         assert_eq!(md.name, "not_null");
@@ -568,6 +647,7 @@ mod tests {
             test_metadata_namespace: None,
             test_metadata_column_name: None,
             test_metadata_combination_of_columns: Some(vec!["a".to_string(), "b".to_string()]),
+            test_metadata_model: None,
         };
         let md = test_metadata_from_asset(&asset).expect("metadata");
         assert_eq!(md.name, "unique_combination_of_columns");

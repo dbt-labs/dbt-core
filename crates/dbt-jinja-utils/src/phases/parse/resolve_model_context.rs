@@ -1,5 +1,6 @@
 //! This module contains the scope guard for resolving models.
 
+use indexmap::IndexMap;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt::Debug,
@@ -228,7 +229,7 @@ pub fn build_resolve_model_context<T: DefaultTo<T> + 'static>(
             checksum: DbtChecksum::default(),
             language: None,
             tags: vec![],
-            meta: BTreeMap::new(),
+            meta: IndexMap::new(),
         },
         __base_attr__: NodeBaseAttributes {
             database: database.to_string(),

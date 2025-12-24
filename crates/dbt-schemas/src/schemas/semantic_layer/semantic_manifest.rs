@@ -1,5 +1,5 @@
 use dbt_serde_yaml::JsonSchema;
-use std::collections::BTreeMap;
+use indexmap::IndexMap;
 
 use serde::{Deserialize, Serialize};
 
@@ -62,5 +62,5 @@ impl From<Nodes> for SemanticManifest {
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
 pub struct SemanticLayerElementConfig {
-    pub meta: Option<BTreeMap<String, YmlValue>>,
+    pub meta: Option<IndexMap<String, YmlValue>>,
 }

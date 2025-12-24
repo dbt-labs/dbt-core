@@ -1,4 +1,5 @@
 use dbt_serde_yaml::{JsonSchema, ShouldBe};
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::collections::{BTreeMap, btree_map::Iter};
@@ -20,7 +21,7 @@ pub struct ProjectMetricConfigs {
     #[serde(default, rename = "+enabled", deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
     #[serde(rename = "+meta")]
-    pub meta: Option<BTreeMap<String, YmlValue>>,
+    pub meta: Option<IndexMap<String, YmlValue>>,
     #[serde(rename = "+tags")]
     pub tags: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+group")]
@@ -43,7 +44,7 @@ impl TypedRecursiveConfig for ProjectMetricConfigs {
 pub struct MetricConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
-    pub meta: Option<BTreeMap<String, YmlValue>>,
+    pub meta: Option<IndexMap<String, YmlValue>>,
     pub tags: Option<StringOrArrayOfStrings>,
     pub group: Option<String>,
 }
@@ -52,7 +53,7 @@ impl Default for MetricConfig {
     fn default() -> Self {
         Self {
             enabled: Some(true),
-            meta: Some(BTreeMap::new()),
+            meta: Some(IndexMap::new()),
             tags: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![])),
             group: None,
         }

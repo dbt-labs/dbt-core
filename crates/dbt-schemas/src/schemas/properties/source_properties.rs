@@ -7,9 +7,9 @@ use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::bool_or_string_bool;
 use dbt_common::serde_utils::Omissible;
 use dbt_serde_yaml::{JsonSchema, Verbatim};
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
-use std::collections::BTreeMap;
 
 // Type aliases for clarity
 type YmlValue = dbt_serde_yaml::Value;
@@ -51,7 +51,7 @@ pub struct TablesConfig {
     pub event_time: Option<String>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
-    pub meta: Option<BTreeMap<String, YmlValue>>,
+    pub meta: Option<IndexMap<String, YmlValue>>,
     pub freshness: Omissible<Option<FreshnessDefinition>>,
     pub tags: Option<StringOrArrayOfStrings>,
     pub loaded_at_field: Option<String>,

@@ -1,5 +1,6 @@
 use dbt_common::{CodeLocationWithFile, ErrorCode, FsError, FsResult, stdfs};
 use dbt_serde_yaml::{JsonSchema, Spanned, UntaggedEnumDeserialize};
+use indexmap::IndexMap;
 use serde::{
     self, Deserialize, Deserializer, Serialize, Serializer,
     de::{self, DeserializeOwned},
@@ -87,7 +88,7 @@ pub fn yaml_to_fs_error(err: dbt_serde_yaml::Error, filename: Option<&Path>) -> 
         .into()
 }
 
-pub fn default_type<'de, D>(deserializer: D) -> Result<Option<BTreeMap<String, YmlValue>>, D::Error>
+pub fn default_type<'de, D>(deserializer: D) -> Result<Option<IndexMap<String, YmlValue>>, D::Error>
 where
     D: Deserializer<'de>,
 {

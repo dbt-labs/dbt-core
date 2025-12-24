@@ -4,6 +4,7 @@ use dbt_serde_yaml::Verbatim;
 use serde::{Deserialize, Serialize};
 // Type aliases for clarity
 type YmlValue = dbt_serde_yaml::Value;
+use indexmap::IndexMap;
 use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
 
@@ -53,8 +54,8 @@ pub fn default_quoting(
 /// Helper function to handle default_to logic for meta and tags
 /// Uses the existing merge functions for proper merging behavior
 pub fn default_meta_and_tags(
-    child_meta: &mut Option<BTreeMap<String, YmlValue>>,
-    parent_meta: &Option<BTreeMap<String, YmlValue>>,
+    child_meta: &mut Option<IndexMap<String, YmlValue>>,
+    parent_meta: &Option<IndexMap<String, YmlValue>>,
     child_tags: &mut Option<StringOrArrayOfStrings>,
     parent_tags: &Option<StringOrArrayOfStrings>,
 ) {
@@ -519,10 +520,10 @@ pub fn access_eq(a: &Option<Access>, b: &Option<Access>) -> bool {
     }
 }
 
-/// Helper function to compare meta fields, treating None and empty BTreeMap as equivalent
+/// Helper function to compare meta fields, treating None and empty IndexMap as equivalent
 pub fn meta_eq(
-    a: &Option<BTreeMap<String, YmlValue>>,
-    b: &Option<BTreeMap<String, YmlValue>>,
+    a: &Option<IndexMap<String, YmlValue>>,
+    b: &Option<IndexMap<String, YmlValue>>,
 ) -> bool {
     match (a, b) {
         // Both None

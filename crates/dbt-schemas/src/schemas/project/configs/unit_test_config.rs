@@ -1,5 +1,6 @@
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_serde_yaml::{JsonSchema, ShouldBe, Spanned};
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 // Type aliases for clarity
 type YmlValue = dbt_serde_yaml::Value;
@@ -30,7 +31,7 @@ pub struct ProjectUnitTestConfig {
     #[serde(default, rename = "+enabled", deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
     #[serde(rename = "+meta")]
-    pub meta: Option<BTreeMap<String, YmlValue>>,
+    pub meta: Option<IndexMap<String, YmlValue>>,
     #[serde(rename = "+tags")]
     pub tags: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+static_analysis")]
@@ -257,7 +258,7 @@ pub struct UnitTestConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
     pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
-    pub meta: Option<BTreeMap<String, YmlValue>>,
+    pub meta: Option<IndexMap<String, YmlValue>>,
     pub tags: Option<StringOrArrayOfStrings>,
     // Adapter specific configs
     pub __warehouse_specific_config__: WarehouseSpecificNodeConfig,

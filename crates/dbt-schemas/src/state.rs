@@ -121,6 +121,8 @@ pub struct GenericTestAsset {
     pub test_metadata_namespace: Option<String>,
     pub test_metadata_column_name: Option<String>,
     pub test_metadata_combination_of_columns: Option<Vec<String>>,
+    /// The model kwarg for generic tests, e.g. "{{ get_where_subquery(ref('foo')) }}"
+    pub test_metadata_model: Option<String>,
 }
 
 impl fmt::Display for GenericTestAsset {

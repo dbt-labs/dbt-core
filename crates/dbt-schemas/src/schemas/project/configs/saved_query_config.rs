@@ -1,3 +1,4 @@
+use indexmap::IndexMap;
 use std::collections::{BTreeMap, btree_map::Iter};
 
 use dbt_serde_yaml::{JsonSchema, ShouldBe};
@@ -29,7 +30,7 @@ pub struct ProjectSavedQueryConfig {
     #[serde(rename = "+group")]
     pub group: Option<String>,
     #[serde(rename = "+meta")]
-    pub meta: Option<BTreeMap<String, YmlValue>>,
+    pub meta: Option<IndexMap<String, YmlValue>>,
     #[serde(rename = "+tags")]
     pub tags: Option<StringOrArrayOfStrings>,
     // Flattened fields
@@ -54,7 +55,7 @@ pub struct SavedQueryConfig {
     pub export_as: Option<ExportConfigExportAs>,
     pub schema: Option<String>,
     pub group: Option<String>,
-    pub meta: Option<BTreeMap<String, YmlValue>>,
+    pub meta: Option<IndexMap<String, YmlValue>>,
     pub tags: Option<StringOrArrayOfStrings>,
 }
 
@@ -84,7 +85,7 @@ impl Default for SavedQueryConfig {
             export_as: None,
             schema: None,
             group: None,
-            meta: Some(BTreeMap::new()),
+            meta: Some(IndexMap::new()),
             tags: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![])),
         }
     }

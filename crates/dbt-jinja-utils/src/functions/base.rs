@@ -1309,43 +1309,98 @@ pub fn build_flat_graph(nodes: &Nodes) -> MutableMap {
         .models
         .iter()
         .map(|(unique_id, model)| {
-            (
-                unique_id.clone(),
-                Value::from_serialize(
-                    (Arc::as_ref(model) as &dyn InternalDbtNode).serialize_keep_none(),
-                ),
-            )
+            let mut serialized = (Arc::as_ref(model) as &dyn InternalDbtNode).serialize_keep_none();
+            if let YmlValue::Mapping(ref mut map, _) = serialized {
+                // Set description to empty string if null
+                let desc_key = YmlValue::string("description".to_string());
+                if let Some(desc_value) = map.get_mut(&desc_key) {
+                    if desc_value.as_str().is_none() {
+                        *desc_value = YmlValue::string("".to_string());
+                    }
+                }
+                // Update path to only contain the filename (strip directory prefix)
+                if let Some(file_name) = model.__common_attr__.path.file_name() {
+                    map.insert(
+                        YmlValue::string("path".to_string()),
+                        YmlValue::string(file_name.to_string_lossy().to_string()),
+                    );
+                }
+            }
+            (unique_id.clone(), Value::from_serialize(serialized))
         })
         .chain(nodes.snapshots.iter().map(|(unique_id, snapshot)| {
-            (
-                unique_id.clone(),
-                Value::from_serialize(
-                    (Arc::as_ref(snapshot) as &dyn InternalDbtNode).serialize_keep_none(),
-                ),
-            )
+            let mut serialized =
+                (Arc::as_ref(snapshot) as &dyn InternalDbtNode).serialize_keep_none();
+            // Update path to only contain the filename (strip directory prefix)
+            if let YmlValue::Mapping(ref mut map, _) = serialized {
+                if let Some(file_name) = snapshot.__common_attr__.path.file_name() {
+                    map.insert(
+                        YmlValue::string("path".to_string()),
+                        YmlValue::string(file_name.to_string_lossy().to_string()),
+                    );
+                }
+            }
+            (unique_id.clone(), Value::from_serialize(serialized))
         }))
         .chain(nodes.tests.iter().map(|(unique_id, test)| {
             // For tests, update original_file_path to use patch_path if it exists
             // we also do this this when we write the test to the manifest
             // (indicates test was defined in a YAML file)
             let mut serialized = (Arc::as_ref(test) as &dyn InternalDbtNode).serialize_keep_none();
-            if let YmlValue::Mapping(ref mut map, _) = serialized
-                && let Some(patch_path) = &test.__common_attr__.patch_path
-            {
-                map.insert(
-                    YmlValue::string("original_file_path".to_string()),
-                    YmlValue::string(patch_path.display().to_string()),
-                );
+            if let YmlValue::Mapping(ref mut map, _) = serialized {
+                if let Some(patch_path) = &test.__common_attr__.patch_path {
+                    map.insert(
+                        YmlValue::string("original_file_path".to_string()),
+                        YmlValue::string(patch_path.display().to_string()),
+                    );
+                }
+                // Update path to only contain the filename (strip directory prefix)
+                if let Some(file_name) = test.__common_attr__.path.file_name() {
+                    map.insert(
+                        YmlValue::string("path".to_string()),
+                        YmlValue::string(file_name.to_string_lossy().to_string()),
+                    );
+                }
+                // For singular tests (from SQL files), update unique_id to remove the hash suffix
+                // For generic tests (from YAML files), keep the original unique_id with suffix
+                if test.__test_attr__.test_metadata.is_none() {
+                    // Singular test - remove hash suffix
+                    let unique_id_without_hash = format!(
+                        "test.{}.{}",
+                        test.__common_attr__.package_name, test.__common_attr__.name
+                    );
+                    map.insert(
+                        YmlValue::string("unique_id".to_string()),
+                        YmlValue::string(unique_id_without_hash),
+                    );
+                }
+                // Set severity to ERROR in config if not already set
+                let config_key = YmlValue::string("config".to_string());
+                if let Some(YmlValue::Mapping(config_map, _)) = map.get_mut(&config_key) {
+                    let severity_key = YmlValue::string("severity".to_string());
+                    let needs_default = match config_map.get(&severity_key) {
+                        None => true,
+                        Some(v) => v.as_str().is_none(),
+                    };
+                    if needs_default {
+                        config_map.insert(severity_key, YmlValue::string("ERROR".to_string()));
+                    }
+                }
             }
             (unique_id.clone(), Value::from_serialize(serialized))
         }))
         .chain(nodes.seeds.iter().map(|(unique_id, seed)| {
-            (
-                unique_id.clone(),
-                Value::from_serialize(
-                    (Arc::as_ref(seed) as &dyn InternalDbtNode).serialize_keep_none(),
-                ),
-            )
+            let mut serialized = (Arc::as_ref(seed) as &dyn InternalDbtNode).serialize_keep_none();
+            // Update path to only contain the filename (strip directory prefix)
+            if let YmlValue::Mapping(ref mut map, _) = serialized {
+                if let Some(file_name) = seed.__common_attr__.path.file_name() {
+                    map.insert(
+                        YmlValue::string("path".to_string()),
+                        YmlValue::string(file_name.to_string_lossy().to_string()),
+                    );
+                }
+            }
+            (unique_id.clone(), Value::from_serialize(serialized))
         }))
         .collect();
     graph.insert(Value::from("nodes"), Value::from_serialize(nodes_insert));

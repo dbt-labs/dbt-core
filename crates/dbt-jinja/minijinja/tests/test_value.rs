@@ -22,17 +22,17 @@ fn test_sort() {
         Value::from(1000f32),
     ];
     v.sort();
-    insta::assert_debug_snapshot!(&v, @r###"
+    insta::assert_debug_snapshot!(&v, @r"
     [
-        false,
-        true,
+        False,
+        True,
         30,
         80,
         99,
         100,
         1000.0,
     ]
-    "###);
+    ");
 }
 
 #[test]
@@ -72,8 +72,8 @@ fn test_sort_different_types() {
     [
         undefined,
         None,
-        false,
-        true,
+        False,
+        True,
         -inf,
         -100,
         -75.0,
@@ -476,7 +476,7 @@ fn test_builtin_seq_objects() {
         "{{ val }}",
         val => Value::from_object(vec![true, false]),
     );
-    assert_snapshot!(rv, @"(true, false)");
+    assert_snapshot!(rv, @"(True, False)");
 
     let rv = minijinja::render!(
         "{{ val }}",
@@ -1029,7 +1029,7 @@ fn test_reverse() {
     assert_eq!(value_thing.len(), Some(2));
     assert_snapshot!(
         render!("{% set r = m|reverse %}{{ m }}|{{ r }}|{{ r }}", m => value_thing),
-        @"(false, true)|(true, false)|(true, false)"
+        @"(False, True)|(True, False)|(True, False)"
     );
 
     assert_snapshot!(
@@ -1173,7 +1173,7 @@ fn test_object_hash_map() {
             .and_then(|x| x.as_i64()),
         Some(1)
     );
-    assert_eq!(value.to_string(), "{true: 1}");
+    assert_eq!(value.to_string(), "{True: 1}");
 }
 
 #[test]
@@ -1221,7 +1221,7 @@ fn test_object_btree_map() {
             .and_then(|x| x.as_i64()),
         Some(1)
     );
-    assert_eq!(value.to_string(), "{true: 1}");
+    assert_eq!(value.to_string(), "{True: 1}");
 }
 
 #[test]
@@ -1389,8 +1389,8 @@ fn test_sorting() {
     [
         undefined,
         None,
-        false,
-        true,
+        False,
+        True,
         -inf,
         -5.0,
         -2,

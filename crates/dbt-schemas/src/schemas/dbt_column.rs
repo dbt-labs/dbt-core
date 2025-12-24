@@ -1,3 +1,4 @@
+use indexmap::IndexMap;
 use std::{collections::BTreeMap, sync::Arc};
 
 use dbt_common::FsResult;
@@ -41,7 +42,7 @@ pub struct DbtColumn {
     #[serde(serialize_with = "serialize_dbt_column_desc")]
     pub description: Option<String>,
     pub constraints: Vec<Constraint>,
-    pub meta: BTreeMap<String, YmlValue>,
+    pub meta: IndexMap<String, YmlValue>,
     pub tags: Vec<String>,
     pub policy_tags: Option<Vec<String>>,
     pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
@@ -142,7 +143,7 @@ pub enum Granularity {
 pub struct ColumnConfig {
     #[serde(default)]
     pub tags: Option<StringOrArrayOfStrings>,
-    pub meta: Option<BTreeMap<String, YmlValue>>,
+    pub meta: Option<IndexMap<String, YmlValue>>,
     pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
 }
 
@@ -219,10 +220,10 @@ impl ColumnInheritanceRules {
 }
 
 /// Process columns by merging parent config with each column's config.
-/// Returns a BTreeMap of column name to DbtColumn.
+/// Returns a Vec of DbtColumn references.
 pub fn process_columns(
     columns: Option<&Vec<ColumnProperties>>,
-    meta: Option<BTreeMap<String, YmlValue>>,
+    meta: Option<IndexMap<String, YmlValue>>,
     tags: Option<Vec<String>>,
 ) -> FsResult<Vec<DbtColumnRef>> {
     Ok(columns

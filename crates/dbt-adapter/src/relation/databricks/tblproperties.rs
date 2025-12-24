@@ -158,6 +158,7 @@ mod tests {
     use dbt_agate::AgateTable;
     use dbt_schemas::schemas::{common::*, nodes::*, project::*};
     use dbt_serde_yaml::Spanned;
+    use indexmap::IndexMap;
     use serde_json::json;
     use std::collections::BTreeMap;
 
@@ -193,7 +194,7 @@ mod tests {
         use dbt_schemas::schemas::nodes::AdapterAttr;
         use dbt_serde_yaml::Value as YmlValue;
 
-        let meta = BTreeMap::new();
+        let meta = IndexMap::new();
         let mut databricks_tblproperties = None;
 
         if let Some(props) = tblproperties {
