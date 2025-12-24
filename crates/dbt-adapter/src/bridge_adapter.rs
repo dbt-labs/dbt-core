@@ -1022,19 +1022,10 @@ impl BaseAdapter for BridgeAdapter {
         node: &InternalDbtNodeWrapper,
         temporary: bool,
     ) -> Result<Value, MinijinjaError> {
-        use crate::bigquery::adapter::get_common_table_options_value;
-        use dbt_common::adapter::AdapterType::Bigquery;
-
-        if self.typed_adapter().adapter_type() == Bigquery {
-            let node = node.as_internal_node();
-            let options = get_common_table_options_value(state, config, node.common(), temporary);
-            Ok(Value::from_serialize(options))
-        } else {
-            Err(MinijinjaError::new(
-                MinijinjaErrorKind::InvalidOperation,
-                "get_common_options is only available with BigQuery adapter",
-            ))
-        }
+        let options = self
+            .typed_adapter()
+            .get_common_options(state, config, node, temporary)?;
+        Ok(options)
     }
 
     #[tracing::instrument(skip(self, _state), level = "trace")]

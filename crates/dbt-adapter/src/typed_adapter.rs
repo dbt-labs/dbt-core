@@ -1,5 +1,4 @@
 use crate::adapter_engine::{AdapterEngine, Options as ExecuteOptions, execute_query_with_retry};
-use crate::bigquery::adapter::{BigqueryAdapter, NestedColumnDataTypes, get_table_schema};
 use crate::catalog_relation::CatalogRelation;
 use crate::column::{BigqueryColumnMode, Column, ColumnBuilder};
 use crate::databricks::adapter::DatabricksAdapter;
@@ -8,6 +7,8 @@ use crate::errors::{
 };
 use crate::funcs::{convert_macro_result_to_record_batch, execute_macro, none_value};
 use crate::information_schema::InformationSchema;
+use crate::metadata::bigquery::BigqueryMetadataAdapter;
+use crate::metadata::bigquery::nest_column_data_types;
 use crate::metadata::postgres::PostgresMetadataAdapter;
 use crate::metadata::redshift::RedshiftMetadataAdapter;
 use crate::metadata::salesforce::SalesforceMetadataAdapter;
@@ -43,16 +44,20 @@ use dbt_schemas::schemas::common::ConstraintSupport;
 use dbt_schemas::schemas::common::ConstraintType;
 use dbt_schemas::schemas::common::DbtIncrementalStrategy;
 use dbt_schemas::schemas::dbt_column::{DbtColumn, DbtColumnRef};
-use dbt_schemas::schemas::manifest::{BigqueryClusterConfig, BigqueryPartitionConfig};
+use dbt_schemas::schemas::manifest::{
+    BigqueryClusterConfig, BigqueryPartitionConfig, PartitionConfig,
+};
 use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::properties::ModelConstraint;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
+use dbt_schemas::schemas::serde::minijinja_value_to_typed_struct;
 use dbt_schemas::schemas::{CommonAttributes, InternalDbtNodeAttributes, InternalDbtNodeWrapper};
 use dbt_serde_yaml::Value as YmlValue;
 use dbt_xdbc::bigquery::*;
 use dbt_xdbc::salesforce::DATA_TRANSFORM_RUN_TIMEOUT;
 use dbt_xdbc::{Connection, QueryCtx};
 use indexmap::IndexMap;
+use minijinja;
 use minijinja::value::ValueMap;
 use minijinja::{State, Value, args};
 use serde::{Deserialize, Serialize};
@@ -1389,74 +1394,13 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         }
     }
 
-    /// Example:
-    ///
-    ///     columns: {
-    ///         "a": {"name": "a", "data_type": "string", "description": ...},
-    ///         "b.nested": {"name": "b.nested", "data_type": "string"},
-    ///         "b.nested2": {"name": "b.nested2", "data_type": "string"}
-    ///         }
-    ///     returns: {
-    ///         "a": {"name": "a", "data_type": "string"},
-    ///         "b": {"name": "b": "data_type": "struct<nested string, nested2 string>}
-    ///     }
-    ///
-    /// arbitrarily nested struct/array types are allowed, for more details check out the
-    /// tests/data/nest_column_data_types example
-    /// reference: https://github.com/dbt-labs/dbt-core/blob/main/env/lib/python3.12/site-packages/dbt/adapters/bigquery/column.py#L131-L132
-    /// The implementation is purely based on the pydoc and the limited observations of how dbt
-    /// compile behehaves on the test example so there probably exist corner cases not handled
-    /// properly
-    /// TODO: support constraints
     fn nest_column_data_types(
         &self,
         columns: IndexMap<String, DbtColumn>,
-        _constraints: Option<BTreeMap<String, String>>,
+        constraints: Option<BTreeMap<String, String>>,
     ) -> AdapterResult<IndexMap<String, DbtColumn>> {
         match self.adapter_type() {
-            AdapterType::Bigquery => {
-                let mut result = NestedColumnDataTypes::default();
-                for (column_name, column) in &columns {
-                    result.insert(column_name, column.data_type.as_ref())
-                }
-                let column_to_data_type = result.format_top_level_columns_data_types();
-                let mut result = IndexMap::new();
-                for (column_name, data_type) in &column_to_data_type {
-                    match columns.get(column_name) {
-                        Some(column) => result.insert(
-                            column_name.clone(),
-                            DbtColumn {
-                                name: column.name.clone(),
-                                data_type: Some(data_type.clone()),
-                                description: column.description.clone(),
-                                constraints: column.constraints.clone(),
-                                meta: column.meta.clone(),
-                                tags: column.tags.clone(),
-                                policy_tags: column.policy_tags.clone(),
-                                databricks_tags: column.databricks_tags.clone(),
-                                quote: column.quote,
-                                deprecated_config: column.deprecated_config.clone(),
-                            },
-                        ),
-                        None => result.insert(
-                            column_name.clone(),
-                            DbtColumn {
-                                name: column_name.to_owned(),
-                                data_type: Some(data_type.to_owned()),
-                                description: None,
-                                constraints: vec![],
-                                meta: BTreeMap::new(),
-                                tags: vec![],
-                                policy_tags: None,
-                                databricks_tags: None,
-                                quote: None,
-                                deprecated_config: Default::default(),
-                            },
-                        ),
-                    };
-                }
-                Ok(result)
-            }
+            AdapterType::Bigquery => nest_column_data_types(columns, constraints),
             AdapterType::Postgres
             | AdapterType::Snowflake
             | AdapterType::Databricks
@@ -2005,7 +1949,30 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         if self.adapter_type() == AdapterType::Bigquery {
             // https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L579-L586
             // Pure config parse; safe for both BigQuery and Replay (when adapter type is BigQuery)
-            return crate::bigquery::adapter::parse_partition_by_value(partition_by);
+            let raw_partition_by = partition_by;
+            if raw_partition_by.is_none() {
+                return Ok(none_value());
+            }
+
+            let partition_by =
+                minijinja_value_to_typed_struct::<PartitionConfig>(raw_partition_by.clone())
+                    .map_err(|e| {
+                        minijinja::Error::new(
+                            minijinja::ErrorKind::SerdeDeserializeError,
+                            format!(
+                                "adapter.parse_partition_by failed on {raw_partition_by:?}: {e}"
+                            ),
+                        )
+                    })?;
+
+            let validated_config = partition_by.into_bigquery().ok_or_else(|| {
+                minijinja::Error::new(
+                    minijinja::ErrorKind::InvalidArgument,
+                    "Expect a BigqueryPartitionConfigStruct",
+                )
+            })?;
+
+            return Ok(Value::from_object(validated_config));
         }
         unimplemented!("only available with BigQuery adapter")
     }
@@ -2018,7 +1985,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         temporary: bool,
     ) -> AdapterResult<BTreeMap<String, Value>> {
         if self.adapter_type() == AdapterType::Bigquery {
-            return crate::bigquery::adapter::get_table_options_value(
+            return metadata::bigquery::object_options::get_table_options_value(
                 state,
                 config,
                 node,
@@ -2036,7 +2003,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         common_attr: &CommonAttributes,
     ) -> AdapterResult<BTreeMap<String, Value>> {
         if self.adapter_type() == AdapterType::Bigquery {
-            let result = crate::bigquery::adapter::get_common_table_options_value(
+            let result = metadata::bigquery::object_options::get_common_table_options_value(
                 state,
                 config,
                 common_attr,
@@ -2045,6 +2012,30 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             Ok(result)
         } else {
             unimplemented!("only available with BigQuery adapter")
+        }
+    }
+
+    fn get_common_options(
+        &self,
+        state: &State,
+        config: ModelConfig,
+        node: &InternalDbtNodeWrapper,
+        temporary: bool,
+    ) -> Result<Value, minijinja::Error> {
+        if self.adapter_type() == AdapterType::Bigquery {
+            let node = node.as_internal_node();
+            let options = metadata::bigquery::object_options::get_common_table_options_value(
+                state,
+                config,
+                node.common(),
+                temporary,
+            );
+            Ok(Value::from_serialize(options))
+        } else {
+            Err(minijinja::Error::new(
+                minijinja::ErrorKind::InvalidOperation,
+                "get_common_options is only available with BigQuery adapter",
+            ))
         }
     }
 
@@ -2338,7 +2329,13 @@ prevent unnecessary latency for other users."#,
         relation: Arc<dyn BaseRelation>,
     ) -> AdapterResult<Option<Value>> {
         if self.adapter_type() == AdapterType::Bigquery {
-            let adbc_schema = get_table_schema(conn, relation.clone())?;
+            let adbc_schema = conn
+                .get_table_schema(
+                    Some(&relation.database_as_str()?),
+                    Some(&relation.schema_as_str()?),
+                    &relation.identifier_as_str()?,
+                )
+                .map_err(adbc_error_to_adapter_error)?;
             if let Some(relation_type) = relation.relation_type() {
                 if relation_type == RelationType::MaterializedView {
                     return Ok(Some(Value::from_object(
@@ -2523,7 +2520,7 @@ impl AdapterTyping for ConcreteAdapter {
                 Box::new(SnowflakeMetadataAdapter::new(engine)) as Box<dyn MetadataAdapter>
             }
             AdapterType::Bigquery => {
-                Box::new(BigqueryAdapter::new(engine)) as Box<dyn MetadataAdapter>
+                Box::new(BigqueryMetadataAdapter::new(engine)) as Box<dyn MetadataAdapter>
             }
             AdapterType::Databricks => {
                 Box::new(DatabricksAdapter::new(engine)) as Box<dyn MetadataAdapter>
@@ -2705,12 +2702,13 @@ mod tests {
                 ("role".into(), "role".into()),
                 ("warehouse".into(), "warehouse".into()),
             ]),
-            Redshift => Mapping::new(),
+            Bigquery | Redshift => Mapping::new(),
             _ => unimplemented!("mock config for adapter type {:?}", adapter_type),
         };
         let auth = auth_for_backend(backend);
         let resolved_quoting = match adapter_type {
             Snowflake => SNOWFLAKE_RESOLVED_QUOTING,
+            Bigquery => DEFAULT_RESOLVED_QUOTING,
             _ => DEFAULT_RESOLVED_QUOTING,
         };
         AdapterEngine::new(
@@ -2718,7 +2716,7 @@ mod tests {
             auth.into(),
             AdapterConfig::new(config),
             resolved_quoting,
-            Arc::new(NaiveStmtSplitter),
+            Arc::new(NaiveStmtSplitter), // XXX: may cause bugs if these tests run SQL
             None,
             QueryCommentConfig::from_query_comment(None, adapter_type, false),
             Box::new(NaiveTypeOpsImpl::new(adapter_type)), // XXX: NaiveTypeOpsImpl
@@ -2736,6 +2734,12 @@ mod tests {
     fn test_quote_for_snowflake() {
         let adapter = ConcreteAdapter::new(engine(Snowflake));
         assert_eq!(adapter.quote("abc"), "\"abc\"");
+    }
+
+    #[test]
+    fn test_quote_for_bigquery() {
+        let adapter = ConcreteAdapter::new(engine(Bigquery));
+        assert_eq!(adapter.quote("abc"), "`abc`");
     }
 
     #[test]

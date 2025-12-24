@@ -1,7 +1,6 @@
 use crate::AdapterResponse;
 use crate::auth::Auth;
 use crate::base_adapter::backend_of;
-use crate::bigquery::adapter::ADBC_EXECUTE_INVOCATION_OPTION;
 use crate::config::AdapterConfig;
 use crate::databricks::databricks_compute_from_state;
 use crate::errors::{
@@ -502,10 +501,7 @@ impl AdapterEngine {
                 .lookup("invocation_id")
                 .and_then(|value| value.as_str().map(|label| label.to_owned()))
             {
-                job_labels.insert(
-                    ADBC_EXECUTE_INVOCATION_OPTION.to_owned(),
-                    invocation_id_label,
-                );
+                job_labels.insert("dbt_invocation_id".to_string(), invocation_id_label);
             }
 
             let job_label_option =

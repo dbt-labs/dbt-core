@@ -1,26 +1,29 @@
-use crate::bigquery::adapter::BigqueryAdapter;
-
-use crate::errors::{
-    AdapterError, AdapterErrorKind, AdapterResult, AsyncAdapterResult, adbc_error_to_adapter_error,
-};
+use crate::errors::*;
+use crate::metadata::CatalogAndSchema;
 use crate::metadata::*;
 use crate::record_batch_utils::get_column_values;
-use crate::{AdapterTyping, TypedBaseAdapter};
-use arrow_array::{
-    Array, BooleanArray, Int64Array, RecordBatch, StringArray, TimestampMicrosecondArray,
-};
-use arrow_schema::{DataType, Field, Schema, SchemaBuilder, TimeUnit};
+use crate::relation::bigquery::BigqueryRelation;
+use crate::typed_adapter::ConcreteAdapter;
+use crate::{AdapterEngine, AdapterResult, AdapterTyping, TypedBaseAdapter};
+
+use arrow_array::*;
+use arrow_schema::*;
+use dbt_common::adapter::AdapterType;
 use dbt_common::adapter::ExecutionPhase;
 use dbt_common::cancellation::Cancellable;
-use dbt_schemas::schemas::legacy_catalog::{
-    CatalogNodeStats, CatalogTable, ColumnMetadata, TableMetadata,
-};
-use dbt_schemas::schemas::relations::base::{BaseRelation, RelationPattern};
-use dbt_xdbc::{Connection, MapReduce, QueryCtx};
+use dbt_schemas::dbt_types::RelationType;
+use dbt_schemas::schemas::dbt_column::DbtColumn;
+use dbt_schemas::schemas::legacy_catalog::*;
+use dbt_schemas::schemas::relations::base::*;
+use dbt_xdbc::*;
+use indexmap::IndexMap;
+use minijinja::State;
 
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
+
+pub mod object_options;
 
 // The following views always need to be qualified with a dataset or a region (but not both!)
 //
@@ -47,6 +50,220 @@ const DATASET_ONLY_VIEWS: &[&str] = &[
     "SEARCH_INDEX_COLUMNS",
     "SEARCH_INDEX_OPTIONS",
 ];
+
+pub fn list_relations(
+    adapter: &dyn AdapterTyping,
+    ctx: &QueryCtx,
+    conn: &'_ mut dyn Connection,
+    db_schema: &CatalogAndSchema,
+) -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
+    let sql = format!(
+        "SELECT
+    table_catalog,
+    table_schema,
+    table_name,
+    table_type
+FROM 
+    {db_schema}.INFORMATION_SCHEMA.TABLES"
+    );
+
+    let batch = adapter.engine().execute(None, conn, ctx, &sql)?;
+    let table_names = get_column_values::<StringArray>(&batch, "table_name")?;
+    let table_schemas = get_column_values::<StringArray>(&batch, "table_schema")?;
+    let table_catalogs = get_column_values::<StringArray>(&batch, "table_catalog")?;
+    let table_types = get_column_values::<StringArray>(&batch, "table_type")?;
+
+    let mut result = Vec::with_capacity(batch.num_rows());
+    for i in 0..batch.num_rows() {
+        let database = table_catalogs.value(i);
+        let schema = table_schemas.value(i);
+        let identifier = table_names.value(i);
+        let relation_type =
+            RelationType::from_adapter_type(AdapterType::Bigquery, table_types.value(i));
+
+        result.push(Arc::new(BigqueryRelation::new(
+            Some(database.to_string()),
+            Some(schema.to_string()),
+            Some(identifier.to_string()),
+            Some(relation_type),
+            None,
+            adapter.quoting(),
+        )) as Arc<dyn BaseRelation>);
+    }
+    Ok(result)
+}
+
+/// Represent nested data types (struct/array) for BigQuery
+/// Leaf nodes are primitive types
+/// For example column names "a.b", "a.c", "a.c.d" will be
+///  a (struct)
+///  /\
+/// b  c (struct)
+///     \
+///      d
+#[derive(Debug, Default)]
+struct NestedColumnDataTypes {
+    root: TrieNode,
+}
+
+#[derive(Debug, Default)]
+struct TrieNode {
+    pub children: IndexMap<String, TrieNode>,
+    pub data_type: Option<String>,
+}
+
+impl NestedColumnDataTypes {
+    pub fn insert(&mut self, column_name: &str, column_type: Option<&String>) {
+        let names = column_name.split(".");
+        let mut node = &mut self.root;
+        for name in names {
+            node = node.children.entry(name.to_owned()).or_default();
+        }
+        node.data_type = column_type.map(String::from);
+    }
+
+    pub fn format_top_level_columns_data_types(&self) -> IndexMap<String, String> {
+        let mut result = IndexMap::new();
+        for (column_name, node) in &self.root.children {
+            let data_type = match &node.data_type {
+                None => {
+                    let inner_data_type = node.format_data_type();
+                    format!("struct<{inner_data_type}>")
+                }
+                Some(data_type) => match data_type.as_str() {
+                    "struct" => {
+                        let inner_data_type = node.format_data_type();
+                        format!("struct<{inner_data_type}>")
+                    }
+                    "array" => {
+                        let inner_data_type = node.format_data_type();
+                        format!("array<struct<{inner_data_type}>>")
+                    }
+                    // assume any struct or array type is a primitive type
+                    _ => {
+                        // ensure no sub fields
+                        if node.children.is_empty() {
+                            data_type.to_owned()
+                        }
+                        // sub fields exist -> it's actually not a primitive type -> default to struct
+                        // this is to be consistent with dbt compile behavior
+                        else {
+                            let inner_data_type = node.format_data_type();
+                            format!("struct<{inner_data_type}>")
+                        }
+                    }
+                },
+            };
+            result.insert(column_name.to_owned(), data_type);
+        }
+        result
+    }
+}
+
+impl TrieNode {
+    // TODO: refactor since this method is very much overlapped with `format_top_level_columns_data_types`
+    fn format_data_type(&self) -> String {
+        let mut result = vec![];
+        for (column_name, node) in &self.children {
+            let data_type = match &node.data_type {
+                None => {
+                    let inner_data_type = node.format_data_type();
+                    if inner_data_type.is_empty() {
+                        column_name.to_owned()
+                    } else {
+                        format!("{column_name} struct<{inner_data_type}>")
+                    }
+                }
+                Some(data_type) => match data_type.as_str() {
+                    "struct" => {
+                        let inner_data_type = node.format_data_type();
+                        format!("{column_name} struct<{inner_data_type}>")
+                    }
+                    "array" => {
+                        let inner_data_type = node.format_data_type();
+                        format!("{column_name} array<struct<{inner_data_type}>>")
+                    }
+                    _ => {
+                        if node.children.is_empty() {
+                            format!("{column_name} {data_type}")
+                        } else {
+                            let inner_data_type = node.format_data_type();
+                            format!("{column_name} struct<{inner_data_type}>")
+                        }
+                    }
+                },
+            };
+            result.push(data_type);
+        }
+        result.join(", ")
+    }
+}
+
+/// Example:
+///
+///     columns: {
+///         "a": {"name": "a", "data_type": "string", "description": ...},
+///         "b.nested": {"name": "b.nested", "data_type": "string"},
+///         "b.nested2": {"name": "b.nested2", "data_type": "string"}
+///     }
+///     returns: {
+///         "a": {"name": "a", "data_type": "string"},
+///         "b": {"name": "b": "data_type": "struct<nested string, nested2 string>}
+///     }
+///
+/// arbitrarily nested struct/array types are allowed, for more details check out the
+/// tests/data/nest_column_data_types example
+/// reference: https://github.com/dbt-labs/dbt-core/blob/main/env/lib/python3.12/site-packages/dbt/adapters/bigquery/column.py#L131-L132
+/// The implementation is purely based on the pydoc and the limited observations of how dbt
+/// compile behehaves on the test example so there probably exist corner cases not handled
+/// properly
+/// TODO: support constraints
+pub fn nest_column_data_types(
+    columns: IndexMap<String, DbtColumn>,
+    _constraints: Option<BTreeMap<String, String>>,
+) -> AdapterResult<IndexMap<String, DbtColumn>> {
+    let mut result = NestedColumnDataTypes::default();
+    for (column_name, column) in &columns {
+        result.insert(column_name, column.data_type.as_ref())
+    }
+    let column_to_data_type = result.format_top_level_columns_data_types();
+    let mut result = IndexMap::new();
+    for (column_name, data_type) in &column_to_data_type {
+        match columns.get(column_name) {
+            Some(column) => result.insert(
+                column_name.clone(),
+                DbtColumn {
+                    name: column.name.clone(),
+                    data_type: Some(data_type.clone()),
+                    description: column.description.clone(),
+                    constraints: column.constraints.clone(),
+                    meta: column.meta.clone(),
+                    tags: column.tags.clone(),
+                    policy_tags: column.policy_tags.clone(),
+                    databricks_tags: column.databricks_tags.clone(),
+                    quote: column.quote,
+                    deprecated_config: column.deprecated_config.clone(),
+                },
+            ),
+            None => result.insert(
+                column_name.clone(),
+                DbtColumn {
+                    name: column_name.to_owned(),
+                    data_type: Some(data_type.to_owned()),
+                    description: None,
+                    constraints: vec![],
+                    meta: BTreeMap::new(),
+                    tags: vec![],
+                    policy_tags: None,
+                    databricks_tags: None,
+                    quote: None,
+                    deprecated_config: Default::default(),
+                },
+            ),
+        };
+    }
+    Ok(result)
+}
 
 // Generate the fully qualified name of a BigQuery INFORMATION_SCHEMA table.
 //
@@ -123,7 +340,7 @@ pub fn build_relation_clauses_bigquery(
 
 fn make_map_f(
     relations: Vec<Arc<dyn BaseRelation>>,
-    adapter: BigqueryAdapter,
+    adapter: ConcreteAdapter,
 ) -> impl Fn(&mut dyn Connection, &(String, Vec<String>)) -> AdapterResult<Arc<RecordBatch>>
 + Send
 + Sync
@@ -173,9 +390,20 @@ fn make_map_f(
     }
 }
 
-impl MetadataAdapter for BigqueryAdapter {
+pub struct BigqueryMetadataAdapter {
+    adapter: ConcreteAdapter,
+}
+
+impl BigqueryMetadataAdapter {
+    pub fn new(engine: Arc<AdapterEngine>) -> Self {
+        let adapter = ConcreteAdapter::new(engine);
+        Self { adapter }
+    }
+}
+
+impl MetadataAdapter for BigqueryMetadataAdapter {
     fn adapter(&self) -> &dyn TypedBaseAdapter {
-        self
+        &self.adapter
     }
 
     fn build_schemas_from_stats_sql(
@@ -499,7 +727,7 @@ impl MetadataAdapter for BigqueryAdapter {
         // All results are accumulated in an unordered map
         type Acc = HashMap<String, AdapterResult<Arc<Schema>>>;
 
-        let adapter: BigqueryAdapter = self.clone(); // clone needed to move it into lambda
+        let adapter: ConcreteAdapter = self.adapter.clone(); // clone needed to move it into lambda
         let new_connection_f = Box::new(move || {
             // FIXME(harry): this is not taking into account that we will have multiple connections open
             // when relations are more than one, do we want to enforce single connection in record and replay tests?
@@ -509,7 +737,7 @@ impl MetadataAdapter for BigqueryAdapter {
                 .map_err(Cancellable::Error)
         });
 
-        let adapter = self.clone();
+        let adapter = self.adapter.clone();
         let map_f = move |conn: &'_ mut dyn Connection,
                           relation: &Arc<dyn BaseRelation>|
               -> AdapterResult<Arc<Schema>> {
@@ -588,7 +816,7 @@ impl MetadataAdapter for BigqueryAdapter {
             Box::new(reduce_f),
             MAX_CONNECTIONS,
         );
-        let token = self.cancellation_token();
+        let token = self.adapter.cancellation_token();
         map_reduce.run(Arc::new(relations.to_vec()), token)
     }
 
@@ -596,7 +824,7 @@ impl MetadataAdapter for BigqueryAdapter {
         &self,
         _patterns: &[RelationPattern],
     ) -> AsyncAdapterResult<'_, Vec<(String, AdapterResult<RelationSchemaPair>)>> {
-        todo!("BigqueryAdapter::list_relations_schemas_by_patterns")
+        todo!("list_relations_schemas_by_patterns for BigQuery")
     }
 
     fn freshness_inner(
@@ -615,14 +843,14 @@ impl MetadataAdapter for BigqueryAdapter {
 
         type Acc = BTreeMap<String, MetadataFreshness>;
 
-        let adapter = self.clone();
+        let adapter = self.adapter.clone();
         let new_connection_f = move || {
             adapter
                 .new_connection(None, None)
                 .map_err(Cancellable::Error)
         };
 
-        let adapter = self.clone();
+        let adapter = self.adapter.clone();
         let map_f = make_map_f(relations.to_vec(), adapter);
 
         let reduce_f = move |acc: &mut Acc,
@@ -660,16 +888,16 @@ impl MetadataAdapter for BigqueryAdapter {
             MAX_CONNECTIONS,
         );
         let keys = where_clauses_by_database.into_iter().collect::<Vec<_>>();
-        let token = self.cancellation_token();
+        let token = self.adapter.cancellation_token();
         map_reduce.run(Arc::new(keys), token)
     }
 
     fn create_schemas_if_not_exists(
         &self,
-        state: &minijinja::State<'_, '_>,
+        state: &State<'_, '_>,
         catalog_schemas: &BTreeMap<String, BTreeSet<String>>,
     ) -> AdapterResult<Vec<(String, String, AdapterResult<()>)>> {
-        create_schemas_if_not_exists(self, self, state, catalog_schemas)
+        create_schemas_if_not_exists(&self.adapter, self, state, catalog_schemas)
     }
 
     fn list_relations_in_parallel_inner(
@@ -677,14 +905,14 @@ impl MetadataAdapter for BigqueryAdapter {
         db_schemas: &[CatalogAndSchema],
     ) -> AsyncAdapterResult<'_, BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>> {
         type Acc = BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>;
-        let adapter = self.clone();
+        let adapter = self.adapter.clone();
         let new_connection_f = move || {
             adapter
                 .new_connection(None, None)
                 .map_err(Cancellable::Error)
         };
 
-        let adapter = self.clone();
+        let adapter = self.adapter.clone();
 
         let map_f = move |conn: &'_ mut dyn Connection,
                           db_schema: &CatalogAndSchema|
@@ -724,7 +952,7 @@ impl MetadataAdapter for BigqueryAdapter {
             Box::new(reduce_f),
             MAX_CONNECTIONS,
         );
-        let token = self.cancellation_token();
+        let token = self.adapter.cancellation_token();
         map_reduce.run(Arc::new(db_schemas.to_vec()), token)
     }
 
@@ -790,5 +1018,86 @@ mod tests {
             generate_system_table_fqn("`my_dataset`", region_only_view, Some("eu")),
             "`region-eu`.INFORMATION_SCHEMA.JOBS"
         );
+    }
+
+    #[test]
+    fn test_format_top_level_columns_data_types() {
+        // Test case 1: Simple primitive types
+        {
+            let mut nested = NestedColumnDataTypes::default();
+            nested.insert("id", Some(&"integer".to_string()));
+            nested.insert("name", Some(&"string".to_string()));
+
+            let result = nested.format_top_level_columns_data_types();
+            assert_eq!(result.get("id").unwrap(), "integer");
+            assert_eq!(result.get("name").unwrap(), "string");
+        }
+
+        // Test case 2: Nested struct
+        {
+            let mut nested = NestedColumnDataTypes::default();
+            nested.insert("user.id", Some(&"integer".to_string()));
+            nested.insert("user.name", Some(&"string".to_string()));
+
+            let result = nested.format_top_level_columns_data_types();
+            assert_eq!(
+                result.get("user").unwrap(),
+                "struct<id integer, name string>"
+            );
+        }
+
+        // Test case 3: Array of structs
+        {
+            let mut nested = NestedColumnDataTypes::default();
+            nested.insert("addresses", Some(&"array".to_string()));
+            nested.insert("addresses.street", Some(&"string".to_string()));
+            nested.insert("addresses.city", Some(&"string".to_string()));
+
+            let result = nested.format_top_level_columns_data_types();
+            assert_eq!(
+                result.get("addresses").unwrap(),
+                "array<struct<street string, city string>>"
+            );
+        }
+
+        // Test case 4: Mixed types with deep nesting
+        {
+            let mut nested = NestedColumnDataTypes::default();
+            nested.insert("id", Some(&"integer".to_string()));
+            nested.insert("user.name", Some(&"string".to_string()));
+            nested.insert("user.contact.email", Some(&"string".to_string()));
+            nested.insert("user.contact.phone", Some(&"string".to_string()));
+
+            let result = nested.format_top_level_columns_data_types();
+            assert_eq!(result.get("id").unwrap(), "integer");
+            assert_eq!(
+                result.get("user").unwrap(),
+                "struct<name string, contact struct<email string, phone string>>"
+            );
+        }
+
+        // Test case 5: Empty struct (no data type)
+        {
+            let mut nested = NestedColumnDataTypes::default();
+            nested.insert("empty_struct", None);
+            nested.insert("empty_struct.field1", Some(&"string".to_string()));
+
+            let result = nested.format_top_level_columns_data_types();
+            assert_eq!(result.get("empty_struct").unwrap(), "struct<field1 string>");
+        }
+
+        // Test case 6: Struct marked as primitive but has children
+        {
+            let mut nested = NestedColumnDataTypes::default();
+            nested.insert("metadata", Some(&"json".to_string()));
+            nested.insert("metadata.key1", Some(&"string".to_string()));
+            nested.insert("metadata.key2", Some(&"integer".to_string()));
+
+            let result = nested.format_top_level_columns_data_types();
+            assert_eq!(
+                result.get("metadata").unwrap(),
+                "struct<key1 string, key2 integer>"
+            );
+        }
     }
 }

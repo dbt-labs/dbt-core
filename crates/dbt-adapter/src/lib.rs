@@ -48,9 +48,6 @@ pub mod config {
     pub use dbt_auth::AdapterConfig;
 }
 
-// Adapters for warehouses / dbs
-/// Bigquery adapter
-pub mod bigquery;
 /// Databricks adapter
 pub mod databricks;
 /// Parse adapter
