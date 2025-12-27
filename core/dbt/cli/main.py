@@ -691,6 +691,7 @@ def run_operation(ctx, **kwargs):
 @cli.command("seed")
 @click.pass_context
 @global_flags
+@p.empty
 @p.exclude
 @p.full_refresh
 @p.profiles_dir
