@@ -289,7 +289,7 @@ fn get_test_details(
         kwargs.insert("column_name".to_string(), Value::String(col.to_string()));
     }
 
-    let (test_macro_name, custom_test_name, namespace) = match test {
+    let (test_macro_name, mut custom_test_name, namespace) = match test {
         DataTests::String(test_name) => {
             let (test_macro_name, namespace) = parse_test_name_and_namespace(test_name);
             (test_macro_name, None, namespace)
@@ -334,6 +334,11 @@ fn get_test_details(
         },
     };
 
+    // `name` is reserved in dbt-core generic tests: it names the test node, but is not a macro kwarg.
+    // In some YAML shapes it may show up in the parsed args map; we treat it as the custom test name
+    // if one wasn't already provided and always remove it from macro kwargs.
+    extract_reserved_name_kwarg(&mut custom_test_name, &mut kwargs)?;
+
     Ok(TestDetails {
         test_macro_name: normalize_test_name(&test_macro_name)?,
         custom_test_name,
@@ -342,6 +347,28 @@ fn get_test_details(
         config,
         jinja_set_vars,
     })
+}
+
+fn extract_reserved_name_kwarg(
+    custom_test_name: &mut Option<String>,
+    kwargs: &mut BTreeMap<String, Value>,
+) -> FsResult<()> {
+    let Some(v) = kwargs.remove("name") else {
+        return Ok(());
+    };
+
+    match v {
+        Value::String(s) => {
+            if custom_test_name.is_none() {
+                *custom_test_name = Some(s);
+            }
+            Ok(())
+        }
+        other => err!(
+            ErrorCode::SchemaError,
+            "Generic test 'name' must be a string (got {other})"
+        ),
+    }
 }
 
 /// Result of extracting kwargs and jinja variables
@@ -776,9 +803,10 @@ fn generate_test_macro(
     };
     // Format all kwargs, handling ref calls specially
     // Exclude an embedded 'config' kwarg as it is emitted via config(...) above
+    // Exclude reserved 'name' kwarg (used to name the test node, not passed to the macro).
     let formatted_args: Vec<String> = kwargs
         .iter()
-        .filter(|(k, _)| k.as_str() != "config")
+        .filter(|(k, _)| k.as_str() != "config" && k.as_str() != "name")
         .map(|(k, v)| {
             let value_str = if let Value::String(s) = v {
                 // Check if this is a reference to one of our Jinja set variables
@@ -1732,6 +1760,52 @@ mod tests {
         assert!(
             sql.contains("{{ test_accepted_values(") && sql.contains("model=ref('my_model')"),
             "Macro call should be well-formed and include model kwarg"
+        );
+    }
+
+    #[test]
+    fn test_generate_test_macro_excludes_reserved_name_kwarg() {
+        let mut kwargs = BTreeMap::new();
+        kwargs.insert(
+            "column_list".to_string(),
+            Value::Array(vec![
+                Value::String("a".to_string()),
+                Value::String("b".to_string()),
+            ]),
+        );
+        kwargs.insert(
+            "model".to_string(),
+            Value::String("get_where_subquery(ref('metapack_dpd'))".to_string()),
+        );
+        kwargs.insert(
+            "name".to_string(),
+            Value::String("metapack_dpd_column_name_order_is_correct".to_string()),
+        );
+
+        let sql = generate_test_macro(
+            "expect_table_columns_to_match_ordered_list",
+            &kwargs,
+            Some("dbt_expectations"),
+            &None,
+            &BTreeMap::new(),
+        )
+        .unwrap();
+
+        assert!(
+            sql.contains("{{ dbt_expectations.test_expect_table_columns_to_match_ordered_list("),
+            "Expected namespaced macro call, got: {sql}"
+        );
+        assert!(
+            sql.contains("column_list=[\"a\",\"b\"]"),
+            "Expected column_list kwarg to be present, got: {sql}"
+        );
+        assert!(
+            sql.contains("model=get_where_subquery(ref('metapack_dpd'))"),
+            "Expected model kwarg to be present, got: {sql}"
+        );
+        assert!(
+            !sql.contains("name="),
+            "Reserved 'name' must not be passed as a macro kwarg, got: {sql}"
         );
     }
 }
