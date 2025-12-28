@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Add description/columns to external ExternalNode so that plugins ingest description/columns
+time: 2025-04-29T13:19:31.737607807+09:00
+custom:
+    Author: toukoudo
+    Issue: "11527"
