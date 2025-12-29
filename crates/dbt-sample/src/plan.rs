@@ -6,6 +6,7 @@ use std::{
 };
 
 use dbt_common::{ErrorCode, FsResult, fs_err};
+use dbt_schemas::schemas::common::ResolvedQuoting;
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
@@ -68,6 +69,7 @@ pub struct Entry {
     pub unique_id: Option<String>,
     pub read: Option<SamplerRel>,
     pub write: Option<SamplerRel>,
+    pub quoting: Option<ResolvedQuoting>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -131,7 +133,12 @@ pub struct BranchAlloc {
 }
 
 impl Entry {
-    pub fn pass(unique_id: String, read: SamplerRel, write: SamplerRel) -> Self {
+    pub fn pass(
+        unique_id: String,
+        read: SamplerRel,
+        write: SamplerRel,
+        quoting: ResolvedQuoting,
+    ) -> Self {
         Entry {
             select: None,
             unique_id: Some(unique_id),
@@ -139,6 +146,7 @@ impl Entry {
             write: Some(write),
             strategy: Strategy::Pass {},
             filters: Vec::new(),
+            quoting: Some(quoting),
         }
     }
 }

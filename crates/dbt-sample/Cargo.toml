@@ -13,3 +13,4 @@ serde_yaml = "0.9"
 # Workspace crates
 dbt-common = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
+dbt-schemas = { workspace = true }
