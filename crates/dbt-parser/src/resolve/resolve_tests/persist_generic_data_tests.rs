@@ -702,21 +702,22 @@ fn generate_test_name(
         None => format!("{prefix}_{resource_name}"),
     };
 
-    let result = match package_name {
-        Some(pkg_name) if pkg_name != project_name => {
-            format!("{pkg_name}_{test_identifier}_{suffix}")
-        }
-        _ => {
-            format!("{test_identifier}_{suffix}")
-        }
+    // In dbt-core, namespaced tests (e.g. `elementary.schema_changes_from_baseline`) include the
+    // namespace prefix in the synthesized name. When truncation applies, the preserved prefix
+    // should also include that namespace (Mantle behavior).
+    let identifier_for_name = match package_name {
+        Some(pkg_name) if pkg_name != project_name => format!("{pkg_name}_{test_identifier}"),
+        _ => test_identifier,
     };
+
+    let result = format!("{identifier_for_name}_{suffix}");
 
     // dbt-core truncates the test name to 63 characters, if the
     // full name is too long. This is done by including the first
     // 30 identifying chars plus a 32-character hash of the full contents
     // See the function `synthesize_generic_test_name` in `dbt-core`:
     // https://github.com/dbt-labs/dbt-core/blob/9010537499980743503ed3b462eb1952be4d2b38/core/dbt/parser/generic_test_builders.py
-    maybe_truncate_test_name(&test_identifier, &result)
+    maybe_truncate_test_name(&identifier_for_name, &result)
 }
 
 /// Represents test configuration for a model version

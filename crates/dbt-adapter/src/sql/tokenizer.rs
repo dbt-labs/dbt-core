@@ -111,6 +111,9 @@ pub(crate) fn abstract_tokenize(tokens: Vec<Token>) -> Vec<AbstractToken> {
     let mut abstract_tokens = Vec::new();
     let mut index = 0;
     let timestamp_regex = Regex::new(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}").unwrap();
+    // Same as `timestamp_regex`, but for finding timestamps embedded in larger tokens
+    // (e.g. when surrounded by quotes/parens).
+    let timestamp_find_regex = Regex::new(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}").unwrap();
     let timestamp_regex_ignore_t = Regex::new(r"^\d{4}-\d{2}-\d{2}\d{2}:\d{2}:\d{2}$").unwrap();
     let date_regex = Regex::new(r"^\d{4}-\d{2}-\d{2}$").unwrap();
     let time_regex = Regex::new(r"^\d{2}:\d{2}:\d{2}$").unwrap();
@@ -162,6 +165,32 @@ pub(crate) fn abstract_tokenize(tokens: Vec<Token>) -> Vec<AbstractToken> {
                 abstract_tokens.push(AbstractToken::Token(token.clone()));
             }
             index += 1;
+        } else if let Some(m) = timestamp_find_regex.find(&token.value) {
+            // Handle timestamps that don't start at a fixed suffix boundary, e.g.:
+            //   cast('2025-12-23T07:06:03' as timestamp)
+            // where the token may include leading '(' / '\'' and trailing '\''.
+            let (first, last) = token.value.split_at(m.start());
+            if !first.is_empty() {
+                abstract_tokens.push(AbstractToken::Token(Token {
+                    value: first.to_string(),
+                    maybe_hash: false,
+                }));
+            }
+
+            let mut timestamp_token = last.to_string();
+            if let Some(next_token) = tokens.get(index + 1)
+                && next_token.matches(".")
+                && let Some(next_next_token) = tokens.get(index + 2)
+            {
+                timestamp_token = timestamp_token + &next_token.value + &next_next_token.value;
+                index += 3;
+            } else {
+                index += 1;
+            }
+
+            abstract_tokens.push(AbstractToken::Timestamp {
+                value: timestamp_token,
+            });
         } else if token.value.chars().count() >= 19
             && let Some(start_byte) = token.value.char_indices().rev().nth(18).map(|(i, _)| i)
             && timestamp_regex.is_match(&token.value[start_byte..])

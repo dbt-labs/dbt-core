@@ -9,8 +9,16 @@ pub fn compare_sql(actual: &str, expected: &str) -> AdapterResult<()> {
     let expected = canonicalize_query_tag(expected);
     let actual = canonicalize_uuid_literals(&actual);
     let expected = canonicalize_uuid_literals(&expected);
+    let actual = canonicalize_uuid_prefixed_test_unique_id_literals(&actual);
+    let expected = canonicalize_uuid_prefixed_test_unique_id_literals(&expected);
+    let actual = canonicalize_dbt_test_unique_id_literals(&actual);
+    let expected = canonicalize_dbt_test_unique_id_literals(&expected);
+    let actual = canonicalize_quoted_timestamp_space_separator(&actual);
+    let expected = canonicalize_quoted_timestamp_space_separator(&expected);
     let actual = canonicalize_elementary_tmp_suffix(&actual);
     let expected = canonicalize_elementary_tmp_suffix(&expected);
+    let actual = canonicalize_test_temp_relation_identifiers(&actual);
+    let expected = canonicalize_test_temp_relation_identifiers(&expected);
 
     // Heuristic: treat queries as equal if they only differ by a top-level
     // "select * from ( ... )" wrapper and benign CTE boundary syntax.
@@ -379,6 +387,52 @@ fn canonicalize_uuid_literals(sql: &str) -> String {
     UUID_RE.replace_all(sql, "'UUID'").to_string()
 }
 
+/// Canonicalize string literals that embed `invocation_id` (UUID) + dbt test unique_id.
+///
+/// These often look like:
+///   '<invocation_uuid>.test.<package>.<test_name>.<suffix>'
+///
+/// Mantle/Fusion can differ in invocation_id and in how they truncate/hash test names, but
+/// the specific embedded literal is not semantically meaningful for replay comparison.
+fn canonicalize_uuid_prefixed_test_unique_id_literals(sql: &str) -> String {
+    static RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
+        Regex::new(
+            r"(?i)'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.test\.[^']*'",
+        )
+        .unwrap()
+    });
+    RE.replace_all(sql, "'UUID.test.TEST_UNIQUE_ID'")
+        .to_string()
+}
+
+/// Canonicalize dbt test node unique IDs embedded in string literals.
+///
+/// These look like:
+///   'test.<package>.<test_name>.<suffix>'
+///
+/// This is intentionally narrow (must start with `test.` inside single quotes) to avoid
+/// masking unrelated string literals.
+fn canonicalize_dbt_test_unique_id_literals(sql: &str) -> String {
+    static RE: once_cell::sync::Lazy<Regex> =
+        once_cell::sync::Lazy::new(|| Regex::new(r"(?i)'test\.[^']*'").unwrap());
+    RE.replace_all(sql, "'test.TEST_UNIQUE_ID'").to_string()
+}
+
+/// Canonicalize quoted timestamp literals that use a space separator between date and time.
+///
+/// This enables the existing fuzzy timestamp matcher (which expects `T`) to work for
+/// patterns like:
+///   '2025-12-23 07:06:03' -> '2025-12-23T07:06:03'
+fn canonicalize_quoted_timestamp_space_separator(sql: &str) -> String {
+    static RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
+        // Narrow to single-quoted literals to avoid touching non-literal SQL fragments.
+        // Supports optional fractional seconds.
+        Regex::new(r"'(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2}(?:\.\d+)?)'").unwrap()
+    });
+    // Use explicit braces to avoid `$1T` being interpreted as a (non-existent) capture.
+    RE.replace_all(sql, "'${1}T${2}'").to_string()
+}
+
 /// Replace dynamic tmp suffixes produced by some packages (e.g., elementary) that append
 /// utc.now()-like timestamps to temporary table names, such as:
 ///   dbt_sources__tmp_20251203160139043240  ->  dbt_sources__tmp_TIMESTAMP
@@ -390,6 +444,30 @@ fn canonicalize_elementary_tmp_suffix(sql: &str) -> String {
         Regex::new(r"(?i)(__tmp_)(?:20[0-9]{2}|2100)\d{8,}").unwrap()
     });
     RE.replace_all(sql, "${1}TIMESTAMP").to_string()
+}
+
+/// Canonicalize dbt test temp relation identifiers that may differ between recorders/runners.
+///
+/// This is intentionally narrow:
+/// - Only matches identifiers that start with `test_` and contain `__tmp_...`.
+/// - Assumes `canonicalize_elementary_tmp_suffix` already normalized the timestamp portion to `TIMESTAMP`.
+///
+/// Example:
+///   PROD.SCH.test_0f6b...__schema_baseline__tmp_TIMESTAMP
+///   PROD.SCH.test_7a2c...__schema_baseline__tmp_TIMESTAMP
+/// both become:
+///   PROD.SCH.test_ALPHA__tmp_TIMESTAMP
+fn canonicalize_test_temp_relation_identifiers(sql: &str) -> String {
+    // Fast-path: avoid regex work on the common case.
+    if !sql.to_ascii_lowercase().contains("__tmp_") {
+        return sql.to_string();
+    }
+
+    static RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
+        // Replace the variable middle portion of `test_<...>__tmp_TIMESTAMP` with `ALPHA`.
+        Regex::new(r"(?i)(\btest_)[0-9a-z_]+(__tmp_TIMESTAMP\b)").unwrap()
+    });
+    RE.replace_all(sql, "${1}ALPHA${2}").to_string()
 }
 
 /// Check whether two SQL strings are identical modulo a top-level
@@ -937,6 +1015,73 @@ mod tests {
             result.is_ok(),
             "Should ignore difference for timestamp value difference"
         );
+
+        // Additional timestamp drift case (incomplete SQL is fine; we only compare text).
+        let sql3 = r#"
+with cur as (
+
+    with baseline as (
+        select lower(column_name) as column_name, data_type
+        from PROD_ASKO_SERVERING.elementary.test_ALPHA__tmp_TIMESTAMP
+    )
+
+    select
+        columns_snapshot.full_table_name,
+        lower(columns_snapshot.column_name) as column_name,
+        columns_snapshot.data_type,
+        (baseline.column_name IS NULL) as is_new,
+
+    cast ('2025-12-30T06:50:06' as timestamp)
+"#;
+
+        let sql4 = r#"
+with cur as (
+
+    with baseline as (
+        select lower(column_name) as column_name, data_type
+        from PROD_ASKO_SERVERING.elementary.test_ALPHA__tmp_TIMESTAMP
+    )
+
+    select
+        columns_snapshot.full_table_name,
+        lower(columns_snapshot.column_name) as column_name,
+        columns_snapshot.data_type,
+        (baseline.column_name IS NULL) as is_new,
+
+    cast ('2025-12-23T07:06:04' as timestamp)
+"#;
+
+        let result = compare_sql(sql3, sql4);
+        assert!(
+            result.is_ok(),
+            "Should ignore difference for timestamp value difference inside CTE fragment"
+        );
+
+        // Additional drift case: invocation_id + test unique_id embedded inside string literal.
+        let sql5 = r#"
+  md5(cast(coalesce(cast(data_issue_id as varchar), '') || '-' || coalesce(cast(cast('019b6e05-5c15-7831-8c40-6718c8683411.test.dis_asko_servering.elementary_schema_changes_from_370c8b8ac782c433a20c7ab43b202251.fba8a27235' as varchar) as varchar), '') as TEXT)) as id,
+"#;
+        let sql6 = r#"
+  md5(cast(coalesce(cast(data_issue_id as varchar), '') || '-' || coalesce(cast(cast('c406f8ee-28dd-4a60-91eb-639ae6a8a613.test.dis_asko_servering.elementary_schema_changes_from_baseline_prs_dim_hendelse_innholdsnavn_.c99b82db3f' as varchar) as varchar), '') as TEXT)) as id,
+"#;
+        let result = compare_sql(sql5, sql6);
+        assert!(
+            result.is_ok(),
+            "Should ignore differences for invocation_id/test unique_id embedded in string literal"
+        );
+
+        // Additional drift case: test unique_id literal (no UUID prefix).
+        let sql7 = r#"
+        cast('test.dis_asko_servering.elementary_schema_changes_from_ebfd1280ea747a1645e253f0e83e355e.83cf5105a0' as varchar) as test_unique_id,
+"#;
+        let sql8 = r#"
+cast('test.dis_asko_servering.elementary_schema_changes_from_baseline_prs_dim_hendelse_hendelseskategori_.4d86bc1ad2' as varchar) as test_unique_id,
+"#;
+        let result = compare_sql(sql7, sql8);
+        assert!(
+            result.is_ok(),
+            "Should ignore differences for test unique_id embedded in string literal"
+        );
     }
 
     #[test]
@@ -962,6 +1107,35 @@ mod tests {
         assert!(
             result.is_ok(),
             "Should ignore difference for timestamp value difference"
+        );
+    }
+
+    #[test]
+    fn test_compare_sql_timestamp_in_cast_with_space_separator() {
+        let sql1 = "select cast ('2025-12-23 07:06:03' as timestamp)";
+        let sql2 = "select cast ('2025-12-30 06:11:01' as timestamp)";
+        compare_sql(sql1, sql2).unwrap_or_else(|e| {
+            panic!(
+                "Should ignore difference for timestamp value difference in cast() literal, but got:\n{e}"
+            )
+        });
+    }
+
+    #[test]
+    fn test_canonicalize_quoted_timestamp_space_separator_values() {
+        let sql1 = "cast ('2025-12-23 07:06:03' as timestamp)";
+        let sql2 = "cast ('2025-12-30 06:11:01' as timestamp)";
+
+        let out1 = canonicalize_quoted_timestamp_space_separator(sql1);
+        let out2 = canonicalize_quoted_timestamp_space_separator(sql2);
+
+        assert!(
+            out1.contains("'2025-12-23T07:06:03'"),
+            "Expected canonicalized timestamp literal, got: {out1}"
+        );
+        assert!(
+            out2.contains("'2025-12-30T06:11:01'"),
+            "Expected canonicalized timestamp literal, got: {out2}"
         );
     }
 
