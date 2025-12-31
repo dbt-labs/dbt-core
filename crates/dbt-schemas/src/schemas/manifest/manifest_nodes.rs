@@ -39,9 +39,9 @@ use crate::schemas::{
     },
     nodes::{ExposureType, TestMetadata},
     project::{
-        AnalysesConfig, DataTestConfig, ExposureConfig, FunctionConfig, MetricConfig, ModelConfig,
-        SavedQueryConfig, SeedConfig, SemanticModelConfig, SnapshotConfig, SourceConfig,
-        UnitTestConfig,
+        AnalysesConfig, CustomChecks, DataTestConfig, ExposureConfig, FunctionConfig, MetricConfig,
+        ModelConfig, SavedQueryConfig, SeedConfig, SemanticModelConfig, SnapshotConfig,
+        SourceConfig, StrictnessMode, UnitTestConfig,
     },
     properties::{
         ModelConstraint, UnitTestOverrides,
@@ -593,6 +593,10 @@ pub struct ManifestModelConfig {
     pub sql_header: Option<String>,
     pub location: Option<String>,
     pub predicates: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub strictness: Option<StrictnessMode>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub custom_checks: Option<CustomChecks>,
     pub submission_method: Option<String>,
     pub job_cluster_config: Option<BTreeMap<String, YmlValue>>,
     pub create_notebook: Option<bool>,
@@ -736,6 +740,8 @@ impl From<ModelConfig> for ManifestModelConfig {
             sql_header: config.sql_header,
             location: config.location,
             predicates: config.predicates,
+            strictness: config.strictness,
+            custom_checks: config.custom_checks,
             submission_method: config.submission_method.clone(),
             job_cluster_config: config.job_cluster_config.clone(),
             create_notebook: config.create_notebook,
@@ -790,6 +796,8 @@ impl From<ManifestModelConfig> for ModelConfig {
             sql_header: config.sql_header,
             location: config.location,
             predicates: config.predicates,
+            strictness: config.strictness,
+            custom_checks: config.custom_checks,
             submission_method: config.submission_method.clone(),
             job_cluster_config: config.job_cluster_config.clone(),
             create_notebook: config.create_notebook,

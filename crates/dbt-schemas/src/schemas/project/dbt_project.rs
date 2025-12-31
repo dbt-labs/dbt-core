@@ -35,6 +35,7 @@ use super::ProjectSeedConfig;
 use super::ProjectSnapshotConfig;
 use super::ProjectSourceConfig;
 use super::ProjectUnitTestConfig;
+use super::{CustomChecks, StrictnessMode};
 
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct ProjectDbtCloudConfig {
@@ -175,6 +176,12 @@ pub struct DbtProject {
     pub require_dbt_version: Option<StringOrArrayOfStrings>,
     #[serde(rename = "restrict-access")]
     pub restrict_access: Option<bool>,
+    #[schemars(skip)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub strictness: Option<StrictnessMode>,
+    #[schemars(skip)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub custom_checks: Option<CustomChecks>,
     pub vars: Verbatim<Option<dbt_serde_yaml::Value>>,
 }
 
@@ -337,6 +344,8 @@ mod tests {
             require_dbt_version: None,
             restrict_access: None,
             vars: Verbatim::from(None),
+            strictness: None,
+            custom_checks: None,
         };
         assert_eq!(project.get_project_id(), "92c907bdbc0c4f27451b9b9fdb1bc8ec");
     }

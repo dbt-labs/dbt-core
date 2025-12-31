@@ -15,7 +15,7 @@ type YmlValue = dbt_serde_yaml::Value;
 use crate::schemas::common::{NodeInfo, NodeInfoWrapper, PersistDocsConfig, hooks_equal};
 use crate::schemas::dbt_column::{DbtColumnRef, deserialize_dbt_columns, serialize_dbt_columns};
 use crate::schemas::manifest::{BigqueryClusterConfig, GrantAccessToTarget, PartitionConfig};
-use crate::schemas::project::{WarehouseSpecificNodeConfig, same_warehouse_config};
+use crate::schemas::project::{StrictnessMode, WarehouseSpecificNodeConfig, same_warehouse_config};
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::{
     common::{
@@ -464,6 +464,9 @@ pub trait InternalDbtNodeAttributes: InternalDbtNode {
     fn static_analysis_off_reason(&self) -> Option<StaticAnalysisOffReason> {
         self.base().static_analysis_off_reason
     }
+    fn strictness(&self) -> Option<StrictnessMode> {
+        None
+    }
     // Setters
 
     fn set_quoting(&mut self, quoting: ResolvedQuoting) {
@@ -799,6 +802,10 @@ impl InternalDbtNodeAttributes for DbtModel {
 
     fn serialized_config(&self) -> YmlValue {
         dbt_serde_yaml::to_value(&self.deprecated_config).expect("Failed to serialize to YAML")
+    }
+
+    fn strictness(&self) -> Option<StrictnessMode> {
+        self.deprecated_config.strictness
     }
 }
 
