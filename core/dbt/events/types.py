@@ -1277,8 +1277,8 @@ class PackageNodeDependsOnRootProjectNode(WarnLevel):
     def message(self) -> str:
         msg = (
             f"The node '{self.node_name}'in package '{self.package_name}' depends on the root project node '{self.root_project_unique_id}'."
-            "This may lead to unexpected cycles downstream. Please set the 'require_ref_prefers_node_package_to_root' behavior change flag to True to avoid this issue."
-            "For more information, see the documentation at https://docs.getdbt.com/reference/global-configs/behavior-changes#require_ref_prefers_node_package_to_root"
+            "This may lead to unexpected cycles downstream. Please set the 'require_ref_searches_node_package_before_root' behavior change flag to True to avoid this issue."
+            "For more information, see the documentation at https://docs.getdbt.com/reference/global-configs/behavior-changes#package-ref-search-order"
         )
         return warning_tag(msg)
 
