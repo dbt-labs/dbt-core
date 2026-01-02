@@ -109,10 +109,10 @@ impl BaseTokenService {
         // --- Check cache first ---
         {
             let cache = TOKEN_CACHE.read().await;
-            if let Some(ref token) = *cache {
-                if Instant::now() < token.expires_at {
-                    return Ok(token.value.clone());
-                }
+            if let Some(ref token) = *cache
+                && Instant::now() < token.expires_at
+            {
+                return Ok(token.value.clone());
             }
         }
 
@@ -120,10 +120,10 @@ impl BaseTokenService {
 
         {
             let cache = TOKEN_CACHE.read().await;
-            if let Some(ref token) = *cache {
-                if Instant::now() < token.expires_at {
-                    return Ok(token.value.clone());
-                }
+            if let Some(ref token) = *cache
+                && Instant::now() < token.expires_at
+            {
+                return Ok(token.value.clone());
             }
         }
 
