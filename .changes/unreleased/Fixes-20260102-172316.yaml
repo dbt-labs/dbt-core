@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fixes error unpacking pex that uses dbt-core due to conflicting __init__.py
+time: 2026-01-02T17:23:16.53289-08:00
+custom:
+    Author: mattalbr
+    Issue: "12321"
