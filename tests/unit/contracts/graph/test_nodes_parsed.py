@@ -523,6 +523,7 @@ def basic_parsed_seed_dict():
             "delimiter": ",",
             "enabled": True,
             "materialized": "seed",
+            "header": True,
             "persist_docs": {},
             "post-hook": [],
             "pre-hook": [],
@@ -616,6 +617,7 @@ def complex_parsed_seed_dict():
             "delimiter": ",",
             "enabled": True,
             "materialized": "seed",
+            "header": True,
             "persist_docs": {"relation": True, "columns": True},
             "post-hook": [],
             "pre-hook": [],
@@ -677,6 +679,7 @@ def complex_parsed_seed_object():
         config=SeedConfig(
             quote_columns=True,
             delimiter=",",
+            header=True,
             persist_docs={"relation": True, "columns": True},
         ),
         docs=Docs(show=True),
