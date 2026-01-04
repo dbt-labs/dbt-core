@@ -48,6 +48,7 @@ pub const DBT_CTE_PREFIX: &str = "__dbt__cte__";
 pub const DBT_RUN_DIR_NAME: &str = "run";
 pub const DBT_DB_DIR_NAME: &str = "db";
 pub const DBT_LOG_DIR_NAME: &str = "logs";
+pub const DBT_STATE_DIR_NAME: &str = "state";
 pub const DBT_DEAFULT_LOG_FILE_NAME: &str = "dbt.log";
 pub const DBT_DEAFULT_QUERY_LOG_FILE_NAME: &str = "query_log.sql";
 pub const DBT_ROOT_PACKAGE_VAR_PREFIX: &str = "__root__";
