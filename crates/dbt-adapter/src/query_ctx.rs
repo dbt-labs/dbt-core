@@ -3,7 +3,9 @@
 use crate::errors::AdapterResult;
 
 use dbt_common::adapter::DBT_EXECUTION_PHASES;
-use dbt_schemas::schemas::{DbtModel, DbtSeed, DbtSnapshot, DbtTest, DbtUnitTest};
+use dbt_schemas::schemas::{
+    DbtModel, DbtSeed, DbtSnapshot, DbtTest, DbtUnitTest, manifest::DbtOperation,
+};
 use dbt_xdbc::QueryCtx;
 use minijinja::{
     Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State,
@@ -52,6 +54,8 @@ pub fn node_id_from_state(state: &State) -> Option<String> {
     } else if let Ok(seed) = DbtSeed::deserialize(&yaml_node) {
         Some(seed.__common_attr__.unique_id)
     } else if let Ok(unit_test) = DbtUnitTest::deserialize(&yaml_node) {
+        Some(unit_test.__common_attr__.unique_id)
+    } else if let Ok(unit_test) = DbtOperation::deserialize(&yaml_node) {
         Some(unit_test.__common_attr__.unique_id)
     } else {
         None
