@@ -1,10 +1,11 @@
 use crate::{AdapterResponse, TypedBaseAdapter};
 
-use crate::databricks::api_client::DatabricksApiClient;
 use dbt_common::{AdapterError, AdapterErrorKind, AdapterResult};
 use dbt_xdbc::{Connection, QueryCtx};
 use minijinja::{State, Value};
 use serde_json::json;
+
+mod api_client;
 
 pub fn submit_python_job(
     adapter: &dyn TypedBaseAdapter,
@@ -95,7 +96,7 @@ pub fn submit_python_job(
         .map(|v| v.is_true())
         .unwrap_or(false);
 
-    let api_client = DatabricksApiClient::new(adapter, use_user_folder_for_python)?;
+    let api_client = api_client::DatabricksApiClient::new(adapter, use_user_folder_for_python)?;
 
     let run_name = format!(
         "{}-{}-{}-{}",
@@ -172,7 +173,7 @@ fn extract_packages(config: &Value) -> Vec<String> {
 }
 
 fn upload_notebook(
-    api_client: &DatabricksApiClient,
+    api_client: &api_client::DatabricksApiClient,
     catalog: &str,
     schema: &str,
     identifier: &str,
@@ -254,7 +255,7 @@ fn build_job_spec(
 }
 
 fn submit_job_run(
-    api_client: &DatabricksApiClient,
+    api_client: &api_client::DatabricksApiClient,
     run_name: &str,
     job_spec: &serde_json::Value,
     timeout_seconds: u64,
@@ -263,7 +264,7 @@ fn submit_job_run(
 }
 
 fn poll_job_completion(
-    api_client: &DatabricksApiClient,
+    api_client: &api_client::DatabricksApiClient,
     run_id: &str,
     timeout_seconds: u64,
 ) -> AdapterResult<()> {

@@ -48,8 +48,6 @@ pub mod config {
     pub use dbt_auth::AdapterConfig;
 }
 
-/// Databricks adapter
-pub mod databricks;
 /// Parse adapter
 pub mod parse;
 

@@ -2,7 +2,6 @@ use crate::AdapterResponse;
 use crate::auth::Auth;
 use crate::base_adapter::backend_of;
 use crate::config::AdapterConfig;
-use crate::databricks::databricks_compute_from_state;
 use crate::errors::{
     AdapterError, AdapterErrorKind, AdapterResult, adbc_error_to_adapter_error,
     arrow_error_to_adapter_error,
@@ -28,10 +27,12 @@ use dbt_common::tracing::span_info::record_current_span_status_from_attrs;
 use dbt_frontend_common::dialect::Dialect;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::telemetry::{QueryExecuted, QueryOutcome};
+use dbt_schemas::schemas::{DbtModel, DbtSnapshot};
 use dbt_xdbc::bigquery::QUERY_LABELS;
 use dbt_xdbc::semaphore::Semaphore;
 use dbt_xdbc::{Backend, Connection, Database, QueryCtx, Statement, connection, database, driver};
 use minijinja::State;
+use serde::Deserialize;
 use std::borrow::Cow;
 use tracy_client::span;
 
@@ -674,6 +675,29 @@ impl AdapterEngine {
             Self::Replay(replay_engine) => replay_engine.cancellation_token(),
             Self::Mock(_) => never_cancels(),
         }
+    }
+}
+
+/// Get the Databricks compute engine configured for this model/snapshot
+///
+/// https://docs.getdbt.com/reference/resource-configs/databricks-configs#selecting-compute-per-model
+fn databricks_compute_from_state(state: &State) -> Option<String> {
+    let yaml_node = dbt_serde_yaml::to_value(state.lookup("model").as_ref()?).ok()?;
+
+    if let Ok(model) = DbtModel::deserialize(&yaml_node) {
+        if let Some(databricks_attr) = &model.__adapter_attr__.databricks_attr {
+            databricks_attr.databricks_compute.clone()
+        } else {
+            None
+        }
+    } else if let Ok(snapshot) = DbtSnapshot::deserialize(&yaml_node) {
+        if let Some(databricks_attr) = &snapshot.__adapter_attr__.databricks_attr {
+            databricks_attr.databricks_compute.clone()
+        } else {
+            None
+        }
+    } else {
+        None
     }
 }
 

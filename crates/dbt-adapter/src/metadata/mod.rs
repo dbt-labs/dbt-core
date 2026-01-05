@@ -22,7 +22,7 @@ use dbt_schemas::schemas::{
 use minijinja::{State, Value};
 
 pub(crate) mod bigquery;
-pub(crate) mod databricks;
+pub mod databricks;
 pub(crate) mod metadata_adapter;
 pub(crate) mod postgres;
 pub(crate) mod redshift;

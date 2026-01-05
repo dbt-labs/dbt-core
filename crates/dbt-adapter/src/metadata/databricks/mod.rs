@@ -1,17 +1,13 @@
-use crate::databricks::adapter::DatabricksAdapter;
-use crate::databricks::describe_table::DatabricksTableMetadata;
-use crate::databricks::version::DbrVersion;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::future;
+use std::ops::DerefMut;
+use std::sync::Arc;
+use std::sync::OnceLock;
 
-use crate::errors::{AdapterError, AdapterResult, AsyncAdapterResult};
-use crate::metadata::*;
-use crate::metadata::{build_relation_clauses, find_matching_relation};
-use crate::record_batch_utils::get_column_values;
-use crate::sql_types::{TypeOps, make_arrow_field_v2};
-use crate::{AdapterTyping, TypedBaseAdapter};
-use arrow_array::{
-    Array, BooleanArray, Int32Array, RecordBatch, StringArray, TimestampMicrosecondArray,
-};
+use arrow_array::*;
 use arrow_schema::{Field, Schema};
+use dbt_agate::AgateTable;
+use dbt_common::adapter::AdapterType;
 use dbt_common::adapter::ExecutionPhase;
 use dbt_common::cancellation::Cancellable;
 use dbt_schemas::dbt_types::RelationType;
@@ -20,10 +16,97 @@ use dbt_schemas::schemas::legacy_catalog::{
 };
 use dbt_schemas::schemas::relations::base::{BaseRelation, RelationPattern};
 use dbt_xdbc::{Connection, MapReduce, QueryCtx};
+use minijinja::State;
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
-use std::future;
-use std::sync::Arc;
+use crate::errors::{AdapterError, AdapterResult, AsyncAdapterResult};
+use crate::metadata::CatalogAndSchema;
+use crate::metadata::databricks::describe_table::DatabricksTableMetadata;
+use crate::metadata::databricks::version::DbrVersion;
+use crate::query_ctx::query_ctx_from_state;
+use crate::record_batch_utils::get_column_values;
+use crate::relation::databricks::base::{
+    DatabricksComponentConfig, DatabricksRelationResultsBuilder, from_results,
+};
+use crate::relation::databricks::{DatabricksRelation, DatabricksRelationConfig};
+use crate::sql_types::{TypeOps, make_arrow_field_v2};
+use crate::typed_adapter::ConcreteAdapter;
+use crate::{AdapterEngine, AdapterResponse};
+use crate::{AdapterTyping, TypedBaseAdapter, metadata::*};
+
+pub mod describe_table;
+pub mod schemas;
+pub(crate) mod version;
+
+// Reference: https://github.com/databricks/dbt-databricks/blob/92f1442faabe0fce6f0375b95e46ebcbfcea4c67/dbt/include/databricks/macros/adapters/metadata.sql
+pub fn list_relations(
+    adapter: &dyn AdapterTyping,
+    ctx: &QueryCtx,
+    conn: &'_ mut dyn Connection,
+    db_schema: &CatalogAndSchema,
+) -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
+    let sql = format!("
+SELECT
+    table_name,
+    if(table_type IN ('EXTERNAL', 'MANAGED', 'MANAGED_SHALLOW_CLONE', 'EXTERNAL_SHALLOW_CLONE'), 'table', lower(table_type)) AS table_type,
+    lower(data_source_format) AS file_format,
+    table_schema,
+    table_owner,
+    table_catalog,
+    if(
+    table_type IN (
+        'EXTERNAL',
+        'MANAGED',
+        'MANAGED_SHALLOW_CLONE',
+        'EXTERNAL_SHALLOW_CLONE'
+    ),
+    lower(table_type),
+    NULL
+    ) AS databricks_table_type
+FROM `system`.`information_schema`.`tables`
+WHERE table_catalog = '{}'
+    AND table_schema = '{}'",
+                            &db_schema.resolved_catalog,
+                            &db_schema.resolved_schema);
+
+    let batch = adapter.engine().execute(None, conn, ctx, &sql)?;
+
+    if batch.num_rows() == 0 {
+        return Ok(Vec::new());
+    }
+
+    let mut relations = Vec::new();
+
+    let names = get_column_values::<StringArray>(&batch, "table_name")?;
+    let schemas = get_column_values::<StringArray>(&batch, "table_schema")?;
+    let catalogs = get_column_values::<StringArray>(&batch, "table_catalog")?;
+    let table_types = get_column_values::<StringArray>(&batch, "table_type")?;
+    let file_formats = get_column_values::<StringArray>(&batch, "file_format")?;
+
+    for i in 0..batch.num_rows() {
+        let name = names.value(i);
+        let schema = schemas.value(i);
+        let catalog = catalogs.value(i);
+        let table_type = table_types.value(i).to_uppercase();
+        let is_delta = file_formats.value(i) == "delta";
+
+        let relation = Arc::new(DatabricksRelation::new(
+            Some(catalog.to_string()),
+            Some(schema.to_string()),
+            Some(name.to_string()),
+            Some(RelationType::from_adapter_type(
+                AdapterType::Databricks,
+                table_type.as_str(),
+            )),
+            None,
+            adapter.quoting(),
+            None,
+            is_delta,
+        )) as Arc<dyn BaseRelation>;
+        relations.push(relation);
+    }
+
+    Ok(relations)
+}
 
 fn get_relation_with_quote_policy(
     relation: &Arc<dyn BaseRelation>,
@@ -53,9 +136,435 @@ fn get_relation_with_quote_policy(
     Ok((quoted_database, quoted_schema, quoted_identifier))
 }
 
-impl MetadataAdapter for DatabricksAdapter {
+pub struct DatabricksMetadataAdapter {
+    adapter: ConcreteAdapter,
+}
+
+impl DatabricksMetadataAdapter {
+    pub fn new(engine: Arc<AdapterEngine>) -> Self {
+        let adapter = ConcreteAdapter::new(engine);
+        Self { adapter }
+    }
+
+    /// Get the Databricks Runtime version, caching the result for subsequent calls.
+    ///
+    /// To bypass the cache, use [`get_dbr_version()`](Self::get_dbr_version) directly.
+    pub(crate) fn dbr_version(&self) -> AdapterResult<DbrVersion> {
+        static CACHED_DBR_VERSION: OnceLock<AdapterResult<DbrVersion>> = OnceLock::new();
+
+        CACHED_DBR_VERSION
+            .get_or_init(|| {
+                let query_ctx = QueryCtx::default().with_desc("get_dbr_version adapter call");
+                let mut conn = self.adapter.engine().new_connection(None, None)?;
+                Self::get_dbr_version(&self.adapter, &query_ctx, conn.deref_mut())
+            })
+            .clone()
+    }
+
+    /// Get the Databricks Runtime version without caching.
+    pub fn get_dbr_version(
+        adapter: &dyn TypedBaseAdapter,
+        ctx: &QueryCtx,
+        conn: &mut dyn Connection,
+    ) -> AdapterResult<DbrVersion> {
+        // https://docs.databricks.com/aws/en/sql/language-manual/functions/current_version
+        // dbr_version is a null string if this query runs in non-cluster mode
+
+        // It appears that this is a divergence from the dbt-databricks implementation,
+        // which uses `SET spark.databricks.clusterUsageTags.sparkVersion` to read out the version instead.
+        // They only do this if `is_cluster` is True, otherwise it would error.
+        let batch = adapter.engine().execute(
+            None,
+            conn,
+            ctx,
+            "select current_version().dbr_version as dbr_version",
+        )?;
+
+        let dbr_version = get_column_values::<StringArray>(&batch, "dbr_version")?;
+        debug_assert_eq!(dbr_version.len(), 1);
+
+        // if dbr_version is null, then we are not on a cluster and we can assume the version is greater than the requested version
+        // dbt is applying a similar logic here: https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/handle.py#L143-L144
+        //
+        // https://docs.databricks.com/aws/en/sql/language-manual/functions/version#examples
+        // in format "[dbr_version] [git_hash]"
+        //
+        // TODO(cwalden): it looks like this might be wrong?
+        //  `current_version().dbr_version` doesn't contain the git hash, so I don't think need this first split.
+        dbr_version.value(0).parse::<DbrVersion>()
+    }
+
+    /// Given the relation, fetch its config from the remote data warehouse
+    /// reference: https://github.com/databricks/dbt-databricks/blob/13686739eb59566c7a90ee3c357d12fe52ec02ea/dbt/adapters/databricks/impl.py#L871
+    pub fn get_from_relation<T: fmt::Debug + DatabricksRelationConfig>(
+        &self,
+        state: &State,
+        conn: &mut dyn Connection,
+        base_relation: Arc<dyn BaseRelation>,
+    ) -> AdapterResult<T> {
+        let relation_type = base_relation.relation_type().ok_or_else(|| {
+            AdapterError::new(
+                AdapterErrorKind::Configuration,
+                format!("relation_type is required for the input relation of adapter.get_relation_config. Input relation: {}", base_relation.render_self_as_str()),
+            )
+        })?;
+
+        let database = base_relation.database_as_str()?;
+        let schema = base_relation.schema_as_str()?;
+        let identifier = base_relation.identifier_as_str()?;
+        let rendered_relation = base_relation.render_self_as_str();
+
+        // Start with common metadata
+        let mut results_builder = DatabricksRelationResultsBuilder::new()
+            .with_describe_extended(self.describe_extended(
+                &database,
+                &schema,
+                &identifier,
+                state,
+                &mut *conn,
+            )?)
+            .with_show_tblproperties(self.show_tblproperties(
+                &rendered_relation,
+                state,
+                &mut *conn,
+            )?);
+
+        // Add materialization-specific metadata
+        // https://github.com/databricks/dbt-databricks/blob/9e2566fdb56318cb7a59a4492f96c7aaa7af73b0/dbt/adapters/databricks/impl.py#L914-L1021
+        results_builder = match relation_type {
+            RelationType::MaterializedView => results_builder.with_info_schema_views(
+                self.get_view_description(&database, &schema, &identifier, state, &mut *conn)?,
+            ),
+            RelationType::View => results_builder
+                .with_info_schema_views(self.get_view_description(
+                    &database,
+                    &schema,
+                    &identifier,
+                    state,
+                    &mut *conn,
+                )?)
+                .with_info_schema_tags(self.fetch_tags(
+                    &database,
+                    &schema,
+                    &identifier,
+                    state,
+                    &mut *conn,
+                )?)
+                .with_info_schema_column_tags(self.fetch_column_tags(
+                    &database,
+                    &schema,
+                    &identifier,
+                    state,
+                    &mut *conn,
+                )?),
+            RelationType::StreamingTable => results_builder,
+            RelationType::Table => {
+                let is_hive_metastore =
+                    base_relation.is_hive_metastore().try_into().map_err(|_| {
+                        AdapterError::new(
+                            AdapterErrorKind::Configuration,
+                            format!(
+                                "Unable to decode is_hive_metastore config for {}",
+                                base_relation.render_self_as_str()
+                            ),
+                        )
+                    })?;
+                if is_hive_metastore {
+                    return Err(AdapterError::new(
+                        AdapterErrorKind::NotSupported,
+                        format!(
+                            "Incremental application of constraints and column masks is not supported for Hive Metastore! Relation: `{database}`.`{schema}`.`{identifier}`"
+                        ),
+                    ));
+                }
+                results_builder
+                    .with_info_schema_tags(self.fetch_tags(
+                        &database,
+                        &schema,
+                        &identifier,
+                        state,
+                        &mut *conn,
+                    )?)
+                    .with_info_schema_column_tags(self.fetch_column_tags(
+                        &database,
+                        &schema,
+                        &identifier,
+                        state,
+                        &mut *conn,
+                    )?)
+                    .with_non_null_constraints(self.fetch_non_null_constraint_columns(
+                        &database,
+                        &schema,
+                        &identifier,
+                        state,
+                        &mut *conn,
+                    )?)
+                    .with_primary_key_constraints(self.fetch_primary_key_constraints(
+                        &database,
+                        &schema,
+                        &identifier,
+                        state,
+                        &mut *conn,
+                    )?)
+                    .with_foreign_key_constraints(self.fetch_foreign_key_constraints(
+                        &database,
+                        &schema,
+                        &identifier,
+                        state,
+                        &mut *conn,
+                    )?)
+                    .with_column_masks(self.fetch_column_masks(
+                        &database,
+                        &schema,
+                        &identifier,
+                        state,
+                        &mut *conn,
+                    )?)
+            }
+            _ => unreachable!(),
+        };
+        let result = from_results::<T>(results_builder.build())?;
+        let tblproperties = result.get_config("tblproperties");
+        if let Some(DatabricksComponentConfig::TblProperties(_tblproperties)) = tblproperties {
+            // https://github.com/databricks/dbt-databricks/blob/13686739eb59566c7a90ee3c357d12fe52ec02ea/dbt/adapters/databricks/impl.py#L908
+            // todo: Implement polling for DLT pipeline status
+            // we don't have the dbx client here
+            // we might need to query internal delta system tables or expose something via ADBC
+        }
+        Ok(result)
+    }
+
+    // convenience for executing SQL
+    fn execute_sql_with_context(
+        &self,
+        sql: &str,
+        state: &State,
+        desc: &str,
+        conn: &mut dyn Connection,
+    ) -> AdapterResult<(AdapterResponse, AgateTable)> {
+        let ctx = query_ctx_from_state(state)?.with_desc(desc);
+        self.adapter.execute(
+            Some(state),
+            conn,
+            &ctx,
+            sql,
+            false, // auto_begin
+            true,  // fetch
+            None,  // limit
+            None,  // options
+        )
+    }
+
+    // https://github.com/dbt-labs/dbt-adapters/blob/6f2aae13e39c5df1c93e5d514678914142d71768/dbt-spark/src/dbt/include/spark/macros/adapters.sql#L314
+    fn describe_extended(
+        &self,
+        database: &str,
+        schema: &str,
+        identifier: &str,
+        state: &State,
+        conn: &mut dyn Connection,
+    ) -> AdapterResult<AgateTable> {
+        let sql = format!("DESCRIBE EXTENDED `{database}`.`{schema}`.`{identifier}`;");
+        let (_, result) =
+            self.execute_sql_with_context(&sql, state, "Describe table extended", conn)?;
+        Ok(result)
+    }
+
+    // https://github.com/databricks/dbt-databricks/blob/9e2566fdb56318cb7a59a4492f96c7aaa7af73b0/dbt/include/databricks/macros/adapters/metadata.sql#L78
+    fn get_view_description(
+        &self,
+        database: &str,
+        schema: &str,
+        identifier: &str,
+        state: &State,
+        conn: &mut dyn Connection,
+    ) -> AdapterResult<AgateTable> {
+        let sql = format!(
+            "SELECT * 
+            FROM `SYSTEM`.`INFORMATION_SCHEMA`.`VIEWS`
+            WHERE TABLE_CATALOG = '{}'
+                AND TABLE_SCHEMA = '{}'
+                AND TABLE_NAME = '{}';",
+            database.to_lowercase(),
+            schema.to_lowercase(),
+            identifier.to_lowercase()
+        );
+        let (_, result) = self.execute_sql_with_context(&sql, state, "Query for view", conn)?;
+        Ok(result)
+    }
+
+    // https://github.com/dbt-labs/dbt-adapters/blob/6f2aae13e39c5df1c93e5d514678914142d71768/dbt-spark/src/dbt/include/spark/macros/adapters.sql#L127
+    fn show_tblproperties(
+        &self,
+        relation_str: &str,
+        state: &State,
+        conn: &mut dyn Connection,
+    ) -> AdapterResult<AgateTable> {
+        let sql = format!("SHOW TBLPROPERTIES {relation_str}");
+        let (_, result) =
+            self.execute_sql_with_context(&sql, state, "Show table properties", conn)?;
+        Ok(result)
+    }
+
+    // https://github.com/databricks/dbt-databricks/blob/9e2566fdb56318cb7a59a4492f96c7aaa7af73b0/dbt/include/databricks/macros/relations/components/constraints.sql#L1
+    fn fetch_non_null_constraint_columns(
+        &self,
+        database: &str,
+        schema: &str,
+        identifier: &str,
+        state: &State,
+        conn: &mut dyn Connection,
+    ) -> AdapterResult<AgateTable> {
+        let sql = format!(
+            "SELECT column_name
+            FROM `{database}`.`information_schema`.`columns`
+            WHERE table_catalog = '{database}' 
+              AND table_schema = '{schema}'
+              AND table_name = '{identifier}'
+              AND is_nullable = 'NO';"
+        );
+        let (_, result) =
+            self.execute_sql_with_context(&sql, state, "Fetch non null constraint columns", conn)?;
+        Ok(result)
+    }
+
+    // https://github.com/databricks/dbt-databricks/blob/9e2566fdb56318cb7a59a4492f96c7aaa7af73b0/dbt/include/databricks/macros/relations/components/constraints.sql#L20
+    fn fetch_primary_key_constraints(
+        &self,
+        database: &str,
+        schema: &str,
+        identifier: &str,
+        state: &State,
+        conn: &mut dyn Connection,
+    ) -> AdapterResult<AgateTable> {
+        let sql = format!(
+            "SELECT kcu.constraint_name, kcu.column_name
+            FROM `{database}`.information_schema.key_column_usage kcu
+            WHERE kcu.table_catalog = '{database}' 
+                AND kcu.table_schema = '{schema}'
+                AND kcu.table_name = '{identifier}' 
+                AND kcu.constraint_name = (
+                SELECT constraint_name
+                FROM `{database}`.information_schema.table_constraints
+                WHERE table_catalog = '{database}'
+                    AND table_schema = '{schema}'
+                    AND table_name = '{identifier}' 
+                    AND constraint_type = 'PRIMARY KEY'
+                )
+            ORDER BY kcu.ordinal_position;"
+        );
+        let (_, result) =
+            self.execute_sql_with_context(&sql, state, "Fetch PK constraints", conn)?;
+        Ok(result)
+    }
+
+    // https://github.com/databricks/dbt-databricks/blob/9e2566fdb56318cb7a59a4492f96c7aaa7af73b0/dbt/include/databricks/macros/relations/components/column_mask.sql#L11
+    fn fetch_column_masks(
+        &self,
+        database: &str,
+        schema: &str,
+        identifier: &str,
+        state: &State,
+        conn: &mut dyn Connection,
+    ) -> AdapterResult<AgateTable> {
+        let sql = format!(
+            "SELECT 
+                column_name,
+                mask_name,
+                using_columns
+            FROM `system`.`information_schema`.`column_masks`
+            WHERE table_catalog = '{database}'
+                AND table_schema = '{schema}'
+                AND table_name = '{identifier}';"
+        );
+        let (_, result) = self.execute_sql_with_context(&sql, state, "Fetch column masks", conn)?;
+        Ok(result)
+    }
+
+    // https://github.com/databricks/dbt-databricks/blob/9e2566fdb56318cb7a59a4492f96c7aaa7af73b0/dbt/include/databricks/macros/relations/components/constraints.sql#L47
+    fn fetch_foreign_key_constraints(
+        &self,
+        database: &str,
+        schema: &str,
+        identifier: &str,
+        state: &State,
+        conn: &mut dyn Connection,
+    ) -> AdapterResult<AgateTable> {
+        let sql = format!(
+            "SELECT
+                kcu.constraint_name,
+                kcu.column_name AS from_column,
+                ukcu.table_catalog AS to_catalog,
+                ukcu.table_schema AS to_schema,
+                ukcu.table_name AS to_table,
+                ukcu.column_name AS to_column
+            FROM `{database}`.information_schema.key_column_usage kcu
+            JOIN `{database}`.information_schema.referential_constraints rc
+                ON kcu.constraint_name = rc.constraint_name
+            JOIN `{database}`.information_schema.key_column_usage ukcu
+                ON rc.unique_constraint_name = ukcu.constraint_name
+                AND kcu.ordinal_position = ukcu.ordinal_position
+            WHERE kcu.table_catalog = '{database}'
+                AND kcu.table_schema = '{schema}'
+                AND kcu.table_name = '{identifier}'
+                AND kcu.constraint_name IN (
+                SELECT constraint_name
+                FROM `{database}`.information_schema.table_constraints
+                WHERE table_catalog = '{database}'
+                    AND table_schema = '{schema}'
+                    AND table_name = '{identifier}'
+                    AND constraint_type = 'FOREIGN KEY'
+                )
+            ORDER BY kcu.ordinal_position;"
+        );
+        let (_, result) =
+            self.execute_sql_with_context(&sql, state, "Fetch FK constraints", conn)?;
+        Ok(result)
+    }
+
+    // https://github.com/databricks/dbt-databricks/blob/9e2566fdb56318cb7a59a4492f96c7aaa7af73b0/dbt/include/databricks/macros/relations/tags.sql#L11
+    fn fetch_tags(
+        &self,
+        database: &str,
+        schema: &str,
+        identifier: &str,
+        state: &State,
+        conn: &mut dyn Connection,
+    ) -> AdapterResult<AgateTable> {
+        let sql = format!(
+            "SELECT tag_name, tag_value
+            FROM `system`.`information_schema`.`table_tags`
+            WHERE catalog_name = '{database}' 
+                AND schema_name = '{schema}'
+                AND table_name = '{identifier}'"
+        );
+        let (_, result) = self.execute_sql_with_context(&sql, state, "Fetch tags", conn)?;
+        Ok(result)
+    }
+
+    fn fetch_column_tags(
+        &self,
+        database: &str,
+        schema: &str,
+        identifier: &str,
+        state: &State,
+        conn: &mut dyn Connection,
+    ) -> AdapterResult<AgateTable> {
+        let sql = format!(
+            "SELECT column_name, tag_name, tag_value
+            FROM `system`.`information_schema`.`column_tags`
+            WHERE catalog_name = '{database}' 
+                AND schema_name = '{schema}'
+                AND table_name = '{identifier}'"
+        );
+        let (_, result) = self.execute_sql_with_context(&sql, state, "Fetch column tags", conn)?;
+        Ok(result)
+    }
+}
+
+impl MetadataAdapter for DatabricksMetadataAdapter {
     fn adapter(&self) -> &dyn TypedBaseAdapter {
-        self
+        &self.adapter
     }
 
     fn build_schemas_from_stats_sql(
@@ -212,14 +721,14 @@ impl MetadataAdapter for DatabricksAdapter {
             }
         };
 
-        let adapter = self.clone(); // clone needed to move it into lambda
+        let adapter = self.adapter.clone(); // clone needed to move it into lambda
         let new_connection_f = Box::new(move || {
             adapter
                 .new_connection(None, None)
                 .map_err(Cancellable::Error)
         });
 
-        let adapter = self.clone();
+        let adapter = self.adapter.clone();
         let map_f = move |conn: &'_ mut dyn Connection,
                           relation: &Arc<dyn BaseRelation>|
               -> AdapterResult<Arc<Schema>> {
@@ -282,7 +791,7 @@ impl MetadataAdapter for DatabricksAdapter {
             Box::new(reduce_f),
             MAX_CONNECTIONS,
         );
-        let token = self.cancellation_token();
+        let token = self.adapter.cancellation_token();
         map_reduce.run(Arc::new(relations.to_vec()), token)
     }
 
@@ -309,14 +818,14 @@ impl MetadataAdapter for DatabricksAdapter {
 
         type Acc = BTreeMap<String, MetadataFreshness>;
 
-        let adapter = self.clone();
+        let adapter = self.adapter.clone();
         let new_connection_f = move || {
             adapter
                 .new_connection(None, None)
                 .map_err(Cancellable::Error)
         };
 
-        let adapter = self.clone();
+        let adapter = self.adapter.clone();
         let map_f = move |conn: &'_ mut dyn Connection,
                           database_and_where_clauses: &(String, Vec<String>)|
               -> AdapterResult<Arc<RecordBatch>> {
@@ -375,16 +884,16 @@ impl MetadataAdapter for DatabricksAdapter {
             MAX_CONNECTIONS,
         );
         let keys = where_clauses_by_database.into_iter().collect::<Vec<_>>();
-        let token = self.cancellation_token();
+        let token = self.adapter.cancellation_token();
         map_reduce.run(Arc::new(keys), token)
     }
 
     fn create_schemas_if_not_exists(
         &self,
-        state: &minijinja::State<'_, '_>,
+        state: &State<'_, '_>,
         catalog_schemas: &BTreeMap<String, BTreeSet<String>>,
     ) -> AdapterResult<Vec<(String, String, AdapterResult<()>)>> {
-        create_schemas_if_not_exists(self, self, state, catalog_schemas)
+        create_schemas_if_not_exists(&self.adapter, self, state, catalog_schemas)
     }
 
     fn list_relations_in_parallel_inner(
@@ -392,15 +901,14 @@ impl MetadataAdapter for DatabricksAdapter {
         db_schemas: &[CatalogAndSchema],
     ) -> AsyncAdapterResult<'_, BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>> {
         type Acc = BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>;
-        let adapter = self.clone();
+        let adapter = self.adapter.clone();
         let new_connection_f = move || {
             adapter
                 .new_connection(None, None)
                 .map_err(Cancellable::Error)
         };
 
-        let adapter = self.clone();
-
+        let adapter = self.adapter.clone();
         let map_f = move |conn: &'_ mut dyn Connection,
                           db_schema: &CatalogAndSchema|
               -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
@@ -422,7 +930,7 @@ impl MetadataAdapter for DatabricksAdapter {
             Box::new(reduce_f),
             MAX_CONNECTIONS,
         );
-        let token = self.cancellation_token();
+        let token = self.adapter.cancellation_token();
         map_reduce.run(Arc::new(db_schemas.to_vec()), token)
     }
 

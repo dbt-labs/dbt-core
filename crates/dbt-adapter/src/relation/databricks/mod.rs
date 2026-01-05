@@ -9,6 +9,7 @@ pub mod query;
 pub mod refresh;
 pub mod tags;
 pub mod tblproperties;
+pub mod typed_constraint;
 
 pub(crate) mod configs;
 pub use configs::*;

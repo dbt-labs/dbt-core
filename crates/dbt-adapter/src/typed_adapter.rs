@@ -1,7 +1,6 @@
 use crate::adapter_engine::{AdapterEngine, Options as ExecuteOptions, execute_query_with_retry};
 use crate::catalog_relation::CatalogRelation;
 use crate::column::{BigqueryColumnMode, Column, ColumnBuilder};
-use crate::databricks::adapter::DatabricksAdapter;
 use crate::errors::{
     AdapterError, AdapterErrorKind, adbc_error_to_adapter_error, arrow_error_to_adapter_error,
 };
@@ -9,6 +8,8 @@ use crate::funcs::{convert_macro_result_to_record_batch, execute_macro, none_val
 use crate::information_schema::InformationSchema;
 use crate::metadata::bigquery::BigqueryMetadataAdapter;
 use crate::metadata::bigquery::nest_column_data_types;
+use crate::metadata::databricks::DatabricksMetadataAdapter;
+use crate::metadata::databricks::version::DbrVersion;
 use crate::metadata::postgres::PostgresMetadataAdapter;
 use crate::metadata::redshift::RedshiftMetadataAdapter;
 use crate::metadata::salesforce::SalesforceMetadataAdapter;
@@ -19,6 +20,12 @@ use crate::record_batch_utils::{extract_first_value_as_i64, get_column_values};
 use crate::relation::BaseRelationConfig;
 use crate::relation::RelationObject;
 use crate::relation::bigquery::*;
+use crate::relation::databricks::base::*;
+use crate::relation::databricks::incremental::IncrementalTableConfig;
+use crate::relation::databricks::materialized_view::MaterializedViewConfig;
+use crate::relation::databricks::relation_api::get_from_relation_config;
+use crate::relation::databricks::streaming_table::StreamingTableConfig;
+use crate::relation::databricks::view::ViewConfig;
 use crate::render_constraint::render_column_constraint;
 use crate::response::{AdapterResponse, ResultObject};
 use crate::snapshots::SnapshotStrategy;
@@ -39,10 +46,10 @@ use dbt_common::behavior_flags::BehaviorFlag;
 use dbt_common::{FsResult, unexpected_fs_err};
 use dbt_frontend_common::dialect::Dialect;
 use dbt_schemas::dbt_types::RelationType;
-use dbt_schemas::schemas::common::Constraint;
 use dbt_schemas::schemas::common::ConstraintSupport;
 use dbt_schemas::schemas::common::ConstraintType;
 use dbt_schemas::schemas::common::DbtIncrementalStrategy;
+use dbt_schemas::schemas::common::{Constraint, DbtMaterialization};
 use dbt_schemas::schemas::dbt_column::{DbtColumn, DbtColumnRef};
 use dbt_schemas::schemas::manifest::{
     BigqueryClusterConfig, BigqueryPartitionConfig, PartitionConfig,
@@ -60,13 +67,24 @@ use indexmap::IndexMap;
 use minijinja;
 use minijinja::value::ValueMap;
 use minijinja::{State, Value, args};
+use once_cell::sync::Lazy;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use std::borrow::Cow;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::str::FromStr;
 use std::sync::{Arc, LazyLock};
+
+static CREDENTIAL_IN_COPY_INTO_REGEX: Lazy<Regex> = Lazy::new(|| {
+    // This is NOT the same as the Python regex used in dbt-databricks. Rust lacks lookaround.
+    // This achieves the same result for the proper structure.  See original at time of port:
+    // https://github.com/databricks/dbt-databricks/blob/66f513b960c62ee21c4c399264a41a56853f3d82/dbt/adapters/databricks/utils.py#L19
+    Regex::new(r"credential\s*(\(\s*'[\w\-]+'\s*=\s*'.*?'\s*(?:,\s*'[\w\-]+'\s*=\s*'.*?'\s*)*\))")
+        .expect("CREDENTIALS_IN_COPY_INTO_REGEX invalid")
+});
 
 /// Adapter with typed functions.
 pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
@@ -147,8 +165,38 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     }
 
     /// Redact credentials expressions from DDL statements
-    fn redact_credentials(&self, _sql: &str) -> AdapterResult<String> {
-        unimplemented!("Only available with Databricks adapter")
+    ///
+    /// https://github.com/databricks/dbt-databricks/blob/66f513b960c62ee21c4c399264a41a56853f3d82/dbt/adapters/databricks/impl.py#L717
+    fn redact_credentials(&self, sql: &str) -> AdapterResult<String> {
+        if self.adapter_type() != AdapterType::Databricks {
+            return Err(AdapterError::new(
+                AdapterErrorKind::NotSupported,
+                "redact_credentials is a Databricks-specific function",
+            ));
+        }
+        let Some(caps) = CREDENTIAL_IN_COPY_INTO_REGEX.captures(sql) else {
+            // WARN: Malformed input by user means credentials may leak.
+            // However, this _is_ the fallback strategy implemented in Python.
+            return Ok(sql.to_string());
+        };
+
+        // Capture the full matched credential(...) string, including the surrounding parentheses.
+        // Then extract only the inner key-value content
+        let full_parens = caps.get(1).unwrap().as_str();
+        let inner = &full_parens[1..full_parens.len() - 1];
+
+        let redacted_pairs = inner
+            .split(',')
+            .map(|pair| {
+                let key = pair.split('=').next().unwrap_or("").trim();
+                format!("{key} = '[REDACTED]'")
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let redacted_sql = sql.replacen(full_parens, &format!("({redacted_pairs})"), 1);
+
+        Ok(redacted_sql)
     }
 
     /// Create a new connection
@@ -701,16 +749,46 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         _state: &State,
         _args: &[Value],
     ) -> AdapterResult<(String, String)> {
-        Ok(("dbt".to_string(), "check_schema_exists".to_string()))
+        if self.adapter_type() == AdapterType::Databricks {
+            Ok((
+                "dbt_spark".to_string(),
+                "spark__check_schema_exists".to_string(),
+            ))
+        } else {
+            Ok(("dbt".to_string(), "check_schema_exists".to_string()))
+        }
     }
 
     /// Determine if the current Databricks connection points to a classic
     /// cluster (as opposed to a SQL warehouse).
     fn is_cluster(&self) -> AdapterResult<bool> {
-        Err(AdapterError::new(
-            AdapterErrorKind::NotSupported,
-            "is_cluster is only available for the Databricks adapter",
-        ))
+        if self.adapter_type() == AdapterType::Databricks {
+            // https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/utils.py#L94
+            let http_path = self
+                .engine()
+                .get_config()
+                .get_string("http_path")
+                .ok_or_else(|| {
+                    AdapterError::new(
+                        AdapterErrorKind::Configuration,
+                        "http_path is required to determine Databricks compute type",
+                    )
+                })?;
+
+            let normalized = http_path.trim().to_ascii_lowercase();
+            if normalized.contains("/warehouses/") {
+                return Ok(false);
+            }
+            if normalized.contains("/protocolv1/") {
+                return Ok(true);
+            }
+            Ok(false)
+        } else {
+            Err(AdapterError::new(
+                AdapterErrorKind::NotSupported,
+                "is_cluster is only available for the Databricks adapter",
+            ))
+        }
     }
 
     /// Rename relation
@@ -1307,13 +1385,28 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
 
     /// Given existing columns and columns from our model
     /// we determine which columns to update and persist docs for
-    /// This is only supported by Databricks
     fn get_persist_doc_columns(
         &self,
-        _existing_columns: Vec<Column>,
-        _model_columns: IndexMap<String, DbtColumnRef>,
+        existing_columns: Vec<Column>,
+        model_columns: IndexMap<String, DbtColumnRef>,
     ) -> AdapterResult<IndexMap<String, DbtColumnRef>> {
-        unimplemented!("Only available for Databricks Adapter")
+        if self.adapter_type() != AdapterType::Databricks {
+            return Err(AdapterError::new(
+                AdapterErrorKind::NotSupported,
+                "get_persist_doc_columns is a Databricks adapter operation",
+            ));
+        }
+        // TODO(jasonlin45): grab comment info as well - we should avoid persisting for comments that are the same for performance reasons
+        let mut result = IndexMap::new();
+        // Intersection of existing columns and model columns that have descriptions
+        for existing_col in existing_columns {
+            if let Some(model_col) = model_columns.get(existing_col.name())
+                && model_col.description.is_some()
+            {
+                result.insert(existing_col.name().to_string(), model_col.clone());
+            }
+        }
+        Ok(result)
     }
 
     /// Translate the result of `show grants` (or equivalent) to match the
@@ -2173,78 +2266,374 @@ prevent unnecessary latency for other users."#,
         }
     }
 
-    /// compare_dbr_version
+    /// https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/connections.py#L226-L227
     fn compare_dbr_version(
         &self,
-        _state: &State,
-        _conn: &mut dyn Connection,
-        _major: i64,
-        _minor: i64,
+        state: &State,
+        conn: &mut dyn Connection,
+        major: i64,
+        minor: i64,
     ) -> AdapterResult<Value> {
-        unimplemented!("only available with Databricks adapter")
+        if self.adapter_type() == AdapterType::Databricks {
+            let query_ctx =
+                query_ctx_from_state(state)?.with_desc("compare_dbr_version adapter call");
+
+            let current_version = DatabricksMetadataAdapter::get_dbr_version(
+                self.as_typed_base_adapter(),
+                &query_ctx,
+                conn,
+            )?;
+            let expected_version = DbrVersion::Full(major, minor);
+
+            let result = match current_version.cmp(&expected_version) {
+                std::cmp::Ordering::Greater => 1,
+                std::cmp::Ordering::Equal => 0,
+                std::cmp::Ordering::Less => -1,
+            };
+
+            Ok(Value::from(result))
+        } else {
+            unimplemented!("only available with Databricks adapter")
+        }
     }
 
-    /// compute_external_path
+    // https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/impl.py#L208-L209
     fn compute_external_path(
         &self,
-        _config: ModelConfig,
-        _node: &dyn InternalDbtNodeAttributes,
-        _is_incremental: bool,
+        config: ModelConfig,
+        node: &dyn InternalDbtNodeAttributes,
+        is_incremental: bool,
     ) -> AdapterResult<String> {
-        unimplemented!("only available with Databricks adapter")
+        if self.adapter_type() == AdapterType::Databricks {
+            // TODO: dbt seems to allow optional database and schema
+            // https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/impl.py#L212-L213
+            let location_root = config
+                .__warehouse_specific_config__
+                .location_root
+                .ok_or_else(|| {
+                    AdapterError::new(
+                        AdapterErrorKind::Configuration,
+                        "location_root is required for external tables.",
+                    )
+                })?;
+
+            let include_full_name_in_path = config
+                .__warehouse_specific_config__
+                .include_full_name_in_path
+                .unwrap_or_default();
+
+            // Build path using the same logic as posixpath.join
+            let path = if include_full_name_in_path {
+                format!(
+                    "{}/{}/{}/{}",
+                    location_root.trim_end_matches('/'),
+                    node.database().trim_end_matches('/'),
+                    node.schema().trim_end_matches('/'),
+                    node.name()
+                )
+            } else {
+                format!(
+                    "{}/{}/{}",
+                    location_root.trim_end_matches('/'),
+                    node.database().trim_end_matches('/'),
+                    node.name()
+                )
+            };
+
+            let path = if is_incremental {
+                format!("{path}_tmp")
+            } else {
+                path
+            };
+            Ok(path)
+        } else {
+            unimplemented!("only available with Databricks adapter")
+        }
     }
 
-    /// update_tblproperties_for_uniform_iceberg
+    /// https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/impl.py#L187-L188
+    ///
+    /// squashes featureset of DatabricksAdapter iceberg_table_properties
+    /// https://github.com/databricks/dbt-databricks/blob/53cd1a2c1fcb245ef25ecf2e41249335fd4c8e4b/dbt/adapters/databricks/impl.py#L229C9-L229C41
     fn update_tblproperties_for_uniform_iceberg(
         &self,
-        _state: &State,
-        _conn: &mut dyn Connection,
-        _config: ModelConfig,
-        _node: &InternalDbtNodeWrapper,
-        _tblproperties: &mut BTreeMap<String, Value>,
+        state: &State,
+        conn: &mut dyn Connection,
+        config: ModelConfig,
+        node: &InternalDbtNodeWrapper,
+        tblproperties: &mut BTreeMap<String, Value>,
     ) -> AdapterResult<()> {
-        unimplemented!("only available with Databricks adapter")
+        if self.adapter_type() == AdapterType::Databricks {
+            // TODO(anna): Ideally from_model_config_and_catalogs would just take in an InternalDbtNodeWrapper instead of a Value. This is blocked by a Snowflake hack in `snowflake__drop_table`.
+            let node_yml = node.as_internal_node().serialize();
+            let catalog_relation = CatalogRelation::from_model_config_and_catalogs(
+                &self.adapter_type(),
+                &Value::from_object(dbt_common::serde_utils::convert_yml_to_value_map(node_yml)),
+                load_catalogs::fetch_catalogs(),
+            )?;
+            // We only have to update tblproperties if using a UniForm Iceberg table
+            if catalog_relation.table_format == "iceberg" {
+                if self
+                    .compare_dbr_version(state, conn, 14, 3)?
+                    .as_i64()
+                    .expect("dbr_version is a number")
+                    < 0
+                {
+                    return Err(AdapterError::new(
+                        AdapterErrorKind::Configuration,
+                        "Iceberg support requires Databricks Runtime 14.3 or later.",
+                    ));
+                }
+
+                if catalog_relation.file_format != Some("delta".to_string()) {
+                    return Err(AdapterError::new(
+                        AdapterErrorKind::Configuration,
+                        "When table_format is 'iceberg', file_format must be 'delta'.",
+                    ));
+                }
+
+                let materialized = config.materialized.ok_or_else(|| {
+                    AdapterError::new(
+                        AdapterErrorKind::Configuration,
+                        "materialized is required for iceberg tables.",
+                    )
+                })?;
+
+                // TODO(versusfacit): support snapshot
+                if materialized != DbtMaterialization::Incremental
+                    && materialized != DbtMaterialization::Table
+                    && materialized != DbtMaterialization::Seed
+                {
+                    return Err(AdapterError::new(
+                        AdapterErrorKind::Configuration,
+                        "When table_format is 'iceberg', materialized must be 'incremental', 'table', or 'seed'.",
+                    ));
+                }
+
+                tblproperties
+                    .entry("delta.enableIcebergCompatV2".to_string())
+                    .or_insert_with(|| Value::from(true));
+
+                tblproperties
+                    .entry("delta.universalFormat.enabledFormats".to_string())
+                    .or_insert_with(|| Value::from("iceberg"));
+            }
+            Ok(())
+        } else {
+            unimplemented!("only available with Databricks adapter")
+        }
     }
 
-    /// is_uniform
+    /// https://github.com/databricks/dbt-databricks/blob/8cda62ee19d01e0670e3156e652841e3ffd3ed41/dbt/adapters/databricks/impl.py#L253
     fn is_uniform(
         &self,
-        _state: &State,
-        _conn: &mut dyn Connection,
-        _config: ModelConfig,
-        _node: &InternalDbtNodeWrapper,
+        state: &State,
+        conn: &mut dyn Connection,
+        config: ModelConfig,
+        node: &InternalDbtNodeWrapper,
     ) -> AdapterResult<bool> {
-        unimplemented!("only available with Databricks adapter")
+        if self.adapter_type() == AdapterType::Databricks {
+            // TODO(anna): Ideally from_model_config_and_catalogs would just take in an InternalDbtNodeWrapper instead of a Value. This is blocked by a Snowflake hack in `snowflake__drop_table`.
+            let node_yml = node.as_internal_node().serialize();
+            let catalog_relation = CatalogRelation::from_model_config_and_catalogs(
+                &self.adapter_type(),
+                &Value::from_object(dbt_common::serde_utils::convert_yml_to_value_map(node_yml)),
+                load_catalogs::fetch_catalogs(),
+            )?;
+
+            if catalog_relation.table_format != "iceberg" {
+                return Ok(false);
+            }
+
+            if self
+                .compare_dbr_version(state, conn, 14, 3)?
+                .as_i64()
+                .expect("dbr_version is a number")
+                < 0
+            {
+                return Err(AdapterError::new(
+                    AdapterErrorKind::Configuration,
+                    "Iceberg support requires Databricks Runtime 14.3 or later.",
+                ));
+            }
+
+            let materialized = config.materialized.ok_or_else(|| {
+                AdapterError::new(
+                    AdapterErrorKind::Configuration,
+                    "materialized is required for iceberg tables.",
+                )
+            })?;
+
+            // TODO(versusfacit): support snapshot
+            if materialized != DbtMaterialization::Incremental
+                && materialized != DbtMaterialization::Table
+                && materialized != DbtMaterialization::Seed
+            {
+                return Err(AdapterError::new(
+                    AdapterErrorKind::Configuration,
+                    "When table_format is 'iceberg', materialized must be 'incremental', 'table', or 'seed'.",
+                ));
+            }
+
+            let use_uniform =
+                if let Some(val) = catalog_relation.adapter_properties.get("use_uniform") {
+                    val.eq_ignore_ascii_case("true")
+                } else {
+                    false
+                };
+
+            if use_uniform && catalog_relation.catalog_type != "unity" {
+                return Err(AdapterError::new(
+                    AdapterErrorKind::Configuration,
+                    "Managed Iceberg tables are only supported in Unity Catalog. Set 'use_uniform' adapter property to true for Hive Metastore.",
+                ));
+            }
+
+            Ok(use_uniform)
+        } else {
+            unimplemented!("only available with Databricks adapter")
+        }
     }
 
-    /// get_relation_config
+    /// Given a relation, fetch its configurations from the remote data warehouse
+    /// reference: https://github.com/databricks/dbt-databricks/blob/13686739eb59566c7a90ee3c357d12fe52ec02ea/dbt/adapters/databricks/impl.py#L797
     fn get_relation_config(
         &self,
-        _state: &State,
-        _conn: &mut dyn Connection,
-        _relation: Arc<dyn BaseRelation>,
+        state: &State,
+        conn: &mut dyn Connection,
+        relation: Arc<dyn BaseRelation>,
     ) -> AdapterResult<Arc<dyn BaseRelationConfig>> {
-        unimplemented!("only available with Databricks adapter")
+        if self.adapter_type() != AdapterType::Databricks {
+            return Err(AdapterError::new(
+                AdapterErrorKind::Internal,
+                "get_relation_config is a Databricks adapter operation".to_string(),
+            ));
+        }
+        let relation_type = relation.relation_type().ok_or_else(|| {
+            AdapterError::new(
+                AdapterErrorKind::Configuration,
+                "relation_type is required for the input relation of adapter.get_relation_config",
+            )
+        })?;
+        let metadata_adapter = self.metadata_adapter().unwrap();
+        assert!(metadata_adapter.adapter().adapter_type() == AdapterType::Databricks);
+        // TODO(felipecrv): remove this downcast when the metadata code is cohesively placed
+        // in the metadata sub-module
+        // SAFETY: adapter type asserted above
+        let metadata_adapter = unsafe {
+            &*(metadata_adapter.as_ref() as *const dyn MetadataAdapter
+                as *const DatabricksMetadataAdapter)
+        };
+        let result: Arc<dyn BaseRelationConfig> = match relation_type {
+            RelationType::Table => Arc::new(
+                metadata_adapter.get_from_relation::<IncrementalTableConfig>(
+                    state,
+                    conn,
+                    relation.clone(),
+                )?,
+            ) as Arc<dyn BaseRelationConfig>,
+            RelationType::View => Arc::new(metadata_adapter.get_from_relation::<ViewConfig>(
+                state,
+                conn,
+                relation.clone(),
+            )?) as Arc<dyn BaseRelationConfig>,
+            RelationType::MaterializedView => Arc::new(
+                metadata_adapter.get_from_relation::<MaterializedViewConfig>(
+                    state,
+                    conn,
+                    relation.clone(),
+                )?,
+            ) as Arc<dyn BaseRelationConfig>,
+            RelationType::StreamingTable => {
+                Arc::new(metadata_adapter.get_from_relation::<StreamingTableConfig>(
+                    state,
+                    conn,
+                    relation.clone(),
+                )?) as Arc<dyn BaseRelationConfig>
+            }
+            _ => {
+                return Err(AdapterError::new(
+                    AdapterErrorKind::Configuration,
+                    format!("Unsupported relation type: {relation_type:?}"),
+                ));
+            }
+        };
+        Ok(result)
     }
 
-    /// get_config_from_model
-    fn get_config_from_model(
-        &self,
-        _model: &dyn InternalDbtNodeAttributes,
-    ) -> AdapterResult<Value> {
-        unimplemented!("only available with Databricks adapter")
+    /// Given a model, parse and build its configurations
+    /// reference: https://github.com/databricks/dbt-databricks/blob/13686739eb59566c7a90ee3c357d12fe52ec02ea/dbt/adapters/databricks/impl.py#L810
+    fn get_config_from_model(&self, model: &dyn InternalDbtNodeAttributes) -> AdapterResult<Value> {
+        if self.adapter_type() != AdapterType::Databricks {
+            return Err(AdapterError::new(
+                AdapterErrorKind::Internal,
+                "get_config_from_model is a Databricks adapter operation".to_string(),
+            ));
+        }
+        let result: Arc<dyn DatabricksRelationConfigBase> = match model.materialized() {
+            DbtMaterialization::Incremental => {
+                Arc::new(get_from_relation_config::<IncrementalTableConfig>(model)?)
+                    as Arc<dyn DatabricksRelationConfigBase>
+            }
+            DbtMaterialization::MaterializedView => {
+                Arc::new(get_from_relation_config::<MaterializedViewConfig>(model)?)
+                    as Arc<dyn DatabricksRelationConfigBase>
+            }
+            DbtMaterialization::StreamingTable => {
+                Arc::new(get_from_relation_config::<StreamingTableConfig>(model)?)
+                    as Arc<dyn DatabricksRelationConfigBase>
+            }
+            DbtMaterialization::View => Arc::new(get_from_relation_config::<ViewConfig>(model)?)
+                as Arc<dyn DatabricksRelationConfigBase>,
+            _ => {
+                return Err(AdapterError::new(
+                    AdapterErrorKind::Configuration,
+                    format!(
+                        "Unsupported materialization type: {:?}",
+                        model.materialized()
+                    ),
+                ));
+            }
+        };
+        let result = DatabricksRelationConfigBaseObject::new(result);
+        Ok(Value::from_object(result))
     }
 
     fn get_column_tags_from_model(
         &self,
-        _model: &dyn InternalDbtNodeAttributes,
+        model: &dyn InternalDbtNodeAttributes,
     ) -> AdapterResult<Value> {
-        unimplemented!("only available with Databricks adapter")
+        use crate::relation::databricks::base::DatabricksComponentProcessor;
+        use crate::relation::databricks::column_tags::{ColumnTagsConfig, ColumnTagsProcessor};
+
+        if self.adapter_type() != AdapterType::Databricks {
+            return Err(AdapterError::new(
+                AdapterErrorKind::Internal,
+                "get_column_tags_from_model is a Databricks adapter operation".to_string(),
+            ));
+        }
+
+        let processor = ColumnTagsProcessor;
+        if let Some(DatabricksComponentConfig::ColumnTags(column_tags)) =
+            processor.from_relation_config(model)?
+        {
+            let value = Value::from_serialize(&column_tags);
+            return Ok(value);
+        }
+
+        Ok(Value::from_serialize(
+            ColumnTagsConfig::new(BTreeMap::new()),
+        ))
     }
 
-    /// clean_sql
-    fn clean_sql(&self, _args: &str) -> AdapterResult<String> {
-        unimplemented!("only available with Databricks adapter")
+    /// https://github.com/databricks/dbt-databricks/blob/4d82bd225df81296165b540d34ad5be43b45e44a/dbt/adapters/databricks/impl.py#L831
+    /// TODO: implement if necessary, currently its noop
+    fn clean_sql(&self, sql: &str) -> AdapterResult<String> {
+        debug_assert!(
+            self.adapter_type() == AdapterType::Databricks,
+            "clean_sql is a Databricks-specific adapter operation"
+        );
+        Ok(sql.to_string())
     }
 
     /// relation_max_name_length
@@ -2424,12 +2813,14 @@ prevent unnecessary latency for other users."#,
         Ok(())
     }
 
-    /// generate_unique_temporary_table_suffix
+    // https://github.com/dbt-labs/dbt-adapters/blob/4dc395b42dae78e895adf9c66ad6811534e879a6/dbt-athena/src/dbt/adapters/athena/impl.py#L445
     fn generate_unique_temporary_table_suffix(
         &self,
-        _suffix_initial: Option<String>,
+        suffix_initial: Option<String>,
     ) -> AdapterResult<String> {
-        unimplemented!("not only available for this adapter")
+        let suffix_initial = suffix_initial.as_deref().unwrap_or("__dbt_tmp");
+        let uuid_str = Uuid::new_v4().to_string().replace('-', "_");
+        Ok(format!("{suffix_initial}_{uuid_str}"))
     }
 
     /// Check the hard_deletes config enum, and the legacy
@@ -2523,7 +2914,7 @@ impl AdapterTyping for ConcreteAdapter {
                 Box::new(BigqueryMetadataAdapter::new(engine)) as Box<dyn MetadataAdapter>
             }
             AdapterType::Databricks => {
-                Box::new(DatabricksAdapter::new(engine)) as Box<dyn MetadataAdapter>
+                Box::new(DatabricksMetadataAdapter::new(engine)) as Box<dyn MetadataAdapter>
             }
             AdapterType::Redshift => {
                 Box::new(RedshiftMetadataAdapter::new(engine)) as Box<dyn MetadataAdapter>

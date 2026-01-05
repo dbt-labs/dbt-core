@@ -5,8 +5,8 @@
 //!
 //! Reference: https://github.com/databricks/dbt-databricks/blob/e7099a2c75a92fa5240989b19d246a0ca8a313ef/dbt/adapters/databricks/relation_configs/constraints.py
 
-use crate::databricks::constraints::TypedConstraint;
 use crate::relation::databricks::base::*;
+use crate::relation::databricks::typed_constraint::TypedConstraint;
 
 use crate::{
     AdapterResult,
@@ -230,7 +230,7 @@ impl DatabricksComponentProcessor for ConstraintsProcessor {
 
         // Use our parse_constraints function to handle both column and model constraints
         let (not_null_columns, other_constraints) =
-            crate::databricks::constraints::parse_constraints(columns, model_constraints)
+            super::typed_constraint::parse_constraints(columns, model_constraints)
                 .map_err(|e| AdapterError::new(AdapterErrorKind::Configuration, e))?;
 
         let constraints_set: BTreeSet<_> = other_constraints.into_iter().collect();
@@ -395,7 +395,7 @@ struct FkData {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::databricks::constraints::TypedConstraint;
+    use crate::relation::databricks::typed_constraint::TypedConstraint;
     use crate::relation::{ComponentConfig, RelationChangeSet};
     use arrow::array::{RecordBatch, StringArray};
     use arrow::csv::ReaderBuilder;
@@ -833,7 +833,7 @@ fk_composite,parent_type,main,default,parents,type
 
     #[test]
     fn test_parse_constraints_function() {
-        use crate::databricks::constraints::parse_constraints;
+        use crate::relation::databricks::typed_constraint::parse_constraints;
 
         let columns = vec![Arc::new(DbtColumn {
             name: "id".to_string(),
@@ -927,7 +927,7 @@ fk_composite,parent_type,main,default,parents,type
 
     #[test]
     fn test_constraint_normalization_and_diff() {
-        use crate::databricks::constraints::TypedConstraint;
+        use crate::relation::databricks::typed_constraint::TypedConstraint;
         use std::collections::BTreeSet;
 
         // Test that normalization works correctly during diff calculation

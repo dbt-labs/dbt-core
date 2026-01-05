@@ -9,7 +9,7 @@ use dbt_xdbc::{Connection, QueryCtx};
 use minijinja::State;
 
 use crate::TypedBaseAdapter;
-use crate::databricks::describe_table::DatabricksTableMetadata;
+use crate::metadata::databricks::describe_table::DatabricksTableMetadata;
 use crate::metadata::{snowflake, try_canonicalize_bool_column_field};
 use crate::record_batch_utils::get_column_values;
 use crate::relation::bigquery::BigqueryRelation;

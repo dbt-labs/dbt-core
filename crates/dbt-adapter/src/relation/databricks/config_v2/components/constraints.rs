@@ -5,11 +5,11 @@
 //!
 //! Reference: https://github.com/databricks/dbt-databricks/blob/e7099a2c75a92fa5240989b19d246a0ca8a313ef/dbt/adapters/databricks/relation_configs/constraints.py
 
-use crate::databricks::constraints::TypedConstraint;
 use crate::relation::config_v2::{ComponentConfig, ComponentConfigLoader};
 use crate::relation::databricks::config_v2::{
     DatabricksRelationMetadata, DatabricksRelationMetadataKey,
 };
+use crate::relation::databricks::typed_constraint::TypedConstraint;
 
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use indexmap::{IndexMap, IndexSet};
@@ -286,7 +286,10 @@ impl Constraints {
 
         // Use our parse_constraints function to handle both column and model constraints
         let Ok((not_null_columns, other_constraints)) =
-            crate::databricks::constraints::parse_constraints(columns, model_constraints)
+            crate::relation::databricks::typed_constraint::parse_constraints(
+                columns,
+                model_constraints,
+            )
         else {
             return Self::default();
         };
@@ -423,9 +426,9 @@ struct FkData {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::databricks::constraints::TypedConstraint;
     use crate::relation::config_v2::ComponentConfig;
     use crate::relation::databricks::config_v2::test_helpers;
+    use crate::relation::databricks::typed_constraint::TypedConstraint;
     use arrow::array::{RecordBatch, StringArray};
     use arrow::csv::ReaderBuilder;
     use arrow_schema::{DataType, Field, Schema};

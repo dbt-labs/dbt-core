@@ -1,5 +1,5 @@
 use crate::AdapterResult;
-use crate::databricks::schemas::DatabricksDescribeTableExtended;
+use crate::metadata::databricks::schemas::DatabricksDescribeTableExtended;
 use crate::metadata::*;
 use crate::record_batch_utils::get_column_values;
 use crate::sql_types::{TypeOps, make_arrow_field_v2};

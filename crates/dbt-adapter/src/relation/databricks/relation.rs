@@ -75,9 +75,9 @@ pub struct DatabricksRelation {
     /// Whether the relation is a delta table
     pub is_delta: bool,
     /// Constraints to be created with the table
-    pub create_constraints: Vec<crate::databricks::constraints::TypedConstraint>,
+    pub create_constraints: Vec<super::typed_constraint::TypedConstraint>,
     /// Constraints to be applied during ALTER operations
-    pub alter_constraints: Vec<crate::databricks::constraints::TypedConstraint>,
+    pub alter_constraints: Vec<super::typed_constraint::TypedConstraint>,
 }
 
 impl BaseRelationProperties for DatabricksRelation {
@@ -194,7 +194,7 @@ impl DatabricksRelation {
     }
 
     /// Add a constraint, routing to create_constraints or alter_constraints based on type
-    pub fn add_constraint(&mut self, constraint: crate::databricks::constraints::TypedConstraint) {
+    pub fn add_constraint(&mut self, constraint: super::typed_constraint::TypedConstraint) {
         use dbt_schemas::schemas::common::ConstraintType;
 
         match constraint.constraint_type() {
@@ -469,7 +469,7 @@ mod tests {
 
     #[test]
     fn test_constraint_methods() {
-        use crate::databricks::constraints::TypedConstraint;
+        use crate::relation::databricks::typed_constraint::TypedConstraint;
 
         let mut relation = DatabricksRelation::new(
             Some("test_db".to_string()),
