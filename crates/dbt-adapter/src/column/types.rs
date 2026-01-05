@@ -488,7 +488,27 @@ impl Column {
 
                 Self::make_degenerate_types_from_parsed_sqltype(adapter_type, &sql_type)
             }
-            _ => (original_sql_str.to_string(), original_sql_str.to_string()),
+            _ => {
+                let stripped = original_sql_str
+                    .strip_suffix(" not null")
+                    .or_else(|| original_sql_str.strip_suffix(" NOT NULL"))
+                    .unwrap_or(original_sql_str);
+                let was_nullable = stripped == original_sql_str;
+
+                debug_assert!(
+                    {
+                        let parsed = SqlType::parse(backend_of(adapter_type), original_sql_str);
+                        match parsed {
+                            Ok((_, nullable)) => was_nullable == nullable,
+                            Err(_) => true, // TODO(felipecrv): assert here so we discover bad inputs
+                        }
+                    },
+                    "not null specified in original_sql_str ('{}') but not as 'not null' or 'NOT NULL' suffix",
+                    original_sql_str
+                );
+
+                (stripped.to_string(), stripped.to_string())
+            }
         }
     }
 
@@ -1036,6 +1056,20 @@ impl Into<Value> for Column {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_stripping_of_not_null_constraint() {
+        let (dtype, _) =
+            Column::make_degenerate_types(AdapterType::Snowflake, "VARCHAR(255) NOT NULL");
+        assert_eq!(dtype, "VARCHAR(255)");
+
+        let (dtype, _) =
+            Column::make_degenerate_types(AdapterType::Snowflake, "NUMBER(10,2) not null");
+        assert_eq!(dtype, "NUMBER(10,2)");
+
+        let (dtype, _) = Column::make_degenerate_types(AdapterType::Snowflake, "BLAH NOT NULL");
+        assert_eq!(dtype, "BLAH");
+    }
 
     #[test]
     fn test_try_from_snowflake_raw_data_type_object() {

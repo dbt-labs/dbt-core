@@ -264,6 +264,9 @@ impl ColumnBuilder {
                 type_ops
                     .format_arrow_type_as_sql(field.data_type(), &mut type_text)
                     .unwrap();
+                if !field.is_nullable() {
+                    type_text.push_str(" not null");
+                }
                 Cow::Owned(type_text)
             }
         };
