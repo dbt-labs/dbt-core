@@ -57,7 +57,7 @@ jobs:
 
       - name: "Get Current Date"
         id: current-date
-        run: echo "date=$(date +'%m%d%Y')" >> $GITHUB_OUTPUT
+        run: echo "date=$(date +'%Y%m%d')" >> $GITHUB_OUTPUT
 
       - name: "Generate Nightly Release Version Number"
         id: nightly-release-version
