@@ -120,7 +120,7 @@ jobs:
     needs: [job-setup]
     if: ${{ !inputs.only_docker }}
 
-    uses: dbt-labs/dbt-release/.github/workflows/release-prep.yml@main
+    uses: dbt-labs/dbt-release/.github/workflows/release-prep.yml@er/quote-version
 
     with:
       version_number: ${{ inputs.version_number }}
