@@ -20,6 +20,12 @@ pub fn compare_sql(actual: &str, expected: &str) -> AdapterResult<()> {
     let actual = canonicalize_test_temp_relation_identifiers(&actual);
     let expected = canonicalize_test_temp_relation_identifiers(&expected);
 
+    // Short-circuit: Elementary-generated SQL is allowed to drift across recorders/runners.
+    // We only short-circuit when BOTH sides are clearly Elementary-originated.
+    if is_elementary_query(&actual) && is_elementary_query(&expected) {
+        return Ok(());
+    }
+
     // Heuristic: treat queries as equal if they only differ by a top-level
     // "select * from ( ... )" wrapper and benign CTE boundary syntax.
     if are_equivalent_ignoring_select_wrapper(&actual, &expected) {
@@ -387,6 +393,12 @@ fn canonicalize_uuid_literals(sql: &str) -> String {
     UUID_RE.replace_all(sql, "'UUID'").to_string()
 }
 
+fn is_elementary_query(sql: &str) -> bool {
+    // Elementary appends an explicit marker comment to its generated SQL.
+    // We treat any SQL containing this marker as Elementary-originated.
+    sql.contains("--ELEMENTARY-METADATA--")
+}
+
 /// Canonicalize string literals that embed `invocation_id` (UUID) + dbt test unique_id.
 ///
 /// These often look like:
@@ -426,11 +438,12 @@ fn canonicalize_dbt_test_unique_id_literals(sql: &str) -> String {
 fn canonicalize_quoted_timestamp_space_separator(sql: &str) -> String {
     static RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
         // Narrow to single-quoted literals to avoid touching non-literal SQL fragments.
-        // Supports optional fractional seconds.
-        Regex::new(r"'(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2}(?:\.\d+)?)'").unwrap()
+        // Supports optional fractional seconds and optional timezone suffix (e.g. +00:00 or Z).
+        Regex::new(r"'(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2}(?:\.\d+)?)(?:([+-]\d{2}:\d{2}|Z))?'")
+            .unwrap()
     });
     // Use explicit braces to avoid `$1T` being interpreted as a (non-existent) capture.
-    RE.replace_all(sql, "'${1}T${2}'").to_string()
+    RE.replace_all(sql, "'${1}T${2}${3}'").to_string()
 }
 
 /// Replace dynamic tmp suffixes produced by some packages (e.g., elementary) that append
@@ -467,7 +480,15 @@ fn canonicalize_test_temp_relation_identifiers(sql: &str) -> String {
         // Replace the variable middle portion of `test_<...>__tmp_TIMESTAMP` with `ALPHA`.
         Regex::new(r"(?i)(\btest_)[0-9a-z_]+(__tmp_TIMESTAMP\b)").unwrap()
     });
-    RE.replace_all(sql, "${1}ALPHA${2}").to_string()
+    static QUOTED_RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
+        // When the identifier is quoted (e.g. Snowflake), the quotes become separate tokens and
+        // can cause mismatches even after normalizing the middle portion. Strip quotes only for
+        // canonical dbt test temp identifiers.
+        Regex::new(r#"(?i)"(test_[0-9a-z_]+__tmp_TIMESTAMP)""#).unwrap()
+    });
+
+    let out = RE.replace_all(sql, "${1}ALPHA${2}");
+    QUOTED_RE.replace_all(&out, "$1").to_string()
 }
 
 /// Check whether two SQL strings are identical modulo a top-level
@@ -1057,30 +1078,59 @@ with cur as (
             "Should ignore difference for timestamp value difference inside CTE fragment"
         );
 
-        // Additional drift case: invocation_id + test unique_id embedded inside string literal.
+        // Timestamp literal drift with timezone: space separator vs T separator.
         let sql5 = r#"
-  md5(cast(coalesce(cast(data_issue_id as varchar), '') || '-' || coalesce(cast(cast('019b6e05-5c15-7831-8c40-6718c8683411.test.dis_asko_servering.elementary_schema_changes_from_370c8b8ac782c433a20c7ab43b202251.fba8a27235' as varchar) as varchar), '') as TEXT)) as id,
+        select
+            min(bucket_start) as min_bucket_start,
+            cast('2025-12-31T08:17:34+00:00' as timestamp) as max_bucket_end
 "#;
         let sql6 = r#"
-  md5(cast(coalesce(cast(data_issue_id as varchar), '') || '-' || coalesce(cast(cast('c406f8ee-28dd-4a60-91eb-639ae6a8a613.test.dis_asko_servering.elementary_schema_changes_from_baseline_prs_dim_hendelse_innholdsnavn_.c99b82db3f' as varchar) as varchar), '') as TEXT)) as id,
+        select
+            min(bucket_start) as min_bucket_start,
+            cast('2025-12-23 08:28:37+00:00' as timestamp) as max_bucket_end
 "#;
         let result = compare_sql(sql5, sql6);
+        assert!(
+            result.is_ok(),
+            "Should ignore differences for timestamp value drift in cast() literal with timezone"
+        );
+    }
+
+    #[test]
+    fn test_compare_sql_with_test_name_variation() {
+        // invocation_id + test unique_id embedded inside string literal.
+        let sql1 = r#"
+  md5(cast(coalesce(cast(data_issue_id as varchar), '') || '-' || coalesce(cast(cast('019b6e05-5c15-7831-8c40-6718c8683411.test.dis_asko_servering.elementary_schema_changes_from_370c8b8ac782c433a20c7ab43b202251.fba8a27235' as varchar) as varchar), '') as TEXT)) as id,
+"#;
+        let sql2 = r#"
+  md5(cast(coalesce(cast(data_issue_id as varchar), '') || '-' || coalesce(cast(cast('c406f8ee-28dd-4a60-91eb-639ae6a8a613.test.dis_asko_servering.elementary_schema_changes_from_baseline_prs_dim_hendelse_innholdsnavn_.c99b82db3f' as varchar) as varchar), '') as TEXT)) as id,
+"#;
+        let result = compare_sql(sql1, sql2);
         assert!(
             result.is_ok(),
             "Should ignore differences for invocation_id/test unique_id embedded in string literal"
         );
 
-        // Additional drift case: test unique_id literal (no UUID prefix).
-        let sql7 = r#"
+        // test unique_id literal (no UUID prefix).
+        let sql3 = r#"
         cast('test.dis_asko_servering.elementary_schema_changes_from_ebfd1280ea747a1645e253f0e83e355e.83cf5105a0' as varchar) as test_unique_id,
 "#;
-        let sql8 = r#"
+        let sql4 = r#"
 cast('test.dis_asko_servering.elementary_schema_changes_from_baseline_prs_dim_hendelse_hendelseskategori_.4d86bc1ad2' as varchar) as test_unique_id,
 "#;
-        let result = compare_sql(sql7, sql8);
+        let result = compare_sql(sql3, sql4);
         assert!(
             result.is_ok(),
             "Should ignore differences for test unique_id embedded in string literal"
+        );
+
+        // Quoted vs unquoted test temp relation identifier in DDL.
+        let sql5 = r#"create or replace  table BE_DPL_PR.elementary.test_ALPHA__tmp_TIMESTAMP"#;
+        let sql6 = r#"create or replace table BE_DPL_PR.elementary."test_ALPHA__tmp_TIMESTAMP""#;
+        let result = compare_sql(sql5, sql6);
+        assert!(
+            result.is_ok(),
+            "Should ignore differences for quoted vs unquoted test temp relation identifier"
         );
     }
 

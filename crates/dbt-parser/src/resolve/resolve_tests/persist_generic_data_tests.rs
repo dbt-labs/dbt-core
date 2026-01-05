@@ -31,7 +31,7 @@ use md5;
 use regex::Regex;
 use serde::Serialize;
 use serde_json::Value;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::hash::DefaultHasher;
 use std::hash::Hash;
 use std::hash::Hasher;
@@ -53,6 +53,7 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
         project_name: &str,
         root_project_name: &str,
         collected_generic_tests: &mut Vec<GenericTestAsset>,
+        test_name_truncations: &mut HashMap<String, String>,
         adapter_type: AdapterType,
         io_args: &IoArgs,
         original_file_path: &PathBuf,
@@ -75,6 +76,7 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
                         io_args,
                         original_file_path,
                         &mut seen_tests,
+                        test_name_truncations,
                     )?;
                     collected_generic_tests.push(test_asset);
                 }
@@ -107,6 +109,7 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
                             io_args,
                             original_file_path,
                             &mut seen_tests,
+                            test_name_truncations,
                         )?;
                         collected_generic_tests.push(test_asset);
                     }
@@ -129,6 +132,7 @@ fn persist_inner(
     io_args: &IoArgs,
     original_file_path: &PathBuf,
     seen_tests: &mut HashSet<String>,
+    test_name_truncations: &mut HashMap<String, String>,
 ) -> FsResult<GenericTestAsset> {
     // If this is not the root project, we need to pass the project name as a dependency package name
     let dependecy_package_name = if project_name != root_project_name {
@@ -162,6 +166,7 @@ fn persist_inner(
         &kwargs,
         namespace.as_ref(),
         &jinja_set_vars,
+        test_name_truncations,
     );
     let path = PathBuf::from(DBT_GENERIC_TESTS_DIR_NAME).join(format!("{full_name}.sql"));
     let test_file = io_args.out_dir.join(&path);
@@ -627,6 +632,7 @@ fn generate_test_name(
     kwargs: &BTreeMap<String, Value>,
     package_name: Option<&String>,
     jinja_set_vars: &BTreeMap<String, String>,
+    test_name_truncations: &mut HashMap<String, String>,
 ) -> String {
     // If a custom test name is provided, use it directly for the display name
     if let Some(custom_test_name) = custom_test_name {
@@ -717,7 +723,14 @@ fn generate_test_name(
     // 30 identifying chars plus a 32-character hash of the full contents
     // See the function `synthesize_generic_test_name` in `dbt-core`:
     // https://github.com/dbt-labs/dbt-core/blob/9010537499980743503ed3b462eb1952be4d2b38/core/dbt/parser/generic_test_builders.py
-    maybe_truncate_test_name(&identifier_for_name, &result)
+    let truncated = maybe_truncate_test_name(&identifier_for_name, &result);
+    if truncated != result {
+        // First write wins to guard against churn if called multiple times.
+        test_name_truncations
+            .entry(truncated.clone())
+            .or_insert_with(|| result.clone());
+    }
+    truncated
 }
 
 /// Represents test configuration for a model version
@@ -1352,6 +1365,7 @@ mod tests {
         jinja_set_vars.insert(set_var_name.to_string(), original_sql.to_string());
 
         // Generate the test name
+        let mut test_name_truncations = HashMap::new();
         let test_name = generate_test_name(
             test_macro_name,
             None,
@@ -1360,6 +1374,7 @@ mod tests {
             &kwargs,
             None,
             &jinja_set_vars,
+            &mut test_name_truncations,
         );
 
         // Verify that the test name does not contain the variable name
@@ -1375,6 +1390,7 @@ mod tests {
 
         // Also test with an empty set vars map to ensure it still works
         let empty_set_vars = BTreeMap::new();
+        let mut test_name_truncations = HashMap::new();
         let test_name_no_vars = generate_test_name(
             test_macro_name,
             None,
@@ -1383,6 +1399,7 @@ mod tests {
             &kwargs,
             None,
             &empty_set_vars,
+            &mut test_name_truncations,
         );
 
         // set vars part of the name is truncated from the final test name due to length
@@ -1413,6 +1430,7 @@ mod tests {
             &BTreeMap::new(),
             None,
             &BTreeMap::new(),
+            &mut HashMap::new(),
         );
 
         assert_eq!(
@@ -1461,6 +1479,7 @@ mod tests {
         let jinja_set_vars = BTreeMap::new();
 
         // Act
+        let mut test_name_truncations = HashMap::new();
         let generated = generate_test_name(
             test_macro_name,
             None,
@@ -1469,6 +1488,7 @@ mod tests {
             &kwargs,
             None,
             &jinja_set_vars,
+            &mut test_name_truncations,
         );
 
         // Assert: ensure config fields are excluded and only combination_of_columns contribute
@@ -1539,6 +1559,7 @@ mod tests {
             Value::String("get_where_subquery(ref('main'))".to_string()),
         );
 
+        let mut test_name_truncations = HashMap::new();
         let test_name_no_vars = generate_test_name(
             "test_macro_name",
             None,
@@ -1547,6 +1568,7 @@ mod tests {
             &kwargs,
             None,
             &BTreeMap::new(),
+            &mut test_name_truncations,
         );
 
         // The generated test name will initially be over 64 characters and have the

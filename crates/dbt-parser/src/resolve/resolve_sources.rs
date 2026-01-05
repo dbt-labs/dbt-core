@@ -42,6 +42,7 @@ pub fn resolve_sources(
     base_ctx: &BTreeMap<String, MinijinjaValue>,
     jinja_env: &JinjaEnv,
     collected_generic_tests: &mut Vec<GenericTestAsset>,
+    test_name_truncations: &mut HashMap<String, String>,
     node_resolver: &mut NodeResolver,
 ) -> FsResult<(
     HashMap<String, Arc<DbtSource>>,
@@ -347,6 +348,7 @@ pub fn resolve_sources(
                     package_name,
                     root_package_name,
                     collected_generic_tests,
+                    test_name_truncations,
                     adapter_type,
                     io_args,
                     &mpe.relative_path,

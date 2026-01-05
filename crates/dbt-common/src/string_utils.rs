@@ -73,6 +73,34 @@ pub fn maybe_truncate_test_name(test_identifier: &str, full_name: &str) -> Strin
     }
 }
 
+/// Returns true if `identifier` looks like a canonical dbt test temp identifier.
+///
+/// This is intentionally conservative and used by multiple crates:
+/// - replay/alpha-conversion logic (record vs replay temp relation names)
+/// - SQL diff canonicalization (ignoring drift for test temp relations)
+///
+/// Behavior:
+/// - trims whitespace
+/// - strips a single leading/trailing quote character if present (`"`, `'`, or `` ` ``)
+/// - case-insensitive check for `test_` prefix
+pub fn is_test_temp_identifier(identifier: &str) -> bool {
+    let identifier = identifier.trim();
+
+    // Strip one layer of quoting (quotes may be present depending on adapter / quoting policy).
+    let identifier = identifier
+        .strip_prefix('"')
+        .or_else(|| identifier.strip_prefix('\''))
+        .or_else(|| identifier.strip_prefix('`'))
+        .unwrap_or(identifier);
+    let identifier = identifier
+        .strip_suffix('"')
+        .or_else(|| identifier.strip_suffix('\''))
+        .or_else(|| identifier.strip_suffix('`'))
+        .unwrap_or(identifier);
+
+    identifier.to_ascii_lowercase().starts_with("test_")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

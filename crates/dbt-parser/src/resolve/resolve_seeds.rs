@@ -45,6 +45,7 @@ pub fn resolve_seeds(
     jinja_env: &JinjaEnv,
     base_ctx: &BTreeMap<String, MinijinjaValue>,
     collected_generic_tests: &mut Vec<GenericTestAsset>,
+    test_name_truncations: &mut HashMap<String, String>,
     node_resolver: &mut NodeResolver,
 ) -> FsResult<(HashMap<String, Arc<DbtSeed>>, HashMap<String, Arc<DbtSeed>>)> {
     let mut seeds: HashMap<String, Arc<DbtSeed>> = HashMap::new();
@@ -302,6 +303,7 @@ pub fn resolve_seeds(
                     package_name,
                     &root_project.name,
                     collected_generic_tests,
+                    test_name_truncations,
                     adapter_type,
                     io_args,
                     patch_path.as_ref().unwrap_or(&path),

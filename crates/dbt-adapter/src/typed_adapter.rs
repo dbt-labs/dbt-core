@@ -2948,6 +2948,10 @@ impl fmt::Debug for ConcreteAdapter {
 ///
 /// NOTE: this is a growing interface that is currently growing.
 pub trait ReplayAdapter: TypedBaseAdapter {
+    /// Seed a mapping from a truncated/hashed generic test name back to the original pre-hash
+    /// full test name. Default implementation is a no-op.
+    fn record_test_name_truncation(&self, _truncated_name: &str, _full_name: &str) {}
+
     fn replay_use_warehouse(
         &self,
         conn: &'_ mut dyn Connection,

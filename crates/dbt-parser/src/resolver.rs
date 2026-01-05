@@ -185,6 +185,7 @@ pub async fn resolve(
     let package_waves = utils::prepare_package_dependency_levels(dbt_state.clone());
 
     let mut semantic_layer_spec_is_legacy = false;
+    let mut test_name_truncations: HashMap<String, String> = HashMap::new();
 
     // Use sequential processing if num_threads is 1, otherwise use parallel processing
     if arg.num_threads == Some(1) {
@@ -193,6 +194,7 @@ pub async fn resolve(
             resolved_disabled_nodes,
             resolved_collector,
             resolved_semantic_layer_spec_is_legacy,
+            resolved_test_name_truncations,
         ) = resolve_packages_sequentially(
             package_waves,
             arg,
@@ -214,6 +216,7 @@ pub async fn resolve(
             .rendering_results
             .extend(resolved_collector.rendering_results);
         semantic_layer_spec_is_legacy |= resolved_semantic_layer_spec_is_legacy;
+        test_name_truncations.extend(resolved_test_name_truncations);
     } else {
         // Parallel processing (original implementation)
         let (
@@ -221,6 +224,7 @@ pub async fn resolve(
             resolved_disabled_nodes,
             resolved_collector,
             resolved_semantic_layer_spec_is_legacy,
+            resolved_test_name_truncations,
         ) = resolve_packages_parallel(
             package_waves,
             arg,
@@ -242,6 +246,7 @@ pub async fn resolve(
             .rendering_results
             .extend(resolved_collector.rendering_results);
         semantic_layer_spec_is_legacy |= resolved_semantic_layer_spec_is_legacy;
+        test_name_truncations.extend(resolved_test_name_truncations);
     }
     // Ensure that there are no duplicate relations
     check_relation_uniqueness(&nodes)?;
@@ -333,6 +338,7 @@ pub async fn resolve(
             root_project_quoting: root_project_quoting.try_into()?,
             defer_nodes: None,
             semantic_layer_spec_is_legacy,
+            test_name_truncations,
         },
         jinja_env,
     ))
@@ -439,6 +445,7 @@ pub async fn resolve_inner(
     jinja_env: Arc<JinjaEnv>,
     node_resolver: &mut NodeResolver,
     runtime_config: Arc<DbtRuntimeConfig>,
+    test_name_truncations: &mut HashMap<String, String>,
     token: &CancellationToken,
     jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
 ) -> FsResult<(Nodes, Nodes, RenderResults, NodeResolver, bool)> {
@@ -530,6 +537,7 @@ pub async fn resolve_inner(
         &base_ctx,
         &jinja_env,
         &mut collected_generic_tests,
+        test_name_truncations,
         node_resolver,
     )?;
     nodes.sources.extend(sources);
@@ -550,6 +558,7 @@ pub async fn resolve_inner(
         &jinja_env,
         &base_ctx,
         &mut collected_generic_tests,
+        test_name_truncations,
         node_resolver,
     )?;
     nodes.seeds.extend(seeds);
@@ -594,6 +603,7 @@ pub async fn resolve_inner(
         &base_ctx,
         runtime_config.clone(),
         &mut collected_generic_tests,
+        test_name_truncations,
         node_resolver,
         token,
         jinja_type_checking_event_listener_factory.clone(),
@@ -839,6 +849,7 @@ async fn resolve_package(
     RenderResults,
     NodeResolver,
     bool,
+    HashMap<String, String>,
 )> {
     let package = dbt_state
         .packages
@@ -865,6 +876,7 @@ async fn resolve_package(
         &dbt_state.cli_vars.clone(),
     ));
 
+    let mut test_name_truncations: HashMap<String, String> = HashMap::new();
     let (
         new_nodes,
         new_disabled_nodes,
@@ -882,6 +894,7 @@ async fn resolve_package(
         jinja_env.clone(),
         &mut node_resolver.clone(),
         runtime_config.clone(),
+        &mut test_name_truncations,
         token,
         jinja_type_checking_event_listener_factory.clone(),
     )
@@ -896,6 +909,7 @@ async fn resolve_package(
         rendering_results,
         updated_node_resolver,
         semantic_layer_spec_is_legacy,
+        test_name_truncations,
     ))
 }
 
@@ -914,13 +928,14 @@ async fn resolve_packages_sequentially(
     all_runtime_configs: &mut BTreeMap<String, Arc<DbtRuntimeConfig>>,
     token: &CancellationToken,
     jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
-) -> FsResult<(Nodes, Nodes, RenderResults, bool)> {
+) -> FsResult<(Nodes, Nodes, RenderResults, bool, HashMap<String, String>)> {
     let mut nodes = Nodes::default();
     let mut disabled_nodes = Nodes::default();
     let mut collector = RenderResults {
         rendering_results: BTreeMap::new(),
     };
     let mut semantic_layer_spec_is_legacy = false;
+    let mut test_name_truncations: HashMap<String, String> = HashMap::new();
     for package_wave in package_waves {
         token.check_cancellation()?;
 
@@ -949,6 +964,7 @@ async fn resolve_packages_sequentially(
                 rendering_results,
                 updated_node_resolver,
                 resolved_semantic_layer_spec_is_legacy,
+                resolved_test_name_truncations,
             ) = result;
 
             semantic_layer_spec_is_legacy |= resolved_semantic_layer_spec_is_legacy;
@@ -961,6 +977,7 @@ async fn resolve_packages_sequentially(
             collector
                 .rendering_results
                 .extend(rendering_results.rendering_results);
+            test_name_truncations.extend(resolved_test_name_truncations);
             // Update refs and sources
             node_resolver.merge(updated_node_resolver);
         }
@@ -971,6 +988,7 @@ async fn resolve_packages_sequentially(
         disabled_nodes,
         collector,
         semantic_layer_spec_is_legacy,
+        test_name_truncations,
     ))
 }
 
@@ -989,13 +1007,14 @@ async fn resolve_packages_parallel(
     all_runtime_configs: &mut BTreeMap<String, Arc<DbtRuntimeConfig>>,
     token: &CancellationToken,
     jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
-) -> FsResult<(Nodes, Nodes, RenderResults, bool)> {
+) -> FsResult<(Nodes, Nodes, RenderResults, bool, HashMap<String, String>)> {
     let mut nodes = Nodes::default();
     let mut disabled_nodes = Nodes::default();
     let mut collector = RenderResults {
         rendering_results: BTreeMap::new(),
     };
     let mut semantic_layer_spec_is_legacy = false;
+    let mut test_name_truncations: HashMap<String, String> = HashMap::new();
     for package_wave in package_waves {
         token.check_cancellation()?;
 
@@ -1047,6 +1066,7 @@ async fn resolve_packages_parallel(
                 rendering_results,
                 updated_node_resolver,
                 resolved_semantic_layer_spec_is_legacy,
+                resolved_test_name_truncations,
             ) = match result {
                 Ok(Ok(val)) => val,
                 Ok(Err(e)) => return Err(Box::new(e)),
@@ -1062,6 +1082,7 @@ async fn resolve_packages_parallel(
             collector
                 .rendering_results
                 .extend(rendering_results.rendering_results);
+            test_name_truncations.extend(resolved_test_name_truncations);
             // This could be optimized refs and sources can all be inserted at the end instead of merging
             node_resolver.merge(updated_node_resolver);
         }
@@ -1072,5 +1093,6 @@ async fn resolve_packages_parallel(
         disabled_nodes,
         collector,
         semantic_layer_spec_is_legacy,
+        test_name_truncations,
     ))
 }

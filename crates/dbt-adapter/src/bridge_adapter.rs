@@ -10,7 +10,7 @@ use crate::query_ctx::{node_id_from_state, query_ctx_from_state};
 use crate::relation::RelationObject;
 use crate::render_constraint::render_model_constraint;
 use crate::snapshots::SnapshotStrategy;
-use crate::typed_adapter::TypedBaseAdapter;
+use crate::typed_adapter::{ReplayAdapter, TypedBaseAdapter};
 use crate::{AdapterEngine, AdapterResponse, AdapterResult, BaseAdapter};
 
 use dbt_agate::AgateTable;
@@ -251,6 +251,10 @@ impl AdapterTyping for BridgeAdapter {
 
     fn as_typed_base_adapter(&self) -> &dyn TypedBaseAdapter {
         self.typed_adapter.as_ref()
+    }
+
+    fn as_replay(&self) -> Option<&dyn ReplayAdapter> {
+        self.typed_adapter.as_replay()
     }
 
     fn column_type(&self) -> Option<Value> {

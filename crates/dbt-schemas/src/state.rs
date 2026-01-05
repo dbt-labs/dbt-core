@@ -466,6 +466,11 @@ pub struct ResolverState {
     /// Nodes that had resolution errors (e.g., unresolved refs/sources)
     pub nodes_with_resolution_errors: HashSet<String>,
     pub semantic_layer_spec_is_legacy: bool,
+    /// Mapping from truncated/hashed generic test names to their original pre-hash full names.
+    ///
+    /// For now this is populated as empty; later we can use it (e.g. in replay mode) to reconcile
+    /// naming differences between Fusion and external recordings.
+    pub test_name_truncations: HashMap<String, String>,
 }
 
 impl ResolverState {
