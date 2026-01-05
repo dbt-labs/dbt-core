@@ -2,6 +2,7 @@ pub mod color;
 pub mod constants;
 pub mod deps;
 pub mod duration;
+pub mod generic;
 pub mod invocation;
 pub mod layout;
 pub mod log_message;

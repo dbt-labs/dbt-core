@@ -4,21 +4,22 @@ use std::{
     sync::atomic::{AtomicBool, Ordering},
 };
 
+use scc::HashMap as SccHashMap;
+
 use console::Term;
 use dbt_telemetry::{
     AnyTelemetryEvent, CompiledCodeInline, DepsAddPackage, DepsAllPackagesInstalled,
-    DepsPackageInstalled, ExecutionPhase, Invocation, ListItemOutput, LogMessage, LogRecordInfo,
-    NodeEvaluated, NodeOutcome, NodeProcessed, NodeSkipReason, NodeType, PhaseExecuted,
-    ProgressMessage, QueryExecuted, SeverityNumber, ShowDataOutput, ShowResult, SpanEndInfo,
-    SpanStartInfo, SpanStatus, StatusCode, TelemetryAttributes, TelemetryOutputFlags,
-    UserLogMessage, node_processed,
+    DepsPackageInstalled, ExecutionPhase, GenericOpExecuted, GenericOpItemProcessed, Invocation,
+    ListItemOutput, LogMessage, LogRecordInfo, NodeEvaluated, NodeOutcome, NodeProcessed,
+    NodeSkipReason, NodeType, PhaseExecuted, ProgressMessage, QueryExecuted, SeverityNumber,
+    ShowDataOutput, ShowResult, SpanEndInfo, SpanStartInfo, SpanStatus, StatusCode,
+    TelemetryOutputFlags, UserLogMessage, node_processed,
 };
 
 use dbt_error::ErrorCode;
 use tracing::level_filters::LevelFilter;
 
 use crate::{
-    constants::{ANALYZING, RENDERING, RUNNING},
     io_args::{FsCommand, ShowOptions},
     logging::{LogFormat, StatEvent, TermEvent, with_suspended_progress_bars},
     tracing::{
@@ -32,8 +33,12 @@ use crate::{
                 format_package_installed_end, format_package_installed_start,
                 get_package_display_name,
             },
+            generic::{
+                capitalize_first_letter, format_generic_op_end, format_generic_op_item_end,
+                format_generic_op_item_start, format_generic_op_start,
+            },
             invocation::format_invocation_summary,
-            layout::format_delimiter,
+            layout::{format_delimiter, right_align_action},
             log_message::format_log_message,
             node::{
                 format_compiled_inline_code, format_node_evaluated_end,
@@ -198,6 +203,12 @@ pub fn should_show_progress_message(
     phase_allows || show_options.contains(&ShowOptions::All)
 }
 
+#[derive(Debug)]
+struct ProgressInfo {
+    progress_text: String,
+    is_contextual_bar: bool,
+}
+
 /// A tracing layer that handles all terminal user interface on stdout and stderr, including progress bars.
 ///
 /// As of today this is a bridge into existing logging-based setup, but eventually
@@ -215,6 +226,12 @@ pub struct TuiLayer {
     list_header_emitted: AtomicBool,
     /// Whether to group skipped tests under TuiAllProcessingNodesGroup spans
     group_skipped_tests: bool,
+    /// Maps operation_id -> (progress_text, is_spinner) for GenericOp progress bars/spinnners.
+    /// This mapping is needed because the progress bar UID is the displayed text (padded display_action),
+    /// but GenericOpItemProcessed only has operation_id. We store the mapping when the parent
+    /// GenericOpExecuted span starts, look it up for child items, and remove it when the parent ends.
+    /// TODO: move to progress bar manager when it is migrated from logging module
+    generic_op_id_to_progress: SccHashMap<String, ProgressInfo>,
     /// Whether running in NEXTEST mode (checked once at init for test purposes)
     #[cfg(debug_assertions)]
     is_nextest: bool,
@@ -240,6 +257,7 @@ impl TuiLayer {
             command,
             list_header_emitted: AtomicBool::new(false),
             group_skipped_tests: is_interactive && max_log_verbosity < LevelFilter::DEBUG,
+            generic_op_id_to_progress: SccHashMap::new(),
             is_nextest: std::env::var("NEXTEST").is_ok(),
         };
 
@@ -252,72 +270,19 @@ impl TuiLayer {
             command,
             list_header_emitted: AtomicBool::new(false),
             group_skipped_tests: is_interactive && max_log_verbosity < LevelFilter::DEBUG,
+            generic_op_bar_text: SccHashMap::new(),
         };
 
         res
     }
 }
 
-fn format_progress_item(unique_id: &str) -> String {
+fn format_unique_id_as_progress_item(unique_id: &str) -> String {
     // Split the unique_id into parts by '.' and take the first and last as the resource type and name
     let parts: Vec<&str> = unique_id.split('.').collect();
     let resource_type = parts.first().unwrap_or(&"unknown");
     let name = parts.last().unwrap_or(&"unknown");
     format!("{resource_type}:{name}")
-}
-
-fn get_progress_params(
-    attributes: &TelemetryAttributes,
-) -> Option<(&'static str, u64, Option<&str>)> {
-    // Check if this is a PhaseExecuted event
-    if let Some(phase) = attributes.downcast_ref::<PhaseExecuted>() {
-        let total = phase.node_count_total.unwrap_or_default();
-
-        return match phase.phase() {
-            ExecutionPhase::Render => Some((RENDERING, total, None)),
-            ExecutionPhase::Analyze => Some((ANALYZING, total, None)),
-            ExecutionPhase::Run => Some((RUNNING, total, None)),
-            _ => {
-                // Not one of the phase we support currently
-                None
-            }
-        };
-    }
-
-    // Check if this is a NodeEvaluated event
-    if let Some(node) = attributes.downcast_ref::<NodeEvaluated>() {
-        let phase = node.phase();
-
-        return match phase {
-            ExecutionPhase::Render => Some((RENDERING, 0, Some(node.unique_id.as_str()))),
-            ExecutionPhase::Analyze => Some((ANALYZING, 0, Some(node.unique_id.as_str()))),
-            ExecutionPhase::Run => Some((RUNNING, 0, Some(node.unique_id.as_str()))),
-            _ => {
-                // Not one of the phase we support currently
-                None
-            }
-        };
-    }
-
-    None
-}
-
-/// Get spinner UID for phases that display a spinner (no progress total)
-fn get_spinner_params(attributes: &TelemetryAttributes) -> Option<String> {
-    if let Some(phase) = attributes.downcast_ref::<PhaseExecuted>() {
-        let phase = phase.phase();
-
-        // Some phases are not handled here, so we only return for the ones we care about
-        return match phase {
-            ExecutionPhase::LoadProject
-            | ExecutionPhase::Parse
-            | ExecutionPhase::Schedule
-            | ExecutionPhase::TaskGraphBuild
-            | ExecutionPhase::Debug => get_phase_progress_text(phase),
-            _ => None,
-        };
-    }
-    None
 }
 
 impl TelemetryConsumer for TuiLayer {
@@ -365,11 +330,15 @@ impl TelemetryConsumer for TuiLayer {
             });
         }
 
-        // Handle NodeEvaluated start (only in debug mode)
-        if self.max_log_verbosity >= LevelFilter::DEBUG {
-            if let Some(ne) = span.attributes.downcast_ref::<NodeEvaluated>() {
-                self.handle_node_evaluated_start(span, ne);
-            }
+        // Handle NodeEvaluated start
+        if let Some(ne) = span.attributes.downcast_ref::<NodeEvaluated>() {
+            self.handle_node_evaluated_start(span, ne);
+            return;
+        }
+
+        if let Some(pe) = span.attributes.downcast_ref::<PhaseExecuted>() {
+            self.handle_phase_executed_start(span, pe);
+            return;
         }
 
         if let Some(ev) = span.attributes.downcast_ref::<DepsAllPackagesInstalled>() {
@@ -389,43 +358,13 @@ impl TelemetryConsumer for TuiLayer {
             return;
         }
 
-        if !self.is_interactive {
-            // Non-interactive mode does not have progress bars
+        if let Some(op) = span.attributes.downcast_ref::<GenericOpExecuted>() {
+            self.handle_generic_op_start(span, op);
             return;
         }
 
-        // Handle progress bars
-        if let Some((bar_uid, total, item)) = get_progress_params(&span.attributes) {
-            // TODO: switch to direct interface with progress bar ocntroller
-            // Create progress bar via log
-            match item {
-                None if total > 0 => log::info!(
-                    _TERM_ONLY_ = true,
-                    _TERM_EVENT_:serde = TermEvent::start_bar(bar_uid.into(), total);
-                    "Starting progress bar with uid: {bar_uid}, total: {total}"
-                ),
-                Some(item) => {
-                    let formatted_item = format_progress_item(item);
-                    log::info!(
-                        _TERM_ONLY_ = true,
-                        _TERM_EVENT_:serde = TermEvent::add_bar_context_item(
-                            bar_uid.into(),
-                            formatted_item.clone()
-                        );
-                        "Updating progress for uid: {bar_uid}, item: {formatted_item}"
-                    )
-                }
-                _ => {}
-            };
-        }
-
-        // Handle spinners for phases without progress totals
-        if let Some(ref spinner_uid) = get_spinner_params(&span.attributes) {
-            log::info!(
-                _TERM_ONLY_ = true,
-                _TERM_EVENT_:serde = TermEvent::start_spinner(spinner_uid.into());
-                "Starting spinner with uid: {spinner_uid}"
-            );
+        if let Some(item) = span.attributes.downcast_ref::<GenericOpItemProcessed>() {
+            self.handle_generic_op_item_start(span, item);
         }
     }
 
@@ -439,13 +378,18 @@ impl TelemetryConsumer for TuiLayer {
         // Handle NodeProcessed events for completed nodes
         if let Some(node_processed) = span.attributes.downcast_ref::<NodeProcessed>() {
             self.handle_node_processed(span, node_processed, data_provider);
+            return;
         }
 
-        // Handle NodeEvaluated end (only in debug mode)
-        if self.max_log_verbosity >= LevelFilter::DEBUG {
-            if let Some(ne) = span.attributes.downcast_ref::<NodeEvaluated>() {
-                self.handle_node_evaluated_end(span, ne);
-            }
+        // Handle NodeEvaluated end
+        if let Some(ne) = span.attributes.downcast_ref::<NodeEvaluated>() {
+            self.handle_node_evaluated_end(span, ne);
+            return;
+        }
+
+        if let Some(ne) = span.attributes.downcast_ref::<PhaseExecuted>() {
+            self.handle_phase_executed_end(span, ne);
+            return;
         }
 
         if let Some(ev) = span.attributes.downcast_ref::<DepsAllPackagesInstalled>() {
@@ -465,66 +409,27 @@ impl TelemetryConsumer for TuiLayer {
             return;
         }
 
+        if let Some(op) = span.attributes.downcast_ref::<GenericOpExecuted>() {
+            self.handle_generic_op_end(span, op);
+            return;
+        }
+
+        if let Some(item) = span.attributes.downcast_ref::<GenericOpItemProcessed>() {
+            self.handle_generic_op_item_end(span, item);
+            return;
+        }
+
         // Handle close of TuiAllProcessingNodesGroup in case we have pending skipped tests to emit
         // after all nodes have been processed
         if span.attributes.is::<TuiAllProcessingNodesGroup>()
             && self.show_options.contains(&ShowOptions::Completed)
         {
             emit_pending_skips(data_provider);
+            return;
         }
 
         if let Some(invocation) = span.attributes.downcast_ref::<Invocation>() {
             self.handle_invocation_end(span, invocation, data_provider);
-        }
-
-        if !self.is_interactive {
-            // Non-interactive mode does not have progress bars
-            return;
-        }
-
-        // Handle progress bars
-        if let Some((bar_uid, total, item)) = get_progress_params(&span.attributes) {
-            // TODO: switch to direct interface with progress bar controller
-            // Create progress bar via log
-            match item {
-                None if total > 0 => log::info!(
-                    _TERM_ONLY_ = true,
-                    _TERM_EVENT_:serde = TermEvent::remove_bar(bar_uid.into());
-                    "Finishing progress bar with uid: {bar_uid}, total: {total}"
-                ),
-                Some(item) => {
-                    let status = if let Some(SpanStatus {
-                        code: StatusCode::Error,
-                        ..
-                    }) = &span.status
-                    {
-                        "failed"
-                    } else {
-                        "succeeded"
-                    };
-
-                    let formatted_item = format_progress_item(item);
-                    log::info!(
-                        _TERM_ONLY_ = true,
-                        _STAT_EVENT_:serde = StatEvent::counter(status, 1),
-                        _TERM_EVENT_:serde = TermEvent::finish_bar_context_item(
-                            bar_uid.into(),
-                            formatted_item.clone()
-                        );
-                        "Finishing item: {bar_uid} on progress bar: {formatted_item}"
-                    )
-                }
-                _ => {}
-            };
-        }
-
-        // Handle spinners for phases without progress totals
-        if let Some(ref spinner_uid) = get_spinner_params(&span.attributes) {
-            log::info!(
-                _TERM_ONLY_ = true,
-                _TERM_EVENT_:serde = TermEvent::remove_spinner(spinner_uid.into());
-                "Removing spinner with uid: {spinner_uid}"
-            );
         }
     }
 
@@ -689,7 +594,120 @@ impl TuiLayer {
         }
     }
 
+    fn handle_phase_executed_start(&self, _span: &SpanStartInfo, phase: &PhaseExecuted) {
+        // Handle progress in interactive mode
+        if self.is_interactive {
+            let total = phase.node_count_total.unwrap_or_default();
+            let phase = phase.phase();
+            let Some(progress_text) = get_phase_progress_text(phase) else {
+                // Do not show progress for phases without defined progress text
+                return;
+            };
+
+            match phase {
+                ExecutionPhase::Render | ExecutionPhase::Analyze | ExecutionPhase::Run => {
+                    log::info!(
+                        _TERM_ONLY_ = true,
+                        _TERM_EVENT_:serde = TermEvent::start_bar(progress_text, total);
+                        ""
+                    )
+                }
+                ExecutionPhase::LoadProject
+                | ExecutionPhase::Clean
+                | ExecutionPhase::Parse
+                | ExecutionPhase::Schedule
+                | ExecutionPhase::TaskGraphBuild
+                | ExecutionPhase::Debug => {
+                    log::info!(
+                        _TERM_ONLY_ = true,
+                        _TERM_EVENT_:serde = TermEvent::start_spinner(progress_text);
+                        ""
+                    );
+                }
+                ExecutionPhase::Unspecified
+                | ExecutionPhase::Compare
+                | ExecutionPhase::InitAdapter
+                | ExecutionPhase::DeferHydration
+                | ExecutionPhase::NodeCacheHydration
+                | ExecutionPhase::FreshnessAnalysis
+                | ExecutionPhase::Lineage => {
+                    // Do not show progress for these phases
+                }
+            }
+        }
+    }
+
+    fn handle_phase_executed_end(&self, _span: &SpanEndInfo, phase: &PhaseExecuted) {
+        // Handle progress in interactive mode
+        if self.is_interactive {
+            let phase = phase.phase();
+            let Some(progress_text) = get_phase_progress_text(phase) else {
+                // Do not show progress for phases without defined progress text
+                return;
+            };
+
+            match phase {
+                // Close contextual progress bar for render, analyze, run phases
+                ExecutionPhase::Render | ExecutionPhase::Analyze | ExecutionPhase::Run => {
+                    log::info!(
+                        _TERM_ONLY_ = true,
+                        _TERM_EVENT_:serde = TermEvent::remove_bar(progress_text);
+                        ""
+                    );
+                }
+                // Use spinner for phases without progress total
+                ExecutionPhase::LoadProject
+                | ExecutionPhase::Clean
+                | ExecutionPhase::Parse
+                | ExecutionPhase::Schedule
+                | ExecutionPhase::TaskGraphBuild
+                | ExecutionPhase::Debug => {
+                    log::info!(
+                        _TERM_ONLY_ = true,
+                        _TERM_EVENT_:serde = TermEvent::remove_spinner(progress_text);
+                        ""
+                    );
+                }
+                ExecutionPhase::Unspecified
+                | ExecutionPhase::Compare
+                | ExecutionPhase::InitAdapter
+                | ExecutionPhase::DeferHydration
+                | ExecutionPhase::NodeCacheHydration
+                | ExecutionPhase::FreshnessAnalysis
+                | ExecutionPhase::Lineage => {
+                    // Do not show progress for these phases
+                }
+            }
+        }
+    }
+
     fn handle_node_evaluated_start(&self, _span: &SpanStartInfo, ne: &NodeEvaluated) {
+        // Handle progress in interactive mode
+        if self.is_interactive {
+            let phase = ne.phase();
+
+            if matches!(
+                phase,
+                ExecutionPhase::Render | ExecutionPhase::Analyze | ExecutionPhase::Run
+            ) && let Some(bar_text) = get_phase_progress_text(phase)
+            {
+                let formatted_item = format_unique_id_as_progress_item(ne.unique_id.as_str());
+                log::info!(
+                    _TERM_ONLY_ = true,
+                    _TERM_EVENT_:serde = TermEvent::add_bar_context_item(
+                        bar_text,
+                        formatted_item
+                    );
+                    ""
+                )
+            }
+        }
+
+        // Print line only in debug mode
+        if self.max_log_verbosity < LevelFilter::DEBUG {
+            return;
+        }
+
         let formatted = format_node_evaluated_start(ne, true);
         with_suspended_progress_bars(|| {
             io::stdout()
@@ -700,6 +718,43 @@ impl TuiLayer {
     }
 
     fn handle_node_evaluated_end(&self, span: &SpanEndInfo, ne: &NodeEvaluated) {
+        // Handle progress in interactive mode
+        if self.is_interactive {
+            let phase = ne.phase();
+
+            if matches!(
+                phase,
+                ExecutionPhase::Render | ExecutionPhase::Analyze | ExecutionPhase::Run
+            ) && let Some(bar_text) = get_phase_progress_text(ne.phase())
+            {
+                let status = if let Some(SpanStatus {
+                    code: StatusCode::Error,
+                    ..
+                }) = &span.status
+                {
+                    "failed"
+                } else {
+                    "succeeded"
+                };
+
+                let formatted_item = format_unique_id_as_progress_item(ne.unique_id.as_str());
+                log::info!(
+                    _TERM_ONLY_ = true,
+                    _STAT_EVENT_:serde = StatEvent::counter(status, 1),
+                    _TERM_EVENT_:serde = TermEvent::finish_bar_context_item(
+                        bar_text,
+                        formatted_item
+                    );
+                    ""
+                )
+            }
+        }
+
+        // Print line only in debug mode
+        if self.max_log_verbosity < LevelFilter::DEBUG {
+            return;
+        }
+
         let duration = span
             .end_time_unix_nano
             .duration_since(span.start_time_unix_nano)
@@ -1197,6 +1252,228 @@ impl TuiLayer {
         );
 
         // Print immediately to stdout
+        with_suspended_progress_bars(|| {
+            io::stdout()
+                .lock()
+                .write_all(format!("{}\n", formatted_message).as_bytes())
+                .expect("failed to write to stdout");
+        });
+    }
+
+    fn handle_generic_op_start(&self, _span: &SpanStartInfo, op: &GenericOpExecuted) {
+        // Handle progress bars in interactive mode
+        if self.is_interactive {
+            // Create action text for the progress bar or spinner
+            let progress_text =
+                right_align_action(capitalize_first_letter(op.display_action.as_str()).into());
+            let progress_info = ProgressInfo {
+                progress_text: progress_text.to_string(),
+                is_contextual_bar: op.item_count_total.is_some(),
+            };
+
+            // Save it to the global mapping for later lookups.
+            // In debug builds panic if id is not unique, but in prod just overwrite.
+            #[cfg(debug_assertions)]
+            self.generic_op_id_to_progress
+                .insert_sync(op.operation_id.clone(), progress_info)
+                .expect(
+                    "A non unique id used for two distinct & concurrent generic operation spans!",
+                );
+            #[cfg(not(debug_assertions))]
+            self.generic_op_bar_text
+                .upsert_sync(op.operation_id.clone(), progress_info);
+
+            match op.item_count_total {
+                Some(total) => {
+                    // Start a progress bar if we have a total count
+                    log::info!(
+                        _TERM_ONLY_ = true,
+                        _TERM_EVENT_:serde = TermEvent::start_bar(progress_text.to_string(), total);
+                        ""
+                    );
+                }
+                None => {
+                    // Start a spinner if we don't have a total count
+                    log::info!(
+                        _TERM_ONLY_ = true,
+                        _TERM_EVENT_:serde = TermEvent::start_spinner(progress_text.to_string());
+                        ""
+                    );
+                }
+            };
+
+            // Return, as we do not want to show both static message and progress bar in interactive mode
+            return;
+        }
+
+        // Only show if ShowOptions::Progress or All is enabled and non-interactive mode
+        if !self.show_options.contains(&ShowOptions::Progress)
+            && !self.show_options.contains(&ShowOptions::All)
+        {
+            return;
+        }
+
+        let formatted_message = format_generic_op_start(op);
+
+        with_suspended_progress_bars(|| {
+            io::stdout()
+                .lock()
+                .write_all(format!("{}\n", formatted_message).as_bytes())
+                .expect("failed to write to stdout");
+        });
+    }
+
+    fn handle_generic_op_end(&self, span: &SpanEndInfo, op: &GenericOpExecuted) {
+        // Handle progress bars in interactive mode
+        if self.is_interactive {
+            // Get the action text for the progress bar or spinner from mapping & remove it
+            let id_and_progress_text = self.generic_op_id_to_progress.remove_sync(&op.operation_id);
+
+            // In debug builds panic if id is not present, but in prod ignore missing.
+            if let Some((_, progress_info)) = id_and_progress_text {
+                if progress_info.is_contextual_bar {
+                    // Finish the progress bar
+                    log::info!(
+                        _TERM_ONLY_ = true,
+                        _TERM_EVENT_:serde = TermEvent::remove_bar(progress_info.progress_text);
+                        ""
+                    );
+                } else {
+                    // Finish the spinner
+                    log::info!(
+                        _TERM_ONLY_ = true,
+                        _TERM_EVENT_:serde = TermEvent::remove_spinner(progress_info.progress_text);
+                        ""
+                    );
+                };
+            } else {
+                #[cfg(debug_assertions)]
+                panic!("A non existing id was used to end a generic operation span!");
+            }
+
+            // Return, as we do not want to show both static message and progress bar in interactive mode
+            return;
+        }
+
+        // Only show conclusion line if ShowOptions::Completed or All is enabled and non-interactive mode
+        if !self.show_options.contains(&ShowOptions::Completed)
+            && !self.show_options.contains(&ShowOptions::All)
+        {
+            return;
+        }
+
+        // Compute duration from span start/end times
+        let duration = span
+            .end_time_unix_nano
+            .duration_since(span.start_time_unix_nano)
+            .unwrap_or_default();
+
+        // Format with shared formatter (colorize = true for TUI)
+        let formatted_message = format_generic_op_end(op, duration);
+
+        // Print conclusion line
+        with_suspended_progress_bars(|| {
+            io::stdout()
+                .lock()
+                .write_all(format!("{}\n", formatted_message).as_bytes())
+                .expect("failed to write to stdout");
+        });
+    }
+
+    fn handle_generic_op_item_start(&self, _span: &SpanStartInfo, item: &GenericOpItemProcessed) {
+        // Handle progress in interactive mode
+        if self.is_interactive {
+            self.generic_op_id_to_progress
+                .read_sync(&item.operation_id, |_, progress_info| {
+                    log::info!(
+                        _TERM_ONLY_ = true,
+                        _TERM_EVENT_:serde = TermEvent::add_bar_context_item(
+                            progress_info.progress_text.clone(),
+                            item.target.clone(),
+                        );
+                        ""
+                    )
+                });
+        }
+
+        // Only show if ShowOptions::All is enabled or DEBUG verbosity
+        if !self.show_options.contains(&ShowOptions::All)
+            && self.max_log_verbosity < LevelFilter::DEBUG
+        {
+            return;
+        }
+
+        let formatted_message = format_generic_op_item_start(item);
+
+        with_suspended_progress_bars(|| {
+            io::stdout()
+                .lock()
+                .write_all(format!("{}\n", formatted_message).as_bytes())
+                .expect("failed to write to stdout");
+        });
+    }
+
+    fn handle_generic_op_item_end(&self, span: &SpanEndInfo, item: &GenericOpItemProcessed) {
+        // Handle progress in interactive mode
+        if self.is_interactive {
+            self.generic_op_id_to_progress
+                .read_sync(&item.operation_id, |_, progress_info| match span.status {
+                    Some(SpanStatus {
+                        code: StatusCode::Error,
+                        ..
+                    }) => {
+                        log::info!(
+                            _TERM_ONLY_ = true,
+                            _STAT_EVENT_:serde = StatEvent::counter("failed", 1),
+                            _TERM_EVENT_:serde = TermEvent::finish_bar_context_item(
+                                progress_info.progress_text.clone(),
+                                item.target.clone()
+                            );
+                            ""
+                        );
+                    }
+                    Some(SpanStatus {
+                        code: StatusCode::Ok,
+                        ..
+                    }) => {
+                        log::info!(
+                            _TERM_ONLY_ = true,
+                            _STAT_EVENT_:serde = StatEvent::counter("succeeded", 1),
+                            _TERM_EVENT_:serde = TermEvent::finish_bar_context_item(
+                                progress_info.progress_text.clone(),
+                                item.target.clone()
+                            );
+                            ""
+                        );
+                    }
+                    _ => {
+                        log::info!(
+                            _TERM_ONLY_ = true,
+                            _TERM_EVENT_:serde = TermEvent::finish_bar_context_item(
+                                progress_info.progress_text.clone(),
+                                item.target.clone()
+                            );
+                            ""
+                        );
+                    }
+                });
+        }
+
+        // Only show if ShowOptions::Completed or All is enabled
+        if !self.show_options.contains(&ShowOptions::Completed)
+            && !self.show_options.contains(&ShowOptions::All)
+        {
+            return;
+        }
+
+        let duration = span
+            .end_time_unix_nano
+            .duration_since(span.start_time_unix_nano)
+            .unwrap_or_default();
+
+        let formatted_message =
+            format_generic_op_item_end(item, duration, span.status.as_ref(), true);
+
         with_suspended_progress_bars(|| {
             io::stdout()
                 .lock()

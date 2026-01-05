@@ -4,9 +4,6 @@ use dbt_telemetry::{
     get_node_outcome_detail, get_test_outcome,
 };
 
-/// Title used for compiled inline node output (matching dbt-core)
-pub const COMPILED_INLINE_NODE_TITLE: &str = "Compiled inline node is:";
-
 use super::{
     color::{BLUE, CYAN, GREEN, PLAIN, RED, YELLOW},
     constants::{MAX_SCHEMA_DISPLAY_LEN, MIN_NODE_TYPE_WIDTH, UNIT_TEST_SCHEMA_SUFFIX},
@@ -14,6 +11,9 @@ use super::{
     layout::right_align_static_action,
     phase::get_phase_action,
 };
+
+/// Title used for compiled inline node output (matching dbt-core)
+pub const COMPILED_INLINE_NODE_TITLE: &str = "Compiled inline node is:";
 
 /// Extract num_failures from test details if available
 pub fn get_num_failures(node: NodeEvent) -> Option<i32> {

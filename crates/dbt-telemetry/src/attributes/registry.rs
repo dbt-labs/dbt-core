@@ -8,9 +8,10 @@ use crate::{
     attributes::traits::ArrowSerializableTelemetryEvent,
     schemas::{
         ArtifactWritten, CallTrace, CompiledCodeInline, DepsAddPackage, DepsAllPackagesInstalled,
-        DepsPackageInstalled, Invocation, ListItemOutput, LogMessage, NodeEvaluated, NodeProcessed,
-        OnboardingScreenShown, PackageUpdate, PhaseExecuted, Process, ProgressMessage,
-        QueryExecuted, ShowDataOutput, ShowResult, Unknown, UserLogMessage,
+        DepsPackageInstalled, GenericOpExecuted, GenericOpItemProcessed, Invocation,
+        ListItemOutput, LogMessage, NodeEvaluated, NodeProcessed, OnboardingScreenShown,
+        PackageUpdate, PhaseExecuted, Process, ProgressMessage, QueryExecuted, ShowDataOutput,
+        ShowResult, Unknown, UserLogMessage,
     },
     serialize::arrow::ArrowAttributes,
 };
@@ -201,6 +202,18 @@ static PUBLIC_TELEMETRY_EVENT_REGISTRY: LazyLock<TelemetryEventTypeRegistry> = L
             arrow_deserialize_for_type::<DepsAllPackagesInstalled>,
             #[cfg(any(test, feature = "test-utils"))]
             faker_for_type::<DepsAllPackagesInstalled>,
+        );
+        registry.register(
+            GenericOpExecuted::FULL_NAME,
+            arrow_deserialize_for_type::<GenericOpExecuted>,
+            #[cfg(any(test, feature = "test-utils"))]
+            faker_for_type::<GenericOpExecuted>,
+        );
+        registry.register(
+            GenericOpItemProcessed::FULL_NAME,
+            arrow_deserialize_for_type::<GenericOpItemProcessed>,
+            #[cfg(any(test, feature = "test-utils"))]
+            faker_for_type::<GenericOpItemProcessed>,
         );
         registry.register(
             NodeEvaluated::FULL_NAME,

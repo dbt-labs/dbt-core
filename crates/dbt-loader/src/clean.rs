@@ -14,14 +14,21 @@ use dbt_common::{
     stdfs,
     tracing::{
         emit::{emit_error_log_from_fs_error, emit_info_progress_message, emit_trace_log_message},
+        event_info::store_event_attributes,
         metrics::get_exit_code_from_error_counter,
     },
 };
 use dbt_jinja_utils::{
     invocation_args::InvocationArgs, phases::load::init::initialize_load_jinja_environment,
 };
-use dbt_telemetry::ProgressMessage;
+use dbt_telemetry::{ExecutionPhase, PhaseExecuted, ProgressMessage};
 
+#[tracing::instrument(
+    skip_all,
+    fields(
+        _e = ?store_event_attributes(PhaseExecuted::start_general(ExecutionPhase::Clean)),
+    )
+)]
 pub async fn execute_clean_command(
     arg: &EvalArgs,
     files: &[String],

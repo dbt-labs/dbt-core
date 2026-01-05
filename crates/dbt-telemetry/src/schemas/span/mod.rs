@@ -2,6 +2,7 @@
 pub(crate) mod artifact;
 pub(crate) mod deps;
 pub(crate) mod dev;
+pub(crate) mod generic;
 pub(crate) mod invocation;
 pub(crate) mod node;
 pub(crate) mod onboarding;
@@ -14,6 +15,7 @@ pub(crate) mod update;
 pub use artifact::*;
 pub use deps::*;
 pub use dev::*;
+pub use generic::*;
 pub use invocation::*;
 pub use node::*;
 pub use onboarding::*;

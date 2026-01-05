@@ -86,9 +86,6 @@ pub const PARSING: &str = "   Parsing";
 // not being issued right now
 pub const SCHEDULING: &str = "Scheduling";
 //
-pub const CLEANING: &str = "  Cleaning";
-pub const FORMATTING: &str = " Formatting";
-pub const LINTING: &str = "   Linting";
 pub const DOWNLOADING: &str = " Downloading";
 pub const DOWNLOADED: &str = " Downloaded";
 pub const COMPILING: &str = " Compiling";
@@ -116,17 +113,11 @@ pub const TEST: &str = "      Test";
 
 // debug command
 pub const VALIDATING: &str = "Validating";
-pub const DEBUGGING: &str = " Debugging";
 pub const DEBUGGED: &str = "  Debugged";
-
-// done
-pub const FINISHED: &str = "  Finished";
 
 // other
 pub const PREVIEWING: &str = "Previewing";
-pub const INLINE_NODE: &str = "sql_operation.inline";
 pub const NOOP: &str = "noop";
-pub const SAMPLING: &str = "  Sampling";
 
 // cas/node read/write
 

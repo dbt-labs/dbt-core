@@ -58,6 +58,10 @@ pub mod v1 {
                     include!("gen/v1.public.events.fusion.deps.rs");
                     include!("gen/v1.public.events.fusion.deps.serde.rs");
                 }
+                pub mod generic {
+                    include!("gen/v1.public.events.fusion.generic.rs");
+                    include!("gen/v1.public.events.fusion.generic.serde.rs");
+                }
                 pub mod process {
                     include!("gen/v1.public.events.fusion.process.rs");
                     include!("gen/v1.public.events.fusion.process.serde.rs");

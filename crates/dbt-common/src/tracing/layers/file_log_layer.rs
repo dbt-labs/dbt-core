@@ -1,9 +1,10 @@
 use dbt_error::ErrorCode;
 use dbt_telemetry::{
-    CompiledCodeInline, DepsAddPackage, DepsAllPackagesInstalled, DepsPackageInstalled, Invocation,
-    ListItemOutput, LogMessage, LogRecordInfo, NodeEvaluated, NodeOutcome, NodeProcessed, NodeType,
-    PhaseExecuted, ProgressMessage, QueryExecuted, SeverityNumber, ShowDataOutput, ShowResult,
-    SpanEndInfo, SpanStartInfo, StatusCode, TelemetryOutputFlags, UserLogMessage, node_processed,
+    CompiledCodeInline, DepsAddPackage, DepsAllPackagesInstalled, DepsPackageInstalled,
+    GenericOpExecuted, GenericOpItemProcessed, Invocation, ListItemOutput, LogMessage,
+    LogRecordInfo, NodeEvaluated, NodeOutcome, NodeProcessed, NodeType, PhaseExecuted,
+    ProgressMessage, QueryExecuted, SeverityNumber, ShowDataOutput, ShowResult, SpanEndInfo,
+    SpanStartInfo, StatusCode, TelemetryOutputFlags, UserLogMessage, node_processed,
 };
 use std::{
     sync::atomic::{AtomicBool, Ordering},
@@ -22,6 +23,10 @@ use super::super::{
             format_package_installed_start,
         },
         duration::{format_timestamp_time_only, format_timestamp_utc_zulu},
+        generic::{
+            format_generic_op_end, format_generic_op_item_end, format_generic_op_item_start,
+            format_generic_op_start,
+        },
         invocation::format_invocation_summary,
         layout::format_delimiter,
         log_message::format_log_message,
@@ -150,6 +155,18 @@ impl TelemetryConsumer for FileLogLayer {
         // Handle DepsAddPackage start
         if let Some(pkg) = span.attributes.downcast_ref::<DepsAddPackage>() {
             self.handle_package_add_start(span, pkg);
+            return;
+        }
+
+        // Handle GenericOpExecuted start
+        if let Some(op) = span.attributes.downcast_ref::<GenericOpExecuted>() {
+            self.handle_generic_op_start(span, op);
+            return;
+        }
+
+        // Handle GenericOpItemProcessed start
+        if let Some(item) = span.attributes.downcast_ref::<GenericOpItemProcessed>() {
+            self.handle_generic_op_item_start(span, item);
         }
     }
 
@@ -199,6 +216,18 @@ impl TelemetryConsumer for FileLogLayer {
         // Handle DepsAddPackage end
         if let Some(pkg) = span.attributes.downcast_ref::<DepsAddPackage>() {
             self.handle_package_add_end(span, pkg);
+            return;
+        }
+
+        // Handle GenericOpExecuted end
+        if let Some(op) = span.attributes.downcast_ref::<GenericOpExecuted>() {
+            self.handle_generic_op_end(span, op);
+            return;
+        }
+
+        // Handle GenericOpItemProcessed end
+        if let Some(item) = span.attributes.downcast_ref::<GenericOpItemProcessed>() {
+            self.handle_generic_op_item_end(span, item);
         }
     }
 
@@ -534,5 +563,41 @@ impl FileLogLayer {
             span.severity_number,
             &[formatted_message],
         );
+    }
+
+    fn handle_generic_op_start(&self, span: &SpanStartInfo, op: &GenericOpExecuted) {
+        let formatted = format_generic_op_start(op);
+        self.write_log_lines(
+            span.start_time_unix_nano,
+            span.severity_number,
+            &[formatted],
+        );
+    }
+
+    fn handle_generic_op_end(&self, span: &SpanEndInfo, op: &GenericOpExecuted) {
+        let duration = span
+            .end_time_unix_nano
+            .duration_since(span.start_time_unix_nano)
+            .unwrap_or_default();
+        let formatted = format_generic_op_end(op, duration);
+        self.write_log_lines(span.end_time_unix_nano, span.severity_number, &[formatted]);
+    }
+
+    fn handle_generic_op_item_start(&self, span: &SpanStartInfo, item: &GenericOpItemProcessed) {
+        let formatted = format_generic_op_item_start(item);
+        self.write_log_lines(
+            span.start_time_unix_nano,
+            span.severity_number,
+            &[formatted],
+        );
+    }
+
+    fn handle_generic_op_item_end(&self, span: &SpanEndInfo, item: &GenericOpItemProcessed) {
+        let duration = span
+            .end_time_unix_nano
+            .duration_since(span.start_time_unix_nano)
+            .unwrap_or_default();
+        let formatted = format_generic_op_item_end(item, duration, span.status.as_ref(), false);
+        self.write_log_lines(span.end_time_unix_nano, span.severity_number, &[formatted]);
     }
 }
