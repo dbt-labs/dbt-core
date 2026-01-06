@@ -1062,8 +1062,12 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
             }),
         );
     }
-    for (_unique_id, _semantic_model) in manifest.semantic_models {
-        // TODO: insert DbtSemanticModel into node.semantic_models
+    for (unique_id, semantic_model) in manifest.semantic_models {
+        // TODO: I don't like the inconsistency of using From trait here,
+        // although it seems everything should be refactored to use that instead
+        nodes
+            .semantic_models
+            .insert(unique_id, Arc::new(semantic_model.into()));
     }
     for (_unique_id, _metric) in manifest.metrics {
         // TODO: insert DbtMetric into node.metrics

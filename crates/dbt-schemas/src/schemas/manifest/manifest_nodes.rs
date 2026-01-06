@@ -24,8 +24,8 @@ use crate::schemas::serde::{bool_or_string_bool, default_type};
 type YmlValue = dbt_serde_yaml::Value;
 
 use crate::schemas::{
-    DbtAnalysis, DbtExposure, DbtFunction, DbtModel, DbtSeed, DbtSnapshot, DbtSource, DbtTest,
-    DbtUnitTest,
+    CommonAttributes, DbtAnalysis, DbtExposure, DbtFunction, DbtModel, DbtSeed, DbtSnapshot,
+    DbtSource, DbtTest, DbtUnitTest, NodeBaseAttributes,
     common::{
         Access, DbtChecksum, DbtContract, DbtMaterialization, DbtQuoting, Expect,
         FreshnessDefinition, Given, IncludeExclude, NodeDependsOn, PersistDocsConfig,
@@ -35,7 +35,10 @@ use crate::schemas::{
         DbtMetric, DbtOperation, DbtSavedQuery, DbtSemanticModel,
         common::{DbtOwner, SourceFileMetadata, WhereFilterIntersection},
         metric::{MeasureAggregationParameters, MetricTypeParams, NonAdditiveDimension},
-        semantic_model::{NodeRelation, SemanticEntity, SemanticMeasure, SemanticModelDefaults},
+        semantic_model::{
+            DbtSemanticModelAttr, NodeRelation, SemanticEntity, SemanticMeasure,
+            SemanticModelDefaults,
+        },
     },
     nodes::{ExposureType, TestMetadata},
     project::{
@@ -1273,6 +1276,17 @@ impl From<SemanticModelConfig> for ManifestSemanticModelConfig {
     }
 }
 
+impl From<ManifestSemanticModelConfig> for SemanticModelConfig {
+    fn from(config: ManifestSemanticModelConfig) -> Self {
+        SemanticModelConfig {
+            enabled: Some(config.enabled),
+            meta: config.meta,
+            group: config.group,
+            tags: Default::default(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct ManifestSemanticModel {
@@ -1337,6 +1351,50 @@ impl From<DbtSemanticModel> for ManifestSemanticModel {
     }
 }
 
+impl From<ManifestSemanticModel> for DbtSemanticModel {
+    fn from(manifest_model: ManifestSemanticModel) -> Self {
+        DbtSemanticModel {
+            __common_attr__: CommonAttributes {
+                unique_id: manifest_model.__common_attr__.unique_id,
+                name: manifest_model.__common_attr__.name,
+                package_name: manifest_model.__common_attr__.package_name,
+                fqn: manifest_model.__common_attr__.fqn,
+                path: manifest_model.__common_attr__.path,
+                original_file_path: manifest_model.__common_attr__.original_file_path,
+                description: manifest_model.__common_attr__.description,
+                tags: manifest_model.__common_attr__.tags,
+                meta: manifest_model.__common_attr__.meta,
+                ..Default::default()
+            },
+            __base_attr__: NodeBaseAttributes {
+                depends_on: manifest_model.__base_attr__.depends_on,
+                refs: manifest_model.__base_attr__.refs,
+                ..Default::default()
+            },
+            __semantic_model_attr__: DbtSemanticModelAttr {
+                model: manifest_model.model,
+                node_relation: manifest_model.node_relation,
+                label: manifest_model.label,
+                defaults: manifest_model.defaults,
+                entities: manifest_model.entities,
+                dimensions: manifest_model.dimensions,
+                metadata: manifest_model.metadata,
+                primary_entity: manifest_model.primary_entity,
+                measures: manifest_model
+                    .measures
+                    .into_iter()
+                    .map(Into::into)
+                    .collect(),
+                created_at: manifest_model.__base_attr__.created_at,
+                unrendered_config: manifest_model.__base_attr__.unrendered_config,
+                group: manifest_model.group,
+            },
+            deprecated_config: manifest_model.config.into(),
+            __other__: manifest_model.__other__,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ManifestSemanticModelMeasure {
     pub name: String,
@@ -1354,6 +1412,23 @@ pub struct ManifestSemanticModelMeasure {
 impl From<SemanticMeasure> for ManifestSemanticModelMeasure {
     fn from(measure: SemanticMeasure) -> Self {
         Self {
+            name: measure.name,
+            agg: measure.agg,
+            description: measure.description,
+            label: measure.label,
+            create_metric: measure.create_metric,
+            expr: measure.expr,
+            agg_params: measure.agg_params,
+            non_additive_dimension: measure.non_additive_dimension,
+            agg_time_dimension: measure.agg_time_dimension,
+            config: measure.config,
+        }
+    }
+}
+
+impl From<ManifestSemanticModelMeasure> for SemanticMeasure {
+    fn from(measure: ManifestSemanticModelMeasure) -> Self {
+        SemanticMeasure {
             name: measure.name,
             agg: measure.agg,
             description: measure.description,
