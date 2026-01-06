@@ -396,7 +396,7 @@ pub trait StaticBaseRelation: fmt::Debug + Send + Sync {
         let identifier = iter.next_kwarg::<Option<String>>("identifier")?;
         let relation_type = iter.next_kwarg::<Option<Value>>("type")?;
         let custom_quoting = iter.next_kwarg::<Option<Value>>("quote_policy")?;
-        iter.finish()?;
+        let _ = iter.trailing_kwargs()?;
 
         // error is intentionally silenced
         let custom_quoting = custom_quoting

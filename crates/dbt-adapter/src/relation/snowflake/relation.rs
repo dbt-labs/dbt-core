@@ -47,12 +47,13 @@ impl StaticBaseRelation for SnowflakeRelationType {
     fn create(&self, args: &[Value]) -> Result<Value, MinijinjaError> {
         let iter = ArgsIter::new(current_function_name!(), &[], args);
         let database: Option<String> = iter.next_kwarg::<Option<String>>("database")?;
+        // Support both 'schema' and 'schema_name' for backward compatibility
         let schema: Option<String> = iter.next_kwarg::<Option<String>>("schema")?;
         let identifier: Option<String> = iter.next_kwarg::<Option<String>>("identifier")?;
         let relation_type: Option<String> = iter.next_kwarg::<Option<String>>("type")?;
         let custom_quoting: Option<Value> = iter.next_kwarg::<Option<Value>>("quote_policy")?;
         let table_format: Option<String> = iter.next_kwarg::<Option<String>>("table_format")?;
-        iter.finish()?;
+        let _ = iter.trailing_kwargs()?;
 
         let custom_quoting = custom_quoting
             .and_then(|v| DbtQuoting::deserialize(v).ok())
