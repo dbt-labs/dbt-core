@@ -9,15 +9,14 @@ pub(crate) mod test_helpers;
 use dbt_agate::AgateTable;
 use indexmap::IndexMap;
 
+// TODO: delete this and make it use RecordBatches instead
 #[derive(Debug, Eq, PartialEq, Hash)]
 pub(crate) enum DatabricksRelationMetadataKey {
-    #[expect(dead_code)]
     InfoSchemaViews,
     InfoSchemaRelationTags,
     InfoSchemaColumnTags,
     DescribeExtended,
     ShowTblProperties,
-    #[expect(dead_code)]
     ColumnMasks,
     PrimaryKeyConstraints,
     ForeignKeyConstraints,

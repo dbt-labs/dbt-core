@@ -5,6 +5,7 @@ use crate::relation::config_v2::{
 };
 use crate::relation::databricks::config_v2::DatabricksRelationMetadata;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
+use minijinja::Value;
 
 pub(crate) const TYPE_NAME: &str = "query";
 
@@ -18,6 +19,7 @@ fn new(query: &str) -> Query {
     Query {
         type_name: TYPE_NAME,
         diff_fn: diff::desired_state,
+        to_jinja_fn: |v| Value::from_serialize(v),
         value: query.trim().to_string(),
     }
 }

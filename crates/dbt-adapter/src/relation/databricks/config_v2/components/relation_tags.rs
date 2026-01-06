@@ -10,9 +10,9 @@ use dbt_schemas::schemas::DbtModel;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_serde_yaml::Value as YmlValue;
 use indexmap::IndexMap;
-use minijinja::Value;
+use minijinja::value::{Value, ValueMap};
 
-pub(crate) const TYPE_NAME: &str = "relation_tags";
+pub(crate) const TYPE_NAME: &str = "tags";
 
 // TODO(serramatutu): reuse this for `tags` and `labels` in other warehouses
 /// Component for Databricks tags
@@ -20,10 +20,18 @@ pub(crate) const TYPE_NAME: &str = "relation_tags";
 /// Holds a IndexMap of tag key and values.
 pub type RelationTags = SimpleComponentConfigImpl<IndexMap<String, String>>;
 
+fn to_jinja(v: &IndexMap<String, String>) -> Value {
+    Value::from(ValueMap::from([(
+        Value::from("set_tags"),
+        Value::from_serialize(v),
+    )]))
+}
+
 fn new(tags: IndexMap<String, String>) -> RelationTags {
     RelationTags {
         type_name: TYPE_NAME,
         diff_fn: diff::desired_state,
+        to_jinja_fn: to_jinja,
         value: tags,
     }
 }

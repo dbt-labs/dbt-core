@@ -39,8 +39,11 @@ mod tests {
                 description: "changing all of view's components except relation comment should not trigger a full refresh",
                 v1_relation_loader: std::marker::PhantomData,
                 v1_errors: vec![
+                    // v1 uses column quoting settings for comments, v2 always quotes (same as
+                    // dbt-databricks)
+                    components::column_comments::TYPE_NAME,
                     // v1 does not validate overriding databricks-reserved keys in the dbt model
-                    "tbl_properties",
+                    components::tbl_properties::TYPE_NAME,
                 ],
                 v2_relation_loader: new_loader(),
                 current_state: TestModelConfig {
@@ -113,7 +116,7 @@ mod tests {
                             components::ColumnCommentsLoader::type_name(),
                             ComponentConfigChange::Some(components::ColumnCommentsLoader::new(
                                 IndexMap::from_iter([(
-                                    "a_column".to_string(),
+                                    "`a_column`".to_string(),
                                     "new comment".to_string(),
                                 )]),
                             )),

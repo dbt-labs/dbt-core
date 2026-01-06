@@ -195,16 +195,6 @@ pub(crate) struct TestCase<T: rc_v1::DatabricksRelationConfig> {
     pub requires_full_refresh: bool,
 }
 
-fn get_v1_component_name(v2_name: &str) -> &str {
-    match v2_name {
-        "relation_comment" => "comment",
-        "relation_tags" => "tags",
-        "partition_by" => "partitioned_by",
-        "tbl_properties" => "tblproperties",
-        _ => v2_name,
-    }
-}
-
 fn eq_or_err<T: Eq + std::fmt::Debug>(a: T, b: T) -> Option<String> {
     if a != b {
         Some(format!("v1 != v2, (v1={:?}, v2={:?})", a, b))
@@ -219,7 +209,10 @@ fn components_eq_v1_v2(
     v2: &dyn ComponentConfig,
 ) -> Option<String> {
     match (v1, v2.type_name()) {
-        (rc_v1::base::DatabricksComponentConfig::ColumnComments(v1), "column_comments") => {
+        (
+            rc_v1::base::DatabricksComponentConfig::ColumnComments(v1),
+            components::column_comments::TYPE_NAME,
+        ) => {
             let v2 = v2
                 .as_any()
                 .downcast_ref::<components::ColumnComments>()
@@ -233,7 +226,10 @@ fn components_eq_v1_v2(
 
             eq_or_err(v1_comments, v2_comments)
         }
-        (rc_v1::base::DatabricksComponentConfig::ColumnTags(v1), "column_tags") => {
+        (
+            rc_v1::base::DatabricksComponentConfig::ColumnTags(v1),
+            components::column_tags::TYPE_NAME,
+        ) => {
             let v2 = v2
                 .as_any()
                 .downcast_ref::<components::ColumnTags>()
@@ -257,14 +253,20 @@ fn components_eq_v1_v2(
 
             eq_or_err(v1_tags, v2_tags)
         }
-        (rc_v1::base::DatabricksComponentConfig::Comment(v1), "relation_comment") => {
+        (
+            rc_v1::base::DatabricksComponentConfig::Comment(v1),
+            components::relation_comment::TYPE_NAME,
+        ) => {
             let v2 = v2
                 .as_any()
                 .downcast_ref::<components::RelationComment>()
                 .unwrap();
             eq_or_err(&v1.comment, &v2.value)
         }
-        (rc_v1::base::DatabricksComponentConfig::Constraints(v1), "constraints") => {
+        (
+            rc_v1::base::DatabricksComponentConfig::Constraints(v1),
+            components::constraints::TYPE_NAME,
+        ) => {
             let v2 = v2
                 .as_any()
                 .downcast_ref::<components::Constraints>()
@@ -281,23 +283,29 @@ fn components_eq_v1_v2(
                 .or_else(|| eq_or_err(to_vec(&v1.set_constraints), to_vec(&v2.set_constraints)))
                 .or_else(|| eq_or_err(to_vec(&v1.unset_constraints), to_vec(&v2.unset_constraints)))
         }
-        (rc_v1::base::DatabricksComponentConfig::PartitionedBy(v1), "partition_by") => {
+        (
+            rc_v1::base::DatabricksComponentConfig::PartitionedBy(v1),
+            components::partition_by::TYPE_NAME,
+        ) => {
             let v2 = v2
                 .as_any()
                 .downcast_ref::<components::PartitionBy>()
                 .unwrap();
             eq_or_err(&v1.partition_by, &v2.value)
         }
-        (rc_v1::base::DatabricksComponentConfig::Query(v1), "query") => {
+        (rc_v1::base::DatabricksComponentConfig::Query(v1), components::query::TYPE_NAME) => {
             let v2 = v2.as_any().downcast_ref::<components::Query>().unwrap();
             eq_or_err(&v1.query, &v2.value)
         }
-        (rc_v1::base::DatabricksComponentConfig::Refresh(v1), "refresh") => {
+        (rc_v1::base::DatabricksComponentConfig::Refresh(v1), components::refresh::TYPE_NAME) => {
             let v2 = v2.as_any().downcast_ref::<components::Refresh>().unwrap();
             eq_or_err(&v1.cron, &v2.value.cron)
                 .or_else(|| eq_or_err(&v1.time_zone_value, &v2.value.time_zone_value))
         }
-        (rc_v1::base::DatabricksComponentConfig::Tags(v1), "relation_tags") => {
+        (
+            rc_v1::base::DatabricksComponentConfig::Tags(v1),
+            components::relation_tags::TYPE_NAME,
+        ) => {
             let v2 = v2
                 .as_any()
                 .downcast_ref::<components::RelationTags>()
@@ -311,7 +319,10 @@ fn components_eq_v1_v2(
 
             eq_or_err(v1_tags, v2_tags)
         }
-        (rc_v1::base::DatabricksComponentConfig::TblProperties(v1), "tbl_properties") => {
+        (
+            rc_v1::base::DatabricksComponentConfig::TblProperties(v1),
+            components::tbl_properties::TYPE_NAME,
+        ) => {
             let v2 = v2
                 .as_any()
                 .downcast_ref::<components::TblProperties>()
@@ -346,7 +357,7 @@ fn changesets_eq_v1_v2(
     let mut errors = Vec::new();
 
     let Some(v1) = v1 else {
-        if v2.len() > 0 {
+        if !v2.is_empty() {
             errors.push("v1 changeset is empty but v2 has changes".to_string());
         }
 
@@ -369,9 +380,8 @@ fn changesets_eq_v1_v2(
         ));
     }
 
-    for (v2_name, v2_change) in v2.iter() {
-        let v1_name = get_v1_component_name(v2_name);
-        let v1_change = v1.get_change(v1_name);
+    for (name, v2_change) in v2.iter() {
+        let v1_change = v1.get_change(name);
         let change_error = match (v1_change, v2_change) {
             (None, ComponentConfigChange::None) => None,
             (None, ComponentConfigChange::Drop) => None,
@@ -384,12 +394,12 @@ fn changesets_eq_v1_v2(
                     .downcast_ref::<rc_v1::base::DatabricksComponentConfig>()
                     .map(|v1_change| {
                         components_eq_v1_v2(v1_change, v2_change.as_ref())
-                            .map(|err| format!("{v2_name}: {err}"))
+                            .map(|err| format!("{name}: {err}"))
                     })
                     .unwrap_or_else(|| Some("Could not downcast v1 change as DatabricksComponentConfig. Something went terribly wrong".to_string()))
             },
             (v1, v2) => Some(format!(
-                "{v1_name}: v1 and v2 config change types mismatch (v1={:?}, v2={:?})",
+                "{name}: v1 and v2 config change types mismatch (v1={:?}, v2={:?})",
                 v1, v2
             )),
         };

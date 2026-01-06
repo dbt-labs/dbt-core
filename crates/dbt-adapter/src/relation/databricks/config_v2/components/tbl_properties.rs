@@ -10,11 +10,10 @@ use dbt_schemas::schemas::DbtModel;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_serde_yaml::Value as YmlValue;
 use indexmap::{IndexMap, IndexSet};
-use minijinja::Value;
+use minijinja::value::{Value, ValueMap};
 
-pub(crate) const TYPE_NAME: &str = "tbl_properties";
+pub(crate) const TYPE_NAME: &str = "tblproperties";
 
-// TODO(serramatutu): `pipeline_id` needs to be its own separate key in Jinja
 const PIPELINE_ID_KEY: &str = "pipelines.pipelineId";
 
 /// All of the following keys are ignoring by the diffing function
@@ -52,32 +51,52 @@ const EQ_IGNORE_LIST: [&str; 24] = [
 /// Holds a IndexMap of tag key and values.
 pub type TblProperties = SimpleComponentConfigImpl<IndexMap<String, String>>;
 
+fn to_jinja(v: &IndexMap<String, String>) -> Value {
+    // FIXME: is there a way to ignore a key and serialize into Value without an extra allocation?
+    let ignore_pipeline = v
+        .iter()
+        .filter(|(k, _v)| k.as_str() != PIPELINE_ID_KEY)
+        .collect::<IndexMap<_, _>>();
+
+    Value::from(ValueMap::from([
+        (
+            Value::from("tblproperties"),
+            Value::from_serialize(ignore_pipeline),
+        ),
+        (
+            Value::from("pipeline_id"),
+            Value::from_serialize(v.get(PIPELINE_ID_KEY)),
+        ),
+    ]))
+}
+
 fn new(properties: IndexMap<String, String>) -> TblProperties {
     TblProperties {
         type_name: TYPE_NAME,
         diff_fn: diff,
+        to_jinja_fn: to_jinja,
         value: properties,
     }
 }
 
 /// Takes the diff between two `TblProperties` by only comparing the non-ignored keys
 fn diff(
-    next: &IndexMap<String, String>,
-    prev: &IndexMap<String, String>,
+    desired_state: &IndexMap<String, String>,
+    current_state: &IndexMap<String, String>,
 ) -> Option<IndexMap<String, String>> {
-    let all_keys: IndexSet<_> = next
+    let all_keys: IndexSet<_> = desired_state
         .keys()
-        .chain(prev.keys())
+        .chain(current_state.keys())
         .filter(|key| !EQ_IGNORE_LIST.contains(&key.as_str()))
         .collect();
 
     let changed_keys: IndexMap<String, String> = all_keys
         .into_iter()
         .filter_map(|key| {
-            let next_val = next.get(key.as_str());
-            if next_val != prev.get(key.as_str()) {
-                let next_val = next_val.cloned().unwrap_or_default();
-                Some((key.clone(), next_val))
+            let desired_val = desired_state.get(key.as_str());
+            if desired_val.is_some() && desired_val != current_state.get(key.as_str()) {
+                let desired_val = desired_val.cloned().unwrap_or_default();
+                Some((key.clone(), desired_val))
             } else {
                 None
             }
@@ -275,10 +294,9 @@ mod tests {
 
         let diff = diff(&next, &prev).unwrap();
 
-        assert_eq!(diff.len(), 3);
+        assert_eq!(diff.len(), 2);
         assert_eq!(diff.get("custom.change").unwrap().as_str(), "new");
         assert_eq!(diff.get("custom.add").unwrap().as_str(), "new");
-        assert_eq!(diff.get("custom.drop").unwrap().as_str(), "");
     }
 
     #[test]

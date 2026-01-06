@@ -1,6 +1,8 @@
 //! https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/relation_configs/liquid_clustering.py
 
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
+use minijinja::Value;
+use serde::Serialize;
 
 use crate::relation::config_v2::{
     ComponentConfig, ComponentConfigLoader, SimpleComponentConfigImpl, diff,
@@ -9,7 +11,7 @@ use crate::relation::databricks::config_v2::DatabricksRelationMetadata;
 
 pub(crate) const TYPE_NAME: &str = "liquid_clustering";
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub(crate) struct Config {
     pub auto_cluster: bool,
     pub cluster_by: Vec<String>,
@@ -22,6 +24,7 @@ fn new(auto_cluster: bool, cluster_by: Vec<String>) -> LiquidClustering {
     LiquidClustering {
         type_name: TYPE_NAME,
         diff_fn: diff::desired_state,
+        to_jinja_fn: |v| Value::from_serialize(v),
         value: Config {
             auto_cluster,
             cluster_by,

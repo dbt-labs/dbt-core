@@ -10,7 +10,7 @@ use dbt_schemas::schemas::DbtModel;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_serde_yaml::Value as YmlValue;
 use indexmap::IndexMap;
-use minijinja::Value;
+use minijinja::value::{Value, ValueMap};
 
 pub(crate) const TYPE_NAME: &str = "column_tags";
 
@@ -19,10 +19,18 @@ pub(crate) const TYPE_NAME: &str = "column_tags";
 /// Holds a IndexMap of column name to column tags.
 pub type ColumnTags = SimpleComponentConfigImpl<IndexMap<String, IndexMap<String, String>>>;
 
+fn to_jinja(v: &IndexMap<String, IndexMap<String, String>>) -> Value {
+    Value::from(ValueMap::from([(
+        Value::from("tags"),
+        Value::from_serialize(v),
+    )]))
+}
+
 fn new(tags: IndexMap<String, IndexMap<String, String>>) -> ColumnTags {
     ColumnTags {
         type_name: TYPE_NAME,
         diff_fn: merge_tags_diff,
+        to_jinja_fn: to_jinja,
         value: tags,
     }
 }

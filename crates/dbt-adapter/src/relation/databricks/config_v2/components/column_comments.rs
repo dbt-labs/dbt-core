@@ -8,6 +8,7 @@ use crate::relation::databricks::config_v2::{
 };
 
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
+use minijinja::value::{Value, ValueMap};
 
 use indexmap::IndexMap;
 
@@ -17,6 +18,50 @@ pub(crate) const TYPE_NAME: &str = "column_comments";
 ///
 /// Holds a mapping of lowercase column names to the column comment.
 pub(crate) type ColumnComments = SimpleComponentConfigImpl<IndexMap<String, String>>;
+
+fn to_jinja(v: &IndexMap<String, String>) -> Value {
+    Value::from(ValueMap::from([
+        (Value::from("comments"), Value::from_serialize(v)),
+        (Value::from("persist"), Value::from_serialize(!v.is_empty())),
+    ]))
+}
+
+fn normalized_keys(map: &IndexMap<String, String>) -> IndexMap<String, &str> {
+    map.iter()
+        .map(|(k, v)| {
+            let unquoted = if k.starts_with('`') && k.ends_with('`') {
+                &k[1..k.len() - 1]
+            } else {
+                k.as_str()
+            };
+
+            let lower = format!("`{}`", unquoted.to_lowercase());
+
+            (lower, v.as_ref())
+        })
+        .collect()
+}
+// dbt-databricks does a case/quote-insensitive match of keys
+// https://github.com/databricks/dbt-databricks/blob/11f7cf7b54e410a1dca05f6f6add8cd1ff8d42d2/dbt/adapters/databricks/relation_configs/column_comments.py#L23
+//
+// Small deviation from Core: it performs case/quote-insensitive comparison of keys. In the final map, it keeps the original casing and quotes all columns.
+// Fusion is lowercasing everything and quoting everything to simplify. We can do that because `COMMENT ON` queries are case insensitive anyways.
+//
+// See: https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-names
+fn normalized_keys_diff(
+    desired_state: &IndexMap<String, String>,
+    current_state: &IndexMap<String, String>,
+) -> Option<IndexMap<String, String>> {
+    diff::changed_keys(
+        &normalized_keys(desired_state),
+        &normalized_keys(current_state),
+    )
+    .map(|v| {
+        v.iter()
+            .map(|(k, v)| (k.to_string(), (*v).to_string()))
+            .collect()
+    })
+}
 
 fn new(column_comments: IndexMap<String, String>) -> ColumnComments {
     let normalized_comments = column_comments
@@ -29,7 +74,8 @@ fn new(column_comments: IndexMap<String, String>) -> ColumnComments {
 
     ColumnComments {
         type_name: TYPE_NAME,
-        diff_fn: diff::changed_keys,
+        diff_fn: normalized_keys_diff,
+        to_jinja_fn: to_jinja,
         value: normalized_comments,
     }
 }
@@ -67,6 +113,9 @@ fn from_remote_state(results: &DatabricksRelationMetadata) -> ColumnComments {
         }
     }
 
+    // The engine might return them in random order so sorting to always be consistent
+    comments.sort_keys();
+
     new(comments)
 }
 
@@ -84,6 +133,8 @@ fn from_local_config(relation_config: &dyn InternalDbtNodeAttributes) -> ColumnC
     let mut comments = IndexMap::new();
     if persist {
         for column in columns {
+            // NOTE: ignore quote config here, dbt-databricks seems to normalize everything at the
+            // end anyways
             comments.insert(
                 column.name.clone(),
                 column
@@ -358,12 +409,14 @@ email,string,\n\
     fn test_column_comments_diff_with_changes() {
         let mut new_comments = IndexMap::new();
         new_comments.insert("id".to_string(), "Updated primary key".to_string());
-        new_comments.insert("name".to_string(), "User name".to_string());
+        new_comments.insert("NAME".to_string(), "User name".to_string());
+        new_comments.insert("age".to_string(), "10".to_string());
         let new_config = new(new_comments);
 
         let mut old_comments = IndexMap::new();
         old_comments.insert("id".to_string(), "Primary key".to_string());
         old_comments.insert("name".to_string(), "User name".to_string());
+        old_comments.insert("`age`".to_string(), "20".to_string());
         let old_config = new(old_comments);
 
         let diff = ColumnComments::diff_from(&new_config, Some(&old_config));
@@ -373,11 +426,12 @@ email,string,\n\
             .as_any()
             .downcast_ref::<ColumnComments>()
             .unwrap();
-        assert_eq!(diff_config.value.len(), 1);
+        assert_eq!(diff_config.value.len(), 2);
         assert_eq!(
-            diff_config.value.get("id"),
+            diff_config.value.get("`id`"),
             Some(&"Updated primary key".to_string())
         );
+        assert_eq!(diff_config.value.get("`age`"), Some(&"10".to_string()));
     }
 
     #[test]
@@ -400,6 +454,6 @@ email,string,\n\
             .unwrap();
         assert_eq!(diff_config.value.len(), 1);
         // Dropped comment gets reset to empty string
-        assert_eq!(diff_config.value.get("name"), Some(&"".to_string()));
+        assert_eq!(diff_config.value.get("`name`"), Some(&"".to_string()));
     }
 }

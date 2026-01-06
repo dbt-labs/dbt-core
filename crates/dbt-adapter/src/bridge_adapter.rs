@@ -1382,8 +1382,7 @@ impl BaseAdapter for BridgeAdapter {
         let config =
             self.typed_adapter
                 .get_relation_config(state, conn.as_mut(), relation.clone())?;
-        let value = config.to_value();
-        Ok(value)
+        Ok(Value::from_object(config))
     }
 
     #[tracing::instrument(skip_all, level = "trace")]

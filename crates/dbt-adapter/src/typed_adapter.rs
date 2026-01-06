@@ -17,15 +17,13 @@ use crate::metadata::snowflake::SnowflakeMetadataAdapter;
 use crate::metadata::{self, CatalogAndSchema, MetadataAdapter};
 use crate::query_ctx::query_ctx_from_state;
 use crate::record_batch_utils::{extract_first_value_as_i64, get_column_values};
-use crate::relation::BaseRelationConfig;
 use crate::relation::RelationObject;
-use crate::relation::bigquery::*;
-use crate::relation::databricks::base::*;
-use crate::relation::databricks::incremental::IncrementalTableConfig;
-use crate::relation::databricks::materialized_view::MaterializedViewConfig;
-use crate::relation::databricks::relation_api::get_from_relation_config;
-use crate::relation::databricks::streaming_table::StreamingTableConfig;
-use crate::relation::databricks::view::ViewConfig;
+use crate::relation::bigquery::{
+    BigqueryMaterializedViewConfig, BigqueryMaterializedViewConfigObject,
+    BigqueryPartitionConfigExt, cluster_by_from_schema, partitions_match,
+};
+use crate::relation::config_v2::{ComponentConfigLoader, RelationConfig};
+use crate::relation::databricks::config_v2::DatabricksRelationMetadata;
 use crate::render_constraint::render_column_constraint;
 use crate::response::{AdapterResponse, ResultObject};
 use crate::snapshots::SnapshotStrategy;
@@ -2502,89 +2500,42 @@ prevent unnecessary latency for other users."#,
         state: &State,
         conn: &mut dyn Connection,
         relation: Arc<dyn BaseRelation>,
-    ) -> AdapterResult<Arc<dyn BaseRelationConfig>> {
-        if self.adapter_type() != AdapterType::Databricks {
-            return Err(AdapterError::new(
-                AdapterErrorKind::Internal,
-                "get_relation_config is a Databricks adapter operation".to_string(),
-            ));
-        }
-        let relation_type = relation.relation_type().ok_or_else(|| {
-            AdapterError::new(
-                AdapterErrorKind::Configuration,
-                "relation_type is required for the input relation of adapter.get_relation_config",
-            )
-        })?;
-        let metadata_adapter = self.metadata_adapter().unwrap();
-        assert!(metadata_adapter.adapter().adapter_type() == AdapterType::Databricks);
-        // TODO(felipecrv): remove this downcast when the metadata code is cohesively placed
-        // in the metadata sub-module
-        // SAFETY: adapter type asserted above
-        let metadata_adapter = unsafe {
-            &*(metadata_adapter.as_ref() as *const dyn MetadataAdapter
-                as *const DatabricksMetadataAdapter)
+    ) -> AdapterResult<RelationConfig> {
+        use crate::relation::databricks::config_v2::relation_types;
+
+        let (relation_type, remote_state) = {
+            let metadata_adapter = DatabricksMetadataAdapter::new(self.engine().clone());
+            metadata_adapter.fetch_relation_config_from_remote(state, conn, relation)?
         };
-        let result: Arc<dyn BaseRelationConfig> = match relation_type {
-            RelationType::Table => Arc::new(
-                metadata_adapter.get_from_relation::<IncrementalTableConfig>(
-                    state,
-                    conn,
-                    relation.clone(),
-                )?,
-            ) as Arc<dyn BaseRelationConfig>,
-            RelationType::View => Arc::new(metadata_adapter.get_from_relation::<ViewConfig>(
-                state,
-                conn,
-                relation.clone(),
-            )?) as Arc<dyn BaseRelationConfig>,
-            RelationType::MaterializedView => Arc::new(
-                metadata_adapter.get_from_relation::<MaterializedViewConfig>(
-                    state,
-                    conn,
-                    relation.clone(),
-                )?,
-            ) as Arc<dyn BaseRelationConfig>,
-            RelationType::StreamingTable => {
-                Arc::new(metadata_adapter.get_from_relation::<StreamingTableConfig>(
-                    state,
-                    conn,
-                    relation.clone(),
-                )?) as Arc<dyn BaseRelationConfig>
-            }
+
+        let config_loader = match relation_type {
+            RelationType::Table => relation_types::incremental_table::new_loader(),
+            RelationType::MaterializedView => relation_types::materialized_view::new_loader(),
+            RelationType::StreamingTable => relation_types::streaming_table::new_loader(),
+            RelationType::View => relation_types::view::new_loader(),
             _ => {
                 return Err(AdapterError::new(
                     AdapterErrorKind::Configuration,
-                    format!("Unsupported relation type: {relation_type:?}"),
+                    format!("Unsupported materialization type: {:?}", relation_type),
                 ));
             }
         };
-        Ok(result)
+
+        let config = config_loader.from_remote_state(&remote_state);
+
+        Ok(config)
     }
 
     /// Given a model, parse and build its configurations
     /// reference: https://github.com/databricks/dbt-databricks/blob/13686739eb59566c7a90ee3c357d12fe52ec02ea/dbt/adapters/databricks/impl.py#L810
     fn get_config_from_model(&self, model: &dyn InternalDbtNodeAttributes) -> AdapterResult<Value> {
-        if self.adapter_type() != AdapterType::Databricks {
-            return Err(AdapterError::new(
-                AdapterErrorKind::Internal,
-                "get_config_from_model is a Databricks adapter operation".to_string(),
-            ));
-        }
-        let result: Arc<dyn DatabricksRelationConfigBase> = match model.materialized() {
-            DbtMaterialization::Incremental => {
-                Arc::new(get_from_relation_config::<IncrementalTableConfig>(model)?)
-                    as Arc<dyn DatabricksRelationConfigBase>
-            }
-            DbtMaterialization::MaterializedView => {
-                Arc::new(get_from_relation_config::<MaterializedViewConfig>(model)?)
-                    as Arc<dyn DatabricksRelationConfigBase>
-            }
-            DbtMaterialization::StreamingTable => {
-                Arc::new(get_from_relation_config::<StreamingTableConfig>(model)?)
-                    as Arc<dyn DatabricksRelationConfigBase>
-            }
-            DbtMaterialization::View => Arc::new(get_from_relation_config::<ViewConfig>(model)?)
-                as Arc<dyn DatabricksRelationConfigBase>,
+        use crate::relation::databricks::config_v2::relation_types;
+
+        let config_loader = match model.materialized() {
+            DbtMaterialization::Incremental => relation_types::incremental_table::new_loader(),
+            DbtMaterialization::MaterializedView => relation_types::materialized_view::new_loader(),
+            DbtMaterialization::StreamingTable => relation_types::streaming_table::new_loader(),
+            DbtMaterialization::View => relation_types::view::new_loader(),
             _ => {
                 return Err(AdapterError::new(
                     AdapterErrorKind::Configuration,
@@ -2595,16 +2546,15 @@ prevent unnecessary latency for other users."#,
                 ));
             }
         };
-        let result = DatabricksRelationConfigBaseObject::new(result);
-        Ok(Value::from_object(result))
+        let config = config_loader.from_local_config(model);
+        Ok(Value::from_object(config))
     }
 
     fn get_column_tags_from_model(
         &self,
         model: &dyn InternalDbtNodeAttributes,
     ) -> AdapterResult<Value> {
-        use crate::relation::databricks::base::DatabricksComponentProcessor;
-        use crate::relation::databricks::column_tags::{ColumnTagsConfig, ColumnTagsProcessor};
+        use crate::relation::databricks::config_v2::components::ColumnTagsLoader;
 
         if self.adapter_type() != AdapterType::Databricks {
             return Err(AdapterError::new(
@@ -2613,17 +2563,9 @@ prevent unnecessary latency for other users."#,
             ));
         }
 
-        let processor = ColumnTagsProcessor;
-        if let Some(DatabricksComponentConfig::ColumnTags(column_tags)) =
-            processor.from_relation_config(model)?
-        {
-            let value = Value::from_serialize(&column_tags);
-            return Ok(value);
-        }
-
-        Ok(Value::from_serialize(
-            ColumnTagsConfig::new(BTreeMap::new()),
-        ))
+        let tags = (&ColumnTagsLoader as &dyn ComponentConfigLoader<DatabricksRelationMetadata>)
+            .from_local_config(model);
+        Ok(tags.as_jinja())
     }
 
     /// https://github.com/databricks/dbt-databricks/blob/4d82bd225df81296165b540d34ad5be43b45e44a/dbt/adapters/databricks/impl.py#L831

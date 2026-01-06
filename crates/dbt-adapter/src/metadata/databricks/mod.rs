@@ -16,6 +16,7 @@ use dbt_schemas::schemas::legacy_catalog::{
 };
 use dbt_schemas::schemas::relations::base::{BaseRelation, RelationPattern};
 use dbt_xdbc::{Connection, MapReduce, QueryCtx};
+use indexmap::IndexMap;
 use minijinja::State;
 
 use crate::errors::{AdapterError, AdapterResult, AsyncAdapterResult};
@@ -24,10 +25,10 @@ use crate::metadata::databricks::describe_table::DatabricksTableMetadata;
 use crate::metadata::databricks::version::DbrVersion;
 use crate::query_ctx::query_ctx_from_state;
 use crate::record_batch_utils::get_column_values;
-use crate::relation::databricks::base::{
-    DatabricksComponentConfig, DatabricksRelationResultsBuilder, from_results,
+use crate::relation::databricks::DatabricksRelation;
+use crate::relation::databricks::config_v2::{
+    DatabricksRelationMetadata, DatabricksRelationMetadataKey,
 };
-use crate::relation::databricks::{DatabricksRelation, DatabricksRelationConfig};
 use crate::sql_types::{TypeOps, make_arrow_field_v2};
 use crate::typed_adapter::ConcreteAdapter;
 use crate::{AdapterEngine, AdapterResponse};
@@ -196,12 +197,13 @@ impl DatabricksMetadataAdapter {
 
     /// Given the relation, fetch its config from the remote data warehouse
     /// reference: https://github.com/databricks/dbt-databricks/blob/13686739eb59566c7a90ee3c357d12fe52ec02ea/dbt/adapters/databricks/impl.py#L871
-    pub fn get_from_relation<T: fmt::Debug + DatabricksRelationConfig>(
+    // TODO: use Arrow RecordBatches for this instead of a hashmap of Agate tables, like BigQuery does
+    pub(crate) fn fetch_relation_config_from_remote(
         &self,
         state: &State,
         conn: &mut dyn Connection,
         base_relation: Arc<dyn BaseRelation>,
-    ) -> AdapterResult<T> {
+    ) -> AdapterResult<(RelationType, DatabricksRelationMetadata)> {
         let relation_type = base_relation.relation_type().ok_or_else(|| {
             AdapterError::new(
                 AdapterErrorKind::Configuration,
@@ -214,50 +216,40 @@ impl DatabricksMetadataAdapter {
         let identifier = base_relation.identifier_as_str()?;
         let rendered_relation = base_relation.render_self_as_str();
 
-        // Start with common metadata
-        let mut results_builder = DatabricksRelationResultsBuilder::new()
-            .with_describe_extended(self.describe_extended(
-                &database,
-                &schema,
-                &identifier,
-                state,
-                &mut *conn,
-            )?)
-            .with_show_tblproperties(self.show_tblproperties(
-                &rendered_relation,
-                state,
-                &mut *conn,
-            )?);
+        let mut metadata = IndexMap::new();
+        metadata.insert(
+            DatabricksRelationMetadataKey::DescribeExtended,
+            self.describe_extended(&database, &schema, &identifier, state, &mut *conn)?,
+        );
+        metadata.insert(
+            DatabricksRelationMetadataKey::ShowTblProperties,
+            self.show_tblproperties(&rendered_relation, state, &mut *conn)?,
+        );
 
         // Add materialization-specific metadata
         // https://github.com/databricks/dbt-databricks/blob/9e2566fdb56318cb7a59a4492f96c7aaa7af73b0/dbt/adapters/databricks/impl.py#L914-L1021
-        results_builder = match relation_type {
-            RelationType::MaterializedView => results_builder.with_info_schema_views(
-                self.get_view_description(&database, &schema, &identifier, state, &mut *conn)?,
-            ),
-            RelationType::View => results_builder
-                .with_info_schema_views(self.get_view_description(
-                    &database,
-                    &schema,
-                    &identifier,
-                    state,
-                    &mut *conn,
-                )?)
-                .with_info_schema_tags(self.fetch_tags(
-                    &database,
-                    &schema,
-                    &identifier,
-                    state,
-                    &mut *conn,
-                )?)
-                .with_info_schema_column_tags(self.fetch_column_tags(
-                    &database,
-                    &schema,
-                    &identifier,
-                    state,
-                    &mut *conn,
-                )?),
-            RelationType::StreamingTable => results_builder,
+        match relation_type {
+            RelationType::MaterializedView => {
+                metadata.insert(
+                    DatabricksRelationMetadataKey::DescribeExtended,
+                    self.get_view_description(&database, &schema, &identifier, state, &mut *conn)?,
+                );
+            }
+            RelationType::View => {
+                metadata.insert(
+                    DatabricksRelationMetadataKey::InfoSchemaViews,
+                    self.get_view_description(&database, &schema, &identifier, state, &mut *conn)?,
+                );
+                metadata.insert(
+                    DatabricksRelationMetadataKey::InfoSchemaRelationTags,
+                    self.fetch_tags(&database, &schema, &identifier, state, &mut *conn)?,
+                );
+                metadata.insert(
+                    DatabricksRelationMetadataKey::InfoSchemaColumnTags,
+                    self.fetch_column_tags(&database, &schema, &identifier, state, &mut *conn)?,
+                );
+            }
+            RelationType::StreamingTable => {}
             RelationType::Table => {
                 let is_hive_metastore =
                     base_relation.is_hive_metastore().try_into().map_err(|_| {
@@ -277,61 +269,71 @@ impl DatabricksMetadataAdapter {
                         ),
                     ));
                 }
-                results_builder
-                    .with_info_schema_tags(self.fetch_tags(
+
+                metadata.insert(
+                    DatabricksRelationMetadataKey::InfoSchemaRelationTags,
+                    self.fetch_tags(&database, &schema, &identifier, state, &mut *conn)?,
+                );
+                metadata.insert(
+                    DatabricksRelationMetadataKey::InfoSchemaColumnTags,
+                    self.fetch_column_tags(&database, &schema, &identifier, state, &mut *conn)?,
+                );
+                metadata.insert(
+                    DatabricksRelationMetadataKey::NonNullConstraints,
+                    self.fetch_non_null_constraint_columns(
                         &database,
                         &schema,
                         &identifier,
                         state,
                         &mut *conn,
-                    )?)
-                    .with_info_schema_column_tags(self.fetch_column_tags(
+                    )?,
+                );
+                metadata.insert(
+                    DatabricksRelationMetadataKey::PrimaryKeyConstraints,
+                    self.fetch_primary_key_constraints(
                         &database,
                         &schema,
                         &identifier,
                         state,
                         &mut *conn,
-                    )?)
-                    .with_non_null_constraints(self.fetch_non_null_constraint_columns(
+                    )?,
+                );
+                metadata.insert(
+                    DatabricksRelationMetadataKey::ForeignKeyConstraints,
+                    self.fetch_foreign_key_constraints(
                         &database,
                         &schema,
                         &identifier,
                         state,
                         &mut *conn,
-                    )?)
-                    .with_primary_key_constraints(self.fetch_primary_key_constraints(
-                        &database,
-                        &schema,
-                        &identifier,
-                        state,
-                        &mut *conn,
-                    )?)
-                    .with_foreign_key_constraints(self.fetch_foreign_key_constraints(
-                        &database,
-                        &schema,
-                        &identifier,
-                        state,
-                        &mut *conn,
-                    )?)
-                    .with_column_masks(self.fetch_column_masks(
-                        &database,
-                        &schema,
-                        &identifier,
-                        state,
-                        &mut *conn,
-                    )?)
+                    )?,
+                );
+                metadata.insert(
+                    DatabricksRelationMetadataKey::ColumnMasks,
+                    self.fetch_column_masks(&database, &schema, &identifier, state, &mut *conn)?,
+                );
             }
-            _ => unreachable!(),
+            RelationType::CTE
+            | RelationType::Ephemeral
+            | RelationType::External
+            | RelationType::PointerTable
+            | RelationType::DynamicTable
+            | RelationType::Function => {
+                return Err(AdapterError::new(
+                    AdapterErrorKind::NotSupported,
+                    format!(
+                        "Cannot apply incremental config on relation of type {relation_type}. Relation: `{database}`.`{schema}`.`{identifier}`"
+                    ),
+                ));
+            }
         };
-        let result = from_results::<T>(results_builder.build())?;
-        let tblproperties = result.get_config("tblproperties");
-        if let Some(DatabricksComponentConfig::TblProperties(_tblproperties)) = tblproperties {
-            // https://github.com/databricks/dbt-databricks/blob/13686739eb59566c7a90ee3c357d12fe52ec02ea/dbt/adapters/databricks/impl.py#L908
-            // todo: Implement polling for DLT pipeline status
-            // we don't have the dbx client here
-            // we might need to query internal delta system tables or expose something via ADBC
-        }
-        Ok(result)
+
+        // https://github.com/databricks/dbt-databricks/blob/13686739eb59566c7a90ee3c357d12fe52ec02ea/dbt/adapters/databricks/impl.py#L908
+        // TODO: Implement polling for DLT pipeline status
+        // we don't have the dbx client here
+        // we might need to query internal delta system tables or expose something via ADBC
+
+        Ok((relation_type, metadata))
     }
 
     // convenience for executing SQL

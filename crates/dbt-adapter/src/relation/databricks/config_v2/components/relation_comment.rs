@@ -1,5 +1,6 @@
 //! https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/relation_configs/comment.py
 
+use crate::funcs::none_value;
 use crate::relation::config_v2::{
     ComponentConfig, ComponentConfigLoader, SimpleComponentConfigImpl, diff,
 };
@@ -8,16 +9,27 @@ use crate::relation::databricks::config_v2::{
 };
 
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
-use minijinja::Value;
+use minijinja::value::{Value, ValueMap};
 
-pub(crate) const TYPE_NAME: &str = "relation_comment";
+pub(crate) const TYPE_NAME: &str = "comment";
 
 pub(crate) type RelationComment = SimpleComponentConfigImpl<Option<String>>;
+
+fn to_jinja(v: &Option<String>) -> Value {
+    Value::from(ValueMap::from([
+        (
+            Value::from("comment"),
+            v.as_ref().map(Value::from).unwrap_or_else(none_value),
+        ),
+        (Value::from("persist"), Value::from(v.is_some())),
+    ]))
+}
 
 fn new(comment: Option<String>) -> RelationComment {
     RelationComment {
         type_name: TYPE_NAME,
         diff_fn: diff::desired_state,
+        to_jinja_fn: to_jinja,
         value: comment,
     }
 }

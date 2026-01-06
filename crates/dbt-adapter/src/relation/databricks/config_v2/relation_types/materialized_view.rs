@@ -11,13 +11,17 @@ fn requires_full_refresh(components: &IndexMap<&'static str, ComponentConfigChan
 
 /// Create a `RelationConfigLoader` for Databricks materialized views
 pub(crate) fn new_loader() -> RelationConfigLoader<DatabricksRelationMetadata> {
-    let loaders: [Box<dyn ComponentConfigLoader<DatabricksRelationMetadata>>; 7] = [
-        Box::new(components::LiquidClusteringLoader),
-        Box::new(components::PartitionByLoader),
-        Box::new(components::QueryLoader),
-        Box::new(components::RefreshLoader),
+    // TODO: missing from Python dbt-databricks:
+    // - liquid clustering
+    // - relation tags
+    // - query
+    let loaders: [Box<dyn ComponentConfigLoader<DatabricksRelationMetadata>>; 4] = [
+        // Box::new(components::LiquidClusteringLoader),
         Box::new(components::RelationCommentLoader),
-        Box::new(components::RelationTagsLoader),
+        Box::new(components::PartitionByLoader),
+        // Box::new(components::QueryLoader),
+        Box::new(components::RefreshLoader),
+        // Box::new(components::RelationTagsLoader),
         Box::new(components::TblPropertiesLoader),
     ];
 
@@ -43,7 +47,7 @@ mod tests {
                 v1_errors: vec![
                     // v1 does not validate overriding databricks-reserved keys in the dbt model
                     // v1 does not diff tags properly and the changed tag does not appear in its changeset
-                    "tbl_properties",
+                    components::tbl_properties::TYPE_NAME,
                 ],
                 v2_relation_loader: new_loader(),
                 current_state: TestModelConfig {
@@ -101,8 +105,8 @@ mod tests {
                 v1_relation_loader: std::marker::PhantomData,
                 v1_errors: vec![
                     // v1 does not detect changes to tags here
-                    "changeset lengths differ",
-                    "tags",
+                    // TODO: re-add tags
+                    components::relation_tags::TYPE_NAME,
                 ],
                 v2_relation_loader: new_loader(),
                 current_state: TestModelConfig {
@@ -129,12 +133,13 @@ mod tests {
                                 Some("UTC".to_string()),
                             )),
                         ),
-                        (
-                            components::RelationTagsLoader::type_name(),
-                            ComponentConfigChange::Some(components::RelationTagsLoader::new(
-                                IndexMap::from_iter([("a_tag".to_string(), "new".to_string())]),
-                            )),
-                        ),
+                        // TODO: re-add tags
+                        // (
+                        //     components::RelationTagsLoader::type_name(),
+                        //     ComponentConfigChange::Some(components::RelationTagsLoader::new(
+                        //         IndexMap::from_iter([("a_tag".to_string(), "new".to_string())]),
+                        //     )),
+                        // ),
                     ],
                     requires_full_refresh,
                 ),

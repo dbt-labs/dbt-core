@@ -13,10 +13,12 @@ use crate::relation::databricks::typed_constraint::TypedConstraint;
 
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use indexmap::{IndexMap, IndexSet};
+use minijinja::Value;
+use serde::Serialize;
 
 pub(crate) const TYPE_NAME: &str = "constraints";
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Serialize)]
 pub struct Constraints {
     pub set_non_nulls: IndexSet<String>,
     pub unset_non_nulls: IndexSet<String>,
@@ -218,7 +220,7 @@ impl Constraints {
 
     fn from_remote_state(results: &DatabricksRelationMetadata) -> Self {
         // Get non-null constraint columns from results
-        let non_null_columns = results
+        let mut non_null_columns = results
             .get(&DatabricksRelationMetadataKey::NonNullConstraints)
             .map(|table| {
                 table
@@ -243,6 +245,9 @@ impl Constraints {
             })
             .unwrap_or_default();
 
+        // The engine might return them in random order so sorting to always be consistent
+        non_null_columns.sort();
+
         // Process check constraints from table properties
         let check_constraints = Self::process_check_constraints(
             results.get(&DatabricksRelationMetadataKey::ShowTblProperties),
@@ -262,6 +267,9 @@ impl Constraints {
         all_constraints.extend(check_constraints);
         all_constraints.extend(pk_constraints);
         all_constraints.extend(fk_constraints);
+
+        // The engine might return them in random order so sorting to always be consistent
+        all_constraints.sort();
 
         Self::new(
             non_null_columns,
@@ -413,6 +421,10 @@ impl ComponentConfig for Constraints {
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+
+    fn as_jinja(&self) -> Value {
+        Value::from_serialize(self)
     }
 }
 

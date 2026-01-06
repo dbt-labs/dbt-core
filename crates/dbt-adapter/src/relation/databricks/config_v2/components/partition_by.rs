@@ -9,9 +9,9 @@ use crate::relation::databricks::config_v2::{
 use dbt_schemas::schemas::DbtModel;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_schemas::schemas::manifest::PartitionConfig;
-use minijinja::Value;
+use minijinja::value::{Value, ValueMap};
 
-pub(crate) const TYPE_NAME: &str = "partition_by";
+pub(crate) const TYPE_NAME: &str = "partitioned_by";
 
 // TODO(serramatutu): reuse this for `partition_by` in other warehouses
 /// Component for Databricks partitioned by
@@ -19,10 +19,18 @@ pub(crate) const TYPE_NAME: &str = "partition_by";
 /// Holds a vec of columns to partition by.
 pub type PartitionBy = SimpleComponentConfigImpl<Vec<String>>;
 
+fn to_jinja(v: &Vec<String>) -> Value {
+    Value::from(ValueMap::from([(
+        Value::from("partition_by"),
+        Value::from_serialize(v),
+    )]))
+}
+
 fn new(partition_by: Vec<String>) -> PartitionBy {
     PartitionBy {
         type_name: TYPE_NAME,
         diff_fn: diff::desired_state,
+        to_jinja_fn: to_jinja,
         value: partition_by,
     }
 }

@@ -11,15 +11,16 @@ fn requires_full_refresh(components: &IndexMap<&'static str, ComponentConfigChan
 
 /// Create a `RelationConfigLoader` for Databricks streaming tables
 pub(crate) fn new_loader() -> RelationConfigLoader<DatabricksRelationMetadata> {
-    let loaders: [Box<dyn ComponentConfigLoader<DatabricksRelationMetadata>>; 6] = [
-        // TODO: column mask
-        // TODO: describe query
-        Box::new(components::LiquidClusteringLoader),
+    // TODO: missing from Python dbt-databricks:
+    // - liquid clustering
+    // - relation tags
+    let loaders: [Box<dyn ComponentConfigLoader<DatabricksRelationMetadata>>; 4] = [
+        // Box::new(components::LiquidClusteringLoader),
         Box::new(components::PartitionByLoader),
-        Box::new(components::RefreshLoader),
         Box::new(components::RelationCommentLoader),
-        Box::new(components::RelationTagsLoader),
         Box::new(components::TblPropertiesLoader),
+        Box::new(components::RefreshLoader),
+        // Box::new(components::RelationTagsLoader),
     ];
 
     RelationConfigLoader::new(loaders, requires_full_refresh)
@@ -42,14 +43,14 @@ mod tests {
                 description: "changing any streaming table components except partition by should not trigger a full refresh",
                 v1_relation_loader: std::marker::PhantomData,
                 v1_errors: vec![
-                    "changeset lengths differ",
                     // v1 does not diff refresh config properly and the changed schedule does not appear in its changeset.
                     // I tested it in Core and it DOES in fact generate the proper changeset.
-                    "refresh",
-                    // v1 does not diff tags properly and the changed tag does not appear in its changeset.
-                    "tags",
+                    components::refresh::TYPE_NAME,
+                    // TODO: re-add tags
+                    // // v1 does not diff tags properly and the changed tag does not appear in its changeset.
+                    // components::relation_tags::TYPE_NAME,
                     // v1 does not validate overriding databricks-reserved keys in the dbt model
-                    "tbl_properties",
+                    components::tbl_properties::TYPE_NAME,
                 ],
                 v2_relation_loader: new_loader(),
                 current_state: TestModelConfig {
@@ -112,15 +113,16 @@ mod tests {
                                 Some("new comment".to_string()),
                             )),
                         ),
-                        (
-                            components::RelationTagsLoader::type_name(),
-                            ComponentConfigChange::Some(components::RelationTagsLoader::new(
-                                IndexMap::from_iter([
-                                    ("a_tag".to_string(), "new".to_string()),
-                                    ("b_tag".to_string(), "old".to_string()),
-                                ]),
-                            )),
-                        ),
+                        // TODO: re-add tags
+                        // (
+                        //     components::RelationTagsLoader::type_name(),
+                        //     ComponentConfigChange::Some(components::RelationTagsLoader::new(
+                        //         IndexMap::from_iter([
+                        //             ("a_tag".to_string(), "new".to_string()),
+                        //             ("b_tag".to_string(), "old".to_string()),
+                        //         ]),
+                        //     )),
+                        // ),
                         (
                             components::TblPropertiesLoader::type_name(),
                             ComponentConfigChange::Some(components::TblPropertiesLoader::new(

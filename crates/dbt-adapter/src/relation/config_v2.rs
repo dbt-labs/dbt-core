@@ -20,12 +20,19 @@
 //!    `RelationConfig` but captures historical differences in Jinja implementations across
 //!    adapters.
 
+use crate::funcs::none_value;
+
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use indexmap::{IndexMap, map::Iter as IndexMapIter};
-use minijinja::value::Object;
-use std::{any::Any, fmt};
+use minijinja::{
+    Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State as MinijinjaState,
+    arg_utils::ArgParser,
+    listener::RenderingEventListener,
+    value::{Enumerator, Object, Value, ValueMap},
+};
+use std::{any::Any, fmt, rc::Rc, sync::Arc};
 
-pub(crate) trait ComponentConfig: fmt::Debug + Send + Sync + Any {
+pub trait ComponentConfig: fmt::Debug + Send + Sync + Any {
     /// Assuming self is the desired state, get the diff that takes the current state to the desired state.
     ///
     /// Returns None if no change was detected.
@@ -38,6 +45,8 @@ pub(crate) trait ComponentConfig: fmt::Debug + Send + Sync + Any {
     fn type_name(&self) -> &'static str;
 
     fn as_any(&self) -> &dyn Any;
+
+    fn as_jinja(&self) -> Value;
 }
 
 /// Contains custom diffing functions that can be used by component implementations
@@ -94,11 +103,15 @@ pub(crate) mod diff {
     }
 }
 
+/// A function that takes a config component value and turns it into a Jinja `Value`
+pub type ToJinjaFn<T> = fn(&T) -> Value;
+
 #[derive(Clone, Debug)]
 pub(crate) struct SimpleComponentConfigImpl<T: fmt::Debug + Send + Sync + Any + Clone> {
     // TODO(serramatutu): maybe dynamic dispatch here with dyn T
     pub type_name: &'static str,
     pub diff_fn: diff::DiffFn<T>,
+    pub to_jinja_fn: ToJinjaFn<T>,
     pub value: T,
 }
 
@@ -127,6 +140,7 @@ impl<T: fmt::Debug + Send + Sync + Any + Clone> ComponentConfig for SimpleCompon
             let self_clone = Self {
                 type_name: self.type_name,
                 diff_fn: self.diff_fn,
+                to_jinja_fn: self.to_jinja_fn,
                 value: diff,
             };
 
@@ -143,11 +157,15 @@ impl<T: fmt::Debug + Send + Sync + Any + Clone> ComponentConfig for SimpleCompon
     fn as_any(&self) -> &dyn Any {
         self
     }
+
+    fn as_jinja(&self) -> Value {
+        (self.to_jinja_fn)(&self.value)
+    }
 }
 
 /// Represents a change in a certain configuration by comparing the applied state with the desired state
 #[derive(Debug)]
-pub(crate) enum ComponentConfigChange {
+pub enum ComponentConfigChange {
     /// The config has changed
     Some(Box<dyn ComponentConfig>),
     /// The config used to exist but has been dropped
@@ -156,12 +174,21 @@ pub(crate) enum ComponentConfigChange {
     None,
 }
 
+impl ComponentConfigChange {
+    fn as_jinja(&self) -> Value {
+        match self {
+            Self::Some(v) => v.as_jinja(),
+            _ => none_value(),
+        }
+    }
+}
+
 /// A function that evaluates a set of components that have been changed and returns whether or not
 /// those will require a full refresh
 pub(crate) type RequiresFullRefreshFn = fn(&IndexMap<&'static str, ComponentConfigChange>) -> bool;
 
 #[derive(Debug)]
-pub(crate) struct RelationConfig(
+pub struct RelationConfig(
     IndexMap<&'static str, Box<dyn ComponentConfig>>,
     RequiresFullRefreshFn,
 );
@@ -216,7 +243,54 @@ impl RelationConfig {
     }
 }
 
-impl Object for RelationConfig {}
+impl Object for RelationConfig {
+    fn call_method(
+        self: &Arc<Self>,
+        _state: &MinijinjaState,
+        name: &str,
+        args: &[Value],
+        _listeners: &[Rc<dyn RenderingEventListener>],
+    ) -> Result<Value, MinijinjaError> {
+        // TODO: args iter
+        let mut parser = ArgParser::new(args, None);
+        match name {
+            "get_changeset" => {
+                let val = if let Some(existing) = parser
+                    .get::<Value>("existing_relation")?
+                    .downcast_object::<RelationConfig>()
+                {
+                    let change_set = RelationConfig::diff(self.as_ref(), existing.as_ref());
+                    if !change_set.is_empty() {
+                        let intermediate_map = Value::from(ValueMap::from([
+                            (
+                                Value::from("requires_full_refresh"),
+                                Value::from(change_set.requires_full_refresh()),
+                            ),
+                            (Value::from("changes"), Value::from_object(change_set)),
+                        ]));
+                        Value::from_serialize(intermediate_map)
+                    } else {
+                        none_value()
+                    }
+                } else {
+                    none_value()
+                };
+
+                Ok(val)
+            }
+            _ => unimplemented!("RelationConfigBaseObject does not support method: {}", name),
+        }
+    }
+
+    fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
+        let key = key.as_str()?;
+        self.0.get(key).map(|v| v.as_jinja())
+    }
+
+    fn enumerate(self: &Arc<Self>) -> Enumerator {
+        Enumerator::Values(self.0.keys().map(|v| Value::from(*v)).collect())
+    }
+}
 
 /// Loads a `ComponentConfig` from the remote data platform state (current state)
 /// or from the local configs (desired state).
@@ -256,7 +330,6 @@ impl<R> RelationConfigLoader<R> {
     }
 
     /// Load the current applied state for the relation and all its components given the remote state
-    #[expect(dead_code)]
     #[expect(clippy::wrong_self_convention)]
     pub(crate) fn from_remote_state(&self, remote_state: &R) -> RelationConfig {
         RelationConfig::new(
@@ -285,7 +358,7 @@ impl<R> RelationConfigLoader<R> {
 }
 
 #[derive(Debug)]
-pub(crate) struct RelationComponentConfigChangeSet(
+pub struct RelationComponentConfigChangeSet(
     IndexMap<&'static str, ComponentConfigChange>,
     RequiresFullRefreshFn,
 );
@@ -303,6 +376,10 @@ impl RelationComponentConfigChangeSet {
         self.0.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     pub fn iter(&self) -> IndexMapIter<'_, &'static str, ComponentConfigChange> {
         self.0.iter()
     }
@@ -317,6 +394,53 @@ impl RelationComponentConfigChangeSet {
     /// Whether applying this config to an existing table requires a full refresh
     pub fn requires_full_refresh(&self) -> bool {
         self.1(&self.0)
+    }
+}
+
+impl Object for RelationComponentConfigChangeSet {
+    fn call_method(
+        self: &Arc<Self>,
+        _state: &MinijinjaState,
+        name: &str,
+        args: &[Value],
+        _listeners: &[Rc<dyn RenderingEventListener>],
+    ) -> Result<Value, MinijinjaError> {
+        // TODO: ArgsIter
+        let mut parser = ArgParser::new(args, None);
+        match name {
+            // support example `_configuration_changes.changes.get("tags", None)`
+            "get" => {
+                let key = parser.get::<Value>("key")?;
+                let key = key.as_str().ok_or_else(|| {
+                    MinijinjaError::new(MinijinjaErrorKind::InvalidArgument, "key must be a string")
+                })?;
+
+                Ok(self
+                    .0
+                    .get(key)
+                    .map(|v| v.as_jinja())
+                    .unwrap_or_else(none_value))
+            }
+            _ => Err(MinijinjaError::new(
+                MinijinjaErrorKind::UnknownMethod,
+                format!("RelationComponentConfigChangeSet has no method named '{name}'"),
+            )),
+        }
+    }
+
+    fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
+        let key = key.as_str()?;
+        self.0.get(key).map(|v| v.as_jinja())
+    }
+
+    fn enumerate(self: &Arc<Self>) -> Enumerator {
+        Enumerator::Iter(Box::new(
+            self.0
+                .keys()
+                .map(|v| Value::from(*v))
+                .collect::<Vec<_>>()
+                .into_iter(),
+        ))
     }
 }
 
@@ -371,11 +495,16 @@ mod tests {
 
     type MockComponent = SimpleComponentConfigImpl<u8>;
 
+    fn to_jinja(v: &u8) -> Value {
+        Value::from(*v)
+    }
+
     #[test]
     fn test_simple_diff_config_created() {
         let next = MockComponent {
             type_name: TYPE_NAME,
             diff_fn: diff::desired_state,
+            to_jinja_fn: to_jinja,
             value: 1,
         };
         let diff = ComponentConfig::diff_from(&next, None).unwrap();
@@ -386,12 +515,14 @@ mod tests {
     fn test_simple_diff_no_change() {
         let prev = MockComponent {
             diff_fn: diff::desired_state,
+            to_jinja_fn: to_jinja,
             type_name: TYPE_NAME,
             value: 1,
         };
         let next = MockComponent {
             type_name: TYPE_NAME,
             diff_fn: diff::desired_state,
+            to_jinja_fn: to_jinja,
             value: 1,
         };
         let diff = ComponentConfig::diff_from(&next, Some(&prev));
@@ -402,12 +533,14 @@ mod tests {
     fn test_simple_diff_with_change() {
         let prev = MockComponent {
             diff_fn: diff::desired_state,
+            to_jinja_fn: to_jinja,
             type_name: TYPE_NAME,
             value: 1,
         };
         let next = MockComponent {
             type_name: TYPE_NAME,
             diff_fn: diff::desired_state,
+            to_jinja_fn: to_jinja,
             value: 10,
         };
         let diff = ComponentConfig::diff_from(&next, Some(&prev)).unwrap();
@@ -419,11 +552,13 @@ mod tests {
         let prev = MockComponent {
             type_name: TYPE_NAME,
             diff_fn: custom_diff,
+            to_jinja_fn: to_jinja,
             value: 1,
         };
         let next = MockComponent {
             type_name: TYPE_NAME,
             diff_fn: custom_diff,
+            to_jinja_fn: to_jinja,
             value: 10,
         };
         let diff = ComponentConfig::diff_from(&next, Some(&prev)).unwrap();
@@ -431,6 +566,7 @@ mod tests {
         let expected = MockComponent {
             type_name: TYPE_NAME,
             diff_fn: custom_diff,
+            to_jinja_fn: to_jinja,
             // 10 - 1, per our custom diff
             value: 9,
         };
@@ -443,6 +579,7 @@ mod tests {
         let next_component = MockComponent {
             type_name: TYPE_NAME,
             diff_fn: diff::desired_state,
+            to_jinja_fn: to_jinja,
             value: 10,
         };
         let prev = RelationConfig::new([], return_true);
@@ -465,6 +602,7 @@ mod tests {
         let component = MockComponent {
             type_name: TYPE_NAME,
             diff_fn: diff::desired_state,
+            to_jinja_fn: to_jinja,
             value: 10,
         };
         let relation_config = RelationConfig::new(
@@ -483,11 +621,13 @@ mod tests {
         let prev_component = MockComponent {
             type_name: TYPE_NAME,
             diff_fn: diff::desired_state,
+            to_jinja_fn: to_jinja,
             value: 1,
         };
         let next_component = MockComponent {
             type_name: TYPE_NAME,
             diff_fn: diff::desired_state,
+            to_jinja_fn: to_jinja,
             value: 10,
         };
         let prev = RelationConfig::new(
@@ -513,6 +653,7 @@ mod tests {
         let prev_component = MockComponent {
             type_name: TYPE_NAME,
             diff_fn: diff::desired_state,
+            to_jinja_fn: to_jinja,
             value: 1,
         };
         let prev = RelationConfig::new(

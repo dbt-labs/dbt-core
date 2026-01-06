@@ -14,8 +14,6 @@ pub mod typed_constraint;
 pub(crate) mod configs;
 pub use configs::*;
 
-// NOTE: this is currently being tested, eventually we'll flip the actual code to use these
-#[cfg(test)]
 pub mod config_v2;
 
 mod relation;
