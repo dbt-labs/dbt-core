@@ -11,14 +11,14 @@ use super::config_keys::ConfigKeys;
 use crate::default_to;
 use crate::schemas::common::{DbtMaterialization, DbtQuoting, Schedule, Severity, StoreFailuresAs};
 use crate::schemas::manifest::GrantAccessToTarget;
-use crate::schemas::manifest::postgres::PostgresIndex;
 use crate::schemas::manifest::{BigqueryClusterConfig, PartitionConfig};
 use crate::schemas::project::configs::common::{
     WarehouseSpecificNodeConfig, default_meta_and_tags, default_quoting,
 };
 use crate::schemas::project::{DefaultTo, TypedRecursiveConfig};
 use crate::schemas::serde::{
-    StringOrArrayOfStrings, bool_or_string_bool, f64_or_string_f64, u64_or_string_u64,
+    IndexesConfig, PrimaryKeyConfig, StringOrArrayOfStrings, bool_or_string_bool,
+    f64_or_string_f64, u64_or_string_u64,
 };
 
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
@@ -265,7 +265,7 @@ pub struct ProjectDataTestConfig {
 
     // Postgres specific fields
     #[serde(default, rename = "+indexes")]
-    pub indexes: Option<Vec<PostgresIndex>>,
+    pub indexes: IndexesConfig,
 
     // Schedule (Databricks streaming tables)
     #[serde(rename = "+schedule")]
@@ -416,7 +416,7 @@ impl From<ProjectDataTestConfig> for DataTestConfig {
                 indexes: config.indexes,
 
                 // data test is unsupported for Salesforce yet
-                primary_key: None,
+                primary_key: PrimaryKeyConfig::default(),
                 category: None,
             },
         }

@@ -22,7 +22,6 @@ use crate::schemas::common::Hooks;
 use crate::schemas::common::PersistDocsConfig;
 use crate::schemas::common::Schedule;
 use crate::schemas::manifest::GrantAccessToTarget;
-use crate::schemas::manifest::postgres::PostgresIndex;
 use crate::schemas::manifest::{BigqueryClusterConfig, PartitionConfig};
 use crate::schemas::project::DefaultTo;
 use crate::schemas::project::TypedRecursiveConfig;
@@ -33,7 +32,10 @@ use crate::schemas::project::configs::common::default_quoting;
 use crate::schemas::project::configs::common::default_to_grants;
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::bool_or_string_bool;
-use crate::schemas::serde::{f64_or_string_f64, serialize_string_or_array_map, u64_or_string_u64};
+use crate::schemas::serde::{
+    IndexesConfig, PrimaryKeyConfig, f64_or_string_f64, serialize_string_or_array_map,
+    u64_or_string_u64,
+};
 
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
@@ -301,7 +303,7 @@ pub struct ProjectSnapshotConfig {
 
     // Adapter-specific fields (Postgres)
     #[serde(default, rename = "+indexes")]
-    pub indexes: Option<Vec<PostgresIndex>>,
+    pub indexes: IndexesConfig,
 
     // Schedule (Databricks streaming tables)
     #[serde(rename = "+schedule")]
@@ -574,7 +576,7 @@ impl From<ProjectSnapshotConfig> for SnapshotConfig {
                 indexes: config.indexes,
 
                 // snapshot is unsupported for Salesforce yet
-                primary_key: None,
+                primary_key: PrimaryKeyConfig::default(),
                 category: None,
             },
         }

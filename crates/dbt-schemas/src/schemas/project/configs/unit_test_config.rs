@@ -11,16 +11,15 @@ use crate::{
     default_to,
     schemas::{
         common::Schedule,
-        manifest::{
-            BigqueryClusterConfig, GrantAccessToTarget, PartitionConfig, postgres::PostgresIndex,
-        },
+        manifest::{BigqueryClusterConfig, GrantAccessToTarget, PartitionConfig},
         project::{
             DefaultTo, TypedRecursiveConfig,
             configs::common::{WarehouseSpecificNodeConfig, default_meta_and_tags},
             configs::config_keys::ConfigKeys,
         },
         serde::{
-            StringOrArrayOfStrings, bool_or_string_bool, f64_or_string_f64, u64_or_string_u64,
+            IndexesConfig, PrimaryKeyConfig, StringOrArrayOfStrings, bool_or_string_bool,
+            f64_or_string_f64, u64_or_string_u64,
         },
     },
 };
@@ -236,7 +235,7 @@ pub struct ProjectUnitTestConfig {
 
     // Postgres specific fields
     #[serde(default, rename = "+indexes")]
-    pub indexes: Option<Vec<PostgresIndex>>,
+    pub indexes: IndexesConfig,
 
     // Flattened fields
     pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectUnitTestConfig>>,
@@ -347,7 +346,7 @@ impl From<ProjectUnitTestConfig> for UnitTestConfig {
                 indexes: config.indexes,
 
                 // unit test is unsupported for Salesforce yet
-                primary_key: None,
+                primary_key: PrimaryKeyConfig::default(),
                 category: None,
             },
         }

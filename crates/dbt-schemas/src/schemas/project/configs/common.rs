@@ -14,12 +14,13 @@ use crate::schemas::common::merge_meta;
 use crate::schemas::common::merge_tags;
 use crate::schemas::common::{DbtQuoting, DocsConfig, Schedule};
 use crate::schemas::manifest::GrantAccessToTarget;
-use crate::schemas::manifest::postgres::PostgresIndex;
 use crate::schemas::manifest::{BigqueryClusterConfig, PartitionConfig};
 use crate::schemas::project::configs::model_config::DataLakeObjectCategory;
 use crate::schemas::project::dbt_project::DefaultTo;
 use crate::schemas::serde::StringOrArrayOfStrings;
-use crate::schemas::serde::{bool_or_string_bool, f64_or_string_f64, u64_or_string_u64};
+use crate::schemas::serde::{
+    IndexesConfig, PrimaryKeyConfig, bool_or_string_bool, f64_or_string_f64, u64_or_string_u64,
+};
 
 /// Helper function to handle default_to logic for hooks (pre_hook/post_hook)
 /// Hooks should be extended, not replaced when merging configs
@@ -273,10 +274,12 @@ pub struct WarehouseSpecificNodeConfig {
 
     // Postgres
     // XXX: This is an incomplete set of configs
-    pub indexes: Option<Vec<PostgresIndex>>,
+    #[serde(default)]
+    pub indexes: IndexesConfig,
 
     // Salesforce
-    pub primary_key: Option<String>,
+    #[serde(default)]
+    pub primary_key: PrimaryKeyConfig,
     pub category: Option<DataLakeObjectCategory>,
 }
 

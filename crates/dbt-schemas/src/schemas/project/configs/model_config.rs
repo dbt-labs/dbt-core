@@ -25,7 +25,6 @@ use crate::schemas::common::{Access, DbtQuoting, Schedule};
 use crate::schemas::common::{DocsConfig, OnConfigurationChange};
 use crate::schemas::common::{Hooks, OnSchemaChange, hooks_equal};
 use crate::schemas::manifest::GrantAccessToTarget;
-use crate::schemas::manifest::postgres::PostgresIndex;
 use crate::schemas::manifest::{BigqueryClusterConfig, PartitionConfig};
 use crate::schemas::project::configs::common::default_column_types;
 use crate::schemas::project::configs::common::default_hooks;
@@ -41,8 +40,8 @@ use crate::schemas::project::dbt_project::TypedRecursiveConfig;
 use crate::schemas::properties::ModelFreshness;
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::{
-    bool_or_string_bool, default_type, f64_or_string_f64, serialize_string_or_array_map,
-    u64_or_string_u64,
+    IndexesConfig, PrimaryKeyConfig, bool_or_string_bool, default_type, f64_or_string_f64,
+    serialize_string_or_array_map, u64_or_string_u64,
 };
 use dbt_serde_yaml::ShouldBe;
 
@@ -364,15 +363,15 @@ pub struct ProjectModelConfig {
     pub table_type: Option<String>,
 
     #[serde(default, rename = "+indexes")]
-    pub indexes: Option<Vec<PostgresIndex>>,
+    pub indexes: IndexesConfig,
 
     // Schedule (Databricks streaming tables)
     #[serde(rename = "+schedule")]
     pub schedule: Option<Schedule>,
 
     // Primary Key (Salesforce)
-    #[serde(rename = "+primary_key")]
-    pub primary_key: Option<String>,
+    #[serde(default, rename = "+primary_key")]
+    pub primary_key: PrimaryKeyConfig,
     #[serde(rename = "+category")]
     pub category: Option<DataLakeObjectCategory>,
     // Flattened field:
