@@ -272,17 +272,13 @@ fn split_union_all_top_level(s: &str) -> Option<Vec<&str>> {
     let mut depth = 0usize;
     let mut start = 0usize;
     let lower = s.to_ascii_lowercase();
-    let bytes = lower.as_bytes();
-    let mut i = 0usize;
-    while i < bytes.len() {
-        let ch = bytes[i] as char;
+    let mut iter = lower.char_indices().peekable();
+    while let Some((i, ch)) = iter.next() {
         if ch == '(' {
             depth += 1;
-            i += 1;
             continue;
         } else if ch == ')' {
             depth = depth.saturating_sub(1);
-            i += 1;
             continue;
         }
         if depth == 0 && lower[i..].starts_with("union") {
@@ -295,12 +291,18 @@ fn split_union_all_top_level(s: &str) -> Option<Vec<&str>> {
                 let left = s[start..i].trim();
                 parts.push(left);
                 // advance past "union all"
-                i = k_after_ws + "all".len();
-                start = i;
+                let next_i = k_after_ws + "all".len();
+                start = next_i;
+                while let Some(&(peek_i, _)) = iter.peek() {
+                    if peek_i < next_i {
+                        iter.next();
+                    } else {
+                        break;
+                    }
+                }
                 continue;
             }
         }
-        i += 1;
     }
     // push final segment
     let last = s[start..].trim();
@@ -328,30 +330,28 @@ fn parse_create_as_subquery(s: &str) -> Option<(&str, &str)> {
     let stuff_start = i;
     // Find 'as' followed by '(' (case-insensitive), not inside parentheses
     let lower = s.to_ascii_lowercase();
-    let bytes = lower.as_bytes();
     let mut depth = 0usize;
     let mut as_pos: Option<usize> = None;
-    let mut j = i;
-    while j < bytes.len() {
-        let ch = bytes[j] as char;
+    let iter = lower.char_indices().peekable();
+    for (j, ch) in iter {
+        if j < i {
+            continue;
+        }
         if ch == '(' {
             depth += 1;
-            j += 1;
             continue;
         } else if ch == ')' {
             depth = depth.saturating_sub(1);
-            j += 1;
             continue;
         }
         if depth == 0 && lower[j..].starts_with("as") {
             let mut k = j + 2;
             k = skip_ws(&lower, k);
-            if k < bytes.len() && (lower.as_bytes()[k] as char) == '(' {
+            if k < lower.len() && (lower.as_bytes()[k] as char) == '(' {
                 as_pos = Some(j);
                 break;
             }
         }
-        j += 1;
     }
     let as_pos = as_pos?;
     let stuff = s[stuff_start..as_pos].trim();
@@ -857,6 +857,32 @@ mod tests {
         assert!(
             result.is_err(),
             "Should detect content differences even with newlines"
+        );
+    }
+
+    #[test]
+    fn test_split_union_all_top_level_splits_and_handles_unicode() {
+        // Regression test: previously this could panic if the scan index landed in the middle
+        // of a multi-byte UTF-8 char (e.g. “).
+        let sql = "select 1 as a /* “unicode” */ UNION   ALL   select 2 as b";
+        let parts = split_union_all_top_level(sql).expect("should split on top-level UNION ALL");
+        assert_eq!(
+            parts,
+            vec!["select 1 as a /* “unicode” */", "select 2 as b"]
+        );
+    }
+
+    #[test]
+    fn test_split_union_all_top_level_does_not_split_inside_parentheses() {
+        let sql = "select 1 as a union all select (select 2 as b union all select 3 as c)";
+        let parts =
+            split_union_all_top_level(sql).expect("should split on the top-level UNION ALL");
+        assert_eq!(
+            parts,
+            vec![
+                "select 1 as a",
+                "select (select 2 as b union all select 3 as c)"
+            ]
         );
     }
 
