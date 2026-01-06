@@ -32,6 +32,9 @@ enum ExecutionPhase {
   // Handling deferral. Fetching state source schemas from remote, hydrating relation, and schema cache
   EXECUTION_PHASE_DEFER_HYDRATION = 60;
 
+  // Hydration of schemas for static analysis
+  EXECUTION_PHASE_SCHEMA_HYDRATION = 65;
+
   // Building the task graph from the schedule
   EXECUTION_PHASE_TASK_GRAPH_BUILD = 70;
 

@@ -9,7 +9,7 @@ pub fn get_phase_action(phase: ExecutionPhase) -> &'static str {
         ExecutionPhase::Clean => "cleaning",
         ExecutionPhase::Compare => "comparing",
         ExecutionPhase::Debug => "debugging",
-        ExecutionPhase::DeferHydration => "defer hydrating",
+        ExecutionPhase::DeferHydration => "deferring state",
         ExecutionPhase::FreshnessAnalysis => "analyzing freshness",
         ExecutionPhase::InitAdapter => "initializing adapter",
         ExecutionPhase::Lineage => "generating lineage",
@@ -19,6 +19,7 @@ pub fn get_phase_action(phase: ExecutionPhase) -> &'static str {
         ExecutionPhase::Render => "rendering",
         ExecutionPhase::Run => "running",
         ExecutionPhase::Schedule => "scheduling",
+        ExecutionPhase::SchemaHydration => "downloading schemas",
         ExecutionPhase::TaskGraphBuild => "building task graph",
         ExecutionPhase::Unspecified => "unknown phase",
     }
@@ -32,7 +33,7 @@ pub fn get_phase_progress_text(phase: ExecutionPhase) -> Option<String> {
         ExecutionPhase::Clean => "Cleaning",
         ExecutionPhase::Compare => "Comparing",
         ExecutionPhase::Debug => "Debugging",
-        ExecutionPhase::DeferHydration => "Hydrating",
+        ExecutionPhase::DeferHydration => "Deferring",
         ExecutionPhase::FreshnessAnalysis => "Analyzing",
         ExecutionPhase::InitAdapter => return None,
         ExecutionPhase::Lineage => "Generating",
@@ -42,6 +43,8 @@ pub fn get_phase_progress_text(phase: ExecutionPhase) -> Option<String> {
         ExecutionPhase::Render => "Rendering",
         ExecutionPhase::Run => "Running",
         ExecutionPhase::Schedule => "Scheduling",
+        // Special case - longer than action column width => no padding
+        ExecutionPhase::SchemaHydration => return Some("Downloading Schemas".to_string()),
         ExecutionPhase::TaskGraphBuild => "Building",
         ExecutionPhase::Unspecified => return None,
     };

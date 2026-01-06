@@ -95,7 +95,6 @@ pub const HYDRATING: &str = "  Hydrating";
 pub const TESTING: &str = "   Testing";
 pub const RUNNING: &str = "   Running";
 pub const COMPARING: &str = "   Comparing";
-pub const DEFERRING: &str = "Deferring State";
 pub const WAITING: &str = "   Waiting";
 pub const CLONING: &str = "   Cloning";
 pub const ABORTED: &str = "   Aborted";

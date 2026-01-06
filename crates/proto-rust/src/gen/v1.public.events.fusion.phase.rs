@@ -59,6 +59,8 @@ pub enum ExecutionPhase {
     InitAdapter = 50,
     /// Handling deferral. Fetching state source schemas from remote, hydrating relation, and schema cache
     DeferHydration = 60,
+    /// Hydration of schemas for static analysis
+    SchemaHydration = 65,
     /// Building the task graph from the schedule
     TaskGraphBuild = 70,
     /// Hydration of cached models, seeds, snapshots and sources
@@ -91,6 +93,7 @@ impl ExecutionPhase {
             Self::Compare => "EXECUTION_PHASE_COMPARE",
             Self::InitAdapter => "EXECUTION_PHASE_INIT_ADAPTER",
             Self::DeferHydration => "EXECUTION_PHASE_DEFER_HYDRATION",
+            Self::SchemaHydration => "EXECUTION_PHASE_SCHEMA_HYDRATION",
             Self::TaskGraphBuild => "EXECUTION_PHASE_TASK_GRAPH_BUILD",
             Self::NodeCacheHydration => "EXECUTION_PHASE_NODE_CACHE_HYDRATION",
             Self::Render => "EXECUTION_PHASE_RENDER",
@@ -112,6 +115,7 @@ impl ExecutionPhase {
             "EXECUTION_PHASE_COMPARE" => Some(Self::Compare),
             "EXECUTION_PHASE_INIT_ADAPTER" => Some(Self::InitAdapter),
             "EXECUTION_PHASE_DEFER_HYDRATION" => Some(Self::DeferHydration),
+            "EXECUTION_PHASE_SCHEMA_HYDRATION" => Some(Self::SchemaHydration),
             "EXECUTION_PHASE_TASK_GRAPH_BUILD" => Some(Self::TaskGraphBuild),
             "EXECUTION_PHASE_NODE_CACHE_HYDRATION" => Some(Self::NodeCacheHydration),
             "EXECUTION_PHASE_RENDER" => Some(Self::Render),

@@ -12,6 +12,7 @@ impl Display for ExecutionPhase {
             Self::Schedule => "Schedule",
             Self::InitAdapter => "InitAdapter",
             Self::DeferHydration => "DeferHydration",
+            Self::SchemaHydration => "SchemaHydration",
             Self::TaskGraphBuild => "TaskGraphBuild",
             Self::NodeCacheHydration => "NodeCacheHydration",
             Self::Render => "Render",

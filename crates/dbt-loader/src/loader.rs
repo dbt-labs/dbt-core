@@ -6,6 +6,7 @@ use dbt_common::constants::{
     DBT_CATALOGS_YML, DBT_DEPENDENCIES_YML, DBT_PACKAGES_LOCK_FILE, DBT_PACKAGES_YML,
 };
 use dbt_common::once_cell_vars::DISPATCH_CONFIG;
+use dbt_common::tracing::span_info::SpanStatusRecorder;
 use dbt_jinja_utils::invocation_args::InvocationArgs;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::phases::load::init::initialize_load_jinja_environment;
@@ -15,6 +16,7 @@ use dbt_schemas::schemas::telemetry::{ExecutionPhase, PhaseExecuted};
 use dbt_schemas::schemas::{DbtCloudConfig, DbtCloudProjectConfig};
 use dbt_schemas::state::DbtProfile;
 use dbt_serde_yaml;
+use dbt_telemetry::GenericOpItemProcessed;
 use fs_deps::get_or_install_packages;
 use pathdiff::diff_paths;
 use serde::Deserialize;
@@ -25,18 +27,19 @@ use std::path::{Path, PathBuf};
 use std::sync::RwLock;
 use std::time::SystemTime;
 use std::{fs, io};
+use tracing::Instrument;
 
 use ignore::gitignore::{Gitignore, GitignoreBuilder};
 
 use dbt_common::constants::{
     DBT_CLOUD_YML, DBT_CONFIG_DIR, DBT_INTERNAL_PACKAGES_DIR_NAME, DBT_PACKAGES_DIR_NAME,
-    DBT_PROJECT_YML, LOADING,
+    DBT_PROJECT_YML,
 };
 use dbt_common::error::LiftableResult;
 use project::DbtProject;
 
 use dbt_common::stdfs::last_modified;
-use dbt_common::{ErrorCode, ectx, err, tokiofs, with_progress};
+use dbt_common::{ErrorCode, create_debug_span, ectx, err, tokiofs};
 use dbt_common::{FsResult, fs_err};
 use dbt_schemas::schemas::project::{self, DbtProjectSimplified, ProjectDbtCloudConfig};
 use dbt_schemas::state::{DbtAsset, DbtPackage, DbtState, DbtVars, ResourcePathKind};
@@ -237,7 +240,14 @@ pub async fn load(
     let lookup_map = packages_lock.lookup_map();
     let mut collected_vars = vec![];
     {
-        let _pb = with_progress!( arg.io, spinner => LOADING, item => "packages" );
+        // TODO: use a dedicated event. Currently this is tightly coupled with tui_layer and assumes
+        // that `ExecutionPhase::LoadProject` will register it's progress spinner with "load" id.
+        let span = create_debug_span(GenericOpItemProcessed::new(
+            "load".to_string(),
+            "loading".to_string(),
+            "loaded".to_string(),
+            "packages".to_string(),
+        ));
 
         let packages = load_packages(
             &arg,
@@ -248,11 +258,20 @@ pub async fn load(
             &packages_install_path,
             token,
         )
-        .await?;
+        .instrument(span.clone())
+        .await
+        .record_status(&span)?;
         dbt_state.packages = packages;
     }
     {
-        let _pb = with_progress!( arg.io, spinner => LOADING, item => "internal packages" );
+        // TODO: use a dedicated event. Currently this is tightly coupled with tui_layer and assumes
+        // that `ExecutionPhase::LoadProject` will register it's progress spinner with "load" id.
+        let span = create_debug_span(GenericOpItemProcessed::new(
+            "load".to_string(),
+            "loading".to_string(),
+            "loaded".to_string(),
+            "internal packages".to_string(),
+        ));
 
         let packages = load_internal_packages(
             &arg,
@@ -262,7 +281,9 @@ pub async fn load(
             &internal_packages_install_path,
             token,
         )
-        .await?;
+        .instrument(span.clone())
+        .await
+        .record_status(&span)?;
         dbt_state.packages.extend(packages);
         dbt_state.vars = collected_vars.into_iter().collect();
     }

@@ -193,9 +193,11 @@ pub fn should_show_progress_message(
         Some(ExecutionPhase::Render) => show_options.contains(&ShowOptions::ProgressRender),
         Some(ExecutionPhase::Analyze) => show_options.contains(&ShowOptions::ProgressAnalyze),
         Some(ExecutionPhase::Run) => show_options.contains(&ShowOptions::ProgressRun),
-        Some(ExecutionPhase::NodeCacheHydration | ExecutionPhase::DeferHydration) => {
-            show_options.contains(&ShowOptions::ProgressHydrate)
-        }
+        Some(
+            ExecutionPhase::NodeCacheHydration
+            | ExecutionPhase::DeferHydration
+            | ExecutionPhase::SchemaHydration,
+        ) => show_options.contains(&ShowOptions::ProgressHydrate),
         // All other phases (including no Phase and Unspecified) match the general Progress option
         _ => show_options.contains(&ShowOptions::Progress),
     };
@@ -290,14 +292,14 @@ impl TelemetryConsumer for TuiLayer {
         span.attributes
             .output_flags()
             .contains(TelemetryOutputFlags::OUTPUT_CONSOLE)
-            // NodeEvaluated are at debug level, but should always be let through
+            // NodeEvaluated, NodeProcessed & GenericOp should always be let through
             // because of progress bars relying on them. Their output is controlled
             // in the handler based on the verbosity level.
-            && (span.attributes.is::<NodeEvaluated>()
+            && (span.attributes.is::<NodeEvaluated>() || span.attributes.is::<NodeProcessed>() || span
+                .attributes.is::<GenericOpExecuted>() || span.attributes.is::<GenericOpItemProcessed>()
                 || span
                     .severity_number
-                    .try_into()
-                    .is_ok_and(|level: tracing::Level| level <= self.max_log_verbosity))
+                    <= self.max_log_verbosity)
     }
 
     fn is_log_enabled(&self, log_record: &LogRecordInfo) -> bool {
@@ -305,10 +307,7 @@ impl TelemetryConsumer for TuiLayer {
             .attributes
             .output_flags()
             .contains(TelemetryOutputFlags::OUTPUT_CONSOLE)
-            && log_record
-                .severity_number
-                .try_into()
-                .is_ok_and(|level: tracing::Level| level <= self.max_log_verbosity)
+            && log_record.severity_number <= self.max_log_verbosity
     }
 
     fn on_span_start(&self, span: &SpanStartInfo, data_provider: &mut DataProvider<'_>) {
@@ -612,12 +611,38 @@ impl TuiLayer {
                         ""
                     )
                 }
-                ExecutionPhase::LoadProject
-                | ExecutionPhase::Clean
+                ExecutionPhase::LoadProject => {
+                    // TODO: remove this when progress contextual items in loader
+                    // use dedicated events
+                    let progress_info = ProgressInfo {
+                        progress_text: progress_text.to_string(),
+                        is_contextual_bar: false,
+                    };
+
+                    #[cfg(debug_assertions)]
+                    self.generic_op_id_to_progress
+                        .insert_sync("load".to_string(), progress_info)
+                        .expect(
+                            "A non unique id used for two distinct & concurrent generic operation spans!",
+                        );
+
+                    #[cfg(not(debug_assertions))]
+                    self.generic_op_bar_text
+                        .upsert_sync("load".to_string(), progress_info);
+
+                    log::info!(
+                        _TERM_ONLY_ = true,
+                        _TERM_EVENT_:serde = TermEvent::start_spinner(progress_text);
+                        ""
+                    );
+                }
+                ExecutionPhase::Clean
                 | ExecutionPhase::Parse
                 | ExecutionPhase::Schedule
                 | ExecutionPhase::TaskGraphBuild
-                | ExecutionPhase::Debug => {
+                | ExecutionPhase::Debug
+                | ExecutionPhase::DeferHydration
+                | ExecutionPhase::SchemaHydration => {
                     log::info!(
                         _TERM_ONLY_ = true,
                         _TERM_EVENT_:serde = TermEvent::start_spinner(progress_text);
@@ -627,7 +652,6 @@ impl TuiLayer {
                 ExecutionPhase::Unspecified
                 | ExecutionPhase::Compare
                 | ExecutionPhase::InitAdapter
-                | ExecutionPhase::DeferHydration
                 | ExecutionPhase::NodeCacheHydration
                 | ExecutionPhase::FreshnessAnalysis
                 | ExecutionPhase::Lineage => {
@@ -656,12 +680,33 @@ impl TuiLayer {
                     );
                 }
                 // Use spinner for phases without progress total
-                ExecutionPhase::LoadProject
-                | ExecutionPhase::Clean
+                ExecutionPhase::LoadProject => {
+                    // TODO: remove this when progress contextual items in loader
+                    // use dedicated events
+
+                    // Get the action text for the progress bar or spinner from mapping & remove it
+                    let id_and_progress_text = self.generic_op_id_to_progress.remove_sync("load");
+
+                    // In debug builds panic if id is not present, but in prod ignore missing.
+                    if let Some((_, progress_info)) = id_and_progress_text {
+                        // Finish the spinner
+                        log::info!(
+                            _TERM_ONLY_ = true,
+                            _TERM_EVENT_:serde = TermEvent::remove_spinner(progress_info.progress_text);
+                            ""
+                        );
+                    } else {
+                        #[cfg(debug_assertions)]
+                        panic!("A non existing id was used to end a generic operation span!");
+                    }
+                }
+                ExecutionPhase::Clean
                 | ExecutionPhase::Parse
                 | ExecutionPhase::Schedule
                 | ExecutionPhase::TaskGraphBuild
-                | ExecutionPhase::Debug => {
+                | ExecutionPhase::Debug
+                | ExecutionPhase::DeferHydration
+                | ExecutionPhase::SchemaHydration => {
                     log::info!(
                         _TERM_ONLY_ = true,
                         _TERM_EVENT_:serde = TermEvent::remove_spinner(progress_text);
@@ -671,7 +716,6 @@ impl TuiLayer {
                 ExecutionPhase::Unspecified
                 | ExecutionPhase::Compare
                 | ExecutionPhase::InitAdapter
-                | ExecutionPhase::DeferHydration
                 | ExecutionPhase::NodeCacheHydration
                 | ExecutionPhase::FreshnessAnalysis
                 | ExecutionPhase::Lineage => {
@@ -681,7 +725,7 @@ impl TuiLayer {
         }
     }
 
-    fn handle_node_evaluated_start(&self, _span: &SpanStartInfo, ne: &NodeEvaluated) {
+    fn handle_node_evaluated_start(&self, span: &SpanStartInfo, ne: &NodeEvaluated) {
         // Handle progress in interactive mode
         if self.is_interactive {
             let phase = ne.phase();
@@ -704,7 +748,7 @@ impl TuiLayer {
         }
 
         // Print line only in debug mode
-        if self.max_log_verbosity < LevelFilter::DEBUG {
+        if span.severity_number > self.max_log_verbosity {
             return;
         }
 
@@ -751,7 +795,7 @@ impl TuiLayer {
         }
 
         // Print line only in debug mode
-        if self.max_log_verbosity < LevelFilter::DEBUG {
+        if span.severity_number > self.max_log_verbosity {
             return;
         }
 
@@ -1260,7 +1304,7 @@ impl TuiLayer {
         });
     }
 
-    fn handle_generic_op_start(&self, _span: &SpanStartInfo, op: &GenericOpExecuted) {
+    fn handle_generic_op_start(&self, span: &SpanStartInfo, op: &GenericOpExecuted) {
         // Handle progress bars in interactive mode
         if self.is_interactive {
             // Create action text for the progress bar or spinner
@@ -1313,6 +1357,11 @@ impl TuiLayer {
             return;
         }
 
+        // Do not show if max verbosity is lower than span verbosity
+        if span.severity_number > self.max_log_verbosity {
+            return;
+        }
+
         let formatted_message = format_generic_op_start(op);
 
         with_suspended_progress_bars(|| {
@@ -1355,10 +1404,15 @@ impl TuiLayer {
             return;
         }
 
-        // Only show conclusion line if ShowOptions::Completed or All is enabled and non-interactive mode
+        // Only show conclusion line if ShowOptions::Completed or All is enabled, non-interactive mode
         if !self.show_options.contains(&ShowOptions::Completed)
             && !self.show_options.contains(&ShowOptions::All)
         {
+            return;
+        }
+
+        // Do not show if max verbosity is lower than span verbosity
+        if span.severity_number > self.max_log_verbosity {
             return;
         }
 
@@ -1380,19 +1434,30 @@ impl TuiLayer {
         });
     }
 
-    fn handle_generic_op_item_start(&self, _span: &SpanStartInfo, item: &GenericOpItemProcessed) {
+    fn handle_generic_op_item_start(&self, span: &SpanStartInfo, item: &GenericOpItemProcessed) {
         // Handle progress in interactive mode
         if self.is_interactive {
             self.generic_op_id_to_progress
                 .read_sync(&item.operation_id, |_, progress_info| {
-                    log::info!(
-                        _TERM_ONLY_ = true,
-                        _TERM_EVENT_:serde = TermEvent::add_bar_context_item(
-                            progress_info.progress_text.clone(),
-                            item.target.clone(),
-                        );
-                        ""
-                    )
+                    if progress_info.is_contextual_bar {
+                        log::info!(
+                            _TERM_ONLY_ = true,
+                            _TERM_EVENT_:serde = TermEvent::add_bar_context_item(
+                                progress_info.progress_text.clone(),
+                                item.target.clone(),
+                            );
+                            ""
+                        )
+                    } else {
+                        log::info!(
+                            _TERM_ONLY_ = true,
+                            _TERM_EVENT_:serde = TermEvent::add_spinner_context_item(
+                                progress_info.progress_text.clone(),
+                                item.target.clone(),
+                            );
+                            ""
+                        )
+                    }
                 });
         }
 
@@ -1400,6 +1465,11 @@ impl TuiLayer {
         if !self.show_options.contains(&ShowOptions::All)
             && self.max_log_verbosity < LevelFilter::DEBUG
         {
+            return;
+        }
+
+        // Do not show if max verbosity is lower than span verbosity
+        if span.severity_number > self.max_log_verbosity {
             return;
         }
 
@@ -1417,44 +1487,49 @@ impl TuiLayer {
         // Handle progress in interactive mode
         if self.is_interactive {
             self.generic_op_id_to_progress
-                .read_sync(&item.operation_id, |_, progress_info| match span.status {
-                    Some(SpanStatus {
-                        code: StatusCode::Error,
-                        ..
-                    }) => {
-                        log::info!(
-                            _TERM_ONLY_ = true,
-                            _STAT_EVENT_:serde = StatEvent::counter("failed", 1),
-                            _TERM_EVENT_:serde = TermEvent::finish_bar_context_item(
-                                progress_info.progress_text.clone(),
-                                item.target.clone()
+                .read_sync(&item.operation_id, |_, progress_info| {
+                    let term_event = if progress_info.is_contextual_bar {
+                        TermEvent::finish_bar_context_item(
+                            progress_info.progress_text.clone(),
+                            item.target.clone(),
+                        )
+                    } else {
+                        TermEvent::finish_spinner_context_item(
+                            progress_info.progress_text.clone(),
+                            item.target.clone(),
+                        )
+                    };
+
+                    match span.status {
+                        Some(SpanStatus {
+                            code: StatusCode::Error,
+                            ..
+                        }) => {
+                            log::info!(
+                                _TERM_ONLY_ = true,
+                                _STAT_EVENT_:serde = StatEvent::counter("failed", 1),
+                                _TERM_EVENT_:serde = term_event;
+                                ""
                             );
-                            ""
-                        );
-                    }
-                    Some(SpanStatus {
-                        code: StatusCode::Ok,
-                        ..
-                    }) => {
-                        log::info!(
-                            _TERM_ONLY_ = true,
-                            _STAT_EVENT_:serde = StatEvent::counter("succeeded", 1),
-                            _TERM_EVENT_:serde = TermEvent::finish_bar_context_item(
-                                progress_info.progress_text.clone(),
-                                item.target.clone()
+                        }
+                        Some(SpanStatus {
+                            code: StatusCode::Ok,
+                            ..
+                        }) => {
+                            log::info!(
+                                _TERM_ONLY_ = true,
+                                _STAT_EVENT_:serde = StatEvent::counter("succeeded", 1),
+                                _TERM_EVENT_:serde = term_event;
+                                ""
                             );
-                            ""
-                        );
-                    }
-                    _ => {
-                        log::info!(
-                            _TERM_ONLY_ = true,
-                            _TERM_EVENT_:serde = TermEvent::finish_bar_context_item(
-                                progress_info.progress_text.clone(),
-                                item.target.clone()
+                        }
+                        _ => {
+                            log::info!(
+                                _TERM_ONLY_ = true,
+                                _TERM_EVENT_:serde = term_event;
+                                ""
                             );
-                            ""
-                        );
+                        }
                     }
                 });
         }
@@ -1463,6 +1538,11 @@ impl TuiLayer {
         if !self.show_options.contains(&ShowOptions::Completed)
             && !self.show_options.contains(&ShowOptions::All)
         {
+            return;
+        }
+
+        // Do not show if max verbosity is lower than span verbosity
+        if span.severity_number > self.max_log_verbosity {
             return;
         }
 
