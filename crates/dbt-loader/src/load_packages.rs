@@ -2,8 +2,11 @@ use dbt_common::adapter::AdapterType;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::tracing::emit::emit_warn_log_message;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
+use sha2::{Digest, Sha256};
+use walkdir::WalkDir;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use dbt_common::constants::DBT_PROJECT_YML;
@@ -11,7 +14,7 @@ use dbt_common::constants::DBT_PROJECT_YML;
 use dbt_common::stdfs;
 
 use dbt_common::err;
-use dbt_common::{ErrorCode, FsResult};
+use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_schemas::state::{DbtPackage, DbtProfile, DbtVars};
 
 use crate::args::LoadArgs;
@@ -97,15 +100,19 @@ pub async fn load_internal_packages(
     .await
 }
 
-/// Load internal packages
+/// Sync internal packages to disk using hash comparison.
+/// Only writes files that have changed and removes stale files.
+///
+/// This function ensures that the internal dbt packages required for
+/// the specified adapter type are present in the given installation path.
+///
+/// It will also ensure that all the files are exactly as stored in the embedded assets,
+/// writing only those that differ based on SHA-256 hash comparison.
 pub fn persist_internal_packages(
     internal_packages_install_path: &Path,
     adapter_type: AdapterType,
     #[allow(unused)] enable_persist_compare_package: bool,
 ) -> FsResult<()> {
-    // Remove existing folders in the internal_packages_install_path
-    // to prevent user from modifying them
-    let _ = std::fs::remove_dir_all(internal_packages_install_path);
     // Copy the dbt-adapters and dbt-{adapter_type} to the packages_install_path
     let adapter_package = format!("dbt-{adapter_type}");
     let mut internal_packages = vec!["dbt-adapters", &adapter_package];
@@ -115,27 +122,61 @@ pub fn persist_internal_packages(
         AdapterType::Databricks => internal_packages.push("dbt-spark"),
         _ => {}
     }
-    // Copy each macro asset to the packages install path, skipping excluded paths
+
+    // Track expected file paths for cleanup
+    let mut expected_files: HashSet<PathBuf> = HashSet::new();
+
     for package in internal_packages {
         let mut found = false;
         for asset in assets::MacroAssets::iter() {
             let asset_path = asset.as_ref();
-            // Check if this asset belongs to the current package
             if !asset_path.starts_with(package) {
                 continue;
             }
             found = true;
 
             let install_path = internal_packages_install_path.join(asset_path);
+            expected_files.insert(install_path.clone());
 
-            // Create parent directories
-            if let Some(parent) = install_path.parent() {
-                std::fs::create_dir_all(parent).unwrap();
+            let asset_contents = assets::MacroAssets::get(asset_path).expect("Asset must exist");
+            let embedded_data = asset_contents.data.as_ref();
+
+            // Check if file needs to be written
+            let needs_write = if install_path.exists() {
+                // Compare hashes
+                let mut existing_data = Vec::new();
+                std::fs::File::open(&install_path)
+                    .and_then(|mut f| f.read_to_end(&mut existing_data))
+                    .map(|_| {
+                        let embedded_hash = Sha256::digest(embedded_data);
+                        let existing_hash = Sha256::digest(&existing_data);
+                        embedded_hash != existing_hash
+                    })
+                    .unwrap_or(true) // If read fails, write it
+            } else {
+                true // File doesn't exist, needs write
+            };
+
+            if needs_write {
+                if let Some(parent) = install_path.parent() {
+                    std::fs::create_dir_all(parent).map_err(|e| {
+                        fs_err!(
+                            ErrorCode::IoError,
+                            "Failed to create directory for dbt adapter package {}: {}",
+                            parent.display(),
+                            e
+                        )
+                    })?;
+                }
+                std::fs::write(&install_path, embedded_data).map_err(|e| {
+                    fs_err!(
+                        ErrorCode::IoError,
+                        "Failed to write file for dbt adapter package {}: {}",
+                        install_path.display(),
+                        e
+                    )
+                })?;
             }
-
-            // Copy the asset contents to the install path
-            let asset_contents = assets::MacroAssets::get(asset_path).unwrap();
-            std::fs::write(install_path, asset_contents.data).unwrap();
         }
 
         if !found {
@@ -145,6 +186,28 @@ pub fn persist_internal_packages(
                 package,
                 adapter_type
             );
+        }
+    }
+
+    // Remove extra files not in expected set
+    if internal_packages_install_path.exists() {
+        for entry in WalkDir::new(internal_packages_install_path)
+            .into_iter()
+            .filter_map(|e| e.ok())
+        {
+            if entry.file_type().is_file() {
+                let path = entry.path().to_path_buf();
+                if !expected_files.contains(&path) {
+                    std::fs::remove_file(&path).map_err(|e| {
+                        fs_err!(
+                            ErrorCode::IoError,
+                            "Failed to remove stale adapter package file {}: {}",
+                            path.display(),
+                            e
+                        )
+                    })?;
+                }
+            }
         }
     }
 
