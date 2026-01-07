@@ -272,7 +272,7 @@ impl TuiLayer {
             command,
             list_header_emitted: AtomicBool::new(false),
             group_skipped_tests: is_interactive && max_log_verbosity < LevelFilter::DEBUG,
-            generic_op_bar_text: SccHashMap::new(),
+            generic_op_id_to_progress: SccHashMap::new(),
         };
 
         res
@@ -627,7 +627,7 @@ impl TuiLayer {
                         );
 
                     #[cfg(not(debug_assertions))]
-                    self.generic_op_bar_text
+                    self.generic_op_id_to_progress
                         .upsert_sync("load".to_string(), progress_info);
 
                     log::info!(
@@ -1324,7 +1324,7 @@ impl TuiLayer {
                     "A non unique id used for two distinct & concurrent generic operation spans!",
                 );
             #[cfg(not(debug_assertions))]
-            self.generic_op_bar_text
+            self.generic_op_id_to_progress
                 .upsert_sync(op.operation_id.clone(), progress_info);
 
             match op.item_count_total {
