@@ -736,6 +736,7 @@ fn find_files_by_kind_and_extension(
                     package_name: project_name.to_string(),
                     base_path: in_dir.to_path_buf(),
                     path: path.clone(),
+                    original_path: path.clone(),
                 })
         })
         .collect::<HashSet<_>>()
@@ -983,10 +984,12 @@ async fn prepare_inline_sql(
     tokiofs::create_dir_all(out_dir).await?;
     tokiofs::write(&inline_path, inline_sql).await?;
 
+    let path = PathBuf::from(filename);
     // Create DbtAsset for the inline SQL
     let inline_asset = DbtAsset {
         base_path: out_dir.to_path_buf(),
-        path: PathBuf::from(filename),
+        path: path.clone(),
+        original_path: path,
         package_name: dbt_state.root_project_name().to_string(),
     };
 

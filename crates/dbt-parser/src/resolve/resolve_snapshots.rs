@@ -102,6 +102,7 @@ pub async fn resolve_snapshots(
     let mut sql_defined_snapshots = Vec::new();
     // Map target path to original macro path for checksum recalculation
     let mut snapshot_original_paths: HashMap<PathBuf, PathBuf> = HashMap::new();
+    let default_snapshots_path = vec![DBT_SNAPSHOTS_DIR_NAME.to_string()];
     for (macro_uid, macro_node) in macros {
         if macro_node.package_name == package_name && macro_uid.starts_with("snapshot.") {
             // Write the macro call to the `snapshots` directory
@@ -111,8 +112,8 @@ pub async fn resolve_snapshots(
                 .strip_prefix("snapshot_")
                 .expect("All snapshot macros should start with 'snapshot_'")
                 .to_string();
+
             // Preserve file layout for proper fqn generation
-            let default_snapshots_path = vec![DBT_SNAPSHOTS_DIR_NAME.to_string()];
             let original_relative_path = strip_resource_paths_from_ref_path(
                 &macro_node.path,
                 package
@@ -121,6 +122,7 @@ pub async fn resolve_snapshots(
                     .as_ref()
                     .unwrap_or(&default_snapshots_path),
             );
+
             let target_path = PathBuf::from(DBT_SNAPSHOTS_DIR_NAME)
                 .join(original_relative_path.with_file_name(format!("{snapshot_name}.sql")));
             let snapshot_path = arg.io.out_dir.join(&target_path);
@@ -134,12 +136,14 @@ pub async fn resolve_snapshots(
 
             snapshot_files.push(DbtAsset {
                 path: target_path.clone(),
+                original_path: macro_node.path.clone(),
                 package_name: package_name.clone(),
                 base_path: arg.io.out_dir.clone(),
             });
             sql_defined_snapshots.push(target_path);
         }
     }
+
     // Save snapshot from yml to the `snapshots` directory
     for (snapshot_name, mpe) in snapshot_properties.iter_mut() {
         // if mpe.schema_value
@@ -173,6 +177,7 @@ pub async fn resolve_snapshots(
                 stdfs::write(&snapshot_path, &sql)?;
                 let asset = DbtAsset {
                     path: target_path.clone(),
+                    original_path: mpe.relative_path.clone(),
                     package_name: package_name.clone(),
                     base_path: arg.io.out_dir.clone(),
                 };

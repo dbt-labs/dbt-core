@@ -104,6 +104,7 @@ pub fn resolve_macros(
     for dbt_asset in macro_files {
         let DbtAsset {
             path: macro_file,
+            original_path: _original_path,
             base_path,
             package_name,
         } = dbt_asset;
@@ -355,6 +356,7 @@ mod tests {
                 fs::write(base_path.join(&file_path), content).unwrap();
                 assets.push(DbtAsset {
                     base_path: base_path.clone(),
+                    original_path: file_path.clone(),
                     path: file_path,
                     package_name: "pkg".to_string(),
                 });
@@ -397,6 +399,7 @@ mod tests {
 
         let docs_asset = DbtAsset {
             base_path,
+            original_path: valid_path.clone(),
             path: valid_path,
             package_name: "pkg".to_string(),
         };

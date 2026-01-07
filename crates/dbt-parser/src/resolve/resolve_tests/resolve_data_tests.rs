@@ -1,4 +1,5 @@
 use crate::args::ResolveArgs;
+use crate::dbt_project_config::DbtProjectConfig;
 use crate::dbt_project_config::RootProjectConfigs;
 use crate::dbt_project_config::init_project_config;
 use crate::renderer::RenderCtx;
@@ -239,12 +240,8 @@ pub async fn resolve_data_tests(
             database: database.to_string(),
             schema: schema.to_string(),
             local_project_config,
-            resource_paths: package
-                .dbt_project
-                .test_paths
-                .as_ref()
-                .unwrap_or(&vec![])
-                .clone(),
+            // tests can be defined in any yaml config
+            resource_paths: package.dbt_project.all_source_paths(),
         }),
         jinja_env: env.clone(),
         runtime_config: runtime_config.clone(),
@@ -289,7 +286,7 @@ pub async fn resolve_data_tests(
         macro_spans: _macro_spans,
         properties: maybe_properties,
         status,
-        patch_path,
+        patch_path: _,
     } in test_sql_resources_map.iter()
     {
         let mut test_config = sql_file_info.config.clone();
@@ -342,10 +339,7 @@ pub async fn resolve_data_tests(
 
         // Check if this test_name corresponds to any test in our collected tests
         // If so, use the original_file_path from the GenericTestAsset for the fqn construction and original_file_path
-        let path_for_fqn = test_path_to_test_asset
-            .get(&dbt_asset.path)
-            .map(|test_asset| test_asset.original_file_path.clone())
-            .unwrap_or_else(|| dbt_asset.path.to_owned());
+        let path_for_fqn = dbt_asset.original_path.clone();
 
         // singular data tests are only found in test_paths, but generic tests
         // can be found in any directory in all_source_paths
@@ -396,17 +390,14 @@ pub async fn resolve_data_tests(
             .get(&dbt_asset.path)
             .map(|test_asset| test_asset.defined_at.clone());
 
-        let patch_path = test_path_to_test_asset
-            .get(&dbt_asset.path)
-            .map(|test_asset| test_asset.original_file_path.clone())
-            .or_else(|| patch_path.clone());
+        let patch_path = &dbt_asset.original_path.clone();
 
         let is_singular_data_test = defined_at.is_none();
 
         let manifest_original_file_path = if is_singular_data_test {
             generated_file_path.clone()
         } else {
-            patch_path.clone().unwrap()
+            patch_path.clone()
         };
 
         // Populate TestMetadata only for generic data tests (not singular .sql tests)
@@ -429,7 +420,7 @@ pub async fn resolve_data_tests(
                 name_span: dbt_common::Span::default(),
                 // original_file_path is a misnomer for tests, it's the path to the generated sql file
                 original_file_path: generated_file_path,
-                patch_path,
+                patch_path: Some(patch_path.to_path_buf()),
                 unique_id: unique_id.clone(),
                 fqn,
                 // dbt-core: description is always default ''
@@ -602,10 +593,10 @@ mod tests {
         let asset = GenericTestAsset {
             dbt_asset: DbtAsset {
                 base_path: PathBuf::new(),
+                original_path: PathBuf::from("models/schema.yml"),
                 path: PathBuf::from("generic_tests/not_null_customers_id.sql"),
                 package_name: "pkg".to_string(),
             },
-            original_file_path: PathBuf::from("models/schema.yml"),
             resource_name: "customers".to_string(),
             resource_type: "model".to_string(),
             test_name: "not_null_customers_id".to_string(),
@@ -633,12 +624,12 @@ mod tests {
         let asset = GenericTestAsset {
             dbt_asset: DbtAsset {
                 base_path: PathBuf::new(),
+                original_path: PathBuf::from("models/schema.yml"),
                 path: PathBuf::from(
                     "generic_tests/unique_combination_of_columns_customers_a__b.sql",
                 ),
                 package_name: "pkg".to_string(),
             },
-            original_file_path: PathBuf::from("models/schema.yml"),
             resource_name: "customers".to_string(),
             resource_type: "model".to_string(),
             test_name: "unique_combination_of_columns_customers_a__b".to_string(),

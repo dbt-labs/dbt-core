@@ -75,6 +75,9 @@ pub struct DbtAsset {
     // in_dir (or project_dir), if the asset is input,
     // out_dir (or target_dir), if asset is an output
     pub base_path: PathBuf,
+    // original location that generated this asset; used to generate
+    // the fqn based on original location to preserve config hierarchy
+    pub original_path: PathBuf,
     // relative path to project root
     pub path: PathBuf,
     // package name
@@ -111,7 +114,6 @@ impl fmt::Display for DbtAsset {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct GenericTestAsset {
     pub dbt_asset: DbtAsset,
-    pub original_file_path: PathBuf,
     pub resource_name: String,
     pub resource_type: String,
     pub test_name: String,
@@ -129,9 +131,8 @@ impl fmt::Display for GenericTestAsset {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "GenericTestAsset {{ dbt_asset: {}, original_file_path: {}, resource_name: {}, resource_type: {}, test_name: {}, test_metadata_name: {:?} }}",
+            "GenericTestAsset {{ dbt_asset: {}, resource_name: {}, resource_type: {}, test_name: {}, test_metadata_name: {:?} }}",
             self.dbt_asset,
-            self.original_file_path.display(),
             self.resource_name,
             self.resource_type,
             self.test_name,

@@ -203,6 +203,7 @@ fn persist_inner(
     stdfs::write(&test_file, generated_test_sql)?;
     let dbt_asset = DbtAsset {
         path,
+        original_path: original_file_path.clone(),
         base_path: io_args.out_dir.to_path_buf(),
         package_name: project_name.to_string(),
     };
@@ -227,7 +228,6 @@ fn persist_inner(
 
     Ok(GenericTestAsset {
         dbt_asset,
-        original_file_path: original_file_path.clone(),
         resource_name: test_config.resource_name.clone(),
         resource_type: test_config.resource_type.clone(),
         test_name: full_name,

@@ -31,10 +31,12 @@ mod tests {
         let sql_file = models_dir.join("test_model.sql");
         std::fs::write(&sql_file, "SELECT 1 as test").unwrap();
 
+        let path = PathBuf::from("models/test_model.sql");
         // Create the DbtAsset
         let test_asset = DbtAsset {
             base_path: base_path.clone(),
-            path: PathBuf::from("models/test_model.sql"),
+            original_path: path.clone(),
+            path: path.clone(),
             package_name: "test_package".to_string(),
         };
 
@@ -145,9 +147,11 @@ mod tests {
         for i in 0..60 {
             let sql_file = models_dir.join(format!("model_{i}.sql"));
             std::fs::write(&sql_file, format!("SELECT {i} as id")).unwrap();
+            let path = PathBuf::from(format!("models/model_{i}.sql"));
             many_assets.push(DbtAsset {
                 base_path: base_path.clone(),
-                path: PathBuf::from(format!("models/model_{i}.sql")),
+                original_path: path.clone(),
+                path: path.clone(),
                 package_name: "test_package".to_string(),
             });
         }
