@@ -2,10 +2,12 @@ use std::path::PathBuf;
 
 use dbt_test_primitives::is_update_golden_files_mode;
 
+pub mod dbt_cloud_config_guard;
 pub mod profiles;
 pub mod task;
 pub mod test_env_guard;
 
+pub use dbt_cloud_config_guard::DbtCloudConfigGuard;
 pub use test_env_guard::TestEnvGuard;
 
 mod schema;

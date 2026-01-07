@@ -1,3 +1,4 @@
+use crate::DbtCloudConfigGuard;
 use crate::task::TestError;
 use crate::task::env::TracingReloadHandle;
 
@@ -198,6 +199,8 @@ async fn run_test_tasks(
 
     // Create environment guard to isolate tests from external environment variables
     let _env_guard = TestEnvGuard::default();
+    // Create cloud config guard to isolate tests from dbt_cloud.yml file
+    let _cloud_guard = DbtCloudConfigGuard::new();
 
     // Set provided environment variables (may be empty)
     for (key, value) in set_env {
