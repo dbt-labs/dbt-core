@@ -144,7 +144,7 @@ pub async fn hydrate_or_download_manifest_from_cloud(
             // Don't fail the entire operation if API request fails
 
             emit_warn_log_message(
-                ErrorCode::Generic,
+                ErrorCode::NetworkError,
                 format!(
                     "Failed to request deferral manifest from the dbt platform for project {}, continuing without deferral. URL: {}, Error: {}",
                     project_id, url, e
@@ -174,7 +174,11 @@ pub async fn hydrate_or_download_manifest_from_cloud(
         };
 
         emit_warn_log_message(
-            ErrorCode::Generic,
+            if status.as_u16() == 429 {
+                ErrorCode::RateLimited
+            } else {
+                ErrorCode::HttpError
+            },
             format!(
                 "Failed to request deferral manifest from the dbt platform for project {}, continuing without deferral. HTTP status {}{}",
                 project_id, status, error_message
@@ -215,7 +219,7 @@ pub async fn hydrate_or_download_manifest_from_cloud(
             };
 
             emit_warn_log_message(
-                ErrorCode::Generic,
+                ErrorCode::NetworkError,
                 format!("Failed to download manifest: {}{}", e, source_error),
                 io.status_reporter.as_ref(),
             );
@@ -233,7 +237,11 @@ pub async fn hydrate_or_download_manifest_from_cloud(
         };
 
         emit_warn_log_message(
-            ErrorCode::Generic,
+            if status.as_u16() == 429 {
+                ErrorCode::RateLimited
+            } else {
+                ErrorCode::HttpError
+            },
             format!(
                 "Failed to download deferral manifest from the dbt platform for project {}, continuing without deferral. HTTP status {}{}",
                 project_id, status, status_text
@@ -269,7 +277,7 @@ pub async fn hydrate_or_download_manifest_from_cloud(
             // Invalid manifest data, fail gracefully
 
             emit_warn_log_message(
-                ErrorCode::Generic,
+                ErrorCode::ManifestLoadFailed,
                 "Downloaded manifest is neither valid JSON nor gzip-compressed JSON. Continuing without deferral.",
                 io.status_reporter.as_ref(),
             );

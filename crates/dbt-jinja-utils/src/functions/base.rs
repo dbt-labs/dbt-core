@@ -1100,7 +1100,7 @@ impl Object for Exceptions {
                 let warn_string = args.get::<String>("").unwrap_or_else(|_| "".to_string());
 
                 emit_warn_log_message(
-                    ErrorCode::Generic,
+                    ErrorCode::DependencyWarning,
                     warn_string,
                     self.io_args.status_reporter.as_ref(),
                 );
@@ -1286,7 +1286,7 @@ impl Object for Exceptions {
                 );
 
                 emit_warn_log_message(
-                    ErrorCode::Generic,
+                    ErrorCode::InvalidConfig,
                     warning,
                     self.io_args.status_reporter.as_ref(),
                 );

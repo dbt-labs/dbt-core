@@ -1174,7 +1174,7 @@ pub fn collect_hook_dependencies_from_config<T: DefaultTo<T> + 'static>(
                 // Log hook rendering error with clear context but don't fail the build
                 // Question (Ani): What should we do if a hook fails to render?
                 let err = fs_err!(
-                    ErrorCode::Generic,
+                    ErrorCode::JinjaError,
                     "Hook failed to render: {}",
                     err.to_string()
                 )

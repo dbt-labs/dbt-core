@@ -34,7 +34,7 @@ pub fn list_tags(clone_dir: &PathBuf) -> FsResult<Vec<String>> {
         .arg("tag")
         .arg("--list")
         .output()
-        .map_err(|e| fs_err!(ErrorCode::RuntimeError, "Error listing tags: {e}"))?;
+        .map_err(|e| fs_err!(ErrorCode::ExecutorError, "Error listing tags: {e}"))?;
     let tags = String::from_utf8(output.stdout).expect("Git output should be UTF-8");
     Ok(tags.split('\n').map(|s| s.to_string()).collect())
 }
@@ -50,7 +50,7 @@ pub fn checkout(clone_dir: &PathBuf, revision: &str) -> FsResult<String> {
         fetch_cmd
             .current_dir(clone_dir)
             .output()
-            .map_err(|e| fs_err!(ErrorCode::RuntimeError, "Error fetching: {e}"))?;
+            .map_err(|e| fs_err!(ErrorCode::ExecutorError, "Error fetching: {e}"))?;
     } else {
         let mut set_branch_cmd = Command::new("git");
         set_branch_cmd
@@ -60,13 +60,13 @@ pub fn checkout(clone_dir: &PathBuf, revision: &str) -> FsResult<String> {
             .arg("origin")
             .arg(revision)
             .output()
-            .map_err(|e| fs_err!(ErrorCode::RuntimeError, "Error setting branches: {e}"))?;
+            .map_err(|e| fs_err!(ErrorCode::ExecutorError, "Error setting branches: {e}"))?;
         fetch_cmd
             .current_dir(clone_dir)
             .arg("--tags")
             .arg(revision)
             .output()
-            .map_err(|e| fs_err!(ErrorCode::RuntimeError, "Error fetching: {e}"))?;
+            .map_err(|e| fs_err!(ErrorCode::ExecutorError, "Error fetching: {e}"))?;
     }
     let spec = if is_commit_revision {
         revision.to_string()
@@ -83,14 +83,14 @@ pub fn checkout(clone_dir: &PathBuf, revision: &str) -> FsResult<String> {
         .arg("--hard")
         .arg(&spec)
         .output()
-        .map_err(|e| fs_err!(ErrorCode::RuntimeError, "Error checking out: {e}"))?;
+        .map_err(|e| fs_err!(ErrorCode::ExecutorError, "Error checking out: {e}"))?;
     let mut get_commit_sha_cmd = Command::new("git");
     let commit_sha = get_commit_sha_cmd
         .current_dir(clone_dir)
         .arg("rev-parse")
         .arg(spec)
         .output()
-        .map_err(|e| fs_err!(ErrorCode::RuntimeError, "Error getting revision: {e}"))?;
+        .map_err(|e| fs_err!(ErrorCode::ExecutorError, "Error getting revision: {e}"))?;
     Ok(String::from_utf8(commit_sha.stdout)
         .expect("Git output should be UTF-8")
         .trim()
@@ -124,7 +124,7 @@ pub fn clone(
     clone_cmd.env("LC_ALL", "C");
     let output = clone_cmd
         .output()
-        .map_err(|e| fs_err!(ErrorCode::RuntimeError, "Error cloning repo: {e}"))?;
+        .map_err(|e| fs_err!(ErrorCode::ExecutorError, "Error cloning repo: {e}"))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8(output.stderr).expect("Git output should be UTF-8");
@@ -134,10 +134,10 @@ pub fn clone(
             basic_clone.arg("clone").arg(repo).arg(clone_dir);
             let basic_output = basic_clone
                 .output()
-                .map_err(|e| fs_err!(ErrorCode::RuntimeError, "Error cloning repo: {e}"))?;
+                .map_err(|e| fs_err!(ErrorCode::ExecutorError, "Error cloning repo: {e}"))?;
             if !basic_output.status.success() {
                 return err!(
-                    ErrorCode::RuntimeError,
+                    ErrorCode::ExecutorError,
                     "Git clone failed with exit status: {}",
                     String::from_utf8(basic_output.stderr).expect("Git output should be UTF-8")
                 );
@@ -145,7 +145,7 @@ pub fn clone(
             return Ok(String::from_utf8(basic_output.stdout).expect("Git output should be UTF-8"));
         }
         return err!(
-            ErrorCode::RuntimeError,
+            ErrorCode::ExecutorError,
             "Git clone failed with exit status: {}",
             stderr
         );
@@ -162,13 +162,13 @@ pub fn clone(
             .output()
             .map_err(|e| {
                 fs_err!(
-                    ErrorCode::RuntimeError,
+                    ErrorCode::ExecutorError,
                     "Error setting sparse checkout: {e}"
                 )
             })?;
         if !sparse_output.status.success() {
             return err!(
-                ErrorCode::RuntimeError,
+                ErrorCode::ExecutorError,
                 "Git sparse checkout of {subdir} failed with exit status: {}",
                 String::from_utf8(sparse_output.stderr).expect("Git output should be UTF-8")
             );
@@ -177,7 +177,7 @@ pub fn clone(
     if remove_git_dir {
         std::fs::remove_dir_all(clone_dir.join(".git")).map_err(|e| {
             fs_err!(
-                ErrorCode::RuntimeError,
+                ErrorCode::ExecutorError,
                 "Error removing .git directory: {e}",
             )
         })?;

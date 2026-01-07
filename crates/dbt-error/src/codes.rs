@@ -112,6 +112,59 @@ pub enum ErrorCode {
 
     GenericExecError = 1067,
     LicenseError = 1068,
+
+    // --------------------------------------------------------------------------------------------
+    // CLI args/config [1100–1149]
+    InvalidFlag = 1100,
+    UnsupportedFlag = 1101,
+    MissingProfile = 1102,
+    ProfileInvalid = 1103,
+    EnvVarMissing = 1104,
+    EnvVarInvalid = 1105,
+
+    // Project/manifest/package [1150–1199]
+    ManifestLoadFailed = 1150,
+    PackageResolutionFailed = 1151,
+    PackageDownloadFailed = 1152,
+    ProfileLoadFailed = 1153,
+
+    // Network/HTTP [1200–1249]
+    NetworkError = 1200,
+    HttpTimeout = 1201,
+    RateLimited = 1202,
+    HttpError = 1203,
+
+    // Auth/credentials [1250–1279]
+    AuthFailed = 1250,
+    CredentialMissing = 1251,
+    CredentialInvalid = 1252,
+    CredentialExpired = 1253,
+    PermissionDenied = 1254,
+
+    // Adapter/DB [1300–1399]
+    DbConnectionFailed = 1300,
+    DbAuthFailed = 1301,
+    DbSyntaxError = 1302,
+    DbResourceExceeded = 1303,
+    DbUnavailable = 1304,
+    DbTxnConflict = 1305,
+    DbNotFound = 1306,
+    DbUnsupportedFeature = 1307,
+    DbDriverError = 1308,
+    ReplayDataInvalid = 1309,
+    ReplayDataMissing = 1310,
+
+    // Execution/runtime [1400–1449]
+    PlannerError = 1400,
+    ExecutorError = 1401,
+    ConcurrencyError = 1402,
+    TaskTimeout = 1403,
+    TaskCancelled = 1404,
+    SqlMismatch = 1405,
+
+    // Serialization [1450–1460]
+    JsonError = 1450,
+    YamlError = 1451,
     // --------------------------------------------------------------------------------------------
     // Jinja
     MacroUnsupportedValueType = 1500,

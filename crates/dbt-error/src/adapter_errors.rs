@@ -33,12 +33,16 @@ pub enum AdapterErrorKind {
     Arrow,
     /// Unexpected result
     UnexpectedResult,
+    /// Recorded replay data was missing or invalid
+    ReplayDataInvalid,
+    /// Recorded replay data missing for requested operation
+    ReplayDataMissing,
+    /// SQL output did not match expected (conformance/build diff)
+    SqlMismatch,
     /// Unexpected Database Ref
     UnexpectedDbReference,
     /// Cancelled operation
     Cancelled,
-    /// Missing information
-    Incomplete,
     /// Unsupported type
     UnsupportedType,
     /// Input/Output error
@@ -71,9 +75,11 @@ impl fmt::Display for AdapterErrorKind {
                 AdapterErrorKind::Authentication => "Authentication Error",
                 AdapterErrorKind::Arrow => "Arrow Error",
                 AdapterErrorKind::UnexpectedResult => "Unexpected Result",
+                AdapterErrorKind::ReplayDataInvalid => "Replay Data Invalid",
+                AdapterErrorKind::ReplayDataMissing => "Replay Data Missing",
+                AdapterErrorKind::SqlMismatch => "SQL Mismatch",
                 AdapterErrorKind::UnexpectedDbReference => "Unexpected Database Reference",
                 AdapterErrorKind::Cancelled => "Cancelled",
-                AdapterErrorKind::Incomplete => "Incomplete",
                 AdapterErrorKind::UnsupportedType => "Unsupported Type",
                 AdapterErrorKind::Io => "IoError",
                 AdapterErrorKind::SerdeJSON => "Serde JSON Error",
@@ -91,26 +97,47 @@ impl From<AdapterErrorKind> for ErrorCode {
     fn from(val: AdapterErrorKind) -> Self {
         match val {
             AdapterErrorKind::Internal => ErrorCode::Unexpected,
-            AdapterErrorKind::SqlExecution => ErrorCode::ExecutionError,
+            AdapterErrorKind::SqlExecution => ErrorCode::ExecutorError,
             AdapterErrorKind::Configuration => ErrorCode::InvalidConfig,
-            AdapterErrorKind::Authentication => ErrorCode::AuthenticationError,
-            AdapterErrorKind::NotFound => ErrorCode::RemoteError,
-            AdapterErrorKind::Driver => ErrorCode::RemoteError,
+            AdapterErrorKind::Authentication => ErrorCode::DbAuthFailed,
+            AdapterErrorKind::NotFound => ErrorCode::DbNotFound,
+            AdapterErrorKind::Driver => ErrorCode::DbDriverError,
             AdapterErrorKind::Arrow => ErrorCode::ArrowError,
-            AdapterErrorKind::UnexpectedResult => ErrorCode::Unexpected,
+            AdapterErrorKind::UnexpectedResult => ErrorCode::ExecutorError,
+            AdapterErrorKind::ReplayDataInvalid => ErrorCode::ReplayDataInvalid,
+            AdapterErrorKind::ReplayDataMissing => ErrorCode::ReplayDataMissing,
+            AdapterErrorKind::SqlMismatch => ErrorCode::SqlMismatch,
             // When DB is configured incorrectly, e.g. RA3
             AdapterErrorKind::UnexpectedDbReference => ErrorCode::InvalidConfig,
-            AdapterErrorKind::Cancelled => ErrorCode::OperationCanceled,
+            AdapterErrorKind::Cancelled => ErrorCode::TaskCancelled,
             AdapterErrorKind::UnsupportedType => ErrorCode::InvalidType,
             AdapterErrorKind::Io => ErrorCode::IoError,
-            AdapterErrorKind::SerdeJSON => ErrorCode::SerializationError,
-            AdapterErrorKind::SerdeYAML => ErrorCode::SerializationError,
-            AdapterErrorKind::NotSupported => ErrorCode::NotSupported,
+            AdapterErrorKind::SerdeJSON => ErrorCode::JsonError,
+            AdapterErrorKind::SerdeYAML => ErrorCode::YamlError,
+            AdapterErrorKind::NotSupported => ErrorCode::DbUnsupportedFeature,
             // Test framework related
             AdapterErrorKind::Replay => ErrorCode::Generic,
-            AdapterErrorKind::Incomplete => ErrorCode::Generic,
             AdapterErrorKind::PythonModelsNotSupportedInReplay => ErrorCode::NotSupported,
         }
+    }
+}
+
+fn map_sqlstate_to_code(sqlstate: &str) -> Option<ErrorCode> {
+    if sqlstate.len() < 2 {
+        return None;
+    }
+
+    let class = sqlstate[0..2].to_ascii_uppercase();
+    match class.as_str() {
+        "08" => Some(ErrorCode::DbConnectionFailed),
+        "28" => Some(ErrorCode::DbAuthFailed),
+        "42" => Some(ErrorCode::DbSyntaxError),
+        "53" => Some(ErrorCode::DbResourceExceeded),
+        "57" | "58" => Some(ErrorCode::DbUnavailable),
+        "40" => Some(ErrorCode::DbTxnConflict),
+        "0A" => Some(ErrorCode::DbUnsupportedFeature),
+        "HY" => Some(ErrorCode::DbDriverError),
+        _ => None,
     }
 }
 
@@ -299,7 +326,7 @@ impl From<JoinError> for AdapterError {
 
 impl From<AdapterError> for Box<FsError> {
     fn from(err: AdapterError) -> Self {
-        let err_code = err.kind().into();
+        let err_code = map_sqlstate_to_code(err.sqlstate()).unwrap_or_else(|| err.kind().into());
         Box::new(FsError::new(err_code, format!("{err}")))
     }
 }

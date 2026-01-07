@@ -477,7 +477,11 @@ impl TryFrom<StringOrArrayOfStrings> for DbtCheckColsSpec {
                 if all == "all" {
                     Ok(DbtCheckColsSpec::All)
                 } else {
-                    err!(ErrorCode::Generic, "Invalid check_cols value: {}", all)
+                    err!(
+                        ErrorCode::InvalidConfig,
+                        "Invalid check_cols value: {}",
+                        all
+                    )
                 }
             }
             StringOrArrayOfStrings::ArrayOfStrings(cols) => Ok(DbtCheckColsSpec::Cols(cols)),
@@ -626,7 +630,13 @@ impl TryFrom<String> for HardDeletes {
             "ignore" => HardDeletes::Ignore,
             "invalidate" => HardDeletes::Invalidate,
             "new_record" => HardDeletes::NewRecord,
-            _ => return err!(ErrorCode::Generic, "Invalid hard_deletes value: {}", value),
+            _ => {
+                return err!(
+                    ErrorCode::InvalidConfig,
+                    "Invalid hard_deletes value: {}",
+                    value
+                );
+            }
         })
     }
 }

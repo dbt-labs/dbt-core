@@ -372,7 +372,7 @@ impl NodeResolverTracker for DummyNodeResolverTracker {
         _node_package_name: &Option<String>,
     ) -> FsResult<(String, MinijinjaValue, ModelStatus, Option<MinijinjaValue>)> {
         Err(fs_err!(
-            ErrorCode::Generic,
+            ErrorCode::NotImplemented,
             "DummyNodeResolverTracker: lookup_ref not implemented for '{}'",
             name
         ))
@@ -385,7 +385,7 @@ impl NodeResolverTracker for DummyNodeResolverTracker {
         table_name: &str,
     ) -> FsResult<(String, MinijinjaValue, ModelStatus)> {
         Err(fs_err!(
-            ErrorCode::Generic,
+            ErrorCode::NotImplemented,
             "DummyNodeResolverTracker: lookup_source not implemented for '{}.{}'",
             source_name,
             table_name
@@ -399,7 +399,7 @@ impl NodeResolverTracker for DummyNodeResolverTracker {
         _maybe_node_package_name: &Option<String>,
     ) -> FsResult<(String, MinijinjaValue, ModelStatus)> {
         Err(fs_err!(
-            ErrorCode::Generic,
+            ErrorCode::NotImplemented,
             "DummyNodeResolverTracker: lookup_function not implemented for '{}'",
             function_name
         ))
@@ -412,7 +412,7 @@ impl NodeResolverTracker for DummyNodeResolverTracker {
         _is_frontier: bool,
     ) -> FsResult<()> {
         Err(fs_err!(
-            ErrorCode::Generic,
+            ErrorCode::NotImplemented,
             "DummyNodeResolverTracker: update_ref_with_deferral not implemented"
         ))
     }

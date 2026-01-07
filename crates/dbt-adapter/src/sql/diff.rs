@@ -68,7 +68,7 @@ pub fn compare_sql(actual: &str, expected: &str) -> AdapterResult<()> {
     let diff_info = generate_visual_sql_diff(&actual, &expected);
 
     Err(AdapterError::new(
-        AdapterErrorKind::UnexpectedResult,
+        AdapterErrorKind::SqlMismatch,
         format!("SQL mismatch detected:\n\n{diff_info}"),
     ))
 }

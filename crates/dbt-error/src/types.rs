@@ -726,7 +726,7 @@ impl From<JoinError> for Box<FsError> {
 
 impl From<arrow::error::ArrowError> for FsError {
     fn from(e: arrow::error::ArrowError) -> Self {
-        FsError::new(ErrorCode::default(), "Arrow error")
+        FsError::new(ErrorCode::ArrowError, "Arrow error")
             .with_cause(WrappedError::Arrow(Box::new(e)))
     }
 }
@@ -843,10 +843,21 @@ impl From<dbt_serde_yaml::Error> for WrappedError {
     }
 }
 
+impl From<dbt_serde_yaml::Error> for FsError {
+    fn from(e: dbt_serde_yaml::Error) -> Self {
+        FsError::new(ErrorCode::YamlError, "YAML error").with_cause(WrappedError::SerdeYml(e))
+    }
+}
+
+impl From<dbt_serde_yaml::Error> for Box<FsError> {
+    fn from(e: dbt_serde_yaml::Error) -> Self {
+        Box::new(e.into())
+    }
+}
+
 impl From<serde_json::Error> for FsError {
     fn from(e: serde_json::Error) -> Self {
-        FsError::new(ErrorCode::SerializationError, "JSON error")
-            .with_cause(WrappedError::SerdeJson(e))
+        FsError::new(ErrorCode::JsonError, "JSON error").with_cause(WrappedError::SerdeJson(e))
     }
 }
 
