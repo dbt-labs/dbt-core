@@ -4,22 +4,22 @@ use crate::{
     value::{
         argtypes::type_name_suffix, value_map_with_capacity, ArgType, Kwargs, ValueKind, ValueMap,
     },
-    Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, Value,
+    Value,
 };
 
-/// Report invalid argument error (returns a MinijinjaError)
+/// Report invalid argument error (returns a minijinja::Error)
 #[macro_export]
 macro_rules! invalid_argument_inner {
     ($msg:expr) => {
-        MinijinjaError::new(MinijinjaErrorKind::InvalidArgument, $msg)
+        $crate::Error::new($crate::ErrorKind::InvalidArgument, $msg)
     };
 
     ($($arg:tt)*) => {
-        MinijinjaError::new(MinijinjaErrorKind::InvalidArgument, format!($($arg)*))
+        $crate::Error::new($crate::ErrorKind::InvalidArgument, format!($($arg)*))
     };
 }
 
-/// Report invalid argument error (returns an Err wrapped MinijinjaError)
+/// Report invalid argument error (returns an Err wrapped minijinja::Error)
 #[macro_export]
 macro_rules! invalid_argument {
     ($msg:expr) => {
@@ -35,11 +35,11 @@ macro_rules! invalid_argument {
 #[macro_export]
 macro_rules! missing_argument {
     ($msg:expr) => {
-        Err(MinijinjaError::new(MinijinjaErrorKind::MissingArgument, $msg))
+        Err($crate::Error::new($crate::ErrorKind::MissingArgument, $msg))
     };
 
     ($($arg:tt)*) => {
-        Err(MinijinjaError::new(MinijinjaErrorKind::MissingArgument, format!($($arg)*)))
+        Err($crate::Error::new($crate::ErrorKind::MissingArgument, format!($($arg)*)))
     };
 }
 
@@ -62,22 +62,18 @@ pub fn check_num_args(
     parser: &ArgParser,
     min: usize,
     max: usize,
-) -> Result<(), MinijinjaError> {
+) -> Result<(), crate::Error> {
     let num_args = parser.positional_len() + parser.kwargs_len();
 
     if num_args < min {
-        missing_argument!(format!(
-            "{} requires {}..{} argument(s)",
-            func_name.into(),
-            min,
-            max
+        Err(crate::Error::new(
+            crate::ErrorKind::MissingArgument,
+            format!("{} requires {}..{} argument(s)", func_name.into(), min, max),
         ))
     } else if num_args > max {
-        too_many_arguments!(format!(
-            "{} requires {}..{} argument(s)",
-            func_name.into(),
-            min,
-            max
+        Err(crate::Error::new(
+            crate::ErrorKind::TooManyArguments,
+            format!("{} requires {}..{} argument(s)", func_name.into(), min, max),
         ))
     } else {
         Ok(())
@@ -134,7 +130,7 @@ impl ArgParser {
     }
 
     /// Get and consume a value by name or next positional argument
-    pub fn get<T>(&mut self, name: &str) -> Result<T, MinijinjaError>
+    pub fn get<T>(&mut self, name: &str) -> Result<T, crate::Error>
     where
         T: TryFrom<Value>,
         T::Error: std::fmt::Display,
@@ -142,8 +138,8 @@ impl ArgParser {
         // First check kwargs
         if let Some(value) = self.kwargs.remove(name) {
             return T::try_from(value).map_err(|e| {
-                MinijinjaError::new(
-                    MinijinjaErrorKind::InvalidOperation,
+                crate::Error::new(
+                    crate::ErrorKind::InvalidOperation,
                     format!("Failed to convert argument '{name}': {e}"),
                 )
             });
@@ -156,21 +152,21 @@ impl ArgParser {
         if let Some(value) = self.positional.first().cloned() {
             self.positional.remove(0);
             return T::try_from(value).map_err(|e| {
-                MinijinjaError::new(
-                    MinijinjaErrorKind::InvalidOperation,
+                crate::Error::new(
+                    crate::ErrorKind::InvalidOperation,
                     format!("Failed to convert next positional argument: {e}"),
                 )
             });
         }
 
-        Err(MinijinjaError::new(
-            MinijinjaErrorKind::InvalidOperation,
+        Err(crate::Error::new(
+            crate::ErrorKind::InvalidOperation,
             format!("Required argument '{name}' not provided"),
         ))
     }
 
     /// Get and consume the next positional argument
-    pub fn next_positional<T>(&mut self) -> Result<T, MinijinjaError>
+    pub fn next_positional<T>(&mut self) -> Result<T, crate::Error>
     where
         T: TryFrom<Value>,
         T::Error: std::fmt::Display,
@@ -178,14 +174,14 @@ impl ArgParser {
         if let Some(value) = self.positional.first().cloned() {
             self.positional.remove(0);
             return T::try_from(value).map_err(|e| {
-                MinijinjaError::new(
-                    MinijinjaErrorKind::InvalidOperation,
+                crate::Error::new(
+                    crate::ErrorKind::InvalidOperation,
                     format!("Failed to convert next positional argument: {e}"),
                 )
             });
         }
-        Err(MinijinjaError::new(
-            MinijinjaErrorKind::InvalidOperation,
+        Err(crate::Error::new(
+            crate::ErrorKind::InvalidOperation,
             "No positional arguments left".to_string(),
         ))
     }
@@ -200,7 +196,7 @@ impl ArgParser {
     }
 
     /// Get and consume a value by either of two names or next positional argument
-    pub fn get_either<T>(&mut self, name1: &str, name2: &str) -> Result<T, MinijinjaError>
+    pub fn get_either<T>(&mut self, name1: &str, name2: &str) -> Result<T, crate::Error>
     where
         T: TryFrom<Value>,
         T::Error: std::fmt::Display,
@@ -208,8 +204,8 @@ impl ArgParser {
         // First check kwargs for name1
         if let Some(value) = self.kwargs.remove(name1) {
             return T::try_from(value).map_err(|e| {
-                MinijinjaError::new(
-                    MinijinjaErrorKind::InvalidOperation,
+                crate::Error::new(
+                    crate::ErrorKind::InvalidOperation,
                     format!("Failed to convert argument '{name1}': {e}"),
                 )
             });
@@ -218,8 +214,8 @@ impl ArgParser {
         // Then check kwargs for name2
         if let Some(value) = self.kwargs.remove(name2) {
             return T::try_from(value).map_err(|e| {
-                MinijinjaError::new(
-                    MinijinjaErrorKind::InvalidOperation,
+                crate::Error::new(
+                    crate::ErrorKind::InvalidOperation,
                     format!("Failed to convert argument '{name2}': {e}"),
                 )
             });
@@ -229,15 +225,15 @@ impl ArgParser {
         if let Some(value) = self.positional.first().cloned() {
             self.positional.remove(0);
             return T::try_from(value).map_err(|e| {
-                MinijinjaError::new(
-                    MinijinjaErrorKind::InvalidOperation,
+                crate::Error::new(
+                    crate::ErrorKind::InvalidOperation,
                     format!("Failed to convert next positional argument: {e}"),
                 )
             });
         }
 
-        Err(MinijinjaError::new(
-            MinijinjaErrorKind::InvalidOperation,
+        Err(crate::Error::new(
+            crate::ErrorKind::InvalidOperation,
             format!("Required argument '{name1}' or '{name2}' not provided"),
         ))
     }
@@ -326,19 +322,19 @@ impl ArgParser {
         func_name: impl Into<String>,
         min: usize,
         max: usize,
-    ) -> Result<(), MinijinjaError> {
+    ) -> Result<(), crate::Error> {
         let num_args = self.positional_len() + self.kwargs_len();
         let err_msg = format!("{} requires {}..{} argument(s)", func_name.into(), min, max);
 
         // TODO: migrate Jinja Error related macros from dbt-adapter/src/macros.rs here
         if num_args < min {
-            Err(MinijinjaError::new(
-                MinijinjaErrorKind::InvalidArgument,
+            Err(crate::Error::new(
+                crate::ErrorKind::InvalidArgument,
                 err_msg,
             ))
         } else if num_args > max {
-            Err(MinijinjaError::new(
-                MinijinjaErrorKind::TooManyArguments,
+            Err(crate::Error::new(
+                crate::ErrorKind::TooManyArguments,
                 err_msg,
             ))
         } else {
@@ -347,10 +343,10 @@ impl ArgParser {
     }
 
     /// Assert that all arguments have been consumed
-    pub fn assert_all_used(&self) -> Result<(), MinijinjaError> {
+    pub fn assert_all_used(&self) -> Result<(), crate::Error> {
         if self.positional_len() > 0 || !self.kwargs.is_empty() {
-            Err(MinijinjaError::new(
-                MinijinjaErrorKind::TooManyArguments,
+            Err(crate::Error::new(
+                crate::ErrorKind::TooManyArguments,
                 "Too many positional arguments".to_string(),
             ))
         } else {
@@ -459,7 +455,7 @@ impl<'a> ArgsIter<'a> {
     }
 
     /// Get the next (required) positional argument.
-    pub fn next_arg<T>(&'a self) -> Result<T, MinijinjaError>
+    pub fn next_arg<T>(&'a self) -> Result<T, crate::Error>
     where
         T: ArgType<'a, Output = T>,
     {
@@ -492,14 +488,14 @@ impl<'a> ArgsIter<'a> {
     ///    # Ok(String::new())
     /// }
     /// ```
-    pub fn next_pos_arg_aliased<T>(&'a self, aliases: &[&'a str]) -> Result<T, MinijinjaError>
+    pub fn next_pos_arg_aliased<T>(&'a self, aliases: &[&'a str]) -> Result<T, crate::Error>
     where
         T: ArgType<'a, Output = T>,
     {
         self._next_arg_impl::<T>(aliases)
     }
 
-    fn _next_arg_impl<T>(&'a self, aliases: &[&'a str]) -> Result<T, MinijinjaError>
+    fn _next_arg_impl<T>(&'a self, aliases: &[&'a str]) -> Result<T, crate::Error>
     where
         T: ArgType<'a, Output = T>,
     {
@@ -529,7 +525,7 @@ impl<'a> ArgsIter<'a> {
         &'a self,
         idx: usize,
         aliases: &[&'a str],
-    ) -> Result<T, MinijinjaError>
+    ) -> Result<T, crate::Error>
     where
         T: ArgType<'a, Output = T>,
     {
@@ -540,7 +536,7 @@ impl<'a> ArgsIter<'a> {
         self.kwargs
             .get::<'a, T>(name)
             .map_err(|err| {
-                if err.kind() == MinijinjaErrorKind::MissingArgument {
+                if err.kind() == crate::ErrorKind::MissingArgument {
                     // Missing kwarg would be the wrong diagnostic here,
                     // so we produce a better one.
                     self._missing_pos_arg(idx, aliases)
@@ -588,7 +584,7 @@ impl<'a> ArgsIter<'a> {
     ///     Ok(())
     /// }
     /// ```
-    pub fn next_kwarg<T>(&'a self, name: &'a str) -> Result<T, MinijinjaError>
+    pub fn next_kwarg<T>(&'a self, name: &'a str) -> Result<T, crate::Error>
     where
         T: ArgType<'a, Output = T>,
     {
@@ -624,18 +620,14 @@ impl<'a> ArgsIter<'a> {
         &'a self,
         name: &'a str,
         aliases: &[&'a str],
-    ) -> Result<T, MinijinjaError>
+    ) -> Result<T, crate::Error>
     where
         T: ArgType<'a, Output = T>,
     {
         self._next_kwarg_impl::<T>(name, aliases)
     }
 
-    fn _next_kwarg_impl<T>(
-        &'a self,
-        name: &'a str,
-        aliases: &[&'a str],
-    ) -> Result<T, MinijinjaError>
+    fn _next_kwarg_impl<T>(&'a self, name: &'a str, aliases: &[&'a str]) -> Result<T, crate::Error>
     where
         T: ArgType<'a, Output = T>,
     {
@@ -660,7 +652,7 @@ impl<'a> ArgsIter<'a> {
 
     /// Ensure all positional arguments have been consumed when no kwargs are expected.
     #[inline(never)]
-    pub fn finish(&self) -> Result<(), MinijinjaError> {
+    pub fn finish(&self) -> Result<(), crate::Error> {
         if self.index.get() < self.num_pos_args {
             // The user called finish() now, so the current iterator position
             // is the expected maximum number of positional arguments.
@@ -689,7 +681,7 @@ impl<'a> ArgsIter<'a> {
     /// ```python
     ///     def f(x, y=20, **kwargs)
     /// ```
-    pub fn trailing_kwargs(&'a self) -> Result<&'a Kwargs, MinijinjaError> {
+    pub fn trailing_kwargs(&'a self) -> Result<&'a Kwargs, crate::Error> {
         if self.index.get() < self.num_pos_args {
             // The user called trailing_kwargs() now, so the current iterator
             // position is the expected maximum number of positional arguments.
@@ -700,16 +692,16 @@ impl<'a> ArgsIter<'a> {
         }
     }
 
-    fn _didnt_expect_any_kwarg(&self) -> MinijinjaError {
-        let err = MinijinjaError::new(
-            MinijinjaErrorKind::TooManyArguments,
+    fn _didnt_expect_any_kwarg(&self) -> crate::Error {
+        let err = crate::Error::new(
+            crate::ErrorKind::TooManyArguments,
             format!("{}() takes no keyword arguments", self.fn_name),
         );
         err
     }
 
     #[inline(never)]
-    fn _unexpected_positional_arg(&self, max_pos_args: usize) -> MinijinjaError {
+    fn _unexpected_positional_arg(&self, max_pos_args: usize) -> crate::Error {
         // handle the unexpected positional argument case
         debug_assert!(
             max_pos_args >= self.pos_params.len(),
@@ -740,11 +732,11 @@ were consumed from the iterator. You are misusing the ArgsIter API.",
                 self.num_pos_args
             )
         };
-        MinijinjaError::new(MinijinjaErrorKind::TooManyArguments, msg)
+        crate::Error::new(crate::ErrorKind::TooManyArguments, msg)
     }
 
     #[inline(never)]
-    fn _missing_pos_arg(&self, idx: usize, aliases: &[&'a str]) -> MinijinjaError {
+    fn _missing_pos_arg(&self, idx: usize, aliases: &[&'a str]) -> crate::Error {
         let msg = match self.pos_params {
             PosParams::Named(param_names) => {
                 use std::fmt::Write as _;
@@ -819,7 +811,7 @@ were consumed from the iterator. You are misusing the ArgsIter API.",
                 }
             }
         };
-        MinijinjaError::new(MinijinjaErrorKind::MissingArgument, msg)
+        crate::Error::new(crate::ErrorKind::MissingArgument, msg)
     }
 
     /// Add more detail to the errors returned by `T::from_value()` calls.
@@ -829,10 +821,10 @@ were consumed from the iterator. You are misusing the ArgsIter API.",
         idx: Option<usize>,
         name: Option<&str>,
         value: Option<&'a Value>,
-        err: MinijinjaError,
-    ) -> MinijinjaError {
+        err: crate::Error,
+    ) -> crate::Error {
         let kind = err.kind();
-        if kind == MinijinjaErrorKind::InvalidOperation {
+        if kind == crate::ErrorKind::InvalidOperation {
             // `got` is the name of the "type" of the value we've got. We try
             // to determine the name that gets as closes as possible to the
             // type of the value if this were Jinja in Python.
@@ -873,19 +865,19 @@ were consumed from the iterator. You are misusing the ArgsIter API.",
                     name, self.fn_name, got, expected
                 ),
             };
-            MinijinjaError::new(kind, detail)
+            crate::Error::new(kind, detail)
         } else {
             err
         }
     }
 
-    fn _ensure_pos_arg_not_in_kwargs(&'a self, idx: usize) -> Result<(), MinijinjaError> {
+    fn _ensure_pos_arg_not_in_kwargs(&'a self, idx: usize) -> Result<(), crate::Error> {
         let name = self.pos_params.get(idx);
         self._ensure_not_in_kwargs(name)
     }
 
     #[inline(never)]
-    fn _ensure_not_in_kwargs(&'a self, name: Option<&'a str>) -> Result<(), MinijinjaError> {
+    fn _ensure_not_in_kwargs(&'a self, name: Option<&'a str>) -> Result<(), crate::Error> {
         if self.kwargs.values.is_empty() {
             return Ok(());
         }
@@ -898,8 +890,8 @@ were consumed from the iterator. You are misusing the ArgsIter API.",
         // we should ensure it is not present in the kwargs as well.
         let kwarg = self.kwargs.peek::<Option<&'a Value>>(name)?;
         if kwarg.is_some() {
-            let err = MinijinjaError::new(
-                MinijinjaErrorKind::TooManyArguments,
+            let err = crate::Error::new(
+                crate::ErrorKind::TooManyArguments,
                 format!(
                     "{}() got multiple values for argument '{}'",
                     self.fn_name, name
@@ -1150,7 +1142,7 @@ mod tests {
     // ArgsIter tests ---------------------------------------------------------
 
     // def f(x, y, alpha=None, beta=None)
-    fn f(args: &[Value]) -> Result<(i64, i64, Option<Value>, Option<Value>), MinijinjaError> {
+    fn f(args: &[Value]) -> Result<(i64, i64, Option<Value>, Option<Value>), crate::Error> {
         let iter = ArgsIter::new("f", &["x", "y"], args);
         let x = iter.next_arg::<i64>()?;
         let y = iter.next_arg::<i64>()?;
@@ -1390,13 +1382,13 @@ mod tests {
     }
 
     // def now()
-    fn now(args: &[Value]) -> Result<(), MinijinjaError> {
+    fn now(args: &[Value]) -> Result<(), crate::Error> {
         let iter = ArgsIter::for_unnamed_pos_args("now", 0, args);
         iter.finish()
     }
 
     // def tuple.count()
-    fn count(args: &[Value]) -> Result<String, MinijinjaError> {
+    fn count(args: &[Value]) -> Result<String, crate::Error> {
         let iter = ArgsIter::for_unnamed_pos_args("tuple.count", 1, args);
         let arg = iter.next_arg::<&str>()?;
         iter.finish()?;
@@ -1506,7 +1498,7 @@ mod tests {
     }
 
     // def print_table(max_columns=20, max_rows=6, **kwargs)
-    fn print_table(args: &[Value]) -> Result<(i64, i64, Kwargs), MinijinjaError> {
+    fn print_table(args: &[Value]) -> Result<(i64, i64, Kwargs), crate::Error> {
         let iter = ArgsIter::new("print_table", &[], args);
         let max_columns = iter.next_kwarg::<Option<i64>>("max_columns")?.unwrap_or(20);
         let max_rows = iter.next_kwarg::<Option<i64>>("max_rows")?.unwrap_or(6);
@@ -1611,14 +1603,14 @@ mod tests {
 
     impl Object for NotMyStruct {}
 
-    fn unwrap_my_struct(args: &[Value]) -> Result<i32, MinijinjaError> {
+    fn unwrap_my_struct(args: &[Value]) -> Result<i32, crate::Error> {
         let iter = ArgsIter::new("unwrap_my_struct", &["x"], args);
         let my_struct = iter.next_arg::<&MyStruct>()?;
         iter.finish()?;
         Ok(my_struct.value)
     }
 
-    fn take_unamed_args(args: &[Value]) -> Result<i32, MinijinjaError> {
+    fn take_unamed_args(args: &[Value]) -> Result<i32, crate::Error> {
         let iter = ArgsIter::for_unnamed_pos_args("take_unamed_args", 2, args);
         let my_struct = iter.next_arg::<&MyStruct>()?;
         let _not_my_struct = iter.next_arg::<&NotMyStruct>()?;
@@ -1704,7 +1696,7 @@ mod tests {
     /// ```python
     /// def string_type(size: int) -> str
     /// ```
-    fn string_type(args: &[Value]) -> Result<String, MinijinjaError> {
+    fn string_type(args: &[Value]) -> Result<String, crate::Error> {
         let iter = ArgsIter::new("string_type", &["size"], args);
         let size = iter.next_arg::<Option<i64>>()?;
         iter.finish()?;
@@ -1743,7 +1735,7 @@ mod tests {
     ///     // and
     ///     def information_schema(self, view_name)
     /// ```
-    fn information_schema(args: &[Value]) -> Result<String, MinijinjaError> {
+    fn information_schema(args: &[Value]) -> Result<String, crate::Error> {
         let iter = ArgsIter::new("information_schema", &["identifier"], args);
         let identifier = iter.next_pos_arg_aliased::<&str>(&["view_name"])?;
         iter.finish()?;
@@ -1757,7 +1749,7 @@ mod tests {
     ///     // and
     ///     def information_schema(self, view_name=None)
     /// ```
-    fn information_schema2(args: &[Value]) -> Result<String, MinijinjaError> {
+    fn information_schema2(args: &[Value]) -> Result<String, crate::Error> {
         let iter = ArgsIter::new("information_schema", &[], args);
         let identifier = iter.next_kwarg_aliased::<Option<&str>>("identifier", &["view_name"])?;
         iter.finish()?;

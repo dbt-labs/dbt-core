@@ -322,15 +322,15 @@ macro_rules! render {
     }
 }
 
-/// Report MinijinjaError
+/// Report minijinja::Error
 #[macro_export]
 macro_rules! jinja_err {
     ($kind:expr, $msg:expr) => {
-        Err(MinijinjaError::new($kind, $msg))
+        Err($crate::Error::new($kind, $msg))
     };
 
     ($kind:expr, $($arg:tt)*) => {
-        Err(MinijinjaError::new($kind, format!($($arg)*)))
+        Err($crate::Error::new($kind, format!($($arg)*)))
     };
 }
 

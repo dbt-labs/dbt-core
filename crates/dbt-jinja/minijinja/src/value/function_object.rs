@@ -9,7 +9,6 @@ use std::fmt;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use crate::error::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind};
 use crate::listener::RenderingEventListener;
 use crate::value::{Object, Value};
 use crate::vm::State;
@@ -40,7 +39,7 @@ impl FunctionObject {
 
     /// Render the function as a qualified function call
     /// This is what gets returned when the function object is rendered in Jinja
-    fn render_function_call(&self) -> Result<Value, MinijinjaError> {
+    fn render_function_call(&self) -> Result<Value, crate::Error> {
         // For functions, we return the qualified name as-is for now
         // In the future, this could be enhanced to include argument placeholders
         // e.g., "database.schema.function_name" or "database.schema.function_name(?)"
@@ -55,13 +54,13 @@ impl Object for FunctionObject {
         name: &str,
         _args: &[Value],
         _listeners: &[Rc<dyn RenderingEventListener>],
-    ) -> Result<Value, MinijinjaError> {
+    ) -> Result<Value, crate::Error> {
         match name {
             "render" => self.render_function_call(),
             // For now, functions don't expose database/schema/identifier methods
             // as this would require parsing the qualified name
-            _ => Err(MinijinjaError::new(
-                MinijinjaErrorKind::UnknownMethod,
+            _ => Err(crate::Error::new(
+                crate::ErrorKind::UnknownMethod,
                 format!("Function object has no method named '{name}'"),
             )),
         }
