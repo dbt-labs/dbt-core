@@ -33,9 +33,11 @@ use regex::Regex;
 /// * `str.count`
 /// * `str.endswith`
 /// * `str.find`
+/// * `str.index`
 /// * `str.isalnum`
 /// * `str.isalpha`
 /// * `str.isascii`
+/// * `str.isidentifier`
 /// * `str.isdigit`
 /// * `str.islower`
 /// * `str.isnumeric`
@@ -43,6 +45,7 @@ use regex::Regex;
 /// * `str.join`
 /// * `str.lower`
 /// * `str.lstrip`
+/// * `str.partition`
 /// * `str.replace`
 /// * `str.rfind`
 /// * `str.rstrip`
@@ -51,6 +54,7 @@ use regex::Regex;
 /// * `str.startswith`
 /// * `str.strip`
 /// * `str.title`
+/// * `str.translate`
 /// * `str.upper`
 #[cfg_attr(docsrs, doc(cfg(feature = "pycompat")))]
 pub fn unknown_method_callback(
@@ -114,6 +118,17 @@ fn string_methods(value: &Value, method: &str, args: &[Value]) -> Result<Value, 
             let () = from_args(args)?;
             Ok(Value::from(s.is_ascii()))
         }
+        "isidentifier" => {
+            let () = from_args(args)?;
+            let is_id = !s.is_empty() && {
+                let mut chars = s.chars();
+                // SAFETY: s is not empty
+                let first = chars.next().unwrap();
+                (first.is_alphabetic() || first == '_')
+                    && chars.all(|c| c.is_alphanumeric() || c == '_')
+            };
+            Ok(Value::from(is_id))
+        }
         "strip" => {
             let (chars,): (Option<&str>,) = from_args(args)?;
             Ok(Value::from(if let Some(chars) = chars {
@@ -152,6 +167,46 @@ fn string_methods(value: &Value, method: &str, args: &[Value]) -> Result<Value, 
             // one shall not call into these filters.  However we consider ourselves
             // privileged.
             Ok(Value::from(minijinja::filters::title(s.into())))
+        }
+        "translate" => {
+            let (table,): (&Value,) = from_args(args)?;
+            if table.kind() != ValueKind::Map {
+                // only support dictionaries
+                return Err(Error::new(
+                    ErrorKind::InvalidOperation,
+                    "translate() argument must be a dict".to_string(),
+                ));
+            }
+            // SAFETY: table kind is Map
+            let obj = table.as_object().unwrap();
+            let mut result = String::new();
+            for c in s.chars() {
+                let cp = c as u32 as f64;
+                let key = Value::from(cp);
+                if let Some(val) = obj.get_value(&key) {
+                    if val.is_none() {
+                        // delete
+                        continue;
+                    } else if let Some(new_cp) = val.as_i64() {
+                        if let Some(new_c) = char::from_u32(new_cp as u32) {
+                            result.push(new_c);
+                        } else {
+                            return Err(Error::new(
+                                ErrorKind::InvalidOperation,
+                                format!("invalid code point: {new_cp}"),
+                            ));
+                        }
+                    } else {
+                        return Err(Error::new(
+                            ErrorKind::InvalidOperation,
+                            "translate table values must be integers or None".to_string(),
+                        ));
+                    }
+                } else {
+                    result.push(c);
+                }
+            }
+            Ok(Value::from(result))
         }
         "split" => {
             let (sep, maxsplits) = from_args(args)?;
@@ -211,6 +266,30 @@ fn string_methods(value: &Value, method: &str, args: &[Value]) -> Result<Value, 
                 Some(x) => x as i64,
                 None => -1,
             }))
+        }
+        "index" => {
+            let (sub, start, end): (&str, Option<i64>, Option<i64>) = from_args(args)?;
+            let len = s.len() as i64;
+            let start_idx = start.unwrap_or(0);
+            let start_idx = if start_idx < 0 {
+                (len + start_idx).max(0) as usize
+            } else {
+                start_idx.min(len) as usize
+            };
+            let end_idx = end.unwrap_or(len);
+            let end_idx = if end_idx < 0 {
+                (len + end_idx).max(0) as usize
+            } else {
+                end_idx.min(len) as usize
+            };
+            if let Some(pos) = s[start_idx..end_idx].find(sub) {
+                Ok(Value::from((start_idx + pos) as i64))
+            } else {
+                Err(Error::new(
+                    ErrorKind::InvalidOperation,
+                    format!("substring '{sub}' not found"),
+                ))
+            }
         }
         "startswith" => {
             let (prefix,): (&Value,) = from_args(args)?;
@@ -337,6 +416,16 @@ fn string_methods(value: &Value, method: &str, args: &[Value]) -> Result<Value, 
         "removesuffix" => {
             let (suffix,): (&str,) = from_args(args)?;
             Ok(Value::from(s.trim_end_matches(suffix)))
+        }
+        "partition" => {
+            let (sep,): (&str,) = from_args(args)?;
+            let this = s;
+            let tuple = if let Some((head, tail)) = this.split_once(sep) {
+                vec![Value::from(head), Value::from(sep), Value::from(tail)]
+            } else {
+                vec![Value::from(this), Value::from(""), Value::from("")]
+            };
+            Ok(Value::from(tuple))
         }
         _ => Err(Error::from(ErrorKind::UnknownMethod)),
     }
