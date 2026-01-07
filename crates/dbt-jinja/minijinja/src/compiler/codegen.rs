@@ -1070,6 +1070,12 @@ impl<'source> CodeGenerator<'source> {
                         self.compile_expr(&c.expr)?;
                         self.add_with_span(Instruction::Neg(c.span()), c.span());
                     }
+                    ast::UnaryOpKind::Pos => {
+                        // unary plus validates numeric type at runtime
+                        // For non-numeric types, it will fail at runtime
+                        self.compile_expr(&c.expr)?;
+                        self.add_with_span(Instruction::Pos(c.span()), c.span());
+                    }
                 }
             }
 

@@ -402,6 +402,7 @@ pub struct Slice<'a> {
 pub enum UnaryOpKind {
     Not,
     Neg,
+    Pos,
 }
 
 /// An unary operator expression.

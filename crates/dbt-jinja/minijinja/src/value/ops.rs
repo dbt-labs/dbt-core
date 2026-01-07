@@ -447,6 +447,21 @@ pub fn neg(val: &Value) -> Result<Value, Error> {
     }
 }
 
+/// Implements an unary `pos` operation on value.
+///
+/// For numeric types, this is a no-op that returns the value unchanged.
+/// For non-numeric types, this returns an error to match Python/Jinja2 behavior.
+pub fn pos(val: &Value) -> Result<Value, Error> {
+    if val.kind() == ValueKind::Number {
+        Ok(val.clone())
+    } else {
+        Err(Error::new(
+            ErrorKind::InvalidOperation,
+            format!("bad operand type for unary +: '{}'", val.kind()),
+        ))
+    }
+}
+
 /// Attempts a string concatenation.
 pub fn string_concat(left: Value, right: &Value) -> Value {
     Value::from(format!("{left}{right}"))

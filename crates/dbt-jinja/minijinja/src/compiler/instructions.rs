@@ -104,6 +104,9 @@ pub enum Instruction<'source> {
     /// Negates the value.
     Neg(Span),
 
+    /// Unary positive.
+    Pos(Span),
+
     /// `=` operator
     Eq(Span),
 

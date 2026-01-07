@@ -419,6 +419,7 @@ impl<'a> Parser<'a> {
     });
     unaryop!(parse_unary_only, parse_primary, {
         Some((Token::Minus, _)) => ast::UnaryOpKind::Neg,
+        Some((Token::Plus, _)) => ast::UnaryOpKind::Pos,
     });
 
     fn parse_unary(&mut self) -> Result<ast::Expr<'a>, Error> {

@@ -668,6 +668,10 @@ impl<'env> Vm<'env> {
                     let a = stack.pop();
                     stack.push(ops::neg(&a).map_err(|e| state.with_span_error(e, span))?);
                 }
+                Instruction::Pos(span) => {
+                    let a = stack.pop();
+                    stack.push(ops::pos(&a).map_err(|e| state.with_span_error(e, span))?);
+                }
                 Instruction::PushWith(span) => {
                     state
                         .ctx

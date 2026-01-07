@@ -1278,6 +1278,22 @@ impl<'src> TypeChecker<'src> {
                     // TODO impl a.neg()
                     typestate.stack.push(a);
                 }
+                Instruction::Pos(span) => {
+                    // TYPECHECK: YES
+                    listener.set_span(span);
+                    // The operand must be a number
+                    let a = match typestate.stack.pop() {
+                        Some(val) => val,
+                        None => {
+                            return Err(crate::Error::new(
+                                crate::error::ErrorKind::InvalidOperation,
+                                "Stack underflow on unary plus",
+                            ))
+                        }
+                    };
+
+                    typestate.stack.push(a);
+                }
                 Instruction::PushWith(_) => {
                     // TYPECHECK: NO
                     typestate.push_frame();
