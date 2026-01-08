@@ -90,6 +90,33 @@ where
     }
 }
 
+/// Wrapper for return values originating from within a `{% call %}` block.
+///
+/// When `return()` is called inside a `{% call %}` block (i.e., within a `caller()` invocation),
+/// the return value must propagate up **2 levels** of the call stack:
+///
+/// 1. **Level 1 (caller block)**: The `caller()` function executes the call block body.
+///    When a `return()` is encountered, the value is wrapped in `CallerReturn` and returned
+///    from the `caller()` call.
+///
+/// 2. **Level 2 (enclosing macro)**: The macro that invoked `caller()` receives the
+///    `CallerReturn` wrapper. It must unwrap the value and treat it as an explicit return,
+///    causing the macro itself to return that value to its caller.
+///
+/// Without this 2-level propagation, the return value would be consumed by the inner
+/// `caller()` invocation but not propagate out of the enclosing macro.
+///
+/// Example:
+/// ```jinja
+/// {%- macro my_statement() -%}
+///     {%- set compiled_code = caller() -%}
+/// {%- endmacro -%}
+/// {%- macro outer() -%}
+///   {%- call my_statement() -%}
+///     {{- return('value') -}}  {# This return must propagate out of outer() #}
+///   {%- endcall -%}
+/// {%- endmacro -%}
+/// ```
 #[derive(Clone, Debug)]
 struct CallerReturn {
     value: Value,
@@ -961,9 +988,14 @@ impl<'env> Vm<'env> {
                         let rv = func
                             .call(state, &args, listeners)
                             .map_err(|err| state.with_span_error(err, this_span))?;
+                        // Handle CallerReturn: when a return() was called inside a {% call %} block,
+                        // the caller() function wraps it in CallerReturn. We unwrap it here and
+                        // mark this frame as an explicit return so the value propagates out of
+                        // the enclosing macro (2nd level of propagation). See CallerReturn docs.
                         if let Some(obj) = rv.as_object() {
                             if let Some(caller_return) = obj.downcast_ref::<CallerReturn>() {
                                 stack.push(caller_return.value.clone());
+                                is_explicit_return = true;
                                 break;
                             }
                         }
@@ -1338,12 +1370,6 @@ impl<'env> Vm<'env> {
 
         if is_caller_return {
             let rv = stack.pop();
-            if rv.as_str().is_none() {
-                return Err(Error::new(
-                    ErrorKind::InvalidOperation,
-                    "caller() must return a string",
-                ));
-            }
             Ok(Value::from_object(CallerReturn::new(rv)))
         } else if is_explicit_return {
             Ok(stack.pop())
