@@ -1129,6 +1129,8 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
     /// This adapter as a Value
     fn as_value(&self) -> Value;
 
+    // TODO(felipecrv): remove these default implementations
+
     /// Used internally to attempt executing a Snowflake `use warehouse [name]` statement from BridgeAdapter
     /// For other BaseAdapter types, this is noop
     ///

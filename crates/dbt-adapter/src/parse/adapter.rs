@@ -42,17 +42,14 @@ use std::fmt;
 use std::rc::Rc;
 use std::sync::Arc;
 
-/// Parse adapter for Jinja templates.
-///
-/// Returns stub values to enable the parsing phase.
 #[derive(Clone)]
-pub struct ParseAdapter {
-    adapter_type: AdapterType,
+pub struct ParseAdapterState {
+    pub adapter_type: AdapterType,
     /// The engine for the ParseAdapter
     ///
     /// Not actually used to run SQL queries during parse, but needed since
     /// this object carries useful dependencies.
-    engine: Arc<AdapterEngine>,
+    pub engine: Arc<AdapterEngine>,
     /// The call_get_relation method calls found during parse
     call_get_relation: DashMap<String, Vec<Value>>,
     /// The call_get_columns_in_relation method calls found during parse
@@ -63,28 +60,53 @@ pub struct ParseAdapter {
     unsafe_nodes: DashSet<String>,
     /// SQLs that are found passed in to adapter.execute in the hidden Parse phase
     execute_sqls: DashSet<String>,
-    /// The global CLI cancellation token
-    cancellation_token: CancellationToken,
     /// catalogs.yml stored when found and loaded
     catalogs: Option<Arc<DbtCatalogs>>,
+}
+
+impl ParseAdapterState {
+    pub fn new(
+        adapter_type: AdapterType,
+        engine: Arc<AdapterEngine>,
+        catalogs: Option<Arc<DbtCatalogs>>,
+    ) -> Self {
+        ParseAdapterState {
+            adapter_type,
+            engine,
+            call_get_relation: DashMap::new(),
+            call_get_columns_in_relation: DashMap::new(),
+            patterned_dangling_sources: DashMap::new(),
+            unsafe_nodes: DashSet::new(),
+            execute_sqls: DashSet::new(),
+            catalogs,
+        }
+    }
+}
+
+/// Parse adapter for Jinja templates.
+///
+/// Returns stub values to enable the parsing phase.
+#[derive(Clone)]
+pub struct ParseAdapter {
+    state: Box<ParseAdapterState>,
 }
 
 impl fmt::Debug for ParseAdapter {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ParseAdapter")
-            .field("adapter_type", &self.adapter_type)
-            .field("call_get_relation", &self.call_get_relation)
+            .field("adapter_type", &self.state.adapter_type)
+            .field("call_get_relation", &self.state.call_get_relation)
             .field(
                 "call_get_columns_in_relation",
-                &self.call_get_columns_in_relation,
+                &self.state.call_get_columns_in_relation,
             )
             .field(
                 "patterned_dangling_sources",
-                &self.patterned_dangling_sources,
+                &self.state.patterned_dangling_sources,
             )
-            .field("unsafe_nodes", &self.unsafe_nodes)
-            .field("execute_sqls", &self.execute_sqls)
-            .field("quoting", &self.engine.quoting())
+            .field("unsafe_nodes", &self.state.unsafe_nodes)
+            .field("execute_sqls", &self.state.execute_sqls)
+            .field("quoting", &self.state.engine.quoting())
             .finish()
     }
 }
@@ -124,19 +146,11 @@ impl ParseAdapter {
             None,
             query_comment,
             type_ops,
-            token.clone(),
+            token,
         );
 
         Self {
-            adapter_type,
-            engine,
-            call_get_relation: DashMap::new(),
-            call_get_columns_in_relation: DashMap::new(),
-            patterned_dangling_sources: DashMap::new(),
-            unsafe_nodes: DashSet::new(),
-            execute_sqls: DashSet::new(),
-            cancellation_token: token,
-            catalogs,
+            state: Box::new(ParseAdapterState::new(adapter_type, engine, catalogs)),
         }
     }
 
@@ -149,7 +163,7 @@ impl ParseAdapter {
         identifier: &str,
     ) -> Result<(), minijinja::Error> {
         let relation = create_relation(
-            self.adapter_type,
+            self.state.adapter_type,
             database.to_string(),
             schema.to_string(),
             Some(identifier.to_string()),
@@ -160,7 +174,8 @@ impl ParseAdapter {
 
         if state.is_execute() {
             if let Some(unique_id) = state.lookup(TARGET_UNIQUE_ID) {
-                self.call_get_relation
+                self.state
+                    .call_get_relation
                     .entry(unique_id.to_string())
                     .or_default()
                     .push(relation);
@@ -183,7 +198,8 @@ impl ParseAdapter {
         if state.is_execute() {
             if let Some(unique_id) = state.lookup(TARGET_UNIQUE_ID) {
                 let relation_value = RelationObject::new(relation).into_value();
-                self.call_get_columns_in_relation
+                self.state
+                    .call_get_columns_in_relation
                     .entry(unique_id.to_string())
                     .or_default()
                     .push(relation_value);
@@ -200,6 +216,7 @@ impl ParseAdapter {
     #[allow(clippy::type_complexity)]
     pub fn relations_to_fetch(&self) -> RelationsToFetch {
         let relations_to_fetch = self
+            .state
             .call_get_relation
             .iter()
             .map(|v| {
@@ -215,6 +232,7 @@ impl ParseAdapter {
             .map_err(|e| FsError::from_jinja_err(e, "Failed to collect get_relation"));
 
         let relations_to_fetch_columns = self
+            .state
             .call_get_columns_in_relation
             .iter()
             .map(|v| {
@@ -230,6 +248,7 @@ impl ParseAdapter {
             .map_err(|e| FsError::from_jinja_err(e, "Failed to collect get_columns_in_relation"));
 
         let patterned_dangling_sources: BTreeMap<String, Vec<RelationPattern>> = self
+            .state
             .patterned_dangling_sources
             .iter()
             .map(|r| (r.key().to_owned(), r.value().to_owned()))
@@ -243,13 +262,13 @@ impl ParseAdapter {
 
     /// Returns a DashSet of unsafe nodes
     pub fn unsafe_nodes(&self) -> &DashSet<String> {
-        &self.unsafe_nodes
+        &self.state.unsafe_nodes
     }
 }
 
 impl AdapterTyping for ParseAdapter {
     fn adapter_type(&self) -> AdapterType {
-        self.adapter_type
+        self.state.adapter_type
     }
 
     fn metadata_adapter(&self) -> Option<Box<dyn MetadataAdapter>> {
@@ -265,15 +284,15 @@ impl AdapterTyping for ParseAdapter {
     }
 
     fn engine(&self) -> &Arc<AdapterEngine> {
-        &self.engine
+        &self.state.engine
     }
 
     fn quoting(&self) -> ResolvedQuoting {
-        self.engine.quoting()
+        self.state.engine.quoting()
     }
 
     fn cancellation_token(&self) -> CancellationToken {
-        self.cancellation_token.clone()
+        self.engine().cancellation_token()
     }
 }
 
@@ -300,14 +319,14 @@ impl BaseAdapter for ParseAdapter {
 
         if state.is_execute() {
             if let Some(unique_id) = state.lookup(TARGET_UNIQUE_ID) {
-                self.unsafe_nodes.insert(
+                self.state.unsafe_nodes.insert(
                     unique_id
                         .as_str()
                         .expect("unique_id must be a string")
                         .to_string(),
                 );
             }
-            self.execute_sqls.insert(sql.to_string());
+            self.state.execute_sqls.insert(sql.to_string());
         }
 
         Ok((response, table))
@@ -350,9 +369,9 @@ impl BaseAdapter for ParseAdapter {
 
     fn build_catalog_relation(&self, model: &Value) -> Result<Value, minijinja::Error> {
         let relation = CatalogRelation::from_model_config_and_catalogs(
-            &self.adapter_type,
+            &self.state.adapter_type,
             model,
-            self.catalogs.clone(),
+            self.state.catalogs.clone(),
         )?;
         Ok(Value::from_object(relation))
     }
@@ -503,7 +522,8 @@ impl BaseAdapter for ParseAdapter {
 
         if state.is_execute() {
             if let Some(unique_id) = state.lookup(TARGET_UNIQUE_ID) {
-                self.patterned_dangling_sources
+                self.state
+                    .patterned_dangling_sources
                     .entry(unique_id.to_string())
                     .or_default()
                     .push(patterned_relation);

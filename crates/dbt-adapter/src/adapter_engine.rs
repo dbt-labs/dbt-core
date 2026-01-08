@@ -156,6 +156,7 @@ impl XdbcEngine {
         }
     }
 
+    #[inline]
     fn adapter_type(&self) -> AdapterType {
         self.adapter_type
     }
@@ -420,6 +421,7 @@ impl AdapterEngine {
     }
 
     /// Get the adapter type for this engine
+    #[inline]
     pub fn adapter_type(&self) -> AdapterType {
         match self {
             AdapterEngine::Xdbc(actual_engine) => actual_engine.adapter_type(),
