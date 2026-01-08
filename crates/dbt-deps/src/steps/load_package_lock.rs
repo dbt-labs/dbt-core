@@ -9,6 +9,7 @@ use dbt_jinja_utils::serde::from_yaml_raw;
 use dbt_schemas::schemas::packages::{
     DbtPackageEntry, DbtPackageLock, DbtPackages, DbtPackagesLock, DeprecatedDbtPackageLock,
     DeprecatedDbtPackagesLock, GitPackageLock, HubPackageLock, LocalPackageLock, PackageVersion,
+    PrivatePackageLock, TarballPackageLock,
 };
 use std::{
     collections::BTreeMap, collections::HashMap, collections::HashSet, path::Path, str::FromStr,
@@ -205,6 +206,92 @@ fn try_load_from_deprecated_dbt_packages_lock(
                             name: package_name,
                             local: local_path,
                         }));
+                    }
+                    DeprecatedDbtPackageLock::Private(package) => {
+                        let private = package.private;
+                        let revision = package.revision;
+                        let provider = package.provider;
+                        let warn_unpinned = package.warn_unpinned;
+                        let subdirectory = package.subdirectory.clone();
+                        let unrendered = package.__unrendered__;
+
+                        // Parse package name from the private path (e.g., "org/repo" -> "repo")
+                        let parts: Vec<&str> = private.split('/').collect();
+                        let mut package_name =
+                            (*parts.last().expect("Package name should exist")).to_string();
+
+                        // If there's a subdirectory, append it to the package name
+                        // This is necessary because the same repo can have multiple packages in different subdirectories
+                        if let Some(ref subdir) = subdirectory {
+                            let subdir_name = subdir
+                                .split('/')
+                                .next_back()
+                                .unwrap_or(subdir.as_str())
+                                .to_string();
+                            package_name = subdir_name;
+                        }
+
+                        if avail_packages.contains(package_name.to_lowercase().as_str()) {
+                            packages.push(DbtPackageLock::Private(PrivatePackageLock {
+                                private: private.to_owned().into(),
+                                name: package_name,
+                                revision,
+                                provider,
+                                warn_unpinned,
+                                subdirectory,
+                                __unrendered__: unrendered,
+                            }));
+                        } else {
+                            emit_warn_log_message(
+                                ErrorCode::FmtError,
+                                format!(
+                                    "Attempted to infer package name from package-lock.yml, but package {} not found in '{}', skipping...",
+                                    private,
+                                    dbt_packages_dir.display()
+                                ),
+                                io.status_reporter.as_ref(),
+                            );
+
+                            return Ok(None);
+                        }
+                    }
+                    DeprecatedDbtPackageLock::Tarball(package) => {
+                        let tarball = package.tarball;
+                        let unrendered = package.__unrendered__;
+
+                        // Parse package name from the tarball URL
+                        // Try to extract from filename (e.g., "https://example.com/package-1.0.0.tar.gz" -> "package")
+                        let url_parts: Vec<&str> = tarball.split('/').collect();
+                        let tarball_str = tarball.as_str();
+                        let filename = url_parts.last().unwrap_or(&tarball_str);
+                        // Remove common extensions and version suffix
+                        let package_name = filename
+                            .trim_end_matches(".tar.gz")
+                            .trim_end_matches(".tgz")
+                            .split('-')
+                            .next()
+                            .unwrap_or(filename)
+                            .to_string();
+
+                        if avail_packages.contains(package_name.to_lowercase().as_str()) {
+                            packages.push(DbtPackageLock::Tarball(TarballPackageLock {
+                                tarball: tarball.to_owned().into(),
+                                name: package_name,
+                                __unrendered__: unrendered,
+                            }));
+                        } else {
+                            emit_warn_log_message(
+                                ErrorCode::FmtError,
+                                format!(
+                                    "Attempted to infer package name from package-lock.yml, but package {} not found in '{}', skipping...",
+                                    tarball,
+                                    dbt_packages_dir.display()
+                                ),
+                                io.status_reporter.as_ref(),
+                            );
+
+                            return Ok(None);
+                        }
                     }
                 }
             }

@@ -313,6 +313,8 @@ pub enum DeprecatedDbtPackageLock {
     Hub(DeprecatedHubPackageLock),
     Git(DeprecatedGitPackageLock),
     Local(DeprecatedLocalPackageLock),
+    Private(DeprecatedPrivatePackageLock),
+    Tarball(DeprecatedTarballPackageLock),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -336,4 +338,25 @@ pub struct DeprecatedGitPackageLock {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DeprecatedLocalPackageLock {
     pub local: PathBuf,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DeprecatedPrivatePackageLock {
+    pub private: String,
+    pub revision: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub warn_unpinned: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subdirectory: Option<String>,
+    #[serde(default)]
+    pub __unrendered__: HashMap<String, YmlValue>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct DeprecatedTarballPackageLock {
+    pub tarball: String,
+    #[serde(default)]
+    pub __unrendered__: HashMap<String, YmlValue>,
 }
