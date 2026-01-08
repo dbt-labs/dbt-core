@@ -15,7 +15,7 @@ use dbt_schemas::schemas::relations::base::{
     BaseRelation, BaseRelationProperties, Policy, RelationPath, TableFormat,
 };
 use minijinja::arg_utils::ArgsIter;
-use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State, Value};
+use minijinja::{State, Value};
 use serde::Deserialize;
 
 use std::any::Any;
@@ -33,9 +33,9 @@ impl StaticBaseRelation for SnowflakeRelationType {
         _identifier: Option<String>,
         _relation_type: Option<RelationType>,
         _custom_quoting: Option<ResolvedQuoting>,
-    ) -> Result<Value, MinijinjaError> {
-        Err(MinijinjaError::new(
-            MinijinjaErrorKind::InvalidOperation,
+    ) -> Result<Value, minijinja::Error> {
+        Err(minijinja::Error::new(
+            minijinja::ErrorKind::InvalidOperation,
             "Not for used for SnowflakeRelationType due to custom create logic, but kept for trait compliance",
         ))
     }
@@ -44,7 +44,7 @@ impl StaticBaseRelation for SnowflakeRelationType {
         "snowflake".to_string()
     }
 
-    fn create(&self, args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn create(&self, args: &[Value]) -> Result<Value, minijinja::Error> {
         let iter = ArgsIter::new(current_function_name!(), &[], args);
         let database: Option<String> = iter.next_kwarg::<Option<String>>("database")?;
         // Support both 'schema' and 'schema_name' for backward compatibility
@@ -189,7 +189,7 @@ impl BaseRelation for SnowflakeRelation {
     }
 
     /// Creates a new Snowflake relation from a state and a list of values
-    fn create_from(&self, _: &State, _: &[Value]) -> Result<Value, MinijinjaError> {
+    fn create_from(&self, _: &State, _: &[Value]) -> Result<Value, minijinja::Error> {
         unimplemented!("Snowflake relation creation from Jinja values")
     }
 
@@ -226,7 +226,7 @@ impl BaseRelation for SnowflakeRelation {
     }
 
     // https://github.com/dbt-labs/dbt-adapters/blob/816d190c9e31391a48cee979bd049aeb34c89ad3/dbt-snowflake/src/dbt/adapters/snowflake/relation.py#L81
-    fn from_config(&self, args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn from_config(&self, args: &[Value]) -> Result<Value, minijinja::Error> {
         let iter = ArgsIter::new(current_function_name!(), &["config"], args);
         let config_value = iter.next_arg::<&Value>()?;
         iter.finish()?;
@@ -237,7 +237,7 @@ impl BaseRelation for SnowflakeRelation {
     }
 
     // https://github.com/dbt-labs/dbt-adapters/blob/292d17301eff3c8a972fcd57f7deb3aac4c8a3cb/dbt-snowflake/src/dbt/adapters/snowflake/relation.py#L92
-    fn dynamic_table_config_changeset(&self, args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn dynamic_table_config_changeset(&self, args: &[Value]) -> Result<Value, minijinja::Error> {
         let iter = ArgsIter::new(
             current_function_name!(),
             &["relation_results", "relation_config"],
@@ -250,16 +250,16 @@ impl BaseRelation for SnowflakeRelation {
 
         let relation_results = DescribeDynamicTableResults::try_from(relation_results_value)
             .map_err(|e| {
-                MinijinjaError::new(
-                    MinijinjaErrorKind::SerdeDeserializeError,
+                minijinja::Error::new(
+                    minijinja::ErrorKind::SerdeDeserializeError,
                     format!("from_config: Failed to serialize DescribeDynamicTableResults: {e}"),
                 )
             })?;
 
         let existing_config = SnowflakeDynamicTableConfig::try_from(relation_results)
             .map_err(|e| {
-                MinijinjaError::new(
-                    MinijinjaErrorKind::SerdeDeserializeError, format!("dynamic_table_config_changeset: Failed to deserialize SnowflakeDynamicTableConfig: {e}")
+                minijinja::Error::new(
+                    minijinja::ErrorKind::SerdeDeserializeError, format!("dynamic_table_config_changeset: Failed to deserialize SnowflakeDynamicTableConfig: {e}")
                 )
             })?;
 
@@ -292,7 +292,7 @@ impl BaseRelation for SnowflakeRelation {
     }
 
     // https://github.com/dbt-labs/dbt-adapters/blob/2a94cc75dba1f98fa5caff1f396f5af7ee444598/dbt-snowflake/src/dbt/adapters/snowflake/relation.py#L223
-    fn needs_to_drop(&self, args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn needs_to_drop(&self, args: &[Value]) -> Result<Value, minijinja::Error> {
         let iter = ArgsIter::new(current_function_name!(), &["old_relation"], args);
         let value = iter.next_arg::<Value>()?;
         iter.finish()?;
@@ -336,7 +336,7 @@ impl BaseRelation for SnowflakeRelation {
     ///
     /// # Returns
     /// One of: "temporary", "iceberg", "transient", or "" (empty string)
-    fn get_ddl_prefix_for_create(&self, args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn get_ddl_prefix_for_create(&self, args: &[Value]) -> Result<Value, minijinja::Error> {
         // Temporary tables take precedence over other options
         let iter = ArgsIter::new(
             current_function_name!(),
@@ -389,7 +389,7 @@ impl BaseRelation for SnowflakeRelation {
         Ok(Value::from(ddl_prefix))
     }
 
-    fn get_ddl_prefix_for_alter(&self) -> Result<Value, MinijinjaError> {
+    fn get_ddl_prefix_for_alter(&self) -> Result<Value, minijinja::Error> {
         if self.table_format == TableFormat::Iceberg {
             Ok(Value::from("iceberg"))
         } else {
@@ -398,7 +398,7 @@ impl BaseRelation for SnowflakeRelation {
     }
 
     /// https://github.com/dbt-labs/dbt-adapters/blob/2a94cc75dba1f98fa5caff1f396f5af7ee444598/dbt-snowflake/src/dbt/adapters/snowflake/relation.py#L206
-    fn get_iceberg_ddl_options(&self, args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn get_iceberg_ddl_options(&self, args: &[Value]) -> Result<Value, minijinja::Error> {
         let iter = ArgsIter::new(current_function_name!(), &["config"], args);
         let runtime_model_config: Value = iter.next_arg::<Value>()?;
         iter.finish()?;
@@ -427,7 +427,7 @@ impl BaseRelation for SnowflakeRelation {
             .get_attr("external_volume")?
             .as_str()
             .ok_or_else(|| {
-                MinijinjaError::new(MinijinjaErrorKind::NonKey, "external_volume is required")
+                minijinja::Error::new(minijinja::ErrorKind::NonKey, "external_volume is required")
             })?
             .to_string();
 
@@ -446,7 +446,7 @@ impl BaseRelation for SnowflakeRelation {
         Ok(Value::from(result))
     }
 
-    fn include_inner(&self, policy: Policy) -> Result<Value, MinijinjaError> {
+    fn include_inner(&self, policy: Policy) -> Result<Value, minijinja::Error> {
         let mut relation = self.clone();
         relation.include_policy = policy;
 
@@ -464,7 +464,7 @@ impl BaseRelation for SnowflakeRelation {
         identifier: Option<String>,
         relation_type: Option<RelationType>,
         custom_quoting: Policy,
-    ) -> Result<Arc<dyn BaseRelation>, MinijinjaError> {
+    ) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
         Ok(Arc::new(SnowflakeRelation::new(
             database,
             schema,
@@ -479,7 +479,7 @@ impl BaseRelation for SnowflakeRelation {
         &self,
         database: Option<String>,
         view_name: Option<&str>,
-    ) -> Result<Value, MinijinjaError> {
+    ) -> Result<Value, minijinja::Error> {
         let result = InformationSchema::try_from_relation(database, view_name)?;
         Ok(RelationObject::new(Arc::new(result)).into_value())
     }
@@ -487,10 +487,10 @@ impl BaseRelation for SnowflakeRelation {
 
 fn node_value_to_snowflake_dynamic_table(
     node_value: &Value,
-) -> Result<SnowflakeDynamicTableConfig, MinijinjaError> {
+) -> Result<SnowflakeDynamicTableConfig, minijinja::Error> {
     let config_wrapper = InternalDbtNodeWrapper::deserialize(node_value).map_err(|e| {
-        MinijinjaError::new(
-            MinijinjaErrorKind::SerdeDeserializeError,
+        minijinja::Error::new(
+            minijinja::ErrorKind::SerdeDeserializeError,
             format!("Failed to deserialize InternalDbtNodeWrapper: {e}"),
         )
     })?;
@@ -498,16 +498,16 @@ fn node_value_to_snowflake_dynamic_table(
     let model = match config_wrapper {
         InternalDbtNodeWrapper::Model(model) => model,
         _ => {
-            return Err(MinijinjaError::new(
-                MinijinjaErrorKind::InvalidOperation,
+            return Err(minijinja::Error::new(
+                minijinja::ErrorKind::InvalidOperation,
                 "Expected a model node",
             ));
         }
     };
 
     if model.__base_attr__.materialized != DbtMaterialization::DynamicTable {
-        return Err(MinijinjaError::new(
-            MinijinjaErrorKind::InvalidOperation,
+        return Err(minijinja::Error::new(
+            minijinja::ErrorKind::InvalidOperation,
             format!(
                 "Unsupported operation for materialization type {}",
                 &model.__base_attr__.materialized
@@ -516,8 +516,8 @@ fn node_value_to_snowflake_dynamic_table(
     }
 
     SnowflakeDynamicTableConfig::try_from(&*model).map_err(|e| {
-        MinijinjaError::new(
-            MinijinjaErrorKind::SerdeDeserializeError,
+        minijinja::Error::new(
+            minijinja::ErrorKind::SerdeDeserializeError,
             format!("Failed to deserialize SnowflakeDynamicTableConfig: {e}"),
         )
     })

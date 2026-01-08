@@ -22,7 +22,7 @@ use minijinja::arg_utils::ArgsIter;
 use minijinja::listener::RenderingEventListener;
 use minijinja::value::ValueKind;
 use minijinja::value::mutable_vec::MutableVec;
-use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State, Value};
+use minijinja::{State, Value};
 use minijinja_contrib::modules::py_datetime::date::PyDate;
 use minijinja_contrib::modules::py_datetime::datetime::PyDateTime;
 use serde::Deserialize;
@@ -38,7 +38,7 @@ pub fn dispatch_adapter_calls(
     name: &str,
     args: &[Value],
     _listeners: &[Rc<dyn RenderingEventListener>],
-) -> Result<Value, MinijinjaError> {
+) -> Result<Value, minijinja::Error> {
     match name {
         "dispatch" => {
             // macro_name: str, macro_namespace: Optional[str] = None
@@ -60,7 +60,10 @@ pub fn dispatch_adapter_calls(
             let limit = iter.next_kwarg::<Option<i64>>("limit")?;
             let options = if let Some(value) = iter.next_kwarg::<Option<Value>>("options")? {
                 Some(HashMap::<String, String>::deserialize(value).map_err(|e| {
-                    MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
+                    minijinja::Error::new(
+                        minijinja::ErrorKind::SerdeDeserializeError,
+                        e.to_string(),
+                    )
                 })?)
             } else {
                 None
@@ -352,8 +355,8 @@ pub fn dispatch_adapter_calls(
                         column_names_val.clone(),
                     )
                     .map_err(|e| {
-                        MinijinjaError::new(
-                            MinijinjaErrorKind::SerdeDeserializeError,
+                        minijinja::Error::new(
+                            minijinja::ErrorKind::SerdeDeserializeError,
                             e.to_string(),
                         )
                     })?,
@@ -364,7 +367,7 @@ pub fn dispatch_adapter_calls(
                 strategy_val.clone(),
             )
             .map_err(|e| {
-                MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
+                minijinja::Error::new(minijinja::ErrorKind::SerdeDeserializeError, e.to_string())
             })?;
             iter.finish()?;
 
@@ -394,8 +397,8 @@ pub fn dispatch_adapter_calls(
             let constraints =
                 minijinja_value_to_typed_struct::<Vec<ModelConstraint>>(raw_constraints.clone())
                     .map_err(|e| {
-                        MinijinjaError::new(
-                            MinijinjaErrorKind::SerdeDeserializeError,
+                        minijinja::Error::new(
+                            minijinja::ErrorKind::SerdeDeserializeError,
                             e.to_string(),
                         )
                     })?;
@@ -418,8 +421,8 @@ pub fn dispatch_adapter_calls(
                 .next_arg::<&Value>()?
                 .downcast_object::<AgateTable>()
                 .ok_or_else(|| {
-                    MinijinjaError::new(
-                        MinijinjaErrorKind::InvalidOperation,
+                    minijinja::Error::new(
+                        minijinja::ErrorKind::InvalidOperation,
                         "grants_table must be an AgateTable",
                     )
                 })?;
@@ -433,8 +436,8 @@ pub fn dispatch_adapter_calls(
                 .next_arg::<&Value>()?
                 .downcast_object::<AgateTable>()
                 .ok_or_else(|| {
-                    MinijinjaError::new(
-                        MinijinjaErrorKind::InvalidOperation,
+                    minijinja::Error::new(
+                        minijinja::ErrorKind::InvalidOperation,
                         "agate_table must be an AgateTable",
                     )
                 })?;
@@ -526,8 +529,8 @@ pub fn dispatch_adapter_calls(
             let partition_by =
                 minijinja_value_to_typed_struct::<PartitionConfig>(partition_by.clone()).map_err(
                     |e| {
-                        MinijinjaError::new(
-                            MinijinjaErrorKind::SerdeDeserializeError,
+                        minijinja::Error::new(
+                            minijinja::ErrorKind::SerdeDeserializeError,
                             format!(
                                 "adapter.add_time_ingestion_partition_column failed on partition_by {partition_by:?}: {e}"
                             ),
@@ -536,8 +539,8 @@ pub fn dispatch_adapter_calls(
                 )?;
 
             let partition_config = partition_by.into_bigquery().ok_or_else(|| {
-                MinijinjaError::new(
-                    MinijinjaErrorKind::InvalidArgument,
+                minijinja::Error::new(
+                    minijinja::ErrorKind::InvalidArgument,
                     "Expect a BigqueryPartitionConfigStruct",
                 )
             })?;
@@ -583,8 +586,8 @@ pub fn dispatch_adapter_calls(
                     Some(
                         minijinja_value_to_typed_struct::<BigqueryPartitionConfig>(pb.clone())
                             .map_err(|e| {
-                                MinijinjaError::new(
-                                    MinijinjaErrorKind::SerdeDeserializeError,
+                                minijinja::Error::new(
+                                    minijinja::ErrorKind::SerdeDeserializeError,
                                     e.to_string(),
                                 )
                             })?,
@@ -602,8 +605,8 @@ pub fn dispatch_adapter_calls(
                     Some(
                         minijinja_value_to_typed_struct::<BigqueryClusterConfig>(cb.clone())
                             .map_err(|e| {
-                                MinijinjaError::new(
-                                    MinijinjaErrorKind::SerdeDeserializeError,
+                                minijinja::Error::new(
+                                    minijinja::ErrorKind::SerdeDeserializeError,
                                     e.to_string(),
                                 )
                             })?,
@@ -660,8 +663,8 @@ pub fn dispatch_adapter_calls(
             let columns =
                 minijinja_value_to_typed_struct::<IndexMap<String, DbtColumn>>(columns.clone())
                     .map_err(|e| {
-                        MinijinjaError::new(
-                            MinijinjaErrorKind::SerdeDeserializeError,
+                        minijinja::Error::new(
+                            minijinja::ErrorKind::SerdeDeserializeError,
                             e.to_string(),
                         )
                     })?;
@@ -720,8 +723,8 @@ pub fn dispatch_adapter_calls(
                 .next_arg::<&Value>()?
                 .downcast_object::<AgateTable>()
                 .ok_or_else(|| {
-                    MinijinjaError::new(
-                        MinijinjaErrorKind::InvalidOperation,
+                    minijinja::Error::new(
+                        minijinja::ErrorKind::InvalidOperation,
                         "agate_table must be an agate.Table",
                     )
                 })?;
@@ -771,20 +774,23 @@ pub fn dispatch_adapter_calls(
             let grant_target =
                 minijinja_value_to_typed_struct::<GrantAccessToTarget>(grant_target_dict.clone())
                     .map_err(|e| {
-                    MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
+                    minijinja::Error::new(
+                        minijinja::ErrorKind::SerdeDeserializeError,
+                        e.to_string(),
+                    )
                 })?;
             iter.finish()?;
 
             let (database, schema) = (
                 grant_target.project.as_deref().ok_or_else(|| {
-                    MinijinjaError::new(
-                        MinijinjaErrorKind::InvalidOperation,
+                    minijinja::Error::new(
+                        minijinja::ErrorKind::InvalidOperation,
                         "project in a GrantAccessToTarget cannot be empty",
                     )
                 })?,
                 grant_target.dataset.as_deref().ok_or_else(|| {
-                    MinijinjaError::new(
-                        MinijinjaErrorKind::InvalidOperation,
+                    minijinja::Error::new(
+                        minijinja::ErrorKind::InvalidOperation,
                         "dataset in a GrantAccessToTarget cannot be empty",
                     )
                 })?,
@@ -794,8 +800,8 @@ pub fn dispatch_adapter_calls(
                 None
             } else {
                 Some(role.as_str().ok_or_else(|| {
-                    MinijinjaError::new(
-                        MinijinjaErrorKind::InvalidOperation,
+                    minijinja::Error::new(
+                        minijinja::ErrorKind::InvalidOperation,
                         "role must be a string",
                     )
                 })?)
@@ -843,8 +849,8 @@ pub fn dispatch_adapter_calls(
                 dbt_schemas::schemas::project::ModelConfig,
             >(config_val.clone())
             .map_err(|e| {
-                MinijinjaError::new(
-                    MinijinjaErrorKind::SerdeDeserializeError,
+                minijinja::Error::new(
+                    minijinja::ErrorKind::SerdeDeserializeError,
                     format!("get_common_options: Failed to deserialize config: {e}"),
                 )
             })?;
@@ -853,8 +859,8 @@ pub fn dispatch_adapter_calls(
                 dbt_schemas::schemas::InternalDbtNodeWrapper,
             >(node_val.clone())
             .map_err(|e| {
-                MinijinjaError::new(
-                    MinijinjaErrorKind::SerdeDeserializeError,
+                minijinja::Error::new(
+                    minijinja::ErrorKind::SerdeDeserializeError,
                     format!(
                         "get_common_options: Failed to deserialize InternalDbtNodeWrapper: {e}"
                     ),
@@ -877,8 +883,8 @@ pub fn dispatch_adapter_calls(
                 dbt_schemas::schemas::project::ModelConfig,
             >(config_val.clone())
             .map_err(|e| {
-                MinijinjaError::new(
-                    MinijinjaErrorKind::SerdeDeserializeError,
+                minijinja::Error::new(
+                    minijinja::ErrorKind::SerdeDeserializeError,
                     format!("get_table_options: Failed to deserialize config: {e}"),
                 )
             })?;
@@ -887,8 +893,8 @@ pub fn dispatch_adapter_calls(
                 dbt_schemas::schemas::InternalDbtNodeWrapper,
             >(node_val.clone())
             .map_err(|e| {
-                MinijinjaError::new(
-                    MinijinjaErrorKind::SerdeDeserializeError,
+                minijinja::Error::new(
+                    minijinja::ErrorKind::SerdeDeserializeError,
                     format!("get_table_options: Failed to deserialize InternalDbtNodeWrapper: {e}"),
                 )
             })?;
@@ -906,8 +912,8 @@ pub fn dispatch_adapter_calls(
                 dbt_schemas::schemas::project::ModelConfig,
             >(config_val.clone())
             .map_err(|e| {
-                MinijinjaError::new(
-                    MinijinjaErrorKind::SerdeDeserializeError,
+                minijinja::Error::new(
+                    minijinja::ErrorKind::SerdeDeserializeError,
                     format!("get_view_options: Failed to deserialize config: {e}"),
                 )
             })?;
@@ -916,8 +922,8 @@ pub fn dispatch_adapter_calls(
                 dbt_schemas::schemas::InternalDbtNodeWrapper,
             >(node_val.clone())
             .map_err(|e| {
-                MinijinjaError::new(
-                    MinijinjaErrorKind::SerdeDeserializeError,
+                minijinja::Error::new(
+                    minijinja::ErrorKind::SerdeDeserializeError,
                     format!("get_view_options: Failed to deserialize InternalDbtNodeWrapper: {e}"),
                 )
             })?;
@@ -961,8 +967,8 @@ pub fn dispatch_adapter_calls(
         // only available for databricks
         "is_cluster" => {
             if adapter.adapter_type() != AdapterType::Databricks {
-                return Err(MinijinjaError::new(
-                    MinijinjaErrorKind::InvalidOperation,
+                return Err(minijinja::Error::new(
+                    minijinja::ErrorKind::InvalidOperation,
                     "adapter.is_cluster is only available with the Databricks adapter",
                 ));
             }
@@ -972,7 +978,7 @@ pub fn dispatch_adapter_calls(
             let is_cluster = adapter
                 .as_typed_base_adapter()
                 .is_cluster()
-                .map_err(MinijinjaError::from)?;
+                .map_err(minijinja::Error::from)?;
             Ok(Value::from(is_cluster))
         }
         "compare_dbr_version" => {
@@ -998,15 +1004,15 @@ pub fn dispatch_adapter_calls(
                 dbt_schemas::schemas::project::ModelConfig,
             >(config_val.clone())
             .map_err(|e| {
-                MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string())
+                minijinja::Error::new(minijinja::ErrorKind::SerdeDeserializeError, e.to_string())
             })?;
 
             let node = minijinja_value_to_typed_struct::<
                 dbt_schemas::schemas::InternalDbtNodeWrapper,
             >(model_val.clone())
             .map_err(|e| {
-                MinijinjaError::new(
-                    MinijinjaErrorKind::SerdeDeserializeError,
+                minijinja::Error::new(
+                    minijinja::ErrorKind::SerdeDeserializeError,
                     format!(
                         "adapter.compute_external_path expected an InternalDbtNodeWrapper: {e}"
                     ),
@@ -1026,8 +1032,8 @@ pub fn dispatch_adapter_calls(
                 dbt_schemas::schemas::project::ModelConfig,
             >(config_val.clone())
             .map_err(|e| {
-                MinijinjaError::new(
-                    MinijinjaErrorKind::SerdeDeserializeError,
+                minijinja::Error::new(
+                    minijinja::ErrorKind::SerdeDeserializeError,
                     format!("update_tblproperties_for_uniform_iceberg: Failed to deserialize config: {e}"),
                 )
             })?;
@@ -1037,8 +1043,8 @@ pub fn dispatch_adapter_calls(
                 dbt_schemas::schemas::InternalDbtNodeWrapper,
             >(node_val)
             .map_err(|e| {
-                MinijinjaError::new(
-                    MinijinjaErrorKind::SerdeDeserializeError,
+                minijinja::Error::new(
+                    minijinja::ErrorKind::SerdeDeserializeError,
                     format!("update_tblproperties_for_uniform_iceberg: Failed to deserialize InternalDbtNodeWrapper: {e}"),
                 )
             })?;
@@ -1060,8 +1066,8 @@ pub fn dispatch_adapter_calls(
                 dbt_schemas::schemas::project::ModelConfig,
             >(config_val.clone())
             .map_err(|e| {
-                MinijinjaError::new(
-                    MinijinjaErrorKind::SerdeDeserializeError,
+                minijinja::Error::new(
+                    minijinja::ErrorKind::SerdeDeserializeError,
                     format!("is_uniform: Failed to deserialize config: {e}"),
                 )
             })?;
@@ -1071,8 +1077,8 @@ pub fn dispatch_adapter_calls(
                 dbt_schemas::schemas::InternalDbtNodeWrapper,
             >(node_val)
             .map_err(|e| {
-                MinijinjaError::new(
-                    MinijinjaErrorKind::SerdeDeserializeError,
+                minijinja::Error::new(
+                    minijinja::ErrorKind::SerdeDeserializeError,
                     format!("is_uniform: Failed to deserialize InternalDbtNodeWrapper: {e}"),
                 )
             })?;
@@ -1102,8 +1108,8 @@ pub fn dispatch_adapter_calls(
                 dbt_schemas::schemas::InternalDbtNodeWrapper,
             >(model)
             .map_err(|e| {
-                MinijinjaError::new(
-                    MinijinjaErrorKind::SerdeDeserializeError,
+                minijinja::Error::new(
+                    minijinja::ErrorKind::SerdeDeserializeError,
                     format!(
                         "adapter.get_config_from_model expected an InternalDbtNodeWrapper: {e}"
                     ),
@@ -1128,8 +1134,8 @@ pub fn dispatch_adapter_calls(
 
             let deserialized_node = minijinja_value_to_typed_struct::<dbt_schemas::schemas::InternalDbtNodeWrapper>(model)
                 .map_err(|e| {
-                    MinijinjaError::new(
-                        MinijinjaErrorKind::SerdeDeserializeError,
+                    minijinja::Error::new(
+                        minijinja::ErrorKind::SerdeDeserializeError,
                         format!(
                             "Failed to deserialize the node passed to adapter.get_column_tags_from_model: {}",
                             e
@@ -1174,8 +1180,8 @@ pub fn dispatch_adapter_calls(
 
             adapter.clean_sql(sql)
         }
-        _ => Err(MinijinjaError::new(
-            MinijinjaErrorKind::InvalidOperation,
+        _ => Err(minijinja::Error::new(
+            minijinja::ErrorKind::InvalidOperation,
             format!("Unknown method on adapter object: '{name}'"),
         )),
     }

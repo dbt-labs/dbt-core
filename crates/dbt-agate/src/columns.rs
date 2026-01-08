@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use minijinja::listener::RenderingEventListener;
 use minijinja::value::{Enumerator, Object, ObjectRepr};
-use minijinja::{Error as MinijinjaError, State, Value};
+use minijinja::{State, Value};
 
 use crate::table::TableRepr;
 use crate::{MappedSequence, Tuple, TupleRepr, ZippedTupleRepr};
@@ -264,7 +264,7 @@ impl Object for Columns {
         name: &str,
         args: &[Value],
         listeners: &[Rc<dyn RenderingEventListener>],
-    ) -> Result<Value, MinijinjaError> {
+    ) -> Result<Value, minijinja::Error> {
         MappedSequence::call_method(self, state, name, args, listeners)
     }
 

@@ -10,10 +10,9 @@ use serde::{
 };
 
 type YmlValue = dbt_serde_yaml::Value;
-type MinijinjaValue = minijinja::Value;
 
 /// Converts a [dbt_serde_yaml::Value] to a [minijinja::Value]
-fn convert_yml_value(yml: YmlValue) -> MinijinjaValue {
+fn convert_yml_value(yml: YmlValue) -> minijinja::Value {
     match yml {
         YmlValue::Mapping(map, _) => {
             let mut value_map = BTreeMap::new();
@@ -23,18 +22,18 @@ fn convert_yml_value(yml: YmlValue) -> MinijinjaValue {
                     convert_yml_value(v),
                 );
             }
-            MinijinjaValue::from(value_map)
+            minijinja::Value::from(value_map)
         }
         YmlValue::Sequence(arr, _) => {
-            MinijinjaValue::from_iter(arr.into_iter().map(convert_yml_value))
+            minijinja::Value::from_iter(arr.into_iter().map(convert_yml_value))
         }
-        YmlValue::Null(_) => MinijinjaValue::from(None::<()>),
-        _ => MinijinjaValue::from_serialize(yml),
+        YmlValue::Null(_) => minijinja::Value::from(None::<()>),
+        _ => minijinja::Value::from_serialize(yml),
     }
 }
 
 /// Converts a [dbt_serde_yaml::Value] to a [BTreeMap<String, Value>]
-pub fn convert_yml_to_map(yml: YmlValue) -> BTreeMap<String, MinijinjaValue> {
+pub fn convert_yml_to_map(yml: YmlValue) -> BTreeMap<String, minijinja::Value> {
     match yml {
         YmlValue::Mapping(map, _) => {
             let mut value_map = BTreeMap::new();
@@ -55,7 +54,7 @@ pub fn convert_yml_to_map(yml: YmlValue) -> BTreeMap<String, MinijinjaValue> {
 }
 
 /// Converts a [dbt_serde_yaml::Value] to a [DashMap<String, Value>]
-pub fn convert_yml_to_dash_map(yml: YmlValue) -> DashMap<String, MinijinjaValue> {
+pub fn convert_yml_to_dash_map(yml: YmlValue) -> DashMap<String, minijinja::Value> {
     match yml {
         YmlValue::Mapping(map, _) => {
             let value_map = DashMap::new();
@@ -77,32 +76,32 @@ pub fn convert_yml_to_dash_map(yml: YmlValue) -> DashMap<String, MinijinjaValue>
 
 /// Converts a [dbt_serde_yaml::Value] to a [minijinja::Value], preserving order of keys if the value is a mapping
 // TODO(anna): This now converts to an ordered map by using `ValueMap`, with the assertion that the key is a string.
-// But as I mentioned below, if we implement Object for IndexMap<String, MinijinjaValue>, then we don't have to wrap the
+// But as I mentioned below, if we implement Object for IndexMap<String, minijinja::Value>, then we don't have to wrap the
 // key in a value.
 // TODO: We are losing span info for error reporting
-fn convert_yml_value_ordered(yml: YmlValue) -> MinijinjaValue {
+fn convert_yml_value_ordered(yml: YmlValue) -> minijinja::Value {
     match yml {
         YmlValue::Mapping(map, _) => {
             let mut value_map = ValueMap::new();
             for (k, v) in map {
                 value_map.insert(
-                    MinijinjaValue::from(k.as_str().expect("key is not a string").to_string()),
+                    minijinja::Value::from(k.as_str().expect("key is not a string").to_string()),
                     convert_yml_value(v),
                 );
             }
-            MinijinjaValue::from_object(value_map)
+            minijinja::Value::from_object(value_map)
         }
         YmlValue::Sequence(arr, _) => {
-            MinijinjaValue::from_iter(arr.into_iter().map(convert_yml_value))
+            minijinja::Value::from_iter(arr.into_iter().map(convert_yml_value))
         }
-        YmlValue::Null(_) => MinijinjaValue::from(None::<()>),
-        _ => MinijinjaValue::from_serialize(yml),
+        YmlValue::Null(_) => minijinja::Value::from(None::<()>),
+        _ => minijinja::Value::from_serialize(yml),
     }
 }
 
 /// Converts a dbt_serde_yaml::Value to an order-preserving minijinja::ValueMap, only converting the first level to a map
 // See: https://docs.rs/minijinja/2.5.0/minijinja/value/trait.Object.html#foreign-impls
-pub fn convert_yml_to_value_map(yml: YmlValue) -> IndexMap<String, MinijinjaValue> {
+pub fn convert_yml_to_value_map(yml: YmlValue) -> IndexMap<String, minijinja::Value> {
     match yml {
         YmlValue::Mapping(map, _) => {
             let mut value_map = IndexMap::with_capacity(map.len());

@@ -6,7 +6,7 @@ use dbt_frontend_common::ident::Identifier;
 use dbt_schema_store::CanonicalFqn;
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::relations::base::{BaseRelation, BaseRelationProperties, Policy};
-use minijinja::{Error as MinijinjaError, State, Value};
+use minijinja::{State, Value};
 
 use std::any::Any;
 use std::sync::Arc;
@@ -60,7 +60,7 @@ impl BaseRelation for EmptyRelation {
     fn as_any(&self) -> &dyn Any {
         self
     }
-    fn create_from(&self, _: &State, _: &[Value]) -> Result<Value, MinijinjaError> {
+    fn create_from(&self, _: &State, _: &[Value]) -> Result<Value, minijinja::Error> {
         unimplemented!("relation creation from Jinja values")
     }
 
@@ -88,43 +88,43 @@ impl BaseRelation for EmptyRelation {
         None
     }
 
-    fn include(&self, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn include(&self, _args: &[Value]) -> Result<Value, minijinja::Error> {
         Ok(self.as_value())
     }
 
-    fn include_inner(&self, _args: Policy) -> Result<Value, MinijinjaError> {
+    fn include_inner(&self, _args: Policy) -> Result<Value, minijinja::Error> {
         Ok(self.as_value())
     }
 
-    fn render_self(&self) -> Result<Value, MinijinjaError> {
+    fn render_self(&self) -> Result<Value, minijinja::Error> {
         Ok(none_value())
     }
 
-    fn needs_to_drop(&self, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn needs_to_drop(&self, _args: &[Value]) -> Result<Value, minijinja::Error> {
         Ok(Value::from(true))
     }
 
-    fn incorporate(&self, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn incorporate(&self, _args: &[Value]) -> Result<Value, minijinja::Error> {
         Ok(self.as_value())
     }
 
-    fn get_ddl_prefix_for_create(&self, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn get_ddl_prefix_for_create(&self, _args: &[Value]) -> Result<Value, minijinja::Error> {
         Ok(empty_string_value())
     }
 
-    fn get_ddl_prefix_for_alter(&self) -> Result<Value, MinijinjaError> {
+    fn get_ddl_prefix_for_alter(&self) -> Result<Value, minijinja::Error> {
         Ok(empty_string_value())
     }
 
-    fn get_iceberg_ddl_options(&self, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn get_iceberg_ddl_options(&self, _args: &[Value]) -> Result<Value, minijinja::Error> {
         Ok(none_value())
     }
 
-    fn dynamic_table_config_changeset(&self, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn dynamic_table_config_changeset(&self, _args: &[Value]) -> Result<Value, minijinja::Error> {
         Ok(none_value())
     }
 
-    fn from_config(&self, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn from_config(&self, _args: &[Value]) -> Result<Value, minijinja::Error> {
         Ok(none_value())
     }
 
@@ -139,7 +139,7 @@ impl BaseRelation for EmptyRelation {
         _identifier: Option<String>,
         _relation_type: Option<RelationType>,
         _quote_policy: Policy,
-    ) -> Result<Arc<dyn BaseRelation>, MinijinjaError> {
+    ) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
         Ok(Arc::new(self.clone()))
     }
 
@@ -147,7 +147,7 @@ impl BaseRelation for EmptyRelation {
         &self,
         _database: Option<String>,
         _view_name: Option<&str>,
-    ) -> Result<Value, MinijinjaError> {
+    ) -> Result<Value, minijinja::Error> {
         Ok(none_value())
     }
 }

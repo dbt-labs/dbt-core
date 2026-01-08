@@ -1,7 +1,6 @@
-use minijinja::Value;
 use minijinja::listener::RenderingEventListener;
 use minijinja::value::Object;
-use minijinja::{Error as MinijinjaError, State};
+use minijinja::{State, Value};
 
 use std::rc::Rc;
 use std::sync::Arc;
@@ -61,7 +60,7 @@ impl Object for BehaviorFlag {
         _name: &str,
         _args: &[Value],
         _listeners: &[Rc<dyn RenderingEventListener>],
-    ) -> Result<Value, MinijinjaError> {
+    ) -> Result<Value, minijinja::Error> {
         panic!("Cannot call any method on BehaviorFlag, such feature is not supported")
     }
 
@@ -115,7 +114,7 @@ impl Object for Behavior {
         _name: &str,
         _args: &[Value],
         _listeners: &[Rc<dyn RenderingEventListener>],
-    ) -> Result<Value, MinijinjaError> {
+    ) -> Result<Value, minijinja::Error> {
         panic!("Cannot call any method on Behavior, such feature is not supported")
     }
 

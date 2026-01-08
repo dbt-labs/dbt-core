@@ -10,7 +10,7 @@ use dbt_schemas::schemas::relations::base::{
     BaseRelation, BaseRelationProperties, Policy, RelationPath,
 };
 use minijinja::arg_utils::{ArgParser, check_num_args};
-use minijinja::{Error as MinijinjaError, State, Value};
+use minijinja::{State, Value};
 
 use std::any::Any;
 use std::sync::Arc;
@@ -29,7 +29,7 @@ impl StaticBaseRelation for PostgresRelationType {
         identifier: Option<String>,
         relation_type: Option<RelationType>,
         custom_quoting: Option<ResolvedQuoting>,
-    ) -> Result<Value, MinijinjaError> {
+    ) -> Result<Value, minijinja::Error> {
         Ok(RelationObject::new(Arc::new(PostgresRelation::try_new(
             database,
             schema,
@@ -66,7 +66,7 @@ impl PostgresRelation {
         identifier: Option<String>,
         relation_type: Option<RelationType>,
         custom_quoting: ResolvedQuoting,
-    ) -> Result<Self, MinijinjaError> {
+    ) -> Result<Self, minijinja::Error> {
         Self::try_new_with_policy(
             RelationPath {
                 database,
@@ -85,14 +85,14 @@ impl PostgresRelation {
         relation_type: Option<RelationType>,
         include_policy: Policy,
         quote_policy: Policy,
-    ) -> Result<Self, MinijinjaError> {
+    ) -> Result<Self, minijinja::Error> {
         // Check identifier length limit
         // TODO (Ani): dbt ignores this check if the relation.type is none (indicating a test relation)
         if path.identifier.is_some()
             && path.identifier.as_deref().map(|i| i.len()).unwrap() > MAX_CHARACTERS_IN_IDENTIFIER
             && relation_type.is_some()
         {
-            return Err(MinijinjaError::new(
+            return Err(minijinja::Error::new(
                 minijinja::ErrorKind::InvalidOperation,
                 format!(
                     "Relation name '{:?}' is longer than {} characters",
@@ -174,7 +174,7 @@ impl BaseRelation for PostgresRelation {
         self
     }
 
-    fn create_from(&self, _: &State, _: &[Value]) -> Result<Value, MinijinjaError> {
+    fn create_from(&self, _: &State, _: &[Value]) -> Result<Value, minijinja::Error> {
         unimplemented!("PostgreSQL relation creation from Jinja values")
     }
 
@@ -202,7 +202,7 @@ impl BaseRelation for PostgresRelation {
         Some("postgres".to_string())
     }
 
-    fn include_inner(&self, include_policy: Policy) -> Result<Value, MinijinjaError> {
+    fn include_inner(&self, include_policy: Policy) -> Result<Value, minijinja::Error> {
         let relation = PostgresRelation::try_new_with_policy(
             self.path.clone(),
             self.relation_type,
@@ -212,7 +212,7 @@ impl BaseRelation for PostgresRelation {
         Ok(relation.as_value())
     }
 
-    fn relation_max_name_length(&self, args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn relation_max_name_length(&self, args: &[Value]) -> Result<Value, minijinja::Error> {
         let args = ArgParser::new(args, None);
         check_num_args(current_function_name!(), &args, 0, 0)?;
         Ok(Value::from(MAX_CHARACTERS_IN_IDENTIFIER))
@@ -229,7 +229,7 @@ impl BaseRelation for PostgresRelation {
         identifier: Option<String>,
         relation_type: Option<RelationType>,
         custom_quoting: Policy,
-    ) -> Result<Arc<dyn BaseRelation>, MinijinjaError> {
+    ) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
         Ok(Arc::new(PostgresRelation::try_new(
             database,
             schema,
@@ -243,7 +243,7 @@ impl BaseRelation for PostgresRelation {
         &self,
         database: Option<String>,
         view_name: Option<&str>,
-    ) -> Result<Value, MinijinjaError> {
+    ) -> Result<Value, minijinja::Error> {
         let result = InformationSchema::try_from_relation(database, view_name)?;
         Ok(RelationObject::new(Arc::new(result)).into_value())
     }

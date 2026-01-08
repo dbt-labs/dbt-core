@@ -14,7 +14,7 @@ use dbt_schemas::schemas::relations::base::{
     BaseRelation, BaseRelationProperties, Policy, RelationPath,
 };
 use minijinja::arg_utils::{ArgParser, ArgsIter, check_num_args};
-use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State, Value};
+use minijinja::{State, Value};
 use serde::Deserialize;
 
 use std::any::Any;
@@ -34,7 +34,7 @@ impl StaticBaseRelation for RedshiftRelationType {
         identifier: Option<String>,
         relation_type: Option<RelationType>,
         custom_quoting: Option<ResolvedQuoting>,
-    ) -> Result<Value, MinijinjaError> {
+    ) -> Result<Value, minijinja::Error> {
         Ok(RelationObject::new(Arc::new(RedshiftRelation::new(
             database,
             schema,
@@ -170,7 +170,7 @@ impl BaseRelation for RedshiftRelation {
         self
     }
 
-    fn create_from(&self, _: &State, _: &[Value]) -> Result<Value, MinijinjaError> {
+    fn create_from(&self, _: &State, _: &[Value]) -> Result<Value, minijinja::Error> {
         unimplemented!("Redshift relation creation from Jinja values")
     }
 
@@ -198,13 +198,13 @@ impl BaseRelation for RedshiftRelation {
         Some("redshift".to_string())
     }
 
-    fn include_inner(&self, policy: Policy) -> Result<Value, MinijinjaError> {
+    fn include_inner(&self, policy: Policy) -> Result<Value, minijinja::Error> {
         let relation = Self::new_with_policy(self.path.clone(), self.relation_type, policy);
 
         Ok(relation.as_value())
     }
 
-    fn relation_max_name_length(&self, args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn relation_max_name_length(&self, args: &[Value]) -> Result<Value, minijinja::Error> {
         let args = ArgParser::new(args, None);
         check_num_args(current_function_name!(), &args, 0, 0)?;
         Ok(Value::from(MAX_CHARACTERS_IN_IDENTIFIER))
@@ -221,7 +221,7 @@ impl BaseRelation for RedshiftRelation {
         identifier: Option<String>,
         relation_type: Option<RelationType>,
         custom_quoting: Policy,
-    ) -> Result<Arc<dyn BaseRelation>, MinijinjaError> {
+    ) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
         Ok(Arc::new(RedshiftRelation::new(
             database,
             schema,
@@ -236,7 +236,7 @@ impl BaseRelation for RedshiftRelation {
         &self,
         database: Option<String>,
         view_name: Option<&str>,
-    ) -> Result<Value, MinijinjaError> {
+    ) -> Result<Value, minijinja::Error> {
         let result = InformationSchema::try_from_relation(database, view_name)?;
         Ok(RelationObject::new(Arc::new(result)).into_value())
     }
@@ -255,7 +255,7 @@ impl BaseRelation for RedshiftRelation {
     }
 
     // https://github.com/dbt-labs/dbt-adapters/blob/f492c919d3bd415bf5065b3cd8cd1af23562feb0/dbt-redshift/src/dbt/adapters/redshift/relation.py#L67
-    fn from_config(&self, args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn from_config(&self, args: &[Value]) -> Result<Value, minijinja::Error> {
         let iter = ArgsIter::new(current_function_name!(), &["config"], args);
         let config_value = iter.next_arg::<&Value>()?;
         iter.finish()?;
@@ -266,7 +266,10 @@ impl BaseRelation for RedshiftRelation {
     }
 
     // https://github.com/dbt-labs/dbt-adapters/blob/f492c919d3bd415bf5065b3cd8cd1af23562feb0/dbt-redshift/src/dbt/adapters/redshift/relation.py#L78
-    fn materialized_view_config_changeset(&self, args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn materialized_view_config_changeset(
+        &self,
+        args: &[Value],
+    ) -> Result<Value, minijinja::Error> {
         let iter = ArgsIter::new(
             current_function_name!(),
             &["relation_results", "relation_config"],
@@ -279,8 +282,8 @@ impl BaseRelation for RedshiftRelation {
 
         let relation_results = DescribeMaterializedViewResults::try_from(relation_results_value)
             .map_err(|e| {
-                MinijinjaError::new(
-                    MinijinjaErrorKind::SerdeDeserializeError,
+                minijinja::Error::new(
+                    minijinja::ErrorKind::SerdeDeserializeError,
                     format!(
                         "from_config: Failed to serialized DescribeMaterializedViewResults: {e}"
                     ),
@@ -289,8 +292,8 @@ impl BaseRelation for RedshiftRelation {
 
         let existing_config = RedshiftMaterializedViewConfig::try_from(relation_results)
         .map_err(|e| {
-            MinijinjaError::new(
-                MinijinjaErrorKind::SerdeDeserializeError,
+            minijinja::Error::new(
+                minijinja::ErrorKind::SerdeDeserializeError,
                 format!("materialized_view_config_changeset: Failed to deserialize RedshiftMaterializedViewConfig: {e}"),
             )
         })?;
@@ -313,10 +316,10 @@ impl BaseRelation for RedshiftRelation {
 
 fn node_value_to_redshift_materialized_view(
     node_value: &Value,
-) -> Result<RedshiftMaterializedViewConfig, MinijinjaError> {
+) -> Result<RedshiftMaterializedViewConfig, minijinja::Error> {
     let config_wrapper = InternalDbtNodeWrapper::deserialize(node_value).map_err(|e| {
-        MinijinjaError::new(
-            MinijinjaErrorKind::SerdeDeserializeError,
+        minijinja::Error::new(
+            minijinja::ErrorKind::SerdeDeserializeError,
             format!("Failed to deserialize InternalDbtNodeWrapper: {e}"),
         )
     })?;
@@ -324,16 +327,16 @@ fn node_value_to_redshift_materialized_view(
     let model = match config_wrapper {
         InternalDbtNodeWrapper::Model(model) => model,
         _ => {
-            return Err(MinijinjaError::new(
-                MinijinjaErrorKind::InvalidOperation,
+            return Err(minijinja::Error::new(
+                minijinja::ErrorKind::InvalidOperation,
                 "Expected a model node",
             ));
         }
     };
 
     if model.__base_attr__.materialized != DbtMaterialization::MaterializedView {
-        return Err(MinijinjaError::new(
-            MinijinjaErrorKind::InvalidOperation,
+        return Err(minijinja::Error::new(
+            minijinja::ErrorKind::InvalidOperation,
             format!(
                 "Unsupported operation for materialization type {}",
                 &model.__base_attr__.materialized
@@ -342,8 +345,8 @@ fn node_value_to_redshift_materialized_view(
     }
 
     RedshiftMaterializedViewConfig::try_from(&*model).map_err(|e| {
-        MinijinjaError::new(
-            MinijinjaErrorKind::SerdeDeserializeError,
+        minijinja::Error::new(
+            minijinja::ErrorKind::SerdeDeserializeError,
             format!("Failed to deserialize RedshiftMaterializedViewConfig: {e}"),
         )
     })

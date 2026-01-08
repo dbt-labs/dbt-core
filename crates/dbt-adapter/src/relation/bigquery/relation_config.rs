@@ -13,10 +13,7 @@ use dbt_schemas::schemas::{
     nodes::BigQueryAttr,
 };
 use dbt_xdbc::duration::parse_duration;
-use minijinja::{
-    Error as MinijinjaError, ErrorKind as MinijinjaErrorKind,
-    value::{Object, Value as MinijinjaValue},
-};
+use minijinja::value::Object;
 use minijinja_contrib::modules::py_datetime::datetime::PyDateTime;
 use std::{
     borrow::Borrow,
@@ -320,24 +317,24 @@ impl BigqueryMaterializedViewConfigObject {
     }
 
     // Reference: https://github.com/dbt-labs/dbt-adapters/blob/2a94cc75dba1f98fa5caff1f396f5af7ee444598/dbt-bigquery/src/dbt/adapters/bigquery/relation_configs/_options.py#L29
-    fn as_ddl_dict(self: &Arc<Self>) -> Result<MinijinjaValue, MinijinjaError> {
+    fn as_ddl_dict(self: &Arc<Self>) -> Result<minijinja::Value, minijinja::Error> {
         let mut hm = BTreeMap::new();
 
         hm.insert(
             "enable_refresh".to_string(),
-            MinijinjaValue::from(self.0.enable_refresh()),
+            minijinja::Value::from(self.0.enable_refresh()),
         );
         hm.insert(
             "refresh_interval_minutes".to_string(),
-            MinijinjaValue::from(self.0.refresh_interval_minutes()),
+            minijinja::Value::from(self.0.refresh_interval_minutes()),
         );
         hm.insert(
             "labels".to_string(),
-            MinijinjaValue::from_serialize(self.0.labels().iter().collect::<Vec<_>>()),
+            minijinja::Value::from_serialize(self.0.labels().iter().collect::<Vec<_>>()),
         );
         hm.insert(
             "tags".to_string(),
-            MinijinjaValue::from_serialize(self.0.tags().iter().collect::<Vec<_>>()),
+            minijinja::Value::from_serialize(self.0.tags().iter().collect::<Vec<_>>()),
         );
 
         let expiration_timestamp_ns = self.0.expiration_timestamp_ns();
@@ -347,27 +344,27 @@ impl BigqueryMaterializedViewConfigObject {
             );
             hm.insert(
                 "expiration_timestamp".to_string(),
-                MinijinjaValue::from_object(date),
+                minijinja::Value::from_object(date),
             );
         }
 
         if !self.0.max_staleness().is_empty() {
             hm.insert(
                 "max_staleness".to_string(),
-                MinijinjaValue::from(self.0.max_staleness()),
+                minijinja::Value::from(self.0.max_staleness()),
             );
         }
         if !self.0.kms_key_name().is_empty() {
             hm.insert(
                 "kms_key_name".to_string(),
-                MinijinjaValue::from(format!("'{}'", self.0.kms_key_name())),
+                minijinja::Value::from(format!("'{}'", self.0.kms_key_name())),
             );
         }
         if !self.0.description().is_empty() {
             // wtf? (the BigQuery adapter does this, but no idea why)
             let jsonified = serde_json::to_string(self.0.description()).map_err(|_err| {
-                MinijinjaError::new(
-                    MinijinjaErrorKind::InvalidArgument,
+                minijinja::Error::new(
+                    minijinja::ErrorKind::InvalidArgument,
                     format!(
                         "Could not escape materialized view description '{}'",
                         self.0.description()
@@ -375,28 +372,28 @@ impl BigqueryMaterializedViewConfigObject {
                 )
             })?;
             let escaped = format!("\"\"\"{}\"\"\"", &jsonified[1..jsonified.len() - 1]);
-            hm.insert("description".to_string(), MinijinjaValue::from(escaped));
+            hm.insert("description".to_string(), minijinja::Value::from(escaped));
         }
 
-        Ok(MinijinjaValue::from_serialize(hm))
+        Ok(minijinja::Value::from_serialize(hm))
     }
 }
 
 impl Object for BigqueryMaterializedViewConfigObject {
-    fn get_value(self: &Arc<Self>, key: &MinijinjaValue) -> Option<MinijinjaValue> {
+    fn get_value(self: &Arc<Self>, key: &minijinja::Value) -> Option<minijinja::Value> {
         match key.as_str()? {
-            "options" => Some(MinijinjaValue::from_object(
+            "options" => Some(minijinja::Value::from_object(
                 BigqueryMaterializedViewConfigObjectOptions(self.clone()),
             )),
             "partition" => self
                 .0
                 .partition_by()
-                .map(|pb| MinijinjaValue::from_object(pb.clone())),
+                .map(|pb| minijinja::Value::from_object(pb.clone())),
             "cluster" => {
                 if self.0.cluster_by().is_empty() {
                     None
                 } else {
-                    Some(MinijinjaValue::from_serialize(BTreeMap::from([(
+                    Some(minijinja::Value::from_serialize(BTreeMap::from([(
                         "fields",
                         self.0
                             .cluster_by()
@@ -416,13 +413,13 @@ impl Object for BigqueryMaterializedViewConfigObjectOptions {
         self: &Arc<Self>,
         _state: &minijinja::State<'_, '_>,
         method: &str,
-        _args: &[MinijinjaValue],
+        _args: &[minijinja::Value],
         _listeners: &[std::rc::Rc<dyn minijinja::listener::RenderingEventListener>],
-    ) -> Result<MinijinjaValue, MinijinjaError> {
+    ) -> Result<minijinja::Value, minijinja::Error> {
         match method {
             "as_ddl_dict" => self.0.as_ddl_dict(),
-            _ => Err(MinijinjaError::new(
-                MinijinjaErrorKind::UnknownMethod,
+            _ => Err(minijinja::Error::new(
+                minijinja::ErrorKind::UnknownMethod,
                 format!("'{method}' is not a method of BigqueryMaterializedViewConfigObject"),
             )),
         }
@@ -698,18 +695,18 @@ impl BigqueryMaterializedViewConfigChangesetObject {
 }
 
 impl Object for BigqueryMaterializedViewConfigChangesetObject {
-    fn get_value(self: &Arc<Self>, key: &MinijinjaValue) -> Option<MinijinjaValue> {
+    fn get_value(self: &Arc<Self>, key: &minijinja::Value) -> Option<minijinja::Value> {
         match key.as_str()? {
-            "requires_full_refresh" => Some(MinijinjaValue::from(self.requires_full_refresh())),
-            "has_changes" => Some(MinijinjaValue::from(self.has_changes())),
+            "requires_full_refresh" => Some(minijinja::Value::from(self.requires_full_refresh())),
+            "has_changes" => Some(minijinja::Value::from(self.has_changes())),
             "options" => self
                 .options
                 .as_ref()
-                .map(|_opts| MinijinjaValue::from_dyn_object(self.clone())),
+                .map(|_opts| minijinja::Value::from_dyn_object(self.clone())),
             "context" => self.options.as_ref().map(|opts| {
-                MinijinjaValue::from_object(BigqueryMaterializedViewConfigObjectOptions(Arc::new(
-                    BigqueryMaterializedViewConfigObject(opts.clone()),
-                )))
+                minijinja::Value::from_object(BigqueryMaterializedViewConfigObjectOptions(
+                    Arc::new(BigqueryMaterializedViewConfigObject(opts.clone())),
+                ))
             }),
             _ => None,
         }

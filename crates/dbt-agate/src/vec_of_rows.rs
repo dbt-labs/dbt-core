@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use arrow::array::RecordBatch;
 use arrow_schema::ArrowError;
-use minijinja::{Error as MinijinjaError, Value};
+use minijinja::Value;
 
 use crate::flat_record_batch::FlatRecordBatch;
 
@@ -43,8 +43,8 @@ impl VecOfRows {
     }
 
     #[allow(dead_code)]
-    pub fn with_single_column(&self, idx: usize) -> Result<VecOfRows, MinijinjaError> {
-        let results = (|| -> Result<Vec<Value>, MinijinjaError> {
+    pub fn with_single_column(&self, idx: usize) -> Result<VecOfRows, minijinja::Error> {
+        let results = (|| -> Result<Vec<Value>, minijinja::Error> {
             let mut rows = Vec::new();
             for row in self.rows_ref() {
                 row.get_item_by_index(idx).map(|value| rows.push(value))?;

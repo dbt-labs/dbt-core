@@ -15,7 +15,7 @@ use dbt_schemas::schemas::relations::base::{
 use dbt_schemas::schemas::serde::minijinja_value_to_typed_struct;
 use dbt_xdbc::Backend;
 use minijinja::arg_utils::{ArgParser, ArgsIter};
-use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State, Value};
+use minijinja::{State, Value};
 
 use std::any::Any;
 // use std::ops::Deref;
@@ -37,7 +37,7 @@ impl StaticBaseRelation for BigqueryRelationType {
         identifier: Option<String>,
         relation_type: Option<RelationType>,
         custom_quoting: Option<ResolvedQuoting>,
-    ) -> Result<Value, MinijinjaError> {
+    ) -> Result<Value, minijinja::Error> {
         Ok(RelationObject::new(Arc::new(BigqueryRelation::new(
             database,
             schema,
@@ -173,7 +173,7 @@ impl BaseRelation for BigqueryRelation {
         self
     }
 
-    fn create_from(&self, _: &State, _: &[Value]) -> Result<Value, MinijinjaError> {
+    fn create_from(&self, _: &State, _: &[Value]) -> Result<Value, minijinja::Error> {
         unimplemented!("BigQuery relation creation from Jinja values")
     }
 
@@ -210,7 +210,7 @@ impl BaseRelation for BigqueryRelation {
         Some("bigquery".to_string())
     }
 
-    fn include_inner(&self, policy: Policy) -> Result<Value, MinijinjaError> {
+    fn include_inner(&self, policy: Policy) -> Result<Value, minijinja::Error> {
         let relation = Self::new_with_policy(
             self.path.clone(),
             self.relation_type,
@@ -221,7 +221,7 @@ impl BaseRelation for BigqueryRelation {
         Ok(relation.as_value())
     }
 
-    fn quote_inner(&self, policy: Policy) -> Result<Value, MinijinjaError> {
+    fn quote_inner(&self, policy: Policy) -> Result<Value, minijinja::Error> {
         let relation = Self::new_with_policy(
             self.path.clone(),
             self.relation_type,
@@ -232,7 +232,7 @@ impl BaseRelation for BigqueryRelation {
         Ok(relation.as_value())
     }
 
-    fn post_incorporate(&self, mut args: ArgParser) -> Result<Value, MinijinjaError> {
+    fn post_incorporate(&self, mut args: ArgParser) -> Result<Value, minijinja::Error> {
         // Extract and consume 'location' kwarg (consistent with base consume approach)
         let loc_opt: Option<String> = args.consume_optional_only_from_kwargs("location");
         if let Some(loc) = loc_opt {
@@ -257,7 +257,7 @@ impl BaseRelation for BigqueryRelation {
         identifier: Option<String>,
         relation_type: Option<RelationType>,
         custom_quoting: Policy,
-    ) -> Result<Arc<dyn BaseRelation>, MinijinjaError> {
+    ) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
         Ok(Arc::new(BigqueryRelation::new(
             database,
             schema,
@@ -272,7 +272,7 @@ impl BaseRelation for BigqueryRelation {
         &self,
         database: Option<String>,
         view_name: Option<&str>,
-    ) -> Result<Value, MinijinjaError> {
+    ) -> Result<Value, minijinja::Error> {
         let mut info_schema = InformationSchema::try_from_relation(database.clone(), view_name)?;
 
         let quote_if_needed = |identifier: &str| -> String {
@@ -293,7 +293,7 @@ impl BaseRelation for BigqueryRelation {
             // OBJECT_PRIVILEGES require a location. If the location is blank there is nothing
             // the user can do about it.
             let loc = self.location.as_ref().ok_or_else(|| {
-                MinijinjaError::new(
+                minijinja::Error::new(
                     minijinja::ErrorKind::InvalidOperation,
                     format!(
                         "No location/region found when trying to retrieve \"{}\"",
@@ -307,7 +307,7 @@ impl BaseRelation for BigqueryRelation {
                 info_schema.database = Some(quote_if_needed(&proj));
                 info_schema.location = Some(loc.to_string());
             } else {
-                return Err(MinijinjaError::new(
+                return Err(minijinja::Error::new(
                     minijinja::ErrorKind::InvalidOperation,
                     "Database/project is required for OBJECT_PRIVILEGES view",
                 ));
@@ -335,7 +335,10 @@ impl BaseRelation for BigqueryRelation {
         Ok(RelationObject::new(Arc::new(info_schema)).into_value())
     }
 
-    fn materialized_view_config_changeset(&self, args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn materialized_view_config_changeset(
+        &self,
+        args: &[Value],
+    ) -> Result<Value, minijinja::Error> {
         let iter = ArgsIter::new(
             current_function_name!(),
             &["relation_results", "relation_config"],
@@ -349,15 +352,15 @@ impl BaseRelation for BigqueryRelation {
         let existing_mv = relation_results_value
             .as_object()
             .ok_or_else(|| {
-                MinijinjaError::new(
-                    MinijinjaErrorKind::InvalidArgument,
+                minijinja::Error::new(
+                    minijinja::ErrorKind::InvalidArgument,
                     "relation_results must be Object",
                 )
             })?
             .downcast_ref::<BigqueryMaterializedViewConfigObject>()
             .ok_or_else(|| {
-                MinijinjaError::new(
-                    MinijinjaErrorKind::InvalidArgument,
+                minijinja::Error::new(
+                    minijinja::ErrorKind::InvalidArgument,
                     "relation_results must be BigqueryMaterializedViewConfigObject",
                 )
             })?
@@ -368,8 +371,8 @@ impl BaseRelation for BigqueryRelation {
         let new_config_node =
             minijinja_value_to_typed_struct::<InternalDbtNodeWrapper>(new_config_value.clone())
                 .map_err(|e| {
-                    MinijinjaError::new(
-                        MinijinjaErrorKind::SerdeDeserializeError,
+                    minijinja::Error::new(
+                        minijinja::ErrorKind::SerdeDeserializeError,
                         format!("Failed to deserialize InternalDbtNodeWrapper: {e}"),
                     )
                 })?;
@@ -377,8 +380,8 @@ impl BaseRelation for BigqueryRelation {
         let new_config_model = match new_config_node {
             InternalDbtNodeWrapper::Model(model) => model,
             _ => {
-                return Err(MinijinjaError::new(
-                    MinijinjaErrorKind::InvalidOperation,
+                return Err(minijinja::Error::new(
+                    minijinja::ErrorKind::InvalidOperation,
                     "Expected a model node",
                 ));
             }
@@ -386,7 +389,7 @@ impl BaseRelation for BigqueryRelation {
 
         let new_mv_config =
             <dyn BigqueryMaterializedViewConfig>::try_from_model(Arc::from(new_config_model))
-                .map_err(|e| MinijinjaError::new(MinijinjaErrorKind::InvalidArgument, e))?;
+                .map_err(|e| minijinja::Error::new(minijinja::ErrorKind::InvalidArgument, e))?;
 
         let changeset =
             BigqueryMaterializedViewConfigChangesetObject::new(existing_mv, new_mv_config);

@@ -25,7 +25,6 @@ use crate::funcs::none_value;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use indexmap::{IndexMap, map::Iter as IndexMapIter};
 use minijinja::{
-    Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State as MinijinjaState,
     arg_utils::ArgParser,
     listener::RenderingEventListener,
     value::{Enumerator, Object, Value, ValueMap},
@@ -246,11 +245,11 @@ impl RelationConfig {
 impl Object for RelationConfig {
     fn call_method(
         self: &Arc<Self>,
-        _state: &MinijinjaState,
+        _state: &minijinja::State,
         name: &str,
         args: &[Value],
         _listeners: &[Rc<dyn RenderingEventListener>],
-    ) -> Result<Value, MinijinjaError> {
+    ) -> Result<Value, minijinja::Error> {
         // TODO: args iter
         let mut parser = ArgParser::new(args, None);
         match name {
@@ -400,11 +399,11 @@ impl RelationComponentConfigChangeSet {
 impl Object for RelationComponentConfigChangeSet {
     fn call_method(
         self: &Arc<Self>,
-        _state: &MinijinjaState,
+        _state: &minijinja::State,
         name: &str,
         args: &[Value],
         _listeners: &[Rc<dyn RenderingEventListener>],
-    ) -> Result<Value, MinijinjaError> {
+    ) -> Result<Value, minijinja::Error> {
         // TODO: ArgsIter
         let mut parser = ArgParser::new(args, None);
         match name {
@@ -412,7 +411,10 @@ impl Object for RelationComponentConfigChangeSet {
             "get" => {
                 let key = parser.get::<Value>("key")?;
                 let key = key.as_str().ok_or_else(|| {
-                    MinijinjaError::new(MinijinjaErrorKind::InvalidArgument, "key must be a string")
+                    minijinja::Error::new(
+                        minijinja::ErrorKind::InvalidArgument,
+                        "key must be a string",
+                    )
                 })?;
 
                 Ok(self
@@ -421,8 +423,8 @@ impl Object for RelationComponentConfigChangeSet {
                     .map(|v| v.as_jinja())
                     .unwrap_or_else(none_value))
             }
-            _ => Err(MinijinjaError::new(
-                MinijinjaErrorKind::UnknownMethod,
+            _ => Err(minijinja::Error::new(
+                minijinja::ErrorKind::UnknownMethod,
                 format!("RelationComponentConfigChangeSet has no method named '{name}'"),
             )),
         }

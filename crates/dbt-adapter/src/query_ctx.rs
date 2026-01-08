@@ -7,10 +7,7 @@ use dbt_schemas::schemas::{
     DbtModel, DbtSeed, DbtSnapshot, DbtTest, DbtUnitTest, manifest::DbtOperation,
 };
 use dbt_xdbc::QueryCtx;
-use minijinja::{
-    Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State,
-    constants::CURRENT_EXECUTION_PHASE,
-};
+use minijinja::{State, constants::CURRENT_EXECUTION_PHASE};
 use serde::Deserialize;
 
 /// Create a new instance from the current jinja state.
@@ -41,7 +38,9 @@ pub fn node_id_from_state(state: &State) -> Option<String> {
     // all deserialization must go through yaml value
     // should this be a .ok?
     let yaml_node = dbt_serde_yaml::to_value(&node)
-        .map_err(|e| MinijinjaError::new(MinijinjaErrorKind::SerdeDeserializeError, e.to_string()))
+        .map_err(|e| {
+            minijinja::Error::new(minijinja::ErrorKind::SerdeDeserializeError, e.to_string())
+        })
         .ok()?;
 
     // Try to deserialize as different node types

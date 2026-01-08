@@ -1,6 +1,5 @@
 use minijinja::arg_utils::ArgsIter;
 use minijinja::value::Value;
-use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -28,7 +27,7 @@ impl ResultStore {
     /// https://github.com/dbt-labs/dbt-core/blob/34bb3f94dde716a3f9c36481d2ead85c211075dd/core/dbt/context/providers.py#L1043
     pub fn store_result(
         &self,
-    ) -> impl Fn(&[Value]) -> Result<Value, MinijinjaError> + Clone + use<> {
+    ) -> impl Fn(&[Value]) -> Result<Value, minijinja::Error> + Clone + use<> {
         let store = self.clone();
         move |args: &[Value]| {
             // name: str,
@@ -71,7 +70,7 @@ impl ResultStore {
     /// https://github.com/dbt-labs/dbt-core/blob/34bb3f94dde716a3f9c36481d2ead85c211075dd/core/dbt/context/providers.py#L1022
     pub fn load_result(
         &self,
-    ) -> impl Fn(&[Value]) -> Result<Value, MinijinjaError> + Clone + use<> {
+    ) -> impl Fn(&[Value]) -> Result<Value, minijinja::Error> + Clone + use<> {
         let store = self.clone();
         move |args: &[Value]| {
             // name: str,
@@ -85,8 +84,8 @@ impl ResultStore {
                 if name == "main" {
                     Ok(value.clone())
                 } else if *value == none_value() {
-                    Err(MinijinjaError::new(
-                        MinijinjaErrorKind::MacroResultAlreadyLoadedError,
+                    Err(minijinja::Error::new(
+                        minijinja::ErrorKind::MacroResultAlreadyLoadedError,
                         format!(
                             "The 'statement' result named '{name}' has already been loaded into a variable"
                         ),
@@ -106,7 +105,7 @@ impl ResultStore {
     /// https://github.com/dbt-labs/dbt-core/blob/34bb3f94dde716a3f9c36481d2ead85c211075dd/core/dbt/context/providers.py#L1043
     pub fn store_raw_result(
         &self,
-    ) -> impl Fn(&[Value]) -> Result<Value, MinijinjaError> + Clone + use<> {
+    ) -> impl Fn(&[Value]) -> Result<Value, minijinja::Error> + Clone + use<> {
         let store = self.clone();
         move |args: &[Value]| {
             // name: str,

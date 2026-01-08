@@ -7,7 +7,7 @@ use crate::{MappedSequence, Tuple, TupleRepr};
 use arrow_array::{Array, StringViewArray};
 use minijinja::listener::RenderingEventListener;
 use minijinja::value::{Enumerator, Object, ObjectRepr};
-use minijinja::{Error as MinijinjaError, State, Value};
+use minijinja::{State, Value};
 
 #[derive(Debug)]
 pub struct RowNamesAsTuple {
@@ -179,7 +179,7 @@ impl Object for Rows {
         name: &str,
         args: &[Value],
         listeners: &[Rc<dyn RenderingEventListener>],
-    ) -> Result<Value, MinijinjaError> {
+    ) -> Result<Value, minijinja::Error> {
         MappedSequence::call_method(self, state, name, args, listeners)
     }
 

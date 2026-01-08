@@ -47,11 +47,11 @@ macro_rules! missing_argument {
 #[macro_export]
 macro_rules! too_many_arguments {
     ($msg:expr) => {
-        Err(MinijinjaError::new(MinijinjaErrorKind::TooManyArguments, $msg))
+        Err($crate::Error::new($crate::ErrorKind::TooManyArguments, $msg))
     };
 
     ($($arg:tt)*) => {
-        Err(MinijinjaError::new(MinijinjaErrorKind::TooManyArguments, format!($($arg)*)))
+        Err($crate::Error::new($crate::ErrorKind::TooManyArguments, format!($($arg)*)))
     };
 }
 

@@ -10,8 +10,7 @@ use dbt_schemas::schemas::serde::minijinja_value_to_typed_struct;
 use dbt_schemas::schemas::{InternalDbtNodeAttributes, InternalDbtNodeWrapper};
 use minijinja::arg_utils::ArgsIter;
 use minijinja::value::{Enumerator, Object, ValueKind};
-use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State};
-use minijinja::{Value, listener::RenderingEventListener};
+use minijinja::{State, Value, listener::RenderingEventListener};
 use serde::Deserialize;
 
 use crate::relation::bigquery::*;
@@ -84,7 +83,7 @@ impl Object for RelationObject {
         name: &str,
         args: &[Value],
         _listeners: &[std::rc::Rc<dyn RenderingEventListener>],
-    ) -> Result<Value, MinijinjaError> {
+    ) -> Result<Value, minijinja::Error> {
         match name {
             "create_from" => self.create_from(state, args),
             "replace_path" => self.replace_path(args),
@@ -194,7 +193,7 @@ pub fn create_relation(
     identifier: Option<String>,
     relation_type: Option<RelationType>,
     custom_quoting: ResolvedQuoting,
-) -> Result<Arc<dyn BaseRelation>, MinijinjaError> {
+) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
     let relation = match adapter_type {
         AdapterType::Postgres => Arc::new(PostgresRelation::try_new(
             Some(database),
@@ -313,7 +312,7 @@ impl Object for StaticBaseRelationObject {
         name: &str,
         args: &[Value],
         _listeners: &[std::rc::Rc<dyn RenderingEventListener>],
-    ) -> Result<Value, MinijinjaError> {
+    ) -> Result<Value, minijinja::Error> {
         match name {
             "create" => self.create(args),
             "scd_args" => self.scd_args(args),
@@ -331,8 +330,8 @@ impl Object for StaticBaseRelationObject {
 
                     let config_wrapper = minijinja_value_to_typed_struct::<InternalDbtNodeWrapper>(relation_config_arg.clone())
                         .map_err(|e| {
-                            MinijinjaError::new(
-                                MinijinjaErrorKind::SerdeDeserializeError,
+                            minijinja::Error::new(
+                                minijinja::ErrorKind::SerdeDeserializeError,
                                 format!("get_table_options: Failed to deserialize InternalDbtNodeWrapper: {e}"),
                             )
                         })?;
@@ -340,8 +339,8 @@ impl Object for StaticBaseRelationObject {
                     let model = match config_wrapper {
                         InternalDbtNodeWrapper::Model(model) => model,
                         _ => {
-                            return Err(MinijinjaError::new(
-                                MinijinjaErrorKind::InvalidOperation,
+                            return Err(minijinja::Error::new(
+                                minijinja::ErrorKind::InvalidOperation,
                                 "Expected a model node",
                             ));
                         }
@@ -350,8 +349,8 @@ impl Object for StaticBaseRelationObject {
                     let mv_config = BigqueryMaterializedViewConfigObject::new(
                         <dyn BigqueryMaterializedViewConfig>::try_from_model(Arc::new(*model))
                         .map_err(|e| {
-                            MinijinjaError::new(
-                                MinijinjaErrorKind::SerdeDeserializeError,
+                            minijinja::Error::new(
+                                minijinja::ErrorKind::SerdeDeserializeError,
                                 format!("materialized_view_from_relation_config: Failed to deserialize BigqueryMaterializedViewConfig: {e}")
                             )
                         })?
@@ -383,13 +382,13 @@ pub trait StaticBaseRelation: fmt::Debug + Send + Sync {
         identifier: Option<String>,
         relation_type: Option<RelationType>,
         custom_quoting: Option<ResolvedQuoting>,
-    ) -> Result<Value, MinijinjaError>;
+    ) -> Result<Value, minijinja::Error>;
 
     fn get_adapter_type(&self) -> String;
 
     /// Create a new relation from the given arguments
     /// impl for api.Relation.create
-    fn create(&self, args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn create(&self, args: &[Value]) -> Result<Value, minijinja::Error> {
         let iter = ArgsIter::new("Relation.create", &[], args);
         let database = iter.next_kwarg::<Option<String>>("database")?;
         let schema = iter.next_kwarg::<Option<String>>("schema")?;
@@ -424,7 +423,7 @@ pub trait StaticBaseRelation: fmt::Debug + Send + Sync {
     }
 
     /// Get the SCD arguments for the relation
-    fn scd_args(&self, args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn scd_args(&self, args: &[Value]) -> Result<Value, minijinja::Error> {
         let iter = ArgsIter::new("Relation.scd_args", &[], args);
         let primary_key = iter.next_kwarg::<Value>("primary_key")?;
         let updated_at = iter.next_kwarg::<String>("updated_at")?;

@@ -10,7 +10,7 @@ use dbt_schemas::schemas::relations::base::{
 use arrow::array::RecordBatch;
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::common::ResolvedQuoting;
-use minijinja::{Error as MinijinjaError, State, Value};
+use minijinja::{State, Value};
 
 use std::any::Any;
 use std::collections::BTreeMap;
@@ -36,7 +36,7 @@ impl StaticBaseRelation for DatabricksRelationType {
         identifier: Option<String>,
         relation_type: Option<RelationType>,
         custom_quoting: Option<ResolvedQuoting>,
-    ) -> Result<Value, MinijinjaError> {
+    ) -> Result<Value, minijinja::Error> {
         Ok(RelationObject::new(Arc::new(DatabricksRelation::new(
             database,
             schema,
@@ -221,7 +221,7 @@ impl BaseRelation for DatabricksRelation {
         self
     }
 
-    fn create_from(&self, _: &State, _: &[Value]) -> Result<Value, MinijinjaError> {
+    fn create_from(&self, _: &State, _: &[Value]) -> Result<Value, minijinja::Error> {
         unimplemented!("Databricks relation creation from Jinja values")
     }
 
@@ -249,7 +249,7 @@ impl BaseRelation for DatabricksRelation {
         Some("databricks".to_string())
     }
 
-    fn include_inner(&self, policy: Policy) -> Result<Value, MinijinjaError> {
+    fn include_inner(&self, policy: Policy) -> Result<Value, minijinja::Error> {
         let mut relation = Self::new_with_policy(
             self.path.clone(),
             self.relation_type,
@@ -294,7 +294,7 @@ impl BaseRelation for DatabricksRelation {
         identifier: Option<String>,
         relation_type: Option<RelationType>,
         custom_quoting: Policy,
-    ) -> Result<Arc<dyn BaseRelation>, MinijinjaError> {
+    ) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
         Ok(Arc::new(DatabricksRelation::new(
             database,
             schema,
@@ -311,7 +311,7 @@ impl BaseRelation for DatabricksRelation {
         &self,
         _database: Option<String>,
         _view_name: Option<&str>,
-    ) -> Result<Value, MinijinjaError> {
+    ) -> Result<Value, minijinja::Error> {
         todo!("InformationSchema")
     }
 }

@@ -2,10 +2,9 @@ use crate::AdapterType;
 
 use arrow::array::RecordBatch;
 use dbt_agate::AgateTable;
-use minijinja::Value;
 use minijinja::listener::RenderingEventListener;
 use minijinja::value::{Enumerator, Object};
-use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State};
+use minijinja::{State, Value};
 use serde::{Deserialize, Serialize};
 use std::rc::Rc;
 use std::sync::Arc;
@@ -78,7 +77,7 @@ impl Object for AdapterResponse {
         _state: &State,
         _args: &[Value],
         _listeners: &[Rc<dyn RenderingEventListener>],
-    ) -> Result<Value, MinijinjaError> {
+    ) -> Result<Value, minijinja::Error> {
         unimplemented!("Is response from 'execute' callable?")
     }
 
@@ -98,7 +97,7 @@ impl Object for AdapterResponse {
 }
 
 impl TryFrom<Value> for AdapterResponse {
-    type Error = MinijinjaError;
+    type Error = minijinja::Error;
 
     fn try_from(value: Value) -> Result<Self, Self::Error> {
         if let Some(response) = value.downcast_object::<AdapterResponse>() {
@@ -111,8 +110,8 @@ impl TryFrom<Value> for AdapterResponse {
                 query_id: None,
             })
         } else {
-            Err(MinijinjaError::new(
-                MinijinjaErrorKind::CannotDeserialize,
+            Err(minijinja::Error::new(
+                minijinja::ErrorKind::CannotDeserialize,
                 "Failed to downcast response",
             ))
         }
@@ -150,7 +149,7 @@ impl Object for ResultObject {
         method: &str,
         _args: &[Value],
         _listeners: &[Rc<dyn RenderingEventListener>],
-    ) -> Result<Value, MinijinjaError> {
+    ) -> Result<Value, minijinja::Error> {
         // NOTE: the `keys` method is used by the `stage_external_sources` macro in
         // `dbt-external-table`. Don't delete this unless the external package is fixed.
         if method == "keys" {

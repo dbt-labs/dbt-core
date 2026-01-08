@@ -7,7 +7,7 @@ use dbt_schemas::{
     dbt_types::RelationType,
     schemas::relations::base::{BaseRelation, BaseRelationProperties, Policy},
 };
-use minijinja::{Error as MinijinjaError, State, Value};
+use minijinja::{State, Value};
 
 use std::{any::Any, sync::Arc};
 
@@ -24,7 +24,7 @@ impl InformationSchema {
     pub fn try_from_relation(
         relation_database: Option<String>,
         information_schema_view: Option<&str>,
-    ) -> Result<Self, MinijinjaError> {
+    ) -> Result<Self, minijinja::Error> {
         // Create the InformationSchema object with the database name as none if it is an empty string
         Ok(Self {
             database: if relation_database.is_some() && relation_database.clone().unwrap() == "" {
@@ -78,7 +78,7 @@ impl BaseRelation for InformationSchema {
         unimplemented!("information schema as_any trait downcasting")
     }
 
-    fn create_from(&self, _state: &State, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn create_from(&self, _state: &State, _args: &[Value]) -> Result<Value, minijinja::Error> {
         unimplemented!("information schema relation creation from Jinja values")
     }
 
@@ -106,11 +106,11 @@ impl BaseRelation for InformationSchema {
         RelationObject::new(Arc::new(self.clone())).into_value()
     }
 
-    fn include_inner(&self, _args: Policy) -> Result<Value, MinijinjaError> {
+    fn include_inner(&self, _args: Policy) -> Result<Value, minijinja::Error> {
         unimplemented!("InformationSchema")
     }
 
-    fn render_self(&self) -> Result<Value, MinijinjaError> {
+    fn render_self(&self) -> Result<Value, minijinja::Error> {
         let rendered: String = match (&self.database, &self.location, &self.identifier) {
             // With database and location
             (Some(database), Some(location), Some(identifier)) => {
@@ -152,7 +152,7 @@ impl BaseRelation for InformationSchema {
         _identifier: Option<String>,
         _relation_type: Option<RelationType>,
         _quote_policy: Policy,
-    ) -> Result<Arc<dyn BaseRelation>, MinijinjaError> {
+    ) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
         unimplemented!("InformationSchema")
     }
 
@@ -160,7 +160,7 @@ impl BaseRelation for InformationSchema {
         &self,
         _database: Option<String>,
         _view_name: Option<&str>,
-    ) -> Result<Value, MinijinjaError> {
+    ) -> Result<Value, minijinja::Error> {
         unimplemented!("InformationSchema")
     }
 }

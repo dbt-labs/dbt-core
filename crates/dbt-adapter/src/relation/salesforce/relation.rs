@@ -8,7 +8,7 @@ use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::relations::base::{
     BaseRelation, BaseRelationProperties, Policy, RelationPath,
 };
-use minijinja::{Error as MinijinjaError, State, Value};
+use minijinja::{State, Value};
 
 use std::any::Any;
 use std::sync::Arc;
@@ -25,7 +25,7 @@ impl StaticBaseRelation for SalesforceRelationType {
         identifier: Option<String>,
         relation_type: Option<RelationType>,
         _custom_quoting: Option<ResolvedQuoting>,
-    ) -> Result<Value, MinijinjaError> {
+    ) -> Result<Value, minijinja::Error> {
         Ok(RelationObject::new(Arc::new(SalesforceRelation::new(
             database,
             schema,
@@ -132,7 +132,7 @@ impl BaseRelation for SalesforceRelation {
     }
 
     /// Creates a new Salesforce relation from a state and a list of values
-    fn create_from(&self, _: &State, _: &[Value]) -> Result<Value, MinijinjaError> {
+    fn create_from(&self, _: &State, _: &[Value]) -> Result<Value, minijinja::Error> {
         unimplemented!("Salesforce relation creation from Jinja values")
     }
 
@@ -164,23 +164,23 @@ impl BaseRelation for SalesforceRelation {
         Some("salesforce".to_string())
     }
 
-    fn needs_to_drop(&self, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn needs_to_drop(&self, _args: &[Value]) -> Result<Value, minijinja::Error> {
         unimplemented!("Salesforce needs_to_drop logic")
     }
 
-    fn get_ddl_prefix_for_create(&self, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn get_ddl_prefix_for_create(&self, _args: &[Value]) -> Result<Value, minijinja::Error> {
         unimplemented!("Salesforce DDL prefix for create")
     }
 
-    fn get_ddl_prefix_for_alter(&self) -> Result<Value, MinijinjaError> {
+    fn get_ddl_prefix_for_alter(&self) -> Result<Value, minijinja::Error> {
         unimplemented!("Salesforce DDL prefix for alter")
     }
 
-    fn get_iceberg_ddl_options(&self, _args: &[Value]) -> Result<Value, MinijinjaError> {
+    fn get_iceberg_ddl_options(&self, _args: &[Value]) -> Result<Value, minijinja::Error> {
         unimplemented!("Salesforce does not support Iceberg DDL options")
     }
 
-    fn include_inner(&self, _policy: Policy) -> Result<Value, MinijinjaError> {
+    fn include_inner(&self, _policy: Policy) -> Result<Value, minijinja::Error> {
         unimplemented!("Salesforce include inner")
     }
 
@@ -195,7 +195,7 @@ impl BaseRelation for SalesforceRelation {
         identifier: Option<String>,
         relation_type: Option<RelationType>,
         _custom_quoting: Policy,
-    ) -> Result<Arc<dyn BaseRelation>, MinijinjaError> {
+    ) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
         Ok(Arc::new(SalesforceRelation::new(
             database,
             schema,
@@ -208,7 +208,7 @@ impl BaseRelation for SalesforceRelation {
         &self,
         _database: Option<String>,
         _view_name: Option<&str>,
-    ) -> Result<Value, MinijinjaError> {
+    ) -> Result<Value, minijinja::Error> {
         unimplemented!("Salesforce information schema inner")
     }
 }

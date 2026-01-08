@@ -5,7 +5,7 @@ use core::fmt;
 use minijinja::arg_utils::ArgsIter;
 use minijinja::listener::RenderingEventListener;
 use minijinja::value::{Enumerator, Object, ObjectRepr};
-use minijinja::{Error as MinijinjaError, State, Value, assert_nullary_args};
+use minijinja::{State, Value, assert_nullary_args};
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -170,7 +170,7 @@ impl Object for Column {
         method: &str,
         args: &[Value],
         listeners: &[Rc<dyn RenderingEventListener>],
-    ) -> Result<Value, MinijinjaError> {
+    ) -> Result<Value, minijinja::Error> {
         match method {
             // Column methods
             "values_distinct" => {
