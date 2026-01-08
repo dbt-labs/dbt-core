@@ -2772,6 +2772,26 @@ where
     }
 }
 
+/// Serialize Option<IndexMap<String, YmlValue>> as empty map when None, otherwise as the map value.
+/// This ensures the field is always present in serialized output, which is required for
+/// Jinja macros that access `node.config.meta.get(...)`.
+pub fn serialize_none_as_empty_map<S>(
+    value: &Option<IndexMap<String, YmlValue>>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    use serde::ser::SerializeMap;
+    match value {
+        Some(map) => map.serialize(serializer),
+        None => {
+            let empty_map = serializer.serialize_map(Some(0))?;
+            empty_map.end()
+        }
+    }
+}
+
 /// Deserialize Option<String>, treating empty string as None for consistency.
 pub fn deserialize_empty_string_as_none<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
 where

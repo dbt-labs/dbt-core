@@ -54,6 +54,7 @@ fn strip_null_fields(value: YmlValue) -> YmlValue {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use indexmap::IndexMap;
     use serde::Serialize;
 
     // NOTE: No #[skip_serializing_none] - we want None to serialize as null
@@ -69,6 +70,21 @@ mod tests {
         pub name: String,
         #[serde(rename = "config")]
         pub deprecated_config: TestConfig,
+    }
+
+    /// Config with meta field using serialize_none_as_empty_map
+    #[derive(Serialize)]
+    struct TestConfigWithMeta {
+        pub enabled: Option<bool>,
+        #[serde(serialize_with = "crate::schemas::nodes::serialize_none_as_empty_map")]
+        pub meta: Option<IndexMap<String, YmlValue>>,
+    }
+
+    #[derive(Serialize)]
+    struct TestNodeWithMeta {
+        pub name: String,
+        #[serde(rename = "config")]
+        pub deprecated_config: TestConfigWithMeta,
     }
 
     #[test]
@@ -125,6 +141,98 @@ mod tests {
                 // enabled should be present
                 assert!(config_map.contains_key(YmlValue::string("enabled".to_string())));
             }
+        }
+    }
+
+    /// Test that meta field is always serialized as an empty map when None,
+    /// even in OmitNone mode. This is required for Jinja macros that access
+    /// node.config.meta.get(...) to work correctly.
+    #[test]
+    fn test_meta_serializes_as_empty_map_when_none() {
+        let node = TestNodeWithMeta {
+            name: "test_model".to_string(),
+            deprecated_config: TestConfigWithMeta {
+                enabled: Some(true),
+                meta: None, // This should serialize as {} not be stripped
+            },
+        };
+
+        let result = serialize_with_mode(&node, SerializationMode::OmitNone);
+
+        // Verify meta is present as an empty map, not stripped
+        if let YmlValue::Mapping(map, _) = result {
+            let config = map
+                .get(YmlValue::string("config".to_string()))
+                .expect("config should be present");
+            if let YmlValue::Mapping(config_map, _) = config {
+                // meta should be present (not stripped)
+                assert!(
+                    config_map.contains_key(YmlValue::string("meta".to_string())),
+                    "meta should be present even when None"
+                );
+                // meta should be an empty mapping
+                let meta = config_map
+                    .get(YmlValue::string("meta".to_string()))
+                    .unwrap();
+                assert!(
+                    matches!(meta, YmlValue::Mapping(m, _) if m.is_empty()),
+                    "meta should be an empty map, got: {:?}",
+                    meta
+                );
+            } else {
+                panic!("config should be a mapping");
+            }
+        } else {
+            panic!("result should be a mapping");
+        }
+    }
+
+    /// Test that meta field serializes correctly when it has values
+    #[test]
+    fn test_meta_serializes_with_values() {
+        let mut meta = IndexMap::new();
+        meta.insert(
+            "schema_prod".to_string(),
+            YmlValue::string("custom_schema".to_string()),
+        );
+
+        let node = TestNodeWithMeta {
+            name: "test_model".to_string(),
+            deprecated_config: TestConfigWithMeta {
+                enabled: Some(true),
+                meta: Some(meta),
+            },
+        };
+
+        let result = serialize_with_mode(&node, SerializationMode::OmitNone);
+
+        // Verify meta is present with the correct value
+        if let YmlValue::Mapping(map, _) = result {
+            let config = map
+                .get(YmlValue::string("config".to_string()))
+                .expect("config should be present");
+            if let YmlValue::Mapping(config_map, _) = config {
+                let meta = config_map
+                    .get(YmlValue::string("meta".to_string()))
+                    .expect("meta should be present");
+                if let YmlValue::Mapping(meta_map, _) = meta {
+                    assert_eq!(meta_map.len(), 1);
+                    let schema_prod = meta_map
+                        .get(YmlValue::string("schema_prod".to_string()))
+                        .expect("schema_prod should be present");
+                    assert_eq!(
+                        schema_prod.as_str(),
+                        Some("custom_schema"),
+                        "schema_prod should have correct value"
+                    );
+                } else {
+                    panic!("meta should be a mapping");
+                }
+            } else {
+                panic!("config should be a mapping");
+            }
+        } else {
+            panic!("result should be a mapping");
         }
     }
 }

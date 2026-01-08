@@ -412,7 +412,13 @@ pub struct ModelConfig {
     pub tags: Option<StringOrArrayOfStrings>,
     pub catalog_name: Option<String>,
     // need default to ensure None if field is not set
-    #[serde(default, deserialize_with = "default_type")]
+    // serialize_with ensures meta is always present (as {} when None) for Jinja macros
+    // that access node.config.meta.get(...)
+    #[serde(
+        default,
+        deserialize_with = "default_type",
+        serialize_with = "crate::schemas::nodes::serialize_none_as_empty_map"
+    )]
     pub meta: Option<IndexMap<String, YmlValue>>,
     pub group: Option<String>,
     pub materialized: Option<DbtMaterialization>,
