@@ -572,33 +572,21 @@ impl Column {
 
     /// Get a vec of columns from a jinja value that returns columns in dbt Core format
     pub fn vec_from_jinja_value(
-        adapter_type: AdapterType,
+        _adapter_type: AdapterType,
         value: Value,
     ) -> Result<Vec<Self>, minijinja::Error> {
-        // First, we attempt to convert the jinja value as a proper Column object so that we
-        // carry the private fields. If that's not possible, that means the object came from a
-        // macro or some other thing that serializes the column. In this case, fall back to
-        // dbt Core's column spec.
+        // Iterate over the jinja value which should be a sequence
         value
-            .downcast_object_ref::<Vec<Self>>()
-            .map(|r| Ok(r.clone()))
-            .unwrap_or_else(|| {
-                // TODO(serramatutu): purge this fallback once we know 100% we can always roundtrip information
-                // to-from Jinja. This will only be done after we get rid of all the macros
-                Ok(
-                    minijinja_value_to_typed_struct::<Vec<DbtCoreBaseColumn>>(value)
-                        .map_err(|e| {
-                            minijinja::Error::new(
-                                minijinja::ErrorKind::SerdeDeserializeError,
-                                e.to_string(),
-                            )
-                        })?
-                        .into_iter()
-                        // TODO(serramatutu): figure out a way to derive non-standard config here
-                        .map(|col| Self::from_dbt_core(adapter_type, col))
-                        .collect(),
-                )
+            .try_iter()?
+            .map(|item| {
+                item.downcast_object_ref::<Self>().cloned().ok_or_else(|| {
+                    minijinja::Error::new(
+                        minijinja::ErrorKind::InvalidOperation,
+                        "Failed to downcast jinja value to Column; expected Column object",
+                    )
+                })
             })
+            .collect()
     }
 
     /// Create a new BigQuery column
