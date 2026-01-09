@@ -940,6 +940,11 @@ class RunTask(CompileTask):
             batch_runner.do_skip()
 
         if not pool.is_closed():
+            # Only run the batch in parallel IFF:
+            # 1. The batch runner is not forced to run sequentially
+            # 2. The batch runner should be run in parallel
+            # 3. There are available threads in the pool
+            #   a. This prevents deadlocks from occurring --threads=1
             if (
                 not force_sequential_run
                 and batch_runner.should_run_in_parallel()
