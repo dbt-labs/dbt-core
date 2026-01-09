@@ -1,5 +1,6 @@
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_args::IoArgs;
+use dbt_common::tracing::emit::emit_warn_log_message;
 use dbt_common::{ErrorCode, FsResult, err, fs_err, stdfs};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_schemas::schemas::packages::{
@@ -123,25 +124,34 @@ pub async fn compute_package_lock(
     dbt_packages_lock.sha1_hash = sha1_hash;
     // Note: This is currently sorting by package name, but there's more to do here
     dbt_packages_lock.packages.sort_by_key(|a| a.package_name());
-    // Sanity check for duplicate package names
+    // Deduplicate packages with the same project name, keeping only the first occurrence.
+    // This handles cases where packages from different sources (e.g., calogica/dbt_date and
+    // godatadriven/dbt_date) resolve to the same project name. dbt-core allows this and
+    // deduplicates during resolution. We do the same here by removing duplicates.
+    // Note: We intentionally do NOT error on duplicate package names here.
+    // dbt-core handles duplicate package names by merging them during resolution
+    // via the incorporate() method in the PackageListing. It only checks for
+    // duplicate *project* names after fetching metadata, not duplicate package names.
     let mut seen = HashSet::new();
-    for package in dbt_packages_lock.packages.iter() {
+    dbt_packages_lock.packages.retain(|package| {
         let lookup_name = package.package_name();
         if seen.contains(&lookup_name) {
-            let conflict_package = dbt_packages_lock.get_by_name(&lookup_name).unwrap();
-            return err!(
-                ErrorCode::InvalidConfig,
-                "Packages '{}:{}' and '{}:{}' occupy the same namespace '{}'. Consider unifying on a single source. This can be caused by other packages depending on '{}', but using an outdated or different full name.",
-                package.entry_type(),
-                package.entry_name(),
-                conflict_package.entry_type(),
-                conflict_package.entry_name(),
-                lookup_name,
-                lookup_name
+            // Warn about duplicate package - keeping the first occurrence
+            emit_warn_log_message(
+                ErrorCode::DependencyWarning,
+                format!(
+                    "Duplicate package name '{}' found in dependencies. Keeping the first occurrence. \
+                     This will be an error in a future version of Fusion.",
+                    lookup_name
+                ),
+                io.status_reporter.as_ref(),
             );
+            false
+        } else {
+            seen.insert(lookup_name);
+            true
         }
-        seen.insert(lookup_name);
-    }
+    });
     Ok(dbt_packages_lock)
 }
 
