@@ -52,7 +52,7 @@ async fn extend_with_model_context<S: Serialize>(
     sql_header: Option<MinijinjaValue>,
 ) {
     // Create a relation for 'this' using config values
-    let this_relation = dbt_adapter::relation::create_relation(
+    let this_relation = dbt_adapter::relation::do_create_relation(
         adapter_type,
         base_attr.database.clone(),
         base_attr.schema.clone(),

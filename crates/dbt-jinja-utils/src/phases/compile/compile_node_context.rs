@@ -113,7 +113,7 @@ where
             let ref_name = model.common().name.clone();
             // for repl, we use the just create a relation on spot using model passed in.
             if ref_name == REPL_MODEL_NAME {
-                dbt_adapter::relation::create_relation(
+                dbt_adapter::relation::do_create_relation(
                     adapter_type,
                     model.base().database.clone(),
                     model.base().schema.clone(),
@@ -147,7 +147,7 @@ where
                 }
             }
         }
-        _ => dbt_adapter::relation::create_relation(
+        _ => dbt_adapter::relation::do_create_relation(
             adapter_type,
             model.base().database.clone(),
             model.base().schema.clone(),

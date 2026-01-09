@@ -767,7 +767,7 @@ impl BaseAdapter for BridgeAdapter {
                 // Skip cache in replay mode
                 let is_replay = adapter.as_replay().is_some();
                 if !is_replay {
-                    let temp_relation = crate::relation::create_relation(
+                    let temp_relation = crate::relation::do_create_relation(
                         adapter.adapter_type(),
                         database.to_string(),
                         schema.to_string(),

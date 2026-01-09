@@ -5,7 +5,7 @@ use std::{
     sync::Arc,
 };
 
-use dbt_adapter::relation::{RelationObject, create_relation_from_node, create_relation_internal};
+use dbt_adapter::relation::{RelationObject, create_relation, create_relation_from_node};
 use dbt_common::{
     CodeLocationWithFile, ErrorCode, FsResult,
     adapter::AdapterType,
@@ -354,7 +354,7 @@ impl NodeResolverTracker for NodeResolver {
             (database, schema, identifier) = mapper[&source.unique_id()].clone();
         }
 
-        let base_rel = create_relation_internal(
+        let base_rel = create_relation(
             adapter_type,
             database,
             schema,
@@ -988,7 +988,7 @@ pub fn create_function_object_from_node(
     adapter_type: AdapterType,
     node: &dyn InternalDbtNodeAttributes,
 ) -> FsResult<FunctionObject> {
-    let relation = create_relation_internal(
+    let relation = create_relation(
         adapter_type,
         node.database(),
         node.schema(),

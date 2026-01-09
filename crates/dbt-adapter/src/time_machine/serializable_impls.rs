@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use dbt_schemas::dbt_types::RelationType;
 
-use crate::relation::{RelationObject, create_relation};
+use crate::relation::{RelationObject, do_create_relation};
 
 use super::serde::ReplayContext;
 use super::serializable::{JsonExtractor, TimeMachineSerializable};
@@ -189,7 +189,7 @@ impl TimeMachineSerializable for RelationObject {
             None
         };
 
-        let relation = create_relation(
+        let relation = do_create_relation(
             adapter_type,
             ext.str_or("database", ""),
             ext.str_or("schema", ""),
@@ -389,7 +389,7 @@ mod tests {
             identifier: true,
         };
 
-        let relation = create_relation(
+        let relation = do_create_relation(
             AdapterType::Snowflake,
             "MY_DB".to_string(),
             "MY_SCHEMA".to_string(),

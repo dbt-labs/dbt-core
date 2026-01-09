@@ -1,7 +1,7 @@
 use crate::errors::{AdapterError, AdapterResult, AsyncAdapterResult};
 use crate::funcs::execute_macro;
 use crate::metadata::*;
-use crate::relation::{create_relation, create_relation_internal};
+use crate::relation::{create_relation, do_create_relation};
 use crate::sql_types::{SdfSchema, arrow_schema_to_sdf_schema};
 use crate::time_machine::{
     args_freshness, args_list_relations_in_parallel, args_list_relations_schemas,
@@ -105,7 +105,7 @@ pub trait MetadataAdapter: Send + Sync {
         };
         for (unique_id, node) in nodes.models.iter() {
             if executed_unique_ids.contains(unique_id) {
-                let relation = create_relation_internal(
+                let relation = create_relation(
                     adapter_type,
                     node.database(),
                     node.schema(),
@@ -120,7 +120,7 @@ pub trait MetadataAdapter: Send + Sync {
 
         for (unique_id, node) in nodes.snapshots.iter() {
             if executed_unique_ids.contains(unique_id) {
-                let relation = create_relation_internal(
+                let relation = create_relation(
                     adapter_type,
                     node.database(),
                     node.schema(),
@@ -135,7 +135,7 @@ pub trait MetadataAdapter: Send + Sync {
 
         for (unique_id, node) in nodes.seeds.iter() {
             if executed_unique_ids.contains(unique_id) {
-                let relation = create_relation_internal(
+                let relation = create_relation(
                     adapter_type,
                     node.database(),
                     node.schema(),
@@ -150,7 +150,7 @@ pub trait MetadataAdapter: Send + Sync {
 
         for (unique_id, node) in nodes.sources.iter() {
             if executed_unique_ids.contains(unique_id) {
-                let relation = create_relation_internal(
+                let relation = create_relation(
                     adapter_type,
                     node.database(),
                     node.schema(),
@@ -374,7 +374,7 @@ pub fn create_schemas_if_not_exists(
     let catalog_schemas = flatten_catalog_schemas(catalog_schemas);
 
     let map_f = |(catalog, schema): (String, String)| -> AdapterResult<(String, String, AdapterResult<()>)> {
-        let mock_relation = create_relation(
+        let mock_relation = do_create_relation(
             adapter.adapter_type(),
             catalog.clone(),
             schema.clone(),

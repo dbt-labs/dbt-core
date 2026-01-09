@@ -9,7 +9,7 @@ use crate::funcs::{
 use crate::metadata::MetadataAdapter;
 use crate::query_comment::QueryCommentConfig;
 use crate::relation::parse::EmptyRelation;
-use crate::relation::{RelationObject, create_relation};
+use crate::relation::{RelationObject, do_create_relation};
 use crate::response::AdapterResponse;
 use crate::snapshots::SnapshotStrategy;
 use crate::sql_types::TypeOps;
@@ -162,7 +162,7 @@ impl ParseAdapter {
         schema: &str,
         identifier: &str,
     ) -> Result<(), minijinja::Error> {
-        let relation = create_relation(
+        let relation = do_create_relation(
             self.state.adapter_type,
             database.to_string(),
             schema.to_string(),

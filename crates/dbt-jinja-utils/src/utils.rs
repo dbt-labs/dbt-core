@@ -1,4 +1,4 @@
-use dbt_adapter::relation::create_relation_internal;
+use dbt_adapter::relation::create_relation;
 use dbt_adapter::{AdapterTyping, ParseAdapter};
 use dbt_common::io_utils::StatusReporter;
 use dbt_common::{ErrorCode, FsError, fs_err, stdfs};
@@ -455,7 +455,7 @@ pub fn generate_relation_name(
     quote_config: ResolvedQuoting,
 ) -> FsResult<String> {
     // Create relation using the adapter
-    match create_relation_internal(
+    match create_relation(
         parse_adapter.adapter_type(),
         database.to_owned(),
         schema.to_owned(),

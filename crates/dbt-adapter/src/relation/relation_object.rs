@@ -186,7 +186,7 @@ impl Object for RelationObject {
 ///
 /// Unlike [internal_create_relation]
 /// This is supposed to be used in places that are invoked by the Jinja rendering process
-pub fn create_relation(
+pub fn do_create_relation(
     adapter_type: AdapterType,
     database: String,
     schema: String,
@@ -250,7 +250,7 @@ pub fn create_relation(
 ///
 /// This is a wrapper around the [create_relation] function
 /// that is supposed to be used outside the context of Jinja
-pub fn create_relation_internal(
+pub fn create_relation(
     adapter_type: AdapterType,
     database: String,
     schema: String,
@@ -258,7 +258,7 @@ pub fn create_relation_internal(
     relation_type: Option<RelationType>,
     custom_quoting: ResolvedQuoting,
 ) -> FsResult<Arc<dyn BaseRelation>> {
-    let result = create_relation(
+    let result = do_create_relation(
         adapter_type,
         database,
         schema,
@@ -275,7 +275,7 @@ pub fn create_relation_from_node(
     node: &dyn InternalDbtNodeAttributes,
     _sample_config: Option<RunFilter>,
 ) -> FsResult<Arc<dyn BaseRelation>> {
-    create_relation_internal(
+    create_relation(
         adapter_type,
         node.database(),
         node.schema(),
