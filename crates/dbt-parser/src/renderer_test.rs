@@ -9,7 +9,7 @@ mod tests {
     use dbt_jinja_utils::jinja_environment::JinjaEnv;
     use dbt_jinja_utils::listener::DefaultJinjaTypeCheckEventListenerFactory;
     use dbt_schemas::filter::RunFilter;
-    use dbt_schemas::schemas::common::DbtQuoting;
+    use dbt_schemas::schemas::common::{DbtChecksum, DbtQuoting, normalize_sql};
     use dbt_schemas::schemas::project::ModelConfig;
     use dbt_schemas::schemas::properties::ModelProperties;
     use dbt_schemas::state::{DbtAsset, DbtRuntimeConfig};
@@ -255,5 +255,270 @@ mod tests {
             }
             _ => panic!("Expected schema to be present"),
         }
+    }
+
+    /// Test that verifies the checksum calculation in render_sql_file matches expected values.
+    /// The checksum is computed by:
+    /// 1. Normalizing SQL (removing whitespace and lowercasing)
+    /// 2. SHA256 hashing the normalized content
+    #[tokio::test]
+    async fn test_render_sql_file_checksum_calculation() {
+        use dbt_common::cancellation::CancellationToken;
+
+        // Set up a temporary directory and create a test SQL file
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let base_path = temp_dir.path().to_path_buf();
+        let models_dir = base_path.join("models");
+        std::fs::create_dir_all(&models_dir).unwrap();
+
+        // Test case 1: Simple SQL content
+        let sql_content = "SELECT 1 as id";
+        let sql_file = models_dir.join("test_model.sql");
+        std::fs::write(&sql_file, sql_content).unwrap();
+
+        // Compute the expected checksum manually using the same algorithm
+        let normalized_sql = normalize_sql(sql_content);
+        let expected_checksum = DbtChecksum::hash(normalized_sql.as_bytes());
+
+        // Verify our normalization understanding is correct
+        assert_eq!(
+            normalized_sql, "select1asid",
+            "Normalized SQL should have no whitespace and be lowercase"
+        );
+
+        let path = PathBuf::from("models/test_model.sql");
+        let test_asset = DbtAsset {
+            base_path: base_path.clone(),
+            original_path: path.clone(),
+            path: path.clone(),
+            package_name: "test_package".to_string(),
+        };
+
+        // Minimal config setup
+        let package_config = DbtProjectConfig::<ModelConfig> {
+            config: ModelConfig {
+                enabled: Some(true),
+                ..Default::default()
+            },
+            children: HashMap::new(),
+        };
+
+        let env = Environment::new();
+        let jinja_env = Arc::new(JinjaEnv::new(env));
+
+        let args = ResolveArgs {
+            io: IoArgs {
+                in_dir: base_path.clone(),
+                out_dir: base_path.clone(),
+                ..Default::default()
+            },
+            num_threads: Some(1),
+            command: FsCommand::Parse,
+            vars: BTreeMap::new(),
+            from_main: false,
+            selector: None,
+            select: None,
+            indirect_selection: None,
+            exclude: None,
+            replay: None,
+            sample_config: RunFilter::default(),
+            sample_renaming: BTreeMap::new(),
+        };
+
+        let mut base_ctx = BTreeMap::new();
+        base_ctx.insert(
+            "project_name".to_string(),
+            minijinja::Value::from("test_package"),
+        );
+
+        let render_ctx = RenderCtx {
+            inner: Arc::new(RenderCtxInner {
+                args,
+                base_ctx,
+                root_project_name: "test_package".to_string(),
+                package_name: "test_package".to_string(),
+                adapter_type: AdapterType::Postgres,
+                database: "test_db".to_string(),
+                schema: "test_schema".to_string(),
+                local_project_config: package_config.clone(),
+                root_project_config: package_config,
+                resource_paths: vec!["models".to_string()],
+                package_quoting: DbtQuoting {
+                    database: Some(true),
+                    schema: Some(true),
+                    identifier: Some(true),
+                    snowflake_ignore_case: Some(false),
+                },
+            }),
+            jinja_env,
+            runtime_config: Arc::new(DbtRuntimeConfig::default()),
+        };
+
+        let token = CancellationToken::never_cancels();
+        let mut node_properties = BTreeMap::new();
+
+        let results = render_unresolved_sql_files::<ModelConfig, ModelProperties>(
+            &render_ctx,
+            &[test_asset],
+            &mut node_properties,
+            &token,
+            Arc::new(DefaultJinjaTypeCheckEventListenerFactory::default()),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(results.len(), 1, "Should have exactly one result");
+
+        let actual_checksum = &results[0].sql_file_info.checksum;
+        assert_eq!(
+            actual_checksum, &expected_checksum,
+            "Checksum in SqlFileRenderResult should match expected checksum.\n\
+             Expected: {:?}\n\
+             Actual: {:?}\n\
+             SQL content: '{}'\n\
+             Normalized: '{}'",
+            expected_checksum, actual_checksum, sql_content, normalized_sql
+        );
+    }
+
+    /// Test checksum calculation with SQL containing various whitespace patterns
+    #[tokio::test]
+    async fn test_render_sql_file_checksum_whitespace_invariant() {
+        use dbt_common::cancellation::CancellationToken;
+
+        let temp_dir = tempfile::TempDir::new().unwrap();
+        let base_path = temp_dir.path().to_path_buf();
+        let models_dir = base_path.join("models");
+        std::fs::create_dir_all(&models_dir).unwrap();
+
+        // Two SQL files with different whitespace but same semantic content
+        // should produce the same checksum
+        let sql_compact = "SELECT 1 as id";
+        let sql_spaced = "SELECT   1   as   id";
+        let sql_multiline = "SELECT\n    1\n    as\n    id";
+
+        // All should normalize to the same string
+        let normalized_compact = normalize_sql(sql_compact);
+        let normalized_spaced = normalize_sql(sql_spaced);
+        let normalized_multiline = normalize_sql(sql_multiline);
+
+        assert_eq!(normalized_compact, normalized_spaced);
+        assert_eq!(normalized_spaced, normalized_multiline);
+        assert_eq!(normalized_compact, "select1asid");
+
+        // All should produce the same checksum
+        let checksum_compact = DbtChecksum::hash(normalized_compact.as_bytes());
+        let checksum_spaced = DbtChecksum::hash(normalized_spaced.as_bytes());
+        let checksum_multiline = DbtChecksum::hash(normalized_multiline.as_bytes());
+
+        assert_eq!(checksum_compact, checksum_spaced);
+        assert_eq!(checksum_spaced, checksum_multiline);
+
+        // Now verify through the rendering pipeline
+        std::fs::write(models_dir.join("model_compact.sql"), sql_compact).unwrap();
+        std::fs::write(models_dir.join("model_spaced.sql"), sql_spaced).unwrap();
+        std::fs::write(models_dir.join("model_multiline.sql"), sql_multiline).unwrap();
+
+        let assets: Vec<DbtAsset> = ["model_compact", "model_spaced", "model_multiline"]
+            .iter()
+            .map(|name| {
+                let path = PathBuf::from(format!("models/{}.sql", name));
+                DbtAsset {
+                    base_path: base_path.clone(),
+                    original_path: path.clone(),
+                    path,
+                    package_name: "test_package".to_string(),
+                }
+            })
+            .collect();
+
+        let package_config = DbtProjectConfig::<ModelConfig> {
+            config: ModelConfig {
+                enabled: Some(true),
+                ..Default::default()
+            },
+            children: HashMap::new(),
+        };
+
+        let env = Environment::new();
+        let jinja_env = Arc::new(JinjaEnv::new(env));
+
+        let args = ResolveArgs {
+            io: IoArgs {
+                in_dir: base_path.clone(),
+                out_dir: base_path.clone(),
+                ..Default::default()
+            },
+            num_threads: Some(1),
+            command: FsCommand::Parse,
+            vars: BTreeMap::new(),
+            from_main: false,
+            selector: None,
+            select: None,
+            indirect_selection: None,
+            exclude: None,
+            replay: None,
+            sample_config: RunFilter::default(),
+            sample_renaming: BTreeMap::new(),
+        };
+
+        let mut base_ctx = BTreeMap::new();
+        base_ctx.insert(
+            "project_name".to_string(),
+            minijinja::Value::from("test_package"),
+        );
+
+        let render_ctx = RenderCtx {
+            inner: Arc::new(RenderCtxInner {
+                args,
+                base_ctx,
+                root_project_name: "test_package".to_string(),
+                package_name: "test_package".to_string(),
+                adapter_type: AdapterType::Postgres,
+                database: "test_db".to_string(),
+                schema: "test_schema".to_string(),
+                local_project_config: package_config.clone(),
+                root_project_config: package_config,
+                resource_paths: vec!["models".to_string()],
+                package_quoting: DbtQuoting {
+                    database: Some(true),
+                    schema: Some(true),
+                    identifier: Some(true),
+                    snowflake_ignore_case: Some(false),
+                },
+            }),
+            jinja_env,
+            runtime_config: Arc::new(DbtRuntimeConfig::default()),
+        };
+
+        let token = CancellationToken::never_cancels();
+        let mut node_properties = BTreeMap::new();
+
+        let results = render_unresolved_sql_files::<ModelConfig, ModelProperties>(
+            &render_ctx,
+            &assets,
+            &mut node_properties,
+            &token,
+            Arc::new(DefaultJinjaTypeCheckEventListenerFactory::default()),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(results.len(), 3, "Should have three results");
+
+        // All three files should have the same checksum despite different whitespace
+        let checksums: Vec<_> = results.iter().map(|r| &r.sql_file_info.checksum).collect();
+        assert_eq!(
+            checksums[0], checksums[1],
+            "Compact and spaced SQL should have same checksum"
+        );
+        assert_eq!(
+            checksums[1], checksums[2],
+            "Spaced and multiline SQL should have same checksum"
+        );
+        assert_eq!(
+            checksums[0], &checksum_compact,
+            "Rendered checksum should match manually computed checksum"
+        );
     }
 }

@@ -27,7 +27,7 @@ use dbt_jinja_utils::phases::parse::sql_resource::SqlResource;
 use dbt_jinja_utils::serde::into_typed_with_jinja_error_context;
 use dbt_jinja_utils::silence_base_context;
 use dbt_jinja_utils::utils::render_sql;
-use dbt_schemas::schemas::common::{DbtChecksum, DbtQuoting, Hooks};
+use dbt_schemas::schemas::common::{DbtChecksum, DbtQuoting, Hooks, normalize_sql};
 use dbt_schemas::schemas::project::DefaultTo;
 use dbt_schemas::schemas::properties::GetConfig;
 use dbt_schemas::schemas::telemetry::NodeType;
@@ -293,12 +293,13 @@ where
                     .push(SqlResource::Config(Box::new(root_config)));
             }
 
+            let normalized_sql = normalize_sql(&sql);
             // Get config from current resources to use for hook rendering
             let temp_sql_file_info = {
                 let sql_resources_locked = sql_resources.lock().unwrap().clone();
                 SqlFileInfo::from_sql_resources(
                     sql_resources_locked,
-                    DbtChecksum::hash(sql.as_bytes()),
+                    DbtChecksum::hash(normalized_sql.as_bytes()),
                     execute_exists.load(atomic::Ordering::Relaxed),
                 )
             };
@@ -313,12 +314,17 @@ where
                 jinja_type_checking_event_listener_factory.clone(),
             )?;
 
+            // Create normalized SQL strings (remove all whitespace and convert to lowercase)
+            // These transformations make state:modified stable in the face of whitespace
             // Create final sql_file_info with all dependencies (main SQL + hooks)
+            // and case differences. See https://github.com/dbt-labs/dbt-fusion/issues/768
+            let normalized_sql = normalize_sql(&sql);
+
             let sql_file_info = {
                 let sql_resources_locked = sql_resources.lock().unwrap().clone();
                 SqlFileInfo::from_sql_resources(
                     sql_resources_locked,
-                    DbtChecksum::hash(sql.as_bytes()),
+                    DbtChecksum::hash(normalized_sql.as_bytes()),
                     execute_exists.load(atomic::Ordering::Relaxed),
                 )
             };
@@ -351,9 +357,10 @@ where
             // Build minimal info for error/disabled outcome
             let sql_file_info = {
                 let sql_resources_locked = sql_resources.lock().unwrap().clone();
+                let normalized_sql = normalize_sql(&sql);
                 SqlFileInfo::from_sql_resources(
                     sql_resources_locked,
-                    DbtChecksum::hash(sql.as_bytes()),
+                    DbtChecksum::hash(normalized_sql.as_bytes()),
                     execute_exists.load(atomic::Ordering::Relaxed),
                 )
             };
