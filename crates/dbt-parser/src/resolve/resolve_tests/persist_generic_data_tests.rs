@@ -396,13 +396,23 @@ fn extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
     // Start with existing config
     let mut final_config = existing_config.clone();
     let mut combined_args = BTreeMap::new();
+    // Config-like keys that appear under `arguments:` should be treated as config, not macro kwargs.
+    // We'll attach them to an embedded `config` kwarg object so `generate_test_macro` emits
+    // a `{{ config(...) }}` block rather than passing them into the test macro.
+    let mut config_from_arguments: BTreeMap<String, Value> = BTreeMap::new();
     let mut config_from_deprecated = BTreeMap::new();
 
     // Process arguments parameter
     if let Some(args) = &arguments.0 {
         let json_value = serde_json::to_value(args.clone()).unwrap_or(Value::Null);
         if let Value::Object(map) = json_value {
-            combined_args.extend(map);
+            for (key, value) in map {
+                if CONFIG_ARGS.contains(&key.as_str()) {
+                    config_from_arguments.insert(key, value);
+                } else {
+                    combined_args.insert(key, value);
+                }
+            }
         }
     }
 
@@ -504,6 +514,47 @@ fn extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
         kwargs.insert(key, kwarg_value);
         if let Some((var_name, var_value)) = jinja_var {
             jinja_set_vars.insert(var_name, var_value);
+        }
+    }
+
+    // If config-like keys were provided under arguments, merge them into an embedded `config` kwarg
+    // so they are emitted via `{{ config(...) }}` and not passed to the test macro.
+    if !config_from_arguments.is_empty() {
+        match kwargs.remove("config") {
+            Some(Value::Object(existing_obj)) => {
+                // Preserve explicit `config:` object values by letting them override extracted keys.
+                let mut merged = serde_json::Map::new();
+                for (k, v) in config_from_arguments {
+                    merged.insert(k, v);
+                }
+                for (k, v) in existing_obj {
+                    merged.insert(k, v);
+                }
+                kwargs.insert("config".to_string(), Value::Object(merged));
+            }
+            Some(other) => {
+                // Unexpected type; keep it as-is and also add extracted config under a proper map.
+                // This preserves previous behavior while ensuring config keys still take effect.
+                kwargs.insert(
+                    "config".to_string(),
+                    Value::Object(
+                        config_from_arguments
+                            .into_iter()
+                            .collect::<serde_json::Map<String, Value>>(),
+                    ),
+                );
+                kwargs.insert("_config_raw".to_string(), other);
+            }
+            None => {
+                kwargs.insert(
+                    "config".to_string(),
+                    Value::Object(
+                        config_from_arguments
+                            .into_iter()
+                            .collect::<serde_json::Map<String, Value>>(),
+                    ),
+                );
+            }
         }
     }
 
@@ -1783,6 +1834,54 @@ mod tests {
         assert!(
             sql.contains("{{ test_accepted_values(") && sql.contains("model=ref('my_model')"),
             "Macro call should be well-formed and include model kwarg"
+        );
+    }
+
+    #[test]
+    fn test_extract_kwargs_moves_config_keys_out_of_arguments() {
+        // Arrange: config-like keys under `arguments` should not become macro kwargs; they should
+        // be routed into an embedded `config` object so `generate_test_macro` emits `{{ config(...) }}`.
+        let args_yaml = dbt_serde_yaml::to_value(serde_json::json!({
+            "values": ["APPAREL", "HEADWEAR"],
+            "error_if": ">1"
+        }))
+        .unwrap();
+        let arguments = Verbatim::from(Some(args_yaml));
+        let deprecated = Verbatim::from(BTreeMap::new());
+        let existing_config: Option<DataTestConfig> = None;
+        let io_args = IoArgs::default();
+
+        // Act
+        let extraction_result = extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
+            &arguments,
+            &deprecated,
+            &existing_config,
+            &io_args,
+            None,
+        )
+        .unwrap();
+
+        // Assert: error_if is not a macro kwarg
+        assert!(
+            !extraction_result.kwargs.contains_key("error_if"),
+            "error_if must not be passed to the test macro as a kwarg"
+        );
+        // Assert: error_if is captured as embedded config
+        let cfg = extraction_result
+            .kwargs
+            .get("config")
+            .expect("expected embedded config object")
+            .as_object()
+            .expect("embedded config must be an object");
+        assert_eq!(
+            cfg.get("error_if"),
+            Some(&serde_json::Value::String(">1".to_string())),
+            "error_if should be moved into embedded config"
+        );
+        // And the original argument remains
+        assert!(
+            extraction_result.kwargs.contains_key("values"),
+            "values should remain a macro kwarg"
         );
     }
 
