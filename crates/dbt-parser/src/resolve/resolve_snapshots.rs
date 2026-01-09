@@ -174,9 +174,28 @@ pub async fn resolve_snapshots(
                 // Write SQL for relation to the `snapshots` directory
                 let sql = format!("select * from {relation}");
 
-                let target_path =
-                    PathBuf::from(DBT_SNAPSHOTS_DIR_NAME).join(format!("{snapshot_name}.sql"));
+                // Preserve directory structure from the properties file path
+                // This ensures FQN includes directory components for proper selector matching
+                let default_snapshots_path = vec![DBT_SNAPSHOTS_DIR_NAME.to_string()];
+                let original_relative_path = strip_resource_paths_from_ref_path(
+                    &mpe.relative_path,
+                    package
+                        .dbt_project
+                        .snapshot_paths
+                        .as_ref()
+                        .unwrap_or(&default_snapshots_path),
+                );
+                let target_path = PathBuf::from(DBT_SNAPSHOTS_DIR_NAME)
+                    .join(
+                        original_relative_path
+                            .parent()
+                            .unwrap_or_else(|| std::path::Path::new("")),
+                    )
+                    .join(format!("{snapshot_name}.sql"));
                 let snapshot_path = arg.io.out_dir.join(&target_path);
+                if let Some(parent) = snapshot_path.parent() {
+                    stdfs::create_dir_all(parent)?;
+                }
                 stdfs::write(&snapshot_path, &sql)?;
                 let asset = DbtAsset {
                     path: target_path.clone(),
