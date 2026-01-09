@@ -19,6 +19,12 @@ on:
     - cron: '0 9,13,18 * * *' # 9:00, 13:00, 18:00 UTC
 
   workflow_dispatch: # for manual triggering
+    inputs:
+      dry_run:
+        description: 'Run in dry-run mode'
+        required: false
+        type: boolean
+        default: false
 
 # no special access is needed
 permissions: read-all
@@ -28,4 +34,5 @@ jobs:
     uses: dbt-labs/actions/.github/workflows/release-branch-tests.yml@feature/dynamic-branch-seletction
     with:
       workflows_to_run: '["main.yml"]'
+      dry_run: ${{ inputs.dry_run }}
     secrets: inherit
