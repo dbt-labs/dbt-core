@@ -12,7 +12,9 @@ use dbt_telemetry::{ExecutionPhase, NodeEvaluated, NodeProcessed, NodeType};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 type YmlValue = dbt_serde_yaml::Value;
-use crate::schemas::common::{NodeInfo, NodeInfoWrapper, PersistDocsConfig, hooks_equal};
+use crate::schemas::common::{
+    NodeInfo, NodeInfoWrapper, PersistDocsConfig, hooks_equal, normalize_sql,
+};
 use crate::schemas::dbt_column::{DbtColumnRef, deserialize_dbt_columns, serialize_dbt_columns};
 use crate::schemas::manifest::{BigqueryClusterConfig, GrantAccessToTarget, PartitionConfig};
 use crate::schemas::project::{StrictnessMode, WarehouseSpecificNodeConfig, same_warehouse_config};
@@ -577,7 +579,47 @@ fn same_persisted_description(
             .map(|column| column.description.clone())
             .collect();
 
-        if self_column_descriptions != other_column_descriptions {
+        if !optional_string_vecs_equal(&self_column_descriptions, &other_column_descriptions) {
+            return false;
+        }
+    }
+
+    true
+}
+
+/// Compare two vectors of Option<String> treating semantic equivalents of "empty" as equal.
+/// - `None` and `Some("")` are considered equal
+/// - `Some("")` and `Some("   ")` (whitespace-only) are considered equal
+/// - Vectors of different lengths are considered different
+fn optional_string_vecs_equal(a: &[Option<String>], b: &[Option<String>]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+
+    /// Helper to check if an Option<String> is semantically empty
+    fn is_empty(opt: &Option<String>) -> bool {
+        match opt {
+            None => true,
+            Some(s) => s.trim().is_empty(),
+        }
+    }
+
+    for (a_item, b_item) in a.iter().zip(b.iter()) {
+        let a_empty = is_empty(a_item);
+        let b_empty = is_empty(b_item);
+
+        if a_empty && b_empty {
+            // Both are semantically empty - consider equal
+            continue;
+        }
+
+        if a_empty != b_empty {
+            // One is empty, one is not - not equal
+            return false;
+        }
+
+        // Both are non-empty, compare using normalize_sql which removes whitespace and lowercases
+        if a_item.as_ref().map(|s| normalize_sql(s)) != b_item.as_ref().map(|s| normalize_sql(s)) {
             return false;
         }
     }
@@ -4069,6 +4111,122 @@ mod tests {
         let config = ModelConfig::deserialize(config);
         if let Err(err) = config {
             panic!("Could not deserialize and failed with the following error: {err}");
+        }
+    }
+
+    mod optional_string_vecs_equal_tests {
+        use super::super::optional_string_vecs_equal;
+
+        #[test]
+        fn test_empty_vecs_are_equal() {
+            let a: Vec<Option<String>> = vec![];
+            let b: Vec<Option<String>> = vec![];
+            assert!(optional_string_vecs_equal(&a, &b));
+        }
+
+        #[test]
+        fn test_different_lengths_are_not_equal() {
+            let a = vec![Some("a".to_string())];
+            let b = vec![Some("a".to_string()), Some("b".to_string())];
+            assert!(!optional_string_vecs_equal(&a, &b));
+        }
+
+        #[test]
+        fn test_none_equals_empty_string() {
+            let a = vec![None];
+            let b = vec![Some("".to_string())];
+            assert!(optional_string_vecs_equal(&a, &b));
+            assert!(optional_string_vecs_equal(&b, &a));
+        }
+
+        #[test]
+        fn test_none_equals_whitespace_only() {
+            let a = vec![None];
+            let b = vec![Some("   ".to_string())];
+            assert!(optional_string_vecs_equal(&a, &b));
+            assert!(optional_string_vecs_equal(&b, &a));
+        }
+
+        #[test]
+        fn test_empty_string_equals_whitespace_only() {
+            let a = vec![Some("".to_string())];
+            let b = vec![Some("   \t\n".to_string())];
+            assert!(optional_string_vecs_equal(&a, &b));
+        }
+
+        #[test]
+        fn test_non_empty_with_different_whitespace_are_equal() {
+            // normalize_sql removes all whitespace, so these should be equal
+            let a = vec![Some("hello world".to_string())];
+            let b = vec![Some("hello  world".to_string())];
+            assert!(optional_string_vecs_equal(&a, &b));
+        }
+
+        #[test]
+        fn test_non_empty_with_different_case_are_equal() {
+            // normalize_sql lowercases, so these should be equal
+            let a = vec![Some("Hello World".to_string())];
+            let b = vec![Some("hello world".to_string())];
+            assert!(optional_string_vecs_equal(&a, &b));
+        }
+
+        #[test]
+        fn test_non_empty_different_content_are_not_equal() {
+            let a = vec![Some("foo".to_string())];
+            let b = vec![Some("bar".to_string())];
+            assert!(!optional_string_vecs_equal(&a, &b));
+        }
+
+        #[test]
+        fn test_empty_vs_non_empty_are_not_equal() {
+            let a = vec![None];
+            let b = vec![Some("content".to_string())];
+            assert!(!optional_string_vecs_equal(&a, &b));
+            assert!(!optional_string_vecs_equal(&b, &a));
+        }
+
+        #[test]
+        fn test_multiple_elements_all_match() {
+            let a = vec![
+                Some("Primary Key".to_string()),
+                None,
+                Some("description".to_string()),
+            ];
+            let b = vec![
+                Some("primary key".to_string()), // different case
+                Some("".to_string()),            // empty string matches None
+                Some("DESCRIPTION".to_string()), // different case
+            ];
+            assert!(optional_string_vecs_equal(&a, &b));
+        }
+
+        #[test]
+        fn test_multiple_elements_one_mismatch() {
+            let a = vec![
+                Some("same".to_string()),
+                Some("different1".to_string()),
+                Some("same".to_string()),
+            ];
+            let b = vec![
+                Some("same".to_string()),
+                Some("different2".to_string()),
+                Some("same".to_string()),
+            ];
+            assert!(!optional_string_vecs_equal(&a, &b));
+        }
+
+        #[test]
+        fn test_real_world_column_descriptions() {
+            // Simulates the real issue: duplicate column definitions with different descriptions
+            let current = vec![
+                Some("Primary key".to_string()),
+                Some("The order in which this user was created under the carrier.".to_string()),
+            ];
+            let previous = vec![
+                Some("Primary key".to_string()),
+                Some("The order in which this user was created under the carrier.".to_string()),
+            ];
+            assert!(optional_string_vecs_equal(&current, &previous));
         }
     }
 }
