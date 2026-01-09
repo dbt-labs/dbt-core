@@ -1,10 +1,14 @@
-use std::{collections::BTreeMap, env};
+use std::{collections::BTreeMap, env, rc::Rc, sync::Arc};
 
 use dbt_common::io_args::EvalArgs;
 use dbt_common::io_args::ReplayMode;
 use itertools::Itertools;
 use log::LevelFilter;
-use minijinja::Value;
+use minijinja::{
+    Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State,
+    listener::RenderingEventListener,
+    value::{Object, ObjectRepr, Value, mutable_map::MutableMap},
+};
 
 /// Invocation args is the dictionary of arguments passed into the jinja environment.
 // TODO: this is not complete, we will add more as we go.
@@ -161,7 +165,13 @@ impl InvocationArgs {
             "invocation_command".to_string(),
             Value::from(env::args().join(" ")),
         );
-        dict.insert("vars".to_string(), Value::from_object(self.vars.clone()));
+
+        // Convert vars to a MutableMap so it can be copied in templates
+        let vars_map = MutableMap::new();
+        for (k, v) in &self.vars {
+            vars_map.insert(Value::from(k.clone()), v.clone());
+        }
+        dict.insert("vars".to_string(), Value::from_object(vars_map));
         dict.insert("select".to_string(), Value::from(self.select.clone()));
         dict.insert("exclude".to_string(), Value::from(self.exclude.clone()));
         dict.insert(
@@ -237,6 +247,67 @@ impl InvocationArgs {
         Self {
             num_threads: final_threads,
             ..self.clone()
+        }
+    }
+}
+
+/// A wrapper around the invocation args dictionary that provides object methods
+/// like `.vars` and `.copy()` for use in Jinja templates.
+#[derive(Debug, Clone)]
+pub struct InvocationArgsDict {
+    dict: BTreeMap<String, Value>,
+}
+
+impl InvocationArgsDict {
+    /// Create a new InvocationArgsDict from a dictionary
+    pub fn new(dict: BTreeMap<String, Value>) -> Self {
+        Self { dict }
+    }
+}
+
+impl Object for InvocationArgsDict {
+    fn repr(self: &Arc<Self>) -> ObjectRepr {
+        ObjectRepr::Map
+    }
+
+    fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
+        if let Some(s) = key.as_str() {
+            // The dict keys are uppercase (see to_dict method), but we want to access them
+            // with lowercase in templates for consistency with dbt
+            let uppercase_key = s.to_uppercase();
+            return self.dict.get(&uppercase_key).cloned();
+        }
+        None
+    }
+
+    fn call_method(
+        self: &Arc<Self>,
+        _state: &State<'_, '_>,
+        name: &str,
+        args: &[Value],
+        _listeners: &[Rc<dyn RenderingEventListener>],
+    ) -> Result<Value, MinijinjaError> {
+        match name {
+            "copy" => {
+                // Ensure no arguments are passed
+                if !args.is_empty() {
+                    return Err(MinijinjaError::new(
+                        MinijinjaErrorKind::TooManyArguments,
+                        "copy() takes no arguments",
+                    ));
+                }
+
+                // Create a mutable copy
+                let map = MutableMap::new();
+                for (k, v) in &self.dict {
+                    map.insert(Value::from(k.clone()), v.clone());
+                }
+                Ok(Value::from_object(map))
+            }
+            _ => Err(MinijinjaError::new(
+                MinijinjaErrorKind::UnknownMethod,
+                format!("InvocationArgsDict has no method named '{name}'"),
+            )),
         }
     }
 }

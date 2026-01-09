@@ -31,7 +31,7 @@ use crate::{
     environment_builder::{JinjaEnvBuilder, MacroUnitsWrapper},
     flags::Flags,
     functions::ConfiguredVar,
-    invocation_args::InvocationArgs,
+    invocation_args::{InvocationArgs, InvocationArgsDict},
     jinja_environment::JinjaEnv,
     phases::utils::build_target_context_map,
 };
@@ -69,7 +69,7 @@ pub fn initialize_parse_jinja_environment(
     let inv_flags = Flags::from_invocation_args(invocation_args.to_dict());
     let joined_flags = prj_flags.join(inv_flags);
 
-    let invocation_args_dict = Arc::new(joined_flags.to_dict());
+    let invocation_args_dict = InvocationArgsDict::new(joined_flags.to_dict());
 
     let globals = BTreeMap::from([
         (
@@ -97,7 +97,7 @@ pub fn initialize_parse_jinja_environment(
         ),
         (
             "invocation_args_dict".to_string(),
-            MinijinjaValue::from_serialize(invocation_args_dict),
+            MinijinjaValue::from_object(invocation_args_dict),
         ),
         (
             "invocation_id".to_string(),

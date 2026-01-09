@@ -1,6 +1,7 @@
 use std::collections::BTreeSet;
 
 use minijinja::tuple;
+use minijinja::value::mutable_map::MutableMap;
 use minijinja::value::mutable_vec::MutableVec;
 use minijinja::value::{from_args, ValueKind};
 use minijinja::{Error, ErrorKind, State, Value};
@@ -476,6 +477,16 @@ fn map_methods(value: &Value, method: &str, args: &[Value]) -> Result<Value, Err
             let () = from_args(args)?;
             // to_dict() on a dict just returns the dict itself
             Ok(value.clone())
+        }
+        "copy" => {
+            let () = from_args(args)?;
+            let map = MutableMap::new();
+            if let Some(iter) = obj.try_iter_pairs() {
+                for (k, v) in iter {
+                    map.insert(k, v);
+                }
+            }
+            Ok(Value::from_object(map))
         }
         _ => Err(Error::from(ErrorKind::UnknownMethod)),
     }
