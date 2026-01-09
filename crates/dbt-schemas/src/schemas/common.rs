@@ -22,7 +22,7 @@ use crate::schemas::dbt_column::{ColumnPropertiesDimensionType, Granularity};
 use crate::schemas::manifest::common::SourceFileMetadata;
 use crate::schemas::semantic_layer::semantic_manifest::SemanticLayerElementConfig;
 
-use super::serde::StringOrArrayOfStrings;
+use super::serde::{StringOrArrayOfStrings, bool_or_string_bool};
 #[derive(Default, Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq, Eq)]
 pub struct FreshnessRules {
     pub count: Option<i64>,
@@ -430,10 +430,17 @@ impl TryFrom<DbtQuoting> for ResolvedQuoting {
 #[derive(Debug, Clone, Serialize, Default, Deserialize, PartialEq, Eq, Copy, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct DbtQuoting {
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub database: Option<bool>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub identifier: Option<bool>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub schema: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        default,
+        deserialize_with = "bool_or_string_bool"
+    )]
     pub snowflake_ignore_case: Option<bool>,
 }
 
