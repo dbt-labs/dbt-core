@@ -847,24 +847,6 @@ class RunTask(CompileTask):
         super().__init__(args, config, manifest)
         self.batch_map = batch_map
 
-    def _maybe_wait_for_microbatch(self, pool: DbtThreadPool, runner: BaseRunner) -> None:
-        """
-        Checks if the runner is a MicrobatchModelRunner, and waits until the
-        number of microbatch models in progress is less than the max number
-        of microbatch models allowed by the pool.
-        """
-
-        if isinstance(runner, MicrobatchModelRunner) and self.job_queue is not None:
-            fire_event(
-                MicrobatchExecutionDebug(
-                    msg=f"Waiting for microbatch model to be run: {runner.node.name}.\n\tpool.max_microbatch_models: {pool.max_microbatch_models}\n\tlen(self.job_queue.in_progress_microbatch): {len(self.job_queue.in_progress_microbatch)}"
-                )
-            )
-            while pool.max_microbatch_models < len(self.job_queue.in_progress_microbatch):
-                time.sleep(0.1)
-
-        return
-
     def raise_on_first_error(self) -> bool:
         return False
 
@@ -898,6 +880,24 @@ class RunTask(CompileTask):
         # Ensure we don't submit more MicrobatchModelRunners than the pool allows
         self._maybe_wait_for_microbatch(pool, runner)
         self._submit(pool, args, callback)
+
+    def _maybe_wait_for_microbatch(self, pool: DbtThreadPool, runner: BaseRunner) -> None:
+        """
+        Checks if the runner is a MicrobatchModelRunner, and waits until the
+        number of microbatch models in progress is less than the max number
+        of microbatch models allowed by the pool.
+        """
+
+        if isinstance(runner, MicrobatchModelRunner) and self.job_queue is not None:
+            fire_event(
+                MicrobatchExecutionDebug(
+                    msg=f"Waiting for microbatch model to be run: {runner.node.name}.\n\tpool.max_microbatch_models: {pool.max_microbatch_models}\n\tlen(self.job_queue.in_progress_microbatch): {len(self.job_queue.in_progress_microbatch)}"
+                )
+            )
+            while pool.max_microbatch_models < len(self.job_queue.in_progress_microbatch):
+                time.sleep(0.1)
+
+        return
 
     def _submit_batch(
         self,
