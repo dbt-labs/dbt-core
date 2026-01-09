@@ -236,7 +236,8 @@ pub fn get_resolved_url(private_package: &PrivatePackage) -> FsResult<String> {
 }
 
 fn get_local_resolved_url(private_package: &PrivatePackage) -> FsResult<String> {
-    match private_package.provider.as_deref().unwrap_or_default() {
+    // Default to "github" when provider is unspecified, matching dbt-core's behavior
+    match private_package.provider.as_deref().unwrap_or("github") {
         "github" => Ok(format!(
             "git@github.com:{}.git",
             private_package.private.deref()
