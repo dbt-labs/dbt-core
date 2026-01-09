@@ -25,7 +25,7 @@ permissions: read-all
 
 jobs:
   run_tests:
-    uses: dbt-labs/actions/.github/workflows/release-branch-tests.yml@main
+    uses: dbt-labs/actions/.github/workflows/release-branch-tests.yml@feature/dynamic-branch-seletction
     with:
       workflows_to_run: '["main.yml"]'
     secrets: inherit
