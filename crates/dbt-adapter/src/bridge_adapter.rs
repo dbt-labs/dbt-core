@@ -1068,6 +1068,7 @@ impl BaseAdapter for BridgeAdapter {
             relation,
             partition_by,
             cluster_by,
+            Some(state),
         )?;
         Ok(Value::from(result))
     }
@@ -1398,9 +1399,9 @@ impl BaseAdapter for BridgeAdapter {
         relation: Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
         let mut conn = self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
-        let result = self
-            .typed_adapter()
-            .describe_relation(conn.as_mut(), relation)?;
+        let result =
+            self.typed_adapter()
+                .describe_relation(conn.as_mut(), relation, Some(state))?;
         Ok(result.map_or_else(none_value, Value::from_serialize))
     }
 

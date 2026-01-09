@@ -489,12 +489,14 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
                 }
             }
             AdapterType::Databricks => {
-                //TODO: enable once https://github.com/dbt-labs/fs/issues/6547 is fixed
-                if let Some(_replay_adapter) = self.as_replay() {
-                    return Err(AdapterError::new(
-                        AdapterErrorKind::NotSupported,
-                        "replay mode not supported for python models on Databricks",
-                    ));
+                if let Some(replay_adapter) = self.as_replay() {
+                    return replay_adapter.replay_submit_python_job(
+                        ctx,
+                        conn,
+                        state,
+                        model,
+                        compiled_code,
+                    );
                 }
                 python::databricks::submit_python_job(
                     self.as_typed_base_adapter(),
@@ -510,12 +512,14 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             //
             // https://docs.getdbt.com/reference/resource-configs/databricks-configs
             AdapterType::Bigquery => {
-                //TODO: enable once https://github.com/dbt-labs/fs/issues/6547 is fixed
-                if let Some(_replay_adapter) = self.as_replay() {
-                    return Err(AdapterError::new(
-                        AdapterErrorKind::NotSupported,
-                        "replay mode not supported for python models on Bigquery",
-                    ));
+                if let Some(replay_adapter) = self.as_replay() {
+                    return replay_adapter.replay_submit_python_job(
+                        ctx,
+                        conn,
+                        state,
+                        model,
+                        compiled_code,
+                    );
                 }
                 python::bigquery::submit_python_job(
                     self.as_typed_base_adapter(),
@@ -1978,20 +1982,23 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         relation: Arc<dyn BaseRelation>,
         local_partition_by: Option<BigqueryPartitionConfig>,
         local_cluster_by: Option<BigqueryClusterConfig>,
+        state: Option<&State>,
     ) -> AdapterResult<bool> {
         match self.adapter_type() {
             AdapterType::Bigquery => {
-                // FIXME: conn.get_table_schema mirrors self.connections.get_bq_table in dbt-bigquery
-                // which currently escapes dbt-core recordings
-                // https://github.com/dbt-labs/dbt-adapters/blob/860e16891bd610d9cfde0ce5b576569d6585813b/dbt-bigquery/src/dbt/adapters/bigquery/impl.py
-                match conn
+                if let (Some(replay_adapter), Some(state)) = (self.as_replay(), state) {
+                    return replay_adapter.replay_is_replaceable(state);
+                }
+
+                let schema_result = conn
                     .get_table_schema(
                         Some(&relation.database_as_str()?),
                         Some(&relation.schema_as_str()?),
                         &relation.identifier_as_str()?,
                     )
-                    .map_err(adbc_error_to_adapter_error)
-                {
+                    .map_err(adbc_error_to_adapter_error);
+
+                match schema_result {
                     Ok(schema) => {
                         let is_partition_match = partitions_match(
                             BigqueryPartitionConfig::try_from_schema(
@@ -2658,8 +2665,13 @@ prevent unnecessary latency for other users."#,
         &self,
         conn: &'_ mut dyn Connection,
         relation: Arc<dyn BaseRelation>,
+        state: Option<&State>,
     ) -> AdapterResult<Option<Value>> {
         if self.adapter_type() == AdapterType::Bigquery {
+            if let (Some(replay_adapter), Some(state)) = (self.as_replay(), state) {
+                return replay_adapter.replay_describe_relation(state);
+            }
+
             let adbc_schema = conn
                 .get_table_schema(
                     Some(&relation.database_as_str()?),
@@ -2987,6 +2999,15 @@ pub trait ReplayAdapter: TypedBaseAdapter {
         cache_result: Option<Vec<Column>>,
     ) -> Result<Value, minijinja::Error>;
 
+    fn replay_submit_python_job(
+        &self,
+        ctx: &QueryCtx,
+        conn: &'_ mut dyn Connection,
+        state: &State,
+        model: &Value,
+        compiled_code: &str,
+    ) -> AdapterResult<AdapterResponse>;
+
     fn replay_render_raw_columns_constraints(
         &self,
         _state: &State,
@@ -3005,6 +3026,10 @@ pub trait ReplayAdapter: TypedBaseAdapter {
         _from_relation: Arc<dyn BaseRelation>,
         _to_relation: Arc<dyn BaseRelation>,
     ) -> AdapterResult<Value>;
+
+    fn replay_is_replaceable(&self, state: &State) -> AdapterResult<bool>;
+
+    fn replay_describe_relation(&self, state: &State) -> AdapterResult<Option<Value>>;
 }
 
 #[cfg(test)]
