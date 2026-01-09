@@ -224,6 +224,7 @@ pub fn resolve_sources(
                     .tags
                     .clone()
                     .map(|tags| tags.into()),
+                Some(mpe.relative_path.to_string_lossy().as_ref()),
             )?
         } else {
             vec![]

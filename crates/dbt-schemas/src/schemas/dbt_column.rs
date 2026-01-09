@@ -1,7 +1,8 @@
 use indexmap::IndexMap;
 use std::{collections::BTreeMap, sync::Arc};
 
-use dbt_common::FsResult;
+use dbt_common::tracing::emit::emit_warn_log_message;
+use dbt_common::{ErrorCode, FsResult};
 use dbt_serde_yaml::{JsonSchema, UntaggedEnumDeserialize};
 use serde::de::{MapAccess, Visitor};
 use serde::ser::SerializeMap;
@@ -221,38 +222,60 @@ impl ColumnInheritanceRules {
 
 /// Process columns by merging parent config with each column's config.
 /// Returns a Vec of DbtColumn references.
+///
+/// Note: If duplicate column names are present, the last definition wins
+/// (matching dbt-core behavior where columns are stored in a dict keyed by name).
 pub fn process_columns(
     columns: Option<&Vec<ColumnProperties>>,
     meta: Option<IndexMap<String, YmlValue>>,
     tags: Option<Vec<String>>,
+    original_file_path: Option<&str>,
 ) -> FsResult<Vec<DbtColumnRef>> {
     Ok(columns
         .map(|cols| {
-            cols.iter()
-                .map(|cp| {
-                    let (cp_meta, cp_tags, cp_databricks_tags) = cp
-                        .config
-                        .clone()
-                        .map(|c| (c.meta, c.tags, c.databricks_tags))
-                        .unwrap_or_default();
+            // Use IndexMap to deduplicate by column name while preserving order.
+            // If duplicate names exist, the last definition wins (matches dbt-core behavior).
+            let mut column_map: IndexMap<String, DbtColumnRef> = IndexMap::new();
 
-                    Ok(Arc::new(DbtColumn {
-                        name: cp.name.clone(),
-                        data_type: cp.data_type.clone(),
-                        description: cp.description.clone(),
-                        constraints: cp.constraints.clone().unwrap_or_default(),
-                        meta: cp_meta.or_else(|| meta.clone()).unwrap_or_default(),
-                        tags: cp_tags
-                            .map(|t| t.into())
-                            .or_else(|| tags.clone())
-                            .unwrap_or_default(),
-                        policy_tags: cp.policy_tags.clone(),
-                        databricks_tags: cp.databricks_tags.clone().or(cp_databricks_tags),
-                        quote: cp.quote,
-                        deprecated_config: cp.config.clone().unwrap_or_default(),
-                    }))
-                })
-                .collect::<Result<Vec<DbtColumnRef>, Box<dyn std::error::Error>>>()
+            for cp in cols.iter() {
+                let (cp_meta, cp_tags, cp_databricks_tags) = cp
+                    .config
+                    .clone()
+                    .map(|c| (c.meta, c.tags, c.databricks_tags))
+                    .unwrap_or_default();
+
+                let column = Arc::new(DbtColumn {
+                    name: cp.name.clone(),
+                    data_type: cp.data_type.clone(),
+                    description: cp.description.clone(),
+                    constraints: cp.constraints.clone().unwrap_or_default(),
+                    meta: cp_meta.or_else(|| meta.clone()).unwrap_or_default(),
+                    tags: cp_tags
+                        .map(|t| t.into())
+                        .or_else(|| tags.clone())
+                        .unwrap_or_default(),
+                    policy_tags: cp.policy_tags.clone(),
+                    databricks_tags: cp.databricks_tags.clone().or(cp_databricks_tags),
+                    quote: cp.quote,
+                    deprecated_config: cp.config.clone().unwrap_or_default(),
+                });
+
+                if column_map.contains_key(&cp.name) {
+                    let location = original_file_path
+                        .map(|p| format!(" in '{}'", p))
+                        .unwrap_or_default();
+                    emit_warn_log_message(
+                        ErrorCode::DuplicateColumns,
+                        format!("Column '{}' is defined multiple times{}. Only the last definition will be used.", cp.name, location),
+                        None,
+                    );
+                }
+
+                // Insert or overwrite - last definition wins
+                column_map.insert(cp.name.clone(), column);
+            }
+
+            Ok::<Vec<DbtColumnRef>, Box<dyn std::error::Error>>(column_map.into_values().collect())
         })
         .transpose()?
         .unwrap_or_default())
@@ -308,4 +331,78 @@ pub struct EntityConfig {
     pub description: Option<String>,
     pub label: Option<String>,
     pub config: Option<SemanticLayerElementConfig>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_process_columns_deduplicates_by_name_last_wins() {
+        // Input: 3 ColumnProperties with duplicate "user_id" names
+        // Expected: 2 DbtColumns with "user_id" having the LAST definition's description
+        let columns = vec![
+            ColumnProperties {
+                name: "user_id".to_string(),
+                data_type: None,
+                description: Some("The primary key for this table".to_string()),
+                constraints: None,
+                tests: None,
+                data_tests: None, // data_tests are not carried to DbtColumn
+                granularity: None,
+                policy_tags: None,
+                databricks_tags: None,
+                quote: None,
+                config: None,
+                entity: None,
+                dimension: None,
+            },
+            ColumnProperties {
+                name: "user_id".to_string(), // DUPLICATE
+                data_type: None,
+                description: Some("Primary key".to_string()), // This should win
+                constraints: None,
+                tests: None,
+                data_tests: None,
+                granularity: None,
+                policy_tags: None,
+                databricks_tags: None,
+                quote: None,
+                config: None,
+                entity: None,
+                dimension: None,
+            },
+            ColumnProperties {
+                name: "user_rank".to_string(),
+                data_type: None,
+                description: Some("The rank of the user".to_string()),
+                constraints: None,
+                tests: None,
+                data_tests: None,
+                granularity: None,
+                policy_tags: None,
+                databricks_tags: None,
+                quote: None,
+                config: None,
+                entity: None,
+                dimension: None,
+            },
+        ];
+
+        let result = process_columns(Some(&columns), None, None, Some("test_schema.yml")).unwrap();
+
+        // Should have 2 columns after deduplication
+        assert_eq!(result.len(), 2);
+
+        // First column should be user_id with the LAST definition's description
+        assert_eq!(result[0].name, "user_id");
+        assert_eq!(result[0].description, Some("Primary key".to_string()));
+
+        // Second column should be user_rank
+        assert_eq!(result[1].name, "user_rank");
+        assert_eq!(
+            result[1].description,
+            Some("The rank of the user".to_string())
+        );
+    }
 }

@@ -343,6 +343,7 @@ pub async fn resolve_models(
             properties.columns.as_ref(),
             model_config.meta.clone(),
             model_config.tags.clone().map(|tags| tags.into()),
+            Some(original_file_path.to_string_lossy().as_ref()),
         )?;
 
         if let Some(versions) = &properties.versions {
@@ -351,6 +352,7 @@ pub async fn resolve_models(
                 maybe_version.as_ref(),
                 versions,
                 columns,
+                Some(original_file_path.to_string_lossy().as_ref()),
             )?;
         }
 
@@ -661,6 +663,7 @@ fn process_versioned_columns(
     maybe_version: Option<&String>,
     versions: &[Versions],
     columns: Vec<DbtColumnRef>,
+    original_file_path: Option<&str>,
 ) -> Result<Vec<DbtColumnRef>, Box<dbt_common::FsError>> {
     for version in versions.iter() {
         if maybe_version.is_some_and(|v| Some(v) == version.get_version().as_ref())
@@ -683,6 +686,7 @@ fn process_versioned_columns(
                 Some(&column_map),
                 model_config.meta.clone(),
                 model_config.tags.clone().map(|tags| tags.into()),
+                original_file_path,
             )?;
 
             if let Some(rules) = ColumnInheritanceRules::from_version_columns(column_props) {
