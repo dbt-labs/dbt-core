@@ -1,6 +1,7 @@
 use std::{collections::BTreeMap, env};
 
 use dbt_common::io_args::EvalArgs;
+use dbt_common::io_args::ReplayMode;
 use itertools::Itertools;
 use log::LevelFilter;
 use minijinja::Value;
@@ -65,6 +66,9 @@ pub struct InvocationArgs {
     pub write_json: bool,
     /// Full refresh
     pub full_refresh: bool,
+
+    /// Replay mode (when running against a recording)
+    pub replay: Option<ReplayMode>,
 }
 
 impl InvocationArgs {
@@ -141,6 +145,7 @@ impl InvocationArgs {
             send_anonymous_usage_stats: arg.send_anonymous_usage_stats,
             write_json: arg.write_json,
             full_refresh: arg.full_refresh,
+            replay: arg.replay.clone(),
         }
     }
 
@@ -220,6 +225,7 @@ impl InvocationArgs {
         );
         dict.insert("write_json".to_string(), Value::from(self.write_json));
         dict.insert("full_refresh".to_string(), Value::from(self.full_refresh));
+        dict.insert("replay".to_string(), Value::from(self.replay.is_some()));
         // make all keys uppercase
         dict.into_iter()
             .map(|(key, value)| (key.to_uppercase(), value))
@@ -232,5 +238,40 @@ impl InvocationArgs {
             num_threads: final_threads,
             ..self.clone()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dbt_common::io_args::ReplayMode;
+
+    #[test]
+    // Replay mode is detected during macro
+    // registration (parse phase) via `invocation_args_dict.REPLAY`. If this key stops being
+    // surfaced by `InvocationArgs::to_dict()`, replay-only macro overrides (e.g. to suppress
+    // non-semantic package behavior) will silently stop applying.
+    fn to_dict_includes_replay_flag() {
+        let args = InvocationArgs {
+            replay: Some(ReplayMode::FsReplay("some/path".into())),
+            ..InvocationArgs::default()
+        };
+        let d = args.to_dict();
+        let replay = d.get("REPLAY").expect("REPLAY should be present");
+        assert!(
+            replay.is_true(),
+            "REPLAY should be present and truthy, got: {replay:?}"
+        );
+
+        let args2 = InvocationArgs {
+            replay: None,
+            ..InvocationArgs::default()
+        };
+        let d2 = args2.to_dict();
+        let replay2 = d2.get("REPLAY").expect("REPLAY should be present");
+        assert!(
+            !replay2.is_true(),
+            "REPLAY should be present and falsy, got: {replay2:?}"
+        );
     }
 }

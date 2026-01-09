@@ -101,10 +101,50 @@ impl JinjaEnvBuilder {
     }
 
     /// Register macros with the environment.
-    pub fn try_with_macros(mut self, macros: MacroUnitsWrapper) -> FsResult<Self> {
+    pub fn try_with_macros(mut self, mut macros: MacroUnitsWrapper) -> FsResult<Self> {
         let adapter = self.adapter.as_ref().ok_or_else(|| {
             unexpected_fs_err!("try_with_macros requires adapter configuration to be set")
         })?;
+
+        // Replay-mode behavior: suppress Elementary artifact uploads to avoid non-semantic drift
+        // (graph-derived metadata hashes, timestamped temp tables, etc.) that can cause replay
+        // recordings to diverge despite no underlying semantic differences.
+        //
+        // We do this by rewriting the macro body for `elementary.upload_artifacts_to_table` to a
+        // no-op. This avoids touching downstream macros like delete_and_insert/create_intermediate_relation
+        // that create timestamped `__TMP_<...>` relations and trigger adapter calls not present in older
+        // recordings.
+        // `try_with_macros` is executed during the parse-phase environment build, which uses
+        // a `ParseAdapter` even when the overall run is in replay mode. Therefore we cannot
+        // rely on `adapter.as_replay()` here.
+        //
+        // Instead we key off the invocation args dict, which is built from `EvalArgs` and
+        // includes whether replay mode is active.
+        let is_replay = self
+            .globals
+            .get("invocation_args_dict")
+            .and_then(|v| v.get_item(&Value::from("REPLAY")).ok())
+            .map(|v| v.is_true())
+            .unwrap_or(false);
+
+        if is_replay {
+            const ELEMENTARY_PKG: &str = "elementary";
+            const TARGET_MACRO: &str = "upload_artifacts_to_table";
+            const NOOP_MACRO_SQL: &str = r#"{% macro upload_artifacts_to_table(table_relation, artifacts, flatten_artifact_callback, append=False, should_commit=False, metadata_hashes=None, on_query_exceed=none) %}
+  {# dbt-fusion replay: deliberately no-op to avoid non-semantic drift and temp-table lookups #}
+  {{- return('') -}}
+{% endmacro %}
+"#;
+
+            if let Some(units) = macros.macros.get_mut(ELEMENTARY_PKG) {
+                for unit in units.iter_mut() {
+                    if unit.info.name == TARGET_MACRO {
+                        unit.sql = NOOP_MACRO_SQL.to_string();
+                        break;
+                    }
+                }
+            }
+        }
 
         // Get the root package name
         let root_package = self
@@ -517,12 +557,24 @@ mod tests {
     use dbt_schemas::schemas::relations::DEFAULT_DBT_QUOTING;
     use minijinja::{
         constants::MACRO_DISPATCH_ORDER, context, dispatch_object::THREAD_LOCAL_DEPENDENCIES,
-        machinery::Span, macro_unit::MacroInfo,
+        machinery::Span, macro_unit::MacroInfo, value::ValueMap,
     };
 
     use super::*;
     use dbt_test_primitives::assert_contains;
     use insta::assert_snapshot;
+
+    // THREAD_LOCAL_DEPENDENCIES is a global OnceCell. Multiple tests mutate it and Rust runs tests
+    // in parallel by default, so we serialize those mutations to avoid cross-test races/flakes.
+    static TEST_DEPS_LOCK: Mutex<()> = Mutex::new(());
+
+    fn set_thread_local_dependencies(pkgs: impl IntoIterator<Item = String>) {
+        let _guard = TEST_DEPS_LOCK.lock().unwrap();
+        let deps = THREAD_LOCAL_DEPENDENCIES.get_or_init(|| Mutex::new(BTreeSet::new()));
+        let mut deps = deps.lock().unwrap();
+        deps.clear();
+        deps.extend(pkgs);
+    }
 
     fn create_macro_unit(name: &str, sql: &str) -> MacroUnit {
         MacroUnit {
@@ -544,6 +596,13 @@ mod tests {
             },
             sql: sql.to_string(),
         }
+    }
+
+    fn invocation_args_dict(replay: bool) -> Value {
+        Value::from_object(ValueMap::from([(
+            Value::from("REPLAY".to_string()),
+            Value::from(replay),
+        )]))
     }
 
     #[test]
@@ -569,9 +628,7 @@ all okay!");
 
     #[test]
     fn test_dispatch_mode() {
-        THREAD_LOCAL_DEPENDENCIES
-            .set(Mutex::new(BTreeSet::new()))
-            .unwrap();
+        set_thread_local_dependencies(std::iter::empty());
         let mut macro_units = MacroUnitsWrapper::new(BTreeMap::new());
         macro_units.macros.insert(
             "dbt".to_string(),
@@ -835,6 +892,7 @@ all okay!");
         // assert_contains!(rv, "<macro 'some_macro'>");
         assert_contains!(rv, "hello");
     }
+
     #[test]
     fn test_date_format() {
         let env = JinjaEnvBuilder::new().build();
@@ -933,5 +991,97 @@ all okay!");
             keys.contains(&"empty_root".to_string()),
             "Root package should be in non_internal_packages even with no macros"
         );
+    }
+
+    #[test]
+    fn test_elementary_upload_artifacts_to_table_is_noop_in_replay() {
+        // In replay mode we rewrite `elementary.upload_artifacts_to_table` to a no-op during macro
+        // registration to avoid non-semantic package side effects (e.g. timestamped temp tables).
+        set_thread_local_dependencies(["test_package".to_string(), "elementary".to_string()]);
+
+        let mut macro_units = MacroUnitsWrapper::new(BTreeMap::new());
+        macro_units.macros.insert(
+            "elementary".to_string(),
+            vec![create_macro_unit(
+                "upload_artifacts_to_table",
+                "{% macro upload_artifacts_to_table(table_relation, artifacts, flatten_artifact_callback, append=False, should_commit=False, metadata_hashes=None, on_query_exceed=none) %}SHOULD_NOT_HAPPEN{% endmacro %}",
+            )],
+        );
+
+        let adapter = ParseAdapter::new(
+            AdapterType::Postgres,
+            dbt_serde_yaml::Mapping::default(),
+            DEFAULT_DBT_QUOTING,
+            Box::new(NaiveTypeOpsImpl::new(AdapterType::Postgres)),
+            never_cancels(),
+            None,
+        );
+
+        let globals = BTreeMap::from([(
+            "invocation_args_dict".to_string(),
+            invocation_args_dict(true),
+        )]);
+
+        let env = JinjaEnvBuilder::new()
+            .with_adapter(Arc::new(adapter) as Arc<dyn BaseAdapter>)
+            .with_root_package("test_package".to_string())
+            .with_globals(globals)
+            .try_with_macros(macro_units)
+            .expect("Failed to register macros")
+            .build();
+
+        let template = r#"
+{% from 'elementary.upload_artifacts_to_table' import upload_artifacts_to_table %}
+{{ upload_artifacts_to_table('rel', [], none) }}
+"#;
+
+        let rv = env.render_str(template, context! {}, &[]).unwrap();
+        assert_eq!(rv.trim(), "");
+    }
+
+    #[test]
+    fn test_elementary_upload_artifacts_to_table_unchanged_outside_replay() {
+        // Outside replay, we should preserve the package-provided macro body. This is the control
+        // case for the replay-only rewrite above.
+        set_thread_local_dependencies(["test_package".to_string(), "elementary".to_string()]);
+
+        let mut macro_units = MacroUnitsWrapper::new(BTreeMap::new());
+        macro_units.macros.insert(
+            "elementary".to_string(),
+            vec![create_macro_unit(
+                "upload_artifacts_to_table",
+                "{% macro upload_artifacts_to_table(table_relation, artifacts, flatten_artifact_callback, append=False, should_commit=False, metadata_hashes=None, on_query_exceed=none) %}SHOULD_NOT_HAPPEN{% endmacro %}",
+            )],
+        );
+
+        let adapter = ParseAdapter::new(
+            AdapterType::Postgres,
+            dbt_serde_yaml::Mapping::default(),
+            DEFAULT_DBT_QUOTING,
+            Box::new(NaiveTypeOpsImpl::new(AdapterType::Postgres)),
+            never_cancels(),
+            None,
+        );
+
+        let globals = BTreeMap::from([(
+            "invocation_args_dict".to_string(),
+            invocation_args_dict(false),
+        )]);
+
+        let env = JinjaEnvBuilder::new()
+            .with_adapter(Arc::new(adapter) as Arc<dyn BaseAdapter>)
+            .with_root_package("test_package".to_string())
+            .with_globals(globals)
+            .try_with_macros(macro_units)
+            .expect("Failed to register macros")
+            .build();
+
+        let template = r#"
+{% from 'elementary.upload_artifacts_to_table' import upload_artifacts_to_table %}
+{{ upload_artifacts_to_table('rel', [], none) }}
+"#;
+
+        let rv = env.render_str(template, context! {}, &[]).unwrap();
+        assert_eq!(rv.trim(), "SHOULD_NOT_HAPPEN");
     }
 }
