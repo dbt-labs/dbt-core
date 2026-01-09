@@ -847,7 +847,13 @@ class RunTask(CompileTask):
         super().__init__(args, config, manifest)
         self.batch_map = batch_map
 
-    def maybe_wait(self, pool: DbtThreadPool, runner: BaseRunner) -> None:
+    def _maybe_wait_for_microbatch(self, pool: DbtThreadPool, runner: BaseRunner) -> None:
+        """
+        Checks if the runner is a MicrobatchModelRunner, and waits until the
+        number of microbatch models in progress is less than the max number
+        of microbatch models allowed by the pool.
+        """
+
         if isinstance(runner, MicrobatchModelRunner) and self.job_queue is not None:
             fire_event(
                 MicrobatchExecutionDebug(
@@ -888,7 +894,9 @@ class RunTask(CompileTask):
             runner.set_pool(pool)
 
         args = [runner]
-        self.maybe_wait(pool, runner)
+
+        # Ensure we don't submit more MicrobatchModelRunners than the pool allows
+        self._maybe_wait_for_microbatch(pool, runner)
         self._submit(pool, args, callback)
 
     def _submit_batch(
