@@ -1192,13 +1192,6 @@ impl<'source> CodeGenerator<'source> {
         match c.identify_call() {
             ast::CallType::Function(name) => {
                 let arg_count = self.compile_call_args(&c.args, 0, caller, span)?;
-                if name == "return" {
-                    return Err(crate::error::Error::new(
-                        crate::error::ErrorKind::InvalidOperation,
-                        "return() is called in a non-block context",
-                    )
-                    .with_span(Path::new(self.instructions.name()), &span));
-                }
                 let ref_or_source_span = if name == "ref" || name == "source" {
                     let arg = if name == "ref" {
                         &c.args[0]

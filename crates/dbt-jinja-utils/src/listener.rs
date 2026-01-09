@@ -8,7 +8,8 @@ use std::{
 
 use minijinja::{
     CodeLocation, MacroSpans, TypecheckingEventListener,
-    listener::{DefaultRenderingEventListener, RenderingEventListener},
+    listener::{MacroStart, RenderingEventListener},
+    machinery::Span,
 };
 
 use dbt_common::{
@@ -36,8 +37,20 @@ pub trait RenderingEventListenerFactory: Send + Sync {
 /// Default implementation of the `ListenerFactory` trait
 #[derive(Default, Debug)]
 pub struct DefaultRenderingEventListenerFactory {
+    /// Suppress malicious return warning
+    pub quiet: bool,
     /// macro spans
     pub macro_spans: Arc<RwLock<HashMap<PathBuf, MacroSpans>>>,
+}
+
+impl DefaultRenderingEventListenerFactory {
+    /// Creates a new rendering event listener factory
+    pub fn new(quiet: bool) -> Self {
+        Self {
+            quiet,
+            macro_spans: Arc::new(RwLock::new(HashMap::new())),
+        }
+    }
 }
 
 impl RenderingEventListenerFactory for DefaultRenderingEventListenerFactory {
@@ -47,7 +60,7 @@ impl RenderingEventListenerFactory for DefaultRenderingEventListenerFactory {
         _filename: &Path,
         _offset: &dbt_frontend_common::error::CodeLocation,
     ) -> Vec<Rc<dyn RenderingEventListener>> {
-        vec![Rc::new(DefaultRenderingEventListener::default())]
+        vec![Rc::new(DefaultRenderingEventListener::new(self.quiet))]
     }
 
     fn destroy_listener(&self, filename: &Path, listener: Rc<dyn RenderingEventListener>) {
@@ -173,25 +186,19 @@ impl TypecheckingEventListener for DagExtractListener {
 
     fn warn(&self, _message: &str) {}
 
-    fn set_span(&self, _span: &minijinja::machinery::Span) {}
+    fn set_span(&self, _span: &Span) {}
 
     fn new_block(&self, _block_id: usize) {}
 
     fn flush(&self) {}
 
-    fn on_lookup(
-        &self,
-        _span: &minijinja::machinery::Span,
-        _simple_name: &str,
-        _full_name: &str,
-        _def_spans: Vec<minijinja::machinery::Span>,
-    ) {
+    fn on_lookup(&self, _span: &Span, _simple_name: &str, _full_name: &str, _def_spans: Vec<Span>) {
     }
 
     fn on_function_call(
         &self,
-        _source_span: &minijinja::machinery::Span,
-        _def_span: &minijinja::machinery::Span,
+        _source_span: &Span,
+        _def_span: &Span,
         _def_path: &Path,
         def_unique_id: &str,
     ) {
@@ -208,7 +215,7 @@ struct WarningPrinter {
     noqa_comments: Option<HashSet<u32>>,
     current_block: RefCell<usize>,
     pending_warnings: RefCell<HashMap<usize, Vec<(CodeLocation, String)>>>,
-    current_span: RefCell<Option<minijinja::machinery::Span>>,
+    current_span: RefCell<Option<Span>>,
 }
 
 impl WarningPrinter {
@@ -230,13 +237,7 @@ impl TypecheckingEventListener for WarningPrinter {
         self
     }
 
-    fn on_lookup(
-        &self,
-        _span: &minijinja::machinery::Span,
-        _simple_name: &str,
-        _full_name: &str,
-        _def_spans: Vec<minijinja::machinery::Span>,
-    ) {
+    fn on_lookup(&self, _span: &Span, _simple_name: &str, _full_name: &str, _def_spans: Vec<Span>) {
         //
     }
     fn warn(&self, message: &str) {
@@ -272,7 +273,7 @@ impl TypecheckingEventListener for WarningPrinter {
             .insert(block_id, Vec::new());
     }
 
-    fn set_span(&self, span: &minijinja::machinery::Span) {
+    fn set_span(&self, span: &Span) {
         *self.current_span.borrow_mut() = Some(*span);
     }
 
@@ -293,5 +294,149 @@ impl TypecheckingEventListener for WarningPrinter {
                 self.args.status_reporter.as_ref(),
             );
         });
+    }
+}
+
+/// default implementation of RenderingEventListener
+#[derive(Debug)]
+pub struct DefaultRenderingEventListener {
+    /// Suppress malicious return warning
+    pub quiet: bool,
+
+    /// io args
+    pub args: IoArgs,
+
+    /// macro spans
+    pub macro_spans: RefCell<MacroSpans>,
+
+    /// inner Vec<MacroStart> means during one function start/stop
+    macro_start_stack: RefCell<Vec<Vec<MacroStart>>>,
+}
+
+impl Default for DefaultRenderingEventListener {
+    fn default() -> Self {
+        Self {
+            quiet: false,
+            args: IoArgs::default(),
+            macro_spans: RefCell::new(MacroSpans::default()),
+            macro_start_stack: RefCell::new(vec![vec![]]),
+        }
+    }
+}
+
+impl DefaultRenderingEventListener {
+    /// Creates a new rendering event listener
+    pub fn new(quiet: bool) -> Self {
+        Self {
+            quiet,
+            args: IoArgs::default(),
+            macro_spans: RefCell::new(MacroSpans::default()),
+            macro_start_stack: RefCell::new(vec![vec![]]),
+        }
+    }
+}
+
+impl RenderingEventListener for DefaultRenderingEventListener {
+    fn on_function_start(&self) {
+        self.macro_start_stack.borrow_mut().push(vec![]);
+    }
+
+    fn on_function_end(&self) {
+        // assert the the top level of the stack is empty
+        let mut macro_start_stack = self.macro_start_stack.borrow_mut();
+        if !macro_start_stack.last().unwrap().is_empty() {
+            unreachable!("MacroStart stack is not empty");
+        }
+        macro_start_stack.pop();
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn name(&self) -> &str {
+        "DefaultRenderingEventListener"
+    }
+
+    fn on_macro_start(
+        &self,
+        _file_path: Option<&Path>,
+        line: &u32,
+        col: &u32,
+        offset: &u32,
+        expanded_line: &u32,
+        expanded_col: &u32,
+        expanded_offset: &u32,
+    ) {
+        self.macro_start_stack
+            .borrow_mut()
+            .last_mut()
+            .unwrap()
+            .push(MacroStart {
+                line: *line,
+                col: *col,
+                offset: *offset,
+                expanded_line: *expanded_line,
+                expanded_col: *expanded_col,
+                expanded_offset: *expanded_offset,
+            });
+    }
+
+    fn on_macro_stop(
+        &self,
+        _file_path: Option<&Path>,
+        line: &u32,
+        col: &u32,
+        offset: &u32,
+        expanded_line: &u32,
+        expanded_col: &u32,
+        expanded_offset: &u32,
+    ) {
+        let mut macro_start_stack = self.macro_start_stack.borrow_mut();
+        let macro_start_stack_length = macro_start_stack.len();
+        let macro_start_stack_last = macro_start_stack.last_mut().unwrap();
+        let macro_start_stack_last_length = macro_start_stack_last.len();
+        if macro_start_stack_length == 1 && macro_start_stack_last_length == 1 {
+            let macro_start = macro_start_stack_last.pop().unwrap();
+            self.macro_spans.borrow_mut().push(
+                Span {
+                    start_line: macro_start.line,
+                    start_col: macro_start.col,
+                    start_offset: macro_start.offset,
+                    end_line: *line,
+                    end_col: *col,
+                    end_offset: *offset,
+                },
+                Span {
+                    start_line: macro_start.expanded_line,
+                    start_col: macro_start.expanded_col,
+                    start_offset: macro_start.expanded_offset,
+                    end_line: *expanded_line,
+                    end_col: *expanded_col,
+                    end_offset: *expanded_offset,
+                },
+            );
+        } else {
+            macro_start_stack_last.pop();
+        }
+    }
+
+    fn on_malicious_return(&self, location: &CodeLocation) {
+        // Whenever we encounter a malicious return, it means a false MacroStart is issued
+        // We should remove the false MacroStart from the stack
+        let mut macro_start_stack = self.macro_start_stack.borrow_mut();
+        let macro_start_stack_last = macro_start_stack.last_mut().unwrap();
+        macro_start_stack_last.clear();
+        if !self.quiet {
+            // We should also warn it
+            emit_warn_log_message(
+                ErrorCode::Generic,
+                format!(
+                    "return is not at the top level of the block.\nIts value is final and cannot be modified by surrounding expressions.\nExample: return(0) + 1. The + 1 is ignored and the macro returns 0.\n  --> {}",
+                    location
+                ),
+                self.args.status_reporter.as_ref(),
+            );
+        }
     }
 }

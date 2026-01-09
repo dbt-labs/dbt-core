@@ -275,7 +275,7 @@ where
         );
     }
 
-    let listener_factory = DefaultRenderingEventListenerFactory::default();
+    let listener_factory = DefaultRenderingEventListenerFactory::new(true);
     match render_sql(
         &sql,
         jinja_env.as_ref(),

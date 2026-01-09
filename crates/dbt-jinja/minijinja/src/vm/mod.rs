@@ -37,7 +37,7 @@ use crate::vm::closure_object::Closure;
 
 pub(crate) use crate::vm::context::{Context, Frame};
 pub use crate::vm::state::State;
-use crate::OutputTracker;
+use crate::{CodeLocation, OutputTracker};
 
 #[cfg(feature = "macros")]
 mod closure_object;
@@ -128,6 +128,27 @@ impl CallerReturn {
     pub fn new(value: Value) -> Self {
         CallerReturn { value }
     }
+}
+
+/// Wrapper function for calling a function.
+/// This wrapper tells listeners that the function is being entered and exited.
+/// The reason we need to track function entry and exit is because of malicious return
+/// malicious return causes unbalanced MacroStart and MacroStop
+/// e.g. {% if condition %} {{ return(1) + 1 }} {% endif %}
+/// The rendering flow creates 2 MacroStart and encounters return. If we don't track function entry and exit,
+/// we will not know when to pop the MacroStart from the stack.
+fn call_wrapper(
+    listeners: &[Rc<dyn RenderingEventListener>],
+    function_call: impl FnOnce() -> Result<Value, Error>,
+) -> Result<Value, Error> {
+    listeners.iter().for_each(|listener| {
+        listener.on_function_start();
+    });
+    let rv = function_call()?;
+    listeners.iter().for_each(|listener| {
+        listener.on_function_end();
+    });
+    Ok(rv)
 }
 
 impl<'env> Vm<'env> {
@@ -365,7 +386,9 @@ impl<'env> Vm<'env> {
                     stack.push(match ops::$method(&a, &b) {
                         Ok(rv) => rv,
                         Err(e) if e.kind() == ErrorKind::InvalidOperation => {
-                            match a.call_method(state, $obj_method, &[b], listeners) {
+                            match call_wrapper(listeners, || {
+                                a.call_method(state, $obj_method, &[b], listeners)
+                            }) {
                                 Ok(rv) => rv,
                                 Err(e2) if e2.kind() == ErrorKind::UnknownMethod => {
                                     return Err(state.with_span_error(e, &$span));
@@ -810,7 +833,7 @@ impl<'env> Vm<'env> {
                 Instruction::CallBlock(name) => {
                     if parent_instructions.is_none() && !out.is_discarding() {
                         out.write_str(
-                            self.call_block(name, state, listeners)?
+                            call_wrapper(listeners, || self.call_block(name, state, listeners))?
                                 .as_str()
                                 .unwrap_or_default(),
                         )?;
@@ -893,9 +916,20 @@ impl<'env> Vm<'env> {
                         pc += 1;
                         continue;
                     }
-                    listeners.iter().for_each(|listener| {
-                        listener.on_reference(name);
-                    });
+                    // if return is called here, it means return is not on the top level of block
+                    // e.g. {{ return(1) + 1 }}
+                    // we should warn it
+                    if *name == "return" {
+                        listeners.iter().for_each(|listener| {
+                            listener.on_malicious_return(&CodeLocation::new(
+                                this_span.start_line,
+                                this_span.start_col,
+                                state.ctx.current_path.clone(),
+                            ));
+                        });
+                        break;
+                    }
+
                     let args = stack.get_call_args(*arg_count);
                     // super is a special function reserved for super-ing into blocks.
                     let rv = if *name == "super" {
@@ -957,7 +991,7 @@ impl<'env> Vm<'env> {
                                 state.ctx.depth() + INCLUDE_RECURSION_COST,
                             )?;
                         let func = inner_state.lookup(name).unwrap();
-                        func.call(&inner_state, args, listeners)
+                        call_wrapper(listeners, || func.call(&inner_state, args, listeners))
                             .map_err(|err| state.with_span_error(err, this_span))?
                     } else if let Some(func) =
                         state.lookup(name).filter(|func| !func.is_undefined())
@@ -985,8 +1019,7 @@ impl<'env> Vm<'env> {
                             args.to_vec()
                         };
 
-                        let rv = func
-                            .call(state, &args, listeners)
+                        let rv = call_wrapper(listeners, || func.call(state, &args, listeners))
                             .map_err(|err| state.with_span_error(err, this_span))?;
                         // Handle CallerReturn: when a return() was called inside a {% call %} block,
                         // the caller() function wraps it in CallerReturn. We unwrap it here and
@@ -1059,7 +1092,7 @@ impl<'env> Vm<'env> {
 
                         // look up and evaluate the macro
                         let func = new_state.lookup(name).unwrap();
-                        func.call(&new_state, &args, listeners)
+                        call_wrapper(listeners, || func.call(&new_state, &args, listeners))
                             .map_err(|err| state.with_span_error(err, this_span))?
                     } else if *name == "render" {
                         let raw = args[0].as_str().unwrap_or_default();
@@ -1102,9 +1135,6 @@ impl<'env> Vm<'env> {
 
                         // For namespaced calls, report the full qualified name
                         let qualified_name = format!("{ns_name}.{name}");
-                        listeners
-                            .iter()
-                            .for_each(|listener| listener.on_reference(&qualified_name));
                         // if not found, attempt to lookup the template and function using name stripped of test_
                         // see generate_test_macro in resolve_generic_tests.rs -> a subset of generated macro names are prefixed with test_
                         let Ok(template) = self.env.get_template(&qualified_name) else {
@@ -1133,14 +1163,10 @@ impl<'env> Vm<'env> {
                             state.ctx.depth() + MACRO_RECURSION_COST,
                         )?;
                         let func = macro_state.lookup(name).unwrap();
-                        func.call(&macro_state, args, listeners)
+                        call_wrapper(listeners, || func.call(&macro_state, args, listeners))
                             .map_err(|err| state.with_span_error(err, this_span))?
                     } else {
                         // For non-namespaced calls, report just the name
-                        listeners
-                            .iter()
-                            .for_each(|listener| listener.on_reference(name));
-
                         let function_name = args[0]
                             .get_attr_fast("function_name")
                             .map(|x| x.to_string())
@@ -1162,15 +1188,18 @@ impl<'env> Vm<'env> {
                         } else {
                             args[1..].to_vec()
                         };
-                        let res = args[0].call_method(state, name, &args_vals, listeners);
+                        let res = call_wrapper(listeners, || {
+                            args[0].call_method(state, name, &args_vals, listeners)
+                        });
                         match res {
                             Ok(rv) => match rv.downcast_object::<DispatchObject>() {
                                 // If we return DispatchObject from a
                                 // method call, we immediately forward
                                 // the call to the dispatch object.
-                                Some(obj) if obj.auto_execute => obj
-                                    .call(state, &args[1..], listeners)
-                                    .map_err(|e| state.with_span_error(e, this_span))?,
+                                Some(obj) if obj.auto_execute => call_wrapper(listeners, || {
+                                    obj.call(state, &args[1..], listeners)
+                                })
+                                .map_err(|e| state.with_span_error(e, this_span))?,
                                 _ => rv,
                             },
                             Err(err) => {
@@ -1184,8 +1213,7 @@ impl<'env> Vm<'env> {
                 Instruction::CallObject(arg_count, span) => {
                     let args = stack.get_call_args(*arg_count);
                     let arg_count = args.len();
-                    let a = args[0]
-                        .call(state, &args[1..], listeners)
+                    let a = call_wrapper(listeners, || args[0].call(state, &args[1..], listeners))
                         .map_err(|e| state.with_span_error(e, span))?;
                     stack.drop_top(arg_count);
                     stack.push(a);
@@ -1268,9 +1296,6 @@ impl<'env> Vm<'env> {
                 }
                 #[cfg(feature = "macros")]
                 Instruction::BuildMacro(name, offset, flags, _) => {
-                    listeners
-                        .iter()
-                        .for_each(|listener| listener.on_definition(name));
                     self.build_macro(&mut stack, state, *offset, name, *flags);
                 }
                 #[cfg(feature = "macros")]
