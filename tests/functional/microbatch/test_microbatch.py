@@ -1098,7 +1098,10 @@ class TestMicrobatchCanRunParallelOrSequential(BaseMicrobatchTest):
 class TestFirstAndLastBatchAlwaysSequential(BaseMicrobatchTest):
     @pytest.fixture
     def batch_exc_catcher(self) -> EventCatcher:
-        return EventCatcher(MicrobatchExecutionDebug)  # type: ignore
+        return EventCatcher(
+            event_to_catch=MicrobatchExecutionDebug,
+            predicate=lambda event: "is being run" in event.data.msg,
+        )
 
     def test_microbatch(
         self, mocker: MockerFixture, project, batch_exc_catcher: EventCatcher
