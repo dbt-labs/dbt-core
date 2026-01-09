@@ -932,7 +932,12 @@ class RunTask(CompileTask):
             batch_runner.do_skip()
 
         if not pool.is_closed():
-            if not force_sequential_run and batch_runner.should_run_in_parallel():
+            if (
+                not force_sequential_run
+                and batch_runner.should_run_in_parallel()
+                and self.job_queue is not None
+                and len(self.job_queue.in_progress) < pool.max_threads
+            ):
                 fire_event(
                     MicrobatchExecutionDebug(
                         msg=f"{batch_runner.describe_batch()} is being run concurrently"
