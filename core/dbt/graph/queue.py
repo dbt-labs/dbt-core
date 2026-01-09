@@ -191,7 +191,8 @@ class GraphQueue:
         """
         with self.lock:
             self.in_progress.remove(node_id)
-            self.in_progress_microbatch.remove(node_id)
+            if node_id in self.in_progress_microbatch:
+                self.in_progress_microbatch.remove(node_id)
             successors = list(self.graph.successors(node_id))
             self.graph.remove_node(node_id)
             self._find_new_additions(successors)
@@ -204,10 +205,12 @@ class GraphQueue:
         Callers must hold the lock.
 
         :param str node_id: The node ID to mark as in progress.
+        :param bool is_microbatch: Whether the node is a microbatch model.
         """
         self.queued.remove(node_id)
         self.in_progress.add(node_id)
-        self.in_progress_microbatch.add(node_id)
+        if is_microbatch:
+            self.in_progress_microbatch.add(node_id)
 
     def join(self) -> None:
         """Join the queue. Blocks until all tasks are marked as done.
