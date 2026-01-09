@@ -1,10 +1,11 @@
 use std::{
     collections::HashSet,
     io::{self, Write},
-    sync::atomic::{AtomicBool, Ordering},
+    sync::{
+        Arc, OnceLock,
+        atomic::{AtomicBool, Ordering},
+    },
 };
-
-use scc::HashMap as SccHashMap;
 
 use console::Term;
 use dbt_telemetry::{
@@ -15,13 +16,14 @@ use dbt_telemetry::{
     ShowDataOutput, ShowResult, SpanEndInfo, SpanStartInfo, SpanStatus, StatusCode,
     TelemetryOutputFlags, UserLogMessage, node_processed,
 };
+use dbt_tui_progress::ProgressController;
 
 use dbt_error::ErrorCode;
 use tracing::level_filters::LevelFilter;
 
 use crate::{
     io_args::{FsCommand, ShowOptions},
-    logging::{LogFormat, StatEvent, TermEvent, with_suspended_progress_bars},
+    logging::LogFormat,
     tracing::{
         data_provider::DataProvider,
         formatters::{
@@ -53,6 +55,37 @@ use crate::{
     },
 };
 
+// -------------------------------------------------------------------------------------------------
+// TEMPORARY: Global suspension hook for legacy log-based output.
+// This exists only until the show_progress! macro is fully migrated to tracing.
+// Once all legacy log-based progress messages are removed, delete this entire section.
+// -------------------------------------------------------------------------------------------------
+
+/// Type alias for the hook function that suspends progress bars.
+type SuspendHook = Box<dyn Fn(&mut dyn FnMut()) + Send + Sync>;
+
+/// Global hook for suspending progress bars during log emission.
+/// TEMPORARY: See module-level comment above.
+static PROGRESS_BAR_SUSPEND_HOOK: OnceLock<SuspendHook> = OnceLock::new();
+
+/// Register a callback that will be invoked to suspend progress bars during log emission.
+/// Called by TuiLayer when it creates a ProgressController in interactive mode.
+/// TEMPORARY: See module-level comment above.
+fn register_progress_bar_suspend_hook(hook: impl Fn(&mut dyn FnMut()) + Send + Sync + 'static) {
+    let _ = PROGRESS_BAR_SUSPEND_HOOK.set(Box::new(hook));
+}
+
+/// Suspend progress bars while executing the provided closure.
+/// If no hook is registered, the closure is executed immediately.
+/// TEMPORARY: See module-level comment above.
+pub fn with_suspended_progress_bars<F: FnMut()>(mut f: F) {
+    if let Some(hook) = PROGRESS_BAR_SUSPEND_HOOK.get() {
+        hook(&mut f);
+    } else {
+        f()
+    }
+}
+
 /// Build TUI layer that handles all terminal user interface on stdout and stderr, including progress bars
 pub fn build_tui_layer(
     max_log_verbosity: LevelFilter,
@@ -69,6 +102,20 @@ pub fn build_tui_layer(
         show_options,
         command,
     ))
+}
+
+/// Identifies progress bars and spinners in the TUI layer.
+///
+/// This enum decouples the progress bar identity from the display text,
+/// allowing stable IDs for lookups while keeping display text flexible.
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+enum ProgressId {
+    /// Progress bar for a specific execution phase (Render, Analyze, Run, etc.)
+    Phase(ExecutionPhase),
+    /// Progress bar/spinner for a generic operation identified by operation_id
+    GenericOp(String),
+    /// Progress bar for dependencies installation
+    DepsInstall,
 }
 
 /// A special non-exported event type used grouping all `NodeProcessed` spans under
@@ -130,7 +177,7 @@ struct SkippedTestNodes {
     seen_unit_test: bool,
 }
 
-fn emit_pending_skips(data_provider: &mut DataProvider<'_>) {
+fn emit_pending_skips(tui: &TuiLayer, data_provider: &mut DataProvider<'_>) {
     // This is a non-skipping node, check if there are pending skipped tests to emit
     let mut output_to_emit = None;
     data_provider.with_ancestor_mut::<TuiAllProcessingNodesGroup, SkippedTestNodes>(|skipped| {
@@ -152,7 +199,7 @@ fn emit_pending_skips(data_provider: &mut DataProvider<'_>) {
 
     // Emit the output after the span lock has been released to avoid possible deadlocks
     if let Some(output) = output_to_emit {
-        with_suspended_progress_bars(|| {
+        tui.write_suspended(|| {
             io::stdout()
                 .lock()
                 .write_all(format!("{}\n", output).as_bytes())
@@ -205,35 +252,34 @@ pub fn should_show_progress_message(
     phase_allows || show_options.contains(&ShowOptions::All)
 }
 
-#[derive(Debug)]
-struct ProgressInfo {
-    progress_text: String,
-    is_contextual_bar: bool,
-}
+use scc::HashMap as SccHashMap;
 
 /// A tracing layer that handles all terminal user interface on stdout and stderr, including progress bars.
 ///
-/// As of today this is a bridge into existing logging-based setup, but eventually
-/// should own the progress bar manager itself
+/// The TuiLayer owns a ProgressController for managing terminal progress bars and spinners.
+/// Progress bars are identified by ProgressId, decoupling identity from display text.
 pub struct TuiLayer {
     /// TUI has complex filtering logic, so we store max log verbosity here,
     /// instead of applying a blanket filter on the whole layer
     max_log_verbosity: LevelFilter,
     max_term_line_width: Option<usize>,
-    /// Enables progress bar for now.
-    is_interactive: bool,
     show_options: HashSet<ShowOptions>,
     command: FsCommand,
     /// Track if we've emitted the list header yet
     list_header_emitted: AtomicBool,
     /// Whether to group skipped tests under TuiAllProcessingNodesGroup spans
     group_skipped_tests: bool,
-    /// Maps operation_id -> (progress_text, is_spinner) for GenericOp progress bars/spinnners.
-    /// This mapping is needed because the progress bar UID is the displayed text (padded display_action),
-    /// but GenericOpItemProcessed only has operation_id. We store the mapping when the parent
-    /// GenericOpExecuted span starts, look it up for child items, and remove it when the parent ends.
-    /// TODO: move to progress bar manager when it is migrated from logging module
-    generic_op_id_to_progress: SccHashMap<String, ProgressInfo>,
+    /// Progress bar controller for managing terminal progress indicators.
+    /// Wrapped in Arc for the global suspension hook closure (TEMPORARY).
+    /// None when not in interactive mode.
+    progress: Option<Arc<ProgressController<ProgressId>>>,
+    /// Maps operation_id -> is_bar for GenericOp progress bars/spinners.
+    /// This mapping is needed because GenericOpItemProcessed only has operation_id,
+    /// but we need to know whether to call bar or spinner context methods.
+    /// We store the mapping when the parent GenericOpExecuted span starts (or LoadProject
+    /// phase for the "load" operation - see TODO in handle_phase_executed_start),
+    /// look it up for child items, and remove it when the parent ends.
+    generic_op_is_bar: SccHashMap<String, bool>,
     /// Whether running in NEXTEST mode (checked once at init for test purposes)
     #[cfg(debug_assertions)]
     is_nextest: bool,
@@ -250,16 +296,36 @@ impl TuiLayer {
         let is_interactive = is_interactive && stdout_term.is_term();
         let max_term_line_width = stdout_term.size_checked().map(|(_, cols)| cols as usize);
 
+        // Initialize progress controller in interactive mode
+        let progress = if is_interactive {
+            let mut ctrl = ProgressController::new();
+            ctrl.start_ticker();
+            let progress = Arc::new(ctrl);
+
+            // TEMPORARY: Register global hook for legacy show_progress! macro.
+            // Remove this once all show_progress! calls are migrated to tracing.
+            let progress_for_hook = Arc::clone(&progress);
+            register_progress_bar_suspend_hook(move |f| {
+                progress_for_hook.with_suspended(f);
+            });
+
+            Some(progress)
+        } else {
+            None
+        };
+
+        let group_skipped_tests = progress.is_some() && max_log_verbosity < LevelFilter::DEBUG;
+
         #[cfg(debug_assertions)]
         let res = Self {
             max_log_verbosity,
             max_term_line_width,
-            is_interactive,
             show_options,
             command,
             list_header_emitted: AtomicBool::new(false),
-            group_skipped_tests: is_interactive && max_log_verbosity < LevelFilter::DEBUG,
-            generic_op_id_to_progress: SccHashMap::new(),
+            group_skipped_tests,
+            progress,
+            generic_op_is_bar: SccHashMap::new(),
             is_nextest: std::env::var("NEXTEST").is_ok(),
         };
 
@@ -267,15 +333,27 @@ impl TuiLayer {
         let res = Self {
             max_log_verbosity,
             max_term_line_width,
-            is_interactive,
             show_options,
             command,
             list_header_emitted: AtomicBool::new(false),
-            group_skipped_tests: is_interactive && max_log_verbosity < LevelFilter::DEBUG,
-            generic_op_id_to_progress: SccHashMap::new(),
+            group_skipped_tests,
+            progress,
+            generic_op_is_bar: SccHashMap::new(),
         };
 
         res
+    }
+
+    /// Executes a closure with progress bars suspended for clean output.
+    /// If no progress controller is active, just executes the closure directly.
+    fn write_suspended<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce() -> R,
+    {
+        match &self.progress {
+            Some(p) => p.with_suspended(f),
+            None => f(),
+        }
     }
 }
 
@@ -423,7 +501,7 @@ impl TelemetryConsumer for TuiLayer {
         if span.attributes.is::<TuiAllProcessingNodesGroup>()
             && self.show_options.contains(&ShowOptions::Completed)
         {
-            emit_pending_skips(data_provider);
+            emit_pending_skips(self, data_provider);
             return;
         }
 
@@ -594,156 +672,123 @@ impl TuiLayer {
     }
 
     fn handle_phase_executed_start(&self, _span: &SpanStartInfo, phase: &PhaseExecuted) {
-        // Handle progress in interactive mode
-        if self.is_interactive {
-            let total = phase.node_count_total.unwrap_or_default();
-            let phase = phase.phase();
-            let Some(progress_text) = get_phase_progress_text(phase) else {
-                // Do not show progress for phases without defined progress text
-                return;
-            };
+        let Some(ref progress) = self.progress else {
+            return;
+        };
 
-            match phase {
-                ExecutionPhase::Render | ExecutionPhase::Analyze | ExecutionPhase::Run => {
-                    log::info!(
-                        _TERM_ONLY_ = true,
-                        _TERM_EVENT_:serde = TermEvent::start_bar(progress_text, total);
-                        ""
-                    )
-                }
-                ExecutionPhase::LoadProject => {
-                    // TODO: remove this when progress contextual items in loader
-                    // use dedicated events
-                    let progress_info = ProgressInfo {
-                        progress_text: progress_text.to_string(),
-                        is_contextual_bar: false,
-                    };
+        let total = phase.node_count_total.unwrap_or_default();
+        let phase_enum = phase.phase();
+        let Some(progress_text) = get_phase_progress_text(phase_enum) else {
+            // Do not show progress for phases without defined progress text
+            return;
+        };
 
-                    #[cfg(debug_assertions)]
-                    self.generic_op_id_to_progress
-                        .insert_sync("load".to_string(), progress_info)
-                        .expect(
-                            "A non unique id used for two distinct & concurrent generic operation spans!",
-                        );
+        match phase_enum {
+            ExecutionPhase::Render | ExecutionPhase::Analyze | ExecutionPhase::Run => {
+                progress.start_bar(ProgressId::Phase(phase_enum), total, progress_text);
+            }
+            ExecutionPhase::LoadProject => {
+                // TODO: Remove this when progress contextual items in loader use dedicated events.
+                // Currently, loader items use GenericOpItemProcessed with operation_id="load",
+                // so we must register the spinner under that ID for items to find it.
+                let load_op_id = "load".to_string();
 
-                    #[cfg(not(debug_assertions))]
-                    self.generic_op_id_to_progress
-                        .upsert_sync("load".to_string(), progress_info);
-
-                    log::info!(
-                        _TERM_ONLY_ = true,
-                        _TERM_EVENT_:serde = TermEvent::start_spinner(progress_text);
-                        ""
+                // Track that this is a spinner (not a bar) for context item lookups
+                #[cfg(debug_assertions)]
+                self.generic_op_is_bar
+                    .insert_sync(load_op_id.clone(), false)
+                    .expect(
+                        "A non unique id used for two distinct & concurrent generic operation spans!",
                     );
-                }
-                ExecutionPhase::Clean
-                | ExecutionPhase::Parse
-                | ExecutionPhase::Schedule
-                | ExecutionPhase::TaskGraphBuild
-                | ExecutionPhase::Debug
-                | ExecutionPhase::DeferHydration
-                | ExecutionPhase::SchemaHydration => {
-                    log::info!(
-                        _TERM_ONLY_ = true,
-                        _TERM_EVENT_:serde = TermEvent::start_spinner(progress_text);
-                        ""
-                    );
-                }
-                ExecutionPhase::Unspecified
-                | ExecutionPhase::Compare
-                | ExecutionPhase::InitAdapter
-                | ExecutionPhase::NodeCacheHydration
-                | ExecutionPhase::FreshnessAnalysis
-                | ExecutionPhase::Lineage => {
-                    // Do not show progress for these phases
-                }
+                #[cfg(not(debug_assertions))]
+                self.generic_op_is_bar
+                    .upsert_sync(load_op_id.clone(), false);
+
+                progress.start_spinner(ProgressId::GenericOp(load_op_id), progress_text);
+            }
+            ExecutionPhase::Clean
+            | ExecutionPhase::Parse
+            | ExecutionPhase::Schedule
+            | ExecutionPhase::TaskGraphBuild
+            | ExecutionPhase::Debug
+            | ExecutionPhase::DeferHydration
+            | ExecutionPhase::SchemaHydration => {
+                progress.start_spinner(ProgressId::Phase(phase_enum), progress_text);
+            }
+            ExecutionPhase::Unspecified
+            | ExecutionPhase::Compare
+            | ExecutionPhase::InitAdapter
+            | ExecutionPhase::NodeCacheHydration
+            | ExecutionPhase::FreshnessAnalysis
+            | ExecutionPhase::Lineage => {
+                // Do not show progress for these phases
             }
         }
     }
 
     fn handle_phase_executed_end(&self, _span: &SpanEndInfo, phase: &PhaseExecuted) {
-        // Handle progress in interactive mode
-        if self.is_interactive {
-            let phase = phase.phase();
-            let Some(progress_text) = get_phase_progress_text(phase) else {
-                // Do not show progress for phases without defined progress text
-                return;
-            };
+        let Some(ref progress) = self.progress else {
+            return;
+        };
 
-            match phase {
-                // Close contextual progress bar for render, analyze, run phases
-                ExecutionPhase::Render | ExecutionPhase::Analyze | ExecutionPhase::Run => {
-                    log::info!(
-                        _TERM_ONLY_ = true,
-                        _TERM_EVENT_:serde = TermEvent::remove_bar(progress_text);
-                        ""
-                    );
-                }
-                // Use spinner for phases without progress total
-                ExecutionPhase::LoadProject => {
-                    // TODO: remove this when progress contextual items in loader
-                    // use dedicated events
+        let phase_enum = phase.phase();
+        let Some(_progress_text) = get_phase_progress_text(phase_enum) else {
+            // Do not show progress for phases without defined progress text
+            return;
+        };
 
-                    // Get the action text for the progress bar or spinner from mapping & remove it
-                    let id_and_progress_text = self.generic_op_id_to_progress.remove_sync("load");
+        match phase_enum {
+            // Close contextual progress bar for render, analyze, run phases
+            ExecutionPhase::Render | ExecutionPhase::Analyze | ExecutionPhase::Run => {
+                progress.remove_bar(&ProgressId::Phase(phase_enum));
+            }
+            // Use spinner for phases without progress total
+            ExecutionPhase::LoadProject => {
+                // TODO: Remove this when progress contextual items in loader use dedicated events.
+                // Must match the ID used in handle_phase_executed_start for LoadProject.
+                let load_op_id = "load".to_string();
 
-                    // In debug builds panic if id is not present, but in prod ignore missing.
-                    if let Some((_, progress_info)) = id_and_progress_text {
-                        // Finish the spinner
-                        log::info!(
-                            _TERM_ONLY_ = true,
-                            _TERM_EVENT_:serde = TermEvent::remove_spinner(progress_info.progress_text);
-                            ""
-                        );
-                    } else {
-                        #[cfg(debug_assertions)]
-                        panic!("A non existing id was used to end a generic operation span!");
-                    }
+                // Remove from tracking map and get whether it existed
+                let was_present = self.generic_op_is_bar.remove_sync(&load_op_id);
+
+                if was_present.is_some() {
+                    progress.remove_spinner(&ProgressId::GenericOp(load_op_id));
+                } else {
+                    #[cfg(debug_assertions)]
+                    panic!("A non existing id was used to end a generic operation span!");
                 }
-                ExecutionPhase::Clean
-                | ExecutionPhase::Parse
-                | ExecutionPhase::Schedule
-                | ExecutionPhase::TaskGraphBuild
-                | ExecutionPhase::Debug
-                | ExecutionPhase::DeferHydration
-                | ExecutionPhase::SchemaHydration => {
-                    log::info!(
-                        _TERM_ONLY_ = true,
-                        _TERM_EVENT_:serde = TermEvent::remove_spinner(progress_text);
-                        ""
-                    );
-                }
-                ExecutionPhase::Unspecified
-                | ExecutionPhase::Compare
-                | ExecutionPhase::InitAdapter
-                | ExecutionPhase::NodeCacheHydration
-                | ExecutionPhase::FreshnessAnalysis
-                | ExecutionPhase::Lineage => {
-                    // Do not show progress for these phases
-                }
+            }
+            ExecutionPhase::Clean
+            | ExecutionPhase::Parse
+            | ExecutionPhase::Schedule
+            | ExecutionPhase::TaskGraphBuild
+            | ExecutionPhase::Debug
+            | ExecutionPhase::DeferHydration
+            | ExecutionPhase::SchemaHydration => {
+                progress.remove_spinner(&ProgressId::Phase(phase_enum));
+            }
+            ExecutionPhase::Unspecified
+            | ExecutionPhase::Compare
+            | ExecutionPhase::InitAdapter
+            | ExecutionPhase::NodeCacheHydration
+            | ExecutionPhase::FreshnessAnalysis
+            | ExecutionPhase::Lineage => {
+                // Do not show progress for these phases
             }
         }
     }
 
     fn handle_node_evaluated_start(&self, span: &SpanStartInfo, ne: &NodeEvaluated) {
         // Handle progress in interactive mode
-        if self.is_interactive {
+        if let Some(ref progress) = self.progress {
             let phase = ne.phase();
 
             if matches!(
                 phase,
                 ExecutionPhase::Render | ExecutionPhase::Analyze | ExecutionPhase::Run
-            ) && let Some(bar_text) = get_phase_progress_text(phase)
-            {
+            ) {
                 let formatted_item = format_unique_id_as_progress_item(ne.unique_id.as_str());
-                log::info!(
-                    _TERM_ONLY_ = true,
-                    _TERM_EVENT_:serde = TermEvent::add_bar_context_item(
-                        bar_text,
-                        formatted_item
-                    );
-                    ""
-                )
+                progress.add_bar_context(&ProgressId::Phase(phase), &formatted_item);
             }
         }
 
@@ -753,7 +798,7 @@ impl TuiLayer {
         }
 
         let formatted = format_node_evaluated_start(ne, true);
-        with_suspended_progress_bars(|| {
+        self.write_suspended(|| {
             io::stdout()
                 .lock()
                 .write_all(format!("{}\n", formatted).as_bytes())
@@ -763,34 +808,25 @@ impl TuiLayer {
 
     fn handle_node_evaluated_end(&self, span: &SpanEndInfo, ne: &NodeEvaluated) {
         // Handle progress in interactive mode
-        if self.is_interactive {
+        if let Some(ref progress) = self.progress {
             let phase = ne.phase();
 
             if matches!(
                 phase,
                 ExecutionPhase::Render | ExecutionPhase::Analyze | ExecutionPhase::Run
-            ) && let Some(bar_text) = get_phase_progress_text(ne.phase())
-            {
+            ) {
                 let status = if let Some(SpanStatus {
                     code: StatusCode::Error,
                     ..
                 }) = &span.status
                 {
-                    "failed"
+                    Some("failed")
                 } else {
-                    "succeeded"
+                    Some("succeeded")
                 };
 
                 let formatted_item = format_unique_id_as_progress_item(ne.unique_id.as_str());
-                log::info!(
-                    _TERM_ONLY_ = true,
-                    _STAT_EVENT_:serde = StatEvent::counter(status, 1),
-                    _TERM_EVENT_:serde = TermEvent::finish_bar_context_item(
-                        bar_text,
-                        formatted_item
-                    );
-                    ""
-                )
+                progress.finish_bar_context(&ProgressId::Phase(phase), &formatted_item, status);
             }
         }
 
@@ -804,7 +840,7 @@ impl TuiLayer {
             .duration_since(span.start_time_unix_nano)
             .unwrap_or_default();
         let formatted = format_node_evaluated_end(ne, duration, true);
-        with_suspended_progress_bars(|| {
+        self.write_suspended(|| {
             io::stdout()
                 .lock()
                 .write_all(format!("{}\n", formatted).as_bytes())
@@ -815,7 +851,7 @@ impl TuiLayer {
     fn handle_query_executed(&self, _span: &SpanEndInfo, query_data: &QueryExecuted) {
         let node_id = query_data.unique_id.as_deref().unwrap_or("unknown");
         let formatted_query = format!("Query executed on node {}:\n{}", node_id, query_data.sql);
-        with_suspended_progress_bars(|| {
+        self.write_suspended(|| {
             io::stdout()
                 .lock()
                 .write_all(format!("{}\n", formatted_query).as_bytes())
@@ -862,7 +898,7 @@ impl TuiLayer {
             && self.group_skipped_tests
             && self.show_options.contains(&ShowOptions::Completed)
         {
-            emit_pending_skips(data_provider);
+            emit_pending_skips(self, data_provider);
         }
 
         // Capture and delay unit test summary messages regardless of show options
@@ -918,7 +954,7 @@ impl TuiLayer {
         let output = format_node_processed_end(node, duration, true);
 
         // Print to stdout with progress bars suspended
-        with_suspended_progress_bars(|| {
+        self.write_suspended(|| {
             io::stdout()
                 .lock()
                 .write_all(format!("{}\n", output).as_bytes())
@@ -953,7 +989,7 @@ impl TuiLayer {
             });
         } else {
             // Print info and below messages immediately
-            with_suspended_progress_bars(|| {
+            self.write_suspended(|| {
                 io::stdout()
                     .lock()
                     .write_all(format!("{}\n", formatted_message).as_bytes())
@@ -964,7 +1000,7 @@ impl TuiLayer {
 
     fn handle_user_log_message(&self, log_record: &LogRecordInfo) {
         // Print user log messages immediately to stdout
-        with_suspended_progress_bars(|| {
+        self.write_suspended(|| {
             io::stdout()
                 .lock()
                 .write_all(format!("{}\n", log_record.body).as_bytes())
@@ -974,7 +1010,7 @@ impl TuiLayer {
 
     fn handle_stdout_message(&self, log_record: &LogRecordInfo) {
         // Print immediately to stdout
-        with_suspended_progress_bars(|| {
+        self.write_suspended(|| {
             io::stdout()
                 .lock()
                 .write_all(log_record.body.as_bytes())
@@ -984,7 +1020,7 @@ impl TuiLayer {
 
     fn handle_list_item_output(&self, list_item: &ListItemOutput) {
         if self.show_options.contains(&ShowOptions::Nodes) || self.command == FsCommand::List {
-            with_suspended_progress_bars(|| {
+            self.write_suspended(|| {
                 let mut stdout = io::stdout().lock();
 
                 // Emit header once before first list item
@@ -1005,7 +1041,7 @@ impl TuiLayer {
     }
 
     fn handle_show_data_output(&self, show_data: &ShowDataOutput) {
-        with_suspended_progress_bars(|| {
+        self.write_suspended(|| {
             let mut stdout = io::stdout().lock();
 
             stdout
@@ -1015,7 +1051,7 @@ impl TuiLayer {
     }
 
     fn handle_show_result(&self, show_result: &ShowResult) {
-        with_suspended_progress_bars(|| {
+        self.write_suspended(|| {
             let mut stdout = io::stdout().lock();
 
             // Apply blue coloring to title
@@ -1039,7 +1075,7 @@ impl TuiLayer {
         }
 
         let formatted = format_compiled_inline_code(compiled_code, true);
-        with_suspended_progress_bars(|| {
+        self.write_suspended(|| {
             io::stdout()
                 .lock()
                 .write_all(format!("{}\n", formatted).as_bytes())
@@ -1058,7 +1094,7 @@ impl TuiLayer {
         );
 
         // Print user log messages immediately to stdout
-        with_suspended_progress_bars(|| {
+        self.write_suspended(|| {
             io::stderr()
                 .lock()
                 .write_all(format!("{formatted_message}\n").as_bytes())
@@ -1076,7 +1112,7 @@ impl TuiLayer {
         }
 
         let formatted = format_progress_message(progress_msg, severity_number, true, true);
-        with_suspended_progress_bars(|| {
+        self.write_suspended(|| {
             io::stdout()
                 .lock()
                 .write_all(format!("{}\n", formatted).as_bytes())
@@ -1092,12 +1128,12 @@ impl TuiLayer {
             return;
         }
 
-        if self.is_interactive {
-            // In interactive mode, start a progress bar via log
-            log::info!(
-                _TERM_ONLY_ = true,
-                _TERM_EVENT_:serde = TermEvent::start_bar(INSTALLING_ACTION.clone(), ev.package_count);
-                ""
+        if let Some(ref progress) = self.progress {
+            // In interactive mode, start a progress bar
+            progress.start_bar(
+                ProgressId::DepsInstall,
+                ev.package_count,
+                INSTALLING_ACTION.clone(),
             );
 
             // In interactive non-debug mode, skip the "Installing packages" message
@@ -1111,7 +1147,7 @@ impl TuiLayer {
         let formatted_message = format_package_install_start(ev, true);
 
         // Print immediately to stdout
-        with_suspended_progress_bars(|| {
+        self.write_suspended(|| {
             io::stdout()
                 .lock()
                 .write_all(format!("{}\n", formatted_message).as_bytes())
@@ -1127,20 +1163,16 @@ impl TuiLayer {
             return;
         }
 
-        if self.is_interactive {
-            // In interactive mode, stop the progress bar via log
-            log::info!(
-                _TERM_ONLY_ = true,
-                _TERM_EVENT_:serde = TermEvent::remove_bar(INSTALLING_ACTION.clone());
-                ""
-            )
+        if let Some(ref progress) = self.progress {
+            // In interactive mode, stop the progress bar
+            progress.remove_bar(&ProgressId::DepsInstall);
         }
 
         // Regardless of the mode - print static message when finished
         let formatted_message = format_package_install_end(ev, true);
 
         // Print immediately to stdout
-        with_suspended_progress_bars(|| {
+        self.write_suspended(|| {
             io::stdout()
                 .lock()
                 .write_all(format!("{}\n", formatted_message).as_bytes())
@@ -1157,16 +1189,9 @@ impl TuiLayer {
         }
 
         // In interactive add the package as a context item to the progress bar
-        if self.is_interactive {
+        if let Some(ref progress) = self.progress {
             if let Some(display_name) = get_package_display_name(pkg) {
-                log::info!(
-                    _TERM_ONLY_ = true,
-                    _TERM_EVENT_:serde = TermEvent::add_bar_context_item(
-                        INSTALLING_ACTION.clone(),
-                        display_name.to_string()
-                    );
-                    ""
-                );
+                progress.add_bar_context(&ProgressId::DepsInstall, display_name);
             }
 
             // In non-debug mode, skip the "Installing package" message
@@ -1188,7 +1213,7 @@ impl TuiLayer {
         let formatted_message = format_package_installed_start(pkg, true);
 
         // Print immediately to stdout
-        with_suspended_progress_bars(|| {
+        self.write_suspended(|| {
             io::stdout()
                 .lock()
                 .write_all(format!("{}\n", formatted_message).as_bytes())
@@ -1205,34 +1230,22 @@ impl TuiLayer {
         }
 
         // In interactive mode, update the progress bar
-        if self.is_interactive {
+        if let Some(ref progress) = self.progress {
             if let Some(display_name) = get_package_display_name(pkg) {
                 let status = if let Some(SpanStatus {
                     code: StatusCode::Error,
                     ..
                 }) = &span.status
                 {
-                    "failed"
+                    Some("failed")
                 } else {
-                    "succeeded"
+                    Some("succeeded")
                 };
-                log::info!(
-                    _TERM_ONLY_ = true,
-                    _STAT_EVENT_:serde = StatEvent::counter(status, 1),
-                    _TERM_EVENT_:serde = TermEvent::finish_bar_context_item(
-                        INSTALLING_ACTION.clone(),
-                        display_name.to_string()
-                    );
-                    ""
-                );
+                progress.finish_bar_context(&ProgressId::DepsInstall, display_name, status);
             } else {
                 // Just increment the progress bar counter if we can't get a display name
-                log::info!(
-                    _TERM_ONLY_ = true,
-                    _TERM_EVENT_:serde = TermEvent::inc_bar(INSTALLING_ACTION.clone(), 1u64);
-                    ""
-                );
-            };
+                progress.inc_bar(&ProgressId::DepsInstall, 1);
+            }
         }
 
         #[cfg(debug_assertions)]
@@ -1252,7 +1265,7 @@ impl TuiLayer {
         );
 
         // Print immediately to stdout
-        with_suspended_progress_bars(|| {
+        self.write_suspended(|| {
             io::stdout()
                 .lock()
                 .write_all(format!("{}\n", formatted_message).as_bytes())
@@ -1272,7 +1285,7 @@ impl TuiLayer {
         let formatted_message = format_package_add_start(pkg, true);
 
         // Print immediately to stdout
-        with_suspended_progress_bars(|| {
+        self.write_suspended(|| {
             io::stdout()
                 .lock()
                 .write_all(format!("{}\n", formatted_message).as_bytes())
@@ -1296,7 +1309,7 @@ impl TuiLayer {
         );
 
         // Print immediately to stdout
-        with_suspended_progress_bars(|| {
+        self.write_suspended(|| {
             io::stdout()
                 .lock()
                 .write_all(format!("{}\n", formatted_message).as_bytes())
@@ -1306,43 +1319,33 @@ impl TuiLayer {
 
     fn handle_generic_op_start(&self, span: &SpanStartInfo, op: &GenericOpExecuted) {
         // Handle progress bars in interactive mode
-        if self.is_interactive {
+        if let Some(ref progress) = self.progress {
             // Create action text for the progress bar or spinner
             let progress_text =
                 right_align_action(capitalize_first_letter(op.display_action.as_str()).into());
-            let progress_info = ProgressInfo {
-                progress_text: progress_text.to_string(),
-                is_contextual_bar: op.item_count_total.is_some(),
-            };
+            let is_bar = op.item_count_total.is_some();
 
-            // Save it to the global mapping for later lookups.
+            // Track whether this op uses a bar or spinner for later lookups.
             // In debug builds panic if id is not unique, but in prod just overwrite.
             #[cfg(debug_assertions)]
-            self.generic_op_id_to_progress
-                .insert_sync(op.operation_id.clone(), progress_info)
+            self.generic_op_is_bar
+                .insert_sync(op.operation_id.clone(), is_bar)
                 .expect(
                     "A non unique id used for two distinct & concurrent generic operation spans!",
                 );
             #[cfg(not(debug_assertions))]
-            self.generic_op_id_to_progress
-                .upsert_sync(op.operation_id.clone(), progress_info);
+            self.generic_op_is_bar
+                .upsert_sync(op.operation_id.clone(), is_bar);
 
+            let progress_id = ProgressId::GenericOp(op.operation_id.clone());
             match op.item_count_total {
                 Some(total) => {
                     // Start a progress bar if we have a total count
-                    log::info!(
-                        _TERM_ONLY_ = true,
-                        _TERM_EVENT_:serde = TermEvent::start_bar(progress_text.to_string(), total);
-                        ""
-                    );
+                    progress.start_bar(progress_id, total, progress_text.to_string());
                 }
                 None => {
                     // Start a spinner if we don't have a total count
-                    log::info!(
-                        _TERM_ONLY_ = true,
-                        _TERM_EVENT_:serde = TermEvent::start_spinner(progress_text.to_string());
-                        ""
-                    );
+                    progress.start_spinner(progress_id, progress_text.to_string());
                 }
             };
 
@@ -1364,7 +1367,7 @@ impl TuiLayer {
 
         let formatted_message = format_generic_op_start(op);
 
-        with_suspended_progress_bars(|| {
+        self.write_suspended(|| {
             io::stdout()
                 .lock()
                 .write_all(format!("{}\n", formatted_message).as_bytes())
@@ -1374,27 +1377,17 @@ impl TuiLayer {
 
     fn handle_generic_op_end(&self, span: &SpanEndInfo, op: &GenericOpExecuted) {
         // Handle progress bars in interactive mode
-        if self.is_interactive {
-            // Get the action text for the progress bar or spinner from mapping & remove it
-            let id_and_progress_text = self.generic_op_id_to_progress.remove_sync(&op.operation_id);
+        if let Some(ref progress) = self.progress {
+            // Get whether this op uses a bar or spinner and remove from tracking
+            let is_bar_entry = self.generic_op_is_bar.remove_sync(&op.operation_id);
 
-            // In debug builds panic if id is not present, but in prod ignore missing.
-            if let Some((_, progress_info)) = id_and_progress_text {
-                if progress_info.is_contextual_bar {
-                    // Finish the progress bar
-                    log::info!(
-                        _TERM_ONLY_ = true,
-                        _TERM_EVENT_:serde = TermEvent::remove_bar(progress_info.progress_text);
-                        ""
-                    );
+            let progress_id = ProgressId::GenericOp(op.operation_id.clone());
+            if let Some((_, is_bar)) = is_bar_entry {
+                if is_bar {
+                    progress.remove_bar(&progress_id);
                 } else {
-                    // Finish the spinner
-                    log::info!(
-                        _TERM_ONLY_ = true,
-                        _TERM_EVENT_:serde = TermEvent::remove_spinner(progress_info.progress_text);
-                        ""
-                    );
-                };
+                    progress.remove_spinner(&progress_id);
+                }
             } else {
                 #[cfg(debug_assertions)]
                 panic!("A non existing id was used to end a generic operation span!");
@@ -1426,7 +1419,7 @@ impl TuiLayer {
         let formatted_message = format_generic_op_end(op, duration);
 
         // Print conclusion line
-        with_suspended_progress_bars(|| {
+        self.write_suspended(|| {
             io::stdout()
                 .lock()
                 .write_all(format!("{}\n", formatted_message).as_bytes())
@@ -1436,27 +1429,14 @@ impl TuiLayer {
 
     fn handle_generic_op_item_start(&self, span: &SpanStartInfo, item: &GenericOpItemProcessed) {
         // Handle progress in interactive mode
-        if self.is_interactive {
-            self.generic_op_id_to_progress
-                .read_sync(&item.operation_id, |_, progress_info| {
-                    if progress_info.is_contextual_bar {
-                        log::info!(
-                            _TERM_ONLY_ = true,
-                            _TERM_EVENT_:serde = TermEvent::add_bar_context_item(
-                                progress_info.progress_text.clone(),
-                                item.target.clone(),
-                            );
-                            ""
-                        )
+        if let Some(ref progress) = self.progress {
+            let progress_id = ProgressId::GenericOp(item.operation_id.clone());
+            self.generic_op_is_bar
+                .read_sync(&item.operation_id, |_, is_bar| {
+                    if *is_bar {
+                        progress.add_bar_context(&progress_id, &item.target);
                     } else {
-                        log::info!(
-                            _TERM_ONLY_ = true,
-                            _TERM_EVENT_:serde = TermEvent::add_spinner_context_item(
-                                progress_info.progress_text.clone(),
-                                item.target.clone(),
-                            );
-                            ""
-                        )
+                        progress.add_spinner_context(&progress_id, &item.target);
                     }
                 });
         }
@@ -1475,7 +1455,7 @@ impl TuiLayer {
 
         let formatted_message = format_generic_op_item_start(item);
 
-        with_suspended_progress_bars(|| {
+        self.write_suspended(|| {
             io::stdout()
                 .lock()
                 .write_all(format!("{}\n", formatted_message).as_bytes())
@@ -1485,51 +1465,26 @@ impl TuiLayer {
 
     fn handle_generic_op_item_end(&self, span: &SpanEndInfo, item: &GenericOpItemProcessed) {
         // Handle progress in interactive mode
-        if self.is_interactive {
-            self.generic_op_id_to_progress
-                .read_sync(&item.operation_id, |_, progress_info| {
-                    let term_event = if progress_info.is_contextual_bar {
-                        TermEvent::finish_bar_context_item(
-                            progress_info.progress_text.clone(),
-                            item.target.clone(),
-                        )
-                    } else {
-                        TermEvent::finish_spinner_context_item(
-                            progress_info.progress_text.clone(),
-                            item.target.clone(),
-                        )
-                    };
+        if let Some(ref progress) = self.progress {
+            let progress_id = ProgressId::GenericOp(item.operation_id.clone());
+            let status = match span.status {
+                Some(SpanStatus {
+                    code: StatusCode::Error,
+                    ..
+                }) => Some("failed"),
+                Some(SpanStatus {
+                    code: StatusCode::Ok,
+                    ..
+                }) => Some("succeeded"),
+                _ => None,
+            };
 
-                    match span.status {
-                        Some(SpanStatus {
-                            code: StatusCode::Error,
-                            ..
-                        }) => {
-                            log::info!(
-                                _TERM_ONLY_ = true,
-                                _STAT_EVENT_:serde = StatEvent::counter("failed", 1),
-                                _TERM_EVENT_:serde = term_event;
-                                ""
-                            );
-                        }
-                        Some(SpanStatus {
-                            code: StatusCode::Ok,
-                            ..
-                        }) => {
-                            log::info!(
-                                _TERM_ONLY_ = true,
-                                _STAT_EVENT_:serde = StatEvent::counter("succeeded", 1),
-                                _TERM_EVENT_:serde = term_event;
-                                ""
-                            );
-                        }
-                        _ => {
-                            log::info!(
-                                _TERM_ONLY_ = true,
-                                _TERM_EVENT_:serde = term_event;
-                                ""
-                            );
-                        }
+            self.generic_op_is_bar
+                .read_sync(&item.operation_id, |_, is_bar| {
+                    if *is_bar {
+                        progress.finish_bar_context(&progress_id, &item.target, status);
+                    } else {
+                        progress.finish_spinner_context(&progress_id, &item.target, status);
                     }
                 });
         }
@@ -1554,7 +1509,7 @@ impl TuiLayer {
         let formatted_message =
             format_generic_op_item_end(item, duration, span.status.as_ref(), true);
 
-        with_suspended_progress_bars(|| {
+        self.write_suspended(|| {
             io::stdout()
                 .lock()
                 .write_all(format!("{}\n", formatted_message).as_bytes())

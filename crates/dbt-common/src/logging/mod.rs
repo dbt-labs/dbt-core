@@ -1,7 +1,5 @@
 mod events;
 mod logger;
-mod term;
 
-pub use events::{ErrorEvent, FsInfo, LogEvent, StatEvent, TermEvent};
+pub use events::{FsInfo, LogEvent, Severity};
 pub use logger::{FsLogConfig, LogFormat, init_logger};
-pub use term::with_suspended_progress_bars;

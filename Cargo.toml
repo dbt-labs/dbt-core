@@ -37,6 +37,7 @@ members = [
   "crates/proto-rust-macros",
   "crates/dbt-env",
   "crates/dbt-test-utils",
+  "crates/dbt-tui-progress",
   "crates/dbt-sample",
 
   "crates/dbt-sql/dbt-lexer-bigquery",
@@ -188,6 +189,7 @@ dbt-telemetry = { path = "crates/dbt-telemetry" }
 dbt-test-containers = { path = "crates/dbt-test-containers" }
 dbt-test-primitives = { path = "crates/dbt-test-primitives" }
 dbt-test-utils = { path = "crates/dbt-test-utils" }
+dbt-tui-progress = { path = "crates/dbt-tui-progress" }
 proto-rust = { path = "crates/proto-rust" }
 proto-rust-macros = { path = "crates/proto-rust-macros" }
 vortex-client = { path = "crates/vortex-client" }
@@ -514,6 +516,7 @@ opentelemetry_sdk = "0.30.0"
 # Compile with --features "tracy-client/enable" to enable integration with the
 # Tracy profiler: https://github.com/wolfpld/tracy
 tracy-client = { version = "0.18.0", default-features = false }
+unicode-segmentation = "1.12"
 
 # axum dependency
 axum = "0.8.5"

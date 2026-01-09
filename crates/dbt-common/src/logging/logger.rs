@@ -2,6 +2,7 @@ use crate::FsResult;
 use crate::constants::{DBT_DEAFULT_LOG_FILE_NAME, DBT_LOG_DIR_NAME};
 use crate::io_args::IoArgs;
 use crate::pretty_string::remove_ansi_codes;
+use crate::tracing::layers::tui_layer::with_suspended_progress_bars;
 use clap::ValueEnum;
 use log::{LevelFilter, Metadata, Record};
 use serde::{Deserialize, Serialize};
@@ -276,26 +277,30 @@ impl log::Log for Logger {
     }
 
     fn log(&self, record: &Record) {
-        if self.enabled(record.metadata()) && !super::term::is_term_control_only(record) {
-            match self.config.format {
-                LogFormat::Text | LogFormat::Default => {
-                    let mut text = record.args().to_string();
-                    if self.remove_ansi_codes {
-                        text = remove_ansi_codes(&text);
+        if self.enabled(record.metadata()) {
+            // TEMPORARY: Suspend progress bars for legacy log output.
+            // Remove when show_progress! macro is fully migrated to tracing.
+            with_suspended_progress_bars(|| {
+                match self.config.format {
+                    LogFormat::Text | LogFormat::Default => {
+                        let mut text = record.args().to_string();
+                        if self.remove_ansi_codes {
+                            text = remove_ansi_codes(&text);
+                        }
+                        locked_writeln!(self, "{}", text);
                     }
-                    locked_writeln!(self, "{}", text);
+                    LogFormat::Json => {
+                        let json = Self::format_json(
+                            record,
+                            &self.invocation_id.to_string(),
+                            self.remove_ansi_codes,
+                        );
+                        locked_writeln!(self, "{}", json);
+                    }
+                    // This is handled in new tracing infra
+                    LogFormat::Otel => {}
                 }
-                LogFormat::Json => {
-                    let json = Self::format_json(
-                        record,
-                        &self.invocation_id.to_string(),
-                        self.remove_ansi_codes,
-                    );
-                    locked_writeln!(self, "{}", json);
-                }
-                // This is handled in new tracing infra
-                LogFormat::Otel => {}
-            }
+            });
         }
     }
 
@@ -388,16 +393,9 @@ impl MultiLoggerBuilder {
         let stdout_logger = self.make_stdout_logger(log_config);
         let stderr_logger = self.make_stderr_logger(log_config);
 
-        if log_config.log_format == LogFormat::Default {
-            let mut fancy_logger =
-                super::term::FancyLogger::new(vec![stdout_logger, stderr_logger]);
-            fancy_logger.start_ticker();
-            self.loggers.push(Box::new(fancy_logger));
-        } else {
-            // For text and json formats, we use the regular loggers
-            self.loggers.push(stdout_logger);
-            self.loggers.push(stderr_logger);
-        }
+        // Progress bars are now managed by TuiLayer, so we just add the regular loggers
+        self.loggers.push(stdout_logger);
+        self.loggers.push(stderr_logger);
         self
     }
 

@@ -57,6 +57,7 @@ tokio = { workspace = true, features = ["fs"] }
 
 pathdiff = { workspace = true }
 
+dbt-tui-progress = { workspace = true }
 indicatif = { workspace = true }
 log = { workspace = true }
 rust-embed = { workspace = true }
