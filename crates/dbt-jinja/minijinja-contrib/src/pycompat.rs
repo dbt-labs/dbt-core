@@ -31,32 +31,49 @@ use regex::Regex;
 /// * `list.index`
 /// * `list.union`
 /// * `str.capitalize`
+/// * `str.casefold`
+/// * `str.center`
 /// * `str.count`
 /// * `str.endswith`
+/// * `str.expandtabs`
 /// * `str.find`
+/// * `str.format`
 /// * `str.index`
 /// * `str.isalnum`
 /// * `str.isalpha`
 /// * `str.isascii`
-/// * `str.isidentifier`
+/// * `str.isdecimal`
 /// * `str.isdigit`
+/// * `str.isidentifier`
 /// * `str.islower`
 /// * `str.isnumeric`
+/// * `str.isprintable`
+/// * `str.isspace`
+/// * `str.istitle`
 /// * `str.isupper`
 /// * `str.join`
+/// * `str.ljust`
 /// * `str.lower`
 /// * `str.lstrip`
 /// * `str.partition`
+/// * `str.removeprefix`
+/// * `str.removesuffix`
 /// * `str.replace`
 /// * `str.rfind`
+/// * `str.rindex`
+/// * `str.rjust`
+/// * `str.rpartition`
+/// * `str.rsplit`
 /// * `str.rstrip`
 /// * `str.split`
 /// * `str.splitlines`
 /// * `str.startswith`
 /// * `str.strip`
+/// * `str.swapcase`
 /// * `str.title`
 /// * `str.translate`
 /// * `str.upper`
+/// * `str.zfill`
 #[cfg_attr(docsrs, doc(cfg(feature = "pycompat")))]
 pub fn unknown_method_callback(
     _state: &State,
@@ -382,6 +399,7 @@ fn string_methods(value: &Value, method: &str, args: &[Value]) -> Result<Value, 
             }
             // Handle simple {} placeholders
             else if result.contains("{}") {
+                // SAFETY: regex pattern is a valid constant
                 if Regex::new(r"\{[a-zA-Z_]\w*\}").unwrap().is_match(&result) {
                     return Err(Error::new(
                         ErrorKind::InvalidOperation,
@@ -393,6 +411,7 @@ fn string_methods(value: &Value, method: &str, args: &[Value]) -> Result<Value, 
                 }
             }
             // Handle named placeholders {name}
+            // SAFETY: regex pattern is a valid constant
             else if Regex::new(r"\{[a-zA-Z_]\w*\}").unwrap().is_match(&result) {
                 if args.len() != 1 || args[0].kind() != ValueKind::Map {
                     return Err(Error::new(
@@ -427,6 +446,225 @@ fn string_methods(value: &Value, method: &str, args: &[Value]) -> Result<Value, 
                 vec![Value::from(this), Value::from(""), Value::from("")]
             };
             Ok(Value::from(tuple))
+        }
+        "casefold" => {
+            let () = from_args(args)?;
+            // Python's casefold is more aggressive than lowercase for case-insensitive matching
+            // For most use cases, to_lowercase() is close enough
+            Ok(Value::from(s.to_lowercase()))
+        }
+        "center" => {
+            let (width, fillchar): (usize, Option<&str>) = from_args(args)?;
+            let fillchar = fillchar.unwrap_or(" ");
+            if fillchar.chars().count() != 1 {
+                return Err(Error::new(
+                    ErrorKind::InvalidOperation,
+                    "The fill character must be exactly one character long".to_string(),
+                ));
+            }
+            // SAFETY: fillchar.chars().count() == 1, so next() will return Some
+            let fillchar = fillchar.chars().next().unwrap();
+            let s_len = s.chars().count();
+            if s_len >= width {
+                Ok(Value::from(s))
+            } else {
+                let total_padding = width - s_len;
+                let left_padding = total_padding / 2;
+                let right_padding = total_padding - left_padding;
+                let result = format!(
+                    "{}{}{}",
+                    fillchar.to_string().repeat(left_padding),
+                    s,
+                    fillchar.to_string().repeat(right_padding)
+                );
+                Ok(Value::from(result))
+            }
+        }
+        "expandtabs" => {
+            let (tabsize,): (Option<usize>,) = from_args(args)?;
+            let tabsize = tabsize.unwrap_or(8);
+            let mut result = String::new();
+            let mut col = 0;
+            for c in s.chars() {
+                if c == '\t' {
+                    let spaces = tabsize - (col % tabsize);
+                    result.push_str(&" ".repeat(spaces));
+                    col += spaces;
+                } else if c == '\n' || c == '\r' {
+                    result.push(c);
+                    col = 0;
+                } else {
+                    result.push(c);
+                    col += 1;
+                }
+            }
+            Ok(Value::from(result))
+        }
+        "isdecimal" => {
+            let () = from_args(args)?;
+            // In Python, isdecimal is stricter than isdigit
+            // It only accepts decimal number characters (0-9)
+            Ok(Value::from(
+                !s.is_empty() && s.chars().all(|x| x.is_ascii_digit()),
+            ))
+        }
+        "isprintable" => {
+            let () = from_args(args)?;
+            // A character is printable if it's not a control character
+            Ok(Value::from(s.chars().all(|c| !c.is_control() || c == '\t')))
+        }
+        "istitle" => {
+            let () = from_args(args)?;
+            if s.is_empty() {
+                return Ok(Value::from(false));
+            }
+            let mut prev_is_cased = false;
+            let mut has_cased = false;
+            for c in s.chars() {
+                if c.is_uppercase() {
+                    if prev_is_cased {
+                        return Ok(Value::from(false));
+                    }
+                    prev_is_cased = true;
+                    has_cased = true;
+                } else if c.is_lowercase() {
+                    if !prev_is_cased {
+                        return Ok(Value::from(false));
+                    }
+                    has_cased = true;
+                } else {
+                    prev_is_cased = false;
+                }
+            }
+            Ok(Value::from(has_cased))
+        }
+        "ljust" => {
+            let (width, fillchar): (usize, Option<&str>) = from_args(args)?;
+            let fillchar = fillchar.unwrap_or(" ");
+            if fillchar.chars().count() != 1 {
+                return Err(Error::new(
+                    ErrorKind::InvalidOperation,
+                    "The fill character must be exactly one character long".to_string(),
+                ));
+            }
+            // SAFETY: fillchar.chars().count() == 1, so next() will return Some
+            let fillchar = fillchar.chars().next().unwrap();
+            let s_len = s.chars().count();
+            if s_len >= width {
+                Ok(Value::from(s))
+            } else {
+                let result = format!("{}{}", s, fillchar.to_string().repeat(width - s_len));
+                Ok(Value::from(result))
+            }
+        }
+        "removeprefix" => {
+            let (prefix,): (&str,) = from_args(args)?;
+            Ok(Value::from(s.strip_prefix(prefix).unwrap_or(s)))
+        }
+        "rindex" => {
+            let (sub, start, end): (&str, Option<i64>, Option<i64>) = from_args(args)?;
+            let len = s.len() as i64;
+            let start_idx = start.unwrap_or(0);
+            let start_idx = if start_idx < 0 {
+                (len + start_idx).max(0) as usize
+            } else {
+                start_idx.min(len) as usize
+            };
+            let end_idx = end.unwrap_or(len);
+            let end_idx = if end_idx < 0 {
+                (len + end_idx).max(0) as usize
+            } else {
+                end_idx.min(len) as usize
+            };
+            if let Some(pos) = s[start_idx..end_idx].rfind(sub) {
+                Ok(Value::from((start_idx + pos) as i64))
+            } else {
+                Err(Error::new(
+                    ErrorKind::InvalidOperation,
+                    format!("substring '{sub}' not found"),
+                ))
+            }
+        }
+        "rjust" => {
+            let (width, fillchar): (usize, Option<&str>) = from_args(args)?;
+            let fillchar = fillchar.unwrap_or(" ");
+            if fillchar.chars().count() != 1 {
+                return Err(Error::new(
+                    ErrorKind::InvalidOperation,
+                    "The fill character must be exactly one character long".to_string(),
+                ));
+            }
+            // SAFETY: fillchar.chars().count() == 1, so next() will return Some
+            let fillchar = fillchar.chars().next().unwrap();
+            let s_len = s.chars().count();
+            if s_len >= width {
+                Ok(Value::from(s))
+            } else {
+                let result = format!("{}{}", fillchar.to_string().repeat(width - s_len), s);
+                Ok(Value::from(result))
+            }
+        }
+        "rpartition" => {
+            let (sep,): (&str,) = from_args(args)?;
+            let this = s;
+            let tuple = if let Some((head, tail)) = this.rsplit_once(sep) {
+                vec![Value::from(head), Value::from(sep), Value::from(tail)]
+            } else {
+                vec![Value::from(""), Value::from(""), Value::from(this)]
+            };
+            Ok(Value::from(tuple))
+        }
+        "rsplit" => {
+            let (sep, maxsplits): (Option<&str>, Option<i32>) = from_args(args)?;
+            let maxsplits = maxsplits.unwrap_or(-1);
+
+            let parts: Vec<Value> = if let Some(sep) = sep {
+                if maxsplits < 0 {
+                    // No limit - same as split() (returns left-to-right order)
+                    s.split(sep).map(Value::from).collect()
+                } else {
+                    // Use rsplitn (splits from right) and reverse to get left-to-right order
+                    let mut parts: Vec<Value> = s
+                        .rsplitn((maxsplits + 1) as usize, sep)
+                        .map(Value::from)
+                        .collect();
+                    parts.reverse();
+                    parts
+                }
+            } else {
+                // Split on whitespace
+                if maxsplits < 0 {
+                    s.split_whitespace().map(Value::from).collect()
+                } else {
+                    let parts: Vec<&str> = s.split_whitespace().collect();
+                    if parts.len() <= maxsplits as usize {
+                        parts.into_iter().map(Value::from).collect()
+                    } else {
+                        let split_point = parts.len() - maxsplits as usize;
+                        let mut result: Vec<Value> =
+                            vec![Value::from(parts[..split_point].join(" "))];
+                        result.extend(parts[split_point..].iter().map(|&p| Value::from(p)));
+                        result
+                    }
+                }
+            };
+            Ok(Value::from_object(MutableVec::from(parts)))
+        }
+        "swapcase" => {
+            let () = from_args(args)?;
+            let result: String = s
+                .chars()
+                .map(|c| {
+                    if c.is_lowercase() {
+                        c.to_uppercase().collect::<String>()
+                    } else if c.is_uppercase() {
+                        c.to_lowercase().collect::<String>()
+                    } else {
+                        c.to_string()
+                    }
+                })
+                .collect();
+            Ok(Value::from(result))
         }
         _ => Err(Error::from(ErrorKind::UnknownMethod)),
     }
