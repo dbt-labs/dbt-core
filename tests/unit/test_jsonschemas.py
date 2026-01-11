@@ -91,3 +91,79 @@ class TestValidateJsonSchema:
 
         jsonschema_validate(resources_schema(), model_bigquery_alias_config_contents, "test.yml")
         assert active_deprecations == {"custom-key-in-config-deprecation": 2}
+
+
+class TestSourceBigQueryAliases:
+
+    @pytest.fixture(scope="class")
+    def source_with_dataset(self):
+        return {
+            "sources": [
+                {
+                    "name": "my_source",
+                    "dataset": "my_dataset",
+                    "tables": [{"name": "my_table"}]
+                }
+            ]
+        }
+
+    @pytest.fixture(scope="class")
+    def source_with_project(self):
+        return {
+            "sources": [
+                {
+                    "name": "my_source",
+                    "project": "my-gcp-project",
+                    "tables": [{"name": "my_table"}]
+                }
+            ]
+        }
+
+    @pytest.fixture(scope="class")
+    def source_with_both_aliases(self):
+        return {
+            "sources": [
+                {
+                    "name": "my_source",
+                    "project": "my-gcp-project",
+                    "dataset": "my_dataset",
+                    "tables": [{"name": "my_table"}]
+                }
+            ]
+        }
+
+    def test_bigquery_source_dataset_no_warning(self, source_with_dataset):
+        reset_deprecations()
+
+        safe_set_invocation_context()
+        get_invocation_context().uses_adapter("bigquery")
+
+        jsonschema_validate(resources_schema(), source_with_dataset, "test.yml")
+        assert active_deprecations == {}
+
+    def test_bigquery_source_project_no_warning(self, source_with_project):
+        reset_deprecations()
+
+        safe_set_invocation_context()
+        get_invocation_context().uses_adapter("bigquery")
+
+        jsonschema_validate(resources_schema(), source_with_project, "test.yml")
+        assert active_deprecations == {}
+
+    def test_bigquery_source_both_aliases_no_warning(self, source_with_both_aliases):
+        reset_deprecations()
+
+        safe_set_invocation_context()
+        get_invocation_context().uses_adapter("bigquery")
+
+        jsonschema_validate(resources_schema(), source_with_both_aliases, "test.yml")
+        assert active_deprecations == {}
+
+    def test_snowflake_source_dataset_warns(self, source_with_dataset):
+        reset_deprecations()
+
+        safe_set_invocation_context()
+        get_invocation_context().uses_adapter("snowflake")
+
+        jsonschema_validate(resources_schema(), source_with_dataset, "test.yml")
+        assert active_deprecations == {"custom-key-in-object-deprecation": 1}
