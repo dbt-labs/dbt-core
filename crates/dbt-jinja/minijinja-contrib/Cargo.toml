@@ -35,6 +35,7 @@ chrono-tz = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 fancy-regex = { workspace = true }
 iana-time-zone = { workspace = true }
+indexmap = { workspace = true }
 minijinja = { workspace = true }
 rand = { version = "0.8.5", optional = true, default-features = false, features = [
   "std",

@@ -6,7 +6,12 @@
 //! pattern-oriented usage consistent with MiniJinja's function/value approach.
 
 use fancy_regex::{Captures, Expander, Regex}; // like python regex, fancy_regex supports lookadheds/lookbehinds
-use minijinja::{value::Object, Error, ErrorKind, Value};
+use indexmap::IndexMap;
+use minijinja::{
+    arg_utils::ArgsIter,
+    value::{Object, ValueMap},
+    Error, ErrorKind, Value,
+};
 use std::{collections::BTreeMap, fmt, iter, sync::Arc};
 
 /// Create a namespace with `re`-like functions for pattern matching.
@@ -118,15 +123,20 @@ fn re_match(args: &[Value]) -> Result<Value, Error> {
     })?;
 
     if let Ok(Some(captures)) = start_anchored.captures(text) {
-        let groups: Vec<Value> = captures
+        let groups: Vec<(Value, Option<Span>)> = captures
             .iter()
-            .map(|m| Value::from(m.map(|m| m.as_str()).unwrap_or_default()))
+            .map(|m| {
+                m.map(|m| (Value::from(m.as_str()), Some((m.start(), m.end()))))
+                    .unwrap_or((Value::NONE, None))
+            })
             .collect();
-        let span: Option<(usize, usize)> = captures
-            .iter()
-            .next()
-            .and_then(|m| m.map(|m| (m.start(), m.end())));
-        let capture = Capture::new(groups, span);
+        let names = start_anchored.capture_names();
+        let named_groups: IndexMap<String, usize> = IndexMap::from_iter(
+            names
+                .enumerate()
+                .filter_map(|(idx, name)| name.map(|name| (name.to_string(), idx))),
+        );
+        let capture = Capture::new(groups, named_groups);
         Ok(Value::from_object(capture))
     } else {
         Ok(Value::NONE)
@@ -146,15 +156,20 @@ fn re_search(args: &[Value]) -> Result<Value, Error> {
     let (regex, text) = get_or_compile_regex_and_text(&args[..2])?;
 
     if let Ok(Some(captures)) = regex.captures(text) {
-        let groups: Vec<Value> = captures
+        let groups: Vec<(Value, Option<Span>)> = captures
             .iter()
-            .map(|m| Value::from(m.map(|m| m.as_str()).unwrap_or_default()))
+            .map(|m| {
+                m.map(|m| (Value::from(m.as_str()), Some((m.start(), m.end()))))
+                    .unwrap_or((Value::NONE, None))
+            })
             .collect();
-        let span = captures
-            .iter()
-            .next()
-            .and_then(|m| m.map(|m| (m.start(), m.end())));
-        let capture = Capture::new(groups, span);
+        let names = regex.capture_names();
+        let named_groups: IndexMap<String, usize> = IndexMap::from_iter(
+            names
+                .enumerate()
+                .filter_map(|(idx, name)| name.map(|name| (name.to_string(), idx))),
+        );
+        let capture = Capture::new(groups, named_groups);
         Ok(Value::from_object(capture))
     } else {
         Ok(Value::NONE)
@@ -185,36 +200,41 @@ fn re_findall(args: &[Value]) -> Result<Value, Error> {
     }
 
     let (regex, text) = get_or_compile_regex_and_text(&args[..2])?;
-    let matches = regex
-        .captures_iter(text)
-        .map(|captures| {
-            let captures =
-                captures.map_err(|err| Error::new(ErrorKind::RegexError, err.to_string()))?;
-            Ok(match captures.len() {
-                1 => {
-                    let full = captures.get(0).unwrap().as_str();
-                    Value::from(full)
-                }
-                2 => {
-                    let capture = captures.get(1).unwrap().as_str();
-                    Value::from(capture)
-                }
-                _ => {
-                    let groups: Vec<Value> = captures
-                        .iter()
-                        .skip(1)
-                        .map(|m| Value::from(m.map(|m| m.as_str()).unwrap_or_default()))
-                        .collect();
-                    let span = captures
-                        .iter()
-                        .nth(1)
-                        .and_then(|m| m.map(|m| (m.start(), m.end())));
-                    let capture = Capture::new(groups, span);
-                    Value::from_object(capture)
-                }
+    let matches =
+        regex
+            .captures_iter(text)
+            .map(|captures| {
+                let captures =
+                    captures.map_err(|err| Error::new(ErrorKind::RegexError, err.to_string()))?;
+                Ok(match captures.len() {
+                    1 => {
+                        let full = captures.get(0).unwrap().as_str();
+                        Value::from(full)
+                    }
+                    2 => {
+                        let capture = captures.get(1).unwrap().as_str();
+                        Value::from(capture)
+                    }
+                    _ => {
+                        let groups: Vec<(Value, Option<Span>)> = captures
+                            .iter()
+                            .skip(1)
+                            .map(|m| {
+                                m.map(|m| (Value::from(m.as_str()), Some((m.start(), m.end()))))
+                                    .unwrap_or((Value::NONE, None))
+                            })
+                            .collect();
+                        let names = regex.capture_names();
+                        let named_groups: IndexMap<String, usize> =
+                            IndexMap::from_iter(names.enumerate().skip(1).filter_map(
+                                |(idx, name)| name.map(|name| (name.to_string(), idx)),
+                            ));
+                        let capture = Capture::new(groups, named_groups);
+                        Value::from_object(capture)
+                    }
+                })
             })
-        })
-        .collect::<Result<Vec<Value>, Error>>()?;
+            .collect::<Result<Vec<Value>, Error>>()?;
 
     Ok(Value::from(matches))
 }
@@ -378,15 +398,40 @@ fn match_obj_to_list(re: &Regex, text: &str, start: usize, end: usize) -> Value 
         Value::from(&text[start..end])
     }
 }
+
+type Span = (usize, usize);
+
 #[derive(Debug, Clone)]
 pub struct Capture {
-    groups: Vec<Value>,
-    span: Option<(usize, usize)>,
+    /// List of groups and spans
+    groups: Vec<(Value, Option<Span>)>,
+    /// Map of group names to their indices in the group vector
+    named_groups: IndexMap<String, usize>,
 }
 
 impl Capture {
-    pub fn new(groups: Vec<Value>, span: Option<(usize, usize)>) -> Self {
-        Self { groups, span }
+    pub fn new(groups: Vec<(Value, Option<Span>)>, named_groups: IndexMap<String, usize>) -> Self {
+        Self {
+            groups,
+            named_groups,
+        }
+    }
+
+    /// Helper: parse the [group] argument, which could be an index or the name of a group
+    fn get_group_idx_from_value(self: &std::sync::Arc<Self>, arg: &Value) -> Result<usize, Error> {
+        if let Some(idx) = arg.as_usize() {
+            Ok(idx)
+        } else if let Some(group) = arg.as_str() {
+            self.named_groups
+                .get(group)
+                .copied()
+                .ok_or_else(|| Error::new(ErrorKind::InvalidArgument, "no such group"))
+        } else {
+            Err(Error::new(
+                ErrorKind::InvalidArgument,
+                "group argument must be an int or string",
+            ))
+        }
     }
 }
 
@@ -398,23 +443,172 @@ impl Object for Capture {
         args: &[Value],
         _listeners: &[std::rc::Rc<dyn minijinja::listener::RenderingEventListener>],
     ) -> Result<Value, Error> {
-        if method == "group" {
-            let idx = if args.is_empty() {
-                0
-            } else {
-                args[0].as_i64().unwrap_or(0) as usize
-            };
-
-            if idx < self.groups.len() {
-                Ok(self.groups[idx].clone())
-            } else {
-                Ok(Value::from(""))
+        match method {
+            // Match.expand(template)
+            "expand" => {
+                // https://docs.python.org/3/library/re.html#re.Match.expand
+                todo!("'expand' is not yet implemented")
             }
-        } else {
-            Err(Error::new(
+            // Match.group([group1, ...])
+            "group" => {
+                if args.len() > 1 {
+                    let mut groups: Vec<Value> = Vec::with_capacity(args.len());
+
+                    for arg in args {
+                        let idx = self.get_group_idx_from_value(arg)?;
+                        groups.push(self.groups[idx].0.clone());
+                    }
+
+                    Ok(Value::from_tuple(groups))
+                } else {
+                    let idx = if args.is_empty() {
+                        0
+                    } else {
+                        self.get_group_idx_from_value(&args[0])?
+                    };
+
+                    if idx < self.groups.len() {
+                        Ok(self.groups[idx].0.clone())
+                    } else {
+                        Err(Error::new(ErrorKind::InvalidArgument, "no such group"))
+                    }
+                }
+            }
+            // Match.groups(default=None)
+            "groups" => {
+                let iter = ArgsIter::new(method, &[], args);
+                let default = iter
+                    .next_kwarg::<Option<Value>>("default")?
+                    .unwrap_or(Value::NONE);
+                let groups = Vec::from_iter(self.groups.iter().skip(1).map(|(group, _)| {
+                    if group.is_none() {
+                        default.clone()
+                    } else {
+                        group.clone()
+                    }
+                }));
+                Ok(Value::from_tuple(groups))
+            }
+            // Match.groupdict(default=None)
+            "groupdict" => {
+                let iter = ArgsIter::new(method, &[], args);
+                let default = iter
+                    .next_kwarg::<Option<Value>>("default")?
+                    .unwrap_or(Value::NONE);
+                let named_groups =
+                    ValueMap::from_iter(self.named_groups.iter().map(|(name, idx)| {
+                        let group = &self.groups[*idx].0;
+                        if group.is_none() {
+                            (Value::from(name), default.clone())
+                        } else {
+                            (Value::from(name), group.clone())
+                        }
+                    }));
+                Ok(Value::from(named_groups))
+            }
+            // Match.start([group])
+            "start" => {
+                let iter = ArgsIter::new(method, &["group"], args);
+                let idx = if let Ok(arg) = iter.next_arg() {
+                    self.get_group_idx_from_value(arg)?
+                } else {
+                    0
+                };
+                iter.finish()?;
+
+                if idx < self.groups.len() {
+                    if let Some((start, _)) = self.groups[idx].1 {
+                        Ok(Value::from(start))
+                    } else {
+                        Ok(Value::from(-1))
+                    }
+                } else {
+                    Err(Error::new(ErrorKind::InvalidArgument, "no such group"))
+                }
+            }
+            // Match.end([group])
+            "end" => {
+                let iter = ArgsIter::new(method, &["group"], args);
+                let idx = if let Ok(arg) = iter.next_arg() {
+                    self.get_group_idx_from_value(arg)?
+                } else {
+                    0
+                };
+                iter.finish()?;
+
+                if idx < self.groups.len() {
+                    if let Some((_, end)) = self.groups[idx].1 {
+                        Ok(Value::from(end))
+                    } else {
+                        Ok(Value::from(-1))
+                    }
+                } else {
+                    Err(Error::new(ErrorKind::InvalidArgument, "no such group"))
+                }
+            }
+            // Match.span([group])
+            "span" => {
+                let iter = ArgsIter::new(method, &["group"], args);
+                let idx = if let Ok(arg) = iter.next_arg() {
+                    self.get_group_idx_from_value(arg)?
+                } else {
+                    0
+                };
+                iter.finish()?;
+
+                if idx < self.groups.len() {
+                    if let Some((start, end)) = self.groups[idx].1 {
+                        Ok(Value::from_tuple(vec![
+                            Value::from(start),
+                            Value::from(end),
+                        ]))
+                    } else {
+                        Ok(Value::from_tuple(vec![Value::from(-1), Value::from(-1)]))
+                    }
+                } else {
+                    Err(Error::new(ErrorKind::InvalidArgument, "no such group"))
+                }
+            }
+            _ => Err(Error::new(
                 ErrorKind::InvalidOperation,
-                format!("Method '{method}' not found"),
-            ))
+                format!("Method '{method}' not found!"),
+            )),
+        }
+    }
+
+    fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
+        match key.as_str() {
+            // Match.pos
+            Some("pos") => {
+                // https://docs.python.org/3/library/re.html#re.Match.pos
+                todo!("'pos' is not yet implemented")
+            }
+            // Match.endpos
+            Some("endpos") => {
+                // https://docs.python.org/3/library/re.html#re.Match.endpos
+                todo!("'endpos' is not yet implemented")
+            }
+            // Match.lastindex
+            Some("lastindex") => {
+                // https://docs.python.org/3/library/re.html#re.Match.lastindex
+                todo!("'lastindex' is not yet implemented")
+            }
+            // Match.lastgroup
+            Some("lastgroup") => {
+                // https://docs.python.org/3/library/re.html#re.Match.lastgroup
+                todo!("'lastgroup' is not yet implemented")
+            }
+            // Match.re
+            Some("re") => {
+                // https://docs.python.org/3/library/re.html#re.Match.re
+                todo!("'re' is not yet implemented")
+            }
+            // Match.string
+            Some("string") => {
+                // https://docs.python.org/3/library/re.html#re.Match.string
+                todo!("'string' is not yet implemented")
+            }
+            _ => None,
         }
     }
 
@@ -427,8 +621,8 @@ impl Object for Capture {
         Self: Sized + 'static,
     {
         write!(f, "<re.Match object; ")?;
-        if let Some(g) = self.groups.first() {
-            if let Some((start, end)) = self.span {
+        if let Some((g, span)) = self.groups.first() {
+            if let Some((start, end)) = span {
                 write!(f, "span = ({start}, {end}), ")?;
             }
             // TODO: escape quotes in g
