@@ -250,8 +250,11 @@ pub fn run_model_event(
         // MD5 hash of the model's contents
         hashed_contents,
         // the language used to write the model (ex. sql, python)
-        // TODO: if other languages are supported, this will need to change
-        language: "sql".to_string(),
+        language: node
+            .common()
+            .language
+            .clone()
+            .unwrap_or_else(|| "sql".to_string()),
         // whether or not the model is in a group
         has_group,
         // whether or not the model is contract enforced
