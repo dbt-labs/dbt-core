@@ -63,6 +63,7 @@ pub mod databricks;
 pub mod redshift;
 pub mod salesforce;
 pub mod snowflake;
+pub mod spark;
 
 // REPL for ADBC drivers
 #[cfg(feature = "repl")]
@@ -89,6 +90,7 @@ pub const DATABRICKS_DRIVER_VERSION: &str = "0.21.0+dbt0.21.6";
 pub const REDSHIFT_DRIVER_VERSION: &str = "0.18.0+dbt0.18.4";
 pub const DUCKDB_DRIVER_VERSION: &str = "0.21.0+dbt0.0.3";
 pub const SALESFORCE_DRIVER_VERSION: &str = "0.21.0+dbt0.21.1";
+pub const SPARK_DRIVER_VERSION: &str = "0.21.0+dbt0.0.1";
 
 pub use install::pre_install_all_drivers;
 pub use install::pre_install_driver;

@@ -122,7 +122,7 @@ fn _render_ident_in_quotes(
 pub const fn quote_char(backend: Backend) -> char {
     use Backend::*;
     match backend {
-        BigQuery | Databricks | DatabricksODBC => '`',
+        BigQuery | Databricks | DatabricksODBC | Spark => '`',
         Snowflake => '"',
         Redshift | RedshiftODBC | Postgres | Salesforce | DuckDB => '"',
         Generic { .. } => '"',
@@ -133,7 +133,7 @@ pub const fn quote_char(backend: Backend) -> char {
 pub const fn canonical_quote(backend: Backend) -> QuotingStyle {
     use Backend::*;
     match backend {
-        BigQuery | Databricks | DatabricksODBC => QuotingStyle::Backtick,
+        BigQuery | Databricks | DatabricksODBC | Spark => QuotingStyle::Backtick,
         Snowflake | Redshift | RedshiftODBC | Postgres | Salesforce | DuckDB => {
             QuotingStyle::Double
         }
@@ -157,6 +157,7 @@ pub fn is_valid_ident_char(c: char, backend: Backend) -> bool {
         Postgres
         | Databricks
         | DatabricksODBC
+        | Spark
         | Redshift
         | RedshiftODBC
         | Salesforce

@@ -199,7 +199,7 @@ pub fn default_time_unit(backend: Backend) -> TimeUnit {
     use Backend::*;
     use TimeUnit::*;
     match backend {
-        Snowflake | Databricks | DatabricksODBC => Nanosecond,
+        Snowflake | Databricks | DatabricksODBC | Spark => Nanosecond,
         BigQuery | Redshift | RedshiftODBC => Microsecond,
         Postgres | Salesforce | DuckDB => Microsecond,
         Generic { .. } => Microsecond, // a reasonable default
@@ -677,7 +677,7 @@ impl SqlType {
             (_, Struct(Some(fields))) => {
                 match backend {
                     Snowflake => write!(out, "OBJECT(")?,
-                    BigQuery | Databricks | DatabricksODBC => write!(out, "STRUCT<")?,
+                    BigQuery | Databricks | DatabricksODBC | Spark => write!(out, "STRUCT<")?,
                     Postgres | Salesforce | DuckDB => write!(out, "(")?,
                     // Redshift doesn't support object/struct types
                     Redshift | RedshiftODBC => write!(out, "(")?,
@@ -715,7 +715,7 @@ impl SqlType {
                 }
                 match backend {
                     Snowflake => write!(out, ")"),
-                    BigQuery | Databricks | DatabricksODBC => write!(out, ">"),
+                    BigQuery | Databricks | DatabricksODBC | Spark => write!(out, ">"),
                     Postgres | Salesforce | DuckDB => write!(out, ")"),
                     Redshift | RedshiftODBC => write!(out, ")"),
                     Generic { .. } => write!(out, ">"),
@@ -1079,7 +1079,7 @@ impl SqlType {
 
             // Databricks {{{
             // https://docs.databricks.com/aws/en/sql/language-manual/data-types/decimal-type
-            (Databricks | DatabricksODBC, Numeric(None) | BigNumeric(None)) => {
+            (Databricks | DatabricksODBC | Spark, Numeric(None) | BigNumeric(None)) => {
                 DataType::Decimal128(10, 0)
             }
             // }}}
@@ -1158,7 +1158,7 @@ impl SqlType {
                     // Databricks doesn't have the TIME type, so we use the precision of its
                     // TIMESTAMP type as the default here, which is 6 (microseconds).
                     // https://docs.databricks.com/aws/en/sql/language-manual/data-types/timestamp-type
-                    (Databricks | DatabricksODBC, None) => TimeUnit::Microsecond,
+                    (Databricks | DatabricksODBC | Spark, None) => TimeUnit::Microsecond,
                     // TIME's default precision on Redshift is assumed to matche PostgreSQL's but
                     // nothing is mentioned in the docs page
                     // https://docs.aws.amazon.com/redshift/latest/dg/r_Date_and_time_literals.html#r_Date_and_time_literals-times
@@ -1208,7 +1208,7 @@ impl SqlType {
                 use IntervalUnit::*;
                 let interval_unit = match backend {
                     Snowflake => MonthDayNano, // XXX: intervals types are not supported on Snowflake, only value literals
-                    Databricks | DatabricksODBC | Redshift | RedshiftODBC => {
+                    Databricks | DatabricksODBC | Spark | Redshift | RedshiftODBC => {
                         // ## Databricks
                         //
                         //     INTERVAL { yearMonthIntervalQualifier | dayTimeIntervalQualifier }
@@ -1425,6 +1425,7 @@ const BIGQUERY_KEYS: [&str; 2] = ["BIGQUERY:type", "type_text"];
 const DATABRICKS_KEYS: [&str; 2] = ["DBX:type", "type_text"];
 const REDSHIFT_KEYS: [&str; 2] = ["REDSHIFT:type", "type_text"];
 const DUCKDB_KEYS: [&str; 2] = ["DUCKDB:type", "type_text"];
+const SPARK_KEYS: [&str; 2] = ["SPARK:type", "type_text"];
 const GENERIC_KEYS: [&str; 2] = ["SQL:type", "type_text"];
 
 fn metadata_type_candidate_keys(backend: Backend) -> &'static [&'static str] {
@@ -1433,6 +1434,7 @@ fn metadata_type_candidate_keys(backend: Backend) -> &'static [&'static str] {
         Backend::Snowflake => &SNOWFLAKE_KEYS,
         Backend::BigQuery => &BIGQUERY_KEYS,
         Backend::Databricks => &DATABRICKS_KEYS,
+        Backend::Spark => &SPARK_KEYS,
         Backend::Redshift | Backend::RedshiftODBC => &REDSHIFT_KEYS,
         Backend::DatabricksODBC => &DATABRICKS_KEYS,
         Backend::DuckDB => &DUCKDB_KEYS,

@@ -20,6 +20,8 @@ static INSTALLABLE_DRIVERS: &[Backend; 7] = &[
     Backend::Redshift,
     Backend::DuckDB,
     Backend::Salesforce,
+    // TODO: work in progress
+    // Backend::Spark,
 ];
 
 #[derive(Debug)]
@@ -281,6 +283,8 @@ pub fn driver_parameters(
         Backend::Postgres => ("postgresql", POSTGRES_DRIVER_VERSION),
         Backend::Databricks => ("databricks", DATABRICKS_DRIVER_VERSION),
         Backend::Redshift => ("redshift", REDSHIFT_DRIVER_VERSION),
+        // TODO: work in progress
+        Backend::Spark => ("spark", SPARK_DRIVER_VERSION),
         Backend::Salesforce => ("salesforce", SALESFORCE_DRIVER_VERSION),
         Backend::DuckDB => ("duckdb", DUCKDB_DRIVER_VERSION),
         Backend::DatabricksODBC | Backend::RedshiftODBC | Backend::Generic { .. } => {
@@ -631,6 +635,8 @@ mod tests {
             ("redshift", REDSHIFT_DRIVER_VERSION),
             ("duckdb", DUCKDB_DRIVER_VERSION),
             ("salesforce", SALESFORCE_DRIVER_VERSION),
+            // TODO: spark
+            // ("spark", SPARK_DRIVER_VERSION),
         ];
         debug_assert!(
             backend_and_versions.len() == INSTALLABLE_DRIVERS.len(),

@@ -14,6 +14,7 @@ mod postgres;
 mod redshift;
 mod salesforce;
 mod snowflake;
+mod spark;
 
 pub use config::AdapterConfig;
 
@@ -35,6 +36,7 @@ pub fn auth_for_backend(backend: Backend) -> Box<dyn Auth> {
         Backend::Databricks | Backend::DatabricksODBC => Box::new(databricks::DatabricksAuth {}),
         Backend::Redshift | Backend::RedshiftODBC => Box::new(redshift::RedshiftAuth {}),
         Backend::Salesforce => Box::new(salesforce::SalesforceAuth {}),
+        Backend::Spark => Box::new(spark::SparkAuth {}),
         Backend::DuckDB => unimplemented!("duckdb backend authentication"),
         Backend::Generic { .. } => unimplemented!("generic backend authentication"),
     }

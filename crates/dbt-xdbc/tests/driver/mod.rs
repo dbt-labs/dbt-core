@@ -149,6 +149,7 @@ mod tests {
                     .with_password(token);
                 Ok(builder)
             }
+            Backend::Spark => todo!("Spark is WIP"),
             Backend::Salesforce => {
                 let mut builder = database::Builder::new(backend);
                 builder.with_named_option(salesforce::AUTH_TYPE, salesforce::auth_type::JWT)?;
@@ -311,6 +312,12 @@ mod tests {
     #[test]
     fn statement_execute_duckdb() -> Result<()> {
         execute_statement(Backend::DuckDB)
+    }
+
+    #[ignore = "Spark is WIP"]
+    #[test]
+    fn statement_execute_spark() -> Result<()> {
+        execute_statement(Backend::Spark)
     }
 
     #[cfg(feature = "odbc")]

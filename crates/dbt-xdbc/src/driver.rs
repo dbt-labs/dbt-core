@@ -45,6 +45,8 @@ pub enum Backend {
     Redshift,
     /// Salesforce driver implementation (ADBC).
     Salesforce,
+    /// Spark driver implementation (ADBC).
+    Spark,
     /// DuckDB driver implementation (ADBC).
     DuckDB,
     /// Databricks driver implementation (ODBC).
@@ -79,6 +81,7 @@ impl Display for Backend {
             Backend::DatabricksODBC => write!(f, "Databricks"),
             Backend::RedshiftODBC => write!(f, "Redshift"),
             Backend::Salesforce => write!(f, "Salesforce"),
+            Backend::Spark => write!(f, "Spark"),
             Backend::Generic { library_name, .. } => write!(f, "Generic({library_name})"),
         }
     }
@@ -92,6 +95,7 @@ impl Backend {
             Backend::Postgres => Some("adbc_driver_postgresql"),
             Backend::Databricks => Some("adbc_driver_databricks"),
             Backend::Salesforce => Some("adbc_driver_salesforce"),
+            Backend::Spark => Some("adbc_driver_spark"),
             Backend::Redshift => Some("adbc_driver_redshift"),
             Backend::DuckDB => Some("duckdb"),
             Backend::DatabricksODBC | Backend::RedshiftODBC => None, // these use ODBC
@@ -119,6 +123,7 @@ impl Backend {
             | Backend::Databricks
             | Backend::Redshift
             | Backend::Salesforce
+            | Backend::Spark
             | Backend::DuckDB
             | Backend::Generic { .. } => FFIProtocol::Adbc,
             Backend::DatabricksODBC | Backend::RedshiftODBC => FFIProtocol::Odbc,
@@ -318,6 +323,7 @@ impl AdbcDriver {
             | Backend::Postgres
             | Backend::Databricks
             | Backend::Redshift
+            | Backend::Spark
             | Backend::DuckDB
             | Backend::Salesforce => {
                 debug_assert!(backend.ffi_protocol() == FFIProtocol::Adbc);
@@ -510,6 +516,7 @@ mod tests {
         try_load_with_builder(Backend::Databricks, AdbcVersion::V100)?;
         try_load_with_builder(Backend::DuckDB, AdbcVersion::V100)?;
         try_load_with_builder(Backend::Salesforce, AdbcVersion::V100)?;
+        try_load_with_builder(Backend::Spark, AdbcVersion::V100)?;
         Ok(())
     }
 
@@ -522,6 +529,7 @@ mod tests {
         try_load_with_builder(Backend::Databricks, AdbcVersion::V110)?;
         try_load_with_builder(Backend::DuckDB, AdbcVersion::V110)?;
         try_load_with_builder(Backend::Salesforce, AdbcVersion::V110)?;
+        try_load_with_builder(Backend::Spark, AdbcVersion::V110)?;
         Ok(())
     }
 
@@ -535,6 +543,7 @@ mod tests {
             Backend::Databricks,
             Backend::DuckDB,
             Backend::Salesforce,
+            Backend::Spark,
         ]
         .iter()
         .copied()
