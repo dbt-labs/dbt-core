@@ -258,7 +258,7 @@ class TestCheckForcingConcurrentBatches:
 
     @pytest.fixture
     def event_catcher(self) -> EventCatcher:
-        return EventCatcher(InvalidConcurrentBatchesConfig)  # type: ignore
+        return EventCatcher(InvalidConcurrentBatchesConfig)
 
     @pytest.mark.parametrize(
         "adapter_support,concurrent_batches_config,expect_warning",

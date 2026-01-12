@@ -6,7 +6,18 @@ import time
 from copy import deepcopy
 from dataclasses import asdict
 from datetime import datetime, timezone
-from typing import AbstractSet, Any, Dict, Iterable, List, Optional, Set, Tuple, Type
+from typing import (
+    AbstractSet,
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    Type,
+)
 
 from dbt import tracking, utils
 from dbt.adapters.base import BaseAdapter, BaseRelation
@@ -849,7 +860,8 @@ class RunTask(CompileTask):
         hook_obj = get_hook(statement, index=hook_index)
         return hook_obj.sql or ""
 
-    def handle_job_queue(self, pool, callback):
+    def handle_job_queue(self, pool: DbtThreadPool, callback: Callable) -> None:
+        assert self.job_queue is not None
         node = self.job_queue.get()
         self._raise_set_error()
         runner = self.get_runner(node)
@@ -864,7 +876,28 @@ class RunTask(CompileTask):
             runner.set_pool(pool)
 
         args = [runner]
+
+        # Ensure we don't submit more MicrobatchModelRunners than the pool allows
+        self._maybe_wait_for_microbatch(pool, runner)
         self._submit(pool, args, callback)
+
+    def _maybe_wait_for_microbatch(self, pool: DbtThreadPool, runner: BaseRunner) -> None:
+        """
+        Checks if the runner is a MicrobatchModelRunner, and waits until the
+        number of microbatch models in progress is less than the max number
+        of microbatch models allowed by the pool.
+        """
+
+        if isinstance(runner, MicrobatchModelRunner) and self.job_queue is not None:
+            fire_event(
+                MicrobatchExecutionDebug(
+                    msg=f"Waiting for microbatch model to be run: {runner.node.name}.\n\tpool.max_microbatch_models: {pool.max_microbatch_models}\n\tlen(self.job_queue.in_progress_microbatch): {len(self.job_queue.in_progress_microbatch)}"
+                )
+            )
+            while pool.max_microbatch_models < len(self.job_queue.in_progress_microbatch):
+                time.sleep(0.1)
+
+        return
 
     def _submit_batch(
         self,
@@ -907,7 +940,17 @@ class RunTask(CompileTask):
             batch_runner.do_skip()
 
         if not pool.is_closed():
-            if not force_sequential_run and batch_runner.should_run_in_parallel():
+            # Only run the batch in parallel IFF:
+            # 1. The batch runner is not forced to run sequentially
+            # 2. The batch runner should be run in parallel
+            # 3. There are available threads in the pool
+            #   a. This prevents deadlocks from occurring --threads=1
+            if (
+                not force_sequential_run
+                and batch_runner.should_run_in_parallel()
+                and self.job_queue is not None
+                and len(self.job_queue.in_progress) < pool.max_threads
+            ):
                 fire_event(
                     MicrobatchExecutionDebug(
                         msg=f"{batch_runner.describe_batch()} is being run concurrently"

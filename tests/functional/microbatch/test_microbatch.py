@@ -1049,7 +1049,7 @@ class TestMicrobatchModelSkipped(BaseMicrobatchTest):
 class TestMicrobatchCanRunParallelOrSequential(BaseMicrobatchTest):
     @pytest.fixture
     def batch_exc_catcher(self) -> EventCatcher:
-        return EventCatcher(MicrobatchExecutionDebug)  # type: ignore
+        return EventCatcher(MicrobatchExecutionDebug)
 
     def test_microbatch(
         self, mocker: MockerFixture, project, batch_exc_catcher: EventCatcher
@@ -1089,7 +1089,10 @@ class TestMicrobatchCanRunParallelOrSequential(BaseMicrobatchTest):
 class TestFirstAndLastBatchAlwaysSequential(BaseMicrobatchTest):
     @pytest.fixture
     def batch_exc_catcher(self) -> EventCatcher:
-        return EventCatcher(MicrobatchExecutionDebug)  # type: ignore
+        return EventCatcher(
+            event_to_catch=MicrobatchExecutionDebug,
+            predicate=lambda event: "is being run" in event.data.msg,
+        )
 
     def test_microbatch(
         self, mocker: MockerFixture, project, batch_exc_catcher: EventCatcher
@@ -1128,7 +1131,7 @@ class TestFirstBatchRunsPreHookLastBatchRunsPostHook(BaseMicrobatchTest):
                 "pre-hook" in event.data.msg or "post-hook" in event.data.msg
             )
 
-        return EventCatcher(event_to_catch=JinjaLogDebug, predicate=pre_or_post_hook)  # type: ignore
+        return EventCatcher(event_to_catch=JinjaLogDebug, predicate=pre_or_post_hook)
 
     def test_microbatch(
         self, mocker: MockerFixture, project, batch_log_catcher: EventCatcher
@@ -1165,11 +1168,11 @@ class TestWhenOnlyOneBatchRunBothPostAndPreHooks(BaseMicrobatchTest):
                 "pre-hook" in event.data.msg or "post-hook" in event.data.msg
             )
 
-        return EventCatcher(event_to_catch=JinjaLogDebug, predicate=pre_or_post_hook)  # type: ignore
+        return EventCatcher(event_to_catch=JinjaLogDebug, predicate=pre_or_post_hook)
 
     @pytest.fixture
     def generic_exception_catcher(self) -> EventCatcher:
-        return EventCatcher(event_to_catch=GenericExceptionOnRun)  # type: ignore
+        return EventCatcher(event_to_catch=GenericExceptionOnRun)
 
     def test_microbatch(
         self,
@@ -1205,7 +1208,7 @@ class TestCanSilenceInvalidConcurrentBatchesConfigWarning(BaseMicrobatchTest):
 
     @pytest.fixture
     def event_catcher(self) -> EventCatcher:
-        return EventCatcher(event_to_catch=InvalidConcurrentBatchesConfig)  # type: ignore
+        return EventCatcher(event_to_catch=InvalidConcurrentBatchesConfig)
 
     def test_microbatch(
         self,
