@@ -4,7 +4,19 @@ from abc import abstractmethod
 from concurrent.futures import as_completed
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import AbstractSet, Dict, Iterable, List, Optional, Set, Tuple, Type, Union
+from typing import (
+    AbstractSet,
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    Type,
+    Union,
+)
 
 import dbt.exceptions
 import dbt.tracking
@@ -284,7 +296,7 @@ class GraphRunnableTask(ConfiguredTask):
 
         return result
 
-    def _submit(self, pool, args, callback):
+    def _submit(self, pool: DbtThreadPool, args: List[Any], callback: Callable) -> None:
         """If the caller has passed the magic 'single-threaded' flag, call the
         function directly instead of pool.apply_async. The single-threaded flag
          is intended for gathering more useful performance information about
@@ -302,7 +314,7 @@ class GraphRunnableTask(ConfiguredTask):
         if self._raise_next_tick is not None:
             raise self._raise_next_tick
 
-    def run_queue(self, pool):
+    def run_queue(self, pool: DbtThreadPool) -> None:
         """Given a pool, submit jobs from the queue to the pool."""
         if self.job_queue is None:
             raise DbtInternalError("Got to run_queue with no job queue set")
@@ -336,7 +348,8 @@ class GraphRunnableTask(ConfiguredTask):
         return
 
     # The build command overrides this
-    def handle_job_queue(self, pool, callback):
+    def handle_job_queue(self, pool: DbtThreadPool, callback: Callable) -> None:
+        assert self.job_queue is not None
         node = self.job_queue.get()
         self._raise_set_error()
         runner = self.get_runner(node)
