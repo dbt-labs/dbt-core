@@ -582,7 +582,11 @@ async fn render_unresolved_sql_files_parallel<
         }
     }
 
-    *node_properties = merged_node_properties;
+    // Merge back node_properties - update entries that were processed while preserving
+    // entries that weren't (e.g., Python models that go through a different code path)
+    for (key, value) in merged_node_properties {
+        node_properties.insert(key, value);
+    }
 
     Ok(results)
 }
