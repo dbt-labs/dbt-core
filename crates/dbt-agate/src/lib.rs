@@ -12,6 +12,7 @@ use minijinja::{ErrorKind, State, Value, assert_nullary_args};
 mod column;
 mod columns;
 mod converters;
+mod data_type;
 mod decimal;
 pub mod grouper;
 pub mod hashers;
@@ -26,6 +27,7 @@ mod vec_of_rows;
 
 pub use column::Column;
 pub use columns::Columns;
+pub use data_type::DataType;
 pub use row::Row;
 pub use rows::Rows;
 pub use table::AgateTable;

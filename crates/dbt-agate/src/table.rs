@@ -1610,18 +1610,20 @@ mod tests {
 
         let column_types = table.column_types_as_tuple();
         assert_eq!(column_types.len(), 3);
-        assert_eq!(
-            column_types.get_item_by_index(0).unwrap().as_str().unwrap(),
-            "Number"
-        );
-        assert_eq!(
-            column_types.get_item_by_index(1).unwrap().as_str().unwrap(),
-            "Text"
-        );
-        assert_eq!(
-            column_types.get_item_by_index(2).unwrap().as_str().unwrap(),
-            "Text"
-        );
+
+        // column_types now returns DataType objects, not strings
+        let dt0 = column_types.get_item_by_index(0).unwrap();
+        let dt0_obj = dt0.downcast_object_ref::<crate::DataType>().unwrap();
+        assert_eq!(dt0_obj.type_name(), "Number");
+
+        let dt1 = column_types.get_item_by_index(1).unwrap();
+        let dt1_obj = dt1.downcast_object_ref::<crate::DataType>().unwrap();
+        assert_eq!(dt1_obj.type_name(), "Text");
+
+        let dt2 = column_types.get_item_by_index(2).unwrap();
+        let dt2_obj = dt2.downcast_object_ref::<crate::DataType>().unwrap();
+        assert_eq!(dt2_obj.type_name(), "Text");
+
         assert_eq!(column_types.count_occurrences_of(&Value::from("Number")), 1);
         assert_eq!(column_types.count_occurrences_of(&Value::from("Text")), 2);
         assert_eq!(

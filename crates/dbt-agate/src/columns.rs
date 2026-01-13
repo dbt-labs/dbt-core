@@ -6,6 +6,7 @@ use minijinja::listener::RenderingEventListener;
 use minijinja::value::{Enumerator, Object, ObjectRepr};
 use minijinja::{State, Value};
 
+use crate::data_type::DataType;
 use crate::table::TableRepr;
 use crate::{MappedSequence, Tuple, TupleRepr, ZippedTupleRepr};
 
@@ -43,8 +44,10 @@ impl PartialEq for ColumnTypesAsTuple {
 
 impl TupleRepr for ColumnTypesAsTuple {
     fn get_item_by_index(&self, idx: isize) -> Option<Value> {
-        // XXX: we are currently representing types as strings, but they should be class objects
-        self.of_table.column_type(idx).map(Value::from)
+        // Return DataType objects with jsonify() method for compatibility with elementary
+        self.of_table
+            .column_type(idx)
+            .map(|type_name| Value::from_object(DataType::new(type_name.to_string())))
     }
 
     fn len(&self) -> usize {
@@ -79,8 +82,15 @@ impl TupleRepr for ColumnTypesAsTuple {
         }
         let self_types = self.of_table.column_types();
         for (i, self_type) in self_types.enumerate() {
-            let other_type = other.get_item_by_index(i as isize);
-            if Some(self_type.as_str()) != other_type.as_ref().and_then(|v| v.as_str()) {
+            let other_value = other.get_item_by_index(i as isize);
+            // Try to extract type_name from DataType object or compare as string
+            let other_type_name = other_value.as_ref().and_then(|v| {
+                // Try to downcast to DataType and get its type_name
+                v.downcast_object_ref::<DataType>()
+                    .map(|dt| dt.type_name().to_string())
+                    .or_else(|| v.as_str().map(|s| s.to_string()))
+            });
+            if Some(self_type.as_str()) != other_type_name.as_deref() {
                 return false;
             }
         }
