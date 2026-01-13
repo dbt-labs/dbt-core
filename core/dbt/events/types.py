@@ -787,6 +787,14 @@ class TimeDimensionsRequireGranularityDeprecation(WarnLevel):
         return line_wrap_message(_deprecation_tag(self.msg, self.__class__.__name__))
 
 
+class GenericSemanticLayerDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D042"
+
+    def message(self) -> str:
+        return line_wrap_message(_deprecation_tag(self.msg, self.__class__.__name__))
+
+
 # =======================================================
 # I - Project parsing
 # =======================================================

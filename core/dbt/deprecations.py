@@ -240,6 +240,11 @@ class TimeDimensionsRequireGranularityDeprecation(DBTDeprecation):
     _event = "TimeDimensionsRequireGranularityDeprecation"
 
 
+class GenericSemanticLayerDeprecation(DBTDeprecation):
+    _name = "generic-semantic-layer-deprecation"
+    _event = "GenericSemanticLayerDeprecation"
+
+
 def renamed_env_var(old_name: str, new_name: str):
     class EnvironmentVariableRenamed(DBTDeprecation):
         _name = f"environment-variable-renamed:{old_name}"
@@ -328,6 +333,7 @@ deprecations_list: List[DBTDeprecation] = [
     ModulesItertoolsUsageDeprecation(),
     DuplicateNameDistinctNodeTypesDeprecation(),
     TimeDimensionsRequireGranularityDeprecation(),
+    GenericSemanticLayerDeprecation(),
 ]
 
 deprecations: Dict[str, DBTDeprecation] = {d.name: d for d in deprecations_list}
