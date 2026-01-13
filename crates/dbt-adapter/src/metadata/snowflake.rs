@@ -129,7 +129,7 @@ pub fn list_relations(
     for batch in batches {
         relations.extend(build_relations_from_show_objects(
             &batch,
-            adapter.quoting(),
+            ResolvedQuoting::trues(),
         )?);
     }
     Ok(relations)
