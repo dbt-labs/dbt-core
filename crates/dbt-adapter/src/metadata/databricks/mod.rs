@@ -18,6 +18,8 @@ use dbt_schemas::schemas::relations::base::{BaseRelation, RelationPattern};
 use dbt_xdbc::{Connection, MapReduce, QueryCtx};
 use indexmap::IndexMap;
 use minijinja::State;
+use once_cell::sync::Lazy;
+use regex::Regex;
 
 use crate::errors::{AdapterError, AdapterResult, AsyncAdapterResult};
 use crate::metadata::CatalogAndSchema;
@@ -156,43 +158,42 @@ impl DatabricksMetadataAdapter {
         CACHED_DBR_VERSION
             .get_or_init(|| {
                 let query_ctx = QueryCtx::default().with_desc("get_dbr_version adapter call");
-                let mut conn = self.adapter.engine().new_connection(None, None)?;
+                let mut conn = self.adapter.new_connection(None, None)?;
                 Self::get_dbr_version(&self.adapter, &query_ctx, conn.deref_mut())
             })
             .clone()
     }
 
     /// Get the Databricks Runtime version without caching.
+    ///
+    /// This follows the dbt-databricks implementation:
+    /// - For clusters: queries `SET spark.databricks.clusterUsageTags.sparkVersion`
+    /// - For SQL Warehouses: returns `DbrVersion::Unset` (treated as latest/max version)
+    ///
+    /// See: https://github.com/databricks/dbt-databricks/blob/822b105b15e644676d9e1f47cbfd765cd4c1541f/dbt/adapters/databricks/handle.py#L129
     pub fn get_dbr_version(
         adapter: &dyn TypedBaseAdapter,
         ctx: &QueryCtx,
         conn: &mut dyn Connection,
     ) -> AdapterResult<DbrVersion> {
-        // https://docs.databricks.com/aws/en/sql/language-manual/functions/current_version
-        // dbr_version is a null string if this query runs in non-cluster mode
+        let is_cluster = adapter.is_cluster()?;
 
-        // It appears that this is a divergence from the dbt-databricks implementation,
-        // which uses `SET spark.databricks.clusterUsageTags.sparkVersion` to read out the version instead.
-        // They only do this if `is_cluster` is True, otherwise it would error.
-        let batch = adapter.engine().execute(
-            None,
-            conn,
-            ctx,
-            "select current_version().dbr_version as dbr_version",
-        )?;
+        if !is_cluster {
+            return Ok(DbrVersion::Unset);
+        }
 
-        let dbr_version = get_column_values::<StringArray>(&batch, "dbr_version")?;
-        debug_assert_eq!(dbr_version.len(), 1);
+        // For clusters, query the spark version tag
+        // Returns a row like: (key, value) = ("spark.databricks.clusterUsageTags.sparkVersion", "15.4.x-scala2.12")
+        let sql = "SET spark.databricks.clusterUsageTags.sparkVersion";
+        let (_response, table) = adapter.execute(None, conn, ctx, sql, false, true, None, None)?;
+        let batch = table.original_record_batch();
 
-        // if dbr_version is null, then we are not on a cluster and we can assume the version is greater than the requested version
-        // dbt is applying a similar logic here: https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/handle.py#L143-L144
-        //
-        // https://docs.databricks.com/aws/en/sql/language-manual/functions/version#examples
-        // in format "[dbr_version] [git_hash]"
-        //
-        // TODO(cwalden): it looks like this might be wrong?
-        //  `current_version().dbr_version` doesn't contain the git hash, so I don't think need this first split.
-        dbr_version.value(0).parse::<DbrVersion>()
+        // The result has two columns: "key" and "value"
+        let values = get_column_values::<StringArray>(&batch, "value")?;
+        debug_assert_eq!(values.len(), 1);
+
+        let version_str = values.value(0);
+        extract_dbr_version(version_str)
     }
 
     /// Given the relation, fetch its config from the remote data warehouse
@@ -968,6 +969,35 @@ fn build_schema_from_basic_describe_table(
     Ok(Arc::new(Schema::new(fields)))
 }
 
+static DBR_VERSION_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"([1-9][0-9]*)\.(x|0|[1-9][0-9]*)").unwrap());
+
+/// Extract DBR version from a spark version string using regex.
+///
+/// See: https://github.com/databricks/dbt-databricks/blob/822b105b15e644676d9e1f47cbfd765cd4c1541f/dbt/adapters/databricks/handle.py#L273
+fn extract_dbr_version(version_str: &str) -> AdapterResult<DbrVersion> {
+    let caps = DBR_VERSION_REGEX.captures(version_str).ok_or_else(|| {
+        AdapterError::new(
+            AdapterErrorKind::Internal,
+            format!("Failed to detect DBR version from: {version_str}"),
+        )
+    })?;
+
+    let major: i64 = caps[1].parse().map_err(|_| {
+        AdapterError::new(AdapterErrorKind::Internal, "Major version is not a number")
+    })?;
+
+    let minor_str = &caps[2];
+    if minor_str == "x" {
+        Ok(DbrVersion::Full(major, i64::MAX))
+    } else {
+        let minor: i64 = minor_str.parse().map_err(|_| {
+            AdapterError::new(AdapterErrorKind::Internal, "Minor version is not a number")
+        })?;
+        Ok(DbrVersion::Full(major, minor))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1085,5 +1115,41 @@ mod tests {
         assert_eq!(database, "`test_db`");
         assert_eq!(schema, "`test_schema`");
         assert_eq!(identifier, "test_table");
+    }
+
+    #[test]
+    fn test_extract_dbr_version_with_scala() {
+        // Format: "15.4.x-scala2.12" → regex finds "15.4" first → (15, 4)
+        let result = extract_dbr_version("15.4.x-scala2.12").unwrap();
+        assert_eq!(result, DbrVersion::Full(15, 4));
+    }
+
+    #[test]
+    fn test_extract_dbr_version_with_gpu_ml() {
+        // Format: "15.4.x-gpu-ml-scala2.12" → regex finds "15.4" first → (15, 4)
+        let result = extract_dbr_version("15.4.x-gpu-ml-scala2.12").unwrap();
+        assert_eq!(result, DbrVersion::Full(15, 4));
+    }
+
+    #[test]
+    fn test_extract_dbr_version_full_version() {
+        // Format: "16.2-scala2.12" → (16, 2)
+        let result = extract_dbr_version("16.2-scala2.12").unwrap();
+        assert_eq!(result, DbrVersion::Full(16, 2));
+    }
+
+    #[test]
+    fn test_extract_dbr_version_simple() {
+        // Simple format without suffix
+        let result = extract_dbr_version("16.2").unwrap();
+        assert_eq!(result, DbrVersion::Full(16, 2));
+    }
+
+    #[test]
+    fn test_extract_dbr_version_with_x_minor() {
+        // Format: "16.x-scala2.12" → minor is "x" → (16, i64::MAX)
+        // This matches Python's (16, sys.maxsize) behavior
+        let result = extract_dbr_version("16.x-scala2.12").unwrap();
+        assert_eq!(result, DbrVersion::Full(16, i64::MAX));
     }
 }
