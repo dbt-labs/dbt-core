@@ -314,7 +314,6 @@ impl Object for PyDate {
         match method {
             "strftime" => Self::strftime(self, args),
             "replace" => Self::replace(self, args).map(Value::from_object),
-            "today" => PyDateClass::date_today(args).map(Value::from_object),
             "isoformat" => Self::isoformat(self, args),
             "weekday" => Self::weekday(self, args),
             "isoweekday" => Self::isoweekday(self, args),
@@ -323,6 +322,11 @@ impl Object for PyDate {
             // Add arithmetic operations
             "__add__" => self.add_op(args, true),
             "__sub__" => self.add_op(args, false),
+
+            "today" => PyDateClass::date_today(args).map(Value::from_object),
+            "fromtimestamp" => PyDateClass::from_timestamp(args).map(Value::from_object),
+            "fromordinal" => PyDateClass::date_from_ordinal(args).map(Value::from_object),
+            "fromisoformat" => PyDateClass::fromisoformat(args).map(Value::from_object),
 
             _ => Err(Error::new(
                 ErrorKind::UnknownMethod,

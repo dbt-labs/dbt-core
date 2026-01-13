@@ -905,6 +905,14 @@ impl Object for PyDateTime {
             "__add__" => self.add_op(args, true),
             "__sub__" => self.add_op(args, false),
 
+            "fromtimestamp" => Ok(Value::from_object(PyDateTimeClass::from_timestamp(args)?)),
+            "now" => Ok(Value::from_object(PyDateTimeClass::now(args)?)),
+            "utcnow" => Ok(Value::from_object(PyDateTimeClass::utcnow(args)?)),
+            "today" => Ok(Value::from_object(PyDateTimeClass::today(args)?)),
+            "strptime" => Ok(Value::from_object(PyDateTimeClass::strptime(args)?)),
+            "combine" => Ok(Value::from_object(PyDateTimeClass::combine(args)?)),
+            "fromisoformat" => Ok(Value::from_object(PyDateTimeClass::fromisoformat(args)?)),
+
             _ => Err(Error::new(
                 ErrorKind::UnknownMethod,
                 format!("datetime has no method named '{method}'"),

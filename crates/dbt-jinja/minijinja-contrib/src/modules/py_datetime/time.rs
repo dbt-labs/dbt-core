@@ -292,9 +292,14 @@ impl Object for PyTime {
                 Ok(Value::from("TODO: implement time.replace(...)"))
             }
             "strftime" => self.strftime(args),
+
             // Add arithmetic operations
             "__add__" => self.add_op(args, true),
             "__sub__" => self.add_op(args, false),
+
+            "now" => PyTimeClass::now(args).map(Value::from_object),
+            "fromisoformat" => PyTimeClass::fromisoformat(args).map(Value::from_object),
+
             _ => Err(Error::new(
                 ErrorKind::UnknownMethod,
                 format!("time object has no method '{method}'"),
