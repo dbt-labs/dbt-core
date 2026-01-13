@@ -22,7 +22,7 @@ use crate::schemas::dbt_column::{ColumnPropertiesDimensionType, Granularity};
 use crate::schemas::manifest::common::SourceFileMetadata;
 use crate::schemas::semantic_layer::semantic_manifest::SemanticLayerElementConfig;
 
-use super::serde::{StringOrArrayOfStrings, bool_or_string_bool};
+use super::serde::{StringOrArrayOfStrings, bool_or_string_bool, bool_or_string_bool_default};
 #[derive(Default, Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq, Eq)]
 pub struct FreshnessRules {
     pub count: Option<i64>,
@@ -374,8 +374,11 @@ pub struct NodeDependsOn {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Copy, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct ResolvedQuoting {
+    #[serde(deserialize_with = "bool_or_string_bool_default")]
     pub database: bool,
+    #[serde(deserialize_with = "bool_or_string_bool_default")]
     pub identifier: bool,
+    #[serde(deserialize_with = "bool_or_string_bool_default")]
     pub schema: bool,
 }
 
