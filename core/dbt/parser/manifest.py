@@ -482,9 +482,9 @@ class ManifestLoader:
             semantic_manifest = SemanticManifest(self.manifest)
             validation_errors = semantic_manifest.validate()
             if validation_errors:
-                error_messages = '\n'.join([f"- {err.message}" for err in validation_errors])
+                # Individual validation errors are already logged via events in semantic_manifest.validate()
                 raise dbt.exceptions.ParsingError(
-                    f"Semantic Manifest validation failed with the following errors:\n{error_messages}"
+                    "Semantic Manifest validation failed. See errors above for details."
                 )
 
             # update tracking data
