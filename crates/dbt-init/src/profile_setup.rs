@@ -180,6 +180,7 @@ impl ProfileSetup {
         Ok(adapters[selection])
     }
 
+    #[allow(unreachable_patterns)]
     pub fn create_profile_for_adapter(
         &self,
         adapter: AdapterType,
@@ -187,6 +188,13 @@ impl ProfileSetup {
         existing_config: Option<&DbConfig>,
     ) -> FsResult<ProfileTarget> {
         let db_config = match adapter {
+            AdapterType::Sidecar => {
+                return Err(fs_err!(
+                    ErrorCode::InvalidConfig,
+                    "Sidecar is an internal adapter type and cannot be used directly in profiles.yml. \
+                     Use 'type: snowflake' (or another warehouse) with 'execute: sidecar' instead."
+                ));
+            }
             AdapterType::Snowflake => {
                 let snowflake_config = match existing_config {
                     Some(DbConfig::Snowflake(config)) => Some(config),
@@ -237,6 +245,16 @@ impl ProfileSetup {
                     _ => None,
                 };
                 todo!("setup_salesforce_profile")
+            }
+
+            AdapterType::Sidecar => {
+                // DuckDB doesn't require credentials for local file-based operations
+                // For now, return a basic Postgres config as placeholder
+                // TODO: Create proper DuckDB profile setup
+                return Err(fs_err!(
+                    ErrorCode::Generic,
+                    "DuckDB profile setup not yet implemented. DuckDB runs locally without credentials."
+                ));
             }
         };
 

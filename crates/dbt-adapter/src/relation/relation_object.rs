@@ -195,7 +195,7 @@ pub fn do_create_relation(
     custom_quoting: ResolvedQuoting,
 ) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
     let relation = match adapter_type {
-        AdapterType::Postgres => Arc::new(PostgresRelation::try_new(
+        AdapterType::Postgres | AdapterType::Sidecar => Arc::new(PostgresRelation::try_new(
             Some(database),
             Some(schema),
             identifier,
@@ -395,7 +395,7 @@ pub trait StaticBaseRelation: fmt::Debug + Send + Sync {
         let identifier = iter.next_kwarg::<Option<String>>("identifier")?;
         let relation_type = iter.next_kwarg::<Option<Value>>("type")?;
         let custom_quoting = iter.next_kwarg::<Option<Value>>("quote_policy")?;
-        let _ = iter.trailing_kwargs()?;
+        iter.finish()?;
 
         // error is intentionally silenced
         let custom_quoting = custom_quoting

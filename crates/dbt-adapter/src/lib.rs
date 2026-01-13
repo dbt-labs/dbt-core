@@ -34,6 +34,10 @@ pub mod sql_types;
 pub mod statement;
 pub mod stmt_splitter;
 
+/// Sidecar adapter for local DuckDB execution
+pub mod sidecar_adapter;
+pub mod sidecar_client;
+
 /// Cross-Version Record/Replay System
 pub mod time_machine;
 pub mod typed_adapter;

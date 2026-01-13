@@ -282,7 +282,7 @@ impl DbConfig {
             DbConfig::Datafusion(..) => None,
             DbConfig::Databricks(..) => Some(AdapterType::Databricks),
             DbConfig::Salesforce(..) => Some(AdapterType::Salesforce),
-            DbConfig::Spark(..) => Some(AdapterType::Spark),
+            DbConfig::Spark(..) => None, // Spark adapter type not yet implemented
         }
     }
 
@@ -379,6 +379,8 @@ pub enum Execute {
     #[default]
     Remote,
     Local,
+    Sidecar,
+    Service,
 }
 
 impl Display for Execute {
@@ -386,6 +388,8 @@ impl Display for Execute {
         match self {
             Execute::Remote => write!(f, "remote"),
             Execute::Local => write!(f, "local"),
+            Execute::Sidecar => write!(f, "sidecar"),
+            Execute::Service => write!(f, "service"),
         }
     }
 }

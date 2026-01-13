@@ -151,7 +151,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         static REDSHIFT: [DbtIncrementalStrategy; 4] = [Append, DeleteInsert, Merge, Microbatch];
 
         match self.adapter_type() {
-            AdapterType::Postgres => &POSTGRES,
+            AdapterType::Postgres | AdapterType::Sidecar => &POSTGRES,
             AdapterType::Snowflake => &SNOWFLAKE,
             AdapterType::Bigquery => &BIGQUERY,
             AdapterType::Databricks => &DATABRICKS,
@@ -427,6 +427,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             | AdapterType::Databricks
             | AdapterType::Redshift
             | AdapterType::Salesforce
+            | AdapterType::Sidecar
             | AdapterType::Spark => {
                 self.execute_inner(
                     self.adapter_type().into(),
@@ -534,6 +535,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             AdapterType::Postgres
             | AdapterType::Redshift
             | AdapterType::Salesforce
+            | AdapterType::Sidecar
             | AdapterType::Spark => Err(AdapterError::new(
                 AdapterErrorKind::Internal,
                 format!(
@@ -550,6 +552,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             AdapterType::Snowflake
             | AdapterType::Redshift
             | AdapterType::Postgres
+            | AdapterType::Sidecar
             | AdapterType::Salesforce => format!("\"{identifier}\""),
             AdapterType::Bigquery | AdapterType::Databricks | AdapterType::Spark => {
                 format!("`{identifier}`")
@@ -564,7 +567,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
                 AdapterType::Snowflake | AdapterType::Salesforce => "name",
                 AdapterType::Databricks | AdapterType::Spark => "databaseName",
                 AdapterType::Bigquery => "schema_name",
-                AdapterType::Postgres | AdapterType::Redshift => "nspname",
+                AdapterType::Postgres | AdapterType::Redshift | AdapterType::Sidecar => "nspname",
             };
             get_column_values::<StringArray>(&result_set, col_name)?
         };
@@ -676,6 +679,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             | AdapterType::Databricks
             | AdapterType::Redshift
             | AdapterType::Salesforce
+            | AdapterType::Sidecar
             | AdapterType::Spark => {
                 let err = format!(
                     "describe_dynamic_table is not supported by the {} adapter",
@@ -876,6 +880,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             AdapterType::Postgres
             | AdapterType::Snowflake
             | AdapterType::Bigquery
+            | AdapterType::Sidecar
             | AdapterType::Redshift => execute_macro(
                 state,
                 &[RelationObject::new(relation).as_value()],
@@ -888,7 +893,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         };
 
         match self.adapter_type() {
-            AdapterType::Postgres | AdapterType::Redshift => {
+            AdapterType::Postgres | AdapterType::Redshift | AdapterType::Sidecar => {
                 let result = macro_execution_result?;
                 Ok(Column::vec_from_jinja_value(self.adapter_type(), result)?)
             }
@@ -1003,6 +1008,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             | AdapterType::Redshift
             | AdapterType::Salesforce
             | AdapterType::Postgres
+            | AdapterType::Sidecar
             | AdapterType::Spark => {
                 // downcast relation
                 let relation = RelationObject::new(relation).as_value();
@@ -1049,6 +1055,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             | AdapterType::Bigquery
             | AdapterType::Databricks
             | AdapterType::Redshift
+            | AdapterType::Sidecar
             | AdapterType::Spark => {
                 // https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1072
                 if quote_config.unwrap_or(true) {
@@ -1214,6 +1221,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             | AdapterType::Databricks
             | AdapterType::Redshift
             | AdapterType::Salesforce
+            | AdapterType::Sidecar
             | AdapterType::Spark => {
                 unimplemented!("only available with BigQuery adapter")
             }
@@ -1231,6 +1239,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             | AdapterType::Databricks
             | AdapterType::Redshift
             | AdapterType::Salesforce
+            | AdapterType::Sidecar
             | AdapterType::Spark => {
                 // https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1783
                 let mut result = vec![];
@@ -1389,6 +1398,14 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             (Redshift, Check) => NotSupported,
             (Redshift, Custom) => NotSupported,
 
+            // Sidecar - follows Postgres
+            (Sidecar, NotNull) => Enforced,
+            (Sidecar, ForeignKey) => Enforced,
+            (Sidecar, Unique) => NotEnforced,
+            (Sidecar, PrimaryKey) => NotEnforced,
+            (Sidecar, Check) => NotSupported,
+            (Sidecar, Custom) => NotSupported,
+
             // Salesforce
             (Salesforce | Spark, _) => unimplemented!("constraint support not implemented"),
         }
@@ -1433,7 +1450,10 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         let record_batch = grants_table.original_record_batch();
 
         match self.adapter_type() {
-            AdapterType::Postgres | AdapterType::Bigquery | AdapterType::Redshift => {
+            AdapterType::Postgres
+            | AdapterType::Bigquery
+            | AdapterType::Redshift
+            | AdapterType::Sidecar => {
                 let grantee_cols = get_column_values::<StringArray>(&record_batch, "grantee")?;
                 let privilege_cols =
                     get_column_values::<StringArray>(&record_batch, "privilege_type")?;
@@ -1512,6 +1532,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             | AdapterType::Databricks
             | AdapterType::Redshift
             | AdapterType::Salesforce
+            | AdapterType::Sidecar
             | AdapterType::Spark => {
                 unimplemented!("only available with BigQuery adapter")
             }
@@ -1586,6 +1607,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             | AdapterType::Databricks
             | AdapterType::Redshift
             | AdapterType::Salesforce
+            | AdapterType::Sidecar
             | AdapterType::Spark => {
                 unimplemented!("only available with BigQuery adapter")
             }
@@ -1628,6 +1650,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             | AdapterType::Databricks
             | AdapterType::Redshift
             | AdapterType::Salesforce
+            | AdapterType::Sidecar
             | AdapterType::Spark => {
                 unimplemented!("only available with BigQuery adapter")
             }
@@ -1669,6 +1692,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             | AdapterType::Databricks
             | AdapterType::Redshift
             | AdapterType::Salesforce
+            | AdapterType::Sidecar
             | AdapterType::Spark => {
                 unimplemented!("only available with BigQuery adapter")
             }
@@ -1741,6 +1765,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             | AdapterType::Snowflake
             | AdapterType::Databricks
             | AdapterType::Redshift
+            | AdapterType::Sidecar
             | AdapterType::Spark => {
                 unimplemented!("only available with BigQuery or Salesforce adapter")
             }
@@ -1801,6 +1826,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             | AdapterType::Databricks
             | AdapterType::Redshift
             | AdapterType::Salesforce
+            | AdapterType::Sidecar
             | AdapterType::Spark => {
                 unimplemented!("only available with BigQuery adapter")
             }
@@ -1928,7 +1954,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         }
 
         match self.adapter_type() {
-            AdapterType::Postgres => {
+            AdapterType::Postgres | AdapterType::Sidecar => {
                 if let Some(configured_database) = self.engine().get_configured_database_name() {
                     if database == configured_database {
                         Ok(Value::from(()))
@@ -2053,6 +2079,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             | AdapterType::Databricks
             | AdapterType::Redshift
             | AdapterType::Salesforce
+            | AdapterType::Sidecar
             | AdapterType::Spark => {
                 unimplemented!(
                     "is_replaceable is only available with BigQuery adapter, not {}",
@@ -2097,6 +2124,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             | AdapterType::Databricks
             | AdapterType::Redshift
             | AdapterType::Salesforce
+            | AdapterType::Sidecar
             | AdapterType::Spark => unimplemented!("only available with BigQuery adapter"),
         }
     }
@@ -2121,6 +2149,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             | AdapterType::Databricks
             | AdapterType::Redshift
             | AdapterType::Salesforce
+            | AdapterType::Sidecar
             | AdapterType::Spark => unimplemented!("only available with BigQuery adapter"),
         }
     }
@@ -2145,6 +2174,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             | AdapterType::Databricks
             | AdapterType::Redshift
             | AdapterType::Salesforce
+            | AdapterType::Sidecar
             | AdapterType::Spark => unimplemented!("only available with BigQuery adapter"),
         }
     }
@@ -2172,6 +2202,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             | AdapterType::Databricks
             | AdapterType::Redshift
             | AdapterType::Salesforce
+            | AdapterType::Sidecar
             | AdapterType::Spark => Err(minijinja::Error::new(
                 minijinja::ErrorKind::InvalidOperation,
                 "get_common_options is only available with BigQuery adapter",
@@ -2216,6 +2247,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             | AdapterType::Databricks
             | AdapterType::Redshift
             | AdapterType::Salesforce
+            | AdapterType::Sidecar
             | AdapterType::Spark => unimplemented!("only available with BigQuery adapter"),
         }
     }
@@ -2241,7 +2273,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             Databricks => databricks::list_relations(adapter, query_ctx, conn, db_schema),
             Redshift => redshift::list_relations(adapter, query_ctx, conn, db_schema),
             Spark => unimplemented!("list_relations"),
-            Postgres | Salesforce => {
+            Postgres | Salesforce | Sidecar => {
                 let err = AdapterError::new(
                     AdapterErrorKind::Internal,
                     format!(
@@ -2319,6 +2351,7 @@ prevent unnecessary latency for other users."#,
             | AdapterType::Postgres
             | AdapterType::Redshift
             | AdapterType::Salesforce
+            | AdapterType::Sidecar
             | AdapterType::Spark => vec![],
         }
     }
@@ -2356,6 +2389,7 @@ prevent unnecessary latency for other users."#,
             | AdapterType::Bigquery
             | AdapterType::Redshift
             | AdapterType::Salesforce
+            | AdapterType::Sidecar
             | AdapterType::Spark => unimplemented!("only available with Databricksadapter"),
         }
     }
@@ -2417,6 +2451,7 @@ prevent unnecessary latency for other users."#,
             | AdapterType::Bigquery
             | AdapterType::Redshift
             | AdapterType::Salesforce
+            | AdapterType::Sidecar
             | AdapterType::Spark => unimplemented!("only available with Databricksadapter"),
         }
     }
@@ -2498,6 +2533,7 @@ prevent unnecessary latency for other users."#,
             | AdapterType::Bigquery
             | AdapterType::Redshift
             | AdapterType::Salesforce
+            | AdapterType::Sidecar
             | AdapterType::Spark => unimplemented!("only available with Databricks adapter"),
         }
     }
@@ -2577,6 +2613,7 @@ prevent unnecessary latency for other users."#,
             | AdapterType::Bigquery
             | AdapterType::Redshift
             | AdapterType::Salesforce
+            | AdapterType::Sidecar
             | AdapterType::Spark => unimplemented!("only available with Databricks adapter"),
         }
     }
@@ -2744,6 +2781,7 @@ prevent unnecessary latency for other users."#,
             | AdapterType::Databricks
             | AdapterType::Redshift
             | AdapterType::Salesforce
+            | AdapterType::Sidecar
             | AdapterType::Spark => unimplemented!("only available with BigQuery adapter"),
         }
     }
@@ -2798,6 +2836,7 @@ prevent unnecessary latency for other users."#,
             | AdapterType::Databricks
             | AdapterType::Redshift
             | AdapterType::Salesforce
+            | AdapterType::Sidecar
             | AdapterType::Spark => unimplemented!("only available with BigQuery adapter"),
         }
     }
@@ -2971,7 +3010,7 @@ impl AdapterTyping for ConcreteAdapter {
             AdapterType::Salesforce => {
                 Box::new(SalesforceMetadataAdapter::new(engine)) as Box<dyn MetadataAdapter>
             }
-            AdapterType::Postgres => {
+            AdapterType::Postgres | AdapterType::Sidecar => {
                 Box::new(PostgresMetadataAdapter::new(engine)) as Box<dyn MetadataAdapter>
             }
         };

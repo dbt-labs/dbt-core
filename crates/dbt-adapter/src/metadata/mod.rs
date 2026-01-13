@@ -27,6 +27,7 @@ pub(crate) mod metadata_adapter;
 pub(crate) mod postgres;
 pub(crate) mod redshift;
 pub(crate) mod salesforce;
+pub(crate) mod sidecar;
 pub mod snowflake; // XXX: temporarily pub before the refactor is complete
 
 // Re-export `metadata_adapter` symbols

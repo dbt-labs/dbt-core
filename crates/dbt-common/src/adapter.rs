@@ -25,6 +25,8 @@ pub enum AdapterType {
     Salesforce,
     /// Spark
     Spark,
+    /// Sidecar (internal dispatch type for DuckDB backend in sidecar mode)
+    Sidecar,
 }
 
 impl From<AdapterType> for Dialect {
@@ -40,6 +42,8 @@ impl From<AdapterType> for Dialect {
             // falls back to Postgresql at the moment
             AdapterType::Salesforce => Dialect::Postgresql,
             AdapterType::Spark => Dialect::SparkSql,
+            // Sidecar uses DuckDB backend but should be treated as Postgres-like
+            AdapterType::Sidecar => Dialect::Postgresql,
         }
     }
 }

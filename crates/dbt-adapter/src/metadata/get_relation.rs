@@ -31,8 +31,21 @@ pub fn get_relation(
     schema: &str,
     identifier: &str,
 ) -> AdapterResult<Option<Arc<dyn BaseRelation>>> {
-    let adapter_type = adapter.adapter_type();
-    match adapter_type {
+    // For sidecar execution, dispatch to physical backend's implementation
+    // but results will be formatted as logical adapter type by the backend-specific function
+    let dispatch_adapter_type = if adapter.engine().is_sidecar() {
+        match adapter.engine().physical_backend() {
+            Some(dbt_xdbc::Backend::DuckDB) => AdapterType::Sidecar,
+            Some(dbt_xdbc::Backend::Snowflake) => AdapterType::Snowflake,
+            Some(dbt_xdbc::Backend::Postgres) => AdapterType::Postgres,
+            Some(dbt_xdbc::Backend::Redshift) => AdapterType::Redshift,
+            _ => adapter.adapter_type(),
+        }
+    } else {
+        adapter.adapter_type()
+    };
+
+    match dispatch_adapter_type {
         AdapterType::Snowflake => {
             snowflake_get_relation(adapter, state, ctx, conn, database, schema, identifier)
         }
@@ -50,6 +63,9 @@ pub fn get_relation(
         }
         AdapterType::Salesforce => {
             salesforce_get_relation(adapter, state, ctx, conn, database, schema, identifier)
+        }
+        AdapterType::Sidecar => {
+            duckdb_get_relation(adapter, state, ctx, conn, database, schema, identifier)
         }
     }
 }
@@ -488,4 +504,77 @@ fn salesforce_get_relation(
         )))),
         Err(_) => Ok(None),
     }
+}
+
+/// DuckDB get_relation implementation
+///
+/// Uses INFORMATION_SCHEMA.TABLES to check if a relation exists and determine its type.
+/// DuckDB supports BASE TABLE, VIEW, and LOCAL TEMPORARY types.
+fn duckdb_get_relation(
+    adapter: &dyn TypedBaseAdapter,
+    state: &State,
+    ctx: &QueryCtx,
+    conn: &'_ mut dyn Connection,
+    database: &str,
+    schema: &str,
+    identifier: &str,
+) -> AdapterResult<Option<Arc<dyn BaseRelation>>> {
+    // DuckDB is case-preserving for quoted identifiers
+    // Unquoted identifiers are lowercase by default
+    let query_schema = if adapter.quoting().schema {
+        schema.to_string()
+    } else {
+        schema.to_lowercase()
+    };
+
+    let query_identifier = if adapter.quoting().identifier {
+        identifier.to_string()
+    } else {
+        identifier.to_lowercase()
+    };
+
+    // Query INFORMATION_SCHEMA.TABLES for relation metadata
+    // DuckDB's table_type values: BASE TABLE, VIEW, LOCAL TEMPORARY
+    let sql = format!(
+        r#"
+            SELECT table_type as type
+            FROM information_schema.tables
+            WHERE table_schema = '{query_schema}'
+              AND table_name = '{query_identifier}'
+        "#,
+    );
+
+    let batch = adapter.engine().execute(Some(state), conn, ctx, &sql)?;
+    if batch.num_rows() == 0 {
+        return Ok(None);
+    }
+
+    let column = batch.column_by_name("type").unwrap();
+    let string_array = column.as_any().downcast_ref::<StringArray>().unwrap();
+
+    if string_array.len() != 1 {
+        return Err(AdapterError::new(
+            AdapterErrorKind::UnexpectedResult,
+            "Did not find 'type' for a relation",
+        ));
+    }
+
+    // Map DuckDB table_type to dbt RelationType
+    let relation_type = match string_array.value(0) {
+        "BASE TABLE" => Some(RelationType::Table),
+        "VIEW" => Some(RelationType::View),
+        "LOCAL TEMPORARY" => Some(RelationType::Table), // Treat temp tables as tables
+        _ => return invalid_value!("Unsupported relation type {}", string_array.value(0)),
+    };
+
+    // Use PostgresRelation for now - DuckDB is PostgreSQL-compatible
+    // TODO: Create DuckDBRelation type if DuckDB-specific features are needed
+    let relation = PostgresRelation::try_new(
+        Some(database.to_string()),
+        Some(schema.to_string()),
+        Some(identifier.to_string()),
+        relation_type,
+        adapter.quoting(),
+    )?;
+    Ok(Some(Arc::new(relation)))
 }
