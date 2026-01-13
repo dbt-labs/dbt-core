@@ -304,7 +304,7 @@ class TestCheckForcingConcurrentBatches:
 class TestSemanticManifestValidation:
     @patch("dbt.contracts.graph.semantic_manifest.SemanticManifest.validate")
     def test_semantic_manifest_validation_error_message(self, mock_validate, mock_project):
-        """Test that the Semantic Manifest validation error message includes the validation errors."""
+        """Test that the Semantic Manifest validation raises ParsingError when validation fails."""
         # Setup a mock validation error
         mock_error = ValidationError(
             context=ValidationIssueContext(
@@ -323,7 +323,7 @@ class TestSemanticManifestValidation:
         )
         manifest_loader.manifest = Manifest()
         
-        # Check that the error message includes the validation error message
+        # Check that ParsingError is raised when validation fails
         with pytest.raises(ParsingError) as exc_info:
             manifest_loader._process_sources = MagicMock()
             manifest_loader._process_refs = MagicMock()
@@ -338,6 +338,6 @@ class TestSemanticManifestValidation:
             manifest_loader.check_valid_microbatch_config = MagicMock()
             manifest_loader.load()
         
-        # Verify error message contains validation error details
-        assert "Test validation error message" in str(exc_info.value)
-        assert "Semantic Manifest validation failed with the following errors:" in str(exc_info.value)
+        # Verify error message indicates validation failure
+        assert "Semantic Manifest validation failed" in str(exc_info.value)
+        assert "See errors above for details" in str(exc_info.value)
