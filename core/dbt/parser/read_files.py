@@ -42,10 +42,10 @@ class FileDiff(dbtClassMixin):
 
 
 def normalize_file_contents(contents: str) -> str:
-    """Normalize file contents by removing all whitespace and converting to lowercase.
+    """Normalize file contents by compacting whitespace.
     This ensures consistent checksums regardless of formatting differences.
     """
-    return "".join(contents.split()).lower()
+    return " ".join(contents.split())
 
 
 # This loads the files contents and creates the SourceFile object
