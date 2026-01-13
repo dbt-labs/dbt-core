@@ -1,5 +1,4 @@
 use crate::adapter_engine::AdapterEngine;
-use crate::cache::RelationCache;
 use crate::column::ColumnStatic;
 use crate::metadata::*;
 use crate::query_cache::QueryCache;
@@ -1214,9 +1213,6 @@ pub trait AdapterFactory: Send + Sync {
         node: &dyn InternalDbtNodeAttributes,
         adapter_type: AdapterType,
     ) -> Result<Arc<dyn BaseRelation>, minijinja::Error>;
-
-    /// Return a new instance of the factory with a different relation cache.
-    fn with_relation_cache(&self, relation_cache: Arc<RelationCache>) -> Arc<dyn AdapterFactory>;
 }
 
 /// Check if the adapter type is supported

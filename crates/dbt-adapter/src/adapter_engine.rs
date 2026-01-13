@@ -1,6 +1,7 @@
 use crate::AdapterResponse;
 use crate::auth::Auth;
 use crate::base_adapter::backend_of;
+use crate::cache::RelationCache;
 use crate::config::AdapterConfig;
 use crate::errors::{
     AdapterError, AdapterErrorKind, AdapterResult, adbc_error_to_adapter_error,
@@ -107,6 +108,8 @@ pub struct XdbcEngine {
     pub type_ops: Box<dyn TypeOps>,
     /// Query cache
     query_cache: Option<Arc<dyn QueryCache>>,
+    /// Relation cache - caches warehouse relation metadata to avoid repeated queries
+    relation_cache: Arc<RelationCache>,
     /// Global CLI cancellation token
     cancellation_token: CancellationToken,
 }
@@ -122,6 +125,7 @@ impl XdbcEngine {
         query_comment: QueryCommentConfig,
         type_ops: Box<dyn TypeOps>,
         query_cache: Option<Arc<dyn QueryCache>>,
+        relation_cache: Arc<RelationCache>,
         token: CancellationToken,
     ) -> Self {
         let threads = config
@@ -152,6 +156,7 @@ impl XdbcEngine {
             type_ops,
             query_comment,
             query_cache,
+            relation_cache,
             cancellation_token: token,
         }
     }
@@ -258,6 +263,8 @@ pub struct MockEngine {
     adapter_type: AdapterType,
     type_ops: Arc<dyn TypeOps>,
     quoting: ResolvedQuoting,
+    /// Relation cache - caches warehouse relation metadata
+    relation_cache: Arc<RelationCache>,
 }
 
 impl MockEngine {
@@ -265,11 +272,13 @@ impl MockEngine {
         adapter_type: AdapterType,
         type_ops: Box<dyn TypeOps>,
         quoting: ResolvedQuoting,
+        relation_cache: Arc<RelationCache>,
     ) -> Self {
         Self {
             adapter_type,
             type_ops: Arc::from(type_ops),
             quoting,
+            relation_cache,
         }
     }
 }
@@ -300,6 +309,7 @@ impl AdapterEngine {
         query_cache: Option<Arc<dyn QueryCache>>,
         query_comment: QueryCommentConfig,
         type_ops: Box<dyn TypeOps>,
+        relation_cache: Arc<RelationCache>,
         token: CancellationToken,
     ) -> Arc<Self> {
         let engine = XdbcEngine::new(
@@ -311,6 +321,7 @@ impl AdapterEngine {
             query_comment,
             type_ops,
             query_cache,
+            relation_cache,
             token,
         );
         Arc::new(AdapterEngine::Xdbc(Arc::new(engine)))
@@ -326,6 +337,7 @@ impl AdapterEngine {
         stmt_splitter: Arc<dyn StmtSplitter>,
         query_comment: QueryCommentConfig,
         type_ops: Box<dyn TypeOps>,
+        relation_cache: Arc<RelationCache>,
         token: CancellationToken,
     ) -> Arc<Self> {
         let engine = ReplayEngine::new(
@@ -336,6 +348,7 @@ impl AdapterEngine {
             stmt_splitter,
             query_comment,
             type_ops,
+            relation_cache,
             token,
         );
         Arc::new(AdapterEngine::Replay(engine))
@@ -667,6 +680,16 @@ impl AdapterEngine {
             Self::Record(_record_engine) => None,
             Self::Replay(_replay_engine) => None,
             Self::Mock(_) => None,
+        }
+    }
+
+    /// Get a reference to the relation cache
+    pub fn relation_cache(&self) -> &Arc<RelationCache> {
+        match self {
+            Self::Xdbc(actual_engine) => &actual_engine.relation_cache,
+            Self::Record(record_engine) => record_engine.relation_cache(),
+            Self::Replay(replay_engine) => replay_engine.relation_cache(),
+            Self::Mock(mock_engine) => &mock_engine.relation_cache,
         }
     }
 

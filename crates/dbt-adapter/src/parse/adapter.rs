@@ -1,4 +1,5 @@
 use crate::base_adapter::{AdapterType, AdapterTyping, BaseAdapter, backend_of};
+use crate::cache::RelationCache;
 use crate::cast_util::downcast_value_to_dyn_base_relation;
 use crate::catalog_relation::CatalogRelation;
 use crate::errors::{AdapterError, AdapterErrorKind};
@@ -146,6 +147,7 @@ impl ParseAdapter {
             None,
             query_comment,
             type_ops,
+            Arc::new(RelationCache::default()),
             token,
         );
 

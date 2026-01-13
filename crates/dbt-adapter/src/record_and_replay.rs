@@ -1,5 +1,6 @@
 use crate::adapter_engine::AdapterEngine;
 use crate::base_adapter::backend_of;
+use crate::cache::RelationCache;
 use crate::config::AdapterConfig;
 use crate::errors::AdapterResult;
 use crate::query_comment::QueryCommentConfig;
@@ -473,6 +474,10 @@ impl RecordEngine {
     pub fn cancellation_token(&self) -> CancellationToken {
         self.0.engine.cancellation_token()
     }
+
+    pub fn relation_cache(&self) -> &Arc<RelationCache> {
+        self.0.engine.relation_cache()
+    }
 }
 
 struct RecordEngineConnection(Arc<RecordEngineInner>, Box<dyn Connection>, Option<String>);
@@ -715,6 +720,8 @@ struct ReplayEngineInner {
     stmt_splitter: Arc<dyn StmtSplitter>,
     query_comment: QueryCommentConfig,
     type_ops: Box<dyn TypeOps>,
+    /// Relation cache - caches warehouse relation metadata
+    relation_cache: Arc<RelationCache>,
     /// Global CLI cancellation token
     cancellation_token: CancellationToken,
 }
@@ -738,6 +745,7 @@ impl ReplayEngine {
         stmt_splitter: Arc<dyn StmtSplitter>,
         query_comment: QueryCommentConfig,
         type_ops: Box<dyn TypeOps>,
+        relation_cache: Arc<RelationCache>,
         token: CancellationToken,
     ) -> Self {
         let inner = ReplayEngineInner {
@@ -749,6 +757,7 @@ impl ReplayEngine {
             stmt_splitter,
             query_comment,
             type_ops,
+            relation_cache,
             cancellation_token: token,
         };
         ReplayEngine(Arc::new(inner))
@@ -797,6 +806,10 @@ impl ReplayEngine {
 
     pub fn cancellation_token(&self) -> CancellationToken {
         self.0.cancellation_token.clone()
+    }
+
+    pub fn relation_cache(&self) -> &Arc<RelationCache> {
+        &self.0.relation_cache
     }
 }
 

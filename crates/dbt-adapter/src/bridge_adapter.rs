@@ -1,5 +1,4 @@
 use crate::base_adapter::{AdapterType, AdapterTyping};
-use crate::cache::RelationCache;
 use crate::column::{Column, ColumnStatic};
 use crate::funcs::*;
 use crate::metadata::*;
@@ -112,10 +111,10 @@ impl Drop for ConnectionGuard<'_> {
 #[derive(Clone)]
 enum InnerAdapter {
     /// The actual implementation for all phases except parsing.
+    /// The relation cache is now stored in the engine, not here.
     Typed {
         adapter: Arc<dyn TypedBaseAdapter>,
         schema_store: Option<Arc<dyn SchemaStoreTrait>>,
-        relation_cache: Arc<RelationCache>,
     },
     /// The state necessary to perform operation in a shallow way during the parsing phase.
     #[expect(dead_code)]
@@ -145,6 +144,10 @@ use InnerAdapter::*;
 /// can be dereferenced into a mutable [Box<dyn Connection>]. When the
 /// guard instance is destroyed, the connection returns to the thread-local
 /// variable.
+///
+/// # Relation Cache
+///
+/// The relation cache is now managed by the engine. Access via `self.engine().relation_cache()`.
 #[derive(Clone)]
 pub struct BridgeAdapter {
     inner: InnerAdapter,
@@ -159,16 +162,17 @@ impl fmt::Debug for BridgeAdapter {
 }
 
 impl BridgeAdapter {
+    /// Create a new bridge adapter.
+    ///
+    /// The relation cache is obtained from the engine. No longer needs to be passed explicitly.
     pub fn new(
         adapter: Arc<dyn TypedBaseAdapter>,
         schema_store: Option<Arc<dyn SchemaStoreTrait>>,
-        relation_cache: Arc<RelationCache>,
         time_machine: Option<TimeMachine>,
     ) -> Self {
         let inner = Typed {
             adapter,
             schema_store,
-            relation_cache,
         };
         Self {
             inner,
@@ -325,11 +329,13 @@ impl BaseAdapter for BridgeAdapter {
         schema_to_relations_map: BTreeMap<CatalogAndSchema, RelationVec>,
     ) -> FsResult<()> {
         match &self.inner {
-            Typed { relation_cache, .. } => {
+            Typed { .. } => {
                 schema_to_relations_map
                     .into_iter()
                     .for_each(|(schema, relations)| {
-                        relation_cache.insert_schema(schema, relations)
+                        self.engine()
+                            .relation_cache()
+                            .insert_schema(schema, relations)
                     });
             }
             Parse(_) => {}
@@ -339,14 +345,14 @@ impl BaseAdapter for BridgeAdapter {
 
     fn is_cached(&self, relation: &Arc<dyn BaseRelation>) -> bool {
         match &self.inner {
-            Typed { relation_cache, .. } => relation_cache.contains_relation(relation),
+            Typed { .. } => self.engine().relation_cache().contains_relation(relation),
             Parse(_) => false,
         }
     }
 
     fn is_already_fully_cached(&self, schema: &CatalogAndSchema) -> bool {
         match &self.inner {
-            Typed { relation_cache, .. } => relation_cache.contains_full_schema(schema),
+            Typed { .. } => self.engine().relation_cache().contains_full_schema(schema),
             Parse(_) => false,
         }
     }
@@ -358,8 +364,11 @@ impl BaseAdapter for BridgeAdapter {
         relation: Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed { relation_cache, .. } => {
-                let _ = relation_cache.insert_relation(relation, None);
+            Typed { .. } => {
+                let _ = self
+                    .engine()
+                    .relation_cache()
+                    .insert_relation(relation, None);
                 Ok(none_value())
             }
             Parse(_) => Ok(none_value()),
@@ -373,8 +382,8 @@ impl BaseAdapter for BridgeAdapter {
         relation: Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed { relation_cache, .. } => {
-                let _ = relation_cache.evict_relation(&relation);
+            Typed { .. } => {
+                let _ = self.engine().relation_cache().evict_relation(&relation);
                 Ok(none_value())
             }
             Parse(_) => Ok(none_value()),
@@ -389,8 +398,11 @@ impl BaseAdapter for BridgeAdapter {
         to_relation: Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed { relation_cache, .. } => {
-                let _ = relation_cache.rename_relation(&from_relation, to_relation);
+            Typed { .. } => {
+                let _ = self
+                    .engine()
+                    .relation_cache()
+                    .rename_relation(&from_relation, to_relation);
                 Ok(none_value())
             }
             Parse(_) => Ok(none_value()),
@@ -584,12 +596,8 @@ impl BaseAdapter for BridgeAdapter {
         relation: Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed {
-                adapter,
-                relation_cache,
-                ..
-            } => {
-                relation_cache.evict_relation(&relation);
+            Typed { adapter, .. } => {
+                self.engine().relation_cache().evict_relation(&relation);
                 Ok(adapter.drop_relation(state, relation)?)
             }
             Parse(_) => Ok(none_value()),
@@ -666,8 +674,10 @@ impl BaseAdapter for BridgeAdapter {
         relation: Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed { relation_cache, .. } => {
-                relation_cache.evict_schema_for_relation(&relation);
+            Typed { .. } => {
+                self.engine()
+                    .relation_cache()
+                    .evict_schema_for_relation(&relation);
                 let args = [RelationObject::new(relation).into_value()];
                 execute_macro(state, &args, "drop_schema")?;
                 Ok(none_value())
@@ -759,11 +769,7 @@ impl BaseAdapter for BridgeAdapter {
         identifier: &str,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed {
-                adapter,
-                relation_cache,
-                ..
-            } => {
+            Typed { adapter, .. } => {
                 // Skip cache in replay mode
                 let is_replay = adapter.as_replay().is_some();
                 if !is_replay {
@@ -776,12 +782,18 @@ impl BaseAdapter for BridgeAdapter {
                         adapter.quoting(),
                     )?;
 
-                    if let Some(cached_entry) = relation_cache.get_relation(&temp_relation) {
+                    if let Some(cached_entry) =
+                        self.engine().relation_cache().get_relation(&temp_relation)
+                    {
                         return Ok(cached_entry.relation().as_value());
                     }
                     // If we have captured the entire schema previously, we can check for non-existence
                     // In these cases, return early with a None value
-                    else if relation_cache.contains_full_schema_for_relation(&temp_relation) {
+                    else if self
+                        .engine()
+                        .relation_cache()
+                        .contains_full_schema_for_relation(&temp_relation)
+                    {
                         return Ok(none_value());
                     }
 
@@ -801,7 +813,9 @@ impl BaseAdapter for BridgeAdapter {
 
                         // After calling list_relations_without_caching, the cache should be populated
                         // with the full schema.
-                        if let Some(cached_entry) = relation_cache.get_relation(&temp_relation) {
+                        if let Some(cached_entry) =
+                            self.engine().relation_cache().get_relation(&temp_relation)
+                        {
                             return Ok(cached_entry.relation().as_value());
                         } else {
                             return Ok(none_value());
@@ -827,7 +841,9 @@ impl BaseAdapter for BridgeAdapter {
                 match relation {
                     Some(relation) => {
                         // cache found relation
-                        relation_cache.insert_relation(relation.clone(), None);
+                        self.engine()
+                            .relation_cache()
+                            .insert_relation(relation.clone(), None);
                         Ok(relation.as_value())
                     }
                     None => Ok(none_value()),
@@ -1370,12 +1386,10 @@ impl BaseAdapter for BridgeAdapter {
         materialization: &str,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed {
-                adapter,
-                relation_cache,
-                ..
-            } => {
-                relation_cache.insert_relation(target_relation_partitioned.clone(), None);
+            Typed { adapter, .. } => {
+                self.engine()
+                    .relation_cache()
+                    .insert_relation(target_relation_partitioned.clone(), None);
 
                 let mut conn =
                     self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;

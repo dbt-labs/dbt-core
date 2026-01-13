@@ -1,6 +1,7 @@
 use crate::AdapterEngine;
 use crate::adapter_engine::MockEngine;
 use crate::base_adapter::{AdapterType, AdapterTyping};
+use crate::cache::RelationCache;
 use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
 use crate::funcs::none_value;
 use crate::metadata::*;
@@ -64,6 +65,7 @@ impl MockAdapter {
                 adapter_type,
                 type_ops,
                 quoting,
+                Arc::new(RelationCache::default()),
             ))),
             flags,
             quoting,

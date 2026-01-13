@@ -3131,6 +3131,7 @@ pub trait ReplayAdapter: TypedBaseAdapter {
 mod tests {
     use super::*;
     use crate::base_adapter::backend_of;
+    use crate::cache::RelationCache;
     use crate::config::AdapterConfig;
     use crate::query_comment::QueryCommentConfig;
     use crate::sql_types::NaiveTypeOpsImpl;
@@ -3177,6 +3178,7 @@ mod tests {
             None,
             QueryCommentConfig::from_query_comment(None, adapter_type, false),
             Box::new(NaiveTypeOpsImpl::new(adapter_type)), // XXX: NaiveTypeOpsImpl
+            Arc::new(RelationCache::default()),
             never_cancels(),
         )
     }
