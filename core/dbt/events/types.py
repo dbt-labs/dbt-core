@@ -779,6 +779,14 @@ class DuplicateNameDistinctNodeTypesDeprecation(WarnLevel):
         return line_wrap_message(_deprecation_tag(description, self.__class__.__name__))
 
 
+class TimeDimensionsRequireGranularityDeprecation(WarnLevel):
+    def code(self) -> str:
+        return "D041"
+
+    def message(self) -> str:
+        return line_wrap_message(_deprecation_tag(self.msg, self.__class__.__name__))
+
+
 # =======================================================
 # I - Project parsing
 # =======================================================
