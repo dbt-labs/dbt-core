@@ -892,7 +892,9 @@ fn generate_test_macro(
                     format!("\"{escaped}\"") // Do NOT add extra quotes
                 }
             } else {
-                v.to_string()
+                // IMPORTANT: serde_json formatting uses `null`, but Jinja uses `none`.
+                // We need to output valid Jinja literals for replay stability.
+                json_to_jinja_literal(v)
             };
             format!("{k}={value_str}")
         })
@@ -903,6 +905,49 @@ fn generate_test_macro(
         formatted_args.join(", ")
     ));
     Ok(sql)
+}
+
+fn json_to_jinja_literal(v: &Value) -> String {
+    match v {
+        Value::Null => "none".to_string(),
+        Value::Bool(b) => {
+            if *b {
+                "true".to_string()
+            } else {
+                "false".to_string()
+            }
+        }
+        Value::Number(n) => n.to_string(),
+        Value::String(s) => serde_json::to_string(s).unwrap_or_else(|_| "\"\"".to_string()),
+        Value::Array(arr) => {
+            let mut out = String::from("[");
+            for (i, item) in arr.iter().enumerate() {
+                if i > 0 {
+                    out.push(',');
+                }
+                out.push_str(&json_to_jinja_literal(item));
+            }
+            out.push(']');
+            out
+        }
+        Value::Object(map) => {
+            // Deterministic ordering for stable SQL/tests
+            let mut keys: Vec<&String> = map.keys().collect();
+            keys.sort();
+            let mut out = String::from("{");
+            for (i, k) in keys.iter().enumerate() {
+                if i > 0 {
+                    out.push(',');
+                }
+                let key = serde_json::to_string(k).unwrap_or_else(|_| "\"\"".to_string());
+                out.push_str(&key);
+                out.push(':');
+                out.push_str(&json_to_jinja_literal(&map[*k]));
+            }
+            out.push('}');
+            out
+        }
+    }
 }
 
 impl<T> TryFrom<&TestableNode<'_, T>> for Vec<GenericTestConfig>
@@ -1929,5 +1974,11 @@ mod tests {
             !sql.contains("name="),
             "Reserved 'name' must not be passed as a macro kwarg, got: {sql}"
         );
+    }
+
+    #[test]
+    fn test_json_to_jinja_literal_null_becomes_none_in_list() {
+        let v = Value::Array(vec![Value::String("x".to_string()), Value::Null]);
+        assert_eq!(json_to_jinja_literal(&v), "[\"x\",none]");
     }
 }
