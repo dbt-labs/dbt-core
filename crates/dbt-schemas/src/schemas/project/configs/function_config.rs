@@ -67,6 +67,10 @@ pub struct ProjectFunctionConfig {
     pub function_kind: Option<FunctionKind>,
     #[serde(rename = "+volatility")]
     pub volatility: Option<Volatility>,
+    #[serde(rename = "+runtime_version")]
+    pub runtime_version: Option<String>,
+    #[serde(rename = "+entry_point")]
+    pub entry_point: Option<String>,
 
     // Additional properties for directory structure
     pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectFunctionConfig>>,
@@ -92,6 +96,8 @@ impl Default for ProjectFunctionConfig {
             tags: None,
             function_kind: None,
             volatility: None,
+            runtime_version: None,
+            entry_point: None,
             __additional_properties__: BTreeMap::new(),
         }
     }
@@ -117,6 +123,8 @@ impl DefaultTo<ProjectFunctionConfig> for ProjectFunctionConfig {
             tags,
             function_kind,
             volatility,
+            runtime_version,
+            entry_point,
             __additional_properties__: _,
         } = self;
 
@@ -141,6 +149,8 @@ impl DefaultTo<ProjectFunctionConfig> for ProjectFunctionConfig {
                 static_analysis,
                 function_kind,
                 volatility,
+                runtime_version,
+                entry_point,
             ]
         );
     }
@@ -181,6 +191,8 @@ pub struct FunctionConfig {
     #[serde(rename = "type")]
     pub function_kind: Option<FunctionKind>,
     pub volatility: Option<Volatility>,
+    pub runtime_version: Option<String>,
+    pub entry_point: Option<String>,
 
     // Warehouse-specific configurations
     pub __warehouse_specific_config__: WarehouseSpecificNodeConfig,
@@ -221,6 +233,8 @@ impl DefaultTo<FunctionConfig> for FunctionConfig {
             static_analysis,
             function_kind,
             volatility,
+            runtime_version,
+            entry_point,
             __warehouse_specific_config__: warehouse_config,
         } = self;
 
@@ -248,6 +262,8 @@ impl DefaultTo<FunctionConfig> for FunctionConfig {
                 static_analysis,
                 function_kind,
                 volatility,
+                runtime_version,
+                entry_point,
             ]
         );
     }
@@ -272,6 +288,8 @@ impl From<ProjectFunctionConfig> for FunctionConfig {
             static_analysis: config.static_analysis,
             function_kind: config.function_kind,
             volatility: config.volatility,
+            runtime_version: config.runtime_version,
+            entry_point: config.entry_point,
             __warehouse_specific_config__: WarehouseSpecificNodeConfig::default(),
         }
     }
