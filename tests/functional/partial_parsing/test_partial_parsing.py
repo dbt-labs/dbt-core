@@ -55,6 +55,7 @@ from tests.functional.partial_parsing.fixtures import (
     model_three_sql,
     model_two_disabled_sql,
     model_two_sql,
+    model_two_sql_missing_space,
     models_schema1_yml,
     models_schema2_yml,
     models_schema2b_yml,
@@ -106,7 +107,11 @@ class TestModels:
         results = run_dbt(["run"])
         assert len(results) == 1
 
-        # add a model file
+        # add a model file with missing space
+        write_file(model_two_sql_missing_space, project.project_root, "models", "model_two.sql")
+        run_dbt(["--partial-parse", "run"], expect_pass=False)
+
+        # add a model file - fix missing space issue
         write_file(model_two_sql, project.project_root, "models", "model_two.sql")
         results = run_dbt(["--partial-parse", "run"])
         assert len(results) == 2
