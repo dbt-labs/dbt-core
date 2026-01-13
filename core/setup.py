@@ -25,7 +25,7 @@ with open(os.path.join(this_directory, "README.md")) as f:
 
 
 package_name = "dbt-core"
-package_version = "1.10.16"
+package_version = "1.10.18"
 description = """With dbt, data analysts and engineers can build analytics \
 the way engineers build applications."""
 
@@ -65,16 +65,16 @@ setup(
         # These packages are major-version-0. Keep upper bounds on upcoming minor versions (which could have breaking changes)
         # and check compatibility / bump in each new minor version of dbt-core.
         "pathspec>=0.9,<0.13",
-        "sqlparse>=0.5.0,<0.6.0",
+        "sqlparse>=0.5.0,<0.5.5",
         # ----
         # These are major-version-0 packages also maintained by dbt-labs.
         # Accept patches but avoid automatically updating past a set minor version range.
         "dbt-extractor>=0.5.0,<=0.6",
         "dbt-semantic-interfaces>=0.9.0,<0.10",
         # Minor versions for these are expected to be backwards-compatible
-        "dbt-common>=1.27.0,<2.0",
+        "dbt-common>=1.34.1,!=1.35.*,!=1.36.*,!=1.37.0,!=1.37.1,<2.0",
         "dbt-adapters>=1.15.5,<2.0",
-        "dbt-protos>=1.0.346,<2.0",
+        "dbt-protos>=1.0.405,<2.0",
         "pydantic<3",
         # ----
         # Expect compatibility with all new versions of these packages, so lower bounds only.
