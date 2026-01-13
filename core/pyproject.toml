@@ -52,7 +52,7 @@ dependencies = [
     # These are major-version-0 packages also maintained by dbt-labs.
     # Accept patches but avoid automatically updating past a set minor version range.
     "dbt-extractor>=0.5.0,<=0.6",
-    "dbt-semantic-interfaces>=0.10.0,<0.11",
+    "dbt-semantic-interfaces>=0.10.2,<0.11",
     # Minor versions for these are expected to be backwards-compatible
     "dbt-common>=1.37.2,<2.0",
     "dbt-adapters>=1.15.5,<2.0",
