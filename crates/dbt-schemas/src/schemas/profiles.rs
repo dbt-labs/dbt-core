@@ -44,7 +44,7 @@ pub enum DbConfig {
     Datafusion(Box<DatafusionDbConfig>),
     // SqlServer,
     // SingleStore,
-    // Spark,
+    Spark(Box<SparkDbConfig>),
     Databricks(Box<DatabricksDbConfig>),
     Salesforce(Box<SalesforceDbConfig>),
     // Hive,
@@ -112,6 +112,7 @@ impl DbConfig {
             DbConfig::Redshift(config) => config.host.as_ref(),
             DbConfig::Databricks(config) => config.host.as_ref(),
             DbConfig::Salesforce(config) => config.client_id.as_ref(),
+            DbConfig::Spark(config) => config.host.as_ref(),
         }
     }
 
@@ -215,6 +216,8 @@ impl DbConfig {
             DbConfig::Databricks(_) => &["host", "http_path", "schema"],
             // TODO: Salesforce connection keys
             DbConfig::Salesforce(_) => &["login_url", "database", "data_transform_run_timeout"],
+            // TODO(serramatutu): Spark connection keys
+            DbConfig::Spark(_) => &[],
             // TODO: Trino and Datafusion connection keys
             DbConfig::Trino(_) => &[],
             DbConfig::Datafusion(_) => &[],
@@ -250,6 +253,7 @@ impl DbConfig {
             DbConfig::Redshift(config) => dbt_serde_yaml::to_value(config),
             DbConfig::Databricks(config) => dbt_serde_yaml::to_value(config),
             DbConfig::Salesforce(config) => dbt_serde_yaml::to_value(config),
+            DbConfig::Spark(config) => dbt_serde_yaml::to_value(config),
         }
     }
 
@@ -264,6 +268,7 @@ impl DbConfig {
             DbConfig::Datafusion(..) => "datafusion",
             DbConfig::Databricks(..) => "databricks",
             DbConfig::Salesforce(..) => "salesforce",
+            DbConfig::Spark(..) => "spark",
         }
     }
 
@@ -277,6 +282,7 @@ impl DbConfig {
             DbConfig::Datafusion(..) => None,
             DbConfig::Databricks(..) => Some(AdapterType::Databricks),
             DbConfig::Salesforce(..) => Some(AdapterType::Salesforce),
+            DbConfig::Spark(..) => Some(AdapterType::Spark),
         }
     }
 
@@ -290,6 +296,7 @@ impl DbConfig {
             DbConfig::Datafusion(config) => config.database.as_ref(),
             DbConfig::Databricks(config) => config.database.as_ref(),
             DbConfig::Salesforce(config) => config.database.as_ref(),
+            DbConfig::Spark(_) => todo!(),
         }
     }
 
@@ -303,6 +310,7 @@ impl DbConfig {
             DbConfig::Datafusion(config) => config.schema.as_ref(),
             DbConfig::Databricks(config) => config.schema.as_ref(),
             DbConfig::Salesforce(_) => None,
+            DbConfig::Spark(_) => todo!(),
         }
     }
 
@@ -316,6 +324,7 @@ impl DbConfig {
             DbConfig::Trino(config) => config.threads.as_ref(),
             DbConfig::Datafusion(_) => None,
             DbConfig::Salesforce(_) => None,
+            DbConfig::Spark(_) => todo!(),
         }
     }
 
@@ -329,6 +338,7 @@ impl DbConfig {
             DbConfig::Redshift(config) => config.threads = threads,
             DbConfig::Datafusion(_) => (),
             DbConfig::Salesforce(_) => (),
+            DbConfig::Spark(_) => todo!(),
         }
     }
 
@@ -771,6 +781,15 @@ fn default_data_transform_run_timeout() -> Option<i64> {
     Some(180000) // 3 mins
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, Merge)]
+#[merge(strategy = merge_strategies_extend::overwrite_option)]
+#[serde(rename_all = "snake_case")]
+pub struct SparkDbConfig {
+    // TODO(serramatutu)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub host: Option<String>,
+}
+
 #[derive(Serialize, JsonSchema)]
 #[serde(untagged)]
 #[serde(rename_all = "snake_case")]
@@ -1140,6 +1159,8 @@ impl TryFrom<DbConfig> for TargetContext {
                     threads: None,
                 },
             })),
+
+            DbConfig::Spark(_) => todo!(),
         }
     }
 }

@@ -24,7 +24,7 @@ impl ColumnBuilder {
         match self.adapter_type {
             Snowflake => Ok(Self::build_snowflake(field, type_ops)),
             Bigquery => Ok(Self::build_bigquery(field, type_ops)),
-            Databricks => Ok(Self::build_databricks(field, type_ops)),
+            Databricks | Spark => Ok(Self::build_databricks(field, type_ops)),
             Redshift => Ok(Self::build_redshift(field, type_ops)),
             Postgres | Salesforce => Ok(Self::build_postgres_like(field, type_ops)),
         }
@@ -67,8 +67,12 @@ impl ColumnBuilder {
                 numeric_precision,
                 numeric_scale,
             ),
-            Databricks => Column::new(
-                Databricks, name, dtype, char_size, None, // numeric_precision
+            Databricks | Spark => Column::new(
+                self.adapter_type,
+                name,
+                dtype,
+                char_size,
+                None, // numeric_precision
                 None, // numeric_scale
             ),
             Salesforce => todo!("Salesforce column creation not implemented yet"),

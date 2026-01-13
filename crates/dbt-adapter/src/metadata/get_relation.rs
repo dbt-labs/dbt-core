@@ -39,7 +39,7 @@ pub fn get_relation(
         AdapterType::Bigquery => {
             bigquery_get_relation(adapter, state, ctx, conn, database, schema, identifier)
         }
-        AdapterType::Databricks => {
+        AdapterType::Databricks | AdapterType::Spark => {
             databricks_get_relation(adapter, state, ctx, conn, database, schema, identifier)
         }
         AdapterType::Redshift => {

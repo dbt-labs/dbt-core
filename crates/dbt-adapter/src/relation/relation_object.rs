@@ -226,7 +226,7 @@ pub fn do_create_relation(
             None,
             custom_quoting,
         )) as Arc<dyn BaseRelation>,
-        AdapterType::Databricks => Arc::new(DatabricksRelation::new(
+        AdapterType::Databricks | AdapterType::Spark => Arc::new(DatabricksRelation::new(
             Some(database),
             Some(schema),
             identifier,

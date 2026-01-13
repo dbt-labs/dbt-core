@@ -23,6 +23,8 @@ pub enum AdapterType {
     Redshift,
     /// Salesforce
     Salesforce,
+    /// Spark
+    Spark,
 }
 
 impl From<AdapterType> for Dialect {
@@ -37,6 +39,7 @@ impl From<AdapterType> for Dialect {
             // https://developer.salesforce.com/docs/data/data-cloud-query-guide/references/data-cloud-query-api-reference/c360a-api-query-v2-call-overview.html
             // falls back to Postgresql at the moment
             AdapterType::Salesforce => Dialect::Postgresql,
+            AdapterType::Spark => Dialect::SparkSql,
         }
     }
 }

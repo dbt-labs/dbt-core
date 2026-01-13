@@ -224,6 +224,13 @@ impl ProfileSetup {
                 };
                 DbConfig::Redshift(setup_redshift_profile(redshift_config.map(Box::as_ref))?)
             }
+            AdapterType::Spark => {
+                let _salesforce_config = match existing_config {
+                    Some(DbConfig::Spark(config)) => Some(config),
+                    _ => None,
+                };
+                todo!("setup_spark_profile")
+            }
             AdapterType::Salesforce => {
                 let _salesforce_config = match existing_config {
                     Some(DbConfig::Salesforce(config)) => Some(config),
