@@ -16,6 +16,7 @@ async-trait = { workspace = true }
 bytes = { workspace = true }
 clap = { workspace = true }
 dbt-common = { workspace = true }
+dbt-features = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-jinja-utils = { workspace = true }
 dbt-loader = { workspace = true }

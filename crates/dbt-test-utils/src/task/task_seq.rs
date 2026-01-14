@@ -11,10 +11,16 @@ use dbt_common::error::FsResult;
 use dbt_common::string_utils::split_into_whitespace_and_brackets;
 use dbt_common::tracing::init_tracing_with_consumer_layer;
 use dbt_common::tracing::reload::create_data_layer_for_tests;
+use dbt_features::feature_stack::FeatureStack;
+use once_cell::sync::OnceCell;
 use std::future::Future;
 use std::iter;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
+use std::sync::Arc;
+
+/// Global [Arc] of a [FeatureStack] to be shared across tests.
+pub static G_DBT_TEST_UTILS_FEATURE_STACK: OnceCell<Arc<FeatureStack>> = OnceCell::new();
 
 pub type BoxedSendFuture<T> = Pin<Box<dyn Future<Output = T> + Send>>;
 pub type CommandFn = dyn Fn(

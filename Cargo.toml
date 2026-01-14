@@ -9,6 +9,7 @@ members = [
   "crates/dbt-cancel",
   "crates/dbt-common",
   "crates/dbt-cloud-api",
+  "crates/dbt-features",
   "crates/dbt-init",
   "crates/dbt-error",
   "crates/dbt-frontend-common",
@@ -173,6 +174,7 @@ dbt-dag = { path = "crates/dbt-dag" }
 dbt-deps = { path = "crates/dbt-deps" }
 dbt-env = { path = "crates/dbt-env" }
 dbt-error = { path = "crates/dbt-error" }
+dbt-features = { path = "crates/dbt-features" }
 dbt-frontend-common = { path = "crates/dbt-frontend-common" }
 dbt-ident = { path = "crates/dbt-ident" }
 dbt-init = { path = "crates/dbt-init" }
