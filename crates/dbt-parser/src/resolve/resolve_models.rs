@@ -906,12 +906,25 @@ fn merge_python_config(
     let mut merged_config = project_config.clone();
 
     // Apply schema.yml config on top (medium priority)
-    if let Some(properties) = maybe_properties
-        && let Some(mut properties_config) = properties.config.clone()
-    {
-        properties_config.default_to(&merged_config);
-        merged_config = properties_config;
+    // For Python models, we always create a config layer with materialized="table" as default
+    // See https://github.com/dbt-labs/dbt-core/blob/34bb3f94dde716a3f9c36481d2ead85c211075dd/core/dbt/parser/base.py#L338
+    // This ensures the default overrides project config but can be overridden by Python file config
+    let mut properties_config = if let Some(properties) = maybe_properties {
+        // Schema.yml exists - use its config if present, otherwise create default
+        properties.config.clone().unwrap_or_default()
+    } else {
+        // No schema.yml - create default config
+        ModelConfig::default()
+    };
+
+    // Set default materialized if not specified
+    if properties_config.materialized.is_none() {
+        properties_config.materialized = Some(DbtMaterialization::Table);
     }
+
+    // Merge with project config (properties_config overrides project_config)
+    properties_config.default_to(&merged_config);
+    merged_config = properties_config;
 
     // Apply Python file config on top (highest priority)
     let mut python_config = *python_file_info.config.clone();
