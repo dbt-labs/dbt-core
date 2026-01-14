@@ -25,32 +25,6 @@ use std::sync::Arc;
 
 pub mod object_options;
 
-// The following views always need to be qualified with a dataset or a region (but not both!)
-//
-// See: https://cloud.google.com/bigquery/docs/information-schema-intro#dataset_qualifier
-const DATASET_OR_REGION_VIEWS: &[&str] = &[
-    "COLUMNS",
-    "COLUMN_FIELD_PATHS",
-    "MATERIALIZED_VIEWS",
-    "PARAMETERS",
-    "PARTITIONS",
-    "ROUTINES",
-    "ROUTINE_OPTIONS",
-    "TABLES",
-    "TABLE_OPTIONS",
-    "VIEWS",
-];
-
-// The following views always need to be qualified with a dataset but not region
-//
-// See: https://cloud.google.com/bigquery/docs/information-schema-intro#region_qualifier
-const DATASET_ONLY_VIEWS: &[&str] = &[
-    "PARTITIONS",
-    "SEARCH_INDEXES",
-    "SEARCH_INDEX_COLUMNS",
-    "SEARCH_INDEX_OPTIONS",
-];
-
 pub fn list_relations(
     adapter: &dyn AdapterTyping,
     ctx: &QueryCtx,
@@ -265,43 +239,217 @@ pub fn nest_column_data_types(
     Ok(result)
 }
 
+#[derive(Debug)]
+pub enum QualifierRequirement {
+    DatasetOnly,
+    RegionOnly,
+    DatasetOrRegion,
+}
+
+// TODO: currently not using _optional_include_project and _optional_exclude_region, but could be useful so capturing that info here
+#[derive(Debug)]
+pub struct QualifierOptions {
+    // Most views allow passing an optional project qualifier. Will use default project when not specified
+    pub _optional_include_project: bool,
+    // Some RegionOnly views allow excluding the region and will default to US
+    pub _optional_exclude_region: bool,
+    pub requirement: QualifierRequirement,
+}
+
+impl QualifierOptions {
+    pub const fn new(
+        optional_include_project: bool,
+        optional_exclude_region: bool,
+        requirement: QualifierRequirement,
+    ) -> Self {
+        Self {
+            _optional_include_project: optional_include_project,
+            _optional_exclude_region: optional_exclude_region,
+            requirement,
+        }
+    }
+}
+
+// Shared QualifierOptions singletons for match-based lookup
+static QO_REGION_TF: QualifierOptions =
+    QualifierOptions::new(true, false, QualifierRequirement::RegionOnly);
+static QO_REGION_FF: QualifierOptions =
+    QualifierOptions::new(false, false, QualifierRequirement::RegionOnly);
+static QO_REGION_TT: QualifierOptions =
+    QualifierOptions::new(true, true, QualifierRequirement::RegionOnly);
+static QO_DATASET_TF: QualifierOptions =
+    QualifierOptions::new(true, false, QualifierRequirement::DatasetOnly);
+static QO_DS_OR_REGION_TF: QualifierOptions =
+    QualifierOptions::new(true, false, QualifierRequirement::DatasetOrRegion);
+
+/// Find the qualifier options and requirements for a known view in info schema.
+///
+/// This should be an exhaustive list of all known views in BQ's INFO SCHEMA. They
+/// are organized in the same order as the documentation to make it easier to find
+/// any new, missing views that need to be accounted for.
+///
+/// NOTE: BY_PROJECT views have an alias stripping that suffix.
+///
+/// NOTE: On the necessity of the `region` qualifier, per BigQuery's docs:
+/// - You MUST specify a region to query _some_ views in `INFORMATION_SCHEMA` [1]
+/// - Some other views (like `TABLES`) either need region or dataset [2]
+/// - Generally, if you don't specify a region, the engine defaults to
+///   the US macro location (which might be routed to any region within the US) [3]
+///
+/// On the ability to specify a project
+/// [1] https://cloud.google.com/bigquery/docs/information-schema-intro#syntax
+/// [2] https://cloud.google.com/bigquery/docs/information-schema-intro#dataset_qualifier
+/// [3] https://cloud.google.com/bigquery/docs/locations#specify_locations
+///
+/// See https://cloud.google.com/bigquery/docs/information-schema-intro
+fn qualifier_options_for_info_schema_view(
+    sys_identifier: &str,
+) -> Option<&'static QualifierOptions> {
+    match sys_identifier {
+        // Access control
+        "OBJECT_PRIVILEGES" => Some(&QO_REGION_TF),
+
+        // BI Engine
+        "BI_CAPACITIES" | "BI_CAPACITY_CHANGES" => Some(&QO_REGION_TF),
+
+        // Configurations
+        "EFFECTIVE_PROJECT_OPTIONS"
+        | "ORGANIZATION_OPTIONS"
+        | "ORGANIZATION_OPTIONS_CHANGES"
+        | "PROJECT_OPTIONS"
+        | "PROJECT_OPTIONS_CHANGES" => Some(&QO_REGION_FF),
+
+        // Datasets
+        "SCHEMATA" | "SCHEMATA_LINKS" | "SCHEMATA_OPTIONS" | "SHARED_DATASET_USAGE" => {
+            Some(&QO_REGION_TT)
+        }
+        "SCHEMATA_REPLICAS" | "SCHEMATA_REPLICAS_BY_FAILOVER_RESERVATION" => Some(&QO_REGION_TF),
+
+        // Jobs
+        "JOBS" | "JOBS_BY_PROJECT" | "JOBS_BY_USER" | "JOBS_BY_FOLDER" | "JOBS_BY_ORGANIZATION" => {
+            Some(&QO_REGION_TF)
+        }
+
+        // Jobs by timeslice
+        "JOBS_TIMELINE"
+        | "JOBS_TIMELINE_BY_PROJECT"
+        | "JOBS_TIMELINE_BY_USER"
+        | "JOBS_TIMELINE_BY_FOLDER"
+        | "JOBS_TIMELINE_BY_ORGANIZATION" => Some(&QO_REGION_TF),
+
+        // Recommendations and insights
+        "INSIGHTS"
+        | "INSIGHTS_BY_PROJECT"
+        | "RECOMMENDATIONS"
+        | "RECOMMENDATIONS_BY_PROJECT"
+        | "RECOMMENDATIONS_BY_ORGANIZATION" => Some(&QO_REGION_TF),
+
+        // Reservations
+        "ASSIGNMENTS"
+        | "ASSIGNMENTS_BY_PROJECT"
+        | "ASSIGNMENT_CHANGES"
+        | "ASSIGNMENT_CHANGES_BY_PROJECT"
+        | "CAPACITY_COMMITMENTS"
+        | "CAPACITY_COMMITMENTS_BY_PROJECT"
+        | "CAPACITY_COMMITMENT_CHANGES"
+        | "CAPACITY_COMMITMENT_CHANGES_BY_PROJECT"
+        | "RESERVATIONS"
+        | "RESERVATIONS_BY_PROJECT"
+        | "RESERVATION_CHANGES"
+        | "RESERVATION_CHANGES_BY_PROJECT"
+        | "RESERVATIONS_TIMELINE"
+        | "RESERVATIONS_TIMELINE_BY_PROJECT" => Some(&QO_REGION_TF),
+
+        // Routines
+        "PARAMETERS" | "ROUTINES" | "ROUTINE_OPTIONS" => Some(&QO_DS_OR_REGION_TF),
+
+        // Search indexes
+        "SEARCH_INDEXES"
+        | "SEARCH_INDEX_COLUMNS"
+        | "SEARCH_INDEX_COLUMN_OPTIONS"
+        | "SEARCH_INDEX_OPTIONS" => Some(&QO_DATASET_TF),
+        "SEARCH_INDEXES_BY_ORGANIZATION" => Some(&QO_REGION_TF),
+
+        // Sessions
+        "SESSIONS" | "SESSIONS_BY_PROJECT" | "SESSIONS_BY_USER" => Some(&QO_REGION_TF),
+
+        // Streaming
+        "STREAMING_TIMELINE"
+        | "STREAMING_TIMELINE_BY_PROJECT"
+        | "STREAMING_TIMELINE_BY_FOLDER"
+        | "STREAMING_TIMELINE_BY_ORGANIZATION" => Some(&QO_REGION_TF),
+
+        // Tables
+        "COLUMNS" | "COLUMN_FIELD_PATHS" | "TABLES" | "TABLE_OPTIONS" => Some(&QO_DS_OR_REGION_TF),
+        "CONSTRAINT_COLUMN_USAGE"
+        | "KEY_COLUMN_USAGE"
+        | "PARTITIONS"
+        | "TABLE_CONSTRAINTS"
+        | "TABLE_SNAPSHOTS" => Some(&QO_DATASET_TF),
+        "TABLE_STORAGE"
+        | "TABLE_STORAGE_BY_PROJECT"
+        | "TABLE_STORAGE_BY_FOLDER"
+        | "TABLE_STORAGE_BY_ORGANIZATION"
+        | "TABLE_STORAGE_USAGE_TIMELINE"
+        | "TABLE_STORAGE_USAGE_TIMELINE_BY_FOLDER"
+        | "TABLE_STORAGE_USAGE_TIMELINE_BY_ORGANIZATION" => Some(&QO_REGION_TF),
+
+        // Vector indexes
+        "VECTOR_INDEXES" | "VECTOR_INDEX_COLUMNS" | "VECTOR_INDEX_OPTIONS" => Some(&QO_DATASET_TF),
+
+        // Views
+        "VIEWS" | "MATERIALIZED_VIEWS" => Some(&QO_DS_OR_REGION_TF),
+
+        // Write API
+        "WRITE_API_TIMELINE"
+        | "WRITE_API_TIMELINE_BY_PROJECT"
+        | "WRITE_API_TIMELINE_BY_FOLDER"
+        | "WRITE_API_TIMELINE_BY_ORGANIZATION" => Some(&QO_REGION_TF),
+
+        _ => None,
+    }
+}
+
 // Generate the fully qualified name of a BigQuery INFORMATION_SCHEMA table.
 //
-// FIXME(serramatutu): This logic can (and will) fail, in certain edge cases when
-// the user provides FQN like `project.region.INFORMATION_SCHEMA.VIEW` or
-// `dataset.INFORMATION_SCHEMA.VIEW`. This is perfectly legal in BigQuery, but our
-// relation parsing upstream it freaks out in some edge cases.
-// See: https://github.com/dbt-labs/fs/issues/4917
+// BQ's info schema tables have unique way of handling qualifiers. Instead of a
+// "database", the qualifier is something like [<project_id>.]<region_or_dataset_id>.
+// but in some cases the region is also optional.
 //
-// NOTE: On the necessity of the `region` qualifier, per BigQuery's docs:
-// - You MUST specify a region to query _some_ views in `INFORMATION_SCHEMA` [1]
-// - Some other views (like `TABLES`) either need region or dataset [2]
-// - Generally, if you don't specify a region, the engine defaults to
-// the US macro location (which might be routed to any region within the US) [3]
+// See `qualifier_options_for_info_schema_view` for specific view requirements..
 //
-// [1] https://cloud.google.com/bigquery/docs/information-schema-intro#syntax
-// [2] https://cloud.google.com/bigquery/docs/information-schema-intro#dataset_qualifier
-// [3] https://cloud.google.com/bigquery/docs/locations#specify_locations
+// TODO: We're currently ignoring any differences between the provided qualifier and
+//       the spericific requirements for the given view name since this is only used to
+//       fetch the view schema, so the specific location doesn't really matter.
 fn generate_system_table_fqn(
-    project: &str,
+    qualifier: &str,
     table: &str,
     user_preferred_region: Option<&str>,
 ) -> String {
     let sys_identifier = table.to_uppercase();
 
-    if DATASET_ONLY_VIEWS.contains(&sys_identifier.as_ref()) {
-        format!("{project}.INFORMATION_SCHEMA.{sys_identifier}")
-    } else if DATASET_OR_REGION_VIEWS.contains(&sys_identifier.as_ref()) {
-        // respect user's location preferences by querying the region directly if
-        // possible
-        match user_preferred_region {
-            None => format!("{project}.INFORMATION_SCHEMA.{sys_identifier}"),
-            Some(region) => format!("`region-{region}`.INFORMATION_SCHEMA.{sys_identifier}"),
-        }
-    } else {
-        // All other tables NEED to be qualified with the region otherwise the query will fail
-        let region = user_preferred_region.unwrap_or("us");
-        format!("`region-{region}`.INFORMATION_SCHEMA.{sys_identifier}")
+    match qualifier_options_for_info_schema_view(&sys_identifier) {
+        Some(qualifier_option) => match qualifier_option.requirement {
+            QualifierRequirement::RegionOnly => {
+                let region = user_preferred_region.unwrap_or("us");
+                format!("`region-{region}`.INFORMATION_SCHEMA.{sys_identifier}")
+            }
+            QualifierRequirement::DatasetOnly => {
+                format!("{qualifier}.INFORMATION_SCHEMA.{sys_identifier}")
+            }
+            QualifierRequirement::DatasetOrRegion => {
+                // respect user's location preferences by querying the region directly if
+                // possible
+                match user_preferred_region {
+                    None => format!("{qualifier}.INFORMATION_SCHEMA.{sys_identifier}"),
+                    Some(region) => {
+                        format!("`region-{region}`.INFORMATION_SCHEMA.{sys_identifier}")
+                    }
+                }
+            }
+        },
+        // This is technically an error, but we'll just let it fail when querying BQ
+        None => format!("INFORMATION_SCHEMA.{sys_identifier}"),
     }
 }
 
@@ -752,7 +900,7 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
             // TODO(jason): This needs to be resolved within the driver itself - querying this way returns IPC directly from the
             // storage API within the driver where it's currently not annotated with the original type text
             if relation.is_system() {
-                let project = relation.database_as_quoted_str()?;
+                let qualifier = relation.database_as_quoted_str()?;
 
                 let user_preferred_region = adapter
                     .engine()
@@ -760,7 +908,7 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
                     .map(|cfg| cfg.to_lowercase());
 
                 let table_fqn =
-                    generate_system_table_fqn(&project, &table, user_preferred_region.as_deref());
+                    generate_system_table_fqn(&qualifier, &table, user_preferred_region.as_deref());
                 let sql = format!("SELECT * FROM {table_fqn} LIMIT 0");
 
                 let ctx = QueryCtx::default().with_desc("Get table schema");
