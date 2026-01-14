@@ -19,7 +19,8 @@ use crate::schemas::project::configs::model_config::DataLakeObjectCategory;
 use crate::schemas::project::dbt_project::DefaultTo;
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::{
-    IndexesConfig, PrimaryKeyConfig, bool_or_string_bool, f64_or_string_f64, u64_or_string_u64,
+    IndexesConfig, OmissibleGrantConfig, PrimaryKeyConfig, bool_or_string_bool, f64_or_string_f64,
+    u64_or_string_u64,
 };
 
 /// Helper function to handle default_to logic for hooks (pre_hook/post_hook)
@@ -94,51 +95,70 @@ pub fn default_column_types(
 /// helper function to handle default_to for grants
 /// if the key of a grant starts with a + append the child grant to the parents, otherwise replace the parent grant
 pub fn default_to_grants(
-    child_grants: &mut Option<BTreeMap<String, StringOrArrayOfStrings>>,
-    parent_grants: &Option<BTreeMap<String, StringOrArrayOfStrings>>,
+    child_grants: &mut OmissibleGrantConfig,
+    parent_grants: &OmissibleGrantConfig,
 ) {
-    match (child_grants, parent_grants) {
-        (Some(child_grants_map), Some(parent_grants_map)) => {
+    use crate::schemas::serde::OmissibleGrantConfig;
+    use dbt_common::serde_utils::Omissible;
+
+    match (child_grants.as_mut(), parent_grants.as_ref()) {
+        (None, Some(parent)) => {
+            // Child not set, inherit from parent
+            *child_grants = OmissibleGrantConfig(Omissible::Present(parent.clone()));
+        }
+        (Some(child), Some(parent)) => {
+            // Both set, merge them following dbt-core DictKeyAppend:
+            // 1. Start with all parent keys
+            // 2. For each child key:
+            //    - +key: extend parent's list with child's values (parent first)
+            //    - key with no prefix: clobber
+            let child_grants_map = &mut child.0;
+            let parent_grants_map = &parent.0;
+
             // Collect keys that need to be processed to avoid borrow conflicts
-            let keys_to_process: Vec<String> = child_grants_map
-                .keys()
-                .filter(|key| key.starts_with('+'))
-                .cloned()
-                .collect();
+            let child_keys: Vec<String> = child_grants_map.keys().cloned().collect();
 
-            // Process each + prefixed key
-            // Can you ever have more than one key in a grant?
-            // TODO: Validate above assumption
-            for child_key in keys_to_process {
-                // Remove the + prefix to get the actual key
-                let actual_key = child_key.trim_start_matches('+');
-
-                // Get the value and remove the + prefixed key
-                if let Some(value) = child_grants_map.remove(&child_key) {
-                    // Append parent value to child value if parent has this key
-                    if let Some(parent_value) = parent_grants_map.get(actual_key) {
-                        let mut child_array: Vec<String> = value.clone().into();
-                        let parent_array: Vec<String> = parent_value.clone().into();
-
-                        child_array.extend(parent_array.iter().cloned());
-                        child_grants_map.insert(
-                            actual_key.to_string(),
-                            StringOrArrayOfStrings::ArrayOfStrings(child_array),
-                        );
-                    } else {
-                        // If parent doesn't have this key, just insert the child value
-                        child_grants_map.insert(actual_key.to_string(), value);
-                    }
+            // First, inherit parent keys that child doesn't have
+            for (parent_key, parent_value) in parent_grants_map.iter() {
+                // Check if child has this key (with or without + prefix)
+                let child_has_key = child_grants_map.contains_key(parent_key)
+                    || child_grants_map.contains_key(&format!("+{}", parent_key));
+                if !child_has_key {
+                    child_grants_map.insert(parent_key.clone(), parent_value.clone());
                 }
             }
+
+            for child_key in child_keys {
+                // + prefix indicates append
+                if child_key.starts_with('+') {
+                    let actual_key = child_key.trim_start_matches('+');
+
+                    if let Some(child_value) = child_grants_map.swap_remove(&child_key) {
+                        let child_array: Vec<String> = child_value.into();
+
+                        if let Some(parent_value) = parent_grants_map.get(actual_key) {
+                            // parent values first, then child values
+                            let mut merged: Vec<String> = parent_value.clone().into();
+                            merged.extend(child_array);
+                            child_grants_map.insert(
+                                actual_key.to_string(),
+                                StringOrArrayOfStrings::ArrayOfStrings(merged),
+                            );
+                        } else {
+                            // Parent doesn't have this key, just use child value
+                            child_grants_map.insert(
+                                actual_key.to_string(),
+                                StringOrArrayOfStrings::ArrayOfStrings(child_array),
+                            );
+                        }
+                    }
+                }
+                // Non prefix keys clobber, so just use what the child has
+            }
         }
-        // no child, set child to parent
-        (child_grants, Some(parent_grants_map)) => {
-            // If only parent exists, set child to parent
-            *child_grants = Some(parent_grants_map.clone());
-        }
-        (Some(child_grants_map), None) => {
-            // Parent doesn't exist but child does - still need to strip + prefixes
+        (Some(child), None) => {
+            // Child set but parent not set - just strip + prefixes
+            let child_grants_map = &mut child.0;
             let keys_to_process: Vec<String> = child_grants_map
                 .keys()
                 .filter(|key| key.starts_with('+'))
@@ -150,7 +170,7 @@ pub fn default_to_grants(
                 let actual_key = child_key.trim_start_matches('+');
 
                 // Get the value and remove the + prefixed key
-                if let Some(value) = child_grants_map.remove(&child_key) {
+                if let Some(value) = child_grants_map.swap_remove(&child_key) {
                     // No parent to merge with, just insert the child value with stripped prefix
                     child_grants_map.insert(actual_key.to_string(), value);
                 }
@@ -539,17 +559,11 @@ pub fn meta_eq(
     }
 }
 
-/// Helper function to compare grants fields, treating None and empty BTreeMap as equivalent
-pub fn grants_eq(
-    a: &Option<BTreeMap<String, StringOrArrayOfStrings>>,
-    b: &Option<BTreeMap<String, StringOrArrayOfStrings>>,
-) -> bool {
-    match (a, b) {
-        // Both None
+/// Helper function to compare grants fields, treating Omitted and empty as equivalent
+pub fn grants_eq(a: &OmissibleGrantConfig, b: &OmissibleGrantConfig) -> bool {
+    match (a.as_ref(), b.as_ref()) {
         (None, None) => true,
-        // Both Some - direct comparison
         (Some(a_val), Some(b_val)) => a_val == b_val,
-        // One None, one Some - check if the Some value is empty (equals default)
         (None, Some(b_val)) => b_val.is_empty(),
         (Some(a_val), None) => a_val.is_empty(),
     }

@@ -1,3 +1,4 @@
+use crate::schemas::serde::OmissibleGrantConfig;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::serde_utils::Omissible;
 use dbt_serde_yaml::JsonSchema;
@@ -41,7 +42,7 @@ use crate::schemas::properties::ModelFreshness;
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::{
     IndexesConfig, PrimaryKeyConfig, bool_or_string_bool, default_type, f64_or_string_f64,
-    serialize_string_or_array_map, u64_or_string_u64,
+    u64_or_string_u64,
 };
 use dbt_serde_yaml::ShouldBe;
 
@@ -174,8 +175,8 @@ pub struct ProjectModelConfig {
     pub full_refresh: Option<bool>,
     #[serde(rename = "+grant_access_to")]
     pub grant_access_to: Option<Vec<GrantAccessToTarget>>,
-    #[serde(rename = "+grants", serialize_with = "serialize_string_or_array_map")]
-    pub grants: Option<BTreeMap<String, StringOrArrayOfStrings>>,
+    #[serde(rename = "+grants")]
+    pub grants: OmissibleGrantConfig,
     #[serde(rename = "+group")]
     pub group: Option<String>,
     #[serde(
@@ -441,8 +442,7 @@ pub struct ModelConfig {
     pub unique_key: Option<DbtUniqueKey>,
     pub on_schema_change: Option<OnSchemaChange>,
     pub on_configuration_change: Option<OnConfigurationChange>,
-    #[serde(serialize_with = "serialize_string_or_array_map")]
-    pub grants: Option<BTreeMap<String, StringOrArrayOfStrings>>,
+    pub grants: OmissibleGrantConfig,
     pub packages: Option<StringOrArrayOfStrings>,
     pub python_version: Option<String>,
     pub docs: Option<DocsConfig>,

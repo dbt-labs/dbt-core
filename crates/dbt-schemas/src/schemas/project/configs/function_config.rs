@@ -1,3 +1,4 @@
+use crate::schemas::serde::OmissibleGrantConfig;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::serde_utils::Omissible;
 use dbt_serde_yaml::JsonSchema;
@@ -28,7 +29,7 @@ use crate::schemas::project::dbt_project::DefaultTo;
 use crate::schemas::project::dbt_project::TypedRecursiveConfig;
 use crate::schemas::properties::{FunctionKind, Volatility};
 use crate::schemas::serde::StringOrArrayOfStrings;
-use crate::schemas::serde::{bool_or_string_bool, default_type, serialize_string_or_array_map};
+use crate::schemas::serde::{bool_or_string_bool, default_type};
 
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
@@ -45,8 +46,8 @@ pub struct ProjectFunctionConfig {
     pub docs: Option<DocsConfig>,
     #[serde(default, rename = "+enabled", deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
-    #[serde(rename = "+grants", serialize_with = "serialize_string_or_array_map")]
-    pub grants: Option<BTreeMap<String, StringOrArrayOfStrings>>,
+    #[serde(rename = "+grants")]
+    pub grants: OmissibleGrantConfig,
     #[serde(rename = "+group")]
     pub group: Option<String>,
     #[serde(rename = "+language")]
@@ -85,7 +86,7 @@ impl Default for ProjectFunctionConfig {
             description: None,
             docs: None,
             enabled: None,
-            grants: None,
+            grants: OmissibleGrantConfig::default(),
             group: None,
             language: None,
             meta: None,
@@ -182,8 +183,7 @@ pub struct FunctionConfig {
     pub meta: Option<IndexMap<String, YmlValue>>,
     pub group: Option<String>,
     pub docs: Option<DocsConfig>,
-    #[serde(serialize_with = "serialize_string_or_array_map")]
-    pub grants: Option<BTreeMap<String, StringOrArrayOfStrings>>,
+    pub grants: OmissibleGrantConfig,
     pub quoting: Option<DbtQuoting>,
     pub language: Option<String>,
     pub on_configuration_change: Option<String>,
@@ -245,6 +245,9 @@ impl DefaultTo<FunctionConfig> for FunctionConfig {
         handle_omissible_override(database, &parent.database);
         handle_omissible_override(schema, &parent.schema);
 
+        // Handle grants with custom merge logic
+        default_to_grants(grants, &parent.grants);
+
         default_to!(
             parent,
             [
@@ -255,7 +258,6 @@ impl DefaultTo<FunctionConfig> for FunctionConfig {
                 meta,
                 group,
                 docs,
-                grants,
                 quoting,
                 language,
                 on_configuration_change,

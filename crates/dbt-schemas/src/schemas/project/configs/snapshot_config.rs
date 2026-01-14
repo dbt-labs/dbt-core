@@ -1,3 +1,4 @@
+use crate::schemas::serde::OmissibleGrantConfig;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_serde_yaml::JsonSchema;
 use dbt_serde_yaml::ShouldBe;
@@ -33,8 +34,7 @@ use crate::schemas::project::configs::common::default_to_grants;
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::bool_or_string_bool;
 use crate::schemas::serde::{
-    IndexesConfig, PrimaryKeyConfig, f64_or_string_f64, serialize_string_or_array_map,
-    u64_or_string_u64,
+    IndexesConfig, PrimaryKeyConfig, f64_or_string_f64, u64_or_string_u64,
 };
 
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
@@ -86,8 +86,8 @@ pub struct ProjectSnapshotConfig {
     pub post_hook: Verbatim<Option<Hooks>>,
     #[serde(rename = "+persist_docs")]
     pub persist_docs: Option<PersistDocsConfig>,
-    #[serde(rename = "+grants", serialize_with = "serialize_string_or_array_map")]
-    pub grants: Option<BTreeMap<String, StringOrArrayOfStrings>>,
+    #[serde(rename = "+grants")]
+    pub grants: OmissibleGrantConfig,
     #[serde(rename = "+event_time")]
     pub event_time: Option<String>,
     #[serde(rename = "+quoting")]
@@ -354,8 +354,8 @@ pub struct SnapshotConfig {
     #[serde(alias = "post-hook")]
     pub post_hook: Verbatim<Option<Hooks>>,
     pub persist_docs: Option<PersistDocsConfig>,
-    #[serde(default, serialize_with = "serialize_string_or_array_map")]
-    pub grants: Option<BTreeMap<String, StringOrArrayOfStrings>>,
+    #[serde(default)]
+    pub grants: OmissibleGrantConfig,
     pub event_time: Option<String>,
     pub quoting: Option<DbtQuoting>,
     pub static_analysis: Option<Spanned<StaticAnalysisKind>>,

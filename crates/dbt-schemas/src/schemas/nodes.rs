@@ -17,6 +17,7 @@ use crate::schemas::common::{
 };
 use crate::schemas::dbt_column::{DbtColumnRef, deserialize_dbt_columns, serialize_dbt_columns};
 use crate::schemas::manifest::{BigqueryClusterConfig, GrantAccessToTarget, PartitionConfig};
+use crate::schemas::project::configs::common::grants_eq;
 use crate::schemas::project::{StrictnessMode, WarehouseSpecificNodeConfig, same_warehouse_config};
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::{
@@ -876,7 +877,7 @@ fn seed_configs_equal(left: &SeedConfig, right: &SeedConfig) -> bool {
     btree_map_equal(&left.column_types, &right.column_types) &&
     docs_config_equal(&left.docs, &right.docs) &&
     left.enabled == right.enabled &&
-    btree_map_string_or_array_equal(&left.grants, &right.grants) &&
+    grants_eq(&left.grants, &right.grants) &&
     left.quote_columns == right.quote_columns &&
     // left.delimiter == right.delimiter && // TODO: re-enable when no longer using mantle/core manifests in IA
     left.event_time == right.event_time &&
@@ -909,19 +910,6 @@ fn btree_map_equal(
                 .collect();
             l_normalized == r_normalized
         }
-        (None, Some(r)) => r.is_empty(),
-        (Some(l), None) => l.is_empty(),
-    }
-}
-
-/// Compare BTreeMap<String, StringOrArrayOfStrings> considering None vs Some(empty) as equal
-fn btree_map_string_or_array_equal(
-    left: &Option<BTreeMap<String, StringOrArrayOfStrings>>,
-    right: &Option<BTreeMap<String, StringOrArrayOfStrings>>,
-) -> bool {
-    match (left, right) {
-        (None, None) => true,
-        (Some(l), Some(r)) => l == r,
         (None, Some(r)) => r.is_empty(),
         (Some(l), None) => l.is_empty(),
     }
@@ -1582,8 +1570,7 @@ impl InternalDbtNode for DbtSnapshot {
             let post_hook_eq = hooks_equal(&self_config.post_hook, &other_config.post_hook);
             let persist_docs_eq =
                 persist_docs_configs_equal(&self_config.persist_docs, &other_config.persist_docs);
-            let grants_eq =
-                btree_map_string_or_array_equal(&self_config.grants, &other_config.grants);
+            let grants_eq = grants_eq(&self_config.grants, &other_config.grants);
             let event_time_eq = self_config.event_time == other_config.event_time;
             let quoting_eq = quoting_equal(&self_config.quoting, &other_config.quoting);
             let static_analysis_eq = self_config.static_analysis == other_config.static_analysis;
