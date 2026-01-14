@@ -510,9 +510,9 @@ fn extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
 
     // Process all combined args for jinja vars
     for (key, value) in combined_args {
-        let (kwarg_value, jinja_var) = process_kwarg(&key, &value);
+        let (kwarg_value, jinja_vars) = process_kwarg(&key, &value);
         kwargs.insert(key, kwarg_value);
-        if let Some((var_name, var_value)) = jinja_var {
+        for (var_name, var_value) in jinja_vars {
             jinja_set_vars.insert(var_name, var_value);
         }
     }
@@ -598,22 +598,53 @@ fn extract_config_keys_from_map(
 }
 
 /// Helper function to process a kwarg value and detect if it needs a Jinja set block
-/// Returns (kwarg_value, optional_jinja_var)
-fn process_kwarg(key: &str, value: &Value) -> (Value, Option<(String, String)>) {
-    if let Value::String(s) = value {
-        if needs_jinja_set_block(s) {
-            // Generate a unique var name based on the key with a prefix to avoid collisions
-            let var_name = format!("dbt_custom_arg_{key}");
-            let jinja_var = Some((var_name.clone(), s.clone()));
-            let kwarg_value = Value::String(var_name);
-            (kwarg_value, jinja_var)
-        } else {
-            // For simple values, just use the value directly
-            (value.clone(), None)
+/// Returns (kwarg_value, jinja_vars)
+fn process_kwarg(key: &str, value: &Value) -> (Value, Vec<(String, String)>) {
+    match value {
+        Value::String(s) => {
+            if needs_jinja_set_block(s) {
+                // Generate a unique var name based on the key with a prefix to avoid collisions
+                let var_name = format!("dbt_custom_arg_{key}");
+                let jinja_var = vec![(var_name.clone(), s.clone())];
+                let kwarg_value = Value::String(var_name);
+                (kwarg_value, jinja_var)
+            } else {
+                // For simple values, just use the value directly
+                (value.clone(), vec![])
+            }
         }
-    } else {
-        // For non-string values, use as is
-        (value.clone(), None)
+        Value::Array(arr) => {
+            // Process each array element
+            let mut new_array = Vec::new();
+            let mut all_jinja_vars = Vec::new();
+
+            for (idx, elem) in arr.iter().enumerate() {
+                let elem_key = format!("{key}_{idx}");
+                let (processed_elem, elem_jinja_vars) = process_kwarg(&elem_key, elem);
+                new_array.push(processed_elem);
+                all_jinja_vars.extend(elem_jinja_vars);
+            }
+
+            (Value::Array(new_array), all_jinja_vars)
+        }
+        Value::Object(obj) => {
+            // Process each object value
+            let mut new_object = serde_json::Map::new();
+            let mut all_jinja_vars = Vec::new();
+
+            for (obj_key, obj_val) in obj {
+                let nested_key = format!("{key}_{obj_key}");
+                let (processed_val, val_jinja_vars) = process_kwarg(&nested_key, obj_val);
+                new_object.insert(obj_key.clone(), processed_val);
+                all_jinja_vars.extend(val_jinja_vars);
+            }
+
+            (Value::Object(new_object), all_jinja_vars)
+        }
+        _ => {
+            // For other non-string values (numbers, bools, null), use as is
+            (value.clone(), vec![])
+        }
     }
 }
 
@@ -815,7 +846,7 @@ fn generate_test_macro(
                 &var_value[2..var_value.len() - 2].trim()
             )
         } else {
-            format!("{{% set {var_name} %}}\n{var_value}\n{{% endset %}}\n\n")
+            format!("{{% set {var_name} -%}}\n{var_value}\n{{%- endset %}}\n\n")
         };
         sql.push_str(&set_val);
     }
@@ -866,6 +897,52 @@ fn generate_test_macro(
     } else {
         format!("test_{test_macro_name}")
     };
+
+    /// Helper function to recursively format a JSON value for Jinja macro calls
+    fn format_value_for_jinja(value: &Value, jinja_set_vars: &BTreeMap<String, String>) -> String {
+        match value {
+            Value::String(s) => {
+                // Check if this is a reference to one of our Jinja set variables
+                if s.starts_with("get_where_subquery(")
+                    || s.starts_with("ref(")
+                    || s.starts_with("source(")
+                    || jinja_set_vars.iter().any(|(var_name, _)| var_name == s)
+                {
+                    s.to_string() // Don't add quotes if it's already a ref, source, or jinja var
+                } else {
+                    let escaped = s
+                        .replace('\\', "\\\\") // Escape backslashes
+                        .replace('"', "\\\"") // Escape double quotes
+                        .replace('{', "\\{") // Escape curly braces
+                        .replace('}', "\\}"); // Escape closing curly braces
+                    format!("\"{escaped}\"")
+                }
+            }
+            Value::Array(arr) => {
+                let formatted_elements: Vec<String> = arr
+                    .iter()
+                    .map(|elem| format_value_for_jinja(elem, jinja_set_vars))
+                    .collect();
+                format!("[{}]", formatted_elements.join(","))
+            }
+            Value::Object(obj) => {
+                // Deterministic ordering for stable SQL/tests
+                let mut keys: Vec<&String> = obj.keys().collect();
+                keys.sort();
+                let formatted_pairs: Vec<String> = keys
+                    .iter()
+                    .map(|k| {
+                        let formatted_val = format_value_for_jinja(&obj[*k], jinja_set_vars);
+                        format!("\"{k}\":{formatted_val}")
+                    })
+                    .collect();
+                format!("{{{}}}", formatted_pairs.join(","))
+            }
+            // For non-string primitives, use json_to_jinja_literal to properly convert null->none, etc.
+            _ => json_to_jinja_literal(value),
+        }
+    }
+
     // Format all kwargs, handling ref calls specially
     // Exclude an embedded 'config' kwarg as it is emitted via config(...) above
     // Exclude reserved 'name' kwarg (used to name the test node, not passed to the macro).
@@ -873,29 +950,7 @@ fn generate_test_macro(
         .iter()
         .filter(|(k, _)| k.as_str() != "config" && k.as_str() != "name")
         .map(|(k, v)| {
-            let value_str = if let Value::String(s) = v {
-                // Check if this is a reference to one of our Jinja set variables
-                if s.starts_with("get_where_subquery(")
-                    || s.starts_with("ref(")
-                    || s.starts_with("source(")
-                    || jinja_set_vars.iter().any(|(var_name, _)| var_name == s)
-                // Check if this is a reference to one of our Jinja set variables
-                {
-                    s.to_string() // Don't add quotes if it's already a ref, source, or already quoted
-                } else {
-                    let escaped = s
-                        .replace('\\', "\\\\") // Escape backslashes
-                        .replace('"', "\\\"") // Escape double quotes
-                        .replace('{', "\\{") // Escape curly braces
-                        .replace('}', "\\}"); // Escape closing curly braces
-
-                    format!("\"{escaped}\"") // Do NOT add extra quotes
-                }
-            } else {
-                // IMPORTANT: serde_json formatting uses `null`, but Jinja uses `none`.
-                // We need to output valid Jinja literals for replay stability.
-                json_to_jinja_literal(v)
-            };
+            let value_str = format_value_for_jinja(v, jinja_set_vars);
             format!("{k}={value_str}")
         })
         .collect();
@@ -1980,5 +2035,224 @@ mod tests {
     fn test_json_to_jinja_literal_null_becomes_none_in_list() {
         let v = Value::Array(vec![Value::String("x".to_string()), Value::Null]);
         assert_eq!(json_to_jinja_literal(&v), "[\"x\",none]");
+    }
+
+    #[test]
+    fn test_jinja_extraction_from_arrays() {
+        // Test that Jinja expressions inside arrays are properly extracted
+        let mut test_args = serde_json::Map::new();
+        test_args.insert(
+            "values".to_string(),
+            Value::Array(vec![
+                Value::String("{% raw %}{{true}}{% endraw %}".to_string()),
+                Value::Null,
+                Value::String("regular_string".to_string()),
+            ]),
+        );
+        test_args.insert(
+            "another_arg".to_string(),
+            Value::String("{{ var('myvar', 'baz') }}-bar".to_string()),
+        );
+
+        // Convert to the format expected by the extraction function
+        let test_args_btree: BTreeMap<String, Value> = test_args.into_iter().collect();
+        let yaml_value = dbt_serde_yaml::to_value(&test_args_btree).unwrap();
+        let verbatim_wrapper = Verbatim::from(Some(yaml_value));
+        let empty_deprecated = Verbatim::from(BTreeMap::new());
+        let existing_config = None;
+        let io_args = IoArgs::default();
+
+        let extraction_result = extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
+            &verbatim_wrapper,
+            &empty_deprecated,
+            &existing_config,
+            &io_args,
+            None,
+        )
+        .unwrap();
+
+        // Check that both the array element and the string arg had their Jinja extracted
+        assert!(
+            extraction_result.jinja_set_vars.len() >= 2,
+            "Expected at least 2 Jinja set vars to be extracted, got: {}",
+            extraction_result.jinja_set_vars.len()
+        );
+
+        // Check that the array was modified to use variable references
+        let values_kwarg = extraction_result.kwargs.get("values").unwrap();
+        if let Value::Array(arr) = values_kwarg {
+            // First element should be a variable reference
+            if let Value::String(s) = &arr[0] {
+                assert!(
+                    s.starts_with("dbt_custom_arg_values_0"),
+                    "Expected first array element to be replaced with variable reference, got: {s}"
+                );
+                // And that variable should map to the original Jinja expression
+                assert!(
+                    extraction_result
+                        .jinja_set_vars
+                        .get(s)
+                        .map(|v| v == "{% raw %}{{true}}{% endraw %}")
+                        .unwrap_or(false),
+                    "Variable reference should map to original Jinja expression"
+                );
+            }
+            // Second element should remain null
+            assert_eq!(arr[1], Value::Null);
+            // Third element should remain a regular string
+            assert_eq!(arr[2], Value::String("regular_string".to_string()));
+        } else {
+            panic!("Expected values kwarg to be an array");
+        }
+
+        // Test that generate_test_macro properly handles the array with variable references
+        let mut kwargs = extraction_result.kwargs;
+        kwargs.insert(
+            "model".to_string(),
+            Value::String("get_where_subquery(ref('my_model'))".to_string()),
+        );
+
+        let sql = generate_test_macro(
+            "accepted_values",
+            &kwargs,
+            None,
+            &None,
+            &extraction_result.jinja_set_vars,
+        )
+        .unwrap();
+
+        // Should have the set blocks with whitespace control
+        assert!(
+            sql.contains("{% set dbt_custom_arg_values_0 -%}"),
+            "Expected set block with whitespace control for array element, got: {sql}"
+        );
+        assert!(
+            sql.contains("{% raw %}{{true}}{% endraw %}"),
+            "Expected original Jinja expression in set block, got: {sql}"
+        );
+        assert!(
+            sql.contains("{%- endset %}"),
+            "Expected endset with whitespace control, got: {sql}"
+        );
+
+        // The macro call should have the variable reference without quotes
+        // Note: json_to_jinja_literal converts null to "none" for proper Jinja syntax
+        assert!(
+            sql.contains("values=[dbt_custom_arg_values_0,none,\"regular_string\"]"),
+            "Expected array with variable reference (unquoted), none, and quoted string, got: {sql}"
+        );
+    }
+
+    #[test]
+    fn test_jinja_set_block_whitespace_control() {
+        // Test that the generated set blocks use whitespace control to avoid newlines
+        let mut jinja_set_vars = BTreeMap::new();
+        jinja_set_vars.insert(
+            "dbt_custom_arg_values_0".to_string(),
+            "{% raw %}{{true}}{% endraw %}".to_string(),
+        );
+
+        let mut kwargs = BTreeMap::new();
+        kwargs.insert(
+            "model".to_string(),
+            Value::String("get_where_subquery(ref('one'))".to_string()),
+        );
+        kwargs.insert("column_name".to_string(), Value::String("id".to_string()));
+        kwargs.insert(
+            "values".to_string(),
+            Value::Array(vec![
+                Value::String("dbt_custom_arg_values_0".to_string()),
+                Value::Null,
+            ]),
+        );
+
+        let sql =
+            generate_test_macro("accepted_values", &kwargs, None, &None, &jinja_set_vars).unwrap();
+
+        // Verify that the set block uses whitespace control (-%} and {%-)
+        assert!(
+            sql.contains("{% set dbt_custom_arg_values_0 -%}"),
+            "Set block should use trailing whitespace control (-%}}), got: {sql}"
+        );
+        assert!(
+            sql.contains("{%- endset %}"),
+            "Set block should use leading whitespace control ({{%-), got: {sql}"
+        );
+
+        // The generated SQL should have the format:
+        // {% set dbt_custom_arg_values_0 -%}
+        // {% raw %}{{true}}{% endraw %}
+        // {%- endset %}
+        //
+        // {{ test_accepted_values(...) }}
+        //
+        // When this is rendered by Jinja, the whitespace control will strip
+        // the newlines, so the value of dbt_custom_arg_values_0 will be
+        // "{{true}}" without leading/trailing newlines
+    }
+
+    #[test]
+    fn test_jinja_extraction_from_objects() {
+        // Test that Jinja expressions inside objects are properly extracted and formatted
+        let mut test_args = serde_json::Map::new();
+        let mut nested_obj = serde_json::Map::new();
+        nested_obj.insert(
+            "query".to_string(),
+            Value::String("SELECT * FROM {{ ref('model') }}".to_string()),
+        );
+        nested_obj.insert("limit".to_string(), Value::Number(100.into()));
+        test_args.insert("config_obj".to_string(), Value::Object(nested_obj));
+
+        // Convert to the format expected by the extraction function
+        let test_args_btree: BTreeMap<String, Value> = test_args.into_iter().collect();
+        let yaml_value = dbt_serde_yaml::to_value(&test_args_btree).unwrap();
+        let verbatim_wrapper = Verbatim::from(Some(yaml_value));
+        let empty_deprecated = Verbatim::from(BTreeMap::new());
+        let existing_config = None;
+        let io_args = IoArgs::default();
+
+        let extraction_result = extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
+            &verbatim_wrapper,
+            &empty_deprecated,
+            &existing_config,
+            &io_args,
+            None,
+        )
+        .unwrap();
+
+        // Check that the jinja expression in the object was extracted
+        assert!(
+            !extraction_result.jinja_set_vars.is_empty(),
+            "Expected Jinja set vars to be extracted from nested object"
+        );
+
+        // Test that generate_test_macro properly handles objects with variable references
+        let mut kwargs = extraction_result.kwargs;
+        kwargs.insert(
+            "model".to_string(),
+            Value::String("get_where_subquery(ref('my_model'))".to_string()),
+        );
+
+        let sql = generate_test_macro(
+            "custom_test",
+            &kwargs,
+            None,
+            &None,
+            &extraction_result.jinja_set_vars,
+        )
+        .unwrap();
+
+        // Should have the set block for the nested query
+        assert!(
+            sql.contains("{% set dbt_custom_arg_config_obj_query -%}"),
+            "Expected set block for nested object query, got: {sql}"
+        );
+
+        // The macro call should have the object formatted with the variable reference unquoted
+        // Note: BTreeMap iterates in sorted key order, so "limit" comes before "query"
+        assert!(
+            sql.contains("config_obj={\"limit\":100,\"query\":dbt_custom_arg_config_obj_query}"),
+            "Expected object with variable reference (unquoted) and regular value, got: {sql}"
+        );
     }
 }
