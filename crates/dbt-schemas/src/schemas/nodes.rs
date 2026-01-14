@@ -4163,14 +4163,6 @@ mod tests {
         }
 
         #[test]
-        fn test_non_empty_with_different_case_are_equal() {
-            // normalize_sql lowercases, so these should be equal
-            let a = vec![Some("Hello World".to_string())];
-            let b = vec![Some("hello world".to_string())];
-            assert!(optional_string_vecs_equal(&a, &b));
-        }
-
-        #[test]
         fn test_non_empty_different_content_are_not_equal() {
             let a = vec![Some("foo".to_string())];
             let b = vec![Some("bar".to_string())];
@@ -4183,21 +4175,6 @@ mod tests {
             let b = vec![Some("content".to_string())];
             assert!(!optional_string_vecs_equal(&a, &b));
             assert!(!optional_string_vecs_equal(&b, &a));
-        }
-
-        #[test]
-        fn test_multiple_elements_all_match() {
-            let a = vec![
-                Some("Primary Key".to_string()),
-                None,
-                Some("description".to_string()),
-            ];
-            let b = vec![
-                Some("primary key".to_string()), // different case
-                Some("".to_string()),            // empty string matches None
-                Some("DESCRIPTION".to_string()), // different case
-            ];
-            assert!(optional_string_vecs_equal(&a, &b));
         }
 
         #[test]

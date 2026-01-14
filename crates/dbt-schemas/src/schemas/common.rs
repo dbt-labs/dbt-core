@@ -1150,13 +1150,26 @@ pub fn _normalize_quote(quoting: bool, dialect: &Dialect, name: &str) -> (String
     }
 }
 
-/// Normalize SQL by removing all whitespace and converting to lowercase.
-/// This ensures consistent checksums regardless of formatting differences.
+/// Normalize SQL by compacting multiple spaces and newlines into a single space.
+/// This ensures consistent checksums regardless of formatting differences
+/// due to multiple spaces and newlines.
 pub fn normalize_sql(sql: &str) -> String {
-    sql.chars()
-        .filter(|c| !c.is_whitespace())
-        .collect::<String>()
-        .to_lowercase()
+    let mut result = String::with_capacity(sql.len());
+    let mut last_was_whitespace = false;
+
+    for c in sql.chars() {
+        if c.is_whitespace() {
+            if !last_was_whitespace {
+                result.push(' ');
+                last_was_whitespace = true;
+            }
+        } else {
+            result.push(c);
+            last_was_whitespace = false;
+        }
+    }
+
+    result.trim().to_string()
 }
 
 /// Merge two meta maps, with the second map's values taking precedence on key conflicts.
