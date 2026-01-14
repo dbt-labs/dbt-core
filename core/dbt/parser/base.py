@@ -5,7 +5,7 @@ from typing import Any, Dict, Generic, List, Optional, TypeVar
 
 from dbt import deprecations, hooks, utils
 from dbt.adapters.factory import get_adapter  # noqa: F401
-from dbt.artifacts.resources import Contract
+from dbt.artifacts.resources import Contract, Export
 from dbt.clients.jinja import MacroGenerator, get_rendered
 from dbt.config import RuntimeConfig
 from dbt.context.context_config import ContextConfig
@@ -305,7 +305,7 @@ class ConfiguredParser(
         # These call the RelationUpdate callable to go through generate_name macros
         self._update_node_database(parsed_node, config_dict.get("database"))
         self._update_node_schema(parsed_node, config_dict.get("schema"))
-        if parsed_node.schema is None:
+        if not isinstance(parsed_node, Export) and parsed_node.schema is None:
             fire_event(
                 Note(
                     msg=f"Node schema set to None from generate_schema_name call for node '{parsed_node.unique_id}'."
