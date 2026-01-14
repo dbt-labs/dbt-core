@@ -6,6 +6,7 @@ use minijinja::{State, Value};
 use serde_json::json;
 
 mod api_client;
+use api_client::DatabricksApiClient;
 
 pub fn submit_python_job(
     adapter: &dyn TypedBaseAdapter,
@@ -41,18 +42,104 @@ pub fn submit_python_job(
         .get_attr("submission_method")
         .ok()
         .and_then(|v| v.as_str().map(|s| s.to_string()))
-        .unwrap_or_else(|| "job_cluster".to_string());
+        .unwrap_or_else(|| "all_purpose_cluster".to_string());
 
-    if submission_method != "job_cluster" {
-        return Err(AdapterError::new(
+    match submission_method.as_str() {
+        "all_purpose_cluster" => submit_all_purpose_cluster(
+            adapter,
+            &config,
+            &catalog,
+            &schema,
+            &identifier,
+            compiled_code,
+        ),
+        "job_cluster" => submit_job_cluster(
+            adapter,
+            &config,
+            &catalog,
+            &schema,
+            &identifier,
+            compiled_code,
+        ),
+        _ => Err(AdapterError::new(
             AdapterErrorKind::NotSupported,
             format!(
-                "Only 'job_cluster' submission method is currently supported, got: {}",
+                "Unsupported submission_method: '{}'. Supported methods: all_purpose_cluster, job_cluster",
                 submission_method
             ),
-        ));
+        )),
     }
+}
 
+/// https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/python_models/python_submissions.py#L412
+fn submit_all_purpose_cluster(
+    adapter: &dyn TypedBaseAdapter,
+    config: &Value,
+    catalog: &str,
+    schema: &str,
+    identifier: &str,
+    compiled_code: &str,
+) -> AdapterResult<AdapterResponse> {
+    let cluster_id = resolve_cluster_id(adapter, config)?;
+
+    let create_notebook = config
+        .get_attr("create_notebook")
+        .ok()
+        .map(|v| v.is_true())
+        .unwrap_or(false);
+
+    if create_notebook {
+        // Extract library configuration (packages, index_url, additional_libs)
+        let packages = extract_packages(config);
+        let index_url = config
+            .get_attr("index_url")
+            .ok()
+            .and_then(|v| v.as_str().map(|s| s.to_string()));
+
+        let additional_libs = config
+            .get_attr("additional_libs")
+            .ok()
+            .and_then(|v| v.try_iter().ok())
+            .map(|iter| {
+                iter.filter_map(|v| serde_json::to_value(&v).ok())
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+
+        let libraries = build_libraries(&packages, index_url.as_deref(), &additional_libs);
+
+        let mut task_settings = json!({
+            "existing_cluster_id": cluster_id
+        });
+
+        // Attach libraries if present
+        if !libraries.is_empty() {
+            task_settings["libraries"] = json!(libraries);
+        }
+
+        submit_via_notebook(
+            adapter,
+            config,
+            catalog,
+            schema,
+            identifier,
+            compiled_code,
+            task_settings,
+        )
+    } else {
+        submit_via_command_api(adapter, config, compiled_code, &cluster_id)
+    }
+}
+
+/// https://github.com/databricks/dbt-databricks/blob/955743ab67543ef1fad3c4f7c13cc8b4a0ab8c06/dbt/adapters/databricks/python_models/python_submissions.py#L392
+fn submit_job_cluster(
+    adapter: &dyn TypedBaseAdapter,
+    config: &Value,
+    catalog: &str,
+    schema: &str,
+    identifier: &str,
+    compiled_code: &str,
+) -> AdapterResult<AdapterResponse> {
     let job_cluster_config = config.get_attr("job_cluster_config").ok().ok_or_else(|| {
         AdapterError::new(
             AdapterErrorKind::Configuration,
@@ -62,19 +149,7 @@ pub fn submit_python_job(
 
     validate_job_cluster_config(&job_cluster_config)?;
 
-    let packages = extract_packages(&config);
-    let timeout = config
-        .get_attr("timeout")
-        .ok()
-        .and_then(|v| v.as_str().and_then(|s| s.parse::<u64>().ok()))
-        .unwrap_or(86400);
-
-    let create_notebook = config
-        .get_attr("create_notebook")
-        .ok()
-        .map(|v| v.is_true())
-        .unwrap_or(true);
-
+    let packages = extract_packages(config);
     let index_url = config
         .get_attr("index_url")
         .ok()
@@ -90,13 +165,112 @@ pub fn submit_python_job(
         })
         .unwrap_or_default();
 
+    let cluster_config_json = serde_json::to_value(&job_cluster_config).map_err(|e| {
+        AdapterError::new(
+            AdapterErrorKind::Internal,
+            format!("Failed to serialize job_cluster_config: {}", e),
+        )
+    })?;
+
+    let libraries = build_libraries(&packages, index_url.as_deref(), &additional_libs);
+
+    let mut task_settings = json!({
+        "new_cluster": cluster_config_json
+    });
+
+    if !libraries.is_empty() {
+        task_settings["libraries"] = json!(libraries);
+    }
+
+    submit_via_notebook(
+        adapter,
+        config,
+        catalog,
+        schema,
+        identifier,
+        compiled_code,
+        task_settings,
+    )
+}
+
+/// https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/python_models/python_submissions.py#L61
+fn submit_via_command_api(
+    adapter: &dyn TypedBaseAdapter,
+    config: &Value,
+    compiled_code: &str,
+    cluster_id: &str,
+) -> AdapterResult<AdapterResponse> {
+    let timeout = config
+        .get_attr("timeout")
+        .ok()
+        .and_then(|v| v.as_str().and_then(|s| s.parse::<u64>().ok()))
+        .unwrap_or(0); // 0 means no timeout (matches dbt-databricks default)
+
     let use_user_folder_for_python = config
         .get_attr("user_folder_for_python")
         .ok()
         .map(|v| v.is_true())
         .unwrap_or(false);
 
-    let api_client = api_client::DatabricksApiClient::new(adapter, use_user_folder_for_python)?;
+    let api_client = DatabricksApiClient::new(adapter, use_user_folder_for_python)?;
+
+    let context_id = api_client.create_context(cluster_id)?;
+
+    let _command_id_opt: Option<String> = None;
+    let result = (|| -> AdapterResult<String> {
+        let command_id = api_client.execute_command(cluster_id, &context_id, compiled_code)?;
+        api_client.poll_command_completion(cluster_id, &context_id, &command_id, timeout)?;
+
+        Ok(command_id)
+    })();
+
+    let cleanup_result = api_client.destroy_context(cluster_id, &context_id);
+    match (result, cleanup_result) {
+        (Ok(command_id), Ok(())) => Ok(AdapterResponse {
+            message: format!(
+                "Python model executed successfully using Command API on cluster {}",
+                cluster_id
+            ),
+            code: "OK".to_string(),
+            rows_affected: 0,
+            query_id: Some(command_id),
+        }),
+        (Err(e), _) => Err(e),
+        (Ok(_), Err(cleanup_err)) => Err(cleanup_err),
+    }
+}
+
+fn submit_via_notebook(
+    adapter: &dyn TypedBaseAdapter,
+    config: &Value,
+    catalog: &str,
+    schema: &str,
+    identifier: &str,
+    compiled_code: &str,
+    task_settings: serde_json::Value,
+) -> AdapterResult<AdapterResponse> {
+    let timeout = config
+        .get_attr("timeout")
+        .ok()
+        .and_then(|v| v.as_str().and_then(|s| s.parse::<u64>().ok()))
+        .unwrap_or(0);
+
+    let use_user_folder_for_python = config
+        .get_attr("user_folder_for_python")
+        .ok()
+        .map(|v| v.is_true())
+        .unwrap_or(true);
+
+    let api_client = DatabricksApiClient::new(adapter, use_user_folder_for_python)?;
+
+    let notebook_path = upload_notebook(
+        &api_client,
+        catalog,
+        schema,
+        identifier,
+        compiled_code,
+        true,
+    )?;
 
     let run_name = format!(
         "{}-{}-{}-{}",
@@ -106,36 +280,89 @@ pub fn submit_python_job(
         uuid::Uuid::new_v4()
     );
 
-    let notebook_path = upload_notebook(
+    let submission_type = if task_settings.get("new_cluster").is_some() {
+        "job_cluster"
+    } else {
+        "all_purpose_cluster"
+    };
+
+    let run_id = submit_notebook_job(
         &api_client,
-        &catalog,
-        &schema,
-        &identifier,
-        compiled_code,
-        create_notebook,
-    )?;
-
-    let job_spec = build_job_spec(
+        &run_name,
         &notebook_path,
-        &job_cluster_config,
-        &packages,
-        index_url.as_deref(),
-        &additional_libs,
+        task_settings,
+        timeout,
     )?;
-
-    let run_id = submit_job_run(&api_client, &run_name, &job_spec, timeout)?;
 
     poll_job_completion(&api_client, &run_id, timeout)?;
 
     Ok(AdapterResponse {
         message: format!(
-            "Python model executed successfully via job_cluster. Run ID: {}, Notebook: {}",
-            run_id, notebook_path
+            "Python model executed successfully via notebook using {}. \
+             Run ID: {}, Notebook: {}",
+            submission_type, run_id, notebook_path
         ),
         code: "OK".to_string(),
         rows_affected: 0,
         query_id: Some(run_id),
     })
+}
+
+fn resolve_cluster_id(adapter: &dyn TypedBaseAdapter, config: &Value) -> AdapterResult<String> {
+    // Precedence order: cluster_id -> http_path -> http_path from profile
+
+    if let Some(cluster_id) = config
+        .get_attr("cluster_id")
+        .ok()
+        .and_then(|v| v.as_str().map(|s| s.to_string()))
+    {
+        return Ok(cluster_id);
+    }
+
+    if let Some(http_path) = config
+        .get_attr("http_path")
+        .ok()
+        .and_then(|v| v.as_str().map(|s| s.to_string()))
+    {
+        return extract_cluster_id_from_http_path(&http_path);
+    }
+
+    let http_path = adapter
+        .engine()
+        .get_config()
+        .get_string("http_path")
+        .ok_or_else(|| {
+            AdapterError::new(
+                AdapterErrorKind::Configuration,
+                "Databricks `http_path` or `cluster_id` of an all-purpose cluster is required \
+                 for the `all_purpose_cluster` submission method.",
+            )
+        })?;
+
+    extract_cluster_id_from_http_path(&http_path)
+}
+
+fn extract_cluster_id_from_http_path(http_path: &str) -> AdapterResult<String> {
+    // Check if this is a warehouse path (not a cluster)
+    if http_path.contains("/warehouses/") {
+        return Err(AdapterError::new(
+            AdapterErrorKind::Configuration,
+            "http_path points to a SQL Warehouse, not an all-purpose cluster. \
+             Use 'job_cluster' submission method for SQL Warehouses.",
+        ));
+    }
+
+    http_path
+        .split('/')
+        .next_back()
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .ok_or_else(|| {
+            AdapterError::new(
+                AdapterErrorKind::Configuration,
+                format!("Could not extract cluster_id from http_path: {}", http_path),
+            )
+        })
 }
 
 fn validate_job_cluster_config(config: &Value) -> AdapterResult<()> {
@@ -172,8 +399,70 @@ fn extract_packages(config: &Value) -> Vec<String> {
         .unwrap_or_default()
 }
 
+fn build_libraries(
+    packages: &[String],
+    index_url: Option<&str>,
+    additional_libs: &[serde_json::Value],
+) -> Vec<serde_json::Value> {
+    let mut libraries = Vec::new();
+
+    for package in packages {
+        let lib = if let Some(idx_url) = index_url {
+            json!({
+                "pypi": {
+                    "package": package,
+                    "repo": idx_url
+                }
+            })
+        } else {
+            json!({
+                "pypi": {
+                    "package": package
+                }
+            })
+        };
+        libraries.push(lib);
+    }
+
+    libraries.extend_from_slice(additional_libs);
+    libraries
+}
+
+fn submit_notebook_job(
+    api_client: &DatabricksApiClient,
+    run_name: &str,
+    notebook_path: &str,
+    task_settings: serde_json::Value,
+    timeout_seconds: u64,
+) -> AdapterResult<String> {
+    let mut task = json!({
+        "task_key": "inner_notebook",
+        "notebook_task": {
+            "notebook_path": notebook_path,
+            "source": "WORKSPACE"
+        }
+    });
+
+    if let serde_json::Value::Object(settings_map) = task_settings
+        && let serde_json::Value::Object(ref mut task_map) = task
+    {
+        task_map.extend(settings_map);
+    }
+
+    api_client.submit_job_run(run_name, &task, timeout_seconds)
+}
+
+fn poll_job_completion(
+    api_client: &DatabricksApiClient,
+    run_id: &str,
+    timeout_seconds: u64,
+) -> AdapterResult<()> {
+    api_client.poll_job_completion(run_id, timeout_seconds)
+}
+
+/// https://github.com/databricks/dbt-databricks/blob/955743ab67543ef1fad3c4f7c13cc8b4a0ab8c06/dbt/adapters/databricks/python_models/python_submissions.py#L92
 fn upload_notebook(
-    api_client: &api_client::DatabricksApiClient,
+    api_client: &DatabricksApiClient,
     catalog: &str,
     schema: &str,
     identifier: &str,
@@ -203,70 +492,4 @@ fn upload_notebook(
     api_client.import_notebook(&notebook_path, compiled_code)?;
 
     Ok(notebook_path)
-}
-
-fn build_job_spec(
-    notebook_path: &str,
-    job_cluster_config: &Value,
-    packages: &[String],
-    index_url: Option<&str>,
-    additional_libs: &[serde_json::Value],
-) -> AdapterResult<serde_json::Value> {
-    let mut libraries = Vec::new();
-
-    for package in packages {
-        let lib = if let Some(idx_url) = index_url {
-            json!({
-                "pypi": {
-                    "package": package,
-                    "repo": idx_url
-                }
-            })
-        } else {
-            json!({
-                "pypi": {
-                    "package": package
-                }
-            })
-        };
-        libraries.push(lib);
-    }
-
-    libraries.extend_from_slice(additional_libs);
-
-    let cluster_config_json = serde_json::to_value(job_cluster_config).map_err(|e| {
-        AdapterError::new(
-            AdapterErrorKind::Internal,
-            format!("Failed to serialize job_cluster_config: {}", e),
-        )
-    })?;
-
-    let job_spec = json!({
-        "task_key": "inner_notebook",
-        "notebook_task": {
-            "notebook_path": notebook_path,
-            "source": "WORKSPACE"
-        },
-        "new_cluster": cluster_config_json,
-        "libraries": libraries
-    });
-
-    Ok(job_spec)
-}
-
-fn submit_job_run(
-    api_client: &api_client::DatabricksApiClient,
-    run_name: &str,
-    job_spec: &serde_json::Value,
-    timeout_seconds: u64,
-) -> AdapterResult<String> {
-    api_client.submit_job_run(run_name, job_spec, timeout_seconds)
-}
-
-fn poll_job_completion(
-    api_client: &api_client::DatabricksApiClient,
-    run_id: &str,
-    timeout_seconds: u64,
-) -> AdapterResult<()> {
-    api_client.poll_job_completion(run_id, timeout_seconds)
 }

@@ -2,14 +2,15 @@ use crate::typed_adapter::TypedBaseAdapter;
 
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
-use dbt_common::{AdapterError, AdapterErrorKind, AdapterResult};
+use dbt_common::tracing::emit::{emit_warn_log_message, print_err};
+use dbt_common::{AdapterError, AdapterErrorKind, AdapterResult, ErrorCode};
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use serde_json::json;
 use std::cell::RefCell;
 use std::io::Read;
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use ureq::http;
 use ureq::{self, Agent, Body, Error as UreqError, RequestBuilder};
 
@@ -127,24 +128,22 @@ impl DatabricksApiClient {
 
         loop {
             let state = self.run_state(run_id)?;
-            if let Some(life_cycle_state) = state.life_cycle_state.as_deref() {
-                if matches!(
+            if let Some(life_cycle_state) = state.life_cycle_state.as_deref()
+                && matches!(
                     life_cycle_state,
                     "TERMINATED" | "SKIPPED" | "INTERNAL_ERROR"
-                ) {
-                    return Self::handle_terminal_state(life_cycle_state, &state);
-                }
+                )
+            {
+                return Self::handle_terminal_state(life_cycle_state, &state);
             }
 
-            if let Some(limit) = timeout_duration {
-                if start.elapsed() >= limit {
-                    return Err(AdapterError::new(
-                        AdapterErrorKind::Driver,
-                        format!(
-                            "Databricks job {run_id} timed out after {timeout_seconds} seconds"
-                        ),
-                    ));
-                }
+            if let Some(limit) = timeout_duration
+                && start.elapsed() >= limit
+            {
+                return Err(AdapterError::new(
+                    AdapterErrorKind::Driver,
+                    format!("Databricks job {run_id} timed out after {timeout_seconds} seconds"),
+                ));
             }
 
             thread::sleep(Duration::from_secs(POLL_INTERVAL_SECS));
@@ -362,6 +361,236 @@ impl DatabricksApiClient {
             format!("https://{trimmed}")
         }
     }
+
+    /// https://github.com/databricks/dbt-databricks/blob/3fa9099d7decb194cac1325c859b860919cb6476/dbt/adapters/databricks/api_client.py#L154
+    pub(crate) fn create_context(&self, cluster_id: &str) -> AdapterResult<String> {
+        self.ensure_cluster_ready(cluster_id)?;
+        self.create_execution_context_with_retry(cluster_id)
+    }
+
+    fn ensure_cluster_ready(&self, cluster_id: &str) -> AdapterResult<()> {
+        let current_status = self.get_cluster_status(cluster_id)?;
+
+        if matches!(current_status.as_str(), "TERMINATED" | "TERMINATING") {
+            self.start_cluster(cluster_id)?;
+        } else if current_status != "RUNNING" {
+            self.wait_for_cluster(cluster_id)?;
+        }
+
+        Ok(())
+    }
+
+    fn get_cluster_status(&self, cluster_id: &str) -> AdapterResult<String> {
+        let response: ClusterStatusResponse =
+            self.get("/api/2.0/clusters/get", Some(&[("cluster_id", cluster_id)]))?;
+
+        Ok(response.state)
+    }
+
+    fn start_cluster(&self, cluster_id: &str) -> AdapterResult<()> {
+        let payload = json!({
+            "cluster_id": cluster_id
+        });
+
+        self.post_json_noop("/api/2.0/clusters/start", payload)
+    }
+
+    fn wait_for_cluster(&self, cluster_id: &str) -> AdapterResult<()> {
+        let max_wait_time = Duration::from_secs(900); // 15 minutes
+        let start = Instant::now();
+
+        loop {
+            // DBX uses get_cluster_libraries_status instead
+            let status = self.get_cluster_status(cluster_id)?;
+
+            if status == "RUNNING" {
+                return Ok(());
+            }
+
+            if start.elapsed() >= max_wait_time {
+                return Err(AdapterError::new(
+                    AdapterErrorKind::Driver,
+                    format!(
+                        "Cluster {} did not reach RUNNING state within {} seconds",
+                        cluster_id,
+                        max_wait_time.as_secs()
+                    ),
+                ));
+            }
+
+            thread::sleep(Duration::from_secs(5));
+        }
+    }
+
+    fn create_execution_context_with_retry(&self, cluster_id: &str) -> AdapterResult<String> {
+        const MAX_RETRIES: u32 = 5;
+        let mut last_error = None;
+
+        for attempt in 0..MAX_RETRIES {
+            let result = self.try_create_context(cluster_id);
+
+            match result {
+                Ok(context_id) => return Ok(context_id),
+                Err(e) => {
+                    let error_msg = e.to_string().to_lowercase();
+
+                    let is_retryable = error_msg.contains("contextstatus.error")
+                        || error_msg.contains("failed to reach running")
+                        || (error_msg.contains("context") && error_msg.contains("error"));
+
+                    if is_retryable && attempt < MAX_RETRIES - 1 {
+                        // TODO: Track context_id from failed attempt and destroy it
+                        // The Python version extracts context_id from the exception and destroys it
+                        // For now, we'll skip this cleanup step as it requires parsing error messages
+
+                        // Adapted core backoff logic
+                        let base_wait = 2_u64.pow(attempt);
+                        let jitter = (SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .unwrap()
+                            .subsec_micros()
+                            % 1_000_000) as f64
+                            / 1_000_000.0;
+                        let wait_time = Duration::from_secs_f64(base_wait as f64 + jitter);
+
+                        print_err(
+                            ErrorCode::RemoteError,
+                            format!(
+                                "Execution context creation failed (attempt {}/{}), retrying in {:.1}s: {}",
+                                attempt + 1,
+                                MAX_RETRIES,
+                                wait_time.as_secs_f64(),
+                                e
+                            ),
+                        );
+
+                        thread::sleep(wait_time);
+                        last_error = Some(e);
+                    } else {
+                        return Err(e);
+                    }
+                }
+            }
+        }
+
+        Err(last_error.unwrap_or_else(|| {
+            AdapterError::new(
+                AdapterErrorKind::Driver,
+                format!(
+                    "Failed to create execution context after {} retries",
+                    MAX_RETRIES
+                ),
+            )
+        }))
+    }
+
+    fn try_create_context(&self, cluster_id: &str) -> AdapterResult<String> {
+        let payload = json!({
+            "clusterId": cluster_id,
+            "language": "python"
+        });
+
+        let response: CreateContextResponse =
+            self.post_json("/api/1.2/contexts/create", payload)?;
+        Ok(response.id)
+    }
+
+    /// https://docs.databricks.com/api/workspace/contexts/destroy
+    pub(crate) fn destroy_context(&self, cluster_id: &str, context_id: &str) -> AdapterResult<()> {
+        let payload = json!({
+            "clusterId": cluster_id,
+            "contextId": context_id
+        });
+
+        self.post_json_noop("/api/1.2/contexts/destroy", payload)
+    }
+
+    /// https://docs.databricks.com/api/workspace/commands/execute
+    pub(crate) fn execute_command(
+        &self,
+        cluster_id: &str,
+        context_id: &str,
+        command: &str,
+    ) -> AdapterResult<String> {
+        let payload = json!({
+            "clusterId": cluster_id,
+            "contextId": context_id,
+            "language": "python",
+            "command": command
+        });
+
+        let response: ExecuteCommandResponse =
+            self.post_json("/api/1.2/commands/execute", payload)?;
+        Ok(response.id)
+    }
+
+    /// https://docs.databricks.com/api/workspace/commands/status
+    pub(crate) fn poll_command_completion(
+        &self,
+        cluster_id: &str,
+        context_id: &str,
+        command_id: &str,
+        timeout_seconds: u64,
+    ) -> AdapterResult<()> {
+        let start = Instant::now();
+        let timeout_duration = if timeout_seconds == 0 {
+            None
+        } else {
+            Some(Duration::from_secs(timeout_seconds))
+        };
+
+        loop {
+            let response: CommandStatusResponse = self.get(
+                "/api/1.2/commands/status",
+                Some(&[
+                    ("clusterId", cluster_id),
+                    ("contextId", context_id),
+                    ("commandId", command_id),
+                ]),
+            )?;
+
+            match response.status.as_str() {
+                "Finished" => {
+                    return Ok(());
+                }
+                "Error" | "Cancelled" => {
+                    let cause = response
+                        .results
+                        .and_then(|r| r.cause)
+                        .unwrap_or_else(|| "Unknown error".to_string());
+                    return Err(AdapterError::new(
+                        AdapterErrorKind::Driver,
+                        format!(
+                            "Command execution failed with status '{}': {}",
+                            response.status, cause
+                        ),
+                    ));
+                }
+                "Running" | "Queued" => {}
+                _ => {
+                    emit_warn_log_message(
+                        ErrorCode::Generic,
+                        format!("Unknown command status: {}", response.status),
+                        None,
+                    );
+                }
+            }
+
+            if let Some(limit) = timeout_duration
+                && start.elapsed() >= limit
+            {
+                return Err(AdapterError::new(
+                    AdapterErrorKind::Driver,
+                    format!(
+                        "Command execution timed out after {} seconds",
+                        timeout_seconds
+                    ),
+                ));
+            }
+
+            thread::sleep(Duration::from_secs(POLL_INTERVAL_SECS));
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -395,4 +624,32 @@ struct DatabricksErrorResponse {
     #[serde(rename = "error_code")]
     error_code: Option<String>,
     message: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct CreateContextResponse {
+    id: String,
+}
+
+#[derive(Deserialize)]
+struct ExecuteCommandResponse {
+    id: String,
+}
+
+#[derive(Deserialize)]
+struct CommandStatusResponse {
+    status: String,
+    #[serde(flatten)]
+    results: Option<CommandResults>,
+}
+
+#[derive(Deserialize)]
+struct CommandResults {
+    #[serde(rename = "cause")]
+    cause: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct ClusterStatusResponse {
+    state: String,
 }
