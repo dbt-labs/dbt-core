@@ -58,6 +58,38 @@ use dbt_jinja_utils::var_fn;
 
 use dbt_common::tracing::event_info::store_event_attributes;
 
+fn resolve_and_set_threads(
+    dbt_profile: &mut DbtProfile,
+    iarg: &InvocationArgs,
+) -> FsResult<Option<usize>> {
+    let final_threads = if iarg.num_threads.is_none() {
+        if let Some(threads) = dbt_profile.db_config.get_threads() {
+            // Convert StringOrInteger to Option<usize>
+            match threads {
+                StringOrInteger::Integer(n) => Some(*n as usize),
+                StringOrInteger::String(s) => Some(s.parse::<usize>().map_err(|_| {
+                    fs_err!(
+                        ErrorCode::Generic,
+                        "Invalid number of threads in profiles.yml: {s}",
+                    )
+                })?),
+            }
+        } else {
+            None
+        }
+    } else {
+        iarg.num_threads
+    };
+
+    dbt_profile
+        .db_config
+        .set_threads(Some(StringOrInteger::Integer(
+            final_threads.unwrap_or(0) as i64
+        )));
+
+    Ok(final_threads)
+}
+
 #[tracing::instrument(
     skip_all,
     fields(
@@ -95,31 +127,7 @@ pub async fn load(
     let env = initialize_load_profile_jinja_environment();
     load_catalogs(arg, &env).await?;
 
-    let final_threads = if iarg.num_threads.is_none() {
-        if let Some(threads) = dbt_profile.db_config.get_threads() {
-            // Convert StringOrInteger to Option<usize>
-            match threads {
-                StringOrInteger::Integer(n) => Some(*n as usize),
-                StringOrInteger::String(s) => Some(s.parse::<usize>().map_err(|_| {
-                    fs_err!(
-                        ErrorCode::Generic,
-                        "Invalid number of threads in profiles.yml: {}",
-                        s
-                    )
-                })?),
-            }
-        } else {
-            None
-        }
-    } else {
-        iarg.num_threads
-    };
-
-    dbt_profile
-        .db_config
-        .set_threads(Some(StringOrInteger::Integer(
-            final_threads.unwrap_or(0) as i64
-        )));
+    let final_threads = resolve_and_set_threads(&mut dbt_profile, iarg)?;
 
     let iarg = InvocationArgs {
         num_threads: final_threads,
@@ -294,6 +302,34 @@ pub async fn load(
     }
 
     Ok((dbt_state, dbt_cloud_project))
+}
+
+/// Lightweight load function for the `clean` command.
+///
+/// This function loads only the minimal state needed for cleaning
+#[tracing::instrument(
+    skip_all,
+    fields(
+        _e = ?store_event_attributes(PhaseExecuted::start_general(ExecutionPhase::LoadProject)),
+    )
+)]
+pub async fn load_for_clean(arg: &LoadArgs) -> FsResult<DbtState> {
+    let (_simplified_dbt_project, dbt_profile) = load_simplified_project_and_profiles(arg).await?;
+
+    let env = initialize_load_profile_jinja_environment();
+    load_catalogs(arg, &env).await?;
+
+    // Create minimal DbtState - no packages, no vars
+    let dbt_state = DbtState {
+        dbt_profile,
+        run_started_at: run_started_at(),
+        packages: vec![],
+        vars: BTreeMap::new(),
+        cli_vars: arg.vars.clone(),
+        catalogs: load_catalogs::fetch_catalogs(),
+    };
+
+    Ok(dbt_state)
 }
 
 pub async fn load_catalogs(arg: &LoadArgs, env: &JinjaEnv) -> FsResult<()> {

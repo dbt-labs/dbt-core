@@ -1,7 +1,7 @@
 use crate::{
     args::LoadArgs,
     dbt_project_yml_loader::{collect_protected_paths, load_project_yml},
-    load,
+    load_for_clean,
 };
 use std::{collections::BTreeMap, path::Path};
 
@@ -35,8 +35,8 @@ pub async fn execute_clean_command(
     token: &CancellationToken,
 ) -> FsResult<i32> {
     let load_args = LoadArgs::from_eval_args(arg);
+    let dbt_state = load_for_clean(&load_args).await?;
     let invocation_args = InvocationArgs::from_eval_args(arg);
-    let (dbt_state, _dbt_cloud_config) = load(&load_args, &invocation_args, token).await?;
     let flags: BTreeMap<String, minijinja::Value> = invocation_args.to_dict();
 
     let arg = EvalArgsBuilder::from_eval_args(arg)
