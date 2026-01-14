@@ -1,4 +1,4 @@
-use std::{cell::Cell, collections::BTreeMap};
+use std::{borrow::Cow, cell::Cell, collections::BTreeMap};
 
 use crate::{
     value::{
@@ -814,6 +814,25 @@ were consumed from the iterator. You are misusing the ArgsIter API.",
         crate::Error::new(crate::ErrorKind::MissingArgument, msg)
     }
 
+    /// Try to determine the type name that gets as closes as possible to
+    /// the type of the value if this were Jinja in Python.
+    pub fn type_name_of_value(value: Option<&Value>) -> Cow<'static, str> {
+        value.map_or_else(
+            || Cow::Borrowed("None"),
+            |v| {
+                if let Some(obj) = v.as_object() {
+                    let full_name = obj.type_name();
+                    return Cow::Borrowed(type_name_suffix(full_name));
+                }
+                let kind = v.kind();
+                match kind {
+                    ValueKind::None => Cow::Borrowed("None"),
+                    _ => Cow::Owned(kind.to_string()),
+                }
+            },
+        )
+    }
+
     /// Add more detail to the errors returned by `T::from_value()` calls.
     #[inline(never)]
     fn _detail_from_value_err(
@@ -825,23 +844,8 @@ were consumed from the iterator. You are misusing the ArgsIter API.",
     ) -> crate::Error {
         let kind = err.kind();
         if kind == crate::ErrorKind::InvalidOperation {
-            // `got` is the name of the "type" of the value we've got. We try
-            // to determine the name that gets as closes as possible to the
-            // type of the value if this were Jinja in Python.
-            let got = value.map_or_else(
-                || "None".to_string(),
-                |v| {
-                    if let Some(obj) = v.as_object() {
-                        let full_name = obj.type_name();
-                        return type_name_suffix(full_name).to_string();
-                    }
-                    let kind = v.kind();
-                    match kind {
-                        ValueKind::None => "None".to_string(),
-                        _ => kind.to_string(),
-                    }
-                },
-            );
+            // `got` is the name of the "type" of the value we've got.
+            let got = Self::type_name_of_value(value);
             // `expected` contains the text produced by `T::from_value()` and it's
             // usually something like:
             // - "cannot convert string to i64"
@@ -851,18 +855,23 @@ were consumed from the iterator. You are misusing the ArgsIter API.",
             let detail = match (idx, name) {
                 (None, None) => format!(
                     "argument to {}() has incompatible type {}; {}",
-                    self.fn_name, got, expected
+                    self.fn_name,
+                    got.as_ref(),
+                    expected
                 ),
                 (Some(idx), None) => format!(
                     "argument {} to {}() has incompatible type {}; {}",
                     idx + 1,
                     self.fn_name,
-                    got,
+                    got.as_ref(),
                     expected
                 ),
                 (_, Some(name)) => format!(
                     "argument '{}' to {}() has incompatible type {}; {}",
-                    name, self.fn_name, got, expected
+                    name,
+                    self.fn_name,
+                    got.as_ref(),
+                    expected
                 ),
             };
             crate::Error::new(kind, detail)

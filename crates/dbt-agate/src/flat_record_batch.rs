@@ -504,6 +504,8 @@ fn dict_encoded_with_same_indices(
 pub(crate) struct FlatRecordBatch {
     /// Flat record batch.
     flat: Arc<RecordBatch>,
+    /// Agate [DataType]s for each column in the flat record batch.
+    data_types: Vec<crate::DataType>,
     /// The original record batch before the flattening of nested columns.
     original: Option<Arc<RecordBatch>>,
     /// Array converters for each column in the flat record batch.
@@ -523,6 +525,21 @@ impl FlatRecordBatch {
         flat: Arc<RecordBatch>,
         original: Option<Arc<RecordBatch>>,
     ) -> Result<Self, ArrowError> {
+        let data_types = flat
+            .schema()
+            .fields()
+            .iter()
+            .map(|field| {
+                let dtype_name = field
+                    .metadata()
+                    .get(AGATE_DTYPE_METADATA_KEY)
+                    .cloned()
+                    // TODO(felipecrv): stop relying on this default by ensuring all
+                    // _from_flattened_record_batch callers provide proper metadata
+                    .unwrap_or_else(|| "Text".to_string());
+                crate::DataType::new(dtype_name)
+            })
+            .collect::<Vec<_>>();
         let converters = flat
             .columns()
             .iter()
@@ -530,6 +547,7 @@ impl FlatRecordBatch {
             .collect::<Result<Vec<_>, ArrowError>>()?;
         Ok(Self {
             flat,
+            data_types,
             original,
             converters,
         })
@@ -578,14 +596,8 @@ impl FlatRecordBatch {
         Arc::new(Self::_from_flattened_record_batch(Arc::new(new_flat), None).unwrap())
     }
 
-    pub fn column_types(&self) -> impl Iterator<Item = &String> + '_ {
-        self.schema_ref().fields().iter().map(|field| {
-            let dtype = field
-                .metadata()
-                .get(AGATE_DTYPE_METADATA_KEY)
-                .expect("AGATE:dtype metadata key missing in field metadata");
-            dtype
-        })
+    pub fn column_types(&self) -> &[crate::DataType] {
+        self.data_types.as_slice()
     }
 
     pub fn column_names(&self) -> impl Iterator<Item = &String> + '_ {
@@ -596,12 +608,8 @@ impl FlatRecordBatch {
             .map(|field| field.name())
     }
 
-    pub fn column_type(&self, idx: usize) -> &String {
-        let field = self.flat.schema_ref().field(idx);
-        field
-            .metadata()
-            .get(AGATE_DTYPE_METADATA_KEY)
-            .expect("AGATE:dtype metadata key missing in field metadata")
+    pub fn column_type(&self, idx: usize) -> &crate::DataType {
+        &self.data_types[idx]
     }
 
     pub fn column_name(&self, idx: usize) -> &String {

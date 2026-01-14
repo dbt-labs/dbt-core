@@ -44,7 +44,7 @@ pub struct TableSet {
 #[derive(Debug)]
 pub(crate) struct TableSetRepr {
     key_name: String,
-    key_type: String,
+    key_type: crate::DataType,
     #[allow(dead_code)]
     sample_table: Option<Arc<AgateTable>>,
     column_types: Option<ColumnTypesAsTuple>,
@@ -87,7 +87,7 @@ impl TableSet {
         tables: Vec<Arc<AgateTable>>,
         keys: Vec<Value>,
         key_name: Option<String>,
-        key_type: Option<String>,
+        key_type: Option<crate::DataType>,
     ) -> Result<Self, Error> {
         let repr = TableSetRepr::try_new(tables, keys, key_name, key_type, false)?;
         Ok(Self::from_repr(repr))
@@ -123,11 +123,11 @@ impl TableSetRepr {
         tables: Vec<Arc<AgateTable>>,
         keys: Vec<Value>,
         key_name: Option<String>,
-        key_type: Option<String>,
+        key_type: Option<crate::DataType>,
         is_fork: bool,
     ) -> Result<Arc<Self>, Error> {
         let key_name = key_name.unwrap_or_else(|| "group".to_string());
-        let key_type = key_type.unwrap_or_else(|| "Text".to_string());
+        let key_type = key_type.unwrap_or_else(|| crate::DataType::new("Text".to_string()));
         let sample_table = tables.first().map(Arc::clone);
 
         let column_types = sample_table.as_ref().map(|t| t.column_types_as_tuple());
@@ -185,7 +185,7 @@ impl TableSetRepr {
         tables: Vec<Arc<AgateTable>>,
         keys: Vec<Value>,
         key_name: Option<String>,
-        key_type: Option<String>,
+        key_type: Option<crate::DataType>,
     ) -> Result<Arc<Self>, Error> {
         let key_name = key_name.unwrap_or_else(|| self.key_name.clone());
         let key_type = key_type.unwrap_or_else(|| self.key_type.clone());
@@ -278,7 +278,7 @@ impl Object for TableSet {
                 //     using :meth:`.Table.group_by` then this is the original column type.)
                 //     """
                 // ```
-                "key_type" => Some(Value::from(&self.repr.key_type)),
+                "key_type" => Some(Value::from_object(self.repr.key_type.clone())),
                 // ```python
                 // @property
                 // def column_types(self):

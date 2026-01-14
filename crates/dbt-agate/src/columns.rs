@@ -6,7 +6,6 @@ use minijinja::listener::RenderingEventListener;
 use minijinja::value::{Enumerator, Object, ObjectRepr};
 use minijinja::{State, Value};
 
-use crate::data_type::DataType;
 use crate::table::TableRepr;
 use crate::{MappedSequence, Tuple, TupleRepr, ZippedTupleRepr};
 
@@ -44,10 +43,9 @@ impl PartialEq for ColumnTypesAsTuple {
 
 impl TupleRepr for ColumnTypesAsTuple {
     fn get_item_by_index(&self, idx: isize) -> Option<Value> {
-        // Return DataType objects with jsonify() method for compatibility with elementary
         self.of_table
             .column_type(idx)
-            .map(|type_name| Value::from_object(DataType::new(type_name.to_string())))
+            .map(|dt| Value::from_object(dt.clone()))
     }
 
     fn len(&self) -> usize {
@@ -55,16 +53,22 @@ impl TupleRepr for ColumnTypesAsTuple {
     }
 
     fn count_occurrences_of(&self, needle: &Value) -> usize {
+        let column_types = self.of_table.column_types().iter();
         if let Some(name) = needle.as_str() {
-            self.of_table.column_types().filter(|n| n == &name).count()
+            column_types.filter(|dt| (*dt).type_name() == name).count()
+        } else if let Some(needle_dt) = needle.downcast_object_ref::<crate::DataType>() {
+            column_types.filter(|dt| (*dt).eq(needle_dt)).count()
         } else {
             0
         }
     }
 
     fn index_of(&self, needle: &Value) -> Option<usize> {
+        let mut column_types = self.of_table.column_types().iter();
         if let Some(name) = needle.as_str() {
-            self.of_table.column_types().position(|n| n == name)
+            column_types.position(|dt| dt.type_name() == name)
+        } else if let Some(needle_dt) = needle.downcast_object_ref::<crate::DataType>() {
+            column_types.position(|dt| dt.eq(needle_dt))
         } else {
             None
         }
@@ -80,17 +84,18 @@ impl TupleRepr for ColumnTypesAsTuple {
         if self.len() != other.len() {
             return false;
         }
-        let self_types = self.of_table.column_types();
+        let self_types = self.of_table.column_types().iter();
         for (i, self_type) in self_types.enumerate() {
-            let other_value = other.get_item_by_index(i as isize);
-            // Try to extract type_name from DataType object or compare as string
-            let other_type_name = other_value.as_ref().and_then(|v| {
-                // Try to downcast to DataType and get its type_name
-                v.downcast_object_ref::<DataType>()
-                    .map(|dt| dt.type_name().to_string())
-                    .or_else(|| v.as_str().map(|s| s.to_string()))
-            });
-            if Some(self_type.as_str()) != other_type_name.as_deref() {
+            let other_value = match other.get_item_by_index(i as isize) {
+                Some(other_value) => other_value,
+                None => return false,
+            };
+            if let Some(other_dt) = other_value.downcast_object_ref::<crate::DataType>() {
+                if !self_type.eq(other_dt) {
+                    return false;
+                }
+                continue;
+            } else {
                 return false;
             }
         }

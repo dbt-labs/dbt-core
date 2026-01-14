@@ -124,7 +124,7 @@ impl TableRepr {
         Some(self.flat.column_name(idx))
     }
 
-    pub fn column_type(&self, idx: isize) -> Option<&String> {
+    pub fn column_type(&self, idx: isize) -> Option<&crate::DataType> {
         let idx = self.adjusted_column_index(idx)?;
         Some(self.flat.column_type(idx))
     }
@@ -133,7 +133,7 @@ impl TableRepr {
         Columns::new(Arc::clone(self))
     }
 
-    pub fn column_types(&self) -> impl Iterator<Item = &String> + '_ {
+    pub fn column_types(&self) -> &[crate::DataType] {
         self.flat.column_types()
     }
 
@@ -472,11 +472,6 @@ impl AgateTable {
         self.repr.column_name(idx)
     }
 
-    /// Get the column types as a zero-copy iterator.
-    pub fn column_types_iter(&self) -> impl Iterator<Item = &String> + '_ {
-        self.repr.column_types()
-    }
-
     /// Get the column names as a zero-copy iterator.
     pub fn column_names_iter(&self) -> impl Iterator<Item = &String> + '_ {
         self.repr.column_names()
@@ -490,9 +485,9 @@ impl AgateTable {
         ColumnNamesAsTuple::of_table(&self.repr)
     }
 
-    /// Get the column types as a newly allocated [Vec].
-    pub fn column_types(&self) -> Vec<String> {
-        self.column_types_iter().map(|s| s.to_string()).collect()
+    /// Get the column types as a slice.
+    pub fn column_types(&self) -> &[crate::DataType] {
+        self.repr.column_types()
     }
 
     /// Get the column names as a newly allocated [Vec<String>].
@@ -770,16 +765,14 @@ impl AgateTable {
         &self,
         key: &str,
         key_name: &str,
-        key_type: Option<&str>,
+        key_type: Option<crate::DataType>,
     ) -> Result<TableSet, Error> {
         let column = self
             .column_names_iter()
             .position(|n| n == key)
             .map(|idx| Column::new(idx, Arc::clone(&self.repr)));
 
-        let key_type = key_type
-            .map(|s| s.to_string())
-            .or_else(|| column.as_ref().and_then(|c| c.data_type().cloned()));
+        let key_type = key_type.or_else(|| column.as_ref().and_then(|c| c.data_type().cloned()));
 
         // TODO: cast the values in `column` according to `key_type`, create a new
         // table with the casted column, and use that table to create the grouper
@@ -1058,8 +1051,8 @@ impl Object for AgateTable {
                     None => "group",
                 };
                 let key_type = match key_type {
-                    Some(ty) => match ty.as_str() {
-                        Some(s) => Some(s),
+                    Some(ty) => match ty.downcast_object_ref::<crate::DataType>() {
+                        Some(dt) => Some(dt.clone()),
                         None => {
                             // TODO: support DataType class instances
                             unimplemented!("group_by with non-string key_type")
@@ -1603,7 +1596,11 @@ mod tests {
         let column_types = table.column_types();
         assert_eq!(
             column_types,
-            vec!["Number".to_string(), "Text".to_string(), "Text".to_string()]
+            vec![
+                crate::DataType::new("Number".to_string()),
+                crate::DataType::new("Text".to_string()),
+                crate::DataType::new("Text".to_string()),
+            ]
         );
         let column_names = table.column_names();
         assert_eq!(column_names, vec!["id", "name", "event_tags.0"]);

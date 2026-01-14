@@ -105,7 +105,7 @@ impl Column {
         ColumnAsTuple::from_single_column_table(table)
     }
 
-    pub fn data_type(&self) -> Option<&String> {
+    pub fn data_type(&self) -> Option<&crate::DataType> {
         self.of_table.column_type(self.index as isize)
     }
 
@@ -152,7 +152,7 @@ impl Object for Column {
                     .of_table
                     .column_name(self.index as isize)
                     .map(Value::from),
-                "data_type" => self.data_type().map(Value::from),
+                "data_type" => self.data_type().map(|dt| Value::from_object(dt.clone())),
                 _ => MappedSequence::get_value(self, key),
             }
         } else {

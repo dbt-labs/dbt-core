@@ -12,7 +12,7 @@ use minijinja::{ErrorKind, State, Value, assert_nullary_args};
 mod column;
 mod columns;
 mod converters;
-mod data_type;
+pub mod data_type; // TODO: rename to data_types
 mod decimal;
 pub mod grouper;
 pub mod hashers;
@@ -113,6 +113,8 @@ impl fmt::Display for Tuple {
         write!(f, ")")
     }
 }
+
+impl Eq for Tuple {}
 
 impl PartialEq for Tuple {
     fn eq(&self, other: &Self) -> bool {
