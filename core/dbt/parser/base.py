@@ -22,6 +22,7 @@ from dbt.exceptions import (
     DbtInternalError,
     DictParseError,
     InvalidAccessTypeError,
+    ParsingError,
 )
 from dbt.flags import get_flags
 from dbt.jsonschemas.jsonschemas import validate_model_config
@@ -303,10 +304,15 @@ class ConfiguredParser(
         self._update_node_database(parsed_node, config_dict.get("database"))
         self._update_node_schema(parsed_node, config_dict.get("schema"))
         if not isinstance(parsed_node, Export) and parsed_node.schema is None:
-            deprecations.warn(
-                "generate-schema-name-null-value-deprecation",
-                resource_unique_id=parsed_node.unique_id,
-            )
+            if not get_flags().require_valid_schema_from_generate_schema_name:
+                deprecations.warn(
+                    "generate-schema-name-null-value-deprecation",
+                    resource_unique_id=parsed_node.unique_id,
+                )
+            else:
+                raise ParsingError(
+                    f"Node '{parsed_node.unique_id}' has a schema set to None as a result of a generate_schema_name call. This is deprecated.\nPlease set a valid schema name, or preserve the legacy behavior by setting the behavior flag 'require_valid_schema_from_generate_schema_name' to True."
+                )
 
         self._update_node_alias(parsed_node, config_dict.get("alias"))
 
