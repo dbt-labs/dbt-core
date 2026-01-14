@@ -30,9 +30,6 @@ from dbt.parser.common import resource_types_to_schema_file_keys
 from dbt.parser.search import FileBlock
 from dbt_common.clients._jinja_blocks import ExtractWarning
 from dbt_common.dataclass_schema import ValidationError
-from dbt_common.events.base_types import EventLevel
-from dbt_common.events.functions import fire_event
-from dbt_common.events.types import Note
 from dbt_common.utils import deep_merge
 
 # internally, the parser may store a less-restrictive type that will be
@@ -306,11 +303,9 @@ class ConfiguredParser(
         self._update_node_database(parsed_node, config_dict.get("database"))
         self._update_node_schema(parsed_node, config_dict.get("schema"))
         if not isinstance(parsed_node, Export) and parsed_node.schema is None:
-            fire_event(
-                Note(
-                    msg=f"Node schema set to None from generate_schema_name call for node '{parsed_node.unique_id}'."
-                ),
-                level=EventLevel.DEBUG,
+            deprecations.warn(
+                "generate-schema-name-null-value-deprecation",
+                resource_unique_id=parsed_node.unique_id,
             )
 
         self._update_node_alias(parsed_node, config_dict.get("alias"))
