@@ -3,6 +3,7 @@
 use std::{collections::BTreeMap, rc::Rc, sync::Arc};
 
 use dbt_schemas::state::DbtVars;
+use indexmap::IndexMap;
 use minijinja::{
     Error, ErrorKind, State, Value, constants::TARGET_PACKAGE_NAME,
     listener::RenderingEventListener, value::Object,
@@ -11,13 +12,13 @@ use minijinja::{
 /// A struct that represent a var object to be used in configuration contexts
 #[derive(Debug)]
 pub struct ConfiguredVar {
-    vars: BTreeMap<String, BTreeMap<String, DbtVars>>,
+    vars: BTreeMap<String, IndexMap<String, DbtVars>>,
     cli_vars: BTreeMap<String, dbt_serde_yaml::Value>,
 }
 
 impl ConfiguredVar {
     pub fn new(
-        vars: BTreeMap<String, BTreeMap<String, DbtVars>>,
+        vars: BTreeMap<String, IndexMap<String, DbtVars>>,
         cli_vars: BTreeMap<String, dbt_serde_yaml::Value>,
     ) -> Self {
         Self { vars, cli_vars }

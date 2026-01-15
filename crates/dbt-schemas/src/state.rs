@@ -1,5 +1,6 @@
 use chrono_tz::Tz;
 use dbt_serde_yaml::{Spanned, UntaggedEnumDeserialize};
+use indexmap::IndexMap;
 use std::{
     any::Any,
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
@@ -25,10 +26,7 @@ use crate::schemas::{
 };
 use blake3::Hasher;
 use chrono::{DateTime, Local, Utc};
-use dbt_common::{
-    ErrorCode, FsResult, adapter::AdapterType, fs_err, io_args::FsCommand,
-    serde_utils::convert_yml_to_map,
-};
+use dbt_common::{ErrorCode, FsResult, adapter::AdapterType, fs_err, io_args::FsCommand};
 use minijinja::{MacroSpans, Value as MinijinjaValue, value::Object};
 use serde::Deserialize;
 use serde::Serialize;
@@ -212,7 +210,7 @@ pub struct DbtState {
     pub run_started_at: DateTime<Tz>,
     pub packages: Vec<DbtPackage>,
     /// Key is the package name, value are all package scoped vars
-    pub vars: BTreeMap<String, BTreeMap<String, DbtVars>>,
+    pub vars: BTreeMap<String, IndexMap<String, DbtVars>>,
     pub cli_vars: BTreeMap<String, dbt_serde_yaml::Value>,
     pub catalogs: Option<Arc<DbtCatalogs>>,
 }
@@ -705,7 +703,7 @@ pub struct DbtRuntimeConfigInner {
     pub query_comment: Option<QueryComment>,
 
     // Variables and hooks
-    pub vars: BTreeMap<String, DbtVars>,
+    pub vars: IndexMap<String, DbtVars>,
     pub cli_vars: BTreeMap<String, dbt_serde_yaml::Value>,
     pub on_run_start: Vec<Spanned<String>>,
     pub on_run_end: Vec<Spanned<String>>,
@@ -737,7 +735,7 @@ impl DbtRuntimeConfig {
         package: &DbtPackage,
         profile: &DbtProfile,
         dependency_lookup: &BTreeMap<String, Arc<DbtRuntimeConfig>>,
-        vars: &BTreeMap<String, DbtVars>,
+        vars: &IndexMap<String, DbtVars>,
         cli_vars: &BTreeMap<String, dbt_serde_yaml::Value>,
     ) -> Self {
         let runtime_config_inner = DbtRuntimeConfigInner {
@@ -825,13 +823,17 @@ impl DbtRuntimeConfig {
 
         // TODO(anna): Look into whether this should also be Index map
         let mut runtime_config = Self {
-            runtime_config: BTreeMap::from_iter(convert_yml_to_map(
+            runtime_config: Deserialize::deserialize(
                 dbt_serde_yaml::to_value(&runtime_config_inner).unwrap(),
-            )),
+            )
+            .unwrap(),
             dependencies: BTreeMap::new(),
-            vars: minijinja::Value::from_object(VarProvider::new(BTreeMap::from_iter(
-                convert_yml_to_map(dbt_serde_yaml::to_value(&runtime_config_inner.vars).unwrap()),
-            ))),
+            vars: minijinja::Value::from_object(VarProvider::new(
+                Deserialize::deserialize(
+                    dbt_serde_yaml::to_value(&runtime_config_inner.vars).unwrap(),
+                )
+                .unwrap(),
+            )),
             inner: runtime_config_inner,
         };
 

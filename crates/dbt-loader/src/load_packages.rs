@@ -2,6 +2,7 @@ use dbt_common::adapter::AdapterType;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::tracing::emit::emit_warn_log_message;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
+use indexmap::IndexMap;
 use sha2::{Digest, Sha256};
 use walkdir::WalkDir;
 
@@ -34,7 +35,7 @@ pub async fn load_packages(
     arg: &LoadArgs,
     env: &JinjaEnv,
     dbt_profile: &DbtProfile,
-    collected_vars: &mut Vec<(String, BTreeMap<String, DbtVars>)>,
+    collected_vars: &mut Vec<(String, IndexMap<String, DbtVars>)>,
     lookup_map: &BTreeMap<String, String>,
     packages_install_path: &Path,
     token: &CancellationToken,
@@ -77,7 +78,7 @@ pub async fn load_internal_packages(
     arg: &LoadArgs,
     env: &JinjaEnv,
     dbt_profile: &DbtProfile,
-    collected_vars: &mut Vec<(String, BTreeMap<String, DbtVars>)>,
+    collected_vars: &mut Vec<(String, IndexMap<String, DbtVars>)>,
     internal_packages_install_path: &Path,
     token: &CancellationToken,
 ) -> FsResult<Vec<DbtPackage>> {
@@ -218,7 +219,7 @@ async fn collect_packages(
     arg: &LoadArgs,
     env: &JinjaEnv,
     dbt_profile: &DbtProfile,
-    collected_vars: &mut Vec<(String, BTreeMap<String, DbtVars>)>,
+    collected_vars: &mut Vec<(String, IndexMap<String, DbtVars>)>,
     package_paths: Vec<(PathBuf, bool)>,
     lookup_map: &BTreeMap<String, String>,
     token: &CancellationToken,

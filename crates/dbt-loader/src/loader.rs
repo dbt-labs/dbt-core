@@ -18,6 +18,7 @@ use dbt_schemas::state::DbtProfile;
 use dbt_serde_yaml;
 use dbt_telemetry::GenericOpItemProcessed;
 use fs_deps::get_or_install_packages;
+use indexmap::IndexMap;
 use pathdiff::diff_paths;
 use serde::Deserialize;
 use std::collections::BTreeSet;
@@ -472,7 +473,7 @@ pub async fn load_inner(
     is_dependency: bool,
     package_lookup_map: &BTreeMap<String, String>,
     skip_dependencies: bool,
-    collected_vars: &mut Vec<(String, BTreeMap<String, DbtVars>)>,
+    collected_vars: &mut Vec<(String, IndexMap<String, DbtVars>)>,
 ) -> FsResult<DbtPackage> {
     // all read files
     let mut all_files: HashMap<ResourcePathKind, Vec<(PathBuf, SystemTime)>> = HashMap::new();

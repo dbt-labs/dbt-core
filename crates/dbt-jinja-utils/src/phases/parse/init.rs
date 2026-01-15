@@ -21,6 +21,7 @@ use dbt_schemas::{
     },
     state::DbtVars,
 };
+use indexmap::IndexMap;
 use minijinja::{
     AutoEscape, dispatch_object::THREAD_LOCAL_DEPENDENCIES, macro_unit::MacroUnit,
     value::Value as MinijinjaValue,
@@ -46,7 +47,7 @@ pub fn initialize_parse_jinja_environment(
     db_config: DbConfig,
     package_quoting: DbtQuoting,
     macro_units: BTreeMap<String, Vec<MacroUnit>>,
-    vars: BTreeMap<String, BTreeMap<String, DbtVars>>,
+    vars: BTreeMap<String, IndexMap<String, DbtVars>>,
     cli_vars: BTreeMap<String, dbt_serde_yaml::Value>,
     flags: BTreeMap<String, MinijinjaValue>,
     run_started_at: DateTime<Tz>,

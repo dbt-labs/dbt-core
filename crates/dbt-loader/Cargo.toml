@@ -26,6 +26,7 @@ dbt-telemetry = { workspace = true }
 dirs = { workspace = true }
 flate2 = { workspace = true }
 ignore = { workspace = true }
+indexmap = { workspace = true }
 minijinja = { workspace = true }
 once_cell = { workspace = true }
 pathdiff = { workspace = true }
@@ -39,7 +40,6 @@ sha2 = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
 walkdir = { workspace = true }
-
 
 [dev-dependencies]
 tempfile = { workspace = true }
