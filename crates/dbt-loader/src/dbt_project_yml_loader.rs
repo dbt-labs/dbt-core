@@ -162,11 +162,17 @@ pub fn load_project_yml(
     dependency_package_name: Option<&str>,
     cli_vars: BTreeMap<String, dbt_serde_yaml::Value>,
 ) -> FsResult<DbtProject> {
+    let namespace_keys: Vec<String> = env
+        .env
+        .get_macro_namespace_registry()
+        .map(|r| r.keys().map(|k| k.to_string()).collect())
+        .unwrap_or_default();
     let mut context = build_resolve_context(
         "dbt_project.yml",
         "dbt_project.yml",
         &BTreeMap::new(),
         BTreeMap::new(),
+        namespace_keys,
     );
 
     context.insert("var".to_string(), Value::from_function(var_fn(cli_vars)));

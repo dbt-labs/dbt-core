@@ -7,6 +7,7 @@ use minijinja::{
 };
 
 use crate::functions::DocMacro;
+use crate::phases::compile_and_run_context::DbtNamespace;
 
 /// Builds a context for resolving models
 pub fn build_resolve_context(
@@ -14,6 +15,7 @@ pub fn build_resolve_context(
     local_project_name: &str,
     docs_macros: &BTreeMap<String, DbtDocsMacro>,
     macro_dispatch_order: BTreeMap<String, Vec<String>>,
+    namespace_keys: Vec<String>,
 ) -> BTreeMap<String, MinijinjaValue> {
     let mut ctx = BTreeMap::new();
     let docs_map: BTreeMap<(String, String), String> = docs_macros
@@ -50,5 +52,14 @@ pub fn build_resolve_context(
     ctx.insert("node".to_string(), MinijinjaValue::NONE);
 
     ctx.insert("connection_name".to_string(), MinijinjaValue::from(""));
+
+    // Insert DbtNamespace objects for each namespace key
+    for key in namespace_keys {
+        ctx.insert(
+            key.clone(),
+            MinijinjaValue::from_object(DbtNamespace::new(&key)),
+        );
+    }
+
     ctx
 }

@@ -2,9 +2,49 @@ use insta::assert_snapshot;
 use minijinja::{
     constants::MACRO_NAMESPACE_REGISTRY,
     context,
-    value::{mutable_vec::MutableVec, ValueMap},
-    Environment, Value,
+    dispatch_object::DispatchObject,
+    listener::RenderingEventListener,
+    value::{mutable_vec::MutableVec, Object, ValueMap},
+    Environment, Error as MinijinjaError, State, Value,
 };
+use std::rc::Rc;
+use std::sync::Arc;
+
+/// Test namespace object that looks up macros in the namespace registry
+#[derive(Debug)]
+struct TestNamespace {
+    name: String,
+}
+
+impl Object for TestNamespace {
+    fn get_property(
+        self: &Arc<Self>,
+        state: &State<'_, '_>,
+        name: &str,
+        _listeners: &[Rc<dyn RenderingEventListener>],
+    ) -> Result<Value, MinijinjaError> {
+        let ns_name = Value::from(self.name.clone());
+        let namespace_registry = state
+            .env()
+            .get_macro_namespace_registry()
+            .unwrap_or_default();
+        if namespace_registry.get(&ns_name).is_some_and(|val| {
+            val.try_iter()
+                .map(|mut iter| iter.any(|v| v.as_str() == Some(name)))
+                .unwrap_or(false)
+        }) {
+            Ok(Value::from_object(DispatchObject {
+                macro_name: (*name).to_string(),
+                package_name: Some(self.name.clone()),
+                strict: true,
+                auto_execute: false,
+                context: Some(state.get_base_context()),
+            }))
+        } else {
+            Ok(Value::UNDEFINED)
+        }
+    }
+}
 
 #[test]
 fn test_set_unwarp() {
@@ -62,24 +102,40 @@ fn test_macro_namespace_lookup() {
         Value::from_object(macro_namespace_registry),
     );
     let _ = env.add_template("test_2.two", "{% macro two() %}two{% endmacro %}");
+
+    // Add namespace objects to context
+    let test_1 = Value::from_object(TestNamespace {
+        name: "test_1".to_string(),
+    });
+    let test_2 = Value::from_object(TestNamespace {
+        name: "test_2".to_string(),
+    });
+
     let rv = env
         .render_str(
             r#"
     {% set m = test_1.one or test_2.two %}
     {{ m() }}
         "#,
-            context! {},
+            context! { test_1, test_2 },
             &[],
         )
         .unwrap();
     assert_snapshot!(rv, @"two");
+
+    let test_1 = Value::from_object(TestNamespace {
+        name: "test_1".to_string(),
+    });
+    let test_2 = Value::from_object(TestNamespace {
+        name: "test_2".to_string(),
+    });
     let rv = env
         .render_str(
             r#"
     {% set m = test_2.two or test_1.one %}
     {{ m() }}
         "#,
-            context! {},
+            context! { test_1, test_2 },
             &[],
         )
         .unwrap();

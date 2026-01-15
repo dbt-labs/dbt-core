@@ -146,11 +146,17 @@ fn load_and_parse_selectors_file(
     }
 
     let raw_selectors = value_from_file(&arg.io, &path, true, None)?;
+    let namespace_keys: Vec<String> = jinja_env
+        .env
+        .get_macro_namespace_registry()
+        .map(|r| r.keys().map(|k| k.to_string()).collect())
+        .unwrap_or_default();
     let context = build_resolve_context(
         root_package_name,
         root_package_name,
         &BTreeMap::new(),
         DISPATCH_CONFIG.get().unwrap().read().unwrap().clone(),
+        namespace_keys,
     );
 
     let yaml: SelectorFile = match dbt_jinja_utils::serde::into_typed_with_jinja(

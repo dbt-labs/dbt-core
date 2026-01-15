@@ -265,6 +265,22 @@ pub trait Object: fmt::Debug + Send + Sync {
         Err(Error::from(ErrorKind::UnknownMethod))
     }
 
+    /// Try to get a property from this object dynamically.
+    ///
+    /// Override this method if your type supports dynamic property access.
+    /// Returns `None` by default, meaning the normal attribute lookup path will be used.
+    fn get_property(
+        self: &Arc<Self>,
+        _state: &State<'_, '_>,
+        _name: &str,
+        _listeners: &[Rc<dyn RenderingEventListener>],
+    ) -> Result<Value, Error> {
+        Err(Error::new(
+            ErrorKind::InvalidOperation,
+            "object does not support get_property",
+        ))
+    }
+
     /// Formats the object for stringification.
     ///
     /// The default implementation is specific to the behavior of
@@ -678,6 +694,13 @@ type_erase! {
             state: &State<'_, '_>,
             method: &str,
             args: &[Value],
+            listeners: &[Rc<dyn RenderingEventListener>]
+        ) -> Result<Value, Error>;
+
+        fn get_property(
+            &self,
+            state: &State<'_, '_>,
+            name: &str,
             listeners: &[Rc<dyn RenderingEventListener>]
         ) -> Result<Value, Error>;
 

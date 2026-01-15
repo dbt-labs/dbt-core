@@ -37,6 +37,7 @@ pub fn build_compile_and_run_base_context(
     package_name: &str,
     nodes: &Nodes,
     runtime_config: Arc<DbtRuntimeConfig>,
+    namespace_keys: Vec<String>,
 ) -> BTreeMap<String, MinijinjaValue> {
     let mut ctx = BTreeMap::new();
     let config_macro = |_: &[MinijinjaValue]| -> Result<MinijinjaValue, MinijinjaError> {
@@ -150,7 +151,94 @@ pub fn build_compile_and_run_base_context(
 
     ctx.insert("node".to_owned(), MinijinjaValue::NONE);
     ctx.insert("connection_name".to_owned(), MinijinjaValue::from(""));
+    for key in namespace_keys {
+        ctx.insert(
+            key.clone(),
+            MinijinjaValue::from_object(DbtNamespace::new(&key)),
+        );
+    }
     ctx
+}
+
+#[derive(Debug)]
+pub struct DbtNamespace {
+    pub name: String,
+}
+
+impl Object for DbtNamespace {
+    fn get_property(
+        self: &Arc<Self>,
+        state: &State<'_, '_>,
+        name: &str,
+        _listeners: &[Rc<dyn RenderingEventListener>],
+    ) -> Result<MinijinjaValue, MinijinjaError> {
+        let ns_name = MinijinjaValue::from(self.name.clone());
+        let namespace_registry = state
+            .env()
+            .get_macro_namespace_registry()
+            .unwrap_or_default();
+        let template_registry = state.env().get_macro_template_registry();
+        // a could be a package name, we need to check if there's a macro in the namespace
+        if namespace_registry.get(&ns_name).is_some_and(|val| {
+            val.try_iter()
+                .map(|mut iter| iter.any(|v| v.as_str() == Some(name)))
+                .unwrap_or(false)
+        }) {
+            let template_registry_entry = template_registry.get(&ns_name);
+            let path = template_registry_entry
+                .and_then(|entry| entry.get_attr("path").ok())
+                .unwrap_or(ns_name);
+            let span = template_registry_entry
+                .and_then(|entry| entry.get_attr("span").ok())
+                .unwrap_or_else(|| {
+                    MinijinjaValue::from_serialize(minijinja::machinery::Span::default())
+                });
+
+            let context = state.get_base_context_with_path_and_span(&path, &span);
+            Ok(MinijinjaValue::from_object(DispatchObject {
+                macro_name: (*name).to_string(),
+                package_name: Some(self.name.clone()),
+                strict: true,
+                auto_execute: false,
+                context: Some(context),
+            }))
+        } else if self.name == "dbt" {
+            let dbt_and_adapters = state.env().get_dbt_and_adapters_namespace();
+            if let Some(package) = dbt_and_adapters.get(&MinijinjaValue::from(name)) {
+                let package_name = package.as_str().map(|s| s.to_string());
+                let template_registry_entry = template_registry.get(&ns_name);
+                let path = template_registry_entry
+                    .and_then(|entry| entry.get_attr("path").ok())
+                    .unwrap_or(ns_name);
+                let span = template_registry_entry
+                    .and_then(|entry| entry.get_attr("span").ok())
+                    .unwrap_or_else(|| {
+                        MinijinjaValue::from_serialize(minijinja::machinery::Span::default())
+                    });
+
+                let context = state.get_base_context_with_path_and_span(&path, &span);
+                Ok(MinijinjaValue::from_object(DispatchObject {
+                    macro_name: (*name).to_string(),
+                    package_name,
+                    strict: true,
+                    auto_execute: false,
+                    context: Some(context),
+                }))
+            } else {
+                Ok(MinijinjaValue::UNDEFINED)
+            }
+        } else {
+            Ok(MinijinjaValue::UNDEFINED)
+        }
+    }
+}
+
+impl DbtNamespace {
+    pub fn new(name: &str) -> Self {
+        Self {
+            name: name.to_string(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -800,8 +888,13 @@ mod tests {
         let runtime_config = Arc::new(DbtRuntimeConfig::default());
 
         // Act
-        let ctx =
-            build_compile_and_run_base_context(node_resolver, "test_pkg", &nodes, runtime_config);
+        let ctx = build_compile_and_run_base_context(
+            node_resolver,
+            "test_pkg",
+            &nodes,
+            runtime_config,
+            vec![],
+        );
 
         // Cleanup env to avoid side effects
         unsafe {

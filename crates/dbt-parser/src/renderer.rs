@@ -719,11 +719,17 @@ async fn process_model_chunk_for_unsafe_detection<T: InternalDbtNodeAttributes +
     token: &CancellationToken,
 ) -> FsResult<Vec<(T, bool)>> {
     let mut nodes = Vec::new();
+    let namespace_keys: Vec<String> = jinja_env
+        .env
+        .get_macro_namespace_registry()
+        .map(|r| r.keys().map(|k| k.to_string()).collect())
+        .unwrap_or_default();
     let mut render_base_context = build_compile_and_run_base_context(
         Arc::new(node_resolver.clone()),
         &package_name,
         &Nodes::default(),
         runtime_config.clone(),
+        namespace_keys,
     );
     silence_base_context(&mut render_base_context);
 
