@@ -243,8 +243,9 @@ class SchemaGenericTestParser(SimpleParser):
         """Look up attached node for Testable target nodes other than sources. Can be None if generic test attached to SQL node with no corresponding .sql file."""
         attached_node = None  # type: Optional[Union[ManifestNode, GraphMemberNode]]
         if not isinstance(target, UnpatchedSourceDefinition):
+            # First, try to attach to an enabled node in the same package as the schema file.
             attached_node_unique_id = self.manifest.ref_lookup.get_unique_id(
-                target.name, target.package_name, version
+                target.name, None, version
             )
             if attached_node_unique_id:
                 attached_node = self.manifest.nodes[attached_node_unique_id]
