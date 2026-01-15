@@ -1,6 +1,7 @@
 use super::{ProjectEnv, Task, TestEnv, TestResult};
 use crate::task::{ArtifactComparisonTask, TestError};
 use async_trait::async_trait;
+use dbt_common::constants::DBT_TARGET_DIR_NAME;
 use dbt_schemas::schemas::RunResultsArtifact;
 use dbt_schemas::schemas::serde::typed_struct_from_json_file;
 use std::sync::{Arc, Mutex};
@@ -36,7 +37,7 @@ impl Task for CaptureRunResults {
         test_env: &TestEnv,
         _task_index: usize,
     ) -> TestResult<()> {
-        let target_dir = test_env.temp_dir.join("target");
+        let target_dir = test_env.temp_dir.join(DBT_TARGET_DIR_NAME);
         let run_results =
             typed_struct_from_json_file(target_dir.join("run_results.json").as_path())?;
         *self.captured.lock().unwrap() = Some(run_results);

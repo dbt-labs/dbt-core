@@ -16,6 +16,7 @@ use arrow::datatypes::{
 };
 use arrow::record_batch::RecordBatch;
 use async_trait::async_trait;
+use dbt_common::constants::DBT_TARGET_DIR_NAME;
 use dbt_common::{
     FsResult,
     stdfs::{self, File},
@@ -122,7 +123,10 @@ impl Task for CpFromTargetTask {
         test_env: &TestEnv,
         _task_index: usize,
     ) -> TestResult<()> {
-        let src_path = test_env.temp_dir.join("target").join(&self.target_file);
+        let src_path = test_env
+            .temp_dir
+            .join(DBT_TARGET_DIR_NAME)
+            .join(&self.target_file);
         let dest_path = project_env.absolute_project_dir.join(&self.dest);
 
         // Create parent directory for destination if it doesn't exist

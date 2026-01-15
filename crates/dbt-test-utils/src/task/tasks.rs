@@ -9,7 +9,11 @@ use std::{
 
 use arrow::record_batch::RecordBatch;
 use async_trait::async_trait;
-use dbt_common::{ErrorCode, FsResult, constants::DBT_INTERNAL_PACKAGES_DIR_NAME, err, stdfs};
+use dbt_common::{
+    ErrorCode, FsResult,
+    constants::{DBT_INTERNAL_PACKAGES_DIR_NAME, DBT_LOG_DIR_NAME, DBT_TARGET_DIR_NAME},
+    err, stdfs,
+};
 use dbt_telemetry::TelemetryRecord;
 use dbt_test_primitives::is_update_golden_files_mode;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
@@ -35,8 +39,8 @@ pub fn prepare_command_vec(
     filter_brackets: bool,
 ) -> Vec<String> {
     let project_dir = &project_env.absolute_project_dir;
-    let target_dir = &test_env.temp_dir.join("target");
-    let logs_dir = &test_env.temp_dir.join("logs");
+    let target_dir = &test_env.temp_dir.join(DBT_TARGET_DIR_NAME);
+    let logs_dir = &test_env.temp_dir.join(DBT_LOG_DIR_NAME);
     let internal_packages_install_path = &test_env.temp_dir.join(DBT_INTERNAL_PACKAGES_DIR_NAME);
 
     // Filter command arguments if requested (for ExecuteAndCompare)
@@ -132,7 +136,7 @@ impl Task for ExecuteOnly {
     ) -> TestResult<()> {
         let mut cmd_vec = self.cmd_vec.clone();
 
-        let mut target_dir = project_env.absolute_project_dir.join("target");
+        let mut target_dir = project_env.absolute_project_dir.join(DBT_TARGET_DIR_NAME);
         // Prepare cli command using the common helper if `redirect_outputs` is true
         if self.redirect_outputs {
             cmd_vec = prepare_command_vec(
@@ -141,7 +145,7 @@ impl Task for ExecuteOnly {
                 test_env,
                 false, // don't filter brackets for ExecuteOnly
             );
-            target_dir = test_env.temp_dir.join("target");
+            target_dir = test_env.temp_dir.join(DBT_TARGET_DIR_NAME);
         }
 
         // Create stdout and stderr files
@@ -395,12 +399,12 @@ impl ExecuteAndCompareTelemetry {
         let log_dir = Self::resolve_path(
             Self::extract_flag_value(cmd_vec, "--log-path"),
             &project_env.absolute_project_dir,
-            test_env.temp_dir.join("logs"),
+            test_env.temp_dir.join(DBT_LOG_DIR_NAME),
         );
         let target_dir = Self::resolve_path(
             Self::extract_flag_value(cmd_vec, "--target-path"),
             &project_env.absolute_project_dir,
-            test_env.temp_dir.join("target"),
+            test_env.temp_dir.join(DBT_TARGET_DIR_NAME),
         );
 
         let task_suffix = Self::task_suffix(task_index);

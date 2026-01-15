@@ -29,6 +29,7 @@ pub enum LocalExecutionBackendKind {
 }
 
 use crate::adapter::AdapterType;
+use crate::constants::DBT_TARGET_DIR_NAME;
 use crate::{
     constants::{DBT_GENERIC_TESTS_DIR_NAME, DBT_SNAPSHOTS_DIR_NAME},
     io_utils::StatusReporter,
@@ -174,7 +175,7 @@ impl IoArgs {
             return relative_path.to_string_lossy().to_string();
         }
         if path.is_relative() {
-            let target_path = in_dir.join("target").join(path);
+            let target_path = in_dir.join(DBT_TARGET_DIR_NAME).join(path);
             if target_path.exists() {
                 return format!("target/{}", path.to_string_lossy());
             }

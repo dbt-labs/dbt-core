@@ -25,6 +25,7 @@ use dbt_test_primitives::is_update_golden_files_mode;
 
 use dbt_common::{
     FsResult,
+    constants::DBT_TARGET_DIR_NAME,
     stdfs::{self},
 };
 
@@ -137,7 +138,7 @@ pub fn create_compare_env(
     // golden files are read from here
     let golden_dir = &test_env.golden_dir;
     // Target dir is in scratch space
-    let target_dir = test_env.temp_dir.join("target");
+    let target_dir = test_env.temp_dir.join(DBT_TARGET_DIR_NAME);
 
     // Prepare stdout and stderr
     let task_suffix = if task_index > 0 {

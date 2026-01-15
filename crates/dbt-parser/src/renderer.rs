@@ -7,7 +7,7 @@ use crate::sql_file_info::SqlFileInfo;
 use crate::utils::{get_node_fqn, register_duplicate_resource, trigger_duplicate_errors};
 use dbt_common::adapter::AdapterType;
 use dbt_common::cancellation::CancellationToken;
-use dbt_common::constants::PARSING;
+use dbt_common::constants::{DBT_TARGET_DIR_NAME, PARSING};
 use dbt_common::io_args::{IoArgs, StaticAnalysisKind};
 use dbt_common::tokiofs::read_to_string;
 use dbt_common::tracing::emit::{
@@ -229,7 +229,7 @@ where
 
     let mut resolve_model_context = base_ctx.clone();
     let display_path = if dbt_asset.base_path == args.io.out_dir {
-        PathBuf::from("target").join(dbt_asset.to_display_path(&args.io.out_dir))
+        PathBuf::from(DBT_TARGET_DIR_NAME).join(dbt_asset.to_display_path(&args.io.out_dir))
     } else {
         dbt_asset.to_display_path(&args.io.in_dir)
     };
@@ -776,7 +776,7 @@ async fn process_model_chunk_for_unsafe_detection<T: InternalDbtNodeAttributes +
             .join(&model.common().original_file_path)
             .exists()
         {
-            PathBuf::from("target").join(&model.common().original_file_path)
+            PathBuf::from(DBT_TARGET_DIR_NAME).join(&model.common().original_file_path)
         } else {
             arg.io.in_dir.join(&model.common().original_file_path)
         };

@@ -5,6 +5,7 @@ use crate::adapter_config::{
 use crate::dbt_cloud_client::{CloudProject, DbtCloudClient, DbtCloudYml};
 use crate::yaml_utils::{has_top_level_key_parsed_file, remove_top_level_key_from_str};
 use dbt_common::adapter::AdapterType;
+use dbt_common::constants::DBT_PACKAGES_DIR_NAME;
 use dbt_common::pretty_string::GREEN;
 use dbt_common::tracing::emit::{emit_info_log_message, emit_warn_log_message};
 use dbt_common::{ErrorCode, FsResult, fs_err, io_args::IoArgs};
@@ -51,7 +52,7 @@ fn load_profile_with_loader(
     };
 
     let dbt_project = DbtProjectSimplified {
-        packages_install_path: Some("dbt_packages".to_string()),
+        packages_install_path: Some(DBT_PACKAGES_DIR_NAME.to_string()),
         profile: Some(profile_name.to_string()),
         dbt_cloud: None,
         data_paths: Default::default(),

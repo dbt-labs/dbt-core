@@ -1,13 +1,16 @@
 use super::mocks::TestWriter;
-use crate::tracing::{
-    emit::{
-        create_debug_span, create_info_span, create_root_info_span, emit_debug_event,
-        emit_error_event, emit_info_event,
+use crate::{
+    constants::DBT_TARGET_DIR_NAME,
+    tracing::{
+        emit::{
+            create_debug_span, create_info_span, create_root_info_span, emit_debug_event,
+            emit_error_event, emit_info_event,
+        },
+        init::create_tracing_subcriber_with_layer,
+        layers::{data_layer::TelemetryDataLayer, json_compat_layer::build_json_compat_layer},
+        span_info::{record_span_status_from_attrs, update_span_attrs},
+        tests::mocks::MockDynSpanEvent,
     },
-    init::create_tracing_subcriber_with_layer,
-    layers::{data_layer::TelemetryDataLayer, json_compat_layer::build_json_compat_layer},
-    span_info::{record_span_status_from_attrs, update_span_attrs},
-    tests::mocks::MockDynSpanEvent,
 };
 use dbt_telemetry::{
     ArtifactType, ArtifactWritten, CompiledCodeInline, DepsAddPackage, DepsPackageInstalled,
@@ -315,7 +318,7 @@ fn test_invocation_span() {
                     log_path: Some("/path/to/logs".to_string()),
                     profiles_dir: Some("/path/to/profiles".to_string()),
                     quiet: Some(false),
-                    target_path: Some("target".to_string()),
+                    target_path: Some(DBT_TARGET_DIR_NAME.to_string()),
                     write_json: Some(true),
                     ..Default::default()
                 }),

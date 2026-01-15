@@ -3,7 +3,10 @@
 use std::{collections::HashMap, path::PathBuf};
 
 use async_trait::async_trait;
-use dbt_common::stdfs;
+use dbt_common::{
+    constants::{DBT_MANIFEST_JSON, DBT_TARGET_DIR_NAME},
+    stdfs,
+};
 use dbt_test_containers::container::docker::{
     ContainerConfig, MountPoint, initialize_container, wait_for_container_stop,
 };
@@ -95,8 +98,8 @@ impl Task for DbtRecordTask {
                 let manifest = stdfs::read_to_string(
                     project_env
                         .absolute_project_dir
-                        .join("target")
-                        .join("manifest.json"),
+                        .join(DBT_TARGET_DIR_NAME)
+                        .join(DBT_MANIFEST_JSON),
                 )?;
                 // Write recordings & manifest.json to golden files
                 let recordings_path = test_env
