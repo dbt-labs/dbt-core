@@ -27,7 +27,7 @@ dbt-test-containers = { workspace = true }
 dbt-test-primitives = { workspace = true }
 diffy = { workspace = true }
 dirs = { workspace = true }
-dotenv = { version = "0.15.0" }
+dotenvy = { workspace = true }
 futures = { workspace = true }
 ignore = { version = "0.4" }
 itertools = { workspace = true }

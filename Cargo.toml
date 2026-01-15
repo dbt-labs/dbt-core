@@ -358,6 +358,7 @@ csv = { version = "1.1", default-features = false }
 dialoguer = "0.11.0"
 diffy = { version = "0.4.2" }
 dirs = "5.0.1"
+dotenvy = "0.15"
 flate2 = "1.0.28"
 gix = { version = "0.72.1", default-features = false, features = ["revision"] }
 gix-discover = "0.40.1"

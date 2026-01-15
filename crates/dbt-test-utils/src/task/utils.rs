@@ -304,7 +304,7 @@ where
     let conformance_file = project_dir.join(".env.conformance");
     if conformance_file.exists() {
         // if so, load it
-        dotenv::from_path(conformance_file).unwrap();
+        dotenvy::from_path(conformance_file).unwrap();
     }
 
     // Redirect stdout and stderr to the specified files until the end of this
