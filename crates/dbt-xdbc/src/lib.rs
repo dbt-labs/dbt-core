@@ -28,6 +28,9 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::time::Duration;
 
+#[cfg(debug_assertions)]
+pub(crate) mod env_var;
+
 pub mod driver;
 pub use driver::Backend;
 pub use driver::Driver;

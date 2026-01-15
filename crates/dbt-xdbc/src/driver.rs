@@ -22,14 +22,11 @@ use std::{
     path::PathBuf, sync::LazyLock,
 };
 
+#[cfg(debug_assertions)]
+use {crate::env_var::env_var_bool, std::io::ErrorKind, std::process::Command};
+
 mod builder;
 pub use builder::*;
-
-#[cfg(debug_assertions)]
-mod env_var;
-
-#[cfg(debug_assertions)]
-use {env_var::env_var_bool, std::io::ErrorKind, std::process::Command};
 
 #[derive(Copy, Clone, Debug, Hash, PartialEq, Eq)]
 pub enum Backend {
@@ -239,15 +236,24 @@ fn find_adbc_libs_directory() -> Option<PathBuf> {
 
     #[cfg(debug_assertions)]
     {
-        let arrow_adbc_pkg_rel_path: PathBuf = ["arrow-adbc", "go", "adbc", "pkg"].iter().collect();
+        let adbc_libs_path = env::var("ADBC_REPOSITORY")
+            .ok()
+            .map(|repo_str| repo_str.into())
+            // fall back to `../arrow-adbc/` if ADBC repository is not provided
+            .or_else(|| {
+                let arrow_adbc_pkg_rel_path: PathBuf =
+                    ["arrow-adbc", "go", "adbc", "pkg"].iter().collect();
 
-        if let Some(sibling_arrow_adbc) =
-            find_upward_dir(&starting_dir, &arrow_adbc_pkg_rel_path, ARROW_HEIGHT_MAX)
-        {
-            if !env_var_bool("DISABLE_AUTO_DRIVER_REBUILD").ok()? {
-                rebuild_drivers(&sibling_arrow_adbc).unwrap();
-            }
-            return Some(sibling_arrow_adbc);
+                find_upward_dir(&starting_dir, &arrow_adbc_pkg_rel_path, ARROW_HEIGHT_MAX)
+            })
+            .inspect(|arrow_repo| {
+                if !env_var_bool("DISABLE_AUTO_DRIVER_REBUILD").unwrap() {
+                    rebuild_drivers(arrow_repo).unwrap();
+                }
+            });
+
+        if adbc_libs_path.is_some() {
+            return adbc_libs_path;
         }
     }
 
