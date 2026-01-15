@@ -282,22 +282,6 @@ pub(crate) fn abstract_tokenize(tokens: Vec<Token>) -> Vec<AbstractToken> {
                 }));
                 index += 1;
             }
-        } else if token.matches("--EPHEMERAL-SELECT-WRAPPER-START") {
-            assert!(tokens.get(index + 1).unwrap().matches("select"));
-            assert!(tokens.get(index + 2).unwrap().matches("*"));
-            assert!(tokens.get(index + 3).unwrap().matches("from"));
-            assert!(tokens.get(index + 4).unwrap().matches("("));
-            index += 5;
-            if tokens.get(index).unwrap().value.to_lowercase() == "with" {
-                index += 1;
-                abstract_tokens.push(AbstractToken::Token(Token {
-                    value: ",".to_string(),
-                    maybe_hash: false,
-                }));
-            }
-        } else if token.matches("--EPHEMERAL-SELECT-WRAPPER-END") {
-            assert!(tokens.get(index + 1).unwrap().matches(")"));
-            index += 2;
         } else {
             abstract_tokens.push(AbstractToken::Token(token.clone()));
             index += 1;

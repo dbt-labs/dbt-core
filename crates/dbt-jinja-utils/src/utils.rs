@@ -34,6 +34,98 @@ use crate::{
     phases::parse::sql_resource::SqlResource,
 };
 
+/// Injects CTEs into SQL, handling existing WITH clauses and comments
+///
+/// This function mimics dbt-core's sqlparse-based approach by:
+/// - Skipping SQL comments (both -- and /* */)
+/// - Detecting existing WITH or WITH RECURSIVE clauses
+/// - Merging CTEs after the WITH keyword if it exists
+/// - Adding a new WITH clause if it doesn't exist
+fn inject_ctes_into_sql(sql: &str, ctes: &str) -> (String, usize, usize) {
+    let mut pos = 0;
+    let chars: Vec<char> = sql.chars().collect();
+
+    // Skip comments and whitespace to find the first real SQL token
+    while pos < chars.len() {
+        // Skip whitespace
+        if chars[pos].is_whitespace() {
+            pos += 1;
+            continue;
+        }
+
+        // Skip single-line comments (--)
+        if pos + 1 < chars.len() && chars[pos] == '-' && chars[pos + 1] == '-' {
+            // Skip until end of line
+            while pos < chars.len() && chars[pos] != '\n' {
+                pos += 1;
+            }
+            if pos < chars.len() {
+                pos += 1; // Skip the newline
+            }
+            continue;
+        }
+
+        // Skip multi-line comments (/* */)
+        if pos + 1 < chars.len() && chars[pos] == '/' && chars[pos + 1] == '*' {
+            pos += 2;
+            // Find the closing */
+            while pos + 1 < chars.len() {
+                if chars[pos] == '*' && chars[pos + 1] == '/' {
+                    pos += 2;
+                    break;
+                }
+                pos += 1;
+            }
+            continue;
+        }
+
+        // We found a non-comment, non-whitespace character
+        break;
+    }
+
+    // Check if we have a WITH or WITH RECURSIVE clause
+    let remaining: String = chars[pos..].iter().collect();
+    let remaining_lower = remaining.to_lowercase();
+
+    let has_with_recursive = remaining_lower.starts_with("with recursive ");
+    let has_with = !has_with_recursive && remaining_lower.starts_with("with ");
+
+    if has_with || has_with_recursive {
+        // SQL has a WITH clause - inject CTEs after the WITH keyword
+        let with_keyword_len = if has_with_recursive {
+            "with recursive ".len()
+        } else {
+            "with ".len()
+        };
+
+        // Calculate the injection point in the original string
+        let prefix_len: usize = chars[..pos].iter().map(|c| c.len_utf8()).sum();
+        let with_end = prefix_len + with_keyword_len;
+
+        // Inject the CTEs after WITH keyword with comma separator
+        // Note: dbt-core adds an extra space after WITH when injecting CTEs
+        let result = format!("{} {},  {}", &sql[..with_end], ctes, &sql[with_end..]);
+
+        // Calculate offsets: +1 for space after WITH, +3 for ",  " separator
+        let added_offset = ctes.len() + 1 + 3;
+        // Count newlines added (lines - 1), not line count
+        let added_lines = ctes.lines().count().saturating_sub(1);
+
+        (result, added_offset, added_lines)
+    } else {
+        // No WITH clause - prepend one
+        // Note: dbt-core uses 2 spaces after WITH keyword
+        let result = format!("with  {} {}", ctes, sql);
+
+        // Calculate offsets: 6 for "with  " prefix (4 letters + 2 spaces), 1 for space after ctes
+        let added_offset = ctes.len() + 6 + 1;
+        // Count newlines added (lines - 1), not line count
+        let added_lines = ctes.lines().count().saturating_sub(1);
+
+        (result, added_offset, added_lines)
+    }
+}
+
 /// The prefix for environment variables that contain secrets
 pub const SECRET_ENV_VAR_PREFIX: &str = "DBT_ENV_SECRET";
 
@@ -217,15 +309,13 @@ pub async fn inject_and_persist_ephemeral_models(
         all_ctes.pop();
     }
 
-    // Wrap the current SQL in a subquery and prepend CTEs
-    let ctes = all_ctes.join(", ");
-    final_sql = format!(
-        "with {ctes}\n--EPHEMERAL-SELECT-WRAPPER-START\nselect * from (\n{final_sql}\n--EPHEMERAL-SELECT-WRAPPER-END\n)"
-    );
-    // Shift expanded macro spans down by number of added lines and added offet
-    // for the "with ... select * from (" line, and the CTEs
-    let added_lines = ctes.lines().count() + 2;
-    let added_offset = ctes.len() + 23;
+    // Inject CTEs into the SQL's WITH clause, mimicking dbt-core's approach
+    // Note: dbt-core uses ", " (comma + 2 spaces) as separator between CTEs
+    let ctes = all_ctes.join(",  ");
+    let (result_sql, added_offset, added_lines) = inject_ctes_into_sql(&final_sql, &ctes);
+    final_sql = result_sql;
+
+    // Adjust macro spans based on the actual characters and lines added
     for span in macro_spans.items.iter_mut() {
         span.1.start_line += added_lines as u32;
         span.1.end_line += added_lines as u32;
