@@ -339,11 +339,18 @@ pub async fn resolve_models(
             }
         }
 
+        // Use patch_path (yml file) when available, otherwise fall back to original_file_path (sql file)
+        // This ensures that duplicate column warnings correctly point to the yml file where columns are defined
+        let columns_file_path = patch_path
+            .as_ref()
+            .map(|p| p.to_string_lossy().into_owned())
+            .or_else(|| Some(original_file_path.to_string_lossy().into_owned()));
+
         let mut columns = process_columns(
             properties.columns.as_ref(),
             model_config.meta.clone(),
             model_config.tags.clone().map(|tags| tags.into()),
-            Some(original_file_path.to_string_lossy().as_ref()),
+            columns_file_path.as_deref(),
         )?;
 
         if let Some(versions) = &properties.versions {
@@ -352,7 +359,7 @@ pub async fn resolve_models(
                 maybe_version.as_ref(),
                 versions,
                 columns,
-                Some(original_file_path.to_string_lossy().as_ref()),
+                columns_file_path.as_deref(),
             )?;
         }
 
