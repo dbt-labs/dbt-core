@@ -800,7 +800,7 @@ class GenerateSchemaNameNullValueDeprecation(WarnLevel):
         return "D044"
 
     def message(self) -> str:
-        description = f"Node '{self.resource_unique_id}' has a schema set to None as a result of a generate_schema_name call. This is deprecated. Please set a valid schema name."
+        description = f"Node '{self.resource_unique_id}' has a schema set to None as a result of a generate_schema_name call. Please set a valid schema name."
         return line_wrap_message(_deprecation_tag(description, self.__class__.__name__))
 
 

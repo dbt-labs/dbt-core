@@ -311,7 +311,7 @@ class ConfiguredParser(
                 )
             else:
                 raise ParsingError(
-                    f"Node '{parsed_node.unique_id}' has a schema set to None as a result of a generate_schema_name call. This is deprecated.\nPlease set a valid schema name, or preserve the legacy behavior by setting the behavior flag 'require_valid_schema_from_generate_schema_name' to True."
+                    f"Node '{parsed_node.unique_id}' has a schema set to None as a result of a generate_schema_name call.\nPlease set a valid schema name, or preserve the legacy behavior by setting the behavior flag 'require_valid_schema_from_generate_schema_name' to True."
                 )
 
         self._update_node_alias(parsed_node, config_dict.get("alias"))
