@@ -1,4 +1,4 @@
-use dbt_common::tracing::emit::{emit_info_progress_message, emit_warn_log_message};
+use dbt_common::tracing::emit::emit_info_progress_message;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_telemetry::ProgressMessage;
 
@@ -24,11 +24,7 @@ pub fn load_profiles<S: Serialize>(
     jinja_env: &JinjaEnv,
     ctx: &S,
 ) -> FsResult<DbtProfile> {
-    let profile_str = get_profile_string(
-        &arg.io,
-        arg.profile.as_ref(),
-        raw_dbt_project.profile.as_ref(),
-    )?;
+    let profile_str = get_profile_string(arg.profile.as_ref(), raw_dbt_project.profile.as_ref())?;
 
     // TODO: Add Secret Renderer logic to profile renderer
 
@@ -108,11 +104,7 @@ pub fn load_profiles<S: Serialize>(
 ///
 /// # Returns
 /// - The profile name to use.
-///
-/// # Warnings
-/// - If the profile is not specified in `dbt_project.yml` but `--profile` is provided.
 fn get_profile_string(
-    io_args: &IoArgs,
     arg_profile: Option<&String>,
     proj_profile: Option<&String>,
 ) -> FsResult<String> {
@@ -123,17 +115,7 @@ fn get_profile_string(
                 "No profile specified in dbt_project.yml"
             )
         }
-        (None, Some(prof)) => {
-            emit_warn_log_message(
-                ErrorCode::InvalidConfig,
-                "No profile specified in dbt_project.yml",
-                io_args.status_reporter.as_ref(),
-            );
-
-            Ok(prof.to_string())
-        }
-        (Some(proj_prof), None) => Ok(proj_prof.to_string()),
-        (Some(_), Some(prof)) => Ok(prof.to_string()),
+        (None, Some(prof)) | (Some(prof), None) | (Some(_), Some(prof)) => Ok(prof.to_string()),
     }
 }
 
