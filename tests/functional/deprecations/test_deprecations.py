@@ -686,7 +686,7 @@ class TestEnvironmentVariableNamespaceDeprecation:
             "DBT_ENGINE_MY_CUSTOM_ENV_VAR_FOR_TESTING": "True",
         },
     )
-    def test_environment_variable_namespace_deprecation(self):
+    def test_environment_variable_namespace_deprecation(self, project):
         event_catcher = EventCatcher(event_to_catch=EnvironmentVariableNamespaceDeprecation)
 
         run_dbt(["parse", "--show-all-deprecations"], callbacks=[event_catcher.catch])
