@@ -280,9 +280,7 @@ pub fn generate_relation_components(
         normalize_quoting(&node.quoting(), adapter_type, &database, &schema, &alias);
 
     // Only generate relation_name if not ephemeral
-    let parse_adapter = env
-        .get_parse_adapter()
-        .expect("Failed to get parse adapter");
+    let parse_adapter = env.get_adapter().expect("Failed to get parse adapter");
     let database_name = if !matches!(node.materialized(), DbtMaterialization::Ephemeral) {
         database.as_str()
     } else {

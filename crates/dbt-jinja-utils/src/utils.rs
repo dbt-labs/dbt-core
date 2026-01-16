@@ -1,5 +1,5 @@
 use dbt_adapter::relation::create_relation;
-use dbt_adapter::{AdapterTyping, ParseAdapter};
+use dbt_adapter::{AdapterTyping, BridgeAdapter};
 use dbt_common::io_utils::StatusReporter;
 use dbt_common::{ErrorCode, FsError, fs_err, stdfs};
 use dbt_common::{FsResult, constants::DBT_CTE_PREFIX, error::MacroSpan, tokiofs};
@@ -538,7 +538,7 @@ pub fn clear_template_cache() {
 
 /// Generate a relation name from database, schema, alias
 pub fn generate_relation_name(
-    parse_adapter: Arc<ParseAdapter>,
+    parse_adapter: Arc<BridgeAdapter>,
     database: &str,
     schema: &str,
     identifier: &str,

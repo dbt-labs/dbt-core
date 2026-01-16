@@ -8,7 +8,7 @@ use std::{
 
 use chrono::DateTime;
 use chrono_tz::Tz;
-use dbt_adapter::{BaseAdapter, ParseAdapter, sql_types::NaiveTypeOpsImpl};
+use dbt_adapter::{BaseAdapter, BridgeAdapter, sql_types::NaiveTypeOpsImpl};
 use dbt_common::{
     ErrorCode, FsResult, adapter::AdapterType, cancellation::CancellationToken, fs_err,
     io_args::IoArgs,
@@ -119,7 +119,7 @@ pub fn initialize_parse_jinja_environment(
         )
     })?;
     let type_formatter = Box::new(NaiveTypeOpsImpl::new(adapter_type));
-    let adapter = ParseAdapter::new(
+    let adapter = BridgeAdapter::new_parse_phase_adapter(
         adapter_type,
         adapter_config_mapping,
         package_quoting,

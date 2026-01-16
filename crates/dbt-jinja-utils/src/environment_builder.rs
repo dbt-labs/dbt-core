@@ -550,7 +550,7 @@ impl Default for JinjaEnvBuilder {
 mod tests {
     use std::{collections::BTreeSet, path::PathBuf, sync::Mutex};
 
-    use dbt_adapter::ParseAdapter;
+    use dbt_adapter::BridgeAdapter;
     use dbt_adapter::sql_types::NaiveTypeOpsImpl;
     use dbt_common::adapter::AdapterType;
     use dbt_common::cancellation::never_cancels;
@@ -684,7 +684,7 @@ all okay!");
                 "{% macro default__one() %}test_package one{% endmacro %}",
             )],
         );
-        let adapter = ParseAdapter::new(
+        let adapter = BridgeAdapter::new_parse_phase_adapter(
             AdapterType::Postgres,
             dbt_serde_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
@@ -772,7 +772,7 @@ all okay!");
                 ),
             ],
         );
-        let adapter = ParseAdapter::new(
+        let adapter = BridgeAdapter::new_parse_phase_adapter(
             AdapterType::Postgres,
             dbt_serde_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
@@ -835,7 +835,7 @@ all okay!");
 
     #[test]
     fn test_macro_assignment() {
-        let adapter = ParseAdapter::new(
+        let adapter = BridgeAdapter::new_parse_phase_adapter(
             AdapterType::Postgres,
             dbt_serde_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
@@ -956,7 +956,7 @@ all okay!");
             )],
         );
 
-        let adapter = ParseAdapter::new(
+        let adapter = BridgeAdapter::new_parse_phase_adapter(
             AdapterType::Postgres,
             dbt_serde_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
@@ -1008,7 +1008,7 @@ all okay!");
             )],
         );
 
-        let adapter = ParseAdapter::new(
+        let adapter = BridgeAdapter::new_parse_phase_adapter(
             AdapterType::Postgres,
             dbt_serde_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
@@ -1054,7 +1054,7 @@ all okay!");
             )],
         );
 
-        let adapter = ParseAdapter::new(
+        let adapter = BridgeAdapter::new_parse_phase_adapter(
             AdapterType::Postgres,
             dbt_serde_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,

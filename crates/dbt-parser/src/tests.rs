@@ -3,7 +3,7 @@
 #[allow(clippy::module_inception)]
 mod tests {
     use dbt_adapter::sql_types::NaiveTypeOpsImpl;
-    use dbt_adapter::{BaseAdapter, ParseAdapter};
+    use dbt_adapter::{BaseAdapter, BridgeAdapter};
     use dbt_common::adapter::AdapterType;
     use dbt_common::cancellation::never_cancels;
     use dbt_common::{FsResult, io_args::IoArgs};
@@ -333,7 +333,7 @@ mod tests {
             ctx: S,
         ) -> Result<String, Error> {
             let mut env = Environment::new();
-            let adapter = Arc::new(ParseAdapter::new(
+            let adapter = Arc::new(BridgeAdapter::new_parse_phase_adapter(
                 AdapterType::Postgres,
                 dbt_serde_yaml::Mapping::default(),
                 DEFAULT_DBT_QUOTING,

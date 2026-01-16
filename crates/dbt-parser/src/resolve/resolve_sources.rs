@@ -193,7 +193,7 @@ pub fn resolve_sources(
         );
 
         let parse_adapter = jinja_env
-            .get_parse_adapter()
+            .get_adapter()
             .expect("Failed to get parse adapter");
 
         let relation_name =

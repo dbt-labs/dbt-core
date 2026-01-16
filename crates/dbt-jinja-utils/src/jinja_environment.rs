@@ -1,4 +1,4 @@
-use dbt_adapter::{BaseAdapter, BridgeAdapter, ParseAdapter, factory::create_static_relation};
+use dbt_adapter::{BaseAdapter, BridgeAdapter, factory::create_static_relation};
 use dbt_common::{ErrorCode, FsError, FsResult, fs_err};
 use minijinja::{
     Environment, Error as MinijinjaError, State, Template, UndefinedBehavior, Value,
@@ -196,16 +196,15 @@ impl JinjaEnv {
     }
 
     /// Get the adapter from the environment
-    pub fn get_base_adapter(&self) -> Option<Arc<dyn BaseAdapter>> {
+    pub fn get_adapter(&self) -> Option<Arc<BridgeAdapter>> {
         let adapter = self.env.get_global("adapter")?;
-        let bridge = adapter.downcast_object::<BridgeAdapter>()?;
-        Some(bridge as Arc<dyn BaseAdapter>)
+        adapter.downcast_object::<BridgeAdapter>()
     }
 
-    /// Get the parse adapter from the environment
-    pub fn get_parse_adapter(&self) -> Option<Arc<ParseAdapter>> {
-        let adapter = self.env.get_global("adapter")?;
-        adapter.downcast_object::<ParseAdapter>()
+    /// Get the adapter from the environment
+    pub fn get_base_adapter(&self) -> Option<Arc<dyn BaseAdapter>> {
+        self.get_adapter()
+            .map(|bridge| bridge as Arc<dyn BaseAdapter>)
     }
 
     /// Set the undefined behavior for the environment.

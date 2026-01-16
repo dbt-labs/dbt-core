@@ -2,8 +2,8 @@ use std::fmt;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use dbt_adapter::ParseAdapter;
 use dbt_adapter::cast_util::downcast_value_to_dyn_base_relation;
+use dbt_adapter::{AdapterTyping, BridgeAdapter};
 use minijinja::arg_utils::ArgsIter;
 use minijinja::listener::RenderingEventListener;
 use minijinja::value::Object;
@@ -11,16 +11,20 @@ use minijinja::{
     Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State, Value as MinijinjaValue,
 };
 
-/// A namespace object that intercepts specific dbt macro calls
-/// to track them in the ParseAdapter before delegating to the original templates
+/// A namespace object that intercepts specific dbt macro calls to track them in the adapter
+/// (in parse-phase mode) before delegating to the original templates.
 #[derive(Debug, Clone)]
 pub struct DbtNamespace {
-    parse_adapter: Arc<ParseAdapter>,
+    parse_adapter: Arc<BridgeAdapter>,
 }
 
 impl DbtNamespace {
-    /// Creates a new DbtNamespace that tracks calls in the ParseAdapter
-    pub fn new(parse_adapter: Arc<ParseAdapter>) -> Self {
+    /// Creates a new DbtNamespace that tracks calls in the adapter
+    pub fn new(parse_adapter: Arc<BridgeAdapter>) -> Self {
+        debug_assert!(
+            parse_adapter.is_parse(),
+            "DbtNamespace should be created with a BridgeAdapter in parse mode",
+        );
         Self { parse_adapter }
     }
 }
@@ -52,6 +56,8 @@ impl Object for DbtNamespace {
                 })?;
                 let relation = downcast_value_to_dyn_base_relation(relation)?;
                 self.parse_adapter
+                    .parse_adapter_state()
+                    .expect("adapter should be configured for the parse phase")
                     .record_get_columns_in_relation_call(state, relation)?;
 
                 // Delegate to the original dbt.get_columns_in_relation template
@@ -82,7 +88,10 @@ impl Object for DbtNamespace {
                 let schema = iter.next_arg::<&str>()?;
                 let identifier = iter.next_arg::<&str>()?;
                 iter.finish()?;
+                // NOTE(felipecrv): this doens't have to be called directly when we move to BridgeAdapter
                 self.parse_adapter
+                    .parse_adapter_state()
+                    .expect("adapter should be configured for the parse phase")
                     .record_get_relation_call(state, database, schema, identifier)?;
 
                 // Delegate to the original dbt.get_relation template

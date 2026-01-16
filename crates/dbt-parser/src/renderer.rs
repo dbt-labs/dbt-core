@@ -659,8 +659,8 @@ pub async fn collect_adapter_identifiers_detect_unsafe<T: InternalDbtNodeAttribu
     let chunk_size = model_vec.len().div_ceil(max_concurrency);
 
     let parse_adapter = jinja_env
-        .get_parse_adapter()
-        .expect("Adapter should be parse");
+        .get_adapter()
+        .expect("Adapter should be available during parse phase");
 
     // Use sequential processing if num_threads is 1, otherwise use parallel processing
     let mut dbt_nodes = if max_concurrency == 1 {
@@ -715,7 +715,7 @@ async fn process_model_chunk_for_unsafe_detection<T: InternalDbtNodeAttributes +
     package_name: String,
     root_project_name: String,
     runtime_config: Arc<DbtRuntimeConfig>,
-    parse_adapter: Arc<dbt_adapter::ParseAdapter>,
+    parse_adapter: Arc<dbt_adapter::BridgeAdapter>,
     token: &CancellationToken,
 ) -> FsResult<Vec<(T, bool)>> {
     let mut nodes = Vec::new();
@@ -789,6 +789,8 @@ async fn process_model_chunk_for_unsafe_detection<T: InternalDbtNodeAttributes +
             &display_path,
         );
         let is_unsafe = parse_adapter
+            .parse_adapter_state()
+            .expect("Adapter must be configured for the parse phase")
             .unsafe_nodes()
             .contains(&model.common().unique_id);
         nodes.push((model, is_unsafe));
@@ -816,7 +818,7 @@ async fn collect_adapter_identifiers_sequential<T: InternalDbtNodeAttributes + '
     package_name: &str,
     root_project_name: &str,
     runtime_config: Arc<DbtRuntimeConfig>,
-    parse_adapter: Arc<dbt_adapter::ParseAdapter>,
+    parse_adapter: Arc<dbt_adapter::BridgeAdapter>,
     chunk_size: usize,
     token: &CancellationToken,
 ) -> FsResult<Vec<(T, bool)>> {
@@ -855,7 +857,7 @@ async fn collect_adapter_identifiers_parallel<T: InternalDbtNodeAttributes + 'st
     package_name: &str,
     root_project_name: &str,
     runtime_config: Arc<DbtRuntimeConfig>,
-    parse_adapter: Arc<dbt_adapter::ParseAdapter>,
+    parse_adapter: Arc<dbt_adapter::BridgeAdapter>,
     chunk_size: usize,
     token: &CancellationToken,
 ) -> FsResult<Vec<(T, bool)>> {

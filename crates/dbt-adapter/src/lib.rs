@@ -73,7 +73,6 @@ pub use bridge_adapter::BridgeAdapter;
 pub use column::{Column, ColumnBuilder};
 pub use errors::AdapterResult;
 pub use funcs::{execute_macro_with_package, execute_macro_wrapper_with_package};
-pub use parse::adapter::ParseAdapter;
 pub use response::AdapterResponse;
 pub use typed_adapter::TypedBaseAdapter;
 
