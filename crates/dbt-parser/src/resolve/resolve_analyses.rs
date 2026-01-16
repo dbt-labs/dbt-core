@@ -172,18 +172,10 @@ pub async fn resolve_analyses(
                 metrics.push(vec![metric.to_owned()]);
             }
         }
-        // Use patch_path (yml file) when available, otherwise fall back to original_file_path (sql file)
-        // This ensures that duplicate column warnings correctly point to the yml file where columns are defined
-        let columns_file_path = patch_path
-            .as_ref()
-            .map(|p| p.to_string_lossy().into_owned())
-            .or_else(|| Some(original_file_path.to_string_lossy().into_owned()));
-
         let columns = process_columns(
             properties.columns.as_ref(),
             analysis_config.meta.clone(),
             analysis_config.tags.clone().map(|tags| tags.into()),
-            columns_file_path.as_deref(),
         )?;
 
         let is_enabled = matches!(status, ModelStatus::Enabled);

@@ -196,12 +196,10 @@ pub fn resolve_seeds(
 
         let is_enabled = properties_config.get_enabled().unwrap_or(true);
 
-        let file_path_str = patch_path.as_ref().map(|p| p.to_string_lossy().to_string());
         let columns = process_columns(
             seed.columns.as_ref(),
             properties_config.meta.clone(),
             properties_config.tags.clone().map(|tags| tags.into()),
-            file_path_str.as_deref(),
         )?;
 
         validate_delimiter(&properties_config.delimiter)?;
