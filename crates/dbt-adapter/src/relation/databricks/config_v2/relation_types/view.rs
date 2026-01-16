@@ -26,26 +26,18 @@ pub(crate) fn new_loader() -> RelationConfigLoader<DatabricksRelationMetadata> {
 mod tests {
     use super::{new_loader, requires_full_refresh};
     use crate::relation::config_v2::{ComponentConfigChange, RelationComponentConfigChangeSet};
-    use crate::relation::databricks as rc_v1;
     use crate::relation::databricks::config_v2::{
-        components,
-        test_helpers::{TestCase, TestModelColumn, TestModelConfig, run_test_cases},
+        DatabricksRelationMetadata, components,
+        test_helpers::{TestModelColumn, TestModelConfig, run_test_cases},
     };
+    use crate::relation::test_helpers::TestCase;
     use indexmap::IndexMap;
 
-    fn create_test_cases() -> Vec<TestCase<rc_v1::view::ViewConfig>> {
+    fn create_test_cases() -> Vec<TestCase<DatabricksRelationMetadata, TestModelConfig>> {
         vec![
             TestCase {
                 description: "changing all of view's components except relation comment should not trigger a full refresh",
-                v1_relation_loader: std::marker::PhantomData,
-                v1_errors: vec![
-                    // v1 uses column quoting settings for comments, v2 always quotes (same as
-                    // dbt-databricks)
-                    components::column_comments::TYPE_NAME,
-                    // v1 does not validate overriding databricks-reserved keys in the dbt model
-                    components::tbl_properties::TYPE_NAME,
-                ],
-                v2_relation_loader: new_loader(),
+                relation_loader: new_loader(),
                 current_state: TestModelConfig {
                     persist_relation_comments: true,
                     persist_column_comments: true,
@@ -154,9 +146,7 @@ mod tests {
             TestCase {
                 // Databricks doesnt have an API to update relation comments
                 description: "changing a view's relation comment should trigger a full refresh",
-                v1_relation_loader: std::marker::PhantomData,
-                v1_errors: vec![],
-                v2_relation_loader: new_loader(),
+                relation_loader: new_loader(),
                 current_state: TestModelConfig {
                     relation_comment: Some("old comment".to_string()),
                     persist_relation_comments: true,

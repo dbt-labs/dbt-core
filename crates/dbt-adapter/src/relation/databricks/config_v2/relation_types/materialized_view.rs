@@ -32,24 +32,18 @@ pub(crate) fn new_loader() -> RelationConfigLoader<DatabricksRelationMetadata> {
 mod tests {
     use super::{new_loader, requires_full_refresh};
     use crate::relation::config_v2::{ComponentConfigChange, RelationComponentConfigChangeSet};
-    use crate::relation::databricks as rc_v1;
     use crate::relation::databricks::config_v2::{
-        components,
-        test_helpers::{TestCase, TestModelConfig, run_test_cases},
+        DatabricksRelationMetadata, components,
+        test_helpers::{TestModelConfig, run_test_cases},
     };
+    use crate::relation::test_helpers::TestCase;
     use indexmap::IndexMap;
 
-    fn create_test_cases() -> Vec<TestCase<rc_v1::materialized_view::MaterializedViewConfig>> {
+    fn create_test_cases() -> Vec<TestCase<DatabricksRelationMetadata, TestModelConfig>> {
         vec![
             TestCase {
                 description: "changing any of materialized view's components except refresh or tags should trigger a full refresh",
-                v1_relation_loader: std::marker::PhantomData,
-                v1_errors: vec![
-                    // v1 does not validate overriding databricks-reserved keys in the dbt model
-                    // v1 does not diff tags properly and the changed tag does not appear in its changeset
-                    components::tbl_properties::TYPE_NAME,
-                ],
-                v2_relation_loader: new_loader(),
+                relation_loader: new_loader(),
                 current_state: TestModelConfig {
                     persist_relation_comments: true,
                     query: Some("SELECT 1".to_string()),
@@ -102,13 +96,7 @@ mod tests {
             },
             TestCase {
                 description: "changing a materialized view's refresh cron or tags should not trigger a full refresh",
-                v1_relation_loader: std::marker::PhantomData,
-                v1_errors: vec![
-                    // v1 does not detect changes to tags here
-                    // TODO: re-add tags
-                    components::relation_tags::TYPE_NAME,
-                ],
-                v2_relation_loader: new_loader(),
+                relation_loader: new_loader(),
                 current_state: TestModelConfig {
                     cron: Some("* * * * *".to_string()),
                     time_zone: Some("UTC".to_string()),

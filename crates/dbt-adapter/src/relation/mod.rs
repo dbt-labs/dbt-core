@@ -19,3 +19,6 @@ pub use relation_object::{
 };
 
 pub(crate) mod config_v2;
+
+#[cfg(test)]
+pub(crate) mod test_helpers;

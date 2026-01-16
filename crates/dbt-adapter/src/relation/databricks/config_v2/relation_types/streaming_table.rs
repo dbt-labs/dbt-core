@@ -30,29 +30,18 @@ pub(crate) fn new_loader() -> RelationConfigLoader<DatabricksRelationMetadata> {
 mod tests {
     use super::{new_loader, requires_full_refresh};
     use crate::relation::config_v2::{ComponentConfigChange, RelationComponentConfigChangeSet};
-    use crate::relation::databricks as rc_v1;
     use crate::relation::databricks::config_v2::{
-        components,
-        test_helpers::{TestCase, TestModelConfig, run_test_cases},
+        DatabricksRelationMetadata, components,
+        test_helpers::{TestModelConfig, run_test_cases},
     };
+    use crate::relation::test_helpers::TestCase;
     use indexmap::IndexMap;
 
-    fn create_test_cases() -> Vec<TestCase<rc_v1::streaming_table::StreamingTableConfig>> {
+    fn create_test_cases() -> Vec<TestCase<DatabricksRelationMetadata, TestModelConfig>> {
         vec![
             TestCase {
                 description: "changing any streaming table components except partition by should not trigger a full refresh",
-                v1_relation_loader: std::marker::PhantomData,
-                v1_errors: vec![
-                    // v1 does not diff refresh config properly and the changed schedule does not appear in its changeset.
-                    // I tested it in Core and it DOES in fact generate the proper changeset.
-                    components::refresh::TYPE_NAME,
-                    // TODO: re-add tags
-                    // // v1 does not diff tags properly and the changed tag does not appear in its changeset.
-                    // components::relation_tags::TYPE_NAME,
-                    // v1 does not validate overriding databricks-reserved keys in the dbt model
-                    components::tbl_properties::TYPE_NAME,
-                ],
-                v2_relation_loader: new_loader(),
+                relation_loader: new_loader(),
                 current_state: TestModelConfig {
                     persist_relation_comments: true,
                     relation_comment: Some("old comment".to_string()),
@@ -139,13 +128,7 @@ mod tests {
             },
             TestCase {
                 description: "changing streaming table partition by should trigger a full refresh",
-                v1_relation_loader: std::marker::PhantomData,
-                v1_errors: vec![
-                    "changeset lengths differ",
-                    // v1 says this does not require full refresh while it does in fact require a full refresh
-                    "requires_full_refresh",
-                ],
-                v2_relation_loader: new_loader(),
+                relation_loader: new_loader(),
                 current_state: TestModelConfig {
                     partition_by: vec!["partition_by_old".to_string()],
                     ..Default::default()
