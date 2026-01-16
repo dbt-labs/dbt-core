@@ -1,6 +1,7 @@
 use crate::{AdapterResponse, TypedBaseAdapter};
 
-use dbt_common::{AdapterError, AdapterErrorKind, AdapterResult};
+use dbt_common::tracing::emit::emit_warn_log_message;
+use dbt_common::{AdapterError, AdapterErrorKind, AdapterResult, ErrorCode};
 use dbt_xdbc::{Connection, QueryCtx};
 use minijinja::{State, Value};
 use serde_json::json;
@@ -61,10 +62,18 @@ pub fn submit_python_job(
             &identifier,
             compiled_code,
         ),
+        "serverless_cluster" => submit_serverless_cluster(
+            adapter,
+            &config,
+            &catalog,
+            &schema,
+            &identifier,
+            compiled_code,
+        ),
         _ => Err(AdapterError::new(
             AdapterErrorKind::NotSupported,
             format!(
-                "Unsupported submission_method: '{}'. Supported methods: all_purpose_cluster, job_cluster",
+                "Unsupported submission_method: '{}'. Supported methods: all_purpose_cluster, job_cluster, serverless_cluster",
                 submission_method
             ),
         )),
@@ -129,6 +138,28 @@ fn submit_all_purpose_cluster(
     } else {
         submit_via_command_api(adapter, config, compiled_code, &cluster_id)
     }
+}
+
+/// https://github.com/databricks/dbt-databricks/blob/87954785bc43167b7bb4a404b793c34d36140dc9/dbt/adapters/databricks/python_models/python_submissions.py#L461
+fn submit_serverless_cluster(
+    adapter: &dyn TypedBaseAdapter,
+    config: &Value,
+    catalog: &str,
+    schema: &str,
+    identifier: &str,
+    compiled_code: &str,
+) -> AdapterResult<AdapterResponse> {
+    let task_settings = json!({});
+
+    submit_via_notebook(
+        adapter,
+        config,
+        catalog,
+        schema,
+        identifier,
+        compiled_code,
+        task_settings,
+    )
 }
 
 /// https://github.com/databricks/dbt-databricks/blob/955743ab67543ef1fad3c4f7c13cc8b4a0ab8c06/dbt/adapters/databricks/python_models/python_submissions.py#L392
@@ -200,11 +231,7 @@ fn submit_via_command_api(
     compiled_code: &str,
     cluster_id: &str,
 ) -> AdapterResult<AdapterResponse> {
-    let timeout = config
-        .get_attr("timeout")
-        .ok()
-        .and_then(|v| v.as_str().and_then(|s| s.parse::<u64>().ok()))
-        .unwrap_or(0); // 0 means no timeout (matches dbt-databricks default)
+    let timeout = extract_timeout(config);
 
     let use_user_folder_for_python = config
         .get_attr("user_folder_for_python")
@@ -249,17 +276,13 @@ fn submit_via_notebook(
     compiled_code: &str,
     task_settings: serde_json::Value,
 ) -> AdapterResult<AdapterResponse> {
-    let timeout = config
-        .get_attr("timeout")
-        .ok()
-        .and_then(|v| v.as_str().and_then(|s| s.parse::<u64>().ok()))
-        .unwrap_or(0);
+    let timeout = extract_timeout(config);
 
     let use_user_folder_for_python = config
         .get_attr("user_folder_for_python")
         .ok()
         .map(|v| v.is_true())
-        .unwrap_or(true);
+        .unwrap_or(false);
 
     let api_client = DatabricksApiClient::new(adapter, use_user_folder_for_python)?;
 
@@ -282,8 +305,10 @@ fn submit_via_notebook(
 
     let submission_type = if task_settings.get("new_cluster").is_some() {
         "job_cluster"
-    } else {
+    } else if task_settings.get("existing_cluster_id").is_some() {
         "all_purpose_cluster"
+    } else {
+        "serverless_cluster"
     };
 
     let run_id = submit_notebook_job(
@@ -397,6 +422,29 @@ fn extract_packages(config: &Value) -> Vec<String> {
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default()
+}
+
+fn extract_timeout(config: &Value) -> u64 {
+    let Some(value) = config.get_attr("timeout").ok() else {
+        return 0;
+    };
+
+    let timeout = value
+        .as_i64()
+        .and_then(|n| u64::try_from(n).ok())
+        .or_else(|| value.as_str().and_then(|s| s.parse::<u64>().ok()));
+
+    match timeout {
+        Some(t) => t,
+        None => {
+            emit_warn_log_message(
+                ErrorCode::InvalidConfig,
+                "Invalid timeout value, using default of 0",
+                None,
+            );
+            0
+        }
+    }
 }
 
 fn build_libraries(
