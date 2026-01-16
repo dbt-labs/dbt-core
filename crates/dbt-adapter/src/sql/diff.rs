@@ -417,10 +417,22 @@ fn canonicalize_uuid_literals(sql: &str) -> String {
 /// The specific package version string isn't semantically meaningful for replay comparison, but
 /// we scope this canonicalization narrowly to avoid masking legitimate literal differences.
 fn canonicalize_elementary_metadata_pkg_version(sql: &str) -> String {
-    // Fast-path: only touch the known Elementary metadata table and field.
+    // Fast-path: only touch likely Elementary `model.elementary.metadata` materializations.
+    //
+    // Projects can change where Elementary models land (database/schema), so we cannot rely on a
+    // fixed schema/table prefix like `analytics_elementary_metadata.metadata`.
+    //
+    // Instead, we scope this canonicalization to DDL that creates a `... .metadata` table and
+    // contains the `dbt_pkg_version` field literal.
     let lower = sql.to_ascii_lowercase();
-    if !(lower.contains("analytics_elementary_metadata.metadata")
-        && lower.contains("dbt_pkg_version"))
+    if !lower.contains("dbt_pkg_version") {
+        return sql.to_string();
+    }
+    // Must look like DDL for a table named `metadata`.
+    // We keep this intentionally conservative to avoid masking unrelated literals.
+    if !(lower.contains("create or replace")
+        && lower.contains("table")
+        && lower.contains(".metadata"))
     {
         return sql.to_string();
     }
@@ -2426,6 +2438,34 @@ SELECT
         assert!(
             result.is_ok(),
             "Elementary metadata package version drift should be ignored"
+        );
+    }
+
+    #[test]
+    fn test_compare_sql_elementary_pkg_version_drift_ignored_with_renamed_schema() {
+        // Regression: some projects materialize Elementary's `metadata` model into the project's
+        // target schema (or other renamed schemas), not `analytics_elementary_metadata`.
+        let actual = r#"
+create or replace transient  table SAM_CLARK_SANDBOX.weather_analytics_prd.metadata
+    as (
+SELECT
+    '0.21.0' as dbt_pkg_version
+    )
+;
+"#;
+        let expected = r#"
+create or replace transient table SAM_CLARK_SANDBOX.weather_analytics_prd.metadata
+    as (
+SELECT
+    '0.20.1' as dbt_pkg_version
+    )
+;
+"#;
+
+        let result = compare_sql(actual, expected);
+        assert!(
+            result.is_ok(),
+            "Elementary metadata package version drift should be ignored even when schema is renamed"
         );
     }
 
