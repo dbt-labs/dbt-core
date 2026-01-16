@@ -23,9 +23,9 @@ use dbt_common::behavior_flags::{Behavior, BehaviorFlag};
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::{AdapterError, AdapterErrorKind, FsError, FsResult};
 use dbt_schema_store::{SchemaEntry, SchemaStoreTrait};
-use dbt_schemas::schemas::common::{DbtIncrementalStrategy, DbtQuoting, ResolvedQuoting};
+use dbt_schemas::schemas::common::{DbtQuoting, ResolvedQuoting};
 use dbt_schemas::schemas::dbt_catalogs::DbtCatalogs;
-use dbt_schemas::schemas::dbt_column::{DbtColumn, DbtColumnRef};
+use dbt_schemas::schemas::dbt_column::DbtColumn;
 use dbt_schemas::schemas::manifest::{BigqueryClusterConfig, BigqueryPartitionConfig};
 use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::properties::ModelConstraint;
@@ -35,10 +35,9 @@ use dbt_schemas::schemas::{InternalDbtNodeAttributes, InternalDbtNodeWrapper};
 use dbt_xdbc::Connection;
 use indexmap::IndexMap;
 use minijinja::constants::TARGET_UNIQUE_ID;
-use minijinja::dispatch_object::DispatchObject;
 use minijinja::listener::RenderingEventListener;
 use minijinja::value::{Kwargs, Object};
-use minijinja::{State, Value, invalid_argument, invalid_argument_inner};
+use minijinja::{State, Value};
 use tracing;
 use tracy_client::span;
 
@@ -48,7 +47,6 @@ use std::fmt;
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
-use std::str::FromStr;
 use std::sync::{Arc, LazyLock};
 
 // Thread-local counter to track adapter call depth.
@@ -437,53 +435,38 @@ impl BaseAdapter for BridgeAdapter {
     #[tracing::instrument(skip_all, level = "trace")]
     fn cache_added(
         &self,
-        _state: &State,
+        state: &State,
         relation: Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed { .. } => {
-                let _ = self
-                    .engine()
-                    .relation_cache()
-                    .insert_relation(relation, None);
-                Ok(none_value())
-            }
+            Typed { adapter, .. } => adapter.cache_added(state, relation.clone()),
             // TODO(jason): We should probably capture any manual user engagement with the cache
             // and use this knowledge for our cache hydration
             Parse(_) => Ok(none_value()),
         }
     }
 
-    #[tracing::instrument(skip(self, _state), level = "trace")]
+    #[tracing::instrument(skip(self, state), level = "trace")]
     fn cache_dropped(
         &self,
-        _state: &State,
+        state: &State,
         relation: Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed { .. } => {
-                let _ = self.engine().relation_cache().evict_relation(&relation);
-                Ok(none_value())
-            }
+            Typed { adapter, .. } => adapter.cache_dropped(state, relation),
             Parse(_) => Ok(none_value()),
         }
     }
 
-    #[tracing::instrument(skip(self, _state), level = "trace")]
+    #[tracing::instrument(skip(self, state), level = "trace")]
     fn cache_renamed(
         &self,
-        _state: &State,
+        state: &State,
         from_relation: Arc<dyn BaseRelation>,
         to_relation: Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed { .. } => {
-                let _ = self
-                    .engine()
-                    .relation_cache()
-                    .rename_relation(&from_relation, to_relation);
-                Ok(none_value())
-            }
+            Typed { adapter, .. } => adapter.cache_renamed(state, from_relation, to_relation),
             Parse(_) => Ok(none_value()),
         }
     }
@@ -827,11 +810,7 @@ impl BaseAdapter for BridgeAdapter {
         relation: Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed { .. } => {
-                let args = [RelationObject::new(relation).into_value()];
-                execute_macro(state, &args, "create_schema")?;
-                Ok(none_value())
-            }
+            Typed { adapter, .. } => adapter.create_schema(state, relation),
             Parse(_) => Ok(none_value()),
         }
     }
@@ -844,27 +823,20 @@ impl BaseAdapter for BridgeAdapter {
         relation: Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed { .. } => {
-                self.engine()
-                    .relation_cache()
-                    .evict_schema_for_relation(&relation);
-                let args = [RelationObject::new(relation).into_value()];
-                execute_macro(state, &args, "drop_schema")?;
-                Ok(none_value())
-            }
+            Typed { adapter, .. } => adapter.drop_schema(state, relation),
             Parse(_) => Ok(none_value()),
         }
     }
 
-    #[tracing::instrument(skip(self, _state), level = "trace")]
+    #[tracing::instrument(skip(self, state), level = "trace")]
     #[allow(clippy::used_underscore_binding)]
     fn valid_snapshot_target(
         &self,
-        _state: &State,
-        _relation: Arc<dyn BaseRelation>,
+        state: &State,
+        relation: Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed { .. } => unimplemented!("valid_snapshot_target"),
+            Typed { adapter, .. } => adapter.valid_snapshot_target(state, relation),
             Parse(_) => Ok(none_value()),
         }
     }
@@ -876,32 +848,7 @@ impl BaseAdapter for BridgeAdapter {
         strategy: &str,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed { adapter, .. } => {
-                if strategy != "default" {
-                    let strategy_ = DbtIncrementalStrategy::from_str(strategy)
-                        .map_err(|e| invalid_argument_inner!("Invalid strategy value {}", e))?;
-                    if !adapter.valid_incremental_strategies().contains(&strategy_)
-                        && builtin_incremental_strategies(false).contains(&strategy_)
-                    {
-                        return invalid_argument!(
-                            "The incremental strategy '{}' is not valid for this adapter",
-                            strategy
-                        );
-                    }
-                }
-
-                let strategy = strategy.replace("+", "_");
-                let macro_name = format!("get_incremental_{strategy}_sql");
-
-                // Return the macro
-                Ok(Value::from_object(DispatchObject {
-                    macro_name,
-                    package_name: None,
-                    strict: false,
-                    auto_execute: false,
-                    context: Some(state.get_base_context()),
-                }))
-            }
+            Typed { adapter, .. } => adapter.get_incremental_strategy_macro(state, strategy),
             Parse(_) => Ok(none_value()),
         }
     }
@@ -1160,49 +1107,15 @@ impl BaseAdapter for BridgeAdapter {
         excluded_schemas: Option<Value>,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed { .. } => {
-                // Validate excluded_schemas if provided
-                if let Some(ref schemas) = excluded_schemas {
-                    let _ = minijinja_value_to_typed_struct::<Vec<String>>(schemas.clone())
-                        .map_err(|e| {
-                            minijinja::Error::new(
-                                minijinja::ErrorKind::SerdeDeserializeError,
-                                e.to_string(),
-                            )
-                        })?;
-                }
-
-                // Get default database from state if not provided
-                let database_str = if let Some(db) = database {
-                    db.to_string()
-                } else {
-                    let target = state.lookup("target").ok_or_else(|| {
-                        minijinja::Error::new(
-                            minijinja::ErrorKind::InvalidOperation,
-                            "target is not set in state",
-                        )
-                    })?;
-                    let db_value = target.get_attr("database").unwrap_or_default();
-                    db_value.as_str().unwrap_or_default().to_string()
-                };
-
-                // Build args array for macro call
-                // Note: For optional string parameters like 'exclude', we pass empty string instead of None
-                // because the macro expects a string and None gets converted to "none" string
-                let args = vec![
-                    Value::from(schema_pattern),
-                    Value::from(table_pattern),
-                    exclude.map(Value::from).unwrap_or_else(|| Value::from("")),
-                    Value::from(database_str.as_str()),
-                    quote_table
-                        .map(Value::from)
-                        .unwrap_or_else(|| Value::from(false)),
-                    excluded_schemas.unwrap_or_else(|| Value::from_iter::<Vec<String>>(vec![])),
-                ];
-
-                let result = execute_macro(state, &args, "get_relations_by_pattern_internal")?;
-                Ok(result)
-            }
+            Typed { adapter, .. } => adapter.get_relations_by_pattern(
+                state,
+                schema_pattern,
+                table_pattern,
+                exclude,
+                database,
+                quote_table,
+                excluded_schemas,
+            ),
             Parse(parse_adapter_state) => parse_adapter_state.get_relations_by_pattern(
                 state,
                 schema_pattern,
@@ -1236,7 +1149,7 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     /// reference: https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L443-L444
-    /// Shares the same input and output as get_column_schema_from_query, simply delegate to the other for now
+    /// Shares the same input and output as get_column_schema_from_query.
     /// FIXME(harry): unlike get_column_schema_from_query which only works when returning a non-empty result
     /// get_columns_in_select_sql returns a schema using the BigQuery Job and GetTable APIs
     #[tracing::instrument(skip(self, state), level = "trace")]
@@ -1246,7 +1159,15 @@ impl BaseAdapter for BridgeAdapter {
         sql: &str,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed { .. } => self.get_column_schema_from_query(state, sql),
+            Typed { adapter, .. } => {
+                let ctx = query_ctx_from_state(state)?
+                    .with_desc("get_column_schema_from_query adapter call");
+                let mut conn =
+                    self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
+                let result =
+                    adapter.get_column_schema_from_query(state, conn.as_mut(), &ctx, sql)?;
+                Ok(Value::from(result))
+            }
             Parse(_) => Ok(empty_map_value()),
         }
     }
@@ -1262,33 +1183,14 @@ impl BaseAdapter for BridgeAdapter {
         }
     }
 
-    #[tracing::instrument(skip(self, _state), level = "trace")]
+    #[tracing::instrument(skip(self, state), level = "trace")]
     fn nest_column_data_types(
         &self,
-        _state: &State,
+        state: &State,
         columns: &Value,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed { adapter, .. } => {
-                // TODO: 'constraints' arg are ignored; didn't find an usage example, implement later
-                let columns =
-                    minijinja_value_to_typed_struct::<IndexMap<String, DbtColumn>>(columns.clone())
-                        .map_err(|e| {
-                            minijinja::Error::new(
-                                minijinja::ErrorKind::SerdeDeserializeError,
-                                e.to_string(),
-                            )
-                        })?;
-
-                let nested_columns = adapter.nest_column_data_types(columns, None)?;
-                let result = IndexMap::<String, Value>::from_iter(
-                    nested_columns
-                        .into_iter()
-                        .map(|(col_name, col)| (col_name, Value::from_serialize(col))),
-                );
-
-                Ok(Value::from_object(result))
-            }
+            Typed { adapter, .. } => adapter.nest_column_data_types(state, columns),
             Parse(_) => Ok(empty_map_value()),
         }
     }
@@ -1297,11 +1199,11 @@ impl BaseAdapter for BridgeAdapter {
     #[allow(clippy::used_underscore_binding)]
     fn get_bq_table(
         &self,
-        _state: &State,
-        _relation: Arc<dyn BaseRelation>,
+        state: &State,
+        relation: Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed { .. } => unimplemented!("get_bq_table"),
+            Typed { adapter, .. } => adapter.get_bq_table(state, relation),
             Parse(_) => Ok(none_value()),
         }
     }
@@ -1336,9 +1238,9 @@ impl BaseAdapter for BridgeAdapter {
         }
     }
 
-    fn upload_file(&self, _state: &State, _args: &[Value]) -> Result<Value, minijinja::Error> {
+    fn upload_file(&self, state: &State, args: &[Value]) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed { .. } => unimplemented!("upload_file"),
+            Typed { adapter, .. } => adapter.upload_file(state, args),
             Parse(_) => Ok(none_value()),
         }
     }
@@ -1784,59 +1686,28 @@ impl BaseAdapter for BridgeAdapter {
         }
     }
 
-    #[tracing::instrument(skip(self, _state), level = "trace")]
+    #[tracing::instrument(skip(self, state), level = "trace")]
     fn get_partitions_metadata(
         &self,
-        _state: &State,
+        state: &State,
         relation: Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed { .. } => {
-                let _ = relation;
-                unimplemented!("get_partitions_metadata")
-            }
+            Typed { adapter, .. } => adapter.get_partitions_metadata(state, relation),
             Parse(_) => Ok(none_value()),
         }
     }
 
-    #[tracing::instrument(skip(self, _state), level = "trace")]
+    #[tracing::instrument(skip(self, state), level = "trace")]
     fn get_persist_doc_columns(
         &self,
-        _state: &State,
+        state: &State,
         existing_columns: &Value,
         model_columns: &Value,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
-                let existing_columns =
-                    Column::vec_from_jinja_value(AdapterType::Databricks, existing_columns.clone())
-                        .map_err(|e| {
-                            minijinja::Error::new(
-                                minijinja::ErrorKind::SerdeDeserializeError,
-                                e.to_string(),
-                            )
-                        })?;
-                let model_columns =
-                    minijinja_value_to_typed_struct::<IndexMap<String, DbtColumnRef>>(
-                        model_columns.clone(),
-                    )
-                    .map_err(|e| {
-                        minijinja::Error::new(
-                            minijinja::ErrorKind::SerdeDeserializeError,
-                            e.to_string(),
-                        )
-                    })?;
-
-                let persist_doc_columns =
-                    adapter.get_persist_doc_columns(existing_columns, model_columns)?;
-
-                let result = IndexMap::from_iter(
-                    persist_doc_columns
-                        .into_iter()
-                        .map(|(col_name, col)| (col_name, Value::from_serialize(col))),
-                );
-
-                Ok(Value::from_object(result))
+                adapter.get_persist_doc_columns(state, existing_columns, model_columns)
             }
             Parse(_) => Ok(none_value()),
         }
@@ -1880,7 +1751,7 @@ impl BaseAdapter for BridgeAdapter {
         node: &InternalDbtNodeWrapper,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed { adapter, .. } => Ok(adapter.get_config_from_model(node.as_internal_node())?),
+            Typed { adapter, .. } => Ok(adapter.get_config_from_model(node)?),
             Parse(_) => Ok(none_value()),
         }
     }
@@ -1888,19 +1759,19 @@ impl BaseAdapter for BridgeAdapter {
     #[tracing::instrument(skip_all, level = "trace")]
     fn get_relations_without_caching(
         &self,
-        _state: &State,
-        _relation: Arc<dyn BaseRelation>,
+        state: &State,
+        relation: Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed { .. } => unimplemented!("get_relations_without_caching"),
+            Typed { adapter, .. } => adapter.get_relations_without_caching(state, relation),
             Parse(_) => Ok(empty_vec_value()),
         }
     }
 
     #[tracing::instrument(skip_all, level = "trace")]
-    fn parse_index(&self, _state: &State, _raw_index: &Value) -> Result<Value, minijinja::Error> {
+    fn parse_index(&self, state: &State, raw_index: &Value) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed { .. } => unimplemented!("parse_index"),
+            Typed { adapter, .. } => adapter.parse_index(state, raw_index),
             Parse(_) => Ok(none_value()),
         }
     }
@@ -2108,26 +1979,6 @@ impl Object for BridgeAdapter {
     fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
         dispatch_adapter_get_value(&**self, key)
     }
-}
-
-/// List of possible builtin strategies for adapters
-/// Microbatch is added by _default_. It is only not added when the behavior flag
-/// `require_batched_execution_for_custom_microbatch_strategy` is True.
-/// TODO: come back when Behavior is implemented
-/// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1690-L1691
-fn builtin_incremental_strategies(
-    require_batched_execution_for_custom_microbatch_strategy: bool,
-) -> Vec<DbtIncrementalStrategy> {
-    let mut result = vec![
-        DbtIncrementalStrategy::Append,
-        DbtIncrementalStrategy::DeleteInsert,
-        DbtIncrementalStrategy::Merge,
-        DbtIncrementalStrategy::InsertOverwrite,
-    ];
-    if require_batched_execution_for_custom_microbatch_strategy {
-        result.push(DbtIncrementalStrategy::Microbatch)
-    }
-    result
 }
 
 #[cfg(debug_assertions)]

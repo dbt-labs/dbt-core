@@ -62,8 +62,9 @@ use dbt_xdbc::bigquery::*;
 use dbt_xdbc::salesforce::DATA_TRANSFORM_RUN_TIMEOUT;
 use dbt_xdbc::{Connection, QueryCtx};
 use indexmap::IndexMap;
-use minijinja;
+use minijinja::dispatch_object::DispatchObject;
 use minijinja::value::ValueMap;
+use minijinja::{self, invalid_argument, invalid_argument_inner};
 use minijinja::{State, Value, args};
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -126,6 +127,40 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             ),
         }
         Ok(())
+    }
+
+    fn cache_added(
+        &self,
+        _state: &State,
+        relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, minijinja::Error> {
+        let _ = self
+            .engine()
+            .relation_cache()
+            .insert_relation(relation, None);
+        Ok(none_value())
+    }
+
+    fn cache_dropped(
+        &self,
+        _state: &State,
+        relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, minijinja::Error> {
+        let _ = self.engine().relation_cache().evict_relation(&relation);
+        Ok(none_value())
+    }
+
+    fn cache_renamed(
+        &self,
+        _state: &State,
+        from_relation: Arc<dyn BaseRelation>,
+        to_relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, minijinja::Error> {
+        let _ = self
+            .engine()
+            .relation_cache()
+            .rename_relation(&from_relation, to_relation);
+        Ok(none_value())
     }
 
     /// Get DB config by key
@@ -195,6 +230,14 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         let redacted_sql = sql.replacen(full_parens, &format!("({redacted_pairs})"), 1);
 
         Ok(redacted_sql)
+    }
+
+    fn get_partitions_metadata(
+        &self,
+        _state: &State,
+        _relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, minijinja::Error> {
+        unimplemented!("get_partitions_metadata")
     }
 
     /// Create a new connection
@@ -581,6 +624,68 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         Ok(schemas)
     }
 
+    fn create_schema(
+        &self,
+        state: &State,
+        relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, minijinja::Error> {
+        let args = [RelationObject::new(relation).into_value()];
+        execute_macro(state, &args, "create_schema")?;
+        Ok(none_value())
+    }
+
+    fn drop_schema(
+        &self,
+        state: &State,
+        relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, minijinja::Error> {
+        self.engine()
+            .relation_cache()
+            .evict_schema_for_relation(&relation);
+        let args = [RelationObject::new(relation).into_value()];
+        execute_macro(state, &args, "drop_schema")?;
+        Ok(none_value())
+    }
+
+    fn valid_snapshot_target(
+        &self,
+        _state: &State,
+        _relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, minijinja::Error> {
+        unimplemented!("valid_snapshot_target")
+    }
+
+    fn get_incremental_strategy_macro(
+        &self,
+        state: &State,
+        strategy: &str,
+    ) -> Result<Value, minijinja::Error> {
+        if strategy != "default" {
+            let strategy_ = DbtIncrementalStrategy::from_str(strategy)
+                .map_err(|e| invalid_argument_inner!("Invalid strategy value {}", e))?;
+            if !self.valid_incremental_strategies().contains(&strategy_)
+                && builtin_incremental_strategies(false).contains(&strategy_)
+            {
+                return invalid_argument!(
+                    "The incremental strategy '{}' is not valid for this adapter",
+                    strategy
+                );
+            }
+        }
+
+        let strategy = strategy.replace("+", "_");
+        let macro_name = format!("get_incremental_{strategy}_sql");
+
+        // Return the macro
+        Ok(Value::from_object(DispatchObject {
+            macro_name,
+            package_name: None,
+            strict: false,
+            auto_execute: false,
+            context: Some(state.get_base_context()),
+        }))
+    }
+
     /// Get relation that represents (database, schema, identifier)
     /// tuple. This function checks that the warehouse has the
     /// relation.
@@ -747,6 +852,60 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
                 "invalid return value",
             )),
         }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn get_relations_by_pattern(
+        &self,
+        state: &State,
+        schema_pattern: &str,
+        table_pattern: &str,
+        exclude: Option<&str>,
+        database: Option<&str>,
+        quote_table: Option<bool>,
+        excluded_schemas: Option<Value>,
+    ) -> Result<Value, minijinja::Error> {
+        // Validate excluded_schemas if provided
+        if let Some(ref schemas) = excluded_schemas {
+            let _ =
+                minijinja_value_to_typed_struct::<Vec<String>>(schemas.clone()).map_err(|e| {
+                    minijinja::Error::new(
+                        minijinja::ErrorKind::SerdeDeserializeError,
+                        e.to_string(),
+                    )
+                })?;
+        }
+
+        // Get default database from state if not provided
+        let database_str = if let Some(db) = database {
+            db.to_string()
+        } else {
+            let target = state.lookup("target").ok_or_else(|| {
+                minijinja::Error::new(
+                    minijinja::ErrorKind::InvalidOperation,
+                    "target is not set in state",
+                )
+            })?;
+            let db_value = target.get_attr("database").unwrap_or_default();
+            db_value.as_str().unwrap_or_default().to_string()
+        };
+
+        // Build args array for macro call
+        // Note: For optional string parameters like 'exclude', we pass empty string instead of None
+        // because the macro expects a string and None gets converted to "none" string
+        let args = vec![
+            Value::from(schema_pattern),
+            Value::from(table_pattern),
+            exclude.map(Value::from).unwrap_or_else(|| Value::from("")),
+            Value::from(database_str.as_str()),
+            quote_table
+                .map(Value::from)
+                .unwrap_or_else(|| Value::from(false)),
+            excluded_schemas.unwrap_or_else(|| Value::from_iter::<Vec<String>>(vec![])),
+        ];
+
+        let result = execute_macro(state, &args, "get_relations_by_pattern_internal")?;
+        Ok(result)
     }
 
     /// Get the full macro name for check_schema_exists
@@ -1182,7 +1341,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
                 let table = relation.identifier_as_str()?;
                 let schema = relation.schema_as_str()?;
 
-                let columns = self.nest_column_data_types(columns, None)?;
+                let columns = self.do_nest_column_data_types(columns, None)?;
 
                 let column_to_description = columns
                     .iter()
@@ -1281,7 +1440,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
                     }
                 }
                 let nested_columns =
-                    self.nest_column_data_types(columns_map, Some(rendered_constraints))?;
+                    self.do_nest_column_data_types(columns_map, Some(rendered_constraints))?;
                 let result = nested_columns
                     .into_values()
                     .map(|column| {
@@ -1413,7 +1572,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
 
     /// Given existing columns and columns from our model
     /// we determine which columns to update and persist docs for
-    fn get_persist_doc_columns(
+    fn do_get_persist_doc_columns(
         &self,
         existing_columns: Vec<Column>,
         model_columns: IndexMap<String, DbtColumnRef>,
@@ -1435,6 +1594,39 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             }
         }
         Ok(result)
+    }
+
+    fn get_persist_doc_columns(
+        &self,
+        _state: &State,
+        existing_columns: &Value,
+        model_columns: &Value,
+    ) -> Result<Value, minijinja::Error> {
+        let existing_columns =
+            Column::vec_from_jinja_value(AdapterType::Databricks, existing_columns.clone())
+                .map_err(|e| {
+                    minijinja::Error::new(
+                        minijinja::ErrorKind::SerdeDeserializeError,
+                        e.to_string(),
+                    )
+                })?;
+        let model_columns = minijinja_value_to_typed_struct::<IndexMap<String, DbtColumnRef>>(
+            model_columns.clone(),
+        )
+        .map_err(|e| {
+            minijinja::Error::new(minijinja::ErrorKind::SerdeDeserializeError, e.to_string())
+        })?;
+
+        let persist_doc_columns =
+            self.do_get_persist_doc_columns(existing_columns, model_columns)?;
+
+        let result = IndexMap::from_iter(
+            persist_doc_columns
+                .into_iter()
+                .map(|(col_name, col)| (col_name, Value::from_serialize(col))),
+        );
+
+        Ok(Value::from_object(result))
     }
 
     /// Translate the result of `show grants` (or equivalent) to match the
@@ -1520,7 +1712,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         }
     }
 
-    fn nest_column_data_types(
+    fn do_nest_column_data_types(
         &self,
         columns: IndexMap<String, DbtColumn>,
         constraints: Option<BTreeMap<String, String>>,
@@ -1537,6 +1729,39 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
                 unimplemented!("only available with BigQuery adapter")
             }
         }
+    }
+
+    fn nest_column_data_types(
+        &self,
+        _state: &State,
+        columns: &Value,
+    ) -> Result<Value, minijinja::Error> {
+        // TODO: 'constraints' arg are ignored; didn't find an usage example, implement later
+        let columns =
+            minijinja_value_to_typed_struct::<IndexMap<String, DbtColumn>>(columns.clone())
+                .map_err(|e| {
+                    minijinja::Error::new(
+                        minijinja::ErrorKind::SerdeDeserializeError,
+                        e.to_string(),
+                    )
+                })?;
+
+        let nested_columns = self.do_nest_column_data_types(columns, None)?;
+        let result = IndexMap::<String, Value>::from_iter(
+            nested_columns
+                .into_iter()
+                .map(|(col_name, col)| (col_name, Value::from_serialize(col))),
+        );
+
+        Ok(Value::from_object(result))
+    }
+
+    fn get_bq_table(
+        &self,
+        _state: &State,
+        _relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, minijinja::Error> {
+        unimplemented!("get_bq_table")
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -2087,6 +2312,10 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
                 )
             }
         }
+    }
+
+    fn upload_file(&self, _state: &State, _args: &[Value]) -> Result<Value, minijinja::Error> {
+        unimplemented!("upload_file")
     }
 
     fn parse_partition_by(&self, partition_by: Value) -> AdapterResult<Value> {
@@ -2653,8 +2882,10 @@ prevent unnecessary latency for other users."#,
 
     /// Given a model, parse and build its configurations
     /// reference: https://github.com/databricks/dbt-databricks/blob/13686739eb59566c7a90ee3c357d12fe52ec02ea/dbt/adapters/databricks/impl.py#L810
-    fn get_config_from_model(&self, model: &dyn InternalDbtNodeAttributes) -> AdapterResult<Value> {
+    fn get_config_from_model(&self, model: &InternalDbtNodeWrapper) -> AdapterResult<Value> {
         use crate::relation::databricks::config_v2::relation_types;
+
+        let model = model.as_internal_node();
 
         let config_loader = match model.materialized() {
             DbtMaterialization::Incremental => relation_types::incremental_table::new_loader(),
@@ -2673,6 +2904,18 @@ prevent unnecessary latency for other users."#,
         };
         let config = config_loader.from_local_config(model);
         Ok(Value::from_object(config))
+    }
+
+    fn get_relations_without_caching(
+        &self,
+        _state: &State,
+        _relation: Arc<dyn BaseRelation>,
+    ) -> Result<Value, minijinja::Error> {
+        unimplemented!("get_relations_without_caching")
+    }
+
+    fn parse_index(&self, _state: &State, _raw_index: &Value) -> Result<Value, minijinja::Error> {
+        unimplemented!("parse_index")
     }
 
     fn get_column_tags_from_model(
@@ -2972,6 +3215,26 @@ prevent unnecessary latency for other users."#,
             _ => Vec::new(),
         }
     }
+}
+
+/// List of possible builtin strategies for adapters
+/// Microbatch is added by _default_. It is only not added when the behavior flag
+/// `require_batched_execution_for_custom_microbatch_strategy` is True.
+/// TODO: come back when Behavior is implemented
+/// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1690-L1691
+fn builtin_incremental_strategies(
+    require_batched_execution_for_custom_microbatch_strategy: bool,
+) -> Vec<DbtIncrementalStrategy> {
+    let mut result = vec![
+        DbtIncrementalStrategy::Append,
+        DbtIncrementalStrategy::DeleteInsert,
+        DbtIncrementalStrategy::Merge,
+        DbtIncrementalStrategy::InsertOverwrite,
+    ];
+    if require_batched_execution_for_custom_microbatch_strategy {
+        result.push(DbtIncrementalStrategy::Microbatch)
+    }
+    result
 }
 
 /// Temporary before the [TypedBaseAdapter] trait becomes *the* adapter implementation struct.
