@@ -8,24 +8,24 @@ For detailed product documentation, see: https://docs.getdbt.com/category/list-o
 
 | Command | Task Class | Description |
 |---------|------------|-------------|
-| [dbt run](6.1_dbt_run.md) | `RunTask` | Execute models against the database |
-| [dbt build](6.2_dbt_build.md) | `BuildTask` | Run seeds, models, snapshots, and tests in DAG order |
-| [dbt seed](6.3_dbt_seed.md) | `SeedTask` | Load CSV files into the database |
-| [dbt snapshot](6.4_dbt_snapshot.md) | `SnapshotTask` | Execute SCD Type 2 snapshots |
-| [dbt test](6.5_dbt_test.md) | `TestTask` | Run data tests and unit tests |
-| [dbt show](6.6_dbt_show.md) | `ShowTask` | Preview query results without materializing |
-| [dbt deps](6.7_dbt_deps.md) | `DepsTask` | Install package dependencies |
-| [dbt docs](6.8_dbt_docs.md) | `GenerateTask` / `ServeTask` | Generate and serve documentation |
-| [dbt clean](6.9_dbt_clean.md) | `CleanTask` | Remove target and packages directories |
+| [dbt parse](6.1_dbt_parse.md) | *(@requires.manifest decorator)* | Parse project and write manifest |
+| [dbt run](6.2_dbt_run.md) | `RunTask` | Execute models against the database |
+| [dbt build](6.3_dbt_build.md) | `BuildTask` | Run seeds, models, snapshots, and tests in DAG order |
+| [dbt seed](6.4_dbt_seed.md) | `SeedTask` | Load CSV files into the database |
+| [dbt snapshot](6.5_dbt_snapshot.md) | `SnapshotTask` | Execute SCD Type 2 snapshots |
+| [dbt test](6.6_dbt_test.md) | `TestTask` | Run data tests and unit tests |
+| [dbt show](6.7_dbt_show.md) | `ShowTask` | Preview query results without materializing |
+| [dbt deps](6.8_dbt_deps.md) | `DepsTask` | Install package dependencies |
+| [dbt docs](6.9_dbt_docs.md) | `GenerateTask` / `ServeTask` | Generate and serve documentation |
 | [dbt compile](6.10_dbt_compile.md) | `CompileTask` | Generate compiled SQL without executing |
-| [dbt debug](6.11_dbt_debug.md) | `DebugTask` | Validate environment and connection |
-| [dbt init](6.12_dbt_init.md) | `InitTask` | Scaffold new project or profile |
-| [dbt list](6.13_dbt_list.md) | `ListTask` | List project resources |
-| [dbt parse](6.14_dbt_parse.md) | *(@requires.manifest decorator)* | Parse project and write manifest |
+| [dbt source](6.11_dbt_source.md) | `FreshnessTask` | Check source freshness |
+| [dbt run-operation](6.12_dbt_run-operation.md) | `RunOperationTask` | Execute a macro |
+| [dbt init](6.13_dbt_init.md) | `InitTask` | Scaffold new project or profile |
+| [dbt list](6.14_dbt_list.md) | `ListTask` | List project resources |
 | [dbt retry](6.15_dbt_retry.md) | `RetryTask` | Re-execute failed nodes |
 | [dbt clone](6.16_dbt_clone.md) | `CloneTask` | Create zero-copy clones from production |
-| [dbt run-operation](6.17_dbt_run-operation.md) | `RunOperationTask` | Execute a macro |
-| [dbt source](6.18_dbt_source.md) | `FreshnessTask` | Check source freshness |
+| [dbt debug](6.17_dbt_debug.md) | `DebugTask` | Validate environment and connection |
+| [dbt clean](6.18_dbt_clean.md) | `CleanTask` | Remove target and packages directories |
 
 ## Command Categories
 
