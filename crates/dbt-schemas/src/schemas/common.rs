@@ -1018,9 +1018,6 @@ pub struct Dimension {
     pub expr: Option<String>,
     pub metadata: Option<SourceFileMetadata>,
     pub config: Option<SemanticLayerElementConfig>,
-    // for internal use only, n/a for derived dimensions
-    #[serde(skip_serializing)]
-    pub column_name: Option<String>,
 }
 
 fn default_false() -> bool {

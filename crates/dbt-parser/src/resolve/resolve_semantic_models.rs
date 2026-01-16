@@ -392,7 +392,6 @@ pub fn model_props_to_dimensions(model_props: ModelProperties) -> Vec<Dimension>
 
             let dimension = Dimension {
                 name: column_dimension_config.name.unwrap_or_default(),
-                column_name: Some(column.name.clone()),
                 dimension_type: column_dimension_config.type_.clone(),
                 description: column_dimension_config.description,
                 expr: Some(column.name.clone()),
@@ -424,7 +423,6 @@ pub fn model_props_to_dimensions(model_props: ModelProperties) -> Vec<Dimension>
         let dimension = Dimension {
             name: derived_dimension.name.clone(),
             expr: Some(derived_dimension.expr.clone()),
-            column_name: None,
             dimension_type: derived_dimension.type_.clone(),
             is_partition: derived_dimension.is_partition.unwrap_or(false),
             description: derived_dimension.description.clone(),

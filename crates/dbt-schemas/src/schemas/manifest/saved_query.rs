@@ -56,10 +56,20 @@ pub struct SavedQueryExport {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SavedQueryExportConfig {
     pub export_as: ExportConfigExportAs,
     pub schema_name: Option<String>,
     pub alias: Option<String>,
     pub database: Option<String>,
+}
+
+// Fusion resolves the database and schema during resolve, wheras mantle
+// resolves those at runtime. Since these will likely always be different
+// between the deferral manifest and the current nodes, we ignore them
+// for modified comparisons.
+impl PartialEq for SavedQueryExportConfig {
+    fn eq(&self, other: &Self) -> bool {
+        self.export_as == other.export_as && self.alias == other.alias
+    }
 }

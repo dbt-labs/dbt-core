@@ -4310,6 +4310,7 @@ impl InternalDbtNodeAttributes for DbtAnalysis {
         dbt_serde_yaml::to_value(&self.deprecated_config).expect("Failed to serialize to YAML")
     }
 }
+// Saved queries don't have a relation, individual exports do.
 pub fn is_invalid_for_relation_comparison(node: &dyn InternalDbtNode) -> bool {
-    node.resource_type() == NodeType::UnitTest
+    node.resource_type() == NodeType::UnitTest || node.resource_type() == NodeType::SavedQuery
 }
