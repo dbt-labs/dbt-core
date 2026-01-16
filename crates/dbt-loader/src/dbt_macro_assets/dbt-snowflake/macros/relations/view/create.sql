@@ -1,6 +1,8 @@
 {% macro snowflake__create_view_as_with_temp_flag(relation, sql, is_temporary=False) -%}
   {%- set secure = config.get('secure', default=false) -%}
   {%- set copy_grants = config.get('copy_grants', default=false) -%}
+  {%- set row_access_policy = config.get('row_access_policy', default=none) -%}
+  {%- set table_tag = config.get('table_tag', default=none) -%}
   {%- set sql_header = config.get('sql_header', none) -%}
 
   {{ sql_header if sql_header is not none }}
@@ -19,7 +21,10 @@
   {%- if contract_config.enforced -%}
     {{ get_assert_columns_equivalent(sql) }}
   {%- endif %}
-  {% if copy_grants -%} copy grants {%- endif %} as (
+  {% if copy_grants -%} copy grants {%- endif %}
+  {% if row_access_policy -%} with row access policy {{ row_access_policy }} {%- endif %}
+  {% if table_tag -%} with tag ({{ table_tag }}) {%- endif %}
+  as (
     {{ sql }}
   );
 {% endmacro %}

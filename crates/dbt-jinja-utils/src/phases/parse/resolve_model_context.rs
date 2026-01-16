@@ -801,6 +801,10 @@ impl<T: DefaultTo<T>> Object for ParseConfig<T> {
                 let _: String = args.get("name")?;
                 Ok(MinijinjaValue::from(""))
             }
+            // At parse time, return false (no column docs persistence during parsing)
+            "persist_column_docs" => Ok(MinijinjaValue::from(false)),
+            // At parse time, return false (no relation docs persistence during parsing)
+            "persist_relation_docs" => Ok(MinijinjaValue::from(false)),
             _ => Err(MinijinjaError::new(
                 MinijinjaErrorKind::UnknownMethod,
                 format!("Unknown method on parse: {name}"),
