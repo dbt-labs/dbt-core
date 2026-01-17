@@ -245,11 +245,27 @@ class SchemaGenericTestParser(SimpleParser):
         if not isinstance(target, UnpatchedSourceDefinition):
             # First, try to attach to an enabled node in the same package as the schema file.
             attached_node_unique_id = self.manifest.ref_lookup.get_unique_id(
-                target.name, None, version
+                target.name, target.package_name, version
             )
             if attached_node_unique_id:
                 attached_node = self.manifest.nodes[attached_node_unique_id]
-            else:
+                # Verify that the node is actually enabled
+                if not attached_node.config.enabled:
+                    attached_node = None
+
+            # If no enabled node found in current package, search in other packages
+            if not attached_node:
+                attached_node_unique_id = self.manifest.ref_lookup.get_unique_id(
+                    target.name, None, version
+                )
+                if attached_node_unique_id:
+                    attached_node = self.manifest.nodes[attached_node_unique_id]
+                    # Verify that the node is actually enabled
+                    if not attached_node.config.enabled:
+                        attached_node = None
+
+            # If still no enabled node found, check in disabled nodes
+            if not attached_node:
                 disabled_node = self.manifest.disabled_lookup.find(
                     target.name, None
                 ) or self.manifest.disabled_lookup.find(target.name.upper(), None)
