@@ -67,6 +67,7 @@ cache_selected_only = _create_option_and_track_env_var(
     "--cache-selected-only/--no-cache-selected-only",
     envvar="DBT_CACHE_SELECTED_ONLY",
     help="At start of run, populate relational cache only for schemas containing selected nodes, or for all schemas of interest.",
+    type=click.BOOL,
 )
 
 clean_project_files_only = _create_option_and_track_env_var(
@@ -74,6 +75,7 @@ clean_project_files_only = _create_option_and_track_env_var(
     envvar="DBT_CLEAN_PROJECT_FILES_ONLY",
     help="If disabled, dbt clean will delete all paths specified in clean-paths, even if they're outside the dbt project.",
     default=True,
+    type=click.BOOL,
 )
 
 compile_docs = _create_option_and_track_env_var(
@@ -103,6 +105,7 @@ debug = _create_option_and_track_env_var(
     "-d/ ",
     envvar="DBT_DEBUG",
     help="Display debug logging during dbt execution. Useful for debugging and making bug reports.",
+    type=click.BOOL,
 )
 
 debug_connection = _create_option_and_track_env_var(
@@ -117,6 +120,7 @@ defer = _create_option_and_track_env_var(
     "--defer/--no-defer",
     envvar="DBT_DEFER",
     help="If set, resolve unselected nodes by deferring to the manifest within the --state directory.",
+    type=click.BOOL,
 )
 
 defer_state = _create_option_and_track_env_var(
@@ -153,6 +157,7 @@ deprecated_include_saved_query = _create_option_and_track_env_var(
     help="Include saved queries in the list of resources to be selected for build command",
     is_flag=True,
     hidden=True,
+    type=click.BOOL,
 )
 
 deprecated_print = _create_option_and_track_env_var(
@@ -162,6 +167,7 @@ deprecated_print = _create_option_and_track_env_var(
     default=True,
     hidden=True,
     callback=lambda ctx, param, value: not value,
+    type=click.BOOL,
 )
 
 deprecated_state = _create_option_and_track_env_var(
@@ -183,6 +189,7 @@ empty = _create_option_and_track_env_var(
     envvar="DBT_EMPTY",
     help="If specified, limit input refs and sources to zero rows.",
     is_flag=True,
+    type=click.BOOL,
 )
 
 empty_catalog = _create_option_and_track_env_var(
@@ -251,6 +258,7 @@ export_saved_queries = _create_option_and_track_env_var(
     help="Export saved queries within the 'build' command, otherwise no-op",
     is_flag=True,
     hidden=True,
+    type=click.BOOL,
 )
 
 fail_fast = _create_option_and_track_env_var(
@@ -258,12 +266,14 @@ fail_fast = _create_option_and_track_env_var(
     "-x/ ",
     envvar="DBT_FAIL_FAST",
     help="Stop execution on first failure.",
+    type=click.BOOL,
 )
 
 favor_state = _create_option_and_track_env_var(
     "--favor-state/--no-favor-state",
     envvar="DBT_FAVOR_STATE",
     help="If set, defer to the argument provided to the state flag for resolving unselected nodes, even if the node(s) exist as a database object in the current environment.",
+    type=click.BOOL,
 )
 
 full_refresh = _create_option_and_track_env_var(
@@ -308,6 +318,7 @@ introspect = _create_option_and_track_env_var(
     envvar="DBT_INTROSPECT",
     help="Whether to scaffold introspective queries as part of compilation",
     default=True,
+    type=click.BOOL,
 )
 
 lock = _create_option_and_track_env_var(
@@ -321,6 +332,7 @@ log_cache_events = _create_option_and_track_env_var(
     "--log-cache-events/--no-log-cache-events",
     help="Enable verbose logging for relational cache events to help when debugging.",
     envvar="DBT_LOG_CACHE_EVENTS",
+    type=click.BOOL,
 )
 
 log_format = _create_option_and_track_env_var(
@@ -376,6 +388,7 @@ macro_debugging = _create_option_and_track_env_var(
     "--macro-debugging/--no-macro-debugging",
     envvar="DBT_MACRO_DEBUGGING",
     hidden=True,
+    type=click.BOOL,
 )
 
 models = _create_option_and_track_env_var(*model_decls, **select_attrs)  # type: ignore[arg-type]
@@ -417,6 +430,7 @@ partial_parse = _create_option_and_track_env_var(
     envvar="DBT_PARTIAL_PARSE",
     help="Allow for partial parsing by looking for and writing to a pickle file in the target directory. This overrides the user configuration file.",
     default=True,
+    type=click.BOOL,
 )
 
 partial_parse_file_diff = _create_option_and_track_env_var(
@@ -425,6 +439,7 @@ partial_parse_file_diff = _create_option_and_track_env_var(
     help="Internal flag for whether to compute a file diff during partial parsing.",
     hidden=True,
     default=True,
+    type=click.BOOL,
 )
 
 partial_parse_file_path = _create_option_and_track_env_var(
@@ -441,6 +456,7 @@ print = _create_option_and_track_env_var(
     envvar="DBT_PRINT",
     help="Output all {{ print() }} macro calls.",
     default=True,
+    type=click.BOOL,
 )
 
 populate_cache = _create_option_and_track_env_var(
@@ -448,6 +464,7 @@ populate_cache = _create_option_and_track_env_var(
     envvar="DBT_POPULATE_CACHE",
     help="At start of run, use `show` or `information_schema` queries to populate a relational cache, which can speed up subsequent materializations.",
     default=True,
+    type=click.BOOL,
 )
 
 port = _create_option_and_track_env_var(
@@ -504,6 +521,7 @@ quiet = _create_option_and_track_env_var(
     "-q",
     envvar="DBT_QUIET",
     help="Suppress all non-error logging to stdout. Does not affect {{ print() }} macro calls.",
+    type=click.BOOL,
 )
 
 raw_select = _create_option_and_track_env_var(*select_decls, **select_attrs)  # type: ignore[arg-type]
@@ -570,6 +588,7 @@ send_anonymous_usage_stats = _create_option_and_track_env_var(
     envvar="DBT_SEND_ANONYMOUS_USAGE_STATS",
     help="Send anonymous usage stats to dbt Labs.",
     default=True,
+    type=click.BOOL,
 )
 
 show = _create_option_and_track_env_var(
@@ -600,6 +619,7 @@ show_resource_report = _create_option_and_track_env_var(
     default=False,
     envvar="DBT_SHOW_RESOURCE_REPORT",
     hidden=True,
+    type=click.BOOL,
 )
 
 # TODO:  The env var is a correction!
@@ -613,6 +633,7 @@ single_threaded = _create_option_and_track_env_var(
     envvar="DBT_SINGLE_THREADED",
     default=False,
     hidden=True,
+    type=click.BOOL,
 )
 
 show_all_deprecations = _create_option_and_track_env_var(
@@ -664,6 +685,7 @@ static_parser = _create_option_and_track_env_var(
     envvar="DBT_STATIC_PARSER",
     help="Use the static parser.",
     default=True,
+    type=click.BOOL,
 )
 
 store_failures = _create_option_and_track_env_var(
@@ -707,6 +729,7 @@ use_colors = _create_option_and_track_env_var(
     envvar="DBT_USE_COLORS",
     help="Specify whether log output is colorized in the console and the log file. Use --use-colors-file/--no-use-colors-file to colorize the log file differently than the console.",
     default=True,
+    type=click.BOOL,
 )
 
 use_colors_file = _create_option_and_track_env_var(
@@ -714,12 +737,14 @@ use_colors_file = _create_option_and_track_env_var(
     envvar="DBT_USE_COLORS_FILE",
     help="Specify whether log file output is colorized by overriding the default value and the general --use-colors/--no-use-colors setting.",
     default=True,
+    type=click.BOOL,
 )
 
 use_experimental_parser = _create_option_and_track_env_var(
     "--use-experimental-parser/--no-use-experimental-parser",
     envvar="DBT_USE_EXPERIMENTAL_PARSER",
     help="Enable experimental parsing features.",
+    type=click.BOOL,
 )
 
 use_fast_test_edges = _create_option_and_track_env_var(
@@ -727,6 +752,7 @@ use_fast_test_edges = _create_option_and_track_env_var(
     envvar="DBT_USE_FAST_TEST_EDGES",
     default=False,
     hidden=True,
+    type=click.BOOL,
 )
 
 vars = _create_option_and_track_env_var(
@@ -764,6 +790,7 @@ version_check = _create_option_and_track_env_var(
     envvar="DBT_VERSION_CHECK",
     help="If set, ensure the installed dbt version matches the require-dbt-version specified in the dbt_project.yml file (if any). Otherwise, allow them to differ.",
     default=True,
+    type=click.BOOL,
 )
 
 warn_error = _create_option_and_track_env_var(
@@ -788,6 +815,7 @@ write_json = _create_option_and_track_env_var(
     envvar="DBT_WRITE_JSON",
     help="Whether or not to write the manifest.json and run_results.json files to the target directory",
     default=True,
+    type=click.BOOL,
 )
 
 upload_artifacts = _create_option_and_track_env_var(
@@ -795,4 +823,5 @@ upload_artifacts = _create_option_and_track_env_var(
     envvar="DBT_UPLOAD_TO_ARTIFACTS_INGEST_API",
     help="Whether or not to upload the artifacts to the dbt Cloud API",
     default=False,
+    type=click.BOOL,
 )
