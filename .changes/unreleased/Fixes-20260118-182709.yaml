@@ -1,0 +1,6 @@
+kind: Fixes
+body: flag options are not resolving false properly
+time: 2026-01-18T18:27:09.85164-05:00
+custom:
+    Author: WilliamDee
+    Issue: None
