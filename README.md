@@ -8,7 +8,7 @@
   <a href="https://www.bestpractices.dev/projects/11095"><img src="https://www.bestpractices.dev/projects/11095/badge"></a>
 </p>
 
-**[dbt](https://www.getdbt.com/)** enables data analysts and engineers to transform their data using the same practices that software engineers use to build applications.
+**[dbt](https://www.getdbt.com/)** Enables data analysts and engineers to transform their data using the same practices that software engineers use to build applications.
 
 ![architecture](https://github.com/dbt-labs/dbt-core/blob/202cb7e51e218c7b29eb3b11ad058bd56b7739de/etc/dbt-transform.png)
 
