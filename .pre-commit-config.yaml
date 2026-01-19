@@ -29,6 +29,7 @@ repos:
       - id: isort
         name: isort
         entry: python -m isort
+        args: [--settings-path, pyproject.toml]
         language: system
         types: [python]
       - id: black
