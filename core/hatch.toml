@@ -94,8 +94,12 @@ setup = [
     "pre-commit install",
 ]
 
+dev-req = [
+    "pip install -e .",
+]
+
 # Code quality commands
-code-quality = "pre-commit run --all-files --show-diff-on-failure"
+code-quality = "pre-commit run --all-files"
 lint = [
     "pre-commit run flake8-check --hook-stage manual --all-files",
     "pre-commit run mypy-check --hook-stage manual --all-files",
@@ -171,6 +175,7 @@ dependencies = [
     "dbt-common @ git+https://github.com/dbt-labs/dbt-common.git@main",
     "dbt-postgres @ git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-postgres",
     # Testing
+    "pre-commit~=3.7.0",
     "pytest>=7.0,<8.0",
     "pytest-cov",
     "pytest-xdist~=3.6",
@@ -186,6 +191,7 @@ dependencies = [
 
 pre-install-commands = [
     "pip install -e .",
+    "pre-commit install",
 ]
 
 [envs.ci.env-vars]
@@ -195,6 +201,7 @@ DBT_TEST_USER_3 = "dbt_test_user_3"
 
 [envs.ci.scripts]
 unit-tests = "python -m pytest --cov=dbt --cov-report=xml {args} ../tests/unit"
+code-quality = "pre-commit run --all-files"
 # Run as single command to avoid pre-install-commands running twice
 integration-tests = """
 python -m pytest --cov=dbt --cov-append --cov-report=xml {args} ../tests/functional -k "not tests/functional/graph_selection" && \
