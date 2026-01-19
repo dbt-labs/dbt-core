@@ -38,25 +38,36 @@ If no exceptions are thrown from invoking the command and the command succeeds, 
 
 ### `dbtRunner`
 
-`dbtRunner` provides a programmatic interface for our click CLI and wraps the invocation of the click commands to handle any exceptions thrown.
+`dbtRunner` provides a programmatic interface for our click CLI and wraps the invocation of the click commands to handle any exceptions thrown. It is a feature available for users of dbt Core, but in some instances we also use it internally for testing.
 
 `dbtRunner.invoke` should ideally only ever return an instantiated `dbtRunnerResult` which contains the following fields:
-- `success`: A boolean representing whether the command invocation was successful
-- `result`: The optional result of the command invoked. This attribute can have many types, please see the definition of `dbtRunnerResult` for more information
+- `success`: A boolean representing whether the command invocation was successful[
+- `result`: The optional result of the command invoked. This attribute can have many types, please see [the definition of `dbtRunnerResult` for more information](https://github.com/dbt-labs/dbt-core/blob/7634345985a86b113f51b74b9b776e346b59bdbf/core/dbt/cli/main.py#L23-L37)
 - `exception`: If an exception was thrown during command invocation it will be saved here, otherwise it will be `None`. Please note that the exceptions held in this attribute are not the exceptions thrown by `postflight` but instead the exceptions that `ResultExit` and `ExceptionExit` wrap
 
 Programmatic exception handling might look like the following:
 ```python
-res = dbtRunner().invoke(["run"])
-if not res.success:
-    ...
-if type(res.exception) == SomeExceptionType:
-    ...
+from dbt.cli.main import dbtRunner, dbtRunnerResult
+
+# initialize
+dbt = dbtRunner()
+
+# create CLI args as a list of strings
+cli_args = ["run", "--select", "tag:my_tag"]
+
+# run the command
+res: dbtRunnerResult = dbt.invoke(cli_args)
+
+# inspect the results
+for r in res.result:
+    print(f"{r.node.name}: {r.status}")
 ```
+
+Reference: https://docs.getdbt.com/reference/programmatic-invocations
 
 ## Adding a New Command
 
-To add a new command: (1) define the command function in `main.py` with appropriate decorators, (2) add an entry to the `Command` enum in `types.py`, and (3) add the command to the `CMD_DICT` in `flags.py`'s `command_args` function. Every command needs at minimum the `@cli.command()` decorator, `@requires.postflight`, and `@requires.preflight`. See the README in `core/dbt/cli/` for additional details.
+To add a new command: (1) define the command function in `main.py` with appropriate decorators, (2) add an entry to the `Command` enum in `types.py`, and (3) add the command to the `CMD_DICT` in `flags.py`'s `command_args` function. Every command needs at minimum the `@cli.command()` decorator, `@requires.postflight`, and `@requires.preflight`.
 
 ```python
 @cli.command("my-new-command")

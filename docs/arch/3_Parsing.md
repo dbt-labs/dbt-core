@@ -2,7 +2,7 @@
 
 ## Overview
 
-Parsing reads all files in the project and constructs an internal representation called the **Manifest**. The manifest contains all nodes (models, tests, seeds, snapshots, etc.), sources, macros, docs, and their relationships. Parsing captures dependencies (`ref()`, `source()`) and configuration, but does not compile SQL or execute anything against the database—those happen later during execution.
+Parsing reads all files in the project and constructs an internal representation called the **Manifest**. The manifest contains all project resources models, tests, seeds, snapshots, sources, macros, docs, etc, and their relationships. Parsing captures dependencies (`ref()`, `source()`) and configuration, but does not compile SQL or execute anything against the database—those happen later during execution.
 
 The manifest is written to `target/manifest.json` for external tooling and for stateful dbt behavior such as `state:modified` selection and deferral. It is also serialized to msgpack to `target/partial_parse.msgpack` for reuse on subsequent runs in partial parsing. Note that the manifest produced by parsing is not complete: fields like `compiled_code` are populated later during compilation, and graph validation (e.g., cycle detection) happens after parsing.
 
@@ -20,10 +20,10 @@ The main entry point is `ManifestLoader.get_full_manifest()`, called from the `@
 The `ManifestLoader.load()` method orchestrates parsing in several phases:
 
 ### 1. Read Files
-Scan project directories and build `manifest.files`—a dictionary of file IDs to `SourceFile` objects containing paths, checksums, and metadata. This phase also checks for partial parsing opportunities (see `3.1_Partial_Parsing.md`).
+Scan project directories and build `manifest.files`—a dictionary of file IDs to `SourceFile` objects containing paths, checksums, and metadata. This phase also checks for partial parsing opportunities (see [Partial Parsing](3.1_Partial_Parsing.md)).
 
 ### 2. Load Macros
-Macros must be parsed first because they're needed for Jinja rendering during subsequent parsing. `MacroParser` processes `.sql` files in macro directories, and `GenericTestParser` handles generic test definitions. After loading, `build_macro_resolver()` creates the `MacroResolver` for looking up macros by name.
+Macros must be parsed first because they're needed for Jinja rendering during subsequent parsing. Additonally Generic Tests also get parsed at this time due to their similarity to macros. `MacroParser` processes `.sql` files in macro directories, and `GenericTestParser` handles generic test definitions. After loading, `build_macro_resolver()` creates the `MacroResolver` for looking up macros by name.
 
 ### 3. Parse Project Files
 For each project (root + dependencies), run the appropriate parsers based on file type:
@@ -40,7 +40,7 @@ For each project (root + dependencies), run the appropriate parsers based on fil
 
 ### 4. Parse Schema Files
 `SchemaParser` processes YAML files, extracting:
-- Model/seed/snapshot/analysis patches (descriptions, configs, columns)
+- Model/seed/snapshot/analysis/function patches (descriptions, configs, columns)
 - Source definitions
 - Exposures, metrics, semantic models, saved queries
 - Generic tests attached to models/sources
@@ -96,4 +96,4 @@ See `docs/guides/parsing-vs-compilation-vs-runtime.md` for a detailed explanatio
 
 ## Partial Parsing
 
-To improve performance on subsequent invocations, dbt can reuse the previous manifest and only re-parse files that have changed. This is controlled by the `--partial-parse` flag (enabled by default). See `3.1_Partial_Parsing.md` for details.
+To improve performance on subsequent invocations, dbt can reuse the previous manifest and only re-parse files that have changed. This is controlled by the `--partial-parse` flag (enabled by default). See [Partial Parsing](3.1_Partial_Parsing.md)
