@@ -343,6 +343,7 @@ pub struct EvalArgs {
     pub empty: bool,
     pub sample: Option<String>,
     pub full_refresh: bool,
+    pub store_failures: bool,
     pub favor_state: bool,
     pub refresh_sources: bool,
     pub send_anonymous_usage_stats: bool,
@@ -366,6 +367,7 @@ impl fmt::Debug for EvalArgs {
             .field("vars", &self.vars)
             .field("show", &self.io.show)
             .field("optimize_tests", &self.optimize_tests)
+            .field("store_failures", &self.store_failures)
             .field("stage", &self.phase)
             .field("format", &self.format)
             .field("limit", &self.limit)

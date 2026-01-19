@@ -70,6 +70,8 @@ pub struct InvocationArgs {
     pub write_json: bool,
     /// Full refresh
     pub full_refresh: bool,
+    /// Store test failures in the database
+    pub store_failures: bool,
 
     /// Replay mode (when running against a recording)
     pub replay: Option<ReplayMode>,
@@ -149,6 +151,7 @@ impl InvocationArgs {
             send_anonymous_usage_stats: arg.send_anonymous_usage_stats,
             write_json: arg.write_json,
             full_refresh: arg.full_refresh,
+            store_failures: arg.store_failures,
             replay: arg.replay.clone(),
         }
     }
@@ -235,6 +238,10 @@ impl InvocationArgs {
         );
         dict.insert("write_json".to_string(), Value::from(self.write_json));
         dict.insert("full_refresh".to_string(), Value::from(self.full_refresh));
+        dict.insert(
+            "store_failures".to_string(),
+            Value::from(self.store_failures),
+        );
         dict.insert("replay".to_string(), Value::from(self.replay.is_some()));
         // make all keys uppercase
         dict.into_iter()

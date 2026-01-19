@@ -186,6 +186,10 @@ impl Flags {
             "WRITE_JSON".to_string(),
             Value::from(invocation_args.write_json),
         );
+        self.flags.insert(
+            "STORE_FAILURES".to_string(),
+            Value::from(invocation_args.store_failures),
+        );
     }
     /// Override self with other flags
     pub fn join(&mut self, other: Flags) -> Self {
