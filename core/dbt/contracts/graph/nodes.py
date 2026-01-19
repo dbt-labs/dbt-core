@@ -1342,6 +1342,25 @@ class SourceDefinition(
         )
 
     def same_external(self, other: "SourceDefinition") -> bool:
+        # When the behavior flag is enabled, compare unrendered external.location
+        # to avoid false positives from environment variables
+        if (
+            get_flags().state_modified_compare_more_unrendered_values
+            and self.external
+            and other.external
+        ):
+            # Compare unrendered_location if available, otherwise compare location
+            self_location = self.external.unrendered_location or self.external.location
+            other_location = other.external.unrendered_location or other.external.location
+            # Compare external properties (using unrendered_location if available)
+            return (
+                self.external.file_format == other.external.file_format
+                and self.external.row_format == other.external.row_format
+                and self.external.tbl_properties == other.external.tbl_properties
+                and self.external.partitions == other.external.partitions
+                and self_location == other_location
+            )
+        # Preserve legacy behaviour
         return self.external == other.external
 
     def same_config(self, old: "SourceDefinition") -> bool:
