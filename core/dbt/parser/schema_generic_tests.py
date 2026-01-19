@@ -243,26 +243,14 @@ class SchemaGenericTestParser(SimpleParser):
         """Look up attached node for Testable target nodes other than sources. Can be None if generic test attached to SQL node with no corresponding .sql file."""
         attached_node = None  # type: Optional[Union[ManifestNode, GraphMemberNode]]
         if not isinstance(target, UnpatchedSourceDefinition):
-            # First, try to attach to an enabled node in the same package as the schema file.
-            attached_node_unique_id = self.manifest.ref_lookup.get_unique_id(
-                target.name, target.package_name, version
-            )
-            if attached_node_unique_id:
-                attached_node = self.manifest.nodes[attached_node_unique_id]
-                # Verify that the node is actually enabled
-                if not attached_node.config.enabled:
-                    attached_node = None
-
-            # If no enabled node found in current package, search in other packages
-            if not attached_node:
-                attached_node_unique_id = self.manifest.ref_lookup.get_unique_id(
-                    target.name, None, version
-                )
-                if attached_node_unique_id:
-                    attached_node = self.manifest.nodes[attached_node_unique_id]
-                    # Verify that the node is actually enabled
-                    if not attached_node.config.enabled:
-                        attached_node = None
+            # Search for an enabled node, first in the same package, then in all packages.
+            for pkg_name in [target.package_name, None]:
+                unique_id = self.manifest.ref_lookup.get_unique_id(target.name, pkg_name, version)
+                if unique_id:
+                    node = self.manifest.nodes.get(unique_id)
+                    if node and node.config.enabled:
+                        attached_node = node
+                        break
 
             # If still no enabled node found, check in disabled nodes
             if not attached_node:
