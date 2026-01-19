@@ -87,10 +87,13 @@ dependencies = [
     "protobuf>=6.0,<7.0",
 ]
 
+pre-install-commands = [
+    "pip install -e .",
+]
+
 [envs.default.scripts]
 # Setup commands
 setup = [
-    "pip install -e .",
     "pre-commit install",
 ]
 
@@ -191,7 +194,6 @@ dependencies = [
 
 pre-install-commands = [
     "pip install -e .",
-    "pre-commit install",
 ]
 
 [envs.ci.env-vars]
@@ -202,7 +204,6 @@ DBT_TEST_USER_3 = "dbt_test_user_3"
 [envs.ci.scripts]
 unit-tests = "python -m pytest --cov=dbt --cov-report=xml {args} ../tests/unit"
 code-quality = "pre-commit run --all-files"
-# Run as single command to avoid pre-install-commands running twice
 integration-tests = """
 python -m pytest --cov=dbt --cov-append --cov-report=xml {args} ../tests/functional -k "not tests/functional/graph_selection" && \
 python -m pytest --cov=dbt --cov-append --cov-report=xml {args} ../tests/functional/graph_selection
