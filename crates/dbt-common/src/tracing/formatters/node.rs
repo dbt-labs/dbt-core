@@ -1,12 +1,13 @@
 use dbt_telemetry::{
-    AnyNodeOutcomeDetail, CompiledCodeInline, NodeEvaluated, NodeEvent, NodeMaterialization,
-    NodeOutcome, NodeProcessed, NodeSkipReason, NodeType, TestOutcome, get_cache_detail,
+    AnyNodeOutcomeDetail, CompiledCodeInline, ExecutionPhase, NodeEvaluated, NodeEvent,
+    NodeMaterialization, NodeOutcome, NodeProcessed, NodeSkipReason, NodeType,
+    SourceFreshnessOutcome, TestOutcome, get_cache_detail, get_freshness_detail,
     get_node_outcome_detail, get_test_outcome,
 };
 
 use super::{
     color::{BLUE, CYAN, GREEN, PLAIN, RED, YELLOW},
-    constants::{MAX_SCHEMA_DISPLAY_LEN, MIN_NODE_TYPE_WIDTH, UNIT_TEST_SCHEMA_SUFFIX},
+    constants::{MAX_QUALIFIER_DISPLAY_LEN, MIN_NODE_TYPE_WIDTH, UNIT_TEST_SCHEMA_SUFFIX},
     duration::format_duration_fixed_width,
     layout::right_align_static_action,
     phase::get_phase_action,
@@ -26,19 +27,22 @@ pub fn get_num_failures(node: NodeEvent) -> Option<i32> {
     })
 }
 
-/// Format schema and alias with truncation for long schema names
-/// If schema is longer than MAX characters, truncate to "long_schema_na....::alias"
-pub fn format_schema_alias(schema: &str, alias: &str, colorize: bool) -> String {
-    let schema = if schema.len() > MAX_SCHEMA_DISPLAY_LEN {
-        format!("{}...", &schema[..MAX_SCHEMA_DISPLAY_LEN.saturating_sub(4)])
+/// Format a qualifier (schema or node name) and alias with truncation for long names
+/// If the qualifier is longer than MAX characters, truncate to "long_name....::alias"
+pub fn format_qualifier_alias(qualifier: &str, alias: &str, colorize: bool) -> String {
+    let qualifier = if qualifier.len() > MAX_QUALIFIER_DISPLAY_LEN {
+        format!(
+            "{}...",
+            &qualifier[..MAX_QUALIFIER_DISPLAY_LEN.saturating_sub(4)]
+        )
     } else {
-        format!("{schema}.")
+        format!("{qualifier}.")
     };
     if !colorize {
-        return format!("{}{}", schema, alias);
+        return format!("{}{}", qualifier, alias);
     }
 
-    format!("{}{}", CYAN.apply_to(schema), BLUE.apply_to(alias))
+    format!("{}{}", CYAN.apply_to(qualifier), BLUE.apply_to(alias))
 }
 
 /// Format node type with minimum width for alignment
@@ -131,66 +135,78 @@ fn format_node_description(node: &NodeProcessed) -> Option<String> {
 
 /// Formats the node outcome as a status string, optionally colorized.
 /// This closely follows dbt-core's formatting for consistency.
+/// Note: test_outcome and freshness_outcome are mutually exclusive (oneof in proto).
 pub fn format_node_outcome_as_status(
     node_outcome: NodeOutcome,
     skip_reason: Option<NodeSkipReason>,
     test_outcome: Option<TestOutcome>,
+    freshness_outcome: Option<SourceFreshnessOutcome>,
     colorize: bool,
 ) -> String {
-    let outcome = match (node_outcome, skip_reason, test_outcome) {
-        // Non test nodes. Success means "success"
-        (NodeOutcome::Success, _, None) => "success",
-        (NodeOutcome::Success, _, Some(t_outcome)) => match t_outcome {
-            TestOutcome::Passed => "pass",
-            TestOutcome::Warned => "warn",
-            TestOutcome::Failed => "fail",
+    let (status, color) = match (node_outcome, skip_reason, test_outcome, freshness_outcome) {
+        // Freshness outcomes (mutually exclusive with test_outcome)
+        (NodeOutcome::Success, _, _, Some(f_outcome)) => match f_outcome {
+            SourceFreshnessOutcome::OutcomePassed => ("pass", &GREEN),
+            SourceFreshnessOutcome::OutcomeWarned => ("warn", &YELLOW),
+            SourceFreshnessOutcome::OutcomeFailed => ("error", &RED),
         },
-        (NodeOutcome::Error, _, _) => "error",
-        (NodeOutcome::Skipped, s_reason, _) => match s_reason {
-            Some(NodeSkipReason::Upstream) => "skipped",
-            Some(NodeSkipReason::Cached) => "reused",
-            Some(NodeSkipReason::NoOp) => "no-op",
+        // Test outcomes
+        (NodeOutcome::Success, _, Some(t_outcome), None) => match t_outcome {
+            TestOutcome::Passed => ("pass", &GREEN),
+            TestOutcome::Warned => ("warn", &YELLOW),
+            TestOutcome::Failed => ("fail", &RED),
+        },
+        // Non test/freshness nodes. Success means "success"
+        (NodeOutcome::Success, _, None, None) => ("success", &GREEN),
+        (NodeOutcome::Error, _, _, _) => ("error", &RED),
+        (NodeOutcome::Skipped, s_reason, _, _) => match s_reason {
+            Some(NodeSkipReason::Upstream) => ("skipped", &YELLOW),
+            Some(NodeSkipReason::Cached) => ("reused", &GREEN),
+            Some(NodeSkipReason::NoOp) => ("no-op", &YELLOW),
             // Other skip reasons are just "skipped"
             Some(NodeSkipReason::PhaseSkipped)
             | Some(NodeSkipReason::PhaseDisabled)
             | Some(NodeSkipReason::Unspecified)
-            | None => "skipped",
+            | None => ("skipped", &YELLOW),
         },
-        (NodeOutcome::Canceled, _, _) => "cancelled", // Treat canceled as skipped for display
-        (NodeOutcome::Unspecified, _, _) => "no-op",
+        (NodeOutcome::Canceled, _, _, _) => ("cancelled", &YELLOW),
+        (NodeOutcome::Unspecified, _, _, _) => ("no-op", &YELLOW),
     };
 
-    if !colorize {
-        return outcome.to_string();
-    }
-
-    match node_outcome {
-        NodeOutcome::Success => GREEN.apply_to(outcome).to_string(),
-        NodeOutcome::Error => RED.apply_to(outcome).to_string(),
-        NodeOutcome::Skipped | NodeOutcome::Canceled | NodeOutcome::Unspecified => {
-            YELLOW.apply_to(outcome).to_string()
-        }
+    if colorize {
+        color.apply_to(status).to_string()
+    } else {
+        status.to_string()
     }
 }
 
 /// Get the formatted (colored or plain) action text for a NodeProcessed event
 /// This uses the padded action constants for info level, main TUI output
+/// Note: test_outcome and freshness_outcome are mutually exclusive (oneof in proto).
 pub fn format_node_action(
     node_outcome: NodeOutcome,
     skip_reason: Option<NodeSkipReason>,
     test_outcome: Option<TestOutcome>,
+    freshness_outcome: Option<SourceFreshnessOutcome>,
     colorize: bool,
 ) -> String {
-    let (action, color) = match (node_outcome, skip_reason, test_outcome) {
-        // Non test nodes. Success means "success"
-        (NodeOutcome::Success, _, None) => ("Succeeded", &GREEN),
-        (NodeOutcome::Success, _, Some(t_outcome)) => match t_outcome {
+    let (action, color) = match (node_outcome, skip_reason, test_outcome, freshness_outcome) {
+        // Freshness outcomes (mutually exclusive with test_outcome)
+        (NodeOutcome::Success, _, _, Some(f_outcome)) => match f_outcome {
+            SourceFreshnessOutcome::OutcomePassed => ("Passed", &GREEN),
+            SourceFreshnessOutcome::OutcomeWarned => ("Warned", &YELLOW),
+            SourceFreshnessOutcome::OutcomeFailed => ("Stale", &RED),
+        },
+        // Test outcomes
+        (NodeOutcome::Success, _, Some(t_outcome), None) => match t_outcome {
             TestOutcome::Passed => ("Passed", &GREEN),
             TestOutcome::Warned => ("Warned", &YELLOW),
             TestOutcome::Failed => ("Failed", &RED),
         },
-        (NodeOutcome::Error, _, _) => ("Failed", &RED),
-        (NodeOutcome::Skipped, s_reason, _) => match s_reason {
+        // Non test/freshness nodes. Success means "success"
+        (NodeOutcome::Success, _, None, None) => ("Succeeded", &GREEN),
+        (NodeOutcome::Error, _, _, _) => ("Failed", &RED),
+        (NodeOutcome::Skipped, s_reason, _, _) => match s_reason {
             Some(NodeSkipReason::Upstream) => ("Skipped", &YELLOW),
             Some(NodeSkipReason::Cached) => ("Reused", &GREEN),
             Some(NodeSkipReason::NoOp) => ("Skipped", &YELLOW),
@@ -200,18 +216,18 @@ pub fn format_node_action(
             | Some(NodeSkipReason::Unspecified)
             | None => ("Skipped", &YELLOW),
         },
-        (NodeOutcome::Canceled, _, _) => ("Cancelled", &YELLOW), // Treat canceled as skipped for display
-        (NodeOutcome::Unspecified, _, _) => ("Finished", &PLAIN),
+        (NodeOutcome::Canceled, _, _, _) => ("Cancelled", &YELLOW),
+        (NodeOutcome::Unspecified, _, _, _) => ("Finished", &PLAIN),
     };
 
     // Right align action
     let action = right_align_static_action(action);
 
-    if !colorize {
-        return action;
+    if colorize {
+        color.apply_to(action).to_string()
+    } else {
+        action
     }
-
-    color.apply_to(action).to_string()
 }
 
 /// Format a NodeProcessed event for the start of processing (no duration)
@@ -221,20 +237,27 @@ pub fn format_node_action(
 pub fn format_node_processed_start(node: &NodeProcessed, colorize: bool) -> String {
     let node_type = node.node_type();
 
-    // Prepare schema and alias
-    let mut schema = node.schema.clone().unwrap_or_default();
+    // Prepare qualifier (schema for all nodes except sources) and alias
+    let mut qualifier = node.schema.clone().unwrap_or_default();
     let mut alias = node.identifier.clone().unwrap_or_else(|| node.name.clone());
+
+    if node_type == NodeType::Source {
+        // For sources we show source_name.identifier to match dbt-core output.
+        if let Some(source_name) = node.source_name.as_ref() {
+            qualifier = source_name.clone();
+        }
+    }
 
     // Special handling for unit tests: display test schema + unit test name
     if node_type == NodeType::UnitTest {
-        schema = format!("{}{}", schema, UNIT_TEST_SCHEMA_SUFFIX);
+        qualifier = format!("{}{}", qualifier, UNIT_TEST_SCHEMA_SUFFIX);
         alias = node.name.clone();
     }
 
     // Format components
-    let schema_alias = format_schema_alias(&schema, &alias, colorize);
+    let qualifier_alias = format_qualifier_alias(&qualifier, &alias, colorize);
 
-    format!("Started {} {}", node_type.pretty(), schema_alias)
+    format!("Started {} {}", node_type.pretty(), qualifier_alias)
 }
 
 /// Format a complete NodeProcessed event into a single output line
@@ -249,6 +272,11 @@ pub fn format_node_processed_end(
     let node_outcome = node.node_outcome();
     let node_type = node.node_type();
 
+    // Special case for freshness phase - dispatch by phase, not node type
+    if node.last_phase() == ExecutionPhase::FreshnessAnalysis {
+        return format_freshness_result(node, duration, colorize);
+    }
+
     // Force duration to 0 if skipped
     let duration = if node_outcome == NodeOutcome::Skipped {
         std::time::Duration::ZERO
@@ -256,13 +284,20 @@ pub fn format_node_processed_end(
         duration
     };
 
-    // Prepare schema and alias
-    let mut schema = node.schema.clone().unwrap_or_default();
+    // Prepare qualifier (schema for all nodes except sources) and alias
+    let mut qualifier = node.schema.clone().unwrap_or_default();
     let mut alias = node.identifier.clone().unwrap_or_else(|| node.name.clone());
+
+    if node_type == NodeType::Source {
+        // For sources we show source_name.identifier to match dbt-core output.
+        if let Some(source_name) = node.source_name.as_ref() {
+            qualifier = source_name.clone();
+        }
+    }
 
     // Special handling for unit tests: display test schema + unit test name
     if node_type == NodeType::UnitTest {
-        schema = format!("{}{}", schema, UNIT_TEST_SCHEMA_SUFFIX);
+        qualifier = format!("{}{}", qualifier, UNIT_TEST_SCHEMA_SUFFIX);
         alias = node.name.clone();
     }
 
@@ -282,7 +317,7 @@ pub fn format_node_processed_end(
     };
 
     // Format components
-    let schema_alias = format_schema_alias(&schema, &alias, colorize);
+    let qualifier_alias = format_qualifier_alias(&qualifier, &alias, colorize);
     let node_type_formatted = format_node_type_fixed_width(node_type.as_static_ref(), colorize);
     let materialization_suffix =
         format_materialization_suffix(materialization_str.as_deref(), desc.as_deref());
@@ -291,6 +326,7 @@ pub fn format_node_processed_end(
         node_outcome,
         node.node_skip_reason.map(|_| node.node_skip_reason()),
         get_test_outcome(node.into()),
+        None, // freshness_outcome - not applicable for non-freshness nodes
         colorize,
     );
 
@@ -299,7 +335,7 @@ pub fn format_node_processed_end(
         action_formatted,
         duration_formatted,
         node_type_formatted,
-        schema_alias,
+        qualifier_alias,
         materialization_suffix
     )
 }
@@ -313,17 +349,17 @@ pub fn format_node_evaluated_start(node: &NodeEvaluated, colorize: bool) -> Stri
     let phase = node.phase();
     let phase_action = get_phase_action(phase);
 
-    // Prepare schema and alias
-    let schema = node.schema.clone().unwrap_or_default();
+    // Prepare relation schema and alias
+    let relation_schema = node.schema.clone().unwrap_or_default();
     let alias = node.identifier.clone().unwrap_or_else(|| node.name.clone());
 
     // Format components
-    let schema_alias = format_schema_alias(&schema, &alias, colorize);
+    let qualifier_alias = format_qualifier_alias(&relation_schema, &alias, colorize);
     let node_type_formatted = node_type.pretty();
 
     format!(
         "Started {} {} {}",
-        phase_action, node_type_formatted, schema_alias
+        phase_action, node_type_formatted, qualifier_alias
     )
 }
 
@@ -341,24 +377,25 @@ pub fn format_node_evaluated_end(
     let phase = node.phase();
     let phase_action = get_phase_action(phase);
 
-    // Prepare schema and alias
-    let schema = node.schema.clone().unwrap_or_default();
+    // Prepare relation schema and alias
+    let relation_schema = node.schema.clone().unwrap_or_default();
     let alias = node.identifier.clone().unwrap_or_else(|| node.name.clone());
 
     // Format components
-    let schema_alias = format_schema_alias(&schema, &alias, colorize);
+    let qualifier_alias = format_qualifier_alias(&relation_schema, &alias, colorize);
     let node_type_formatted = node_type.pretty();
     let duration_formatted = format_duration_fixed_width(duration);
     let outcome_formatted = format_node_outcome_as_status(
         node_outcome,
         node.node_skip_reason.map(|_| node.node_skip_reason()),
         get_test_outcome(node.into()),
+        None, // freshness_outcome - NodeEvaluated doesn't have freshness details
         colorize,
     );
 
     format!(
         "Finished {} [{}] {} {} [{}]",
-        phase_action, duration_formatted, node_type_formatted, schema_alias, outcome_formatted
+        phase_action, duration_formatted, node_type_formatted, qualifier_alias, outcome_formatted
     )
 }
 
@@ -418,7 +455,8 @@ pub fn format_skipped_test_group(
     let action_formatted = format_node_action(
         NodeOutcome::Skipped,
         Some(NodeSkipReason::Upstream),
-        None,
+        None, // test_outcome
+        None, // freshness_outcome
         colorize,
     );
 
@@ -439,4 +477,59 @@ pub fn format_compiled_inline_code(compiled_code: &CompiledCodeInline, colorize:
         COMPILED_INLINE_NODE_TITLE.to_string()
     };
     format!("{}\n{}", title, compiled_code.sql)
+}
+
+/// Format a source freshness result
+///
+/// Returns formatted string in the pattern:
+/// `{action} [{duration}] source {schema}.{identifier} (last updated {age} ago)`
+pub fn format_freshness_result(
+    node: &NodeProcessed,
+    duration: std::time::Duration,
+    colorize: bool,
+) -> String {
+    let (freshness_outcome, description) = if let Some(freshness_detail) =
+        get_freshness_detail(node.into())
+    {
+        // Format age duration
+        let age_str = freshness_detail
+            .age_seconds
+            .map(|age| {
+                humantime::format_duration(std::time::Duration::from_secs(age as u64)).to_string()
+            })
+            .unwrap_or_else(|| "unknown".to_string());
+
+        (
+            Some(freshness_detail.node_freshness_outcome()),
+            format!(" (last updated {} ago)", age_str),
+        )
+    } else {
+        // Early exit due to error, so no freshness info
+        (None, "".to_string())
+    };
+
+    // Prepare source name and identifier (dbt-core logs `source_name.identifier`)
+    let source_name = node.source_name.as_deref().unwrap_or("");
+    let identifier = node.identifier.as_deref().unwrap_or(&node.name);
+
+    // Format components
+    let qualifier_alias = format_qualifier_alias(source_name, identifier, colorize);
+    let node_type_formatted =
+        format_node_type_fixed_width(node.node_type().as_static_ref(), colorize);
+    let action_formatted = format_node_action(
+        node.node_outcome(),
+        node.node_skip_reason.map(|_| node.node_skip_reason()),
+        None, // test_outcome
+        freshness_outcome,
+        colorize,
+    );
+
+    format!(
+        "{} [{}] {} {}{}",
+        action_formatted,
+        format_duration_fixed_width(duration),
+        node_type_formatted,
+        qualifier_alias,
+        description
+    )
 }

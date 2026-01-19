@@ -144,6 +144,9 @@ enum SourceFreshnessOutcome {
 
 message SourceFreshnessDetail {
   SourceFreshnessOutcome node_freshness_outcome = 1;
+
+  // Age of the source in seconds (time since last load)
+  optional int64 age_seconds = 2;
 }
 
 message NodeCacheDetail {
@@ -267,6 +270,9 @@ message NodeProcessed {
 
   // Name of the relation (table, view, etc.) that will be created for this node if applicable.
   optional string identifier = 5;
+
+  // Name of the source for source nodes.
+  optional string source_name = 6;
 
   // How this node is materialized in the data warehouse.
   optional NodeMaterialization materialization = 7;

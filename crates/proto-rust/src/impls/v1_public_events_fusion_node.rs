@@ -2,13 +2,24 @@ use crate::v1::public::events::fusion::{
     node::{
         NodeCacheDetail, NodeEvaluated, NodeMaterialization, NodeOutcome, NodeProcessed,
         NodeSkipReason, NodeSkipUpstreamDetail, NodeType, SourceFreshnessDetail,
-        TestEvaluationDetail, TestOutcome, node_evaluated, node_processed,
+        SourceFreshnessOutcome, TestEvaluationDetail, TestOutcome, node_evaluated, node_processed,
     },
     phase::ExecutionPhase,
 };
 
 // Display trait is intentionally not implemented to avoid inefficient usage.
 // Prefer `node_type.as_ref()` or if you need String use `node_type.as_ref().to_string()`.
+
+impl SourceFreshnessOutcome {
+    /// Returns a human-readable status string for the freshness outcome.
+    pub const fn as_static_ref(&self) -> &'static str {
+        match self {
+            Self::OutcomePassed => "pass",
+            Self::OutcomeWarned => "warn",
+            Self::OutcomeFailed => "error",
+        }
+    }
+}
 
 impl NodeType {
     pub const fn as_static_ref(&self) -> &'static str {
@@ -222,11 +233,22 @@ pub fn get_test_outcome(node: NodeEvent) -> Option<TestOutcome> {
     })
 }
 
-/// Extract test outcome from test details if available
+/// Extract cache detail from node details if available
 pub fn get_cache_detail(node: NodeEvent<'_>) -> Option<&'_ NodeCacheDetail> {
     get_node_outcome_detail(node).and_then(|detail| {
         if let AnyNodeOutcomeDetail::NodeCacheDetail(cache_detail) = detail {
             Some(cache_detail)
+        } else {
+            None
+        }
+    })
+}
+
+/// Extract freshness detail from node details if available
+pub fn get_freshness_detail(node: NodeEvent<'_>) -> Option<&'_ SourceFreshnessDetail> {
+    get_node_outcome_detail(node).and_then(|detail| {
+        if let AnyNodeOutcomeDetail::NodeFreshnessOutcome(freshness_detail) = detail {
+            Some(freshness_detail)
         } else {
             None
         }
@@ -360,6 +382,7 @@ impl NodeProcessed {
             database,
             schema,
             identifier,
+            None, // source_name
             materialization,
             custom_materialization,
             node_type,

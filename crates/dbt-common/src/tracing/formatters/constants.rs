@@ -2,7 +2,7 @@
 pub(super) const DEFAULT_TERMINAL_WIDTH: usize = 60;
 
 /// Maximum length for displaying schema information in formatted outputs
-pub(super) const MAX_SCHEMA_DISPLAY_LEN: usize = 200;
+pub(super) const MAX_QUALIFIER_DISPLAY_LEN: usize = 200;
 
 /// Minimum width allocated for node type display in formatted outputs
 pub(super) const MIN_NODE_TYPE_WIDTH: usize = 5; // Length of "model"

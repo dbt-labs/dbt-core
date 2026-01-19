@@ -724,6 +724,14 @@ impl PartialEq for DbtChecksum {
 }
 
 impl DbtChecksum {
+    /// Returns the checksum string value regardless of variant.
+    pub fn as_checksum_string(&self) -> &str {
+        match self {
+            Self::String(s) => s,
+            Self::Object(o) => &o.checksum,
+        }
+    }
+
     pub fn hash(s: &[u8]) -> Self {
         let mut hasher = Sha256::new();
         hasher.update(s);

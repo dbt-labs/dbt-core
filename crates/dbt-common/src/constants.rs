@@ -107,7 +107,6 @@ pub const STALE: &str = "     Stale";
 pub const SKIPPED: &str = "   Skipped";
 pub const ANALYZED: &str = "  Analyzed";
 pub const RENDERED: &str = "  Rendered";
-pub const FRESHNESS: &str = " Freshness";
 pub const TEST: &str = "      Test";
 
 // debug command

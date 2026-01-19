@@ -712,14 +712,14 @@ impl TuiLayer {
             | ExecutionPhase::TaskGraphBuild
             | ExecutionPhase::Debug
             | ExecutionPhase::DeferHydration
-            | ExecutionPhase::SchemaHydration => {
+            | ExecutionPhase::SchemaHydration
+            | ExecutionPhase::FreshnessAnalysis => {
                 progress.start_spinner(ProgressId::Phase(phase_enum), progress_text);
             }
             ExecutionPhase::Unspecified
             | ExecutionPhase::Compare
             | ExecutionPhase::InitAdapter
             | ExecutionPhase::NodeCacheHydration
-            | ExecutionPhase::FreshnessAnalysis
             | ExecutionPhase::Lineage => {
                 // Do not show progress for these phases
             }
@@ -764,14 +764,14 @@ impl TuiLayer {
             | ExecutionPhase::TaskGraphBuild
             | ExecutionPhase::Debug
             | ExecutionPhase::DeferHydration
-            | ExecutionPhase::SchemaHydration => {
+            | ExecutionPhase::SchemaHydration
+            | ExecutionPhase::FreshnessAnalysis => {
                 progress.remove_spinner(&ProgressId::Phase(phase_enum));
             }
             ExecutionPhase::Unspecified
             | ExecutionPhase::Compare
             | ExecutionPhase::InitAdapter
             | ExecutionPhase::NodeCacheHydration
-            | ExecutionPhase::FreshnessAnalysis
             | ExecutionPhase::Lineage => {
                 // Do not show progress for these phases
             }

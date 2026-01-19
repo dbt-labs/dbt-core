@@ -1091,6 +1091,9 @@ impl serde::Serialize for NodeProcessed {
         if self.identifier.is_some() {
             len += 1;
         }
+        if self.source_name.is_some() {
+            len += 1;
+        }
         if self.materialization.is_some() {
             len += 1;
         }
@@ -1160,6 +1163,9 @@ impl serde::Serialize for NodeProcessed {
         }
         if let Some(v) = self.identifier.as_ref() {
             struct_ser.serialize_field("identifier", v)?;
+        }
+        if let Some(v) = self.source_name.as_ref() {
+            struct_ser.serialize_field("source_name", v)?;
         }
         if let Some(v) = self.materialization.as_ref() {
             let v = NodeMaterialization::try_from(*v)
@@ -1262,6 +1268,8 @@ impl<'de> serde::Deserialize<'de> for NodeProcessed {
             "database",
             "schema",
             "identifier",
+            "source_name",
+            "sourceName",
             "materialization",
             "custom_materialization",
             "customMaterialization",
@@ -1312,6 +1320,7 @@ impl<'de> serde::Deserialize<'de> for NodeProcessed {
             Database,
             Schema,
             Identifier,
+            SourceName,
             Materialization,
             CustomMaterialization,
             NodeType,
@@ -1360,6 +1369,7 @@ impl<'de> serde::Deserialize<'de> for NodeProcessed {
                             "database" => Ok(GeneratedField::Database),
                             "schema" => Ok(GeneratedField::Schema),
                             "identifier" => Ok(GeneratedField::Identifier),
+                            "sourceName" | "source_name" => Ok(GeneratedField::SourceName),
                             "materialization" => Ok(GeneratedField::Materialization),
                             "customMaterialization" | "custom_materialization" => Ok(GeneratedField::CustomMaterialization),
                             "nodeType" | "node_type" => Ok(GeneratedField::NodeType),
@@ -1405,6 +1415,7 @@ impl<'de> serde::Deserialize<'de> for NodeProcessed {
                 let mut database__ = None;
                 let mut schema__ = None;
                 let mut identifier__ = None;
+                let mut source_name__ = None;
                 let mut materialization__ = None;
                 let mut custom_materialization__ = None;
                 let mut node_type__ = None;
@@ -1454,6 +1465,12 @@ impl<'de> serde::Deserialize<'de> for NodeProcessed {
                                 return Err(serde::de::Error::duplicate_field("identifier"));
                             }
                             identifier__ = map_.next_value()?;
+                        }
+                        GeneratedField::SourceName => {
+                            if source_name__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("sourceName"));
+                            }
+                            source_name__ = map_.next_value()?;
                         }
                         GeneratedField::Materialization => {
                             if materialization__.is_some() {
@@ -1604,6 +1621,7 @@ impl<'de> serde::Deserialize<'de> for NodeProcessed {
                     database: database__,
                     schema: schema__,
                     identifier: identifier__,
+                    source_name: source_name__,
                     materialization: materialization__,
                     custom_materialization: custom_materialization__,
                     node_type: node_type__.unwrap_or_default(),
@@ -1931,11 +1949,19 @@ impl serde::Serialize for SourceFreshnessDetail {
         if self.node_freshness_outcome != 0 {
             len += 1;
         }
+        if self.age_seconds.is_some() {
+            len += 1;
+        }
         let mut struct_ser = serializer.serialize_struct("v1.public.events.fusion.node.SourceFreshnessDetail", len)?;
         if self.node_freshness_outcome != 0 {
             let v = SourceFreshnessOutcome::try_from(self.node_freshness_outcome)
                 .map_err(|_| serde::ser::Error::custom(format!("Invalid variant {}", self.node_freshness_outcome)))?;
             struct_ser.serialize_field("node_freshness_outcome", &v)?;
+        }
+        if let Some(v) = self.age_seconds.as_ref() {
+            #[allow(clippy::needless_borrow)]
+            #[allow(clippy::needless_borrows_for_generic_args)]
+            struct_ser.serialize_field("age_seconds", ToString::to_string(&v).as_str())?;
         }
         struct_ser.end()
     }
@@ -1949,11 +1975,14 @@ impl<'de> serde::Deserialize<'de> for SourceFreshnessDetail {
         const FIELDS: &[&str] = &[
             "node_freshness_outcome",
             "nodeFreshnessOutcome",
+            "age_seconds",
+            "ageSeconds",
         ];
 
         #[allow(clippy::enum_variant_names)]
         enum GeneratedField {
             NodeFreshnessOutcome,
+            AgeSeconds,
             __SkipField__,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
@@ -1977,6 +2006,7 @@ impl<'de> serde::Deserialize<'de> for SourceFreshnessDetail {
                     {
                         match value {
                             "nodeFreshnessOutcome" | "node_freshness_outcome" => Ok(GeneratedField::NodeFreshnessOutcome),
+                            "ageSeconds" | "age_seconds" => Ok(GeneratedField::AgeSeconds),
                             _ => Ok(GeneratedField::__SkipField__),
                         }
                     }
@@ -1997,6 +2027,7 @@ impl<'de> serde::Deserialize<'de> for SourceFreshnessDetail {
                     V: serde::de::MapAccess<'de>,
             {
                 let mut node_freshness_outcome__ = None;
+                let mut age_seconds__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
                         GeneratedField::NodeFreshnessOutcome => {
@@ -2005,6 +2036,14 @@ impl<'de> serde::Deserialize<'de> for SourceFreshnessDetail {
                             }
                             node_freshness_outcome__ = Some(map_.next_value::<SourceFreshnessOutcome>()? as i32);
                         }
+                        GeneratedField::AgeSeconds => {
+                            if age_seconds__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("ageSeconds"));
+                            }
+                            age_seconds__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
+                        }
                         GeneratedField::__SkipField__ => {
                             let _ = map_.next_value::<serde::de::IgnoredAny>()?;
                         }
@@ -2012,6 +2051,7 @@ impl<'de> serde::Deserialize<'de> for SourceFreshnessDetail {
                 }
                 Ok(SourceFreshnessDetail {
                     node_freshness_outcome: node_freshness_outcome__.unwrap_or_default(),
+                    age_seconds: age_seconds__,
                 })
             }
         }

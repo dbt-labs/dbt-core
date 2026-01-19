@@ -42,6 +42,9 @@ pub struct SourceFreshnessDetail {
         )
     )]
     pub node_freshness_outcome: i32,
+    /// Age of the source in seconds (time since last load)
+    #[prost(int64, optional, tag = "2")]
+    pub age_seconds: ::core::option::Option<i64>,
 }
 impl crate::StaticName for SourceFreshnessDetail {
     const FULL_NAME: &'static str = "v1.public.events.fusion.node.SourceFreshnessDetail";
@@ -279,6 +282,9 @@ pub struct NodeProcessed {
     /// Name of the relation (table, view, etc.) that will be created for this node if applicable.
     #[prost(string, optional, tag = "5")]
     pub identifier: ::core::option::Option<::prost::alloc::string::String>,
+    /// Name of the source for source nodes.
+    #[prost(string, optional, tag = "6")]
+    pub source_name: ::core::option::Option<::prost::alloc::string::String>,
     /// How this node is materialized in the data warehouse.
     #[prost(enumeration = "NodeMaterialization", optional, tag = "7")]
     #[cfg_attr(

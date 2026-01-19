@@ -309,10 +309,7 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
             },
         );
 
-        let node_checksum = match &common.checksum {
-            DbtChecksum::String(s) => s.clone(),
-            DbtChecksum::Object(o) => o.checksum.clone(),
-        };
+        let node_checksum = common.checksum.as_checksum_string().to_string();
 
         NodeEvaluated::start(
             common.unique_id.clone(),
@@ -332,6 +329,15 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
     }
 
     fn get_node_processed_event(
+        &self,
+        last_phase: Option<ExecutionPhase>,
+        in_dir: &PathBuf,
+        in_selection: bool,
+    ) -> NodeProcessed {
+        self.get_node_processed_event_base(last_phase, in_dir, in_selection)
+    }
+
+    fn get_node_processed_event_base(
         &self,
         last_phase: Option<ExecutionPhase>,
         in_dir: &PathBuf,
@@ -371,10 +377,7 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
             },
         );
 
-        let node_checksum = match &common.checksum {
-            DbtChecksum::String(s) => s.clone(),
-            DbtChecksum::Object(o) => o.checksum.clone(),
-        };
+        let node_checksum = common.checksum.as_checksum_string().to_string();
 
         NodeProcessed::start(
             common.unique_id.clone(),
@@ -1310,6 +1313,17 @@ impl InternalDbtNode for DbtSource {
 
     fn event_time(&self) -> Option<String> {
         self.deprecated_config.event_time.clone()
+    }
+
+    fn get_node_processed_event(
+        &self,
+        last_phase: Option<ExecutionPhase>,
+        in_dir: &PathBuf,
+        in_selection: bool,
+    ) -> NodeProcessed {
+        let mut event = self.get_node_processed_event_base(last_phase, in_dir, in_selection);
+        event.source_name = Some(self.__source_attr__.source_name.clone());
+        event
     }
 
     fn base_mut(&mut self) -> &mut NodeBaseAttributes {

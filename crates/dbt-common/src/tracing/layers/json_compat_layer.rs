@@ -7,7 +7,8 @@ use dbt_telemetry::{
     ExecutionPhase, Invocation, ListItemOutput, LogMessage, LogRecordInfo, NodeEvaluated,
     NodeEvent, NodeOutcome, NodeProcessed, NodeSkipReason, NodeType, ProgressMessage,
     QueryExecuted, SeverityNumber, ShowDataOutput, ShowResult, SpanEndInfo, SpanStartInfo,
-    StatusCode, TelemetryOutputFlags, TestOutcome, UserLogMessage, get_test_outcome,
+    StatusCode, TelemetryOutputFlags, TestOutcome, UserLogMessage, get_freshness_detail,
+    get_test_outcome,
 };
 
 use serde_json::json;
@@ -734,20 +735,37 @@ impl JsonCompatLayer {
     }
 
     /// Handle NodeProcessed span end events
-    /// Generates Log[NODE TYPE]Result based on node type & NodeFinished (Q025)
+    /// Generates Log[NODE TYPE]Result based on node type/phase & NodeFinished (Q025)
     fn emit_node_processed_end(&self, node: &NodeProcessed, span: &SpanEndInfo) {
         // Do not emit for non-selected nodes
         if !node.in_selection {
             return;
         }
 
-        let node_outcome = node.node_outcome();
+        let source_name = node.source_name.as_deref().unwrap_or("");
+        let table_name = node.identifier.as_deref().unwrap_or(node.name.as_str());
 
+        let node_outcome = node.node_outcome();
         let node_type = node.node_type();
         let node_skip_reason = node.node_skip_reason.map(|_| node.node_skip_reason());
 
-        // Determine `Log[NODE TYPE]Result` event name and code based on node type and skip reason
-        let (event_name, event_code) = if node_outcome == NodeOutcome::Skipped
+        // Get both test and freshness details (mutually exclusive - oneof in proto)
+        let test_outcome = get_test_outcome(node.into());
+        let freshness_detail = get_freshness_detail(node.into());
+        let freshness_outcome = freshness_detail
+            .as_ref()
+            .map(|d| d.node_freshness_outcome());
+
+        // Check if this is a freshness phase and a source node
+        // (fusion runs freshness as part of SAO also on extended models hence the node type check)
+        let is_freshness =
+            node.last_phase() == ExecutionPhase::FreshnessAnalysis && node_type == NodeType::Source;
+
+        // Determine `Log[NODE TYPE]Result` event name and code
+        let (event_name, event_code) = if is_freshness {
+            // Freshness phase: emit LogFreshnessResult (Q018)
+            ("LogFreshnessResult", "Q018")
+        } else if node_outcome == NodeOutcome::Skipped
             && matches!(node_skip_reason, Some(NodeSkipReason::NoOp))
         {
             // Special case for no-op result
@@ -763,11 +781,12 @@ impl JsonCompatLayer {
             }
         };
 
-        // Build status string
+        // Build status string using shared formatter (handles both test and freshness outcomes)
         let status = format_node_outcome_as_status(
             node_outcome,
-            node.node_skip_reason.map(|_| node.node_skip_reason()),
-            get_test_outcome(node.into()),
+            node_skip_reason,
+            test_outcome,
+            freshness_outcome,
             false,
         );
 
@@ -776,7 +795,12 @@ impl JsonCompatLayer {
             .duration_since(span.start_time_unix_nano)
             .unwrap_or_default();
 
-        let msg = format_node_processed_end(node, duration, false);
+        // Format message - for freshness, use special format
+        let msg = if is_freshness {
+            format!("Freshness of {}.{}: {}", source_name, table_name, status)
+        } else {
+            format_node_processed_end(node, duration, false)
+        };
 
         let node_info = build_node_info_json(
             node.into(),
@@ -796,12 +820,18 @@ impl JsonCompatLayer {
         // Extract num_failures for tests
         let num_failures = get_num_failures(node.into());
 
-        // Build data object, including num_failures for tests if available
+        // Build data object
         let mut data = json!({
             "node_info": node_info,
             "status": status,
             "execution_time": duration.as_secs_f32()
         });
+
+        if is_freshness {
+            let as_map = data.as_object_mut().unwrap();
+            as_map.insert("source_name".to_string(), source_name.into());
+            as_map.insert("table_name".to_string(), table_name.into());
+        }
 
         if let Some(num_failures_val) = num_failures {
             data.as_object_mut()
@@ -817,7 +847,7 @@ impl JsonCompatLayer {
 
         self.writer.writeln(value.as_str());
 
-        // NodeFinished (Q025) with a stub for run results & maybe MarkSkippedChildren
+        // NodeFinished (Q025) - emit for ALL nodes including freshness
         let info_json = serde_json::to_value(self.build_core_event_info(
             Some("Q025"),
             Some("NodeFinished"),
@@ -841,18 +871,25 @@ impl JsonCompatLayer {
 
         // Emit MarkSkippedChildren if node outcome would cause children to be skipped
         // This happens when node fails, is skipped, canceled, or for tests with failures
-        let should_mark_skipped = match (node_outcome, get_test_outcome(node.into())) {
-            (NodeOutcome::Success, None) => false,
-            // Tests report as success, we need to check test outcome for failures
-            (NodeOutcome::Success, Some(to)) => to == TestOutcome::Failed,
-            // Any error outcome causes children to be skipped
-            (NodeOutcome::Error, _) => true,
-            // Canceled does't mean skipped, just operation was aborted
-            (NodeOutcome::Canceled, _) => false,
-            // Skipped because of error causes children to be skipped as well
-            (NodeOutcome::Skipped, _) => matches!(node_skip_reason, Some(NodeSkipReason::Upstream)),
-            // should not happen, treat as not skipping children
-            (NodeOutcome::Unspecified, _) => false,
+        // Note: Freshness nodes don't have children, so we skip this check for them
+        let should_mark_skipped = if is_freshness {
+            false // Freshness sources don't have downstream children in the execution graph
+        } else {
+            match (node_outcome, test_outcome) {
+                (NodeOutcome::Success, None) => false,
+                // Tests report as success, we need to check test outcome for failures
+                (NodeOutcome::Success, Some(to)) => to == TestOutcome::Failed,
+                // Any error outcome causes children to be skipped
+                (NodeOutcome::Error, _) => true,
+                // Canceled doesn't mean skipped, just operation was aborted
+                (NodeOutcome::Canceled, _) => false,
+                // Skipped because of error causes children to be skipped as well
+                (NodeOutcome::Skipped, _) => {
+                    matches!(node_skip_reason, Some(NodeSkipReason::Upstream))
+                }
+                // should not happen, treat as not skipping children
+                (NodeOutcome::Unspecified, _) => false,
+            }
         };
 
         if should_mark_skipped {

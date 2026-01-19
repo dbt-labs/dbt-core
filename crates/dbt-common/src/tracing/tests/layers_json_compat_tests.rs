@@ -18,7 +18,8 @@ use dbt_telemetry::{
     NodeEvaluated, NodeMaterialization, NodeOutcome, NodeOutcomeDetail, NodeProcessed,
     NodeSkipReason, NodeSkipUpstreamDetail, NodeType, PackageType, ProgressMessage, QueryExecuted,
     QueryOutcome, SeverityNumber, ShowDataOutput, ShowDataOutputFormat, ShowResult,
-    ShowResultOutputFormat, TelemetryOutputFlags, UserLogMessage, node_processed,
+    ShowResultOutputFormat, SourceFreshnessDetail, SourceFreshnessOutcome, TelemetryOutputFlags,
+    UserLogMessage, node_processed, update_dbt_core_event_code_for_node_processed_end,
 };
 use serde_json::{Value, json};
 use tracing::level_filters::LevelFilter;
@@ -1294,6 +1295,150 @@ fn test_show_result() {
                     "result_type": "manifest",
                     "content": "manifest content here",
                     "output_format": "text"
+                }
+            }),
+        ],
+    );
+}
+
+#[test]
+fn test_freshness_result() {
+    let invocation_id = Uuid::new_v4();
+    let source_name = "my_source";
+    let source_schema = "my_schema";
+    let table_name = "my_table";
+    let test_unique_id = format!("source.my_project.{}.{}", source_name, table_name);
+
+    // Helper to build node_info JSON - note: node_finished_at is redacted for all events
+    // because the test framework collects outputs after span close
+    let expected_node_info = |node_status: &str| {
+        json!({
+            "node_path": "models/sources.yml",
+            "node_name": table_name,
+            "unique_id": test_unique_id.clone(),
+            "resource_type": "source",
+            "materialized": "",
+            "node_status": node_status,
+            "node_started_at": "<redacted::node_started_at>",
+            "node_finished_at": "<redacted::node_finished_at>",
+            "node_relation": {
+                "database": "MY_DB",
+                "schema": source_schema,
+                "alias": table_name,
+                "relation_name": format!("MY_DB.{}.{}", source_schema, table_name)
+            },
+            "node_checksum": TEST_NODE_CHECKSUM
+        })
+    };
+
+    test_events(
+        "Freshness: NodeStart, LogStartLine, LogFreshnessResult, NodeFinished",
+        invocation_id,
+        || {
+            // Create NodeProcessed span for freshness
+            let mut node_processed_event = NodeProcessed::start(
+                test_unique_id.clone(),
+                table_name.to_string(),
+                Some("MY_DB".to_string()),
+                Some(source_schema.to_string()),
+                Some(table_name.to_string()),
+                None,
+                None,
+                NodeType::Source,
+                Some(ExecutionPhase::FreshnessAnalysis),
+                "models/sources.yml".to_string(),
+                None,
+                None,
+                TEST_NODE_CHECKSUM.to_string(),
+                true,
+            );
+            node_processed_event.source_name = Some(source_name.to_string());
+
+            // Set freshness outcome (warn) with age
+            node_processed_event.node_outcome = NodeOutcome::Success as i32;
+            node_processed_event.node_outcome_detail = Some(
+                node_processed::NodeOutcomeDetail::NodeFreshnessOutcome(SourceFreshnessDetail {
+                    node_freshness_outcome: SourceFreshnessOutcome::OutcomeWarned as i32,
+                    age_seconds: Some(7200), // 2 hours
+                }),
+            );
+            update_dbt_core_event_code_for_node_processed_end(&mut node_processed_event);
+
+            let _span = create_info_span(node_processed_event);
+        },
+        &[
+            "node_info.node_started_at",
+            "node_info.node_finished_at",
+            "execution_time",
+            "run_result.execution_time",
+        ],
+        vec![
+            // LogFreshnessResult (Q018)
+            json!({
+                "info": {
+                    "category": "",
+                    "code": "Q018",
+                    "invocation_id": invocation_id.to_string(),
+                    "name": "LogFreshnessResult",
+                    "level": "info",
+                    "extra": {},
+                    "msg": format!("Freshness of {}.{}: warn", source_name, table_name)
+                },
+                "data": {
+                    "node_info": expected_node_info("warn"),
+                    "status": "warn",
+                    "execution_time": "<redacted::execution_time>",
+                    "source_name": source_name,
+                    "table_name": table_name
+                }
+            }),
+            // LogStartLine (Q011)
+            json!({
+                "info": {
+                    "category": "",
+                    "code": "Q011",
+                    "invocation_id": invocation_id.to_string(),
+                    "name": "LogStartLine",
+                    "level": "info",
+                    "extra": {},
+                    "msg": format!("Started source {}.{}", source_name, table_name)
+                },
+                "data": {
+                    "node_info": expected_node_info("started")
+                }
+            }),
+            // NodeFinished (Q025) - must also be emitted for freshness nodes
+            json!({
+                "info": {
+                    "category": "",
+                    "code": "Q025",
+                    "invocation_id": invocation_id.to_string(),
+                    "name": "NodeFinished",
+                    "level": "debug",
+                    "extra": {},
+                    "msg": format!("Finished running node {}", test_unique_id.clone())
+                },
+                "data": {
+                    "node_info": expected_node_info("warn"),
+                    "run_result": {
+                        "status": "warn",
+                        "execution_time": "<redacted::execution_time>"
+                    }
+                }
+            }),
+            // NodeStart (Q024)
+            json!({
+                "info": {
+                    "category": "",
+                    "code": "Q024",
+                    "invocation_id": invocation_id.to_string(),
+                    "name": "NodeStart",
+                    "level": "debug",
+                    "extra": {},
+                    "msg": format!("Began running node {}", test_unique_id.clone())
+                },
+                "data": {
+                    "node_info": expected_node_info("started")
                 }
             }),
         ],

@@ -12,8 +12,8 @@ use serde_with::skip_serializing_none;
 use std::borrow::Cow;
 
 pub use proto_rust::impls::node::{
-    AnyNodeOutcomeDetail, NodeEvent, get_cache_detail, get_node_outcome_detail, get_test_outcome,
-    update_dbt_core_event_code_for_node_processed_end,
+    AnyNodeOutcomeDetail, NodeEvent, get_cache_detail, get_freshness_detail,
+    get_node_outcome_detail, get_test_outcome, update_dbt_core_event_code_for_node_processed_end,
 };
 pub use proto_rust::v1::public::events::fusion::node::{
     NodeCacheDetail, NodeCacheReason, NodeCancelReason, NodeErrorType, NodeEvaluated,
@@ -80,6 +80,8 @@ struct NodeProcessedJsonPayload {
     pub in_selection: bool,
     /// Node type specific outcome details.
     pub node_outcome_detail: Option<node_processed::NodeOutcomeDetail>,
+    /// Source name for source nodes.
+    pub source_name: Option<String>,
 }
 
 impl ArrowSerializableTelemetryEvent for NodeEvaluated {
@@ -256,6 +258,7 @@ impl ArrowSerializableTelemetryEvent for NodeProcessed {
             json_payload: serde_json::to_string(&NodeProcessedJsonPayload {
                 in_selection: self.in_selection,
                 node_outcome_detail: self.node_outcome_detail.clone(),
+                source_name: self.source_name.clone(),
             })
             .unwrap_or_else(|_| {
                 panic!(
@@ -336,6 +339,7 @@ impl ArrowSerializableTelemetryEvent for NodeProcessed {
                     )
                 })?,
             node_outcome_detail: json_payload.node_outcome_detail,
+            source_name: json_payload.source_name,
             relative_path: record
                 .relative_path
                 .as_deref()
