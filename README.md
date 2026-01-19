@@ -14,7 +14,7 @@
 
 ## Understanding dbt
 
-Analysts using dbt can transform their data by simply writing select statements, while dbt handles turning these statements into tables and views in a data warehouse.
+Analyst using dbt can transform their data by simply writing select statements, while dbt handles turning these statements into tables and views in a data warehouse.
 
 These select statements, or "models", form a dbt project. Models frequently build on top of one another – dbt makes it easy to [manage relationships](https://docs.getdbt.com/docs/ref) between models, and [visualize these relationships](https://docs.getdbt.com/docs/documentation), as well as assure the quality of your transformations through [testing](https://docs.getdbt.com/docs/testing).
 
