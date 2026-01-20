@@ -35,7 +35,7 @@ pub fn get_phase_progress_text(phase: ExecutionPhase) -> Option<String> {
         ExecutionPhase::Debug => "Debugging",
         ExecutionPhase::DeferHydration => "Deferring",
         // Special case - longer than action column width => no padding
-        ExecutionPhase::FreshnessAnalysis => return Some("Checking freshness...".to_string()),
+        ExecutionPhase::FreshnessAnalysis => return Some("Analyzing freshness".to_string()),
         ExecutionPhase::InitAdapter => return None,
         ExecutionPhase::Lineage => "Generating",
         ExecutionPhase::LoadProject => "Loading",
