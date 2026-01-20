@@ -34,7 +34,15 @@ from dbt.context.providers import (
     generate_parse_semantic_models,
 )
 from dbt.contracts.files import SchemaSourceFile
-from dbt.contracts.graph.nodes import Exposure, Group, Metric, SavedQuery, SemanticModel
+from dbt.contracts.graph.nodes import (
+    Exposure,
+    Group,
+    Metric,
+    ModelNode,
+    ParsedNodePatch,
+    SavedQuery,
+    SemanticModel,
+)
 from dbt.contracts.graph.unparsed import (
     UnparsedConversionTypeParams,
     UnparsedCumulativeTypeParams,
@@ -72,7 +80,7 @@ from dbt_semantic_interfaces.type_enums import (
 
 
 def parse_where_filter(
-    where: Optional[Union[List[str], str]]
+    where: Optional[Union[List[str], str]],
 ) -> Optional[WhereFilterIntersection]:
     if where is None:
         return None
@@ -654,7 +662,11 @@ class SemanticModelParser(YamlReader):
         parser.parse_metric(unparsed=unparsed_metric, generated_from=semantic_model_name)
 
     def _generate_semantic_model_config(
-        self, target: UnparsedSemanticModel, fqn: List[str], package_name: str, rendered: bool
+        self,
+        target_config: Dict[str, Any],
+        fqn: List[str],
+        package_name: str,
+        rendered: bool,
     ):
         generator: BaseContextConfigGenerator
         if rendered:
@@ -665,7 +677,7 @@ class SemanticModelParser(YamlReader):
         # configs with precendence set
         precedence_configs = dict()
         # first apply semantic model configs
-        precedence_configs.update(target.config)
+        precedence_configs.update(target_config)
 
         config = generator.calculate_node_config(
             config_call_dict={},
@@ -678,20 +690,71 @@ class SemanticModelParser(YamlReader):
 
         return config
 
-    def parse_semantic_model(self, unparsed: UnparsedSemanticModel) -> None:
-        package_name = self.project.project_name
-        unique_id = f"{NodeType.SemanticModel}.{package_name}.{unparsed.name}"
-        path = self.yaml.path.relative_path
-
-        fqn = self.schema_parser.get_fqn_prefix(path)
-        fqn.append(unparsed.name)
-
+    def _parse_semantic_model_v1(self, unparsed: UnparsedSemanticModel) -> None:
         entities = self._get_entities(unparsed.entities)
         measures = self._get_measures(unparsed.measures)
         dimensions = self._get_dimensions(unparsed.dimensions)
 
+        self._parse_semantic_model_helper(
+            semantic_model_name=unparsed.name,
+            semantic_model_config=unparsed.config,
+            description=unparsed.description,
+            label=unparsed.label,
+            model=unparsed.model,
+            name=unparsed.name,
+            defaults=unparsed.defaults,
+            primary_entity=unparsed.primary_entity,
+            entities=entities,
+            measures=measures,
+            unparsed_measures=unparsed.measures,
+            dimensions=dimensions,
+        )
+
+    def parse_v2_semantic_model_from_dbt_model_patch(
+        self,
+        node: ModelNode,
+        patch: ParsedNodePatch,
+    ):
+        self._parse_semantic_model_helper(
+            semantic_model_name=node.name,
+            semantic_model_config=patch.config,
+            description=node.description,
+            label=None,  # does not seem to be available in v2 YAML, unless it is part of the semantic model config's 'group'?
+            model=f"ref('{patch.name}')",
+            name=node.name,
+            defaults=None,  # unclear if this exists in some form in v2 YAML
+            primary_entity=None,  # Not yet implemented; should become patch.primary_entity
+            entities=[],  # Not yet implemented, will derive from patch.derived_semantics.entities
+            dimensions=[],  # Not yet implemented, will derive from patch.derived_semantics.dimensions
+            # Measures are not part of the v2 YAML design.
+            measures=[],
+            unparsed_measures=[],
+        )
+
+    def _parse_semantic_model_helper(
+        self,
+        semantic_model_name: str,
+        semantic_model_config: Dict[str, Any],
+        description: Optional[str],
+        label: Optional[str],
+        model: str,
+        name: str,
+        defaults,
+        primary_entity,
+        entities: List[Entity],
+        dimensions: List[Dimension],
+        measures: List[Measure],  # v1 only
+        unparsed_measures: List[UnparsedMeasure] = [],  # v1 only
+    ) -> None:
+        package_name = self.project.project_name
+        unique_id = f"{NodeType.SemanticModel}.{package_name}.{semantic_model_name}"
+        path = self.yaml.path.relative_path
+
+        fqn = self.schema_parser.get_fqn_prefix(path)
+        fqn.append(semantic_model_name)
+
         config = self._generate_semantic_model_config(
-            target=unparsed,
+            target_config=semantic_model_config,
             fqn=fqn,
             package_name=package_name,
             rendered=True,
@@ -713,18 +776,18 @@ class SemanticModelParser(YamlReader):
         config = config.finalize_and_validate()
 
         unrendered_config = self._generate_semantic_model_config(
-            target=unparsed,
+            target_config=semantic_model_config,
             fqn=fqn,
             package_name=package_name,
             rendered=False,
         )
 
         parsed = SemanticModel(
-            description=unparsed.description,
-            label=unparsed.label,
+            description=description,
+            label=label,
             fqn=fqn,
-            model=unparsed.model,
-            name=unparsed.name,
+            model=model,
+            name=name,
             node_relation=None,  # Resolved from the value of "model" after parsing
             original_file_path=self.yaml.path.original_file_path,
             package_name=package_name,
@@ -734,8 +797,8 @@ class SemanticModelParser(YamlReader):
             entities=entities,
             measures=measures,
             dimensions=dimensions,
-            defaults=unparsed.defaults,
-            primary_entity=unparsed.primary_entity,
+            defaults=defaults,
+            primary_entity=primary_entity,
             config=config,
             unrendered_config=unrendered_config,
             group=config.group,
@@ -762,7 +825,8 @@ class SemanticModelParser(YamlReader):
             self.manifest.add_disabled(self.yaml.file, parsed)
 
         # Create a metric for each measure with `create_metric = True`
-        for measure in unparsed.measures:
+        # This is only relevant for v1 SL YAML; v2 does not include measures at all.
+        for measure in unparsed_measures:
             if measure.create_metric is True:
                 self._create_metric(
                     measure=measure,
@@ -779,7 +843,7 @@ class SemanticModelParser(YamlReader):
             except (ValidationError, JSONValidationError) as exc:
                 raise YamlParseDictError(self.yaml.path, self.key, data, exc)
 
-            self.parse_semantic_model(unparsed)
+            self._parse_semantic_model_v1(unparsed)
 
 
 class SavedQueryParser(YamlReader):

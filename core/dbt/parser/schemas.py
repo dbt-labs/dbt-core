@@ -781,6 +781,7 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
         # code consistency.
         deprecation_date: Optional[datetime.datetime] = None
         time_spine: Optional[TimeSpine] = None
+        semantic_model = None
 
         if isinstance(block.target, UnparsedModelUpdate):
             deprecation_date = block.target.deprecation_date
@@ -798,6 +799,7 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
                 if block.target.time_spine
                 else None
             )
+            semantic_model = block.target.semantic_model
 
         return ParsedNodePatch(
             name=block.target.name,
@@ -815,6 +817,7 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
             constraints=block.target.constraints,
             deprecation_date=deprecation_date,
             time_spine=time_spine,
+            semantic_model=semantic_model,
         )
 
     def parse_patch(self, block: TargetBlock[NodeTarget], refs: ParserRef) -> None:
@@ -1112,6 +1115,16 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
                     unique_id=node.unique_id,
                     field_value=patch.access,
                 )
+
+        if patch.semantic_model:
+            from dbt.parser.schema_yaml_readers import SemanticModelParser
+
+            semantic_model_parser = SemanticModelParser(self.schema_parser, self.yaml)
+            semantic_model_parser.parse_v2_semantic_model_from_dbt_model_patch(
+                node=node,
+                patch=patch,
+            )
+
         # These two will have to be reapplied after config is built for versioned models
         self.patch_constraints(node, patch.constraints)
         self.patch_time_spine(node, patch.time_spine)

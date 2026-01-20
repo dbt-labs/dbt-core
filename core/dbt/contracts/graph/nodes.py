@@ -1763,6 +1763,7 @@ class ParsedNodePatch(ParsedPatch):
     constraints: List[Dict[str, Any]]
     deprecation_date: Optional[datetime]
     time_spine: Optional[TimeSpine] = None
+    semantic_model: Optional[bool] = None
     freshness: Optional[ModelFreshness] = None
 
 
