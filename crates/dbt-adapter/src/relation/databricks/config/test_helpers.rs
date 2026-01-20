@@ -1,6 +1,6 @@
 //! Testing utilities for databricks relation configs
 use crate::AdapterType;
-use crate::relation::databricks::config_v2::DatabricksRelationMetadata;
+use crate::relation::databricks::config::DatabricksRelationMetadata;
 use crate::relation::test_helpers;
 use arrow::csv::ReaderBuilder;
 use arrow_schema::{DataType, Field, Schema};

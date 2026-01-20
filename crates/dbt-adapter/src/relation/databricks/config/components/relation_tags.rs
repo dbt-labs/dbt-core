@@ -3,7 +3,7 @@
 use crate::relation::config_v2::{
     ComponentConfig, ComponentConfigLoader, SimpleComponentConfigImpl, diff,
 };
-use crate::relation::databricks::config_v2::{
+use crate::relation::databricks::config::{
     DatabricksRelationMetadata, DatabricksRelationMetadataKey,
 };
 use dbt_schemas::schemas::DbtModel;

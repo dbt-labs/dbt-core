@@ -23,7 +23,7 @@ use crate::relation::bigquery::{
     BigqueryPartitionConfigExt, cluster_by_from_schema, partitions_match,
 };
 use crate::relation::config_v2::{ComponentConfigLoader, RelationConfig};
-use crate::relation::databricks::config_v2::DatabricksRelationMetadata;
+use crate::relation::databricks::config::DatabricksRelationMetadata;
 use crate::render_constraint::render_column_constraint;
 use crate::response::{AdapterResponse, ResultObject};
 use crate::snapshots::SnapshotStrategy;
@@ -2855,7 +2855,7 @@ prevent unnecessary latency for other users."#,
         conn: &mut dyn Connection,
         relation: Arc<dyn BaseRelation>,
     ) -> AdapterResult<RelationConfig> {
-        use crate::relation::databricks::config_v2::relation_types;
+        use crate::relation::databricks::config::relation_types;
 
         let (relation_type, remote_state) = {
             let metadata_adapter = DatabricksMetadataAdapter::new(self.engine().clone());
@@ -2883,7 +2883,7 @@ prevent unnecessary latency for other users."#,
     /// Given a model, parse and build its configurations
     /// reference: https://github.com/databricks/dbt-databricks/blob/13686739eb59566c7a90ee3c357d12fe52ec02ea/dbt/adapters/databricks/impl.py#L810
     fn get_config_from_model(&self, model: &InternalDbtNodeWrapper) -> AdapterResult<Value> {
-        use crate::relation::databricks::config_v2::relation_types;
+        use crate::relation::databricks::config::relation_types;
 
         let model = model.as_internal_node();
 
@@ -2922,7 +2922,7 @@ prevent unnecessary latency for other users."#,
         &self,
         model: &dyn InternalDbtNodeAttributes,
     ) -> AdapterResult<Value> {
-        use crate::relation::databricks::config_v2::components::ColumnTagsLoader;
+        use crate::relation::databricks::config::components::ColumnTagsLoader;
 
         if self.adapter_type() != AdapterType::Databricks {
             return Err(AdapterError::new(

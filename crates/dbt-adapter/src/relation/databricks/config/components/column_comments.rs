@@ -3,7 +3,7 @@
 use crate::relation::config_v2::{
     ComponentConfig, ComponentConfigLoader, SimpleComponentConfigImpl, diff,
 };
-use crate::relation::databricks::config_v2::{
+use crate::relation::databricks::config::{
     DatabricksRelationMetadata, DatabricksRelationMetadataKey,
 };
 
@@ -185,7 +185,7 @@ impl ComponentConfigLoader<DatabricksRelationMetadata> for ColumnCommentsLoader 
 mod tests {
     use super::*;
     use crate::relation::config_v2::ComponentConfig;
-    use crate::relation::databricks::config_v2::test_helpers;
+    use crate::relation::databricks::config::test_helpers;
     use arrow::array::{ArrayRef, RecordBatch, StringArray};
     use arrow::csv::{Reader, ReaderBuilder};
     use arrow_schema::{DataType, Field, Schema};

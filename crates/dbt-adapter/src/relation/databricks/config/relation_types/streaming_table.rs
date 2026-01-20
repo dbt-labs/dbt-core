@@ -1,22 +1,26 @@
-//! https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/relation_configs/view.py
+//! https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/relation_configs/streaming_table.py
 
 use crate::relation::config_v2::ComponentConfigChange;
 use crate::relation::config_v2::{ComponentConfigLoader, RelationConfigLoader};
-use crate::relation::databricks::config_v2::{DatabricksRelationMetadata, components};
+use crate::relation::databricks::config::{DatabricksRelationMetadata, components};
 use indexmap::IndexMap;
 
 fn requires_full_refresh(components: &IndexMap<&'static str, ComponentConfigChange>) -> bool {
-    super::requires_full_refresh(super::MaterializationType::View, components)
+    super::requires_full_refresh(super::MaterializationType::StreamingTable, components)
 }
 
-/// Create a `RelationConfigLoader` for Databricks views
+/// Create a `RelationConfigLoader` for Databricks streaming tables
 pub(crate) fn new_loader() -> RelationConfigLoader<DatabricksRelationMetadata> {
-    let loaders: [Box<dyn ComponentConfigLoader<DatabricksRelationMetadata>>; 5] = [
-        Box::new(components::ColumnCommentsLoader),
-        Box::new(components::QueryLoader),
+    // TODO: missing from Python dbt-databricks:
+    // - liquid clustering
+    // - relation tags
+    let loaders: [Box<dyn ComponentConfigLoader<DatabricksRelationMetadata>>; 4] = [
+        // Box::new(components::LiquidClusteringLoader),
+        Box::new(components::PartitionByLoader),
         Box::new(components::RelationCommentLoader),
-        Box::new(components::RelationTagsLoader),
         Box::new(components::TblPropertiesLoader),
+        Box::new(components::RefreshLoader),
+        // Box::new(components::RelationTagsLoader),
     ];
 
     RelationConfigLoader::new(loaders, requires_full_refresh)
@@ -26,9 +30,9 @@ pub(crate) fn new_loader() -> RelationConfigLoader<DatabricksRelationMetadata> {
 mod tests {
     use super::{new_loader, requires_full_refresh};
     use crate::relation::config_v2::{ComponentConfigChange, RelationComponentConfigChangeSet};
-    use crate::relation::databricks::config_v2::{
+    use crate::relation::databricks::config::{
         DatabricksRelationMetadata, components,
-        test_helpers::{TestModelColumn, TestModelConfig, run_test_cases},
+        test_helpers::{TestModelConfig, run_test_cases},
     };
     use crate::relation::test_helpers::TestCase;
     use indexmap::IndexMap;
@@ -36,24 +40,14 @@ mod tests {
     fn create_test_cases() -> Vec<TestCase<DatabricksRelationMetadata, TestModelConfig>> {
         vec![
             TestCase {
-                description: "changing all of view's components except relation comment should not trigger a full refresh",
+                description: "changing any streaming table components except partition by should not trigger a full refresh",
                 relation_loader: new_loader(),
                 current_state: TestModelConfig {
                     persist_relation_comments: true,
-                    persist_column_comments: true,
-                    query: Some("SELECT 1".to_string()),
-                    columns: vec![
-                        TestModelColumn {
-                            name: "a_column".to_string(),
-                            comment: Some("old comment".to_string()),
-                            ..Default::default()
-                        },
-                        TestModelColumn {
-                            name: "b_column".to_string(),
-                            comment: Some("old comment".to_string()),
-                            ..Default::default()
-                        },
-                    ],
+                    relation_comment: Some("old comment".to_string()),
+                    cluster_by: vec!["cluster_by_old".to_string()],
+                    cron: Some("* * * * *".to_string()),
+                    time_zone: Some("UTC".to_string()),
                     tags: IndexMap::from_iter([
                         ("a_tag".to_string(), "old".to_string()),
                         ("b_tag".to_string(), "old".to_string()),
@@ -70,20 +64,10 @@ mod tests {
                 },
                 desired_state: TestModelConfig {
                     persist_relation_comments: true,
-                    persist_column_comments: true,
-                    query: Some("SELECT 1000".to_string()),
-                    columns: vec![
-                        TestModelColumn {
-                            name: "a_column".to_string(),
-                            comment: Some("new comment".to_string()),
-                            ..Default::default()
-                        },
-                        TestModelColumn {
-                            name: "b_column".to_string(),
-                            comment: Some("old comment".to_string()),
-                            ..Default::default()
-                        },
-                    ],
+                    relation_comment: Some("new comment".to_string()),
+                    cluster_by: vec!["cluster_by_new".to_string()],
+                    cron: Some("*/60 * * * *".to_string()),
+                    time_zone: Some("UTC".to_string()),
                     tags: IndexMap::from_iter([
                         ("a_tag".to_string(), "new".to_string()),
                         ("b_tag".to_string(), "old".to_string()),
@@ -104,29 +88,28 @@ mod tests {
                 },
                 expected_changeset: RelationComponentConfigChangeSet::new(
                     [
+                        // TODO: add liquid clustering to changeset here once that gets implemented
                         (
-                            components::ColumnCommentsLoader::type_name(),
-                            ComponentConfigChange::Some(components::ColumnCommentsLoader::new(
-                                IndexMap::from_iter([(
-                                    "`a_column`".to_string(),
-                                    "new comment".to_string(),
-                                )]),
+                            components::RefreshLoader::type_name(),
+                            ComponentConfigChange::Some(components::RefreshLoader::new(
+                                Some("*/60 * * * *".to_string()),
+                                Some("UTC".to_string()),
                             )),
                         ),
                         (
-                            components::RelationTagsLoader::type_name(),
-                            ComponentConfigChange::Some(components::RelationTagsLoader::new(
-                                IndexMap::from_iter([
-                                    ("a_tag".to_string(), "new".to_string()),
-                                    ("b_tag".to_string(), "old".to_string()),
-                                ]),
+                            components::RelationCommentLoader::type_name(),
+                            ComponentConfigChange::Some(components::RelationCommentLoader::new(
+                                Some("new comment".to_string()),
                             )),
                         ),
-                        // TODO: query is not implemented
+                        // TODO: re-add tags
                         // (
-                        //     components::QueryLoader::type_name(),
-                        //     ComponentConfigChange::Some(components::QueryLoader::new(
-                        //         "SELECT 1000",
+                        //     components::RelationTagsLoader::type_name(),
+                        //     ComponentConfigChange::Some(components::RelationTagsLoader::new(
+                        //         IndexMap::from_iter([
+                        //             ("a_tag".to_string(), "new".to_string()),
+                        //             ("b_tag".to_string(), "old".to_string()),
+                        //         ]),
                         //     )),
                         // ),
                         (
@@ -144,25 +127,22 @@ mod tests {
                 requires_full_refresh: false,
             },
             TestCase {
-                // Databricks doesnt have an API to update relation comments
-                description: "changing a view's relation comment should trigger a full refresh",
+                description: "changing streaming table partition by should trigger a full refresh",
                 relation_loader: new_loader(),
                 current_state: TestModelConfig {
-                    relation_comment: Some("old comment".to_string()),
-                    persist_relation_comments: true,
+                    partition_by: vec!["partition_by_old".to_string()],
                     ..Default::default()
                 },
                 desired_state: TestModelConfig {
-                    relation_comment: Some("new comment".to_string()),
-                    persist_relation_comments: true,
+                    partition_by: vec!["partition_by_new".to_string()],
                     ..Default::default()
                 },
                 expected_changeset: RelationComponentConfigChangeSet::new(
                     [(
-                        components::RelationCommentLoader::type_name(),
-                        ComponentConfigChange::Some(components::RelationCommentLoader::new(Some(
-                            "new comment".to_string(),
-                        ))),
+                        components::PartitionByLoader::type_name(),
+                        ComponentConfigChange::Some(components::PartitionByLoader::new(vec![
+                            "partition_by_new".to_string(),
+                        ])),
                     )],
                     requires_full_refresh,
                 ),

@@ -25,7 +25,7 @@ pub(super) fn requires_full_refresh(
     materialization_type: MaterializationType,
     components: &IndexMap<&'static str, ComponentConfigChange>,
 ) -> bool {
-    use crate::relation::databricks::config_v2::components::*;
+    use crate::relation::databricks::config::components::*;
 
     match materialization_type {
         // https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/relation_configs/incremental.py

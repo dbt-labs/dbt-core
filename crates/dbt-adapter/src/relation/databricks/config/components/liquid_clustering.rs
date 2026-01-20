@@ -7,7 +7,7 @@ use serde::Serialize;
 use crate::relation::config_v2::{
     ComponentConfig, ComponentConfigLoader, SimpleComponentConfigImpl, diff,
 };
-use crate::relation::databricks::config_v2::DatabricksRelationMetadata;
+use crate::relation::databricks::config::DatabricksRelationMetadata;
 
 pub(crate) const TYPE_NAME: &str = "liquid_clustering";
 

@@ -2,7 +2,7 @@
 
 use crate::relation::config_v2::ComponentConfigChange;
 use crate::relation::config_v2::{ComponentConfigLoader, RelationConfigLoader};
-use crate::relation::databricks::config_v2::{DatabricksRelationMetadata, components};
+use crate::relation::databricks::config::{DatabricksRelationMetadata, components};
 use indexmap::IndexMap;
 
 fn requires_full_refresh(components: &IndexMap<&'static str, ComponentConfigChange>) -> bool {
@@ -32,7 +32,7 @@ pub(crate) fn new_loader() -> RelationConfigLoader<DatabricksRelationMetadata> {
 mod tests {
     use super::{new_loader, requires_full_refresh};
     use crate::relation::config_v2::{ComponentConfigChange, RelationComponentConfigChangeSet};
-    use crate::relation::databricks::config_v2::{
+    use crate::relation::databricks::config::{
         DatabricksRelationMetadata, components,
         test_helpers::{TestModelConfig, run_test_cases},
     };

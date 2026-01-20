@@ -6,7 +6,7 @@
 //! Reference: https://github.com/databricks/dbt-databricks/blob/e7099a2c75a92fa5240989b19d246a0ca8a313ef/dbt/adapters/databricks/relation_configs/constraints.py
 
 use crate::relation::config_v2::{ComponentConfig, ComponentConfigLoader};
-use crate::relation::databricks::config_v2::{
+use crate::relation::databricks::config::{
     DatabricksRelationMetadata, DatabricksRelationMetadataKey,
 };
 use crate::relation::databricks::typed_constraint::TypedConstraint;
@@ -439,7 +439,7 @@ struct FkData {
 mod tests {
     use super::*;
     use crate::relation::config_v2::ComponentConfig;
-    use crate::relation::databricks::config_v2::test_helpers;
+    use crate::relation::databricks::config::test_helpers;
     use crate::relation::databricks::typed_constraint::TypedConstraint;
     use arrow::array::{RecordBatch, StringArray};
     use arrow::csv::ReaderBuilder;

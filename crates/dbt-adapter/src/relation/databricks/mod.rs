@@ -1,4 +1,4 @@
-pub mod config_v2;
+pub mod config;
 
 mod relation;
 pub use relation::{DEFAULT_DATABRICKS_DATABASE, INFORMATION_SCHEMA_SCHEMA, SYSTEM_DATABASE};

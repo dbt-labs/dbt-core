@@ -4,7 +4,7 @@ use crate::funcs::none_value;
 use crate::relation::config_v2::{
     ComponentConfig, ComponentConfigLoader, SimpleComponentConfigImpl, diff,
 };
-use crate::relation::databricks::config_v2::{
+use crate::relation::databricks::config::{
     DatabricksRelationMetadata, DatabricksRelationMetadataKey,
 };
 
@@ -111,7 +111,7 @@ impl ComponentConfigLoader<DatabricksRelationMetadata> for RelationCommentLoader
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::relation::databricks::config_v2::test_helpers;
+    use crate::relation::databricks::config::test_helpers;
     use dbt_agate::AgateTable;
     use dbt_schemas::schemas::DbtModel;
     use indexmap::IndexMap;

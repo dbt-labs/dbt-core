@@ -28,7 +28,7 @@ use crate::metadata::databricks::version::DbrVersion;
 use crate::query_ctx::query_ctx_from_state;
 use crate::record_batch_utils::get_column_values;
 use crate::relation::databricks::DatabricksRelation;
-use crate::relation::databricks::config_v2::{
+use crate::relation::databricks::config::{
     DatabricksRelationMetadata, DatabricksRelationMetadataKey,
 };
 use crate::sql_types::{TypeOps, make_arrow_field_v2};
