@@ -419,8 +419,8 @@ impl SchemaStore {
 #[async_trait::async_trait]
 impl SchemaStoreTrait for SchemaStore {
     fn exists(&self, cfqn: &CanonicalFqn) -> bool {
-        self.resolve_lookup_entry_by_cfqn(cfqn)
-            .is_some_and(|entry| self.state.exists(&entry))
+        let entry = self.resolve_lookup_entry_by_cfqn(cfqn);
+        entry.as_ref().is_some_and(|entry| self.state.exists(entry))
     }
 
     async fn exists_async(&self, cfqn: &CanonicalFqn) -> bool {

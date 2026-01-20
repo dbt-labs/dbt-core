@@ -18,7 +18,7 @@ use crate::adapter_engine::{AdapterEngine, MockEngine};
 use crate::base_adapter::AdapterType;
 use crate::cache::RelationCache;
 use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
-use crate::metadata::{MetadataAdapter, snowflake::SnowflakeMetadataAdapter};
+use crate::metadata::MetadataAdapter;
 use crate::response::AdapterResponse;
 use crate::sidecar_client::SidecarClient;
 use crate::sql_types::TypeOps;
@@ -98,10 +98,10 @@ impl AdapterTyping for SnowflakeSidecarAdapter {
     }
 
     fn metadata_adapter(&self) -> Option<Box<dyn MetadataAdapter>> {
-        // Use Snowflake metadata adapter for catalog introspection
-        Some(Box::new(SnowflakeMetadataAdapter::new(Arc::clone(
-            &self.engine,
-        ))))
+        // In sidecar mode, we don't use the Snowflake metadata adapter.
+        // Schema hydration is handled via db_runner (DESCRIBE queries to DuckDB).
+        // Returning None causes hydrate_missing_tables_from_remote to use the db_runner path.
+        None
     }
 
     fn as_typed_base_adapter(&self) -> &dyn TypedBaseAdapter {

@@ -161,6 +161,7 @@ pub enum ErrorCode {
     TaskTimeout = 1403,
     TaskCancelled = 1404,
     SqlMismatch = 1405,
+    SidecarError = 1406,
 
     // Serialization [1450–1460]
     JsonError = 1450,
