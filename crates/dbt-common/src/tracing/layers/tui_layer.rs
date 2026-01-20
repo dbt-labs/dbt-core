@@ -13,8 +13,8 @@ use dbt_telemetry::{
     DepsPackageInstalled, ExecutionPhase, GenericOpExecuted, GenericOpItemProcessed, Invocation,
     ListItemOutput, LogMessage, LogRecordInfo, NodeEvaluated, NodeOutcome, NodeProcessed,
     NodeSkipReason, NodeType, PhaseExecuted, ProgressMessage, QueryExecuted, SeverityNumber,
-    ShowDataOutput, ShowResult, SpanEndInfo, SpanStartInfo, SpanStatus, StatusCode,
-    TelemetryOutputFlags, UserLogMessage, node_processed,
+    ShowDataOutput, ShowResult, SpanEndInfo, SpanStartInfo, SpanStatus, StateModifiedDiff,
+    StatusCode, TelemetryOutputFlags, UserLogMessage, node_processed,
 };
 use dbt_tui_progress::ProgressController;
 
@@ -48,6 +48,7 @@ use crate::{
             },
             phase::get_phase_progress_text,
             progress::format_progress_message,
+            state_mod_diff::format_state_modified_diff_lines,
             test_result::format_test_failure,
         },
         layer::{ConsumerLayer, TelemetryConsumer},
@@ -514,6 +515,11 @@ impl TelemetryConsumer for TuiLayer {
         // Check if this is a LogMessage (error/warning)
         if let Some(log_msg) = log_record.attributes.downcast_ref::<LogMessage>() {
             self.handle_log_message(log_msg, log_record, data_provider);
+            return;
+        }
+
+        if let Some(state_mod_diff) = log_record.attributes.downcast_ref::<StateModifiedDiff>() {
+            self.handle_state_modified_diff(state_mod_diff);
             return;
         }
 
@@ -996,6 +1002,16 @@ impl TuiLayer {
                     .expect("failed to write to stdout");
             });
         }
+    }
+
+    fn handle_state_modified_diff(&self, state_mod_diff: &StateModifiedDiff) {
+        let formatted = format_state_modified_diff_lines(state_mod_diff).join("\n");
+        self.write_suspended(|| {
+            io::stdout()
+                .lock()
+                .write_all(format!("{formatted}\n").as_bytes())
+                .expect("failed to write to stdout");
+        });
     }
 
     fn handle_user_log_message(&self, log_record: &LogRecordInfo) {

@@ -17,6 +17,7 @@ use super::omissible_utils::handle_omissible_override;
 use crate::default_to;
 use crate::schemas::common::DocsConfig;
 use crate::schemas::common::{Access, DbtQuoting};
+use crate::schemas::project::configs::common::log_state_mod_diff;
 // Import comparison helpers from common
 use super::common::{
     access_eq, docs_eq, grants_eq, meta_eq, omissible_option_eq, same_warehouse_config,
@@ -301,22 +302,156 @@ impl FunctionConfig {
     /// Custom comparison that treats Omitted and Present(None) as equivalent for schema/database fields
     pub fn same_config(&self, other: &FunctionConfig) -> bool {
         // Compare all fields individually
-        self.enabled == other.enabled
-            && self.alias == other.alias
-            && omissible_option_eq(&self.schema, &other.schema)      // Custom comparison for Omissible
-            && self.tags == other.tags
-            && meta_eq(&self.meta, &other.meta)                      // Custom comparison for meta
-            && self.group == other.group
-            && docs_eq(&self.docs, &other.docs)                      // Custom comparison for docs
-            && grants_eq(&self.grants, &other.grants)                // Custom comparison for grants
-            && self.quoting == other.quoting
-            && self.language == other.language
-            && self.on_configuration_change == other.on_configuration_change
-            && self.static_analysis == other.static_analysis
-            && self.function_kind == other.function_kind
-            && self.volatility == other.volatility
-            && access_eq(&self.access, &other.access)                // Custom comparison for access
-            && same_warehouse_config(&self.__warehouse_specific_config__, &other.__warehouse_specific_config__)
+        let enabled_eq = self.enabled == other.enabled;
+        let alias_eq = self.alias == other.alias;
+        let schema_eq = omissible_option_eq(&self.schema, &other.schema); // Custom comparison for Omissible
+        let tags_eq = self.tags == other.tags;
+        let meta_eq_result = meta_eq(&self.meta, &other.meta); // Custom comparison for meta
+        let group_eq = self.group == other.group;
+        let docs_eq_result = docs_eq(&self.docs, &other.docs); // Custom comparison for docs
+        let grants_eq_result = grants_eq(&self.grants, &other.grants); // Custom comparison for grants
+        let quoting_eq = self.quoting == other.quoting;
+        let language_eq = self.language == other.language;
+        let on_configuration_change_eq =
+            self.on_configuration_change == other.on_configuration_change;
+        let static_analysis_eq = self.static_analysis == other.static_analysis;
+        let function_kind_eq = self.function_kind == other.function_kind;
+        let volatility_eq = self.volatility == other.volatility;
+        let access_eq_result = access_eq(&self.access, &other.access); // Custom comparison for access
+        let warehouse_config_eq = same_warehouse_config(
+            &self.__warehouse_specific_config__,
+            &other.__warehouse_specific_config__,
+        );
+
+        let result = enabled_eq
+            && alias_eq
+            && schema_eq
+            && tags_eq
+            && meta_eq_result
+            && group_eq
+            && docs_eq_result
+            && grants_eq_result
+            && quoting_eq
+            && language_eq
+            && on_configuration_change_eq
+            && static_analysis_eq
+            && function_kind_eq
+            && volatility_eq
+            && access_eq_result
+            && warehouse_config_eq;
+
+        if !result {
+            log_state_mod_diff(
+                "unique_id in next function_config log",
+                "function_config",
+                [
+                    (
+                        "enabled",
+                        enabled_eq,
+                        Some((
+                            format!("{:?}", &self.enabled),
+                            format!("{:?}", &other.enabled),
+                        )),
+                    ),
+                    (
+                        "alias",
+                        alias_eq,
+                        Some((format!("{:?}", &self.alias), format!("{:?}", &other.alias))),
+                    ),
+                    (
+                        "schema",
+                        schema_eq,
+                        Some((
+                            format!("{:?}", &self.schema),
+                            format!("{:?}", &other.schema),
+                        )),
+                    ),
+                    (
+                        "tags",
+                        tags_eq,
+                        Some((format!("{:?}", &self.tags), format!("{:?}", &other.tags))),
+                    ),
+                    (
+                        "meta",
+                        meta_eq_result,
+                        Some((format!("{:?}", &self.meta), format!("{:?}", &other.meta))),
+                    ),
+                    (
+                        "group",
+                        group_eq,
+                        Some((format!("{:?}", &self.group), format!("{:?}", &other.group))),
+                    ),
+                    ("docs", docs_eq_result, None),
+                    (
+                        "grants",
+                        grants_eq_result,
+                        Some((
+                            format!("{:?}", &self.grants),
+                            format!("{:?}", &other.grants),
+                        )),
+                    ),
+                    (
+                        "quoting",
+                        quoting_eq,
+                        Some((
+                            format!("{:?}", &self.quoting),
+                            format!("{:?}", &other.quoting),
+                        )),
+                    ),
+                    (
+                        "language",
+                        language_eq,
+                        Some((
+                            format!("{:?}", &self.language),
+                            format!("{:?}", &other.language),
+                        )),
+                    ),
+                    (
+                        "on_configuration_change",
+                        on_configuration_change_eq,
+                        Some((
+                            format!("{:?}", &self.on_configuration_change),
+                            format!("{:?}", &other.on_configuration_change),
+                        )),
+                    ),
+                    (
+                        "static_analysis",
+                        static_analysis_eq,
+                        Some((
+                            format!("{:?}", &self.static_analysis),
+                            format!("{:?}", &other.static_analysis),
+                        )),
+                    ),
+                    (
+                        "function_kind",
+                        function_kind_eq,
+                        Some((
+                            format!("{:?}", &self.function_kind),
+                            format!("{:?}", &other.function_kind),
+                        )),
+                    ),
+                    (
+                        "volatility",
+                        volatility_eq,
+                        Some((
+                            format!("{:?}", &self.volatility),
+                            format!("{:?}", &other.volatility),
+                        )),
+                    ),
+                    (
+                        "access",
+                        access_eq_result,
+                        Some((
+                            format!("{:?}", &self.access),
+                            format!("{:?}", &other.access),
+                        )),
+                    ),
+                    ("warehouse_config", warehouse_config_eq, None),
+                ],
+            );
+        }
+
+        result
     }
 }
 

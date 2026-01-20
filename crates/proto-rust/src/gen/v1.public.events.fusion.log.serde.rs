@@ -1299,6 +1299,173 @@ impl<'de> serde::Deserialize<'de> for ShowResultOutputFormat {
         deserializer.deserialize_any(GeneratedVisitor)
     }
 }
+impl serde::Serialize for StateModifiedDiff {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if self.unique_id.is_some() {
+            len += 1;
+        }
+        if !self.node_type_or_category.is_empty() {
+            len += 1;
+        }
+        if !self.check.is_empty() {
+            len += 1;
+        }
+        if self.self_value.is_some() {
+            len += 1;
+        }
+        if self.other_value.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("v1.public.events.fusion.log.StateModifiedDiff", len)?;
+        if let Some(v) = self.unique_id.as_ref() {
+            struct_ser.serialize_field("unique_id", v)?;
+        }
+        if !self.node_type_or_category.is_empty() {
+            struct_ser.serialize_field("node_type_or_category", &self.node_type_or_category)?;
+        }
+        if !self.check.is_empty() {
+            struct_ser.serialize_field("check", &self.check)?;
+        }
+        if let Some(v) = self.self_value.as_ref() {
+            struct_ser.serialize_field("self_value", v)?;
+        }
+        if let Some(v) = self.other_value.as_ref() {
+            struct_ser.serialize_field("other_value", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for StateModifiedDiff {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "unique_id",
+            "uniqueId",
+            "node_type_or_category",
+            "nodeTypeOrCategory",
+            "check",
+            "self_value",
+            "selfValue",
+            "other_value",
+            "otherValue",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            UniqueId,
+            NodeTypeOrCategory,
+            Check,
+            SelfValue,
+            OtherValue,
+            __SkipField__,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "uniqueId" | "unique_id" => Ok(GeneratedField::UniqueId),
+                            "nodeTypeOrCategory" | "node_type_or_category" => Ok(GeneratedField::NodeTypeOrCategory),
+                            "check" => Ok(GeneratedField::Check),
+                            "selfValue" | "self_value" => Ok(GeneratedField::SelfValue),
+                            "otherValue" | "other_value" => Ok(GeneratedField::OtherValue),
+                            _ => Ok(GeneratedField::__SkipField__),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = StateModifiedDiff;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct v1.public.events.fusion.log.StateModifiedDiff")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<StateModifiedDiff, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut unique_id__ = None;
+                let mut node_type_or_category__ = None;
+                let mut check__ = None;
+                let mut self_value__ = None;
+                let mut other_value__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::UniqueId => {
+                            if unique_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("uniqueId"));
+                            }
+                            unique_id__ = map_.next_value()?;
+                        }
+                        GeneratedField::NodeTypeOrCategory => {
+                            if node_type_or_category__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("nodeTypeOrCategory"));
+                            }
+                            node_type_or_category__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Check => {
+                            if check__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("check"));
+                            }
+                            check__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::SelfValue => {
+                            if self_value__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("selfValue"));
+                            }
+                            self_value__ = map_.next_value()?;
+                        }
+                        GeneratedField::OtherValue => {
+                            if other_value__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("otherValue"));
+                            }
+                            other_value__ = map_.next_value()?;
+                        }
+                        GeneratedField::__SkipField__ => {
+                            let _ = map_.next_value::<serde::de::IgnoredAny>()?;
+                        }
+                    }
+                }
+                Ok(StateModifiedDiff {
+                    unique_id: unique_id__,
+                    node_type_or_category: node_type_or_category__.unwrap_or_default(),
+                    check: check__.unwrap_or_default(),
+                    self_value: self_value__,
+                    other_value: other_value__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("v1.public.events.fusion.log.StateModifiedDiff", FIELDS, GeneratedVisitor)
+    }
+}
 impl serde::Serialize for UserLogMessage {
     #[allow(deprecated)]
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>

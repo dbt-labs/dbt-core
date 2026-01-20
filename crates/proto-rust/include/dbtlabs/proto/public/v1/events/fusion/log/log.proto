@@ -99,3 +99,20 @@ message ProgressMessage {
   // Execution phase (if known) during which this log was emitted.
   optional v1.public.events.fusion.phase.ExecutionPhase phase = 8;
 }
+
+// Event emitted when comparing nodes/configs for state modification details.
+message StateModifiedDiff {
+  // If this log message is emitted in the context of a specific node,
+  // this field should be set to the node's unique id.
+  optional string unique_id = 1;
+
+  // Node type or comparison category being evaluated.
+  string node_type_or_category = 2;
+
+  // Name of the specific comparison check.
+  string check = 3;
+
+  // Optional self/other values for the failed check.
+  optional string self_value = 4;
+  optional string other_value = 5;
+}

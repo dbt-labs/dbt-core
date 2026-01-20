@@ -4,7 +4,8 @@ use dbt_telemetry::{
     GenericOpExecuted, GenericOpItemProcessed, Invocation, ListItemOutput, LogMessage,
     LogRecordInfo, NodeEvaluated, NodeOutcome, NodeProcessed, NodeType, PhaseExecuted,
     ProgressMessage, QueryExecuted, SeverityNumber, ShowDataOutput, ShowResult, SpanEndInfo,
-    SpanStartInfo, StatusCode, TelemetryOutputFlags, UserLogMessage, node_processed,
+    SpanStartInfo, StateModifiedDiff, StatusCode, TelemetryOutputFlags, UserLogMessage,
+    node_processed,
 };
 use std::{
     sync::atomic::{AtomicBool, Ordering},
@@ -37,6 +38,7 @@ use super::super::{
         },
         phase::{format_phase_executed_end, format_phase_executed_start},
         progress::format_progress_message,
+        state_mod_diff::format_state_modified_diff_lines,
         test_result::format_test_failure,
     },
     layer::{ConsumerLayer, TelemetryConsumer},
@@ -235,6 +237,11 @@ impl TelemetryConsumer for FileLogLayer {
         // Check if this is a LogMessage (error/warning)
         if let Some(log_msg) = log_record.attributes.downcast_ref::<LogMessage>() {
             self.handle_log_message(log_msg, log_record);
+            return;
+        }
+
+        if let Some(state_mod_diff) = log_record.attributes.downcast_ref::<StateModifiedDiff>() {
+            self.handle_state_modified_diff(log_record, state_mod_diff);
             return;
         }
 
@@ -480,6 +487,19 @@ impl FileLogLayer {
             log_record.time_unix_nano,
             log_record.severity_number,
             &[formatted],
+        );
+    }
+
+    fn handle_state_modified_diff(
+        &self,
+        log_record: &LogRecordInfo,
+        state_mod_diff: &StateModifiedDiff,
+    ) {
+        let lines = format_state_modified_diff_lines(state_mod_diff);
+        self.write_log_lines(
+            log_record.time_unix_nano,
+            log_record.severity_number,
+            &lines,
         );
     }
 

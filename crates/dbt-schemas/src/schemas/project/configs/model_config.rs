@@ -32,6 +32,7 @@ use crate::schemas::project::configs::common::default_hooks;
 use crate::schemas::project::configs::common::default_meta_and_tags;
 use crate::schemas::project::configs::common::default_quoting;
 use crate::schemas::project::configs::common::default_to_grants;
+use crate::schemas::project::configs::common::log_state_mod_diff;
 use crate::schemas::project::configs::common::{
     WarehouseSpecificNodeConfig, access_eq, docs_eq, grants_eq, meta_eq, omissible_option_eq,
     same_warehouse_config,
@@ -925,54 +926,385 @@ impl DefaultTo<ModelConfig> for ModelConfig {
 
 impl ModelConfig {
     pub fn same_database_representation(&self, other: &ModelConfig) -> bool {
-        omissible_option_eq(&self.database, &other.database) && self.alias == other.alias
+        let database_eq = omissible_option_eq(&self.database, &other.database);
+        let alias_eq = self.alias == other.alias;
+
+        let result = database_eq && alias_eq;
+
+        if !result {
+            log_state_mod_diff(
+                "unique_id in next model_config log",
+                "model_database_representation",
+                [
+                    (
+                        "database",
+                        database_eq,
+                        Some((
+                            format!("{:?}", &self.database),
+                            format!("{:?}", &other.database),
+                        )),
+                    ),
+                    (
+                        "alias",
+                        alias_eq,
+                        Some((format!("{:?}", &self.alias), format!("{:?}", &other.alias))),
+                    ),
+                ],
+            );
+        }
+
+        result
     }
 
     /// Custom comparison that treats Omitted and Present(None) as equivalent for schema/database fields
     pub fn same_config(&self, other: &ModelConfig) -> bool {
-        // Compare all fields,
-        self.enabled == other.enabled
-            && self.catalog_name == other.catalog_name
-            && meta_eq(&self.meta, &other.meta)  // Custom comparison for meta
-            && materialized_eq(&self.materialized, &other.materialized)
-            && self.incremental_strategy == other.incremental_strategy
-            // incremental_predicates can differ because of environment, i.e. dev vs prod
-            // so we don't compare them. To compare them we will need a SQL AST whose 
-            // shape and node types can be compared rather contents of each node.
-            // && self.incremental_predicates == other.incremental_predicates
-            && self.batch_size == other.batch_size
-            && lookback_eq(&self.lookback, &other.lookback)  // Custom comparison for lookback
-            && self.begin == other.begin
-            && persist_docs_eq(&self.persist_docs, &other.persist_docs)  // Custom comparison for persist_docs
-            && hooks_equal(&self.post_hook, &other.post_hook)
-            && hooks_equal(&self.pre_hook, &other.pre_hook)
-            // && self.quoting == other.quoting // TODO: re-enable when no longer using mantle/core manifests in IA
-            && column_types_eq(&self.column_types, &other.column_types)  // Custom comparison for column_types
-            && self.full_refresh == other.full_refresh
-            && self.unique_key == other.unique_key
-            && on_schema_change_eq(&self.on_schema_change, &other.on_schema_change)  // Custom comparison for on_schema_change
-            && on_configuration_change_eq(&self.on_configuration_change, &other.on_configuration_change)  // Custom comparison for on_configuration_change
-            && grants_eq(&self.grants, &other.grants)  // Custom comparison for grants
-            && packages_and_imports_eq(&self.packages, &other.packages)  // Custom comparison for packages
-            && packages_and_imports_eq(&self.imports, &other.imports)  // Custom comparison for imports (same function as packages)
-            && self.python_version == other.python_version
-            && docs_eq(&self.docs, &other.docs)  // Custom comparison for docs
-            // This is a project level config that can differ between environments,
-            // so we don't compare them.
-            // && self.event_time == other.event_time
-            && self.concurrent_batches == other.concurrent_batches
-            && self.merge_update_columns == other.merge_update_columns
-            && self.merge_exclude_columns == other.merge_exclude_columns
-            && access_eq(&self.access, &other.access)  // Custom comparison for access
-            && self.table_format == other.table_format
-            && self.static_analysis == other.static_analysis
-            && self.freshness == other.freshness
-            && self.sql_header == other.sql_header
-            && self.location == other.location
-            && self.predicates == other.predicates
-            && strictness_eq(&self.strictness, &other.strictness)
-            && custom_checks_eq(&self.custom_checks, &other.custom_checks)
-            && same_warehouse_config(&self.__warehouse_specific_config__, &other.__warehouse_specific_config__)
+        // Compare all fields.
+        let enabled_eq = self.enabled == other.enabled;
+        let catalog_name_eq = self.catalog_name == other.catalog_name;
+        let meta_eq_result = meta_eq(&self.meta, &other.meta); // Custom comparison for meta
+        let materialized_eq_result = materialized_eq(&self.materialized, &other.materialized);
+        let incremental_strategy_eq = self.incremental_strategy == other.incremental_strategy;
+        // incremental_predicates can differ because of environment, i.e. dev vs prod
+        // so we don't compare them. To compare them we will need a SQL AST whose
+        // shape and node types can be compared rather contents of each node.
+        // && self.incremental_predicates == other.incremental_predicates
+        let batch_size_eq = self.batch_size == other.batch_size;
+        let lookback_eq_result = lookback_eq(&self.lookback, &other.lookback); // Custom comparison for lookback
+        let begin_eq = self.begin == other.begin;
+        let persist_docs_eq_result = persist_docs_eq(&self.persist_docs, &other.persist_docs); // Custom comparison for persist_docs
+        let post_hook_eq = hooks_equal(&self.post_hook, &other.post_hook);
+        let pre_hook_eq = hooks_equal(&self.pre_hook, &other.pre_hook);
+        // let quoting_eq = self.quoting == other.quoting // TODO: re-enable when no longer using mantle/core manifests in IA
+        let column_types_eq_result = column_types_eq(&self.column_types, &other.column_types); // Custom comparison for column_types
+        let full_refresh_eq = self.full_refresh == other.full_refresh;
+        let unique_key_eq = self.unique_key == other.unique_key;
+        let on_schema_change_eq_result =
+            on_schema_change_eq(&self.on_schema_change, &other.on_schema_change); // Custom comparison for on_schema_change
+        let on_configuration_change_eq_result = on_configuration_change_eq(
+            &self.on_configuration_change,
+            &other.on_configuration_change,
+        ); // Custom comparison for on_configuration_change
+        let grants_eq_result = grants_eq(&self.grants, &other.grants); // Custom comparison for grants
+        let packages_eq = packages_and_imports_eq(&self.packages, &other.packages); // Custom comparison for packages
+        let imports_eq = packages_and_imports_eq(&self.imports, &other.imports); // Custom comparison for imports (same function as packages)
+        let python_version_eq = self.python_version == other.python_version;
+        let docs_eq_result = docs_eq(&self.docs, &other.docs); // Custom comparison for docs
+        // This is a project level config that can differ between environments,
+        // so we don't compare them.
+        // && self.event_time == other.event_time
+        let concurrent_batches_eq = self.concurrent_batches == other.concurrent_batches;
+        let merge_update_columns_eq = self.merge_update_columns == other.merge_update_columns;
+        let merge_exclude_columns_eq = self.merge_exclude_columns == other.merge_exclude_columns;
+        let access_eq_result = access_eq(&self.access, &other.access); // Custom comparison for access
+        let table_format_eq = self.table_format == other.table_format;
+        let static_analysis_eq = self.static_analysis == other.static_analysis;
+        let freshness_eq = self.freshness == other.freshness;
+        let sql_header_eq = self.sql_header == other.sql_header;
+        let location_eq = self.location == other.location;
+        let predicates_eq = self.predicates == other.predicates;
+        let strictness_eq_result = strictness_eq(&self.strictness, &other.strictness);
+        let custom_checks_eq_result = custom_checks_eq(&self.custom_checks, &other.custom_checks);
+        let warehouse_config_eq = same_warehouse_config(
+            &self.__warehouse_specific_config__,
+            &other.__warehouse_specific_config__,
+        );
+
+        let result = enabled_eq
+            && catalog_name_eq
+            && meta_eq_result
+            && materialized_eq_result
+            && incremental_strategy_eq
+            && batch_size_eq
+            && lookback_eq_result
+            && begin_eq
+            && persist_docs_eq_result
+            && post_hook_eq
+            && pre_hook_eq
+            // && quoting_eq
+            && column_types_eq_result
+            && full_refresh_eq
+            && unique_key_eq
+            && on_schema_change_eq_result
+            && on_configuration_change_eq_result
+            && grants_eq_result
+            && packages_eq
+            && imports_eq
+            && python_version_eq
+            && docs_eq_result
+            // && event_time_eq
+            && concurrent_batches_eq
+            && merge_update_columns_eq
+            && merge_exclude_columns_eq
+            && access_eq_result
+            && table_format_eq
+            && static_analysis_eq
+            && freshness_eq
+            && sql_header_eq
+            && location_eq
+            && predicates_eq
+            && strictness_eq_result
+            && custom_checks_eq_result
+            && warehouse_config_eq;
+
+        if !result {
+            log_state_mod_diff(
+                "unique_id in next model_config log",
+                "model_config",
+                [
+                    (
+                        "enabled",
+                        enabled_eq,
+                        Some((
+                            format!("{:?}", &self.enabled),
+                            format!("{:?}", &other.enabled),
+                        )),
+                    ),
+                    (
+                        "catalog_name",
+                        catalog_name_eq,
+                        Some((
+                            format!("{:?}", &self.catalog_name),
+                            format!("{:?}", &other.catalog_name),
+                        )),
+                    ),
+                    (
+                        "meta",
+                        meta_eq_result,
+                        Some((format!("{:?}", &self.meta), format!("{:?}", &other.meta))),
+                    ),
+                    (
+                        "materialized",
+                        materialized_eq_result,
+                        Some((
+                            format!("{:?}", &self.materialized),
+                            format!("{:?}", &other.materialized),
+                        )),
+                    ),
+                    (
+                        "incremental_strategy",
+                        incremental_strategy_eq,
+                        Some((
+                            format!("{:?}", &self.incremental_strategy),
+                            format!("{:?}", &other.incremental_strategy),
+                        )),
+                    ),
+                    (
+                        "batch_size",
+                        batch_size_eq,
+                        Some((
+                            format!("{:?}", &self.batch_size),
+                            format!("{:?}", &other.batch_size),
+                        )),
+                    ),
+                    (
+                        "lookback",
+                        lookback_eq_result,
+                        Some((
+                            format!("{:?}", &self.lookback),
+                            format!("{:?}", &other.lookback),
+                        )),
+                    ),
+                    (
+                        "begin",
+                        begin_eq,
+                        Some((format!("{:?}", &self.begin), format!("{:?}", &other.begin))),
+                    ),
+                    ("persist_docs", persist_docs_eq_result, None),
+                    (
+                        "post_hook",
+                        post_hook_eq,
+                        Some((
+                            format!("{:?}", &self.post_hook),
+                            format!("{:?}", &other.post_hook),
+                        )),
+                    ),
+                    (
+                        "pre_hook",
+                        pre_hook_eq,
+                        Some((
+                            format!("{:?}", &self.pre_hook),
+                            format!("{:?}", &other.pre_hook),
+                        )),
+                    ),
+                    (
+                        "column_types",
+                        column_types_eq_result,
+                        Some((
+                            format!("{:?}", &self.column_types),
+                            format!("{:?}", &other.column_types),
+                        )),
+                    ),
+                    (
+                        "full_refresh",
+                        full_refresh_eq,
+                        Some((
+                            format!("{:?}", &self.full_refresh),
+                            format!("{:?}", &other.full_refresh),
+                        )),
+                    ),
+                    (
+                        "unique_key",
+                        unique_key_eq,
+                        Some((
+                            format!("{:?}", &self.unique_key),
+                            format!("{:?}", &other.unique_key),
+                        )),
+                    ),
+                    (
+                        "on_schema_change",
+                        on_schema_change_eq_result,
+                        Some((
+                            format!("{:?}", &self.on_schema_change),
+                            format!("{:?}", &other.on_schema_change),
+                        )),
+                    ),
+                    (
+                        "on_configuration_change",
+                        on_configuration_change_eq_result,
+                        Some((
+                            format!("{:?}", &self.on_configuration_change),
+                            format!("{:?}", &other.on_configuration_change),
+                        )),
+                    ),
+                    (
+                        "grants",
+                        grants_eq_result,
+                        Some((
+                            format!("{:?}", &self.grants),
+                            format!("{:?}", &other.grants),
+                        )),
+                    ),
+                    (
+                        "packages",
+                        packages_eq,
+                        Some((
+                            format!("{:?}", &self.packages),
+                            format!("{:?}", &other.packages),
+                        )),
+                    ),
+                    (
+                        "imports",
+                        imports_eq,
+                        Some((
+                            format!("{:?}", &self.imports),
+                            format!("{:?}", &other.imports),
+                        )),
+                    ),
+                    (
+                        "python_version",
+                        python_version_eq,
+                        Some((
+                            format!("{:?}", &self.python_version),
+                            format!("{:?}", &other.python_version),
+                        )),
+                    ),
+                    (
+                        "docs",
+                        docs_eq_result,
+                        Some((format!("{:?}", &self.docs), format!("{:?}", &other.docs))),
+                    ),
+                    (
+                        "concurrent_batches",
+                        concurrent_batches_eq,
+                        Some((
+                            format!("{:?}", &self.concurrent_batches),
+                            format!("{:?}", &other.concurrent_batches),
+                        )),
+                    ),
+                    (
+                        "merge_update_columns",
+                        merge_update_columns_eq,
+                        Some((
+                            format!("{:?}", &self.merge_update_columns),
+                            format!("{:?}", &other.merge_update_columns),
+                        )),
+                    ),
+                    (
+                        "merge_exclude_columns",
+                        merge_exclude_columns_eq,
+                        Some((
+                            format!("{:?}", &self.merge_exclude_columns),
+                            format!("{:?}", &other.merge_exclude_columns),
+                        )),
+                    ),
+                    (
+                        "access",
+                        access_eq_result,
+                        Some((
+                            format!("{:?}", &self.access),
+                            format!("{:?}", &other.access),
+                        )),
+                    ),
+                    (
+                        "table_format",
+                        table_format_eq,
+                        Some((
+                            format!("{:?}", &self.table_format),
+                            format!("{:?}", &other.table_format),
+                        )),
+                    ),
+                    (
+                        "static_analysis",
+                        static_analysis_eq,
+                        Some((
+                            format!("{:?}", &self.static_analysis),
+                            format!("{:?}", &other.static_analysis),
+                        )),
+                    ),
+                    (
+                        "freshness",
+                        freshness_eq,
+                        Some((
+                            format!("{:?}", &self.freshness),
+                            format!("{:?}", &other.freshness),
+                        )),
+                    ),
+                    (
+                        "sql_header",
+                        sql_header_eq,
+                        Some((
+                            format!("{:?}", &self.sql_header),
+                            format!("{:?}", &other.sql_header),
+                        )),
+                    ),
+                    (
+                        "location",
+                        location_eq,
+                        Some((
+                            format!("{:?}", &self.location),
+                            format!("{:?}", &other.location),
+                        )),
+                    ),
+                    (
+                        "predicates",
+                        predicates_eq,
+                        Some((
+                            format!("{:?}", &self.predicates),
+                            format!("{:?}", &other.predicates),
+                        )),
+                    ),
+                    (
+                        "strictness",
+                        strictness_eq_result,
+                        Some((
+                            format!("{:?}", &self.strictness),
+                            format!("{:?}", &other.strictness),
+                        )),
+                    ),
+                    (
+                        "custom_checks",
+                        custom_checks_eq_result,
+                        Some((
+                            format!("{:?}", &self.custom_checks),
+                            format!("{:?}", &other.custom_checks),
+                        )),
+                    ),
+                    ("warehouse_config", warehouse_config_eq, None),
+                ],
+            );
+        }
+
+        result
     }
 }
 

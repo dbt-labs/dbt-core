@@ -251,6 +251,41 @@ impl ::prost::Name for ProgressMessage {
         "/v1.public.events.fusion.log.ProgressMessage".into()
     }
 }
+/// Event emitted when comparing nodes/configs for state modification details.
+#[cfg_attr(any(test, feature = "test-utils"), derive(::fake::Dummy))]
+#[derive(crate::macros::ProtoNew)]
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct StateModifiedDiff {
+    /// If this log message is emitted in the context of a specific node,
+    /// this field should be set to the node's unique id.
+    #[prost(string, optional, tag = "1")]
+    pub unique_id: ::core::option::Option<::prost::alloc::string::String>,
+    /// Node type or comparison category being evaluated.
+    #[prost(string, tag = "2")]
+    pub node_type_or_category: ::prost::alloc::string::String,
+    /// Name of the specific comparison check.
+    #[prost(string, tag = "3")]
+    pub check: ::prost::alloc::string::String,
+    /// Optional self/other values for the failed check.
+    #[prost(string, optional, tag = "4")]
+    pub self_value: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "5")]
+    pub other_value: ::core::option::Option<::prost::alloc::string::String>,
+}
+impl crate::StaticName for StateModifiedDiff {
+    const FULL_NAME: &'static str = "v1.public.events.fusion.log.StateModifiedDiff";
+    const TYPE_URL: &'static str = "/v1.public.events.fusion.log.StateModifiedDiff";
+}
+impl ::prost::Name for StateModifiedDiff {
+    const NAME: &'static str = "StateModifiedDiff";
+    const PACKAGE: &'static str = "v1.public.events.fusion.log";
+    fn full_name() -> ::prost::alloc::string::String {
+        "v1.public.events.fusion.log.StateModifiedDiff".into()
+    }
+    fn type_url() -> ::prost::alloc::string::String {
+        "/v1.public.events.fusion.log.StateModifiedDiff".into()
+    }
+}
 /// Event emitted when displaying inline data (e.g., from show command).
 /// This event replaces the dbt-core ShowNode event (Q041) for inline data display.
 #[cfg_attr(any(test, feature = "test-utils"), derive(::fake::Dummy))]

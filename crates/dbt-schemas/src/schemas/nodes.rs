@@ -18,6 +18,7 @@ use crate::schemas::common::{
 use crate::schemas::dbt_column::{DbtColumnRef, deserialize_dbt_columns, serialize_dbt_columns};
 use crate::schemas::manifest::{BigqueryClusterConfig, GrantAccessToTarget, PartitionConfig};
 use crate::schemas::project::configs::common::grants_eq;
+use crate::schemas::project::configs::common::log_state_mod_diff;
 use crate::schemas::project::{StrictnessMode, WarehouseSpecificNodeConfig, same_warehouse_config};
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::{
@@ -537,6 +538,11 @@ fn same_persisted_description(
 ) -> bool {
     // If persist_docs settings differ, they're not the same
     if !persist_docs_configs_equal(&self_base.persist_docs, &other_base.persist_docs) {
+        log_state_mod_diff(
+            &self_common.unique_id,
+            "persisted_description - persist_docs_configs_equal",
+            [("persist_docs", false, None)],
+        );
         return false;
     }
 
@@ -566,6 +572,11 @@ fn same_persisted_description(
         && normalize_description(&self_common.description)
             != normalize_description(&other_common.description)
     {
+        log_state_mod_diff(
+            &self_common.unique_id,
+            "persisted_description - relation and column descriptions",
+            [("description", false, None)],
+        );
         return false;
     }
 
@@ -584,6 +595,18 @@ fn same_persisted_description(
             .collect();
 
         if !optional_string_vecs_equal(&self_column_descriptions, &other_column_descriptions) {
+            log_state_mod_diff(
+                &self_common.unique_id,
+                "persisted_description - column descriptions",
+                [(
+                    "description",
+                    false,
+                    Some((
+                        format!("{:?}", &self_column_descriptions),
+                        format!("{:?}", &other_column_descriptions),
+                    )),
+                )],
+            );
             return false;
         }
     }
@@ -691,8 +714,37 @@ fn persist_docs_configs_equal(
     let a_persist_columns = a.as_ref().and_then(|pd| pd.columns).unwrap_or(false);
     let b_persist_columns = b.as_ref().and_then(|pd| pd.columns).unwrap_or(false);
 
-    // Both relation and columns settings must match
-    a_persist_relation == b_persist_relation && a_persist_columns == b_persist_columns
+    let relation_eq = a_persist_relation == b_persist_relation;
+    let columns_eq = a_persist_columns == b_persist_columns;
+
+    let result = relation_eq && columns_eq;
+
+    if !result {
+        log_state_mod_diff(
+            "unique_id in next seed/snapshot log",
+            "persist_docs_config",
+            [
+                (
+                    "relation",
+                    relation_eq,
+                    Some((
+                        format!("{:?}", &a_persist_relation),
+                        format!("{:?}", &b_persist_relation),
+                    )),
+                ),
+                (
+                    "columns",
+                    columns_eq,
+                    Some((
+                        format!("{:?}", &a_persist_columns),
+                        format!("{:?}", &b_persist_columns),
+                    )),
+                ),
+            ],
+        );
+    }
+
+    result
 }
 
 fn same_database_representation_model(
@@ -707,7 +759,24 @@ fn same_database_representation_seed(self_config: &SeedConfig, other_config: &Se
     // Compare database, schema, alias from the deprecated_config
     /*self_config.database == other_config.database
     && self_config.schema == other_config.schema*/
-    self_config.alias == other_config.alias
+    let alias_eq = self_config.alias == other_config.alias;
+
+    if !alias_eq {
+        log_state_mod_diff(
+            "unique_id in next seed log",
+            "seed_database_representation",
+            [(
+                "alias",
+                alias_eq,
+                Some((
+                    format!("{:?}", &self_config.alias),
+                    format!("{:?}", &other_config.alias),
+                )),
+            )],
+        );
+    }
+
+    alias_eq
 }
 
 fn same_database_representation_snapshot(
@@ -717,7 +786,24 @@ fn same_database_representation_snapshot(
     // Compare database, schema, alias from the deprecated_config
     /*self_config.database == other_config.database
     && self_config.schema == other_config.schema*/
-    self_config.alias == other_config.alias
+    let alias_eq = self_config.alias == other_config.alias;
+
+    if !alias_eq {
+        log_state_mod_diff(
+            "unique_id in next snapshot log",
+            "snapshot_database_representation",
+            [(
+                "alias",
+                alias_eq,
+                Some((
+                    format!("{:?}", &self_config.alias),
+                    format!("{:?}", &other_config.alias),
+                )),
+            )],
+        );
+    }
+
+    alias_eq
 }
 
 impl InternalDbtNode for DbtModel {
@@ -773,8 +859,19 @@ impl InternalDbtNode for DbtModel {
 
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(other_model) = other.as_any().downcast_ref::<DbtModel>() {
-            self.deprecated_config
-                .same_config(&other_model.deprecated_config)
+            let deprecated_config_eq = self
+                .deprecated_config
+                .same_config(&other_model.deprecated_config);
+
+            if !deprecated_config_eq {
+                log_state_mod_diff(
+                    &self.__common_attr__.unique_id,
+                    "model_config",
+                    [("deprecated_config", deprecated_config_eq, None)],
+                );
+            }
+
+            deprecated_config_eq
         } else {
             false
         }
@@ -788,20 +885,48 @@ impl InternalDbtNode for DbtModel {
 
         if let Some(other_model) = other.as_any().downcast_ref::<DbtModel>() {
             // Equivalent to dbt-core's same_contents method for ParsedNode
-            same_body(&self.__common_attr__, &other_model.__common_attr__)
-                && self.has_same_config(other)
-                && same_persisted_description(
-                    &self.__common_attr__,
-                    &self.__base_attr__,
-                    &other_model.__common_attr__,
-                    &other_model.__base_attr__,
-                )
-                && same_fqn(&self.__common_attr__, &other_model.__common_attr__)
-                && same_database_representation_model(
-                    &self.deprecated_config,
-                    &other_model.deprecated_config,
-                )
-                && self.same_contract(other_model)
+            let same_body_result = same_body(&self.__common_attr__, &other_model.__common_attr__);
+            let same_config_result = self.has_same_config(other);
+            let same_persisted_desc_result = same_persisted_description(
+                &self.__common_attr__,
+                &self.__base_attr__,
+                &other_model.__common_attr__,
+                &other_model.__base_attr__,
+            );
+            let same_fqn_result = same_fqn(&self.__common_attr__, &other_model.__common_attr__);
+            let same_db_repr_result = same_database_representation_model(
+                &self.deprecated_config,
+                &other_model.deprecated_config,
+            );
+            let same_contract_result = self.same_contract(other_model);
+
+            let result = same_body_result
+                && same_config_result
+                && same_persisted_desc_result
+                && same_fqn_result
+                && same_db_repr_result
+                && same_contract_result;
+
+            if !result {
+                log_state_mod_diff(
+                    &self.__common_attr__.unique_id,
+                    "model",
+                    [
+                        ("same_body", same_body_result, None),
+                        ("same_config", same_config_result, None),
+                        (
+                            "same_persisted_description",
+                            same_persisted_desc_result,
+                            None,
+                        ),
+                        ("same_fqn", same_fqn_result, None),
+                        ("same_database_representation", same_db_repr_result, None),
+                        ("same_contract", same_contract_result, None),
+                    ],
+                );
+            }
+
+            result
         } else {
             false
         }
@@ -877,21 +1002,133 @@ fn seed_materialized_eq(a: &Option<DbtMaterialization>, b: &Option<DbtMaterializ
 /// None vs Some(empty) representations as equivalent
 fn seed_configs_equal(left: &SeedConfig, right: &SeedConfig) -> bool {
     // Compare each field with smart empty comparison
-    btree_map_equal(&left.column_types, &right.column_types) &&
-    docs_config_equal(&left.docs, &right.docs) &&
-    left.enabled == right.enabled &&
-    grants_eq(&left.grants, &right.grants) &&
-    left.quote_columns == right.quote_columns &&
+    let column_types_eq = btree_map_equal(&left.column_types, &right.column_types);
+    let docs_eq = docs_config_equal(&left.docs, &right.docs);
+    let enabled_eq = left.enabled == right.enabled;
+    let grants_eq_result = grants_eq(&left.grants, &right.grants);
+    let quote_columns_eq = left.quote_columns == right.quote_columns;
     // left.delimiter == right.delimiter && // TODO: re-enable when no longer using mantle/core manifests in IA
-    left.event_time == right.event_time &&
-    left.full_refresh == right.full_refresh &&
-    indexmap_yml_value_equal(&left.meta, &right.meta) &&
-    persist_docs_configs_equal(&left.persist_docs, &right.persist_docs) &&
-    hooks_equal(&left.post_hook, &right.post_hook) &&
-    hooks_equal(&left.pre_hook, &right.pre_hook) &&
+    let event_time_eq = left.event_time == right.event_time;
+    let full_refresh_eq = left.full_refresh == right.full_refresh;
+    let meta_eq = indexmap_yml_value_equal(&left.meta, &right.meta);
+    let persist_docs_eq = persist_docs_configs_equal(&left.persist_docs, &right.persist_docs);
+    let post_hook_eq = hooks_equal(&left.post_hook, &right.post_hook);
+    let pre_hook_eq = hooks_equal(&left.pre_hook, &right.pre_hook);
     // quoting_equal(&left.quoting, &right.quoting) && // TODO: re-enable when no longer using mantle/core manifests in IA
-    seed_materialized_eq(&left.materialized, &right.materialized) &&
-    same_warehouse_config(&left.__warehouse_specific_config__, &right.__warehouse_specific_config__)
+    let materialized_eq = seed_materialized_eq(&left.materialized, &right.materialized);
+    let warehouse_config_eq = same_warehouse_config(
+        &left.__warehouse_specific_config__,
+        &right.__warehouse_specific_config__,
+    );
+
+    let result = column_types_eq
+        && docs_eq
+        && enabled_eq
+        && grants_eq_result
+        && quote_columns_eq
+        && event_time_eq
+        && full_refresh_eq
+        && meta_eq
+        && persist_docs_eq
+        && post_hook_eq
+        && pre_hook_eq
+        && materialized_eq
+        && warehouse_config_eq;
+
+    if !result {
+        log_state_mod_diff(
+            "unique_id in next seed_config log",
+            "seed_config",
+            [
+                (
+                    "column_types",
+                    column_types_eq,
+                    Some((
+                        format!("{:?}", &left.column_types),
+                        format!("{:?}", &right.column_types),
+                    )),
+                ),
+                (
+                    "docs",
+                    docs_eq,
+                    Some((format!("{:?}", &left.docs), format!("{:?}", &right.docs))),
+                ),
+                (
+                    "enabled",
+                    enabled_eq,
+                    Some((
+                        format!("{:?}", &left.enabled),
+                        format!("{:?}", &right.enabled),
+                    )),
+                ),
+                (
+                    "grants",
+                    grants_eq_result,
+                    Some((
+                        format!("{:?}", &left.grants),
+                        format!("{:?}", &right.grants),
+                    )),
+                ),
+                (
+                    "quote_columns",
+                    quote_columns_eq,
+                    Some((
+                        format!("{:?}", &left.quote_columns),
+                        format!("{:?}", &right.quote_columns),
+                    )),
+                ),
+                (
+                    "event_time",
+                    event_time_eq,
+                    Some((
+                        format!("{:?}", &left.event_time),
+                        format!("{:?}", &right.event_time),
+                    )),
+                ),
+                (
+                    "full_refresh",
+                    full_refresh_eq,
+                    Some((
+                        format!("{:?}", &left.full_refresh),
+                        format!("{:?}", &right.full_refresh),
+                    )),
+                ),
+                (
+                    "meta",
+                    meta_eq,
+                    Some((format!("{:?}", &left.meta), format!("{:?}", &right.meta))),
+                ),
+                ("persist_docs", persist_docs_eq, None),
+                (
+                    "post_hook",
+                    post_hook_eq,
+                    Some((
+                        format!("{:?}", &left.post_hook),
+                        format!("{:?}", &right.post_hook),
+                    )),
+                ),
+                (
+                    "pre_hook",
+                    pre_hook_eq,
+                    Some((
+                        format!("{:?}", &left.pre_hook),
+                        format!("{:?}", &right.pre_hook),
+                    )),
+                ),
+                (
+                    "materialized",
+                    materialized_eq,
+                    Some((
+                        format!("{:?}", &left.materialized),
+                        format!("{:?}", &right.materialized),
+                    )),
+                ),
+                ("warehouse_config", warehouse_config_eq, None),
+            ],
+        );
+    }
+
+    result
 }
 
 /// Compare BTreeMap<Spanned<String>, String> considering None vs Some(empty) as equal
@@ -1068,7 +1305,18 @@ impl InternalDbtNode for DbtSeed {
 
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(other_model) = other.as_any().downcast_ref::<DbtSeed>() {
-            seed_configs_equal(&self.deprecated_config, &other_model.deprecated_config)
+            let deprecated_config_eq =
+                seed_configs_equal(&self.deprecated_config, &other_model.deprecated_config);
+
+            if !deprecated_config_eq {
+                log_state_mod_diff(
+                    &self.__common_attr__.unique_id,
+                    "seed_config",
+                    [("deprecated_config", deprecated_config_eq, None)],
+                );
+            }
+
+            deprecated_config_eq
         } else {
             false
         }
@@ -1081,22 +1329,49 @@ impl InternalDbtNode for DbtSeed {
             // warnings are logged about this. Implement these warnings later
             // after confirming they make sense. See:
             //https://github.com/dbt-labs/dbt-core/blob/b75d5e701ef4dc2d7a98c5301ef63ecfc02eae15/core/dbt/contracts/graph/nodes.py#L900-L933
-            same_body(&self.__common_attr__, &other_seed.__common_attr__)
-                && self.has_same_config(other)
-                && same_persisted_description(
-                    &self.__common_attr__,
-                    &self.__base_attr__,
-                    &other_seed.__common_attr__,
-                    &other_seed.__base_attr__,
-                )
-                && same_fqn(&self.__common_attr__, &other_seed.__common_attr__)
-                && same_database_representation_seed(
-                    &self.deprecated_config,
-                    &other_seed.deprecated_config,
-                )
+            let same_body_result = same_body(&self.__common_attr__, &other_seed.__common_attr__);
+            let same_config_result = self.has_same_config(other);
+            let same_persisted_desc_result = same_persisted_description(
+                &self.__common_attr__,
+                &self.__base_attr__,
+                &other_seed.__common_attr__,
+                &other_seed.__base_attr__,
+            );
+            let same_fqn_result = same_fqn(&self.__common_attr__, &other_seed.__common_attr__);
+            let same_db_repr_result = same_database_representation_seed(
+                &self.deprecated_config,
+                &other_seed.deprecated_config,
+            );
+
             // For seeds, same_contract always returns true in dbt-core
             // Seeds don't have complex contract validation like models,
             // so we do not need to do a contract check for seeds.
+
+            let result = same_body_result
+                && same_config_result
+                && same_persisted_desc_result
+                && same_fqn_result
+                && same_db_repr_result;
+
+            if !result {
+                log_state_mod_diff(
+                    &self.__common_attr__.unique_id,
+                    "seed",
+                    [
+                        ("same_body", same_body_result, None),
+                        ("same_config", same_config_result, None),
+                        (
+                            "same_persisted_description",
+                            same_persisted_desc_result,
+                            None,
+                        ),
+                        ("same_fqn", same_fqn_result, None),
+                        ("same_database_representation", same_db_repr_result, None),
+                    ],
+                );
+            }
+
+            result
         } else {
             false
         }
@@ -1167,20 +1442,104 @@ impl InternalDbtNode for DbtTest {
             // The dbt-core method compares unrendered_config values for
             // database as well, but we do not have unrendered_config values
             // so we do not do that comparison
-            self.deprecated_config.enabled == other.deprecated_config.enabled
-                && self.deprecated_config.alias == other.deprecated_config.alias
-                && self.deprecated_config.tags == other.deprecated_config.tags
-                && self.deprecated_config.meta == other.deprecated_config.meta
-                && self.deprecated_config.group == other.deprecated_config.group
-                && self.deprecated_config.quoting == other.deprecated_config.quoting
+            let enabled_eq = self.deprecated_config.enabled == other.deprecated_config.enabled;
+            let alias_eq = self.deprecated_config.alias == other.deprecated_config.alias;
+            let tags_eq = self.deprecated_config.tags == other.deprecated_config.tags;
+            let meta_eq = self.deprecated_config.meta == other.deprecated_config.meta;
+            let group_eq = self.deprecated_config.group == other.deprecated_config.group;
+            let quoting_eq = self.deprecated_config.quoting == other.deprecated_config.quoting;
+
+            let result = enabled_eq && alias_eq && tags_eq && meta_eq && group_eq && quoting_eq;
+
+            if !result {
+                log_state_mod_diff(
+                    &self.__common_attr__.unique_id,
+                    "test_config",
+                    [
+                        (
+                            "enabled",
+                            enabled_eq,
+                            Some((
+                                format!("{:?}", &self.deprecated_config.enabled),
+                                format!("{:?}", &other.deprecated_config.enabled),
+                            )),
+                        ),
+                        (
+                            "alias",
+                            alias_eq,
+                            Some((
+                                format!("{:?}", &self.deprecated_config.alias),
+                                format!("{:?}", &other.deprecated_config.alias),
+                            )),
+                        ),
+                        (
+                            "tags",
+                            tags_eq,
+                            Some((
+                                format!("{:?}", &self.deprecated_config.tags),
+                                format!("{:?}", &other.deprecated_config.tags),
+                            )),
+                        ),
+                        (
+                            "meta",
+                            meta_eq,
+                            Some((
+                                format!("{:?}", &self.deprecated_config.meta),
+                                format!("{:?}", &other.deprecated_config.meta),
+                            )),
+                        ),
+                        (
+                            "group",
+                            group_eq,
+                            Some((
+                                format!("{:?}", &self.deprecated_config.group),
+                                format!("{:?}", &other.deprecated_config.group),
+                            )),
+                        ),
+                        (
+                            "quoting",
+                            quoting_eq,
+                            Some((
+                                format!("{:?}", &self.deprecated_config.quoting),
+                                format!("{:?}", &other.deprecated_config.quoting),
+                            )),
+                        ),
+                    ],
+                );
+            }
+
+            result
         } else {
             false
         }
     }
 
     fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
-        if let Some(other) = other.as_any().downcast_ref::<DbtTest>() {
-            self.has_same_config(other) && self.common().fqn == other.common().fqn
+        if let Some(other_test) = other.as_any().downcast_ref::<DbtTest>() {
+            let same_config_result = self.has_same_config(other);
+            let same_fqn_result = self.common().fqn == other_test.common().fqn;
+
+            let result = same_config_result && same_fqn_result;
+
+            if !result {
+                log_state_mod_diff(
+                    &self.__common_attr__.unique_id,
+                    "test",
+                    [
+                        ("same_config", same_config_result, None),
+                        (
+                            "same_fqn",
+                            same_fqn_result,
+                            Some((
+                                format!("{:?}", &self.common().fqn),
+                                format!("{:?}", &other_test.common().fqn),
+                            )),
+                        ),
+                    ],
+                );
+            }
+
+            result
         } else {
             false
         }
@@ -1244,28 +1603,69 @@ impl InternalDbtNode for DbtUnitTest {
             let self_config = &self.deprecated_config;
             let other_config = &other.deprecated_config;
 
-            self_config.enabled == other_config.enabled
-                && self_config.static_analysis == other_config.static_analysis
-                && same_warehouse_config(
-                    &self_config.__warehouse_specific_config__,
-                    &other_config.__warehouse_specific_config__,
-                )
+            let enabled_eq = self_config.enabled == other_config.enabled;
+            let static_analysis_eq = self_config.static_analysis == other_config.static_analysis;
+            let warehouse_config_eq = same_warehouse_config(
+                &self_config.__warehouse_specific_config__,
+                &other_config.__warehouse_specific_config__,
+            );
+
+            let result = enabled_eq && static_analysis_eq && warehouse_config_eq;
+
+            if !result {
+                log_state_mod_diff(
+                    &self.__common_attr__.unique_id,
+                    "unit_test_config",
+                    [
+                        (
+                            "enabled",
+                            enabled_eq,
+                            Some((
+                                format!("{:?}", &self_config.enabled),
+                                format!("{:?}", &other_config.enabled),
+                            )),
+                        ),
+                        (
+                            "static_analysis",
+                            static_analysis_eq,
+                            Some((
+                                format!("{:?}", &self_config.static_analysis),
+                                format!("{:?}", &other_config.static_analysis),
+                            )),
+                        ),
+                        ("warehouse_config", warehouse_config_eq, None),
+                    ],
+                );
+            }
+
+            result
         } else {
             false
         }
     }
 
     fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
-        if let Some(other) = other.as_any().downcast_ref::<DbtUnitTest>() {
-            let same_fqn = self.common().fqn == other.common().fqn;
-            if !same_fqn {
-                println!(
-                    "FQN differs: self={:?}, other={:?}",
-                    self.common().fqn,
-                    other.common().fqn
+        if let Some(other_unit_test) = other.as_any().downcast_ref::<DbtUnitTest>() {
+            let same_fqn_result = self.common().fqn == other_unit_test.common().fqn;
+
+            let result = same_fqn_result;
+
+            if !result {
+                log_state_mod_diff(
+                    &self.__common_attr__.unique_id,
+                    "unit_test",
+                    [(
+                        "same_fqn",
+                        same_fqn_result,
+                        Some((
+                            format!("{:?}", &self.common().fqn),
+                            format!("{:?}", &other_unit_test.common().fqn),
+                        )),
+                    )],
                 );
             }
-            same_fqn
+
+            result
         } else {
             false
         }
@@ -1452,14 +1852,82 @@ impl InternalDbtNode for DbtSource {
                 &other_config.__warehouse_specific_config__,
             );
 
-            enabled_eq
+            let result = enabled_eq
                 && event_time_eq
                 && freshness_eq
                 && quoting_eq
                 && loaded_at_field_eq
                 && loaded_at_query_result
                 && static_analysis_eq
-                && warehouse_config_eq
+                && warehouse_config_eq;
+
+            if !result {
+                log_state_mod_diff(
+                    &self.__common_attr__.unique_id,
+                    "source_config",
+                    [
+                        (
+                            "enabled",
+                            enabled_eq,
+                            Some((
+                                format!("{:?}", &self.__base_attr__.enabled),
+                                format!("{:?}", &other_source.__base_attr__.enabled),
+                            )),
+                        ),
+                        (
+                            "event_time",
+                            event_time_eq,
+                            Some((
+                                format!("{:?}", &self_config.event_time),
+                                format!("{:?}", &other_config.event_time),
+                            )),
+                        ),
+                        (
+                            "freshness",
+                            freshness_eq,
+                            Some((
+                                format!("{:?}", &self.__source_attr__.freshness),
+                                format!("{:?}", &other_source.__source_attr__.freshness),
+                            )),
+                        ),
+                        (
+                            "quoting",
+                            quoting_eq,
+                            Some((
+                                format!("{:?}", &self_config.quoting),
+                                format!("{:?}", &other_config.quoting),
+                            )),
+                        ),
+                        (
+                            "loaded_at_field",
+                            loaded_at_field_eq,
+                            Some((
+                                format!("{:?}", &self.__source_attr__.loaded_at_field),
+                                format!("{:?}", &other_source.__source_attr__.loaded_at_field),
+                            )),
+                        ),
+                        (
+                            "loaded_at_query",
+                            loaded_at_query_result,
+                            Some((
+                                format!("{:?}", &self.__source_attr__.loaded_at_query),
+                                format!("{:?}", &other_source.__source_attr__.loaded_at_query),
+                            )),
+                        ),
+                        (
+                            "static_analysis",
+                            static_analysis_eq,
+                            Some((
+                                format!("{:?}", &self_config.static_analysis),
+                                format!("{:?}", &other_config.static_analysis),
+                            )),
+                        ),
+                        ("warehouse_config", warehouse_config_eq, None),
+                    ],
+                );
+            }
+
+            result
         } else {
             false
         }
@@ -1467,12 +1935,48 @@ impl InternalDbtNode for DbtSource {
 
     fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(other_source) = other.as_any().downcast_ref::<DbtSource>() {
-            same_relation_name(
+            let same_relation_name_result = same_relation_name(
                 &self.__base_attr__.relation_name,
                 &other_source.__base_attr__.relation_name,
-            ) && self.__common_attr__.fqn == other_source.__common_attr__.fqn
-                && self.has_same_config(other)
-                && self.__source_attr__.loader == other_source.__source_attr__.loader
+            );
+            let same_fqn_result = self.__common_attr__.fqn == other_source.__common_attr__.fqn;
+            let same_config_result = self.has_same_config(other);
+            let same_loader_result =
+                self.__source_attr__.loader == other_source.__source_attr__.loader;
+
+            let result = same_relation_name_result
+                && same_fqn_result
+                && same_config_result
+                && same_loader_result;
+
+            if !result {
+                log_state_mod_diff(
+                    &self.__common_attr__.unique_id,
+                    "source",
+                    [
+                        ("same_relation_name", same_relation_name_result, None),
+                        (
+                            "same_fqn",
+                            same_fqn_result,
+                            Some((
+                                format!("{:?}", &self.__common_attr__.fqn),
+                                format!("{:?}", &other_source.__common_attr__.fqn),
+                            )),
+                        ),
+                        ("same_config", same_config_result, None),
+                        (
+                            "same_loader",
+                            same_loader_result,
+                            Some((
+                                format!("{:?}", &self.__source_attr__.loader),
+                                format!("{:?}", &other_source.__source_attr__.loader),
+                            )),
+                        ),
+                    ],
+                );
+            }
+
+            result
         } else {
             false
         }
@@ -1599,7 +2103,7 @@ impl InternalDbtNode for DbtSnapshot {
                 &other_config.__warehouse_specific_config__,
             );
 
-            alias_eq
+            let result = alias_eq
                 && materialized_eq
                 && strategy_eq
                 && unique_key_eq
@@ -1623,7 +2127,188 @@ impl InternalDbtNode for DbtSnapshot {
                 && quote_columns_eq
                 && invalidate_hard_deletes_eq
                 // Adapter specific configs
-                && warehouse_config_eq
+                && warehouse_config_eq;
+
+            if !result {
+                log_state_mod_diff(
+                    &self.__common_attr__.unique_id,
+                    "snapshot_config",
+                    [
+                        (
+                            "alias",
+                            alias_eq,
+                            Some((
+                                format!("{:?}", &self_config.alias),
+                                format!("{:?}", &other_config.alias),
+                            )),
+                        ),
+                        (
+                            "materialized",
+                            materialized_eq,
+                            Some((
+                                format!("{:?}", &self_config.materialized),
+                                format!("{:?}", &other_config.materialized),
+                            )),
+                        ),
+                        (
+                            "strategy",
+                            strategy_eq,
+                            Some((
+                                format!("{:?}", &self_config.strategy),
+                                format!("{:?}", &other_config.strategy),
+                            )),
+                        ),
+                        (
+                            "unique_key",
+                            unique_key_eq,
+                            Some((
+                                format!("{:?}", &self_config.unique_key),
+                                format!("{:?}", &other_config.unique_key),
+                            )),
+                        ),
+                        (
+                            "check_cols",
+                            check_cols_eq,
+                            Some((
+                                format!("{:?}", &self_config.check_cols),
+                                format!("{:?}", &other_config.check_cols),
+                            )),
+                        ),
+                        (
+                            "updated_at",
+                            updated_at_eq,
+                            Some((
+                                format!("{:?}", &self_config.updated_at),
+                                format!("{:?}", &other_config.updated_at),
+                            )),
+                        ),
+                        (
+                            "dbt_valid_to_current",
+                            dbt_valid_to_current_eq,
+                            Some((
+                                format!("{:?}", &self_config.dbt_valid_to_current),
+                                format!("{:?}", &other_config.dbt_valid_to_current),
+                            )),
+                        ),
+                        (
+                            "snapshot_meta_column_names",
+                            snapshot_meta_column_names_eq,
+                            Some((
+                                format!("{:?}", &self_config.snapshot_meta_column_names),
+                                format!("{:?}", &other_config.snapshot_meta_column_names),
+                            )),
+                        ),
+                        (
+                            "hard_deletes",
+                            hard_deletes_eq,
+                            Some((
+                                format!("{:?}", &self_config.hard_deletes),
+                                format!("{:?}", &other_config.hard_deletes),
+                            )),
+                        ),
+                        (
+                            "target_database",
+                            target_database_eq,
+                            Some((
+                                format!("{:?}", &self_config.target_database),
+                                format!("{:?}", &other_config.target_database),
+                            )),
+                        ),
+                        (
+                            "target_schema",
+                            target_schema_eq,
+                            Some((
+                                format!("{:?}", &self_config.target_schema),
+                                format!("{:?}", &other_config.target_schema),
+                            )),
+                        ),
+                        (
+                            "enabled",
+                            enabled_eq,
+                            Some((
+                                format!("{:?}", &self_config.enabled),
+                                format!("{:?}", &other_config.enabled),
+                            )),
+                        ),
+                        (
+                            "pre_hook",
+                            pre_hook_eq,
+                            Some((
+                                format!("{:?}", &self_config.pre_hook),
+                                format!("{:?}", &other_config.pre_hook),
+                            )),
+                        ),
+                        (
+                            "post_hook",
+                            post_hook_eq,
+                            Some((
+                                format!("{:?}", &self_config.post_hook),
+                                format!("{:?}", &other_config.post_hook),
+                            )),
+                        ),
+                        ("persist_docs", persist_docs_eq, None),
+                        (
+                            "grants",
+                            grants_eq,
+                            Some((
+                                format!("{:?}", &self_config.grants),
+                                format!("{:?}", &other_config.grants),
+                            )),
+                        ),
+                        (
+                            "event_time",
+                            event_time_eq,
+                            Some((
+                                format!("{:?}", &self_config.event_time),
+                                format!("{:?}", &other_config.event_time),
+                            )),
+                        ),
+                        (
+                            "quoting",
+                            quoting_eq,
+                            Some((
+                                format!("{:?}", &self_config.quoting),
+                                format!("{:?}", &other_config.quoting),
+                            )),
+                        ),
+                        (
+                            "static_analysis",
+                            static_analysis_eq,
+                            Some((
+                                format!("{:?}", &self_config.static_analysis),
+                                format!("{:?}", &other_config.static_analysis),
+                            )),
+                        ),
+                        (
+                            "group",
+                            group_eq,
+                            Some((
+                                format!("{:?}", &self_config.group),
+                                format!("{:?}", &other_config.group),
+                            )),
+                        ),
+                        (
+                            "quote_columns",
+                            quote_columns_eq,
+                            Some((
+                                format!("{:?}", &self_config.quote_columns),
+                                format!("{:?}", &other_config.quote_columns),
+                            )),
+                        ),
+                        (
+                            "invalidate_hard_deletes",
+                            invalidate_hard_deletes_eq,
+                            Some((
+                                format!("{:?}", &self_config.invalidate_hard_deletes),
+                                format!("{:?}", &other_config.invalidate_hard_deletes),
+                            )),
+                        ),
+                        ("warehouse_config", warehouse_config_eq, None),
+                    ],
+                );
+            }
+
+            result
         } else {
             false
         }
@@ -1632,22 +2317,50 @@ impl InternalDbtNode for DbtSnapshot {
     fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(other_snapshot) = other.as_any().downcast_ref::<DbtSnapshot>() {
             // Equivalent to dbt-core's same_contents method for ParsedNode
-            same_body(&self.__common_attr__, &other_snapshot.__common_attr__)
-                && self.has_same_config(other)
-                && same_persisted_description(
-                    &self.__common_attr__,
-                    &self.__base_attr__,
-                    &other_snapshot.__common_attr__,
-                    &other_snapshot.__base_attr__,
-                )
-                && same_fqn(&self.__common_attr__, &other_snapshot.__common_attr__)
-                && same_database_representation_snapshot(
-                    &self.deprecated_config,
-                    &other_snapshot.deprecated_config,
-                )
+            let same_body_result =
+                same_body(&self.__common_attr__, &other_snapshot.__common_attr__);
+            let same_config_result = self.has_same_config(other);
+            let same_persisted_desc_result = same_persisted_description(
+                &self.__common_attr__,
+                &self.__base_attr__,
+                &other_snapshot.__common_attr__,
+                &other_snapshot.__base_attr__,
+            );
+            let same_fqn_result = same_fqn(&self.__common_attr__, &other_snapshot.__common_attr__);
+            let same_db_repr_result = same_database_representation_snapshot(
+                &self.deprecated_config,
+                &other_snapshot.deprecated_config,
+            );
+
             // For snapshots, same_contract always returns true in dbt-core,
             // so we do not need to do a contract check for snapshots.
             // See: https://github.com/dbt-labs/dbt-core/blob/main/core/dbt/contracts/graph/nodes.py#L374
+
+            let result = same_body_result
+                && same_config_result
+                && same_persisted_desc_result
+                && same_fqn_result
+                && same_db_repr_result;
+
+            if !result {
+                log_state_mod_diff(
+                    &self.__common_attr__.unique_id,
+                    "snapshot",
+                    [
+                        ("same_body", same_body_result, None),
+                        ("same_config", same_config_result, None),
+                        (
+                            "same_persisted_description",
+                            same_persisted_desc_result,
+                            None,
+                        ),
+                        ("same_fqn", same_fqn_result, None),
+                        ("same_database_representation", same_db_repr_result, None),
+                    ],
+                );
+            }
+
+            result
         } else {
             false
         }
@@ -1735,19 +2448,107 @@ impl InternalDbtNode for DbtExposure {
     }
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(other_exposure) = other.as_any().downcast_ref::<DbtExposure>() {
-            self.deprecated_config.enabled == other_exposure.deprecated_config.enabled
+            let enabled_eq =
+                self.deprecated_config.enabled == other_exposure.deprecated_config.enabled;
+
+            if !enabled_eq {
+                log_state_mod_diff(
+                    &self.__common_attr__.unique_id,
+                    "exposure_config",
+                    [(
+                        "enabled",
+                        enabled_eq,
+                        Some((
+                            format!("{:?}", &self.deprecated_config.enabled),
+                            format!("{:?}", &other_exposure.deprecated_config.enabled),
+                        )),
+                    )],
+                );
+            }
+
+            enabled_eq
         } else {
             false
         }
     }
     fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(other_exposure) = other.as_any().downcast_ref::<DbtExposure>() {
-            self.__common_attr__.name == other_exposure.__common_attr__.name
-                && self.__common_attr__.fqn == other_exposure.__common_attr__.fqn
-                && self.__exposure_attr__.owner == other_exposure.__exposure_attr__.owner
-                && self.__exposure_attr__.maturity == other_exposure.__exposure_attr__.maturity
-                && self.__exposure_attr__.url == other_exposure.__exposure_attr__.url
-                && self.__exposure_attr__.label == other_exposure.__exposure_attr__.label
+            let same_name_result = self.__common_attr__.name == other_exposure.__common_attr__.name;
+            let same_fqn_result = self.__common_attr__.fqn == other_exposure.__common_attr__.fqn;
+            let same_owner_result =
+                self.__exposure_attr__.owner == other_exposure.__exposure_attr__.owner;
+            let same_maturity_result =
+                self.__exposure_attr__.maturity == other_exposure.__exposure_attr__.maturity;
+            let same_url_result =
+                self.__exposure_attr__.url == other_exposure.__exposure_attr__.url;
+            let same_label_result =
+                self.__exposure_attr__.label == other_exposure.__exposure_attr__.label;
+
+            let result = same_name_result
+                && same_fqn_result
+                && same_owner_result
+                && same_maturity_result
+                && same_url_result
+                && same_label_result;
+
+            if !result {
+                log_state_mod_diff(
+                    &self.__common_attr__.unique_id,
+                    "exposure",
+                    [
+                        (
+                            "same_name",
+                            same_name_result,
+                            Some((
+                                format!("{:?}", &self.__common_attr__.name),
+                                format!("{:?}", &other_exposure.__common_attr__.name),
+                            )),
+                        ),
+                        (
+                            "same_fqn",
+                            same_fqn_result,
+                            Some((
+                                format!("{:?}", &self.__common_attr__.fqn),
+                                format!("{:?}", &other_exposure.__common_attr__.fqn),
+                            )),
+                        ),
+                        (
+                            "same_owner",
+                            same_owner_result,
+                            Some((
+                                format!("{:?}", &self.__exposure_attr__.owner),
+                                format!("{:?}", &other_exposure.__exposure_attr__.owner),
+                            )),
+                        ),
+                        (
+                            "same_maturity",
+                            same_maturity_result,
+                            Some((
+                                format!("{:?}", &self.__exposure_attr__.maturity),
+                                format!("{:?}", &other_exposure.__exposure_attr__.maturity),
+                            )),
+                        ),
+                        (
+                            "same_url",
+                            same_url_result,
+                            Some((
+                                format!("{:?}", &self.__exposure_attr__.url),
+                                format!("{:?}", &other_exposure.__exposure_attr__.url),
+                            )),
+                        ),
+                        (
+                            "same_label",
+                            same_label_result,
+                            Some((
+                                format!("{:?}", &self.__exposure_attr__.label),
+                                format!("{:?}", &other_exposure.__exposure_attr__.label),
+                            )),
+                        ),
+                    ],
+                );
+            }
+
+            result
         } else {
             false
         }
@@ -1820,20 +2621,113 @@ impl InternalDbtNode for DbtSemanticModel {
     // TODO: group is not compared while it is in dbt-core. SemanticModel group is not implemented in dbt-fusion.
     fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(other_semantic_model) = other.as_any().downcast_ref::<DbtSemanticModel>() {
-            self.has_same_config(other)
-                && self.__semantic_model_attr__.model
-                    == other_semantic_model.__semantic_model_attr__.model
-                && self.__common_attr__.description
-                    == other_semantic_model.__common_attr__.description
-                && self.__semantic_model_attr__.entities
-                    == other_semantic_model.__semantic_model_attr__.entities
-                && self.__semantic_model_attr__.dimensions
-                    == other_semantic_model.__semantic_model_attr__.dimensions
-                && self.__semantic_model_attr__.measures
-                    == other_semantic_model.__semantic_model_attr__.measures
-                && self.deprecated_config == other_semantic_model.deprecated_config
-                && self.__semantic_model_attr__.primary_entity
-                    == other_semantic_model.__semantic_model_attr__.primary_entity
+            let same_config_result = self.has_same_config(other);
+            let same_model_result = self.__semantic_model_attr__.model
+                == other_semantic_model.__semantic_model_attr__.model;
+            let same_description_result = self.__common_attr__.description
+                == other_semantic_model.__common_attr__.description;
+            let same_entities_result = self.__semantic_model_attr__.entities
+                == other_semantic_model.__semantic_model_attr__.entities;
+            let same_dimensions_result = self.__semantic_model_attr__.dimensions
+                == other_semantic_model.__semantic_model_attr__.dimensions;
+            let same_measures_result = self.__semantic_model_attr__.measures
+                == other_semantic_model.__semantic_model_attr__.measures;
+            let same_deprecated_config_result =
+                self.deprecated_config == other_semantic_model.deprecated_config;
+            let same_primary_entity_result = self.__semantic_model_attr__.primary_entity
+                == other_semantic_model.__semantic_model_attr__.primary_entity;
+
+            let result = same_config_result
+                && same_model_result
+                && same_description_result
+                && same_entities_result
+                && same_dimensions_result
+                && same_measures_result
+                && same_deprecated_config_result
+                && same_primary_entity_result;
+
+            if !result {
+                log_state_mod_diff(
+                    &self.__common_attr__.unique_id,
+                    "semantic_model",
+                    [
+                        ("same_config", same_config_result, None),
+                        (
+                            "same_model",
+                            same_model_result,
+                            Some((
+                                format!("{:?}", &self.__semantic_model_attr__.model),
+                                format!(
+                                    "{:?}",
+                                    &other_semantic_model.__semantic_model_attr__.model
+                                ),
+                            )),
+                        ),
+                        (
+                            "same_description",
+                            same_description_result,
+                            Some((
+                                format!("{:?}", &self.__common_attr__.description),
+                                format!("{:?}", &other_semantic_model.__common_attr__.description),
+                            )),
+                        ),
+                        (
+                            "same_entities",
+                            same_entities_result,
+                            Some((
+                                format!("{:?}", &self.__semantic_model_attr__.entities),
+                                format!(
+                                    "{:?}",
+                                    &other_semantic_model.__semantic_model_attr__.entities
+                                ),
+                            )),
+                        ),
+                        (
+                            "same_dimensions",
+                            same_dimensions_result,
+                            Some((
+                                format!("{:?}", &self.__semantic_model_attr__.dimensions),
+                                format!(
+                                    "{:?}",
+                                    &other_semantic_model.__semantic_model_attr__.dimensions
+                                ),
+                            )),
+                        ),
+                        (
+                            "same_measures",
+                            same_measures_result,
+                            Some((
+                                format!("{:?}", &self.__semantic_model_attr__.measures),
+                                format!(
+                                    "{:?}",
+                                    &other_semantic_model.__semantic_model_attr__.measures
+                                ),
+                            )),
+                        ),
+                        (
+                            "same_deprecated_config",
+                            same_deprecated_config_result,
+                            Some((
+                                format!("{:?}", &self.deprecated_config),
+                                format!("{:?}", &other_semantic_model.deprecated_config),
+                            )),
+                        ),
+                        (
+                            "same_primary_entity",
+                            same_primary_entity_result,
+                            Some((
+                                format!("{:?}", &self.__semantic_model_attr__.primary_entity),
+                                format!(
+                                    "{:?}",
+                                    &other_semantic_model.__semantic_model_attr__.primary_entity
+                                ),
+                            )),
+                        ),
+                    ],
+                );
+            }
+
+            result
         } else {
             false
         }
@@ -1895,7 +2789,37 @@ impl InternalDbtNode for DbtMetric {
             let self_config = &self.deprecated_config;
             let other_config = &other_metric.deprecated_config;
 
-            self_config.enabled == other_config.enabled && self_config.group == other_config.group
+            let enabled_eq = self_config.enabled == other_config.enabled;
+            let group_eq = self_config.group == other_config.group;
+
+            let result = enabled_eq && group_eq;
+
+            if !result {
+                log_state_mod_diff(
+                    &self.__common_attr__.unique_id,
+                    "metric_config",
+                    [
+                        (
+                            "enabled",
+                            enabled_eq,
+                            Some((
+                                format!("{:?}", &self_config.enabled),
+                                format!("{:?}", &other_config.enabled),
+                            )),
+                        ),
+                        (
+                            "group",
+                            group_eq,
+                            Some((
+                                format!("{:?}", &self_config.group),
+                                format!("{:?}", &other_config.group),
+                            )),
+                        ),
+                    ],
+                );
+            }
+
+            result
         } else {
             false
         }
@@ -1905,13 +2829,86 @@ impl InternalDbtNode for DbtMetric {
     // https://github.com/dbt-labs/dbt-core/blob/906e07c1f2161aaf8873f17ba323221a3cf48c9f/core/dbt/contracts/graph/nodes.py#L1496-L1511
     fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(other_metric) = other.as_any().downcast_ref::<DbtMetric>() {
-            self.has_same_config(other)
-                && self.__metric_attr__.filter == other_metric.__metric_attr__.filter
-                && self.__metric_attr__.metadata == other_metric.__metric_attr__.metadata
-                && self.__metric_attr__.type_params == other_metric.__metric_attr__.type_params
-                && self.__common_attr__.description == other_metric.__common_attr__.description
-                && self.__common_attr__.fqn == other_metric.__common_attr__.fqn
-                && self.__metric_attr__.label == other_metric.__metric_attr__.label
+            let same_config_result = self.has_same_config(other);
+            let same_filter_result =
+                self.__metric_attr__.filter == other_metric.__metric_attr__.filter;
+            let same_metadata_result =
+                self.__metric_attr__.metadata == other_metric.__metric_attr__.metadata;
+            let same_type_params_result =
+                self.__metric_attr__.type_params == other_metric.__metric_attr__.type_params;
+            let same_description_result =
+                self.__common_attr__.description == other_metric.__common_attr__.description;
+            let same_fqn_result = self.__common_attr__.fqn == other_metric.__common_attr__.fqn;
+            let same_label_result =
+                self.__metric_attr__.label == other_metric.__metric_attr__.label;
+
+            let result = same_config_result
+                && same_filter_result
+                && same_metadata_result
+                && same_type_params_result
+                && same_description_result
+                && same_fqn_result
+                && same_label_result;
+
+            if !result {
+                log_state_mod_diff(
+                    &self.__common_attr__.unique_id,
+                    "metric",
+                    [
+                        ("same_config", same_config_result, None),
+                        (
+                            "same_filter",
+                            same_filter_result,
+                            Some((
+                                format!("{:?}", &self.__metric_attr__.filter),
+                                format!("{:?}", &other_metric.__metric_attr__.filter),
+                            )),
+                        ),
+                        (
+                            "same_metadata",
+                            same_metadata_result,
+                            Some((
+                                format!("{:?}", &self.__metric_attr__.metadata),
+                                format!("{:?}", &other_metric.__metric_attr__.metadata),
+                            )),
+                        ),
+                        (
+                            "same_type_params",
+                            same_type_params_result,
+                            Some((
+                                format!("{:?}", &self.__metric_attr__.type_params),
+                                format!("{:?}", &other_metric.__metric_attr__.type_params),
+                            )),
+                        ),
+                        (
+                            "same_description",
+                            same_description_result,
+                            Some((
+                                format!("{:?}", &self.__common_attr__.description),
+                                format!("{:?}", &other_metric.__common_attr__.description),
+                            )),
+                        ),
+                        (
+                            "same_fqn",
+                            same_fqn_result,
+                            Some((
+                                format!("{:?}", &self.__common_attr__.fqn),
+                                format!("{:?}", &other_metric.__common_attr__.fqn),
+                            )),
+                        ),
+                        (
+                            "same_label",
+                            same_label_result,
+                            Some((
+                                format!("{:?}", &self.__metric_attr__.label),
+                                format!("{:?}", &other_metric.__metric_attr__.label),
+                            )),
+                        ),
+                    ],
+                );
+            }
+
+            result
         } else {
             false
         }
@@ -1969,28 +2966,167 @@ impl InternalDbtNode for DbtSavedQuery {
             let self_config = &self.deprecated_config;
             let other_config = &other_saved_query.deprecated_config;
 
-            self_config.cache == other_config.cache
-                && self_config.enabled == other_config.enabled
-                && self_config.export_as == other_config.export_as
-                && self_config.schema == other_config.schema
-                && self_config.group == other_config.group
+            let cache_eq = self_config.cache == other_config.cache;
+            let enabled_eq = self_config.enabled == other_config.enabled;
+            let export_as_eq = self_config.export_as == other_config.export_as;
+            let schema_eq = self_config.schema == other_config.schema;
+            let group_eq = self_config.group == other_config.group;
+
+            let result = cache_eq && enabled_eq && export_as_eq && schema_eq && group_eq;
+
+            if !result {
+                log_state_mod_diff(
+                    &self.__common_attr__.unique_id,
+                    "saved_query_config",
+                    [
+                        (
+                            "cache",
+                            cache_eq,
+                            Some((
+                                format!("{:?}", &self_config.cache),
+                                format!("{:?}", &other_config.cache),
+                            )),
+                        ),
+                        (
+                            "enabled",
+                            enabled_eq,
+                            Some((
+                                format!("{:?}", &self_config.enabled),
+                                format!("{:?}", &other_config.enabled),
+                            )),
+                        ),
+                        (
+                            "export_as",
+                            export_as_eq,
+                            Some((
+                                format!("{:?}", &self_config.export_as),
+                                format!("{:?}", &other_config.export_as),
+                            )),
+                        ),
+                        (
+                            "schema",
+                            schema_eq,
+                            Some((
+                                format!("{:?}", &self_config.schema),
+                                format!("{:?}", &other_config.schema),
+                            )),
+                        ),
+                        (
+                            "group",
+                            group_eq,
+                            Some((
+                                format!("{:?}", &self_config.group),
+                                format!("{:?}", &other_config.group),
+                            )),
+                        ),
+                    ],
+                );
+            }
+
+            result
         } else {
             false
         }
     }
     fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(other_saved_query) = other.as_any().downcast_ref::<DbtSavedQuery>() {
-            self.has_same_config(other)
-                && self.__common_attr__.description == other_saved_query.__common_attr__.description
-                && self.__common_attr__.fqn == other_saved_query.__common_attr__.fqn
-                && self.__saved_query_attr__.label == other_saved_query.__saved_query_attr__.label
-                && self.__common_attr__.tags == other_saved_query.__common_attr__.tags
-                && self.__saved_query_attr__.exports
-                    == other_saved_query.__saved_query_attr__.exports
-                && self.__saved_query_attr__.query_params.group_by
-                    == other_saved_query.__saved_query_attr__.query_params.group_by
-                && self.__saved_query_attr__.query_params.where_
-                    == other_saved_query.__saved_query_attr__.query_params.where_
+            let same_config_result = self.has_same_config(other);
+            let same_description_result =
+                self.__common_attr__.description == other_saved_query.__common_attr__.description;
+            let same_fqn_result = self.__common_attr__.fqn == other_saved_query.__common_attr__.fqn;
+            let same_label_result =
+                self.__saved_query_attr__.label == other_saved_query.__saved_query_attr__.label;
+            let same_tags_result =
+                self.__common_attr__.tags == other_saved_query.__common_attr__.tags;
+            let same_exports_result =
+                self.__saved_query_attr__.exports == other_saved_query.__saved_query_attr__.exports;
+            let same_group_by_result = self.__saved_query_attr__.query_params.group_by
+                == other_saved_query.__saved_query_attr__.query_params.group_by;
+            let same_where_result = self.__saved_query_attr__.query_params.where_
+                == other_saved_query.__saved_query_attr__.query_params.where_;
+
+            let result = same_config_result
+                && same_description_result
+                && same_fqn_result
+                && same_label_result
+                && same_tags_result
+                && same_exports_result
+                && same_group_by_result
+                && same_where_result;
+
+            if !result {
+                log_state_mod_diff(
+                    &self.__common_attr__.unique_id,
+                    "saved_query",
+                    [
+                        ("same_config", same_config_result, None),
+                        (
+                            "same_description",
+                            same_description_result,
+                            Some((
+                                format!("{:?}", &self.__common_attr__.description),
+                                format!("{:?}", &other_saved_query.__common_attr__.description),
+                            )),
+                        ),
+                        (
+                            "same_fqn",
+                            same_fqn_result,
+                            Some((
+                                format!("{:?}", &self.__common_attr__.fqn),
+                                format!("{:?}", &other_saved_query.__common_attr__.fqn),
+                            )),
+                        ),
+                        (
+                            "same_label",
+                            same_label_result,
+                            Some((
+                                format!("{:?}", &self.__saved_query_attr__.label),
+                                format!("{:?}", &other_saved_query.__saved_query_attr__.label),
+                            )),
+                        ),
+                        (
+                            "same_tags",
+                            same_tags_result,
+                            Some((
+                                format!("{:?}", &self.__common_attr__.tags),
+                                format!("{:?}", &other_saved_query.__common_attr__.tags),
+                            )),
+                        ),
+                        (
+                            "same_exports",
+                            same_exports_result,
+                            Some((
+                                format!("{:?}", &self.__saved_query_attr__.exports),
+                                format!("{:?}", &other_saved_query.__saved_query_attr__.exports),
+                            )),
+                        ),
+                        (
+                            "same_group_by",
+                            same_group_by_result,
+                            Some((
+                                format!("{:?}", &self.__saved_query_attr__.query_params.group_by),
+                                format!(
+                                    "{:?}",
+                                    &other_saved_query.__saved_query_attr__.query_params.group_by
+                                ),
+                            )),
+                        ),
+                        (
+                            "same_where",
+                            same_where_result,
+                            Some((
+                                format!("{:?}", &self.__saved_query_attr__.query_params.where_),
+                                format!(
+                                    "{:?}",
+                                    &other_saved_query.__saved_query_attr__.query_params.where_
+                                ),
+                            )),
+                        ),
+                    ],
+                );
+            }
+
+            result
         } else {
             false
         }
@@ -2052,8 +3188,19 @@ impl InternalDbtNode for DbtFunction {
 
     fn has_same_config(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(other_function) = other.as_any().downcast_ref::<DbtFunction>() {
-            self.deprecated_config
-                .same_config(&other_function.deprecated_config)
+            let deprecated_config_eq = self
+                .deprecated_config
+                .same_config(&other_function.deprecated_config);
+
+            if !deprecated_config_eq {
+                log_state_mod_diff(
+                    &self.__common_attr__.unique_id,
+                    "function_config",
+                    [("deprecated_config", deprecated_config_eq, None)],
+                );
+            }
+
+            deprecated_config_eq
         } else {
             false
         }
@@ -2061,7 +3208,27 @@ impl InternalDbtNode for DbtFunction {
 
     fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(other_function) = other.as_any().downcast_ref::<DbtFunction>() {
-            self.__common_attr__.checksum == other_function.__common_attr__.checksum
+            let same_checksum_result =
+                self.__common_attr__.checksum == other_function.__common_attr__.checksum;
+
+            let result = same_checksum_result;
+
+            if !result {
+                log_state_mod_diff(
+                    &self.__common_attr__.unique_id,
+                    "function",
+                    [(
+                        "same_checksum",
+                        same_checksum_result,
+                        Some((
+                            format!("{:?}", &self.__common_attr__.checksum),
+                            format!("{:?}", &other_function.__common_attr__.checksum),
+                        )),
+                    )],
+                );
+            }
+
+            result
         } else {
             false
         }
@@ -2137,7 +3304,26 @@ impl InternalDbtNode for DbtMacro {
     }
     fn has_same_content(&self, other: &dyn InternalDbtNode) -> bool {
         if let Some(other_macro) = other.as_any().downcast_ref::<DbtMacro>() {
-            self.macro_sql == other_macro.macro_sql
+            let same_macro_sql_result = self.macro_sql == other_macro.macro_sql;
+
+            let result = same_macro_sql_result;
+
+            if !result {
+                log_state_mod_diff(
+                    &self.unique_id,
+                    "macro",
+                    [(
+                        "same_macro_sql",
+                        same_macro_sql_result,
+                        Some((
+                            format!("{:?}", &self.macro_sql),
+                            format!("{:?}", &other_macro.macro_sql),
+                        )),
+                    )],
+                );
+            }
+
+            result
         } else {
             false
         }
@@ -4271,8 +5457,37 @@ impl InternalDbtNode for DbtAnalysis {
             let self_config = &self.deprecated_config;
             let other_config = &other_analysis.deprecated_config;
 
-            self_config.enabled == other_config.enabled
-                && self_config.static_analysis == other_config.static_analysis
+            let enabled_eq = self_config.enabled == other_config.enabled;
+            let static_analysis_eq = self_config.static_analysis == other_config.static_analysis;
+
+            let result = enabled_eq && static_analysis_eq;
+
+            if !result {
+                log_state_mod_diff(
+                    &self.__common_attr__.unique_id,
+                    "analysis_config",
+                    [
+                        (
+                            "enabled",
+                            enabled_eq,
+                            Some((
+                                format!("{:?}", &self_config.enabled),
+                                format!("{:?}", &other_config.enabled),
+                            )),
+                        ),
+                        (
+                            "static_analysis",
+                            static_analysis_eq,
+                            Some((
+                                format!("{:?}", &self_config.static_analysis),
+                                format!("{:?}", &other_config.static_analysis),
+                            )),
+                        ),
+                    ],
+                );
+            }
+
+            result
         } else {
             false
         }
