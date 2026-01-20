@@ -214,7 +214,7 @@ impl<'env> Vm<'env> {
         context_base: Value,
         caller: Option<Value>,
         varargs: Vec<Value>,
-        kwargs: ValueMap,
+        kwargs: MutableMap,
         state: &State,
         args: Vec<Value>,
         listeners: &[Rc<dyn RenderingEventListener>],
@@ -236,7 +236,8 @@ impl<'env> Vm<'env> {
             ctx.store("caller", caller);
         }
         ctx.store("varargs", Value::from(varargs));
-        ctx.store("kwargs", Value::from(kwargs));
+        // kwargs is already a MutableMap, supporting .pop() and other mutating methods
+        ctx.store("kwargs", Value::from_object(kwargs));
 
         ok!(ctx.incr_depth(state.ctx.depth() + MACRO_RECURSION_COST));
         self.do_eval(

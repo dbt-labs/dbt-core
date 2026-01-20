@@ -2,7 +2,8 @@ use std::{borrow::Cow, cell::Cell, collections::BTreeMap};
 
 use crate::{
     value::{
-        argtypes::type_name_suffix, value_map_with_capacity, ArgType, Kwargs, ValueKind, ValueMap,
+        argtypes::type_name_suffix, mutable_map::MutableMap, value_map_with_capacity, ArgType,
+        Kwargs, ValueKind, ValueMap,
     },
     Value,
 };
@@ -287,6 +288,16 @@ impl ArgParser {
             value_map.insert(Value::from(key), value);
         }
         value_map
+    }
+
+    /// Return the remaining kwargs as a MutableMap (supports .pop() and other mutating methods)
+    pub fn get_kwargs_as_mutable_map(&mut self) -> MutableMap {
+        let mutable_map = MutableMap::new();
+        // Use std::mem::take to move the kwargs out, avoiding clones
+        for (key, value) in std::mem::take(&mut self.kwargs) {
+            mutable_map.insert(Value::from(key), value);
+        }
+        mutable_map
     }
 
     /// Get and consume an optional value by name from kwargs

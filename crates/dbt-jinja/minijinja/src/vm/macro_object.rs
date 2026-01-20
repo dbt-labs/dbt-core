@@ -8,7 +8,7 @@ use crate::error::{Error, ErrorKind};
 use crate::listener::RenderingEventListener;
 use crate::machinery::Span;
 use crate::value::mutable_map::MutableMap;
-use crate::value::{Enumerator, Kwargs, Object, Value, ValueMap};
+use crate::value::{Enumerator, Kwargs, Object, Value};
 use crate::vm::state::State;
 use crate::vm::Vm;
 
@@ -80,12 +80,11 @@ impl Object for Macro {
             Some(
                 extra_kwargs
                     .get(&Value::from("caller"))
-                    .unwrap_or(&Value::UNDEFINED)
-                    .clone(),
+                    .unwrap_or(Value::UNDEFINED),
             )
         } else {
             // Check if caller was provided but not expected
-            if extra_kwargs.contains_key(&Value::from("caller")) {
+            if extra_kwargs.contains(&Value::from("caller")) {
                 return Err(Error::new(
                     ErrorKind::TooManyArguments,
                     "macro does not accept caller argument",
@@ -131,8 +130,8 @@ pub struct ParsedArgs {
     pub arg_values: Vec<Value>,
     /// The extra args
     pub extra_args: Vec<Value>,
-    /// The extra kwargs
-    pub extra_kwargs: ValueMap,
+    /// The extra kwargs (as MutableMap to support .pop() and other mutating methods)
+    pub extra_kwargs: MutableMap,
 }
 
 /// Parse args given a macro arg spec and return the parsed args and any extra args or kwargs
@@ -172,6 +171,6 @@ pub fn parse_macro_arguments_with_spec(
     Ok(ParsedArgs {
         arg_values,
         extra_args: parser.get_args_as_vec_of_values(),
-        extra_kwargs: parser.get_kwargs_as_value_map(),
+        extra_kwargs: parser.get_kwargs_as_mutable_map(),
     })
 }

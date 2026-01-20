@@ -1415,6 +1415,11 @@ pub mod mutable_map {
             lock_read!(self).get(key).cloned()
         }
 
+        /// Check if the map contains the given `key`.
+        pub fn contains(&self, key: &Value) -> bool {
+            lock_read!(self).contains_key(key)
+        }
+
         /// Return all keys in the map.
         pub fn keys(&self) -> Vec<Value> {
             lock_read!(self).keys().cloned().collect()
