@@ -547,4 +547,31 @@ base_schema_yml_v2 = """models:
   - name: fct_revenue
     description: This is the model fct_revenue. It should be able to use doc blocks
     semantic_model: true
+    columns:
+      - name: id
+        description: This is the id column dim.
+        config:
+          meta:
+          component_level: "original_meta"
+        dimension:
+          name: id_dim
+          label: "ID Dimension"
+          type: categorical
+          is_partition: true
+          config:
+            meta:
+              component_level: "dimension_override"
+      - name: second_col
+        description: This is the second column.
+        granularity: day
+        dimension:
+          name: second_dim
+          label: "Second Dimension"
+          type: time
+          validity_params:
+            is_start: true
+            is_end: true
+      - name: col_with_default_dimensions
+        description: This is the column with default dimension settings.
+        dimension: categorical
 """

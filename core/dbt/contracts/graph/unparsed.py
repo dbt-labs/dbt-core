@@ -142,10 +142,48 @@ class HasConfig:
 
 
 @dataclass
+class UnparsedDimensionBase(dbtClassMixin):
+    # Should we be limiting name length or otherwise validating this?
+    name: str
+    type: str  # actually a DimensionType enum value
+    description: Optional[str] = None
+    label: Optional[str] = None
+    is_partition: bool = False
+    config: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class UnparsedDimensionTypeParams(dbtClassMixin):
+    """Used for dbt Semantic Layer dimensions (v1 YAML)."""
+
+    time_granularity: str  # TimeGranularity enum
+    validity_params: Optional[DimensionValidityParams] = None
+
+
+@dataclass
+class UnparsedDimension(UnparsedDimensionBase):
+    """Used for dbt Semantic Layer dimensions (v1 YAML)."""
+
+    type_params: Optional[UnparsedDimensionTypeParams] = None
+    expr: Optional[str] = None
+
+
+@dataclass
+class UnparsedDimensionV2(UnparsedDimensionBase):
+    """Used for dbt Semantic Layer dimensions (v2 YAML)."""
+
+    validity_params: Optional[DimensionValidityParams] = None
+
+
+@dataclass
 class UnparsedColumn(HasConfig, HasColumnAndTestProps):
     quote: Optional[bool] = None
     tags: List[str] = field(default_factory=list)
     granularity: Optional[str] = None  # str is really a TimeGranularity Enum
+    # Note 1: Dimension str is a DimensionType enum value
+    # Note 2: Don't ask me why, but str must come after UnparsedDimensionV2 here or else
+    # this will be read as a dict object instead of a UnparsedDimensionV2 object
+    dimension: Union[UnparsedDimensionV2, str, None] = None
 
 
 @dataclass
@@ -710,24 +748,6 @@ class UnparsedMeasure(dbtClassMixin):
     non_additive_dimension: Optional[UnparsedNonAdditiveDimension] = None
     agg_time_dimension: Optional[str] = None
     create_metric: bool = False
-    config: Dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
-class UnparsedDimensionTypeParams(dbtClassMixin):
-    time_granularity: str  # TimeGranularity enum
-    validity_params: Optional[DimensionValidityParams] = None
-
-
-@dataclass
-class UnparsedDimension(dbtClassMixin):
-    name: str
-    type: str  # actually an enum
-    description: Optional[str] = None
-    label: Optional[str] = None
-    is_partition: bool = False
-    type_params: Optional[UnparsedDimensionTypeParams] = None
-    expr: Optional[str] = None
     config: Dict[str, Any] = field(default_factory=dict)
 
 

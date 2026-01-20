@@ -2,10 +2,13 @@ from collections.abc import Sequence
 from typing import Any, Dict, List, Optional, Union
 
 from dbt.artifacts.resources import (
+    ColumnDimension,
+    ColumnInfo,
     ConversionTypeParams,
     CumulativeTypeParams,
     Dimension,
     DimensionTypeParams,
+    DimensionValidityParams,
     Entity,
     Export,
     ExportConfig,
@@ -710,11 +713,65 @@ class SemanticModelParser(YamlReader):
             dimensions=dimensions,
         )
 
+    def _parse_v2_column_dimensions(self, columns: Dict[str, ColumnInfo]) -> List[Dimension]:
+        dimensions: List[Dimension] = []
+        for column in columns.values():
+            if column.dimension is None:
+                continue
+            elif isinstance(column.dimension, DimensionType):
+                dimensions.append(
+                    Dimension(
+                        name=column.name,
+                        type=column.dimension,
+                        description=column.description,
+                        metadata=None,  # Not yet supported in v1 or v2 YAML
+                        config=SemanticLayerElementConfig(meta=column.config.get("meta", {})),
+                    )
+                )
+            elif isinstance(column.dimension, ColumnDimension):
+                type_params = (
+                    DimensionTypeParams(
+                        time_granularity=column.granularity,
+                        validity_params=(
+                            DimensionValidityParams(
+                                is_start=column.dimension.validity_params.is_start,
+                                is_end=column.dimension.validity_params.is_end,
+                            )
+                            if column.dimension.validity_params is not None
+                            else None
+                        ),
+                    )
+                    if column.granularity is not None
+                    else None
+                )
+                meta = dict(column.config.get("meta", {}))
+                meta.update((column.dimension.config or {}).get("meta", {}))
+                config = SemanticLayerElementConfig(meta=meta)
+                dimensions.append(
+                    Dimension(
+                        # required
+                        type=DimensionType(column.dimension.type),
+                        # fields that use column's values as fallback values
+                        name=column.dimension.name or column.name,
+                        description=column.dimension.description or column.description,
+                        config=config,
+                        # optional fields
+                        label=column.dimension.label,
+                        is_partition=column.dimension.is_partition,
+                        type_params=type_params,
+                        metadata=None,  # Not yet supported in v1 or v2 YAML
+                        # expr argument is not supported for column-based dimensions
+                    )
+                )
+        return dimensions
+
     def parse_v2_semantic_model_from_dbt_model_patch(
         self,
         node: ModelNode,
         patch: ParsedNodePatch,
     ) -> None:
+        dimensions = self._parse_v2_column_dimensions(patch.columns)
+
         self._parse_semantic_model_helper(
             semantic_model_name=node.name,
             semantic_model_config=patch.config,
@@ -722,10 +779,10 @@ class SemanticModelParser(YamlReader):
             label=None,  # does not seem to be available in v2 YAML, unless it is part of the semantic model config's 'group'?
             model=f"ref('{patch.name}')",
             name=node.name,
-            defaults=None,  # unclear if this exists in some form in v2 YAML
+            defaults=None,  # TODO DI-4604: support agg_time_dimension default here for v2 YAML
             primary_entity=None,  # Not yet implemented; should become patch.primary_entity
             entities=[],  # Not yet implemented, will derive from patch.derived_semantics.entities
-            dimensions=[],  # Not yet implemented, will derive from patch.derived_semantics.dimensions
+            dimensions=dimensions,
             # Measures are not part of the v2 YAML design.
             measures=[],
             unparsed_measures=[],
