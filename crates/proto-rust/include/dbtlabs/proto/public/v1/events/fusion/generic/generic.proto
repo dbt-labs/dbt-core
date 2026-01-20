@@ -1,5 +1,6 @@
 syntax = "proto3";
 package v1.public.events.fusion.generic;
+option go_package = "github.com/dbt-labs/proto-golang/v1/public/events/fusion/generic";
 
 // Note: These events are for operations whose API is not yet stabilized.
 // They provide a generic progress tracking mechanism that can be used
