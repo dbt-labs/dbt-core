@@ -45,6 +45,7 @@ from dbt.parser.models import (
     _get_sample_result,
     _get_stable_sample_result,
     _shift_sources,
+    verify_python_model_code, 
 )
 from dbt.parser.schemas import (
     AnalysisPatchParser,
@@ -2016,3 +2017,28 @@ class AnalysisParserTest(BaseParserTest):
         self.assertEqual(
             self.parser.manifest.files[file_id].nodes, ["analysis.snowplow.analysis_1"]
         )
+
+
+class TestVerifyPythonModelCode(unittest.TestCase):
+    def _make_mock_node(self, raw_code: str):
+        return MockNode(
+            package="test",
+            name="test_model",
+            config=ModelConfig(enabled=True),
+            refs=[],
+            sources=[],
+            patch_path=None,
+            raw_code=raw_code,
+            original_file_path="models/test_model.py",
+        )
+
+    def test_valid_python_code_passes(self):
+        code = "def model(dbt, session): return session.table('x')"
+        node = self._make_mock_node(code)
+        verify_python_model_code(node)
+
+    def test_jinja_raises_error(self):
+        code = "x = '{{ ref(\"other\") }}'"
+        node = self._make_mock_node(code)
+        with self.assertRaises(ParsingError):
+            verify_python_model_code(node)
