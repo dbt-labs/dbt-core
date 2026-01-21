@@ -14,11 +14,13 @@
 //! Arrow IPC results from the DuckDB worker.
 
 use crate::AdapterTyping;
-use crate::adapter_engine::{AdapterEngine, MockEngine};
+use crate::adapter_engine::{AdapterEngine, SidecarEngine};
 use crate::base_adapter::AdapterType;
 use crate::cache::RelationCache;
-use crate::errors::{AdapterError, AdapterErrorKind, AdapterResult};
+use crate::config::AdapterConfig;
+use crate::errors::AdapterResult;
 use crate::metadata::MetadataAdapter;
+use crate::query_comment::QueryCommentConfig;
 use crate::response::AdapterResponse;
 use crate::sidecar_client::SidecarClient;
 use crate::sql_types::TypeOps;
@@ -27,7 +29,7 @@ use crate::typed_adapter::TypedBaseAdapter;
 use dbt_agate::AgateTable;
 use dbt_common::cancellation::CancellationToken;
 use dbt_schemas::schemas::common::ResolvedQuoting;
-use dbt_xdbc::{Connection, QueryCtx};
+use dbt_xdbc::{Backend, Connection, QueryCtx};
 use minijinja::{State, Value};
 
 use std::collections::{BTreeMap, HashMap};
@@ -41,13 +43,14 @@ use std::sync::Arc;
 /// - Delegates execute() calls to SidecarClient (DuckDB worker)
 /// - Returns Snowflake-compatible results (AgateTable)
 /// - Implements full TypedBaseAdapter interface
+/// - Supports introspection (get_columns_in_relation) via sidecar DESCRIBE queries
 #[derive(Clone)]
 pub struct SnowflakeSidecarAdapter {
     /// Adapter type (always Snowflake)
     adapter_type: AdapterType,
-    /// Mock engine for type operations and quoting
+    /// Sidecar engine for type operations, quoting, and execution delegation
     engine: Arc<AdapterEngine>,
-    /// Sidecar client for query execution
+    /// Sidecar client for query execution (also stored in engine, kept for direct access)
     sidecar_client: Arc<dyn SidecarClient>,
     /// Flags from dbt_project.yml
     #[allow(dead_code)]
@@ -69,6 +72,9 @@ impl fmt::Debug for SnowflakeSidecarAdapter {
 
 impl SnowflakeSidecarAdapter {
     /// Create a new Snowflake sidecar adapter
+    ///
+    /// Uses `SidecarEngine` to enable introspection queries (e.g., `get_columns_in_relation`)
+    /// to execute via the sidecar client instead of returning mock data.
     pub fn new(
         flags: BTreeMap<String, Value>,
         quoting: ResolvedQuoting,
@@ -76,14 +82,20 @@ impl SnowflakeSidecarAdapter {
         sidecar_client: Arc<dyn SidecarClient>,
         cancellation_token: CancellationToken,
     ) -> Self {
+        let sidecar_engine = SidecarEngine::new(
+            AdapterType::Snowflake,
+            Backend::DuckDB,
+            sidecar_client.clone(),
+            quoting,
+            AdapterConfig::default(),
+            type_ops,
+            QueryCommentConfig::from_query_comment(None, AdapterType::Snowflake, false),
+            Arc::new(RelationCache::default()),
+        );
+
         Self {
             adapter_type: AdapterType::Snowflake,
-            engine: Arc::new(AdapterEngine::Mock(MockEngine::new(
-                AdapterType::Snowflake,
-                type_ops,
-                quoting,
-                Arc::new(RelationCache::default()),
-            ))),
+            engine: Arc::new(AdapterEngine::Sidecar(Arc::new(sidecar_engine))),
             sidecar_client,
             flags,
             quoting,
@@ -99,7 +111,7 @@ impl AdapterTyping for SnowflakeSidecarAdapter {
 
     fn metadata_adapter(&self) -> Option<Box<dyn MetadataAdapter>> {
         // In sidecar mode, we don't use the Snowflake metadata adapter.
-        // Schema hydration is handled via db_runner (DESCRIBE queries to DuckDB).
+        // Schema hydration is handled via db_runner (DESCRIBE queries).
         // Returning None causes hydrate_missing_tables_from_remote to use the db_runner path.
         None
     }
@@ -122,16 +134,13 @@ impl AdapterTyping for SnowflakeSidecarAdapter {
 }
 
 impl TypedBaseAdapter for SnowflakeSidecarAdapter {
-    /// Sidecar mode doesn't use connections - error if code tries to create one
+    /// Create a connection that delegates to the sidecar client
     fn new_connection(
         &self,
-        _state: Option<&State>,
-        _node_id: Option<String>,
+        state: Option<&State>,
+        node_id: Option<String>,
     ) -> AdapterResult<Box<dyn Connection>> {
-        Err(AdapterError::new(
-            AdapterErrorKind::NotSupported,
-            "Sidecar mode does not use connections - all execution goes through SidecarClient",
-        ))
+        self.sidecar_client.new_connection(state, node_id)
     }
 
     /// Execute a query via sidecar (overrides default implementation)

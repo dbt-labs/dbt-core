@@ -645,6 +645,8 @@ impl SqlType {
                 }
             },
 
+            // Snowflake uses VARIANT for JSON data
+            (Snowflake, Json | Jsonb) => write!(out, "VARIANT"),
             (_, Json) => write!(out, "JSON"),
             (_, Jsonb) => write!(out, "JSONB"),
             (_, Geometry(srid)) => {

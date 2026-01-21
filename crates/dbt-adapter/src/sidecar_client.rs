@@ -10,6 +10,7 @@
 use std::fmt::Debug;
 
 use arrow::record_batch::RecordBatch;
+use dbt_schemas::dbt_types::RelationType;
 use minijinja::State;
 
 use crate::errors::AdapterResult;
@@ -17,6 +18,15 @@ use crate::errors::AdapterResult;
 // Re-export types needed by trait implementations
 pub use dbt_xdbc::connection::Connection;
 pub use dbt_xdbc::query_ctx::QueryCtx;
+
+/// Column information returned by sidecar introspection.
+#[derive(Debug, Clone)]
+pub struct ColumnInfo {
+    /// Column name
+    pub name: String,
+    /// Column data type (backend-specific, e.g., DuckDB types)
+    pub data_type: String,
+}
 
 /// Trait for adapters that execute via subprocess (sidecar) or HTTP service.
 ///
@@ -92,4 +102,28 @@ pub trait SidecarClient: Debug + Send + Sync {
     /// - Subprocess fails to terminate cleanly
     /// - State cannot be flushed
     fn shutdown(&self) -> AdapterResult<()>;
+
+    /// Get the type of a relation (table, view, etc.) if it exists.
+    ///
+    /// # Arguments
+    ///
+    /// * `schema` - Schema name (case-sensitive for DuckDB)
+    /// * `table` - Table/view name (case-sensitive for DuckDB)
+    ///
+    /// # Returns
+    ///
+    /// * `Some(RelationType)` if the relation exists
+    /// * `None` if the relation doesn't exist
+    fn get_relation_type(&self, schema: &str, table: &str) -> AdapterResult<Option<RelationType>>;
+
+    /// Get column information for a relation.
+    ///
+    /// # Arguments
+    ///
+    /// * `relation_name` - Fully qualified relation name (e.g., "schema.table")
+    ///
+    /// # Returns
+    ///
+    /// Vector of column info, empty if relation doesn't exist or has no columns.
+    fn get_columns(&self, relation_name: &str) -> AdapterResult<Vec<ColumnInfo>>;
 }

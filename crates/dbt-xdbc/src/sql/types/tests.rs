@@ -930,7 +930,7 @@ fn expected_type_rendering_for(backend: Backend) -> Vec<(u32, SqlType, &'static 
             line!(),
             Array(Some(Box::new(Json))),
             "ARRAY<JSON>",
-            "ARRAY(JSON)",
+            "ARRAY(VARIANT)",
             "JSON[]",
             "JSON[]",
             "ARRAY<JSON>",

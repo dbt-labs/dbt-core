@@ -61,19 +61,26 @@ pub struct NoopConnection;
 
 impl Connection for NoopConnection {
     fn new_statement(&mut self) -> adbc_core::error::Result<Box<dyn Statement>> {
-        unimplemented!("ADBC statement creation in mock connection")
+        // Return an error instead of panicking so callers can handle gracefully
+        Err(adbc_core::error::Error::with_message_and_status(
+            "NoopConnection does not support statement creation",
+            adbc_core::error::Status::NotImplemented,
+        ))
     }
 
     fn cancel(&mut self) -> adbc_core::error::Result<()> {
-        unimplemented!("ADBC connection cancellation in mock connection")
+        // No-op for cancel - nothing to cancel
+        Ok(())
     }
 
     fn commit(&mut self) -> adbc_core::error::Result<()> {
-        unimplemented!("ADBC transaction commit in mock connection")
+        // No-op for commit - no transaction state
+        Ok(())
     }
 
     fn rollback(&mut self) -> adbc_core::error::Result<()> {
-        unimplemented!("ADBC transaction rollback in mock connection")
+        // No-op for rollback - no transaction state
+        Ok(())
     }
 
     fn get_table_schema(
@@ -82,7 +89,11 @@ impl Connection for NoopConnection {
         _db_schema: Option<&str>,
         _table_name: &str,
     ) -> adbc_core::error::Result<Schema> {
-        unimplemented!("ADBC table schema retrieval in mock connection")
+        // Return an error instead of panicking
+        Err(adbc_core::error::Error::with_message_and_status(
+            "NoopConnection does not support table schema retrieval",
+            adbc_core::error::Status::NotImplemented,
+        ))
     }
 
     fn update_node_id(&mut self, _node_id: Option<String>) {}
@@ -292,6 +303,7 @@ impl MockEngine {
 pub struct SidecarEngine {
     adapter_type: AdapterType,
     execution_backend: Backend,
+    #[allow(dead_code)]
     client: Arc<dyn crate::sidecar_client::SidecarClient>,
     quoting: ResolvedQuoting,
     config: Arc<AdapterConfig>,
@@ -498,7 +510,9 @@ impl AdapterEngine {
             Self::Record(record_engine) => record_engine.new_connection(None, None),
             Self::Replay(replay_engine) => replay_engine.new_connection(None, None),
             Self::Mock(_) => Ok(Box::new(NoopConnection) as Box<dyn Connection>),
-            Self::Sidecar(sidecar_engine) => sidecar_engine.client.new_connection(None, None),
+            // Sidecar mode doesn't use real connections - adapter methods that need
+            // data access should use the sidecar client directly (e.g., get_relation)
+            Self::Sidecar(_) => Ok(Box::new(NoopConnection) as Box<dyn Connection>),
         }?;
         Ok(conn)
     }
@@ -536,7 +550,9 @@ impl AdapterEngine {
             Self::Record(record_engine) => record_engine.new_connection(state, node_id),
             Self::Replay(replay_engine) => replay_engine.new_connection(state, node_id),
             Self::Mock(_) => Ok(Box::new(NoopConnection)),
-            Self::Sidecar(sidecar_engine) => sidecar_engine.client.new_connection(state, node_id),
+            // Sidecar mode doesn't use real connections - adapter methods that need
+            // data access should use the sidecar client directly (e.g., get_relation)
+            Self::Sidecar(_) => Ok(Box::new(NoopConnection)),
         }
     }
 
