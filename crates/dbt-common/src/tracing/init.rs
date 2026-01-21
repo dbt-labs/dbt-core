@@ -107,8 +107,13 @@ pub fn init_tracing(config: FsTraceConfig) -> FsResult<TelemetryHandle> {
         consumer_layers.into_iter(),
     );
 
+    // Base filter must allow events at the highest configured verbosity across all sinks
+    // (e.g., stdout may be INFO while file log is TRACE)
+    let effective_max_verbosity =
+        std::cmp::max(config.max_log_verbosity, config.max_file_log_verbosity);
+
     let process_span =
-        init_tracing_with_consumer_layer(config.max_log_verbosity, config.package, data_layer)?;
+        init_tracing_with_consumer_layer(effective_max_verbosity, config.package, data_layer)?;
 
     Ok(TelemetryHandle::new(shutdown_items, process_span))
 }
