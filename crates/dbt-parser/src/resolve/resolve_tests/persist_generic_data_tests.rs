@@ -759,9 +759,16 @@ fn generate_test_name(
     let clean_flat_args: Vec<String> = flat_args
         .iter()
         .map(|arg| {
-            CLEAN_REGEX
-                .replace_all(arg.trim_matches('"'), "_")
-                .to_string()
+            // `Value::to_string()` may escape newlines into the two-character sequence `\n`.
+            // Treat both escaped and literal newlines as whitespace so we don't end up with
+            // artifacts like `_nand_` from `\nand`.
+            let normalized = arg
+                .trim_matches('"')
+                .replace("\\r\\n", " ")
+                .replace("\\n", " ")
+                .replace("\\r", " ")
+                .replace(['\n', '\r'], " ");
+            CLEAN_REGEX.replace_all(&normalized, "_").to_string()
         })
         .collect();
 
@@ -1660,6 +1667,60 @@ mod tests {
                 "Generated name should not contain config-derived token '{disallowed}': {generated}"
             );
         }
+    }
+
+    #[test]
+    fn test_generate_test_name_treats_escaped_newlines_as_whitespace() {
+        // Regression: `Value::to_string()` may escape newlines into `\n`, which previously
+        // yielded `_nand_` from `\nand` after CLEAN_REGEX sanitization. We want `_and_`.
+
+        let test_config = GenericTestConfig {
+            resource_type: "model".to_string(),
+            resource_name: "my_model".to_string(),
+            version_num: None,
+            model_tests: None,
+            column_tests: None,
+            source_name: None,
+        };
+
+        let mut kwargs = BTreeMap::new();
+        kwargs.insert(
+            "model".to_string(),
+            Value::String("ref('my_model')".to_string()),
+        );
+        kwargs.insert(
+            "compare_row_condition".to_string(),
+            // Represents a multi-line condition serialized as an escaped newline.
+            Value::String("x = 1\\nand y = 2".to_string()),
+        );
+
+        let mut test_name_truncations = HashMap::new();
+        let generated = generate_test_name(
+            "dbt_expectations_expect_table_aggregation_to_equal_other_table",
+            None,
+            "my_project",
+            &test_config,
+            &kwargs,
+            None,
+            &BTreeMap::new(),
+            &mut test_name_truncations,
+        );
+
+        // The returned name may be truncated to <=63 chars (dbt-core behavior).
+        // When that happens, the un-truncated full name is stored in `test_name_truncations`.
+        let full = test_name_truncations
+            .get(&generated)
+            .cloned()
+            .unwrap_or_else(|| generated.clone());
+
+        assert!(
+            !full.contains("_nand_"),
+            "Full generated name should not contain `_nand_`: {full}"
+        );
+        assert!(
+            full.contains("x_1_and_y_2"),
+            "Full generated name should treat escaped newlines as whitespace: {full}"
+        );
     }
     #[test]
     fn test_generate_test_name_with_name_longer_than_63_chars() {
