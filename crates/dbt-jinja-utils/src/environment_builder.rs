@@ -286,6 +286,7 @@ impl JinjaEnvBuilder {
                     ))),
                 };
                 function_registry.insert(template_name.clone(), funcsign.clone());
+                function_registry.insert(macro_name.clone(), funcsign.clone());
 
                 macro_template_registry.insert(
                     Value::from(template_name),

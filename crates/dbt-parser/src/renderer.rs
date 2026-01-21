@@ -272,6 +272,7 @@ where
             &sql,
             &dbt_common::CodeLocationWithFile::new(1, 1, 0, display_path.clone()),
             unique_id,
+            Some(*adapter_type),
         );
     }
 
@@ -968,6 +969,7 @@ pub fn collect_hook_dependencies_from_config<T: DefaultTo<T> + 'static>(
                 sql,
                 &dbt_common::CodeLocationWithFile::new(1, 1, 0, resource_path.to_path_buf()),
                 unique_id,
+                None,
             );
         }
         let listener_factory = DefaultRenderingEventListenerFactory::default();

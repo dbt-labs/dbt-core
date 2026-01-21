@@ -8,6 +8,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 #[derive(Clone)]
 /// AdapterDispatchFunction is a singleton that type check adapter.dispatch
 pub struct AdapterDispatchFunction {
+    adapter_type: Arc<Mutex<Option<String>>>,
     function_registry: Arc<Mutex<Option<Arc<FunctionRegistry>>>>,
 }
 
@@ -15,14 +16,22 @@ pub struct AdapterDispatchFunction {
 static ADAPTER_DISPATCH_INSTANCE: OnceLock<AdapterDispatchFunction> = OnceLock::new();
 
 impl AdapterDispatchFunction {
-    fn new(function_registry: Arc<Mutex<Option<Arc<FunctionRegistry>>>>) -> Self {
-        Self { function_registry }
+    fn new(
+        adapter_type: Arc<Mutex<Option<String>>>,
+        function_registry: Arc<Mutex<Option<Arc<FunctionRegistry>>>>,
+    ) -> Self {
+        Self {
+            adapter_type,
+            function_registry,
+        }
     }
 
     /// Get the singleton instance of AdapterDispatchFunction
     pub fn instance() -> Self {
         ADAPTER_DISPATCH_INSTANCE
-            .get_or_init(|| AdapterDispatchFunction::new(Arc::new(Mutex::new(None))))
+            .get_or_init(|| {
+                AdapterDispatchFunction::new(Arc::new(Mutex::new(None)), Arc::new(Mutex::new(None)))
+            })
             .clone()
     }
 
@@ -35,6 +44,11 @@ impl AdapterDispatchFunction {
     pub fn set_function_registry(&self, new_registry: Arc<FunctionRegistry>) {
         let mut registry = self.function_registry.lock().unwrap();
         *registry = Some(new_registry);
+    }
+
+    /// Set the adapter type
+    pub fn set_adapter_type(&self, new_adapter_type: &Option<String>) {
+        *self.adapter_type.lock().unwrap() = new_adapter_type.clone();
     }
 }
 
@@ -51,23 +65,20 @@ impl FunctionType for AdapterDispatchFunction {
         listener: Rc<dyn TypecheckingEventListener>,
     ) -> Result<Type, crate::Error> {
         if let Some(Type::String(Some(name))) = args.get(0) {
-            let prefixes = [
-                "default__",
-                "snowflake__",
-                "redshift__",
-                "bigquery__",
-                "postgres__",
-            ];
             if let Ok(registry_opt) = self.function_registry.lock() {
                 if let Some(ref registry) = *registry_opt {
-                    for prefix in prefixes.iter() {
-                        let key = format!("{prefix}{name}");
-                        for (registry_key, func) in registry.iter() {
-                            if registry_key.ends_with(&key) {
-                                return Ok(Type::Object(func.clone()));
-                            }
+                    if let Some(adapter_type) = self.adapter_type.lock().unwrap().as_ref() {
+                        let key = format!("{adapter_type}__{name}");
+                        if let Some(func) = registry.get(&key) {
+                            return Ok(Type::Object(func.clone()));
                         }
                     }
+                    // try default adapter
+                    let key = format!("default__{name}");
+                    if let Some(func) = registry.get(&key) {
+                        return Ok(Type::Object(func.clone()));
+                    }
+
                     listener.warn(&format!(
                         "Function {name} not found in any supported adapter"
                     ));

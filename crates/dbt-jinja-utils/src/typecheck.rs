@@ -1,9 +1,10 @@
 use crate::{jinja_environment::JinjaEnv, listener};
+use dbt_adapter::AdapterType;
 use dbt_common::{
     ErrorCode, FsError, FsResult, io_args::IoArgs, tracing::emit::emit_error_log_message,
 };
 use minijinja::{
-    Value,
+    AdapterDispatchFunction, Value,
     compiler::codegen::CodeGenerationProfile,
     constants::{DBT_AND_ADAPTERS_NAMESPACE, ROOT_PACKAGE_NAME, TARGET_PACKAGE_NAME},
     load_builtins_with_namespace,
@@ -28,6 +29,7 @@ pub fn typecheck(
     content: &str,
     offset: &dbt_common::CodeLocationWithFile,
     unique_id: &str,
+    adapter_type: Option<AdapterType>,
 ) -> FsResult<()> {
     let function_signatures = env.jinja_function_registry.clone();
     let mut jinja_typecheck_env = env.env.clone();
@@ -36,6 +38,8 @@ pub fn typecheck(
         .map_err(|e| FsError::from_jinja_err(e, "Failed to load built-ins"))?;
 
     let mut typecheck_resolved_context: BTreeMap<String, Value> = BTreeMap::new();
+    AdapterDispatchFunction::instance()
+        .set_adapter_type(&adapter_type.map(|adapter_type| adapter_type.to_string()));
 
     if let Some(target_package_name) = target_package_name {
         typecheck_resolved_context.insert(

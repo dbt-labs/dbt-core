@@ -1729,7 +1729,23 @@ impl<'src> TypeChecker<'src> {
                         }
 
                         let result = match function.call(&method_args, &kwargs, listener.clone()) {
-                            Ok(rv) => rv,
+                            Ok(rv) => {
+                                if let Type::Object(funcsign) = &rv {
+                                    if let (Some(def_span), Some(def_path), Some(def_unique_id)) = (
+                                        funcsign.get_span(),
+                                        funcsign.get_path(),
+                                        funcsign.get_unique_id(),
+                                    ) {
+                                        listener.on_function_call(
+                                            span,
+                                            &def_span,
+                                            &def_path,
+                                            &def_unique_id,
+                                        );
+                                    }
+                                }
+                                rv
+                            }
                             Err(e) => {
                                 listener
                                     .warn(&format!("Method call failed '{self_type}.{name}': {e}"));
