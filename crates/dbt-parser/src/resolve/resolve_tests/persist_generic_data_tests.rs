@@ -912,9 +912,7 @@ fn generate_test_macro(
                 } else {
                     let escaped = s
                         .replace('\\', "\\\\") // Escape backslashes
-                        .replace('"', "\\\"") // Escape double quotes
-                        .replace('{', "\\{") // Escape curly braces
-                        .replace('}', "\\}"); // Escape closing curly braces
+                        .replace('"', "\\\""); // Escape double quotes
                     format!("\"{escaped}\"")
                 }
             }
@@ -2253,6 +2251,46 @@ mod tests {
         assert!(
             sql.contains("config_obj={\"limit\":100,\"query\":dbt_custom_arg_config_obj_query}"),
             "Expected object with variable reference (unquoted) and regular value, got: {sql}"
+        );
+    }
+
+    #[test]
+    fn test_generate_test_macro_does_not_escape_curly_braces_in_string_kwargs() {
+        // Curly braces are common in regex quantifiers (e.g. {1,2}) and should be preserved.
+        // They are not special inside a quoted Jinja string literal; escaping them mutates the
+        // argument value and changes the downstream compiled SQL.
+        let mut kwargs = BTreeMap::new();
+        kwargs.insert(
+            "model".to_string(),
+            Value::String("ref('my_model')".to_string()),
+        );
+        kwargs.insert(
+            "column_name".to_string(),
+            Value::String("postcode".to_string()),
+        );
+        kwargs.insert(
+            "regex".to_string(),
+            Value::String("^[A-Z]{1,2}\\\\d{1,2}[A-Z]?$".to_string()),
+        );
+
+        let sql = generate_test_macro(
+            "expect_column_values_to_match_regex",
+            &kwargs,
+            Some("dbt_expectations"),
+            &None,
+            &BTreeMap::new(),
+        )
+        .unwrap();
+
+        // We expect backslashes and quotes to be escaped for the Jinja string literal,
+        // but curly braces must remain unescaped.
+        assert!(
+            sql.contains("regex=\"^[A-Z]{1,2}\\\\\\\\d{1,2}[A-Z]?$\""),
+            "Expected regex kwarg to preserve braces while escaping backslashes, got: {sql}"
+        );
+        assert!(
+            !sql.contains("\\{") && !sql.contains("\\}"),
+            "Curly braces should not be backslash-escaped in generated macro args, got: {sql}"
         );
     }
 }
