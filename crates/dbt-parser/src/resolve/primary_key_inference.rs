@@ -305,6 +305,7 @@ mod tests {
                 }),
                 file_key_name: None,
                 introspection: IntrospectionKind::None,
+                original_name: None,
             },
             ..Default::default()
         };
@@ -328,6 +329,7 @@ mod tests {
                 }),
                 file_key_name: None,
                 introspection: IntrospectionKind::None,
+                original_name: None,
             },
             ..Default::default()
         };

@@ -222,6 +222,12 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
         self.resource_type() == NodeType::Test
     }
 
+    /// Returns the original (untruncated) test name if truncation occurred.
+    /// For non-test nodes or tests without truncation, returns None.
+    fn original_name(&self) -> Option<&str> {
+        None
+    }
+
     // Some node types are never considered new even if the previous state is missing. See
     // the same_contents method for Exposure, SavedQuery, SemanticModel and Metrics in
     // mantle: https://github.com/dbt-labs/dbt-mantle/blob/1a251ee081adf4c7af2ba38e7797b04e69d2a15f/core/dbt/contracts/graph/nodes.py
@@ -1426,6 +1432,10 @@ impl InternalDbtNode for DbtTest {
 
     fn defined_at(&self) -> Option<&dbt_common::CodeLocationWithFile> {
         self.defined_at.as_ref()
+    }
+
+    fn original_name(&self) -> Option<&str> {
+        self.__test_attr__.original_name.as_deref()
     }
 
     fn serialize_inner(
@@ -4295,6 +4305,11 @@ pub struct DbtTestAttr {
     pub file_key_name: Option<String>,
     #[serde(skip_serializing, default = "default_introspection")]
     pub introspection: IntrospectionKind,
+    /// The original (untruncated) test name, if truncation occurred.
+    /// When test names exceed 63 characters, dbt truncates to `<first 30 chars>_<md5 hash>`.
+    /// This field stores the original name for selector matching purposes.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub original_name: Option<String>,
 }
 
 #[skip_serializing_none]

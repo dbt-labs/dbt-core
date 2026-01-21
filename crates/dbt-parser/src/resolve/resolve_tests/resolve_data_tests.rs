@@ -514,6 +514,9 @@ pub async fn resolve_data_tests(
                 test_metadata: inferred_test_metadata.clone(),
                 file_key_name: None,
                 introspection: IntrospectionKind::None,
+                original_name: test_path_to_test_asset
+                    .get(&dbt_asset.path)
+                    .and_then(|test_asset| test_asset.original_name.clone()),
             },
             deprecated_config: *test_config.clone(),
             __other__: BTreeMap::new(),
@@ -606,6 +609,7 @@ mod tests {
             test_metadata_column_name: Some("id".to_string()),
             test_metadata_combination_of_columns: None,
             test_metadata_model: None,
+            original_name: None,
         };
         let md = test_metadata_from_asset(&asset).expect("metadata");
         assert_eq!(md.name, "not_null");
@@ -639,6 +643,7 @@ mod tests {
             test_metadata_column_name: None,
             test_metadata_combination_of_columns: Some(vec!["a".to_string(), "b".to_string()]),
             test_metadata_model: None,
+            original_name: None,
         };
         let md = test_metadata_from_asset(&asset).expect("metadata");
         assert_eq!(md.name, "unique_combination_of_columns");

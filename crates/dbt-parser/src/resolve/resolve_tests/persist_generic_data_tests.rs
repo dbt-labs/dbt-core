@@ -226,6 +226,9 @@ fn persist_inner(
         .and_then(|v| v.as_str())
         .map(|s| format!("{{{{ {} }}}}", s));
 
+    // If the test name was truncated, get the original name from the truncations map
+    let original_name = test_name_truncations.get(&full_name).cloned();
+
     Ok(GenericTestAsset {
         dbt_asset,
         resource_name: test_config.resource_name.clone(),
@@ -237,6 +240,7 @@ fn persist_inner(
         test_metadata_column_name: column_name,
         test_metadata_combination_of_columns: combination_of_columns,
         test_metadata_model,
+        original_name,
     })
 }
 

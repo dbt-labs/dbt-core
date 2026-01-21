@@ -123,6 +123,10 @@ pub struct GenericTestAsset {
     pub test_metadata_combination_of_columns: Option<Vec<String>>,
     /// The model kwarg for generic tests, e.g. "{{ get_where_subquery(ref('foo')) }}"
     pub test_metadata_model: Option<String>,
+    /// The original (untruncated) test name, if truncation occurred.
+    /// When test names exceed 63 characters, dbt truncates to `<first 30 chars>_<md5 hash>`.
+    /// This field stores the original name for selector matching purposes.
+    pub original_name: Option<String>,
 }
 
 impl fmt::Display for GenericTestAsset {

@@ -634,6 +634,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                             test_metadata: test.test_metadata,
                             file_key_name: test.file_key_name,
                             introspection: IntrospectionKind::None,
+                            original_name: None,
                         },
                         deprecated_config: test.config,
                         __other__: test.__other__,
