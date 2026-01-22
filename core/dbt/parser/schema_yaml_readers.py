@@ -714,7 +714,7 @@ class SemanticModelParser(YamlReader):
         self,
         node: ModelNode,
         patch: ParsedNodePatch,
-    ):
+    ) -> None:
         self._parse_semantic_model_helper(
             semantic_model_name=node.name,
             semantic_model_config=patch.config,
