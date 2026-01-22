@@ -57,8 +57,37 @@ impl ProtoTelemetryEvent for LogMessage {
     }
 }
 
+/// Internal struct used for serializing/deserializing LogMessage fields as JSON payload.
+#[skip_serializing_none]
+#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Debug, Default)]
+struct LogMessageJsonPayload {
+    pub expanded_relative_path: Option<String>,
+    pub expanded_line: Option<u32>,
+    pub expanded_column: Option<u32>,
+}
+
 impl ArrowSerializableTelemetryEvent for LogMessage {
     fn to_arrow_record(&self) -> ArrowAttributes<'_> {
+        let json_payload = LogMessageJsonPayload {
+            expanded_relative_path: self.expanded_relative_path.clone(),
+            expanded_line: self.expanded_line,
+            expanded_column: self.expanded_column,
+        };
+
+        let json_payload = if json_payload.expanded_relative_path.is_none()
+            && json_payload.expanded_line.is_none()
+            && json_payload.expanded_column.is_none()
+        {
+            None
+        } else {
+            Some(serde_json::to_string(&json_payload).unwrap_or_else(|_| {
+                panic!(
+                    "Failed to serialize data in event type \"{}\" to JSON",
+                    Self::full_name()
+                )
+            }))
+        };
+
         ArrowAttributes {
             code: self.code,
             dbt_core_event_code: self.dbt_core_event_code.as_deref().map(Cow::Borrowed),
@@ -69,11 +98,26 @@ impl ArrowSerializableTelemetryEvent for LogMessage {
             file: self.file.as_deref().map(Cow::Borrowed),
             line: self.line,
             package_name: self.package_name.as_deref().map(Cow::Borrowed),
+            relative_path: self.relative_path.as_deref().map(Cow::Borrowed),
+            code_line: self.code_line,
+            code_column: self.code_column,
+            json_payload,
             ..Default::default()
         }
     }
 
     fn from_arrow_record(record: &ArrowAttributes) -> Result<Self, String> {
+        let json_payload: Option<LogMessageJsonPayload> = match record.json_payload.as_ref() {
+            Some(payload) => Some(serde_json::from_str(payload).map_err(|e| {
+                format!(
+                    "Failed to deserialize data of event type \"{}\" from JSON payload: {}",
+                    Self::full_name(),
+                    e
+                )
+            })?),
+            None => None,
+        };
+
         Ok(Self {
             code: record.code,
             dbt_core_event_code: record.dbt_core_event_code.as_deref().map(str::to_string),
@@ -98,6 +142,18 @@ impl ArrowSerializableTelemetryEvent for LogMessage {
             file: record.file.as_deref().map(str::to_string),
             line: record.line,
             package_name: record.package_name.as_deref().map(str::to_string),
+            relative_path: record.relative_path.as_deref().map(str::to_string),
+            code_line: record.code_line,
+            code_column: record.code_column,
+            expanded_relative_path: json_payload
+                .as_ref()
+                .and_then(|payload| payload.expanded_relative_path.clone()),
+            expanded_line: json_payload
+                .as_ref()
+                .and_then(|payload| payload.expanded_line),
+            expanded_column: json_payload
+                .as_ref()
+                .and_then(|payload| payload.expanded_column),
         })
     }
 }

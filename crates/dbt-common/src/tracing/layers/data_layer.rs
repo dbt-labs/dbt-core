@@ -785,6 +785,12 @@ where
                 phase: None,
                 file: location.file,
                 line: location.line,
+                relative_path: None,
+                code_line: None,
+                code_column: None,
+                expanded_relative_path: None,
+                expanded_line: None,
+                expanded_column: None,
             }
             .into()
         };

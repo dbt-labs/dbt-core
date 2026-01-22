@@ -425,6 +425,12 @@ mod tests {
                 phase: None,
                 file: None,
                 line: None,
+                relative_path: None,
+                code_line: None,
+                code_column: None,
+                expanded_relative_path: None,
+                expanded_line: None,
+                expanded_column: None,
             }
             .into(),
         })

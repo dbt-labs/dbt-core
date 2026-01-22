@@ -95,6 +95,18 @@ impl CodeLocationWithFile {
         self.line != 0 || self.col != 0
     }
 
+    pub fn line_opt(&self) -> Option<u32> {
+        if self.line == 0 {
+            None
+        } else {
+            Some(self.line)
+        }
+    }
+
+    pub fn col_opt(&self) -> Option<u32> {
+        if self.col == 0 { None } else { Some(self.col) }
+    }
+
     pub fn get_source_location(
         &self,
         macro_spans: &[preprocessor_location::MacroSpan],
@@ -172,6 +184,22 @@ impl CodeLocationWithFile {
             ..self
         }
     }
+
+    pub fn relative_path(&self) -> PathBuf {
+        if self.file.is_relative() {
+            self.file.as_ref().to_owned()
+        } else if let Ok(cwd) = std::env::current_dir() {
+            let cwd = utils::canonicalize(cwd.as_path()).unwrap_or(cwd);
+            pathdiff::diff_paths(self.file.as_ref(), &cwd)
+                .unwrap_or_else(|| self.file.as_ref().to_owned())
+        } else {
+            self.file.as_ref().to_owned()
+        }
+    }
+
+    pub fn expanded(&self) -> Option<&CodeLocationWithFile> {
+        self.expanded.as_deref()
+    }
 }
 
 impl From<PathBuf> for CodeLocationWithFile {
@@ -218,15 +246,7 @@ impl From<MiniJinjaErrorWrapper> for CodeLocationWithFile {
 
 impl std::fmt::Display for CodeLocationWithFile {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let relative_path = if self.file.is_relative() {
-            self.file.as_ref().to_owned()
-        } else if let Ok(cwd) = std::env::current_dir() {
-            let cwd = utils::canonicalize(cwd.as_path()).unwrap_or(cwd);
-            pathdiff::diff_paths(self.file.as_ref(), &cwd)
-                .unwrap_or_else(|| self.file.as_ref().to_owned())
-        } else {
-            self.file.as_ref().to_owned()
-        };
+        let relative_path = self.relative_path();
 
         if !self.has_position() {
             write!(f, "{}", relative_path.display())?;

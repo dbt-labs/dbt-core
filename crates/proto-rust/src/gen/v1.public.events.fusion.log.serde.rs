@@ -341,6 +341,24 @@ impl serde::Serialize for LogMessage {
         if self.package_name.is_some() {
             len += 1;
         }
+        if self.relative_path.is_some() {
+            len += 1;
+        }
+        if self.code_line.is_some() {
+            len += 1;
+        }
+        if self.code_column.is_some() {
+            len += 1;
+        }
+        if self.expanded_relative_path.is_some() {
+            len += 1;
+        }
+        if self.expanded_line.is_some() {
+            len += 1;
+        }
+        if self.expanded_column.is_some() {
+            len += 1;
+        }
         let mut struct_ser = serializer.serialize_struct("v1.public.events.fusion.log.LogMessage", len)?;
         if let Some(v) = self.code.as_ref() {
             struct_ser.serialize_field("code", v)?;
@@ -373,6 +391,24 @@ impl serde::Serialize for LogMessage {
         if let Some(v) = self.package_name.as_ref() {
             struct_ser.serialize_field("package_name", v)?;
         }
+        if let Some(v) = self.relative_path.as_ref() {
+            struct_ser.serialize_field("relative_path", v)?;
+        }
+        if let Some(v) = self.code_line.as_ref() {
+            struct_ser.serialize_field("code_line", v)?;
+        }
+        if let Some(v) = self.code_column.as_ref() {
+            struct_ser.serialize_field("code_column", v)?;
+        }
+        if let Some(v) = self.expanded_relative_path.as_ref() {
+            struct_ser.serialize_field("expanded_relative_path", v)?;
+        }
+        if let Some(v) = self.expanded_line.as_ref() {
+            struct_ser.serialize_field("expanded_line", v)?;
+        }
+        if let Some(v) = self.expanded_column.as_ref() {
+            struct_ser.serialize_field("expanded_column", v)?;
+        }
         struct_ser.end()
     }
 }
@@ -397,6 +433,18 @@ impl<'de> serde::Deserialize<'de> for LogMessage {
             "phase",
             "package_name",
             "packageName",
+            "relative_path",
+            "relativePath",
+            "code_line",
+            "codeLine",
+            "code_column",
+            "codeColumn",
+            "expanded_relative_path",
+            "expandedRelativePath",
+            "expanded_line",
+            "expandedLine",
+            "expanded_column",
+            "expandedColumn",
         ];
 
         #[allow(clippy::enum_variant_names)]
@@ -410,6 +458,12 @@ impl<'de> serde::Deserialize<'de> for LogMessage {
             Line,
             Phase,
             PackageName,
+            RelativePath,
+            CodeLine,
+            CodeColumn,
+            ExpandedRelativePath,
+            ExpandedLine,
+            ExpandedColumn,
             __SkipField__,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
@@ -441,6 +495,12 @@ impl<'de> serde::Deserialize<'de> for LogMessage {
                             "line" => Ok(GeneratedField::Line),
                             "phase" => Ok(GeneratedField::Phase),
                             "packageName" | "package_name" => Ok(GeneratedField::PackageName),
+                            "relativePath" | "relative_path" => Ok(GeneratedField::RelativePath),
+                            "codeLine" | "code_line" => Ok(GeneratedField::CodeLine),
+                            "codeColumn" | "code_column" => Ok(GeneratedField::CodeColumn),
+                            "expandedRelativePath" | "expanded_relative_path" => Ok(GeneratedField::ExpandedRelativePath),
+                            "expandedLine" | "expanded_line" => Ok(GeneratedField::ExpandedLine),
+                            "expandedColumn" | "expanded_column" => Ok(GeneratedField::ExpandedColumn),
                             _ => Ok(GeneratedField::__SkipField__),
                         }
                     }
@@ -469,6 +529,12 @@ impl<'de> serde::Deserialize<'de> for LogMessage {
                 let mut line__ = None;
                 let mut phase__ = None;
                 let mut package_name__ = None;
+                let mut relative_path__ = None;
+                let mut code_line__ = None;
+                let mut code_column__ = None;
+                let mut expanded_relative_path__ = None;
+                let mut expanded_line__ = None;
+                let mut expanded_column__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
                         GeneratedField::Code => {
@@ -529,6 +595,50 @@ impl<'de> serde::Deserialize<'de> for LogMessage {
                             }
                             package_name__ = map_.next_value()?;
                         }
+                        GeneratedField::RelativePath => {
+                            if relative_path__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("relativePath"));
+                            }
+                            relative_path__ = map_.next_value()?;
+                        }
+                        GeneratedField::CodeLine => {
+                            if code_line__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("codeLine"));
+                            }
+                            code_line__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
+                        }
+                        GeneratedField::CodeColumn => {
+                            if code_column__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("codeColumn"));
+                            }
+                            code_column__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
+                        }
+                        GeneratedField::ExpandedRelativePath => {
+                            if expanded_relative_path__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("expandedRelativePath"));
+                            }
+                            expanded_relative_path__ = map_.next_value()?;
+                        }
+                        GeneratedField::ExpandedLine => {
+                            if expanded_line__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("expandedLine"));
+                            }
+                            expanded_line__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
+                        }
+                        GeneratedField::ExpandedColumn => {
+                            if expanded_column__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("expandedColumn"));
+                            }
+                            expanded_column__ = 
+                                map_.next_value::<::std::option::Option<::pbjson::private::NumberDeserialize<_>>>()?.map(|x| x.0)
+                            ;
+                        }
                         GeneratedField::__SkipField__ => {
                             let _ = map_.next_value::<serde::de::IgnoredAny>()?;
                         }
@@ -544,6 +654,12 @@ impl<'de> serde::Deserialize<'de> for LogMessage {
                     line: line__,
                     phase: phase__,
                     package_name: package_name__,
+                    relative_path: relative_path__,
+                    code_line: code_line__,
+                    code_column: code_column__,
+                    expanded_relative_path: expanded_relative_path__,
+                    expanded_line: expanded_line__,
+                    expanded_column: expanded_column__,
                 })
             }
         }

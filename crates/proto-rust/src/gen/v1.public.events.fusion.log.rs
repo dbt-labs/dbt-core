@@ -131,6 +131,22 @@ pub struct LogMessage {
     /// Package name of the project dependency for which this log was emitted. Not set for the root project.
     #[prost(string, optional, tag = "9")]
     pub package_name: ::core::option::Option<::prost::alloc::string::String>,
+    /// Relative path to the project file where this log message originated.
+    #[prost(string, optional, tag = "10")]
+    pub relative_path: ::core::option::Option<::prost::alloc::string::String>,
+    /// 1-indexed line number in the project file where this log message originated.
+    #[prost(uint32, optional, tag = "11")]
+    pub code_line: ::core::option::Option<u32>,
+    /// 0-indexed column number in the project file where this log message originated.
+    #[prost(uint32, optional, tag = "12")]
+    pub code_column: ::core::option::Option<u32>,
+    /// Optional expanded (compiled) file location for this log message.
+    #[prost(string, optional, tag = "13")]
+    pub expanded_relative_path: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(uint32, optional, tag = "14")]
+    pub expanded_line: ::core::option::Option<u32>,
+    #[prost(uint32, optional, tag = "15")]
+    pub expanded_column: ::core::option::Option<u32>,
 }
 impl crate::StaticName for LogMessage {
     const FULL_NAME: &'static str = "v1.public.events.fusion.log.LogMessage";

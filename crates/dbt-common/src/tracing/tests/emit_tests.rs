@@ -14,8 +14,9 @@ use crate::tracing::{
         emit_warn_event, emit_warn_log_message,
     },
     init::create_tracing_subcriber_with_layer,
-    layer::ConsumerLayer,
+    layer::{ConsumerLayer, MiddlewareLayer},
     layers::data_layer::TelemetryDataLayer,
+    middlewares::markdown_log_filter::TelemetryMarkdownLogFilter,
 };
 
 use super::mocks::{MockDynSpanEvent, TestLayer};
@@ -67,6 +68,12 @@ fn test_create_span() {
         phase: None,
         file: None,
         line: None,
+        relative_path: None,
+        code_line: None,
+        code_column: None,
+        expanded_relative_path: None,
+        expanded_line: None,
+        expanded_column: None,
     }
     .into();
 
@@ -80,6 +87,12 @@ fn test_create_span() {
         phase: None,
         file: None,
         line: None,
+        relative_path: None,
+        code_line: None,
+        code_column: None,
+        expanded_relative_path: None,
+        expanded_line: None,
+        expanded_column: None,
     }
     .into();
 
@@ -478,6 +491,8 @@ fn test_convenience_log_message_functions() {
 fn test_emit_error_log_from_fs_error_md_reports_warning() {
     let trace_id = rand::random::<u128>();
     let (test_layer, _, _, log_records) = TestLayer::new();
+    let middlewares: Vec<MiddlewareLayer> =
+        vec![Box::new(TelemetryMarkdownLogFilter) as MiddlewareLayer];
 
     let subscriber = create_tracing_subcriber_with_layer(
         tracing::level_filters::LevelFilter::TRACE,
@@ -485,7 +500,7 @@ fn test_emit_error_log_from_fs_error_md_reports_warning() {
             trace_id,
             None,
             false,
-            std::iter::empty(),
+            middlewares.into_iter(),
             std::iter::once(Box::new(test_layer) as ConsumerLayer),
         ),
     );
@@ -516,16 +531,16 @@ fn test_emit_error_log_from_fs_error_md_reports_warning() {
         record.body.contains("md parse error"),
         "Expected body to contain error message"
     );
-    assert!(
-        record.body.contains("models/README.md"),
-        "Expected body to include file path"
-    );
+    let log_attrs = record.attributes.downcast_ref::<LogMessage>().unwrap();
+    assert_eq!(log_attrs.relative_path.as_deref(), Some("models/README.md"));
 }
 
 #[test]
 fn test_emit_error_log_from_fs_error_sql_reports_error() {
     let trace_id = rand::random::<u128>();
     let (test_layer, _, _, log_records) = TestLayer::new();
+    let middlewares: Vec<MiddlewareLayer> =
+        vec![Box::new(TelemetryMarkdownLogFilter) as MiddlewareLayer];
 
     let subscriber = create_tracing_subcriber_with_layer(
         tracing::level_filters::LevelFilter::TRACE,
@@ -533,7 +548,7 @@ fn test_emit_error_log_from_fs_error_sql_reports_error() {
             trace_id,
             None,
             false,
-            std::iter::empty(),
+            middlewares.into_iter(),
             std::iter::once(Box::new(test_layer) as ConsumerLayer),
         ),
     );
@@ -564,8 +579,6 @@ fn test_emit_error_log_from_fs_error_sql_reports_error() {
         record.body.contains("sql parse error"),
         "Expected body to contain error message"
     );
-    assert!(
-        record.body.contains("models/view.sql"),
-        "Expected body to include file path"
-    );
+    let log_attrs = record.attributes.downcast_ref::<LogMessage>().unwrap();
+    assert_eq!(log_attrs.relative_path.as_deref(), Some("models/view.sql"));
 }

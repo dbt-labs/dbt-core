@@ -33,6 +33,20 @@ message LogMessage {
 
   // Package name of the project dependency for which this log was emitted. Not set for the root project.
   optional string package_name = 9;
+
+  // Relative path to the project file where this log message originated.
+  optional string relative_path = 10;
+
+  // 1-indexed line number in the project file where this log message originated.
+  optional uint32 code_line = 11;
+
+  // 0-indexed column number in the project file where this log message originated.
+  optional uint32 code_column = 12;
+
+  // Optional expanded (compiled) file location for this log message.
+  optional string expanded_relative_path = 13;
+  optional uint32 expanded_line = 14;
+  optional uint32 expanded_column = 15;
 }
 
 // Event emitted when user explicitly logs messages via jinja's print() or log() functions.

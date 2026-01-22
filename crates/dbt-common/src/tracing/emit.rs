@@ -62,6 +62,30 @@ pub(super) fn get_file_and_line(values: Recordable<'_>) -> Option<(String, u32)>
     visitor.file.map(|f| (f, visitor.line.unwrap_or(0)))
 }
 
+#[derive(Default)]
+struct LogMessageLocationFields {
+    relative_path: Option<String>,
+    line: Option<u32>,
+    column: Option<u32>,
+    expanded_relative_path: Option<String>,
+    expanded_line: Option<u32>,
+    expanded_column: Option<u32>,
+}
+
+fn log_message_location_fields(location: &crate::CodeLocationWithFile) -> LogMessageLocationFields {
+    let expanded = location.expanded();
+
+    LogMessageLocationFields {
+        relative_path: Some(location.relative_path().to_string_lossy().to_string()),
+        line: location.line_opt(),
+        column: location.col_opt(),
+        expanded_relative_path: expanded
+            .map(|loc| loc.relative_path().to_string_lossy().to_string()),
+        expanded_line: expanded.and_then(|loc| loc.line_opt()),
+        expanded_column: expanded.and_then(|loc| loc.col_opt()),
+    }
+}
+
 // The following repetetive functions have to be separate, as tracing requires
 // a constant level for its macros and thus we cannot pass level as a parameter.
 // They are also intentionally spelled out rather than using a macro, to ease
@@ -385,48 +409,48 @@ pub fn emit_trace_log_message(message: impl FnOnce() -> String) {
     })
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum FsErrorLogSeverity {
-    Error,
-    Warning,
-}
-
-fn severity_for_fs_error(error: &FsError) -> FsErrorLogSeverity {
-    if is_markdown_file(error.location.as_ref()) {
-        FsErrorLogSeverity::Warning
-    } else {
-        FsErrorLogSeverity::Error
-    }
-}
-
 #[track_caller]
-fn emit_fs_error_with_severity(
+fn emit_fs_error_log_message(
     error: &FsError,
-    severity: FsErrorLogSeverity,
+    level: tracing::Level,
     status_reporter: Option<&Arc<dyn StatusReporter + 'static>>,
 ) {
-    match severity {
-        FsErrorLogSeverity::Error => {
-            if let Some(status_reporter) = status_reporter {
-                status_reporter.collect_error(error);
+    if let Some(status_reporter) = status_reporter {
+        if matches!(level, tracing::Level::ERROR) && is_markdown_file(error.location.as_ref()) {
+            // CLI log severity is downgraded via middleware, but the status reporter still needs
+            // the same downgrade for LSP diagnostics.
+            status_reporter.collect_warning(error);
+        } else {
+            match level {
+                tracing::Level::WARN => status_reporter.collect_warning(error),
+                _ => status_reporter.collect_error(error),
             };
-
-            emit_error_event(
-                LogMessage::new_from_level_and_code(error.code as u32, tracing::Level::ERROR),
-                Some(error.message().as_str()),
-            );
         }
-        FsErrorLogSeverity::Warning => {
-            if let Some(status_reporter) = status_reporter {
-                status_reporter.collect_warning(error);
-            };
+    };
 
-            emit_warn_event(
-                LogMessage::new_from_level_and_code(error.code as u32, tracing::Level::WARN),
-                Some(error.message().as_str()),
-            );
-        }
+    let mut log_message = LogMessage::new_from_level_and_code(error.code as u32, level);
+    if let Some(location) = error.location.as_ref() {
+        let fields = log_message_location_fields(location);
+        log_message.relative_path = fields.relative_path;
+        log_message.code_line = fields.line;
+        log_message.code_column = fields.column;
+        log_message.expanded_relative_path = fields.expanded_relative_path;
+        log_message.expanded_line = fields.expanded_line;
+        log_message.expanded_column = fields.expanded_column;
     }
+
+    match level {
+        tracing::Level::WARN => emit_warn_event(log_message, Some(error.message().as_str())),
+        _ => emit_error_event(log_message, Some(error.message().as_str())),
+    }
+}
+
+fn is_markdown_file(location: Option<&crate::CodeLocationWithFile>) -> bool {
+    location
+        .and_then(|loc| loc.file.extension())
+        .and_then(OsStr::to_str)
+        .map(|ext| ext.eq_ignore_ascii_case("md"))
+        .unwrap_or(false)
 }
 
 /// Emit a log message event at ERROR level with the given code and message.
@@ -456,15 +480,7 @@ pub fn emit_error_log_from_fs_error(
     error: &FsError,
     status_reporter: Option<&Arc<dyn StatusReporter + 'static>>,
 ) {
-    emit_fs_error_with_severity(error, severity_for_fs_error(error), status_reporter);
-}
-
-fn is_markdown_file(location: Option<&crate::CodeLocationWithFile>) -> bool {
-    location
-        .and_then(|loc| loc.file.extension())
-        .and_then(OsStr::to_str)
-        .map(|ext| ext.eq_ignore_ascii_case("md"))
-        .unwrap_or(false)
+    emit_fs_error_log_message(error, tracing::Level::ERROR, status_reporter);
 }
 
 /// Emit a log message event at WARN level with the given code and message.
@@ -494,7 +510,7 @@ pub fn emit_warn_log_from_fs_error(
     warning: &FsError,
     status_reporter: Option<&Arc<dyn StatusReporter + 'static>>,
 ) {
-    emit_fs_error_with_severity(warning, FsErrorLogSeverity::Warning, status_reporter);
+    emit_fs_error_log_message(warning, tracing::Level::WARN, status_reporter);
 }
 
 /// Emit a log message related to parsing error based on the given FsError.
@@ -514,7 +530,15 @@ pub fn emit_strict_parse_error(
     let mut log_message =
         LogMessage::new_from_level_and_code(error.code as u32, tracing::Level::ERROR);
     log_message.package_name = package_name.as_ref().map(|s| s.as_ref().to_string());
-
+    if let Some(location) = error.location.as_ref() {
+        let fields = log_message_location_fields(location);
+        log_message.relative_path = fields.relative_path;
+        log_message.code_line = fields.line;
+        log_message.code_column = fields.column;
+        log_message.expanded_relative_path = fields.expanded_relative_path;
+        log_message.expanded_line = fields.expanded_line;
+        log_message.expanded_column = fields.expanded_column;
+    }
     emit_error_event(
         ParsingErrorMessage::new(log_message),
         Some(error.message().as_str()),

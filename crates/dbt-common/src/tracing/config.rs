@@ -14,6 +14,7 @@ use super::{
         query_log::build_query_log_layer_with_background_writer,
         tui_layer::build_tui_layer,
     },
+    middlewares::markdown_log_filter::TelemetryMarkdownLogFilter,
     middlewares::metric_aggregator::TelemetryMetricAggregator,
     shutdown::TelemetryShutdownItem,
 };
@@ -455,7 +456,8 @@ impl FsTraceConfig {
 
         Ok((
             vec![
-                // Order important! First handle parsing errors, which may filter, only then aggregate metrics
+                // Order important! First downgrade markdown errors, then handle parsing errors, then aggregate metrics
+                Box::new(TelemetryMarkdownLogFilter),
                 Box::new(TelemetryParsingErrorFilter::new(self.show_all_deprecations)),
                 Box::new(TelemetryMetricAggregator),
             ],
