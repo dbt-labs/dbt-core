@@ -1,4 +1,5 @@
 use crate::schemas::serde::OmissibleGrantConfig;
+use crate::schemas::serde::QueryTag;
 use dbt_serde_yaml::JsonSchema;
 use dbt_serde_yaml::ShouldBe;
 use dbt_serde_yaml::Spanned;
@@ -101,7 +102,7 @@ pub struct ProjectSeedConfig {
     #[serde(rename = "+tmp_relation_type")]
     pub tmp_relation_type: Option<String>,
     #[serde(rename = "+query_tag")]
-    pub query_tag: Option<String>,
+    pub query_tag: Option<QueryTag>,
     #[serde(rename = "+table_tag")]
     pub table_tag: Option<String>,
     #[serde(rename = "+row_access_policy")]

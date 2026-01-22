@@ -1,4 +1,5 @@
 use crate::schemas::serde::OmissibleGrantConfig;
+use crate::schemas::serde::QueryTag;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::serde_utils::Omissible;
 use dbt_serde_yaml::JsonSchema;
@@ -293,7 +294,7 @@ pub struct ProjectModelConfig {
     #[serde(rename = "+custom_checks")]
     pub custom_checks: Option<CustomChecks>,
     #[serde(rename = "+query_tag")]
-    pub query_tag: Option<String>,
+    pub query_tag: Option<QueryTag>,
     #[serde(rename = "+table_tag")]
     pub table_tag: Option<String>,
     #[serde(rename = "+row_access_policy")]

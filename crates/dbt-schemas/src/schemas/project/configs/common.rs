@@ -20,6 +20,7 @@ use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::manifest::{BigqueryClusterConfig, PartitionConfig};
 use crate::schemas::project::configs::model_config::DataLakeObjectCategory;
 use crate::schemas::project::dbt_project::DefaultTo;
+use crate::schemas::serde::QueryTag;
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::{
     IndexesConfig, OmissibleGrantConfig, PrimaryKeyConfig, bool_or_string_bool, f64_or_string_f64,
@@ -313,7 +314,7 @@ pub struct WarehouseSpecificNodeConfig {
     pub refresh_mode: Option<String>,
     pub initialize: Option<String>,
     pub tmp_relation_type: Option<String>,
-    pub query_tag: Option<String>,
+    pub query_tag: Option<QueryTag>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub automatic_clustering: Option<bool>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]

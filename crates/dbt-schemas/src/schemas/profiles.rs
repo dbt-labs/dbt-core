@@ -1,7 +1,7 @@
 #![allow(unused_qualifications)]
 
 use crate::schemas::relations::DEFAULT_DATABRICKS_DATABASE;
-use crate::schemas::serde::{StringOrInteger, StringOrMap};
+use crate::schemas::serde::{QueryTag, StringOrInteger, StringOrMap};
 
 use dbt_common::adapter::AdapterType;
 use dbt_serde_yaml::JsonSchema;
@@ -505,7 +505,7 @@ pub struct SnowflakeDbConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub threads: Option<StringOrInteger>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub query_tag: Option<String>,
+    pub query_tag: Option<QueryTag>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub retry_all: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -841,7 +841,7 @@ pub struct SnowflakeTargetEnv {
     pub role: Option<String>,
     pub authenticator: Option<String>,
     pub oauth_client_id: Option<String>,
-    pub query_tag: Option<String>,
+    pub query_tag: Option<QueryTag>,
     pub client_session_keep_alive: bool, // Default: false
     pub host: Option<String>,
     pub port: Option<String>,

@@ -16,7 +16,7 @@ use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
 use crate::schemas::project::configs::common::{default_meta_and_tags, default_quoting};
 use crate::schemas::project::{DefaultTo, TypedRecursiveConfig};
 use crate::schemas::serde::{
-    IndexesConfig, PrimaryKeyConfig, StringOrArrayOfStrings, bool_or_string_bool,
+    IndexesConfig, PrimaryKeyConfig, QueryTag, StringOrArrayOfStrings, bool_or_string_bool,
     f64_or_string_f64, u64_or_string_u64,
 };
 
@@ -62,7 +62,7 @@ pub struct ProjectSourceConfig {
     #[serde(rename = "+tmp_relation_type")]
     pub tmp_relation_type: Option<String>,
     #[serde(rename = "+query_tag")]
-    pub query_tag: Option<String>,
+    pub query_tag: Option<QueryTag>,
     #[serde(rename = "+table_tag")]
     pub table_tag: Option<String>,
     #[serde(rename = "+row_access_policy")]

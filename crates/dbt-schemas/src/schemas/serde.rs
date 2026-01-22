@@ -188,6 +188,91 @@ pub fn default_true() -> Option<bool> {
     Some(true)
 }
 
+// =============================================================================
+// QueryTag - Wrapper type for query_tag that converts maps/sequences to JSON strings
+// =============================================================================
+//
+// This type matches dbt-core's query_tag behavior:
+// - String values are kept as-is
+// - Map/dict values are JSON-serialized to strings
+// - Sequence/list values are JSON-serialized to strings
+// - Always serializes as a string
+// - Use as Option<QueryTag> for optional fields
+
+/// A wrapper type for the `query_tag` config field that handles flexible deserialization.
+///
+/// Accepts strings, dictionaries, or sequences for query_tag. Maps and sequences
+/// are JSON-serialized to strings.
+///
+/// # Example
+///
+/// ```ignore
+/// // Input: "my-tag"
+/// // Stores as: "my-tag"
+///
+/// // Input: {"project": "foo", "env": "prod"}
+/// // Stores as: "{\"project\":\"foo\",\"env\":\"prod\"}"
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq, JsonSchema)]
+pub struct QueryTag(pub String);
+
+impl QueryTag {
+    /// Creates a QueryTag from a String
+    pub fn new(value: String) -> Self {
+        Self(value)
+    }
+
+    /// Consumes self and returns the inner value
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+
+    /// Returns a reference to the inner value
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl Serialize for QueryTag {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.0.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for QueryTag {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = dbt_serde_yaml::Value::deserialize(deserializer)?;
+        match value {
+            dbt_serde_yaml::Value::String(s, _) => Ok(QueryTag(s)),
+            dbt_serde_yaml::Value::Mapping(_, _) | dbt_serde_yaml::Value::Sequence(_, _) => {
+                // Convert map or sequence to JSON string to match dbt-core behavior
+                let json_string = serde_json::to_string(&value)
+                    .map_err(|e| de::Error::custom(format!("Failed to serialize to JSON: {e}")))?;
+                Ok(QueryTag(json_string))
+            }
+            _ => Err(de::Error::custom("expected a string, a map, or a sequence")),
+        }
+    }
+}
+
+impl From<String> for QueryTag {
+    fn from(value: String) -> Self {
+        QueryTag(value)
+    }
+}
+
+impl From<QueryTag> for String {
+    fn from(config: QueryTag) -> Self {
+        config.0
+    }
+}
+
 pub fn try_from_value<T: DeserializeOwned>(
     value: Option<YmlValue>,
 ) -> Result<Option<T>, Box<dyn std::error::Error>> {

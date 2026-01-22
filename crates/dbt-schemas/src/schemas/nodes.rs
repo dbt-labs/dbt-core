@@ -20,7 +20,7 @@ use crate::schemas::manifest::{BigqueryClusterConfig, GrantAccessToTarget, Parti
 use crate::schemas::project::configs::common::log_state_mod_diff;
 use crate::schemas::project::configs::common::{array_of_strings_eq, grants_eq, meta_eq};
 use crate::schemas::project::{StrictnessMode, WarehouseSpecificNodeConfig, same_warehouse_config};
-use crate::schemas::serde::StringOrArrayOfStrings;
+use crate::schemas::serde::{QueryTag, StringOrArrayOfStrings};
 use crate::schemas::{
     common::{
         Access, DbtChecksum, DbtContract, DbtIncrementalStrategy, DbtMaterialization, Expect,
@@ -5039,7 +5039,7 @@ pub struct SnowflakeAttr {
     pub refresh_mode: Option<String>,
     pub initialize: Option<String>,
     pub tmp_relation_type: Option<String>,
-    pub query_tag: Option<String>,
+    pub query_tag: Option<QueryTag>,
     pub automatic_clustering: Option<bool>,
     pub copy_grants: Option<bool>,
     pub secure: Option<bool>,
