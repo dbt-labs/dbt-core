@@ -8,7 +8,7 @@ use indexmap::IndexMap;
 use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
 
-use dbt_common::tracing::emit::emit_debug_event;
+use dbt_common::tracing::emit::emit_trace_event;
 use dbt_telemetry::StateModifiedDiff;
 
 use crate::default_to;
@@ -44,16 +44,19 @@ where
             .map(|(self_value, other_value)| (Some(self_value), Some(other_value)))
             .unwrap_or((None, None));
 
-        emit_debug_event(
-            StateModifiedDiff {
-                unique_id: Some(unique_id.to_string()),
-                node_type_or_category: node_type.to_string(),
-                check: check_name.to_string(),
-                self_value,
-                other_value,
-            },
-            None,
-        );
+        emit_trace_event(|| {
+            (
+                StateModifiedDiff {
+                    unique_id: Some(unique_id.to_string()),
+                    node_type_or_category: node_type.to_string(),
+                    check: check_name.to_string(),
+                    self_value,
+                    other_value,
+                }
+                .into(),
+                None,
+            )
+        });
     }
 }
 
