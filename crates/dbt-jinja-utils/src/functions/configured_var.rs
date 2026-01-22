@@ -4,8 +4,9 @@ use std::{collections::BTreeMap, rc::Rc, sync::Arc};
 
 use dbt_schemas::state::DbtVars;
 use indexmap::IndexMap;
+use minijinja::value::ValueKind;
 use minijinja::{
-    Error, ErrorKind, State, Value, constants::TARGET_PACKAGE_NAME,
+    Error, ErrorKind, State, Value, arg_utils::ArgsIter, constants::TARGET_PACKAGE_NAME,
     listener::RenderingEventListener, value::Object,
 };
 
@@ -33,13 +34,55 @@ impl Object for ConfiguredVar {
         args: &[Value],
         _listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, Error> {
-        // Safely get var_name, defaulting to empty string if args is empty or not a string
-        let var_name = args
-            .first()
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
-        let default_value = args.get(1);
+        // NOTE: Minijinja encodes keyword arguments into `args` as a final map value.
+        // Using `ArgsIter` ensures we correctly support both:
+        // - var("name", "default")
+        // - var("name", default="default")
+        // and we don't accidentally treat the kwargs map itself as the default value.
+        let iter = ArgsIter::new("var", &["name", "default"], args);
+        // Jinja will happily pass "undefined" into functions if the caller writes `var(x)`
+        // and `x` is not defined. Jinja2's Undefined is string-coercible, so dbt-core will
+        // end up treating it like an empty string key and still honor the provided default.
+        //
+        // For compatibility (and to keep tests/fixtures stable), we explicitly coerce
+        // undefined/none to an empty string here instead of raising a type error.
+        let var_name_value = iter.next_arg::<Value>()?;
+        let var_name = if let Some(s) = var_name_value.as_str() {
+            s.to_string()
+        } else if var_name_value.is_undefined() || var_name_value.is_none() {
+            "".to_string()
+        } else {
+            return Err(Error::new(
+                ErrorKind::InvalidOperation,
+                "argument 'name' to var() has incompatible type; value is not a string",
+            ));
+        };
+        // IMPORTANT: ArgsIter's `next_kwarg::<Option<&Value>>` cannot distinguish between:
+        // - kwarg missing
+        // - kwarg present with value `none`
+        //
+        // dbt projects commonly do `var("x", default=None)`, so we need to preserve an
+        // explicit `none` default.
+        //
+        // We therefore parse the kwargs map ourselves (if present), and fall back to
+        // a true positional default only when the 2nd argument is not that kwargs map.
+        let mut default_value: Option<Value> = None;
+
+        // Positional default: var("x", "abc")
+        if args.len() >= 2 && args.get(1).map(|v| v.kind()) != Some(ValueKind::Map) {
+            default_value = args.get(1).cloned();
+        }
+
+        // Keyword default: var("x", default=...)
+        if let Some(last) = args.last()
+            && last.kind() == ValueKind::Map
+        {
+            // If the key doesn't exist, get_item errors; treat that as "no kwarg".
+            if let Ok(v) = last.get_item(&Value::from("default")) {
+                default_value = Some(v);
+            }
+        }
+
         // 1. CLI vars
         if let Some(value) = self.cli_vars.get(&var_name) {
             return Ok(Value::from_serialize(value));
@@ -51,7 +94,7 @@ impl Object for ConfiguredVar {
                 .and_then(|v| v.as_str().map(|s| s.to_string()))
         {
             if let Some(default_value) = default_value {
-                return Ok(Value::from_serialize(default_value));
+                return Ok(default_value);
             } else {
                 return Err(Error::new(
                     ErrorKind::InvalidOperation,
@@ -81,7 +124,7 @@ impl Object for ConfiguredVar {
         if let Some(var) = vars_lookup.get(&var_name) {
             Ok(Value::from_serialize(var))
         } else if let Some(default_value) = default_value {
-            Ok(Value::from_serialize(default_value))
+            Ok(default_value)
         // TODO (alex): this check only works for parse. At compile time, this needs to be phase dependent
         // "this" is only present when resolving models, which is when we need to
         } else if state.lookup("this").is_none() {
@@ -153,5 +196,69 @@ impl Object for ConfiguredVar {
                 format!("Method {method} not found"),
             ))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use minijinja::constants::TARGET_PACKAGE_NAME;
+    use minijinja::value::Value as MinijinjaValue;
+
+    fn make_env_with_var() -> minijinja::Environment<'static> {
+        let mut env = minijinja::Environment::new();
+
+        // Mirror Fusion's global Jinja context: dbt projects frequently use
+        // Python-ish constants (capitalized) like `None`.
+        env.add_global("None", MinijinjaValue::from(()));
+        env.add_global("True", MinijinjaValue::from(true));
+        env.add_global("False", MinijinjaValue::from(false));
+
+        // Provide the current package name so ConfiguredVar can look up the vars namespace.
+        env.add_global(TARGET_PACKAGE_NAME, MinijinjaValue::from("my_new_project"));
+
+        // Provide an empty vars namespace for this package (required by ConfiguredVar).
+        let mut vars = BTreeMap::new();
+        vars.insert("my_new_project".to_string(), IndexMap::new());
+
+        let cli_vars = BTreeMap::new();
+        env.add_global(
+            "var",
+            MinijinjaValue::from_object(ConfiguredVar::new(vars, cli_vars)),
+        );
+        env
+    }
+
+    #[test]
+    fn var_default_keyword_none_is_treated_as_none() {
+        let env = make_env_with_var();
+        let template = env
+            .template_from_str(
+                "{% set x = var('x', default=None) %}{% if x is not none %}NOT{% else %}NONE{% endif %}",
+            )
+            .unwrap();
+
+        let rendered = template.render(minijinja::context!(), &[]).unwrap();
+        assert_eq!(rendered, "NONE");
+    }
+
+    #[test]
+    fn var_default_keyword_string_is_used_when_var_missing() {
+        let env = make_env_with_var();
+        let template = env
+            .template_from_str("{{ var('x', default='abc') }}")
+            .unwrap();
+
+        let rendered = template.render(minijinja::context!(), &[]).unwrap();
+        assert_eq!(rendered, "abc");
+    }
+
+    #[test]
+    fn var_default_positional_string_is_used_when_var_missing() {
+        let env = make_env_with_var();
+        let template = env.template_from_str("{{ var('x', 'abc') }}").unwrap();
+
+        let rendered = template.render(minijinja::context!(), &[]).unwrap();
+        assert_eq!(rendered, "abc");
     }
 }

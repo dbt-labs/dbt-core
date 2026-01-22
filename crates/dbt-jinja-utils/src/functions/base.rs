@@ -95,6 +95,14 @@ pub fn register_base_functions(env: &mut Environment, io_args: IoArgs) {
         "exceptions".to_owned(),
         Value::from_object(Exceptions { io_args }),
     );
+    // dbt-core templates commonly use Python-ish constants (capitalized).
+    // In Jinja2 the canonical values are `none/true/false`, but many dbt projects
+    // (and dbt-core's Python context) also make `None/True/False` available.
+    // Missing these can cause `default=None` to be treated as an undefined variable,
+    // which in turn can make `var(..., default=None)` behave like a required var.
+    env.add_global("None", Value::from(()));
+    env.add_global("True", Value::from(true));
+    env.add_global("False", Value::from(false));
 
     env.add_func_func("fromjson", fromjson);
     env.add_func_func("tojson", tojson);
