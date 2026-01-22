@@ -103,13 +103,30 @@ where
         .to_owned())
 }
 
+/// Information about a column that was renamed during disambiguation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RenamedColumn<'a> {
+    /// The original column name (duplicate).
+    pub original: &'a str,
+    /// The new unique column name (e.g., "col_2", "col_3").
+    pub renamed: &'a str,
+}
+
 /// Deduplicate column names in a RecordBatch by appending `_2`, `_3`, etc. to duplicate names.
 ///
 /// This mirrors the behavior of dbt-core's `process_results` method in `SQLConnectionManager`
 /// which renames duplicate columns to ensure each column has a unique name.
 ///
 /// For example, columns `["A", "B", "A", "A"]` become `["A", "B", "A_2", "A_3"]`.
-pub fn disambiguate_column_names(batch: RecordBatch) -> RecordBatch {
+///
+/// # Arguments
+/// * `batch` - The record batch to deduplicate column names for.
+/// * `on_disambiguate` - Optional callback invoked when columns are renamed. Receives the list
+///   of renamed columns. Use this to emit warnings or log the disambiguation.
+pub fn disambiguate_column_names(
+    batch: RecordBatch,
+    on_disambiguate: Option<impl FnOnce(&[RenamedColumn<'_>])>,
+) -> RecordBatch {
     let schema = batch.schema();
     let fields = schema.fields();
 
@@ -129,14 +146,24 @@ pub fn disambiguate_column_names(batch: RecordBatch) -> RecordBatch {
         }
     }
 
-    // Check if any names changed - if not, return original batch to avoid unnecessary allocation
-    let names_changed = new_names
+    let renamed_columns: Vec<_> = fields
         .iter()
-        .zip(fields.iter())
-        .any(|(new_name, field)| new_name != field.name());
+        .zip(new_names.iter())
+        .filter(|(field, new_name)| field.name() != *new_name)
+        .map(|(field, new_name)| RenamedColumn {
+            original: field.name().as_str(),
+            renamed: new_name.as_str(),
+        })
+        .collect();
 
-    if !names_changed {
+    // If no names changed, return original batch to avoid unnecessary allocation
+    if renamed_columns.is_empty() {
         return batch;
+    }
+
+    // Invoke callback if provided
+    if let Some(callback) = on_disambiguate {
+        callback(&renamed_columns);
     }
 
     // Build new schema with deduplicated names
@@ -229,7 +256,16 @@ mod tests {
         )
         .unwrap();
 
-        let result = disambiguate_column_names(batch);
+        // Callback should not be invoked when no duplicates exist
+        let callback_invoked = std::cell::Cell::new(false);
+        let result = disambiguate_column_names(
+            batch,
+            Some(|_: &[RenamedColumn]| {
+                callback_invoked.set(true);
+            }),
+        );
+        assert!(!callback_invoked.get());
+
         let schema = result.schema();
         let names: Vec<_> = schema.fields().iter().map(|f| f.name().as_str()).collect();
         assert_eq!(names, vec!["a", "b", "c"]);
@@ -254,7 +290,24 @@ mod tests {
         )
         .unwrap();
 
-        let result = disambiguate_column_names(batch);
+        let captured = std::cell::RefCell::new(Vec::new());
+        let result = disambiguate_column_names(
+            batch,
+            Some(|renamed: &[RenamedColumn]| {
+                captured.borrow_mut().extend(
+                    renamed
+                        .iter()
+                        .map(|r| (r.original.to_string(), r.renamed.to_string())),
+                );
+            }),
+        );
+
+        // Verify callback was invoked with correct data
+        let renamed = captured.into_inner();
+        assert_eq!(renamed.len(), 2);
+        assert_eq!(renamed[0], ("A".to_string(), "A_2".to_string()));
+        assert_eq!(renamed[1], ("A".to_string(), "A_3".to_string()));
+
         let schema = result.schema();
         let names: Vec<_> = schema.fields().iter().map(|f| f.name().as_str()).collect();
         assert_eq!(names, vec!["A", "B", "A_2", "A_3"]);
@@ -275,7 +328,7 @@ mod tests {
             .collect();
         let batch = RecordBatch::try_new(Arc::new(schema), cols).unwrap();
 
-        let result = disambiguate_column_names(batch);
+        let result = disambiguate_column_names(batch, None::<fn(&[RenamedColumn])>);
         let schema = result.schema();
         let names: Vec<_> = schema.fields().iter().map(|f| f.name().as_str()).collect();
         assert_eq!(names, vec!["x", "y", "x_2", "y_2", "x_3"]);

@@ -15,8 +15,10 @@ use crate::metadata::redshift::RedshiftMetadataAdapter;
 use crate::metadata::salesforce::SalesforceMetadataAdapter;
 use crate::metadata::snowflake::SnowflakeMetadataAdapter;
 use crate::metadata::{self, CatalogAndSchema, MetadataAdapter};
-use crate::query_ctx::query_ctx_from_state;
-use crate::record_batch_utils::{extract_first_value_as_i64, get_column_values};
+use crate::query_ctx::{node_id_from_state, query_ctx_from_state};
+use crate::record_batch_utils::{
+    RenamedColumn, disambiguate_column_names, extract_first_value_as_i64, get_column_values,
+};
 use crate::relation::RelationObject;
 use crate::relation::bigquery::{
     BigqueryMaterializedViewConfig, BigqueryMaterializedViewConfigObject,
@@ -41,7 +43,8 @@ use dashmap::DashMap;
 use dbt_agate::AgateTable;
 use dbt_common::adapter::AdapterType;
 use dbt_common::behavior_flags::BehaviorFlag;
-use dbt_common::{FsResult, unexpected_fs_err};
+use dbt_common::tracing::emit::emit_warn_log_message;
+use dbt_common::{ErrorCode, FsResult, unexpected_fs_err};
 use dbt_frontend_common::dialect::Dialect;
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::common::ConstraintSupport;
@@ -84,6 +87,33 @@ static CREDENTIAL_IN_COPY_INTO_REGEX: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"credential\s*(\(\s*'[\w\-]+'\s*=\s*'.*?'\s*(?:,\s*'[\w\-]+'\s*=\s*'.*?'\s*)*\))")
         .expect("CREDENTIALS_IN_COPY_INTO_REGEX invalid")
 });
+
+/// Returns a callback that emits a warning when duplicate column names are renamed.
+fn warn_duplicate_columns(node_id: Option<String>) -> impl FnOnce(&[RenamedColumn<'_>]) {
+    use std::fmt::Write;
+
+    move |renamed: &[RenamedColumn<'_>]| {
+        let mut msg = match &node_id {
+            Some(id) => format!(
+                "Query for node '{}' returned duplicate column names. \
+                 Columns were renamed to ensure uniqueness: ",
+                id
+            ),
+            None => "Query returned duplicate column names. \
+                     Columns were renamed to ensure uniqueness: "
+                .to_string(),
+        };
+
+        for (i, r) in renamed.iter().enumerate() {
+            if i > 0 {
+                msg.push_str(", ");
+            }
+            write!(msg, "'{}' -> '{}'", r.original, r.renamed).unwrap();
+        }
+
+        emit_warn_log_message(ErrorCode::DuplicateColumns, msg, None);
+    }
+}
 
 /// Adapter with typed functions.
 pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
@@ -335,7 +365,8 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         // duplicate columns to `col_2`, `col_3`, etc.
         // BigQuery is the exception to this deduping
         let last_batch = if self.adapter_type() != AdapterType::Bigquery {
-            crate::record_batch_utils::disambiguate_column_names(last_batch)
+            let node_id = state.and_then(node_id_from_state);
+            disambiguate_column_names(last_batch, Some(warn_duplicate_columns(node_id)))
         } else {
             last_batch
         };
