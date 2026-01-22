@@ -168,6 +168,12 @@ fn persist_inner(
         &jinja_set_vars,
         test_name_truncations,
     );
+
+    // Generate unique_id hash from UNCLEANED kwargs to match mantle's behavior.
+    let test_hash =
+        generate_test_unique_id_hash(&full_name, &test_macro_name, namespace.as_ref(), &kwargs);
+    let unique_id = format!("{}.{}", full_name, test_hash);
+
     let path = PathBuf::from(DBT_GENERIC_TESTS_DIR_NAME).join(format!("{full_name}.sql"));
     let test_file = io_args.out_dir.join(&path);
     let generated_test_sql = generate_test_macro(
@@ -177,7 +183,11 @@ fn persist_inner(
         &config,
         &jinja_set_vars,
     )?;
-    if !seen_tests.insert(full_name.clone()) {
+
+    // Check for duplicate tests using the unique_id (which includes kwargs hash)
+    // rather than just the cleaned name. This matches mantle's behavior where
+    // tests with different kwargs get different unique_ids.
+    if !seen_tests.insert(unique_id) {
         match column_name {
             Some(column_name) => {
                 return err!(
@@ -703,6 +713,123 @@ fn merge_yaml_values(
 
 static CLEAN_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"[^0-9a-zA-Z_]+").expect("valid regex"));
+
+/// Generates a unique hash for a generic test based on uncleaned kwargs.
+/// This matches mantle's behavior where the unique_id includes a hash of the
+/// test metadata (namespace, name, kwargs) WITHOUT cleaning, ensuring that
+/// tests with different expressions (e.g., '> 0' vs '= 0') get different
+/// unique_ids even if their cleaned names would be identical.
+///
+/// https://github.com/dbt-labs/dbt-core/blob/2ef17b836e39d1b4c7a55f14b448a2254378302e/core/dbt/parser/schema_generic_tests.py#L104-L117
+fn generate_test_unique_id_hash(
+    fqn_name: &str,
+    test_macro_name: &str,
+    namespace: Option<&String>,
+    kwargs: &BTreeMap<String, Value>,
+) -> String {
+    const HASH_LENGTH: usize = 10;
+
+    // Mantle builds test_metadata as:
+    //   metadata = {"namespace": builder.namespace, "name": builder.name, "kwargs": builder.args}
+    // Then computes:
+    //   hashable_metadata = repr(get_hashable_md(test_metadata))
+    //   hash_string = name + hashable_metadata
+    //   test_hash = md5(hash_string)[-HASH_LENGTH:]
+    //
+    // get_hashable_md recursively processes:
+    //   - dicts: sorted by keys, recursively processed
+    //   - lists: recursively processed
+    //   - other: str(value)
+
+    // Build the test_metadata dict structure matching mantle
+    let hashable_metadata = build_hashable_metadata_repr(test_macro_name, namespace, kwargs);
+
+    // hash_string = name + hashable_metadata (name is fqn_name in mantle)
+    let hash_string = format!("{}{}", fqn_name, hashable_metadata);
+
+    // Compute MD5 hash and take last HASH_LENGTH characters
+    let digest = md5::compute(hash_string.as_bytes());
+    let hash_hex = format!("{:x}", digest);
+    hash_hex[hash_hex.len() - HASH_LENGTH..].to_string()
+}
+
+/// Builds a Python repr()-like string of the test metadata dict.
+/// https://github.com/dbt-labs/dbt-core/blob/2ef17b836e39d1b4c7a55f14b448a2254378302e/core/dbt/parser/schema_generic_tests.py#L104-L113
+fn build_hashable_metadata_repr(
+    test_macro_name: &str,
+    namespace: Option<&String>,
+    kwargs: &BTreeMap<String, Value>,
+) -> String {
+    use std::fmt::Write;
+
+    // Build the metadata dict: {"kwargs": {...}, "name": "...", "namespace": "..."}
+    let mut out = String::new();
+    out.push_str("{'kwargs': ");
+
+    // "kwargs" comes first alphabetically
+    write_value_to_hashable_repr(
+        &mut out,
+        &Value::Object(kwargs.iter().map(|(k, v)| (k.clone(), v.clone())).collect()),
+    );
+
+    // "name" comes second
+    let _ = write!(out, ", 'name': '{}'", test_macro_name);
+
+    // "namespace" comes third (None is still represented)
+    match namespace {
+        Some(ns) => {
+            let _ = write!(out, ", 'namespace': '{}'", ns);
+        }
+        None => out.push_str(", 'namespace': None"),
+    }
+
+    out.push('}');
+    out
+}
+
+/// Writes a serde_json Value as a Python repr()-like string to a buffer.
+/// https://github.com/dbt-labs/dbt-core/blob/2ef17b836e39d1b4c7a55f14b448a2254378302e/core/dbt/parser/schema_generic_tests.py#L104-L113
+fn write_value_to_hashable_repr(out: &mut String, value: &Value) {
+    use std::fmt::Write;
+
+    match value {
+        Value::Object(map) => {
+            // Sort keys alphabetically (serde_json::Map may not be sorted)
+            let mut sorted_entries: Vec<_> = map.iter().collect();
+            sorted_entries.sort_by(|a, b| a.0.cmp(b.0));
+
+            out.push('{');
+            for (i, (k, v)) in sorted_entries.iter().enumerate() {
+                if i > 0 {
+                    out.push_str(", ");
+                }
+                let _ = write!(out, "'{}': ", k);
+                write_value_to_hashable_repr(out, v);
+            }
+            out.push('}');
+        }
+        Value::Array(arr) => {
+            out.push('[');
+            for (i, v) in arr.iter().enumerate() {
+                if i > 0 {
+                    out.push_str(", ");
+                }
+                write_value_to_hashable_repr(out, v);
+            }
+            out.push(']');
+        }
+        Value::String(s) => {
+            let _ = write!(out, "'{}'", s);
+        }
+        Value::Number(n) => {
+            let _ = write!(out, "{}", n);
+        }
+        Value::Bool(b) => {
+            out.push_str(if *b { "True" } else { "False" });
+        }
+        Value::Null => out.push_str("None"),
+    }
+}
 
 //https://github.com/dbt-labs/dbt-core/blob/31881d2a3bea030e700e9df126a3445298385698/core/dbt/parser/generic_test_builders.py#L26
 /// Generates a test name and alias for a generic test.
@@ -2356,6 +2483,255 @@ mod tests {
         assert!(
             !sql.contains("\\{") && !sql.contains("\\}"),
             "Curly braces should not be backslash-escaped in generated macro args, got: {sql}"
+        );
+    }
+
+    #[test]
+    fn test_write_value_to_hashable_repr_string() {
+        let mut out = String::new();
+        write_value_to_hashable_repr(&mut out, &Value::String("hello".to_string()));
+        assert_eq!(out, "'hello'");
+    }
+
+    #[test]
+    fn test_write_value_to_hashable_repr_number() {
+        let mut out = String::new();
+        write_value_to_hashable_repr(&mut out, &Value::Number(42.into()));
+        assert_eq!(out, "42");
+    }
+
+    #[test]
+    fn test_write_value_to_hashable_repr_bool() {
+        let mut out = String::new();
+        write_value_to_hashable_repr(&mut out, &Value::Bool(true));
+        assert_eq!(out, "True");
+
+        out.clear();
+        write_value_to_hashable_repr(&mut out, &Value::Bool(false));
+        assert_eq!(out, "False");
+    }
+
+    #[test]
+    fn test_write_value_to_hashable_repr_null() {
+        let mut out = String::new();
+        write_value_to_hashable_repr(&mut out, &Value::Null);
+        assert_eq!(out, "None");
+    }
+
+    #[test]
+    fn test_write_value_to_hashable_repr_array() {
+        let mut out = String::new();
+        write_value_to_hashable_repr(
+            &mut out,
+            &Value::Array(vec![
+                Value::String("a".to_string()),
+                Value::Number(1.into()),
+            ]),
+        );
+        assert_eq!(out, "['a', 1]");
+    }
+
+    #[test]
+    fn test_write_value_to_hashable_repr_object_sorted_keys() {
+        // Keys should be sorted alphabetically
+        let mut map = serde_json::Map::new();
+        map.insert("zebra".to_string(), Value::String("z".to_string()));
+        map.insert("apple".to_string(), Value::String("a".to_string()));
+        map.insert("mango".to_string(), Value::String("m".to_string()));
+
+        let mut out = String::new();
+        write_value_to_hashable_repr(&mut out, &Value::Object(map));
+        assert_eq!(out, "{'apple': 'a', 'mango': 'm', 'zebra': 'z'}");
+    }
+
+    #[test]
+    fn test_build_hashable_metadata_repr_with_namespace() {
+        let mut kwargs = BTreeMap::new();
+        kwargs.insert("expression".to_string(), Value::String("> 0".to_string()));
+
+        let repr = build_hashable_metadata_repr(
+            "expression_is_true",
+            Some(&"dbt_utils".to_string()),
+            &kwargs,
+        );
+
+        // Should have sorted keys: kwargs, name, namespace
+        assert!(repr.starts_with("{'kwargs': "));
+        assert!(repr.contains("'name': 'expression_is_true'"));
+        assert!(repr.contains("'namespace': 'dbt_utils'"));
+    }
+
+    #[test]
+    fn test_build_hashable_metadata_repr_without_namespace() {
+        let kwargs = BTreeMap::new();
+        let repr = build_hashable_metadata_repr("unique", None, &kwargs);
+
+        assert!(repr.contains("'namespace': None"));
+    }
+
+    #[test]
+    fn test_generate_test_unique_id_hash_different_expressions() {
+        // This is the key test: expressions '> 0' and '= 0' should produce different hashes
+        // even though they would clean to the same value '_0'
+        let mut kwargs_gt = BTreeMap::new();
+        kwargs_gt.insert(
+            "model".to_string(),
+            Value::String("get_where_subquery(ref('model'))".to_string()),
+        );
+        kwargs_gt.insert(
+            "column_name".to_string(),
+            Value::String("effective_conc".to_string()),
+        );
+        kwargs_gt.insert("expression".to_string(), Value::String("> 0".to_string()));
+
+        let mut kwargs_eq = BTreeMap::new();
+        kwargs_eq.insert(
+            "model".to_string(),
+            Value::String("get_where_subquery(ref('model'))".to_string()),
+        );
+        kwargs_eq.insert(
+            "column_name".to_string(),
+            Value::String("effective_conc".to_string()),
+        );
+        kwargs_eq.insert("expression".to_string(), Value::String("= 0".to_string()));
+
+        let namespace = Some("dbt_utils".to_string());
+        let full_name = "dbt_utils_expression_is_true_model__0";
+
+        let hash_gt = generate_test_unique_id_hash(
+            full_name,
+            "expression_is_true",
+            namespace.as_ref(),
+            &kwargs_gt,
+        );
+        let hash_eq = generate_test_unique_id_hash(
+            full_name,
+            "expression_is_true",
+            namespace.as_ref(),
+            &kwargs_eq,
+        );
+
+        assert_ne!(
+            hash_gt, hash_eq,
+            "Hashes should differ for '> 0' vs '= 0' expressions"
+        );
+        assert_eq!(hash_gt.len(), 10, "Hash should be 10 characters");
+        assert_eq!(hash_eq.len(), 10, "Hash should be 10 characters");
+    }
+
+    #[test]
+    fn test_generate_test_unique_id_hash_same_kwargs_same_hash() {
+        // Same kwargs should produce same hash
+        let mut kwargs = BTreeMap::new();
+        kwargs.insert(
+            "model".to_string(),
+            Value::String("ref('model')".to_string()),
+        );
+        kwargs.insert("column_name".to_string(), Value::String("col".to_string()));
+
+        let hash1 = generate_test_unique_id_hash("test_name", "unique", None, &kwargs);
+        let hash2 = generate_test_unique_id_hash("test_name", "unique", None, &kwargs);
+
+        assert_eq!(hash1, hash2, "Same kwargs should produce same hash");
+    }
+
+    #[test]
+    fn test_duplicate_detection_with_different_expressions() {
+        // Simulate what happens with two expression_is_true tests with '> 0' and '= 0'
+        // Both clean to '_0' in the test name, but should have different unique_ids
+
+        let test_config = GenericTestConfig {
+            resource_type: "model".to_string(),
+            resource_name: "stg_model".to_string(),
+            version_num: None,
+            model_tests: None,
+            column_tests: None,
+            source_name: None,
+        };
+
+        // Test 1: expression '> 0'
+        let mut kwargs1 = BTreeMap::new();
+        kwargs1.insert(
+            "model".to_string(),
+            Value::String("get_where_subquery(ref('stg_model'))".to_string()),
+        );
+        kwargs1.insert(
+            "column_name".to_string(),
+            Value::String("effective_conc".to_string()),
+        );
+        kwargs1.insert("expression".to_string(), Value::String("> 0".to_string()));
+
+        // Test 2: expression '= 0'
+        let mut kwargs2 = BTreeMap::new();
+        kwargs2.insert(
+            "model".to_string(),
+            Value::String("get_where_subquery(ref('stg_model'))".to_string()),
+        );
+        kwargs2.insert(
+            "column_name".to_string(),
+            Value::String("effective_conc".to_string()),
+        );
+        kwargs2.insert("expression".to_string(), Value::String("= 0".to_string()));
+
+        let namespace = Some("dbt_utils".to_string());
+        let mut test_name_truncations = HashMap::new();
+
+        // Generate test names (these will be the same due to cleaning)
+        let name1 = generate_test_name(
+            "expression_is_true",
+            None,
+            "my_project",
+            &test_config,
+            &kwargs1,
+            namespace.as_ref(),
+            &BTreeMap::new(),
+            &mut test_name_truncations,
+        );
+        let name2 = generate_test_name(
+            "expression_is_true",
+            None,
+            "my_project",
+            &test_config,
+            &kwargs2,
+            namespace.as_ref(),
+            &BTreeMap::new(),
+            &mut test_name_truncations,
+        );
+
+        // Names should be identical (both clean to '_0')
+        assert_eq!(name1, name2, "Cleaned names should be identical");
+
+        // But unique_ids should differ
+        let hash1 = generate_test_unique_id_hash(
+            &name1,
+            "expression_is_true",
+            namespace.as_ref(),
+            &kwargs1,
+        );
+        let hash2 = generate_test_unique_id_hash(
+            &name2,
+            "expression_is_true",
+            namespace.as_ref(),
+            &kwargs2,
+        );
+
+        let unique_id1 = format!("{}.{}", name1, hash1);
+        let unique_id2 = format!("{}.{}", name2, hash2);
+
+        assert_ne!(
+            unique_id1, unique_id2,
+            "Unique IDs should differ even when cleaned names are the same"
+        );
+
+        // Verify that using unique_id for duplicate detection would NOT flag these as duplicates
+        let mut seen_tests = HashSet::new();
+        assert!(
+            seen_tests.insert(unique_id1),
+            "First test should be inserted"
+        );
+        assert!(
+            seen_tests.insert(unique_id2),
+            "Second test should also be inserted (not a duplicate)"
         );
     }
 }
