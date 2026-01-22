@@ -83,6 +83,7 @@ pub struct GitPackage {
     pub warn_unpinned: Option<bool>,
     #[serde(rename = "subdirectory", skip_serializing_if = "Option::is_none")]
     pub subdirectory: Option<String>,
+    #[serde(default, skip_serializing)]
     pub __unrendered__: HashMap<String, YmlValue>,
 }
 
@@ -109,6 +110,7 @@ pub struct PrivatePackage {
     pub warn_unpinned: Option<bool>,
     #[serde(rename = "subdirectory", skip_serializing_if = "Option::is_none")]
     pub subdirectory: Option<String>,
+    #[serde(default, skip_serializing)]
     pub __unrendered__: HashMap<String, YmlValue>,
 }
 
@@ -255,6 +257,7 @@ pub struct GitPackageLock {
     pub warn_unpinned: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subdirectory: Option<String>,
+    #[serde(default, skip_serializing)]
     pub __unrendered__: HashMap<String, YmlValue>,
 }
 
@@ -275,6 +278,7 @@ pub struct PrivatePackageLock {
     pub warn_unpinned: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subdirectory: Option<String>,
+    #[serde(default, skip_serializing)]
     pub __unrendered__: HashMap<String, YmlValue>,
 }
 
@@ -282,12 +286,14 @@ pub struct PrivatePackageLock {
 pub struct TarballPackageLock {
     pub tarball: Verbatim<String>,
     pub name: String,
+    #[serde(default, skip_serializing)]
     pub __unrendered__: HashMap<String, YmlValue>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TarballPackage {
     pub tarball: Verbatim<String>,
+    #[serde(default, skip_serializing)]
     pub __unrendered__: HashMap<String, YmlValue>,
 }
 
@@ -332,6 +338,7 @@ pub struct DeprecatedGitPackageLock {
     pub warn_unpinned: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subdirectory: Option<String>,
+    #[serde(default, skip_serializing)]
     pub __unrendered__: HashMap<String, YmlValue>,
 }
 
@@ -350,13 +357,13 @@ pub struct DeprecatedPrivatePackageLock {
     pub warn_unpinned: Option<bool>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub subdirectory: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing)]
     pub __unrendered__: HashMap<String, YmlValue>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DeprecatedTarballPackageLock {
     pub tarball: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing)]
     pub __unrendered__: HashMap<String, YmlValue>,
 }
