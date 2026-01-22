@@ -101,7 +101,7 @@ impl SchemaEntryWrapper {
 }
 
 /// Interior mutable state shared by [`SchemaStore`].
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct SchemaStoreState {
     store_dir: PathBuf,
     store_fmt: StoreFormat,
@@ -294,7 +294,7 @@ impl SchemaStoreState {
 }
 
 /// Supported on-disk encodings for schemas and data.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum StoreFormat {
     ArrowIpc,
     Parquet,
@@ -302,7 +302,7 @@ pub enum StoreFormat {
 }
 
 /// Primary filesystem-backed implementation of [`SchemaStoreTrait`].
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SchemaStore {
     selected: BiMap<CanonicalFqn, UniqueId>,
     frontier: BiMap<CanonicalFqn, UniqueId>,
@@ -515,7 +515,7 @@ impl SchemaStoreTrait for SchemaStore {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DataStore {
     store_dir: PathBuf,
     store_fmt: StoreFormat,
