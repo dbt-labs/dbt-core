@@ -191,6 +191,12 @@ hatch run test
 # Run integration tests
 hatch run integration-tests
 
+# Run integration tests for test class
+hatch run integration-tests -k TestVerifyArtifacts
+
+# Run integration tests for test method name
+hatch run integration-tests -k test_load_artifact
+
 # Run integration tests in fail-fast mode
 hatch run integration-tests-fail-fast
 
