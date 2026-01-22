@@ -22,9 +22,12 @@ use crate::schemas::dbt_column::{ColumnPropertiesDimensionType, Granularity};
 use crate::schemas::manifest::common::SourceFileMetadata;
 use crate::schemas::semantic_layer::semantic_manifest::SemanticLayerElementConfig;
 
-use super::serde::{StringOrArrayOfStrings, bool_or_string_bool, bool_or_string_bool_default};
+use super::serde::{
+    StringOrArrayOfStrings, bool_or_string_bool, bool_or_string_bool_default, i64_or_string_i64,
+};
 #[derive(Default, Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq, Eq)]
 pub struct FreshnessRules {
+    #[serde(deserialize_with = "i64_or_string_i64")]
     pub count: Option<i64>,
     pub period: Option<FreshnessPeriod>,
 }
@@ -1479,5 +1482,27 @@ models:
             Some("USING CRON 0,15,30,45 * * * * UTC".to_string())
         );
         assert_eq!(schedule_config.time_zone_value, None);
+    }
+
+    #[test]
+    fn test_freshness_rules_count_as_number() {
+        let yaml = r#"
+count: 24
+period: hour
+"#;
+        let rules: FreshnessRules = dbt_serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(rules.count, Some(24));
+        assert_eq!(rules.period, Some(FreshnessPeriod::hour));
+    }
+
+    #[test]
+    fn test_freshness_rules_count_as_string() {
+        let yaml = r#"
+count: "24"
+period: hour
+"#;
+        let rules: FreshnessRules = dbt_serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(rules.count, Some(24));
+        assert_eq!(rules.period, Some(FreshnessPeriod::hour));
     }
 }

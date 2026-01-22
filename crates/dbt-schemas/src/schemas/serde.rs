@@ -164,6 +164,16 @@ where
         .or_else(|| value.as_str().and_then(|s| s.parse::<u64>().ok())))
 }
 
+pub fn i64_or_string_i64<'de, D>(deserializer: D) -> Result<Option<i64>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = dbt_serde_yaml::Value::deserialize(deserializer)?;
+    Ok(value
+        .as_i64()
+        .or_else(|| value.as_str().and_then(|s| s.parse::<i64>().ok())))
+}
+
 pub fn f64_or_string_f64<'de, D>(deserializer: D) -> Result<Option<f64>, D::Error>
 where
     D: Deserializer<'de>,
