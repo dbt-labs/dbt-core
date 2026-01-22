@@ -541,3 +541,10 @@ semantic_models:
     defaults:
       agg_time_dimension: created_at
 """
+
+
+base_schema_yml_v2 = """models:
+  - name: fct_revenue
+    description: This is the model fct_revenue. It should be able to use doc blocks
+    semantic_model: true
+"""

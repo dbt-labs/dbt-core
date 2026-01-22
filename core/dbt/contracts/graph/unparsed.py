@@ -228,6 +228,10 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
     versions: Sequence[UnparsedVersion] = field(default_factory=list)
     deprecation_date: Optional[datetime.datetime] = None
     time_spine: Optional[TimeSpine] = None
+    # TODO: allow semantic model to accept a semantic model config object OR a bool
+    semantic_model: Optional[bool] = None
+    # TODO: add metrics section
+    # TODO: add derived_semantics section with dimensions and entities
 
     def __post_init__(self) -> None:
         if self.latest_version:
