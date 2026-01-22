@@ -1093,6 +1093,12 @@ impl SqlType {
                 // https://docs.aws.amazon.com/redshift/latest/dg/r_Numeric_types201.html#r_Numeric_types201-decimal-or-numeric-type
                 DataType::Decimal128(18, 0)
             }
+            // Redshift system tables have a variety of odd types that come in as Other. Most of them can be safely treated
+            // as Utf8, but oid is known BIGINT.
+            (Redshift | RedshiftODBC, Other(name)) if name.to_lowercase().as_str() == "oid" => {
+                DataType::Int64
+            }
+            (Redshift | RedshiftODBC, Other(_)) => DataType::Utf8,
             // }}}
 
             // DuckDB {{{

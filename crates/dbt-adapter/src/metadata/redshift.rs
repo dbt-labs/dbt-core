@@ -15,6 +15,7 @@ use dbt_schemas::schemas::legacy_catalog::*;
 use dbt_schemas::schemas::relations::base::*;
 use dbt_xdbc::*;
 use minijinja::State;
+
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
@@ -690,6 +691,22 @@ AND table_name = '{identifier}'"
                     comment,
                 )?;
 
+                fields.push(field);
+            }
+
+            // This list was created using brute force since I can't find docs for which tables support it
+            let tables_with_oid: &'static str = "pg_cast pg_opclass pg_class pg_constraint pg_database pg_language pg_namespace pg_operator pg_proc pg_type";
+
+            // Some pg_ tables contain an "invisible" oid column
+            // See: https://docs.aws.amazon.com/redshift/latest/dg/c_join_PG.html
+            if schema == "pg_catalog" && tables_with_oid.contains(identifier.as_str()) {
+                let field = make_arrow_field_v2(
+                    adapter.engine().type_ops(),
+                    String::from("oid"),
+                    "oid",
+                    Some(false),
+                    None,
+                )?;
                 fields.push(field);
             }
 
