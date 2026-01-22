@@ -65,18 +65,14 @@ pub struct SqlFileRenderResult<T: DefaultTo<T>, S> {
 
 /// Extracts model and version configuration from node properties
 fn extract_model_and_version_config<T: DefaultTo<T>, S: GetConfig<T> + Debug>(
-    ref_name: &str,
     mpe: &mut MinimalPropertiesEntry,
-    duplicate_errors: &mut Vec<FsError>,
     arg: &ResolveArgs,
     jinja_env: &JinjaEnv,
     base_ctx: &BTreeMap<String, MinijinjaValue>,
     dependency_package_name: Option<&str>,
 ) -> FsResult<(Option<S>, Option<T>)> {
-    if !mpe.duplicate_paths.is_empty() {
-        register_duplicate_resource(mpe, ref_name, "model", duplicate_errors);
-        return Ok((None, None));
-    }
+    // Note: Duplicate checking is deferred until after we determine if the model is enabled.
+    // This matches dbt-core behavior which only checks for duplicates among enabled models.
     // Can occur if a model asset is duplicated, but does not have duplicate property.yml definitions.
     if mpe.schema_value.is_null() {
         return Ok((None, None));
@@ -160,12 +156,14 @@ where
     };
 
     let ref_name = dbt_asset.path.file_stem().unwrap().to_str().unwrap();
+    let has_duplicate_paths = node_properties
+        .get(ref_name)
+        .map(|mpe| !mpe.duplicate_paths.is_empty())
+        .unwrap_or(false);
     let (maybe_model, maybe_version_config) = {
         if let Some(mpe) = node_properties.get_mut(ref_name) {
             extract_model_and_version_config::<T, S>(
-                ref_name,
                 mpe,
-                duplicate_errors,
                 args,
                 jinja_env,
                 base_ctx,
@@ -176,10 +174,6 @@ where
             (None::<S>, None::<T>)
         }
     };
-
-    if maybe_model.is_none() && maybe_version_config.is_none() && !duplicate_errors.is_empty() {
-        return Ok(None);
-    }
 
     let model_name = dbt_asset
         .path
@@ -277,7 +271,7 @@ where
     }
 
     let listener_factory = DefaultRenderingEventListenerFactory::new(true);
-    match render_sql(
+    let (sql_file_info, status, rendered_sql, macro_spans) = match render_sql(
         &sql,
         jinja_env.as_ref(),
         &resolve_model_context,
@@ -342,17 +336,12 @@ where
 
             let macro_spans = listener_factory.drain_macro_spans(&display_path);
 
-            Ok(Some(SqlFileRenderResult {
-                asset: dbt_asset.clone(),
+            (
                 sql_file_info,
-                rendered_sql: rendered_sql_except_node_resolver,
-                macro_spans,
-                properties: maybe_model,
                 status,
-                patch_path: node_properties
-                    .get(ref_name)
-                    .map(|mpe| mpe.relative_path.clone()),
-            }))
+                rendered_sql_except_node_resolver,
+                macro_spans,
+            )
         }
         Err(err) => {
             // Build minimal info for error/disabled outcome
@@ -391,19 +380,35 @@ where
                 }
             };
 
-            Ok(Some(SqlFileRenderResult {
-                asset: dbt_asset.clone(),
-                sql_file_info,
-                rendered_sql: "".to_string(),
-                macro_spans: MacroSpans::default(),
-                properties: maybe_model,
-                status,
-                patch_path: node_properties
-                    .get(ref_name)
-                    .map(|mpe| mpe.relative_path.clone()),
-            }))
+            (sql_file_info, status, String::new(), MacroSpans::default())
         }
+    };
+
+    // Only check for duplicate resource definitions for enabled models to match dbt-core behavior.
+    if status == ModelStatus::Enabled
+        && has_duplicate_paths
+        && node_properties.get(ref_name).is_some()
+    {
+        register_duplicate_resource(
+            node_properties.get(ref_name).unwrap(),
+            ref_name,
+            "model",
+            duplicate_errors,
+        );
+        return Ok(None);
     }
+
+    Ok(Some(SqlFileRenderResult {
+        asset: dbt_asset.clone(),
+        sql_file_info,
+        rendered_sql,
+        macro_spans,
+        properties: maybe_model,
+        status,
+        patch_path: node_properties
+            .get(ref_name)
+            .map(|mpe| mpe.relative_path.clone()),
+    }))
 }
 
 /// Inner context for rendering sql files
