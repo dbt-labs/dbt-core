@@ -1,3 +1,4 @@
+
 -- funcsign: (model, agate_table) -> string
 {% macro create_csv_table(model, agate_table) -%}
   {{ adapter.dispatch('create_csv_table', 'dbt')(model, agate_table) }}
@@ -26,6 +27,7 @@
   {{ return(sql) }}
 {% endmacro %}
 
+
 -- funcsign: (model, bool, relation, agate_table) -> string
 {% macro reset_csv_table(model, full_refresh, old_relation, agate_table) -%}
   {{ adapter.dispatch('reset_csv_table', 'dbt')(model, full_refresh, old_relation, agate_table) }}
@@ -45,6 +47,7 @@
     {{ return(sql) }}
 {% endmacro %}
 
+
 -- funcsign: (string, string) -> string
 {% macro get_csv_sql(create_or_truncate_sql, insert_sql) %}
     {{ adapter.dispatch('get_csv_sql', 'dbt')(create_or_truncate_sql, insert_sql) }}
@@ -57,6 +60,7 @@
     {{ insert_sql }}
 {% endmacro %}
 
+
 -- funcsign: () -> string
 {% macro get_binding_char() -%}
   {{ adapter.dispatch('get_binding_char', 'dbt')() }}
@@ -67,6 +71,7 @@
   {{ return('%s') }}
 {% endmacro %}
 
+
 -- funcsign: () -> integer
 {% macro get_batch_size() -%}
   {{ return(adapter.dispatch('get_batch_size', 'dbt')()) }}
@@ -76,6 +81,7 @@
 {% macro default__get_batch_size() %}
   {{ return(10000) }}
 {% endmacro %}
+
 
 -- funcsign: (model, list[string]) -> string
 {% macro get_seed_column_quoted_csv(model, column_names) %}
@@ -88,6 +94,7 @@
     {%- set dest_cols_csv = quoted | join(', ') -%}
     {{ return(dest_cols_csv) }}
 {% endmacro %}
+
 
 -- funcsign: (model, agate_table) -> string
 {% macro load_csv_rows(model, agate_table) -%}

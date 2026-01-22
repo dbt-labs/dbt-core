@@ -8,6 +8,7 @@
   {% do return(None) %}
 {% endmacro %}
 
+
 -- funcsign: (relation) -> string
 {% macro create_indexes(relation) -%}
   {{ adapter.dispatch('create_indexes', 'dbt')(relation) }}
@@ -25,6 +26,7 @@
   {% endfor %}
 {% endmacro %}
 
+
 -- funcsign: (relation, string) -> string
 {% macro get_drop_index_sql(relation, index_name) -%}
     {{ adapter.dispatch('get_drop_index_sql', 'dbt')(relation, index_name) }}
@@ -34,6 +36,7 @@
 {% macro default__get_drop_index_sql(relation, index_name) -%}
     {{ exceptions.raise_compiler_error("`get_drop_index_sql has not been implemented for this adapter.") }}
 {%- endmacro %}
+
 
 -- funcsign: (relation) -> string
 {% macro get_show_indexes_sql(relation) -%}

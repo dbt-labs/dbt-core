@@ -15,6 +15,9 @@
     ) dbt_internal_test
 {%- endmacro %}
 
+
+
+
 -- funcsign: (string, string, list[string]) -> string
 {% macro get_unit_test_sql(main_sql, expected_fixture_sql, expected_column_names) -%}
   {{ adapter.dispatch('get_unit_test_sql', 'dbt')(main_sql, expected_fixture_sql, expected_column_names) }}
@@ -44,11 +47,15 @@ union all
 select * from dbt_internal_unit_test_expected
 {%- endmacro %}
 
+
+{# DIVERGENCE #}
 -- funcsign: (string) -> string
 {% macro get_aggregated_test_sql(main_sql) -%}
   {{ adapter.dispatch('get_aggregated_test_sql', 'dbt')(main_sql) }}
 {%- endmacro %}
 
+
+{# DIVERGENCE #}
 -- funcsign: (string) -> string
 {% macro default__get_aggregated_test_sql(main_sql) -%}
     -- Process aggregated test results by column

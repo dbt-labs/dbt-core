@@ -9,6 +9,7 @@ actually executes the drop, and `get_drop_sql`, which returns the template.
     {{- adapter.dispatch('drop_table', 'dbt')(relation) -}}
 {%- endmacro %}
 
+
 -- funcsign: (relation) -> string
 {% macro default__drop_table(relation) -%}
     drop table if exists {{ relation.render() }} cascade

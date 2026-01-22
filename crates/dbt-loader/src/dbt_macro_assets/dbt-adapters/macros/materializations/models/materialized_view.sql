@@ -21,6 +21,7 @@
 
 {% endmaterialization %}
 
+
 -- funcsign: (relation, relation, list[hook]) -> string
 {% macro materialized_view_setup(backup_relation, intermediate_relation, pre_hooks) %}
 
@@ -36,6 +37,7 @@
     {{ run_hooks(pre_hooks, inside_transaction=False) }}
 
 {% endmacro %}
+
 
 -- funcsign: (optional[relation], optional[relation], list[hook]) -> string
 {% macro materialized_view_teardown(backup_relation, intermediate_relation, post_hooks) %}
@@ -62,7 +64,7 @@
     {% else %}
 
         -- get config options
-        {% set on_configuration_change = config.get('on_configuration_change', 'apply') %}
+        {% set on_configuration_change = config.get('on_configuration_change', 'apply') %} {# DIVERGENCE: core does not default to `apply` here because it sets it elsewhere in the Python code #}
         {% set configuration_changes = get_materialized_view_configuration_changes(existing_relation, config) %}
 
         {% if configuration_changes is none %}
@@ -98,6 +100,7 @@
         rows_affected="-1"
     ) %}
 {% endmacro %}
+
 
 -- funcsign: (string, optional[relation], relation, list[hook]) -> string
 {% macro materialized_view_execute_build_sql(build_sql, existing_relation, target_relation, post_hooks) %}

@@ -87,6 +87,7 @@
     }) %}
 {% endmacro %}
 
+
 -- funcsign: (timestamp) -> string
 {% macro snapshot_string_as_time(timestamp) -%}
     {{ adapter.dispatch('snapshot_string_as_time', 'dbt')(timestamp) }}
@@ -98,6 +99,7 @@
         'snapshot_string_as_time macro not implemented for adapter '+adapter.type()
     ) %}
 {% endmacro %}
+
 
 -- funcsign: (model, bool, list[string]|string) -> tuple[bool, list[base_column]]
 {% macro snapshot_check_all_get_existing_columns(node, target_exists, check_cols_config) -%}
@@ -127,7 +129,7 @@
         {% do exceptions.raise_compiler_error("Invalid value for 'check_cols': " ~ check_cols_config) %}
     {% endif %}
 
-    {%- set existing_cols = adapter.get_columns_in_relation(target_relation) | map(attribute = 'name') | list -%} -- noqa: should be a relation instead of an optional[string]
+    {%- set existing_cols = adapter.get_columns_in_relation(target_relation) | map(attribute = 'name') | list -%}
     {%- set ns = namespace() -%} {#-- handle for-loop scoping with a namespace --#}
     {%- set ns.column_added = false -%}
 
@@ -141,6 +143,8 @@
     {%- endfor -%}
     {{ return((ns.column_added, intersection)) }}
 {%- endmacro %}
+
+
 -- funcsign: (model, string, string, config, bool) -> struct{unique_key: list[string]|string|none, updated_at: string, row_changed: string, scd_id: string, invalidate_hard_deletes: bool, hard_deletes: string}
 {% macro snapshot_check_strategy(node, snapshotted_rel, current_rel, model_config, target_exists) %}
     {# The model_config parameter is no longer used, but is passed in anyway for compatibility. #}

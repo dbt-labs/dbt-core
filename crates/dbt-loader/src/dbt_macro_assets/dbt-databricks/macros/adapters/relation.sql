@@ -12,7 +12,7 @@
     {% set tmp_identifier = base_relation.identifier ~ suffix %}
     {% set language = model['language'] %}
     {%- if language == 'sql' -%}
-      -- INTENTIONAL DIVERGENCE - the original impl assumes the view to be created is a temp view 
+      -- DIVERGENCE - the original impl assumes the view to be created is a temp view 
       -- But because DBX v2 api doesn't support session, session-scoped objects like temp view won't work
       -- For a regular view, we need the 3-part fully qualified name so that the relation can be referenced across queries
       {% set tmp_relation = api.Relation.create(

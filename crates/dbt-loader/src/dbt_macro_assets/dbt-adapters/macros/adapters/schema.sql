@@ -10,6 +10,7 @@
   {% endcall %}
 {% endmacro %}
 
+
 -- funcsign: (relation) -> string
 {% macro drop_schema(relation) -%}
   {{ adapter.dispatch('drop_schema', 'dbt')(relation) }}

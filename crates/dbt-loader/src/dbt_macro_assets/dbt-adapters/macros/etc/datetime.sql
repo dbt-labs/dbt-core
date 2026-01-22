@@ -5,13 +5,14 @@
       The provided partition date '{{ date_str }}' does not match the expected format '{{ date_fmt }}'
   {%- endset %}
 
-  {# Deviation from Core: `try_or_compiler_error` now takes in the function to call in two arguments:
+  {# DIVERGENCE: `try_or_compiler_error` now takes in the function to call in two arguments:
    # the (optional) package containing the function, and the name of the function as a string.
    #}
   {% set res = try_or_compiler_error(error_msg, modules.datetime.datetime, "strptime", date_str.strip(), date_fmt) %}
   {{ return(res) }}
 
 {% endmacro %}
+
 
 -- funcsign: (string, optional[string], optional[string], optional[string]) -> list[timestamp]
 {% macro dates_in_range(start_date_str, end_date_str=none, in_fmt="%Y%m%d", out_fmt="%Y%m%d") %}
@@ -42,6 +43,7 @@
     {{ return(date_list) }}
 {% endmacro %}
 
+
 -- funcsign: (string, optional[string]) -> list[timestamp]
 {% macro partition_range(raw_partition_date, date_fmt='%Y%m%d') %}
     {% set partition_range = (raw_partition_date | string).split(",") %}
@@ -58,6 +60,7 @@
 
     {{ return(dates_in_range(start_date, end_date, in_fmt=date_fmt)) }}
 {% endmacro %}
+
 
 -- funcsign: () -> string
 {% macro py_current_timestring() %}

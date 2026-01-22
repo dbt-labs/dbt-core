@@ -13,6 +13,7 @@
 #}
 
 {#
+    DIVERGENCE:
     This macro was named as `get_incremental_insert_overwrite_sql` in the dbt-snowflake project
     https://github.com/dbt-labs/dbt-adapters/blob/906472ee65ab2438cc4f7142f4a9866366cea9e1/dbt-snowflake/src/dbt/include/snowflake/macros/materializations/incremental/insert_overwrite.sql#L15
     This `get_incremental_insert_overwrite_sql` also exists in the dbt-adapters project

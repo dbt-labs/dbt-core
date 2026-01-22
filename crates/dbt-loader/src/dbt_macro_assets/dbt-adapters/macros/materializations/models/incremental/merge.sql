@@ -53,6 +53,7 @@
 
 {% endmacro %}
 
+
 -- funcsign: (string, string, string|list[string]|none, list[base_column], optional[list[string]]) -> string
 {% macro get_delete_insert_merge_sql(target, source, unique_key, dest_columns, incremental_predicates) -%}
   {{ adapter.dispatch('get_delete_insert_merge_sql', 'dbt')(target, source, unique_key, dest_columns, incremental_predicates) }}
@@ -90,6 +91,7 @@
     )
 
 {%- endmacro %}
+
 
 -- funcsign: (string, string, list[base_column], optional[list[string]], optional[bool]) -> string
 {% macro get_insert_overwrite_merge_sql(target, source, dest_columns, predicates, include_sql_header=false) -%}

@@ -53,7 +53,7 @@
 
   {%- if language == 'sql' -%}
     {%- if temporary -%}
-      -- INTENTIONAL DIVERGENCE
+      -- DIVERGENCE
       -- create_temporary_view method cannot be used here, because DBX v2 api doesn't support session
       {{ _create_view_simple(relation, compiled_code) }}
     {%- else -%}
@@ -119,7 +119,7 @@
 {%- endmacro -%}
 
 
--- INTENTIONAL DIVERGENCE
+-- DIVERGENCE
 {% macro _create_view_simple(relation, compiled_code) -%}
     create or replace view {{ relation }} as
       {{ compiled_code }}
@@ -127,7 +127,7 @@
 
 {% macro get_create_intermediate_table(relation, compiled_code, language) %}
   {%- if language == 'sql' -%}
-    -- INTENTIONAL DIVERGENCE
+    -- DIVERGENCE
     -- create_temporary_view method cannot be used here, because DBX v2 api doesn't support session
     {{ _create_view_simple(relation, compiled_code) }}
   {%- else -%}

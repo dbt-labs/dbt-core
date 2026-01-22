@@ -954,8 +954,8 @@ impl Statement for ReplayEngineStatement {
         let record_sql = handler
             .read_sql(&path, &file_name)
             .map_err(|e| from_fs_error(e, Some(&path)))?;
-        if normalize_dbt_tmp_name(&record_sql)
-            != normalize_dbt_tmp_name(replay_sql)
+        if normalize_sql_for_comparison(&record_sql)
+            != normalize_sql_for_comparison(replay_sql)
                 // we need to normalize
                 // in CI, FUSION_SLT_WAREHOUSE is used,
                 // locally, FUSION_ADAPTER_TESTING is used,
@@ -1075,6 +1075,14 @@ pub fn normalize_dbt_tmp_name(sql: &str) -> String {
     DBT_TMP_UUID_PATTERN
         .replace_all(sql, "dbt_tmp_")
         .to_string()
+}
+
+/// Normalizes SQL for comparison by:
+/// 1. Normalizing dbt_tmp UUIDs
+/// 2. Collapsing all whitespace (spaces, tabs, newlines) into single spaces
+fn normalize_sql_for_comparison(sql: &str) -> String {
+    let normalized = normalize_dbt_tmp_name(sql);
+    normalized.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 #[cfg(test)]

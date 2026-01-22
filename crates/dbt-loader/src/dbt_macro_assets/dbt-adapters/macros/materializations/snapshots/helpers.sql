@@ -10,10 +10,11 @@
 {% macro default__create_columns(relation, columns) %}
   {% for column in columns %}
     {% call statement() %}
-      alter table {{ relation.render() }} add column {{ adapter.quote(column.name) }} {{ column.data_type }};
+      alter table {{ relation.render() }} add column {{ adapter.quote(column.name) }} {{ column.data_type }}; {# DIVERGENCE: FIXME: support expanded_data_type on Column #}
     {% endcall %}
   {% endfor %}
 {% endmacro %}
+
 
 -- funcsign: (relation) -> string
 {% macro post_snapshot(staging_relation) %}
@@ -241,6 +242,7 @@
 
 {%- endmacro %}
 
+
 -- funcsign: (strategy, string) -> string
 {% macro build_snapshot_table(strategy, sql) -%}
   {{ adapter.dispatch('build_snapshot_table', 'dbt')(strategy, sql) }}
@@ -264,6 +266,7 @@
 
 {% endmacro %}
 
+
 -- funcsign: (strategy, string, relation) -> relation
 {% macro build_snapshot_staging_table(strategy, sql, target_relation) %}
     {% set temp_relation = make_temp_relation(target_relation) %}
@@ -276,6 +279,7 @@
 
     {% do return(temp_relation) %}
 {% endmacro %}
+
 
 -- funcsign: (string) -> string
 {% macro get_updated_at_column_data_type(snapshot_sql) %}
@@ -291,6 +295,7 @@
     {{ return(ns.dbt_updated_at_data_type or none)  }}
 {% endmacro %}
 
+
 -- funcsign: (string) -> string
 {% macro check_time_data_types(sql) %}
   {% set dbt_updated_at_data_type = get_updated_at_column_data_type(sql) %}
@@ -302,12 +307,14 @@
   {% endif %}
 {% endmacro %}
 
+
 -- funcsign: (strategy, list[base_column]) -> string
 {% macro get_dbt_valid_to_current(strategy, columns) %}
   {% set dbt_valid_to_current = config.get('dbt_valid_to_current') or "null" %}
   coalesce(nullif({{ strategy.updated_at }}, {{ strategy.updated_at }}), {{dbt_valid_to_current}})
   as {{ columns.dbt_valid_to }}
 {% endmacro %}
+
 
 -- funcsign: (string|list[string]|none) -> string
 {% macro unique_key_fields(unique_key) %}
@@ -320,6 +327,7 @@
         {{ unique_key }} as dbt_unique_key
     {% endif %}
 {% endmacro %}
+
 
 -- funcsign: (string|list[string]|none, string, string) -> string
 {% macro unique_key_join_on(unique_key, identifier, from_identifier) %}
@@ -335,6 +343,7 @@
     {% endif %}
 {% endmacro %}
 
+
 -- funcsign: (string|list[string]|none, string) -> string
 {% macro unique_key_is_null(unique_key, identifier) %}
     {% if unique_key | is_list %}
@@ -343,6 +352,7 @@
         {{ identifier }}.dbt_unique_key is null
     {% endif %}
 {% endmacro %}
+
 
 -- funcsign: (string|list[string]|none, string) -> string
 {% macro unique_key_is_not_null(unique_key, identifier) %}

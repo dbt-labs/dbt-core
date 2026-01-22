@@ -26,6 +26,7 @@
 )
 {% endmacro %}
 
+
 -- funcsign: (relation) -> list[api.column]
 {% macro snowflake__get_columns_in_relation(relation) -%}
   {%- set sql -%}
@@ -89,6 +90,7 @@
   {{ return(load_result('check_schema_exists').table) }}
 {%- endmacro %}
 
+
 -- funcsign: (relation, string, string) -> string
 {% macro snowflake__alter_column_type(relation, column_name, new_column_type) -%}
   {% call statement('alter_column_type') %}
@@ -104,12 +106,13 @@
         {%- set relation_type = relation.type -%}
     {%- endif -%}
 
-    {%- if relation.is_iceberg_format() -%}
+    {%- if relation.is_iceberg_format() -%} {# DIVERGENCE: in core is_iceberg_format is an attribute of the relation object, not a method #}
         alter iceberg table {{ relation.render() }} set comment = $${{ relation_comment | replace('$', '[$]') }}$$;
     {%- else -%}
         comment on {{ relation_type }} {{ relation.render() }} IS $${{ relation_comment | replace('$', '[$]') }}$$;
     {%- endif -%}
 {% endmacro %}
+
 
 -- funcsign: (relation, dict[string, model]) -> string
 {% macro snowflake__alter_column_comment(relation, column_dict) -%}
@@ -125,15 +128,18 @@
     {% endfor %}
 {% endmacro %}
 
+
 -- funcsign: () -> agate_table
 {% macro get_current_query_tag() -%}
   {{ return(run_query("show parameters like 'query_tag' in session").rows[0]['value']) }}
 {% endmacro %}
 
+
 -- funcsign: () -> optional[agate_table]
 {% macro set_query_tag() -%}
     {{ return(adapter.dispatch('set_query_tag', 'dbt')()) }}
 {% endmacro %}
+
 
 -- funcsign: () -> optional[agate_table]
 {% macro snowflake__set_query_tag() -%}
@@ -147,10 +153,12 @@
   {{ return(none)}}
 {% endmacro %}
 
+
 -- funcsign: (optional[string]) -> string
 {% macro unset_query_tag(original_query_tag) -%}
     {{ return(adapter.dispatch('unset_query_tag', 'dbt')(original_query_tag)) }}
 {% endmacro %}
+
 
 -- funcsign: (optional[string]) -> string
 {% macro snowflake__unset_query_tag(original_query_tag) -%}
@@ -166,6 +174,7 @@
   {% endif %}
 {% endmacro %}
 
+
 {% macro snowflake__get_column_data_type_for_alter(relation, column) %}
   {#
     Helper macro to get the correct data type for ALTER TABLE operations.
@@ -175,7 +184,7 @@
     This fixes the bug where dbt generates VARCHAR(16777216) for new columns which
     is not supported by Snowflake Iceberg tables.
   #}
-  {% if relation.is_iceberg_format() and column.is_string() %}
+  {% if relation.is_iceberg_format() and column.is_string() %} {# DIVERGENCE: in core is_iceberg_format is an attribute of the relation object, not a method #}
     {% set data_type = column.data_type.upper() %}
     {% if data_type.startswith('CHARACTER VARYING') or data_type.startswith('VARCHAR') %}
       {#
@@ -232,6 +241,8 @@
 
 {% endmacro %}
 
+
+
 {% macro snowflake__is_catalog_linked_database(relation=none, catalog_relation=none) -%}
     {#-- Helper macro to detect if we're in a catalog-linked database context --#}
     {#-- CORE DISCREPANCY: there's supposed to be a relation.catalog based arm here. This is a core
@@ -270,6 +281,7 @@
 
 {% endmacro %}
 
+
 -- funcsign: (relation) -> string
 {% macro snowflake__truncate_relation(relation) -%}
   {% set truncate_dml %}
@@ -284,6 +296,8 @@
   {%- endcall %}
 {% endmacro %}
 
+
+{# DIVERGENCE #}
 {% macro snowflake__test_aggregated_unique(model, column_names) %}
 {% set skip_column_names = aggregated_test_skip_column_names | default([]) %}
 {% set filtered_columns = [] %}
@@ -321,6 +335,8 @@ where 1 = 0
 {% endif %}
 {% endmacro %}
 
+
+{# DIVERGENCE #}
 -- funcsign: () -> bool
 {% macro is_glue_catalog_linked_database() -%}
   {#- Check if the current model is using a Glue catalog-linked database -#}
@@ -333,6 +349,8 @@ where 1 = 0
   {{ return(false) }}
 {%- endmacro %}
 
+
+{# DIVERGENCE #}
 -- funcsign: (relation) -> relation
 {% macro make_glue_compatible_relation(relation) -%}
   {#-

@@ -1,3 +1,4 @@
+{# DIVERGENCE: parameter `information_schema` is now `dbschema` #}
 -- funcsign: (information_schema, list[relation]) -> agate_table
 {% macro snowflake__get_catalog(dbschema, schemas) -%}
 
@@ -17,6 +18,8 @@
 
 {%- endmacro %}
 
+
+{# DIVERGENCE: parameter `information_schema` is now `dbschema` #}
 -- funcsign: (information_schema, list[relation]) -> agate_table
 {% macro snowflake__get_catalog_relations(dbschema, relations) -%}
 
@@ -36,6 +39,8 @@
 
 {%- endmacro %}
 
+
+{# DIVERGENCE: parameter `information_schema` is now `dbschema` #}
 -- funcsign: (information_schema) -> string
 {% macro snowflake__get_catalog_tables_sql(dbschema) -%}
     select
@@ -70,9 +75,11 @@
         to_varchar(convert_timezone('UTC', last_altered), 'yyyy-mm-dd HH24:MI'||'UTC') as "stats:last_modified:value",
         'The timestamp for last update/change' as "stats:last_modified:description",
         (last_altered is not null and table_type='BASE TABLE') as "stats:last_modified:include"
-    from {{ dbschema.database }}.INFORMATION_SCHEMA.tables
+    from {{ dbschema.database }}.INFORMATION_SCHEMA.tables {# DIVERGENCE: core uses INFORMATION_SCHEMA, we use dbschema.database #}
 {%- endmacro %}
 
+
+{# DIVERGENCE: parameter `information_schema` is now `dbschema` #}
 {% macro snowflake__get_catalog_columns_sql(dbschema) -%}
     select
         table_catalog as "table_database",
@@ -83,8 +90,9 @@
         ordinal_position as "column_index",
         data_type as "column_type",
         comment as "column_comment"
-    from {{ dbschema.database }}.INFORMATION_SCHEMA.columns
+    from {{ dbschema.database }}.INFORMATION_SCHEMA.columns {# DIVERGENCE: core uses INFORMATION_SCHEMA, we use dbschema.database #}
 {%- endmacro %}
+
 
 -- funcsign: () -> string
 {% macro snowflake__get_catalog_results_sql() -%}
@@ -94,10 +102,12 @@
     order by "column_index"
 {%- endmacro %}
 
+
 -- funcsign: (string, string) -> string
 {% macro snowflake__catalog_equals(field, value) %}
     "{{ field }}" ilike '{{ value }}' and upper("{{ field }}") = upper('{{ value }}')
 {% endmacro %}
+
 
 -- funcsign: (list[relation]) -> string
 {% macro snowflake__get_catalog_schemas_where_clause_sql(schemas) -%}
@@ -105,6 +115,7 @@
         ({{ snowflake__catalog_equals('table_schema', schema) }}){%- if not loop.last %} or {% endif -%}
     {%- endfor -%})
 {%- endmacro %}
+
 
 -- funcsign: (list[relation]) -> string
 {% macro snowflake__get_catalog_relations_where_clause_sql(relations) -%}

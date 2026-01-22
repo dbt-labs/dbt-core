@@ -9,8 +9,6 @@
 {%- endmacro -%}
 
 -- funcsign: (model) -> string
-
-
 {% macro build_ref_function(model) %}
 
     {%- set ref_dict = {} -%}
@@ -114,6 +112,6 @@ class dbtObj:
 {{py_script_comment()}}
 {% endmacro %}
 
-#-- entry point for add instuctions for running compiled_code --#}
+{#-- entry point for add instuctions for running compiled_code --#}
 {%macro py_script_comment()%}
 {%endmacro%}

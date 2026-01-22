@@ -11,12 +11,16 @@
     {{ macro(model, column_name) }}
 {% endtest %}
 
+
+{# DIVERGENCE #}
 -- funcsign: (relation, list[string]) -> string
 {% test aggregated_unique(model, column_names) %}
     {% set macro = adapter.dispatch('test_aggregated_unique', 'dbt') %}
     {{ macro(model, column_names) }}
 {% endtest %}
 
+
+{# DIVERGENCE #}
 -- funcsign: (relation, list[string]) -> string
 {% test aggregated_not_null(model, column_names) %}
     {% set macro = adapter.dispatch('test_aggregated_not_null', 'dbt') %}

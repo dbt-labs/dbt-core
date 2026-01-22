@@ -2,7 +2,6 @@
 {% macro snowflake__get_create_dynamic_table_as_sql(relation, sql) -%}
 
     {%- set catalog_relation = adapter.build_catalog_relation(config.model) -%}
-
     {%- set dynamic_table = relation.from_config(config.model) -%}
 
     {%- if catalog_relation.catalog_type == 'INFO_SCHEMA' -%}
@@ -40,6 +39,7 @@
         {{ optional('initialize', dynamic_table.initialize) }}
         {{ optional('with row access policy', dynamic_table.row_access_policy, equals_char='') }}
         {{ optional('with tag', dynamic_table.table_tag, quote_char='(', equals_char='') }}
+        {# DIVERGENCE: FIXME: support dynamic_table.cluster_by #}
         as (
             {{ sql }}
         )
@@ -76,6 +76,7 @@
         {{ optional('initialize', dynamic_table.initialize) }}
         {{ optional('row_access_policy', dynamic_table.row_access_policy) }}
         {{ optional('table_tag', dynamic_table.table_tag) }}
+        {# DIVERGENCE: FIXME: support dynamic_table.cluster_by #}
         as (
             {{ sql }}
         )

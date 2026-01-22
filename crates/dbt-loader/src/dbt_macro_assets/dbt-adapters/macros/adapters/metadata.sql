@@ -1,10 +1,10 @@
 -- funcsign: (relation, list[relation]) -> list[relation]
-{% macro get_catalog_relations(dbschema, relations) -%}
-  {{ return(adapter.dispatch('get_catalog_relations', 'dbt')(dbschema, relations)) }}
+{% macro get_catalog_relations(information_schema, relations) -%}
+  {{ return(adapter.dispatch('get_catalog_relations', 'dbt')(information_schema, relations)) }}
 {%- endmacro %}
 
 -- funcsign: (relation, list[relation]) -> list[relation]
-{% macro default__get_catalog_relations(dbschema, relations) -%}
+{% macro default__get_catalog_relations(information_schema, relations) -%}
   {% set typename = adapter.type() %}
   {% set msg -%}
     get_catalog_relations not implemented for {{ typename }}
@@ -14,12 +14,12 @@
 {%- endmacro %}
 
 -- funcsign: (relation, list[string]) -> agate_table
-{% macro get_catalog(dbschema, schemas) -%}
-  {{ return(adapter.dispatch('get_catalog', 'dbt')(dbschema, schemas)) }}
+{% macro get_catalog(information_schema, schemas) -%}
+  {{ return(adapter.dispatch('get_catalog', 'dbt')(information_schema, schemas)) }}
 {%- endmacro %}
 
 -- funcsign: (relation, list[string]) -> agate_table
-{% macro default__get_catalog(dbschema, schemas) -%}
+{% macro default__get_catalog(information_schema, schemas) -%}
 
   {% set typename = adapter.type() %}
   {% set msg -%}

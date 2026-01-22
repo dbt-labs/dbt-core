@@ -5,6 +5,7 @@
 
 {% endmacro %}
 
+
 -- funcsign: (struct{target_relation: string, temp_relation: string, dest_columns: list[base_column], unique_key: string, incremental_predicates: optional[list[string]]}) -> string
 {% macro default__get_incremental_append_sql(arg_dict) %}
 
@@ -88,6 +89,7 @@
   {{ exceptions.raise_not_implemented('microbatch materialization strategy not implemented for adapter ' + adapter.type()) }}
 
 {% endmacro %}
+
 
 -- funcsign: (string, string, list[base_column]) -> string
 {% macro get_insert_into_sql(target_relation, temp_relation, dest_columns) %}

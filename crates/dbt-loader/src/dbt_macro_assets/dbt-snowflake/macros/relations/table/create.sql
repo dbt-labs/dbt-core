@@ -9,6 +9,7 @@
             {{ snowflake__create_table_info_schema_sql(relation, compiled_code) }}
         {%- elif catalog_relation.catalog_type == 'BUILT_IN' -%}
             {{ snowflake__create_table_built_in_sql(relation, compiled_code) }}
+        {# DIVERGENCE #}
         {%- elif catalog_relation.catalog_type == 'ICEBERG_REST' -%}
             {{ snowflake__create_table_iceberg_rest_sql(relation, compiled_code) }}
         {%- else -%}
@@ -44,7 +45,7 @@
 {%- endif -%}
 
 {%- set sql_header = config.get('sql_header', none) -%}
-{{ sql_header if sql_header }}
+{{ sql_header if sql_header is not none }}
 
 create or replace temporary table {{ relation }}
     {%- if contract_config.enforced %}
@@ -73,6 +74,7 @@ as (
     {%- set transient='' -%}
 {%- endif -%}
 
+{# DIVERGENCE BEGIN #}
 {# -- begin TODO: store all this under the CatalogRelation type for core compliance of
    -- catalog relation based ddl; determine why 'is not none' is different in Fusion #}
 {%- set enable_automatic_clustering = config.get('automatic_clustering', default=false) -%}
@@ -88,6 +90,7 @@ as (
   {%- set cluster_by_string = none -%}
 {%- endif -%}
 {# -- end TODO #}
+{# DIVERGENCE END #}
 
 {%- set copy_grants = config.get('copy_grants', default=false) -%}
 {%- set row_access_policy = config.get('row_access_policy', default=none) -%}
@@ -100,7 +103,7 @@ as (
 {%- endif -%}
 
 {%- set sql_header = config.get('sql_header', none) -%}
-{{ sql_header if sql_header }}
+{{ sql_header if sql_header is not none }}
 
 create or replace {{ transient }} table {{ relation }}
     {%- set contract_config = config.get('contract') -%}
@@ -112,12 +115,12 @@ create or replace {{ transient }} table {{ relation }}
     {% if table_tag -%} with tag ({{ table_tag }}) {%- endif %}
     as (
     {#- TODO: when we store this under the Catalog Relation, we can change this back to how it is in Core -#}
-	{%- if cluster_by_string -%}
+	{%- if cluster_by_string -%} {# DIVERGENCE #}
         select * from (
             {{ compiled_code }}
         )
         order by (
-            {{ cluster_by_string }}
+            {{ cluster_by_string }} {# DIVERGENCE #}
         )
         {%- else -%}
         {{ compiled_code }}
@@ -125,15 +128,17 @@ create or replace {{ transient }} table {{ relation }}
     )
 ;
 
+{# DIVERGENCE #}
 {% if cluster_by_string -%}
 alter table {{relation}} cluster by ({{cluster_by_string}});
 {%- endif -%}
 
+{# DIVERGENCE #}
 {% if catalog_relation.cluster_by -%}
 alter table {{ relation }} cluster by ({{ catalog_relation.cluster_by }});
 {%- endif -%}
 
-{% if enable_automatic_clustering and cluster_by_string %}
+{% if enable_automatic_clustering and cluster_by_string %} {# DIVERGENCE #}
 alter table {{ relation }} resume recluster;
 {%- endif -%}
 
@@ -151,6 +156,8 @@ alter table {{ relation }} resume recluster;
 
 {%- set catalog_relation = adapter.build_catalog_relation(config.model) -%}
 
+
+{# DIVERGENCE BEGIN #}
 {# -- begin TODO: store all this under the CatalogRelation type for core compliance of
    -- catalog relation based ddl; determine why 'is not none' is different in Fusion #}
 {%- set enable_automatic_clustering = config.get('automatic_clustering', default=false) -%}
@@ -166,6 +173,7 @@ alter table {{ relation }} resume recluster;
   {%- set cluster_by_string = none -%}
 {%- endif -%}
 {# -- end TODO #}
+{# DIVERGENCE END #}
 
 {%- set partition_by_keys = get_partition_by_keys(config) -%}
 {%- if partition_by_keys -%}
@@ -175,6 +183,7 @@ alter table {{ relation }} resume recluster;
 {%- endif -%}
 
 {%- set copy_grants = config.get('copy_grants', default=false) -%}
+
 {%- set row_access_policy = config.get('row_access_policy', default=none) -%}
 {%- set table_tag = config.get('table_tag', default=none) -%}
 
@@ -185,7 +194,7 @@ alter table {{ relation }} resume recluster;
 {%- endif -%}
 
 {%- set sql_header = config.get('sql_header', none) -%}
-{{ sql_header if sql_header }}
+{{ sql_header if sql_header is not none }}
 
 create or replace iceberg table {{ relation }}
     {%- if contract_config.enforced %}
@@ -203,21 +212,22 @@ create or replace iceberg table {{ relation }}
     {% if table_tag -%} with tag ({{ table_tag }}) {%- endif %}
     {% if copy_grants -%} copy grants {%- endif %}
 as (
-    {%- if cluster_by_string -%}
+    {%- if cluster_by_string -%} {# DIVERGENCE #}
     select * from (
 	{{ compiled_code }}
-    ) order by ({{ cluster_by_string }})
+    ) order by ({{ cluster_by_string }}) {# DIVERGENCE #}
     {%- else -%}
     {{ compiled_code }}
     {%- endif %}
     )
 ;
 
+{# DIVERGENCE #}
 {% if cluster_by_string -%}
 alter iceberg table {{relation}} cluster by ({{cluster_by_string}});
 {%- endif -%}
 
-{% if enable_automatic_clustering and cluster_by_string %}
+{% if enable_automatic_clustering and cluster_by_string %} {# DIVERGENCE #}
 alter iceberg table {{ relation }} resume recluster;
 {%- endif -%}
 
@@ -234,6 +244,7 @@ alter iceberg table {{ relation }} resume recluster;
 -#}
 
 {# Step 0: Create a Glue-compatible relation (lowercase + double-quoted) #}
+{# DIVERGENCE: FIXME: see the comments from snowflake__create_table_iceberg_rest_sql above #}
 {% set glue_relation = make_glue_compatible_relation(relation) %}
 
 {# Step 1: Get the schema from the compiled query #}
@@ -245,7 +256,7 @@ alter iceberg table {{ relation }} resume recluster;
 {%- set row_access_policy = config.get('row_access_policy', default=none) -%}
 {%- set table_tag = config.get('table_tag', default=none) -%}
 
-{%- set partition_by_keys = get_partition_by_keys(config) -%}
+{%- set partition_by_keys = get_partition_by_keys(config) -%} {# DIVERGENCE #}
 {%- if partition_by_keys -%}
   {# HACK: Force columns to be lowercase and quoted in glue #}
   {%- set partition_by_keys_quotes = [] -%}
@@ -300,6 +311,11 @@ insert into {{ glue_relation }}
 {%- endmacro %}
 
 
+{# DIVERGENCE: FIXME:
+    From @ajhlee-dbt:
+    this and the divergence for `{% set glue_relation = make_glue_compatible_relation(relation) %}` are quoting issues for catalog-linked databases.
+    Fusion has an entirely separate path for just Glue CLD because the hack in Core to override quoting does not work
+#}
 {% macro snowflake__create_table_iceberg_rest_sql(relation, compiled_code) -%}
 {#-
     Implements CREATE ICEBERG TABLE ... CATALOG('catalog_name') (external REST catalog):
@@ -409,6 +425,7 @@ def main(session):
 
 {% endmacro %}
 
+{# DIVERGENCE #}
 {# -- begin TODO: store all this under the CatalogRelation type for core compliance of
    -- catalog relation based ddl, then pass in the catalog relation here #}
 {% macro get_partition_by_keys(config) -%}
@@ -418,4 +435,3 @@ def main(session):
     {%- endif -%}
     {{ return(partition_by_keys) }}
 {%- endmacro -%}
-{# -- end TODO #}

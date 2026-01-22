@@ -4,6 +4,7 @@
     {{- adapter.dispatch('get_replace_sql', 'dbt')(existing_relation, target_relation, sql) -}}
 {% endmacro %}
 
+
 -- funcsign: (relation, relation, string) -> string
 {% macro default__get_replace_sql(existing_relation, target_relation, sql) %}
 

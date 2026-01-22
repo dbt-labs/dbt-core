@@ -27,6 +27,7 @@ The macro override naming method (spark__statement) only works for macros which 
   {%- endif -%}
 {%- endmacro %}
 
+
 -- ai
 -- funcsign: (optional[string], optional[string], optional[string], optional[string], optional[agate_table]) -> string
 {% macro noop_statement(name=None, message=None, code=None, rows_affected=None, res=None) -%}
@@ -54,6 +55,8 @@ The macro override naming method (spark__statement) only works for macros which 
   {% do return(load_result("run_query_statement").table) %}
 {% endmacro %}
 
+
+{# DIVERGENCE #}
 {# Private: similar to statement, but allows passing options. Not recommended to use in any user defined macros use at your own risk. #}
 {%- macro _statement_with_options(name=None, fetch_result=False, auto_begin=True, language='sql', options={}) -%}
   {%- if execute: -%}
@@ -81,6 +84,7 @@ The macro override naming method (spark__statement) only works for macros which 
 {%- endmacro %}
 
 
+{# DIVERGENCE #}
 {# Private: similar to run_query, but allows passing Arrow ADBC Statement options. Not recommended to use in any user defined macros use at your own risk. #}
 {% macro _run_query_with_options(sql, options={}) %}
   {% call _statement_with_options("run_query_statement", fetch_result=true, auto_begin=false, options=options) %}

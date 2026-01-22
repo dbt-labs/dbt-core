@@ -42,6 +42,7 @@
     {{ return(True) }}
 {%- endmacro -%}
 
+
 -- funcsign: (optional[relation], optional[bool]) -> bool
 {% macro should_revoke(existing_relation, full_refresh_mode=True) %}
 
@@ -70,6 +71,7 @@
     show grants on {{ relation.render() }}
 {% endmacro %}
 
+
 -- funcsign: (relation, string, list[string]) -> string
 {% macro get_grant_sql(relation, privilege, grantees) %}
     {{ return(adapter.dispatch('get_grant_sql', 'dbt')(relation, privilege, grantees)) }}
@@ -93,6 +95,7 @@
 
 
 {# ------- RUNTIME APPLICATION --------- #}
+
 -- funcsign: (relation, dict[string, list[string]], (relation, string, list[string]) -> string) -> list[string]
 {% macro get_dcl_statement_list(relation, grant_config, get_dcl_macro) %}
     {{ return(adapter.dispatch('get_dcl_statement_list', 'dbt')(relation, grant_config, get_dcl_macro)) }}
@@ -120,6 +123,7 @@
     {%- endfor -%}
     {{ return(dcl_statements) }}
 {%- endmacro %}
+
 
 -- funcsign: (list[string]) -> string
 {% macro call_dcl_statements(dcl_statement_list) %}
@@ -149,7 +153,7 @@
 {% endmacro %}
 
 -- funcsign: (relation, optional[dict[string, list[string]]], bool) -> string
-{% macro default__apply_grants(relation, grant_config, should_revoke) %}
+{% macro default__apply_grants(relation, grant_config, should_revoke=True) %}
     {#-- If grant_config is {} or None, this is a no-op --#}
     {% if grant_config %}
         {% if should_revoke %}

@@ -36,8 +36,7 @@
     {% else %}
 
         -- get config options
-        {# Deviation from core: explicitly provide an `on_configuration_change` default value. In core, the default value is already present at this point. #}
-        {% set on_configuration_change = config.get('on_configuration_change', 'apply') %}
+        {% set on_configuration_change = config.get('on_configuration_change', 'apply') %} {# DIVERGENCE: core does not default to `apply` here because it sets it elsewhere in the Python code #}
         {% set configuration_changes = snowflake__get_dynamic_table_configuration_changes(existing_relation, config) %}
 
         {% if configuration_changes is none %}

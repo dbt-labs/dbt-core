@@ -1,7 +1,9 @@
+
 -- funcsign: (relation, string, list[string]) -> string
 {% macro snapshot_merge_sql(target, source, insert_cols) -%}
   {{ adapter.dispatch('snapshot_merge_sql', 'dbt')(target, source, insert_cols) }}
 {%- endmacro %}
+
 
 -- funcsign: (relation, string, list[string]) -> string
 {% macro default__snapshot_merge_sql(target, source, insert_cols) -%}

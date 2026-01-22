@@ -1,3 +1,4 @@
+
 -- funcsign: (string, string, string|list[string]|none, list[base_column], optional[list[string]]) -> string
 {% macro snowflake__get_merge_sql(target, source_sql, unique_key, dest_columns, incremental_predicates) -%}
 
@@ -37,6 +38,7 @@
 
 {% endmacro %}
 
+
 -- funcsign: (string, string, string|list[string]|none, list[base_column], optional[list[string]]) -> string
 {% macro snowflake__get_delete_insert_merge_sql(target, source, unique_key, dest_columns, incremental_predicates) %}
     {% set dml = default__get_delete_insert_merge_sql(target, source, unique_key, dest_columns, incremental_predicates) %}
@@ -47,6 +49,7 @@
         {% do return(snowflake_dml_explicit_transaction(dml)) %}
     {% endif %}
 {% endmacro %}
+
 
 -- funcsign: (string, string, list[base_column]) -> string
 {% macro snowflake__snapshot_merge_sql(target, source, insert_cols) %}
@@ -59,6 +62,7 @@
     {% endif %}
 {% endmacro %}
 
+
 -- funcsign: (string) -> string
 {% macro snowflake__get_incremental_append_sql(get_incremental_append_sql) %}
     {% set dml = default__get_incremental_append_sql(get_incremental_append_sql) %}
@@ -69,6 +73,7 @@
         {% do return(snowflake_dml_explicit_transaction(dml)) %}
     {% endif %}
 {% endmacro %}
+
 
 {% macro snowflake__get_incremental_microbatch_sql(arg_dict) %}
     {%- set target = arg_dict["target_relation"] -%}

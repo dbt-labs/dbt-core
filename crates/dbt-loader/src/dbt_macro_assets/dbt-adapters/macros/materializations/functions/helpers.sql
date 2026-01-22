@@ -20,10 +20,13 @@
 {% endmacro %}
 
 
+{# DIVERGENCE #}
 {% macro get_function_macro(function_type, function_language) %}
     {{ return(adapter.dispatch('get_function_macro', 'dbt')(function_type, function_language)) }}
 {% endmacro %}
 
+
+{# DIVERGENCE #}
 {% macro default__get_function_macro(function_type, function_language) %}
     {% set macro_name = function_type ~ "_function_" ~ function_language %}
     {% if not macro_name in context %}

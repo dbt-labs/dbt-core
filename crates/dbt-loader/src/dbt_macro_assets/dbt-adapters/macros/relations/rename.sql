@@ -4,6 +4,7 @@
     {{- adapter.dispatch('get_rename_sql', 'dbt')(relation, new_name) -}}
 {%- endmacro -%}
 
+
 -- funcsign: (relation, relation) -> string
 {%- macro default__get_rename_sql(relation, new_name) -%}
 
@@ -22,6 +23,7 @@
     {%- endif -%}
 
 {%- endmacro -%}
+
 
 -- funcsign: (relation, relation) -> string
 {% macro rename_relation(from_relation, to_relation) -%}

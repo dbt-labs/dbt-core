@@ -4,6 +4,7 @@
     {{- adapter.dispatch('get_create_backup_sql', 'dbt')(relation) -}}
 {%- endmacro -%}
 
+
 -- funcsign: (relation) -> string
 {%- macro default__get_create_backup_sql(relation) -%}
 

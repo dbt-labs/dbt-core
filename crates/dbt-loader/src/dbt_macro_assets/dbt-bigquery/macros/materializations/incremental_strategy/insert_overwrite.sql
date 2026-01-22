@@ -110,7 +110,7 @@
     select distinct {{ partition_by.render_wrapped() }}
     from {{ tmp_relation }}
   {%- endset -%}
-  {# INTENTIONAL DIVERGENCE since otherwise the query will be executed using a client with the Storage Read API enabled #}
+  {# DIVERGENCE since otherwise the query will be executed using a client with the Storage Read API enabled #}
   {# that would return null values for the partition pseudo-columns #}
   {%- set partitions = _run_query_with_options(
     partitions_sql,
