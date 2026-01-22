@@ -476,6 +476,15 @@ class YamlReader(metaclass=ABCMeta):
             unrendered_database = entry.get("database", None)
             unrendered_schema = entry.get("schema", None)
 
+            # Capture unrendered external.location for each table in sources
+            unrendered_external_locations: Dict[str, str] = {}
+            if self.key == "sources" and "tables" in entry:
+                for table in entry.get("tables", []):
+                    table_name = table.get("name", "")
+                    external = table.get("external")
+                    if external and isinstance(external, dict) and external.get("location"):
+                        unrendered_external_locations[table_name] = external["location"]
+
             # Render the data (except for tests, data_tests and descriptions).
             # See the SchemaYamlRenderer
             entry = self.render_entry(entry)
@@ -495,6 +504,12 @@ class YamlReader(metaclass=ABCMeta):
                 schema_file.add_unrendered_database(self.key, entry["name"], unrendered_database)
             if unrendered_schema:
                 schema_file.add_unrendered_schema(self.key, entry["name"], unrendered_schema)
+
+            # Store unrendered external.location for each table
+            for table_name, unrendered_location in unrendered_external_locations.items():
+                schema_file.add_unrendered_external_location(
+                    self.key, entry["name"], table_name, unrendered_location
+                )
 
             if self.schema_yaml_vars.env_vars:
                 self.schema_parser.manifest.env_vars.update(self.schema_yaml_vars.env_vars)
@@ -578,6 +593,14 @@ class SourceParser(YamlReader):
             # the FQN is project name / path elements /source_name /table_name
             fqn = self.schema_parser.get_fqn_prefix(fqn_path)
             fqn.extend([source.name, table.name])
+
+            # Set unrendered_location on table's external for state:modified comparisons
+            if isinstance(self.yaml.file, SchemaSourceFile) and table.external:
+                unrendered_location = self.yaml.file.get_unrendered_external_location(
+                    "sources", source.name, table.name
+                )
+                if unrendered_location:
+                    table.external.unrendered_location = unrendered_location
 
             source_def = UnpatchedSourceDefinition(
                 source=source,
