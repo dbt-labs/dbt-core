@@ -108,6 +108,20 @@ pub fn default_meta_and_tags(
         merge_tags(child_tags_vec, parent_tags_vec).map(StringOrArrayOfStrings::ArrayOfStrings);
 }
 
+/// Compare Option<StringOrArrayOfStrings>, treating None and empty array as equal
+pub fn array_of_strings_eq(
+    a: &Option<StringOrArrayOfStrings>,
+    b: &Option<StringOrArrayOfStrings>,
+) -> bool {
+    match (a, b) {
+        (None, None) => true,
+        (Some(a_val), Some(b_val)) => a_val == b_val,
+        (None, Some(StringOrArrayOfStrings::ArrayOfStrings(values))) => values.is_empty(),
+        (Some(StringOrArrayOfStrings::ArrayOfStrings(values)), None) => values.is_empty(),
+        _ => false,
+    }
+}
+
 /// Helper function to handle default_to logic for column_types
 /// Column types should be merged, with parent values filling in missing keys
 pub fn default_column_types(
@@ -1250,4 +1264,56 @@ pub fn same_warehouse_config(
     }
 
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_array_of_strings_eq_none_and_empty_array() {
+        let none_val: Option<StringOrArrayOfStrings> = None;
+        let empty_array = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![]));
+
+        assert!(array_of_strings_eq(&none_val, &empty_array));
+        assert!(array_of_strings_eq(&empty_array, &none_val));
+    }
+
+    #[test]
+    fn test_array_of_strings_eq_same_values() {
+        let left = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            "alpha".to_string(),
+            "beta".to_string(),
+        ]));
+        let right = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            "alpha".to_string(),
+            "beta".to_string(),
+        ]));
+
+        assert!(array_of_strings_eq(&left, &right));
+    }
+
+    #[test]
+    fn test_array_of_strings_eq_different_values() {
+        let left = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            "alpha".to_string(),
+            "beta".to_string(),
+        ]));
+        let right = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            "alpha".to_string(),
+            "gamma".to_string(),
+        ]));
+
+        assert!(!array_of_strings_eq(&left, &right));
+    }
+
+    #[test]
+    fn test_array_of_strings_eq_string_and_array_equal() {
+        let string_val = Some(StringOrArrayOfStrings::String("alpha".to_string()));
+        let array_val = Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+            "alpha".to_string(),
+        ]));
+
+        assert!(array_of_strings_eq(&string_val, &array_val));
+    }
 }

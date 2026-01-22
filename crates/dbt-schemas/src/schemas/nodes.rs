@@ -17,8 +17,8 @@ use crate::schemas::common::{
 };
 use crate::schemas::dbt_column::{DbtColumnRef, deserialize_dbt_columns, serialize_dbt_columns};
 use crate::schemas::manifest::{BigqueryClusterConfig, GrantAccessToTarget, PartitionConfig};
-use crate::schemas::project::configs::common::grants_eq;
 use crate::schemas::project::configs::common::log_state_mod_diff;
+use crate::schemas::project::configs::common::{array_of_strings_eq, grants_eq, meta_eq};
 use crate::schemas::project::{StrictnessMode, WarehouseSpecificNodeConfig, same_warehouse_config};
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::{
@@ -1454,8 +1454,9 @@ impl InternalDbtNode for DbtTest {
             // so we do not do that comparison
             let enabled_eq = self.deprecated_config.enabled == other.deprecated_config.enabled;
             let alias_eq = self.deprecated_config.alias == other.deprecated_config.alias;
-            let tags_eq = self.deprecated_config.tags == other.deprecated_config.tags;
-            let meta_eq = self.deprecated_config.meta == other.deprecated_config.meta;
+            let tags_eq =
+                array_of_strings_eq(&self.deprecated_config.tags, &other.deprecated_config.tags);
+            let meta_eq = meta_eq(&self.deprecated_config.meta, &other.deprecated_config.meta);
             let group_eq = self.deprecated_config.group == other.deprecated_config.group;
             let quoting_eq = self.deprecated_config.quoting == other.deprecated_config.quoting;
 
