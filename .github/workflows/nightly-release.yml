@@ -51,7 +51,7 @@ jobs:
 
       - name: "Audit Version And Parse Into Parts"
         id: semver
-        uses: dbt-labs/actions/parse-semver@er/fix-semver
+        uses: dbt-labs/actions/parse-semver@v1
         with:
           version: ${{ steps.version-number-sources.outputs.current_version }}
 
@@ -66,7 +66,7 @@ jobs:
           echo "number=$number" >> $GITHUB_OUTPUT
 
       - name: "Audit Nightly Release Version And Parse Into Parts"
-        uses: dbt-labs/actions/parse-semver@er/fix-semver
+        uses: dbt-labs/actions/parse-semver@v1
         with:
           version: ${{ steps.nightly-release-version.outputs.number }}
 
