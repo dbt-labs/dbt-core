@@ -124,6 +124,8 @@ pub struct ProjectModelConfig {
     pub submission_method: Option<String>,
     #[serde(rename = "+job_cluster_config")]
     pub job_cluster_config: Option<BTreeMap<String, YmlValue>>,
+    #[serde(rename = "+python_job_config")]
+    pub python_job_config: Option<BTreeMap<String, YmlValue>>,
     #[serde(rename = "+cluster_id")]
     pub cluster_id: Option<String>,
     #[serde(rename = "+http_path")]
@@ -469,6 +471,7 @@ pub struct ModelConfig {
     pub __warehouse_specific_config__: WarehouseSpecificNodeConfig,
     pub submission_method: Option<String>,
     pub job_cluster_config: Option<BTreeMap<String, YmlValue>>,
+    pub python_job_config: Option<BTreeMap<String, YmlValue>>,
     pub cluster_id: Option<String>,
     pub http_path: Option<String>,
     pub create_notebook: Option<bool>,
@@ -486,6 +489,7 @@ impl From<ProjectModelConfig> for ModelConfig {
             begin: config.begin,
             submission_method: config.submission_method.clone(),
             job_cluster_config: config.job_cluster_config.clone(),
+            python_job_config: config.python_job_config.clone(),
             cluster_id: config.cluster_id.clone(),
             http_path: config.http_path.clone(),
             create_notebook: config.create_notebook,
@@ -645,6 +649,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             meta: Verbatim::from(config.meta),
             submission_method: config.submission_method.clone(),
             job_cluster_config: config.job_cluster_config.clone(),
+            python_job_config: config.python_job_config.clone(),
             cluster_id: config.cluster_id.clone(),
             http_path: config.http_path.clone(),
             create_notebook: config.create_notebook,
@@ -814,6 +819,7 @@ impl DefaultTo<ModelConfig> for ModelConfig {
             custom_checks,
             submission_method,
             job_cluster_config,
+            python_job_config,
             cluster_id,
             http_path,
             create_notebook,
@@ -885,6 +891,7 @@ impl DefaultTo<ModelConfig> for ModelConfig {
                 custom_checks,
                 submission_method,
                 job_cluster_config,
+                python_job_config,
                 cluster_id,
                 http_path,
                 create_notebook,

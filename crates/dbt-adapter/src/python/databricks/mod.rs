@@ -70,10 +70,18 @@ pub fn submit_python_job(
             &identifier,
             compiled_code,
         ),
+        "workflow_job" => submit_workflow_job(
+            adapter,
+            &config,
+            &catalog,
+            &schema,
+            &identifier,
+            compiled_code,
+        ),
         _ => Err(AdapterError::new(
             AdapterErrorKind::NotSupported,
             format!(
-                "Unsupported submission_method: '{}'. Supported methods: all_purpose_cluster, job_cluster, serverless_cluster",
+                "Unsupported submission_method: '{}'. Supported methods: all_purpose_cluster, job_cluster, serverless_cluster, workflow_job",
                 submission_method
             ),
         )),
@@ -160,6 +168,72 @@ fn submit_serverless_cluster(
         compiled_code,
         task_settings,
     )
+}
+
+/// https://github.com/databricks/dbt-databricks/blob/955743ab67543ef1fad3c4f7c13cc8b4a0ab8c06/dbt/adapters/databricks/python_models/python_submissions.py#L465
+fn submit_workflow_job(
+    adapter: &dyn TypedBaseAdapter,
+    config: &Value,
+    catalog: &str,
+    schema: &str,
+    identifier: &str,
+    compiled_code: &str,
+) -> AdapterResult<AdapterResponse> {
+    let python_job_config = config.get_attr("python_job_config").ok().ok_or_else(|| {
+        AdapterError::new(
+            AdapterErrorKind::Configuration,
+            "'python_job_config' is required for workflow_job submission method",
+        )
+    })?;
+
+    let timeout = extract_timeout(config);
+
+    let use_user_folder_for_python = config
+        .get_attr("user_folder_for_python")
+        .ok()
+        .map(|v| v.is_true())
+        .unwrap_or(false);
+
+    let api_client = DatabricksApiClient::new(adapter, use_user_folder_for_python)?;
+
+    let notebook_path = upload_notebook(
+        &api_client,
+        catalog,
+        schema,
+        identifier,
+        compiled_code,
+        true,
+    )?;
+
+    let task_settings = build_cluster_settings(config)?;
+
+    let (workflow_spec, existing_job_id) = build_workflow_spec(
+        &python_job_config,
+        catalog,
+        schema,
+        identifier,
+        &notebook_path,
+        task_settings,
+    )?;
+
+    let job_id = create_or_update_workflow(&api_client, workflow_spec, existing_job_id)?;
+
+    // todo: Implement permission building from grants and access_control_list configs
+
+    let run_id = api_client.run_workflow(job_id, true)?;
+
+    poll_job_completion(&api_client, &run_id.to_string(), timeout)?;
+
+    // Only convert to string at the boundary (AdapterResponse)
+    Ok(AdapterResponse {
+        message: format!(
+            "Python model executed successfully via workflow_job. Job ID: {}, Run ID: {}",
+            job_id, run_id
+        ),
+        code: "OK".to_string(),
+        rows_affected: 0,
+        query_id: Some(run_id.to_string()),
+    })
 }
 
 /// https://github.com/databricks/dbt-databricks/blob/955743ab67543ef1fad3c4f7c13cc8b4a0ab8c06/dbt/adapters/databricks/python_models/python_submissions.py#L392
@@ -540,4 +614,152 @@ fn upload_notebook(
     api_client.import_notebook(&notebook_path, compiled_code)?;
 
     Ok(notebook_path)
+}
+
+/// Build cluster settings for workflow task
+/// https://github.com/databricks/dbt-databricks/blob/955743ab67543ef1fad3c4f7c13cc8b4a0ab8c06/dbt/adapters/databricks/python_models/python_submissions.py#L494
+fn build_cluster_settings(config: &Value) -> AdapterResult<serde_json::Value> {
+    // Priority: job_cluster_config > cluster_id > empty (serverless)
+    if let Ok(job_cluster_config) = config.get_attr("job_cluster_config") {
+        let cluster_config_json = serde_json::to_value(&job_cluster_config).map_err(|e| {
+            AdapterError::new(
+                AdapterErrorKind::Internal,
+                format!("Failed to serialize job_cluster_config: {}", e),
+            )
+        })?;
+        return Ok(json!({
+            "new_cluster": cluster_config_json
+        }));
+    }
+
+    if let Some(cluster_id) = config
+        .get_attr("cluster_id")
+        .ok()
+        .and_then(|v| v.as_str().map(|s| s.to_string()))
+    {
+        return Ok(json!({
+            "existing_cluster_id": cluster_id
+        }));
+    }
+
+    // No cluster specified - serverless
+    Ok(json!({}))
+}
+
+/// https://github.com/databricks/dbt-databricks/blob/955743ab67543ef1fad3c4f7c13cc8b4a0ab8c06/dbt/adapters/databricks/python_models/python_submissions.py#L477
+fn build_workflow_spec(
+    python_job_config: &Value,
+    catalog: &str,
+    schema: &str,
+    identifier: &str,
+    notebook_path: &str,
+    task_settings: serde_json::Value,
+) -> AdapterResult<(serde_json::Value, Option<u64>)> {
+    let workflow_name = python_job_config
+        .get_attr("name")
+        .ok()
+        .and_then(|v| v.as_str().map(|s| s.to_string()))
+        .unwrap_or_else(|| format!("dbt__{}-{}-{}", catalog, schema, identifier));
+
+    let existing_job_id = python_job_config
+        .get_attr("existing_job_id")
+        .ok()
+        .and_then(|v| {
+            v.as_str()
+                .and_then(|s| s.parse::<u64>().ok())
+                .or_else(|| v.as_i64().map(|i| i as u64))
+        });
+
+    let post_hook_tasks = python_job_config
+        .get_attr("post_hook_tasks")
+        .ok()
+        .and_then(|v| v.try_iter().ok())
+        .map(|iter| {
+            iter.filter_map(|v| serde_json::to_value(&v).ok())
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+
+    let mut notebook_task = json!({
+        "task_key": "inner_notebook",
+        "notebook_task": {
+            "notebook_path": notebook_path,
+            "source": "WORKSPACE"
+        }
+    });
+
+    // notebook_task is always an Object since we just created it with json!({...})
+    let task_map = notebook_task.as_object_mut().unwrap();
+
+    if let serde_json::Value::Object(settings_map) = task_settings {
+        task_map.extend(settings_map);
+    }
+
+    if let Ok(additional_settings) = python_job_config.get_attr("additional_task_settings") {
+        let additional_json =
+            serde_json::to_value(&additional_settings).unwrap_or_else(|_| json!({}));
+        if let serde_json::Value::Object(add_map) = additional_json {
+            task_map.extend(add_map);
+        }
+    }
+
+    let mut tasks = vec![notebook_task];
+    tasks.extend(post_hook_tasks);
+
+    let mut workflow_spec = serde_json::to_value(python_job_config).unwrap_or_else(|_| json!({}));
+
+    // Ensure workflow_spec is an Object - fail loudly if user provided invalid config
+    let spec_map = workflow_spec.as_object_mut().ok_or_else(|| {
+        AdapterError::new(
+            AdapterErrorKind::Configuration,
+            "python_job_config must be an object/dictionary",
+        )
+    })?;
+
+    spec_map.insert("name".to_string(), json!(workflow_name));
+    spec_map.insert("tasks".to_string(), json!(tasks));
+
+    Ok((workflow_spec, existing_job_id))
+}
+
+/// https://github.com/databricks/dbt-databricks/blob/955743ab67543ef1fad3c4f7c13cc8b4a0ab8c06/dbt/adapters/databricks/python_models/python_submissions.py#L369
+fn create_or_update_workflow(
+    api_client: &DatabricksApiClient,
+    workflow_spec: serde_json::Value,
+    existing_job_id: Option<u64>,
+) -> AdapterResult<u64> {
+    if let Some(job_id) = existing_job_id {
+        api_client.update_workflow(job_id, workflow_spec)?;
+        return Ok(job_id);
+    }
+
+    let workflow_name = workflow_spec
+        .get("name")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| {
+            AdapterError::new(
+                AdapterErrorKind::Internal,
+                "Workflow spec missing 'name' field",
+            )
+        })?;
+
+    let search_response = api_client.search_workflows_by_name(workflow_name)?;
+
+    if search_response.jobs.len() > 1 {
+        return Err(AdapterError::new(
+            AdapterErrorKind::Configuration,
+            format!(
+                "Multiple jobs found with name '{}'. Use a unique job name or specify \
+                'existing_job_id' in python_job_config.",
+                workflow_name
+            ),
+        ));
+    }
+
+    if let Some(workflow) = search_response.jobs.first() {
+        api_client.update_workflow(workflow.job_id, workflow_spec)?;
+        return Ok(workflow.job_id);
+    }
+
+    api_client.create_workflow(workflow_spec)
 }

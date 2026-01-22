@@ -591,6 +591,52 @@ impl DatabricksApiClient {
             thread::sleep(Duration::from_secs(POLL_INTERVAL_SECS));
         }
     }
+
+    /// https://docs.databricks.com/api/workspace/jobs/list
+    pub(crate) fn search_workflows_by_name(
+        &self,
+        workflow_name: &str,
+    ) -> AdapterResult<WorkflowSearchResponse> {
+        self.get(
+            "/api/2.1/jobs/list",
+            Some(&[("name", workflow_name), ("expand_tasks", "false")]),
+        )
+    }
+
+    /// https://docs.databricks.com/api/workspace/jobs/create
+    pub(crate) fn create_workflow(&self, workflow_spec: serde_json::Value) -> AdapterResult<u64> {
+        let response: CreateWorkflowResponse =
+            self.post_json("/api/2.1/jobs/create", workflow_spec)?;
+        Ok(response.job_id)
+    }
+
+    /// https://docs.databricks.com/api/workspace/jobs/update
+    pub(crate) fn update_workflow(
+        &self,
+        job_id: u64,
+        workflow_spec: serde_json::Value,
+    ) -> AdapterResult<()> {
+        let mut payload = workflow_spec;
+        if let serde_json::Value::Object(ref mut map) = payload {
+            map.insert("job_id".to_string(), json!(job_id));
+        }
+
+        self.post_json::<serde_json::Value>("/api/2.1/jobs/update", payload)?;
+        Ok(())
+    }
+
+    /// https://docs.databricks.com/api/workspace/jobs/run-now
+    pub(crate) fn run_workflow(&self, job_id: u64, enable_queueing: bool) -> AdapterResult<u64> {
+        let payload = json!({
+            "job_id": job_id,
+            "queue": {
+                "enabled": enable_queueing
+            }
+        });
+
+        let response: RunWorkflowResponse = self.post_json("/api/2.1/jobs/run-now", payload)?;
+        Ok(response.run_id)
+    }
 }
 
 #[derive(Deserialize)]
@@ -652,4 +698,25 @@ struct CommandResults {
 #[derive(Deserialize)]
 struct ClusterStatusResponse {
     state: String,
+}
+
+#[derive(Deserialize)]
+pub(crate) struct WorkflowSearchResponse {
+    #[serde(default)]
+    pub jobs: Vec<WorkflowJob>,
+}
+
+#[derive(Deserialize)]
+pub(crate) struct WorkflowJob {
+    pub job_id: u64,
+}
+
+#[derive(Deserialize)]
+struct CreateWorkflowResponse {
+    job_id: u64,
+}
+
+#[derive(Deserialize)]
+struct RunWorkflowResponse {
+    run_id: u64,
 }
