@@ -1159,6 +1159,43 @@ mod builtins {
         Ok(Value::from(rv))
     }
 
+    /// Converts a minijinja Value to serde_json::Value with sorted object keys.
+    /// This ensures that dictionary keys are serialized in alphabetical order,
+    /// matching Python's json.dumps() default behavior.
+    #[cfg(feature = "json")]
+    fn value_to_sorted_json(value: &Value) -> Result<serde_json::Value, serde_json::Error> {
+        use serde_json::Value as JsonValue;
+
+        // First serialize to serde_json::Value (which preserves order from minijinja)
+        let json_value: JsonValue = serde_json::to_value(value)?;
+
+        // Then recursively sort all object keys
+        Ok(sort_json_keys(json_value))
+    }
+
+    /// Recursively sorts all object keys in a serde_json::Value
+    #[cfg(feature = "json")]
+    fn sort_json_keys(value: serde_json::Value) -> serde_json::Value {
+        use serde_json::Value as JsonValue;
+        use std::collections::BTreeMap;
+
+        match value {
+            JsonValue::Object(map) => {
+                // Convert to BTreeMap to sort keys, then recursively sort nested values
+                let sorted: BTreeMap<String, JsonValue> = map
+                    .into_iter()
+                    .map(|(k, v)| (k, sort_json_keys(v)))
+                    .collect();
+                JsonValue::Object(sorted.into_iter().collect())
+            }
+            JsonValue::Array(arr) => {
+                // Recursively sort keys in array elements
+                JsonValue::Array(arr.into_iter().map(sort_json_keys).collect())
+            }
+            other => other,
+        }
+    }
+
     /// A JSON formatter that matches Python's json.dumps() default style:
     /// - Compact (no newlines or indentation)
     /// - Space after colons (e.g., `{"key": "value"}` instead of `{"key":"value"}`)
@@ -1239,18 +1276,26 @@ mod builtins {
             },
         };
         ok!(arg_parser.assert_all_used());
+
+        // Convert to serde_json::Value with sorted keys to match Python's json.dumps()
+        let sorted_json = ok!(value_to_sorted_json(&value).map_err(|err| Error::new(
+            ErrorKind::InvalidOperation,
+            "cannot serialize to JSON"
+        )
+        .with_source(err)));
+
         if let Some(indent) = indent {
             let mut out = Vec::<u8>::new();
             let indentation = " ".repeat(indent);
             let formatter = serde_json::ser::PrettyFormatter::with_indent(indentation.as_bytes());
             let mut s = serde_json::Serializer::with_formatter(&mut out, formatter);
-            serde::Serialize::serialize(&value, &mut s)
+            serde::Serialize::serialize(&sorted_json, &mut s)
                 .map(|_| unsafe { String::from_utf8_unchecked(out) })
         } else {
             // Use Python-style formatting (space after colon and comma)
             let mut out = Vec::<u8>::new();
             let mut s = serde_json::Serializer::with_formatter(&mut out, PythonStyleJsonFormatter);
-            serde::Serialize::serialize(&value, &mut s)
+            serde::Serialize::serialize(&sorted_json, &mut s)
                 .map(|_| unsafe { String::from_utf8_unchecked(out) })
         }
         .map_err(|err| {

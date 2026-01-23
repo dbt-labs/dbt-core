@@ -13,8 +13,9 @@ mod tests {
     use dbt_schemas::schemas::project::ModelConfig;
     use dbt_schemas::schemas::properties::ModelProperties;
     use dbt_schemas::state::{DbtAsset, DbtRuntimeConfig};
+    use indexmap::IndexMap;
     use minijinja::Environment;
-    use std::collections::{BTreeMap, HashMap};
+    use std::collections::BTreeMap;
     use std::path::PathBuf;
     use std::sync::Arc;
 
@@ -48,7 +49,7 @@ mod tests {
         };
         let package_config = DbtProjectConfig::<ModelConfig> {
             config: package_cfg,
-            children: HashMap::new(),
+            children: IndexMap::new(),
         };
 
         let root_cfg = ModelConfig {
@@ -58,7 +59,7 @@ mod tests {
         };
         let root_config = DbtProjectConfig::<ModelConfig> {
             config: root_cfg,
-            children: HashMap::new(),
+            children: IndexMap::new(),
         };
 
         // Set up Jinja environment
