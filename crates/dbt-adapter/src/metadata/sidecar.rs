@@ -1,5 +1,5 @@
 use crate::AdapterTyping;
-use crate::relation::postgres::PostgresRelation;
+use crate::relation::do_create_relation;
 use crate::typed_adapter::ConcreteAdapter;
 use crate::{AdapterEngine, TypedBaseAdapter};
 use crate::{
@@ -321,14 +321,15 @@ WHERE table_schema = '{}'",
         let schema_name = schema_name.value(i);
         let table_type = table_type.value(i);
 
-        // Use PostgresRelation for DuckDB (they share similar SQL semantics)
-        let relation = Arc::new(PostgresRelation::try_new(
-            Some(database_name.to_string()),
-            Some(schema_name.to_string()),
+        // Use the adapter's actual type to create the appropriate relation
+        let relation = do_create_relation(
+            adapter.adapter_type(),
+            database_name.to_string(),
+            schema_name.to_string(),
             Some(table_name.to_string()),
             Some(RelationType::from(table_type)),
             adapter.quoting(),
-        )?) as Arc<dyn BaseRelation>;
+        )?;
         relations.push(relation);
     }
 

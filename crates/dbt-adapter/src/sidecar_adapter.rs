@@ -10,13 +10,13 @@
 //! - **Compile/Render phase**: Jinja's `execute=true` allows introspection queries via sidecar
 //! - **Run phase**: Uses DbRunnerBackend directly (not this adapter)
 //!
-//! The adapter returns results in Snowflake-compatible format (AgateTable) by converting
-//! Arrow IPC results from the DuckDB worker.
+//! The adapter returns results in Snowflake-compatible format (AgateTable)
 
 use crate::AdapterTyping;
 use crate::adapter_engine::{AdapterEngine, SidecarEngine};
 use crate::base_adapter::AdapterType;
 use crate::cache::RelationCache;
+use crate::column::Column;
 use crate::config::AdapterConfig;
 use crate::errors::AdapterResult;
 use crate::metadata::MetadataAdapter;
@@ -25,6 +25,7 @@ use crate::response::AdapterResponse;
 use crate::sidecar_client::SidecarClient;
 use crate::sql_types::TypeOps;
 use crate::typed_adapter::TypedBaseAdapter;
+use dbt_schemas::schemas::relations::base::BaseRelation;
 
 use dbt_agate::AgateTable;
 use dbt_common::cancellation::CancellationToken;
@@ -40,7 +41,7 @@ use std::sync::Arc;
 ///
 /// This adapter:
 /// - Uses Snowflake SQL dialect and type system
-/// - Delegates execute() calls to SidecarClient (DuckDB worker)
+/// - Delegates execute() calls to SidecarClient
 /// - Returns Snowflake-compatible results (AgateTable)
 /// - Implements full TypedBaseAdapter interface
 /// - Supports introspection (get_columns_in_relation) via sidecar DESCRIBE queries
@@ -189,6 +190,36 @@ impl TypedBaseAdapter for SnowflakeSidecarAdapter {
         Ok(())
     }
 
-    // All other TypedBaseAdapter methods use default implementations
-    // which delegate to the engine or provide Snowflake-specific behavior
+    /// Get columns in relation via sidecar (overrides default Jinja macro execution)
+    fn get_columns_in_relation(
+        &self,
+        _state: &State,
+        relation: Arc<dyn BaseRelation>,
+    ) -> AdapterResult<Vec<Column>> {
+        // Build fully qualified relation name: database.schema.identifier
+        let database = relation.database_as_str()?;
+        let schema = relation.schema_as_str()?;
+        let identifier = relation.identifier_as_str()?;
+        let relation_name = format!("{}.{}.{}", database, schema, identifier);
+
+        // Get columns via sidecar client
+        let column_infos = self.sidecar_client.get_columns(&relation_name)?;
+
+        // Convert ColumnInfo to Column objects
+        let columns = column_infos
+            .into_iter()
+            .map(|info| {
+                Column::new(
+                    self.adapter_type,
+                    info.name,
+                    info.data_type,
+                    None, // char_size
+                    None, // numeric_precision
+                    None, // numeric_scale
+                )
+            })
+            .collect();
+
+        Ok(columns)
+    }
 }

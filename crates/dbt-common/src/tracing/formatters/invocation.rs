@@ -19,7 +19,9 @@ use super::duration::format_duration_for_summary;
 /// Commands that should not include the result breakdown line.
 const RESULT_LINE_OPT_OUT_COMMANDS: [&str; 1] = ["man"];
 /// Commands that should include the extended evaluation/result breakdown.
-const SUMMARY_COMMANDS: [&str; 6] = ["build", "compile", "run", "seed", "snapshot", "test"];
+const SUMMARY_COMMANDS: [&str; 7] = [
+    "build", "compile", "run", "sample", "seed", "snapshot", "test",
+];
 
 /// Type sfe way to get ordering of all supported node types for summary display.
 const fn node_type_to_order(node_type: NodeType) -> u8 {

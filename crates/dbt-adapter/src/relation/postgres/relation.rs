@@ -95,8 +95,9 @@ impl PostgresRelation {
             return Err(minijinja::Error::new(
                 minijinja::ErrorKind::InvalidOperation,
                 format!(
-                    "Relation name '{:?}' is longer than {} characters",
-                    path.identifier, MAX_CHARACTERS_IN_IDENTIFIER
+                    "Relation name '{}' is longer than {} characters",
+                    path.identifier.as_deref().unwrap(),
+                    MAX_CHARACTERS_IN_IDENTIFIER
                 ),
             ));
         }

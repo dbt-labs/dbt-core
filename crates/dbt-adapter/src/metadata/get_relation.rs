@@ -14,6 +14,7 @@ use crate::metadata::{snowflake, try_canonicalize_bool_column_field};
 use crate::record_batch_utils::get_column_values;
 use crate::relation::bigquery::BigqueryRelation;
 use crate::relation::databricks::DatabricksRelation;
+use crate::relation::do_create_relation;
 use crate::relation::postgres::PostgresRelation;
 use crate::relation::redshift::RedshiftRelation;
 use crate::relation::salesforce::SalesforceRelation;
@@ -567,14 +568,16 @@ fn duckdb_get_relation(
         _ => return invalid_value!("Unsupported relation type {}", string_array.value(0)),
     };
 
-    // Use PostgresRelation for now - DuckDB is PostgreSQL-compatible
-    // TODO: Create DuckDBRelation type if DuckDB-specific features are needed
-    let relation = PostgresRelation::try_new(
-        Some(database.to_string()),
-        Some(schema.to_string()),
+    // Use the logical adapter type to create the appropriate relation
+    // This avoids backend-specific limitations (like Postgres 63-char identifier limit)
+    // when running in sidecar mode
+    let relation = do_create_relation(
+        adapter.adapter_type(),
+        database.to_string(),
+        schema.to_string(),
         Some(identifier.to_string()),
         relation_type,
         adapter.quoting(),
     )?;
-    Ok(Some(Arc::new(relation)))
+    Ok(Some(relation))
 }
