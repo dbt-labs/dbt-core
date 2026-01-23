@@ -2,11 +2,14 @@ use std::borrow::Cow;
 use std::cell::RefCell;
 use std::collections::HashSet;
 use std::ops::{Deref, DerefMut};
+use std::rc::Rc;
 use std::sync::Arc;
 
 use crate::error::{Error, ErrorKind};
+use crate::listener::RenderingEventListener;
 use crate::value::{
-    DynObject, ObjectRepr, Packed, SmallStr, StringType, Value, ValueKind, ValueMap, ValueRepr,
+    mutable_map::MutableMap, DynObject, ObjectRepr, Packed, SmallStr, StringType, Value, ValueKind,
+    ValueMap, ValueRepr,
 };
 use crate::vm::State;
 
@@ -799,6 +802,49 @@ impl Object for KwargsValues {
     }
 }
 
+/// A mutable wrapper around MutableMap that is specifically marked as kwargs.
+/// This distinguishes kwargs from regular dict values which are also MutableMap.
+#[derive(Debug)]
+pub(crate) struct KwargsMutableMap(Arc<MutableMap>);
+
+impl KwargsMutableMap {
+    pub fn inner(&self) -> &Arc<MutableMap> {
+        &self.0
+    }
+}
+
+impl Object for KwargsMutableMap {
+    fn repr(self: &Arc<Self>) -> ObjectRepr {
+        ObjectRepr::Map
+    }
+
+    fn is_mutable(self: &Arc<Self>) -> bool {
+        true
+    }
+
+    fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
+        self.0.get(key)
+    }
+
+    fn enumerate(self: &Arc<Self>) -> Enumerator {
+        Object::enumerate(&self.0)
+    }
+
+    fn enumerator_len(self: &Arc<Self>) -> Option<usize> {
+        Object::enumerator_len(&self.0)
+    }
+
+    fn call_method(
+        self: &Arc<Self>,
+        state: &State<'_, '_>,
+        method: &str,
+        args: &[Value],
+        listeners: &[Rc<dyn RenderingEventListener>],
+    ) -> Result<Value, Error> {
+        Object::call_method(&self.0, state, method, args, listeners)
+    }
+}
+
 impl<'a> ArgType<'a> for Kwargs {
     type Output = Self;
 
@@ -840,15 +886,27 @@ impl Kwargs {
 
     /// Given a value, extracts the kwargs if there are any.
     pub(crate) fn extract(value: &Value) -> Option<Kwargs> {
-        value
-            .as_object()
-            .and_then(|x| x.downcast::<KwargsValues>())
-            .map(Kwargs::new)
+        let obj = value.as_object()?;
+
+        // Try to extract as KwargsValues first (for backward compatibility)
+        if let Some(kwargs_values) = obj.downcast::<KwargsValues>() {
+            return Some(Kwargs::new(kwargs_values));
+        }
+
+        // Try to extract as KwargsMutableMap (new behavior - only actual kwargs)
+        if let Some(kwargs_map) = obj.downcast::<KwargsMutableMap>() {
+            let cloned_map: MutableMap = kwargs_map.inner().as_ref().clone();
+            let value_map: ValueMap = cloned_map.into();
+            return Some(Kwargs::new(Arc::new(KwargsValues(value_map))));
+        }
+
+        // DO NOT extract from plain MutableMap - those are regular dicts
+        None
     }
 
     /// Wraps a value map into kwargs.
     pub(crate) fn wrap(map: ValueMap) -> Value {
-        Value::from_object(KwargsValues(map))
+        Value::from_object(KwargsMutableMap(Arc::new(MutableMap::from(map))))
     }
 
     /// Get a single argument from the kwargs but don't mark it as used.
@@ -1147,5 +1205,58 @@ mod tests {
         assert!(one.is_none());
         let (one,) = from_args::<(Option<i32>,)>(args!(Some(Value::UNDEFINED))).unwrap();
         assert!(one.is_none());
+    }
+
+    #[test]
+    fn test_regular_dict_not_extracted_as_kwargs() {
+        // Create a regular dict using MutableMap (simulates {% set d = {"key": "value"} %})
+        let dict = Value::from_object(MutableMap::from(
+            [("key".into(), Value::from("value"))]
+                .into_iter()
+                .collect::<ValueMap>(),
+        ));
+
+        // Regular dict should NOT be extractable as kwargs
+        assert!(Kwargs::extract(&dict).is_none());
+        assert!(!dict.is_kwargs());
+
+        // When passed as argument, dict should be treated as positional arg, not kwargs
+        let args = [dict];
+        let (value, kwargs) = from_args::<(Value, Kwargs)>(&args).unwrap();
+
+        // The dict should be the positional argument
+        assert!(value.as_object().is_some());
+        assert_eq!(
+            value.get_item(&Value::from("key")).unwrap(),
+            Value::from("value")
+        );
+
+        // Kwargs should be empty (dict was not consumed as kwargs)
+        assert!(!kwargs.has("key"));
+    }
+
+    #[test]
+    fn test_kwargs_wrap_creates_extractable_kwargs() {
+        // Create kwargs using Kwargs::wrap (simulates func(a=1, b=2))
+        let kwargs_value = Kwargs::wrap(
+            [("a".into(), Value::from(1)), ("b".into(), Value::from(2))]
+                .into_iter()
+                .collect::<ValueMap>(),
+        );
+
+        // Wrapped kwargs SHOULD be extractable
+        assert!(Kwargs::extract(&kwargs_value).is_some());
+        assert!(kwargs_value.is_kwargs());
+
+        // When passed as argument, it should be extracted as kwargs
+        let args = [kwargs_value];
+        let (args_slice, kwargs) = from_args::<(&[Value], Kwargs)>(&args).unwrap();
+
+        // No positional args (kwargs was consumed)
+        assert!(args_slice.is_empty());
+
+        // Kwargs should have the values
+        assert_eq!(kwargs.get::<i32>("a").unwrap(), 1);
+        assert_eq!(kwargs.get::<i32>("b").unwrap(), 2);
     }
 }
