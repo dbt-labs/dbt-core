@@ -38,6 +38,25 @@ Following agate's type priority (highest to lowest):
 
 **Null values:** Empty strings (`""`) and `"null"` (case-insensitive) are treated as NULL.
 
+## Force Text Columns
+
+Agate allows users to override type inference for specific columns. Mantle uses this feature to force user-specified seed columns to be treated as strings, deferring type casting to the warehouse.
+
+This crate provides a constrained API for the same purpose via `infer_agate_schema_with_text_columns`:
+
+```rust
+let text_columns = vec!["DATE_CREATED".to_string(), "ORIGINAL_NETWORK_NAME".to_string()];
+let (schema, records_read, missing) = format
+    .infer_agate_schema_with_text_columns(&mut reader, max_records, &text_columns)
+    .unwrap();
+```
+
+**Matching behavior:**
+- Column names are matched **case-insensitively** using `dbt-ident`
+- This differs from Mantle, which does case-sensitive matching because it preserves the user's original casing from the YAML file
+- In Fusion, `DbtSeed` normalizes `column_types` keys based on warehouse semantics during the resolve phase (e.g., Snowflake uppercases unquoted identifiers), so case-insensitive matching is needed to match normalized keys against original CSV headers
+- Columns not found in CSV headers are returned in `missing` for warning/logging
+
 ## Usage
 
 Enable with the environment variable:

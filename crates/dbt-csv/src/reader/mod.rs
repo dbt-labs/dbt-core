@@ -221,7 +221,26 @@ impl Format {
         reader: R,
         max_records: Option<usize>,
     ) -> Result<(crate::type_tester::AgateSchema, usize), ArrowError> {
-        use crate::type_tester::{AgateSchema, TypeTester};
+        let (schema, records_count, _warnings) =
+            self.infer_agate_schema_with_text_columns(reader, max_records, &[])?;
+        Ok((schema, records_count))
+    }
+
+    /// Infer an AgateSchema from the data in a reader, with forced text columns.
+    ///
+    /// This is similar to `infer_agate_schema`, but allows specifying columns that
+    /// should be forced to `Text` type without inspecting their data. This matches
+    /// agate's behavior when users specify column types in dbt's YAML config.
+    ///
+    /// # Arguments
+    /// * `text_columns` - Column names to force as Text type (case-sensitive exact match)
+    pub fn infer_agate_schema_with_text_columns<R: Read>(
+        &self,
+        reader: R,
+        max_records: Option<usize>,
+        text_columns: &[String],
+    ) -> Result<(crate::type_tester::AgateSchema, usize, Vec<String>), ArrowError> {
+        use crate::type_tester::{AgateSchema, AgateType, TypeTester};
 
         let mut csv_reader = self.build_reader(reader);
 
@@ -235,6 +254,21 @@ impl Format {
                 .map(|i| format!("column_{}", i + 1))
                 .collect()
         };
+
+        // Build a boolean mask for forced text columns (case-insensitive match using dbt-ident)
+        // This handles dialect-specific normalization (e.g., Snowflake uppercases column_types keys)
+        // Also track which text_columns weren't found for warning
+        let mut is_force_text_col: Vec<bool> = vec![false; headers.len()];
+        let mut missing_columns: Vec<String> = Vec::new();
+
+        for text_col in text_columns {
+            let text_col_ident = dbt_ident::Ident::new(text_col);
+            if let Some(idx) = headers.iter().position(|h| text_col_ident.matches(h)) {
+                is_force_text_col[idx] = true;
+            } else {
+                missing_columns.push(text_col.clone());
+            }
+        }
 
         let header_length = headers.len();
         // Use Python-compatible TypeTester for each column
@@ -251,8 +285,12 @@ impl Format {
             }
             records_count += 1;
 
-            // Test each value against possible types
-            for (i, tester) in type_testers.iter_mut().enumerate().take(header_length) {
+            // Test each value against possible types (skip forced text columns)
+            for (i, tester) in type_testers.iter_mut().enumerate() {
+                // Skip type inference for forced text columns
+                if is_force_text_col[i] {
+                    continue;
+                }
                 if let Some(string) = record.get(i) {
                     tester.test(string);
                 }
@@ -260,10 +298,21 @@ impl Format {
         }
 
         // Build AgateSchema from inference results
-        let types: Vec<_> = type_testers.iter().map(|t| t.get_type()).collect();
+        // For forced text columns, use Text type directly
+        let types: Vec<_> = type_testers
+            .iter()
+            .enumerate()
+            .map(|(i, t)| {
+                if is_force_text_col[i] {
+                    AgateType::Text
+                } else {
+                    t.get_type()
+                }
+            })
+            .collect();
         let agate_schema = AgateSchema::from_names_and_types(headers, types);
 
-        Ok((agate_schema, records_count))
+        Ok((agate_schema, records_count, missing_columns))
     }
 
     /// Build a [`csv::Reader`] for this [`Format`]
@@ -2101,5 +2150,130 @@ mod tests {
         assert!(!c2.is_null(2));
         assert_eq!(c2.value(1), "something_cannot_be_inlined");
         assert_eq!(c2.value(2), "bar");
+    }
+
+    #[test]
+    fn test_infer_agate_schema_with_text_columns() {
+        use crate::type_tester::{AgateColumn, AgateSchema, AgateType};
+
+        let mut file = File::open("test/data/text_columns_test.csv").unwrap();
+
+        // Specify date_created and original_network_name as forced text columns
+        let text_columns: Vec<String> = vec!["date_created", "original_network_name"]
+            .into_iter()
+            .map(String::from)
+            .collect();
+        let (agate_schema, records_count, missing_columns) = Format::default()
+            .with_header(true)
+            .infer_agate_schema_with_text_columns(&mut file, None, &text_columns)
+            .unwrap();
+
+        // Should have read 1 data row
+        assert_eq!(records_count, 1);
+
+        // No missing columns - all text_columns matched
+        assert!(
+            missing_columns.is_empty(),
+            "Expected no missing columns, got: {:?}",
+            missing_columns
+        );
+
+        // Expected schema:
+        // - date_created: forced to Text (would fail date inference due to "4/30/2021" format)
+        // - original_network_name: forced to Text
+        // - mapped_network_name: inferred as Text (contains "Ad Extensions")
+        // - is_paid_network: inferred as Boolean (contains "TRUE")
+        let expected_schema = AgateSchema::new(vec![
+            AgateColumn::new("date_created", AgateType::Text),
+            AgateColumn::new("original_network_name", AgateType::Text),
+            AgateColumn::new("mapped_network_name", AgateType::Text),
+            AgateColumn::new("is_paid_network", AgateType::Boolean),
+        ]);
+
+        assert_eq!(agate_schema, expected_schema);
+    }
+
+    #[test]
+    fn test_infer_agate_schema_with_text_columns_case_insensitive() {
+        use crate::type_tester::{AgateColumn, AgateSchema, AgateType};
+
+        let mut file = File::open("test/data/text_columns_test.csv").unwrap();
+
+        // Specify uppercased column names (simulates Snowflake normalization)
+        // Case-insensitive matching should still find them
+        let text_columns: Vec<String> = vec![
+            "DATE_CREATED",          // uppercase (matches date_created)
+            "ORIGINAL_NETWORK_NAME", // uppercase (matches original_network_name)
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect();
+        let (agate_schema, records_count, missing_columns) = Format::default()
+            .with_header(true)
+            .infer_agate_schema_with_text_columns(&mut file, None, &text_columns)
+            .unwrap();
+
+        // Should have read 1 data row
+        assert_eq!(records_count, 1);
+
+        // No missing columns - case-insensitive matching finds them
+        assert!(
+            missing_columns.is_empty(),
+            "Expected no missing columns, got: {:?}",
+            missing_columns
+        );
+
+        // Expected schema: both specified columns forced to Text
+        let expected_schema = AgateSchema::new(vec![
+            AgateColumn::new("date_created", AgateType::Text),
+            AgateColumn::new("original_network_name", AgateType::Text),
+            AgateColumn::new("mapped_network_name", AgateType::Text),
+            AgateColumn::new("is_paid_network", AgateType::Boolean),
+        ]);
+
+        assert_eq!(agate_schema, expected_schema);
+    }
+
+    #[test]
+    fn test_infer_agate_schema_with_text_columns_missing() {
+        use crate::type_tester::{AgateColumn, AgateSchema, AgateType};
+
+        let mut file = File::open("test/data/text_columns_test.csv").unwrap();
+
+        // Specify misspelled column names (not just wrong case)
+        let text_columns: Vec<String> = vec![
+            "ORIGINAL_NETWORK",   // misspelled (actual: original_network_name)
+            "nonexistent_column", // doesn't exist at all
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect();
+        let (agate_schema, records_count, missing_columns) = Format::default()
+            .with_header(true)
+            .infer_agate_schema_with_text_columns(&mut file, None, &text_columns)
+            .unwrap();
+
+        // Should have read 1 data row
+        assert_eq!(records_count, 1);
+
+        // Both should be missing (misspelled, not just wrong case)
+        assert_eq!(
+            missing_columns.len(),
+            2,
+            "Expected 2 missing columns, got: {:?}",
+            missing_columns
+        );
+        assert!(missing_columns.contains(&"ORIGINAL_NETWORK".to_string()));
+        assert!(missing_columns.contains(&"nonexistent_column".to_string()));
+
+        // Expected schema: all columns inferred normally (no forced text)
+        let expected_schema = AgateSchema::new(vec![
+            AgateColumn::new("date_created", AgateType::Date),
+            AgateColumn::new("original_network_name", AgateType::Text),
+            AgateColumn::new("mapped_network_name", AgateType::Text),
+            AgateColumn::new("is_paid_network", AgateType::Boolean),
+        ]);
+
+        assert_eq!(agate_schema, expected_schema);
     }
 }

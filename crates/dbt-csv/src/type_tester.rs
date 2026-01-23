@@ -315,7 +315,7 @@ impl AgateType {
 // =============================================================================
 
 /// A column in an AgateSchema.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AgateColumn {
     /// Column name
     pub name: String,
@@ -343,7 +343,7 @@ impl AgateColumn {
 /// This is used during CSV parsing to preserve the original type inference
 /// information and parse data directly according to AgateType semantics,
 /// rather than converting to Arrow types and using Arrow's parsers.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AgateSchema {
     /// Columns in the schema
     columns: Vec<AgateColumn>,
