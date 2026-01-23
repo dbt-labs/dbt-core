@@ -9,6 +9,7 @@ use dbt_jinja_utils::serde::{from_yaml_raw, into_typed_with_jinja};
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_schemas::schemas::properties::{
     AnalysesProperties, DbtPropertiesFileValues, MinimalSchemaValue, MinimalTableValue,
+    MinimalUnitTestValue,
 };
 use dbt_schemas::schemas::serde::FloatOrString;
 use dbt_schemas::state::DbtPackage;
@@ -400,7 +401,7 @@ impl MinimalProperties {
         }
         if let Some(unit_tests) = other.unit_tests {
             for unit_test_value in unit_tests {
-                let unit_test = into_typed_with_jinja::<MinimalSchemaValue, _>(
+                let unit_test = into_typed_with_jinja::<MinimalUnitTestValue, _>(
                     io_args,
                     unit_test_value.clone(),
                     false,

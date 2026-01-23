@@ -184,7 +184,7 @@ pub mod schemas {
         pub use properties::GroupProperties;
         pub use properties::{
             DbtPropertiesFile, DbtPropertiesFileValues, GetConfig, MinimalSchemaValue,
-            MinimalTableValue,
+            MinimalTableValue, MinimalUnitTestValue,
         };
         pub use saved_queries_properties::SavedQueriesProperties;
         pub use seed_properties::SeedProperties;

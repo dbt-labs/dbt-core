@@ -67,6 +67,16 @@ pub struct MinimalTableValue {
     pub __additional_properties__: Verbatim<BTreeMap<String, dbt_serde_yaml::Value>>,
 }
 
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct MinimalUnitTestValue {
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub versions: Option<dbt_serde_yaml::Value>,
+    pub __additional_properties__: Verbatim<BTreeMap<String, dbt_serde_yaml::Value>>,
+}
+
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct DbtPropertiesFile {
