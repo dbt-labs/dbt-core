@@ -1228,79 +1228,29 @@ fn docs_config_equal(
 
 /// Compare DbtQuoting structures with more nuanced logic
 /// This handles cases where one side has values and the other has all None fields
-#[allow(dead_code)]
 fn quoting_equal(
     left: &Option<crate::schemas::common::DbtQuoting>,
     right: &Option<crate::schemas::common::DbtQuoting>,
 ) -> bool {
     use crate::schemas::common::DbtQuoting;
 
-    // Helper to check if a DbtQuoting has all fields as None
-    let is_all_none = |q: &DbtQuoting| -> bool {
-        q.database.is_none()
-            && q.identifier.is_none()
-            && q.schema.is_none()
-            && q.snowflake_ignore_case.is_none()
-    };
-
-    // Helper to check if a DbtQuoting has all fields as Some(false)
-    let is_all_false = |q: &DbtQuoting| -> bool {
-        q.database == Some(false)
-            && q.identifier == Some(false)
-            && q.schema == Some(false)
-            && q.snowflake_ignore_case == Some(false)
-    };
-
-    // Helper to check if a DbtQuoting is effectively "default" (all None or all false)
-    let is_default = |q: &DbtQuoting| -> bool { is_all_none(q) || is_all_false(q) };
+    let database = |q: &DbtQuoting| -> bool { q.database.unwrap_or(false) };
+    let identifier = |q: &DbtQuoting| -> bool { q.identifier.unwrap_or(false) };
+    let schema = |q: &DbtQuoting| -> bool { q.schema.unwrap_or(false) };
+    let snowflake_ignore_case =
+        |q: &DbtQuoting| -> bool { q.snowflake_ignore_case.unwrap_or(false) };
 
     match (left, right) {
         (None, None) => true,
         (Some(l), Some(r)) => {
-            // Direct equality check first
-            if l == r {
-                return true;
-            }
-
-            // Check if both are effectively default
-            if is_default(l) && is_default(r) {
-                return true;
-            }
-
-            // Compare field by field, treating None and Some(false) as equal
-            let database_eq = match (l.database, r.database) {
-                (None, None) | (Some(false), Some(false)) => true,
-                (None, Some(false)) | (Some(false), None) => true,
-                (Some(a), Some(b)) => a == b,
-                _ => false,
-            };
-
-            let identifier_eq = match (l.identifier, r.identifier) {
-                (None, None) | (Some(false), Some(false)) => true,
-                (None, Some(false)) | (Some(false), None) => true,
-                (Some(a), Some(b)) => a == b,
-                _ => false,
-            };
-
-            let schema_eq = match (l.schema, r.schema) {
-                (None, None) | (Some(false), Some(false)) => true,
-                (None, Some(false)) | (Some(false), None) => true,
-                (Some(a), Some(b)) => a == b,
-                _ => false,
-            };
-
-            let snowflake_ignore_case_eq = match (l.snowflake_ignore_case, r.snowflake_ignore_case)
-            {
-                (None, None) | (Some(false), Some(false)) => true,
-                (None, Some(false)) | (Some(false), None) => true,
-                (Some(a), Some(b)) => a == b,
-                _ => false,
-            };
-
-            database_eq && identifier_eq && schema_eq && snowflake_ignore_case_eq
+            database(l) == database(r)
+                && identifier(l) == identifier(r)
+                && schema(l) == schema(r)
+                && snowflake_ignore_case(l) == snowflake_ignore_case(r)
         }
-        (None, Some(r)) => is_default(r),
-        (Some(l), None) => is_default(l),
+        (None, Some(q)) | (Some(q), None) => {
+            !database(q) && !identifier(q) && !schema(q) && !snowflake_ignore_case(q)
+        }
     }
 }
 
@@ -1484,7 +1434,10 @@ impl InternalDbtNode for DbtTest {
                 array_of_strings_eq(&self.deprecated_config.tags, &other.deprecated_config.tags);
             let meta_eq = meta_eq(&self.deprecated_config.meta, &other.deprecated_config.meta);
             let group_eq = self.deprecated_config.group == other.deprecated_config.group;
-            let quoting_eq = self.deprecated_config.quoting == other.deprecated_config.quoting;
+            let quoting_eq = quoting_equal(
+                &self.deprecated_config.quoting,
+                &other.deprecated_config.quoting,
+            );
 
             let result = enabled_eq && alias_eq && tags_eq && meta_eq && group_eq && quoting_eq;
 
