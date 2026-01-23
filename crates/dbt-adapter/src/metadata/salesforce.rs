@@ -73,8 +73,8 @@ impl MetadataAdapter for SalesforceMetadataAdapter {
     fn create_schemas_if_not_exists(
         &self,
         _state: &State<'_, '_>,
-        _catalog_schemas: &BTreeMap<String, BTreeSet<String>>,
-    ) -> AdapterResult<Vec<(String, String, AdapterResult<()>)>> {
+        _catalog_schemas: Vec<(String, String, String)>,
+    ) -> AdapterResult<Vec<(String, String, String, AdapterResult<()>)>> {
         Ok(Vec::new())
     }
 

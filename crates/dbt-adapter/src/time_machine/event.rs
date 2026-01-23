@@ -134,8 +134,8 @@ pub enum MetadataCallArgs {
     },
     /// Arguments for create_schemas_if_not_exists
     CreateSchemasIfNotExists {
-        /// Map of catalog -> schemas to create
-        catalog_schemas: Vec<CatalogSchemas>,
+        /// List of (catalog, schema, unique_id) to create
+        catalog_schemas: Vec<(String, String, String)>,
     },
 }
 

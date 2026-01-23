@@ -618,17 +618,9 @@ pub fn args_list_relations_schemas_by_patterns(
 
 /// Create MetadataCallArgs for create_schemas_if_not_exists.
 pub fn args_create_schemas_if_not_exists(
-    catalog_schemas: &BTreeMap<String, BTreeSet<String>>,
+    catalog_schemas: Vec<(String, String, String)>,
 ) -> MetadataCallArgs {
-    MetadataCallArgs::CreateSchemasIfNotExists {
-        catalog_schemas: catalog_schemas
-            .iter()
-            .map(|(c, schemas)| CatalogSchemas {
-                catalog: c.clone(),
-                schemas: schemas.iter().cloned().collect(),
-            })
-            .collect(),
-    }
+    MetadataCallArgs::CreateSchemasIfNotExists { catalog_schemas }
 }
 
 #[cfg(test)]

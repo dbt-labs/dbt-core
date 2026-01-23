@@ -28,6 +28,7 @@ use minijinja_contrib::modules::py_datetime::datetime::PyDateTime;
 use serde::Deserialize;
 
 use std::collections::{BTreeMap, HashMap};
+use std::error::Error;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -1281,8 +1282,14 @@ pub fn execute_macro_with_package(
     let func = state
         .lookup(macro_name)
         .unwrap_or_else(|| panic!("{macro_name} exists"));
-    func.call(&state, args, &[])
-        .map_err(|err| AdapterError::new(AdapterErrorKind::UnexpectedResult, err.to_string()))
+    func.call(&state, args, &[]).map_err(|err| {
+        if let Some(source) = err.source() {
+            if let Some(adapter_err) = source.downcast_ref::<AdapterError>() {
+                return adapter_err.clone();
+            }
+        }
+        AdapterError::new(AdapterErrorKind::UnexpectedResult, err.to_string())
+    })
 }
 
 /// Returns a value that represents the absence of a value of a Object method return.

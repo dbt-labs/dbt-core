@@ -628,8 +628,8 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
     fn create_schemas_if_not_exists(
         &self,
         state: &State<'_, '_>,
-        catalog_schemas: &BTreeMap<String, BTreeSet<String>>,
-    ) -> AdapterResult<Vec<(String, String, AdapterResult<()>)>> {
+        catalog_schemas: Vec<(String, String, String)>,
+    ) -> AdapterResult<Vec<(String, String, String, AdapterResult<()>)>> {
         create_schemas_if_not_exists(&self.adapter, self, state, catalog_schemas)
     }
 

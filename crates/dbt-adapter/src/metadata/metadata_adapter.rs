@@ -171,8 +171,8 @@ pub trait MetadataAdapter: Send + Sync {
     fn create_schemas_if_not_exists(
         &self,
         state: &State<'_, '_>,
-        catalog_schemas: &BTreeMap<String, BTreeSet<String>>,
-    ) -> AdapterResult<Vec<(String, String, AdapterResult<()>)>>;
+        catalog_schemas: Vec<(String, String, String)>,
+    ) -> AdapterResult<Vec<(String, String, String, AdapterResult<()>)>>;
 
     // =========================================================================
     // Async I/O methods - use _inner pattern for recording
@@ -369,11 +369,9 @@ pub fn create_schemas_if_not_exists(
     adapter: &dyn TypedBaseAdapter,
     metadata_adapter: &dyn MetadataAdapter,
     state: &State,
-    catalog_schemas: &BTreeMap<String, BTreeSet<String>>,
-) -> AdapterResult<Vec<(String, String, AdapterResult<()>)>> {
-    let catalog_schemas = flatten_catalog_schemas(catalog_schemas);
-
-    let map_f = |(catalog, schema): (String, String)| -> AdapterResult<(String, String, AdapterResult<()>)> {
+    catalog_schemas: Vec<(String, String, String)>,
+) -> AdapterResult<Vec<(String, String, String, AdapterResult<()>)>> {
+    let map_f = |(catalog, schema, unique_id): (String, String, String)| -> AdapterResult<(String, String, String, AdapterResult<()>)> {
         let mock_relation = do_create_relation(
             adapter.adapter_type(),
             catalog.clone(),
@@ -391,11 +389,16 @@ pub fn create_schemas_if_not_exists(
                 } else if adapter.adapter_type() == AdapterType::Bigquery {
                     Err(e)
                 } else {
-                    return Err(e);
+                    let chars = e.sqlstate().as_bytes();
+                    let sqlstate: [u8; 5] = chars[..5].try_into().map_err(|_| e.clone())?;
+                    let err_string = format!(
+                        "Failed to create schema '{schema}' in database '{catalog}' in remote for {unique_id}: {}", e.message()
+                    );
+                    return Err(AdapterError::new_with_sqlstate_and_vendor_code(e.kind(), err_string, sqlstate, e.vendor_code()));
                 }
             }
         };
-        Ok((catalog, schema, res))
+        Ok((catalog, schema, unique_id, res))
     };
 
     catalog_schemas.into_iter().map(map_f).collect()

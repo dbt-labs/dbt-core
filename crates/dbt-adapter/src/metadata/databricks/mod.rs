@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, HashMap};
 use std::future;
 use std::ops::DerefMut;
 use std::sync::Arc;
@@ -894,8 +894,8 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
     fn create_schemas_if_not_exists(
         &self,
         state: &State<'_, '_>,
-        catalog_schemas: &BTreeMap<String, BTreeSet<String>>,
-    ) -> AdapterResult<Vec<(String, String, AdapterResult<()>)>> {
+        catalog_schemas: Vec<(String, String, String)>,
+    ) -> AdapterResult<Vec<(String, String, String, AdapterResult<()>)>> {
         create_schemas_if_not_exists(&self.adapter, self, state, catalog_schemas)
     }
 

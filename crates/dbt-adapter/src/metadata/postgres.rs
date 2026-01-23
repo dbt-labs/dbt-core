@@ -15,7 +15,7 @@ use dbt_schemas::schemas::{
 use minijinja::State;
 
 use std::collections::btree_map::Entry;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 pub struct PostgresMetadataAdapter {
@@ -176,8 +176,8 @@ impl MetadataAdapter for PostgresMetadataAdapter {
     fn create_schemas_if_not_exists(
         &self,
         _state: &State<'_, '_>,
-        _catalog_schemas: &BTreeMap<String, BTreeSet<String>>,
-    ) -> AdapterResult<Vec<(String, String, AdapterResult<()>)>> {
+        _catalog_schemas: Vec<(String, String, String)>,
+    ) -> AdapterResult<Vec<(String, String, String, AdapterResult<()>)>> {
         todo!("PostgresAdapter::create_schemas_if_not_exists")
     }
 

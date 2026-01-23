@@ -17,7 +17,7 @@ use dbt_xdbc::*;
 use minijinja::State;
 
 use std::collections::btree_map::Entry;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 /// Reference: https://github.com/dbt-labs/dbt-adapters/blob/87e81a47baa11c312003377091a9efc0ab72d88e/dbt-redshift/src/dbt/include/redshift/macros/adapters.sql#L226
@@ -756,8 +756,8 @@ AND table_name = '{identifier}'"
     fn create_schemas_if_not_exists(
         &self,
         state: &State<'_, '_>,
-        catalog_schemas: &BTreeMap<String, BTreeSet<String>>,
-    ) -> AdapterResult<Vec<(String, String, AdapterResult<()>)>> {
+        catalog_schemas: Vec<(String, String, String)>,
+    ) -> AdapterResult<Vec<(String, String, String, AdapterResult<()>)>> {
         create_schemas_if_not_exists(&self.adapter, self, state, catalog_schemas)
     }
 

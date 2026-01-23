@@ -1115,9 +1115,9 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
                     Ok(result) => result,
                     Err(err) => {
                         // Handle NotFound errors
+                        // XXX(anna): since execute_macro passes up the original error kind, we can't rely on it being an UnexpectedResult anymore
                         if err.kind() == AdapterErrorKind::NotFound
-                            || (err.kind() == AdapterErrorKind::UnexpectedResult
-                                && err.message().contains("Error 404: Not found"))
+                            || err.message().contains("Error 404: Not found")
                         {
                             return Ok(Vec::new());
                         }

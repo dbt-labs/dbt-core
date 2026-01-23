@@ -20,7 +20,7 @@ use indexmap::IndexMap;
 use minijinja::State;
 
 use std::collections::btree_map::Entry;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 
 pub mod object_options;
@@ -1043,8 +1043,8 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
     fn create_schemas_if_not_exists(
         &self,
         state: &State<'_, '_>,
-        catalog_schemas: &BTreeMap<String, BTreeSet<String>>,
-    ) -> AdapterResult<Vec<(String, String, AdapterResult<()>)>> {
+        catalog_schemas: Vec<(String, String, String)>,
+    ) -> AdapterResult<Vec<(String, String, String, AdapterResult<()>)>> {
         create_schemas_if_not_exists(&self.adapter, self, state, catalog_schemas)
     }
 
