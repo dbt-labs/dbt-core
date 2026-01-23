@@ -214,10 +214,8 @@ pub fn generate_relation_components(
     node: &dyn InternalDbtNodeAttributes,
     adapter_type: AdapterType,
 ) -> FsResult<(String, String, String, String, ResolvedQuoting)> {
-    // TODO handle jinja rendering errors on each component name rendering
     // Get default values from the node
-    let (default_database, default_schema, default_alias) =
-        (node.database(), node.schema(), node.base().alias.clone());
+    let (default_database, default_schema) = (node.database(), node.schema());
     // Generate database name
     let database = if node.skip_generate_database_name_macro() {
         components.database.clone().unwrap_or(default_database)
@@ -230,8 +228,7 @@ pub fn generate_relation_components(
             base_ctx,
             components.database.clone(),
             Some(node),
-        )
-        .unwrap_or_else(|_| default_database.to_owned()) // todo handle this error
+        )?
     };
 
     // Generate schema name
@@ -246,8 +243,7 @@ pub fn generate_relation_components(
             base_ctx,
             components.schema.clone(),
             Some(node),
-        )
-        .unwrap_or_else(|_| default_schema.to_owned()) // todo handle this error
+        )?
     };
 
     // Generate alias
@@ -259,15 +255,7 @@ pub fn generate_relation_components(
         base_ctx,
         components.alias.clone(),
         Some(node),
-    )
-    .unwrap_or_else(|_| {
-        // If alias generation fails and default_alias is empty, use the node name as fallback
-        if default_alias.is_empty() {
-            node.common().name.clone()
-        } else {
-            default_alias.to_owned()
-        }
-    });
+    )?;
 
     // Ensure alias is never empty - use node name as ultimate fallback
     let alias = if alias.is_empty() {
