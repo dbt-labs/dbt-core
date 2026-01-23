@@ -25,6 +25,7 @@ use crate::schemas::{
     common::{
         Access, DbtChecksum, DbtContract, DbtIncrementalStrategy, DbtMaterialization, Expect,
         FreshnessDefinition, Given, IncludeExclude, NodeDependsOn, ResolvedQuoting, ScheduleConfig,
+        SchemaOrigin, SchemaRefreshInterval, SyncConfig,
     },
     macros::DbtMacro,
     manifest::common::DbtOwner,
@@ -477,6 +478,25 @@ pub trait InternalDbtNodeAttributes: InternalDbtNode {
     fn static_analysis_off_reason(&self) -> Option<StaticAnalysisOffReason> {
         self.base().static_analysis_off_reason
     }
+
+    /// Returns the schema origin for this node.
+    ///
+    /// For sources with `schema_origin: local`, the schema is derived from
+    /// YAML column definitions rather than fetched from the warehouse.
+    /// Default is `Remote` for all node types except sources that explicitly
+    /// configure `schema_origin: local`.
+    fn schema_origin(&self) -> SchemaOrigin {
+        SchemaOrigin::default()
+    }
+
+    /// Returns the schema refresh interval for this node.
+    ///
+    /// For sources with `sync.schema_refresh_interval` configured, returns
+    /// the per-source TTL. Otherwise returns `None` to use the global default.
+    fn schema_refresh_interval(&self) -> Option<SchemaRefreshInterval> {
+        None
+    }
+
     fn strictness(&self) -> Option<StrictnessMode> {
         None
     }
@@ -981,11 +1001,17 @@ impl InternalDbtNodeAttributes for DbtModel {
         dbt_serde_yaml::to_value(&self.deprecated_config).expect("Failed to serialize to YAML")
     }
 
+    fn schema_refresh_interval(&self) -> Option<SchemaRefreshInterval> {
+        self.__model_attr__
+            .sync
+            .as_ref()
+            .and_then(|sync| sync.schema_refresh_interval.clone())
+    }
+
     fn strictness(&self) -> Option<StrictnessMode> {
         self.deprecated_config.strictness
     }
 }
-
 /// Helper function to compare materialized fields for seeds, treating None and default Seed materialization as equivalent
 fn seed_materialized_eq(a: &Option<DbtMaterialization>, b: &Option<DbtMaterialization>) -> bool {
     use crate::schemas::common::DbtMaterialization;
@@ -2017,6 +2043,17 @@ impl InternalDbtNodeAttributes for DbtSource {
     fn serialized_config(&self) -> YmlValue {
         dbt_serde_yaml::to_value(&self.deprecated_config).expect("Failed to serialize DbtModel")
     }
+
+    fn schema_origin(&self) -> SchemaOrigin {
+        self.__source_attr__.schema_origin
+    }
+
+    fn schema_refresh_interval(&self) -> Option<SchemaRefreshInterval> {
+        self.__source_attr__
+            .sync
+            .as_ref()
+            .and_then(|s| s.schema_refresh_interval.clone())
+    }
 }
 
 impl InternalDbtNode for DbtSnapshot {
@@ -2429,6 +2466,13 @@ impl InternalDbtNodeAttributes for DbtSnapshot {
 
     fn serialized_config(&self) -> YmlValue {
         dbt_serde_yaml::to_value(&self.deprecated_config).expect("Failed to serialize to YAML")
+    }
+
+    fn schema_refresh_interval(&self) -> Option<SchemaRefreshInterval> {
+        self.__snapshot_attr__
+            .sync
+            .as_ref()
+            .and_then(|s| s.schema_refresh_interval.clone())
     }
 }
 
@@ -4349,6 +4393,7 @@ pub struct DbtSnapshotAttr {
     pub snapshot_meta_column_names: SnapshotMetaColumnNames,
     #[serde(skip_serializing, default = "default_introspection")]
     pub introspection: IntrospectionKind,
+    pub sync: Option<SyncConfig>,
 }
 
 #[skip_serializing_none]
@@ -4393,6 +4438,10 @@ pub struct DbtSourceAttr {
     pub loaded_at_query: Option<String>,
     #[serialize_always]
     pub freshness: Option<FreshnessDefinition>,
+    /// Specifies where the schema metadata originates: 'remote' (default) or 'local'
+    #[serde(default)]
+    pub schema_origin: SchemaOrigin,
+    pub sync: Option<SyncConfig>,
 }
 
 impl DbtSource {
@@ -5140,6 +5189,7 @@ pub struct DbtModelAttr {
     // TODO(anna): See if we _need_ to put these here, or if they can somehow be added to AdapterAttr.
     pub catalog_name: Option<String>,
     pub table_format: Option<String>,
+    pub sync: Option<SyncConfig>,
 }
 
 #[skip_serializing_none]

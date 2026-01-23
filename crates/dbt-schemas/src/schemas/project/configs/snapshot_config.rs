@@ -23,6 +23,7 @@ use crate::schemas::common::HardDeletes;
 use crate::schemas::common::Hooks;
 use crate::schemas::common::PersistDocsConfig;
 use crate::schemas::common::Schedule;
+use crate::schemas::common::SyncConfig;
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::manifest::{BigqueryClusterConfig, PartitionConfig};
 use crate::schemas::project::DefaultTo;
@@ -309,6 +310,11 @@ pub struct ProjectSnapshotConfig {
     // Schedule (Databricks streaming tables)
     #[serde(rename = "+schedule")]
     pub schedule: Option<Schedule>,
+
+    /// Schema synchronization configuration
+    #[serde(rename = "+sync")]
+    pub sync: Option<SyncConfig>,
+
     // Flattened field:
     pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectSnapshotConfig>>,
 }
@@ -367,6 +373,8 @@ pub struct SnapshotConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub invalidate_hard_deletes: Option<bool>,
     pub docs: Option<DocsConfig>,
+    /// Schema synchronization configuration
+    pub sync: Option<SyncConfig>,
     // Adapter specific configs
     pub __warehouse_specific_config__: WarehouseSpecificNodeConfig,
 }
@@ -500,6 +508,7 @@ impl From<ProjectSnapshotConfig> for SnapshotConfig {
             quote_columns: config.quote_columns,
             invalidate_hard_deletes: config.invalidate_hard_deletes,
             docs: config.docs,
+            sync: config.sync,
             __warehouse_specific_config__: WarehouseSpecificNodeConfig {
                 description: None, // Only for Bigquery models
                 adapter_properties: config.adapter_properties,
@@ -698,6 +707,7 @@ impl From<SnapshotConfig> for ProjectSnapshotConfig {
             indexes: config.__warehouse_specific_config__.indexes,
             // Schedule (Databricks streaming tables)
             schedule: config.__warehouse_specific_config__.schedule,
+            sync: config.sync,
             __additional_properties__: BTreeMap::new(),
         }
     }
@@ -746,6 +756,7 @@ impl DefaultTo<SnapshotConfig> for SnapshotConfig {
             invalidate_hard_deletes,
             docs,
             static_analysis,
+            sync,
             // Flattened configs
             __warehouse_specific_config__: warehouse_specific_config,
         } = self;
@@ -795,6 +806,7 @@ impl DefaultTo<SnapshotConfig> for SnapshotConfig {
                 check_cols,
                 static_analysis,
                 materialized,
+                sync,
             ]
         );
     }

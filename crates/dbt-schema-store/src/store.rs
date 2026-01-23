@@ -37,9 +37,11 @@ const REMOTE_DIR_NAME: &str = "sourced_remote";
 const INTERNAL_DIR_NAME: &str = "internal";
 const DEFERRED_DIR_NAME: &str = "deferred";
 const EXTERNAL_DIR_NAME: &str = "external";
+const LOCAL_DIR_NAME: &str = "defined_local";
 const DATA_DIR_NAME: &str = "data";
 const SCHEMA_DIR_NAME: &str = "schemas";
 const DBT_ORIGINAL_SCHEMA_KEY: &str = "DBT:original_schema";
+const DBT_SCHEMA_ORIGIN_KEY: &str = "DBT:schema_origin";
 
 /// Lookup key representing the origin of a schema entry.
 ///
@@ -51,18 +53,22 @@ const DBT_ORIGINAL_SCHEMA_KEY: &str = "DBT:original_schema";
 ///   hydrate from remote storage.
 /// * [`LookupEntry::External`] – tables outside of the project graph, discovered
 ///   lazily as DataFusion resolves them.
+/// * [`LookupEntry::Local`] – sources with schema_origin=local, where schemas
+///   are derived from YAML column definitions rather than the remote warehouse.
 #[derive(Hash, Eq, PartialEq, Clone, Debug)]
 pub enum LookupEntry {
     Selected(UniqueId),
     Frontier(CanonicalFqn),
     Deferred(CanonicalFqn),
     External(CanonicalFqn),
+    Local(CanonicalFqn),
 }
 
 impl std::fmt::Display for LookupEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             LookupEntry::Selected(unique_id) => write!(f, "Selected({})", unique_id),
+            LookupEntry::Local(cfqn) => write!(f, "Local({})", cfqn),
             LookupEntry::Frontier(cfqn) => write!(f, "Frontier({})", cfqn),
             LookupEntry::Deferred(cfqn) => write!(f, "Deferred({})", cfqn),
             LookupEntry::External(cfqn) => write!(f, "External({})", cfqn),
@@ -98,6 +104,10 @@ impl SchemaEntryWrapper {
             timestamp,
         }
     }
+
+    pub fn timestamp(&self) -> u128 {
+        self.timestamp
+    }
 }
 
 /// Interior mutable state shared by [`SchemaStore`].
@@ -110,11 +120,21 @@ struct SchemaStoreState {
 
 impl SchemaStoreState {
     /// Pre-populates the state with any schemas already persisted on disk.
-    pub fn init(target_dir: &Path, cache_fmt: StoreFormat, entries: &[LookupEntry]) -> Self {
+    ///
+    /// Entries older than their configured interval are considered stale and
+    /// will not be registered, forcing a re-fetch.
+    ///
+    /// Each entry is paired with its optional refresh interval. `None` means
+    /// no expiration (cached indefinitely).
+    pub fn init(
+        target_dir: &Path,
+        cache_fmt: StoreFormat,
+        entries_with_intervals: &[(LookupEntry, Option<Duration>)],
+    ) -> Self {
         let store_dir = target_dir.join(SCHEMA_DIR_NAME);
-        // For each selected and frontier, check if a cache entry exists or not
         let cached_schemas = SccHashMap::new();
-        for entry in entries {
+
+        for (entry, interval) in entries_with_intervals {
             // Do not register selected entries, these will be registered during compile
             if let LookupEntry::Selected(unique_id) = entry
                 // HACK: This is a temporary hack to avoid re-fetching snapshots from the remote
@@ -124,8 +144,15 @@ impl SchemaStoreState {
             {
                 continue;
             }
-            Self::try_register_entry_inner(&store_dir, &cached_schemas, entry);
+
+            dbt_common::tracing::emit::emit_debug_log_message(format!(
+                "Initializing schema store with entry: {:?} and interval: {:?}",
+                entry, interval
+            ));
+
+            Self::try_register_entry_inner(&store_dir, &cached_schemas, entry, *interval);
         }
+
         Self {
             store_dir,
             store_fmt: cache_fmt,
@@ -145,8 +172,11 @@ impl SchemaStoreState {
 
     /// Ensures the given lookup entry is tracked by the cache without eagerly
     /// hydrating the underlying schema.
+    ///
+    /// Note: This method does not apply TTL checking - it's for runtime registration
+    /// of entries that should be used regardless of age.
     pub fn try_register_entry(&self, entry: &LookupEntry) -> Option<Arc<SchemaEntryWrapper>> {
-        Self::try_register_entry_inner(&self.store_dir, &self.cached_entries, entry)
+        Self::try_register_entry_inner(&self.store_dir, &self.cached_entries, entry, None)
     }
 
     /// Retrieves the schema from the cache, hydrating it from disk on first use.
@@ -180,12 +210,46 @@ impl SchemaStoreState {
             ArrowError::IoError(format!("Failed to create directory: {}", path.display()), e)
         })?;
         let (schema_entry, timestamp) = self.write_cached_schema(&path, original_schema, schema)?;
+
         let schema_entry_wrapper =
             Arc::new(SchemaEntryWrapper::new(schema_entry.clone(), timestamp));
         let _ = self
             .cached_entries
             .upsert_sync(entry.clone(), schema_entry_wrapper);
         Ok(schema_entry)
+    }
+
+    /// Evicts stale entries from the cache based on their refresh intervals.
+    ///
+    /// Returns the number of entries evicted.
+    pub fn evict_stale_entries(
+        &self,
+        entries_with_intervals: &[(LookupEntry, Option<Duration>)],
+    ) -> usize {
+        let mut evicted_count = 0;
+
+        for (entry, interval) in entries_with_intervals {
+            // Skip entries without a refresh interval (cached indefinitely)
+            if interval.is_none() {
+                continue;
+            }
+
+            // Skip selected entries (they're compiled, not cached remotely)
+            if matches!(entry, LookupEntry::Selected(_)) {
+                continue;
+            }
+
+            // Check if entry exists in cache and if it's stale (logs if stale)
+            if let Some(wrapper) = self.cached_entries.read_sync(entry, |_, v| Arc::clone(v))
+                && Self::is_entry_stale(entry, wrapper.timestamp(), *interval)
+            {
+                // Entry is stale - remove from cache
+                self.cached_entries.remove_sync(entry);
+                evicted_count += 1;
+            }
+        }
+
+        evicted_count
     }
 
     /// Hydrates the schema on-demand and caches it in the underlying [`OnceLock`].
@@ -272,24 +336,58 @@ impl SchemaStoreState {
                 .join(cfqn.schema())
                 .join(cfqn.table())
                 .join("output.parquet"),
+            LookupEntry::Local(cfqn) => cache_dir
+                .join(LOCAL_DIR_NAME)
+                .join(cfqn.catalog())
+                .join(cfqn.schema())
+                .join(cfqn.table())
+                .join("output.parquet"),
         }
     }
 
-    /// Inserts the lookup entry into the cache if a persisted schema already exists.
+    /// Checks if a cached entry is stale based on its timestamp and refresh interval.
+    /// If stale, logs a debug message.
+    fn is_entry_stale(
+        entry: &LookupEntry,
+        timestamp: u128,
+        refresh_interval: Option<Duration>,
+    ) -> bool {
+        if let Some(interval) = refresh_interval {
+            let now_millis = SystemTime::now()
+                .duration_since(SystemTime::UNIX_EPOCH)
+                .unwrap_or(Duration::ZERO)
+                .as_millis();
+            let age = Duration::from_millis(now_millis.saturating_sub(timestamp) as u64);
+            if age > interval {
+                dbt_common::tracing::emit::emit_debug_log_message(format!(
+                    "Schema cache entry {:?} is stale (age: {:?}, refresh_interval: {:?})",
+                    entry, age, interval
+                ));
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Inserts the lookup entry into the cache if a persisted schema already exists
+    /// and is not stale according to the refresh interval.
     fn try_register_entry_inner(
         cache_dir: &Path,
         cached_schemas: &SccHashMap<LookupEntry, Arc<SchemaEntryWrapper>>,
         entry: &LookupEntry,
+        refresh_interval: Option<Duration>,
     ) -> Option<Arc<SchemaEntryWrapper>> {
         let path = Self::resolve_entry_path(cache_dir, entry);
-        let timestamp = get_timestamp(&path);
-        if let Some(timestamp) = timestamp {
-            let schema_entry_wrapper = Arc::new(SchemaEntryWrapper::empty(timestamp));
-            let _ = cached_schemas.upsert_sync(entry.clone(), schema_entry_wrapper.clone());
-            Some(schema_entry_wrapper)
-        } else {
-            None
+        let timestamp = get_timestamp(&path)?;
+
+        // Check if the entry is stale based on refresh interval
+        if Self::is_entry_stale(entry, timestamp, refresh_interval) {
+            return None;
         }
+
+        let schema_entry_wrapper = Arc::new(SchemaEntryWrapper::empty(timestamp));
+        let _ = cached_schemas.upsert_sync(entry.clone(), schema_entry_wrapper.clone());
+        Some(schema_entry_wrapper)
     }
 }
 
@@ -308,41 +406,79 @@ pub struct SchemaStore {
     frontier: BiMap<CanonicalFqn, UniqueId>,
     deferred: OnceLock<BiMap<CanonicalFqn, UniqueId>>,
     external: SccHashSet<CanonicalFqn>,
+    local: BiMap<CanonicalFqn, UniqueId>,
     state: SchemaStoreState,
 }
 
 impl SchemaStore {
-    // TODO: We can create an initialize which will check the filesystem and automatically refresh the cache if needed
     /// Creates a new filesystem-backed schema store rooted at `cache_dir`.
+    ///
+    /// `refresh_intervals` maps unique_id -> refresh interval for per-source TTL.
+    /// Sources not in the map or with `None` value use no expiration (cached indefinitely).
+    ///
+    /// `local` maps cfqn -> unique_id for sources with `schema_origin=local`.
+    /// `local_schemas` contains the Arrow schemas derived from YAML column definitions.
+    /// Schemas are registered during construction.
     pub fn new(
         cache_dir: PathBuf,
         selected: HashMap<CanonicalFqn, UniqueId>,
         frontier: HashMap<CanonicalFqn, UniqueId>,
+        local: HashMap<CanonicalFqn, UniqueId>,
+        local_schemas: Vec<crate::LocalSchemaEntry>,
         cache_fmt: StoreFormat,
+        refresh_intervals: HashMap<String, Option<Duration>>,
     ) -> Self {
-        let entries = selected
+        // Helper to get refresh interval for a unique_id
+        let get_interval = |uid: &String| refresh_intervals.get(uid).copied().flatten();
+
+        // Build entries with their refresh intervals
+        // Chain all entries first, then map to add intervals in a single pass
+        let entries_with_intervals: Vec<(LookupEntry, Option<Duration>)> = selected
             .values()
-            .map(|cfqn| LookupEntry::Selected(cfqn.clone()))
+            .map(|uid| (LookupEntry::Selected(uid.clone()), uid))
             .chain(
                 frontier
-                    .keys()
-                    .map(|cfqn| LookupEntry::Frontier(cfqn.clone())),
+                    .iter()
+                    .map(|(cfqn, uid)| (LookupEntry::Frontier(cfqn.clone()), uid)),
             )
-            .collect::<Vec<_>>();
-        let state = SchemaStoreState::init(&cache_dir, cache_fmt, &entries);
-        Self {
+            .chain(
+                local
+                    .iter()
+                    .map(|(cfqn, uid)| (LookupEntry::Local(cfqn.clone()), uid)),
+            )
+            .map(|(entry, uid)| (entry, get_interval(uid)))
+            .collect();
+
+        let state = SchemaStoreState::init(&cache_dir, cache_fmt, &entries_with_intervals);
+
+        let store = Self {
             selected: selected.into_iter().collect(),
             frontier: frontier.into_iter().collect(),
             deferred: OnceLock::new(),
             external: SccHashSet::new(),
+            local: local.into_iter().collect(),
             state,
+        };
+
+        // Register local schemas during construction
+        for ls in local_schemas {
+            let entry = LookupEntry::Local(ls.cfqn.clone());
+            let schema_with_origin = add_schema_origin_metadata(ls.schema, "local");
+            // Always overwrite to pick up YAML changes; ignore errors during construction
+            let _ = store
+                .state
+                .register_schema(&entry, None, schema_with_origin, true);
         }
+
+        store
     }
 
     /// Finds the [`LookupEntry`] corresponding to a canonical FQN.
     pub fn resolve_lookup_entry_by_cfqn(&self, cfqn: &CanonicalFqn) -> Option<LookupEntry> {
         if let Some(unique_id) = self.selected.get_by_left(cfqn) {
             Some(LookupEntry::Selected(unique_id.clone()))
+        } else if self.local.contains_left(cfqn) {
+            Some(LookupEntry::Local(cfqn.clone()))
         } else if self.frontier.contains_left(cfqn) {
             Some(LookupEntry::Frontier(cfqn.clone()))
         } else if self
@@ -363,6 +499,8 @@ impl SchemaStore {
     pub fn resolve_lookup_entry_by_unique_id(&self, unique_id: &str) -> Option<LookupEntry> {
         if self.selected.contains_right(unique_id) {
             Some(LookupEntry::Selected(unique_id.to_string()))
+        } else if let Some(cfqn) = self.local.get_by_right(unique_id) {
+            Some(LookupEntry::Local(cfqn.clone()))
         } else if let Some(cfqn) = self.frontier.get_by_right(unique_id) {
             Some(LookupEntry::Frontier(cfqn.clone()))
         } else if self
@@ -394,6 +532,42 @@ impl SchemaStore {
         }
     }
 
+    /// Evicts stale entries from the schema store cache.
+    ///
+    /// This should be called when reusing a schema store from a previous cache state
+    /// to ensure TTL-based eviction happens even when the store isn't being recreated.
+    ///
+    /// Returns the number of entries evicted.
+    pub fn evict_stale_entries(
+        &self,
+        refresh_intervals: &HashMap<String, Option<Duration>>,
+    ) -> usize {
+        use std::time::Duration;
+
+        // Helper to get refresh interval for a unique_id
+        let get_interval = |uid: &String| refresh_intervals.get(uid).copied().flatten();
+
+        // Build the same entries_with_intervals structure as in ::new()
+        let entries_with_intervals: Vec<(LookupEntry, Option<Duration>)> = self
+            .selected
+            .iter()
+            .map(|(_, uid)| (LookupEntry::Selected(uid.clone()), uid))
+            .chain(
+                self.frontier
+                    .iter()
+                    .map(|(cfqn, uid)| (LookupEntry::Frontier(cfqn.clone()), uid)),
+            )
+            .chain(
+                self.local
+                    .iter()
+                    .map(|(cfqn, uid)| (LookupEntry::Local(cfqn.clone()), uid)),
+            )
+            .map(|(entry, uid)| (entry, get_interval(uid)))
+            .collect();
+
+        self.state.evict_stale_entries(&entries_with_intervals)
+    }
+
     fn visit_cfqn<F>(&self, mut f: F)
     where
         F: FnMut(&CanonicalFqn),
@@ -413,6 +587,16 @@ impl SchemaStore {
             f(cfqn);
             true
         });
+        for (cfqn, _) in self.local.iter() {
+            f(cfqn);
+        }
+    }
+
+    /// Checks if a schema exists for a specific lookup entry type.
+    /// This is useful when you need to check existence for a specific entry type
+    /// (e.g., Frontier vs Selected) rather than just by FQN or unique_id.
+    pub fn exists_by_lookup(&self, entry: &LookupEntry) -> bool {
+        self.state.exists(entry)
     }
 }
 
@@ -669,6 +853,13 @@ fn make_parquet_writer(
             )))
         }
     }
+}
+
+/// Adds schema origin metadata to an Arrow schema.
+fn add_schema_origin_metadata(schema: SchemaRef, origin: &str) -> SchemaRef {
+    let mut metadata: HashMap<String, String> = schema.metadata().clone();
+    metadata.insert(DBT_SCHEMA_ORIGIN_KEY.to_string(), origin.to_string());
+    Arc::new(Schema::new_with_metadata(schema.fields().clone(), metadata))
 }
 
 /// Persists the given schema as a Parquet file at the specified path.

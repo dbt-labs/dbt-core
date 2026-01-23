@@ -36,6 +36,20 @@ use arrow::array::RecordBatch;
 use arrow_schema::{ArrowError, SchemaRef};
 use dbt_ident::Ident;
 
+/// A local schema entry containing the fully qualified name, unique ID, and Arrow schema.
+///
+/// Used to pass local source schemas (derived from YAML column definitions) into the
+/// schema store for registration.
+#[derive(Debug, Clone)]
+pub struct LocalSchemaEntry {
+    /// The canonical fully qualified name of the source
+    pub cfqn: CanonicalFqn,
+    /// The dbt unique_id of the source
+    pub unique_id: String,
+    /// The Arrow schema built from column definitions
+    pub schema: SchemaRef,
+}
+
 /// Canonical identifier component (catalog, schema, or table) used within the
 /// schema store.
 ///

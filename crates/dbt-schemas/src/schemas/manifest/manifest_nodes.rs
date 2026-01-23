@@ -29,7 +29,7 @@ use crate::schemas::{
     DbtSource, DbtTest, DbtUnitTest, NodeBaseAttributes,
     common::{
         Access, DbtChecksum, DbtContract, DbtMaterialization, DbtQuoting, Expect,
-        FreshnessDefinition, Given, IncludeExclude, NodeDependsOn, PersistDocsConfig,
+        FreshnessDefinition, Given, IncludeExclude, NodeDependsOn, PersistDocsConfig, SyncConfig,
     },
     dbt_column::{DbtColumnRef, deserialize_dbt_columns, serialize_dbt_columns},
     manifest::{
@@ -610,6 +610,8 @@ pub struct ManifestModelConfig {
     pub index_url: Option<String>,
     pub additional_libs: Option<Vec<YmlValue>>,
     pub user_folder_for_python: Option<bool>,
+    /// Schema synchronization configuration
+    pub sync: Option<SyncConfig>,
     // Adapter specific configs
     pub __warehouse_specific_config__: WarehouseSpecificNodeConfig,
 }
@@ -758,6 +760,7 @@ impl From<ModelConfig> for ManifestModelConfig {
             index_url: config.index_url.clone(),
             additional_libs: config.additional_libs.clone(),
             user_folder_for_python: config.user_folder_for_python,
+            sync: config.sync,
             __warehouse_specific_config__: config.__warehouse_specific_config__,
         }
     }
@@ -817,6 +820,7 @@ impl From<ManifestModelConfig> for ModelConfig {
             index_url: config.index_url.clone(),
             additional_libs: config.additional_libs.clone(),
             user_folder_for_python: config.user_folder_for_python,
+            sync: config.sync,
             __warehouse_specific_config__: config.__warehouse_specific_config__,
         }
     }

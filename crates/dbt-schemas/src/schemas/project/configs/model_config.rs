@@ -23,6 +23,7 @@ use crate::schemas::common::DbtIncrementalStrategy;
 use crate::schemas::common::DbtMaterialization;
 use crate::schemas::common::DbtUniqueKey;
 use crate::schemas::common::PersistDocsConfig;
+use crate::schemas::common::SyncConfig;
 use crate::schemas::common::{Access, DbtQuoting, Schedule};
 use crate::schemas::common::{DocsConfig, OnConfigurationChange};
 use crate::schemas::common::{Hooks, OnSchemaChange, hooks_equal};
@@ -383,6 +384,11 @@ pub struct ProjectModelConfig {
     pub primary_key: PrimaryKeyConfig,
     #[serde(rename = "+category")]
     pub category: Option<DataLakeObjectCategory>,
+
+    /// Schema synchronization configuration
+    #[serde(rename = "+sync")]
+    pub sync: Option<SyncConfig>,
+
     // Flattened field:
     pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectModelConfig>>,
 }
@@ -464,6 +470,8 @@ pub struct ModelConfig {
     pub sql_header: Option<String>,
     pub location: Option<String>,
     pub predicates: Option<Vec<String>>,
+    /// Schema synchronization configuration
+    pub sync: Option<SyncConfig>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub strictness: Option<StrictnessMode>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -532,6 +540,7 @@ impl From<ProjectModelConfig> for ModelConfig {
             schema: config.schema,
             sql_header: config.sql_header,
             static_analysis: config.static_analysis,
+            sync: config.sync,
             table_format: config.table_format,
             tags: config.tags.into_inner(),
             unique_key: config.unique_key,
@@ -754,6 +763,7 @@ impl From<ModelConfig> for ProjectModelConfig {
             schedule: config.__warehouse_specific_config__.schedule,
             primary_key: config.__warehouse_specific_config__.primary_key,
             category: config.__warehouse_specific_config__.category,
+            sync: config.sync,
             __additional_properties__: BTreeMap::new(),
         }
     }
@@ -827,6 +837,7 @@ impl DefaultTo<ModelConfig> for ModelConfig {
             index_url,
             additional_libs,
             user_folder_for_python,
+            sync,
         } = self;
 
         // Handle flattened configs
@@ -899,6 +910,7 @@ impl DefaultTo<ModelConfig> for ModelConfig {
                 index_url,
                 additional_libs,
                 user_folder_for_python,
+                sync,
             ]
         );
     }

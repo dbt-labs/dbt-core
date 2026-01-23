@@ -163,6 +163,19 @@ pub fn resolve_sources(
                 "loaded_at_field and loaded_at_query cannot be set at the same time"
             );
         }
+
+        let merged_schema_origin = table_config
+            .schema_origin
+            .or_else(|| source.config.as_ref().and_then(|c| c.schema_origin))
+            .or(source_properties_config.schema_origin)
+            .unwrap_or_default();
+
+        // Merge sync config: table-level overrides source-level
+        let merged_sync = table_config
+            .sync
+            .clone()
+            .or_else(|| source.config.as_ref().and_then(|c| c.sync.clone()))
+            .or_else(|| source_properties_config.sync.clone());
         let merged_freshness = merge_freshness(
             source_properties_config.freshness.as_ref(),
             &table_config.freshness,
@@ -229,6 +242,33 @@ pub fn resolve_sources(
             vec![]
         };
 
+        // Validate local sources have data types defined
+        use dbt_schemas::schemas::common::SchemaOrigin;
+        if merged_schema_origin == SchemaOrigin::Local {
+            if columns.is_empty() {
+                return err!(
+                    ErrorCode::InvalidConfig,
+                    "source:{}.{} has schema_origin: local but no columns defined. \
+                     Local sources must have column definitions with data_type specified.",
+                    source_name,
+                    table_name
+                );
+            }
+
+            for col in &columns {
+                if col.data_type.is_none() {
+                    return err!(
+                        ErrorCode::InvalidConfig,
+                        "Column '{}' in source:{}.{} has schema_origin: local but no data_type defined. \
+                         All columns must have data_type specified for local sources.",
+                        col.name,
+                        source_name,
+                        table_name
+                    );
+                }
+            }
+        }
+
         if let Some(freshness) = merged_freshness.as_ref() {
             FreshnessRules::validate(freshness.error_after.as_ref())?;
             FreshnessRules::validate(freshness.warn_after.as_ref())?;
@@ -263,6 +303,8 @@ pub fn resolve_sources(
         merged_configs.loaded_at_field = merged_loaded_at_field.clone();
         merged_configs.loaded_at_query = merged_loaded_at_query.clone().into();
         merged_configs.event_time = merged_event_time.clone();
+        merged_configs.schema_origin = Some(merged_schema_origin);
+        merged_configs.sync = merged_sync.clone();
 
         let dbt_source = DbtSource {
             __common_attr__: CommonAttributes {
@@ -317,6 +359,8 @@ pub fn resolve_sources(
                 loader: source.loader.clone().unwrap_or_default(),
                 loaded_at_field: merged_loaded_at_field.clone(),
                 loaded_at_query: merged_loaded_at_query.clone(),
+                schema_origin: merged_schema_origin,
+                sync: merged_sync,
             },
             deprecated_config: merged_configs,
             __other__: other,

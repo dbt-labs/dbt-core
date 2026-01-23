@@ -1,5 +1,7 @@
 use crate::schemas::common::DbtQuoting;
 use crate::schemas::common::FreshnessDefinition;
+use crate::schemas::common::SchemaOrigin;
+use crate::schemas::common::SyncConfig;
 use crate::schemas::data_tests::DataTests;
 use crate::schemas::dbt_column::ColumnProperties;
 use crate::schemas::project::SourceConfig;
@@ -56,4 +58,6 @@ pub struct TablesConfig {
     pub tags: Option<StringOrArrayOfStrings>,
     pub loaded_at_field: Option<String>,
     pub loaded_at_query: Verbatim<Option<String>>,
+    pub schema_origin: Option<SchemaOrigin>,
+    pub sync: Option<SyncConfig>,
 }

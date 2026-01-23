@@ -510,6 +510,7 @@ pub async fn resolve_models(
                 event_time: model_config.event_time.clone(),
                 catalog_name: model_config.catalog_name.clone(),
                 table_format: model_config.table_format.clone(),
+                sync: model_config.sync.clone(),
             },
             __adapter_attr__: AdapterAttr::from_config_and_dialect(
                 &model_config.__warehouse_specific_config__,

@@ -431,6 +431,7 @@ pub async fn resolve_snapshots(
                     } else {
                         IntrospectionKind::None
                     },
+                    sync: final_config.sync.clone(),
                 },
                 __adapter_attr__: AdapterAttr::from_config_and_dialect(
                     &final_config.__warehouse_specific_config__,

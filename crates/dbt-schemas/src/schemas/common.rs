@@ -3,6 +3,52 @@
 use indexmap::IndexMap;
 use std::collections::{BTreeMap, HashMap};
 use std::str::FromStr;
+use std::time::Duration;
+
+/// Indicates where schema metadata originates from.
+///
+/// - `Remote` (default): Schema is fetched from the remote warehouse
+/// - `Local`: Schema is derived from YAML column definitions
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum SchemaOrigin {
+    /// Schema metadata comes from the remote warehouse (default)
+    #[default]
+    Remote,
+    /// Schema metadata is derived from YAML column definitions
+    Local,
+}
+
+impl SchemaOrigin {
+    /// Returns the string representation of the schema origin.
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Remote => "remote",
+            Self::Local => "local",
+        }
+    }
+}
+
+impl std::fmt::Display for SchemaOrigin {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+impl FromStr for SchemaOrigin {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "remote" => Ok(Self::Remote),
+            "local" => Ok(Self::Local),
+            _ => Err(format!(
+                "Invalid schema_origin '{}': expected 'remote' or 'local'",
+                s
+            )),
+        }
+    }
+}
 
 use dbt_common::adapter::AdapterType;
 use dbt_common::{CodeLocationWithFile, ErrorCode, FsError, FsResult, err, fs_err};
@@ -1256,6 +1302,170 @@ pub fn conform_normalized_snapshot_raw_code_to_mantle_format(normalized_full: &s
     normalized_sql.to_string()
 }
 
+/// Schema refresh interval configuration.
+///
+/// This type represents how often to refresh source schemas from remote.
+/// Default: 1 hour.
+///
+/// Examples:
+/// - `"30m"`, `"2h"`, `"1d"` - refresh after the specified duration
+/// - `"never"` - never automatically refresh (only manual sync)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SchemaRefreshInterval {
+    /// Refresh after the specified duration
+    Duration(Duration), //todo validate that this deserializes as claimed
+    /// Never automatically refresh
+    Never,
+}
+
+impl schemars::JsonSchema for SchemaRefreshInterval {
+    fn schema_name() -> String {
+        "SchemaRefreshInterval".to_string()
+    }
+
+    fn json_schema(_gen: &mut schemars::r#gen::SchemaGenerator) -> schemars::schema::Schema {
+        schemars::schema::Schema::Object(schemars::schema::SchemaObject {
+            instance_type: Some(schemars::schema::InstanceType::String.into()),
+            metadata: Some(Box::new(schemars::schema::Metadata {
+                description: Some(
+                    "Schema refresh interval: '30m', '2h', '1d', or 'never'".to_string(),
+                ),
+                ..Default::default()
+            })),
+            ..Default::default()
+        })
+    }
+}
+
+impl Default for SchemaRefreshInterval {
+    fn default() -> Self {
+        Self::Duration(Duration::from_hours(1))
+    }
+}
+
+impl SchemaRefreshInterval {
+    /// Creates a new interval from hours.
+    pub fn from_hours(hours: u64) -> Self {
+        Self::Duration(Duration::from_hours(hours))
+    }
+
+    /// Returns the duration as seconds, or None if set to never refresh.
+    pub fn as_secs(&self) -> Option<u64> {
+        match self {
+            Self::Duration(d) => Some(d.as_secs()),
+            Self::Never => None,
+        }
+    }
+
+    /// Returns the duration, or None if set to never refresh.
+    pub fn as_duration(&self) -> Option<Duration> {
+        match self {
+            Self::Duration(d) => Some(*d),
+            Self::Never => None,
+        }
+    }
+
+    /// Returns true if this interval is set to never refresh.
+    pub fn is_never(&self) -> bool {
+        matches!(self, Self::Never)
+    }
+}
+
+impl From<Duration> for SchemaRefreshInterval {
+    fn from(duration: Duration) -> Self {
+        Self::Duration(duration)
+    }
+}
+
+impl From<SchemaRefreshInterval> for Option<Duration> {
+    fn from(interval: SchemaRefreshInterval) -> Self {
+        interval.as_duration()
+    }
+}
+
+impl FromStr for SchemaRefreshInterval {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.eq_ignore_ascii_case("never") {
+            return Ok(Self::Never);
+        }
+        // Use humantime to parse duration strings like "30m", "2h", "1d"
+        let duration = humantime::parse_duration(s).map_err(|e| {
+            format!(
+                "Invalid schema_refresh_interval '{}': {}. \
+                 Expected format like '30m', '2h', '1d', or 'never'",
+                s, e
+            )
+        })?;
+
+        // Validate duration bounds
+        const MIN_DURATION: Duration = Duration::from_secs(0); // 0 seconds (always refresh)
+        const MAX_DURATION: Duration = Duration::from_secs(365 * 24 * 60 * 60); // 1 year
+
+        if duration < MIN_DURATION {
+            return Err(format!(
+                "schema_refresh_interval '{}' is invalid. Must be non-negative",
+                s
+            ));
+        }
+
+        if duration > MAX_DURATION {
+            return Err(format!(
+                "schema_refresh_interval '{}' is too long. Maximum allowed is 1 year",
+                s
+            ));
+        }
+
+        Ok(Self::Duration(duration))
+    }
+}
+
+impl<'de> Deserialize<'de> for SchemaRefreshInterval {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        s.parse().map_err(serde::de::Error::custom)
+    }
+}
+
+impl Serialize for SchemaRefreshInterval {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match self {
+            Self::Duration(d) => {
+                serializer.serialize_str(&humantime::format_duration(*d).to_string())
+            }
+            Self::Never => serializer.serialize_str("never"),
+        }
+    }
+}
+
+impl std::fmt::Display for SchemaRefreshInterval {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Duration(d) => write!(f, "{}", humantime::format_duration(*d)),
+            Self::Never => write!(f, "never"),
+        }
+    }
+}
+
+/// Configuration for schema synchronization behavior.
+///
+/// This can be specified at source level (default for all tables) or
+/// at individual table level (overrides source-level settings).
+#[skip_serializing_none]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+pub struct SyncConfig {
+    /// How often to refresh the schema from the warehouse.
+    /// Examples: "30m", "2h", "1d", "never"
+    pub schema_refresh_interval: Option<SchemaRefreshInterval>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1398,6 +1608,147 @@ mod tests {
         let (actual_identifier, actual_quoting) = result;
         assert_eq!(actual_identifier, expected_identifier);
         assert_eq!(actual_quoting, expected_quoting);
+    }
+
+    mod schema_refresh_interval_tests {
+        use super::*;
+
+        #[test]
+        fn test_parsing() {
+            // Duration variants
+            assert_eq!(
+                "30m".parse::<SchemaRefreshInterval>().unwrap().as_secs(),
+                Some(30 * 60)
+            );
+            assert_eq!(
+                "2h".parse::<SchemaRefreshInterval>().unwrap().as_secs(),
+                Some(2 * 60 * 60)
+            );
+            assert_eq!(
+                "1d".parse::<SchemaRefreshInterval>().unwrap().as_secs(),
+                Some(24 * 60 * 60)
+            );
+
+            // Never variant (case insensitive)
+            assert!("never".parse::<SchemaRefreshInterval>().unwrap().is_never());
+            assert!("NEVER".parse::<SchemaRefreshInterval>().unwrap().is_never());
+            assert!("Never".parse::<SchemaRefreshInterval>().unwrap().is_never());
+
+            // Never returns None for duration
+            let never: SchemaRefreshInterval = "never".parse().unwrap();
+            assert_eq!(never.as_secs(), None);
+            assert_eq!(never.as_duration(), None);
+        }
+
+        #[test]
+        fn test_default_and_constructors() {
+            // Default is 1 hour
+            let default = SchemaRefreshInterval::default();
+            assert_eq!(default.as_secs(), Some(60 * 60));
+            assert!(!default.is_never());
+
+            // from_hours constructor
+            assert_eq!(
+                SchemaRefreshInterval::from_hours(3).as_secs(),
+                Some(3 * 60 * 60)
+            );
+        }
+
+        #[test]
+        fn test_yaml_roundtrip() {
+            #[derive(Serialize, Deserialize, PartialEq, Debug)]
+            struct Config {
+                interval: SchemaRefreshInterval,
+            }
+
+            // Duration roundtrip
+            let duration_config = Config {
+                interval: "2h".parse().unwrap(),
+            };
+            let yaml = dbt_serde_yaml::to_string(&duration_config).unwrap();
+            assert_eq!(
+                dbt_serde_yaml::from_str::<Config>(&yaml).unwrap(),
+                duration_config
+            );
+
+            // Never roundtrip
+            let never_config = Config {
+                interval: SchemaRefreshInterval::Never,
+            };
+            let yaml = dbt_serde_yaml::to_string(&never_config).unwrap();
+            assert_eq!(
+                dbt_serde_yaml::from_str::<Config>(&yaml).unwrap(),
+                never_config
+            );
+        }
+
+        #[test]
+        fn test_conversions() {
+            // Into Option<Duration>
+            let duration: Option<Duration> = "1h".parse::<SchemaRefreshInterval>().unwrap().into();
+            assert_eq!(duration.unwrap().as_secs(), 60 * 60);
+
+            let none: Option<Duration> = SchemaRefreshInterval::Never.into();
+            assert!(none.is_none());
+
+            // Display
+            assert_eq!(
+                format!("{}", "30m".parse::<SchemaRefreshInterval>().unwrap()),
+                "30m"
+            );
+            assert_eq!(format!("{}", SchemaRefreshInterval::Never), "never");
+        }
+
+        #[test]
+        fn test_zero_ttl() {
+            // 0s TTL means always refresh
+            let zero_ttl = "0s".parse::<SchemaRefreshInterval>().unwrap();
+            assert_eq!(zero_ttl.as_secs(), Some(0));
+            assert!(!zero_ttl.is_never());
+
+            // Verify 0s is different from "never"
+            let never = SchemaRefreshInterval::Never;
+            assert_ne!(zero_ttl, never);
+        }
+
+        #[test]
+        fn test_validation_bounds() {
+            // Test minimum duration validation (0s and above should succeed)
+            assert!("-1s".parse::<SchemaRefreshInterval>().is_err());
+            assert!("0s".parse::<SchemaRefreshInterval>().is_ok());
+            assert!("30s".parse::<SchemaRefreshInterval>().is_ok());
+            assert!("59s".parse::<SchemaRefreshInterval>().is_ok());
+
+            // Test 1 minute (should succeed)
+            assert!("1m".parse::<SchemaRefreshInterval>().is_ok());
+            assert!("60s".parse::<SchemaRefreshInterval>().is_ok());
+
+            // Test maximum duration validation (> 1 year should fail)
+            assert!("366d".parse::<SchemaRefreshInterval>().is_err());
+            assert!("2y".parse::<SchemaRefreshInterval>().is_err());
+
+            // Test exactly 1 year (should succeed)
+            assert!("365d".parse::<SchemaRefreshInterval>().is_ok());
+            assert!("8760h".parse::<SchemaRefreshInterval>().is_ok());
+        }
+
+        #[test]
+        fn test_error_messages() {
+            // Test invalid format error
+            let err = "invalid".parse::<SchemaRefreshInterval>().unwrap_err();
+            assert!(err.contains("Invalid schema_refresh_interval"));
+            assert!(err.contains("Expected format like '30m', '2h', '1d', or 'never'"));
+
+            // Test negative duration error
+            let err = "-1s".parse::<SchemaRefreshInterval>().unwrap_err();
+            assert!(err.contains("Invalid schema_refresh_interval"));
+            assert!(err.contains("Expected format"));
+
+            // Test too long error
+            let err = "2y".parse::<SchemaRefreshInterval>().unwrap_err();
+            assert!(err.contains("too long"));
+            assert!(err.contains("Maximum allowed is 1 year"));
+        }
     }
 
     #[test]
