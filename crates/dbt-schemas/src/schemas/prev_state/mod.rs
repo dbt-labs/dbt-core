@@ -1,6 +1,7 @@
 use super::{RunResultsArtifact, manifest::DbtManifest, sources::FreshnessResultsArtifact};
 use crate::schemas::common::{DbtQuoting, ResolvedQuoting};
 use crate::schemas::manifest::nodes_from_dbt_manifest;
+use crate::schemas::project::configs::common::log_state_mod_diff;
 use crate::schemas::serde::typed_struct_from_json_file;
 use crate::schemas::{
     InternalDbtNode, Nodes, nodes::DbtModel, nodes::is_invalid_for_relation_comparison,
@@ -183,7 +184,22 @@ impl PreviousState {
         let normalized_current = normalize_alias(current_alias);
         let normalized_previous = normalize_alias(previous_alias);
 
-        normalized_current != normalized_previous
+        let is_same_relation = normalized_current == normalized_previous;
+        if !is_same_relation {
+            log_state_mod_diff(
+                &current_node.common().unique_id,
+                "relation",
+                [(
+                    "alias",
+                    false,
+                    Some((
+                        format!("{:?}", current_alias),
+                        format!("{:?}", previous_alias),
+                    )),
+                )],
+            );
+        }
+        !is_same_relation
     }
 
     fn check_persisted_descriptions_modified(&self, current_node: &dyn InternalDbtNode) -> bool {
@@ -210,8 +226,23 @@ impl PreviousState {
                 .map(|s| s.trim_matches('\n').to_string())
         }
 
-        normalize_description(&current_node.common().description)
-            != normalize_description(&previous_node.common().description)
+        let is_same_desc = normalize_description(&current_node.common().description)
+            == normalize_description(&previous_node.common().description);
+        if !is_same_desc {
+            log_state_mod_diff(
+                &current_node.common().unique_id,
+                "persisted_descriptions",
+                [(
+                    "description",
+                    false,
+                    Some((
+                        format!("{:?}", &current_node.common().description),
+                        format!("{:?}", &previous_node.common().description),
+                    )),
+                )],
+            );
+        }
+        !is_same_desc
     }
 
     fn check_contract_modified(&self, current_node: &dyn InternalDbtNode) -> bool {
@@ -229,7 +260,15 @@ impl PreviousState {
             current_node.as_any().downcast_ref::<DbtModel>(),
             previous_node.as_any().downcast_ref::<DbtModel>(),
         ) {
-            !current_model.same_contract(previous_model)
+            let is_same_contract = current_model.same_contract(previous_model);
+            if !is_same_contract {
+                log_state_mod_diff(
+                    &current_node.common().unique_id,
+                    "contract",
+                    [("contract", false, None)],
+                );
+            }
+            !is_same_contract
         } else {
             false
         }
