@@ -25,6 +25,7 @@ pub fn compare_sql(actual: &str, expected: &str) -> AdapterResult<()> {
     let expected = canonicalize_test_temp_relation_identifiers(&expected);
     let actual = canonicalize_elementary_metadata_pkg_version(&actual);
     let expected = canonicalize_elementary_metadata_pkg_version(&expected);
+    let actual = canonicalize_python_config_dict(&actual, &expected);
 
     // Short-circuit: Elementary-generated SQL is allowed to drift across recorders/runners.
     // We only short-circuit when BOTH sides are clearly Elementary-originated.
@@ -814,6 +815,273 @@ fn canonicalize_typographic_quotes_in_dollar_quoted_strings(sql: &str) -> String
     }
 
     out
+}
+
+/// For Python models, canonicalize config_dict when actual differs from expected only by extra meta keys.
+/// This handles cases where project-level configs add extra meta keys that dbt-core doesn't serialize.
+/// Only replaces the entire config_dict if:
+/// 1. Actual's meta contains all expected meta keys with same values (superset)
+/// 2. All non-meta keys match exactly between actual and expected
+fn canonicalize_python_config_dict(actual: &str, expected: &str) -> String {
+    // Check if both contain config_dict (Python model indicator)
+    if !actual.contains("config_dict = {") || !expected.contains("config_dict = {") {
+        return actual.to_string();
+    }
+
+    // Extract config_dict from both
+    let actual_config_dict = extract_config_dict(actual);
+    let expected_config_dict = extract_config_dict(expected);
+
+    if actual_config_dict.is_none() || expected_config_dict.is_none() {
+        return actual.to_string();
+    }
+
+    let (actual_dict_start, actual_dict_end, actual_dict_str) = actual_config_dict.unwrap();
+    let (_expected_dict_start, _expected_dict_end, expected_dict_str) =
+        expected_config_dict.unwrap();
+
+    // Try to parse both as Python dicts
+    if let (Ok(actual_dict), Ok(expected_dict)) = (
+        parse_python_dict(&actual_dict_str),
+        parse_python_dict(&expected_dict_str),
+    ) {
+        // Check if actual's meta is a superset of expected's meta
+        if let (Some(actual_meta), Some(expected_meta)) = (
+            actual_dict.get("meta").and_then(|v| v.as_dict()),
+            expected_dict.get("meta").and_then(|v| v.as_dict()),
+        ) {
+            // Verify all expected meta keys are in actual and have the same value
+            let meta_is_superset = expected_meta
+                .iter()
+                .all(|(k, v)| actual_meta.get(k) == Some(v));
+
+            // Verify all non-meta keys in expected also exist in actual with same values
+            // This ensures we only canonicalize when the dicts differ only in meta's extra keys
+            let non_meta_keys_match = expected_dict
+                .iter()
+                .filter(|(k, _)| k.as_str() != "meta")
+                .all(|(k, v)| actual_dict.get(k) == Some(v));
+
+            if meta_is_superset && non_meta_keys_match {
+                // Safe to canonicalize by replacing actual's config_dict with expected's
+                let mut result = String::with_capacity(actual.len());
+                result.push_str(&actual[..actual_dict_start]);
+                result.push_str(&expected_dict_str);
+                result.push_str(&actual[actual_dict_end..]);
+                return result;
+            }
+        }
+    }
+
+    actual.to_string()
+}
+
+/// Extract config_dict string from Python SQL
+/// Returns (start_offset, end_offset, dict_string)
+fn extract_config_dict(sql: &str) -> Option<(usize, usize, String)> {
+    let start_pattern = "config_dict = ";
+    let start = sql.find(start_pattern)?;
+    let dict_start = start + start_pattern.len();
+
+    // Verify the next character is {
+    if !sql[dict_start..].starts_with('{') {
+        return None;
+    }
+
+    // Start scanning from after the opening {
+    let scan_start = dict_start + 1;
+
+    // Find the matching closing brace
+    let mut depth = 0;
+    let mut string_quote: Option<char> = None;
+    let mut escape_next = false;
+    let mut dict_end = dict_start;
+
+    for (i, ch) in sql[scan_start..].chars().enumerate() {
+        if escape_next {
+            escape_next = false;
+            continue;
+        }
+
+        match ch {
+            '\\' => escape_next = true,
+            '\'' | '"' => {
+                if let Some(quote) = string_quote {
+                    // We're in a string, check if this closes it
+                    if ch == quote {
+                        string_quote = None;
+                    }
+                } else {
+                    // We're not in a string, this opens one
+                    string_quote = Some(ch);
+                }
+            }
+            '{' if string_quote.is_none() => {
+                depth += 1;
+            }
+            '}' if string_quote.is_none() => {
+                if depth == 0 {
+                    dict_end = scan_start + i + 1;
+                    break;
+                }
+                depth -= 1;
+            }
+            _ => {}
+        }
+    }
+
+    if dict_end == dict_start {
+        return None;
+    }
+
+    Some((dict_start, dict_end, sql[dict_start..dict_end].to_string()))
+}
+
+/// Simple Python dict value representation
+#[derive(Debug, Clone, PartialEq)]
+enum PyValue {
+    String(String),
+    Dict(HashMap<String, PyValue>),
+    None,
+}
+
+impl PyValue {
+    fn as_dict(&self) -> Option<&HashMap<String, PyValue>> {
+        match self {
+            PyValue::Dict(d) => Some(d),
+            _ => None,
+        }
+    }
+}
+
+/// Parse a simple Python dict literal (limited to what we need for config_dict)
+fn parse_python_dict(s: &str) -> Result<HashMap<String, PyValue>, String> {
+    let s = s.trim();
+    if !s.starts_with('{') || !s.ends_with('}') {
+        return Err("Not a dict".to_string());
+    }
+
+    let inner = &s[1..s.len() - 1].trim();
+    if inner.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    let mut result = HashMap::new();
+    let mut remaining = *inner;
+
+    while !remaining.is_empty() {
+        remaining = remaining.trim_start();
+        if remaining.is_empty() {
+            break;
+        }
+
+        // Parse key (quoted string)
+        if !remaining.starts_with('\'') && !remaining.starts_with('"') {
+            return Err("Expected quoted key".to_string());
+        }
+
+        let quote_char = remaining.chars().next().unwrap();
+        let key_end = remaining[1..].find(quote_char).ok_or("Unterminated key")?;
+        let key = remaining[1..=key_end].to_string();
+        remaining = remaining[key_end + 2..].trim_start();
+
+        // Expect colon
+        if !remaining.starts_with(':') {
+            return Err("Expected colon".to_string());
+        }
+        remaining = remaining[1..].trim_start();
+
+        // Parse value
+        let (value, rest) = parse_python_value(remaining)?;
+        result.insert(key, value);
+        remaining = rest.trim_start();
+
+        // Handle comma
+        if remaining.starts_with(',') {
+            remaining = &remaining[1..];
+        }
+    }
+
+    Ok(result)
+}
+
+fn parse_python_value(s: &str) -> Result<(PyValue, &str), String> {
+    let s = s.trim_start();
+
+    if s.starts_with('{') {
+        // Parse nested dict
+        let mut depth = 0;
+        let mut end = 0;
+        let mut string_quote: Option<char> = None;
+        let mut escape_next = false;
+
+        for (i, ch) in s.chars().enumerate() {
+            if escape_next {
+                escape_next = false;
+                continue;
+            }
+
+            match ch {
+                '\\' => escape_next = true,
+                '\'' | '"' => {
+                    if let Some(quote) = string_quote {
+                        // We're in a string, check if this closes it
+                        if ch == quote {
+                            string_quote = None;
+                        }
+                    } else {
+                        // We're not in a string, this opens one
+                        string_quote = Some(ch);
+                    }
+                }
+                '{' if string_quote.is_none() => depth += 1,
+                '}' if string_quote.is_none() => {
+                    depth -= 1;
+                    if depth == 0 {
+                        end = i + 1;
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        if end == 0 {
+            return Err("Unterminated dict".to_string());
+        }
+
+        let dict_str = &s[..end];
+        let dict = parse_python_dict(dict_str)?;
+        Ok((PyValue::Dict(dict), &s[end..]))
+    } else if s.starts_with('\'') || s.starts_with('"') {
+        // Parse string
+        let quote_char = s.chars().next().unwrap();
+        let mut end = 1;
+        let mut escape_next = false;
+
+        for (i, ch) in s[1..].chars().enumerate() {
+            if escape_next {
+                escape_next = false;
+                end = i + 2;
+                continue;
+            }
+
+            if ch == '\\' {
+                escape_next = true;
+            } else if ch == quote_char {
+                end = i + 2;
+                break;
+            }
+            end = i + 2;
+        }
+
+        let value = s[1..end - 1].to_string();
+        Ok((PyValue::String(value), &s[end..]))
+    } else if let Some(stripped) = s.strip_prefix("None") {
+        Ok((PyValue::None, stripped))
+    } else {
+        Err("Unknown value type".to_string())
+    }
 }
 
 fn fuzzy_compare_sql(actual: &str, expected: &str) -> bool {
@@ -2939,6 +3207,46 @@ select * from outer_cte
         assert!(
             result.is_err(),
             "Non-dbt CTEs should NOT be normalized - they are user-defined and should be preserved"
+        );
+    }
+
+    #[test]
+    fn test_compare_sql_python_config_dict_with_nested_quotes() {
+        // Test that config_dict with nested quotes (like env_var template syntax) is properly canonicalized
+        let actual = r#"config_dict = {'meta': {'indirect_selection': "{{ env_var('DBT_INDIRECT_SELECTION', 'cautious') }}", 'dbt_environment': 'Prod'}, 'database': 'REPORTING_PROD', 'schema': 'exports', 'backup_config': {}}"#;
+        let expected = r#"config_dict = {'meta': {'dbt_environment': 'Prod'}, 'database': 'REPORTING_PROD', 'schema': 'exports', 'backup_config': {}}"#;
+
+        let canonicalized = canonicalize_python_config_dict(actual, expected);
+
+        // Should canonicalize to the expected format (ours has a superset meta)
+        assert!(
+            canonicalized.contains("{'dbt_environment': 'Prod'}"),
+            "Should canonicalize to expected config_dict, got: {}",
+            canonicalized
+        );
+        assert!(
+            !canonicalized.contains("indirect_selection"),
+            "Should remove the indirect_selection key"
+        );
+    }
+
+    #[test]
+    fn test_compare_sql_python_config_dict_different_non_meta_keys() {
+        // Test that config_dict is NOT canonicalized when non-meta keys differ
+        let actual = r#"config_dict = {'meta': {'indirect_selection': 'cautious', 'dbt_environment': 'Prod'}, 'database': 'REPORTING_DEV', 'schema': 'exports', 'backup_config': {}}"#;
+        let expected = r#"config_dict = {'meta': {'dbt_environment': 'Prod'}, 'database': 'REPORTING_PROD', 'schema': 'exports', 'backup_config': {}}"#;
+
+        let canonicalized = canonicalize_python_config_dict(actual, expected);
+
+        // Should NOT canonicalize because database differs (REPORTING_DEV vs REPORTING_PROD)
+        assert!(
+            canonicalized.contains("REPORTING_DEV"),
+            "Should preserve actual's database when non-meta keys differ, got: {}",
+            canonicalized
+        );
+        assert!(
+            canonicalized.contains("indirect_selection"),
+            "Should preserve actual's extra meta keys when non-meta keys differ"
         );
     }
 }

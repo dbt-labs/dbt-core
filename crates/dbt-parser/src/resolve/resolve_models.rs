@@ -928,6 +928,13 @@ fn merge_python_config(
     python_config.default_to(&merged_config);
     merged_config = python_config;
 
+    // Transfer Python-specific config key tracking from PythonFileInfo to merged config
+    // These fields should come from the Python file analysis, not from project/schema configs
+    if !python_file_info.config_keys_used.is_empty() {
+        merged_config.config_keys_used = Some(python_file_info.config_keys_used.clone());
+        merged_config.config_keys_defaults = Some(python_file_info.config_keys_defaults.clone());
+    }
+
     // Warn if user explicitly enabled static_analysis for a Python model
     // This check happens after all config sources are merged
     if merged_config.static_analysis == Some(StaticAnalysisKind::On.into()) {

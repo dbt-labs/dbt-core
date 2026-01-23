@@ -822,6 +822,10 @@ impl From<ManifestModelConfig> for ModelConfig {
             user_folder_for_python: config.user_folder_for_python,
             sync: config.sync,
             __warehouse_specific_config__: config.__warehouse_specific_config__,
+            // config_keys_used and config_keys_defaults are not in ManifestModelConfig
+            // They're only in ModelConfig and not persisted to the manifest
+            config_keys_used: None,
+            config_keys_defaults: None,
         }
     }
 }

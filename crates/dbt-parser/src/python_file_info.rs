@@ -25,7 +25,9 @@ pub struct PythonFileInfo<T: DefaultTo<T>> {
     pub config_keys_used: Vec<String>,
 
     /// Default values provided to dbt.config.get('key', default)
-    pub config_keys_defaults: Vec<(String, String)>,
+    /// Stored in the same order as config_keys_used for Jinja zip()
+    /// Stored as minijinja Values which render as Python literals
+    pub config_keys_defaults: Vec<minijinja::value::Value>,
 
     /// File checksum
     pub checksum: DbtChecksum,

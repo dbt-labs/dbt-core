@@ -487,6 +487,16 @@ pub struct ModelConfig {
     pub index_url: Option<String>,
     pub additional_libs: Option<Vec<YmlValue>>,
     pub user_folder_for_python: Option<bool>,
+    /// Config keys accessed via dbt.config.get() in Python models
+    /// Used to populate config_dict at runtime
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(skip)]
+    pub config_keys_used: Option<Vec<String>>,
+    /// Default values for config keys in the same order as config_keys_used
+    /// Stored as minijinja Values which render as Python literals
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(skip)]
+    pub config_keys_defaults: Option<Vec<minijinja::value::Value>>,
 }
 
 impl From<ProjectModelConfig> for ModelConfig {
@@ -622,6 +632,9 @@ impl From<ProjectModelConfig> for ModelConfig {
                 primary_key: config.primary_key,
                 category: config.category,
             },
+            // Python-specific fields - initialized to None here, set during Python AST analysis
+            config_keys_used: None,
+            config_keys_defaults: None,
         }
     }
 }
@@ -837,6 +850,8 @@ impl DefaultTo<ModelConfig> for ModelConfig {
             index_url,
             additional_libs,
             user_folder_for_python,
+            config_keys_used,
+            config_keys_defaults,
             sync,
         } = self;
 
@@ -910,6 +925,8 @@ impl DefaultTo<ModelConfig> for ModelConfig {
                 index_url,
                 additional_libs,
                 user_folder_for_python,
+                config_keys_used,
+                config_keys_defaults,
                 sync,
             ]
         );

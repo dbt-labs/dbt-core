@@ -22,6 +22,39 @@ use std::path::PathBuf;
 /// Type alias for function call arguments (positional, keyword)
 type CallArgs = (Vec<LiteralValue>, Vec<(String, LiteralValue)>);
 
+/// Convert a Python LiteralValue to a minijinja::value::Value
+/// This allows Jinja to properly render Python objects in config_dict
+fn literal_value_to_minijinja(value: &LiteralValue) -> minijinja::value::Value {
+    use minijinja::value::Value as MJValue;
+
+    match value {
+        LiteralValue::None => MJValue::NONE,
+        LiteralValue::Bool(b) => MJValue::from(*b),
+        LiteralValue::Integer(i) => MJValue::from(*i),
+        LiteralValue::Float(f) => MJValue::from(*f),
+        LiteralValue::String(s) => MJValue::from(s.as_str()),
+        LiteralValue::List(items) => {
+            let mj_items: Vec<MJValue> = items.iter().map(literal_value_to_minijinja).collect();
+            MJValue::from(mj_items)
+        }
+        LiteralValue::Dict(pairs) => {
+            let mj_map: std::collections::BTreeMap<String, MJValue> = pairs
+                .iter()
+                .filter_map(|(k, v)| {
+                    let key_str = k.as_string()?;
+                    Some((key_str, literal_value_to_minijinja(v)))
+                })
+                .collect();
+            MJValue::from_serialize(&mj_map)
+        }
+        LiteralValue::Tuple(items) => {
+            // MiniJinja doesn't have tuples, use list
+            let mj_items: Vec<MJValue> = items.iter().map(literal_value_to_minijinja).collect();
+            MJValue::from(mj_items)
+        }
+    }
+}
+
 /// Convert a Python LiteralValue to a dbt_serde_yaml::Value
 fn literal_value_to_yaml(
     value: LiteralValue,
@@ -245,11 +278,6 @@ impl<'a, T: DefaultTo<T>> DbtPythonVisitor<'a, T> {
 
     /// Handle a dbt.config() call
     fn handle_config(&mut self, kwargs: Vec<(String, LiteralValue)>) {
-        // Track which config keys were used
-        for (key, _value) in &kwargs {
-            self.file_info.config_keys_used.push(key.clone());
-        }
-
         // Convert kwargs into YAML mapping and deserialize into config struct
         // This handles all config fields uniformly, similar to SQL models
         let span = dbt_serde_yaml::Span::default();
@@ -296,14 +324,18 @@ impl<'a, T: DefaultTo<T>> DbtPythonVisitor<'a, T> {
             1 => {
                 if let Some(key) = args[0].as_string() {
                     self.file_info.config_keys_used.push(key);
+                    // No explicit default provided, use Python's None
+                    self.file_info
+                        .config_keys_defaults
+                        .push(minijinja::value::Value::NONE);
                 }
             }
             2 => {
                 if let Some(key) = args[0].as_string() {
-                    self.file_info.config_keys_used.push(key.clone());
-                    // Store the default value as a string representation
-                    let default_str = format!("{:?}", args[1]);
-                    self.file_info.config_keys_defaults.push((key, default_str));
+                    self.file_info.config_keys_used.push(key);
+                    // Convert the default value to minijinja::value::Value for Jinja rendering
+                    let default_value = literal_value_to_minijinja(&args[1]);
+                    self.file_info.config_keys_defaults.push(default_value);
                 }
             }
             _ => {
@@ -500,10 +532,12 @@ def model(dbt, session):
         )
         .unwrap();
 
-        assert!(
-            result
-                .config_keys_used
-                .contains(&"materialized".to_string())
+        // dbt.config() sets config values but doesn't add them to config_keys_used
+        // Only dbt.config.get() calls should be tracked in config_keys_used
+        assert!(result.config_keys_used.is_empty());
+        assert_eq!(
+            result.config.materialized,
+            Some(dbt_schemas::schemas::common::DbtMaterialization::Table)
         );
     }
 
@@ -585,8 +619,9 @@ def model(dbt, session):
                 .contains(&"materialized".to_string())
         );
         assert!(result.config_keys_used.contains(&"schema".to_string()));
-        assert_eq!(result.config_keys_defaults.len(), 1);
-        assert_eq!(result.config_keys_defaults[0].0, "materialized");
+        // Both keys should have defaults: materialized has explicit 'table', schema has implicit None
+        assert_eq!(result.config_keys_defaults.len(), 2);
+        assert!(result.config_keys_defaults.iter().any(|v| v.is_none()));
     }
 
     #[test]
@@ -639,13 +674,11 @@ def model(dbt, session):
         )
         .unwrap();
 
-        assert!(
-            result
-                .config_keys_used
-                .contains(&"materialized".to_string())
-        );
-        assert!(result.config_keys_used.contains(&"tags".to_string()));
-        assert!(result.config_keys_used.contains(&"meta".to_string()));
+        // dbt.config() sets config values but doesn't add them to config_keys_used
+        assert!(result.config_keys_used.is_empty());
+        assert!(result.config.materialized.is_some());
+        assert!(result.config.tags.is_some());
+        assert!(result.config.meta.is_some());
     }
 
     #[test]
@@ -669,13 +702,10 @@ def model(dbt, session):
         )
         .unwrap();
 
-        // Both config calls should be processed
-        assert!(
-            result
-                .config_keys_used
-                .contains(&"materialized".to_string())
-        );
-        assert!(result.config_keys_used.contains(&"tags".to_string()));
+        // Both config calls should be processed but not added to config_keys_used
+        assert!(result.config_keys_used.is_empty());
+        assert!(result.config.materialized.is_some());
+        assert!(result.config.tags.is_some());
     }
 
     #[test]
@@ -811,13 +841,10 @@ def model(dbt, session):
         assert!(result.packages.contains(&"torch".to_string()));
         assert!(result.packages.contains(&"sklearn".to_string()));
 
-        // Check config keys were used
-        assert!(
-            result
-                .config_keys_used
-                .contains(&"materialized".to_string())
-        );
-        assert!(result.config_keys_used.contains(&"packages".to_string()));
+        // dbt.config() sets config values but doesn't add them to config_keys_used
+        assert!(result.config_keys_used.is_empty());
+        assert!(result.config.materialized.is_some());
+        assert!(result.config.packages.is_some());
     }
 
     /// Test config.get() extracts config keys
@@ -880,15 +907,24 @@ def model(dbt, session):
         assert!(result.config_keys_used.contains(&"param_Str".to_string()));
         assert!(result.config_keys_used.contains(&"param_List".to_string()));
 
-        // Check defaults are captured
-        let default_keys: Vec<&str> = result
-            .config_keys_defaults
-            .iter()
-            .map(|(k, _)| k.as_str())
-            .collect();
-        assert!(default_keys.contains(&"param_None"));
-        assert!(default_keys.contains(&"param_Str"));
-        assert!(default_keys.contains(&"param_List"));
+        // Check defaults are captured (in same order as keys) as minijinja Values
+        assert_eq!(result.config_keys_defaults.len(), 3);
+        // Check for None default
+        assert!(result.config_keys_defaults.iter().any(|v| v.is_none()));
+        // Check for "default" string
+        assert!(
+            result
+                .config_keys_defaults
+                .iter()
+                .any(|v| v.as_str() == Some("default"))
+        );
+        // Check for [1, 2] list
+        assert!(
+            result
+                .config_keys_defaults
+                .iter()
+                .any(|v| v.len() == Some(2))
+        );
     }
 
     /// Test config.get() in f-string
@@ -917,12 +953,11 @@ def model(dbt, fal):
         )
         .unwrap();
 
+        // Only dbt.config.get() calls should be in config_keys_used
+        assert_eq!(result.config_keys_used.len(), 1);
         assert!(result.config_keys_used.contains(&"my_var".to_string()));
-        assert!(
-            result
-                .config_keys_used
-                .contains(&"materialized".to_string())
-        );
+        // dbt.config() sets the value in the config struct
+        assert!(result.config.materialized.is_some());
     }
 
     /// Test that ref() in variable names (not as a call) doesn't get extracted
@@ -1087,7 +1122,8 @@ def model(dbt, session):
         )
         .unwrap();
 
-        assert!(result.config_keys_used.contains(&"packages".to_string()));
+        // dbt.config() sets config values but doesn't add them to config_keys_used
+        assert!(result.config_keys_used.is_empty());
         // The packages list should be in the config
         assert!(result.config.packages.is_some());
     }
@@ -1140,7 +1176,8 @@ def model(dbt, session):
         )
         .unwrap();
 
-        assert!(result.config_keys_used.contains(&"tags".to_string()));
+        // dbt.config() sets config values but doesn't add them to config_keys_used
+        assert!(result.config_keys_used.is_empty());
         assert!(result.config.tags.is_some());
     }
 
