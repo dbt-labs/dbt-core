@@ -1326,12 +1326,16 @@ pub fn build_flat_graph(nodes: &Nodes) -> MutableMap {
                         *desc_value = YmlValue::string("".to_string());
                     }
                 }
-                // Update path to only contain the filename (strip directory prefix)
-                if let Some(file_name) = model.__common_attr__.path.file_name() {
-                    map.insert(
-                        YmlValue::string("path".to_string()),
-                        YmlValue::string(file_name.to_string_lossy().to_string()),
-                    );
+                // Strip "models/" prefix from path if present.
+                // dbt-core's manifest stores paths relative to the models folder (e.g., "3-data_vault/...")
+                // not including "models/" prefix. Customer macros like bfs_find_all_downstream_nodes
+                // rely on path.startswith() checks that assume this format.
+                let path_key = YmlValue::string("path".to_string());
+                if let Some(path_value) = map.get(&path_key) {
+                    if let Some(path_str) = path_value.as_str() {
+                        let stripped = path_str.strip_prefix("models/").unwrap_or(path_str);
+                        map.insert(path_key, YmlValue::string(stripped.to_string()));
+                    }
                 }
             }
             (unique_id.clone(), Value::from_serialize(serialized))
@@ -1339,13 +1343,14 @@ pub fn build_flat_graph(nodes: &Nodes) -> MutableMap {
         .chain(nodes.snapshots.iter().map(|(unique_id, snapshot)| {
             let mut serialized =
                 (Arc::as_ref(snapshot) as &dyn InternalDbtNode).serialize_keep_none();
-            // Update path to only contain the filename (strip directory prefix)
+            // Strip resource folder prefix from path for consistency with dbt-core manifest format
             if let YmlValue::Mapping(ref mut map, _) = serialized {
-                if let Some(file_name) = snapshot.__common_attr__.path.file_name() {
-                    map.insert(
-                        YmlValue::string("path".to_string()),
-                        YmlValue::string(file_name.to_string_lossy().to_string()),
-                    );
+                let path_key = YmlValue::string("path".to_string());
+                if let Some(path_value) = map.get(&path_key) {
+                    if let Some(path_str) = path_value.as_str() {
+                        let stripped = path_str.strip_prefix("snapshots/").unwrap_or(path_str);
+                        map.insert(path_key, YmlValue::string(stripped.to_string()));
+                    }
                 }
             }
             (unique_id.clone(), Value::from_serialize(serialized))
@@ -1362,12 +1367,17 @@ pub fn build_flat_graph(nodes: &Nodes) -> MutableMap {
                         YmlValue::string(patch_path.display().to_string()),
                     );
                 }
-                // Update path to only contain the filename (strip directory prefix)
-                if let Some(file_name) = test.__common_attr__.path.file_name() {
-                    map.insert(
-                        YmlValue::string("path".to_string()),
-                        YmlValue::string(file_name.to_string_lossy().to_string()),
-                    );
+                // For tests, use just the file name (not the full path) for consistency with dbt-core manifest format
+                // Generic tests have paths like "tests/generic_tests/not_null_foo_id.sql" but manifest expects "not_null_foo_id.sql"
+                let path_key = YmlValue::string("path".to_string());
+                if let Some(path_value) = map.get(&path_key) {
+                    if let Some(path_str) = path_value.as_str() {
+                        let file_name = std::path::Path::new(path_str)
+                            .file_name()
+                            .and_then(|s| s.to_str())
+                            .unwrap_or(path_str);
+                        map.insert(path_key.clone(), YmlValue::string(file_name.to_string()));
+                    }
                 }
                 // Set severity to ERROR in config if not already set
                 let config_key = YmlValue::string("config".to_string());
@@ -1386,13 +1396,14 @@ pub fn build_flat_graph(nodes: &Nodes) -> MutableMap {
         }))
         .chain(nodes.seeds.iter().map(|(unique_id, seed)| {
             let mut serialized = (Arc::as_ref(seed) as &dyn InternalDbtNode).serialize_keep_none();
-            // Update path to only contain the filename (strip directory prefix)
+            // Strip resource folder prefix from path for consistency with dbt-core manifest format
             if let YmlValue::Mapping(ref mut map, _) = serialized {
-                if let Some(file_name) = seed.__common_attr__.path.file_name() {
-                    map.insert(
-                        YmlValue::string("path".to_string()),
-                        YmlValue::string(file_name.to_string_lossy().to_string()),
-                    );
+                let path_key = YmlValue::string("path".to_string());
+                if let Some(path_value) = map.get(&path_key) {
+                    if let Some(path_str) = path_value.as_str() {
+                        let stripped = path_str.strip_prefix("seeds/").unwrap_or(path_str);
+                        map.insert(path_key, YmlValue::string(stripped.to_string()));
+                    }
                 }
             }
             (unique_id.clone(), Value::from_serialize(serialized))
