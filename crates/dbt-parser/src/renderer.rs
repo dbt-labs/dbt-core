@@ -13,7 +13,8 @@ use dbt_common::tokiofs::read_to_string;
 use dbt_common::tracing::emit::{
     emit_error_log_from_fs_error, emit_error_log_message, emit_warn_log_from_fs_error,
 };
-use dbt_common::{ErrorCode, FsError, FsResult, fs_err, fsinfo, show_progress};
+use dbt_common::tracing::span_info::SpanStatusRecorder as _;
+use dbt_common::{ErrorCode, FsError, FsResult, create_debug_span, fs_err};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::listener::{
     DefaultRenderingEventListenerFactory, JinjaTypeCheckingEventListenerFactory,
@@ -33,6 +34,7 @@ use dbt_schemas::schemas::properties::GetConfig;
 use dbt_schemas::schemas::telemetry::NodeType;
 use dbt_schemas::schemas::{InternalDbtNodeAttributes, IntrospectionKind, Nodes};
 use dbt_schemas::state::{DbtAsset, DbtRuntimeConfig, ModelStatus};
+use dbt_telemetry::{AssetParsed, ExecutionPhase};
 use std::fmt::Debug;
 use tracing::Instrument as _;
 
@@ -127,6 +129,62 @@ where
     T: DefaultTo<T> + 'static,
     S: GetConfig<T> + Debug,
 {
+    let RenderCtx { inner, .. } = render_ctx;
+
+    let RenderCtxInner {
+        args, package_name, ..
+    } = &**inner;
+
+    let ref_name = dbt_asset.path.file_stem().unwrap().to_str().unwrap();
+
+    let display_path = if dbt_asset.base_path == args.io.out_dir {
+        PathBuf::from(DBT_TARGET_DIR_NAME).join(dbt_asset.to_display_path(&args.io.out_dir))
+    } else {
+        dbt_asset.to_display_path(&args.io.in_dir)
+    };
+    let display_path_str = display_path.display().to_string();
+
+    let span = create_debug_span(AssetParsed::new(
+        package_name.clone(),
+        ref_name.to_string(),
+        dbt_asset.path.display().to_string(),
+        display_path_str.clone(),
+        None,
+        ExecutionPhase::Parse,
+    ));
+
+    render_sql_file_inner(
+        render_ctx,
+        dbt_asset,
+        node_properties,
+        duplicate_errors,
+        token,
+        jinja_type_checking_event_listener_factory,
+        display_path,
+        display_path_str,
+        ref_name,
+    )
+    .instrument(span.clone())
+    .await
+    .record_status(&span)
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn render_sql_file_inner<T, S>(
+    render_ctx: &RenderCtx<T>,
+    dbt_asset: &DbtAsset,
+    node_properties: &mut BTreeMap<String, MinimalPropertiesEntry>,
+    duplicate_errors: &mut Vec<FsError>,
+    token: &CancellationToken,
+    jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
+    display_path: PathBuf,
+    display_path_str: String,
+    ref_name: &str,
+) -> FsResult<Option<SqlFileRenderResult<T, S>>>
+where
+    T: DefaultTo<T> + 'static,
+    S: GetConfig<T> + Debug,
+{
     let RenderCtx {
         inner,
         jinja_env,
@@ -155,11 +213,11 @@ where
         None
     };
 
-    let ref_name = dbt_asset.path.file_stem().unwrap().to_str().unwrap();
     let has_duplicate_paths = node_properties
         .get(ref_name)
         .map(|mpe| !mpe.duplicate_paths.is_empty())
         .unwrap_or(false);
+
     let (maybe_model, maybe_version_config) = {
         if let Some(mpe) = node_properties.get_mut(ref_name) {
             extract_model_and_version_config::<T, S>(
@@ -175,13 +233,7 @@ where
         }
     };
 
-    let model_name = dbt_asset
-        .path
-        .file_stem()
-        .unwrap()
-        .to_str()
-        .unwrap()
-        .to_string();
+    let model_name = ref_name.to_string();
 
     let fqn = get_node_fqn(
         package_name,
@@ -222,12 +274,6 @@ where
     let execute_exists = Arc::new(AtomicBool::new(false));
 
     let mut resolve_model_context = base_ctx.clone();
-    let display_path = if dbt_asset.base_path == args.io.out_dir {
-        PathBuf::from(DBT_TARGET_DIR_NAME).join(dbt_asset.to_display_path(&args.io.out_dir))
-    } else {
-        dbt_asset.to_display_path(&args.io.in_dir)
-    };
-
     resolve_model_context.extend(build_resolve_model_context(
         &properties_config,
         *adapter_type,
@@ -245,10 +291,9 @@ where
         &args.io,
     ));
 
-    show_progress!(
-        args.io,
-        fsinfo!(PARSING.into(), display_path.display().to_string())
-    );
+    if let Some(status_reporter) = &args.io.status_reporter {
+        status_reporter.show_progress(PARSING, &display_path_str, None);
+    }
 
     if let Some(model) = resolve_model_context.get("model")
         && let Ok(unique_id) = model.get_attr("unique_id")

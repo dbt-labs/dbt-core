@@ -20,6 +20,7 @@ dbt-frontend-common = { workspace = true }
 dbt-jinja-utils = { workspace = true }
 dbt-schemas = { workspace = true }
 dbt-selector-parser = { workspace = true }
+dbt-telemetry = { workspace = true }
 pathdiff = { workspace = true }
 
 chrono = { workspace = true }
@@ -42,7 +43,6 @@ dbt-fusion-workspace-hack = { version = "0.1" }
 tracing = { workspace = true }
 
 [dev-dependencies]
-dbt-telemetry = { workspace = true }
 dbt-test-primitives = { workspace = true }
 serde = { workspace = true }
 tempfile = { workspace = true }

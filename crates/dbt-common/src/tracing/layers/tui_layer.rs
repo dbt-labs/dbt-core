@@ -9,7 +9,7 @@ use std::{
 
 use console::Term;
 use dbt_telemetry::{
-    AnyTelemetryEvent, CompiledCodeInline, DepsAddPackage, DepsAllPackagesInstalled,
+    AnyTelemetryEvent, AssetParsed, CompiledCodeInline, DepsAddPackage, DepsAllPackagesInstalled,
     DepsPackageInstalled, ExecutionPhase, GenericOpExecuted, GenericOpItemProcessed, Invocation,
     ListItemOutput, LogMessage, LogRecordInfo, NodeEvaluated, NodeOutcome, NodeProcessed,
     NodeSkipReason, NodeType, PhaseExecuted, ProgressMessage, QueryExecuted, SeverityNumber,
@@ -21,12 +21,14 @@ use dbt_tui_progress::ProgressController;
 use dbt_error::ErrorCode;
 use tracing::level_filters::LevelFilter;
 
+use crate::constants::DBT_GENERIC_TESTS_DIR_NAME;
 use crate::{
     io_args::{FsCommand, ShowOptions},
     logging::LogFormat,
     tracing::{
         data_provider::DataProvider,
         formatters::{
+            asset::format_asset_parsed_start,
             color::BLUE,
             constants::SELECTED_NODES_TITLE,
             deps::{
@@ -374,11 +376,15 @@ impl TelemetryConsumer for TuiLayer {
             // NodeEvaluated, NodeProcessed & GenericOp should always be let through
             // because of progress bars relying on them. Their output is controlled
             // in the handler based on the verbosity level.
-            && (span.attributes.is::<NodeEvaluated>() || span.attributes.is::<NodeProcessed>() || span
-                .attributes.is::<GenericOpExecuted>() || span.attributes.is::<GenericOpItemProcessed>()
-                || span
-                    .severity_number
-                    <= self.max_log_verbosity)
+            && (span.attributes.is::<NodeEvaluated>()
+                || span.attributes.is::<NodeProcessed>()
+                || span.attributes.is::<GenericOpExecuted>()
+                || span.attributes.is::<GenericOpItemProcessed>()
+                // TOD: This one is also allowed to pass at debug level due to multitude of
+                // tests recording prased messages using `progress` cli arg. Special casing
+                // should be removed and formatting unified with file layer
+                || span.attributes.is::<AssetParsed>()
+                || span.severity_number <= self.max_log_verbosity)
     }
 
     fn is_log_enabled(&self, log_record: &LogRecordInfo) -> bool {
@@ -406,6 +412,11 @@ impl TelemetryConsumer for TuiLayer {
                 seen_test: false,
                 seen_unit_test: false,
             });
+        }
+
+        if let Some(asset_parsed) = span.attributes.downcast_ref::<AssetParsed>() {
+            self.handle_asset_parsed_start(span, asset_parsed);
+            return;
         }
 
         // Handle NodeEvaluated start
@@ -1128,6 +1139,27 @@ impl TuiLayer {
         }
 
         let formatted = format_progress_message(progress_msg, severity_number, true, true);
+        self.write_suspended(|| {
+            io::stdout()
+                .lock()
+                .write_all(format!("{}\n", formatted).as_bytes())
+                .expect("failed to write to stdout");
+        });
+    }
+
+    fn handle_asset_parsed_start(&self, _span: &SpanStartInfo, asset: &AssetParsed) {
+        // TODO: This is temporary legacy rendering for parse progress and should
+        // be replaced with the new end-span rendering (matching file log) once fully migrated.
+        // We ignore this span severity level and only check show options for progress.
+
+        if !should_show_progress_message(Some(asset.phase()), &self.show_options)
+            // Legacy filter exclusion for generic tests
+            || asset.display_path.contains(DBT_GENERIC_TESTS_DIR_NAME)
+        {
+            return;
+        }
+
+        let formatted = format_asset_parsed_start(asset, true);
         self.write_suspended(|| {
             io::stdout()
                 .lock()

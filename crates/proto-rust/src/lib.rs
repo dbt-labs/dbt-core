@@ -46,6 +46,10 @@ pub mod v1 {
                     include!("gen/v1.public.events.fusion.log.rs");
                     include!("gen/v1.public.events.fusion.log.serde.rs");
                 }
+                pub mod asset {
+                    include!("gen/v1.public.events.fusion.asset.rs");
+                    include!("gen/v1.public.events.fusion.asset.serde.rs");
+                }
                 pub mod artifact {
                     include!("gen/v1.public.events.fusion.artifact.rs");
                     include!("gen/v1.public.events.fusion.artifact.serde.rs");

@@ -1,3 +1,4 @@
+pub mod asset;
 pub mod color;
 pub mod constants;
 pub mod deps;

@@ -7,11 +7,11 @@ use super::traits::AnyTelemetryEvent;
 use crate::{
     attributes::traits::ArrowSerializableTelemetryEvent,
     schemas::{
-        ArtifactWritten, CallTrace, CompiledCodeInline, DepsAddPackage, DepsAllPackagesInstalled,
-        DepsPackageInstalled, GenericOpExecuted, GenericOpItemProcessed, Invocation,
-        ListItemOutput, LogMessage, NodeEvaluated, NodeProcessed, OnboardingScreenShown,
-        PackageUpdate, PhaseExecuted, Process, ProgressMessage, QueryExecuted, ShowDataOutput,
-        ShowResult, StateModifiedDiff, Unknown, UserLogMessage,
+        ArtifactWritten, AssetParsed, CallTrace, CompiledCodeInline, DepsAddPackage,
+        DepsAllPackagesInstalled, DepsPackageInstalled, GenericOpExecuted, GenericOpItemProcessed,
+        Invocation, ListItemOutput, LogMessage, NodeEvaluated, NodeProcessed,
+        OnboardingScreenShown, PackageUpdate, PhaseExecuted, Process, ProgressMessage,
+        QueryExecuted, ShowDataOutput, ShowResult, StateModifiedDiff, Unknown, UserLogMessage,
     },
     serialize::arrow::ArrowAttributes,
 };
@@ -170,6 +170,12 @@ static PUBLIC_TELEMETRY_EVENT_REGISTRY: LazyLock<TelemetryEventTypeRegistry> = L
             arrow_deserialize_for_type::<PhaseExecuted>,
             #[cfg(any(test, feature = "test-utils"))]
             faker_for_type::<PhaseExecuted>,
+        );
+        registry.register(
+            AssetParsed::FULL_NAME,
+            arrow_deserialize_for_type::<AssetParsed>,
+            #[cfg(any(test, feature = "test-utils"))]
+            faker_for_type::<AssetParsed>,
         );
         registry.register(
             OnboardingScreenShown::FULL_NAME,

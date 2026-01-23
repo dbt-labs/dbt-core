@@ -1,8 +1,8 @@
 use dbt_error::ErrorCode;
 use dbt_telemetry::{
-    CompiledCodeInline, DepsAddPackage, DepsAllPackagesInstalled, DepsPackageInstalled,
-    GenericOpExecuted, GenericOpItemProcessed, Invocation, ListItemOutput, LogMessage,
-    LogRecordInfo, NodeEvaluated, NodeOutcome, NodeProcessed, NodeType, PhaseExecuted,
+    AssetParsed, CompiledCodeInline, DepsAddPackage, DepsAllPackagesInstalled,
+    DepsPackageInstalled, GenericOpExecuted, GenericOpItemProcessed, Invocation, ListItemOutput,
+    LogMessage, LogRecordInfo, NodeEvaluated, NodeOutcome, NodeProcessed, NodeType, PhaseExecuted,
     ProgressMessage, QueryExecuted, SeverityNumber, ShowDataOutput, ShowResult, SpanEndInfo,
     SpanStartInfo, StateModifiedDiff, StatusCode, TelemetryOutputFlags, UserLogMessage,
     node_processed,
@@ -17,6 +17,7 @@ use super::super::{
     background_writer::BackgroundWriter,
     data_provider::DataProvider,
     formatters::{
+        asset::format_asset_parsed_end,
         constants::SELECTED_NODES_TITLE,
         deps::{
             format_package_add_end, format_package_add_start, format_package_install_end,
@@ -182,6 +183,11 @@ impl TelemetryConsumer for FileLogLayer {
         // Handle PhaseExecuted end
         if let Some(phase) = span.attributes.downcast_ref::<PhaseExecuted>() {
             self.handle_phase_executed_end(span, phase);
+            return;
+        }
+
+        if let Some(asset_parsed) = span.attributes.downcast_ref::<AssetParsed>() {
+            self.handle_asset_parsed_end(span, asset_parsed);
             return;
         }
 
@@ -488,6 +494,15 @@ impl FileLogLayer {
             log_record.severity_number,
             &[formatted],
         );
+    }
+
+    fn handle_asset_parsed_end(&self, span: &SpanEndInfo, asset: &AssetParsed) {
+        let duration = span
+            .end_time_unix_nano
+            .duration_since(span.start_time_unix_nano)
+            .unwrap_or_default();
+        let formatted = format_asset_parsed_end(asset, duration, false);
+        self.write_log_lines(span.end_time_unix_nano, span.severity_number, &[formatted]);
     }
 
     fn handle_state_modified_diff(
