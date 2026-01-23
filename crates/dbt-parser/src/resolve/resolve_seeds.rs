@@ -5,6 +5,7 @@ use crate::utils::{
     update_node_relation_components,
 };
 use dbt_common::adapter::AdapterType;
+use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
 use dbt_common::tracing::emit::emit_error_log_from_fs_error;
 use dbt_common::{ErrorCode, FsResult, fs_err, stdfs};
 use dbt_frontend_common::Dialect;
@@ -161,6 +162,11 @@ pub fn resolve_seeds(
             project_config.clone()
         };
 
+        let static_analysis = properties_config
+            .static_analysis
+            .clone()
+            .unwrap_or_else(|| StaticAnalysisKind::On.into());
+
         // XXX: normalize column_types to uppercase if it is snowflake
         if matches!(adapter_type, AdapterType::Snowflake)
             && let Some(column_types) = &properties_config.column_types
@@ -252,6 +258,10 @@ pub fn resolve_seeds(
                     .try_into()
                     .expect("quoting is required"),
                 materialized: DbtMaterialization::Table,
+                static_analysis_off_reason: (static_analysis.clone().into_inner()
+                    == StaticAnalysisKind::Off)
+                    .then_some(StaticAnalysisOffReason::ConfiguredOff),
+                static_analysis,
                 ..Default::default()
             },
             __seed_attr__: DbtSeedAttr {

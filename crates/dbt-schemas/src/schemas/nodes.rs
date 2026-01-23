@@ -1364,10 +1364,6 @@ impl InternalDbtNode for DbtSeed {
 }
 
 impl InternalDbtNodeAttributes for DbtSeed {
-    fn set_static_analysis(&mut self, _static_analysis: Spanned<StaticAnalysisKind>) {
-        unimplemented!("static analysis metadata setting for schema nodes")
-    }
-
     fn search_name(&self) -> String {
         self.__common_attr__.name.clone()
     }

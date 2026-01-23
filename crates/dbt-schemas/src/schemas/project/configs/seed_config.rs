@@ -1,5 +1,6 @@
 use crate::schemas::serde::OmissibleGrantConfig;
 use crate::schemas::serde::QueryTag;
+use dbt_common::io_args::StaticAnalysisKind;
 use dbt_serde_yaml::JsonSchema;
 use dbt_serde_yaml::ShouldBe;
 use dbt_serde_yaml::Spanned;
@@ -77,6 +78,8 @@ pub struct ProjectSeedConfig {
     pub schema: Option<String>,
     #[serde(rename = "+snowflake_warehouse")]
     pub snowflake_warehouse: Option<String>,
+    #[serde(rename = "+static_analysis")]
+    pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
     #[serde(rename = "+tags")]
     pub tags: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+transient")]
@@ -299,6 +302,7 @@ pub struct SeedConfig {
     pub full_refresh: Option<bool>,
     pub group: Option<String>,
     pub meta: Option<IndexMap<String, YmlValue>>,
+    pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
     pub persist_docs: Option<PersistDocsConfig>,
     #[serde(alias = "post-hook")]
     pub post_hook: Verbatim<Option<Hooks>>,
@@ -328,6 +332,7 @@ impl From<ProjectSeedConfig> for SeedConfig {
             full_refresh: config.full_refresh,
             group: config.group,
             meta: config.meta,
+            static_analysis: config.static_analysis,
             persist_docs: config.persist_docs,
             post_hook: config.post_hook,
             pre_hook: config.pre_hook,
@@ -436,6 +441,7 @@ impl From<SeedConfig> for ProjectSeedConfig {
             persist_docs: config.persist_docs,
             post_hook: config.post_hook,
             pre_hook: config.pre_hook,
+            static_analysis: config.static_analysis,
             tags: config.tags,
             quoting: config.quoting,
             // Snowflake fields
@@ -559,6 +565,7 @@ impl DefaultTo<SeedConfig> for SeedConfig {
             group,
             persist_docs,
             materialized,
+            static_analysis,
             // Adapter specific configs
             __warehouse_specific_config__: warehouse_specific_config,
         } = self;
@@ -596,6 +603,7 @@ impl DefaultTo<SeedConfig> for SeedConfig {
                 full_refresh,
                 group,
                 persist_docs,
+                static_analysis,
                 materialized,
             ]
         );

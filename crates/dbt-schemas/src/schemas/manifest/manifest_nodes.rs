@@ -643,6 +643,7 @@ pub struct ManifestSeedConfig {
     pub post_hook: Verbatim<Option<Hooks>>,
     #[serde(alias = "pre-hook")]
     pub pre_hook: Verbatim<Option<Hooks>>,
+    pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
     pub tags: Option<StringOrArrayOfStrings>,
     pub quoting: Option<DbtQuoting>,
     pub materialized: Option<DbtMaterialization>,
@@ -670,6 +671,7 @@ impl From<SeedConfig> for ManifestSeedConfig {
             persist_docs: config.persist_docs,
             post_hook: config.post_hook,
             pre_hook: config.pre_hook,
+            static_analysis: config.static_analysis,
             tags: config.tags,
             quoting: config.quoting,
             materialized: config.materialized,
@@ -698,6 +700,7 @@ impl From<ManifestSeedConfig> for SeedConfig {
             persist_docs: config.persist_docs,
             post_hook: config.post_hook,
             pre_hook: config.pre_hook,
+            static_analysis: config.static_analysis,
             tags: config.tags,
             quoting: config.quoting,
             materialized: config.materialized,
