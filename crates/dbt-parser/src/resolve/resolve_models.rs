@@ -667,14 +667,28 @@ fn process_versioned_columns(
         if maybe_version.is_some_and(|v| Some(v) == version.get_version().as_ref())
             && let Some(column_props) = version.__additional_properties__.get("columns")
         {
+            // dbt-core allows column-level `meta:` directly under a `columns:` entry (including
+            // inside `versions: - v: ... columns:`). Our `ColumnProperties` schema only supports
+            // column metadata under `config.meta`, so if we see a top-level `meta`, translate it
+            // into `config.meta` before deserializing.
+            //
+            // This fixes a conformance issue where versioned-model column meta (e.g.
+            // `database_tags`) was silently dropped, causing hooks that rely on it (like tagging)
+            // to skip expected behavior.
             let column_map: Vec<ColumnProperties> = column_props
                 .as_sequence()
                 .map(|cols| {
+                    let include_key = dbt_serde_yaml::Value::string("include".to_string());
+                    let exclude_key = dbt_serde_yaml::Value::string("exclude".to_string());
+
                     cols.iter()
-                        .filter_map(|col| col.as_mapping())
-                        .filter(|map| !(map.contains_key("include") || map.contains_key("exclude")))
-                        .filter_map(|map| {
-                            dbt_serde_yaml::from_value::<ColumnProperties>(map.clone().into()).ok()
+                        .filter_map(|col| col.as_mapping().map(|m| (col, m)))
+                        .filter(|(_, map)| {
+                            !(map.contains_key(&include_key) || map.contains_key(&exclude_key))
+                        })
+                        .filter_map(|(col, _map)| {
+                            let col_val = normalize_versioned_column_meta_to_config(col);
+                            dbt_serde_yaml::from_value::<ColumnProperties>(col_val).ok()
                         })
                         .collect()
                 })
@@ -699,6 +713,61 @@ fn process_versioned_columns(
     }
 
     Ok(columns)
+}
+
+/// Translate column-level `meta:` (as allowed by dbt-core inside `columns:` blocks, including under
+/// `versions: - v: ... columns:`) into `config.meta` for deserialization into `ColumnProperties`.
+fn normalize_versioned_column_meta_to_config(col: &dbt_serde_yaml::Value) -> dbt_serde_yaml::Value {
+    let meta_key = dbt_serde_yaml::Value::string("meta".to_string());
+    let config_key = dbt_serde_yaml::Value::string("config".to_string());
+
+    // Work on a cloned value to preserve spans where possible.
+    let mut col_val = col.clone();
+    if let dbt_serde_yaml::Value::Mapping(ref mut mapping, ref span) = col_val {
+        let Some(meta_val) = mapping.get(&meta_key).cloned() else {
+            return col_val;
+        };
+
+        // Remove top-level meta to avoid unknown-field deserialization errors.
+        mapping.remove(&meta_key);
+
+        // Ensure config exists as a mapping.
+        let mut config_map = match mapping.get(&config_key) {
+            Some(dbt_serde_yaml::Value::Mapping(cfg, _)) => cfg.clone(),
+            _ => dbt_serde_yaml::Mapping::new(),
+        };
+
+        // If config.meta exists and both are mappings, merge; otherwise set.
+        match config_map.get(&meta_key) {
+            Some(dbt_serde_yaml::Value::Mapping(existing_meta, existing_span))
+                if matches!(meta_val, dbt_serde_yaml::Value::Mapping(_, _)) =>
+            {
+                let mut merged = existing_meta.clone();
+                if let dbt_serde_yaml::Value::Mapping(new_meta, _) = meta_val {
+                    for (k, v) in new_meta {
+                        merged.entry(k).or_insert(v);
+                    }
+                }
+                config_map.insert(
+                    meta_key.clone(),
+                    dbt_serde_yaml::Value::Mapping(merged, existing_span.clone()),
+                );
+            }
+            Some(_) => {
+                // Keep existing config.meta; ignore top-level meta.
+            }
+            None => {
+                config_map.insert(meta_key.clone(), meta_val);
+            }
+        }
+
+        mapping.insert(
+            config_key,
+            dbt_serde_yaml::Value::Mapping(config_map, span.clone()),
+        );
+    }
+
+    col_val
 }
 
 pub fn validate_merge_update_columns_xor(model_config: &ModelConfig, path: &Path) -> FsResult<()> {
@@ -977,4 +1046,70 @@ fn is_python_model(asset: &dbt_schemas::state::DbtAsset) -> bool {
         .and_then(|ext| ext.to_str())
         .map(|ext| ext == "py")
         .unwrap_or(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dbt_schemas::schemas::project::ModelConfig;
+    use indexmap::IndexMap;
+    use std::collections::HashMap;
+
+    #[test]
+    fn process_versioned_columns_moves_top_level_meta_into_config_meta() {
+        // This is a minimal regression test for a conformance bug where versioned model column
+        // metadata like:
+        //
+        //   versions:
+        //     - v: 1
+        //       columns:
+        //         - name: billingentitylocalamount
+        //           meta:
+        //             database_tags:
+        //               data_classification: Highly Confidential-Monetary
+        //
+        // was being dropped during `process_versioned_columns` parsing/merging.
+
+        let mut version_additional: HashMap<String, dbt_serde_yaml::Value> = HashMap::new();
+        let columns_yaml = dbt_serde_yaml::from_str::<dbt_serde_yaml::Value>(
+            r#"
+- name: billingentitylocalamount
+  meta:
+    database_tags:
+      data_classification: Highly Confidential-Monetary
+"#,
+        )
+        .expect("valid yaml");
+        version_additional.insert("columns".to_string(), columns_yaml);
+
+        let versions = vec![Versions {
+            v: dbt_serde_yaml::Value::string("1".to_string()),
+            config: dbt_serde_yaml::Verbatim::from(None),
+            __additional_properties__: dbt_serde_yaml::Verbatim::from(version_additional),
+        }];
+
+        // Provide some model-level meta to ensure the column-level meta takes precedence when present.
+        let model_config = ModelConfig {
+            meta: Some(IndexMap::from_iter([(
+                "required_docs".to_string(),
+                dbt_serde_yaml::Value::Null(dbt_serde_yaml::Span::default()),
+            )])),
+            ..Default::default()
+        };
+
+        let cols =
+            process_versioned_columns(&model_config, Some(&"1".to_string()), &versions, Vec::new())
+                .expect("process_versioned_columns should succeed");
+
+        let col = cols
+            .iter()
+            .find(|c| c.name.eq_ignore_ascii_case("billingentitylocalamount"))
+            .expect("expected billingentitylocalamount to be present");
+
+        assert!(
+            col.meta.contains_key("database_tags"),
+            "expected meta.database_tags to be preserved, got meta keys: {:?}",
+            col.meta.keys().collect::<Vec<_>>()
+        );
+    }
 }

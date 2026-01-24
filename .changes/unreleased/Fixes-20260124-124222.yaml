@@ -1,0 +1,7 @@
+kind: Fixes
+body: Fix versioned model column meta propagation
+time: 2026-01-24T12:42:22.643008-08:00
+custom:
+    author: ""
+    issue: ""
+    project: dbt-fusion
