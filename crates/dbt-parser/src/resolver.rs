@@ -991,6 +991,10 @@ async fn resolve_packages_sequentially(
             semantic_layer_spec_is_legacy |= resolved_semantic_layer_spec_is_legacy;
 
             // Update runtime configs for next wave
+            dbt_schemas::state::register_global_runtime_config(
+                package_name.clone(),
+                runtime_config.clone(),
+            );
             all_runtime_configs.insert(package_name, runtime_config);
             // Merge results
             nodes.extend(new_nodes);
@@ -1096,6 +1100,10 @@ async fn resolve_packages_parallel(
             semantic_layer_spec_is_legacy |= resolved_semantic_layer_spec_is_legacy;
 
             // Update runtime configs for next wave
+            dbt_schemas::state::register_global_runtime_config(
+                package_name.clone(),
+                runtime_config.clone(),
+            );
             all_runtime_configs.insert(package_name.clone(), runtime_config);
             // Merge results in main thread
             nodes.extend(new_nodes);
