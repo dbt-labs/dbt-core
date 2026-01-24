@@ -544,7 +544,13 @@ class ParseConfigObject(Config):
     def require(self, name, validator=None):
         return ""
 
+    def meta_require(self, name, validator=None):
+        return ""
+
     def get(self, name, default=None, validator=None):
+        return ""
+
+    def meta_get(self, name, default=None, validator=None):
         return ""
 
     def persist_relation_docs(self) -> bool:
@@ -578,6 +584,16 @@ class RuntimeConfigObject(Config):
             raise MissingConfigError(unique_id=self.model.unique_id, name=name)
         return result
 
+    def _lookup_meta(self, name, default=_MISSING):
+        # if this is a macro, there might be no `model.config`.
+        if not hasattr(self.model, "config"):
+            result = default
+        else:
+            result = self.model.config.meta_get(name, default)
+        if result is _MISSING:
+            raise MissingConfigError(unique_id=self.model.unique_id, name=name)
+        return result
+
     def require(self, name, validator=None):
         to_return = self._lookup(name)
 
@@ -586,8 +602,24 @@ class RuntimeConfigObject(Config):
 
         return to_return
 
+    def meta_require(self, name, validator=None):
+        to_return = self._lookup_meta(name)
+
+        if validator is not None:
+            self._validate(validator, to_return)
+
+        return to_return
+
     def get(self, name, default=None, validator=None):
         to_return = self._lookup(name, default)
+
+        if validator is not None and default is not None:
+            self._validate(validator, to_return)
+
+        return to_return
+
+    def meta_get(self, name, default=None, validator=None):
+        to_return = self._lookup_meta(name, default)
 
         if validator is not None and default is not None:
             self._validate(validator, to_return)
@@ -854,7 +886,12 @@ class RuntimeUnitTestSourceResolver(BaseSourceResolver):
         # we just need to set_cte, but skipping it confuses typing. We *do* need
         # the relation in the "this" property.
         self.model.set_cte(target_source.unique_id, None)
-        return self.Relation.create_ephemeral_from(target_source)
+
+        identifier = self.Relation.add_ephemeral_prefix(target_source.cte_name)
+        return self.Relation.create(
+            type=self.Relation.CTE,
+            identifier=identifier,
+        ).quote(identifier=False)
 
 
 # metric` implementations

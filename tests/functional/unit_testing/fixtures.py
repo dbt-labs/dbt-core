@@ -145,7 +145,7 @@ unit_tests:
         - {c: 3}
 """
 
-test_disabled_my_model_yml = """
+test_disabled_unit_test_my_model_yml = """
 unit_tests:
   - name: test_disabled_my_model
     model: my_model
@@ -162,6 +162,32 @@ unit_tests:
     expect:
       rows:
         - {c: 3}
+"""
+
+my_model_disabled_sql = """
+{{ config(enabled=false) }}
+select 1 as id
+"""
+
+my_model_disabled_yml = """
+models:
+  - name: my_model_disabled_yml
+    config:
+      enabled: false
+"""
+
+disabled_my_model_tests_yml = """
+unit_tests:
+  - name: test_disabled_my_model_sql
+    model: my_model_disabled_sql
+    given: []
+    expect:
+      rows: [{"id": 1}]
+  - name: test_disabled_my_model_yml
+    model: my_model_disabled_yml
+    given: []
+    expect:
+      rows: [{"id": 1}]
 """
 
 test_my_model_simple_fixture_yml = """

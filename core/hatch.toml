@@ -1,0 +1,206 @@
+[version]
+path = "dbt/__version__.py"
+
+[build.targets.wheel]
+packages = ["dbt"]
+only-packages = true
+exclude = [
+    "**/*.md",
+]
+artifacts = [
+    "dbt/include/**/*.py",
+    "dbt/include/**/*.sql",
+    "dbt/include/**/*.yml",
+    "dbt/include/**/*.html",
+    "dbt/include/**/*.md",
+    "dbt/include/**/.gitkeep",
+    "dbt/include/**/.gitignore",
+    "dbt/task/docs/**/*.html",
+    "dbt/jsonschemas/**/*.json",
+    "dbt/py.typed",
+    # Directories without __init__.py (namespace packages)
+    "dbt/artifacts/resources/v1/**/*.py",
+    "dbt/artifacts/utils/**/*.py",
+    "dbt/event_time/**/*.py",
+    "dbt/docs/source/**/*.py",
+    "dbt/tests/util.py",
+]
+
+[build.targets.sdist]
+include = [
+    "/dbt",
+    "/README.md",
+]
+
+[build.targets.sdist.force-include]
+"dbt/task/docs/index.html" = "dbt/task/docs/index.html"
+
+[envs.default]
+# Python 3.10-3.11 required locally due to flake8==4.0.1 compatibility
+# CI uses [envs.ci] which doesn't set python, allowing matrix testing
+python = "3.11"
+dependencies = [
+    # Git dependencies for development against main branches
+    "dbt-adapters @ git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-adapters",
+    "dbt-tests-adapter @ git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-tests-adapter",
+    "dbt-common @ git+https://github.com/dbt-labs/dbt-common.git@main",
+    "dbt-postgres @ git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-postgres",
+    # Code quality
+    "pre-commit~=3.7.0",
+    "black>=24.3,<25.0",
+    "flake8==4.0.1",  # requires python <3.12
+    "mypy==1.4.1",  # update requires code fixes
+    "isort==5.13.2",
+    # Testing
+    "pytest>=7.0,<8.0",
+    "pytest-xdist~=3.6",
+    "pytest-csv~=3.0",
+    "pytest-cov",
+    "pytest-dotenv",
+    "pytest-mock",
+    "pytest-split",
+    "pytest-logbook~=1.2",
+    "logbook<1.9",
+    "flaky",
+    "freezegun>=1.5.1",
+    "hypothesis",
+    "mocker",
+    # Debugging
+    "ipdb",
+    "ddtrace==2.21.3",
+    # Documentation
+    "docutils",
+    "sphinx",
+    # Type stubs
+    "types-docutils",
+    "types-PyYAML",
+    "types-Jinja2",
+    "types-jsonschema",
+    "types-mock",
+    "types-protobuf>=5.0,<6.0",
+    "types-python-dateutil",
+    "types-pytz",
+    "types-requests",
+    "types-setuptools",
+    # Other
+    "pip-tools",
+    "protobuf>=6.0,<7.0",
+]
+
+[envs.default.scripts]
+# Setup commands
+setup = [
+    "pip install -e .",
+    "pre-commit install",
+]
+
+# Code quality commands
+code-quality = "pre-commit run --all-files --show-diff-on-failure"
+lint = [
+    "pre-commit run flake8-check --hook-stage manual --all-files",
+    "pre-commit run mypy-check --hook-stage manual --all-files",
+]
+flake8 = "pre-commit run flake8-check --hook-stage manual --all-files"
+mypy = "pre-commit run mypy-check --hook-stage manual --all-files"
+black = "pre-commit run black-check --hook-stage manual --all-files"
+
+# Testing commands
+unit-tests = "python -m pytest {args} ../tests/unit"
+integration-tests = "python -m pytest -nauto {args} ../tests/functional"
+integration-tests-fail-fast = "python -m pytest -x -nauto {args} ../tests/functional"
+test = [
+    "python -m pytest ../tests/unit",
+    "pre-commit run black-check --hook-stage manual --all-files",
+    "pre-commit run flake8-check --hook-stage manual --all-files",
+    "pre-commit run mypy-check --hook-stage manual --all-files",
+]
+
+# Database setup
+setup-db = [
+    "docker compose up -d database",
+    "bash ../scripts/setup_db.sh",
+]
+
+# Utility commands
+clean = [
+    "rm -f .coverage",
+    "rm -f .coverage.*",
+    "rm -rf .eggs/",
+    "rm -rf build/",
+    "rm -rf dbt.egg-info/",
+    "rm -f dbt_project.yml",
+    "rm -rf dist/",
+    "find . -type f -name '*.pyc' -delete",
+    "find . -type d -name __pycache__ -exec rm -rf {} +",
+]
+json-schema = "python ../scripts/collect-artifact-schema.py --path ../schemas"
+
+[envs.build]
+python = "3.11"
+detached = true
+dependencies = [
+    "wheel",
+    "twine",
+    "check-wheel-contents",
+]
+
+[envs.build.scripts]
+check-all = [
+    "- check-wheel",
+    "- check-sdist",
+]
+check-wheel = [
+    "twine check dist/*",
+    "find ./dist/dbt_core-*.whl -maxdepth 1 -type f | xargs python -m pip install --force-reinstall --find-links=dist/",
+    "pip freeze | grep dbt-core",
+    "dbt --version",
+]
+check-sdist = [
+    "check-wheel-contents dist/*.whl --ignore W007,W008",
+    "find ./dist/dbt_core-*.gz -maxdepth 1 -type f | xargs python -m pip install --force-reinstall --find-links=dist/",
+    "pip freeze | grep dbt-core",
+    "dbt --version",
+]
+
+# CI environment - isolated environment with test dependencies
+[envs.ci]
+dependencies = [
+    # Git dependencies for development against main branches
+    "dbt-adapters @ git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-adapters",
+    "dbt-tests-adapter @ git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-tests-adapter",
+    "dbt-common @ git+https://github.com/dbt-labs/dbt-common.git@main",
+    "dbt-postgres @ git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-postgres",
+    # Testing
+    "pytest>=7.0,<8.0",
+    "pytest-cov",
+    "pytest-xdist~=3.6",
+    "pytest-csv~=3.0",
+    "pytest-dotenv",
+    "pytest-mock",
+    "pytest-split",
+    "ddtrace==2.21.3",
+    "flaky",
+    "freezegun>=1.5.1",
+    "hypothesis",
+]
+
+pre-install-commands = [
+    "pip install -e .",
+]
+
+[envs.ci.env-vars]
+DBT_TEST_USER_1 = "dbt_test_user_1"
+DBT_TEST_USER_2 = "dbt_test_user_2"
+DBT_TEST_USER_3 = "dbt_test_user_3"
+
+[envs.ci.scripts]
+unit-tests = "python -m pytest --cov=dbt --cov-report=xml {args} ../tests/unit"
+# Run as single command to avoid pre-install-commands running twice
+integration-tests = """
+python -m pytest --cov=dbt --cov-append --cov-report=xml {args} ../tests/functional -k "not tests/functional/graph_selection" && \
+python -m pytest --cov=dbt --cov-append --cov-report=xml {args} ../tests/functional/graph_selection
+"""
+
+# Note: Python version matrix is handled by GitHub Actions CI, not hatch.
+# This avoids running tests 4x per job. The CI sets up the Python version
+# and hatch uses whatever Python is active.

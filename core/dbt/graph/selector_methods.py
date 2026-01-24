@@ -35,7 +35,7 @@ from dbt.contracts.state import PreviousState
 from dbt.node_types import NodeType
 from dbt_common.dataclass_schema import StrEnum
 from dbt_common.events.contextvars import get_project_root
-from dbt_common.exceptions import DbtInternalError, DbtRuntimeError
+from dbt_common.exceptions import CompilationError, DbtInternalError, DbtRuntimeError
 
 from .graph import UniqueId
 
@@ -654,6 +654,16 @@ class StateSelectorMethod(SelectorMethod):
             if macro_uid in visited_macros:
                 continue
             visited_macros.append(macro_uid)
+
+            # If macro_uid is None, it means the macro/test was removed but is still referenced.
+            # Raise a clear error to match the behavior of regular dbt run.
+            if macro_uid is None:
+                raise CompilationError(
+                    f"Node '{node.name}' (in {node.original_file_path}) depends on a macro or test "
+                    f"that does not exist. This can happen when a macro or generic test is removed "
+                    f"but is still referenced. Check for typos and/or install package dependencies "
+                    f"with 'dbt deps'."
+                )
 
             if macro_uid in self.modified_macros:
                 return True

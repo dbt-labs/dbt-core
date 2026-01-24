@@ -14,33 +14,33 @@ on:
   workflow_dispatch:
     inputs:
       branch:
-        description: 'Branch to check out'
+        description: "Branch to check out"
         type: string
         required: true
-        default: 'main'
+        default: "main"
       test_path:
-        description: 'Path to single test to run (ex: tests/functional/retry/test_retry.py::TestRetry::test_fail_fast)'
+        description: "Path to single test to run (ex: tests/functional/retry/test_retry.py::TestRetry::test_fail_fast)"
         type: string
         required: true
-        default: 'tests/functional/...'
+        default: "tests/functional/..."
       python_version:
-        description: 'Version of Python to Test Against'
+        description: "Version of Python to Test Against"
         type: choice
         options:
-          - '3.10'
-          - '3.11'
+          - "3.10"
+          - "3.11"
       os:
-        description: 'OS to run test in'
+        description: "OS to run test in"
         type: choice
         options:
-          - 'ubuntu-latest'
-          - 'macos-14'
-          - 'windows-latest'
+          - "ubuntu-latest"
+          - "macos-14"
+          - "windows-latest"
       num_runs_per_batch:
-        description: 'Max number of times to run the test per batch.  We always run 10 batches.'
+        description: "Max number of times to run the test per batch.  We always run 10 batches."
         type: number
         required: true
-        default: '50'
+        default: "50"
 
 permissions: read-all
 
@@ -90,12 +90,19 @@ jobs:
         with:
           python-version: "${{ inputs.python_version }}"
 
+      - name: "Install hatch"
+        run: python -m pip install --user --upgrade pip hatch
+
       - name: "Setup Dev Environment"
-        run: make dev
+        run: |
+          cd core
+          hatch run setup
 
       - name: "Set up postgres (linux)"
         if: inputs.os == '${{ vars.UBUNTU_LATEST }}'
-        run: make setup-db
+        run: |
+          cd core
+          hatch run setup-db
 
         # mac and windows don't use make due to limitations with docker with those runners in GitHub
       - name: Set up postgres (macos)
@@ -104,7 +111,7 @@ jobs:
         with:
           timeout_minutes: 10
           max_attempts: 3
-          command: ./test/setup_db.sh
+          command: ./scripts/setup_db.sh
 
       - name: "Set up postgres (windows)"
         if: inputs.os == 'windows-latest'
@@ -153,5 +160,5 @@ jobs:
       - name: "Error for Failures"
         if: ${{ steps.pytest.outputs.failure }}
         run: |
-            echo "Batch ${{ matrix.batch }} failed ${{ steps.pytest.outputs.failure }} of ${{ inputs.num_runs_per_batch }} tests"
-            exit 1
+          echo "Batch ${{ matrix.batch }} failed ${{ steps.pytest.outputs.failure }} of ${{ inputs.num_runs_per_batch }} tests"
+          exit 1

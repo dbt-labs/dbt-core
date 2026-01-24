@@ -102,12 +102,12 @@ jobs:
         run: |
           pip install --user --upgrade pip
           pip --version
-          pip install tox
-          tox --version
+          pip install hatch
+          hatch --version
 
       - name: Run postgres setup script
         run: |
-          ./test/setup_db.sh
+          ./scripts/setup_db.sh
         env:
           PGHOST: localhost
           PGPORT: 5432
@@ -123,7 +123,7 @@ jobs:
         with:
           timeout_minutes: 30
           max_attempts: 3
-          command: tox -e integration -- -nauto
+          command: cd core && hatch -v run ci:integration-tests -- -nauto
         env:
           PYTEST_ADDOPTS: ${{ format('--splits {0} --group {1}', env.PYTHON_INTEGRATION_TEST_WORKERS, matrix.split-group) }}
 

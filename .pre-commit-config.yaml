@@ -84,7 +84,7 @@ repos:
         types: [python]
       - id: no_versioned_artifact_resource_imports
         name: no_versioned_artifact_resource_imports
-        entry: python custom-hooks/no_versioned_artifact_resource_imports.py
+        entry: python scripts/pre-commit-hooks/no_versioned_artifact_resource_imports.py
         language: system
         files: ^core/dbt/
         types: [python]

@@ -20,9 +20,8 @@
   - [Testing](#testing)
     - [Initial setup](#initial-setup)
     - [Test commands](#test-commands)
-      - [Makefile](#makefile)
+      - [Hatch scripts](#hatch-scripts)
       - [`pre-commit`](#pre-commit)
-      - [`tox`](#tox)
       - [`pytest`](#pytest)
     - [Unit, Integration, Functional?](#unit-integration-functional)
   - [Debugging](#debugging)
@@ -35,7 +34,7 @@
 
 There are many ways to contribute to the ongoing development of `dbt-core`, such as by participating in discussions and issues. We encourage you to first read our higher-level document: ["Expectations for Open Source Contributors"](https://docs.getdbt.com/docs/contributing/oss-expectations).
 
-The rest of this document serves as a more granular guide for contributing code changes to `dbt-core` (this repository). It is not intended as a guide for using `dbt-core`, and some pieces assume a level of familiarity with Python development (virtualenvs, `pip`, etc). Specific code snippets in this guide assume you are using macOS or Linux and are comfortable with the command line.
+The rest of this document serves as a more granular guide for contributing code changes to `dbt-core` (this repository). It is not intended as a guide for using `dbt-core`, and some pieces assume a level of familiarity with Python development and package managers. Specific code snippets in this guide assume you are using macOS or Linux and are comfortable with the command line.
 
 If you get stuck, we're happy to help! Drop us a line in the `#dbt-core-development` channel in the [dbt Community Slack](https://community.getdbt.com).
 
@@ -74,28 +73,22 @@ There are some tools that will be helpful to you in developing locally. While th
 
 These are the tools used in `dbt-core` development and testing:
 
-- [`tox`](https://tox.readthedocs.io/en/latest/) to manage virtualenvs across python versions. We currently target the latest patch releases for Python 3.10, 3.11, 3.12, and 3.13
+- [`hatch`](https://hatch.pypa.io/) for build backend, environment management, and running tests across Python versions (3.10, 3.11, 3.12, and 3.13)
 - [`pytest`](https://docs.pytest.org/en/latest/) to define, discover, and run tests
 - [`flake8`](https://flake8.pycqa.org/en/latest/) for code linting
 - [`black`](https://github.com/psf/black) for code formatting
 - [`mypy`](https://mypy.readthedocs.io/en/stable/) for static type checking
 - [`pre-commit`](https://pre-commit.com) to easily run those checks
 - [`changie`](https://changie.dev/) to create changelog entries, without merge conflicts
-- [`make`](https://users.cs.duke.edu/~ola/courses/programming/Makefiles/Makefiles.html) to run multiple setup or test steps in combination. Don't worry too much, nobody _really_ understands how `make` works, and our Makefile aims to be super simple.
 - [GitHub Actions](https://github.com/features/actions) for automating tests and checks, once a PR is pushed to the `dbt-core` repository
 
 A deep understanding of these tools in not required to effectively contribute to `dbt-core`, but we recommend checking out the attached documentation if you're interested in learning more about each one.
 
 #### Virtual environments
 
-We strongly recommend using virtual environments when developing code in `dbt-core`. We recommend creating this virtualenv
-in the root of the `dbt-core` repository. To create a new virtualenv, run:
-```sh
-python3 -m venv env
-source env/bin/activate
-```
+dbt-core uses [Hatch](https://hatch.pypa.io/) for dependency and environment management. Hatch automatically creates and manages isolated environments for development, testing, and building, so you don't need to manually create virtual environments.
 
-This will create and activate a new Python virtual environment.
+For more information on how Hatch manages environments, see the [Hatch environment documentation](https://hatch.pypa.io/latest/environment/).
 
 #### Docker and `docker-compose`
 
@@ -114,22 +107,42 @@ brew install postgresql
 
 ### Installation
 
-First make sure that you set up your `virtualenv` as described in [Setting up an environment](#setting-up-an-environment).  Also ensure you have the latest version of pip installed with `pip install --upgrade pip`. Next, install `dbt-core` (and its dependencies):
+First make sure you have Python 3.10 or later installed. Ensure you have the latest version of pip installed with `pip install --upgrade pip`. Next, install `hatch`.  Finally set up `dbt-core` for development:
 
 ```sh
-make dev
+cd core
+hatch run setup
 ```
-or, alternatively:
+
+This will install all development dependencies and set up pre-commit hooks.
+
+By default, hatch will use whatever Python version is active in your environment. To specify a particular Python version, set the `HATCH_PYTHON` environment variable:
+
 ```sh
-pip install -r dev-requirements.txt -r editable-requirements.txt
-pre-commit install
+export HATCH_PYTHON=3.12
+hatch env create
 ```
+
+Or add it to your shell profile (e.g., `~/.zshrc` or `~/.bashrc`) for persistence.
 
 When installed in this way, any changes you make to your local copy of the source code will be reflected immediately in your next `dbt` run.
 
+#### Building dbt-core
+
+dbt-core uses [Hatch](https://hatch.pypa.io/) (specifically `hatchling`) as its build backend. To build distribution packages:
+
+```sh
+cd core
+hatch build
+```
+
+This will create both wheel (`.whl`) and source distribution (`.tar.gz`) files in the `dist/` directory.
+
+The build configuration is defined in `core/pyproject.toml`. You can also use the standard `python -m build` command if you prefer.
+
 ### Running `dbt-core`
 
-With your virtualenv activated, the `dbt` script should point back to the source code you've cloned on your machine. You can verify this by running `which dbt`. This command should show you a path to an executable in your virtualenv.
+Once you've run `hatch run setup`, the `dbt` command will be available in your PATH. You can verify this by running `which dbt`.
 
 Configure your [profile](https://docs.getdbt.com/docs/configure-your-profile) as necessary to connect to your target databases. It may be a good idea to add a new profile pointing to a local Postgres instance, or a specific test sandbox within your data warehouse if appropriate. Make sure to create a profile before running integration tests.
 
@@ -147,45 +160,78 @@ Although `dbt-core` works with a number of different databases, you won't need t
 Postgres offers the easiest way to test most `dbt-core` functionality today. They are the fastest to run, and the easiest to set up. To run the Postgres integration tests, you'll have to do one extra step of setting up the test database:
 
 ```sh
-make setup-db
+cd core
+hatch run setup-db
 ```
-or, alternatively:
+
+Alternatively, you can run the setup commands directly:
+
 ```sh
 docker-compose up -d database
-PGHOST=localhost PGUSER=root PGPASSWORD=password PGDATABASE=postgres bash test/setup_db.sh
+PGHOST=localhost PGUSER=root PGPASSWORD=password PGDATABASE=postgres bash scripts/setup_db.sh
 ```
 
 ### Test commands
 
 There are a few methods for running tests locally.
 
-#### Makefile
+#### Hatch scripts
 
-There are multiple targets in the Makefile to run common test suites and code
-checks, most notably:
+The primary way to run tests and checks is using hatch scripts (defined in `core/hatch.toml`):
 
 ```sh
-# Runs unit tests with py38 and code checks in parallel.
-make test
-# Runs postgres integration tests with py38 in "fail fast" mode.
-make integration
-```
-> These make targets assume you have a local installation of a recent version of [`tox`](https://tox.readthedocs.io/en/latest/) for unit/integration testing and pre-commit for code quality checks,
-> unless you use choose a Docker container to run tests. Run `make help` for more info.
+cd core
 
-Check out the other targets in the Makefile to see other commonly used test
-suites.
+# Run all unit tests
+hatch run unit-tests
+
+# Run unit tests and all code quality checks
+hatch run test
+
+# Run integration tests
+hatch run integration-tests
+
+# Run integration tests in fail-fast mode
+hatch run integration-tests-fail-fast
+
+# Run linting checks only
+hatch run lint
+hatch run flake8
+hatch run mypy
+hatch run black
+
+# Run all pre-commit hooks
+hatch run code-quality
+
+# Clean build artifacts
+hatch run clean
+```
+
+Hatch manages isolated environments and dependencies automatically. The commands above use the `default` environment which is recommended for most local development.
+
+**Using the `ci` environment (optional)**
+
+If you need to replicate exactly what runs in GitHub Actions (e.g., with coverage reporting), use the `ci` environment:
+
+```sh
+cd core
+
+# Run unit tests with coverage
+hatch run ci:unit-tests
+
+# Run unit tests with a specific Python version
+hatch run +py=3.11 ci:unit-tests
+```
+
+> **Note:** Most developers should use the default environment (`hatch run unit-tests`). The `ci` environment is primarily for debugging CI failures or running tests with coverage.
 
 #### `pre-commit`
-[`pre-commit`](https://pre-commit.com) takes care of running all code-checks for formatting and linting. Run `make dev` to install `pre-commit` in your local environment (we recommend running this command with a python virtual environment active). This command installs several pip executables including black, mypy, and flake8. Once this is done you can use any of the linter-based make targets as well as a git pre-commit hook that will ensure proper formatting and linting.
 
-#### `tox`
-
-[`tox`](https://tox.readthedocs.io/en/latest/) takes care of managing virtualenvs and install dependencies in order to run tests. You can also run tests in parallel, for example, you can run unit tests for Python 3.8, Python 3.9, Python 3.10 and Python 3.11 checks in parallel with `tox -p`. Also, you can run unit tests for specific python versions with `tox -e py38`. The configuration for these tests in located in `tox.ini`.
+[`pre-commit`](https://pre-commit.com) takes care of running all code-checks for formatting and linting. Run `hatch run setup` to install `pre-commit` in your local environment (we recommend running this command with a python virtual environment active). This installs several pip executables including black, mypy, and flake8. Once installed, hooks will run automatically on `git commit`, or you can run them manually with `hatch run code-quality`.
 
 #### `pytest`
 
-Finally, you can also run a specific test or group of tests using [`pytest`](https://docs.pytest.org/en/latest/) directly. With a virtualenv active and dev dependencies installed you can do things like:
+Finally, you can also run a specific test or group of tests using [`pytest`](https://docs.pytest.org/en/latest/) directly. After running `hatch run setup`, you can run pytest commands like:
 
 ```sh
 # run all unit tests in a file

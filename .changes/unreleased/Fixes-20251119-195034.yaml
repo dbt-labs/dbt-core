@@ -1,0 +1,6 @@
+kind: Fixes
+body: Allow the usage of `function` with `--exclude-resource-type` flag
+time: 2025-11-19T19:50:34.703236-06:00
+custom:
+  Author: QMalcolm
+  Issue: "12143"

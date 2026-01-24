@@ -291,8 +291,22 @@ def project(func):
         flags = ctx.obj["flags"]
         # TODO deprecations warnings fired from loading the project will lack
         # the project_id in the snowplow event.
+
+        # Determine if vars should be required during project loading.
+        # Commands that don't need vars evaluated (like 'deps', 'clean')
+        # should use lenient mode (require_vars=False) to allow missing vars.
+        # Commands that validate or execute (like 'run', 'compile', 'build', 'debug') should use
+        # strict mode (require_vars=True) to show helpful "Required var X not found" errors.
+        # If adding more commands to lenient mode, update this condition.
+        require_vars = flags.WHICH != "deps"
+
         project = load_project(
-            flags.PROJECT_DIR, flags.VERSION_CHECK, ctx.obj["profile"], flags.VARS, validate=True
+            flags.PROJECT_DIR,
+            flags.VERSION_CHECK,
+            ctx.obj["profile"],
+            flags.VARS,
+            validate=True,
+            require_vars=require_vars,
         )
         ctx.obj["project"] = project
 
@@ -432,3 +446,5 @@ def setup_manifest(ctx: Context, write: bool = True, write_perf_info: bool = Fal
         adapter.set_macro_resolver(ctx.obj["manifest"])
         query_header_context = generate_query_header_context(adapter.config, ctx.obj["manifest"])  # type: ignore[attr-defined]
         adapter.connections.set_query_header(query_header_context)
+        for integration in active_integrations:
+            adapter.add_catalog_integration(integration)

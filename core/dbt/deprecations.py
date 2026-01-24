@@ -230,6 +230,11 @@ class ModulesItertoolsUsageDeprecation(DBTDeprecation):
     _event = "ModulesItertoolsUsageDeprecation"
 
 
+class DuplicateNameDistinctNodeTypesDeprecation(DBTDeprecation):
+    _name = "duplicate-name-distinct-node-types-deprecation"
+    _event = "DuplicateNameDistinctNodeTypesDeprecation"
+
+
 def renamed_env_var(old_name: str, new_name: str):
     class EnvironmentVariableRenamed(DBTDeprecation):
         _name = f"environment-variable-renamed:{old_name}"
@@ -266,7 +271,7 @@ def show_deprecations_summary() -> None:
         deprecation_event = deprecations[deprecation].event()
         summaries.append(
             DeprecationSummary(
-                event_name=deprecation_event.__name__,
+                event_name=type(deprecation_event).__name__,
                 event_code=deprecation_event.code(),
                 occurrences=occurrences,
             ).to_msg_dict()
@@ -316,6 +321,7 @@ deprecations_list: List[DBTDeprecation] = [
     ArgumentsPropertyInGenericTestDeprecation(),
     MissingArgumentsPropertyInGenericTestDeprecation(),
     ModulesItertoolsUsageDeprecation(),
+    DuplicateNameDistinctNodeTypesDeprecation(),
 ]
 
 deprecations: Dict[str, DBTDeprecation] = {d.name: d for d in deprecations_list}

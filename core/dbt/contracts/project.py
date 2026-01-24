@@ -366,6 +366,8 @@ class ProjectFlags(ExtensibleDbtClassMixin):
     validate_macro_args: bool = False
     require_all_warnings_handled_by_warn_error: bool = False
     require_generic_test_arguments_property: bool = True
+    require_unique_project_resource_names: bool = False
+    require_ref_searches_node_package_before_root: bool = False
 
     @property
     def project_only_flags(self) -> Dict[str, Any]:
@@ -382,6 +384,8 @@ class ProjectFlags(ExtensibleDbtClassMixin):
             "validate_macro_args": self.validate_macro_args,
             "require_all_warnings_handled_by_warn_error": self.require_all_warnings_handled_by_warn_error,
             "require_generic_test_arguments_property": self.require_generic_test_arguments_property,
+            "require_unique_project_resource_names": self.require_unique_project_resource_names,
+            "require_ref_searches_node_package_before_root": self.require_ref_searches_node_package_before_root,
         }
 
 
