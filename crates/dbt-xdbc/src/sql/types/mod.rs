@@ -739,6 +739,10 @@ impl SqlType {
         }
     }
 
+    pub fn display(&self, backend: Backend) -> SqlTypeDisplay<'_> {
+        SqlTypeDisplay(self, backend)
+    }
+
     /// Best-effort conversion from an Arrow `DataType` to a `SqlType`.
     ///
     /// Arrow types are less expressive than SQL types, so this function
@@ -1416,6 +1420,18 @@ impl SqlType {
             }
         };
         data_type
+    }
+}
+
+pub struct SqlTypeDisplay<'a>(&'a SqlType, Backend);
+
+impl fmt::Display for SqlTypeDisplay<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // TODO(felipecrv): change SqlType::write to take a [fmt::Write] instead of
+        // [String] so I can pass `f` directly here.
+        let mut buffer = String::new();
+        self.0.write(self.1, &mut buffer)?;
+        write!(f, "{}", buffer)
     }
 }
 
