@@ -11,11 +11,14 @@ use minijinja::Value;
 use dbt_common::adapter::AdapterType;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 
+use crate::time_machine::AdapterCallEvent;
+
 use super::event::MetadataCallArgs;
 use super::event_recorder::EventRecorder;
 use super::event_replay::{Recording, ReplayError, ReplayMode};
 use super::semantic::SemanticCategory;
 use super::serde::{ReplayContext, json_to_value_with_context};
+use super::validation::{IncomingEvent, TimeMachineEventValidationEngine, ValidationResult};
 
 /// Unified time machine for recording or replaying adapter calls.
 #[derive(Clone)]
@@ -109,6 +112,8 @@ pub struct EventReplayer {
     replay_mode: ReplayMode,
     /// Context for value reconstruction
     replay_ctx: ReplayContext,
+    /// Validation engine for comparing events
+    validation_engine: TimeMachineEventValidationEngine,
 }
 
 impl EventReplayer {
@@ -128,6 +133,7 @@ impl EventReplayer {
                 adapter_type,
                 quoting: ResolvedQuoting::default(),
             },
+            validation_engine: TimeMachineEventValidationEngine::new(),
         }
     }
 
@@ -175,13 +181,39 @@ impl EventReplayer {
         let serialized_args = super::serde::serialize_args(args);
 
         // Dispatch to the appropriate matching strategy
-        match self.replay_mode {
+        let event = match self.replay_mode {
             ReplayMode::Strict => {
-                self.get_result_strict(node_id, method, &serialized_args, call_category)
+                self.get_result_strict(node_id, method, &serialized_args, call_category)?
             }
             ReplayMode::Semantic => {
-                self.get_result_semantic(node_id, method, &serialized_args, call_category)
+                self.get_result_semantic(node_id, method, &serialized_args, call_category)?
             }
+        };
+
+        // Validate the event using the validation engine
+        self.validate_event(node_id, method, &serialized_args, event)?;
+
+        self.convert_event_to_result(event)
+    }
+
+    /// Validate an event using the validation engine.
+    fn validate_event(
+        &self,
+        node_id: &str,
+        method: &str,
+        args: &serde_json::Value,
+        event: &AdapterCallEvent,
+    ) -> Result<(), ReplayCallError> {
+        let incoming = IncomingEvent::new(node_id, method, args);
+        match self.validation_engine.validate(&incoming, event) {
+            ValidationResult::Match | ValidationResult::Skipped(_) => Ok(()),
+            ValidationResult::Mismatch(mismatch) => Err(ReplayCallError {
+                message: format!(
+                    "Replay mismatch for '{}' on node '{}' (seq {}):\n{}",
+                    method, node_id, event.seq, mismatch,
+                ),
+                recorded_error: None,
+            }),
         }
     }
 
@@ -189,54 +221,26 @@ impl EventReplayer {
     fn get_result_strict(
         &self,
         node_id: &str,
-        method: &str,
-        args: &serde_json::Value,
+        _method: &str,
+        _args: &serde_json::Value,
         call_category: SemanticCategory,
-    ) -> Result<Value, ReplayCallError> {
-        let event = match self.recording.peek_next(node_id) {
-            Some(event) => event,
-            None => {
-                return Err(ReplayCallError {
-                    message: format!(
-                        "No recorded event for {} call '{}' on node '{}' with args '{}'. \
-                         Recording may be incomplete or from a different code version.",
-                        call_category, method, node_id, args
-                    ),
-                    recorded_error: None,
-                });
-            }
-        };
-
-        // Validate method name
-        if event.method != method {
+    ) -> Result<&AdapterCallEvent, ReplayCallError> {
+        if self.recording.peek_next(node_id).is_none() {
             return Err(ReplayCallError {
                 message: format!(
-                    "Method mismatch on node '{}': expected '{}', got '{}' (seq {})",
-                    node_id, event.method, method, event.seq
+                    "No recorded event for {} call on node '{}'. \
+                     Recording may be incomplete or from a different code version.",
+                    call_category, node_id
                 ),
                 recorded_error: None,
             });
         }
 
-        // Validate args only for reads - writes may contain dynamic SQL content
-        // (timestamps, query tags, invocation IDs) that differs between runs.
-        // The sequence ordering provides correctness for writes.
-        if !call_category.is_mutating() && !super::serde::values_match(&event.args, args) {
-            return Err(ReplayCallError {
-                message: format!(
-                    "Args mismatch on node '{}' for method '{}' (seq {})",
-                    node_id, method, event.seq
-                ),
-                recorded_error: None,
-            });
-        }
-
-        // Consume the matching event for replay
-        let event = self
+        // Consume and return the matching event for replay
+        Ok(self
             .recording
             .take_next(node_id)
-            .expect("event should exist after peek");
-        self.convert_event_to_result(event)
+            .expect("event should exist after peek"))
     }
 
     /// Get result using semantic segment-based matching.
@@ -251,39 +255,29 @@ impl EventReplayer {
         method: &str,
         args: &serde_json::Value,
         call_category: SemanticCategory,
-    ) -> Result<Value, ReplayCallError> {
+    ) -> Result<&AdapterCallEvent, ReplayCallError> {
         // Use semantic matching from the Recording
-        let event = match self
-            .recording
+        self.recording
             .take_semantic_match(node_id, method, args, call_category)
-        {
-            Some(event) => event,
-            None => {
-                // No matching event found - error for both reads and writes
+            .ok_or_else(|| {
                 let context = if call_category.is_mutating() {
                     "Write operations must match the next write barrier in sequence."
                 } else {
                     "No matching read found in current segment. \
                      The same read can be matched multiple times, but at least one must exist."
                 };
-                return Err(ReplayCallError {
+                ReplayCallError {
                     message: format!(
                         "No recorded event for {} call '{}' on node '{}'. {}",
                         call_category, method, node_id, context
                     ),
                     recorded_error: None,
-                });
-            }
-        };
-
-        self.convert_event_to_result(event)
+                }
+            })
     }
 
     /// Convert a matched event to a replay result.
-    fn convert_event_to_result(
-        &self,
-        event: &super::event::AdapterCallEvent,
-    ) -> Result<Value, ReplayCallError> {
+    fn convert_event_to_result(&self, event: &AdapterCallEvent) -> Result<Value, ReplayCallError> {
         // Check if the recorded call succeeded
         if !event.success {
             return Err(ReplayCallError {

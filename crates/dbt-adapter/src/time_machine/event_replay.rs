@@ -25,6 +25,7 @@ use std::path::Path;
 use flate2::read::GzDecoder;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
+use similar::{ChangeTag, TextDiff};
 
 use super::event::{
     AdapterCallEvent, MetadataCallArgs, MetadataCallEvent, RecordedEvent, RecordingHeader,
@@ -801,10 +802,55 @@ pub enum ReplayDifference {
         expected: serde_json::Value,
         actual: serde_json::Value,
     },
-    SqlEquivalent {
+    SqlMismatch {
         expected: String,
         actual: String,
     },
+}
+
+impl std::fmt::Display for ReplayDifference {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ReplayDifference::MethodMismatch { expected, actual } => {
+                write!(
+                    f,
+                    "Method mismatch: expected '{}', got '{}'",
+                    expected, actual
+                )
+            }
+            ReplayDifference::ArgCountMismatch { expected, actual } => {
+                write!(
+                    f,
+                    "Arg count mismatch: expected {}, got {}",
+                    expected, actual
+                )
+            }
+            ReplayDifference::ArgValueMismatch {
+                index,
+                expected,
+                actual,
+            } => {
+                write!(
+                    f,
+                    "Arg[{}] mismatch:\n  expected: {}\n  actual: {}",
+                    index, expected, actual
+                )
+            }
+            ReplayDifference::SqlMismatch { expected, actual } => {
+                writeln!(f, "SQL mismatch:")?;
+                let diff = TextDiff::from_lines(expected, actual);
+                for change in diff.iter_all_changes() {
+                    let sign = match change.tag() {
+                        ChangeTag::Delete => "-",
+                        ChangeTag::Insert => "+",
+                        ChangeTag::Equal => " ",
+                    };
+                    write!(f, "{}{}", sign, change)?;
+                }
+                Ok(())
+            }
+        }
+    }
 }
 
 /// Validate a replay call against a recorded event.
@@ -833,19 +879,12 @@ pub fn validate_replay(
             (Some(exp_sql), Some(act_sql)) => {
                 match compare_sql(exp_sql, act_sql) {
                     Ok(()) => {
-                        // SQL is equivalent - log if textually different
-                        if exp_sql != act_sql {
-                            differences.push(ReplayDifference::SqlEquivalent {
-                                expected: exp_sql.to_string(),
-                                actual: act_sql.to_string(),
-                            });
-                        }
+                        // SQL is semantically equivalent, no difference to report
                     }
                     Err(_) => {
-                        differences.push(ReplayDifference::ArgValueMismatch {
-                            index: 0,
-                            expected: serde_json::Value::String(exp_sql.to_string()),
-                            actual: serde_json::Value::String(act_sql.to_string()),
+                        differences.push(ReplayDifference::SqlMismatch {
+                            expected: exp_sql.to_string(),
+                            actual: act_sql.to_string(),
                         });
                     }
                 }
@@ -895,6 +934,7 @@ pub fn validate_replay(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::sql::diff::compare_sql;
 
     /// Compare SQL args for execute/run_query methods.
     fn sql_args_match(recorded: &serde_json::Value, actual: &serde_json::Value) -> bool {

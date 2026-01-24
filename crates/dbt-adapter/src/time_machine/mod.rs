@@ -78,6 +78,7 @@ pub mod semantic;
 pub mod serde;
 pub mod serializable;
 mod serializable_impls;
+mod validation;
 pub mod writer;
 
 // Re-export commonly used types
