@@ -4,6 +4,7 @@ use minijinja::Value;
 
 pub mod date;
 pub mod datetime;
+pub mod strptime;
 pub mod time;
 pub mod timedelta;
 pub mod tzinfo;

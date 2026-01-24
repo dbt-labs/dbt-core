@@ -4,9 +4,11 @@ use std::sync::Arc;
 
 use chrono::{DateTime, Datelike, NaiveDate, NaiveDateTime, NaiveTime, TimeZone, Timelike, Utc};
 use chrono_tz::Tz;
+use minijinja::arg_utils::ArgsIter;
 use minijinja::{arg_utils::ArgParser, value::Object, Error, ErrorKind, Value};
 
 use crate::modules::py_datetime::date::PyDate; // your date
+use crate::modules::py_datetime::strptime;
 use crate::modules::py_datetime::time::PyTime;
 use crate::modules::py_datetime::timedelta::PyTimeDelta;
 use crate::modules::pytz::PytzTimezone; // your timedelta // your trait // your time
@@ -309,11 +311,20 @@ impl PyDateTimeClass {
     // datetime.strptime(date_string, format)
     // ------------------------------------------------------------------
     fn strptime(args: &[Value]) -> Result<PyDateTime, Error> {
-        let mut parser = ArgParser::new(args, None);
-        let date_str: String = parser.next_positional()?;
-        let fmt_str: String = parser.next_positional()?;
+        let iter = ArgsIter::new("strptime", &["date_string", "format"], args);
+        let date_str = iter.next_arg::<&str>()?;
+        let fmt_str = iter.next_arg::<&str>()?;
+        iter.finish()?;
 
-        let naive = Self::parse_datetime_with_fallback(&date_str, &fmt_str).map_err(|e| {
+        if let Ok(naive) = strptime::strptime(date_str, fmt_str) {
+            return Ok(PyDateTime {
+                state: DateTimeState::Naive(naive),
+                tzinfo: None,
+            });
+        }
+
+        // Fall back on old strptime since new version is not fully implemented yet
+        let naive = Self::parse_datetime_with_fallback(date_str, fmt_str).map_err(|e| {
             Error::new(
                 ErrorKind::InvalidArgument,
                 format!("strptime parsing error: {e}"),
