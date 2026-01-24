@@ -69,6 +69,7 @@
 //!   the happy path (see type documentation for more details).
 
 use std::{
+    collections::{BTreeMap, HashMap},
     path::{Path, PathBuf},
     rc::Rc,
     sync::LazyLock,
@@ -80,12 +81,13 @@ use dbt_common::{
 };
 use dbt_schemas::schemas::serde::yaml_to_fs_error;
 use dbt_serde_yaml::Value;
-use minijinja::listener::RenderingEventListener;
+use minijinja::{constants::CURRENT_SPAN, listener::RenderingEventListener};
 use regex::Regex;
 use serde::{Serialize, de::DeserializeOwned};
 
 use crate::{
-    jinja_environment::JinjaEnv, phases::load::secret_renderer::render_secrets,
+    jinja_environment::JinjaEnv,
+    phases::load::{LoadContext, secret_renderer::render_secrets},
     typecheck_listener::YamlTypecheckingEventListener,
 };
 
@@ -111,6 +113,44 @@ pub fn value_from_file(
     )
 }
 
+/// The context trait when rendering in minijinja.
+pub trait MinijinjaContext: Serialize {
+    /// Returns [Some] with a new context that has updated itself with the given yaml span.
+    /// Returns [None] if the context cannot be updated.
+    fn with_yaml_span(&self, span: &dbt_serde_yaml::Span) -> Option<Box<Self>>;
+}
+
+impl MinijinjaContext for BTreeMap<String, minijinja::Value> {
+    fn with_yaml_span(&self, span: &dbt_serde_yaml::Span) -> Option<Box<Self>> {
+        let mut ctx = self.clone();
+        let minijinja_span = minijinja::compiler::tokens::Span {
+            start_line: span.start.line() as u32,
+            start_col: span.start.column() as u32,
+            start_offset: span.start.index() as u32,
+            end_line: span.end.line() as u32,
+            end_col: span.end.column() as u32,
+            end_offset: span.end.index() as u32,
+        };
+        ctx.insert(
+            CURRENT_SPAN.to_string(),
+            minijinja::Value::from_serialize(minijinja_span),
+        );
+        Some(Box::new(ctx))
+    }
+}
+
+impl<V: Serialize> MinijinjaContext for HashMap<String, V> {
+    fn with_yaml_span(&self, _span: &dbt_serde_yaml::Span) -> Option<Box<Self>> {
+        None
+    }
+}
+
+impl MinijinjaContext for LoadContext {
+    fn with_yaml_span(&self, _span: &dbt_serde_yaml::Span) -> Option<Box<Self>> {
+        None
+    }
+}
+
 /// Renders a Yaml `Value` containing Jinja expressions into a target
 /// `Deserialize` type T.
 ///
@@ -129,7 +169,7 @@ pub fn into_typed_with_jinja<T, S>(
 ) -> FsResult<T>
 where
     T: DeserializeOwned,
-    S: Serialize,
+    S: MinijinjaContext,
 {
     let (res, errors) = into_typed_with_jinja_error(
         Some(io_args),
@@ -168,7 +208,7 @@ pub fn into_typed_with_jinja_error_context<T, S>(
 ) -> FsResult<T>
 where
     T: DeserializeOwned,
-    S: Serialize,
+    S: MinijinjaContext,
 {
     let (res, errors) =
         into_typed_with_jinja_error(io_args, value, should_render_secrets, env, ctx, listeners)?;
@@ -328,10 +368,16 @@ fn into_typed_with_jinja_error<T, S>(
 ) -> FsResult<(T, Vec<FsError>)>
 where
     T: DeserializeOwned,
-    S: Serialize,
+    S: MinijinjaContext,
 {
     let jinja_renderer = |value: &Value| match value {
         Value::String(s, yaml_span) => {
+            let updated_ctx = ctx.with_yaml_span(yaml_span);
+            let ctx = if let Some(ctx) = &updated_ctx {
+                ctx
+            } else {
+                ctx
+            };
             let expanded = render_jinja_str(
                 io_args,
                 s,
@@ -459,7 +505,7 @@ fn perform_typecheck<F>(
         std::sync::Arc<minijinja::compiler::typecheck::FunctionRegistry>,
         std::sync::Arc<dashmap::DashMap<String, minijinja::Type>>,
         Rc<dyn minijinja::TypecheckingEventListener>,
-        std::collections::BTreeMap<String, minijinja::Value>,
+        BTreeMap<String, minijinja::Value>,
     ) -> FsResult<()>,
 {
     if let Some(io_args) = io_args {
@@ -493,7 +539,7 @@ fn perform_typecheck<F>(
         let macro_namespace_registry = env.env.get_macro_namespace_registry();
         if let Ok(builtins) = minijinja::load_builtins_with_namespace(macro_namespace_registry) {
             // Build typecheck context with required values
-            let mut typecheck_resolved_context = std::collections::BTreeMap::new();
+            let mut typecheck_resolved_context = BTreeMap::new();
             typecheck_resolved_context.insert(
                 "ROOT_PACKAGE_NAME".to_string(),
                 minijinja::Value::from("dbt"),

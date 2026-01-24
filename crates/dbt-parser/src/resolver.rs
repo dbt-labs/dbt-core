@@ -29,6 +29,7 @@ use dbt_schemas::state::{
     PatternedDanglingSources, RenderResults,
 };
 use dbt_schemas::state::{DbtRuntimeConfig, Operations};
+use minijinja::constants::CURRENT_PATH;
 use tracing::Instrument as _;
 
 use crate::args::ResolveArgs;
@@ -496,6 +497,17 @@ pub async fn resolve_inner(
     let semantic_layer_spec_is_legacy = min_properties.semantic_layer_spec_is_legacy;
 
     for (model_name, minimal_model_props) in &min_properties.models {
+        // Update base context with the relative yaml file path.
+        // We do this for accurate error reporting.
+        let base_ctx = {
+            let mut base_ctx = base_ctx.clone();
+            base_ctx.insert(
+                CURRENT_PATH.to_string(),
+                minijinja::Value::from(minimal_model_props.relative_path.to_string_lossy()),
+            );
+            base_ctx
+        };
+
         // Extract metrics to be parsed separately because they are not supposed to be rendered with Jinja
         let mut maybe_model_metrics_yml: Option<YmlValue> = None;
         let mut model_yml = minimal_model_props.clone().schema_value;

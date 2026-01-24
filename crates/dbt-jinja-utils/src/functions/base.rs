@@ -241,7 +241,7 @@ impl Object for DocMacro {
             Some(content) => Ok(Value::from_serialize(content)),
             None => {
                 let status_reporter = get_status_reporter(state.env());
-                let current_span = state.current_span();
+                let current_span = state.current_span_of_context();
                 let current_file_path = state.current_path().clone();
                 let location = CodeLocationWithFile::new(
                     current_span.start_line,

@@ -1,3 +1,4 @@
+use dbt_common::constants::DBT_PROJECT_YML;
 use dbt_common::io_args::IoArgs;
 use dbt_common::tracing::emit::emit_warn_log_from_fs_error;
 use dbt_common::{ErrorCode, fs_err};
@@ -13,6 +14,7 @@ use dbt_schemas::schemas::project::{
 };
 use dbt_serde_yaml::{ShouldBe, Value as YmlValue};
 use minijinja::Value;
+use minijinja::constants::CURRENT_PATH;
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
@@ -168,14 +170,15 @@ pub fn load_project_yml(
         .map(|r| r.keys().map(|k| k.to_string()).collect())
         .unwrap_or_default();
     let mut context = build_resolve_context(
-        "dbt_project.yml",
-        "dbt_project.yml",
+        DBT_PROJECT_YML,
+        DBT_PROJECT_YML,
         &BTreeMap::new(),
         BTreeMap::new(),
         namespace_keys,
     );
 
     context.insert("var".to_string(), Value::from_function(var_fn(cli_vars)));
+    context.insert(CURRENT_PATH.to_string(), Value::from(DBT_PROJECT_YML));
 
     // Parse the template without vars using Jinja
     let mut dbt_project: DbtProject = into_typed_with_jinja(

@@ -131,6 +131,11 @@ impl<'template, 'env> State<'template, 'env> {
         &self.ctx.current_path
     }
 
+    /// Returns a [Span] of the context.
+    pub fn current_span_of_context(&self) -> Span {
+        self.ctx.current_span
+    }
+
     /// Creates an empty state for an environment.
     pub fn new_for_env(env: &'env Environment) -> State<'env, 'env> {
         State::new(

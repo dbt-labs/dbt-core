@@ -4,7 +4,7 @@ use dbt_common::{
     constants::{DBT_DEPENDENCIES_YML, DBT_PACKAGES_YML},
     err, fs_err, stdfs,
 };
-use dbt_jinja_utils::serde::value_from_file;
+use dbt_jinja_utils::serde::{MinijinjaContext, value_from_file};
 use dbt_schemas::schemas::serde::yaml_to_fs_error;
 use pathdiff::diff_paths;
 use std::{
@@ -22,7 +22,7 @@ use dbt_schemas::schemas::{
     profiles::{DbConfig, DbTargets, DbtProfilesIntermediate},
 };
 use fs_deps::utils::get_local_package_full_path;
-use serde::{Serialize, de::DeserializeOwned};
+use serde::de::DeserializeOwned;
 use std::{fs::metadata, io, time::SystemTime};
 
 use ignore::gitignore::Gitignore;
@@ -142,7 +142,7 @@ pub fn get_db_config(
     Ok(db_config)
 }
 
-pub fn read_profiles_and_extract_db_config<S: Serialize>(
+pub fn read_profiles_and_extract_db_config<S: MinijinjaContext>(
     io_args: &IoArgs,
     target_override: &Option<String>,
     jinja_env: &JinjaEnv,

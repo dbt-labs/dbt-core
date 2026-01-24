@@ -1,5 +1,6 @@
 use dbt_common::tracing::emit::emit_info_progress_message;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
+use dbt_jinja_utils::serde::MinijinjaContext;
 use dbt_telemetry::ProgressMessage;
 
 use dbt_common::constants::DBT_PROFILES_YML;
@@ -16,9 +17,8 @@ use dirs::home_dir;
 
 use crate::args::{IoArgs, LoadArgs};
 use crate::utils::read_profiles_and_extract_db_config;
-use serde::Serialize;
 
-pub fn load_profiles<S: Serialize>(
+pub fn load_profiles<S: MinijinjaContext>(
     arg: &LoadArgs,
     raw_dbt_project: &DbtProjectSimplified,
     jinja_env: &JinjaEnv,
