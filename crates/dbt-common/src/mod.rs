@@ -4,6 +4,7 @@ pub mod macros;
 pub mod adapter;
 pub mod atomic;
 pub mod cancellation;
+pub mod cli_parser_trait;
 pub mod constants;
 pub mod hashing;
 pub mod io_utils;

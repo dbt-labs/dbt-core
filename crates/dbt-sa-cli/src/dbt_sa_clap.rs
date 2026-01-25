@@ -1,5 +1,6 @@
 use clap::{ArgAction, builder::BoolishValueParser};
 use console::Style;
+use dbt_common::cli_parser_trait::CliParserTrait;
 use dbt_common::constants::{DBT_PROJECT_YML, DBT_TARGET_DIR_NAME};
 use dbt_common::io_utils::determine_project_dir;
 use dbt_common::logging::LogFormat;
@@ -7,6 +8,7 @@ use dbt_common::{ErrorCode, FsResult, fs_err, stdfs};
 use dbt_serde_yaml::Value;
 use log::LevelFilter;
 use serde::{Deserialize, Serialize};
+use std::ffi::OsString;
 use std::sync::LazyLock;
 use std::{
     collections::{BTreeMap, HashSet},
@@ -48,6 +50,41 @@ static AFTER_HELP: LazyLock<String> = LazyLock::new(|| {
         )
     )
 });
+
+#[derive(Default)]
+pub struct CliParser {}
+
+impl CliParserTrait for CliParser {
+    type CliType = Cli;
+
+    /// Parse from `std::env::args_os()`, [exit][Error::exit] on error.
+    fn parse(&self) -> Cli {
+        Cli::parse()
+    }
+
+    /// Parse from `std::env::args_os()`, return Err on error.
+    fn try_parse(&self) -> Result<Cli, clap::Error> {
+        Cli::try_parse()
+    }
+
+    /// Parse from iterator, return Err on error.
+    fn try_parse_from<I, T>(&self, itr: I) -> Result<Cli, clap::Error>
+    where
+        I: IntoIterator<Item = T>,
+        T: Into<OsString> + Clone,
+    {
+        Cli::try_parse_from(itr)
+    }
+
+    /// Parse from iterator, return Err on error.
+    fn parse_from<I, T>(&self, itr: I) -> Self::CliType
+    where
+        I: IntoIterator<Item = T>,
+        T: Into<OsString> + Clone,
+    {
+        Cli::parse_from(itr)
+    }
+}
 
 #[derive(Parser, Debug, Clone)]
 #[command(

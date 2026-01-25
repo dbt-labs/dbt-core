@@ -1,10 +1,9 @@
-use clap::Parser;
 use clap::error::ErrorKind;
 
 use dbt_common::cancellation::CancellationTokenSource;
 use dbt_common::tracing::{FsTraceConfig, init_tracing};
 use dbt_common::{constants::PANIC, pretty_string::GREEN, pretty_string::RED};
-use dbt_sa_lib::dbt_sa_clap::Cli;
+use dbt_sa_lib::dbt_sa_clap::CliParser;
 use dbt_sa_lib::dbt_sa_clap::from_main;
 use dbt_sa_lib::dbt_sa_lib::execute_fs;
 use std::io::{self, Write};
@@ -20,11 +19,13 @@ const FS_DEFAULT_STACK_SIZE: usize = 8 * 1024 * 1024;
 const FS_DEFAULT_MAX_BLOCKING_THREADS: usize = 512;
 
 fn main() -> ExitCode {
+    use dbt_common::cli_parser_trait::CliParserTrait as _;
+
     let cst = CancellationTokenSource::new();
     // TODO(felipecrv): cancel the token (through the cst) on Ctrl-C
     let token = cst.token();
 
-    let cli = match Cli::try_parse() {
+    let cli = match CliParser::default().try_parse() {
         Ok(cli) => {
             // Continue as normal
             cli

@@ -2,10 +2,10 @@ use crate::task::env::TracingReloadHandle;
 
 use super::TestResult;
 use super::log_capture::JsonLogEvent;
-use clap::Parser;
 use dbt_common::{
     FsError,
     cancellation::{CancellationToken, never_cancels},
+    cli_parser_trait::CliParserTrait,
     tracing::FsTraceConfig,
 };
 use std::fmt::Debug;
@@ -284,15 +284,15 @@ pub fn strip_leading_relative(path: &Path) -> &Path {
 
 // Util function to execute fusion commands in tests
 #[allow(clippy::too_many_arguments)]
-pub async fn exec_fs<Fut, P: Parser>(
+pub async fn exec_fs<P: CliParserTrait + Default, Fut>(
     feature_stack: Arc<FeatureStack>,
     cmd_vec: Vec<String>,
     project_dir: PathBuf,
     target_dir: PathBuf,
     stdout_file: File,
     stderr_file: File,
-    execute_fs: impl FnOnce(SystemArgs, P, Arc<FeatureStack>, CancellationToken) -> Fut,
-    from_lib: impl FnOnce(&P) -> SystemArgs,
+    execute_fs: impl FnOnce(SystemArgs, P::CliType, Arc<FeatureStack>, CancellationToken) -> Fut,
+    from_lib: impl FnOnce(&P::CliType) -> SystemArgs,
     tracing_handle: TracingReloadHandle,
 ) -> FsResult<i32>
 where
@@ -313,7 +313,7 @@ where
     let _stdout = with_redirected_stdout(stdout_file);
     let _stderr = with_redirected_stderr(stderr_file);
 
-    let cli = P::parse_from(cmd_vec);
+    let cli = P::default().parse_from(cmd_vec);
     let arg = from_lib(&cli);
     let trace_config = FsTraceConfig::new_from_io_args(
         arg.command,
