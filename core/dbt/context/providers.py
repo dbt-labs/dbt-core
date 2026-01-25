@@ -1,4 +1,5 @@
 import abc
+import csv
 import os
 from copy import deepcopy
 from typing import (
@@ -67,6 +68,7 @@ from dbt.contracts.graph.nodes import (
     SourceDefinition,
     UnitTestNode,
 )
+from dbt.events.types import JinjaLogWarning
 from dbt.exceptions import (
     CompilationError,
     ConflictingConfigKeysError,
@@ -94,13 +96,14 @@ from dbt.utils import MultiDict, args_to_dict
 from dbt_common.clients.jinja import MacroProtocol
 from dbt_common.constants import SECRET_ENV_PREFIX
 from dbt_common.context import get_invocation_context
-from dbt_common.events.functions import get_metadata_vars
+from dbt_common.events.functions import fire_event, get_metadata_vars
 from dbt_common.exceptions import (
     DbtInternalError,
     DbtRuntimeError,
     DbtValidationError,
     MacrosSourcesUnWriteableError,
 )
+from dbt_common.ui import warning_tag
 from dbt_common.utils import AttrDict, cast_to_str, merge
 
 if TYPE_CHECKING:
@@ -1267,8 +1270,26 @@ class ProviderContext(ManifestContext):
             assert self.model.root_path
             path = os.path.join(self.model.root_path, self.model.original_file_path)
 
-        column_types = self.model.config.column_types
+        column_types = self.model.config.column_types or {}
         delimiter = self.model.config.delimiter
+        if column_types:
+            with open(path, newline="", encoding="utf-8-sig") as seed_file:
+                reader = csv.reader(seed_file, delimiter=delimiter)
+                seed_columns: List[str] = next(reader, [])
+            missing_columns = sorted(set(column_types) - set(seed_columns))
+            if missing_columns:
+                msg = warning_tag(
+                    f"Seed '{self.model.package_name}.{self.model.name}' "
+                    f"({self.model.original_file_path}) has column_types configured for "
+                    f"columns not present in the CSV header: {', '.join(missing_columns)}. "
+                    "Those entries will be ignored."
+                )
+                fire_event(JinjaLogWarning(msg=msg))
+                column_types = {
+                    column_name: column_type
+                    for column_name, column_type in column_types.items()
+                    if column_name in seed_columns
+                }
         try:
             table = agate_helper.from_csv(path, text_columns=column_types, delimiter=delimiter)
         except ValueError as e:
