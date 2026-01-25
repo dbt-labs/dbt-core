@@ -1273,23 +1273,33 @@ class ProviderContext(ManifestContext):
         column_types = self.model.config.column_types or {}
         delimiter = self.model.config.delimiter
         if column_types:
-            with open(path, newline="", encoding="utf-8-sig") as seed_file:
-                reader = csv.reader(seed_file, delimiter=delimiter)
-                seed_columns: List[str] = next(reader, [])
-            missing_columns = sorted(set(column_types) - set(seed_columns))
-            if missing_columns:
-                msg = warning_tag(
-                    f"Seed '{self.model.package_name}.{self.model.name}' "
-                    f"({self.model.original_file_path}) has column_types configured for "
-                    f"columns not present in the CSV header: {', '.join(missing_columns)}. "
-                    "Those entries will be ignored."
-                )
-                fire_event(JinjaLogWarning(msg=msg))
-                column_types = {
-                    column_name: column_type
-                    for column_name, column_type in column_types.items()
-                    if column_name in seed_columns
-                }
+            # Read the CSV header to validate configured column_types.
+            try:
+                with open(path, newline="", encoding="utf-8-sig") as seed_file:
+                    reader = csv.reader(seed_file, delimiter=delimiter)
+                    seed_columns: List[str] = next(reader)
+            except (OSError, StopIteration, TypeError):
+                # If the file can't be read / is empty / the delimiter is invalid, skip
+                # validation and fall back to agate's behavior.
+                seed_columns = []
+
+            if seed_columns:
+                missing_columns = sorted(set(column_types) - set(seed_columns))
+                if missing_columns:
+                    # Warn with seed context.
+                    msg = warning_tag(
+                        f"Seed '{self.model.package_name}.{self.model.name}' "
+                        f"({self.model.original_file_path}) has column_types configured for "
+                        f"columns not present in the CSV header: {', '.join(missing_columns)}. "
+                        "Those entries will be ignored."
+                    )
+                    fire_event(JinjaLogWarning(msg=msg))
+                    # Drop invalid overrides so agate doesn't emit its own warning.
+                    column_types = {
+                        column_name: column_type
+                        for column_name, column_type in column_types.items()
+                        if column_name in seed_columns
+                    }
         try:
             table = agate_helper.from_csv(path, text_columns=column_types, delimiter=delimiter)
         except ValueError as e:
