@@ -1,0 +1,6 @@
+kind: Fixes
+body: '[Bug] Unhelpful bug from agate when column type specified for non-existent column'
+time: 2026-01-25T11:32:44.5200661+05:30
+custom:
+    Author: abhishek09827
+    Issue: '#12379'

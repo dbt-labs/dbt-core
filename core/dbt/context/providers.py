@@ -1,4 +1,5 @@
 import abc
+import csv
 import os
 from copy import deepcopy
 from typing import (
@@ -67,6 +68,7 @@ from dbt.contracts.graph.nodes import (
     SourceDefinition,
     UnitTestNode,
 )
+from dbt.events.types import JinjaLogWarning
 from dbt.exceptions import (
     CompilationError,
     ConflictingConfigKeysError,
@@ -94,7 +96,7 @@ from dbt.utils import MultiDict, args_to_dict
 from dbt_common.clients.jinja import MacroProtocol
 from dbt_common.constants import SECRET_ENV_PREFIX
 from dbt_common.context import get_invocation_context
-from dbt_common.events.functions import get_metadata_vars
+from dbt_common.events.functions import fire_event, get_metadata_vars
 from dbt_common.exceptions import (
     DbtInternalError,
     DbtRuntimeError,
@@ -1269,8 +1271,37 @@ class ProviderContext(ManifestContext):
 
         column_types = self.model.config.column_types
         delimiter = self.model.config.delimiter
+
+        # Validate that column_types keys exist in the file header
+        filtered_column_types = column_types
+        if column_types:
+            try:
+                # Use utf-8-sig to handle BOM if present
+                with open(path, "r", encoding="utf-8-sig", newline="") as f:
+                    reader = csv.reader(f, delimiter=delimiter)
+                    header = next(reader)
+
+                header_set = set(header)
+                filtered_column_types = column_types.copy()
+                for col_name in list(column_types.keys()):
+                    if col_name not in header_set:
+                        del filtered_column_types[col_name]
+                        msg = (
+                            f"Column type specified for non-existent column '{col_name}' "
+                            f"in seed '{self.model.name}' (file: {path}). "
+                            "This column type override will be ignored."
+                        )
+                        fire_event(JinjaLogWarning(msg=msg))
+
+            except (IOError, StopIteration, TypeError):
+                # If file cannot be read or is empty, or delimiter is invalid for csv.reader,
+                # we proceed with original column_types and let agate_helper handle it (or fail there).
+                pass
+
         try:
-            table = agate_helper.from_csv(path, text_columns=column_types, delimiter=delimiter)
+            table = agate_helper.from_csv(
+                path, text_columns=filtered_column_types, delimiter=delimiter
+            )
         except ValueError as e:
             raise LoadAgateTableValueError(e, node=self.model)
         # this is used by some adapters
