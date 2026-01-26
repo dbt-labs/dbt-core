@@ -67,3 +67,32 @@ impl InternalEnv {
         &self.invocation_config
     }
 }
+
+const TRUE_VALUES: [&str; 4] = ["1", "true", "yes", "on"];
+const FALSE_VALUES: [&str; 5] = ["0", "false", "no", "off", ""];
+
+/// Parse a boolean from an environment variable.
+///
+/// Returns `Ok(false)` if the variable is not set.
+/// Returns `Err` with a descriptive message if the value is not a recognized boolean.
+///
+/// Recognized true values: `1`, `true`, `yes`, `on` (case-insensitive)
+/// Recognized false values: `0`, `false`, `no`, `off`, `` (empty string, case-insensitive)
+pub fn env_var_bool(var_name: &str) -> Result<bool, String> {
+    match env::var_os(var_name) {
+        Some(val) => {
+            if TRUE_VALUES.iter().any(|s| val.eq_ignore_ascii_case(s)) {
+                Ok(true)
+            } else if FALSE_VALUES.iter().any(|s| val.eq_ignore_ascii_case(s)) {
+                Ok(false)
+            } else {
+                Err(format!(
+                    "Invalid value for environment variable {var_name:?}: {val:?}. Expected one of: {} (true) or {} (false).",
+                    TRUE_VALUES.join(", "),
+                    FALSE_VALUES.join(", ")
+                ))
+            }
+        }
+        None => Ok(false),
+    }
+}
