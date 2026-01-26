@@ -129,11 +129,30 @@ impl FromStr for UpdatesOn {
     }
 }
 
-#[derive(Default, Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq, Eq)]
+#[derive(Default, Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct ModelFreshnessRules {
     pub count: Option<i64>,
     pub period: Option<FreshnessPeriod>,
     pub updates_on: Option<UpdatesOn>,
+}
+
+impl PartialEq for ModelFreshnessRules {
+    fn eq(&self, other: &Self) -> bool {
+        self.count == other.count
+            && self.period == other.period
+            && updates_on_eq(&self.updates_on, &other.updates_on)
+    }
+}
+
+impl Eq for ModelFreshnessRules {}
+
+fn updates_on_eq(a: &Option<UpdatesOn>, b: &Option<UpdatesOn>) -> bool {
+    match (a.as_ref(), b.as_ref()) {
+        (None, None) => true,
+        (Some(a_val), Some(b_val)) => a_val == b_val,
+        (None, Some(b_val)) => b_val == &UpdatesOn::default(),
+        (Some(a_val), None) => a_val == &UpdatesOn::default(),
+    }
 }
 
 impl ModelFreshnessRules {
@@ -1469,6 +1488,22 @@ pub struct SyncConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn model_freshness_rules_eq_defaults_updates_on_to_any() {
+        let base = ModelFreshnessRules {
+            count: Some(1),
+            period: Some(FreshnessPeriod::hour),
+            updates_on: None,
+        };
+        let other = ModelFreshnessRules {
+            count: Some(1),
+            period: Some(FreshnessPeriod::hour),
+            updates_on: Some(UpdatesOn::Any),
+        };
+
+        assert_eq!(base, other);
+    }
 
     #[test]
     fn test_hooks_equal_array_of_strings_vs_hook_config_array() {
