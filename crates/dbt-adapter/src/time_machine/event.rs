@@ -15,6 +15,8 @@ pub enum RecordedEvent {
     AdapterCall(AdapterCallEvent),
     /// From MetadataAdapter
     MetadataCall(MetadataCallEvent),
+    /// SAO skip event
+    Sao(SaoEvent),
 }
 
 impl RecordedEvent {
@@ -23,6 +25,7 @@ impl RecordedEvent {
         match self {
             RecordedEvent::AdapterCall(e) => &e.node_id,
             RecordedEvent::MetadataCall(e) => &e.caller_id,
+            RecordedEvent::Sao(e) => &e.node_id,
         }
     }
 
@@ -31,6 +34,7 @@ impl RecordedEvent {
         match self {
             RecordedEvent::AdapterCall(e) => e.seq,
             RecordedEvent::MetadataCall(e) => e.seq,
+            RecordedEvent::Sao(_) => 0,
         }
     }
 
@@ -39,6 +43,7 @@ impl RecordedEvent {
         match self {
             RecordedEvent::AdapterCall(e) => e.timestamp_ns,
             RecordedEvent::MetadataCall(e) => e.timestamp_ns,
+            RecordedEvent::Sao(e) => e.timestamp_ns,
         }
     }
 }
@@ -95,6 +100,59 @@ pub struct MetadataCallEvent {
     pub duration_ms: u64,
     /// Timestamp in nanoseconds since recording start
     pub timestamp_ns: u64,
+}
+
+/// SAO skip event.
+///
+/// Recorded when a node is skipped due to a cache hit. This enables
+/// replay to skip execution for nodes that were also skipped during recording.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SaoEvent {
+    /// Node unique_id
+    pub node_id: String,
+    /// Why the node was skipped
+    pub status: SaoStatus,
+    /// Human message explaining the skip reason
+    pub message: String,
+    /// The hash of the node at the time of the skip decision
+    pub stored_hash: String,
+    /// Timestamp in nanoseconds since recording start
+    pub timestamp_ns: u64,
+}
+
+/// SAO status variants representing different skip reasons.
+/// Subset of NodeStatus
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum SaoStatus {
+    ReusedNoChanges,
+    ReusedStillFresh {
+        freshness_seconds: u64,
+        last_updated_seconds: u64,
+    },
+    ReusedStillFreshNoChanges,
+}
+
+impl From<SaoStatus> for dbt_common::stats::NodeStatus {
+    fn from(status: SaoStatus) -> Self {
+        use dbt_common::stats::NodeStatus;
+        match status {
+            SaoStatus::ReusedNoChanges => {
+                NodeStatus::ReusedNoChanges("Reused (SAO replay)".to_string())
+            }
+            SaoStatus::ReusedStillFresh {
+                freshness_seconds,
+                last_updated_seconds,
+            } => NodeStatus::ReusedStillFresh(
+                "Reused (SAO replay)".to_string(),
+                freshness_seconds,
+                last_updated_seconds,
+            ),
+            SaoStatus::ReusedStillFreshNoChanges => {
+                NodeStatus::ReusedStillFreshNoChanges("Reused (SAO replay)".to_string())
+            }
+        }
+    }
 }
 
 /// Structured arguments for MetadataAdapter method calls.
@@ -233,5 +291,55 @@ mod tests {
         assert_eq!(header.format_version, RecordingHeader::FORMAT_VERSION);
         assert_eq!(header.adapter_type, "snowflake");
         assert_eq!(header.invocation_id, "abc-123");
+    }
+
+    #[test]
+    fn test_sao_event_serialization_roundtrip() {
+        let event = RecordedEvent::Sao(SaoEvent {
+            node_id: "model.my_project.orders".to_string(),
+            status: SaoStatus::ReusedNoChanges,
+            message: "No new changes on any upstreams".to_string(),
+            stored_hash: "abc123".to_string(),
+            timestamp_ns: 12345,
+        });
+
+        let json = serde_json::to_string(&event).unwrap();
+        let parsed: RecordedEvent = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed.node_id(), "model.my_project.orders");
+        assert_eq!(parsed.seq(), 0);
+        assert_eq!(parsed.timestamp_ns(), 12345);
+    }
+
+    #[test]
+    fn test_sao_status_with_freshness() {
+        let event = RecordedEvent::Sao(SaoEvent {
+            node_id: "model.my_project.orders".to_string(),
+            status: SaoStatus::ReusedStillFresh {
+                freshness_seconds: 3600,
+                last_updated_seconds: 1800,
+            },
+            message: "Still within freshness period".to_string(),
+            stored_hash: "def456".to_string(),
+            timestamp_ns: 67890,
+        });
+
+        let json = serde_json::to_string(&event).unwrap();
+        let parsed: RecordedEvent = serde_json::from_str(&json).unwrap();
+
+        if let RecordedEvent::Sao(sao) = parsed {
+            if let SaoStatus::ReusedStillFresh {
+                freshness_seconds,
+                last_updated_seconds,
+            } = sao.status
+            {
+                assert_eq!(freshness_seconds, 3600);
+                assert_eq!(last_updated_seconds, 1800);
+            } else {
+                panic!("Expected ReusedStillFresh status");
+            }
+        } else {
+            panic!("Expected Sao event");
+        }
     }
 }

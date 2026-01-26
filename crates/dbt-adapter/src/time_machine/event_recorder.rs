@@ -11,7 +11,7 @@ use tokio::sync::mpsc;
 
 use super::event::{
     AdapterCallEvent, CatalogSchema, CatalogSchemas, MetadataCallArgs, MetadataCallEvent,
-    RecordedEvent,
+    RecordedEvent, SaoEvent, SaoStatus,
 };
 use super::semantic::SemanticCategory;
 
@@ -185,6 +185,25 @@ impl EventRecorder {
         }))
         .await;
     }
+
+    /// Record an SAO  skip event.
+    ///
+    /// This is called when a node is skipped due to a cache hit.
+    pub fn record_sao_skip(
+        &self,
+        node_id: impl Into<String>,
+        status: SaoStatus,
+        message: impl Into<String>,
+        stored_hash: impl Into<String>,
+    ) {
+        self.emit_sync(RecordedEvent::Sao(SaoEvent {
+            node_id: node_id.into(),
+            status,
+            message: message.into(),
+            stored_hash: stored_hash.into(),
+            timestamp_ns: self.elapsed_ns(),
+        }));
+    }
 }
 
 impl Default for EventRecorder {
@@ -285,6 +304,64 @@ mod tests {
         let event = receiver.recv().await.unwrap();
         assert_eq!(event.node_id(), "model.test.orders");
         assert_eq!(event.seq(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_record_sao_skip() {
+        let (recorder, mut receiver) = EventRecorder::new();
+
+        // Record an SAO skip event
+        recorder.record_sao_skip(
+            "model.test.orders",
+            SaoStatus::ReusedNoChanges,
+            "No new changes on any upstreams",
+            "abc123",
+        );
+
+        // Should receive the event
+        let event = receiver.recv().await.unwrap();
+        assert_eq!(event.node_id(), "model.test.orders");
+        assert_eq!(event.seq(), 0); // SAO events always have seq 0
+
+        if let RecordedEvent::Sao(sao) = event {
+            assert!(matches!(sao.status, SaoStatus::ReusedNoChanges));
+            assert_eq!(sao.message, "No new changes on any upstreams");
+            assert_eq!(sao.stored_hash, "abc123");
+        } else {
+            panic!("Expected Sao event");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_record_sao_skip_with_freshness() {
+        let (recorder, mut receiver) = EventRecorder::new();
+
+        // Record an SAO skip event with freshness info
+        recorder.record_sao_skip(
+            "model.test.orders",
+            SaoStatus::ReusedStillFresh {
+                freshness_seconds: 3600,
+                last_updated_seconds: 1800,
+            },
+            "Still within freshness period",
+            "def456",
+        );
+
+        let event = receiver.recv().await.unwrap();
+        if let RecordedEvent::Sao(sao) = event {
+            if let SaoStatus::ReusedStillFresh {
+                freshness_seconds,
+                last_updated_seconds,
+            } = sao.status
+            {
+                assert_eq!(freshness_seconds, 3600);
+                assert_eq!(last_updated_seconds, 1800);
+            } else {
+                panic!("Expected ReusedStillFresh status");
+            }
+        } else {
+            panic!("Expected Sao event");
+        }
     }
 
     #[tokio::test]

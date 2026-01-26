@@ -13,7 +13,7 @@ use dbt_schemas::schemas::common::ResolvedQuoting;
 
 use crate::time_machine::AdapterCallEvent;
 
-use super::event::MetadataCallArgs;
+use super::event::{MetadataCallArgs, SaoEvent};
 use super::event_recorder::EventRecorder;
 use super::event_replay::{Recording, ReplayError, ReplayMode};
 use super::semantic::SemanticCategory;
@@ -458,6 +458,24 @@ impl EventReplayer {
         self.recording.total_metadata_events() > 0
     }
 
+    /// Get SAO skip event for a node if exists.
+    ///
+    /// Returns the SAO event if the node was skipped due to a cache hit during recording.
+    /// This enables replay to skip execution for nodes that were also skipped during recording.
+    pub fn get_sao_event(&self, node_id: &str) -> Option<&SaoEvent> {
+        self.recording.get_sao_event(node_id)
+    }
+
+    /// Check if a node has a recorded SAO skip event.
+    pub fn has_sao_event(&self, node_id: &str) -> bool {
+        self.recording.has_sao_event(node_id)
+    }
+
+    /// Get total number of SAO skip events in the recording.
+    pub fn total_sao_events(&self) -> usize {
+        self.recording.total_sao_events()
+    }
+
     /// Reset replay state for all nodes.
     pub fn reset(&self) {
         self.recording.reset();
@@ -469,6 +487,7 @@ impl EventReplayer {
             total_events: self.recording.total_events(),
             adapter_events: self.recording.total_adapter_events(),
             metadata_events: self.recording.total_metadata_events(),
+            sao_events: self.recording.total_sao_events(),
             node_count: self.recording.node_ids().count(),
             metadata_caller_count: self.recording.metadata_caller_ids().count(),
         }
@@ -481,6 +500,7 @@ pub struct ReplayerStats {
     pub total_events: usize,
     pub adapter_events: usize,
     pub metadata_events: usize,
+    pub sao_events: usize,
     pub node_count: usize,
     pub metadata_caller_count: usize,
 }
