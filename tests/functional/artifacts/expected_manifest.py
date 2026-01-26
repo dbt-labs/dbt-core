@@ -312,6 +312,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     "id": {
                         "name": "id",
                         "description": "The user ID number",
+                        "dimension": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -324,6 +325,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     "first_name": {
                         "name": "first_name",
                         "description": "The user's first name",
+                        "dimension": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -336,6 +338,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     "email": {
                         "name": "email",
                         "description": "The user's email",
+                        "dimension": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -348,6 +351,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     "ip_address": {
                         "name": "ip_address",
                         "description": "The user's IP address",
+                        "dimension": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -360,6 +364,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     "updated_at": {
                         "name": "updated_at",
                         "description": "The last time this user's email was updated",
+                        "dimension": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -423,6 +428,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     "id": {
                         "name": "id",
                         "description": "The user ID number",
+                        "dimension": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -435,6 +441,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     "first_name": {
                         "name": "first_name",
                         "description": "The user's first name",
+                        "dimension": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -447,6 +454,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     "email": {
                         "name": "email",
                         "description": "The user's email",
+                        "dimension": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -459,6 +467,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     "ip_address": {
                         "name": "ip_address",
                         "description": "The user's IP address",
+                        "dimension": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -471,6 +480,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     "updated_at": {
                         "name": "updated_at",
                         "description": "The last time this user's email was updated",
+                        "dimension": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -523,6 +533,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     "id": {
                         "name": "id",
                         "description": "The user ID number",
+                        "dimension": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -535,6 +546,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     "first_name": {
                         "name": "first_name",
                         "description": "The user's first name",
+                        "dimension": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -547,6 +559,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     "email": {
                         "name": "email",
                         "description": "The user's email",
+                        "dimension": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -559,6 +572,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     "ip_address": {
                         "name": "ip_address",
                         "description": "The user's IP address",
+                        "dimension": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -571,6 +585,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     "updated_at": {
                         "name": "updated_at",
                         "description": "The last time this user's email was updated",
+                        "dimension": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -809,6 +824,7 @@ def expected_seeded_manifest(project, model_database=None, quote_model=False):
                     "id": {
                         "description": "An ID field",
                         "name": "id",
+                        "dimension": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -1081,6 +1097,7 @@ def expected_references_manifest(project):
                     "first_name": {
                         "description": "The first name being summarized",
                         "name": "first_name",
+                        "dimension": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -1093,6 +1110,7 @@ def expected_references_manifest(project):
                     "ct": {
                         "description": "The number of instances of the first name",
                         "name": "ct",
+                        "dimension": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -1159,6 +1177,7 @@ def expected_references_manifest(project):
                     "first_name": {
                         "description": "The first name being summarized",
                         "name": "first_name",
+                        "dimension": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -1171,6 +1190,7 @@ def expected_references_manifest(project):
                     "ct": {
                         "description": "The number of instances of the first name",
                         "name": "ct",
+                        "dimension": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -1232,6 +1252,7 @@ def expected_references_manifest(project):
                     "id": {
                         "name": "id",
                         "description": "The user ID number",
+                        "dimension": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -1244,6 +1265,7 @@ def expected_references_manifest(project):
                     "first_name": {
                         "name": "first_name",
                         "description": "The user's first name",
+                        "dimension": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -1256,6 +1278,7 @@ def expected_references_manifest(project):
                     "email": {
                         "name": "email",
                         "description": "The user's email",
+                        "dimension": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -1268,6 +1291,7 @@ def expected_references_manifest(project):
                     "ip_address": {
                         "name": "ip_address",
                         "description": "The user's IP address",
+                        "dimension": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -1280,6 +1304,7 @@ def expected_references_manifest(project):
                     "updated_at": {
                         "name": "updated_at",
                         "description": "The last time this user's email was updated",
+                        "dimension": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -1363,6 +1388,7 @@ def expected_references_manifest(project):
                 "columns": {
                     "id": {
                         "description": "An ID field",
+                        "dimension": None,
                         "name": "id",
                         "data_type": None,
                         "meta": {},
@@ -1659,6 +1685,7 @@ def expected_versions_manifest(project):
                     "first_name": {
                         "description": "The first name being summarized",
                         "name": "first_name",
+                        "dimension": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -1674,6 +1701,7 @@ def expected_versions_manifest(project):
                     "ct": {
                         "description": "The number of instances of the first name",
                         "name": "ct",
+                        "dimension": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -1746,6 +1774,7 @@ def expected_versions_manifest(project):
                     "first_name": {
                         "description": "The first name being summarized",
                         "name": "first_name",
+                        "dimension": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
@@ -1761,6 +1790,7 @@ def expected_versions_manifest(project):
                     "extra": {
                         "description": "",
                         "name": "extra",
+                        "dimension": None,
                         "data_type": None,
                         "meta": {},
                         "quote": None,
