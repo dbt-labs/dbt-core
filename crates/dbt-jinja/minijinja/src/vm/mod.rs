@@ -737,10 +737,14 @@ impl<'env> Vm<'env> {
                         }
                     };
                     match next {
-                        Some(item) => stack.push(
-                            item.validate()
-                                .map_err(|e| state.with_span_error(e, span))?,
-                        ),
+                        Some(item) => {
+                            // each iteration should start with clean local vars to match Python
+                            state.ctx.current_locals_mut().clear();
+                            stack.push(
+                                item.validate()
+                                    .map_err(|e| state.with_span_error(e, span))?,
+                            );
+                        }
                         None => {
                             pc = *jump_target;
                             continue;
