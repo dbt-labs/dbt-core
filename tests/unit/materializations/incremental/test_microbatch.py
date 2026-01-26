@@ -1,5 +1,6 @@
 from datetime import datetime
 from unittest import mock
+from zoneinfo import ZoneInfo
 
 import pytest
 import pytz
@@ -21,6 +22,7 @@ class TestMicrobatchBuilder:
         model.config.incremental_strategy = "microbatch"
         model.config.begin = MODEL_CONFIG_BEGIN
         model.config.batch_size = BatchSize.day
+        model.config.event_timezone = "UTC"
 
         return model
 
@@ -683,3 +685,79 @@ class TestMicrobatchBuilder:
     ) -> None:
         ceilinged = MicrobatchBuilder.ceiling_timestamp(timestamp, batch_size)
         assert ceilinged == expected_datetime
+
+    @pytest.mark.parametrize(
+        "event_timezone,batch_size,event_time_start,event_time_end,default_end_time,expected_end_time",
+        [
+            (
+                "UTC",
+                BatchSize.day,
+                None,
+                None,
+                datetime(2026, 1, 14, 23, 30, 0, 0, pytz.UTC),
+                datetime(2026, 1, 15, 0, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                "Asia/Tokyo",
+                BatchSize.day,
+                None,
+                None,
+                datetime(2026, 1, 14, 23, 30, 0, 0, pytz.UTC),
+                datetime(2026, 1, 16, 0, 0, 0, 0, ZoneInfo("Asia/Tokyo")),
+            ),
+            (
+                "UTC",
+                BatchSize.day,
+                None,
+                None,
+                datetime(2026, 1, 15, 0, 10, 0, 0, pytz.UTC),
+                datetime(2026, 1, 16, 0, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                "Asia/Tokyo",
+                BatchSize.day,
+                None,
+                None,
+                datetime(2026, 1, 15, 0, 10, 0, 0, pytz.UTC),
+                datetime(2026, 1, 16, 0, 0, 0, 0, ZoneInfo("Asia/Tokyo")),
+            ),
+            (
+                "UTC",
+                BatchSize.day,
+                datetime(2026, 1, 7, 0, 0, 0, 0),
+                datetime(2026, 1, 15, 0, 0, 0, 0),
+                datetime(2026, 1, 14, 23, 30, 0, 0, pytz.UTC),
+                datetime(2026, 1, 15, 0, 0, 0, 0, pytz.UTC),
+            ),
+            (
+                "Asia/Tokyo",
+                BatchSize.day,
+                datetime(2026, 1, 7, 0, 0, 0, 0),
+                datetime(2026, 1, 15, 0, 0, 0, 0),
+                datetime(2026, 1, 14, 23, 30, 0, 0, pytz.UTC),
+                datetime(2026, 1, 15, 0, 0, 0, 0, ZoneInfo("Asia/Tokyo")),
+            ),
+        ],
+    )
+    def test_build_end_time_for_event_timezone(
+        self,
+        microbatch_model,
+        event_timezone,
+        batch_size,
+        event_time_start,
+        event_time_end,
+        default_end_time,
+        expected_end_time,
+    ):
+        microbatch_model.config.event_timezone = event_timezone
+        microbatch_model.config.batch_size = batch_size
+        microbatch_model.config.lookback = 1
+        microbatch_builder = MicrobatchBuilder(
+            model=microbatch_model,
+            is_incremental=True,
+            event_time_start=event_time_start,
+            event_time_end=event_time_end,
+            default_end_time=default_end_time,
+        )
+
+        assert microbatch_builder.build_end_time() == expected_end_time

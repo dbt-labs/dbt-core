@@ -18,6 +18,7 @@ from typing import (
     Tuple,
     Type,
 )
+from zoneinfo import ZoneInfo
 
 from dbt import tracking, utils
 from dbt.adapters.base import BaseAdapter, BaseRelation
@@ -732,7 +733,7 @@ class MicrobatchModelRunner(ModelRunner):
             is_incremental=self._is_incremental(model),
             event_time_start=event_time_start,
             event_time_end=event_time_end,
-            default_end_time=get_invocation_started_at(),
+            default_end_time=get_invocation_started_at().replace(tzinfo=ZoneInfo("UTC")),
         )
 
     def get_batches(self, model: ModelNode) -> Dict[int, BatchType]:
