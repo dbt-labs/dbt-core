@@ -379,6 +379,12 @@ pub async fn load_simplified_project_and_profiles(
             "var".to_owned(),
             minijinja::Value::from_function(var_fn(arg.vars.clone())),
         ),
+        (
+            // Add empty context object (mimics dbt-core's BaseContext.to_dict() pattern)
+            // This allows profiles.yml to use: context.project_name or ''
+            "context".to_owned(),
+            minijinja::Value::from_serialize(BTreeMap::<String, minijinja::Value>::new()),
+        ),
     ]);
 
     let simplified_dbt_project: DbtProjectSimplified = into_typed_with_jinja(

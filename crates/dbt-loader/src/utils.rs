@@ -123,22 +123,6 @@ pub fn get_db_config(
         )
     })?;
 
-    // if !db_config.ignored_properties().is_empty() {
-    //     show_warning!(
-    //         io_args,
-    //         fs_err!(
-    //             ErrorCode::InvalidConfig,
-    //             "Unused keys in profiles.yml target '{}': {}",
-    //             target_name,
-    //             db_config
-    //                 .ignored_properties()
-    //                 .keys()
-    //                 .map(|k| format!("'{k}'"))
-    //                 .collect::<Vec<String>>()
-    //                 .join(", ")
-    //         )
-    //     );
-    // }
     Ok(db_config)
 }
 

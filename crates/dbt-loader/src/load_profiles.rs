@@ -179,3 +179,28 @@ fn get_profile_path(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use dbt_jinja_utils::phases::load::init::initialize_load_profile_jinja_environment;
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn test_context_accessible_in_profiles_jinja_templates() {
+        let env = initialize_load_profile_jinja_environment();
+
+        // Create a context with an empty "context" object (mimics load_simplified_project_and_profiles)
+        let ctx: BTreeMap<String, minijinja::Value> = BTreeMap::from([(
+            "context".to_owned(),
+            minijinja::Value::from_serialize(BTreeMap::<String, minijinja::Value>::new()),
+        )]);
+
+        // Test that accessing context.project_name with a default doesn't error
+        let result = env.render_str("{{context.project_name or ''}}", &ctx, &[]);
+        assert!(
+            result.is_ok(),
+            "Should not error when accessing context.project_name with default"
+        );
+        assert_eq!(result.unwrap(), "");
+    }
+}
