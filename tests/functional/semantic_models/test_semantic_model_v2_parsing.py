@@ -1,7 +1,7 @@
 import pytest
 
 from dbt.contracts.graph.manifest import Manifest
-from dbt_semantic_interfaces.type_enums import DimensionType
+from dbt_semantic_interfaces.type_enums import DimensionType, EntityType
 from tests.functional.assertions.test_runner import dbtTestRunner
 from tests.functional.semantic_models.fixtures import (
     base_schema_yml_v2,
@@ -39,6 +39,8 @@ class TestSemanticModelParsingWorks:
             == "This is the model fct_revenue. It should be able to use doc blocks"
         )
 
+        # Dimensions
+
         assert len(semantic_model.dimensions) == 3
         dimensions = {dimension.name: dimension for dimension in semantic_model.dimensions}
         id_dim = dimensions["id_dim"]
@@ -49,7 +51,7 @@ class TestSemanticModelParsingWorks:
         assert id_dim.config.meta == {"component_level": "dimension_override"}
         second_dim = dimensions["second_dim"]
         assert second_dim.type == DimensionType.TIME
-        assert second_dim.description == "This is the second column."
+        assert second_dim.description == "This is the second column (dim)."
         assert second_dim.label == "Second Dimension"
         assert second_dim.is_partition is False
         assert second_dim.config.meta == {}
@@ -65,6 +67,33 @@ class TestSemanticModelParsingWorks:
         assert col_with_default_dimensions.is_partition is False
         assert col_with_default_dimensions.config.meta == {}
         assert col_with_default_dimensions.validity_params is None
+
+        # Entities
+        assert len(semantic_model.entities) == 3
+        entities = {entity.name: entity for entity in semantic_model.entities}
+        primary_entity = entities["id_entity"]
+        assert primary_entity.type == EntityType.PRIMARY
+        assert primary_entity.description == "This is the id entity, and it is the primary entity."
+        assert primary_entity.label == "ID Entity"
+        assert primary_entity.config.meta == {"component_level": "entity_override"}
+
+        foreign_id_col = entities["foreign_id_col"]
+        assert foreign_id_col.type == EntityType.FOREIGN
+        assert foreign_id_col.description == "This is a foreign id column."
+        assert foreign_id_col.label is None
+        assert foreign_id_col.config.meta == {}
+
+        col_with_default_entity_testing_default_desc = entities[
+            "col_with_default_entity_testing_default_desc"
+        ]
+        assert col_with_default_entity_testing_default_desc.type == EntityType.NATURAL
+        assert (
+            col_with_default_entity_testing_default_desc.description
+            == "This is the column with default dimension settings."
+        )
+        assert col_with_default_entity_testing_default_desc.label is None
+        assert col_with_default_entity_testing_default_desc.config.meta == {}
+
         # No measures in v2 YAML
         assert len(semantic_model.measures) == 0
         # TODO: Metrics are not parsed yet

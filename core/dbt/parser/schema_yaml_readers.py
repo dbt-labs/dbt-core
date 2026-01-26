@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Optional, Union
 
 from dbt.artifacts.resources import (
     ColumnDimension,
+    ColumnEntity,
     ColumnInfo,
     ConversionTypeParams,
     CumulativeTypeParams,
@@ -765,12 +766,42 @@ class SemanticModelParser(YamlReader):
                 )
         return dimensions
 
+    def _parse_v2_column_entities(self, columns: Dict[str, ColumnInfo]) -> List[Entity]:
+        entities: List[Entity] = []
+        for column in columns.values():
+            if column.entity is None:
+                continue
+            elif isinstance(column.entity, ColumnEntity):
+                entities.append(
+                    Entity(
+                        name=column.entity.name,
+                        type=column.entity.type,
+                        description=column.entity.description,
+                        label=column.entity.label,
+                        config=SemanticLayerElementConfig(
+                            meta=column.entity.config.get("meta", column.config.get("meta", {}))
+                        ),
+                    )
+                )
+            elif isinstance(column.entity, EntityType):
+                entities.append(
+                    Entity(
+                        name=column.name,
+                        type=column.entity,
+                        description=column.description,
+                        label=None,  # there's no label to carry through from columns
+                        config=SemanticLayerElementConfig(meta=column.config.get("meta", {})),
+                    )
+                )
+        return entities
+
     def parse_v2_semantic_model_from_dbt_model_patch(
         self,
         node: ModelNode,
         patch: ParsedNodePatch,
     ) -> None:
         dimensions = self._parse_v2_column_dimensions(patch.columns)
+        entities = self._parse_v2_column_entities(patch.columns)
 
         self._parse_semantic_model_helper(
             semantic_model_name=node.name,
@@ -781,7 +812,7 @@ class SemanticModelParser(YamlReader):
             name=node.name,
             defaults=None,  # TODO DI-4604: support agg_time_dimension default here for v2 YAML
             primary_entity=None,  # Not yet implemented; should become patch.primary_entity
-            entities=[],  # Not yet implemented, will derive from patch.derived_semantics.entities
+            entities=entities,
             dimensions=dimensions,
             # Measures are not part of the v2 YAML design.
             measures=[],

@@ -561,17 +561,32 @@ base_schema_yml_v2 = """models:
           config:
             meta:
               component_level: "dimension_override"
+        entity:
+          name: id_entity
+          description: This is the id entity, and it is the primary entity.
+          label: ID Entity
+          type: primary
+          config:
+            meta:
+              component_level: "entity_override"
       - name: second_col
         description: This is the second column.
         granularity: day
         dimension:
           name: second_dim
-          label: "Second Dimension"
+          description: This is the second column (dim).
+          label: Second Dimension
           type: time
           validity_params:
             is_start: true
             is_end: true
+      - name: foreign_id_col
+        description: This is a foreign id column.
+        entity: foreign
       - name: col_with_default_dimensions
         description: This is the column with default dimension settings.
         dimension: categorical
+        entity:
+          name: col_with_default_entity_testing_default_desc
+          type: natural
 """
