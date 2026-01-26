@@ -89,6 +89,7 @@ class TestGoodDocsBlocks:
         assert {
             "name": "id",
             "description": "The user ID number",
+            "dimension": None,
             "data_type": None,
             "constraints": [],
             "meta": {},
@@ -102,6 +103,7 @@ class TestGoodDocsBlocks:
         assert {
             "name": "first_name",
             "description": "The user's first name",
+            "dimension": None,
             "data_type": None,
             "constraints": [],
             "meta": {},
@@ -115,6 +117,7 @@ class TestGoodDocsBlocks:
         assert {
             "name": "last_name",
             "description": "The user's last name",
+            "dimension": None,
             "data_type": None,
             "constraints": [],
             "meta": {},
@@ -128,6 +131,7 @@ class TestGoodDocsBlocks:
         assert {
             "name": "tricky",
             "description": "The user ID number The user's first name The user's last name",
+            "dimension": None,
             "data_type": None,
             "constraints": [],
             "meta": {},
@@ -176,6 +180,7 @@ class TestGoodDocsBlocksAltPath:
         assert {
             "name": "id",
             "description": "The user ID number with alternative text",
+            "dimension": None,
             "data_type": None,
             "constraints": [],
             "meta": {},
@@ -189,6 +194,7 @@ class TestGoodDocsBlocksAltPath:
         assert {
             "name": "first_name",
             "description": "The user's first name",
+            "dimension": None,
             "data_type": None,
             "constraints": [],
             "meta": {},
@@ -202,6 +208,7 @@ class TestGoodDocsBlocksAltPath:
         assert {
             "name": "last_name",
             "description": "The user's last name in this other file",
+            "dimension": None,
             "data_type": None,
             "constraints": [],
             "meta": {},
@@ -215,6 +222,7 @@ class TestGoodDocsBlocksAltPath:
         assert {
             "name": "tricky",
             "description": "The user ID number with alternative text The user's first name The user's last name in this other file",
+            "dimension": None,
             "data_type": None,
             "constraints": [],
             "meta": {},
