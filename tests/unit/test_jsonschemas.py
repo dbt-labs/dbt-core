@@ -94,7 +94,6 @@ class TestValidateJsonSchema:
 
 
 class TestSourceBigQueryAliases:
-
     @pytest.fixture(scope="class")
     def source_with_dataset(self):
         return {
@@ -102,7 +101,7 @@ class TestSourceBigQueryAliases:
                 {
                     "name": "my_source",
                     "dataset": "my_dataset",
-                    "tables": [{"name": "my_table"}]
+                    "tables": [{"name": "my_table"}],
                 }
             ]
         }
@@ -114,7 +113,7 @@ class TestSourceBigQueryAliases:
                 {
                     "name": "my_source",
                     "project": "my-gcp-project",
-                    "tables": [{"name": "my_table"}]
+                    "tables": [{"name": "my_table"}],
                 }
             ]
         }
@@ -127,7 +126,7 @@ class TestSourceBigQueryAliases:
                     "name": "my_source",
                     "project": "my-gcp-project",
                     "dataset": "my_dataset",
-                    "tables": [{"name": "my_table"}]
+                    "tables": [{"name": "my_table"}],
                 }
             ]
         }
