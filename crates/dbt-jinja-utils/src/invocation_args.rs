@@ -1,14 +1,10 @@
-use std::{collections::BTreeMap, env, rc::Rc, sync::Arc};
+use std::{collections::BTreeMap, env};
 
 use dbt_common::io_args::EvalArgs;
 use dbt_common::io_args::ReplayMode;
 use itertools::Itertools;
 use log::LevelFilter;
-use minijinja::{
-    Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State,
-    listener::RenderingEventListener,
-    value::{Object, ObjectRepr, Value, mutable_map::MutableMap},
-};
+use minijinja::Value;
 
 /// Invocation args is the dictionary of arguments passed into the jinja environment.
 // TODO: this is not complete, we will add more as we go.
@@ -169,26 +165,21 @@ impl InvocationArgs {
             Value::from(env::args().join(" ")),
         );
 
-        // Convert vars to a MutableMap so it can be copied in templates
-        let vars_map = MutableMap::new();
-        for (k, v) in &self.vars {
-            vars_map.insert(Value::from(k.clone()), v.clone());
-        }
-        dict.insert("vars".to_string(), Value::from_object(vars_map));
-        dict.insert("select".to_string(), Value::from(self.select.clone()));
-        dict.insert("exclude".to_string(), Value::from(self.exclude.clone()));
+        dict.insert("vars".to_string(), Value::from_serialize(&self.vars));
+        dict.insert("SELECT".to_string(), Value::from(self.select.clone()));
+        dict.insert("EXCLUDE".to_string(), Value::from(self.exclude.clone()));
         dict.insert(
-            "profiles_dir".to_string(),
+            "PROFILES_DIR".to_string(),
             Value::from(self.profiles_dir.clone()),
         );
         dict.insert(
-            "packages_install_path".to_string(),
+            "PACKAGES_INSTALL_PATH".to_string(),
             Value::from(self.packages_install_path.clone()),
         );
-        dict.insert("target".to_string(), Value::from(self.target.clone()));
-        dict.insert("num_threads".to_string(), Value::from(self.num_threads));
+        dict.insert("TARGET".to_string(), Value::from(self.target.clone()));
+        dict.insert("NUM_THREADS".to_string(), Value::from(self.num_threads));
         dict.insert(
-            "invocation_id".to_string(),
+            "INVOCATION_ID".to_string(),
             Value::from(self.invocation_id.to_string()),
         );
         dict.insert("warn_error".to_string(), Value::from(self.warn_error));
@@ -201,52 +192,50 @@ impl InvocationArgs {
                     .collect::<BTreeMap<_, _>>(),
             ),
         );
-        dict.insert("version_check".to_string(), Value::from(self.version_check));
-        dict.insert("defer".to_string(), Value::from(self.defer));
+        dict.insert("VERSION_CHECK".to_string(), Value::from(self.version_check));
+        dict.insert("DEFER".to_string(), Value::from(self.defer));
         dict.insert(
-            "defer_state".to_string(),
+            "DEFER_STATE".to_string(),
             Value::from(self.defer_state.clone()),
         );
-        dict.insert("debug".to_string(), Value::from(self.debug));
+        dict.insert("DEBUG".to_string(), Value::from(self.debug));
         dict.insert(
-            "log_format_file".to_string(),
+            "LOG_FORMAT_FILE".to_string(),
             Value::from(self.log_format_file.clone()),
         );
         dict.insert(
-            "log_format".to_string(),
+            "LOG_FORMAT".to_string(),
             Value::from(self.log_format.clone()),
         );
         dict.insert(
-            "log_level_file".to_string(),
+            "LOG_LEVEL_FILE".to_string(),
             Value::from(self.log_level_file.clone()),
         );
-        dict.insert("log_level".to_string(), Value::from(self.log_level.clone()));
-        dict.insert("log_path".to_string(), Value::from(self.log_path.clone()));
-        dict.insert("profile".to_string(), Value::from(self.profile.clone()));
+        dict.insert("LOG_LEVEL".to_string(), Value::from(self.log_level.clone()));
+        dict.insert("LOG_PATH".to_string(), Value::from(self.log_path.clone()));
+        dict.insert("PROFILE".to_string(), Value::from(self.profile.clone()));
         dict.insert(
-            "project_dir".to_string(),
+            "PROJECT_DIR".to_string(),
             Value::from(self.project_dir.clone()),
         );
-        dict.insert("quiet".to_string(), Value::from(self.quiet));
+        dict.insert("QUIET".to_string(), Value::from(self.quiet));
         dict.insert(
-            "resource_type".to_string(),
+            "RESOURCE_TYPE".to_string(),
             Value::from(self.resource_type.clone()),
         );
         dict.insert(
-            "send_anonymous_usage_stats".to_string(),
+            "SEND_ANONYMOUS_USAGE_STATS".to_string(),
             Value::from(self.send_anonymous_usage_stats),
         );
-        dict.insert("write_json".to_string(), Value::from(self.write_json));
-        dict.insert("full_refresh".to_string(), Value::from(self.full_refresh));
+        dict.insert("WRITE_JSON".to_string(), Value::from(self.write_json));
+        dict.insert("FULL_REFRESH".to_string(), Value::from(self.full_refresh));
         dict.insert(
-            "store_failures".to_string(),
+            "STORE_FAILURES".to_string(),
             Value::from(self.store_failures),
         );
-        dict.insert("replay".to_string(), Value::from(self.replay.is_some()));
-        // make all keys uppercase
-        dict.into_iter()
-            .map(|(key, value)| (key.to_uppercase(), value))
-            .collect()
+        dict.insert("REPLAY".to_string(), Value::from(self.replay.is_some()));
+
+        dict
     }
 
     /// Set the number of threads to use.
@@ -254,67 +243,6 @@ impl InvocationArgs {
         Self {
             num_threads: final_threads,
             ..self.clone()
-        }
-    }
-}
-
-/// A wrapper around the invocation args dictionary that provides object methods
-/// like `.vars` and `.copy()` for use in Jinja templates.
-#[derive(Debug, Clone)]
-pub struct InvocationArgsDict {
-    dict: BTreeMap<String, Value>,
-}
-
-impl InvocationArgsDict {
-    /// Create a new InvocationArgsDict from a dictionary
-    pub fn new(dict: BTreeMap<String, Value>) -> Self {
-        Self { dict }
-    }
-}
-
-impl Object for InvocationArgsDict {
-    fn repr(self: &Arc<Self>) -> ObjectRepr {
-        ObjectRepr::Map
-    }
-
-    fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
-        if let Some(s) = key.as_str() {
-            // The dict keys are uppercase (see to_dict method), but we want to access them
-            // with lowercase in templates for consistency with dbt
-            let uppercase_key = s.to_uppercase();
-            return self.dict.get(&uppercase_key).cloned();
-        }
-        None
-    }
-
-    fn call_method(
-        self: &Arc<Self>,
-        _state: &State<'_, '_>,
-        name: &str,
-        args: &[Value],
-        _listeners: &[Rc<dyn RenderingEventListener>],
-    ) -> Result<Value, MinijinjaError> {
-        match name {
-            "copy" => {
-                // Ensure no arguments are passed
-                if !args.is_empty() {
-                    return Err(MinijinjaError::new(
-                        MinijinjaErrorKind::TooManyArguments,
-                        "copy() takes no arguments",
-                    ));
-                }
-
-                // Create a mutable copy
-                let map = MutableMap::new();
-                for (k, v) in &self.dict {
-                    map.insert(Value::from(k.clone()), v.clone());
-                }
-                Ok(Value::from_object(map))
-            }
-            _ => Err(MinijinjaError::new(
-                MinijinjaErrorKind::UnknownMethod,
-                format!("InvocationArgsDict has no method named '{name}'"),
-            )),
         }
     }
 }

@@ -32,7 +32,7 @@ use crate::{
     environment_builder::{JinjaEnvBuilder, MacroUnitsWrapper},
     flags::Flags,
     functions::ConfiguredVar,
-    invocation_args::{InvocationArgs, InvocationArgsDict},
+    invocation_args::InvocationArgs,
     jinja_environment::JinjaEnv,
     phases::utils::build_target_context_map,
 };
@@ -70,7 +70,8 @@ pub fn initialize_parse_jinja_environment(
     let inv_flags = Flags::from_invocation_args(invocation_args.to_dict());
     let joined_flags = prj_flags.join(inv_flags);
 
-    let invocation_args_dict = InvocationArgsDict::new(joined_flags.to_dict());
+    let invocation_args_dict =
+        MinijinjaValue::from_serialize(invocation_args_to_dict(invocation_args, &prj_flags));
 
     let globals = BTreeMap::from([
         (
@@ -96,10 +97,7 @@ pub fn initialize_parse_jinja_environment(
             "flags".to_string(),
             MinijinjaValue::from_object(joined_flags),
         ),
-        (
-            "invocation_args_dict".to_string(),
-            MinijinjaValue::from_object(invocation_args_dict),
-        ),
+        ("invocation_args_dict".to_string(), invocation_args_dict),
         (
             "invocation_id".to_string(),
             MinijinjaValue::from_serialize(invocation_args.invocation_id.to_string()),
@@ -142,4 +140,77 @@ pub fn initialize_parse_jinja_environment(
     // if we directly render the first one, it will add double quotes around the string, but the second one will not.
     env.env.set_auto_escape_callback(|_| AutoEscape::None);
     Ok(env)
+}
+
+fn invocation_args_to_dict(
+    args: &InvocationArgs,
+    flags: &Flags,
+) -> BTreeMap<String, MinijinjaValue> {
+    /* Port of: https://github.com/dbt-labs/dbt-core/blob/62757f198761ca3a8b8700535bc8c28f84d5c5d5/core/dbt/utils/utils.py#L332
+    * ```python
+    def args_to_dict(args):
+        var_args = vars(args).copy()
+        # update the args with the flags, which could also come from environment
+        # variables or project_flags
+        flag_dict = flags.get_flag_dict()
+        var_args.update(flag_dict)
+        dict_args = {}
+        # remove args keys that clutter up the dictionary
+        for key in var_args:
+            if key.lower() in var_args and key == key.upper():
+                # skip all capped keys being introduced by Flags in dbt.cli.flags
+                continue
+            if key in ["cls", "mp_context"]:
+                continue
+            if var_args[key] is None:
+                continue
+            # TODO: add more default_false_keys
+            default_false_keys = (
+                "debug",
+                "full_refresh",
+                "fail_fast",
+                "warn_error",
+                "single_threaded",
+                "log_cache_events",
+                "store_failures",
+                "use_experimental_parser",
+            )
+            default_empty_yaml_dict_keys = ("vars", "warn_error_options")
+            if key in default_false_keys and var_args[key] is False:
+                continue
+            if key in default_empty_yaml_dict_keys and var_args[key] == "{}":
+                continue
+            # this was required for a test case
+            if isinstance(var_args[key], PosixPath) or isinstance(var_args[key], WindowsPath):
+                var_args[key] = str(var_args[key])
+            if isinstance(var_args[key], WarnErrorOptionsV2):
+                var_args[key] = var_args[key].to_dict()
+
+            dict_args[key] = var_args[key]
+        return dict_args
+    * ```
+    */
+    let mut var_args = args.to_dict();
+    // update the args with the flags, which could also come from environment
+    // variables or project_flags
+    var_args.extend(flags.to_dict());
+    // remove args keys that clutter up the dictionary
+    let mut dict_args = BTreeMap::new();
+    for (key, value) in var_args.iter() {
+        if var_args.contains_key(&key.to_lowercase()) && key == &key.to_uppercase() {
+            // skip all capped keys being introduced by Flags in dbt.cli.flags
+            continue;
+        }
+        if key == "cls" || key == "mp_context" {
+            continue;
+        }
+        if value.is_none() {
+            continue;
+        }
+
+        // The rest of the filtering logic from dbt-core is irrelevant
+
+        dict_args.insert(key.clone(), value.clone());
+    }
+    dict_args
 }
