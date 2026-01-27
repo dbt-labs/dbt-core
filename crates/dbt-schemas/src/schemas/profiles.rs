@@ -282,7 +282,7 @@ impl DbConfig {
             DbConfig::Datafusion(..) => None,
             DbConfig::Databricks(..) => Some(AdapterType::Databricks),
             DbConfig::Salesforce(..) => Some(AdapterType::Salesforce),
-            DbConfig::Spark(..) => None, // Spark adapter type not yet implemented
+            DbConfig::Spark(..) => Some(AdapterType::Spark),
         }
     }
 
@@ -296,7 +296,7 @@ impl DbConfig {
             DbConfig::Datafusion(config) => config.database.as_ref(),
             DbConfig::Databricks(config) => config.database.as_ref(),
             DbConfig::Salesforce(config) => config.database.as_ref(),
-            DbConfig::Spark(_) => todo!(),
+            DbConfig::Spark(_) => None,
         }
     }
 
@@ -309,8 +309,8 @@ impl DbConfig {
             DbConfig::Bigquery(config) => config.schema.as_ref(),
             DbConfig::Datafusion(config) => config.schema.as_ref(),
             DbConfig::Databricks(config) => config.schema.as_ref(),
+            DbConfig::Spark(config) => config.schema.as_ref(),
             DbConfig::Salesforce(_) => None,
-            DbConfig::Spark(_) => todo!(),
         }
     }
 
@@ -324,7 +324,7 @@ impl DbConfig {
             DbConfig::Trino(config) => config.threads.as_ref(),
             DbConfig::Datafusion(_) => None,
             DbConfig::Salesforce(_) => None,
-            DbConfig::Spark(_) => todo!(),
+            DbConfig::Spark(_) => None,
         }
     }
 
@@ -338,7 +338,7 @@ impl DbConfig {
             DbConfig::Redshift(config) => config.threads = threads,
             DbConfig::Datafusion(_) => (),
             DbConfig::Salesforce(_) => (),
-            DbConfig::Spark(_) => todo!(),
+            DbConfig::Spark(_) => (),
         }
     }
 
@@ -785,13 +785,90 @@ fn default_data_transform_run_timeout() -> Option<i64> {
     Some(180000) // 3 mins
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SparkMethod {
+    Thrift,
+    Livy,
+    // TODO: HTTP, Spark Connect, EMR StartJob, Session (?)
+}
+
+#[derive(Default, Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "UPPERCASE")]
+pub enum SparkAuth {
+    NoSasl,
+    SaslCustom,
+    SaslKerberos,
+    SaslLdap,
+    #[default]
+    SaslNone,
+    SaslPlain,
+}
+
+impl Display for SparkAuth {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::NoSasl => write!(f, "NOSASL"),
+            Self::SaslCustom => write!(f, "CUSTOM"),
+            Self::SaslKerberos => write!(f, "KERBEROS"),
+            Self::SaslLdap => write!(f, "LDAP"),
+            Self::SaslNone => write!(f, "NONE"),
+            Self::SaslPlain => write!(f, "PLAIN"),
+        }
+    }
+}
+
+impl std::str::FromStr for SparkAuth {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "CUSTOM" => Ok(Self::SaslCustom),
+            "KERBEROS" => Ok(Self::SaslKerberos),
+            "LDAP" => Ok(Self::SaslLdap),
+            "NONE" => Ok(Self::SaslNone),
+            "NOSASL" => Ok(Self::NoSasl),
+            "PLAIN" => Ok(Self::SaslPlain),
+            _ => Err(format!("Invalid Spark auth mode: {s}")),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, Merge)]
 #[merge(strategy = merge_strategies_extend::overwrite_option)]
 #[serde(rename_all = "snake_case")]
 pub struct SparkDbConfig {
-    // TODO(serramatutu)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub auth: Option<SparkAuth>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub use_ssl: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub method: Option<SparkMethod>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub schema: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub host: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub port: Option<u16>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub user: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kerberos_service_name: Option<String>,
+    // TODO: python supports some extra properties:
+    // - cluster
+    // - connect_retries
+    // - connect_timeout
+    // - connection_string_suffix
+    // - database (same as schema)
+    // - driver
+    // - endpoint
+    // - organization
+    // - poll_interval
+    // - query_retries
+    // - query_timeout
+    // - retry_all
+    // - server_side_parameters
+    // - token
 }
 
 #[derive(Serialize, JsonSchema)]
@@ -807,6 +884,7 @@ pub enum TargetContext {
     Databricks(DatabricksTargetEnv),
     Redshift(RedshiftTargetEnv),
     Salesforce(SalesforceTargetEnv),
+    Spark(SparkTargetEnv),
     // Add other variants as needed
 }
 
@@ -948,6 +1026,18 @@ pub struct RedshiftTargetEnv {
 #[derive(Serialize, JsonSchema)]
 pub struct SalesforceTargetEnv {
     pub __common__: CommonTargetContext,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct SparkTargetEnv {
+    pub __common__: CommonTargetContext,
+    pub method: SparkMethod,
+    pub host: String,
+    pub port: u16,
+    pub user: String,
+    pub auth: SparkAuth,
+    pub use_ssl: bool,
+    pub kerberos_service_name: String,
 }
 
 fn missing(field: &str) -> String {
@@ -1164,7 +1254,23 @@ impl TryFrom<DbConfig> for TargetContext {
                 },
             })),
 
-            DbConfig::Spark(_) => todo!(),
+            DbConfig::Spark(config) => Ok(TargetContext::Spark(SparkTargetEnv {
+                method: config.method.ok_or_else(|| missing("method"))?,
+                host: config.host.ok_or_else(|| missing("host"))?,
+                port: config.port.unwrap_or(10000),
+                user: config.user.unwrap_or_default(),
+
+                kerberos_service_name: config.kerberos_service_name.unwrap_or_default(),
+                use_ssl: config.use_ssl.unwrap_or(false),
+                auth: config.auth.unwrap_or_default(),
+
+                __common__: CommonTargetContext {
+                    database: "".to_string(),
+                    schema: config.schema.ok_or_else(|| missing("schema"))?,
+                    type_: adapter_type,
+                    threads: None,
+                },
+            })),
         }
     }
 }

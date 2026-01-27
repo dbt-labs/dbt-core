@@ -949,7 +949,10 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         _state: &State,
         _args: &[Value],
     ) -> AdapterResult<(String, String)> {
-        if self.adapter_type() == AdapterType::Databricks {
+        if matches!(
+            self.adapter_type(),
+            AdapterType::Databricks | AdapterType::Spark
+        ) {
             Ok((
                 "dbt_spark".to_string(),
                 "spark__check_schema_exists".to_string(),
@@ -962,33 +965,33 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     /// Determine if the current Databricks connection points to a classic
     /// cluster (as opposed to a SQL warehouse).
     fn is_cluster(&self) -> AdapterResult<bool> {
-        if self.adapter_type() == AdapterType::Databricks {
-            // https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/utils.py#L94
-            let http_path = self
-                .engine()
-                .get_config()
-                .get_string("http_path")
-                .ok_or_else(|| {
-                    AdapterError::new(
-                        AdapterErrorKind::Configuration,
-                        "http_path is required to determine Databricks compute type",
-                    )
-                })?;
-
-            let normalized = http_path.trim().to_ascii_lowercase();
-            if normalized.contains("/warehouses/") {
-                return Ok(false);
-            }
-            if normalized.contains("/protocolv1/") {
-                return Ok(true);
-            }
-            Ok(false)
-        } else {
-            Err(AdapterError::new(
+        if self.adapter_type() != AdapterType::Databricks {
+            return Err(AdapterError::new(
                 AdapterErrorKind::NotSupported,
                 "is_cluster is only available for the Databricks adapter",
-            ))
+            ));
         }
+
+        // https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/utils.py#L94
+        let http_path = self
+            .engine()
+            .get_config()
+            .get_string("http_path")
+            .ok_or_else(|| {
+                AdapterError::new(
+                    AdapterErrorKind::Configuration,
+                    "http_path is required to determine Databricks compute type",
+                )
+            })?;
+
+        let normalized = http_path.trim().to_ascii_lowercase();
+        if normalized.contains("/warehouses/") {
+            return Ok(false);
+        }
+        if normalized.contains("/protocolv1/") {
+            return Ok(true);
+        }
+        Ok(false)
     }
 
     /// Rename relation
@@ -2530,9 +2533,9 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         match self.adapter_type() {
             Snowflake => snowflake::list_relations(adapter, query_ctx, conn, db_schema),
             Bigquery => bigquery::list_relations(adapter, query_ctx, conn, db_schema),
-            Databricks => databricks::list_relations(adapter, query_ctx, conn, db_schema),
+            // TODO(serramatutu/spark): Spark list_relations breaks with Databricks implementation
+            Databricks | Spark => databricks::list_relations(adapter, query_ctx, conn, db_schema),
             Redshift => redshift::list_relations(adapter, query_ctx, conn, db_schema),
-            Spark => unimplemented!("list_relations"),
             Postgres | Salesforce | Sidecar => {
                 let err = AdapterError::new(
                     AdapterErrorKind::Internal,

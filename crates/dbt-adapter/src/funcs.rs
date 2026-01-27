@@ -965,14 +965,7 @@ pub fn dispatch_adapter_calls(
 
             adapter.redact_credentials(state, sql)
         }
-        // only available for databricks
         "is_cluster" => {
-            if adapter.adapter_type() != AdapterType::Databricks {
-                return Err(minijinja::Error::new(
-                    minijinja::ErrorKind::InvalidOperation,
-                    "adapter.is_cluster is only available with the Databricks adapter",
-                ));
-            }
             if adapter.is_parse() {
                 return Ok(Value::from(false));
             }

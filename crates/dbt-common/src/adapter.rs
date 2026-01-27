@@ -35,13 +35,13 @@ impl From<AdapterType> for Dialect {
             AdapterType::Postgres => Dialect::Postgresql,
             AdapterType::Snowflake => Dialect::Snowflake,
             AdapterType::Bigquery => Dialect::Bigquery,
-            AdapterType::Databricks => Dialect::Databricks,
+            // TODO(serramatutu): switch Spark to Spark dialect once frontend looks good
+            AdapterType::Databricks | AdapterType::Spark => Dialect::Databricks,
             AdapterType::Redshift => Dialect::Redshift,
             // Salesforce dialect is unclear, it claims ANSI vaguely
             // https://developer.salesforce.com/docs/data/data-cloud-query-guide/references/data-cloud-query-api-reference/c360a-api-query-v2-call-overview.html
             // falls back to Postgresql at the moment
             AdapterType::Salesforce => Dialect::Postgresql,
-            AdapterType::Spark => Dialect::SparkSql,
             // Sidecar uses DuckDB backend but should be treated as Postgres-like
             AdapterType::Sidecar => Dialect::Postgresql,
         }

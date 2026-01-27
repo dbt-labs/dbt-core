@@ -32,7 +32,10 @@ pub fn create_static_relation(
             StaticBaseRelationObject::new(Arc::new(bigquery_relation_type))
         }
         AdapterType::Databricks | AdapterType::Spark => {
-            let databricks_relation_type = DatabricksRelationType(quoting);
+            let databricks_relation_type = DatabricksRelationType {
+                adapter_type,
+                quoting,
+            };
             StaticBaseRelationObject::new(Arc::new(databricks_relation_type))
         }
         AdapterType::Redshift => {

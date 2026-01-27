@@ -151,13 +151,7 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
 
     /// Database as string or error
     fn database_as_str(&self) -> Result<String, MinijinjaError> {
-        match self.database().as_str() {
-            Some(val) => Ok(val.to_string()),
-            None => jinja_err!(
-                MinijinjaErrorKind::InvalidOperation,
-                "expect database as string"
-            ),
-        }
+        Ok(self.database().as_str().unwrap_or_default().to_string())
     }
 
     /// Get the database name as a string literal
@@ -513,15 +507,26 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
 
     /// Relation without any identifier
     fn without_identifier(&self, _args: &[Value]) -> Result<Value, MinijinjaError> {
+        let database = match self.database().as_str() {
+            None | Some("") => None,
+            Some(v) => Some(v.to_string()),
+        };
+
+        let schema = match self.schema().as_str() {
+            None | Some("") => None,
+            Some(v) => Some(v.to_string()),
+        };
+
         let result = self
             .create_relation(
-                Some(self.database().as_str().unwrap().to_string()),
-                Some(self.schema().as_str().unwrap().to_string()),
+                database,
+                schema,
                 None,
                 self.relation_type(),
                 self.quote_policy(),
             )?
             .as_value();
+
         Ok(result)
     }
 

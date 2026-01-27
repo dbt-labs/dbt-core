@@ -93,6 +93,7 @@ WHERE table_catalog = '{}'
         let is_delta = file_formats.value(i) == "delta";
 
         let relation = Arc::new(DatabricksRelation::new(
+            adapter.adapter_type(),
             Some(catalog.to_string()),
             Some(schema.to_string()),
             Some(name.to_string()),
@@ -1023,6 +1024,7 @@ mod tests {
         };
 
         Arc::new(DatabricksRelation::new(
+            AdapterType::Databricks,
             Some(database.to_string()),
             Some(schema.to_string()),
             Some(identifier.to_string()),
