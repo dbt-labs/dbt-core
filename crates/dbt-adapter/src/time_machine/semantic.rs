@@ -62,7 +62,9 @@ impl SemanticCategory {
             | "get_relation_config"
             | "get_config_from_model"
             | "compare_dbr_version"
-            | "get_missing_columns" => SemanticCategory::MetadataRead,
+            | "get_missing_columns"
+            | "is_replaceable"
+            | "is_uniform" => SemanticCategory::MetadataRead,
 
             // Mutate database state (DDL/DML)
             "execute"
@@ -103,8 +105,6 @@ impl SemanticCategory {
             | "nest_column_data_types"
             | "add_time_ingestion_partition_column"
             | "parse_partition_by"
-            | "is_replaceable"
-            | "is_uniform"
             | "valid_incremental_strategies"
             | "get_persist_doc_columns"
             | "get_column_tags_from_model"

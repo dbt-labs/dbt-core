@@ -1791,6 +1791,14 @@ impl BaseAdapter for BridgeAdapter {
     /// Returns true if the warehouse was overridden, false otherwise
     #[tracing::instrument(skip(self), level = "trace")]
     fn use_warehouse(&self, warehouse: Option<String>, node_id: &str) -> FsResult<bool> {
+        // TODO(jason): Record/replay non-jinja internal calls non-invasively
+        // https://github.com/dbt-labs/fs/issues/7736
+        if let Some(tm) = self.time_machine()
+            && tm.is_replaying()
+        {
+            return Ok(false);
+        }
+
         match &self.inner {
             Typed { adapter, .. } => {
                 if warehouse.is_none() {
@@ -1812,6 +1820,14 @@ impl BaseAdapter for BridgeAdapter {
     /// To restore to the warehouse configured in profiles.yml
     #[tracing::instrument(skip(self), level = "trace")]
     fn restore_warehouse(&self, node_id: &str) -> FsResult<()> {
+        // TODO(jason): Record/replay non-jinja internal calls non-invasively
+        // https://github.com/dbt-labs/fs/issues/7736
+        if let Some(tm) = self.time_machine()
+            && tm.is_replaying()
+        {
+            return Ok(());
+        }
+
         match &self.inner {
             Typed { adapter, .. } => {
                 let mut conn = self
