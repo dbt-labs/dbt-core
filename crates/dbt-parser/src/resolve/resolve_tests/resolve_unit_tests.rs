@@ -231,7 +231,7 @@ pub fn resolve_unit_tests(
                 patch_path: None,
                 checksum: DbtChecksum::default(),
                 raw_code: None,
-                language: None,
+                language: Some("sql".to_string()),
                 tags: properties_config
                     .tags
                     .clone()

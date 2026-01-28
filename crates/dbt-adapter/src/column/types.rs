@@ -347,8 +347,7 @@ pub struct Column {
     _fields: Vec<Self>,
 
     /// The original data type string as used during instantiation.
-    #[allow(clippy::used_underscore_binding)]
-    _original_sql_str: Option<String>,
+    original_sql_str: Option<String>,
 
     /// Name of the column. Confusingly named `column` in dbt-adapters.
     name: String,
@@ -528,7 +527,7 @@ impl Column {
             _nullable: None,
             _repeated: None,
             _fields: Vec::new(),
-            _original_sql_str: Some(original_sql_str),
+            original_sql_str: Some(original_sql_str),
             name,
             core_dtype,
             core_data_type,
@@ -547,7 +546,7 @@ impl Column {
             _fields: Vec::new(),
             // TODO(serramatutu): figure out a way to not lose the original dtype information
             // while roundtripping from Jinja
-            _original_sql_str: None,
+            original_sql_str: None,
             name: col.name,
             core_dtype: col.dtype.clone(),
             core_data_type: col.dtype,
@@ -611,7 +610,7 @@ impl Column {
             _nullable: nullable,
             _repeated: repeated,
             _fields: fields.into(),
-            _original_sql_str: Some(original_sql_str),
+            original_sql_str: Some(original_sql_str),
             name,
             core_dtype,
             core_data_type,
@@ -642,7 +641,7 @@ impl Column {
                 _nullable: None,
                 _repeated: None,
                 _fields: Vec::new(),
-                _original_sql_str: Some(raw_data_type.to_string()),
+                original_sql_str: Some(raw_data_type.to_string()),
                 name: name.to_string(),
                 core_dtype,
                 core_data_type,
@@ -706,7 +705,7 @@ impl Column {
             _nullable: None,
             _repeated: None,
             _fields: Vec::new(),
-            _original_sql_str: Some(raw_data_type.to_string()),
+            original_sql_str: Some(raw_data_type.to_string()),
             name: name.to_string(),
             core_dtype: data_type.clone(),
             core_data_type: data_type,
@@ -732,6 +731,10 @@ impl Column {
 
     pub fn into_name(self) -> String {
         self.name
+    }
+
+    pub fn original_sql_str(&self) -> Option<&str> {
+        self.original_sql_str.as_deref()
     }
 
     /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/column.py#L92-L93
@@ -920,7 +923,7 @@ impl Column {
             format!("{prefix}.{}", self.name)
         };
 
-        let original_sql_str = if let Some(s) = self._original_sql_str.as_ref() {
+        let original_sql_str = if let Some(s) = self.original_sql_str.as_ref() {
             s.clone()
         } else {
             self.core_data_type.clone()
