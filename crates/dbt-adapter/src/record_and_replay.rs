@@ -91,10 +91,26 @@ fn compute_file_name(node_id: Option<&String>, sql: Option<&str>) -> AdbcResult<
     Ok(file_name)
 }
 
-fn compute_file_name_for_node_id(node_id: Option<&str>) -> String {
-    let id = node_id.unwrap_or("unknown");
-    let mut entry = COUNTERS.entry(id.to_string()).or_insert(0);
-    let file_name = format!("{}-{}", id, *entry);
+/// Compute a file name for get_table_schema based on the table identifier.
+/// Uses a hash of the fully qualified table name.
+fn compute_file_name_for_table_schema(
+    catalog: Option<&str>,
+    db_schema: Option<&str>,
+    table_name: &str,
+) -> String {
+    // TODO(jason): This format is hard to review - we should actually migrate multi-command
+    // invocations to individual invocation scoped folders
+    let fqn = format!(
+        "{}.{}.{}",
+        catalog.unwrap_or("_"),
+        db_schema.unwrap_or("_"),
+        table_name
+    );
+    let hash = checksum8(&fqn);
+    // Use counter to handle multiple calls to the same table (e.g., before/after creation)
+    let counter_key = format!("get_table_schema.{hash}");
+    let mut entry = COUNTERS.entry(counter_key).or_insert(0);
+    let file_name = format!("get_table_schema.{hash}-{}", *entry);
     *entry += 1;
     file_name
 }
@@ -518,9 +534,8 @@ impl Connection for RecordEngineConnection {
         let path = self.0.path.clone();
         create_dir_all(&path).map_err(|e| from_fs_error(e.into(), Some(&path)))?;
 
-        let file_name = compute_file_name_for_node_id(self.2.as_deref());
+        let full_file_name = compute_file_name_for_table_schema(catalog, db_schema, table_name);
         let handler = FileHandler::new_for_record();
-        let full_file_name = format!("{file_name}.get_table_schema");
 
         match result {
             Ok(schema) => {
@@ -842,13 +857,13 @@ impl Connection for ReplayEngineConnection {
 
     fn get_table_schema(
         &self,
-        _catalog: Option<&str>,
-        _db_schema: Option<&str>,
-        _table_name: &str,
+        catalog: Option<&str>,
+        db_schema: Option<&str>,
+        table_name: &str,
     ) -> AdbcResult<Schema> {
         let path = self.0.path.clone();
-        let file_name = compute_file_name_for_node_id(self.1.as_deref());
-        let full_file_name = format!("{file_name}.get_table_schema");
+        // Use table identifier for deterministic file naming (order-independent)
+        let full_file_name = compute_file_name_for_table_schema(catalog, db_schema, table_name);
 
         // FIXME: Compat layer
         // Try Arrow IPC first, fall back to Parquet
