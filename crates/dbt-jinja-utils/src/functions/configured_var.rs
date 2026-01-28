@@ -57,6 +57,7 @@ impl Object for ConfiguredVar {
                 "argument 'name' to var() has incompatible type; value is not a string",
             ));
         };
+
         // IMPORTANT: ArgsIter's `next_kwarg::<Option<&Value>>` cannot distinguish between:
         // - kwarg missing
         // - kwarg present with value `none`
@@ -68,18 +69,33 @@ impl Object for ConfiguredVar {
         // a true positional default only when the 2nd argument is not that kwargs map.
         let mut default_value: Option<Value> = None;
 
-        // Positional default: var("x", "abc")
-        if args.len() >= 2 && args.get(1).map(|v| v.kind()) != Some(ValueKind::Map) {
-            default_value = args.get(1).cloned();
-        }
+        // there are two ways for the second argument to be a map:
+        // 1. var("x", {"a": 1})
+        // 2. var("x", {"default": 1})
+        // The first use provides a default map-typed value for x
+        // The second use provides a default int-typed value for x
 
-        // Keyword default: var("x", default=...)
-        if let Some(last) = args.last()
-            && last.kind() == ValueKind::Map
-        {
-            // If the key doesn't exist, get_item errors; treat that as "no kwarg".
-            if let Ok(v) = last.get_item(&Value::from("default")) {
+        // Handling the default value
+        if args.len() == 2 {
+            let second = args.get(1).expect("second must be present");
+            let default_key = Value::from("default");
+            let keyword_default_value = if second.kind() == ValueKind::Map {
+                // NOTE: `get_item` can succeed and still return `undefined` when the key
+                // does not exist. Treat that as "not present".
+                match second.get_item(&default_key) {
+                    Ok(v) if !v.is_undefined() => Some(v),
+                    _ => None,
+                }
+            } else {
+                None
+            };
+
+            if let Some(v) = keyword_default_value {
+                // Keyword default: var("x", default=...)
                 default_value = Some(v);
+            } else {
+                // Positional default: var("x", "abc")
+                default_value = Some(second.clone());
             }
         }
 
@@ -260,5 +276,16 @@ mod tests {
 
         let rendered = template.render(minijinja::context!(), &[]).unwrap();
         assert_eq!(rendered, "abc");
+    }
+
+    #[test]
+    fn var_default_positional_map_is_used_when_var_missing() {
+        let env = make_env_with_var();
+        let template = env
+            .template_from_str("{{ var('config', {'materialized': 'table'}).materialized }}")
+            .unwrap();
+
+        let rendered = template.render(minijinja::context!(), &[]).unwrap();
+        assert_eq!(rendered, "table");
     }
 }
