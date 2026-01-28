@@ -12,6 +12,34 @@ use dbt_xdbc::{Backend, database, databricks};
 /// Ref: https://github.com/databricks/databricks-sql-go/blob/56b8a73b09908454e3070fe513ff2563c85ba214/connector.go#L214
 const USER_AGENT_NAME: &str = "dbt";
 
+/// Supported Databricks authentication types.
+/// When `auth_type` is absent, defaults to token-based (PAT) authentication.
+/// When `auth_type` is present, only `oauth` is a valid value.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DatabricksAuthType {
+    /// OAuth authentication
+    OAuth,
+    /// Personal Access Token
+    Token,
+}
+
+impl DatabricksAuthType {
+    /// Parse auth_type from config.
+    /// - Absent: defaults to token-based authentication
+    /// - "oauth": OAuth authentication
+    /// - Any other value: error
+    fn from_config(config: &AdapterConfig) -> Result<Self, AuthError> {
+        match config.get_string("auth_type") {
+            Some(s) if s.eq_ignore_ascii_case("oauth") => Ok(DatabricksAuthType::OAuth),
+            Some(invalid) => Err(AuthError::config(format!(
+                "Invalid auth_type '{}'. Valid values are: 'oauth'. Omit auth_type to use token-based authentication.",
+                invalid
+            ))),
+            None => Ok(DatabricksAuthType::Token),
+        }
+    }
+}
+
 pub struct DatabricksAuth;
 
 impl Auth for DatabricksAuth {
@@ -67,32 +95,37 @@ impl Auth for DatabricksAuth {
             builder.with_named_option(databricks::CATALOG, config.require_string("database")?)?;
             builder.with_named_option(databricks::HTTP_PATH, http_path)?;
 
-            // Personal Access Token
-            if let Some(token) = config.get_string("token") {
-                builder.with_named_option(databricks::TOKEN, token)?;
-                builder.with_named_option(databricks::AUTH_TYPE, databricks::auth_type::PAT)?;
-            }
-            // External Browser Oauth - U2M Oauth
-            else if !config.contains_key("client_secret") {
-                if let Some(client_id) = config.get_string("client_id") {
-                    builder.with_named_option(databricks::CLIENT_ID, client_id)?;
+            match DatabricksAuthType::from_config(config)? {
+                DatabricksAuthType::OAuth => {
+                    // OAuth authentication: M2M if client_secret present, otherwise External Browser (U2M)
+                    if let Some(client_secret) = config.get_string("client_secret") {
+                        // M2M
+                        builder.with_named_option(
+                            databricks::CLIENT_ID,
+                            config.require_string("client_id")?,
+                        )?;
+                        builder.with_named_option(databricks::CLIENT_SECRET, client_secret)?;
+                        builder.with_named_option(
+                            databricks::AUTH_TYPE,
+                            databricks::auth_type::OAUTH_M2M,
+                        )?;
+                    } else {
+                        // U2M
+                        if let Some(client_id) = config.get_string("client_id") {
+                            builder.with_named_option(databricks::CLIENT_ID, client_id)?;
+                        }
+                        builder.with_named_option(
+                            databricks::AUTH_TYPE,
+                            databricks::auth_type::EXTERNAL_BROWSER,
+                        )?;
+                    }
                 }
-                builder.with_named_option(
-                    databricks::AUTH_TYPE,
-                    databricks::auth_type::EXTERNAL_BROWSER,
-                )?;
-            }
-            // M2M Oauth
-            else if let Some(client_id) = config.get_string("client_id") {
-                builder.with_named_option(databricks::CLIENT_ID, client_id)?;
-                builder.with_named_option(
-                    databricks::CLIENT_SECRET,
-                    config.require_string("client_secret")?,
-                )?;
-                builder
-                    .with_named_option(databricks::AUTH_TYPE, databricks::auth_type::OAUTH_M2M)?;
-            } else {
-                return Err(AuthError::config("No valid authentication method provided"));
+                DatabricksAuthType::Token => {
+                    // Token
+                    builder
+                        .with_named_option(databricks::TOKEN, config.require_string("token")?)?;
+                    builder.with_named_option(databricks::AUTH_TYPE, databricks::auth_type::PAT)?;
+                }
             }
         }
         Ok(builder)
@@ -138,15 +171,7 @@ fn validate_config(config: &AdapterConfig) -> Result<(), AuthError> {
     if !config.contains_key("host") {
         return Err(AuthError::config("host is required".to_string()));
     }
-    let is_oauth = config
-        .get("auth_type")
-        .map(|v| v == "oauth")
-        .unwrap_or(false);
-    if !config.contains_key("token") && !is_oauth {
-        return Err(AuthError::config(
-            "The config `auth_type: oauth` is required when not using access token",
-        ));
-    }
+    DatabricksAuthType::from_config(config)?;
     if !config.contains_key("client_id") && config.contains_key("client_secret") {
         return Err(AuthError::config(
             "The config 'client_id' is required to connect to Databricks when 'client_secret' is present",
@@ -289,6 +314,40 @@ mod tests {
         run_config_test(config, &expected).unwrap();
     }
 
+    /// Test that M2M OAuth is used when auth_type is "oauth" even if a token field exists.
+    /// This handles the case where a user has a leftover token from a previous PAT configuration.
+    #[test]
+    fn test_m2m_oauth_with_leftover_token() {
+        let config = Mapping::from_iter([
+            ("host".into(), "H".into()),
+            ("schema".into(), "S".into()),
+            (
+                "http_path".into(),
+                "sql/protocolv1/o/1030i40i30i50i3/my-cluster-id".into(),
+            ),
+            ("client_id".into(), "CLIENT_ID".into()),
+            ("client_secret".into(), "CLIENT_SECRET".into()),
+            ("database".into(), "C".into()),
+            ("auth_type".into(), "oauth".into()),
+            ("token".into(), "LEFTOVER_TOKEN".into()), // Should be ignored
+        ]);
+
+        let expected = vec![
+            (databricks::CLIENT_ID, "CLIENT_ID"),
+            (databricks::CLIENT_SECRET, "CLIENT_SECRET"),
+            (databricks::SCHEMA, "S"),
+            (databricks::HOST, "H"),
+            (
+                databricks::HTTP_PATH,
+                "sql/protocolv1/o/1030i40i30i50i3/my-cluster-id",
+            ),
+            (databricks::CATALOG, "C"),
+            (databricks::USER_AGENT, USER_AGENT_NAME),
+            (databricks::AUTH_TYPE, databricks::auth_type::OAUTH_M2M),
+        ];
+        run_config_test(config, &expected).unwrap();
+    }
+
     #[test]
     fn test_external_browser_oauth() {
         let config = Mapping::from_iter([
@@ -349,8 +408,42 @@ mod tests {
         run_config_test(config, &expected).unwrap();
     }
 
+    /// Test that External Browser OAuth is used when auth_type is "oauth" even if a token field exists.
+    /// This handles the case where a user has a leftover token from a previous PAT configuration.
     #[test]
-    fn test_validate_config_errors_with_missing_token_and_not_oauth() {
+    fn test_external_browser_oauth_with_leftover_token() {
+        let config = Mapping::from_iter([
+            ("host".into(), "H".into()),
+            ("schema".into(), "S".into()),
+            (
+                "http_path".into(),
+                "sql/protocolv1/o/1030i40i30i50i3/my-cluster-id".into(),
+            ),
+            ("client_id".into(), "CLIENT_ID".into()),
+            ("database".into(), "C".into()),
+            ("auth_type".into(), "oauth".into()),
+            ("token".into(), "LEFTOVER_TOKEN".into()), // Should be ignored
+        ]);
+        let expected = vec![
+            (databricks::SCHEMA, "S"),
+            (databricks::HOST, "H"),
+            (
+                databricks::HTTP_PATH,
+                "sql/protocolv1/o/1030i40i30i50i3/my-cluster-id",
+            ),
+            (databricks::CATALOG, "C"),
+            (databricks::CLIENT_ID, "CLIENT_ID"),
+            (databricks::USER_AGENT, USER_AGENT_NAME),
+            (
+                databricks::AUTH_TYPE,
+                databricks::auth_type::EXTERNAL_BROWSER,
+            ),
+        ];
+        run_config_test(config, &expected).unwrap();
+    }
+
+    #[test]
+    fn test_invalid_auth_type_errors() {
         let config = Mapping::from_iter([
             ("host".into(), "H".into()),
             (
@@ -359,13 +452,37 @@ mod tests {
             ),
             ("schema".into(), "S".into()),
             ("database".into(), "C".into()),
-            ("auth_type".into(), "external_browser".into()),
+            ("auth_type".into(), "external_browser".into()), // Invalid value
         ]);
-        let result = validate_config(&AdapterConfig::new(config));
+        let auth = DatabricksAuth {};
+        let result = auth.configure(&AdapterConfig::new(config));
         assert!(result.is_err());
         assert_eq!(
             result.unwrap_err().msg(),
-            "The config `auth_type: oauth` is required when not using access token"
+            "Invalid auth_type 'external_browser'. Valid values are: 'oauth'. Omit auth_type to use token-based authentication."
+        );
+    }
+
+    #[test]
+    fn test_invalid_auth_type_pat_errors() {
+        // "pat" is not a valid auth_type value - users should omit auth_type for PAT
+        let config = Mapping::from_iter([
+            ("host".into(), "H".into()),
+            (
+                "http_path".into(),
+                "sql/protocolv1/o/1030i40i30i50i3/my-cluster-id".into(),
+            ),
+            ("schema".into(), "S".into()),
+            ("database".into(), "C".into()),
+            ("token".into(), "T".into()),
+            ("auth_type".into(), "pat".into()), // Invalid - should omit auth_type
+        ]);
+        let auth = DatabricksAuth {};
+        let result = auth.configure(&AdapterConfig::new(config));
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().msg(),
+            "Invalid auth_type 'pat'. Valid values are: 'oauth'. Omit auth_type to use token-based authentication."
         );
     }
 
