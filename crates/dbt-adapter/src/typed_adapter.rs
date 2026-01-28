@@ -1303,17 +1303,17 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         from_relation: Arc<dyn BaseRelation>,
         to_relation: Arc<dyn BaseRelation>,
     ) -> AdapterResult<Value> {
-        if self.adapter_type() == AdapterType::Bigquery {
-            // This method is a noop for BigQuery
-            // https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L260-L261
-            return Ok(none_value());
-        }
         if let Some(replay_adapter) = self.as_replay() {
             return replay_adapter.replay_expand_target_column_types(
                 state,
                 from_relation,
                 to_relation,
             );
+        }
+        if self.adapter_type() == AdapterType::Bigquery {
+            // This method is a noop for BigQuery
+            // https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L260-L261
+            return Ok(none_value());
         }
         let from_columns = self.get_columns_in_relation(state, from_relation)?;
         let to_columns = self.get_columns_in_relation(state, to_relation.clone())?;
