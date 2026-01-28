@@ -199,8 +199,15 @@ class UnparsedEntity(UnparsedEntityBase):
 class UnparsedColumnEntityV2(UnparsedEntityBase):
     """Used for dbt Semantic Layer column entities (v2 YAML)."""
 
-    # TODO: add a matching UnparsedDerivedEntityV2 class that adds an expr field
     pass
+
+
+# kw_only allows this child to define required fields
+@dataclass(kw_only=True)
+class UnparsedDerivedEntityV2(UnparsedEntityBase):
+    """Used for dbt Semantic Layer derived entities (v2 YAML)."""
+
+    expr: str
 
 
 @dataclass
@@ -473,6 +480,12 @@ class UnparsedNodeUpdate(HasConfig, HasColumnTests, HasColumnAndTestProps, HasYa
 
 
 @dataclass
+class UnparsedDerivedSemantics(dbtClassMixin):
+    # TODO DI-4618 Add dimensions field here
+    entities: List[UnparsedDerivedEntityV2] = field(default_factory=list)
+
+
+@dataclass
 class UnparsedModelUpdate(UnparsedNodeUpdate):
     quote_columns: Optional[bool] = None
     access: Optional[str] = None
@@ -480,10 +493,10 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
     versions: Sequence[UnparsedVersion] = field(default_factory=list)
     deprecation_date: Optional[datetime.datetime] = None
     time_spine: Optional[TimeSpine] = None
-    # TODO: allow semantic model to accept a semantic model config object OR a bool
+    # TODO DI-4579: allow semantic model to accept a semantic model config object OR a bool
     semantic_model: Optional[bool] = None
     metrics: Optional[List[UnparsedMetricV2]] = None
-    # TODO: add derived_semantics section with dimensions, metrics, and entities
+    derived_semantics: Optional[UnparsedDerivedSemantics] = None
 
     def __post_init__(self) -> None:
         if self.latest_version:

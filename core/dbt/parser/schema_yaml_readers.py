@@ -53,6 +53,7 @@ from dbt.contracts.graph.unparsed import (
     PercentileType,
     UnparsedConversionTypeParams,
     UnparsedCumulativeTypeParams,
+    UnparsedDerivedSemantics,
     UnparsedDimension,
     UnparsedDimensionTypeParams,
     UnparsedEntity,
@@ -951,6 +952,23 @@ class SemanticModelParser(YamlReader):
                 )
         return entities
 
+    def _parse_v2_derived_semantics_entities(
+        self, derived_semantics: UnparsedDerivedSemantics
+    ) -> List[Entity]:
+        entities: List[Entity] = []
+        for unparsed_entity in derived_semantics.entities:
+            entities.append(
+                Entity(
+                    name=unparsed_entity.name,
+                    type=EntityType(unparsed_entity.type),
+                    description=unparsed_entity.description,
+                    label=unparsed_entity.label,
+                    expr=unparsed_entity.expr,
+                    config=SemanticLayerElementConfig(meta=unparsed_entity.config.get("meta", {})),
+                )
+            )
+        return entities
+
     def parse_v2_semantic_model_from_dbt_model_patch(
         self,
         node: ModelNode,
@@ -958,7 +976,8 @@ class SemanticModelParser(YamlReader):
     ) -> None:
         dimensions = self._parse_v2_column_dimensions(patch.columns)
         entities = self._parse_v2_column_entities(patch.columns)
-
+        if patch.derived_semantics is not None:
+            entities.extend(self._parse_v2_derived_semantics_entities(patch.derived_semantics))
         self._parse_semantic_model_helper(
             semantic_model_name=node.name,
             semantic_model_config=patch.config,
