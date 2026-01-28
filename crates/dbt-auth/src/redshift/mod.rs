@@ -6,7 +6,7 @@ use tokio::runtime::Runtime;
 use tokio::task;
 
 use crate::redshift::token_service::{TokenEndpoint, create_token_service_client};
-use adbc_core::ffi::constants::ADBC_OPTION_USERNAME;
+use adbc_core::constants::ADBC_OPTION_USERNAME;
 use dbt_xdbc::redshift::{
     AUTH_IDC_CLIENT_DISPLAY_NAME, AUTH_IDC_REGION, AUTH_IDP_LISTEN_PORT, AUTH_IDP_RESPONSE_TIMEOUT,
     AUTH_ISSUER_URL, AUTH_PROVIDER, AUTH_PROVIDER_BROWSER_IDC, AUTH_PROVIDER_IDP_TOKEN, AUTH_TOKEN,
