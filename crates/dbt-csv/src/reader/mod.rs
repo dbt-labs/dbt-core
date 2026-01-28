@@ -81,6 +81,7 @@ impl NullRegex {
 #[derive(Debug, Clone)]
 pub struct Format {
     header: bool,
+    disambiguate_header: bool,
     delimiter: Option<u8>,
     escape: Option<u8>,
     quote: Option<u8>,
@@ -94,6 +95,7 @@ impl Default for Format {
     fn default() -> Self {
         Self {
             header: false,
+            disambiguate_header: false,
             delimiter: Some(b','),
             escape: None,
             quote: Some(b'"'),
@@ -122,9 +124,10 @@ impl Format {
     /// let format = Format::new(b',', true);
     /// let (schema, _) = format.infer_schema(reader, None)?;
     /// ```
-    pub fn new(delimiter: u8, has_header: bool) -> Self {
+    pub fn new(delimiter: u8, has_header: bool, disambiguate_header: bool) -> Self {
         Self {
             header: has_header,
+            disambiguate_header,
             delimiter: Some(delimiter),
             escape: None,
             quote: Some(b'"'),
@@ -249,10 +252,16 @@ impl Format {
             let headers = &csv_reader.headers().map_err(map_csv_error)?.clone();
             headers.iter().map(|s| s.to_string()).collect()
         } else {
-            let first_record_count = &csv_reader.headers().map_err(map_csv_error)?.len();
-            (0..*first_record_count)
-                .map(|i| format!("column_{}", i + 1))
-                .collect()
+            // No header row - generate letter names like agate does
+            // This matches agate's behavior: tuple(utils.letter_name(i) for i in range(len(rows[0])))
+            let first_record_count = csv_reader.headers().map_err(map_csv_error)?.len();
+            (0..first_record_count).map(Self::letter_name).collect()
+        };
+        // Apply deduplication if enabled
+        let headers = if self.disambiguate_header {
+            Self::disambiguate_headers(headers)
+        } else {
+            headers
         };
 
         // Build a boolean mask for forced text columns (case-insensitive match using dbt-ident)
@@ -313,6 +322,38 @@ impl Format {
         let agate_schema = AgateSchema::from_names_and_types(headers, types);
 
         Ok((agate_schema, records_count, missing_columns))
+    }
+
+    /// Deduplicate column names matching agate's utils.deduplicate behavior.
+    /// ['abc', 'abc', 'cde', 'abc'] -> ['abc', 'abc_2', 'cde', 'abc_3']
+    fn disambiguate_headers(headers: Vec<String>) -> Vec<String> {
+        use std::collections::HashMap;
+
+        let mut counts: HashMap<&str, usize> = HashMap::new();
+
+        headers
+            .iter()
+            .map(|name| {
+                let count = counts.entry(name).or_insert(0);
+                *count += 1;
+                if *count == 1 {
+                    name.clone()
+                } else {
+                    format!("{}_{}", name, *count)
+                }
+            })
+            .collect()
+    }
+
+    /// Generate a letter name for a column index, matching agate's letter_name function.
+    /// Index 0 -> "a", 1 -> "b", ..., 25 -> "z", 26 -> "aa", 27 -> "bb", ...
+    /// Replicating agate/utils.py::letter_name
+    fn letter_name(index: usize) -> String {
+        const LETTERS: &[u8] = b"abcdefghijklmnopqrstuvwxyz";
+        let count = LETTERS.len();
+        let letter = LETTERS[index % count] as char;
+        let repeat = (index / count) + 1;
+        std::iter::repeat_n(letter, repeat).collect()
     }
 
     /// Build a [`csv::Reader`] for this [`Format`]
@@ -1013,6 +1054,11 @@ impl ReaderBuilder {
         self
     }
 
+    /// Set whether to dedupe conflicting header names
+    pub fn with_disambiguate_header(mut self, disambiguate_header: bool) -> Self {
+        self.format.disambiguate_header = disambiguate_header;
+        self
+    }
     /// Overrides the [Format] of this [ReaderBuilder]
     pub fn with_format(mut self, format: Format) -> Self {
         self.format = format;
@@ -1138,7 +1184,7 @@ mod tests {
     use std::io::{Cursor, Seek, SeekFrom, Write};
 
     use arrow_array::cast::AsArray;
-    use arrow_array::types::Float64Type;
+    use arrow_array::types::{Float64Type, Int64Type};
 
     #[test]
     fn test_csv() {
@@ -1346,11 +1392,11 @@ mod tests {
 
         let mut csv = ReaderBuilder::new(agate_schema).build(file).unwrap();
 
-        // csv field names should be 'column_{number}'
+        // csv field names should be letter names (agate behavior)
         let schema = csv.schema();
-        assert_eq!("column_1", schema.field(0).name());
-        assert_eq!("column_2", schema.field(1).name());
-        assert_eq!("column_3", schema.field(2).name());
+        assert_eq!("a", schema.field(0).name());
+        assert_eq!("b", schema.field(1).name());
+        assert_eq!("c", schema.field(2).name());
         let batch = csv.next().unwrap().unwrap();
         let batch_schema = batch.schema();
 
@@ -2029,7 +2075,7 @@ mod tests {
         4,5\n\
         6,7,8";
         let mut read = Cursor::new(csv.as_bytes());
-        let result = Format::new(b',', true).infer_agate_schema(&mut read, None);
+        let result = Format::new(b',', true, true).infer_agate_schema(&mut read, None);
         // Should succeed now (truncated rows allowed by default)
         assert!(result.is_ok());
     }
@@ -2043,7 +2089,7 @@ mod tests {
         4,5\n\
         6,7,8";
         let mut read = Cursor::new(csv.as_bytes());
-        let result = Format::new(b',', true)
+        let result = Format::new(b',', true, true)
             .with_truncated_rows(false)
             .infer_agate_schema(&mut read, None);
         assert!(result.is_err());
@@ -2275,5 +2321,69 @@ mod tests {
         ]);
 
         assert_eq!(agate_schema, expected_schema);
+    }
+
+    #[test]
+    fn test_csv_with_duplicate_column_names() {
+        // CSV with duplicate column name "col_1"
+        let csv = "col_1,col_2,col_1\n1,text,3";
+
+        // Use Format with disambiguate_header=true to infer schema with deduplication
+        let format = Format::new(b',', true, true);
+        let (agate_schema, _) = format
+            .infer_agate_schema(Cursor::new(csv.as_bytes()), None)
+            .unwrap();
+
+        // Assert that column names were deduplicated (col_1, col_2, col_1_2)
+        assert_eq!(agate_schema.column(0).name, "col_1");
+        assert_eq!(agate_schema.column(1).name, "col_2");
+        assert_eq!(agate_schema.column(2).name, "col_1_2");
+
+        // Read the data using the inferred schema
+        let batch = ReaderBuilder::new(agate_schema)
+            .with_header(true)
+            .build_buffered(Cursor::new(csv.as_bytes()))
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap();
+
+        // Assert on row/column counts
+        assert_eq!(batch.num_rows(), 1);
+        assert_eq!(batch.num_columns(), 3);
+
+        // Assert on schema/datatypes with deduplicated names
+        let result_schema = batch.schema();
+        assert_eq!(result_schema.field(0).name(), "col_1");
+        assert_eq!(result_schema.field(0).data_type(), &DataType::Int64);
+        assert_eq!(result_schema.field(1).name(), "col_2");
+        assert_eq!(result_schema.field(1).data_type(), &DataType::Utf8);
+        assert_eq!(result_schema.field(2).name(), "col_1_2");
+        assert_eq!(result_schema.field(2).data_type(), &DataType::Int64);
+
+        // Assert on values
+        let col1_first = batch.column(0).as_primitive::<Int64Type>();
+        assert_eq!(col1_first.value(0), 1);
+
+        let col2 = batch.column(1).as_string::<i32>();
+        assert_eq!(col2.value(0), "text");
+
+        let col1_second = batch.column(2).as_primitive::<Int64Type>();
+        assert_eq!(col1_second.value(0), 3);
+    }
+
+    #[test]
+    fn test_letter_name() {
+        // Index 0 -> "a" (first letter)
+        assert_eq!(Format::letter_name(0), "a");
+
+        // Index 25 -> "z" (last letter, 25 % 26 = 25, repeat = 1)
+        assert_eq!(Format::letter_name(25), "z");
+
+        // Index 26 -> "aa" (wraps to first letter, 26 % 26 = 0 -> 'a', repeat = 2)
+        assert_eq!(Format::letter_name(26), "aa");
+
+        // Index 51 -> "zz" (wraps to last letter, 51 % 26 = 25 -> 'z', repeat = 2)
+        assert_eq!(Format::letter_name(51), "zz");
     }
 }

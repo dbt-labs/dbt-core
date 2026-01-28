@@ -71,8 +71,8 @@ fn map_csv_error(error: csv::Error) -> ArrowError {
 pub struct CustomCsvOptions {
     /// Field delimiter
     pub delimiter: u8,
-    /// Whether the CSV has a header row
-    pub has_header: bool,
+    // Should deduplicate headers share the same names
+    pub disambiguate_header: bool,
     /// Max records to use for schema inference
     pub max_records_for_inference: Option<usize>,
     /// Column names to force as Text type (case-sensitive exact match).
@@ -85,7 +85,7 @@ impl Default for CustomCsvOptions {
     fn default() -> Self {
         CustomCsvOptions {
             delimiter: b',',
-            has_header: true,
+            disambiguate_header: true,
             max_records_for_inference: Some(1000),
             text_columns: Vec::new(),
         }
@@ -99,9 +99,9 @@ impl CustomCsvOptions {
         self
     }
 
-    /// Set whether the CSV has a header row
-    pub fn with_has_header(mut self, has_header: bool) -> Self {
-        self.has_header = has_header;
+    /// Set whether the CSV should deduplicate header names
+    pub fn with_dedupe_header(mut self, dedupe_header: bool) -> Self {
+        self.disambiguate_header = dedupe_header;
         self
     }
 
@@ -124,16 +124,43 @@ pub struct CsvReadResult {
     pub unmatched_text_columns: Vec<String>,
 }
 
+/// Check if the first line of data is empty (only contains line terminators).
+/// This matches agate's behavior where an empty header line triggers letter name generation.
+fn is_first_line_empty(data: &[u8]) -> bool {
+    matches!(data.first(), Some(b'\n') | Some(b'\r'))
+}
+
+/// Skip an empty first line (starts with line terminator).
+/// Only call when is_first_line_empty() returns true.
+fn skip_empty_first_line(data: &[u8]) -> &[u8] {
+    match data.first() {
+        Some(b'\n') => &data[1..],
+        Some(b'\r') if data.get(1) == Some(&b'\n') => &data[2..],
+        Some(b'\r') => &data[1..],
+        _ => data,
+    }
+}
+
 pub fn read_to_arrow_records(
     path: &Path,
     options: &CustomCsvOptions,
 ) -> Result<CsvReadResult, ArrowError> {
     let data = std::fs::read(path).map_err(|e| ArrowError::CsvError(e.to_string()))?;
+
+    // Determine if file has a header row (agate compatibility)
+    // If first line is empty, eat the line and treat as no-header (autogen letter name)
+    let (has_header, data_for_processing) = if is_first_line_empty(&data) {
+        (false, skip_empty_first_line(&data))
+    } else {
+        (true, data.as_slice())
+    };
+
     // Use Python-compatible type inference (returns AgateSchema)
     // Pass text_columns to force those columns as Text type
-    let format = Format::new(options.delimiter, options.has_header);
+    let format = Format::new(options.delimiter, has_header, options.disambiguate_header)
+        .with_truncated_rows(true);
     let (agate_schema, _, unmatched_text_columns) = format.infer_agate_schema_with_text_columns(
-        Cursor::new(&data),
+        Cursor::new(data_for_processing),
         options.max_records_for_inference,
         &options.text_columns,
     )?;
@@ -143,11 +170,10 @@ pub fn read_to_arrow_records(
 
     // Read data with flexible row handling (matches Python csv module)
     // ReaderBuilder now takes AgateSchema and parses according to AgateType semantics
-    let reader = ReaderBuilder::new(agate_schema)
-        .with_header(options.has_header)
-        .with_delimiter(options.delimiter)
-        .with_truncated_rows(true)
-        .build(Cursor::new(data))?;
+    let reader: reader::BufReader<std::io::BufReader<Cursor<&[u8]>>> =
+        ReaderBuilder::new(agate_schema)
+            .with_format(format)
+            .build(Cursor::new(data_for_processing))?;
 
     let batches = reader.collect::<Result<Vec<_>, _>>()?;
 
@@ -156,4 +182,61 @@ pub fn read_to_arrow_records(
         batches,
         unmatched_text_columns,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use arrow_array::cast::AsArray;
+    use arrow_array::types::{Float64Type, Int64Type};
+    use std::path::Path;
+
+    /// Helper to verify empty header CSV produces letter names and correct data
+    fn verify_empty_header_csv(path: &Path) {
+        let options = CustomCsvOptions::default();
+        let result = read_to_arrow_records(path, &options).unwrap();
+
+        // Should have 3 columns with letter names
+        assert_eq!(result.schema.fields().len(), 3);
+        assert_eq!(result.schema.field(0).name(), "a");
+        assert_eq!(result.schema.field(1).name(), "b");
+        assert_eq!(result.schema.field(2).name(), "c");
+
+        // Should have 1 batch with 2 rows
+        assert_eq!(result.batches.len(), 1);
+        let batch = &result.batches[0];
+        assert_eq!(batch.num_rows(), 2);
+        assert_eq!(batch.num_columns(), 3);
+
+        // Verify data values
+        let col_a = batch.column(0).as_primitive::<Int64Type>();
+        assert_eq!(col_a.value(0), 1);
+        assert_eq!(col_a.value(1), 2);
+
+        let col_b = batch.column(1).as_string::<i32>();
+        assert_eq!(col_b.value(0), "hello");
+        assert_eq!(col_b.value(1), "world");
+
+        let col_c = batch.column(2).as_primitive::<Float64Type>();
+        assert!((col_c.value(0) - 3.5).abs() < 0.001);
+        assert!((col_c.value(1) - 2.5).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_read_csv_with_empty_header_line_lf() {
+        // Test empty header line with \n terminator
+        verify_empty_header_csv(Path::new("test/data/empty_header.csv"));
+    }
+
+    #[test]
+    fn test_read_csv_with_empty_header_line_cr() {
+        // Test empty header line with \r terminator
+        verify_empty_header_csv(Path::new("test/data/empty_header_cr.csv"));
+    }
+
+    #[test]
+    fn test_read_csv_with_empty_header_line_crlf() {
+        // Test empty header line with \r\n terminator
+        verify_empty_header_csv(Path::new("test/data/empty_header_crlf.csv"));
+    }
 }
