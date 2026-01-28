@@ -4,7 +4,9 @@ use std::{
 };
 
 use dbt_common::{io_args::ListOutputFormat, node_selector::SelectExpression};
-use dbt_schemas::schemas::{Nodes, telemetry::NodeType};
+use dbt_schemas::schemas::Nodes;
+#[cfg(debug_assertions)]
+use dbt_schemas::schemas::telemetry::NodeType;
 use serde_json::Map;
 
 type JsonValue = serde_json::Value;
@@ -42,6 +44,7 @@ pub struct Schedule<T> {
 
 impl Schedule<String> {
     #[inline]
+    #[allow(unused_variables)]
     pub fn debug_assert_invariants(&self, nodes: &Nodes) {
         #[cfg(debug_assertions)]
         {

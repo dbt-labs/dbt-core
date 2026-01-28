@@ -63,6 +63,7 @@ pub trait MetadataAdapter: Send + Sync {
     ) -> AdapterResult<BTreeMap<String, BTreeMap<String, ColumnMetadata>>>;
 
     /// Check if the returned error is due to insufficient permissions.
+    #[allow(unused_variables)]
     fn is_permission_error(&self, e: &AdapterError) -> bool {
         #[cfg(debug_assertions)]
         {

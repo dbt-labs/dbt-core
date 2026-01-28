@@ -36,6 +36,7 @@ const MAX_ENCODED_MESSAGE_SIZE_BYTES: usize = 2 * 1024 * 1024; // 2mb
 const MIN_BACKOFF_MILLIS: u64 = 200;
 const MAX_BACKOFF_MILLIS: u64 = 30_000;
 
+#[cfg(debug_assertions)]
 const LOG_PROTO_SHUTDOWN_MESSAGE: &str = "You're trying to log a message via \
 Vortex, but the client is already shut down. This should be fixed, but on release \
 builds the message will simply be dropped.";
@@ -604,12 +605,12 @@ impl VortexProducerClient {
             value: serialized_value.into(),
         };
         let msg = box_any_message(any);
-        let res = self.sender.send((msg, is_shutdown));
-
         #[cfg(debug_assertions)]
-        if res.is_err() {
+        if self.sender.send((msg, is_shutdown)).is_err() {
             eprintln!("{LOG_PROTO_SHUTDOWN_MESSAGE} type_url=/{package}.{name}");
         }
+        #[cfg(not(debug_assertions))]
+        let _ = self.sender.send((msg, is_shutdown));
     }
 }
 
