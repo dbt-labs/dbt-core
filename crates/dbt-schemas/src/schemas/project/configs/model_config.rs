@@ -268,6 +268,19 @@ pub struct ProjectModelConfig {
     pub python_version: Option<String>,
     #[serde(rename = "+imports")]
     pub imports: Option<StringOrArrayOfStrings>,
+    /// Snowflake Python model config: secrets to pass to stored procedure
+    #[serde(rename = "+secrets")]
+    pub secrets: Option<BTreeMap<String, YmlValue>>,
+    /// Snowflake Python model config: external access integrations for network access
+    #[serde(rename = "+external_access_integrations")]
+    pub external_access_integrations: Option<StringOrArrayOfStrings>,
+    /// Snowflake Python model config: use anonymous stored procedure (default: true)
+    #[serde(
+        default,
+        rename = "+use_anonymous_sproc",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub use_anonymous_sproc: Option<bool>,
     #[serde(rename = "+partition_by")]
     pub partition_by: Option<PartitionConfig>,
     #[serde(
@@ -457,6 +470,10 @@ pub struct ModelConfig {
     pub python_version: Option<String>,
     pub docs: Option<DocsConfig>,
     pub imports: Option<StringOrArrayOfStrings>,
+    pub secrets: Option<BTreeMap<String, YmlValue>>,
+    pub external_access_integrations: Option<StringOrArrayOfStrings>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub use_anonymous_sproc: Option<bool>,
     pub contract: Option<DbtContract>,
     pub event_time: Option<String>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
@@ -540,6 +557,9 @@ impl From<ProjectModelConfig> for ModelConfig {
             packages: config.packages,
             python_version: config.python_version,
             imports: config.imports,
+            secrets: config.secrets,
+            external_access_integrations: config.external_access_integrations,
+            use_anonymous_sproc: config.use_anonymous_sproc,
             persist_docs: config.persist_docs,
             post_hook: config.post_hook,
             pre_hook: config.pre_hook,
@@ -684,6 +704,9 @@ impl From<ModelConfig> for ProjectModelConfig {
             packages: config.packages,
             python_version: config.python_version,
             imports: config.imports,
+            secrets: config.secrets,
+            external_access_integrations: config.external_access_integrations,
+            use_anonymous_sproc: config.use_anonymous_sproc,
             persist_docs: config.persist_docs,
             post_hook: config.post_hook,
             pre_hook: config.pre_hook,
@@ -826,6 +849,9 @@ impl DefaultTo<ModelConfig> for ModelConfig {
             packages,
             python_version,
             imports,
+            secrets,
+            external_access_integrations,
+            use_anonymous_sproc,
             docs,
             contract,
             event_time,
@@ -900,6 +926,9 @@ impl DefaultTo<ModelConfig> for ModelConfig {
                 on_configuration_change,
                 packages,
                 python_version,
+                use_anonymous_sproc,
+                secrets,
+                external_access_integrations,
                 imports,
                 docs,
                 contract,

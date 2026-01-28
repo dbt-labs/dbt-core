@@ -87,18 +87,24 @@ pub fn finalize_python_code(
     let secrets = config
         .get_attr("secrets")
         .ok()
-        .and_then(|v| {
-            if let Ok(items) = v.try_iter() {
-                let pairs: Vec<String> = items
-                    .filter_map(|item| {
-                        let key_val = item.get_item(&Value::from(0)).ok()?;
-                        let key = key_val.as_str()?.to_string();
-                        let val_val = item.get_item(&Value::from(1)).ok()?;
-                        let val = val_val.as_str()?.to_string();
-                        Some(format!("'{}' = {}", key, val))
+        .and_then(|secrets_dict| {
+            // Iterate over dict keys, then get values
+            if let Ok(keys_iter) = secrets_dict.try_iter() {
+                let pairs: Vec<String> = keys_iter
+                    .filter_map(|key| {
+                        // Get the key as string
+                        let key_str = key.as_str()?.to_string();
+                        // Get the value for this key from the dict
+                        let value = secrets_dict.get_item(&key).ok()?;
+                        let val_str = value.as_str()?.to_string();
+                        Some(format!("'{}' = {}", key_str, val_str))
                     })
                     .collect();
-                Some(pairs.join(", "))
+                if pairs.is_empty() {
+                    None
+                } else {
+                    Some(pairs.join(", "))
+                }
             } else {
                 None
             }
@@ -166,7 +172,7 @@ $$"#,
         compiled_code
     );
 
-    // Use anonymous sproc by default
+    // Use anonymous sproc by default (matching dbt-snowflake behavior)
     let use_anonymous_sproc = config
         .get_attr("use_anonymous_sproc")
         .ok()
