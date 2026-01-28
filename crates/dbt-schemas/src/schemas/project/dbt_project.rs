@@ -18,6 +18,7 @@ use serde_with::skip_serializing_none;
 use strum::{Display, EnumString};
 
 use crate::schemas::common::DbtQuoting;
+use crate::schemas::common::SyncConfig;
 use crate::schemas::project::ProjectAnalysisConfig;
 use crate::schemas::project::ProjectSemanticModelConfig;
 use crate::schemas::project::configs::saved_query_config::ProjectSavedQueryConfig;
@@ -172,6 +173,7 @@ pub struct DbtProject {
     #[serde(rename = "query-comment")]
     pub query_comment: Verbatim<Option<QueryComment>>,
     pub quoting: Spanned<Option<DbtQuoting>>,
+    pub sync: Option<SyncConfig>,
     #[serde(rename = "require-dbt-version")]
     pub require_dbt_version: Option<StringOrArrayOfStrings>,
     #[serde(rename = "restrict-access")]
@@ -341,6 +343,7 @@ mod tests {
             on_run_start: Verbatim::from(None),
             query_comment: Verbatim::from(None),
             quoting: Spanned::new(None),
+            sync: None,
             require_dbt_version: None,
             restrict_access: None,
             vars: Verbatim::from(None),

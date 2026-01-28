@@ -223,6 +223,7 @@ pub fn build_root_project_configs(
             ModelConfig {
                 enabled: Some(true),
                 quoting: Some(root_project_quoting),
+                sync: root_project.sync.clone(),
                 ..Default::default()
             },
             None,
@@ -233,6 +234,7 @@ pub fn build_root_project_configs(
             SourceConfig {
                 enabled: Some(true),
                 quoting: Some(source_default_quoting),
+                sync: root_project.sync.clone(),
                 ..Default::default()
             },
             None,
@@ -243,6 +245,7 @@ pub fn build_root_project_configs(
             SnapshotConfig {
                 enabled: Some(true),
                 quoting: Some(root_project_quoting),
+                sync: root_project.sync.clone(),
                 ..Default::default()
             },
             None,
