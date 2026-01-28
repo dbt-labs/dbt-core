@@ -1,6 +1,105 @@
 use dbt_common::{ErrorCode, FsResult, err, fs_err};
 use std::{path::PathBuf, process::Command};
-// Use the local git client!
+
+use crate::utils::sanitize_git_url;
+
+/// Analyzes git stderr output and returns a user-friendly error message.
+/// This helps distinguish between different failure modes like authentication errors,
+/// missing refs, and permission issues.
+fn parse_git_clone_error(stderr: &str, repo: &str, revision: Option<&str>) -> (ErrorCode, String) {
+    let sanitized_repo = sanitize_git_url(repo);
+    let ref_name = revision.unwrap_or("HEAD");
+
+    // Check for missing remote ref (branch/tag doesn't exist)
+    if stderr.contains("couldn't find remote ref") || stderr.contains("did not match any") {
+        return (
+            ErrorCode::PackageDownloadFailed,
+            format!(
+                "Git ref '{}' not found in repository '{}'. Please verify the tag/branch/commit exists.",
+                ref_name, sanitized_repo
+            ),
+        );
+    }
+
+    // Check for authentication failures
+    if stderr.contains("Authentication failed")
+        || stderr.contains("could not read Username")
+        || stderr.contains("Invalid username or password")
+        || stderr.contains("terminal prompts disabled")
+    {
+        return (
+            ErrorCode::AuthFailed,
+            format!(
+                "Authentication failed for repository '{}'. Please check your credentials or access token.",
+                sanitized_repo
+            ),
+        );
+    }
+
+    // Check for repository not found
+    if stderr.contains("Repository not found")
+        || stderr.contains("does not appear to be a git repository")
+        || stderr.contains("not found")
+    {
+        return (
+            ErrorCode::PackageDownloadFailed,
+            format!(
+                "Repository '{}' not found. Please verify the repository URL and your access permissions.",
+                sanitized_repo
+            ),
+        );
+    }
+
+    // Check for permission denied
+    if stderr.contains("403")
+        || stderr.contains("Permission denied")
+        || stderr.contains("Access denied")
+    {
+        return (
+            ErrorCode::PermissionDenied,
+            format!(
+                "Permission denied for repository '{}'. Please verify you have access to this repository.",
+                sanitized_repo
+            ),
+        );
+    }
+
+    // Handle HTTP 500 error (common with GitLab for both auth and missing refs)
+    if stderr.contains("returned error: 500")
+        || stderr.contains("The requested URL returned error: 500")
+    {
+        return (
+            ErrorCode::PackageDownloadFailed,
+            format!(
+                "Failed to access repository '{}' (HTTP 500). This could be due to: \
+                (1) invalid credentials, (2) missing permissions, or (3) non-existent git ref '{}'. \
+                Please verify your access and that the specified version exists.",
+                sanitized_repo, ref_name
+            ),
+        );
+    }
+
+    // Handle HTTP 401/unauthorized
+    if stderr.contains("401") || stderr.contains("Unauthorized") {
+        return (
+            ErrorCode::AuthFailed,
+            format!(
+                "Unauthorized access to repository '{}'. Please check your credentials.",
+                sanitized_repo
+            ),
+        );
+    }
+
+    // Fallback: include the sanitized URL for context
+    (
+        ErrorCode::ExecutorError,
+        format!(
+            "Git clone failed for '{}': {}",
+            sanitized_repo,
+            stderr.trim()
+        ),
+    )
+}
 
 pub fn is_commit(revision: &str) -> bool {
     revision.len() == 40 && revision.chars().all(|c| c.is_ascii_hexdigit())
@@ -136,19 +235,16 @@ pub fn clone(
                 .output()
                 .map_err(|e| fs_err!(ErrorCode::ExecutorError, "Error cloning repo: {e}"))?;
             if !basic_output.status.success() {
-                return err!(
-                    ErrorCode::ExecutorError,
-                    "Git clone failed with exit status: {}",
-                    String::from_utf8(basic_output.stderr).expect("Git output should be UTF-8")
-                );
+                let basic_stderr =
+                    String::from_utf8(basic_output.stderr).expect("Git output should be UTF-8");
+                let (error_code, message) =
+                    parse_git_clone_error(&basic_stderr, repo, revision.as_deref());
+                return err!(error_code, "{}", message);
             }
             return Ok(String::from_utf8(basic_output.stdout).expect("Git output should be UTF-8"));
         }
-        return err!(
-            ErrorCode::ExecutorError,
-            "Git clone failed with exit status: {}",
-            stderr
-        );
+        let (error_code, message) = parse_git_clone_error(&stderr, repo, revision.as_deref());
+        return err!(error_code, "{}", message);
     }
 
     if let Some(subdir) = maybe_checkout_subdir {
@@ -193,5 +289,91 @@ mod tests {
     fn test_is_commit() {
         assert!(is_commit("1234567890abcdef1234567890abcdef12345678"));
         assert!(!is_commit("1234567890abcdef1234567890abcdef1234567890abc"));
+    }
+
+    #[test]
+    fn test_parse_git_clone_error_missing_ref() {
+        let stderr = "fatal: couldn't find remote ref v1.1500.3";
+        let (code, message) =
+            parse_git_clone_error(stderr, "https://github.com/org/repo.git", Some("v1.1500.3"));
+        assert_eq!(code, ErrorCode::PackageDownloadFailed);
+        assert!(message.contains("v1.1500.3"));
+        assert!(message.contains("not found"));
+    }
+
+    #[test]
+    fn test_parse_git_clone_error_auth_failed() {
+        let stderr = "fatal: Authentication failed for 'https://github.com/org/repo.git/'";
+        let (code, message) =
+            parse_git_clone_error(stderr, "https://user:pass@github.com/org/repo.git", None);
+        assert_eq!(code, ErrorCode::AuthFailed);
+        assert!(message.contains("Authentication failed"));
+        // Verify credentials are sanitized in the message
+        assert!(!message.contains("user:pass"));
+    }
+
+    #[test]
+    fn test_parse_git_clone_error_permission_denied() {
+        let stderr = "fatal: unable to access 'https://github.com/org/repo.git/': The requested URL returned error: 403";
+        let (code, message) =
+            parse_git_clone_error(stderr, "https://github.com/org/repo.git", None);
+        assert_eq!(code, ErrorCode::PermissionDenied);
+        assert!(message.contains("Permission denied"));
+    }
+
+    #[test]
+    fn test_parse_git_clone_error_http_500_gitlab() {
+        // This is the exact error from GitLab that the bug report mentions
+        let stderr = "Cloning into '/tmp/.tmpRyO2PJ/private_package.git'...\nfatal: unable to access 'https://gitlab.host.org/private_package.git/': The requested URL returned error: 500";
+        let (code, message) = parse_git_clone_error(
+            stderr,
+            "https://gitlab-ci-token:xxx@gitlab.host.org/private_package.git",
+            Some("v1.0.0"),
+        );
+        assert_eq!(code, ErrorCode::PackageDownloadFailed);
+        assert!(message.contains("HTTP 500"));
+        assert!(message.contains("v1.0.0"));
+        // Verify it mentions possible causes
+        assert!(message.contains("credentials"));
+        assert!(message.contains("permissions"));
+        // Verify credentials are sanitized
+        assert!(!message.contains("gitlab-ci-token"));
+    }
+
+    #[test]
+    fn test_parse_git_clone_error_unauthorized() {
+        let stderr = "fatal: unable to access 'https://github.com/org/repo.git/': The requested URL returned error: 401";
+        let (code, message) =
+            parse_git_clone_error(stderr, "https://github.com/org/repo.git", None);
+        assert_eq!(code, ErrorCode::AuthFailed);
+        assert!(message.contains("Unauthorized"));
+    }
+
+    #[test]
+    fn test_parse_git_clone_error_repo_not_found() {
+        let stderr = "fatal: repository 'https://github.com/org/nonexistent.git/' not found";
+        let (code, message) =
+            parse_git_clone_error(stderr, "https://github.com/org/nonexistent.git", None);
+        assert_eq!(code, ErrorCode::PackageDownloadFailed);
+        assert!(message.contains("not found"));
+    }
+
+    #[test]
+    fn test_parse_git_clone_error_unknown_error() {
+        let stderr = "fatal: some unexpected git error occurred";
+        let (code, message) =
+            parse_git_clone_error(stderr, "https://github.com/org/repo.git", None);
+        assert_eq!(code, ErrorCode::ExecutorError);
+        assert!(message.contains("some unexpected git error"));
+    }
+
+    #[test]
+    fn test_parse_git_clone_error_sanitizes_credentials() {
+        let stderr = "fatal: couldn't find remote ref main";
+        let repo_with_creds = "https://ghp_1234567890abcdef@github.com/org/repo.git";
+        let (_, message) = parse_git_clone_error(stderr, repo_with_creds, Some("main"));
+        // Verify credentials are not in the message
+        assert!(!message.contains("ghp_1234567890abcdef"));
+        assert!(message.contains("github.com"));
     }
 }
