@@ -183,6 +183,15 @@ def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path:
                     if key == "type_params":
                         continue
 
+                    # 'dataset' and 'project' are valid top-level source properties for BigQuery
+                    if (
+                        len(error_path) == 2
+                        and error_path[0] == "sources"
+                        and isinstance(error_path[1], int)
+                        and key in _get_allowed_config_key_aliases()
+                    ):
+                        continue
+
                     if key == "overrides" and key_path.startswith("sources"):
                         deprecations.warn(
                             "source-override-deprecation",
