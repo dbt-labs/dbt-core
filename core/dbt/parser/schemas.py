@@ -685,12 +685,10 @@ class PatchParser(YamlReader, Generic[NonSourceTarget, Parsed]):
     def normalize_attribute(self, data, path, attribute) -> None:
         if attribute in data:
             if "config" in data and attribute in data["config"]:
-                raise ParsingError(
-                    f"""
+                raise ParsingError(f"""
                     In {path}: found {attribute} dictionary in 'config' dictionary and as top-level key.
                     Remove the top-level key and define it under 'config' dictionary only.
-                """.strip()
-                )
+                """.strip())
             else:
                 if "config" not in data:
                     data["config"] = {}
@@ -782,6 +780,7 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
         deprecation_date: Optional[datetime.datetime] = None
         time_spine: Optional[TimeSpine] = None
         semantic_model = None
+        metrics = None
 
         if isinstance(block.target, UnparsedModelUpdate):
             deprecation_date = block.target.deprecation_date
@@ -800,6 +799,7 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
                 else None
             )
             semantic_model = block.target.semantic_model
+            metrics = block.target.metrics
 
         return ParsedNodePatch(
             name=block.target.name,
@@ -818,6 +818,7 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
             deprecation_date=deprecation_date,
             time_spine=time_spine,
             semantic_model=semantic_model,
+            metrics=metrics,
         )
 
     def parse_patch(self, block: TargetBlock[NodeTarget], refs: ParserRef) -> None:
@@ -1123,6 +1124,12 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
             semantic_model_parser.parse_v2_semantic_model_from_dbt_model_patch(
                 node=node,
                 patch=patch,
+            )
+
+            from dbt.parser.schema_yaml_readers import MetricParser
+
+            MetricParser(self.schema_parser, self.yaml).parse_v2_metrics_from_dbt_model_patch(
+                patch
             )
 
         # These two will have to be reapplied after config is built for versioned models

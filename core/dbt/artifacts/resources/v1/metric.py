@@ -134,6 +134,14 @@ class MetricTypeParams(dbtClassMixin):
     join_to_timespine: bool = False
     is_private: Optional[bool] = None  # populated by "hidden" field in YAML
 
+    def get_semantic_model_name(self) -> Optional[str]:
+        """Simple helper to avoid having to null check intermediate members."""
+        return (
+            self.metric_aggregation_params.semantic_model
+            if self.metric_aggregation_params is not None
+            else None
+        )
+
 
 @dataclass
 class MetricConfig(BaseConfig):
