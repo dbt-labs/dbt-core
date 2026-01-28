@@ -3,4 +3,4 @@ body: Add UnparsedMetricV2 to read in new-style YAML Semantic Layer Metrics.
 time: 2025-11-11T10:35:04.123144-08:00
 custom:
     Author: theyostalservice
-    Issue: na
+    Issue: "12157"
