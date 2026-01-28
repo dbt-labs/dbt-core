@@ -176,6 +176,31 @@ class UnparsedDimensionV2(UnparsedDimensionBase):
 
 
 @dataclass
+class UnparsedEntityBase(dbtClassMixin):
+    name: str
+    type: str  # EntityType enum
+    description: Optional[str] = None
+    label: Optional[str] = None
+    config: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class UnparsedEntity(UnparsedEntityBase):
+    """Used for dbt Semantic Layer entities (v1 YAML only)."""
+
+    role: Optional[str] = None
+    expr: Optional[str] = None
+
+
+@dataclass
+class UnparsedColumnEntityV2(UnparsedEntityBase):
+    """Used for dbt Semantic Layer column entities (v2 YAML)."""
+
+    # TODO: add a matching UnparsedDerivedEntityV2 class that adds an expr field
+    pass
+
+
+@dataclass
 class UnparsedColumn(HasConfig, HasColumnAndTestProps):
     quote: Optional[bool] = None
     tags: List[str] = field(default_factory=list)
@@ -183,7 +208,11 @@ class UnparsedColumn(HasConfig, HasColumnAndTestProps):
     # Note 1: Dimension str is a DimensionType enum value
     # Note 2: Don't ask me why, but str must come after UnparsedDimensionV2 here or else
     # this will be read as a dict object instead of a UnparsedDimensionV2 object
+    # Only used in v2 semantic layer.
     dimension: Union[UnparsedDimensionV2, str, None] = None
+    # UnparsedColumnEntityV2 must come before str to parse correctly.  str is assumed to be EntityType enum value
+    # Only used in v2 semantic layer.
+    entity: Union[UnparsedColumnEntityV2, str, None] = None
 
 
 @dataclass
@@ -269,7 +298,7 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
     # TODO: allow semantic model to accept a semantic model config object OR a bool
     semantic_model: Optional[bool] = None
     # TODO: add metrics section
-    # TODO: add derived_semantics section with dimensions and entities
+    # TODO: add derived_semantics section with dimensions, metrics, and entities
 
     def __post_init__(self) -> None:
         if self.latest_version:
@@ -641,6 +670,8 @@ class UnparsedCumulativeTypeParams(dbtClassMixin):
 
 @dataclass
 class UnparsedMetricTypeParams(dbtClassMixin):
+    """Used on v1 Semantic Metric YAML."""
+
     measure: Optional[Union[UnparsedMetricInputMeasure, str]] = None
     numerator: Optional[Union[UnparsedMetricInput, str]] = None
     denominator: Optional[Union[UnparsedMetricInput, str]] = None
@@ -652,24 +683,22 @@ class UnparsedMetricTypeParams(dbtClassMixin):
     cumulative_type_params: Optional[UnparsedCumulativeTypeParams] = None
 
 
-@dataclass
-class UnparsedMetric(dbtClassMixin):
+@dataclass(kw_only=True)
+class UnparsedMetricBase(dbtClassMixin):
+
     name: str
-    label: str
-    type: str
-    type_params: UnparsedMetricTypeParams
+    type: str = "simple"
+    label: Optional[str] = None
     description: str = ""
     # Note: `Union` must be the outermost part of the type annotation for serialization to work properly.
     filter: Union[str, List[str], None] = None
     time_granularity: Optional[str] = None
-    # metadata: Optional[Unparsedetadata] = None # TODO
-    meta: Dict[str, Any] = field(default_factory=dict)
-    tags: List[str] = field(default_factory=list)
+
     config: Dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def validate(cls, data):
-        super(UnparsedMetric, cls).validate(data)
+        super().validate(data)
         if "name" in data:
             errors = []
             if " " in data["name"]:
@@ -687,6 +716,61 @@ class UnparsedMetric(dbtClassMixin):
                 raise ValidationError(
                     f"The metric name '{data['name']}' is invalid.  It {', '.join(e for e in errors)}"
                 )
+
+
+@dataclass(kw_only=True)
+class UnparsedMetric(UnparsedMetricBase):
+    """Old-style YAML metric; prefer UnparsedMetricV2 instead as of late 2025."""
+
+    label: str  # TODO: follow up - v1 made this required, but in v2 it appears optional
+
+    type_params: UnparsedMetricTypeParams  # old-style YAML
+    # metadata: Optional[Unparsedetadata] = None # TODO
+    meta: Dict[str, Any] = field(default_factory=dict)
+    tags: List[str] = field(default_factory=list)
+
+
+@dataclass
+class UnparsedNonAdditiveDimensionV2(dbtClassMixin):
+    name: str
+    window_agg: str  # AggregationType enum
+    group_by: List[str] = field(default_factory=list)
+
+
+@dataclass
+class UnparsedMetricV2(UnparsedMetricBase):
+    hidden: bool = False
+    agg: Optional[str] = None
+
+    percentile: Optional[float] = None
+    percentile_type: Optional[str] = None
+
+    join_to_timespine: Optional[bool] = None
+    fill_nulls_with: Optional[int] = None
+    expr: Optional[Union[str, int]] = None
+
+    non_additive_dimension: Optional[UnparsedNonAdditiveDimensionV2] = None
+    agg_time_dimension: Optional[str] = None
+
+    # For cumulative metrics
+    window: Optional[str] = None
+    grain_to_date: Optional[str] = None
+    period_agg: str = PeriodAggregation.FIRST.value
+    input_metric: Optional[Union[str, Dict[str, Any]]] = None
+
+    # For ratio metrics
+    numerator: Optional[Union[str, Dict[str, Any]]] = None
+    denominator: Optional[Union[str, Dict[str, Any]]] = None
+
+    # For derived metrics
+    input_metrics: Optional[List[Dict[str, Any]]] = None
+
+    # For conversion metrics
+    entity: Optional[str] = None
+    calculation: Optional[str] = None
+    base_metric: Optional[Union[str, Dict[str, Any]]] = None
+    conversion_metric: Optional[Union[str, Dict[str, Any]]] = None
+    constant_properties: Optional[List[Dict[str, Any]]] = None
 
 
 @dataclass
@@ -717,17 +801,6 @@ class UnparsedFunctionUpdate(HasConfig, HasColumnProps, HasYamlMetadata, Unparse
 #
 # semantic interfaces unparsed objects
 #
-
-
-@dataclass
-class UnparsedEntity(dbtClassMixin):
-    name: str
-    type: str  # EntityType enum
-    description: Optional[str] = None
-    label: Optional[str] = None
-    role: Optional[str] = None
-    expr: Optional[str] = None
-    config: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
