@@ -701,3 +701,19 @@ schema_yml_v2_conversion_metric_missing_base_metric = """
 """
 
 schema_yml_v2_standalone_simple_metric = textwrap.dedent(schema_yml_v2_simple_metric_on_model_1)
+
+derived_semantics_yml = """
+    derived_semantics:
+      entities:
+        - name: derived_id_entity
+          description: This is the id entity, and it is the primary entity.
+          label: ID Entity
+          type: primary
+          expr: "id + foreign_id_col"
+          config:
+            meta:
+              test_label_thing: derived_entity_1
+        - name: derived_id_entity_with_no_optional_fields
+          type: primary
+          expr: id + foreign_id_col
+"""
