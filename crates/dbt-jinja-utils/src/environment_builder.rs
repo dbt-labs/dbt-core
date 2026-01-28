@@ -123,7 +123,12 @@ impl JinjaEnvBuilder {
         let is_replay = self
             .globals
             .get("invocation_args_dict")
-            .and_then(|v| v.get_item(&Value::from("REPLAY")).ok())
+            .and_then(|v| {
+                // Check both lowercase (from invocation_args_dict after filtering) and uppercase
+                v.get_item(&Value::from("replay"))
+                    .ok()
+                    .or_else(|| v.get_item(&Value::from("REPLAY")).ok())
+            })
             .map(|v| v.is_true())
             .unwrap_or(false);
 
@@ -625,10 +630,10 @@ mod tests {
     }
 
     fn invocation_args_dict(replay: bool) -> Value {
-        Value::from_object(ValueMap::from([(
-            Value::from("REPLAY".to_string()),
-            Value::from(replay),
-        )]))
+        Value::from_object(ValueMap::from([
+            (Value::from("REPLAY".to_string()), Value::from(replay)),
+            (Value::from("replay".to_string()), Value::from(replay)),
+        ]))
     }
 
     #[test]

@@ -156,12 +156,12 @@ impl InvocationArgs {
     pub fn to_dict(&self) -> BTreeMap<String, Value> {
         let mut dict = BTreeMap::new();
         dict.insert(
-            "which".to_string(),
+            "WHICH".to_string(),
             Value::from(self.invocation_command.clone()),
         );
 
         dict.insert(
-            "invocation_command".to_string(),
+            "INVOCATION_COMMAND".to_string(),
             Value::from(env::args().join(" ")),
         );
 
@@ -235,7 +235,22 @@ impl InvocationArgs {
         );
         dict.insert("REPLAY".to_string(), Value::from(self.replay.is_some()));
 
-        dict
+        // !!HACK!!: Inject a lower case version of the upper-case keys, for use
+        // in `invocation_args_dict` -- we do this because this method is
+        // currently been used both to create `flags` and `invocation_args_dict`.
+        //
+        // FIXME: we should separate `flags` and `invocation_args_dict` creation
+        // codepaths.
+        dict.into_iter()
+            .flat_map(|(k, v)| {
+                if k == k.to_uppercase() {
+                    let lower_value = v.clone();
+                    vec![(k.clone(), v), (k.to_lowercase(), lower_value)]
+                } else {
+                    vec![(k, v)]
+                }
+            })
+            .collect()
     }
 
     /// Set the number of threads to use.
