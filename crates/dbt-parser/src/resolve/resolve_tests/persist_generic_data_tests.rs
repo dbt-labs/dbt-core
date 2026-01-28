@@ -293,7 +293,7 @@ fn get_test_details(
         }
         _ => {
             if let Some(ref version_num) = test_config.version_num {
-                format!("ref('{}', v={})", &test_config.resource_name, version_num)
+                format!("ref('{}', v='{}')", &test_config.resource_name, version_num)
             } else {
                 format!("ref('{}')", &test_config.resource_name)
             }
@@ -2732,6 +2732,42 @@ mod tests {
         assert!(
             seen_tests.insert(unique_id2),
             "Second test should also be inserted (not a duplicate)"
+        );
+    }
+
+    #[test]
+    fn test_versioned_ref_is_quoted_in_persisted_generic_tests() {
+        let test_config = GenericTestConfig {
+            resource_type: "model".to_string(),
+            resource_name: "turmoenster".to_string(),
+            version_num: Some("1_1".to_string()),
+            model_tests: None,
+            column_tests: None,
+            source_name: None,
+        };
+
+        let io_args = IoArgs::default();
+        let details = get_test_details(
+            &DataTests::String("not_null".to_string().into()),
+            &test_config,
+            None,
+            &io_args,
+            None,
+        )
+        .unwrap();
+
+        let model = details
+            .kwargs
+            .get("model")
+            .and_then(|v| v.as_str())
+            .unwrap();
+        assert_eq!(
+            model, "get_where_subquery(ref('turmoenster', v='1_1'))",
+            "Version should be emitted as a quoted string to avoid Jinja interpreting 1_1 as numeric 11"
+        );
+        assert!(
+            !model.contains("v=1_1"),
+            "Unquoted v=1_1 would be parsed by Jinja as the numeric literal 11"
         );
     }
 }

@@ -730,9 +730,20 @@ pub fn render_fn() -> impl Fn(&State, &[Value], Kwargs) -> Result<Value, Error> 
                 "render requires exactly one argument (the string to render)",
             ));
         }
-        let sql = args[0]
-            .as_str()
-            .ok_or_else(|| Error::new(ErrorKind::InvalidOperation, "Argument must be a string"))?;
+        // dbt-core (Jinja2/Python) effectively accepts any value here and stringifies it.
+        // In practice, many dbt projects call `render(...)` on values that can legitimately be
+        // `none` (e.g. optional metadata-driven SQL snippets from `run_query`), expecting
+        // `"None"` and handling that downstream.
+        //
+        // Fusion uses minijinja which is stricter by default; align behavior by accepting
+        // `none` and treating it like Python's `str(None)` => `"None"`.
+        let sql = if args[0].is_none() {
+            "None"
+        } else {
+            args[0].as_str().ok_or_else(|| {
+                Error::new(ErrorKind::InvalidOperation, "Argument must be a string")
+            })?
+        };
 
         let env = state.env();
 
@@ -1532,6 +1543,20 @@ mod tests {
 
         // Should remove duplicates: 1,2,3,4,5
         assert_eq!(output.trim(), "1,2,3,4,5");
+    }
+
+    #[test]
+    fn test_render_accepts_none() {
+        let mut env = Environment::new();
+        env.add_function("render", render_fn());
+
+        // dbt projects frequently pass `none` into `render(...)` (often after `run_query`)
+        // and expect it to stringify to "None" (Python/Jinja2 behavior).
+        let template_source = r#"{{ render(None) }}"#;
+        let tmpl = env.template_from_str(template_source).unwrap();
+        let output = tmpl.render(Value::UNDEFINED, &[]).unwrap();
+
+        assert_eq!(output.trim(), "None");
     }
 
     #[test]
