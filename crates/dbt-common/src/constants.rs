@@ -86,7 +86,6 @@ pub const PARSING: &str = "   Parsing";
 // not being issued right now
 pub const SCHEDULING: &str = "Scheduling";
 //
-pub const DOWNLOADING: &str = " Downloading";
 pub const DOWNLOADED: &str = " Downloaded";
 pub const COMPILING: &str = " Compiling";
 pub const RENDERING: &str = " Rendering";

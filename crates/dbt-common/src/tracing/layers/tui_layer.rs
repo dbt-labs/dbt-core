@@ -243,11 +243,13 @@ pub fn should_show_progress_message(
         Some(ExecutionPhase::Render) => show_options.contains(&ShowOptions::ProgressRender),
         Some(ExecutionPhase::Analyze) => show_options.contains(&ShowOptions::ProgressAnalyze),
         Some(ExecutionPhase::Run) => show_options.contains(&ShowOptions::ProgressRun),
-        Some(
-            ExecutionPhase::NodeCacheHydration
-            | ExecutionPhase::DeferHydration
-            | ExecutionPhase::SchemaHydration,
-        ) => show_options.contains(&ShowOptions::ProgressHydrate),
+        Some(ExecutionPhase::NodeCacheHydration | ExecutionPhase::DeferHydration) => {
+            show_options.contains(&ShowOptions::ProgressHydrate)
+        }
+        Some(ExecutionPhase::SchemaHydration) => {
+            show_options.contains(&ShowOptions::ProgressHydrate)
+                || show_options.contains(&ShowOptions::Progress)
+        }
         // All other phases (including no Phase and Unspecified) match the general Progress option
         _ => show_options.contains(&ShowOptions::Progress),
     };
