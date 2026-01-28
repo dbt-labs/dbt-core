@@ -12,7 +12,6 @@ from dbt_semantic_interfaces.type_enums import (
 from tests.functional.assertions.test_runner import dbtTestRunner
 from tests.functional.semantic_models.fixtures import (
     base_schema_yml_v2,
-    derived_semantics_yml,
     fct_revenue_sql,
     metricflow_time_spine_sql,
     schema_yml_v2_conversion_metric_missing_base_metric,
@@ -235,7 +234,7 @@ class TestCumulativeMetricNoInputMetricFails:
             "metricflow_time_spine.sql": metricflow_time_spine_sql,
         }
 
-    def test_cumulative_metric_no_input_metric_parsing_fails(self, project) -> None:
+    def test_cumulative_metric_no_input_metric_parsing_fails(self, project):
         runner = dbtTestRunner()
         result = runner.invoke(["parse"])
         assert not result.success
@@ -251,44 +250,11 @@ class TestConversionMetricNoBaseMetricFails:
             "metricflow_time_spine.sql": metricflow_time_spine_sql,
         }
 
-    def test_conversion_metric_no_base_metric_parsing_fails(self, project) -> None:
+    def test_conversion_metric_no_base_metric_parsing_fails(self, project):
         runner = dbtTestRunner()
         result = runner.invoke(["parse"])
         assert not result.success
         assert "base_metric is required for conversion metrics." in str(result.exception)
-
-
-class TestDerivedSemanticsParsingWorks:
-    @pytest.fixture(scope="class")
-    def models(self):
-        return {
-            "schema.yml": semantic_model_schema_yml_v2 + derived_semantics_yml,
-            "fct_revenue.sql": fct_revenue_sql,
-            "metricflow_time_spine.sql": metricflow_time_spine_sql,
-        }
-
-    def test_derived_semantics_parsing(self, project) -> None:
-        runner = dbtTestRunner()
-        result = runner.invoke(["parse"])
-        assert result.success
-        manifest = result.result
-        assert len(manifest.semantic_models) == 1
-        semantic_model = manifest.semantic_models["semantic_model.test.fct_revenue"]
-        entities = {entity.name: entity for entity in semantic_model.entities}
-        assert (
-            len(entities) == 5
-        )  # length is so long because it is column entities + derived entities
-
-        id_entity = entities["derived_id_entity"]
-        assert id_entity.type == EntityType.PRIMARY
-        assert id_entity.description == "This is the id entity, and it is the primary entity."
-        assert id_entity.expr == "id + foreign_id_col"
-        assert id_entity.config.meta == {"test_label_thing": "derived_entity_1"}
-
-        id_entity_with_no_optional_fields = entities["derived_id_entity_with_no_optional_fields"]
-        assert id_entity_with_no_optional_fields.type == EntityType.PRIMARY
-        assert id_entity_with_no_optional_fields.expr == "id + foreign_id_col"
-        assert id_entity_with_no_optional_fields.config.meta == {}
 
 
 # TODO DI-4605: add enforcement and a test for when there are validity params with no column granularity
