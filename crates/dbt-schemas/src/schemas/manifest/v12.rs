@@ -5,13 +5,12 @@ use std::collections::{BTreeMap, HashMap};
 type YmlValue = dbt_serde_yaml::Value;
 
 use crate::schemas::{
-    InternalDbtNode,
-    macros::{DbtDocsMacro, DbtMacro},
+    macros::DbtDocsMacro,
     manifest::{
         DbtNode, ManifestMetadata,
         manifest::serialize_with_resource_type,
         manifest_nodes::{
-            ManifestExposure, ManifestFunction, ManifestMetric, ManifestSavedQuery,
+            ManifestExposure, ManifestFunction, ManifestMacro, ManifestMetric, ManifestSavedQuery,
             ManifestSemanticModel, ManifestSource, ManifestUnitTest,
         },
     },
@@ -24,7 +23,7 @@ pub struct DbtManifestV12 {
     pub metadata: ManifestMetadata,
     pub nodes: BTreeMap<String, DbtNode>,
     pub sources: BTreeMap<String, ManifestSource>,
-    pub macros: BTreeMap<String, DbtMacro>,
+    pub macros: BTreeMap<String, ManifestMacro>,
     pub unit_tests: BTreeMap<String, ManifestUnitTest>,
     pub docs: BTreeMap<String, DbtDocsMacro>,
     pub semantic_models: BTreeMap<String, ManifestSemanticModel>,
@@ -92,12 +91,20 @@ impl Serialize for DbtManifestV12 {
             dbt_serde_yaml::to_value(sources_serialized).map_err(serde::ser::Error::custom)?,
         );
 
-        // Serialize macros using InternalDbtNode trait
+        // Serialize macros
         let macros_serialized: BTreeMap<String, YmlValue> = self
             .macros
             .iter()
-            .map(|(k, v)| (k.clone(), InternalDbtNode::serialize(v)))
-            .collect();
+            .map(|(k, v)| {
+                Ok((
+                    k.clone(),
+                    serialize_with_resource_type(
+                        dbt_serde_yaml::to_value(v).map_err(serde::ser::Error::custom)?,
+                        "macro",
+                    ),
+                ))
+            })
+            .collect::<Result<_, _>>()?;
         map.insert(
             "macros".to_string(),
             dbt_serde_yaml::to_value(macros_serialized).map_err(serde::ser::Error::custom)?,

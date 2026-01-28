@@ -85,9 +85,9 @@ pub mod schemas {
             nodes_from_dbt_manifest,
         };
         pub use manifest_nodes::{
-            ManifestDataTest, ManifestExposure, ManifestFunction, ManifestMetric, ManifestModel,
-            ManifestSavedQuery, ManifestSeed, ManifestSemanticModel, ManifestSnapshot,
-            ManifestSource, ManifestUnitTest,
+            ManifestDataTest, ManifestExposure, ManifestFunction, ManifestMacro, ManifestMetric,
+            ManifestModel, ManifestSavedQuery, ManifestSeed, ManifestSemanticModel,
+            ManifestSnapshot, ManifestSource, ManifestUnitTest,
         };
         pub use metric::DbtMetric;
         pub use operation::DbtOperation;

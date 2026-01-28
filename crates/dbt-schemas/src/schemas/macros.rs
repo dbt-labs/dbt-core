@@ -11,6 +11,16 @@ use serde_with::skip_serializing_none;
 
 use super::common::DocsConfig;
 
+/// Macro argument as defined in v12 manifest schema
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct MacroArgument {
+    pub name: String,
+    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
+    pub type_: Option<String>,
+    #[serde(default)]
+    pub description: String,
+}
+
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
@@ -31,6 +41,9 @@ pub struct DbtMacro {
     pub funcsign: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub args: Vec<ArgSpec>,
+    /// Macro arguments from YAML spec (used for manifest serialization via ManifestMacro)
+    #[serde(skip)]
+    pub arguments: Vec<MacroArgument>,
     #[serde(skip_serializing)]
     pub macro_name_span: Option<Span>,
     pub __other__: BTreeMap<String, Value>,

@@ -32,6 +32,7 @@ use crate::schemas::{
         FreshnessDefinition, Given, IncludeExclude, NodeDependsOn, PersistDocsConfig, SyncConfig,
     },
     dbt_column::{DbtColumnRef, deserialize_dbt_columns, serialize_dbt_columns},
+    macros::{DbtMacro, MacroArgument, MacroDependsOn},
     manifest::{
         DbtMetric, DbtOperation, DbtSavedQuery, DbtSemanticModel,
         common::{DbtOwner, SourceFileMetadata, WhereFilterIntersection},
@@ -520,6 +521,49 @@ impl From<DbtSource> for ManifestSource {
             loaded_at_query: source.__source_attr__.loaded_at_query,
             freshness: source.__source_attr__.freshness,
             __other__: source.__other__,
+        }
+    }
+}
+
+/// Macro as represented in the v12 manifest (has arguments, not args)
+#[skip_serializing_none]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub struct ManifestMacro {
+    pub name: String,
+    pub package_name: String,
+    pub path: PathBuf,
+    pub original_file_path: PathBuf,
+    pub unique_id: String,
+    pub macro_sql: String,
+    pub depends_on: MacroDependsOn,
+    pub description: String,
+    pub meta: BTreeMap<String, YmlValue>,
+    pub docs: Option<DocsConfig>,
+    pub patch_path: Option<PathBuf>,
+    #[serde(default)]
+    pub arguments: Vec<MacroArgument>,
+    pub __other__: BTreeMap<String, YmlValue>,
+}
+
+impl From<DbtMacro> for ManifestMacro {
+    fn from(macro_: DbtMacro) -> Self {
+        // dbt-core: macro.arguments in manifest only come from YAML definitions.
+        // If no YAML, arguments is an empty list.
+        Self {
+            name: macro_.name,
+            package_name: macro_.package_name,
+            path: macro_.path,
+            original_file_path: macro_.original_file_path,
+            unique_id: macro_.unique_id,
+            macro_sql: macro_.macro_sql,
+            depends_on: macro_.depends_on,
+            description: macro_.description,
+            meta: macro_.meta,
+            docs: macro_.docs,
+            patch_path: macro_.patch_path,
+            arguments: macro_.arguments,
+            __other__: macro_.__other__,
         }
     }
 }

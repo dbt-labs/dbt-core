@@ -10,6 +10,7 @@ use dbt_jinja_utils::serde::into_typed_with_jinja;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_schemas::schemas::macros::DbtDocsMacro;
 use dbt_schemas::schemas::macros::DbtMacro;
+use dbt_schemas::schemas::macros::MacroArgument;
 use dbt_schemas::schemas::macros::MacroDependsOn;
 use dbt_schemas::schemas::properties::MacrosProperties;
 use dbt_schemas::state::DbtAsset;
@@ -161,6 +162,7 @@ pub fn resolve_macros(
                             patch_path: None,
                             funcsign: None,
                             args: vec![],
+                            arguments: vec![],
                             macro_name_span: Some(macro_name_span),
                             __other__: BTreeMap::new(),
                         };
@@ -188,6 +190,7 @@ pub fn resolve_macros(
                             patch_path: None,
                             funcsign: func_sign.clone(),
                             args: args.clone(),
+                            arguments: vec![],
                             macro_name_span: Some(macro_name_span),
                             __other__: BTreeMap::new(),
                         };
@@ -214,6 +217,7 @@ pub fn resolve_macros(
                             patch_path: None,
                             funcsign: None,
                             args: vec![],
+                            arguments: vec![],
                             macro_name_span: Some(macro_name_span),
                             __other__: BTreeMap::new(),
                         };
@@ -241,6 +245,7 @@ pub fn resolve_macros(
                             patch_path: None,
                             funcsign: None,
                             args: vec![],
+                            arguments: vec![],
                             macro_name_span: Some(macro_name_span),
                             __other__: BTreeMap::new(),
                         };
@@ -303,6 +308,18 @@ pub fn apply_macro_patches(
             // Update docs if provided
             if macro_props.docs.is_some() {
                 dbt_macro.docs = macro_props.docs;
+            }
+
+            // Update arguments if provided in YAML
+            if let Some(yml_arguments) = macro_props.arguments {
+                dbt_macro.arguments = yml_arguments
+                    .into_iter()
+                    .map(|arg| MacroArgument {
+                        name: arg.name,
+                        type_: arg.type_,
+                        description: arg.description.unwrap_or_default(),
+                    })
+                    .collect();
             }
 
             // Set patch_path to indicate this macro was patched from a YAML file

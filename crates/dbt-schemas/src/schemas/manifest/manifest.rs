@@ -231,7 +231,12 @@ pub fn build_manifest(invocation_id: &str, resolver_state: &ResolverState) -> Db
             .iter()
             .map(|(id, unit_test)| (id.clone(), (**unit_test).clone().into()))
             .collect(),
-        macros: resolver_state.macros.macros.clone(),
+        macros: resolver_state
+            .macros
+            .macros
+            .iter()
+            .map(|(id, macro_)| (id.clone(), macro_.clone().into()))
+            .collect(),
         functions: resolver_state
             .nodes
             .functions
