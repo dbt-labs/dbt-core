@@ -182,6 +182,7 @@ pub mod schemas {
         pub use model_properties::ModelProperties;
         pub use properties::GroupConfig;
         pub use properties::GroupProperties;
+        pub use properties::MacrosProperties;
         pub use properties::{
             DbtPropertiesFile, DbtPropertiesFileValues, GetConfig, MinimalSchemaValue,
             MinimalTableValue, MinimalUnitTestValue,

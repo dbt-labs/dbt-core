@@ -609,6 +609,14 @@ pub async fn load_inner(
         &all_files,
     );
 
+    let macro_ymls = find_files_by_kind_and_extension(
+        package_path,
+        &dbt_project.name,
+        &ResourcePathKind::MacroPaths,
+        &["yml", "yaml"],
+        &all_files,
+    );
+
     // todo: change dbt_properties to be BTreeSet, this may require many goldies updates
     for item in seed_ymls
         .iter()
@@ -616,6 +624,7 @@ pub async fn load_inner(
         .chain(&analysis_ymls)
         .chain(&test_ymls)
         .chain(&function_ymls)
+        .chain(&macro_ymls)
     {
         if !dbt_properties.contains(item) {
             dbt_properties.push(item.clone());

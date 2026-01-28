@@ -136,6 +136,7 @@ pub struct MacrosProperties {
     pub arguments: Option<Vec<MacrosArguments>>,
     pub description: Option<String>,
     pub docs: Option<DocsConfig>,
+    pub meta: Option<IndexMap<String, YmlValue>>,
     pub name: String,
 }
 

@@ -2,17 +2,25 @@ use dbt_common::ErrorCode;
 use dbt_common::FsResult;
 use dbt_common::io_args::IoArgs;
 use dbt_common::stdfs::diff_paths;
-use dbt_common::tracing::emit::emit_warn_log_from_fs_error;
+use dbt_common::tracing::emit::{emit_warn_log_from_fs_error, emit_warn_log_message};
 use dbt_common::{err, fs_err};
+use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::phases::parse::sql_resource::SqlResource;
+use dbt_jinja_utils::serde::into_typed_with_jinja;
+use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_schemas::schemas::macros::DbtDocsMacro;
 use dbt_schemas::schemas::macros::DbtMacro;
 use dbt_schemas::schemas::macros::MacroDependsOn;
+use dbt_schemas::schemas::properties::MacrosProperties;
 use dbt_schemas::state::DbtAsset;
+use minijinja::Value as MinijinjaValue;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::fs;
+use std::path::PathBuf;
+
+use crate::resolve::resolve_properties::MinimalPropertiesEntry;
 
 use crate::utils::parse_macro_statements;
 
@@ -145,10 +153,11 @@ pub fn resolve_macros(
                             span: Some(span),
                             unique_id: unique_id.clone(),
                             macro_sql: split_macro_sql.to_string(),
-                            depends_on: MacroDependsOn { macros: vec![] }, // Populate as needed
-                            // dbt-core: description is always default ''
-                            description: String::new(), // Populate as needed
-                            meta: BTreeMap::new(),      // Populate as needed
+                            depends_on: MacroDependsOn { macros: vec![] },
+                            // Description is patched from YAML schema files via apply_macro_patches
+                            description: String::new(),
+                            meta: BTreeMap::new(),
+                            docs: None,
                             patch_path: None,
                             funcsign: None,
                             args: vec![],
@@ -171,9 +180,11 @@ pub fn resolve_macros(
                             span: Some(span),
                             unique_id: unique_id.clone(),
                             macro_sql: split_macro_sql.to_string(),
-                            depends_on: MacroDependsOn { macros: vec![] }, // Populate as needed
-                            description: String::new(),                    // Populate as needed
-                            meta: BTreeMap::new(),                         // Populate as needed
+                            depends_on: MacroDependsOn { macros: vec![] },
+                            // Description is patched from YAML schema files via apply_macro_patches
+                            description: String::new(),
+                            meta: BTreeMap::new(),
+                            docs: None,
                             patch_path: None,
                             funcsign: func_sign.clone(),
                             args: args.clone(),
@@ -199,6 +210,7 @@ pub fn resolve_macros(
                             depends_on: MacroDependsOn { macros: vec![] },
                             description: String::new(),
                             meta: BTreeMap::new(),
+                            docs: None,
                             patch_path: None,
                             funcsign: None,
                             args: vec![],
@@ -221,9 +233,11 @@ pub fn resolve_macros(
                             span: Some(span),
                             unique_id: unique_id.clone(),
                             macro_sql: split_macro_sql.to_string(),
-                            depends_on: MacroDependsOn { macros: vec![] }, // Populate as needed
-                            description: String::new(),                    // Populate as needed
-                            meta: BTreeMap::new(),                         // Populate as needed
+                            depends_on: MacroDependsOn { macros: vec![] },
+                            // Description is patched from YAML schema files via apply_macro_patches
+                            description: String::new(),
+                            meta: BTreeMap::new(),
+                            docs: None,
                             patch_path: None,
                             funcsign: None,
                             args: vec![],
@@ -246,6 +260,73 @@ pub fn resolve_macros(
     }
 
     Ok(nodes)
+}
+
+/// Apply macro patches from YAML schema files to the resolved macros.
+/// This updates description and patch_path fields based on YAML macro definitions.
+pub fn apply_macro_patches(
+    io: &IoArgs,
+    macros: &mut BTreeMap<String, DbtMacro>,
+    macro_properties: &BTreeMap<String, MinimalPropertiesEntry>,
+    package_name: &str,
+    jinja_env: &JinjaEnv,
+    base_ctx: &BTreeMap<String, MinijinjaValue>,
+) -> FsResult<()> {
+    for (macro_name, props_entry) in macro_properties {
+        // Build the unique_id to look up the macro
+        let unique_id = format!("macro.{package_name}.{macro_name}");
+
+        // Check if this macro exists in our resolved macros
+        if let Some(dbt_macro) = macros.get_mut(&unique_id) {
+            // Parse the macro properties with Jinja rendering (for doc blocks)
+            let macro_props: MacrosProperties = into_typed_with_jinja(
+                io,
+                props_entry.schema_value.clone(),
+                false,
+                jinja_env,
+                base_ctx,
+                &[],
+                dependency_package_name_from_ctx(jinja_env, base_ctx),
+                true,
+            )?;
+
+            // Update description if provided
+            if let Some(description) = macro_props.description {
+                dbt_macro.description = description;
+            }
+
+            // Update meta if provided
+            if let Some(meta) = macro_props.meta {
+                dbt_macro.meta = meta.into_iter().collect();
+            }
+
+            // Update docs if provided
+            if macro_props.docs.is_some() {
+                dbt_macro.docs = macro_props.docs;
+            }
+
+            // Set patch_path to indicate this macro was patched from a YAML file
+            // Format: package_name://path/to/schema.yml
+            let patch_path = PathBuf::from(format!(
+                "{}://{}",
+                package_name,
+                props_entry.relative_path.display()
+            ));
+            dbt_macro.patch_path = Some(patch_path);
+        } else {
+            // Emit a warning when YAML references a macro that doesn't exist
+            emit_warn_log_message(
+                ErrorCode::SchemaError,
+                format!(
+                    "Found patch for macro \"{}\" which was not found",
+                    macro_name
+                ),
+                io.status_reporter.as_ref(),
+            );
+        }
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

@@ -8,8 +8,8 @@ use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::serde::{from_yaml_raw, into_typed_with_jinja};
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_schemas::schemas::properties::{
-    AnalysesProperties, DbtPropertiesFileValues, MinimalSchemaValue, MinimalTableValue,
-    MinimalUnitTestValue,
+    AnalysesProperties, DbtPropertiesFileValues, MacrosProperties, MinimalSchemaValue,
+    MinimalTableValue, MinimalUnitTestValue,
 };
 use dbt_schemas::schemas::serde::FloatOrString;
 use dbt_schemas::state::DbtPackage;
@@ -44,6 +44,7 @@ pub struct MinimalProperties {
     pub metrics: BTreeMap<String, MinimalPropertiesEntry>,
     pub saved_queries: BTreeMap<String, MinimalPropertiesEntry>,
     pub groups: BTreeMap<String, MinimalPropertiesEntry>,
+    pub macros: BTreeMap<String, MinimalPropertiesEntry>,
     pub semantic_layer_spec_is_legacy: bool,
 }
 
@@ -519,6 +520,38 @@ impl MinimalProperties {
                             name_span: Span::default(),
                             relative_path: properties_path.to_path_buf(),
                             schema_value: group_value,
+                            table_value: None,
+                            version_info: None,
+                            duplicate_paths: vec![],
+                        },
+                    );
+                }
+            }
+        }
+        if let Some(macros) = other.macros {
+            for macro_value in macros {
+                let macro_props = into_typed_with_jinja::<MacrosProperties, _>(
+                    io_args,
+                    macro_value.clone(),
+                    false,
+                    jinja_env,
+                    base_ctx,
+                    &[],
+                    dependency_package_name_from_ctx(jinja_env, base_ctx),
+                    true,
+                )?;
+                if let Some(existing_macro) = self.macros.get_mut(&macro_props.name) {
+                    existing_macro
+                        .duplicate_paths
+                        .push(properties_path.to_path_buf());
+                } else {
+                    self.macros.insert(
+                        macro_props.name.clone(),
+                        MinimalPropertiesEntry {
+                            name: validate_resource_name(&macro_props.name)?,
+                            name_span: Span::default(),
+                            relative_path: properties_path.to_path_buf(),
+                            schema_value: macro_value,
                             table_value: None,
                             version_info: None,
                             duplicate_paths: vec![],

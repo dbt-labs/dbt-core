@@ -9,6 +9,8 @@ use minijinja::{
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 
+use super::common::DocsConfig;
+
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
@@ -24,6 +26,7 @@ pub struct DbtMacro {
     pub depends_on: MacroDependsOn,
     pub description: String,
     pub meta: BTreeMap<String, Value>,
+    pub docs: Option<DocsConfig>,
     pub patch_path: Option<PathBuf>,
     pub funcsign: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
