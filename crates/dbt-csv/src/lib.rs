@@ -86,7 +86,7 @@ impl Default for CustomCsvOptions {
         CustomCsvOptions {
             delimiter: b',',
             disambiguate_header: true,
-            max_records_for_inference: Some(1000),
+            max_records_for_inference: None,
             text_columns: Vec::new(),
         }
     }
