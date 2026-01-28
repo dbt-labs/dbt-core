@@ -11,7 +11,11 @@ from dbt_common.contracts.config.properties import AdditionalPropertiesMixin
 from dbt_common.contracts.constraints import ColumnLevelConstraint
 from dbt_common.contracts.util import Mergeable
 from dbt_common.dataclass_schema import ExtensibleDbtClassMixin, dbtClassMixin
-from dbt_semantic_interfaces.type_enums import DimensionType, TimeGranularity
+from dbt_semantic_interfaces.type_enums import (
+    DimensionType,
+    EntityType,
+    TimeGranularity,
+)
 
 NodeVersion = Union[str, float]
 
@@ -95,6 +99,15 @@ class ColumnDimension(dbtClassMixin):
 
 
 @dataclass
+class ColumnEntity(dbtClassMixin):
+    name: str
+    type: EntityType
+    description: Optional[str] = None
+    label: Optional[str] = None
+    config: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
 class ColumnInfo(AdditionalPropertiesMixin, ExtensibleDbtClassMixin):
     """Used in all ManifestNodes and SourceDefinition"""
 
@@ -109,6 +122,7 @@ class ColumnInfo(AdditionalPropertiesMixin, ExtensibleDbtClassMixin):
     _extra: Dict[str, Any] = field(default_factory=dict)
     granularity: Optional[TimeGranularity] = None
     dimension: Union[ColumnDimension, DimensionType, None] = None
+    entity: Union[ColumnEntity, EntityType, None] = None
     doc_blocks: List[str] = field(default_factory=list)
 
     def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None) -> dict:

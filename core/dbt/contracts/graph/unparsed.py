@@ -176,6 +176,31 @@ class UnparsedDimensionV2(UnparsedDimensionBase):
 
 
 @dataclass
+class UnparsedEntityBase(dbtClassMixin):
+    name: str
+    type: str  # EntityType enum
+    description: Optional[str] = None
+    label: Optional[str] = None
+    config: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class UnparsedEntity(UnparsedEntityBase):
+    """Used for dbt Semantic Layer entities (v1 YAML only)."""
+
+    role: Optional[str] = None
+    expr: Optional[str] = None
+
+
+@dataclass
+class UnparsedColumnEntityV2(UnparsedEntityBase):
+    """Used for dbt Semantic Layer column entities (v2 YAML)."""
+
+    # TODO: add a matching UnparsedDerivedEntityV2 class that adds an expr field
+    pass
+
+
+@dataclass
 class UnparsedColumn(HasConfig, HasColumnAndTestProps):
     quote: Optional[bool] = None
     tags: List[str] = field(default_factory=list)
@@ -183,7 +208,11 @@ class UnparsedColumn(HasConfig, HasColumnAndTestProps):
     # Note 1: Dimension str is a DimensionType enum value
     # Note 2: Don't ask me why, but str must come after UnparsedDimensionV2 here or else
     # this will be read as a dict object instead of a UnparsedDimensionV2 object
+    # Only used in v2 semantic layer.
     dimension: Union[UnparsedDimensionV2, str, None] = None
+    # UnparsedColumnEntityV2 must come before str to parse correctly.  str is assumed to be EntityType enum value
+    # Only used in v2 semantic layer.
+    entity: Union[UnparsedColumnEntityV2, str, None] = None
 
 
 @dataclass
@@ -269,7 +298,7 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
     # TODO: allow semantic model to accept a semantic model config object OR a bool
     semantic_model: Optional[bool] = None
     # TODO: add metrics section
-    # TODO: add derived_semantics section with dimensions and entities
+    # TODO: add derived_semantics section with dimensions, metrics, and entities
 
     def __post_init__(self) -> None:
         if self.latest_version:
@@ -772,17 +801,6 @@ class UnparsedFunctionUpdate(HasConfig, HasColumnProps, HasYamlMetadata, Unparse
 #
 # semantic interfaces unparsed objects
 #
-
-
-@dataclass
-class UnparsedEntity(dbtClassMixin):
-    name: str
-    type: str  # EntityType enum
-    description: Optional[str] = None
-    label: Optional[str] = None
-    role: Optional[str] = None
-    expr: Optional[str] = None
-    config: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
