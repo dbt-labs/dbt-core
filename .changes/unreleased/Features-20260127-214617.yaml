@@ -3,4 +3,4 @@ body: Add parsing for v2 metrics on models and finish implementing their depende
 time: 2026-01-27T21:46:17.985044-08:00
 custom:
     Author: theyostalservice
-    Issue: .
+    Issue: "12397"
