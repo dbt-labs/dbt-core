@@ -685,10 +685,12 @@ class PatchParser(YamlReader, Generic[NonSourceTarget, Parsed]):
     def normalize_attribute(self, data, path, attribute) -> None:
         if attribute in data:
             if "config" in data and attribute in data["config"]:
-                raise ParsingError(f"""
+                raise ParsingError(
+                    f"""
                     In {path}: found {attribute} dictionary in 'config' dictionary and as top-level key.
                     Remove the top-level key and define it under 'config' dictionary only.
-                """.strip())
+                """.strip()
+                )
             else:
                 if "config" not in data:
                     data["config"] = {}
