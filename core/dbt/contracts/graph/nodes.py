@@ -31,19 +31,32 @@ from dbt.artifacts.resources import (
 )
 from dbt.artifacts.resources import Documentation as DocumentationResource
 from dbt.artifacts.resources import Exposure as ExposureResource
-from dbt.artifacts.resources import FileHash
+from dbt.artifacts.resources import (
+    FileHash,
+)
 from dbt.artifacts.resources import Function as FunctionResource
-from dbt.artifacts.resources import FunctionArgument, FunctionReturns
+from dbt.artifacts.resources import (
+    FunctionArgument,
+    FunctionReturns,
+)
 from dbt.artifacts.resources import GenericTest as GenericTestResource
-from dbt.artifacts.resources import GraphResource
+from dbt.artifacts.resources import (
+    GraphResource,
+)
 from dbt.artifacts.resources import Group as GroupResource
 from dbt.artifacts.resources import HasRelationMetadata as HasRelationMetadataResource
 from dbt.artifacts.resources import HookNode as HookNodeResource
-from dbt.artifacts.resources import InjectedCTE
+from dbt.artifacts.resources import (
+    InjectedCTE,
+)
 from dbt.artifacts.resources import Macro as MacroResource
-from dbt.artifacts.resources import MacroArgument
+from dbt.artifacts.resources import (
+    MacroArgument,
+)
 from dbt.artifacts.resources import Metric as MetricResource
-from dbt.artifacts.resources import MetricInputMeasure
+from dbt.artifacts.resources import (
+    MetricInputMeasure,
+)
 from dbt.artifacts.resources import Model as ModelResource
 from dbt.artifacts.resources import (
     ModelConfig,
@@ -61,7 +74,9 @@ from dbt.artifacts.resources import SingularTest as SingularTestResource
 from dbt.artifacts.resources import Snapshot as SnapshotResource
 from dbt.artifacts.resources import SourceDefinition as SourceDefinitionResource
 from dbt.artifacts.resources import SqlOperation as SqlOperationResource
-from dbt.artifacts.resources import TimeSpine
+from dbt.artifacts.resources import (
+    TimeSpine,
+)
 from dbt.artifacts.resources import UnitTestDefinition as UnitTestDefinitionResource
 from dbt.artifacts.schemas.batch_results import BatchResults
 from dbt.clients.jinja_static import statically_extract_has_name_this
@@ -72,6 +87,7 @@ from dbt.contracts.graph.unparsed import (
     TestDef,
     UnitTestOverrides,
     UnparsedColumn,
+    UnparsedMetricV2,
     UnparsedSourceDefinition,
     UnparsedSourceTableDefinition,
 )
@@ -1764,6 +1780,7 @@ class ParsedNodePatch(ParsedPatch):
     deprecation_date: Optional[datetime]
     time_spine: Optional[TimeSpine] = None
     semantic_model: Optional[bool] = None
+    metrics: Optional[List[UnparsedMetricV2]] = None
     freshness: Optional[ModelFreshness] = None
 
 

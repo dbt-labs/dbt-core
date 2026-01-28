@@ -1931,12 +1931,46 @@ def _process_refs(
         node.depends_on.add_node(target_model_id)
 
 
+def _add_depends_on_metrics_to_v2_metric(
+    metric: Metric,
+    input_metrics: List[MetricInput],
+    manifest: Manifest,
+    current_project: str,
+) -> None:
+    """Set the depends_on property for a v2 metric that depends on other metrics"""
+    for input_metric in input_metrics:
+        target_metric = manifest.resolve_metric(
+            target_metric_name=input_metric.name,
+            target_metric_package=None,
+            current_project=current_project,
+            node_package=metric.package_name,
+        )
+
+        if target_metric is None:
+            raise dbt.exceptions.ParsingError(
+                f"The metric `{input_metric.name}` does not exist but was referenced.",
+                node=metric,
+            )
+        elif isinstance(target_metric, Disabled):
+            raise dbt.exceptions.ParsingError(
+                f"The metric `{input_metric.name}` is disabled and thus cannot be referenced.",
+                node=metric,
+            )
+
+        _process_metric_node(
+            manifest=manifest,
+            current_project=current_project,
+            metric=target_metric,
+        )
+        metric.depends_on.add_node(target_metric.unique_id)
+
+
 def _process_metric_depends_on_semantic_models_for_measures(
     manifest: Manifest,
     current_project: str,
     metric: Metric,
 ) -> None:
-    """For a given metric, set the `depends_on` property"""
+    """For a given v1 metric, set the `depends_on` property"""
 
     assert (
         len(metric.type_params.input_measures) > 0
@@ -2001,49 +2035,112 @@ def _process_metric_node(
     metric: Metric,
 ) -> None:
     """Sets a metric's `input_measures` and `depends_on` properties"""
-
     # This ensures that if this metrics input_measures have already been set
     # we skip the work. This could happen either due to recursion or if multiple
     # metrics derive from another given metric.
     # NOTE: This does not protect against infinite loops
     if len(metric.type_params.input_measures) > 0:
         return
+        # TODO DI-4613: we need a v2 equivalent to avoid unnecessary work!  (This will
+        # probably require passing through / maintaining a "processed" set of metric names)
 
     if metric.type is MetricType.SIMPLE or metric.type is MetricType.CUMULATIVE:
-        if (
+        if metric.type is MetricType.SIMPLE and (
             metric.type_params.measure is None
             and metric.type_params.metric_aggregation_params is None
         ):
             # This should be caught earlier, but just in case, we assert here to avoid
             # any unexpected behaviors.
             raise dbt.exceptions.ParsingError(
-                f"Metric {metric} should have a measure or agg type defined, but it does not.",
+                f"Simple metric {metric} should have a measure or agg type defined, but it does not.",
+                node=metric,
+            )
+        elif metric.type is MetricType.CUMULATIVE and (
+            metric.type_params.measure is None
+            and (
+                metric.type_params.cumulative_type_params is None
+                or metric.type_params.cumulative_type_params.metric is None
+            )
+        ):
+            raise dbt.exceptions.ParsingError(
+                f"Cumulative metric {metric} should have a measure or input_metric defined, but it does not.",
                 node=metric,
             )
         if metric.type_params.measure is not None:
+            # v1 dependencies
             metric.add_input_measure(metric.type_params.measure)
             _process_metric_depends_on_semantic_models_for_measures(
                 manifest=manifest, current_project=current_project, metric=metric
             )
-        # TODO DI-4415: Once we can process simple metric merged into a model directly,
-        # we need to add a 'depends on' for the semantic model
+        else:
+            # v2 dependencies
+            if metric.type is MetricType.SIMPLE:
+                semantic_model_dependency = metric.type_params.get_semantic_model_name()
+                if semantic_model_dependency is None:
+                    raise dbt.exceptions.ParsingError(
+                        f"Simple metric `{metric.name}` must be attached to a semantic model.",
+                        node=metric,
+                    )
+                unique_id = (
+                    f"{NodeType.SemanticModel}.{current_project}.{semantic_model_dependency}"
+                )
+                metric.depends_on.add_node(unique_id)
+            if metric.type is MetricType.CUMULATIVE:
+                cumulative_type_params = metric.type_params.cumulative_type_params
+                input_metric = (
+                    cumulative_type_params.metric if cumulative_type_params is not None else None
+                )
+                assert (
+                    input_metric is not None
+                ), f"Cumulative metric `{metric.name}` must have a metric as an input."
+                _add_depends_on_metrics_to_v2_metric(
+                    metric,
+                    input_metrics=[input_metric],
+                    manifest=manifest,
+                    current_project=current_project,
+                )
     elif metric.type is MetricType.CONVERSION:
         conversion_type_params = metric.type_params.conversion_type_params
         assert (
             conversion_type_params
         ), f"{metric.name} is a conversion metric and must have conversion_type_params defined."
         # Handle old-style YAML measure inputs
-        if conversion_type_params.base_measure is not None:
-            metric.add_input_measure(conversion_type_params.base_measure)
-        if conversion_type_params.conversion_measure is not None:
-            metric.add_input_measure(conversion_type_params.conversion_measure)
-        _process_metric_depends_on_semantic_models_for_measures(
-            manifest=manifest,
-            current_project=current_project,
-            metric=metric,
-        )
-        # If we ever want to enable blended v1 and v2 manifests, we'll need to recurse through
-        # metric inputs here to find their measure inputs.
+        base_measure = conversion_type_params.base_measure
+        conversion_measure = conversion_type_params.conversion_measure
+        base_metric = conversion_type_params.base_metric
+        conversion_metric = conversion_type_params.conversion_metric
+        if base_measure is not None or conversion_measure is not None:
+            # v1 dependencies
+            assert base_measure is not None and conversion_measure is not None, (
+                f"Conversion metric `{metric.name}` cannot have only one of base measure "
+                + "and conversion measure defined."
+            )
+            metric.add_input_measure(base_measure)
+            metric.add_input_measure(conversion_measure)
+            _process_metric_depends_on_semantic_models_for_measures(
+                manifest=manifest,
+                current_project=current_project,
+                metric=metric,
+            )
+        elif base_metric is not None or conversion_metric is not None:
+            # v2 dependencies
+            assert base_metric is not None and conversion_metric is not None, (
+                f"Conversion metric `{metric.name}` cannot have only one of base metric "
+                + "and conversion metric defined."
+            )
+            _add_depends_on_metrics_to_v2_metric(
+                metric,
+                input_metrics=[base_metric, conversion_metric],
+                manifest=manifest,
+                current_project=current_project,
+            )
+        else:
+            raise dbt.exceptions.ParsingError(
+                f"Depending the version of YAML being used, conversion metric `{metric.name}` "
+                + "must have base and conversion measures or base and conversion metrics defined.",
+                node=metric,
+            )
+
     elif metric.type is MetricType.DERIVED or metric.type is MetricType.RATIO:
         input_metrics = metric.input_metrics
         if metric.type is MetricType.RATIO:
