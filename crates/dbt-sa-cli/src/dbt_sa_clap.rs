@@ -345,6 +345,10 @@ pub struct CommonArgs {
     #[arg(global = true, long, short = 'd', default_value = "false", action = ArgAction::SetTrue,  env = "DBT_DEBUG", value_parser = BoolishValueParser::new(),hide = true)]
     pub debug: bool,
 
+    /// Root directory for sidecar/DuckDB state. Defaults to target-path if not set.
+    #[arg(global = true, long, env = "DBT_DB_ROOT", hide = true)]
+    pub db_root: Option<PathBuf>,
+
     /// Show produced artifacts [default: 'progress']
     #[clap(long, num_args(0..), help = "Show produced artifacts [default: 'progress']")]
     pub show: Vec<ShowOptions>,
@@ -528,6 +532,7 @@ impl InitArgs {
                 beta_use_query_cache: arg.io.beta_use_query_cache,
                 host: arg.io.host,
                 port: arg.io.port,
+                db_root: arg.io.db_root.clone(),
             },
             send_anonymous_usage_stats: self.common_args.get_send_anonymous_usage_stats(),
             ..Default::default()
@@ -618,6 +623,7 @@ impl CommonArgs {
                 beta_use_query_cache: arg.io.beta_use_query_cache,
                 host: arg.io.host,
                 port: arg.io.port,
+                db_root: arg.io.db_root.clone(),
             },
             profiles_dir: self.profiles_dir.clone(),
             packages_install_path: self.packages_install_path.clone(),
@@ -716,6 +722,7 @@ pub fn from_main(cli: &Cli) -> SystemArgs {
             beta_use_query_cache: false,
             host: "localhost".to_string(),
             port: 8000,
+            db_root: cli.common_args().db_root,
         },
         from_main: true,
 
@@ -754,6 +761,7 @@ pub fn from_lib(cli: &Cli) -> SystemArgs {
             beta_use_query_cache: false,
             host: "localhost".to_string(),
             port: 8000,
+            db_root: cli.common_args().db_root,
         },
         from_main: false,
         target: cli.common_args().target,

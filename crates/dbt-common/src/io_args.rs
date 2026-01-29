@@ -107,6 +107,10 @@ pub struct IoArgs {
     pub is_compile: bool,
     pub in_dir: PathBuf,
     pub out_dir: PathBuf,
+    /// Root directory for sidecar/DuckDB state. Defaults to out_dir if not set.
+    /// Structure: {db_root}/db/state/{catalog}.db (persistent)
+    ///            {db_root}/db/sessions/{session-id}/... (ephemeral)
+    pub db_root: Option<PathBuf>,
     pub log_path: Option<PathBuf>,
     pub otel_file_name: Option<String>,
     pub otel_parquet_file_name: Option<String>,
@@ -139,6 +143,53 @@ impl IoArgs {
         let rel_first = rel_path.components().next();
         out_dir_last == rel_first
     }
+
+    // -----------------------------------------------------------------------------------------
+    // Sidecar/DuckDB path helpers
+    // -----------------------------------------------------------------------------------------
+
+    /// Returns the db_root, defaulting to out_dir if not explicitly set.
+    pub fn db_root(&self) -> &Path {
+        self.db_root.as_deref().unwrap_or(&self.out_dir)
+    }
+
+    /// Path to persistent DuckDB state directory: {db_root}/db/state/
+    pub fn db_state_dir(&self) -> PathBuf {
+        self.db_root().join("db").join("state")
+    }
+
+    /// Path to a specific catalog's DuckDB file: {db_root}/db/state/{catalog}.db
+    pub fn db_catalog_path(&self, catalog: &str) -> PathBuf {
+        self.db_state_dir()
+            .join(format!("{}.db", catalog.to_ascii_lowercase()))
+    }
+
+    /// Path to session-scoped directory: {db_root}/db/sessions/{invocation_id}/
+    pub fn db_session_dir(&self) -> PathBuf {
+        self.db_root()
+            .join("db")
+            .join("sessions")
+            .join(self.invocation_id.to_string())
+    }
+
+    /// Path to session logs: {db_root}/db/sessions/{invocation_id}/logs/
+    pub fn db_session_logs_dir(&self) -> PathBuf {
+        self.db_session_dir().join("logs")
+    }
+
+    /// Path to session pull data: {db_root}/db/sessions/{invocation_id}/pull/
+    pub fn db_session_pull_dir(&self) -> PathBuf {
+        self.db_session_dir().join("pull")
+    }
+
+    /// Path to session pull data for a specific table:
+    /// {db_root}/db/sessions/{invocation_id}/pull/{catalog}/{schema}/{table}/
+    pub fn db_session_table_dir(&self, catalog: &str, schema: &str, table: &str) -> PathBuf {
+        self.db_session_pull_dir()
+            .join(catalog.to_ascii_lowercase())
+            .join(schema.to_ascii_lowercase())
+            .join(table.to_ascii_lowercase())
+    }
 }
 
 impl fmt::Debug for IoArgs {
@@ -148,6 +199,7 @@ impl fmt::Debug for IoArgs {
             .field("show", &self.show)
             .field("in_dir", &self.in_dir)
             .field("out_dir", &self.out_dir)
+            .field("db_root", &self.db_root)
             .field("log_path", &self.log_path)
             .field("otel_file_name", &self.otel_file_name)
             .field("status_reporter", &self.status_reporter.is_some())
