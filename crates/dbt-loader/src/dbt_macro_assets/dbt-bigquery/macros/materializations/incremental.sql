@@ -78,7 +78,7 @@
 
   {%- set target_relation = this.incorporate(type='table') %}
   {%- set existing_relation = load_relation(this) %}
-  {# Deviation from Core: we require the temp relation to have a type #}
+  {# DIVERGENCE: FIXME: Fusion requires the temp relation to have a type #}
   {%- set tmp_relation = make_temp_relation(target_relation) %}
 
   {#-- Validate early so we don't run SQL if the strategy is invalid --#}
@@ -143,7 +143,7 @@
       {%- endcall -%}
       {% set tmp_relation_exists = true %}
       {#-- Process schema changes. Returns dict of changes if successful. Use source columns for upserting/merging --#}
-      {% set dest_columns = process_schema_changes(on_schema_change, tmp_relation, existing_relation) %}
+  {% set dest_columns = adapter.dispatch('process_schema_changes', 'dbt')(on_schema_change, tmp_relation, existing_relation) %}
     {% endif %}
 
     {% if not dest_columns %}
@@ -165,6 +165,8 @@
   {% endif %}
 
   {{ run_hooks(post_hooks) }}
+
+  {% set target_relation = this.incorporate(type='table') %}
 
   {% set should_revoke = should_revoke(existing_relation, full_refresh_mode) %}
   {% do apply_grants(target_relation, grant_config, should_revoke) %}

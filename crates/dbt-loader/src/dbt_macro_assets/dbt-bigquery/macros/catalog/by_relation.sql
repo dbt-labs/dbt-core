@@ -1,3 +1,4 @@
+{# DIVERGENCE: parameter `information_schema` is now `dbschema` #}
 {% macro bigquery__get_catalog_relations(db_schema, relations) -%}
 
     {%- if (relations | length) == 0 -%}

@@ -1,3 +1,8 @@
+{# DIVERGENCE:
+    parameter `information_schema` is now `dbschema`,
+    the diffs are due to in Fusion, we do not have the InformationSchema objects implemented the same way as in the Python adapter.
+    But the rendered SQL should be the same.
+#}
 {% macro _bigquery__get_table_shards_sql(db_schema) %}
     {% set region = "region-%s"|format(db_schema.identifier)%}
     select
@@ -58,6 +63,7 @@
 {% endmacro %}
 
 
+{# DIVERGENCE: parameter `information_schema` is now `dbschema` #}
 {% macro _bigquery__get_columns_sql(db_schema) %}
     select
         columns.table_catalog,
@@ -82,8 +88,10 @@
         case when columns.clustering_ordinal_position is not null then 1 else 0 end as is_clustering_column,
         case when columns.clustering_ordinal_position is not null then paths.field_path end as cluster_column,
         columns.clustering_ordinal_position
+    {# DIVERGENCE BEGIN #}
     from `{{ db_schema.database }}`.`{{ db_schema.schema }}`.INFORMATION_SCHEMA.COLUMNS columns
     join `{{ db_schema.database }}`.`{{ db_schema.schema }}`.INFORMATION_SCHEMA.COLUMN_FIELD_PATHS paths
+    {# DIVERGENCE END #}
         on paths.table_catalog = columns.table_catalog
         and paths.table_schema = columns.table_schema
         and paths.table_name = columns.table_name

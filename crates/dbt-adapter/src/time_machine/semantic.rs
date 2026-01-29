@@ -119,7 +119,8 @@ impl SemanticCategory {
             | "compute_external_path"
             | "get_hard_deletes_behavior"
             | "is_cluster"
-            | "build_catalog_relation" => SemanticCategory::Pure,
+            | "build_catalog_relation"
+            | "sync_struct_columns" => SemanticCategory::Pure,
 
             _ => {
                 debug_assert!(

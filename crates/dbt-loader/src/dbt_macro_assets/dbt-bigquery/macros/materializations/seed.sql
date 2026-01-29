@@ -9,7 +9,7 @@
 
 {% macro bigquery__load_csv_rows(model, agate_table) %}
 
-  {# -- already layered into the schema of the agate table upstream #}
+  {# DIVERGENCE BEGIN: already layered into the schema of the agate table upstream #}
   {%- set table_after_schema_override = agate_table -%}
 
   {%- set delimiter = model['config'].get('delimiter', ',') -%}
@@ -21,6 +21,7 @@
       agate_table,
       delimiter,
   ) }}
+  {# DIVERGENCE END #}
 
   {% call statement() %}
     alter table {{ this.render() }} set {{ bigquery_table_options(config, model) }}

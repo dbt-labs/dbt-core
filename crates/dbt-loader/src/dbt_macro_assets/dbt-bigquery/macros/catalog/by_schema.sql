@@ -1,3 +1,4 @@
+{# DIVERGENCE: parameter `information_schema` is now `dbschema` #}
 {% macro bigquery__get_catalog(db_schema, schemas) -%}
 
     {%- if (schemas | length) == 0 -%}

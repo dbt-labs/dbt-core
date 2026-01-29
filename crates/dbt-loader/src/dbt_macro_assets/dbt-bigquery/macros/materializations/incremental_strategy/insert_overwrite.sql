@@ -40,61 +40,143 @@
 {% macro bq_insert_overwrite_sql(
     tmp_relation, target_relation, sql, unique_key, partition_by, partitions, dest_columns, tmp_relation_exists, copy_partitions
 ) %}
-  {% if partitions is not none and partitions != [] %} {# static #}
-      {{ bq_static_insert_overwrite_sql(tmp_relation, target_relation, sql, partition_by, partitions, dest_columns, tmp_relation_exists, copy_partitions) }}
-  {% else %} {# dynamic #}
-      {{ bq_dynamic_insert_overwrite_sql(tmp_relation, target_relation, sql, unique_key, partition_by, dest_columns, tmp_relation_exists, copy_partitions) }}
-  {% endif %}
+
+    {# static #}
+    {% if partitions is not none and partitions != [] %}
+        {{ bq_static_insert_overwrite_sql(tmp_relation, target_relation, sql, partition_by, partitions, dest_columns, tmp_relation_exists, copy_partitions) }}
+
+    {# dynamic #}
+    {% else %}
+        {{ bq_dynamic_insert_overwrite_sql(tmp_relation, target_relation, sql, unique_key, partition_by, dest_columns, tmp_relation_exists, copy_partitions) }}
+    {% endif %}
+
 {% endmacro %}
+
+{#
+    -- static partitions refer to a fixed set of partition values that are
+    -- known ahead of time and do not depend on source data or runtime
+    -- conditions. these values are typically hardcoded or configured
+    -- externally (e.g., via dbt variables or macros).
+    --
+    -- with `insert_overwrite`, dbt uses a predefined partition filter
+    -- expression to overwrite specific partitions
+    -- (e.g., where partition_column = '2024-05-01').
+    -- it excels where using a fixed minimal partition list, no need to
+    -- query source data for partitions, and insert statements can be
+    -- batched. this also keeps things deterministic.
+#}
+
+{% macro bq_static_select_insert_overwrite_sql(tmp_relation, sql, partition_by, tmp_relation_exists) %}
+  {%- set source_sql -%}
+  (
+    {% if tmp_relation_exists %}
+      select
+        {% if partition_by.time_ingestion_partitioning %}
+          {{ partition_by.insertable_time_partitioning_field() }},
+        {% endif %}
+        * from {{ tmp_relation }}
+    {%- elif partition_by.time_ingestion_partitioning -%}
+      {{ wrap_with_time_ingestion_partitioning_sql(partition_by, sql, true) }}
+    {%- else -%}
+      {{ sql }}
+    {%- endif %}
+  )
+  {%- endset -%}
+  {{ return(source_sql) }}
+{% endmacro %}
+
+
+{#
+  -- Static-partition + `copy_partitions=true` should inline the literals / foldable constants
+  -- supplied via the `partitions=` config.
+
+  -- The inline method will still copy (truncate) a partition even
+  -- if the incremental run produced no rows for that date, because the user
+  -- explicitly listed it in `partitions=`.
+#}
+{% macro bq_static_copy_partitions_insert_overwrite_sql(
+  tmp_relation, target_relation, sql, partition_by, partitions, tmp_relation_exists
+) %}
+
+    {%- if tmp_relation_exists is false -%}
+        {%- set source_sql = bq_static_select_insert_overwrite_sql(tmp_relation, sql, partition_by, tmp_relation_exists) %}
+
+        {# -- we run temp table creation in a separate script to move to partitions copy if it doesn't already exist #}
+        {%- call statement('create_tmp_relation_for_copy', language='sql') -%}
+          {{ bq_create_table_as(partition_by, true, tmp_relation, source_sql, 'sql')
+        }}
+        {%- endcall %}
+    {%- endif -%}
+
+    {%- set partitions_sql -%}
+	select
+	    cast(partition_literal as timestamp) as partition_ts
+	from unnest([
+	    {{ partitions | join(', ') }}
+	]) as partition_literal
+    {%- endset -%}
+
+    {%- set resolved_partitions = run_query(partitions_sql).columns[0].values() -%}
+
+    {% do bq_copy_partitions(tmp_relation, target_relation, resolved_partitions, partition_by) %}
+
+    {# clean up temp table #}
+    drop table if exists {{ tmp_relation }}
+{% endmacro %}
+
 
 {% macro bq_static_insert_overwrite_sql(
     tmp_relation, target_relation, sql, partition_by, partitions, dest_columns, tmp_relation_exists, copy_partitions
 ) %}
 
-      {% set predicate -%}
-          {{ partition_by.render_wrapped(alias='DBT_INTERNAL_DEST') }} in (
-              {{ partitions | join (', ') }}
-          )
-      {%- endset %}
+    {%- if copy_partitions %}
+        {{ bq_static_copy_partitions_insert_overwrite_sql(tmp_relation, target_relation, sql, partition_by, partitions, tmp_relation_exists) }}
+    {% else -%}
+        {% set predicate -%}
+            {{ partition_by.render_wrapped(alias='dbt_internal_dest') }} in (
+                {{ partitions | join (', ') }}
+            )
+        {%- endset %}
 
-      {%- set source_sql -%}
-        (
-          {% if partition_by.time_ingestion_partitioning and tmp_relation_exists -%}
-          select
-            {{ partition_by.insertable_time_partitioning_field() }},
-            * from {{ tmp_relation }}
-          {% elif tmp_relation_exists -%}
-            select
-            * from {{ tmp_relation }}
-          {%- elif partition_by.time_ingestion_partitioning -%}
-            {{ wrap_with_time_ingestion_partitioning_sql(partition_by, sql, True) }}
-          {%- else -%}
-            {{sql}}
-          {%- endif %}
+        {%- set source_sql = bq_static_select_insert_overwrite_sql(tmp_relation, sql, partition_by, tmp_relation_exists) %}
+	{#
+	  -- when the model sql is inserted directly into the merge statement,
+	  -- we need to prepend it with the user-defined `sql_header`. this is
+	  -- important when the model sql references elements like variables or udfs
+	  -- defined in the header.
 
-        )
-      {%- endset -%}
+	  -- in the case where a temporary table is created first (i.e., the
+	  -- "temp table exists" path), the `sql_header` is already included via
+	  -- the `create_table_as` macro, so no additional handling is needed.
+	#}
 
-      {% if copy_partitions %}
-          {% do bq_copy_partitions(tmp_relation, target_relation, partitions, partition_by) %}
-      {% else %}
+        -- 1. run the merge statement
+        {{ get_insert_overwrite_merge_sql(target_relation, source_sql, dest_columns, [predicate], include_sql_header = not tmp_relation_exists) }};
 
-      {#-- In case we're putting the model SQL _directly_ into the MERGE statement,
-         we need to prepend the MERGE statement with the user-configured sql_header,
-         which may be needed to resolve that model SQL (e.g. referencing a variable or UDF in the header)
-         in the "temporary table exists" case, we save the model SQL result as a temp table first, wherein the
-         sql_header is included by the create_table_as macro.
-      #}
-      -- 1. run the merge statement
-      {{ get_insert_overwrite_merge_sql(target_relation, source_sql, dest_columns, [predicate], include_sql_header = not tmp_relation_exists) }};
+        {%- if tmp_relation_exists -%}
+        -- 2. clean up the temp table
+        drop table if exists {{ tmp_relation }};
+        {%- endif -%}
 
-      {%- if tmp_relation_exists -%}
-      -- 2. clean up the temp table
-      drop table if exists {{ tmp_relation }};
-      {%- endif -%}
-
-  {% endif %}
+    {%- endif -%}
 {% endmacro %}
+
+
+{#
+    -- dynamic partitions refer to the set partition values that are
+    -- determined at runtime, based on either the contents of source
+    -- data (e.g. values in an updated_date column) or external runtime
+    -- parameters (e.g. time of day, system params).
+    --
+    -- with `insert_overwrite`, this allows dbt to compute which
+    -- partitions to overwrite dynamically using a partition filter
+    -- expression (e.g., where partition_column >= current_date()).
+    --
+    -- this enables targeted incremental updates by overwriting only the
+    -- affected partitions, rather than replacing the entire table.
+    -- this reduces latency and cost by limiting the scope of writes.
+#}
+
 
 {% macro bq_dynamic_copy_partitions_insert_overwrite_sql(
   tmp_relation, target_relation, sql, unique_key, partition_by, dest_columns, tmp_relation_exists, copy_partitions
