@@ -328,7 +328,7 @@ class UnparsedMetricBase(dbtClassMixin):
 
     name: str
     type: str = "simple"
-    label: Optional[str] = None
+    label: Optional[str] = None  # in v1 this is required, but in v2 it is optional
     description: str = ""
     # Note: `Union` must be the outermost part of the type annotation for serialization to work properly.
     filter: Union[str, List[str], None] = None
@@ -362,7 +362,7 @@ class UnparsedMetricBase(dbtClassMixin):
 class UnparsedMetric(UnparsedMetricBase):
     """Old-style YAML metric; prefer UnparsedMetricV2 instead as of late 2025."""
 
-    label: str  # TODO: follow up - v1 made this required, but in v2 it appears optional
+    label: str
 
     type_params: UnparsedMetricTypeParams  # old-style YAML
     # metadata: Optional[Unparsedetadata] = None # TODO
