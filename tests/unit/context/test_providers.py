@@ -1,3 +1,4 @@
+import warnings
 from argparse import Namespace
 from datetime import datetime
 from typing import Any, Optional, Type, Union
@@ -12,12 +13,17 @@ from dbt.artifacts.resources.types import BatchSize
 from dbt.context.providers import (
     BaseResolver,
     EventTimeFilter,
+    ProviderContext,
     RuntimeRefResolver,
     RuntimeSourceResolver,
 )
 from dbt.contracts.graph.nodes import BatchContext, ModelNode, SnapshotNode
 from dbt.event_time.sample_window import SampleWindow
+from dbt.events.types import JinjaLogWarning
 from dbt.flags import set_from_args
+from dbt_common.events.event_catcher import EventCatcher
+from dbt_common.events.event_manager_client import add_callback_to_manager
+from tests.unit.utils.manifest import make_seed
 
 
 class TestBaseResolver:
@@ -497,3 +503,102 @@ class TestRuntimeSourceResolver:
         # create limited relation
         relation = resolver.resolve("test", "test")
         assert relation.limit == expected_limit
+
+
+class TestLoadAgateTable:
+    def _build_context(self, tmp_path, column_types, csv_contents):
+        seed = make_seed("test_project", "seed")
+        seed.config = SeedConfig(column_types=column_types)
+
+        data_dir = tmp_path / "data"
+        data_dir.mkdir()
+        seed_path = data_dir / "seed.csv"
+        seed_path.write_text(csv_contents)
+
+        config = mock.Mock()
+        config.project_root = str(tmp_path)
+        config.packages_install_path = "dbt_packages"
+        config.project_name = "test_project"
+
+        context = ProviderContext.__new__(ProviderContext)
+        context.model = seed
+        context.config = config
+        return context
+
+    def test_warns_on_missing_column_types(self, tmp_path):
+        context = self._build_context(
+            tmp_path,
+            {"my_column_a": "varchar(2)", "my_column_b": "text"},
+            "my_column_a\n1\n",
+        )
+
+        event_catcher = EventCatcher(JinjaLogWarning)
+        add_callback_to_manager(event_catcher.catch)
+
+        with warnings.catch_warnings(record=True) as caught_warnings:
+            warnings.simplefilter("always")
+            context.load_agate_table()
+
+        assert len(event_catcher.caught_events) == 1
+        message = event_catcher.caught_events[0].info.msg
+        assert "test_project.seed" in message
+        assert "my_column_b" in message
+        assert "Those entries will be ignored." in message
+        assert not any(
+            "does not match the name of any column" in str(warning.message)
+            for warning in caught_warnings
+        )
+
+    def test_no_column_types_no_warning(self, tmp_path):
+        context = self._build_context(tmp_path, {}, "my_column_a\n1\n")
+
+        event_catcher = EventCatcher(JinjaLogWarning)
+        add_callback_to_manager(event_catcher.catch)
+
+        with mock.patch("dbt_common.clients.agate_helper.from_csv") as from_csv:
+            from_csv.return_value = mock.Mock()
+            context.load_agate_table()
+
+        assert event_catcher.caught_events == []
+        from_csv.assert_called_once()
+        assert from_csv.call_args.kwargs["text_columns"] == {}
+
+    def test_all_columns_exist_no_warning_and_overrides_passed(self, tmp_path):
+        overrides = {"my_column_a": "varchar(2)", "my_column_b": "text"}
+        context = self._build_context(
+            tmp_path,
+            overrides,
+            "my_column_a,my_column_b\n1,hello\n",
+        )
+
+        event_catcher = EventCatcher(JinjaLogWarning)
+        add_callback_to_manager(event_catcher.catch)
+
+        with mock.patch("dbt_common.clients.agate_helper.from_csv") as from_csv:
+            from_csv.return_value = mock.Mock()
+            context.load_agate_table()
+
+        assert event_catcher.caught_events == []
+        from_csv.assert_called_once()
+        assert from_csv.call_args.kwargs["text_columns"] == overrides
+
+    def test_multiple_missing_columns_sorted_in_warning(self, tmp_path):
+        context = self._build_context(
+            tmp_path,
+            {"z_col": "text", "a_col": "text", "b_col": "text", "keep": "int"},
+            "keep\n1\n",
+        )
+
+        event_catcher = EventCatcher(JinjaLogWarning)
+        add_callback_to_manager(event_catcher.catch)
+
+        with mock.patch("dbt_common.clients.agate_helper.from_csv") as from_csv:
+            from_csv.return_value = mock.Mock()
+            context.load_agate_table()
+
+        assert len(event_catcher.caught_events) == 1
+        message = event_catcher.caught_events[0].info.msg
+        assert "a_col, b_col, z_col" in message
+        assert "Those entries will be ignored." in message
+        from_csv.assert_called_once()
+        assert from_csv.call_args.kwargs["text_columns"] == {"keep": "int"}
