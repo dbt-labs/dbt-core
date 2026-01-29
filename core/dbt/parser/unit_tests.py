@@ -125,6 +125,8 @@ class UnitTestManifestLoader:
             original_input_node = self._get_original_input_node(
                 given.input, tested_node, test_case.name
             )
+            if original_input_node is None:  # target_ref() inputs don't need fixtures
+                continue
             input_name = original_input_node.name
             common_fields = {
                 "resource_type": NodeType.Model,
@@ -212,6 +214,8 @@ class UnitTestManifestLoader:
             - "source('my_source_schema', 'my_source_name')"
             - "this"
         tested_node: ModelNode of representing node being tested
+
+        Returns None for target_ref() inputs (they don't need fixture data).
         """
         if input.strip() == "this":
             original_input_node = tested_node
@@ -239,6 +243,8 @@ class UnitTestManifestLoader:
                     self.manifest,
                 )
             else:
+                if input.strip().startswith("target_ref("):
+                    return None
                 raise InvalidUnitTestGivenInput(input=input)
 
         if not original_input_node:

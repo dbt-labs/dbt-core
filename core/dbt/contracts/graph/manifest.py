@@ -580,11 +580,33 @@ def build_node_edges(nodes: List[ManifestNode]):
     # pre-populate the forward edge dict for simplicity
     forward_edges: Dict[str, List[str]] = {n.unique_id: [] for n in nodes}
     for node in nodes:
-        backward_edges[node.unique_id] = node.depends_on_nodes[:]
-        for unique_id in backward_edges[node.unique_id]:
-            if unique_id in forward_edges.keys():
+        target_ids = _get_target_dep_ids(node)
+        backward_edges[node.unique_id] = [d for d in node.depends_on_nodes if d not in target_ids]
+        for unique_id in node.depends_on_nodes:
+            if unique_id in target_ids:
+                # target_ref: reversed direction (node --> target)
+                forward_edges[node.unique_id].append(unique_id)
+                backward_edges.setdefault(unique_id, []).append(node.unique_id)
+            elif unique_id in forward_edges.keys():
                 forward_edges[unique_id].append(node.unique_id)
     return _sort_values(forward_edges), _sort_values(backward_edges)
+
+
+def _get_target_dep_ids(node: ManifestNode) -> Set[str]:
+    """Match refs with is_target=True to their dependency IDs."""
+    try:
+        refs = node.refs
+    except Exception:
+        return set()
+    result: Set[str] = set()
+    for ref in refs:
+        if ref.is_target:
+            for dep_id in node.depends_on_nodes:
+                parts = dep_id.split(".")
+                if len(parts) >= 3 and parts[2] == ref.name and (ref.package is None or parts[1] == ref.package):
+                    result.add(dep_id)
+                    break
+    return result
 
 
 # Build a map of children of macros and generic tests

@@ -822,6 +822,35 @@ class RuntimeUnitTestRefResolver(RuntimeRefResolver):
         return super().resolve(target_name, target_package, target_version)
 
 
+# `target_ref` implementations - inherit from ref resolvers, override only what differs
+
+
+class ParseTargetResolver(ParseRefResolver):
+    # Store in model.refs with is_target=True flag
+    def resolve(
+        self, name: str, package: Optional[str] = None, version: Optional[NodeVersion] = None
+    ) -> RelationProxy:
+        ref_args = self._repack_args(name, package, version)
+        ref_args.is_target = True
+        self.model.refs.append(ref_args)
+        return self.Relation.create_from(self.config, self.model)
+
+
+class RuntimeUnitTestTargetResolver(RuntimeRefResolver):
+    @property
+    def resolve_limit(self) -> Optional[int]:
+        return None
+
+    # Targets don't need fixture data in unit tests - just return dummy relation
+    def resolve(
+        self,
+        target_name: str,
+        target_package: Optional[str] = None,
+        target_version: Optional[NodeVersion] = None,
+    ) -> RelationProxy:
+        return self.Relation.create_from(self.config, self.model)
+
+
 # `source` implementations
 class ParseSourceResolver(BaseSourceResolver):
     def resolve(self, source_name: str, table_name: str):
@@ -1040,6 +1069,7 @@ class Provider(Protocol):
     source: Type[BaseSourceResolver]
     metric: Type[BaseMetricResolver]
     function: Type[BaseFunctionResolver]
+    target_ref: Type[BaseRefResolver]
 
 
 class ParseProvider(Provider):
@@ -1051,6 +1081,7 @@ class ParseProvider(Provider):
     source = ParseSourceResolver
     metric = ParseMetricResolver
     function = ParseFunctionResolver
+    target_ref = ParseTargetResolver
 
 
 class GenerateNameProvider(Provider):
@@ -1062,6 +1093,7 @@ class GenerateNameProvider(Provider):
     source = ParseSourceResolver
     metric = ParseMetricResolver
     function = ParseFunctionResolver
+    target_ref = ParseTargetResolver
 
 
 class RuntimeProvider(Provider):
@@ -1073,6 +1105,7 @@ class RuntimeProvider(Provider):
     source = RuntimeSourceResolver
     metric = RuntimeMetricResolver
     function = RuntimeFunctionResolver
+    target_ref = RuntimeRefResolver
 
 
 class RuntimeUnitTestProvider(Provider):
@@ -1084,10 +1117,12 @@ class RuntimeUnitTestProvider(Provider):
     source = RuntimeUnitTestSourceResolver
     metric = RuntimeMetricResolver
     function = RuntimeFunctionResolver
+    target_ref = RuntimeUnitTestTargetResolver
 
 
 class OperationProvider(RuntimeProvider):
     ref = OperationRefResolver
+    target_ref = RuntimeRefResolver
 
 
 T = TypeVar("T")
@@ -1317,6 +1352,18 @@ class ProviderContext(ManifestContext):
             select * from {{ ref('package_name', 'model_name') }}"
         """
         return self.provider.ref(self.db_wrapper, self.model, self.config, self.manifest)
+
+    @contextproperty()
+    def target_ref(self) -> Callable:
+        """Like `ref()`, but for models this model writes INTO (e.g., MV target tables).
+
+        Differences from ref():
+        - Lineage graph shows data flowing FROM this model TO the target
+        - Unit tests don't require fixture data for targets
+
+        Usage: {{ target_ref('target_table') }} or {{ target_ref('package', 'model') }}
+        """
+        return self.provider.target_ref(self.db_wrapper, self.model, self.config, self.manifest)
 
     @contextproperty()
     def source(self) -> Callable:
