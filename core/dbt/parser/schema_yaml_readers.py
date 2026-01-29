@@ -7,6 +7,7 @@ from dbt.artifacts.resources import (
     ColumnInfo,
     ConversionTypeParams,
     CumulativeTypeParams,
+    Defaults,
     Dimension,
     DimensionTypeParams,
     DimensionValidityParams,
@@ -1030,7 +1031,7 @@ class SemanticModelParser(YamlReader):
             label=None,  # does not seem to be available in v2 YAML, unless it is part of the semantic model config's 'group'?
             model=f"ref('{patch.name}')",
             name=node.name,
-            defaults=None,  # TODO DI-4604: support agg_time_dimension default here for v2 YAML
+            defaults=Defaults(agg_time_dimension=patch.agg_time_dimension),
             primary_entity=None,  # Not yet implemented; should become patch.primary_entity
             entities=entities,
             dimensions=dimensions,

@@ -1768,6 +1768,7 @@ class ParsedNodePatch(ParsedPatch):
     semantic_model: Optional[bool] = None
     metrics: Optional[List[UnparsedMetricV2]] = None
     derived_semantics: Optional[UnparsedDerivedSemantics] = None
+    agg_time_dimension: Optional[str] = None
     freshness: Optional[ModelFreshness] = None
 
 

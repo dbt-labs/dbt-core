@@ -503,6 +503,7 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
     time_spine: Optional[TimeSpine] = None
     # TODO DI-4579: allow semantic model to accept a semantic model config object OR a bool
     semantic_model: Optional[bool] = None
+    agg_time_dimension: Optional[str] = None
     metrics: Optional[List[UnparsedMetricV2]] = None
     derived_semantics: Optional[UnparsedDerivedSemantics] = None
 

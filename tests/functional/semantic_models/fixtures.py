@@ -599,6 +599,7 @@ base_schema_yml_v2 = """models:
   - name: fct_revenue
     description: This is the model fct_revenue. It should be able to use doc blocks
     semantic_model: true
+    agg_time_dimension: second_dim
     columns:
       - name: id
         description: This is the id column dim.
@@ -632,6 +633,14 @@ base_schema_yml_v2 = """models:
       - name: foreign_id_col
         description: This is a foreign id column.
         entity: foreign
+      - name: created_at
+        description: This is the time the entry was created.
+        granularity: day
+        dimension:
+          name: ds
+          description: the ds column
+          label: DS Column
+          type: time
 """
 
 schema_yml_v2_simple_metric_on_model_1 = """
@@ -644,6 +653,7 @@ schema_yml_v2_simple_metric_on_model_1 = """
         expr: id
       - name: simple_metric_2
         description: This is our second simple metric.
+        agg_time_dimension: ds
         label: Simple Metric 2
         type: simple
         agg: count
