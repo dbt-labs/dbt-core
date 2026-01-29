@@ -129,6 +129,10 @@ class TestStandaloneMetricParsingWorks:
         result = runner.invoke(["parse"])
         assert result.success
         manifest = result.result
+
+        semantic_model = manifest.semantic_models["semantic_model.test.fct_revenue"]
+        assert semantic_model.defaults.agg_time_dimension == "second_dim"
+
         metrics = manifest.metrics
         assert len(metrics) == 5
 
@@ -139,6 +143,7 @@ class TestStandaloneMetricParsingWorks:
         assert simple_metric.type_params.metric_aggregation_params.agg == AggregationType.COUNT
         assert simple_metric.type_params.metric_aggregation_params.semantic_model == "fct_revenue"
         assert "semantic_model.test.fct_revenue" in simple_metric.depends_on.nodes
+        assert simple_metric.type_params.metric_aggregation_params.agg_time_dimension is None
 
         simple_metric_2 = metrics["metric.test.simple_metric_2"]
         assert simple_metric_2.name == "simple_metric_2"
@@ -149,6 +154,7 @@ class TestStandaloneMetricParsingWorks:
             simple_metric_2.type_params.metric_aggregation_params.semantic_model == "fct_revenue"
         )
         assert "semantic_model.test.fct_revenue" in simple_metric_2.depends_on.nodes
+        assert simple_metric_2.type_params.metric_aggregation_params.agg_time_dimension == "ds"
 
         percentile_metric = metrics["metric.test.percentile_metric"]
         assert percentile_metric.name == "percentile_metric"
@@ -173,6 +179,7 @@ class TestStandaloneMetricParsingWorks:
             is False
         )
         assert "semantic_model.test.fct_revenue" in percentile_metric.depends_on.nodes
+        assert percentile_metric.type_params.metric_aggregation_params.agg_time_dimension is None
 
         cumulative_metric = metrics["metric.test.cumulative_metric"]
         assert cumulative_metric.name == "cumulative_metric"
@@ -185,6 +192,7 @@ class TestStandaloneMetricParsingWorks:
         )
         assert cumulative_metric.type_params.cumulative_type_params.metric.name == "simple_metric"
         assert "metric.test.simple_metric" in cumulative_metric.depends_on.nodes
+        assert cumulative_metric.type_params.metric_aggregation_params is None
 
         conversion_metric = metrics["metric.test.conversion_metric"]
         assert conversion_metric.name == "conversion_metric"
@@ -205,6 +213,7 @@ class TestStandaloneMetricParsingWorks:
         )
         assert "metric.test.simple_metric" in conversion_metric.depends_on.nodes
         assert "metric.test.simple_metric_2" in conversion_metric.depends_on.nodes
+        assert conversion_metric.type_params.metric_aggregation_params is None
 
 
 class TestStandaloneMetricParsingSimpleMetricFails:

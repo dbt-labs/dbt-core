@@ -784,6 +784,7 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
         semantic_model = None
         metrics = None
         derived_semantics = None
+        agg_time_dimension = None
 
         if isinstance(block.target, UnparsedModelUpdate):
             deprecation_date = block.target.deprecation_date
@@ -804,6 +805,7 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
             semantic_model = block.target.semantic_model
             metrics = block.target.metrics
             derived_semantics = block.target.derived_semantics
+            agg_time_dimension = block.target.agg_time_dimension
 
         return ParsedNodePatch(
             name=block.target.name,
@@ -824,6 +826,7 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
             semantic_model=semantic_model,
             metrics=metrics,
             derived_semantics=derived_semantics,
+            agg_time_dimension=agg_time_dimension,
         )
 
     def parse_patch(self, block: TargetBlock[NodeTarget], refs: ParserRef) -> None:
