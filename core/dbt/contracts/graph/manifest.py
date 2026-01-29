@@ -1015,6 +1015,7 @@ class Manifest(MacroMethods, dbtClassMixin):
             "saved_queries": {
                 k: v.to_dict(omit_none=False) for k, v in self.saved_queries.items()
             },
+            "unit_tests": {k: v.to_dict(omit_none=False) for k, v in self.unit_tests.items()},
         }
 
     def build_disabled_by_file_id(self):
