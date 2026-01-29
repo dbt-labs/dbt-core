@@ -13,7 +13,7 @@ pub mod utils;
 
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::DBT_PROJECT_YML;
-use dbt_common::io_args::IoArgs;
+use dbt_common::io_args::{IoArgs, ReplayMode, TimeMachineMode};
 use dbt_common::tracing::span_info::SpanStatusRecorder as _;
 use dbt_common::{
     ErrorCode, FsResult,
@@ -45,8 +45,28 @@ pub async fn get_or_install_packages(
     vars: BTreeMap<String, dbt_serde_yaml::Value>,
     version_check: bool,
     skip_private_deps: bool,
+    replay_mode: Option<&ReplayMode>,
     token: &CancellationToken,
 ) -> FsResult<(DbtPackagesLock, Vec<UpstreamProject>)> {
+    // In Time Machine replay mode, skip all package fetching/installation
+    // We should only load the existing package-lock.yml from disk
+    let is_time_machine_replay = matches!(
+        replay_mode,
+        Some(ReplayMode::TimeMachine(TimeMachineMode::Replay(_)))
+    );
+
+    if is_time_machine_replay {
+        // Just load the existing package-lock.yml without any validation or fetching
+        let dbt_packages_lock =
+            load_dbt_packages_lock_without_validation(io, packages_install_path, env, &vars)?
+                .unwrap_or_default();
+
+        show_progress!(io, fsinfo!(LOADING.into(), "package-lock.yml".to_string()));
+
+        // Return empty upstream projects since we're not fetching anything
+        return Ok((dbt_packages_lock, vec![]));
+    }
+
     let hub_url_from_env = std::env::var("DBT_PACKAGE_HUB_URL");
     let hub_url = hub_url_from_env
         .as_deref()

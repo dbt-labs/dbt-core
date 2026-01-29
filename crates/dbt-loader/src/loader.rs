@@ -5,6 +5,7 @@ use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::{
     DBT_CATALOGS_YML, DBT_DEPENDENCIES_YML, DBT_PACKAGES_LOCK_FILE, DBT_PACKAGES_YML,
 };
+use dbt_common::io_args::{ReplayMode, TimeMachineMode};
 use dbt_common::once_cell_vars::DISPATCH_CONFIG;
 use dbt_common::tracing::span_info::SpanStatusRecorder;
 use dbt_jinja_utils::invocation_args::InvocationArgs;
@@ -235,12 +236,23 @@ pub async fn load(
         arg.vars.clone(),
         arg.version_check,
         arg.skip_private_deps,
+        iarg.replay.as_ref(),
         token,
     )
     .await?;
 
-    // get publication artifact for each upstream project
-    download_publication_artifacts(&upstream_projects, &dbt_cloud_project, &arg.io).await?;
+    // Skip downloading publication artifacts in Time Machine replay mode
+    // In replay mode, we're replaying a recorded session and don't need to download anything
+    let is_time_machine_replay = matches!(
+        &iarg.replay,
+        Some(ReplayMode::TimeMachine(TimeMachineMode::Replay(_)))
+    );
+
+    if !is_time_machine_replay {
+        // get publication artifact for each upstream project
+        download_publication_artifacts(&upstream_projects, &dbt_cloud_project, &arg.io).await?;
+    }
+
     // If we are running `dbt deps` we don't need to collect files
     if arg.install_deps {
         return Ok((dbt_state, dbt_cloud_project));
