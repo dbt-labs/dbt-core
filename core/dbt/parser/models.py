@@ -27,8 +27,8 @@ from dbt_common.dataclass_schema import ValidationError
 from dbt_common.exceptions.macros import UndefinedMacroError
 from dbt_extractor import ExtractionError, py_extract_from_source  # type: ignore
 
-dbt_function_key_words = set(["ref", "source", "config", "get"])
-dbt_function_full_names = set(["dbt.ref", "dbt.source", "dbt.config", "dbt.config.get"])
+dbt_function_key_words = set(["ref", "source", "config", "get", "target_ref"])
+dbt_function_full_names = set(["dbt.ref", "dbt.source", "dbt.config", "dbt.config.get", "dbt.target_ref"])
 
 
 class PythonValidationVisitor(ast.NodeVisitor):
@@ -420,7 +420,7 @@ class ModelParser(SimpleSQLParser[ModelNode]):
         # first check if there is a banned macro defined in scope for this model file
         root_project_name = self.root_project.project_name
         project_name = node.package_name
-        banned_macros = ["ref", "source", "config"]
+        banned_macros = ["ref", "source", "config", "target_ref"]
 
         all_banned_macro_keys: Iterator[str] = chain.from_iterable(
             map(
