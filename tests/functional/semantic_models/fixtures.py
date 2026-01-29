@@ -543,7 +543,7 @@ semantic_models:
 """
 
 
-base_schema_yml_v2 = """models:
+semantic_model_schema_yml_v2 = """models:
   - name: fct_revenue
     description: This is the model fct_revenue. It should be able to use doc blocks
     semantic_model: true
@@ -589,4 +589,57 @@ base_schema_yml_v2 = """models:
         entity:
           name: col_with_default_entity_testing_default_desc
           type: natural
+"""
+
+# Separate from the full-spectrum entities and dimensions test because some settings
+# interact with metric validations.
+base_schema_yml_v2 = """models:
+  - name: fct_revenue
+    description: This is the model fct_revenue. It should be able to use doc blocks
+    semantic_model: true
+    columns:
+      - name: id
+        description: This is the id column dim.
+        config:
+          meta:
+          component_level: "original_meta"
+        dimension:
+          name: id_dim
+          label: "ID Dimension"
+          type: categorical
+          is_partition: true
+          config:
+            meta:
+              component_level: "dimension_override"
+        entity:
+          name: id_entity
+          description: This is the id entity, and it is the primary entity.
+          label: ID Entity
+          type: primary
+          config:
+            meta:
+              component_level: "entity_override"
+      - name: second_col
+        description: This is the second column.
+        granularity: day
+        dimension:
+          name: second_dim
+          description: This is the second column (dim).
+          label: Second Dimension
+          type: time
+      - name: foreign_id_col
+        description: This is a foreign id column.
+        entity: foreign
+"""
+
+schema_yml_v2_metrics = """
+metrics:
+  # shouldn't work because the simple metric will need to be attached to a model,
+  # but it's fine for now.
+  - name: simple_metric
+    description: This is our first simple metric.
+    label: Simple Metric
+    type: simple
+    agg: count
+    expr: id
 """

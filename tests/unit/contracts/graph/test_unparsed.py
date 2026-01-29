@@ -1066,21 +1066,10 @@ class TestUnparsedMetricV2(BaseTestUnparsedMetric, ContractTestCase):
         self.assert_symmetric(metric, dct)
         pickle.loads(pickle.dumps(metric))
 
-    def test_metric_no_agg_still_good(self):
-        metric = self.ContractType(
-            name="new_customers",
-            label="New Customers",
-            description="New customers",
-            filter="is_new = true",
-            join_to_timespine=False,
-            config={
-                "tags": [],
-                "meta": {"is_okr": True},
-            },
-        )
+    def test_simple_metric_with_no_agg_fails_validation(self):
         tst = self.get_ok_dict_with_defaults()
         del tst["agg"]
-        pickle.loads(pickle.dumps(metric))
+        self.assert_fails_validation(tst)
 
 
 class TestUnparsedVersion(ContractTestCase):

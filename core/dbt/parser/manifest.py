@@ -28,6 +28,7 @@ from dbt.adapters.factory import (
 from dbt.artifacts.resources import (
     CatalogWriteIntegrationConfig,
     FileHash,
+    MetricInput,
     NodeRelation,
     NodeVersion,
 )
@@ -1930,14 +1931,17 @@ def _process_refs(
         node.depends_on.add_node(target_model_id)
 
 
-def _process_metric_depends_on(
+def _process_metric_depends_on_semantic_models_for_measures(
     manifest: Manifest,
     current_project: str,
     metric: Metric,
 ) -> None:
     """For a given metric, set the `depends_on` property"""
 
-    assert len(metric.type_params.input_measures) > 0
+    assert (
+        len(metric.type_params.input_measures) > 0
+        or metric.type_params.metric_aggregation_params is not None
+    ), f"{metric} should have a measure or agg type defined, but it does not."
     for input_measure in metric.type_params.input_measures:
         target_semantic_model = manifest.resolve_semantic_model_for_measure(
             target_measure_name=input_measure.name,
@@ -1958,6 +1962,39 @@ def _process_metric_depends_on(
         metric.depends_on.add_node(target_semantic_model.unique_id)
 
 
+def _process_multiple_metric_inputs(
+    manifest: Manifest,
+    current_project: str,
+    metric: Metric,
+    metric_inputs: List[MetricInput],
+) -> None:
+    for input_metric in metric_inputs:
+        target_metric = manifest.resolve_metric(
+            target_metric_name=input_metric.name,
+            target_metric_package=None,
+            current_project=current_project,
+            node_package=metric.package_name,
+        )
+
+        if target_metric is None:
+            raise dbt.exceptions.ParsingError(
+                f"The metric `{input_metric.name}` does not exist but was referenced.",
+                node=metric,
+            )
+        elif isinstance(target_metric, Disabled):
+            raise dbt.exceptions.ParsingError(
+                f"The metric `{input_metric.name}` is disabled and thus cannot be referenced.",
+                node=metric,
+            )
+
+        _process_metric_node(
+            manifest=manifest, current_project=current_project, metric=target_metric
+        )
+        for input_measure in target_metric.type_params.input_measures:
+            metric.add_input_measure(input_measure)
+        metric.depends_on.add_node(target_metric.unique_id)
+
+
 def _process_metric_node(
     manifest: Manifest,
     current_project: str,
@@ -1973,23 +2010,40 @@ def _process_metric_node(
         return
 
     if metric.type is MetricType.SIMPLE or metric.type is MetricType.CUMULATIVE:
-        assert (
-            metric.type_params.measure is not None
-        ), f"{metric} should have a measure defined, but it does not."
-        metric.add_input_measure(metric.type_params.measure)
-        _process_metric_depends_on(
-            manifest=manifest, current_project=current_project, metric=metric
-        )
+        if (
+            metric.type_params.measure is None
+            and metric.type_params.metric_aggregation_params is None
+        ):
+            # This should be caught earlier, but just in case, we assert here to avoid
+            # any unexpected behaviors.
+            raise dbt.exceptions.ParsingError(
+                f"Metric {metric} should have a measure or agg type defined, but it does not.",
+                node=metric,
+            )
+        if metric.type_params.measure is not None:
+            metric.add_input_measure(metric.type_params.measure)
+            _process_metric_depends_on_semantic_models_for_measures(
+                manifest=manifest, current_project=current_project, metric=metric
+            )
+        # TODO DI-4415: Once we can process simple metric merged into a model directly,
+        # we need to add a 'depends on' for the semantic model
     elif metric.type is MetricType.CONVERSION:
         conversion_type_params = metric.type_params.conversion_type_params
         assert (
             conversion_type_params
         ), f"{metric.name} is a conversion metric and must have conversion_type_params defined."
-        metric.add_input_measure(conversion_type_params.base_measure)
-        metric.add_input_measure(conversion_type_params.conversion_measure)
-        _process_metric_depends_on(
-            manifest=manifest, current_project=current_project, metric=metric
+        # Handle old-style YAML measure inputs
+        if conversion_type_params.base_measure is not None:
+            metric.add_input_measure(conversion_type_params.base_measure)
+        if conversion_type_params.conversion_measure is not None:
+            metric.add_input_measure(conversion_type_params.conversion_measure)
+        _process_metric_depends_on_semantic_models_for_measures(
+            manifest=manifest,
+            current_project=current_project,
+            metric=metric,
         )
+        # If we ever want to enable blended v1 and v2 manifests, we'll need to recurse through
+        # metric inputs here to find their measure inputs.
     elif metric.type is MetricType.DERIVED or metric.type is MetricType.RATIO:
         input_metrics = metric.input_metrics
         if metric.type is MetricType.RATIO:
@@ -2007,7 +2061,6 @@ def _process_metric_node(
                 current_project=current_project,
                 node_package=metric.package_name,
             )
-
             if target_metric is None:
                 raise dbt.exceptions.ParsingError(
                     f"The metric `{input_metric.name}` does not exist but was referenced by metric `{metric.name}`.",
@@ -2018,7 +2071,6 @@ def _process_metric_node(
                     f"The metric `{input_metric.name}` is disabled and thus cannot be referenced.",
                     node=metric,
                 )
-
             _process_metric_node(
                 manifest=manifest, current_project=current_project, metric=target_metric
             )
