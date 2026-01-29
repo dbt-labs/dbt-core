@@ -716,4 +716,12 @@ derived_semantics_yml = """
         - name: derived_id_entity_with_no_optional_fields
           type: primary
           expr: id + foreign_id_col
+      dimensions:
+        - name: derived_id_dimension
+          type: categorical
+          expr: id
+          granularity: day
+          validity_params:
+            is_start: true
+            is_end: true
 """

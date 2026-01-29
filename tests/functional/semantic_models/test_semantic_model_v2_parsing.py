@@ -290,6 +290,14 @@ class TestDerivedSemanticsParsingWorks:
         assert id_entity_with_no_optional_fields.expr == "id + foreign_id_col"
         assert id_entity_with_no_optional_fields.config.meta == {}
 
+        dimensions = {dimension.name: dimension for dimension in semantic_model.dimensions}
+        assert len(dimensions) == 4  # includes non-derived dimensions
+        assert dimensions["derived_id_dimension"].type == DimensionType.CATEGORICAL
+        assert dimensions["derived_id_dimension"].expr == "id"
+        assert dimensions["derived_id_dimension"].config.meta == {}
+        assert dimensions["derived_id_dimension"].type_params.validity_params.is_start is True
+        assert dimensions["derived_id_dimension"].type_params.validity_params.is_end is True
+
 
 # TODO DI-4605: add enforcement and a test for when there are validity params with no column granularity
 # TODO DI-4603: add enforcement and a test for a TIME type dimension and a column that has no granularity set

@@ -53,6 +53,7 @@ from dbt.contracts.graph.unparsed import (
     PercentileType,
     UnparsedConversionTypeParams,
     UnparsedCumulativeTypeParams,
+    UnparsedDerivedDimensionV2,
     UnparsedDerivedSemantics,
     UnparsedDimension,
     UnparsedDimensionTypeParams,
@@ -888,16 +889,20 @@ class SemanticModelParser(YamlReader):
                 )
             elif isinstance(column.dimension, ColumnDimension):
                 type_params = (
-                    DimensionTypeParams(
-                        time_granularity=column.granularity,
-                        validity_params=(
-                            DimensionValidityParams(
-                                is_start=column.dimension.validity_params.is_start,
-                                is_end=column.dimension.validity_params.is_end,
-                            )
-                            if column.dimension.validity_params is not None
-                            else None
-                        ),
+                    (
+                        DimensionTypeParams(
+                            time_granularity=column.granularity,
+                            validity_params=(
+                                DimensionValidityParams(
+                                    is_start=column.dimension.validity_params.is_start,
+                                    is_end=column.dimension.validity_params.is_end,
+                                )
+                                if column.dimension.validity_params is not None
+                                else None
+                            ),
+                        )
+                        if column.granularity is not None
+                        else None
                     )
                     if column.granularity is not None
                     else None
@@ -921,6 +926,42 @@ class SemanticModelParser(YamlReader):
                         # expr argument is not supported for column-based dimensions
                     )
                 )
+        return dimensions
+
+    def _parse_v2_derived_dimensions(
+        self,
+        derived_dimensions: List[UnparsedDerivedDimensionV2],
+    ) -> List[Dimension]:
+        dimensions: List[Dimension] = []
+        for derived_dimension in derived_dimensions:
+            type_params = None
+            if derived_dimension.granularity is not None:
+                type_params = DimensionTypeParams(
+                    time_granularity=TimeGranularity(derived_dimension.granularity),
+                    validity_params=(
+                        DimensionValidityParams(
+                            is_start=derived_dimension.validity_params.is_start,
+                            is_end=derived_dimension.validity_params.is_end,
+                        )
+                        if derived_dimension.validity_params is not None
+                        else None
+                    ),
+                )
+            dimensions.append(
+                Dimension(
+                    type=DimensionType(derived_dimension.type),
+                    name=derived_dimension.name,
+                    description=derived_dimension.description,
+                    label=derived_dimension.label,
+                    is_partition=derived_dimension.is_partition,
+                    config=SemanticLayerElementConfig(
+                        meta=derived_dimension.config.get("meta", {})
+                    ),
+                    type_params=type_params,
+                    # fields unique to derived dimensions
+                    expr=derived_dimension.expr,
+                )
+            )
         return dimensions
 
     def _parse_v2_column_entities(self, columns: Dict[str, ColumnInfo]) -> List[Entity]:
@@ -975,6 +1016,10 @@ class SemanticModelParser(YamlReader):
         patch: ParsedNodePatch,
     ) -> None:
         dimensions = self._parse_v2_column_dimensions(patch.columns)
+        if patch.derived_semantics is not None:
+            dimensions.extend(
+                self._parse_v2_derived_dimensions(patch.derived_semantics.dimensions)
+            )
         entities = self._parse_v2_column_entities(patch.columns)
         if patch.derived_semantics is not None:
             entities.extend(self._parse_v2_derived_semantics_entities(patch.derived_semantics))
