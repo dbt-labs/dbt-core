@@ -178,6 +178,14 @@ class UnparsedDimensionV2(UnparsedDimensionBase):
     validity_params: Optional[DimensionValidityParams] = None
 
 
+@dataclass(kw_only=True)
+class UnparsedDerivedDimensionV2(UnparsedDimensionV2):
+    """Used for dbt Semantic Layer derived dimensions (v2 YAML)."""
+
+    expr: str
+    granularity: Optional[str] = None  # str is really a TimeGranularity Enum
+
+
 @dataclass
 class UnparsedEntityBase(dbtClassMixin):
     name: str
@@ -481,8 +489,8 @@ class UnparsedNodeUpdate(HasConfig, HasColumnTests, HasColumnAndTestProps, HasYa
 
 @dataclass
 class UnparsedDerivedSemantics(dbtClassMixin):
-    # TODO DI-4618 Add dimensions field here
     entities: List[UnparsedDerivedEntityV2] = field(default_factory=list)
+    dimensions: List[UnparsedDerivedDimensionV2] = field(default_factory=list)
 
 
 @dataclass
