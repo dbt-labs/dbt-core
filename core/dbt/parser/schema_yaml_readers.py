@@ -53,6 +53,7 @@ from dbt.contracts.graph.unparsed import (
     PercentileType,
     UnparsedConversionTypeParams,
     UnparsedCumulativeTypeParams,
+    UnparsedDerivedSemantics,
     UnparsedDimension,
     UnparsedDimensionTypeParams,
     UnparsedEntity,
@@ -354,9 +355,9 @@ class MetricParser(YamlReader):
             return None
 
         if unparsed_metric.base_metric is None:
-            raise ValidationError("base_metric is required for cumulative metrics.")
+            raise ValidationError("base_metric is required for conversion metrics.")
         if unparsed_metric.conversion_metric is None:
-            raise ValidationError("conversion_metric is required for cumulative metrics.")
+            raise ValidationError("conversion_metric is required for conversion metrics.")
         if unparsed_metric.entity is None:
             raise ValidationError("entity is required for conversion metrics.")
 
@@ -408,12 +409,14 @@ class MetricParser(YamlReader):
     ) -> Optional[CumulativeTypeParams]:
         if MetricType(unparsed_metric.type) is not MetricType.CUMULATIVE:
             return None
-        if unparsed_metric.period_agg is None:
-            raise ValidationError("period_agg is required for cumulative metrics.")
+        input_metric = unparsed_metric.input_metric
+        if input_metric is None:
+            raise ValidationError("input_metric is required for cumulative metrics.")
         return CumulativeTypeParams(
             window=self._get_optional_time_window(unparsed_metric.window),
             grain_to_date=unparsed_metric.grain_to_date,
             period_agg=self._get_period_agg(unparsed_metric.period_agg),
+            metric=self._get_metric_input(input_metric),
         )
 
     def _get_v2_non_additive_dimension(
@@ -428,7 +431,11 @@ class MetricParser(YamlReader):
             window_groupings=unparsed_non_additive_dimension.group_by,
         )
 
-    def _get_metric_type_params(self, unparsed_metric: UnparsedMetricBase) -> MetricTypeParams:
+    def _get_metric_type_params(
+        self,
+        unparsed_metric: UnparsedMetricBase,
+        generated_from: Optional[str] = None,
+    ) -> MetricTypeParams:
         if isinstance(unparsed_metric, UnparsedMetric):
             type_params = unparsed_metric.type_params
 
@@ -459,12 +466,15 @@ class MetricParser(YamlReader):
             )
         elif isinstance(unparsed_metric, UnparsedMetricV2):
             if unparsed_metric.agg is not None:
-                # TODO DI-4415 - we only need this for simple metrics, and it must be
-                # populated with the semantic model name where the simple metric lives.
-                semantic_model = "TODO: set by the parser"
-
+                if generated_from is None:
+                    raise YamlParseDictError(
+                        self.yaml.path,
+                        self.key,
+                        yaml_data=unparsed_metric.to_dict(),
+                        cause="simple metrics in v2 YAML must be attached to semantic_model",
+                    )
                 metric_aggregation_params = MetricAggregationParams(
-                    semantic_model=semantic_model,
+                    semantic_model=generated_from,
                     agg=AggregationType(unparsed_metric.agg),
                     agg_params=MeasureAggregationParameters(
                         percentile=unparsed_metric.percentile,
@@ -563,7 +573,7 @@ class MetricParser(YamlReader):
             description=unparsed.description,
             label=unparsed.label or unparsed.name,
             type=MetricType(unparsed.type),
-            type_params=self._get_metric_type_params(unparsed),
+            type_params=self._get_metric_type_params(unparsed, generated_from=generated_from),
             time_granularity=unparsed.time_granularity,
             filter=parse_where_filter(unparsed.filter),
             meta=meta,
@@ -604,6 +614,25 @@ class MetricParser(YamlReader):
         )
         return config
 
+    def _parse_v2_metric(
+        self, data: dict[str, Any], semantic_model_name: Optional[str] = None
+    ) -> None:
+        try:
+            UnparsedMetricV2.validate(data)
+            unparsed = UnparsedMetricV2.from_dict(data)
+        except (ValidationError, JSONValidationError) as exc:
+            raise YamlParseDictError(self.yaml.path, self.key, data, exc)
+        self.parse_metric(unparsed=unparsed)
+
+    def parse_v2_metrics_from_dbt_model_patch(self, model_patch: ParsedNodePatch) -> None:
+        if model_patch.metrics is None:
+            return
+        for metric in model_patch.metrics:
+            semantic_model = (
+                model_patch.name if MetricType(metric.type) == MetricType.SIMPLE else None
+            )
+            self.parse_metric(metric, generated_from=semantic_model)
+
     def parse(self) -> None:
         for data in self.get_key_dicts():
             # The main differentiator of old-style yaml and new-style is "type_params",
@@ -614,13 +643,9 @@ class MetricParser(YamlReader):
                     unparsed = UnparsedMetric.from_dict(data)
                 except (ValidationError, JSONValidationError) as exc:
                     raise YamlParseDictError(self.yaml.path, self.key, data, exc)
+                self.parse_metric(unparsed)
             else:
-                try:
-                    UnparsedMetricV2.validate(data)
-                    unparsed = UnparsedMetricV2.from_dict(data)
-                except (ValidationError, JSONValidationError) as exc:
-                    raise YamlParseDictError(self.yaml.path, self.key, data, exc)
-            self.parse_metric(unparsed)
+                self._parse_v2_metric(data)
 
 
 class GroupParser(YamlReader):
@@ -927,6 +952,23 @@ class SemanticModelParser(YamlReader):
                 )
         return entities
 
+    def _parse_v2_derived_semantics_entities(
+        self, derived_semantics: UnparsedDerivedSemantics
+    ) -> List[Entity]:
+        entities: List[Entity] = []
+        for unparsed_entity in derived_semantics.entities:
+            entities.append(
+                Entity(
+                    name=unparsed_entity.name,
+                    type=EntityType(unparsed_entity.type),
+                    description=unparsed_entity.description,
+                    label=unparsed_entity.label,
+                    expr=unparsed_entity.expr,
+                    config=SemanticLayerElementConfig(meta=unparsed_entity.config.get("meta", {})),
+                )
+            )
+        return entities
+
     def parse_v2_semantic_model_from_dbt_model_patch(
         self,
         node: ModelNode,
@@ -934,7 +976,8 @@ class SemanticModelParser(YamlReader):
     ) -> None:
         dimensions = self._parse_v2_column_dimensions(patch.columns)
         entities = self._parse_v2_column_entities(patch.columns)
-
+        if patch.derived_semantics is not None:
+            entities.extend(self._parse_v2_derived_semantics_entities(patch.derived_semantics))
         self._parse_semantic_model_helper(
             semantic_model_name=node.name,
             semantic_model_config=patch.config,

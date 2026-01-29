@@ -199,8 +199,15 @@ class UnparsedEntity(UnparsedEntityBase):
 class UnparsedColumnEntityV2(UnparsedEntityBase):
     """Used for dbt Semantic Layer column entities (v2 YAML)."""
 
-    # TODO: add a matching UnparsedDerivedEntityV2 class that adds an expr field
     pass
+
+
+# kw_only allows this child to define required fields
+@dataclass(kw_only=True)
+class UnparsedDerivedEntityV2(UnparsedEntityBase):
+    """Used for dbt Semantic Layer derived entities (v2 YAML)."""
+
+    expr: str
 
 
 @dataclass
@@ -221,6 +228,188 @@ class UnparsedColumn(HasConfig, HasColumnAndTestProps):
 @dataclass
 class HasColumnTests(dbtClassMixin):
     columns: Sequence[UnparsedColumn] = field(default_factory=list)
+
+
+@dataclass
+class MetricFilter(dbtClassMixin):
+    field: str
+    operator: str
+    # TODO : Can we make this Any?
+    value: str
+
+
+class MetricTimePeriod(StrEnum):
+    day = "day"
+    week = "week"
+    month = "month"
+    year = "year"
+
+    def plural(self) -> str:
+        return str(self) + "s"
+
+
+@dataclass
+class MetricTime(dbtClassMixin, Mergeable):
+    count: Optional[int] = None
+    period: Optional[MetricTimePeriod] = None
+
+    def __bool__(self):
+        return self.count is not None and self.period is not None
+
+
+@dataclass
+class UnparsedMetricInputMeasure(dbtClassMixin):
+    name: str
+    # Note: `Union` must be the outermost part of the type annotation for serialization to work properly.
+    filter: Union[str, List[str], None] = None
+    alias: Optional[str] = None
+    join_to_timespine: bool = False
+    fill_nulls_with: Optional[int] = None
+
+
+@dataclass
+class UnparsedMetricInput(dbtClassMixin):
+    name: str
+    # Note: `Union` must be the outermost part of the type annotation for serialization to work properly.
+    filter: Union[str, List[str], None] = None
+    alias: Optional[str] = None
+    offset_window: Optional[str] = None
+    offset_to_grain: Optional[str] = None
+
+
+@dataclass
+class UnparsedConversionTypeParams(dbtClassMixin):
+    """Only used in v1 Semantic YAML"""
+
+    base_measure: Union[UnparsedMetricInputMeasure, str]
+    conversion_measure: Union[UnparsedMetricInputMeasure, str]
+    entity: str
+    calculation: str = (
+        ConversionCalculationType.CONVERSION_RATE.value
+    )  # ConversionCalculationType Enum
+    window: Optional[str] = None
+    constant_properties: Optional[List[ConstantPropertyInput]] = None
+
+
+@dataclass
+class UnparsedCumulativeTypeParams(dbtClassMixin):
+    """Only used in v1 Semantic YAML"""
+
+    window: Optional[str] = None
+    grain_to_date: Optional[str] = None
+    period_agg: str = PeriodAggregation.FIRST.value
+
+
+@dataclass
+class UnparsedMetricTypeParams(dbtClassMixin):
+    """Used on v1 Semantic Metric YAML."""
+
+    measure: Optional[Union[UnparsedMetricInputMeasure, str]] = None
+    numerator: Optional[Union[UnparsedMetricInput, str]] = None
+    denominator: Optional[Union[UnparsedMetricInput, str]] = None
+    expr: Optional[Union[str, bool]] = None
+    window: Optional[str] = None
+    grain_to_date: Optional[str] = None  # str is really a TimeGranularity Enum
+    metrics: Optional[List[Union[UnparsedMetricInput, str]]] = None
+    conversion_type_params: Optional[UnparsedConversionTypeParams] = None
+    cumulative_type_params: Optional[UnparsedCumulativeTypeParams] = None
+
+
+@dataclass(kw_only=True)
+class UnparsedMetricBase(dbtClassMixin):
+
+    name: str
+    type: str = "simple"
+    label: Optional[str] = None
+    description: str = ""
+    # Note: `Union` must be the outermost part of the type annotation for serialization to work properly.
+    filter: Union[str, List[str], None] = None
+    time_granularity: Optional[str] = None
+
+    config: Dict[str, Any] = field(default_factory=dict)
+
+    @classmethod
+    def validate(cls, data):
+        super().validate(data)
+        if "name" in data:
+            errors = []
+            if " " in data["name"]:
+                errors.append("cannot contain spaces")
+            # This handles failing queries due to too long metric names.
+            # It only occurs in BigQuery and Snowflake (Postgres/Redshift truncate)
+            if len(data["name"]) > 250:
+                errors.append("cannot contain more than 250 characters")
+            if not (re.match(r"^[A-Za-z]", data["name"])):
+                errors.append("must begin with a letter")
+            if not (re.match(r"[\w]+$", data["name"])):
+                errors.append("must contain only letters, numbers and underscores")
+
+            if errors:
+                raise ValidationError(
+                    f"The metric name '{data['name']}' is invalid.  It {', '.join(e for e in errors)}"
+                )
+
+
+@dataclass(kw_only=True)
+class UnparsedMetric(UnparsedMetricBase):
+    """Old-style YAML metric; prefer UnparsedMetricV2 instead as of late 2025."""
+
+    label: str  # TODO: follow up - v1 made this required, but in v2 it appears optional
+
+    type_params: UnparsedMetricTypeParams  # old-style YAML
+    # metadata: Optional[Unparsedetadata] = None # TODO
+    meta: Dict[str, Any] = field(default_factory=dict)
+    tags: List[str] = field(default_factory=list)
+
+
+@dataclass
+class UnparsedNonAdditiveDimensionV2(dbtClassMixin):
+    name: str
+    window_agg: str  # AggregationType enum
+    group_by: List[str] = field(default_factory=list)
+
+
+@dataclass
+class UnparsedMetricV2(UnparsedMetricBase):
+    hidden: bool = False
+    agg: Optional[str] = None
+
+    percentile: Optional[float] = None
+    percentile_type: Optional[str] = None
+
+    join_to_timespine: Optional[bool] = None
+    fill_nulls_with: Optional[int] = None
+    expr: Optional[Union[str, int]] = None
+
+    non_additive_dimension: Optional[UnparsedNonAdditiveDimensionV2] = None
+    agg_time_dimension: Optional[str] = None
+
+    # For cumulative metrics
+    window: Optional[str] = None
+    grain_to_date: Optional[str] = None
+    period_agg: str = PeriodAggregation.FIRST.value
+    input_metric: Optional[Union[UnparsedMetricInput, str]] = None
+
+    # For ratio metrics
+    numerator: Optional[Union[UnparsedMetricInput, str]] = None
+    denominator: Optional[Union[UnparsedMetricInput, str]] = None
+
+    # For derived metrics
+    input_metrics: Optional[List[Union[UnparsedMetricInput, str]]] = None
+
+    # For conversion metrics
+    entity: Optional[str] = None
+    calculation: Optional[str] = None
+    base_metric: Optional[Union[UnparsedMetricInput, str]] = None
+    conversion_metric: Optional[Union[UnparsedMetricInput, str]] = None
+    constant_properties: Optional[List[ConstantPropertyInput]] = None
+
+    @classmethod
+    @override
+    def validate(cls, data):
+        super().validate(data)
+        if data["type"] == "simple" and data.get("agg") is None:
+            raise ValidationError("Simple metrics must have an agg param.")
 
 
 @dataclass
@@ -291,6 +480,12 @@ class UnparsedNodeUpdate(HasConfig, HasColumnTests, HasColumnAndTestProps, HasYa
 
 
 @dataclass
+class UnparsedDerivedSemantics(dbtClassMixin):
+    # TODO DI-4618 Add dimensions field here
+    entities: List[UnparsedDerivedEntityV2] = field(default_factory=list)
+
+
+@dataclass
 class UnparsedModelUpdate(UnparsedNodeUpdate):
     quote_columns: Optional[bool] = None
     access: Optional[str] = None
@@ -298,10 +493,10 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
     versions: Sequence[UnparsedVersion] = field(default_factory=list)
     deprecation_date: Optional[datetime.datetime] = None
     time_spine: Optional[TimeSpine] = None
-    # TODO: allow semantic model to accept a semantic model config object OR a bool
+    # TODO DI-4579: allow semantic model to accept a semantic model config object OR a bool
     semantic_model: Optional[bool] = None
-    # TODO: add metrics section
-    # TODO: add derived_semantics section with dimensions, metrics, and entities
+    metrics: Optional[List[UnparsedMetricV2]] = None
+    derived_semantics: Optional[UnparsedDerivedSemantics] = None
 
     def __post_init__(self) -> None:
         if self.latest_version:
@@ -603,188 +798,6 @@ class UnparsedExposure(dbtClassMixin):
 
         if data["owner"].get("name") is None and data["owner"].get("email") is None:
             raise ValidationError("Exposure owner must have at least one of 'name' or 'email'.")
-
-
-@dataclass
-class MetricFilter(dbtClassMixin):
-    field: str
-    operator: str
-    # TODO : Can we make this Any?
-    value: str
-
-
-class MetricTimePeriod(StrEnum):
-    day = "day"
-    week = "week"
-    month = "month"
-    year = "year"
-
-    def plural(self) -> str:
-        return str(self) + "s"
-
-
-@dataclass
-class MetricTime(dbtClassMixin, Mergeable):
-    count: Optional[int] = None
-    period: Optional[MetricTimePeriod] = None
-
-    def __bool__(self):
-        return self.count is not None and self.period is not None
-
-
-@dataclass
-class UnparsedMetricInputMeasure(dbtClassMixin):
-    name: str
-    # Note: `Union` must be the outermost part of the type annotation for serialization to work properly.
-    filter: Union[str, List[str], None] = None
-    alias: Optional[str] = None
-    join_to_timespine: bool = False
-    fill_nulls_with: Optional[int] = None
-
-
-@dataclass
-class UnparsedMetricInput(dbtClassMixin):
-    name: str
-    # Note: `Union` must be the outermost part of the type annotation for serialization to work properly.
-    filter: Union[str, List[str], None] = None
-    alias: Optional[str] = None
-    offset_window: Optional[str] = None
-    offset_to_grain: Optional[str] = None
-
-
-@dataclass
-class UnparsedConversionTypeParams(dbtClassMixin):
-    """Only used in v1 Semantic YAML"""
-
-    base_measure: Union[UnparsedMetricInputMeasure, str]
-    conversion_measure: Union[UnparsedMetricInputMeasure, str]
-    entity: str
-    calculation: str = (
-        ConversionCalculationType.CONVERSION_RATE.value
-    )  # ConversionCalculationType Enum
-    window: Optional[str] = None
-    constant_properties: Optional[List[ConstantPropertyInput]] = None
-
-
-@dataclass
-class UnparsedCumulativeTypeParams(dbtClassMixin):
-    """Only used in v1 Semantic YAML"""
-
-    window: Optional[str] = None
-    grain_to_date: Optional[str] = None
-    period_agg: str = PeriodAggregation.FIRST.value
-
-
-@dataclass
-class UnparsedMetricTypeParams(dbtClassMixin):
-    """Used on v1 Semantic Metric YAML."""
-
-    measure: Optional[Union[UnparsedMetricInputMeasure, str]] = None
-    numerator: Optional[Union[UnparsedMetricInput, str]] = None
-    denominator: Optional[Union[UnparsedMetricInput, str]] = None
-    expr: Optional[Union[str, bool]] = None
-    window: Optional[str] = None
-    grain_to_date: Optional[str] = None  # str is really a TimeGranularity Enum
-    metrics: Optional[List[Union[UnparsedMetricInput, str]]] = None
-    conversion_type_params: Optional[UnparsedConversionTypeParams] = None
-    cumulative_type_params: Optional[UnparsedCumulativeTypeParams] = None
-
-
-@dataclass(kw_only=True)
-class UnparsedMetricBase(dbtClassMixin):
-
-    name: str
-    type: str = "simple"
-    label: Optional[str] = None
-    description: str = ""
-    # Note: `Union` must be the outermost part of the type annotation for serialization to work properly.
-    filter: Union[str, List[str], None] = None
-    time_granularity: Optional[str] = None
-
-    config: Dict[str, Any] = field(default_factory=dict)
-
-    @classmethod
-    def validate(cls, data):
-        super().validate(data)
-        if "name" in data:
-            errors = []
-            if " " in data["name"]:
-                errors.append("cannot contain spaces")
-            # This handles failing queries due to too long metric names.
-            # It only occurs in BigQuery and Snowflake (Postgres/Redshift truncate)
-            if len(data["name"]) > 250:
-                errors.append("cannot contain more than 250 characters")
-            if not (re.match(r"^[A-Za-z]", data["name"])):
-                errors.append("must begin with a letter")
-            if not (re.match(r"[\w]+$", data["name"])):
-                errors.append("must contain only letters, numbers and underscores")
-
-            if errors:
-                raise ValidationError(
-                    f"The metric name '{data['name']}' is invalid.  It {', '.join(e for e in errors)}"
-                )
-
-
-@dataclass(kw_only=True)
-class UnparsedMetric(UnparsedMetricBase):
-    """Old-style YAML metric; prefer UnparsedMetricV2 instead as of late 2025."""
-
-    label: str  # TODO: follow up - v1 made this required, but in v2 it appears optional
-
-    type_params: UnparsedMetricTypeParams  # old-style YAML
-    # metadata: Optional[Unparsedetadata] = None # TODO
-    meta: Dict[str, Any] = field(default_factory=dict)
-    tags: List[str] = field(default_factory=list)
-
-
-@dataclass
-class UnparsedNonAdditiveDimensionV2(dbtClassMixin):
-    name: str
-    window_agg: str  # AggregationType enum
-    group_by: List[str] = field(default_factory=list)
-
-
-@dataclass
-class UnparsedMetricV2(UnparsedMetricBase):
-    hidden: bool = False
-    agg: Optional[str] = None
-
-    percentile: Optional[float] = None
-    percentile_type: Optional[str] = None
-
-    join_to_timespine: Optional[bool] = None
-    fill_nulls_with: Optional[int] = None
-    expr: Optional[Union[str, int]] = None
-
-    non_additive_dimension: Optional[UnparsedNonAdditiveDimensionV2] = None
-    agg_time_dimension: Optional[str] = None
-
-    # For cumulative metrics
-    window: Optional[str] = None
-    grain_to_date: Optional[str] = None
-    period_agg: str = PeriodAggregation.FIRST.value
-    input_metric: Optional[Union[str, Dict[str, Any]]] = None
-
-    # For ratio metrics
-    numerator: Optional[Union[UnparsedMetricInput, str]] = None
-    denominator: Optional[Union[UnparsedMetricInput, str]] = None
-
-    # For derived metrics
-    input_metrics: Optional[List[Union[UnparsedMetricInput, str]]] = None
-
-    # For conversion metrics
-    entity: Optional[str] = None
-    calculation: Optional[str] = None
-    base_metric: Optional[Union[UnparsedMetricInput, str]] = None
-    conversion_metric: Optional[Union[UnparsedMetricInput, str]] = None
-    constant_properties: Optional[List[ConstantPropertyInput]] = None
-
-    @classmethod
-    @override
-    def validate(cls, data):
-        super().validate(data)
-        if data["type"] == "simple" and data.get("agg") is None:
-            raise ValidationError("Simple metrics must have an agg param.")
 
 
 @dataclass

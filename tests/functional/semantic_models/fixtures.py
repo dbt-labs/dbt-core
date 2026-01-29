@@ -1,3 +1,5 @@
+import textwrap
+
 simple_metricflow_time_spine_sql = """
 SELECT to_date('02/20/2023', 'mm/dd/yyyy') as date_day
 """
@@ -632,14 +634,86 @@ base_schema_yml_v2 = """models:
         entity: foreign
 """
 
-schema_yml_v2_metrics = """
-metrics:
-  # shouldn't work because the simple metric will need to be attached to a model,
-  # but it's fine for now.
-  - name: simple_metric
-    description: This is our first simple metric.
-    label: Simple Metric
-    type: simple
-    agg: count
-    expr: id
+schema_yml_v2_simple_metric_on_model_1 = """
+    metrics:
+      - name: simple_metric
+        description: This is our first simple metric.
+        label: Simple Metric
+        type: simple
+        agg: count
+        expr: id
+      - name: simple_metric_2
+        description: This is our second simple metric.
+        label: Simple Metric 2
+        type: simple
+        agg: count
+        expr: second_col
+      - name: percentile_metric
+        description: This is our percentile metric.
+        label: Percentile Metric
+        type: simple
+        agg: percentile
+        percentile: 0.99
+        percentile_type: discrete
+        expr: second_col
+      - name: cumulative_metric
+        description: This is our cumulative metric.
+        label: Cumulative Metric
+        type: cumulative
+        grain_to_date: day
+        period_agg: first
+        input_metric: simple_metric
+      - name: conversion_metric
+        description: This is our conversion metric.
+        label: Conversion Metric
+        type: conversion
+        entity: id_entity
+        calculation: conversion_rate
+        base_metric: simple_metric
+        conversion_metric: simple_metric_2
+"""
+
+schema_yml_v2_cumulative_metric_missing_input_metric = """
+    metrics:
+      - name: cumulative_metric
+        description: This is our cumulative metric.
+        label: Cumulative Metric
+        type: cumulative
+        grain_to_date: day
+        period_agg: first
+"""
+
+schema_yml_v2_conversion_metric_missing_base_metric = """
+    metrics:
+      - name: simple_metric_2
+        description: This is our second simple metric.
+        label: Simple Metric 2
+        type: simple
+        agg: count
+        expr: second_col
+      - name: conversion_metric
+        description: This is our conversion metric.
+        label: Conversion Metric
+        type: conversion
+        entity: id_entity
+        calculation: conversion_rate
+        conversion_metric: simple_metric_2
+"""
+
+schema_yml_v2_standalone_simple_metric = textwrap.dedent(schema_yml_v2_simple_metric_on_model_1)
+
+derived_semantics_yml = """
+    derived_semantics:
+      entities:
+        - name: derived_id_entity
+          description: This is the id entity, and it is the primary entity.
+          label: ID Entity
+          type: primary
+          expr: "id + foreign_id_col"
+          config:
+            meta:
+              test_label_thing: derived_entity_1
+        - name: derived_id_entity_with_no_optional_fields
+          type: primary
+          expr: id + foreign_id_col
 """
