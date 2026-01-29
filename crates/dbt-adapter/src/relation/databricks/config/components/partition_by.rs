@@ -8,7 +8,7 @@ use crate::relation::databricks::config::{
 };
 use dbt_schemas::schemas::DbtModel;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
-use dbt_schemas::schemas::manifest::PartitionConfig;
+use dbt_schemas::schemas::common::PartitionConfig;
 use minijinja::value::{Value, ValueMap};
 
 pub(crate) const TYPE_NAME: &str = "partitioned_by";

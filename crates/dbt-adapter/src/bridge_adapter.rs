@@ -25,10 +25,10 @@ use dbt_common::behavior_flags::{Behavior, BehaviorFlag};
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::{AdapterError, AdapterErrorKind, FsError, FsResult};
 use dbt_schema_store::{SchemaEntry, SchemaStoreTrait};
-use dbt_schemas::schemas::common::{DbtQuoting, ResolvedQuoting};
+use dbt_schemas::schemas::common::{ClusterConfig, DbtQuoting, ResolvedQuoting};
 use dbt_schemas::schemas::dbt_catalogs::DbtCatalogs;
 use dbt_schemas::schemas::dbt_column::DbtColumn;
-use dbt_schemas::schemas::manifest::{BigqueryClusterConfig, BigqueryPartitionConfig};
+use dbt_schemas::schemas::manifest::BigqueryPartitionConfig;
 use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::properties::ModelConstraint;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
@@ -1216,7 +1216,7 @@ impl BaseAdapter for BridgeAdapter {
         state: &State,
         relation: Option<Arc<dyn BaseRelation>>,
         partition_by: Option<BigqueryPartitionConfig>,
-        cluster_by: Option<BigqueryClusterConfig>,
+        cluster_by: Option<ClusterConfig>,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {

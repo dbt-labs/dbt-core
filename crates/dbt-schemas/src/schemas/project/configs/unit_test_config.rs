@@ -10,8 +10,8 @@ use std::collections::{BTreeMap, btree_map::Iter};
 use crate::{
     default_to,
     schemas::{
-        common::Schedule,
-        manifest::{BigqueryClusterConfig, GrantAccessToTarget, PartitionConfig},
+        common::{ClusterConfig, PartitionConfig, Schedule},
+        manifest::GrantAccessToTarget,
         project::{
             DefaultTo, TypedRecursiveConfig,
             configs::{
@@ -88,7 +88,7 @@ pub struct ProjectUnitTestConfig {
     #[serde(rename = "+partition_by")]
     pub partition_by: Option<PartitionConfig>,
     #[serde(rename = "+cluster_by")]
-    pub cluster_by: Option<BigqueryClusterConfig>,
+    pub cluster_by: Option<ClusterConfig>,
     #[serde(
         default,
         rename = "+hours_to_expiration",

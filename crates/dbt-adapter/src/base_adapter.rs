@@ -839,7 +839,7 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
         _state: &State,
         _relation: Option<Arc<dyn BaseRelation>>,
         _partition_by: Option<dbt_schemas::schemas::manifest::BigqueryPartitionConfig>,
-        _cluster_by: Option<dbt_schemas::schemas::manifest::BigqueryClusterConfig>,
+        _cluster_by: Option<dbt_schemas::schemas::common::ClusterConfig>,
     ) -> Result<Value, minijinja::Error> {
         unimplemented!("only available with BigQuery adapter")
     }

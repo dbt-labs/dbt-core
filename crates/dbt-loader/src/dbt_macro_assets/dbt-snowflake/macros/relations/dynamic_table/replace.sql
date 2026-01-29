@@ -51,7 +51,7 @@ create or replace dynamic table {{ relation }}
     {{ optional('initialize', dynamic_table.initialize) }}
     {{ optional('with row access policy', dynamic_table.row_access_policy, equals_char='') }}
     {{ optional('with tag', dynamic_table.table_tag, quote_char='(', equals_char='') }}
-    {# DIVERGENCE: FIXME: support dynamic_table.cluster_by #}
+    {{ optional('cluster by', dynamic_table.cluster_by, quote_char='(', equals_char='') }}
     as (
         {{ sql }}
     )
@@ -88,7 +88,7 @@ create or replace dynamic iceberg table {{ relation }}
     {{ optional('initialize', dynamic_table.initialize) }}
     {{ optional('row_access_policy', dynamic_table.row_access_policy) }}
     {{ optional('table_tag', dynamic_table.table_tag) }}
-    {# DIVERGENCE: FIXME: support dynamic_table.cluster_by #}
+    {{ optional('cluster by', dynamic_table.cluster_by, quote_char='(', equals_char='') }}
     as (
         {{ sql }}
     )

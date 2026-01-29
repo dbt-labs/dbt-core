@@ -337,6 +337,8 @@ pub struct SnowflakeDynamicTableConfig {
     pub row_access_policy: Option<String>,
     /// Specifies the tag name and the tag string value.
     pub table_tag: Option<String>,
+    /// Specifies the columns to cluster on
+    pub cluster_by: Option<String>,
 }
 
 impl TryFrom<&DbtModel> for SnowflakeDynamicTableConfig {
@@ -385,6 +387,12 @@ impl TryFrom<&DbtModel> for SnowflakeDynamicTableConfig {
             });
         let row_access_policy = snowflake_config.row_access_policy.clone();
         let table_tag = snowflake_config.table_tag.clone();
+        // Reference: https://github.com/dbt-labs/dbt-adapters/blob/4655aa9a4c698aaf8e37ccc67af5a8a5f0529577/dbt-snowflake/src/dbt/adapters/snowflake/parse_model.py#L63
+        // In Core, the `cluster_by` field in a DynamicTableConfig is already stringified
+        let cluster_by = snowflake_config.cluster_by.as_ref().map(|cluster_by| {
+            let fields = cluster_by.fields();
+            fields.join(", ")
+        });
 
         Ok(Self {
             table_name,
@@ -396,6 +404,7 @@ impl TryFrom<&DbtModel> for SnowflakeDynamicTableConfig {
             initialize,
             row_access_policy,
             table_tag,
+            cluster_by,
         })
     }
 }
@@ -458,6 +467,8 @@ impl TryFrom<DescribeDynamicTableResults> for SnowflakeDynamicTableConfig {
             // These can't be queried from Snowflake
             row_access_policy: None,
             table_tag: None,
+            // TODO: This _can_ be queried from Snowflake, but Core doesn't read it at all
+            cluster_by: None,
         })
     }
 }
@@ -474,6 +485,7 @@ impl Object for SnowflakeDynamicTableConfig {
             Some("initialize") => Some(Value::from_object(self.initialize.clone())),
             Some("row_access_policy") => Some(Value::from(self.row_access_policy.clone())),
             Some("table_tag") => Some(Value::from(self.table_tag.clone())),
+            Some("cluster_by") => Some(Value::from(self.cluster_by.clone())),
             _ => None,
         }
     }
@@ -756,6 +768,7 @@ mod tests {
             },
             row_access_policy: None,
             table_tag: None,
+            cluster_by: None,
         };
 
         let config_2 = SnowflakeDynamicTableConfig {
@@ -774,6 +787,7 @@ mod tests {
             },
             row_access_policy: None,
             table_tag: None,
+            cluster_by: None,
         };
 
         let config_3 = SnowflakeDynamicTableConfig {
@@ -792,6 +806,7 @@ mod tests {
             },
             row_access_policy: None,
             table_tag: None,
+            cluster_by: None,
         };
 
         let config_4 = SnowflakeDynamicTableConfig {
@@ -810,6 +825,7 @@ mod tests {
             },
             row_access_policy: None,
             table_tag: None,
+            cluster_by: None,
         };
 
         /* Changeset:
@@ -1024,6 +1040,7 @@ mod tests {
                 initialize: initialize_config.clone(),
                 row_access_policy: None,
                 table_tag: None,
+                cluster_by: None,
             };
             let config_value = Value::from_object(config);
 

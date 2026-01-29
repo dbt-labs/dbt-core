@@ -16,16 +16,17 @@ use crate::schemas::common::{
     NodeInfo, NodeInfoWrapper, PersistDocsConfig, hooks_equal, normalize_sql,
 };
 use crate::schemas::dbt_column::{DbtColumnRef, deserialize_dbt_columns, serialize_dbt_columns};
-use crate::schemas::manifest::{BigqueryClusterConfig, GrantAccessToTarget, PartitionConfig};
+use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::project::configs::common::log_state_mod_diff;
 use crate::schemas::project::configs::common::{array_of_strings_eq, grants_eq, meta_eq};
 use crate::schemas::project::{StrictnessMode, WarehouseSpecificNodeConfig, same_warehouse_config};
 use crate::schemas::serde::{QueryTag, StringOrArrayOfStrings};
 use crate::schemas::{
     common::{
-        Access, DbtChecksum, DbtContract, DbtIncrementalStrategy, DbtMaterialization, Expect,
-        FreshnessDefinition, Given, IncludeExclude, NodeDependsOn, ResolvedQuoting, ScheduleConfig,
-        SchemaOrigin, SchemaRefreshInterval, SyncConfig,
+        Access, ClusterConfig, DbtChecksum, DbtContract, DbtIncrementalStrategy,
+        DbtMaterialization, Expect, FreshnessDefinition, Given, IncludeExclude, NodeDependsOn,
+        PartitionConfig, ResolvedQuoting, ScheduleConfig, SchemaOrigin, SchemaRefreshInterval,
+        SyncConfig,
     },
     macros::DbtMacro,
     manifest::common::DbtOwner,
@@ -4852,6 +4853,7 @@ impl AdapterAttr {
                 AdapterAttr::default().with_snowflake_attr(Some(Box::new(SnowflakeAttr {
                     table_tag: config.table_tag.clone(),
                     partition_by: config.partition_by.clone(),
+                    cluster_by: config.cluster_by.clone(),
                     row_access_policy: config.row_access_policy.clone(),
                     adapter_properties: config.adapter_properties.clone(),
                     external_volume: config.external_volume.clone(),
@@ -4940,6 +4942,7 @@ impl AdapterAttr {
                     .with_snowflake_attr(Some(Box::new(SnowflakeAttr {
                         table_tag: config.table_tag.clone(),
                         partition_by: config.partition_by.clone(),
+                        cluster_by: config.cluster_by.clone(),
                         row_access_policy: config.row_access_policy.clone(),
                         adapter_properties: config.adapter_properties.clone(),
                         external_volume: config.external_volume.clone(),
@@ -5027,6 +5030,7 @@ impl AdapterAttr {
 pub struct SnowflakeAttr {
     pub adapter_properties: Option<BTreeMap<String, YmlValue>>,
     pub partition_by: Option<PartitionConfig>,
+    pub cluster_by: Option<ClusterConfig>,
     pub table_tag: Option<String>,
     pub row_access_policy: Option<String>,
     pub external_volume: Option<String>,
@@ -5085,7 +5089,7 @@ pub struct BigQueryAttr {
     pub base_location_root: Option<String>,
     pub base_location_subpath: Option<String>,
     pub partition_by: Option<PartitionConfig>,
-    pub cluster_by: Option<BigqueryClusterConfig>,
+    pub cluster_by: Option<ClusterConfig>,
     pub hours_to_expiration: Option<u64>,
     pub labels: Option<BTreeMap<String, String>>,
     pub labels_from_meta: Option<bool>,

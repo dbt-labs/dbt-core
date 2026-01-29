@@ -9,9 +9,11 @@ use std::collections::btree_map::Iter;
 
 use super::config_keys::ConfigKeys;
 use crate::default_to;
-use crate::schemas::common::{DbtQuoting, FreshnessDefinition, Schedule, SchemaOrigin, SyncConfig};
+use crate::schemas::common::PartitionConfig;
+use crate::schemas::common::{
+    ClusterConfig, DbtQuoting, FreshnessDefinition, Schedule, SchemaOrigin, SyncConfig,
+};
 use crate::schemas::manifest::GrantAccessToTarget;
-use crate::schemas::manifest::{BigqueryClusterConfig, PartitionConfig};
 use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
 use crate::schemas::project::configs::common::{default_meta_and_tags, default_quoting};
 use crate::schemas::project::{DefaultTo, TypedRecursiveConfig};
@@ -92,7 +94,7 @@ pub struct ProjectSourceConfig {
     #[serde(rename = "+partition_by")]
     pub partition_by: Option<PartitionConfig>,
     #[serde(rename = "+cluster_by")]
-    pub cluster_by: Option<BigqueryClusterConfig>,
+    pub cluster_by: Option<ClusterConfig>,
     #[serde(
         default,
         rename = "+hours_to_expiration",

@@ -11,10 +11,9 @@ use crate::snapshots::SnapshotStrategy;
 
 use arrow::array::RecordBatch;
 use dbt_agate::AgateTable;
+use dbt_schemas::schemas::common::{ClusterConfig, PartitionConfig};
 use dbt_schemas::schemas::dbt_column::DbtColumn;
-use dbt_schemas::schemas::manifest::{
-    BigqueryClusterConfig, BigqueryPartitionConfig, GrantAccessToTarget, PartitionConfig,
-};
+use dbt_schemas::schemas::manifest::{BigqueryPartitionConfig, GrantAccessToTarget};
 use dbt_schemas::schemas::properties::ModelConstraint;
 use dbt_schemas::schemas::serde::minijinja_value_to_typed_struct;
 use indexmap::IndexMap;
@@ -604,13 +603,14 @@ pub fn dispatch_adapter_calls(
                     None
                 } else {
                     Some(
-                        minijinja_value_to_typed_struct::<BigqueryClusterConfig>(cb.clone())
-                            .map_err(|e| {
+                        minijinja_value_to_typed_struct::<ClusterConfig>(cb.clone()).map_err(
+                            |e| {
                                 minijinja::Error::new(
                                     minijinja::ErrorKind::SerdeDeserializeError,
                                     e.to_string(),
                                 )
-                            })?,
+                            },
+                        )?,
                     )
                 }
             } else {

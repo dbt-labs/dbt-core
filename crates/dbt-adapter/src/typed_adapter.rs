@@ -47,14 +47,12 @@ use dbt_common::tracing::emit::emit_warn_log_message;
 use dbt_common::{ErrorCode, FsResult, unexpected_fs_err};
 use dbt_frontend_common::dialect::Dialect;
 use dbt_schemas::dbt_types::RelationType;
-use dbt_schemas::schemas::common::ConstraintSupport;
 use dbt_schemas::schemas::common::ConstraintType;
 use dbt_schemas::schemas::common::DbtIncrementalStrategy;
+use dbt_schemas::schemas::common::{ClusterConfig, ConstraintSupport, PartitionConfig};
 use dbt_schemas::schemas::common::{Constraint, DbtMaterialization};
 use dbt_schemas::schemas::dbt_column::{DbtColumn, DbtColumnRef};
-use dbt_schemas::schemas::manifest::{
-    BigqueryClusterConfig, BigqueryPartitionConfig, PartitionConfig,
-};
+use dbt_schemas::schemas::manifest::BigqueryPartitionConfig;
 use dbt_schemas::schemas::project::ModelConfig;
 use dbt_schemas::schemas::properties::ModelConstraint;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
@@ -2284,7 +2282,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         conn: &'_ mut dyn Connection,
         relation: Arc<dyn BaseRelation>,
         local_partition_by: Option<BigqueryPartitionConfig>,
-        local_cluster_by: Option<BigqueryClusterConfig>,
+        local_cluster_by: Option<ClusterConfig>,
         state: Option<&State>,
     ) -> AdapterResult<bool> {
         match self.adapter_type() {

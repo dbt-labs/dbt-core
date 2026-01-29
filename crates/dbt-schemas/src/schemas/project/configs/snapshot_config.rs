@@ -1,3 +1,4 @@
+use crate::schemas::common::ClusterConfig;
 use crate::schemas::serde::OmissibleGrantConfig;
 use crate::schemas::serde::QueryTag;
 use dbt_common::io_args::StaticAnalysisKind;
@@ -21,11 +22,11 @@ use crate::schemas::common::DbtQuoting;
 use crate::schemas::common::DocsConfig;
 use crate::schemas::common::HardDeletes;
 use crate::schemas::common::Hooks;
+use crate::schemas::common::PartitionConfig;
 use crate::schemas::common::PersistDocsConfig;
 use crate::schemas::common::Schedule;
 use crate::schemas::common::SyncConfig;
 use crate::schemas::manifest::GrantAccessToTarget;
-use crate::schemas::manifest::{BigqueryClusterConfig, PartitionConfig};
 use crate::schemas::project::DefaultTo;
 use crate::schemas::project::TypedRecursiveConfig;
 use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
@@ -169,7 +170,7 @@ pub struct ProjectSnapshotConfig {
     pub transient: Option<bool>,
     // Adapter-specific fields (BigQuery)
     #[serde(rename = "+cluster_by")]
-    pub cluster_by: Option<BigqueryClusterConfig>,
+    pub cluster_by: Option<ClusterConfig>,
     #[serde(
         default,
         rename = "+enable_refresh",

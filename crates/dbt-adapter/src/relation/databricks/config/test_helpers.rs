@@ -6,7 +6,7 @@ use arrow::csv::ReaderBuilder;
 use arrow_schema::{DataType, Field, Schema};
 use dbt_agate::AgateTable;
 use dbt_schemas::schemas::{
-    common::*, dbt_column::DbtColumn, manifest::PartitionConfig, nodes::*, project::*,
+    common::PartitionConfig, common::*, dbt_column::DbtColumn, nodes::*, project::*,
 };
 use dbt_serde_yaml::{Spanned, Value as YmlValue};
 use indexmap::IndexMap;

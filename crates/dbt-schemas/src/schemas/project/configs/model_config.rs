@@ -1,3 +1,4 @@
+use crate::schemas::common::ClusterConfig;
 use crate::schemas::serde::OmissibleGrantConfig;
 use crate::schemas::serde::QueryTag;
 use dbt_common::io_args::StaticAnalysisKind;
@@ -22,13 +23,13 @@ use crate::schemas::common::DbtContract;
 use crate::schemas::common::DbtIncrementalStrategy;
 use crate::schemas::common::DbtMaterialization;
 use crate::schemas::common::DbtUniqueKey;
+use crate::schemas::common::PartitionConfig;
 use crate::schemas::common::PersistDocsConfig;
 use crate::schemas::common::SyncConfig;
 use crate::schemas::common::{Access, DbtQuoting, Schedule};
 use crate::schemas::common::{DocsConfig, OnConfigurationChange};
 use crate::schemas::common::{Hooks, OnSchemaChange, hooks_equal};
 use crate::schemas::manifest::GrantAccessToTarget;
-use crate::schemas::manifest::{BigqueryClusterConfig, PartitionConfig};
 use crate::schemas::project::configs::common::default_column_types;
 use crate::schemas::project::configs::common::default_hooks;
 use crate::schemas::project::configs::common::default_meta_and_tags;
@@ -95,7 +96,7 @@ pub struct ProjectModelConfig {
     #[serde(rename = "+catalog_name")]
     pub catalog_name: Option<String>,
     #[serde(rename = "+cluster_by")]
-    pub cluster_by: Option<BigqueryClusterConfig>,
+    pub cluster_by: Option<ClusterConfig>,
     #[serde(rename = "+clustered_by")]
     pub clustered_by: Option<String>,
     #[serde(rename = "+column_types")]

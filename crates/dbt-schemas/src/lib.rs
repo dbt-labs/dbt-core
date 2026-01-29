@@ -76,8 +76,8 @@ pub mod schemas {
 
         pub mod common;
         pub use bigquery_partition::{
-            BigqueryClusterConfig, BigqueryPartitionConfig, BigqueryPartitionConfigInner,
-            GrantAccessToTarget, PartitionConfig, Range, RangeConfig, TimeConfig,
+            BigqueryPartitionConfig, BigqueryPartitionConfigInner, GrantAccessToTarget, Range,
+            RangeConfig, TimeConfig,
         };
         pub use group::ManifestGroup;
         pub use manifest::{

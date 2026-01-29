@@ -65,6 +65,7 @@ use strum::{Display, EnumIter, EnumString};
 
 use crate::dbt_types::RelationType;
 use crate::schemas::dbt_column::{ColumnPropertiesDimensionType, Granularity};
+use crate::schemas::manifest::BigqueryPartitionConfig;
 use crate::schemas::manifest::common::SourceFileMetadata;
 use crate::schemas::semantic_layer::semantic_manifest::SemanticLayerElementConfig;
 
@@ -1485,9 +1486,71 @@ pub struct SyncConfig {
     pub schema_refresh_interval: Option<SchemaRefreshInterval>,
 }
 
+/// Configuration for cluster by columns.
+///
+/// dbt-core allows either of the variants for the `cluster_by`
+/// to allow cluster on a single column or on multiple columns
+#[derive(Debug, Clone, Serialize, UntaggedEnumDeserialize, PartialEq, Eq, JsonSchema)]
+#[serde(untagged)]
+pub enum ClusterConfig {
+    String(String),
+    List(Vec<String>),
+}
+
+impl ClusterConfig {
+    /// Normalize the enum as a list of cluster_by fields
+    pub fn fields(&self) -> Vec<&str> {
+        match self {
+            ClusterConfig::String(s) => vec![s.as_ref()],
+            ClusterConfig::List(l) => l.iter().map(|s| s.as_ref()).collect(),
+        }
+    }
+
+    /// Normalize the enum as a list of cluster_by fields
+    pub fn into_fields(self) -> Vec<String> {
+        match self {
+            ClusterConfig::String(s) => vec![s],
+            ClusterConfig::List(l) => l,
+        }
+    }
+}
+
+/// Configuration for partition by columns.
+///
+/// dbt-core allows either of the variants for the `partition_by` in the model config
+/// but the bigquery-adapter throws RunTime error
+/// the behaviors are tested from the latest dbt-core + bigquery-adapter as this is written
+/// we're conformant to this behavior via here and via the `into_bigquery()` method
+#[derive(Debug, Clone, Serialize, UntaggedEnumDeserialize, PartialEq, Eq, JsonSchema)]
+#[serde(untagged)]
+pub enum PartitionConfig {
+    String(String),
+    List(Vec<String>),
+    BigqueryPartitionConfig(BigqueryPartitionConfig),
+}
+
+impl PartitionConfig {
+    pub fn into_bigquery(self) -> Option<BigqueryPartitionConfig> {
+        match self {
+            PartitionConfig::BigqueryPartitionConfig(bq) => Some(bq),
+            _ => None,
+        }
+    }
+
+    pub fn as_bigquery(&self) -> Option<&BigqueryPartitionConfig> {
+        match self {
+            PartitionConfig::BigqueryPartitionConfig(bq) => Some(bq),
+            _ => None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use crate::schemas::serde::minijinja_value_to_typed_struct;
+
     use super::*;
+    use minijinja::value::Value as MinijinjaValue;
 
     #[test]
     fn model_freshness_rules_eq_defaults_updates_on_to_any() {
@@ -1890,5 +1953,41 @@ period: hour
         let rules: FreshnessRules = dbt_serde_yaml::from_str(yaml).unwrap();
         assert_eq!(rules.count, Some(24));
         assert_eq!(rules.period, Some(FreshnessPeriod::hour));
+    }
+
+    #[test]
+    fn test_bigquery_partition_config_legacy_deserialize_from_jinja_values() {
+        // Test String variant
+        let string_value = MinijinjaValue::from("partition_field");
+        let result = minijinja_value_to_typed_struct::<PartitionConfig>(string_value).unwrap();
+        assert!(matches!(result, PartitionConfig::String(s) if s == "partition_field"));
+
+        // Test List variant
+        let list_value = MinijinjaValue::from(vec!["field1", "field2"]);
+        let result = minijinja_value_to_typed_struct::<PartitionConfig>(list_value).unwrap();
+        assert!(
+            matches!(result, PartitionConfig::List(ref list) if list == &vec!["field1".to_string(), "field2".to_string()])
+        );
+
+        // Test BigqueryPartitionConfig variant with time partitioning
+        let config_json: YmlValue = dbt_serde_yaml::from_str(
+            r#"
+            field: "partition_date"
+            data_type: "date"
+            granularity: "day"
+            time_ingestion_partitioning: true
+        "#,
+        )
+        .unwrap();
+        let config_value = MinijinjaValue::from_serialize(&config_json);
+        let result = minijinja_value_to_typed_struct::<PartitionConfig>(config_value).unwrap();
+        if let PartitionConfig::BigqueryPartitionConfig(config) = result {
+            assert_eq!(config.field, "partition_date");
+            assert_eq!(config.data_type, "date");
+            assert!(config.time_ingestion_partitioning());
+            assert_eq!(config.granularity().unwrap(), "day");
+        } else {
+            panic!("Expected BigqueryPartitionConfig variant");
+        }
     }
 }

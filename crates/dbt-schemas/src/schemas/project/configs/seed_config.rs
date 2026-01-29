@@ -1,3 +1,4 @@
+use crate::schemas::common::ClusterConfig;
 use crate::schemas::serde::OmissibleGrantConfig;
 use crate::schemas::serde::QueryTag;
 use dbt_common::io_args::StaticAnalysisKind;
@@ -19,10 +20,10 @@ use crate::schemas::common::DbtMaterialization;
 use crate::schemas::common::DbtQuoting;
 use crate::schemas::common::DocsConfig;
 use crate::schemas::common::Hooks;
+use crate::schemas::common::PartitionConfig;
 use crate::schemas::common::PersistDocsConfig;
 use crate::schemas::common::Schedule;
 use crate::schemas::manifest::GrantAccessToTarget;
-use crate::schemas::manifest::{BigqueryClusterConfig, PartitionConfig};
 use crate::schemas::project::DefaultTo;
 use crate::schemas::project::TypedRecursiveConfig;
 use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
@@ -121,7 +122,7 @@ pub struct ProjectSeedConfig {
     #[serde(rename = "+partition_by")]
     pub partition_by: Option<PartitionConfig>,
     #[serde(rename = "+cluster_by")]
-    pub cluster_by: Option<BigqueryClusterConfig>,
+    pub cluster_by: Option<ClusterConfig>,
     #[serde(
         default,
         rename = "+hours_to_expiration",

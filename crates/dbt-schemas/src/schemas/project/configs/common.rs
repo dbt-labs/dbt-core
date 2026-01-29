@@ -13,11 +13,11 @@ use dbt_telemetry::StateModifiedDiff;
 
 use crate::default_to;
 use crate::schemas::common::Hooks;
+use crate::schemas::common::PartitionConfig;
 use crate::schemas::common::merge_meta;
 use crate::schemas::common::merge_tags;
-use crate::schemas::common::{DbtQuoting, DocsConfig, Schedule};
+use crate::schemas::common::{ClusterConfig, DbtQuoting, DocsConfig, Schedule};
 use crate::schemas::manifest::GrantAccessToTarget;
-use crate::schemas::manifest::{BigqueryClusterConfig, PartitionConfig};
 use crate::schemas::project::configs::model_config::DataLakeObjectCategory;
 use crate::schemas::project::dbt_project::DefaultTo;
 use crate::schemas::serde::QueryTag;
@@ -241,11 +241,11 @@ pub fn default_to_grants(
 pub struct WarehouseSpecificNodeConfig {
     // Shared
     pub partition_by: Option<PartitionConfig>,
+    pub cluster_by: Option<ClusterConfig>,
     pub adapter_properties: Option<BTreeMap<String, YmlValue>>,
 
     // BigQuery
     pub description: Option<String>,
-    pub cluster_by: Option<BigqueryClusterConfig>,
     #[serde(default, deserialize_with = "u64_or_string_u64")]
     pub hours_to_expiration: Option<u64>,
     pub labels: Option<BTreeMap<String, String>>,
