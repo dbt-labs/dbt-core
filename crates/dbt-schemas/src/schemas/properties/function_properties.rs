@@ -49,6 +49,10 @@ pub struct FunctionReturnType {
     pub description: Option<String>,
 }
 
+fn default_language() -> Option<String> {
+    Some("sql".to_string())
+}
+
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct FunctionProperties {
@@ -58,11 +62,10 @@ pub struct FunctionProperties {
     pub identifier: Option<String>,
     pub name: String,
     pub tests: Option<Vec<DataTests>>,
+    #[serde(default = "default_language")]
     pub language: Option<String>,
     pub returns: Option<FunctionReturnType>,
     pub arguments: Option<Vec<FunctionArgument>>,
-    #[serde(rename = "type")]
-    pub function_kind: Option<FunctionKind>,
 }
 
 impl FunctionProperties {
@@ -74,10 +77,9 @@ impl FunctionProperties {
             description: None,
             identifier: None,
             tests: None,
-            language: None,
+            language: default_language(),
             returns: None,
             arguments: None,
-            function_kind: None,
         }
     }
 }

@@ -668,13 +668,24 @@ pub async fn load_inner(
         model_sql_files.extend(python_model_files);
         model_sql_files.sort_by(|a, b| a.path.cmp(&b.path));
     }
-    let function_sql_files = find_files_by_kind_and_extension(
+    let mut function_sql_files = find_files_by_kind_and_extension(
         package_path,
         &dbt_project.name,
         &ResourcePathKind::FunctionPaths,
         &["sql"],
         &all_files,
     );
+    let python_function_files = find_files_by_kind_and_extension(
+        package_path,
+        &dbt_project.name,
+        &ResourcePathKind::FunctionPaths,
+        &["py"],
+        &all_files,
+    );
+    if !python_function_files.is_empty() {
+        function_sql_files.extend(python_function_files);
+        function_sql_files.sort_by(|a, b| a.path.cmp(&b.path));
+    }
     let macro_files = find_files_by_kind_and_extension(
         package_path,
         &dbt_project.name,

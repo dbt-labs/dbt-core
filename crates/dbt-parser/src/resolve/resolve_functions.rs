@@ -17,7 +17,7 @@ use dbt_schemas::{
         CommonAttributes, DbtFunction, NodeBaseAttributes,
         common::NodeDependsOn,
         project::DbtProject,
-        properties::FunctionProperties,
+        properties::{FunctionKind, FunctionProperties},
         ref_and_source::{DbtRef, DbtSourceWrapper},
     },
     state::{DbtPackage, DbtRuntimeConfig, NodeResolverTracker},
@@ -34,6 +34,16 @@ use crate::{
 };
 
 use super::resolve_properties::MinimalPropertiesEntry;
+
+/// Determine if a DbtAsset is a Python function based on file extension
+fn is_python_function(asset: &dbt_schemas::state::DbtAsset) -> bool {
+    asset
+        .path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| ext == "py")
+        .unwrap_or(false)
+}
 
 #[allow(clippy::too_many_arguments)]
 pub async fn resolve_functions(
@@ -173,7 +183,11 @@ pub async fn resolve_functions(
                 // The actual rendered SQL is stored in rendering_results
                 raw_code: Some("--placeholder--".to_string()),
                 checksum: sql_file_info.checksum,
-                language: properties.language.clone(),
+                language: if is_python_function(&dbt_asset) {
+                    Some("python".to_string())
+                } else {
+                    properties.language.clone()
+                },
                 tags: model_config
                     .tags
                     .clone()
@@ -235,7 +249,11 @@ pub async fn resolve_functions(
                     .and_then(|c| c.access.clone())
                     .unwrap_or(Access::Private),
                 group: properties.config.as_ref().and_then(|c| c.group.clone()),
-                language: properties.language.clone(),
+                language: if is_python_function(&dbt_asset) {
+                    Some("python".to_string())
+                } else {
+                    properties.language.clone()
+                },
                 on_configuration_change: properties
                     .config
                     .as_ref()
@@ -248,7 +266,12 @@ pub async fn resolve_functions(
                 group: model_config.group.clone(),
                 tags: model_config.tags.clone(),
                 meta: model_config.meta.clone(),
-                function_kind: model_config.function_kind.clone(),
+                function_kind: model_config
+                    .function_kind
+                    .clone()
+                    .or(Some(FunctionKind::Scalar)),
+                runtime_version: model_config.runtime_version.clone(),
+                entry_point: model_config.entry_point.clone(),
                 ..Default::default()
             },
             __other__: BTreeMap::new(),

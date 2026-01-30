@@ -32,6 +32,10 @@ use crate::schemas::properties::{FunctionKind, Volatility};
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::{bool_or_string_bool, default_type};
 
+fn default_function_kind() -> Option<FunctionKind> {
+    Some(FunctionKind::Scalar)
+}
+
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct ProjectFunctionConfig {
@@ -51,8 +55,6 @@ pub struct ProjectFunctionConfig {
     pub grants: OmissibleGrantConfig,
     #[serde(rename = "+group")]
     pub group: Option<String>,
-    #[serde(rename = "+language")]
-    pub language: Option<String>,
     #[serde(rename = "+meta")]
     pub meta: Option<IndexMap<String, YmlValue>>,
     #[serde(rename = "+on_configuration_change")]
@@ -89,7 +91,6 @@ impl Default for ProjectFunctionConfig {
             enabled: None,
             grants: OmissibleGrantConfig::default(),
             group: None,
-            language: None,
             meta: None,
             on_configuration_change: None,
             quoting: None,
@@ -116,7 +117,6 @@ impl DefaultTo<ProjectFunctionConfig> for ProjectFunctionConfig {
             enabled,
             grants,
             group,
-            language,
             meta,
             on_configuration_change,
             quoting,
@@ -146,7 +146,6 @@ impl DefaultTo<ProjectFunctionConfig> for ProjectFunctionConfig {
                 docs,
                 enabled,
                 group,
-                language,
                 on_configuration_change,
                 static_analysis,
                 function_kind,
@@ -186,10 +185,9 @@ pub struct FunctionConfig {
     pub docs: Option<DocsConfig>,
     pub grants: OmissibleGrantConfig,
     pub quoting: Option<DbtQuoting>,
-    pub language: Option<String>,
     pub on_configuration_change: Option<String>,
     pub static_analysis: Option<StaticAnalysisKind>,
-    #[serde(rename = "type")]
+    #[serde(default = "default_function_kind", rename = "type")]
     pub function_kind: Option<FunctionKind>,
     pub volatility: Option<Volatility>,
     pub runtime_version: Option<String>,
@@ -229,7 +227,6 @@ impl DefaultTo<FunctionConfig> for FunctionConfig {
             docs,
             grants,
             quoting,
-            language,
             on_configuration_change,
             static_analysis,
             function_kind,
@@ -260,7 +257,6 @@ impl DefaultTo<FunctionConfig> for FunctionConfig {
                 group,
                 docs,
                 quoting,
-                language,
                 on_configuration_change,
                 static_analysis,
                 function_kind,
@@ -286,7 +282,6 @@ impl From<ProjectFunctionConfig> for FunctionConfig {
             docs: config.docs,
             grants: config.grants,
             quoting: config.quoting,
-            language: config.language,
             on_configuration_change: config.on_configuration_change,
             static_analysis: config.static_analysis,
             function_kind: config.function_kind,
@@ -311,7 +306,6 @@ impl FunctionConfig {
         let docs_eq_result = docs_eq(&self.docs, &other.docs); // Custom comparison for docs
         let grants_eq_result = grants_eq(&self.grants, &other.grants); // Custom comparison for grants
         let quoting_eq = self.quoting == other.quoting;
-        let language_eq = self.language == other.language;
         let on_configuration_change_eq =
             self.on_configuration_change == other.on_configuration_change;
         let static_analysis_eq = self.static_analysis == other.static_analysis;
@@ -332,7 +326,6 @@ impl FunctionConfig {
             && docs_eq_result
             && grants_eq_result
             && quoting_eq
-            && language_eq
             && on_configuration_change_eq
             && static_analysis_eq
             && function_kind_eq
@@ -396,14 +389,6 @@ impl FunctionConfig {
                         Some((
                             format!("{:?}", &self.quoting),
                             format!("{:?}", &other.quoting),
-                        )),
-                    ),
-                    (
-                        "language",
-                        language_eq,
-                        Some((
-                            format!("{:?}", &self.language),
-                            format!("{:?}", &other.language),
                         )),
                     ),
                     (

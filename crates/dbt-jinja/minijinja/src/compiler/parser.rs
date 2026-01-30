@@ -1407,9 +1407,9 @@ impl<'a> Parser<'a> {
             // First check if ',' is specified
             if skip_token!(self, Token::Comma) {
                 // Check if default is specified
-                if matches_token!(self, Token::Ident("default")) {
-                    skip_token!(self, Token::Ident("default"));
-                    break;
+                if skip_token!(self, Token::Ident("default")) {
+                    // Continue to allow additional parameters after 'default'
+                    continue;
                 }
 
                 // Check if the adapter is specified
@@ -1417,7 +1417,7 @@ impl<'a> Parser<'a> {
                     expect_token!(self, Token::Assign, "`=`");
                     let (adapter_name, _) = expect_token!(self, Token::Str(name) => name, "str");
                     ret = adapter_name.to_string();
-                // Else, check if default expression is specified (i.e. {% materialization mat_name, default %})
+                // Else, check if supported_languages is specified
                 } else if skip_token!(self, Token::Ident("supported_languages")) {
                     expect_token!(self, Token::Assign, "`=`");
                     *supported_languages = Some(ok!(self.parse_expr()));
