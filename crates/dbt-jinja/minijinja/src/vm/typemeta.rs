@@ -1486,7 +1486,13 @@ impl<'src> TypeChecker<'src> {
                     typestate.drop_top(arg_count.unwrap_or(0) as usize);
                     typestate.stack.push(Type::Bool);
                 }
-                Instruction::CallFunction(name, arg_count, span, ref_or_source_span) => {
+                Instruction::CallFunction(
+                    name,
+                    arg_count,
+                    identifier_span,
+                    span,
+                    ref_or_source_span,
+                ) => {
                     // TYPECHECK: YES
                     listener.set_span(span);
 
@@ -1536,6 +1542,7 @@ impl<'src> TypeChecker<'src> {
                                     if let Type::String(Some(name)) = &args[0] {
                                         listener.on_model_reference(
                                             name,
+                                            identifier_span,
                                             &ref_or_source_span.start_line,
                                             &ref_or_source_span.start_col,
                                             &ref_or_source_span.start_offset,
@@ -1550,6 +1557,7 @@ impl<'src> TypeChecker<'src> {
                                     if let Type::String(Some(name)) = args.last().unwrap() {
                                         listener.on_model_source_reference(
                                             name,
+                                            identifier_span,
                                             &ref_or_source_span.start_line,
                                             &ref_or_source_span.start_col,
                                             &ref_or_source_span.start_offset,
@@ -1581,7 +1589,7 @@ impl<'src> TypeChecker<'src> {
                                 funcsign.get_unique_id(),
                             ) {
                                 listener.on_function_call(
-                                    span,
+                                    identifier_span,
                                     &def_span,
                                     &def_path,
                                     &def_unique_id,
@@ -1609,7 +1617,7 @@ impl<'src> TypeChecker<'src> {
                                 funcsign.get_unique_id(),
                             ) {
                                 listener.on_function_call(
-                                    span,
+                                    identifier_span,
                                     &def_span,
                                     &def_path,
                                     &def_unique_id,
@@ -1637,7 +1645,7 @@ impl<'src> TypeChecker<'src> {
                                     funcsign.get_unique_id(),
                                 ) {
                                     listener.on_function_call(
-                                        span,
+                                        identifier_span,
                                         &def_span,
                                         &def_path,
                                         &def_unique_id,
@@ -1667,7 +1675,7 @@ impl<'src> TypeChecker<'src> {
                         typestate.stack.push(Type::Any { hard: false });
                     }
                 }
-                Instruction::CallMethod(name, arg_count, span) => {
+                Instruction::CallMethod(name, arg_count, identifier_span, span) => {
                     // TYPECHECK: NO? (Maybe add method check later)
                     listener.set_span(span);
 
@@ -1704,7 +1712,7 @@ impl<'src> TypeChecker<'src> {
                                     funcsign.get_unique_id(),
                                 ) {
                                     listener.on_function_call(
-                                        span,
+                                        identifier_span,
                                         &def_span,
                                         &def_path,
                                         &def_unique_id,
@@ -1737,7 +1745,7 @@ impl<'src> TypeChecker<'src> {
                                         funcsign.get_unique_id(),
                                     ) {
                                         listener.on_function_call(
-                                            span,
+                                            identifier_span,
                                             &def_span,
                                             &def_path,
                                             &def_unique_id,

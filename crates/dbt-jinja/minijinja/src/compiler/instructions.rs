@@ -191,10 +191,16 @@ pub enum Instruction<'source> {
     EndCapture,
 
     /// Calls a global function
-    CallFunction(&'source str, Option<u16>, Span, Option<Span>),
+    CallFunction(
+        &'source str,
+        Option<u16>,
+        Box<Span>,
+        Box<Span>,
+        Option<Box<Span>>,
+    ),
 
     /// Calls a method
-    CallMethod(&'source str, Option<u16>, Span),
+    CallMethod(&'source str, Option<u16>, Box<Span>, Box<Span>),
 
     /// Calls an object
     CallObject(Option<u16>, Span),
@@ -442,7 +448,7 @@ impl<'source> Instructions<'source> {
             let name = match instr {
                 Instruction::Lookup(name, _)
                 | Instruction::StoreLocal(name, _)
-                | Instruction::CallFunction(name, _, _, _) => *name,
+                | Instruction::CallFunction(name, _, _, _, _) => *name,
                 Instruction::PushLoop(flags, _) if flags & LOOP_FLAG_WITH_LOOP_VAR != 0 => "loop",
                 Instruction::PushLoop(_, _) | Instruction::PushWith(_) => break,
                 _ => continue,

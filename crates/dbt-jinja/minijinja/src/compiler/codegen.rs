@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::compiler::ast;
+use crate::compiler::ast::{self, Expr};
 use crate::compiler::instructions::{
     Instruction, Instructions, LocalId, LOOP_FLAG_RECURSIVE, LOOP_FLAG_WITH_LOOP_VAR, MAX_LOCALS,
 };
@@ -36,6 +36,14 @@ fn get_local_id<'source>(ids: &mut BTreeMap<&'source str, LocalId>, name: &'sour
         let next_id = ids.len() as LocalId;
         ids.insert(name, next_id);
         next_id
+    }
+}
+
+fn get_identifier_span<'a>(expr: &ast::Expr<'a>) -> Option<Span> {
+    match expr {
+        Expr::Var(var) => Some(var.span()),
+        Expr::GetAttr(get_attr) => Some(get_attr.span()),
+        _ => None,
     }
 }
 
@@ -1199,17 +1207,22 @@ impl<'source> CodeGenerator<'source> {
                         c.args.last().unwrap()
                     };
                     if let ast::CallArg::Pos(ast::Expr::Const(c)) = arg {
-                        Some(c.span())
+                        Some(c.span().into())
                     } else {
                         None
                     }
                 } else {
                     None
                 };
+                let identifier_span = match get_identifier_span(&c.expr) {
+                    Some(identifier_span) => identifier_span,
+                    _ => span, // fallback to span
+                };
                 self.add(Instruction::CallFunction(
                     name,
                     arg_count,
-                    span,
+                    identifier_span.into(),
+                    span.into(),
                     ref_or_source_span,
                 ));
             }
@@ -1222,7 +1235,16 @@ impl<'source> CodeGenerator<'source> {
             ast::CallType::Method(expr, name) => {
                 self.compile_expr(expr)?;
                 let arg_count = self.compile_call_args(&c.args, 1, caller, span)?;
-                self.add(Instruction::CallMethod(name, arg_count, span));
+                let identifier_span = match get_identifier_span(&c.expr) {
+                    Some(identifier_span) => identifier_span,
+                    _ => span, // fallback to span
+                };
+                self.add(Instruction::CallMethod(
+                    name,
+                    arg_count,
+                    identifier_span.into(),
+                    span.into(),
+                ));
             }
             ast::CallType::Object(expr) => {
                 self.compile_expr(expr)?;

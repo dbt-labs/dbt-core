@@ -31,6 +31,7 @@ pub trait TypecheckingEventListener {
     fn on_model_reference(
         &self,
         _name: &str,
+        _identifier_span: &Span,
         _start_line: &u32,
         _start_col: &u32,
         _start_offset: &u32,
@@ -45,6 +46,7 @@ pub trait TypecheckingEventListener {
     fn on_model_source_reference(
         &self,
         _name: &str,
+        _identifier_span: &Span,
         _start_line: &u32,
         _start_col: &u32,
         _start_offset: &u32,

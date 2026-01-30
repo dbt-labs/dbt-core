@@ -860,7 +860,7 @@ impl<'env> Vm<'env> {
                     stack.drop_top(arg_count);
                     stack.push(Value::from(rv));
                 }
-                Instruction::CallFunction(name, arg_count, this_span, _) => {
+                Instruction::CallFunction(name, arg_count, _, this_span, _) => {
                     // reset_span is a special function that resets the current span
                     // it is only used internally like in run_operation.rs,
                     // where we want to set the location to yml file
@@ -1097,7 +1097,7 @@ impl<'env> Vm<'env> {
                     stack.drop_top(arg_count);
                     stack.push(rv);
                 }
-                Instruction::CallMethod(name, arg_count, this_span) => {
+                Instruction::CallMethod(name, arg_count, _, this_span) => {
                     let args = stack.get_call_args(*arg_count);
                     let arg_count = args.len();
 
