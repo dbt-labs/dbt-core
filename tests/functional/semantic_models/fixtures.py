@@ -718,13 +718,13 @@ derived_semantics_yml = """
         - name: derived_id_entity
           description: This is the id entity, and it is the primary entity.
           label: ID Entity
-          type: primary
+          type: foreign
           expr: "id + foreign_id_col"
           config:
             meta:
               test_label_thing: derived_entity_1
         - name: derived_id_entity_with_no_optional_fields
-          type: primary
+          type: foreign
           expr: id + foreign_id_col
       dimensions:
         - name: derived_id_dimension
