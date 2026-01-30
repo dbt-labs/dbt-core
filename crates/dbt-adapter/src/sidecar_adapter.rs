@@ -19,8 +19,9 @@ use crate::cache::RelationCache;
 use crate::column::Column;
 use crate::config::AdapterConfig;
 use crate::errors::AdapterResult;
-use crate::metadata::MetadataAdapter;
+use crate::metadata::{CatalogAndSchema, MetadataAdapter};
 use crate::query_comment::QueryCommentConfig;
+use crate::relation::do_create_relation;
 use crate::response::AdapterResponse;
 use crate::sidecar_client::SidecarClient;
 use crate::sql_types::TypeOps;
@@ -221,5 +222,86 @@ impl TypedBaseAdapter for SnowflakeSidecarAdapter {
             .collect();
 
         Ok(columns)
+    }
+
+    /// List relations in schema via sidecar (overrides default Snowflake SQL)
+    ///
+    /// Delegates to SidecarClient::list_relations() and converts to BaseRelation objects.
+    fn list_relations(
+        &self,
+        _query_ctx: &QueryCtx,
+        _conn: &'_ mut dyn Connection,
+        db_schema: &CatalogAndSchema,
+    ) -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
+        // Normalize schema name based on quoting policy
+        let query_schema = if self.quoting.schema {
+            db_schema.resolved_schema.clone()
+        } else {
+            db_schema.resolved_schema.to_lowercase()
+        };
+
+        // Delegate to sidecar client
+        let relation_infos = self.sidecar_client.list_relations(&query_schema)?;
+
+        // Convert to BaseRelation objects
+        let mut relations = Vec::with_capacity(relation_infos.len());
+        for (database, schema, name, rel_type) in relation_infos {
+            let relation = do_create_relation(
+                self.adapter_type,
+                database,
+                schema,
+                Some(name),
+                Some(rel_type),
+                self.quoting,
+            )?;
+            relations.push(relation);
+        }
+        Ok(relations)
+    }
+
+    /// Get relation via sidecar (overrides default Snowflake SQL)
+    ///
+    /// Delegates to SidecarClient::get_relation_type() and converts to BaseRelation.
+    fn get_relation(
+        &self,
+        _state: &State,
+        _ctx: &QueryCtx,
+        _conn: &'_ mut dyn Connection,
+        database: &str,
+        schema: &str,
+        identifier: &str,
+    ) -> AdapterResult<Option<Arc<dyn BaseRelation>>> {
+        // Normalize names based on quoting policy (DuckDB is case-preserving for quoted identifiers)
+        let query_schema = if self.quoting.schema {
+            schema.to_string()
+        } else {
+            schema.to_lowercase()
+        };
+        let query_identifier = if self.quoting.identifier {
+            identifier.to_string()
+        } else {
+            identifier.to_lowercase()
+        };
+
+        // Delegate to sidecar client
+        let relation_type = self
+            .sidecar_client
+            .get_relation_type(&query_schema, &query_identifier)?;
+
+        match relation_type {
+            Some(rel_type) => {
+                // Create relation with the logical adapter type (Snowflake)
+                let relation = do_create_relation(
+                    self.adapter_type,
+                    database.to_string(),
+                    schema.to_string(),
+                    Some(identifier.to_string()),
+                    Some(rel_type),
+                    self.quoting,
+                )?;
+                Ok(Some(relation))
+            }
+            None => Ok(None),
+        }
     }
 }

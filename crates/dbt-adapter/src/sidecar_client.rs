@@ -126,4 +126,18 @@ pub trait SidecarClient: Debug + Send + Sync {
     ///
     /// Vector of column info, empty if relation doesn't exist or has no columns.
     fn get_columns(&self, relation_name: &str) -> AdapterResult<Vec<ColumnInfo>>;
+
+    /// List all relations in a schema.
+    ///
+    /// # Arguments
+    ///
+    /// * `schema` - Schema name to list relations from
+    ///
+    /// # Returns
+    ///
+    /// Vector of tuples: (database, schema, name, relation_type)
+    fn list_relations(
+        &self,
+        schema: &str,
+    ) -> AdapterResult<Vec<(String, String, String, RelationType)>>;
 }
