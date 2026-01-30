@@ -1035,7 +1035,6 @@ class SemanticModelParser(YamlReader):
             if patch.semantic_model.name is not None:
                 name = patch.semantic_model.name
             if patch.semantic_model.config is not None:
-                print(f"patch.semantic_model: {patch.semantic_model}")
                 unparsed_sub_config = patch.semantic_model.config
                 if isinstance(unparsed_sub_config, UnparsedSemanticResourceConfig):
                     if unparsed_sub_config.meta is not None:
@@ -1044,7 +1043,6 @@ class SemanticModelParser(YamlReader):
                     config["enabled"] = patch.semantic_model.enabled
                 if patch.semantic_model.group is not None:
                     config["group"] = patch.semantic_model.group
-                print("ending config:", config)
         elif isinstance(patch.semantic_model, bool):
             # boolean value just indicates that the model has a semantic model,
             # so nothing to do here.

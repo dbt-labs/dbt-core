@@ -1131,7 +1131,6 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
             and patch.semantic_model.enabled is not False
         )
         if semantic_model_enabled:
-            print(f"patch.semantic_model: {patch.semantic_model}")
             from dbt.parser.schema_yaml_readers import SemanticModelParser
 
             semantic_model_parser = SemanticModelParser(self.schema_parser, self.yaml)
