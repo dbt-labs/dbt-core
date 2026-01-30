@@ -6,7 +6,8 @@ use crate::schemas::serde::typed_struct_from_json_file;
 use crate::schemas::{
     InternalDbtNode, Nodes, nodes::DbtModel, nodes::is_invalid_for_relation_comparison,
 };
-use dbt_common::{FsResult, constants::DBT_MANIFEST_JSON};
+use dbt_common::tracing::emit::emit_warn_log_message;
+use dbt_common::{ErrorCode, FsResult, constants::DBT_MANIFEST_JSON};
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -38,33 +39,56 @@ impl fmt::Display for PreviousState {
 
 impl PreviousState {
     pub fn try_new(state_path: &Path, root_project_quoting: ResolvedQuoting) -> FsResult<Self> {
-        Self::try_new_with_target_path(state_path, root_project_quoting, None)
+        Self::try_new_with_target_path(state_path, root_project_quoting, None, true)
     }
 
+    /// Creates a new `PreviousState` from the given state path.
+    ///
+    /// # Arguments
+    /// * `state_path` - The path to the state directory containing manifest.json and other artifacts
+    /// * `root_project_quoting` - The quoting configuration for the root project
+    /// * `target_path` - Optional target path for the output directory
+    /// * `warn_on_manifest_load_failure` - If true, emits a warning when manifest.json fails to load.
+    ///   This should be set to true when the selector includes `state:modified` or `state:new`,
+    ///   and false for other selectors like `source_status:fresher+` that don't require the manifest.
     pub fn try_new_with_target_path(
         state_path: &Path,
         root_project_quoting: ResolvedQuoting,
         target_path: Option<PathBuf>,
+        warn_on_manifest_load_failure: bool,
     ) -> FsResult<Self> {
         // Try to load manifest.json, but make it optional
-        let nodes = if let Ok(manifest) =
-            typed_struct_from_json_file::<DbtManifest>(&state_path.join(DBT_MANIFEST_JSON))
-        {
-            let dbt_quoting = DbtQuoting {
-                database: Some(root_project_quoting.database),
-                schema: Some(root_project_quoting.schema),
-                identifier: Some(root_project_quoting.identifier),
-                snowflake_ignore_case: None,
-            };
-            let quoting = if let Some(mut mantle_quoting) = manifest.metadata.quoting {
-                mantle_quoting.default_to(&dbt_quoting);
-                mantle_quoting
-            } else {
-                dbt_quoting
-            };
-            Some(nodes_from_dbt_manifest(manifest, quoting))
-        } else {
-            None
+        let manifest_path = state_path.join(DBT_MANIFEST_JSON);
+        let nodes = match typed_struct_from_json_file::<DbtManifest>(&manifest_path) {
+            Ok(manifest) => {
+                let dbt_quoting = DbtQuoting {
+                    database: Some(root_project_quoting.database),
+                    schema: Some(root_project_quoting.schema),
+                    identifier: Some(root_project_quoting.identifier),
+                    snowflake_ignore_case: None,
+                };
+                let quoting = if let Some(mut mantle_quoting) = manifest.metadata.quoting {
+                    mantle_quoting.default_to(&dbt_quoting);
+                    mantle_quoting
+                } else {
+                    dbt_quoting
+                };
+                Some(nodes_from_dbt_manifest(manifest, quoting))
+            }
+            Err(e) => {
+                if warn_on_manifest_load_failure {
+                    emit_warn_log_message(
+                        ErrorCode::ManifestLoadFailed,
+                        format!(
+                            "Failed to load manifest.json from state path '{}': {}",
+                            state_path.display(),
+                            e
+                        ),
+                        None,
+                    );
+                }
+                None
+            }
         };
 
         Ok(Self {

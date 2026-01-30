@@ -318,6 +318,44 @@ pub fn convert_column_selectors_to_fqn(expr: SelectExpression) -> (SelectExpress
         }
     }
 }
+
+/// Checks if a `SelectExpression` contains any `state:modified` or `state:new` selectors.
+///
+/// This is useful for determining whether loading the manifest.json is required for
+/// a given selector. If the selector only uses methods like `source_status:fresher+`,
+/// then the manifest is not needed and we should not warn if it fails to load.
+pub fn contains_state_modified_or_new_selector(expr: &SelectExpression) -> bool {
+    match expr {
+        SelectExpression::Atom(criteria) => {
+            if criteria.method == MethodName::State {
+                let value_lower = criteria.value.to_lowercase();
+                value_lower.starts_with("modified") || value_lower.starts_with("new")
+            } else {
+                // Also check nested excludes
+                criteria
+                    .exclude
+                    .as_ref()
+                    .map(|e| contains_state_modified_or_new_selector(e))
+                    .unwrap_or(false)
+            }
+        }
+        SelectExpression::And(expressions) | SelectExpression::Or(expressions) => expressions
+            .iter()
+            .any(contains_state_modified_or_new_selector),
+        SelectExpression::Exclude(expr) => contains_state_modified_or_new_selector(expr),
+    }
+}
+
+/// Checks if any of the provided optional select expressions contain `state:modified` or `state:new`.
+pub fn selectors_require_manifest(
+    select: Option<&SelectExpression>,
+    exclude: Option<&SelectExpression>,
+) -> bool {
+    let select_requires = select.is_some_and(contains_state_modified_or_new_selector);
+    let exclude_requires = exclude.is_some_and(contains_state_modified_or_new_selector);
+    select_requires || exclude_requires
+}
+
 // ------------------------------------------------------------------------------------------------
 pub fn conjoin_expression(
     maybe_select_expression: Option<SelectExpression>,
