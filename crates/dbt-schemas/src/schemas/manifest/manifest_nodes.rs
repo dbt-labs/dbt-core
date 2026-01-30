@@ -622,7 +622,7 @@ pub struct ManifestModelConfig {
     pub unique_key: Option<DbtUniqueKey>,
     pub on_schema_change: Option<OnSchemaChange>,
     pub on_configuration_change: Option<OnConfigurationChange>,
-    #[serde(rename = "+grants")]
+    #[serde(rename = "+grants", alias = "grants")]
     pub grants: OmissibleGrantConfig,
     pub packages: Option<StringOrArrayOfStrings>,
     pub python_version: Option<String>,
