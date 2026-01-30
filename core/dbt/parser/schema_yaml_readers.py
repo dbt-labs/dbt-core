@@ -1060,7 +1060,7 @@ class SemanticModelParser(YamlReader):
             label=None,  # does not seem to be available in v2 YAML, unless it is part of the semantic model config's 'group'?
             model=f"ref('{patch.name}')",
             defaults=Defaults(agg_time_dimension=patch.agg_time_dimension),
-            primary_entity=None,  # Not yet implemented; should become patch.primary_entity
+            primary_entity=patch.primary_entity,
             entities=entities,
             dimensions=dimensions,
             # Measures are not part of the v2 YAML design.

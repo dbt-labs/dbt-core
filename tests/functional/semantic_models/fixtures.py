@@ -545,7 +545,7 @@ semantic_models:
 """
 
 
-semantic_model_schema_yml_v2_template = """models:
+semantic_model_schema_yml_v2_template_for_model_configs = """models:
   - name: fct_revenue
     description: This is the model fct_revenue. It should be able to use doc blocks
     {semantic_model_value}
@@ -594,12 +594,14 @@ semantic_model_schema_yml_v2_template = """models:
 """
 
 # You can replace the semantic_model variable in the template like this:
-semantic_model_schema_yml_v2 = semantic_model_schema_yml_v2_template.format(
+semantic_model_schema_yml_v2 = semantic_model_schema_yml_v2_template_for_model_configs.format(
     semantic_model_value="semantic_model: true",
 )
 
-semantic_model_schema_yml_v2_disabled = semantic_model_schema_yml_v2_template.format(
-    semantic_model_value="semantic_model: false",
+semantic_model_schema_yml_v2_disabled = (
+    semantic_model_schema_yml_v2_template_for_model_configs.format(
+        semantic_model_value="semantic_model: false",
+    )
 )
 
 semantic_model_test_groups_yml = """groups:
@@ -612,7 +614,7 @@ semantic_model_test_groups_yml = """groups:
         data_owner: Finance team
 """
 
-semantic_model_schema_yml_v2_renamed = semantic_model_schema_yml_v2_template.format(
+semantic_model_schema_yml_v2_renamed = semantic_model_schema_yml_v2_template_for_model_configs.format(
     semantic_model_value="""semantic_model:
       name: renamed_semantic_model
       enabled: true
@@ -623,25 +625,115 @@ semantic_model_schema_yml_v2_renamed = semantic_model_schema_yml_v2_template.for
     """,
 )
 
-semantic_model_schema_yml_v2_default_values = semantic_model_schema_yml_v2_template.format(
+semantic_model_schema_yml_v2_default_values = semantic_model_schema_yml_v2_template_for_model_configs.format(
     semantic_model_value="""semantic_model:
       enabled: true
     """
 )
 
-semantic_model_schema_yml_v2_disabled = semantic_model_schema_yml_v2_template.format(
+semantic_model_schema_yml_v2_disabled = semantic_model_schema_yml_v2_template_for_model_configs.format(
     semantic_model_value="""semantic_model:
       enabled: false
     """,
 )
 
-semantic_model_schema_yml_v2_false_config = semantic_model_schema_yml_v2_template.format(
-    semantic_model_value="semantic_model: false",
+semantic_model_schema_yml_v2_false_config = (
+    semantic_model_schema_yml_v2_template_for_model_configs.format(
+        semantic_model_value="semantic_model: false",
+    )
 )
 
-semantic_model_config_does_not_exist = semantic_model_schema_yml_v2_template.format(
-    semantic_model_value="",
+semantic_model_config_does_not_exist = (
+    semantic_model_schema_yml_v2_template_for_model_configs.format(
+        semantic_model_value="",
+    )
 )
+
+semantic_model_schema_yml_v2_template_for_primary_entity_tests = """models:
+  - name: fct_revenue
+    description: This is the model fct_revenue. It should be able to use doc blocks
+    semantic_model: true
+    {primary_entity_setting}
+    columns:
+      - name: id
+        description: This is the id column dim.
+        config:
+          meta:
+          component_level: "original_meta"
+        dimension:
+          name: id_dim
+          label: "ID Dimension"
+          type: categorical
+          is_partition: true
+        entity:
+          name: id_entity
+          description: This is the id entity, and it is the primary entity.
+          label: ID Entity
+          type: {id_entity_type}
+      - name: second_col
+        description: This is the second column.
+        granularity: day
+        dimension:
+          name: second_dim
+          description: This is the second column (dim).
+          label: Second Dimension
+          type: time
+          validity_params:
+            is_start: true
+            is_end: true
+      - name: other_id_col
+        description: This is the other id column.
+        entity:
+          name: other_id_entity
+          type: {other_id_entity_type}
+      - name: col_with_default_dimensions
+        description: This is the column with default dimension settings.
+        dimension: categorical
+        entity:
+          name: col_with_default_entity_testing_default_desc
+          type: natural
+"""
+
+semantic_model_schema_yml_v2_with_primary_entity_only_on_column = (
+    semantic_model_schema_yml_v2_template_for_primary_entity_tests.format(
+        primary_entity_setting="",
+        id_entity_type="primary",
+        other_id_entity_type="foreign",
+    )
+)
+
+semantic_model_schema_yml_v2_with_twice_declared_primary_entity = (
+    semantic_model_schema_yml_v2_template_for_primary_entity_tests.format(
+        primary_entity_setting="primary_entity: id_entity",
+        id_entity_type="primary",
+        other_id_entity_type="foreign",
+    )
+)
+
+semantic_model_schema_yml_v2_primary_entity_only_on_model = (
+    semantic_model_schema_yml_v2_template_for_primary_entity_tests.format(
+        primary_entity_setting="primary_entity: id_entity",
+        id_entity_type="foreign",
+        other_id_entity_type="foreign",
+    )
+)
+
+semantic_model_schema_yml_v2_with_two_primary_entities_and_no_model_declaration = (
+    semantic_model_schema_yml_v2_template_for_primary_entity_tests.format(
+        primary_entity_setting="",
+        id_entity_type="primary",
+        other_id_entity_type="primary",
+    )
+)
+
+semantic_model_schema_yml_v2_with_two_primary_entities_and_model_declaration = (
+    semantic_model_schema_yml_v2_template_for_primary_entity_tests.format(
+        primary_entity_setting="primary_entity: id_entity",
+        id_entity_type="primary",
+        other_id_entity_type="primary",
+    )
+)
+
 
 semantic_model_schema_yml_v2 = """models:
   - name: fct_revenue

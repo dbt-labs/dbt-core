@@ -785,6 +785,7 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
         metrics = None
         derived_semantics = None
         agg_time_dimension = None
+        primary_entity = None
 
         if isinstance(block.target, UnparsedModelUpdate):
             deprecation_date = block.target.deprecation_date
@@ -806,7 +807,7 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
             metrics = block.target.metrics
             derived_semantics = block.target.derived_semantics
             agg_time_dimension = block.target.agg_time_dimension
-
+            primary_entity = block.target.primary_entity
         return ParsedNodePatch(
             name=block.target.name,
             original_file_path=block.target.original_file_path,
@@ -827,6 +828,7 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
             metrics=metrics,
             derived_semantics=derived_semantics,
             agg_time_dimension=agg_time_dimension,
+            primary_entity=primary_entity,
         )
 
     def parse_patch(self, block: TargetBlock[NodeTarget], refs: ParserRef) -> None:
