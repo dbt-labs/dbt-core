@@ -1,17 +1,16 @@
 mod key_format;
 
-use crate::{AdapterConfig, Auth, AuthError};
+use crate::{AdapterConfig, Auth, AuthError, auth_configure_pipeline};
 use database::Builder as DatabaseBuilder;
 use dbt_xdbc::database::LogLevel;
 use dbt_xdbc::{Backend, database, snowflake};
 
-use std::borrow::Cow;
 use std::fs;
 
 const APP_NAME: &str = "dbt";
 
 // WARNING: Still needs adjustment on what is considered must-have
-const REQUIRED_PARAMS: [&str; 7] = [
+const CONNECTION_PARAMS: [&str; 10] = [
     "user",
     "password",
     "account",
@@ -19,6 +18,23 @@ const REQUIRED_PARAMS: [&str; 7] = [
     "warehouse",
     "database",
     "schema",
+    "host",
+    "port",
+    "protocol",
+];
+
+/// Configuration values that are needed for an auth method in a dbt-snowflake profile.
+///
+/// dbt snowflake only formalized `method` later in it's lifetime. For profiles without
+/// `method`, we must naively copy over all these fields. These are mutually exclusive fields.
+/// Username and password are always required, so they do not belong to this set.
+const AUTH_PARAMS_USED_FOR_LEGACY_CONFIG: [&str; 6] = [
+    "private_key_path",
+    "private_key",
+    "private_key_passphrase",
+    "oauth_client_id",
+    "oauth_client_secret",
+    "authenticator",
 ];
 
 const DEFAULT_CONNECT_TIMEOUT: &str = "10s";
@@ -30,490 +46,354 @@ fn postfix_seconds_unit(value: &str) -> String {
     format!("{value}s")
 }
 
-trait ConfigureBuilder {
-    fn configure(self, builder: DatabaseBuilder) -> Result<DatabaseBuilder, AuthError>;
-    fn check_authenticator_field(config: &AdapterConfig) -> Result<(), AuthError> {
-        if config.get_string("authenticator").is_some() {
-            Err(AuthError::config(
-                "Profile does not need an authenticator. Use method field instead.",
-            ))
-        } else {
-            Ok(())
-        }
-    }
-}
-
 /// Get Snowflake private key by path or from a Base64 encoded DER bytestring
-enum PrivateKeySource {
-    Literal(String),
-    FilePath(String),
+#[derive(Debug)]
+enum PrivateKeySource<'a> {
+    FilePath(&'a str),
+    Raw(&'a str),
 }
 
 #[derive(Debug)]
-struct Keypair {
-    private_key_path: Option<String>,
-    private_key: Option<String>,
-    private_key_passphrase: Option<String>,
+enum SnowflakeAuthIR<'a> {
+    Warehouse,
+    WarehouseMFA,
+    Keypair {
+        key_source: PrivateKeySource<'a>,
+        private_key_passphrase: Option<&'a str>,
+    },
+    NativeOauth {
+        client_id: &'a str,
+        client_secret: &'a str,
+        refresh_token: &'a str,
+    },
+    NativeOauthJWT {
+        jwt_token: &'a str,
+    },
+    Sso,
 }
 
-impl Keypair {
-    fn new(config: &AdapterConfig) -> Result<Self, AuthError> {
-        Self::check_authenticator_field(config)?;
-        Ok(Keypair {
-            private_key_path: config.get_string("private_key_path").map(Cow::into_owned),
-            private_key: config.get_string("private_key").map(Cow::into_owned),
-            private_key_passphrase: config
-                .get_string("private_key_passphrase")
-                .map(Cow::into_owned),
-        })
-    }
-
-    fn build_keypair_parameter_key_value_pairs(
-        &self,
-        source: PrivateKeySource,
-        passphrase: Option<String>,
-    ) -> Result<Vec<(&'static str, String)>, AuthError> {
-        let mut pairs = vec![(snowflake::AUTH_TYPE, snowflake::auth_type::JWT.to_owned())];
-        match source {
-            PrivateKeySource::Literal(ref key) => {
-                pairs.push((
-                    snowflake::JWT_PRIVATE_KEY_PKCS8_VALUE,
-                    key_format::normalize_key(key)?,
-                ));
-                if let Some(pass) = passphrase {
-                    pairs.push((snowflake::JWT_PRIVATE_KEY_PKCS8_PASSWORD, pass));
+impl<'a> SnowflakeAuthIR<'a> {
+    pub fn apply(self, mut builder: DatabaseBuilder) -> Result<DatabaseBuilder, AuthError> {
+        match self {
+            Self::NativeOauth {
+                client_id,
+                client_secret,
+                refresh_token,
+            } => {
+                builder.with_named_option(snowflake::AUTH_TYPE, snowflake::auth_type::OAUTH)?;
+                builder.with_named_option(snowflake::CLIENT_ID, client_id)?;
+                builder.with_named_option(snowflake::CLIENT_SECRET, client_secret)?;
+                builder.with_named_option(snowflake::REFRESH_TOKEN, refresh_token)?;
+                builder.with_named_option(snowflake::CLIENT_STORE_TEMP_CREDS, "true")?;
+            }
+            Self::NativeOauthJWT { jwt_token } => {
+                builder.with_named_option(snowflake::AUTH_TYPE, snowflake::auth_type::OAUTH)?;
+                builder.with_named_option(snowflake::AUTH_TOKEN, jwt_token)?;
+                builder.with_named_option(snowflake::CLIENT_STORE_TEMP_CREDS, "true")?;
+            }
+            Self::Sso => {
+                builder.with_named_option(
+                    snowflake::AUTH_TYPE,
+                    snowflake::auth_type::EXTERNAL_BROWSER,
+                )?;
+                builder.with_named_option(snowflake::CLIENT_STORE_TEMP_CREDS, "true")?;
+            }
+            Self::Keypair {
+                key_source,
+                private_key_passphrase,
+            } => {
+                builder.with_named_option(snowflake::AUTH_TYPE, snowflake::auth_type::JWT)?;
+                match key_source {
+                    PrivateKeySource::FilePath(path) => {
+                        fs::metadata(path).map_err(|_| {
+                            AuthError::config(format!("Private key file not found: '{path}'"))
+                        })?;
+                        // If there's a passphrase, pass to the PKCS#8_VALUE param
+                        // If no passphrase, just pass the path
+                        if let Some(pass) = private_key_passphrase {
+                            let key_content = fs::read_to_string(path).map_err(|_| {
+                                AuthError::config(format!(
+                                    "Could not read from key file: '{}'",
+                                    path
+                                ))
+                            })?;
+                            builder.with_named_option(
+                                snowflake::JWT_PRIVATE_KEY_PKCS8_VALUE,
+                                key_format::normalize_key(&key_content)?,
+                            )?;
+                            builder.with_named_option(
+                                snowflake::JWT_PRIVATE_KEY_PKCS8_PASSWORD,
+                                pass,
+                            )?;
+                        } else {
+                            builder.with_named_option(snowflake::JWT_PRIVATE_KEY, path)?;
+                        }
+                    }
+                    PrivateKeySource::Raw(raw) => {
+                        builder.with_named_option(
+                            snowflake::JWT_PRIVATE_KEY_PKCS8_VALUE,
+                            key_format::normalize_key(raw)?,
+                        )?;
+                        if let Some(pass) = private_key_passphrase {
+                            builder.with_named_option(
+                                snowflake::JWT_PRIVATE_KEY_PKCS8_PASSWORD,
+                                pass,
+                            )?;
+                        }
+                    }
                 }
             }
-            PrivateKeySource::FilePath(path) => {
-                if let Some(pass) = passphrase {
-                    let key = fs::read_to_string(path)?;
-                    pairs.push((
-                        snowflake::JWT_PRIVATE_KEY_PKCS8_VALUE,
-                        key_format::normalize_key(&key)?,
-                    ));
-                    pairs.push((snowflake::JWT_PRIVATE_KEY_PKCS8_PASSWORD, pass));
-                } else {
-                    pairs.push((snowflake::JWT_PRIVATE_KEY, path));
-                }
+            Self::WarehouseMFA => {
+                builder.with_named_option(
+                    snowflake::AUTH_TYPE,
+                    snowflake::auth_type::USERNAME_PASSWORD_MFA,
+                )?;
+                builder.with_named_option(snowflake::CLIENT_CACHE_MFA_TOKEN, "true")?;
+            }
+            Self::Warehouse => {
+                // No-op: username and password are standard
             }
         }
-        Ok(pairs)
-    }
-}
 
-impl ConfigureBuilder for Keypair {
-    fn configure(self, builder: DatabaseBuilder) -> Result<DatabaseBuilder, AuthError> {
-        let mut builder = builder;
-        let source = match (self.private_key_path.as_ref(), self.private_key.as_ref()) {
-            (Some(_), Some(_)) => Err(AuthError::config(
-                "Cannot specify both 'private_key' and 'private_key_path'",
-            )),
-            (Some(path), None) => Ok(PrivateKeySource::FilePath(path.clone())),
-            (None, Some(key)) => Ok(PrivateKeySource::Literal(key.clone())),
-            (None, None) => Err(AuthError::config(
-                "Keypair authentication requires exactly one of 'private_key' or 'private_key_path'",
-            )),
-        }?;
-
-        for (key, value) in self
-            .build_keypair_parameter_key_value_pairs(source, self.private_key_passphrase.clone())?
-        {
-            builder.with_named_option(key, value)?;
-        }
         Ok(builder)
     }
 }
 
-#[derive(Debug)]
-struct NativeOauth {
-    client_id: String,
-    client_secret: String,
-    refresh_token: String,
-}
-
-impl NativeOauth {
-    fn new(config: &AdapterConfig) -> Result<Self, AuthError> {
-        Self::check_authenticator_field(config)?;
-
-        if config.contains_key("token") {
+fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<SnowflakeAuthIR<'a>, AuthError> {
+    // Case 1: Profile has `method`. We can do strict evaluation of their profiles.yml
+    if let Some(method) = config.get_str("method") {
+        if config.get_str("authenticator").is_some() {
             return Err(AuthError::config(
-                "Rename 'token' to 'refresh_token' in profile for 'method: snowflake_oauth'.",
+                "Using 'method' in your Snowflake profile subsumes 'authenticator' field. Please remove authenticator.",
             ));
-        };
-
-        match (
-            config.get_string("oauth_client_id"),
-            config.get_string("oauth_client_secret"),
-            config.get_string("refresh_token"),
-        ) {
-            (Some(client_id), Some(client_secret), Some(refresh_token)) => Ok(NativeOauth {
-                client_id: client_id.to_string(),
-                client_secret: client_secret.to_string(),
-                refresh_token: refresh_token.to_string(),
-            }),
-            _ => Err(AuthError::config(
-                "Profile requires 'oauth_client_id', 'oauth_client_secret', and 'refresh_token' for method: snowflake_oauth.",
-            )),
         }
-    }
-}
 
-impl ConfigureBuilder for NativeOauth {
-    fn configure(self, builder: DatabaseBuilder) -> Result<DatabaseBuilder, AuthError> {
-        let mut builder = builder;
-        builder.with_named_option(snowflake::AUTH_TYPE, snowflake::auth_type::OAUTH)?;
-        builder.with_named_option(snowflake::CLIENT_ID, self.client_id)?;
-        builder.with_named_option(snowflake::CLIENT_SECRET, self.client_secret)?;
-        builder.with_named_option(snowflake::REFRESH_TOKEN, self.refresh_token)?;
-        builder.with_named_option(snowflake::CLIENT_STORE_TEMP_CREDS, "true")?;
-        Ok(builder)
-    }
-}
-
-#[derive(Debug)]
-struct NativeOauthJWT {
-    jwt_token: String,
-}
-
-impl NativeOauthJWT {
-    fn new(config: &AdapterConfig) -> Result<Self, AuthError> {
-        Self::check_authenticator_field(config)?;
-
-        if let Some(jwt_token) = config.get_string("jwt_token").map(Cow::into_owned) {
-            Ok(NativeOauthJWT { jwt_token })
-        } else {
-            Err(AuthError::config(
-                "Profile requires 'jwt_token' for 'method: snowflake_oauth_jwt'.",
-            ))
-        }
-    }
-}
-
-impl ConfigureBuilder for NativeOauthJWT {
-    fn configure(self, builder: DatabaseBuilder) -> Result<DatabaseBuilder, AuthError> {
-        let mut builder = builder;
-        builder.with_named_option(snowflake::AUTH_TYPE, snowflake::auth_type::OAUTH)?;
-        builder.with_named_option(snowflake::AUTH_TOKEN, self.jwt_token)?;
-        builder.with_named_option(snowflake::CLIENT_STORE_TEMP_CREDS, "true")?;
-        Ok(builder)
-    }
-}
-
-#[derive(Debug)]
-struct Sso;
-
-impl Sso {
-    fn new(config: &AdapterConfig) -> Result<Self, AuthError> {
-        Self::check_authenticator_field(config)?;
-        Ok(Sso)
-    }
-}
-
-impl ConfigureBuilder for Sso {
-    fn configure(self, builder: DatabaseBuilder) -> Result<DatabaseBuilder, AuthError> {
-        let mut builder = builder;
-        builder.with_named_option(snowflake::AUTH_TYPE, snowflake::auth_type::EXTERNAL_BROWSER)?;
-        builder.with_named_option(snowflake::CLIENT_STORE_TEMP_CREDS, "true")?;
-        Ok(builder)
-    }
-}
-
-#[derive(Debug)]
-struct Warehouse;
-
-impl Warehouse {
-    fn new(config: &AdapterConfig) -> Result<Self, AuthError> {
-        Self::check_authenticator_field(config)?;
-        Ok(Warehouse)
-    }
-}
-
-impl ConfigureBuilder for Warehouse {
-    fn configure(self, builder: DatabaseBuilder) -> Result<DatabaseBuilder, AuthError> {
-        Ok(builder) // user and password is part of required parameters
-    }
-}
-
-#[derive(Debug)]
-struct WarehouseMFA;
-
-impl WarehouseMFA {
-    fn new(config: &AdapterConfig) -> Result<Self, AuthError> {
-        Self::check_authenticator_field(config)?;
-        Ok(WarehouseMFA)
-    }
-}
-
-impl ConfigureBuilder for WarehouseMFA {
-    fn configure(self, builder: DatabaseBuilder) -> Result<DatabaseBuilder, AuthError> {
-        let mut builder = builder;
-        builder.with_named_option(
-            snowflake::AUTH_TYPE,
-            snowflake::auth_type::USERNAME_PASSWORD_MFA,
-        )?;
-        builder.with_named_option(snowflake::CLIENT_CACHE_MFA_TOKEN, "true")?;
-        Ok(builder)
-    }
-}
-
-#[derive(Debug)]
-enum AuthMethod {
-    Keypair(Keypair),
-    Sso(Sso),
-    NativeOauth(NativeOauth),
-    NativeOauthJWT(NativeOauthJWT),
-    Warehouse(Warehouse),
-    WarehouseMFA(WarehouseMFA),
-}
-
-impl AuthMethod {
-    pub fn new(config: &AdapterConfig, method: &str) -> Result<Self, AuthError> {
         match method {
-            "keypair" => Keypair::new(config).map(Self::Keypair),
-            "sso" => Sso::new(config).map(Self::Sso),
-            "snowflake_oauth" => NativeOauth::new(config).map(Self::NativeOauth),
-            "snowflake_oauth_jwt" => NativeOauthJWT::new(config).map(Self::NativeOauthJWT),
-            "warehouse" => Warehouse::new(config).map(Self::Warehouse),
-            "warehouse_mfa" => WarehouseMFA::new(config).map(Self::WarehouseMFA),
+            "keypair" => {
+                let pk_path = config.get_str("private_key_path");
+                let pk_raw = config.get_str("private_key");
+                let pk_pass = config.get_str("private_key_passphrase");
+
+                let source = match (pk_path, pk_raw) {
+                    (Some(_), Some(_)) => Err(AuthError::config(
+                        "Cannot specify both 'private_key' and 'private_key_path'",
+                    )),
+                    (Some(path), None) => Ok(PrivateKeySource::FilePath(path)),
+                    (None, Some(raw)) => Ok(PrivateKeySource::Raw(raw)),
+                    (None, None) => Err(AuthError::config(
+                        "Keypair authentication requires exactly one of 'private_key' or 'private_key_path'",
+                    )),
+                }?;
+
+                Ok(SnowflakeAuthIR::Keypair {
+                    key_source: source,
+                    private_key_passphrase: pk_pass,
+                })
+            }
+            "sso" => Ok(SnowflakeAuthIR::Sso),
+            "snowflake_oauth" => {
+                if config.contains_key("token") {
+                    return Err(AuthError::config(
+                        "Rename 'token' to 'refresh_token' in profile for 'method: snowflake_oauth'.",
+                    ));
+                };
+
+                let cid = config.get_str("oauth_client_id");
+                let sec = config.get_str("oauth_client_secret");
+                let tok = config.get_str("refresh_token");
+
+                match (cid, sec, tok) {
+                    (Some(client_id), Some(client_secret), Some(refresh_token)) => {
+                        Ok(SnowflakeAuthIR::NativeOauth {
+                            client_id,
+                            client_secret,
+                            refresh_token,
+                        })
+                    }
+                    _ => Err(AuthError::config(
+                        "Profile requires 'oauth_client_id', 'oauth_client_secret', and 'refresh_token' for method: snowflake_oauth.",
+                    )),
+                }
+            }
+            "snowflake_oauth_jwt" => {
+                if let Some(jwt_token) = config.get_str("jwt_token") {
+                    Ok(SnowflakeAuthIR::NativeOauthJWT { jwt_token })
+                } else {
+                    Err(AuthError::config(
+                        "Profile requires 'jwt_token' for 'method: snowflake_oauth_jwt'.",
+                    ))
+                }
+            }
+            "warehouse" => Ok(SnowflakeAuthIR::Warehouse),
+            "warehouse_mfa" => Ok(SnowflakeAuthIR::WarehouseMFA),
             unsupported_method => Err(AuthError::config(format!(
                 "Profile has unsupported authentication method {unsupported_method}"
             ))),
         }
-    }
 
-    pub fn configure(self, builder: DatabaseBuilder) -> Result<DatabaseBuilder, AuthError> {
-        match self {
-            AuthMethod::Keypair(k) => k.configure(builder),
-            AuthMethod::Sso(s) => s.configure(builder),
-            AuthMethod::NativeOauth(o) => o.configure(builder),
-            AuthMethod::NativeOauthJWT(j) => j.configure(builder),
-            AuthMethod::Warehouse(w) => w.configure(builder),
-            AuthMethod::WarehouseMFA(m) => m.configure(builder),
-        }
-    }
-}
-
-pub struct SnowflakeAuth;
-
-impl SnowflakeAuth {
-    /// For users who provide an explicit auth 'method' parameter in
-    /// profiles.yml. This will unify dbt-snowflake with other
-    /// existing 'perfect' adapters in FS.
-    fn configure_builder_using_auth_option(
-        &self,
-        config: &AdapterConfig,
-        method: String,
-    ) -> Result<DatabaseBuilder, AuthError> {
-        let mut builder = DatabaseBuilder::new(self.backend());
-
-        for key in REQUIRED_PARAMS {
-            if let Some(value) = config.get_string(key) {
-                match key {
-                    "user" => Ok(builder.with_username(value)),
-                    "password" => Ok(builder.with_password(value)),
-                    "account" => builder.with_named_option(snowflake::ACCOUNT, value),
-                    "database" => builder.with_named_option(snowflake::DATABASE, value),
-                    "schema" => builder.with_named_option(snowflake::SCHEMA, value),
-                    "role" => builder.with_named_option(snowflake::ROLE, value),
-                    "warehouse" => builder.with_named_option(snowflake::WAREHOUSE, value),
-                    "host" => builder.with_named_option(snowflake::HOST, value),
-                    "port" => builder.with_named_option(snowflake::PORT, value),
-                    "protocol" => builder.with_named_option(snowflake::PROTOCOL, value),
-                    _ => panic!("unexpected key: {key}"),
-                }?;
-            }
-        }
-
-        builder.with_named_option(snowflake::APPLICATION_NAME, APP_NAME)?;
-
-        if let Some(s3_stage_vpce_dns_name) =
-            config.get_string(snowflake::S3_STAGE_VPCE_DNS_NAME_PARAM_KEY)
-        {
-            builder.with_named_option(
-                snowflake::S3_STAGE_VPCE_DNS_NAME_PARAM_KEY,
-                s3_stage_vpce_dns_name,
-            )?;
-        }
-
-        if let Some(query_tag) = config.get_string(snowflake::QUERY_TAG_PARAM_KEY) {
-            builder.with_named_option(snowflake::QUERY_TAG_PARAM_KEY, query_tag)?;
-        }
-
-        let connect_timeout_duration = config
-            .get_string("connect_timeout")
-            .as_deref()
-            .map(postfix_seconds_unit)
-            .unwrap_or_else(|| DEFAULT_CONNECT_TIMEOUT.to_string());
-        builder.with_named_option(snowflake::LOGIN_TIMEOUT, connect_timeout_duration)?;
-        let request_timeout_duration = config
-            .get_string("request_timeout")
-            .as_deref()
-            .map(postfix_seconds_unit)
-            .unwrap_or_else(|| DEFAULT_REQUEST_TIMEOUT.to_string());
-        builder.with_named_option(snowflake::REQUEST_TIMEOUT, request_timeout_duration)?;
-
-        AuthMethod::new(config, &method)?.configure(builder)
-    }
-
-    /// For backwards compatibility with Python dbt-snowflake
-    /// implementation, which does not have an auth 'method' parameter
-    /// in profiles.yml.
-    fn configure_builder_without_auth_option(
-        &self,
-        config: &AdapterConfig,
-    ) -> Result<DatabaseBuilder, AuthError> {
-        let mut builder = DatabaseBuilder::new(self.backend());
-
-        for key in [
-            "user",
-            "password",
-            "account",
-            "database",
-            "schema",
-            "role",
-            "warehouse",
-            "private_key_path",
-            "private_key",
-            "private_key_passphrase",
-            "authenticator",
-            "oauth_client_id",
-            "oauth_client_secret",
-            "client_session_keep_alive",
-            snowflake::S3_STAGE_VPCE_DNS_NAME_PARAM_KEY,
-            snowflake::QUERY_TAG_PARAM_KEY,
-            "host",
-            "port",
-            "protocol",
-        ]
-        .iter()
-        {
-            if let Some(value) = config.get_string(key) {
-                match *key {
-                    "user" => Ok(builder.with_username(value)),
-                    "password" => Ok(builder.with_password(value)),
-                    "account" => builder.with_named_option(snowflake::ACCOUNT, value),
-                    "database" => builder.with_named_option(snowflake::DATABASE, value),
-                    "schema" => builder.with_named_option(snowflake::SCHEMA, value),
-                    "role" => builder.with_named_option(snowflake::ROLE, value),
-                    "warehouse" => builder.with_named_option(snowflake::WAREHOUSE, value),
-                    "private_key_path" => {
-                        builder
-                            .with_named_option(snowflake::AUTH_TYPE, snowflake::auth_type::JWT)?;
-                        // TODO: maybe it's safe to assume from a file we always get header and footer formatted private key
-                        // the same for the same logics in `fn build_keypair_parameter_key_value_pairs`
-                        let key_contents = fs::read_to_string(value.to_string()).map_err(|_| {
-                            AuthError::config(format!("Private key file not found: '{}'", value))
-                        })?;
-                        builder.with_named_option(
-                            snowflake::JWT_PRIVATE_KEY_PKCS8_VALUE,
-                            key_format::normalize_key(&key_contents)?,
-                        )
-                    }
-                    "private_key" => {
-                        builder
-                            .with_named_option(snowflake::AUTH_TYPE, snowflake::auth_type::JWT)?;
-                        builder.with_named_option(
-                            snowflake::JWT_PRIVATE_KEY_PKCS8_VALUE,
-                            key_format::normalize_key(&value)?,
-                        )
-                    }
-                    "private_key_passphrase" => {
-                        builder.with_named_option(snowflake::JWT_PRIVATE_KEY_PKCS8_PASSWORD, value)
-                    }
-                    "client_session_keep_alive" => {
-                        builder.with_named_option(snowflake::KEEP_SESSION_ALIVE, value)
-                    }
-                    "oauth_client_id" => builder.with_named_option(snowflake::CLIENT_ID, value),
-                    "oauth_client_secret" => {
-                        builder.with_named_option(snowflake::CLIENT_SECRET, value)
-                    }
-                    snowflake::S3_STAGE_VPCE_DNS_NAME_PARAM_KEY => builder
-                        .with_named_option(snowflake::S3_STAGE_VPCE_DNS_NAME_PARAM_KEY, value),
-                    snowflake::QUERY_TAG_PARAM_KEY => {
-                        builder.with_named_option(snowflake::QUERY_TAG_PARAM_KEY, value)
-                    }
-                    "host" => builder.with_named_option(snowflake::HOST, value),
-                    "port" => builder.with_named_option(snowflake::PORT, value),
-                    "protocol" => builder.with_named_option(snowflake::PROTOCOL, value),
-                    "authenticator" => {
-                        if value == "externalbrowser" {
-                            builder
-                                .with_named_option(snowflake::CLIENT_STORE_TEMP_CREDS, "true")?;
-                            builder.with_named_option(
-                                snowflake::AUTH_TYPE,
-                                snowflake::auth_type::EXTERNAL_BROWSER,
-                            )
-                        } else if value == "oauth" {
-                            if let Some(token) = config.get_string("token") {
-                                builder.with_named_option(snowflake::REFRESH_TOKEN, token)?;
-                            } else {
-                                Err(AuthError::config(
-                                    "Field token: not found. Required for authenticator oauth.",
-                                ))?
-                            }
-                            builder
-                                .with_named_option(snowflake::CLIENT_STORE_TEMP_CREDS, "true")?;
-                            builder.with_named_option(
-                                snowflake::AUTH_TYPE,
-                                snowflake::auth_type::OAUTH,
-                            )
-                        } else if value == "jwt" {
-                            if let Some(token) = config.get_string("token") {
-                                builder.with_named_option(snowflake::AUTH_TOKEN, token)?;
-                            } else {
-                                Err(AuthError::config(
-                                    "Field token: not found. Required for authenticator jwt.",
-                                ))?
-                            }
-                            builder
-                                .with_named_option(snowflake::CLIENT_STORE_TEMP_CREDS, "true")?;
-                            builder.with_named_option(
-                                snowflake::AUTH_TYPE,
-                                snowflake::auth_type::OAUTH,
-                            )
-                        } else if value == "username_password_mfa" {
-                            builder.with_named_option(
-                                snowflake::AUTH_TYPE,
-                                snowflake::auth_type::USERNAME_PASSWORD_MFA,
-                            )?;
-                            builder.with_named_option(snowflake::CLIENT_CACHE_MFA_TOKEN, "true")
-                        } else {
-                            Err(AuthError::config(format!(
-                                "'{value}' for authenticator is not supported. If using authenticator, it must be set to exactly one of {{'externalbrowser', 'oauth', 'username_password_mfa'}}."
-                            )))?
-                        }
-                    }
-                    _ => panic!("unexpected key: {key}"),
-                }?;
-            }
-        }
-
-        // TODO: unified serde-based try_into for all auth methods, for now adhoc post-facto checks to
-        //  reach dbt compliance
+    // Case 2: User has no `method` and we must rely on simple passthrough.
+    //
+    // For backwards compatibility with dbt-snowflake in core. By default,
+    // there is no `method` parameter. `method` is the standard authentication
+    // method option for other adapters, however.
+    // FIXME: I made this better but Felipe has a long-term iterator-based solution to make this exact
+    } else {
+        // Reduce ambiguity in loop
         if config.contains_key("private_key_path") && config.contains_key("private_key") {
             return Err(AuthError::config(
                 "Cannot specify both `private_key` and `private_key_path`.".to_owned(),
             ));
         }
 
-        let connect_timeout_duration = config
-            .get_string("connect_timeout")
-            .as_deref()
-            .map(postfix_seconds_unit)
-            .unwrap_or_else(|| DEFAULT_CONNECT_TIMEOUT.to_string());
-        builder.with_named_option(snowflake::LOGIN_TIMEOUT, connect_timeout_duration)?;
+        // Take first matching, even if this isn't strictly correct right, fallback to user/pass
+        for key in AUTH_PARAMS_USED_FOR_LEGACY_CONFIG.iter() {
+            if let Some(value) = config.get_str(key) {
+                return match *key {
+                    "private_key_path" => Ok(SnowflakeAuthIR::Keypair {
+                        key_source: PrivateKeySource::FilePath(value),
+                        private_key_passphrase: config.get_str("private_key_passphrase"),
+                    }),
+                    "private_key" => Ok(SnowflakeAuthIR::Keypair {
+                        key_source: PrivateKeySource::Raw(value),
+                        private_key_passphrase: config.get_str("private_key_passphrase"),
+                    }),
+                    "private_key_passphrase" => {
+                        // We found a passphrase, so we MUST find a key source to go with it
+                        let path = config.get_str("private_key_path");
+                        let raw = config.get_str("private_key");
 
-        let request_timeout_duration = config
-            .get_string("request_timeout")
-            .as_deref()
-            .map(postfix_seconds_unit)
-            .unwrap_or_else(|| DEFAULT_REQUEST_TIMEOUT.to_string());
-        builder.with_named_option(snowflake::REQUEST_TIMEOUT, request_timeout_duration)?;
+                        let source = match (path, raw) {
+                            (Some(p), _) => PrivateKeySource::FilePath(p),
+                            (None, Some(r)) => PrivateKeySource::Raw(r),
+                            (None, None) => {
+                                return Err(AuthError::config(
+                                    "Found 'private_key_passphrase' but missing 'private_key_path' or 'private_key'",
+                                ));
+                            }
+                        };
 
-        builder.with_named_option(snowflake::APPLICATION_NAME, "dbt")?;
-        Ok(builder)
+                        Ok(SnowflakeAuthIR::Keypair {
+                            key_source: source,
+                            private_key_passphrase: Some(value),
+                        })
+                    }
+                    "oauth_client_id" | "oauth_client_secret" => {
+                        let cid = config.get_str("oauth_client_id");
+                        let sec = config.get_str("oauth_client_secret");
+                        // backwards compatibility; we'd prefer this to be named refresh_token but this
+                        let tok = config.get_str("token");
+                        match (cid, sec, tok) {
+                            (Some(client_id), Some(client_secret), Some(refresh_token)) => {
+                                Ok(SnowflakeAuthIR::NativeOauth {
+                                    client_id,
+                                    client_secret,
+                                    refresh_token,
+                                })
+                            }
+                            _ => Err(AuthError::config(
+                                "Legacy OAuth requires `oauth_client_id`, `oauth_client_secret`, and `token`.",
+                            )),
+                        }
+                    }
+                    "authenticator" => {
+                        if value == "externalbrowser" {
+                            Ok(SnowflakeAuthIR::Sso)
+                        } else if value == "oauth" {
+                            let cid = config.get_str("oauth_client_id");
+                            let sec = config.get_str("oauth_client_secret");
+                            let tok = config.get_str("refresh_token");
+
+                            // Use the tuple match to enforce all three fields
+                            match (cid, sec, tok) {
+                                (Some(client_id), Some(client_secret), Some(refresh_token)) => {
+                                    Ok(SnowflakeAuthIR::NativeOauth {
+                                        client_id,
+                                        client_secret,
+                                        refresh_token,
+                                    })
+                                }
+                                _ => Err(AuthError::config(
+                                    "Legacy 'authenticator: oauth' requires oauth_client_id, oauth_client_secret, and refresh_token",
+                                )),
+                            }
+                        } else if value == "jwt" {
+                            config
+                                .get_str("token")
+                                .map(|jwt_token| SnowflakeAuthIR::NativeOauthJWT { jwt_token })
+                                .ok_or_else(|| {
+                                    AuthError::config("Legacy 'authenticator: jwt' requires token")
+                                })
+                        } else if value == "username_password_mfa" {
+                            Ok(SnowflakeAuthIR::WarehouseMFA)
+                        } else {
+                            Err(AuthError::config(format!(
+                                "Unsupported authenticator: {value}"
+                            )))
+                        }
+                    }
+                    _ => panic!("unexpected key: {key}"),
+                };
+            }
+        }
+
+        // Fallback to username and password when no other auth is possible
+        Ok(SnowflakeAuthIR::Warehouse)
     }
 }
+
+fn apply_connection_args(
+    config: &AdapterConfig,
+    mut builder: DatabaseBuilder,
+) -> Result<DatabaseBuilder, AuthError> {
+    for key in CONNECTION_PARAMS {
+        if let Some(value) = config.get_str(key) {
+            match key {
+                "user" => Ok(builder.with_username(value)),
+                "password" => Ok(builder.with_password(value)),
+                "account" => builder.with_named_option(snowflake::ACCOUNT, value),
+                "database" => builder.with_named_option(snowflake::DATABASE, value),
+                "schema" => builder.with_named_option(snowflake::SCHEMA, value),
+                "role" => builder.with_named_option(snowflake::ROLE, value),
+                "warehouse" => builder.with_named_option(snowflake::WAREHOUSE, value),
+                "host" => builder.with_named_option(snowflake::HOST, value),
+                "port" => builder.with_named_option(snowflake::PORT, value),
+                "protocol" => builder.with_named_option(snowflake::PROTOCOL, value),
+                _ => panic!("unexpected key: {key}"),
+            }?;
+        }
+    }
+    builder.with_named_option(snowflake::APPLICATION_NAME, APP_NAME)?;
+
+    // S3 VPCE Logic
+    if let Some(s3_dns) = config.get_str(snowflake::S3_STAGE_VPCE_DNS_NAME_PARAM_KEY) {
+        builder.with_named_option(snowflake::S3_STAGE_VPCE_DNS_NAME_PARAM_KEY, s3_dns)?;
+    }
+
+    // Query Tag Logic
+    if let Some(query_tag) = config.get_str(snowflake::QUERY_TAG_PARAM_KEY) {
+        builder.with_named_option(snowflake::QUERY_TAG_PARAM_KEY, query_tag)?;
+    }
+
+    // Timeout Logic
+    let connect_timeout = config
+        .get_str("connect_timeout")
+        .map(postfix_seconds_unit)
+        .unwrap_or_else(|| DEFAULT_CONNECT_TIMEOUT.to_string());
+    builder.with_named_option(snowflake::LOGIN_TIMEOUT, connect_timeout)?;
+
+    let request_timeout = config
+        .get_str("request_timeout")
+        .map(postfix_seconds_unit)
+        .unwrap_or_else(|| DEFAULT_REQUEST_TIMEOUT.to_string());
+    builder.with_named_option(snowflake::REQUEST_TIMEOUT, request_timeout)?;
+
+    // disable any logging from Gosnowflake that's not a fatal/panic
+    builder.with_named_option(snowflake::LOG_TRACING, LogLevel::Fatal.to_string())?;
+
+    Ok(builder)
+}
+
+pub struct SnowflakeAuth;
 
 impl Auth for SnowflakeAuth {
     fn backend(&self) -> Backend {
@@ -521,20 +401,7 @@ impl Auth for SnowflakeAuth {
     }
 
     fn configure(&self, config: &AdapterConfig) -> Result<DatabaseBuilder, AuthError> {
-        // TODO: can we unify configure_builder_without_auth_option and configure_builder_using_auth_option?
-        // otherwise, we have to update certain logics more than 1 places
-        let mut builder = match config.get_string("method") {
-            Some(method) => {
-                SnowflakeAuth::configure_builder_using_auth_option(self, config, method.to_string())
-            } // V2
-            None => {
-                SnowflakeAuth::configure_builder_without_auth_option(self, config)
-                // V1 compatible
-            }
-        }?;
-        // disable any logging from Gosnowflake that's not a fatal/panic
-        builder.with_named_option(snowflake::LOG_TRACING, LogLevel::Fatal.to_string())?;
-        Ok(builder)
+        auth_configure_pipeline!(self.backend(), &config, parse_auth, apply_connection_args)
     }
 }
 
@@ -764,16 +631,23 @@ mod tests {
 
     #[test]
     fn test_keypair_path_with_method_param() {
+        use std::io::Write;
+        use tempfile::NamedTempFile;
+
+        let mut tmp_file = NamedTempFile::new().expect("Failed to create temp file");
+        writeln!(tmp_file, "fake-private-key-data").unwrap();
+        let temp_path = tmp_file.path().to_str().expect("Valid UTF-8 path");
+
         let mut config = base_config();
         config.insert("method".into(), "keypair".into());
-        config.insert("private_key_path".into(), "private_key_path".into());
+        config.insert("private_key_path".into(), temp_path.into());
         let expected = [
             ("user", "U"),
             ("password", "P"),
             (snowflake::ACCOUNT, "A"),
             (snowflake::ROLE, "role"),
             (snowflake::WAREHOUSE, "warehouse"),
-            (snowflake::JWT_PRIVATE_KEY, "private_key_path"),
+            (snowflake::JWT_PRIVATE_KEY, temp_path),
             (snowflake::AUTH_TYPE, "auth_jwt"),
             (snowflake::APPLICATION_NAME, APP_NAME),
             (snowflake::LOG_TRACING, "fatal"),
@@ -955,7 +829,7 @@ mod tests {
         config.insert("token".into(), "should_be_refresh_token".into());
 
         let cfg = AdapterConfig::new(config);
-        let result = AuthMethod::new(&cfg, "snowflake_oauth");
+        let result = parse_auth(&cfg);
 
         assert!(
             matches!(result, Err(ref e) if matches!(e, AuthError::Config(_))),
@@ -973,24 +847,30 @@ mod tests {
 
     #[test]
     fn test_invalid_private_key_path() {
-        let mut config = base_config();
-        config.insert("private_key_path".into(), "invalid_path".into());
-
         let auth = SnowflakeAuth {};
-        let builder = auth.configure(&AdapterConfig::new(config));
+        let bad_path = "this_file_does_not_exist.p8";
 
-        assert!(
-            matches!(builder, Err(ref e) if matches!(e, AuthError::Config(_))),
-            "Expected configuration error, got: {builder:?}"
-        );
-
-        if let Err(e) = builder {
-            let msg = format!("{e:?}");
-            assert!(
-                msg.contains("Private key file not found"),
-                "Unexpected error message: {msg}"
-            );
+        macro_rules! assert_file_not_found {
+            ($config_map:expr, $label:expr) => {
+                let result = auth.configure(&AdapterConfig::new($config_map));
+                assert!(
+                    matches!(result, Err(AuthError::Config(ref msg)) if msg.contains("Private key file not found")),
+                    "{} path failed: expected 'Private key file not found' error, got {:?}",
+                    $label, result
+                );
+            };
         }
+
+        // 1. Test Legacy Case
+        let mut legacy_map = base_config();
+        legacy_map.insert("private_key_path".into(), bad_path.into());
+        assert_file_not_found!(legacy_map, "Legacy");
+
+        // 2. Test Modern Case
+        let mut modern_map = base_config();
+        modern_map.insert("method".into(), "keypair".into());
+        modern_map.insert("private_key_path".into(), bad_path.into());
+        assert_file_not_found!(modern_map, "Modern");
     }
 
     #[test]
@@ -1002,7 +882,7 @@ mod tests {
         config.insert("refresh_token".into(), "refresh_token".into());
 
         let cfg = AdapterConfig::new(config);
-        let result = AuthMethod::new(&cfg, "snowflake_oauth");
+        let result = parse_auth(&cfg);
 
         assert!(
             matches!(result, Err(ref e) if matches!(e, AuthError::Config(_))),
@@ -1069,10 +949,11 @@ mod tests {
     #[test]
     fn test_catch_unneeded_authenticator() {
         let mut config = base_config();
+        config.insert("method".into(), "warehouse".into());
         config.insert("authenticator".into(), "wrong".into());
 
         let cfg = AdapterConfig::new(config);
-        let result = AuthMethod::new(&cfg, "warehouse_mfa");
+        let result = parse_auth(&cfg);
 
         assert!(
             matches!(result, Err(ref e) if matches!(e, AuthError::Config(_))),
@@ -1082,7 +963,7 @@ mod tests {
         if let Err(e) = result {
             let msg = format!("{e:?}");
             assert!(
-                msg.contains("authenticator") && msg.contains("Use method field"),
+                msg.contains("Using 'method' in your Snowflake profile subsumes"),
                 "Unexpected error message: {msg}"
             );
         }
@@ -1125,7 +1006,7 @@ mod tests {
         config.insert("token".into(), "wrong_field".into());
 
         let cfg = AdapterConfig::new(config);
-        let result = AuthMethod::new(&cfg, "snowflake_oauth_jwt");
+        let result = parse_auth(&cfg);
 
         assert!(
             matches!(result, Err(ref e) if matches!(e, AuthError::Config(_))),
@@ -1148,7 +1029,7 @@ mod tests {
         // jwt intentionally missing
 
         let cfg = AdapterConfig::new(config);
-        let result = AuthMethod::new(&cfg, "snowflake_oauth_jwt");
+        let result = parse_auth(&cfg);
 
         assert!(
             matches!(result, Err(ref e) if matches!(e, AuthError::Config(_))),

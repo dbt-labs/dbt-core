@@ -27,6 +27,20 @@ pub trait Auth: Send + Sync {
     fn configure(&self, config: &AdapterConfig) -> Result<database::Builder, AuthError>;
 }
 
+/// Macro used to structure the AdapterConfig -> database::Builder pipeline
+#[macro_export]
+macro_rules! auth_configure_pipeline {
+    ($backend:expr, $cfg:expr, $parse_auth:path, $apply_connection_args:path) => {{
+        let authentication_args = $parse_auth($cfg)?;
+
+        let builder = DatabaseBuilder::new($backend);
+        let builder = authentication_args.apply(builder)?;
+        let builder = $apply_connection_args($cfg, builder)?;
+
+        Ok(builder)
+    }};
+}
+
 /// Factory function to create an Auth instance based on the backend type.
 pub fn auth_for_backend(backend: Backend) -> Box<dyn Auth> {
     match backend {

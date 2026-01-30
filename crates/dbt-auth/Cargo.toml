@@ -33,6 +33,7 @@ tokio = { workspace = true }
 
 [dev-dependencies]
 dbt-test-primitives = { workspace = true }
+tempfile = { workspace = true }
 
 [lib]
 name = "dbt_auth"

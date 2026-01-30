@@ -68,6 +68,12 @@ impl AdapterConfig {
         self.get(field).map(yml_value_to_string)
     }
 
+    /// Get a direct reference to a string value if it exists and is a string.
+    /// This returns a borrow tied to the lifetime of the AdapterConfig itself.
+    pub fn get_str(&self, field: &str) -> Option<&str> {
+        self.get(field)?.as_str()
+    }
+
     /// Like `require`, but calls `to_string` on the value.
     pub fn require_string(&self, field: &str) -> Result<Cow<'_, str>, dbt_serde_yaml::Error> {
         self.require(field).map(yml_value_to_string)
