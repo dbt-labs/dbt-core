@@ -1124,8 +1124,13 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
                     unique_id=node.unique_id,
                     field_value=patch.access,
                 )
-
-        if patch.semantic_model:
+        # breaking out False and None here is wordy but extra clear
+        semantic_model_enabled = patch.semantic_model is True or (
+            patch.semantic_model is not False
+            and patch.semantic_model is not None
+            and patch.semantic_model.enabled is not False
+        )
+        if semantic_model_enabled:
             from dbt.parser.schema_yaml_readers import SemanticModelParser
 
             semantic_model_parser = SemanticModelParser(self.schema_parser, self.yaml)

@@ -74,6 +74,7 @@ from dbt.contracts.graph.unparsed import (
     UnparsedColumn,
     UnparsedDerivedSemantics,
     UnparsedMetricV2,
+    UnparsedSemanticModelConfig,
     UnparsedSourceDefinition,
     UnparsedSourceTableDefinition,
 )
@@ -1765,7 +1766,7 @@ class ParsedNodePatch(ParsedPatch):
     constraints: List[Dict[str, Any]]
     deprecation_date: Optional[datetime]
     time_spine: Optional[TimeSpine] = None
-    semantic_model: Optional[bool] = None
+    semantic_model: Union[UnparsedSemanticModelConfig, bool, None] = None
     metrics: Optional[List[UnparsedMetricV2]] = None
     derived_semantics: Optional[UnparsedDerivedSemantics] = None
     agg_time_dimension: Optional[str] = None

@@ -19,7 +19,13 @@ from tests.functional.semantic_models.fixtures import (
     schema_yml_v2_cumulative_metric_missing_input_metric,
     schema_yml_v2_simple_metric_on_model_1,
     schema_yml_v2_standalone_simple_metric,
+    semantic_model_config_does_not_exist,
     semantic_model_schema_yml_v2,
+    semantic_model_schema_yml_v2_default_values,
+    semantic_model_schema_yml_v2_disabled,
+    semantic_model_schema_yml_v2_false_config,
+    semantic_model_schema_yml_v2_renamed,
+    semantic_model_test_groups_yml,
 )
 
 
@@ -39,9 +45,8 @@ class TestSemanticModelParsingWorks:
         assert isinstance(result.result, Manifest)
         manifest = result.result
         assert len(manifest.semantic_models) == 1
-        # TODO: Add support for renaming semantic model to be different than the dbt model
-        # semantic_model = manifest.semantic_models["semantic_model.test.revenue"]
         semantic_model = manifest.semantic_models["semantic_model.test.fct_revenue"]
+        assert semantic_model.name == "fct_revenue"
         assert semantic_model.node_relation.alias == "fct_revenue"
         assert (
             semantic_model.node_relation.relation_name
@@ -51,6 +56,9 @@ class TestSemanticModelParsingWorks:
             semantic_model.description
             == "This is the model fct_revenue. It should be able to use doc blocks"
         )
+        assert semantic_model.config.enabled is True
+        assert semantic_model.config.group is None
+        assert semantic_model.config.meta == {}
 
         # Dimensions
 
@@ -112,6 +120,122 @@ class TestSemanticModelParsingWorks:
         assert len(manifest.metrics) == 0
         # TODO: Dimensions are not parsed yet (for those attached to model columns)
         # TODO: Dimensions are not parsed yet (for those defined in derived semantics)
+
+
+class TestSemanticModelConfigOverrides:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": semantic_model_test_groups_yml + semantic_model_schema_yml_v2_renamed,
+            "fct_revenue.sql": fct_revenue_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+        }
+
+    def test_semantic_model_parsing(self, project) -> None:
+        runner = dbtTestRunner()
+        result = runner.invoke(["parse"])
+        assert result.success
+        assert isinstance(result.result, Manifest)
+        manifest = result.result
+        assert len(manifest.semantic_models) == 1
+        semantic_model = manifest.semantic_models["semantic_model.test.renamed_semantic_model"]
+
+        assert semantic_model.node_relation.alias == "fct_revenue"
+        assert (
+            semantic_model.node_relation.relation_name
+            == f'"dbt"."{project.test_schema}"."fct_revenue"'
+        )
+
+        assert semantic_model.config.enabled is True
+        assert semantic_model.config.group == "finance"
+        assert semantic_model.config.meta == {"meta_tag_1": "this_meta"}
+
+
+class TestSemanticModelConfigDefaultValues:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": semantic_model_schema_yml_v2_default_values,
+            "fct_revenue.sql": fct_revenue_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+        }
+
+    def test_semantic_model_parsing_defaults(self, project) -> None:
+        runner = dbtTestRunner()
+        result = runner.invoke(["parse"])
+        assert result.success
+        assert isinstance(result.result, Manifest)
+        manifest = result.result
+
+        assert len(manifest.semantic_models) == 1
+        semantic_model = list(manifest.semantic_models.values())[0]
+
+        # With no custom name, alias should be based on model name (default test. + model name)
+        assert semantic_model.node_relation.alias == "fct_revenue"
+
+        assert (
+            semantic_model.description
+            == "This is the model fct_revenue. It should be able to use doc blocks"
+        )
+
+        # Should use default config values
+        assert semantic_model.config.enabled is True
+        assert semantic_model.config.group is None
+        assert semantic_model.config.meta == {}
+
+
+class TestSemanticModelConfigDoesNotExistPassesWithoutParsingSemanticModel:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": semantic_model_config_does_not_exist,
+            "fct_revenue.sql": fct_revenue_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+        }
+
+    def test_semantic_model_parsing(self, project) -> None:
+        runner = dbtTestRunner()
+        result = runner.invoke(["parse"])
+        assert result.success
+        assert isinstance(result.result, Manifest)
+        manifest = result.result
+        assert len(manifest.semantic_models) == 0
+
+
+class TestSemanticModelDisabledConfigIsNotParsed:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": semantic_model_schema_yml_v2_disabled,
+            "fct_revenue.sql": fct_revenue_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+        }
+
+    def test_semantic_model_parsing(self, project) -> None:
+        runner = dbtTestRunner()
+        result = runner.invoke(["parse"])
+        assert result.success
+        assert isinstance(result.result, Manifest)
+        manifest = result.result
+        assert len(manifest.semantic_models) == 0
+
+
+class TestSemanticModelFalseConfigIsNotParsed:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": semantic_model_schema_yml_v2_false_config,
+            "fct_revenue.sql": fct_revenue_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+        }
+
+    def test_semantic_model_parsing(self, project) -> None:
+        runner = dbtTestRunner()
+        result = runner.invoke(["parse"])
+        assert result.success
+        assert isinstance(result.result, Manifest)
+        manifest = result.result
+        assert len(manifest.semantic_models) == 0
 
 
 class TestStandaloneMetricParsingWorks:

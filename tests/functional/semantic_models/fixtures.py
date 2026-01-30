@@ -545,6 +545,104 @@ semantic_models:
 """
 
 
+semantic_model_schema_yml_v2_template = """models:
+  - name: fct_revenue
+    description: This is the model fct_revenue. It should be able to use doc blocks
+    {semantic_model_value}
+    columns:
+      - name: id
+        description: This is the id column dim.
+        config:
+          meta:
+          component_level: "original_meta"
+        dimension:
+          name: id_dim
+          label: "ID Dimension"
+          type: categorical
+          is_partition: true
+          config:
+            meta:
+              component_level: "dimension_override"
+        entity:
+          name: id_entity
+          description: This is the id entity, and it is the primary entity.
+          label: ID Entity
+          type: primary
+          config:
+            meta:
+              component_level: "entity_override"
+      - name: second_col
+        description: This is the second column.
+        granularity: day
+        dimension:
+          name: second_dim
+          description: This is the second column (dim).
+          label: Second Dimension
+          type: time
+          validity_params:
+            is_start: true
+            is_end: true
+      - name: foreign_id_col
+        description: This is a foreign id column.
+        entity: foreign
+      - name: col_with_default_dimensions
+        description: This is the column with default dimension settings.
+        dimension: categorical
+        entity:
+          name: col_with_default_entity_testing_default_desc
+          type: natural
+"""
+
+# You can replace the semantic_model variable in the template like this:
+semantic_model_schema_yml_v2 = semantic_model_schema_yml_v2_template.format(
+    semantic_model_value="semantic_model: true",
+)
+
+semantic_model_schema_yml_v2_disabled = semantic_model_schema_yml_v2_template.format(
+    semantic_model_value="semantic_model: false",
+)
+
+semantic_model_test_groups_yml = """groups:
+  - name: finance
+    owner:
+      # 'name' or 'email' is required; additional properties will no longer be allowed in a future release
+      email: finance@jaffleshop.com
+    config:
+      meta: # optional
+        data_owner: Finance team
+"""
+
+semantic_model_schema_yml_v2_renamed = semantic_model_schema_yml_v2_template.format(
+    semantic_model_value="""semantic_model:
+      name: renamed_semantic_model
+      enabled: true
+      group: finance
+      config:
+        meta:
+          meta_tag_1: this_meta
+    """,
+)
+
+semantic_model_schema_yml_v2_default_values = semantic_model_schema_yml_v2_template.format(
+    semantic_model_value="""semantic_model:
+      enabled: true
+    """
+)
+
+semantic_model_schema_yml_v2_disabled = semantic_model_schema_yml_v2_template.format(
+    semantic_model_value="""semantic_model:
+      enabled: false
+    """,
+)
+
+semantic_model_schema_yml_v2_false_config = semantic_model_schema_yml_v2_template.format(
+    semantic_model_value="semantic_model: false",
+)
+
+semantic_model_config_does_not_exist = semantic_model_schema_yml_v2_template.format(
+    semantic_model_value="",
+)
+
 semantic_model_schema_yml_v2 = """models:
   - name: fct_revenue
     description: This is the model fct_revenue. It should be able to use doc blocks

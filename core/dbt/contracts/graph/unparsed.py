@@ -494,6 +494,19 @@ class UnparsedDerivedSemantics(dbtClassMixin):
 
 
 @dataclass
+class UnparsedSemanticResourceConfig(dbtClassMixin):
+    meta: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(kw_only=True)
+class UnparsedSemanticModelConfig(dbtClassMixin):
+    name: Optional[str] = None
+    enabled: bool = True
+    group: Optional[str] = None
+    config: Optional[UnparsedSemanticResourceConfig] = None
+
+
+@dataclass
 class UnparsedModelUpdate(UnparsedNodeUpdate):
     quote_columns: Optional[bool] = None
     access: Optional[str] = None
@@ -501,8 +514,11 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
     versions: Sequence[UnparsedVersion] = field(default_factory=list)
     deprecation_date: Optional[datetime.datetime] = None
     time_spine: Optional[TimeSpine] = None
-    # TODO DI-4579: allow semantic model to accept a semantic model config object OR a bool
-    semantic_model: Optional[bool] = None
+    # True indicates that the semantic model is enabeld and will have it's values populated
+    # directly from the model.
+    # Using an UnparsedSemanticModelConfig object allows user to override some of the
+    # values instead.
+    semantic_model: Union[UnparsedSemanticModelConfig, bool, None] = None
     agg_time_dimension: Optional[str] = None
     metrics: Optional[List[UnparsedMetricV2]] = None
     derived_semantics: Optional[UnparsedDerivedSemantics] = None
