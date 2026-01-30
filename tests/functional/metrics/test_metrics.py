@@ -568,6 +568,31 @@ class TestFilterParsing:
         assert filters6[0].where_sql_template == "{{ Dimension('id__loves_dbt') }} is true"
 
 
+class TestMetricFilterLineage:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "basic_metrics.yml": basic_metrics_yml,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "semantic_model_people.yml": semantic_model_people_yml,
+            "people.sql": models_people_sql,
+        }
+
+    def test_metric_filter_lineage(self, project):
+        runner = dbtRunner()
+        result = runner.invoke(["parse"])
+        assert result.success
+        manifest = get_manifest(project.project_root)
+        manifest.build_parent_and_child_maps()
+
+        tenured = manifest.metrics["metric.test.tenured_people"]
+        assert "metric.test.collective_tenure" in tenured.depends_on.nodes
+        assert (
+            "metric.test.tenured_people"
+            in manifest.child_map["metric.test.collective_tenure"]
+        )
+
+
 class TestDuplicateInputMeasures:
     @pytest.fixture(scope="class")
     def models(self):
