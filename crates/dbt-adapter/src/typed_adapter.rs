@@ -1130,10 +1130,12 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             AdapterType::Databricks => {
                 // Databricks inherits the implementation from the Spark adapter.
                 //
-                // Spark implementation also implicitly filters out known HUDI metadata columns,
-                // which we currently do not.
+                // The DESCRIBE TABLE output includes metadata sections (e.g. "# Partition Information",
+                // "# Clustering Information") that must be filtered out. This matches the Python
+                // Spark adapter behavior which filters rows where col_name starts with '#'.
                 //
                 // https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-spark/src/dbt/adapters/spark/impl.py#L317-L336
+                // https://github.com/dbt-labs/dbt-fusion/issues/1230
                 let result = match macro_execution_result
                     .and_then(|r| convert_macro_result_to_record_batch(&r))
                 {
@@ -1153,7 +1155,10 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
                 let name_string_array = get_column_values::<StringArray>(&result, "col_name")?;
                 let dtype_string_array = get_column_values::<StringArray>(&result, "data_type")?;
 
+                // Filter out metadata rows (like "# Partition Information", "# Clustering Information")
+                // These are section headers in DESCRIBE TABLE output, not actual columns.
                 let columns = (0..name_string_array.len())
+                    .filter(|&i| !name_string_array.value(i).starts_with('#'))
                     .map(|i| {
                         Column::new(
                             AdapterType::Databricks,
