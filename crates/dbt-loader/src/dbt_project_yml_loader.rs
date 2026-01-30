@@ -4,8 +4,7 @@ use dbt_common::tracing::emit::emit_warn_log_from_fs_error;
 use dbt_common::{ErrorCode, fs_err};
 use dbt_common::{FsResult, unexpected_fs_err};
 use dbt_jinja_utils::serde::{into_typed_with_jinja, value_from_file};
-use dbt_jinja_utils::var_fn;
-use dbt_jinja_utils::{jinja_environment::JinjaEnv, phases::parse::build_resolve_context};
+use dbt_jinja_utils::{Var, jinja_environment::JinjaEnv, phases::parse::build_resolve_context};
 use dbt_schemas::schemas::project::DbtProject;
 use dbt_schemas::schemas::project::{
     ProjectAnalysisConfig, ProjectDataTestConfig, ProjectExposureConfig, ProjectFunctionConfig,
@@ -177,7 +176,7 @@ pub fn load_project_yml(
         namespace_keys,
     );
 
-    context.insert("var".to_string(), Value::from_function(var_fn(cli_vars)));
+    context.insert("var".to_string(), Value::from_object(Var::new(cli_vars)));
     context.insert(CURRENT_PATH.to_string(), Value::from(DBT_PROJECT_YML));
 
     // Parse the template without vars using Jinja

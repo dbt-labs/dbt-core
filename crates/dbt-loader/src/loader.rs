@@ -54,9 +54,9 @@ use crate::{
     load_internal_packages, load_packages, load_profiles, load_vars, persist_internal_packages,
 };
 
+use dbt_jinja_utils::Var;
 use dbt_jinja_utils::phases::load::secret_renderer::secret_context_env_var;
 use dbt_jinja_utils::serde::{into_typed_with_jinja, value_from_file};
-use dbt_jinja_utils::var_fn;
 
 use dbt_common::tracing::event_info::store_event_attributes;
 
@@ -353,7 +353,7 @@ pub async fn load_catalogs(arg: &LoadArgs, env: &JinjaEnv) -> FsResult<()> {
         ),
         (
             "var".to_owned(),
-            minijinja::Value::from_function(var_fn(arg.vars.clone())),
+            minijinja::Value::from_object(Var::new(arg.vars.clone())),
         ),
     ]);
     let catalogs_yml_path = arg.io.in_dir.join(DBT_CATALOGS_YML);
@@ -389,7 +389,7 @@ pub async fn load_simplified_project_and_profiles(
         ),
         (
             "var".to_owned(),
-            minijinja::Value::from_function(var_fn(arg.vars.clone())),
+            minijinja::Value::from_object(Var::new(arg.vars.clone())),
         ),
         (
             // Add empty context object (mimics dbt-core's BaseContext.to_dict() pattern)
