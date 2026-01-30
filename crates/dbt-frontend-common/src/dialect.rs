@@ -119,7 +119,8 @@ impl Dialect {
     pub fn get_default_col(self) -> String {
         match self {
             Dialect::Trino | Dialect::Redshift => "_sdf::col".to_string(), // this column is not seen by the user
-            Dialect::Bigquery | Dialect::Snowflake => "c".to_string(),
+            Dialect::Snowflake => "c".to_string(),
+            Dialect::Bigquery => "_field_".to_string(),
             Dialect::Databricks => "col".to_string(),
             _ => todo!("get_default_col not implemented for {self}"),
         }
@@ -127,8 +128,8 @@ impl Dialect {
 
     pub fn get_default_col_start(&self) -> usize {
         match self {
-            Dialect::Bigquery | Dialect::Snowflake | Dialect::Trino | Dialect::Redshift => 0,
-            Dialect::Databricks => 1,
+            Dialect::Snowflake | Dialect::Trino | Dialect::Redshift => 0,
+            Dialect::Bigquery | Dialect::Databricks => 1,
             _ => todo!("get_default_col_start not implemented for {self}"),
         }
     }
