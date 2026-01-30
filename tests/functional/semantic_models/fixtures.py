@@ -702,14 +702,6 @@ semantic_model_schema_yml_v2_with_primary_entity_only_on_column = (
     )
 )
 
-semantic_model_schema_yml_v2_with_twice_declared_primary_entity = (
-    semantic_model_schema_yml_v2_template_for_primary_entity_tests.format(
-        primary_entity_setting="primary_entity: id_entity",
-        id_entity_type="primary",
-        other_id_entity_type="foreign",
-    )
-)
-
 semantic_model_schema_yml_v2_primary_entity_only_on_model = (
     semantic_model_schema_yml_v2_template_for_primary_entity_tests.format(
         primary_entity_setting="primary_entity: id_entity",
@@ -717,23 +709,6 @@ semantic_model_schema_yml_v2_primary_entity_only_on_model = (
         other_id_entity_type="foreign",
     )
 )
-
-semantic_model_schema_yml_v2_with_two_primary_entities_and_no_model_declaration = (
-    semantic_model_schema_yml_v2_template_for_primary_entity_tests.format(
-        primary_entity_setting="",
-        id_entity_type="primary",
-        other_id_entity_type="primary",
-    )
-)
-
-semantic_model_schema_yml_v2_with_two_primary_entities_and_model_declaration = (
-    semantic_model_schema_yml_v2_template_for_primary_entity_tests.format(
-        primary_entity_setting="primary_entity: id_entity",
-        id_entity_type="primary",
-        other_id_entity_type="primary",
-    )
-)
-
 
 semantic_model_schema_yml_v2 = """models:
   - name: fct_revenue

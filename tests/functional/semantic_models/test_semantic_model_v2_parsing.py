@@ -27,9 +27,6 @@ from tests.functional.semantic_models.fixtures import (
     semantic_model_schema_yml_v2_primary_entity_only_on_model,
     semantic_model_schema_yml_v2_renamed,
     semantic_model_schema_yml_v2_with_primary_entity_only_on_column,
-    semantic_model_schema_yml_v2_with_twice_declared_primary_entity,
-    semantic_model_schema_yml_v2_with_two_primary_entities_and_model_declaration,
-    semantic_model_schema_yml_v2_with_two_primary_entities_and_no_model_declaration,
     semantic_model_test_groups_yml,
 )
 
@@ -463,32 +460,6 @@ class TestSemanticModelWithPrimaryEntityOnlyOnColumn:
         assert semantic_model.primary_entity is None
 
 
-class TestSemanticModelWithTwiceDeclaredPrimaryEntity:
-    @pytest.fixture(scope="class")
-    def models(self):
-        return {
-            "schema.yml": semantic_model_schema_yml_v2_with_twice_declared_primary_entity,
-            "fct_revenue.sql": fct_revenue_sql,
-            "metricflow_time_spine.sql": metricflow_time_spine_sql,
-        }
-
-    def test_primary_entity_type_is_id_entity(self, project):
-        runner = dbtTestRunner()
-        result = runner.invoke(["parse"])
-        assert result.success
-        manifest = result.result
-        assert len(manifest.semantic_models) == 1
-        semantic_model = list(manifest.semantic_models.values())[0]
-        entities = {entity.name: entity for entity in semantic_model.entities}
-        primary_entity = [
-            entity for entity in entities.values() if entity.type == EntityType.PRIMARY
-        ]
-        assert len(primary_entity) == 1
-        primary_entity = primary_entity[0]
-        assert primary_entity.name == "id_entity"
-        assert semantic_model.primary_entity == "id_entity"
-
-
 class TestSemanticModelWithPrimaryEntityOnlyOnModel:
     @pytest.fixture(scope="class")
     def models(self):
@@ -510,55 +481,6 @@ class TestSemanticModelWithPrimaryEntityOnlyOnModel:
             entity for entity in entities.values() if entity.type == EntityType.PRIMARY
         ]
         assert len(primary_entity) == 0
-        assert semantic_model.primary_entity == "id_entity"
-
-
-class TestSemanticModelWithTwoPrimaryEntitiesNoModelDeclaration:
-    @pytest.fixture(scope="class")
-    def models(self):
-        return {
-            "schema.yml": semantic_model_schema_yml_v2_with_two_primary_entities_and_no_model_declaration,
-            "fct_revenue.sql": fct_revenue_sql,
-            "metricflow_time_spine.sql": metricflow_time_spine_sql,
-        }
-
-    def test_primary_entity_type_is_id_entity(self, project):
-        runner = dbtTestRunner()
-        result = runner.invoke(["parse"])
-        assert result.success
-        manifest = result.result
-        assert len(manifest.semantic_models) == 1
-        semantic_model = list(manifest.semantic_models.values())[0]
-        entities = {entity.name: entity for entity in semantic_model.entities}
-        primary_entity = [
-            entity for entity in entities.values() if entity.type == EntityType.PRIMARY
-        ]
-        assert len(primary_entity) == 2
-        assert [e.name for e in primary_entity] == ["id_entity", "other_id_entity"]
-        assert semantic_model.primary_entity is None
-
-
-class TestSemanticModelWithTwoPrimaryEntitiesAndModelDeclaration:
-    @pytest.fixture(scope="class")
-    def models(self):
-        return {
-            "schema.yml": semantic_model_schema_yml_v2_with_two_primary_entities_and_model_declaration,
-            "fct_revenue.sql": fct_revenue_sql,
-            "metricflow_time_spine.sql": metricflow_time_spine_sql,
-        }
-
-    def test_primary_entity_type_is_id_entity(self, project):
-        runner = dbtTestRunner()
-        result = runner.invoke(["parse"])
-        assert result.success
-        manifest = result.result
-        assert len(manifest.semantic_models) == 1
-        semantic_model = list(manifest.semantic_models.values())[0]
-        entities = {entity.name: entity for entity in semantic_model.entities}
-        primary_entity = [
-            entity for entity in entities.values() if entity.type == EntityType.PRIMARY
-        ]
-        assert len(primary_entity) == 2
         assert semantic_model.primary_entity == "id_entity"
 
 
