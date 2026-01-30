@@ -8,7 +8,7 @@ use minijinja::Value;
 
 /// Invocation args is the dictionary of arguments passed into the jinja environment.
 // TODO: this is not complete, we will add more as we go.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct InvocationArgs {
     /// command
     pub invocation_command: String,
@@ -36,6 +36,8 @@ pub struct InvocationArgs {
     pub warn_error_options: BTreeMap<String, Value>,
     /// Version check
     pub version_check: bool,
+    /// Introspect
+    pub introspect: bool,
     /// Defer
     pub defer: bool,
     /// Defer state
@@ -71,6 +73,43 @@ pub struct InvocationArgs {
 
     /// Replay mode (when running against a recording)
     pub replay: Option<ReplayMode>,
+}
+
+impl Default for InvocationArgs {
+    fn default() -> Self {
+        Self {
+            invocation_command: String::new(),
+            vars: BTreeMap::new(),
+            select: None,
+            exclude: None,
+            profiles_dir: None,
+            packages_install_path: None,
+            target: None,
+            num_threads: None,
+            invocation_id: uuid::Uuid::nil(),
+            warn_error: false,
+            warn_error_options: BTreeMap::new(),
+            version_check: false,
+            introspect: true,
+            defer: false,
+            defer_state: String::new(),
+            debug: false,
+            log_format_file: String::new(),
+            log_format: String::new(),
+            log_level_file: String::new(),
+            log_level: String::new(),
+            log_path: String::new(),
+            profile: String::new(),
+            project_dir: String::new(),
+            quiet: false,
+            resource_type: Vec::new(),
+            send_anonymous_usage_stats: false,
+            write_json: false,
+            full_refresh: false,
+            store_failures: false,
+            replay: None,
+        }
+    }
 }
 
 impl InvocationArgs {
@@ -117,6 +156,7 @@ impl InvocationArgs {
                 })
                 .collect(),
             version_check: arg.version_check,
+            introspect: arg.introspect,
             defer: arg.defer,
             defer_state: arg
                 .defer_state
@@ -193,6 +233,7 @@ impl InvocationArgs {
             ),
         );
         dict.insert("VERSION_CHECK".to_string(), Value::from(self.version_check));
+        dict.insert("INTROSPECT".to_string(), Value::from(self.introspect));
         dict.insert("DEFER".to_string(), Value::from(self.defer));
         dict.insert(
             "DEFER_STATE".to_string(),

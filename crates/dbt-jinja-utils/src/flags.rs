@@ -166,6 +166,10 @@ impl Flags {
             "VERSION_CHECK".to_string(),
             Value::from(invocation_args.version_check),
         );
+        self.flags.insert(
+            "INTROSPECT".to_string(),
+            Value::from(invocation_args.introspect),
+        );
         self.flags
             .insert("DEFER".to_string(), Value::from(invocation_args.defer));
         self.flags.insert(
