@@ -74,6 +74,8 @@ from dbt.contracts.graph.unparsed import (
     UnparsedQueryParams,
     UnparsedSavedQuery,
     UnparsedSemanticModel,
+    UnparsedSemanticModelConfig,
+    UnparsedSemanticResourceConfig,
 )
 from dbt.exceptions import JSONValidationError, YamlParseDictError
 from dbt.node_types import NodeType
@@ -864,7 +866,6 @@ class SemanticModelParser(YamlReader):
             description=unparsed.description,
             label=unparsed.label,
             model=unparsed.model,
-            name=unparsed.name,
             defaults=unparsed.defaults,
             primary_entity=unparsed.primary_entity,
             entities=entities,
@@ -1016,6 +1017,9 @@ class SemanticModelParser(YamlReader):
         node: ModelNode,
         patch: ParsedNodePatch,
     ) -> None:
+        if patch.semantic_model is None:
+            return
+
         dimensions = self._parse_v2_column_dimensions(patch.columns)
         if patch.derived_semantics is not None:
             dimensions.extend(
@@ -1024,13 +1028,37 @@ class SemanticModelParser(YamlReader):
         entities = self._parse_v2_column_entities(patch.columns)
         if patch.derived_semantics is not None:
             entities.extend(self._parse_v2_derived_semantics_entities(patch.derived_semantics))
+
+        name = node.name
+        config: Dict[str, Any] = {}
+        if isinstance(patch.semantic_model, UnparsedSemanticModelConfig):
+            if patch.semantic_model.name is not None:
+                name = patch.semantic_model.name
+            if patch.semantic_model.config is not None:
+                print(f"patch.semantic_model: {patch.semantic_model}")
+                unparsed_sub_config = patch.semantic_model.config
+                if isinstance(unparsed_sub_config, UnparsedSemanticResourceConfig):
+                    if unparsed_sub_config.meta is not None:
+                        config["meta"] = unparsed_sub_config.meta
+                if patch.semantic_model.enabled is not None:
+                    config["enabled"] = patch.semantic_model.enabled
+                if patch.semantic_model.group is not None:
+                    config["group"] = patch.semantic_model.group
+                print("ending config:", config)
+        elif isinstance(patch.semantic_model, bool):
+            # boolean value just indicates that the model has a semantic model,
+            # so nothing to do here.
+            pass
+        else:
+            # this should be unreachable, but just in case
+            raise ValueError(f"Invalid semantic model config: {patch.semantic_model}")
+
         self._parse_semantic_model_helper(
-            semantic_model_name=node.name,
-            semantic_model_config=patch.config,
+            semantic_model_name=name,
+            semantic_model_config=config,
             description=node.description,
             label=None,  # does not seem to be available in v2 YAML, unless it is part of the semantic model config's 'group'?
             model=f"ref('{patch.name}')",
-            name=node.name,
             defaults=Defaults(agg_time_dimension=patch.agg_time_dimension),
             primary_entity=None,  # Not yet implemented; should become patch.primary_entity
             entities=entities,
@@ -1047,7 +1075,6 @@ class SemanticModelParser(YamlReader):
         description: Optional[str],
         label: Optional[str],
         model: str,
-        name: str,
         defaults,
         primary_entity,
         entities: List[Entity],
@@ -1096,7 +1123,7 @@ class SemanticModelParser(YamlReader):
             label=label,
             fqn=fqn,
             model=model,
-            name=name,
+            name=semantic_model_name,
             node_relation=None,  # Resolved from the value of "model" after parsing
             original_file_path=self.yaml.path.original_file_path,
             package_name=package_name,

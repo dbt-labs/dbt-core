@@ -1,0 +1,6 @@
+kind: Features
+body: Implement parsing of semantic model object-style configuration in v2 semantic YAML.
+time: 2026-01-29T17:54:32.188082-08:00
+custom:
+    Author: theyostalservice
+    Issue: "12413"
