@@ -289,13 +289,13 @@ class TestDerivedSemanticsParsingWorks:
         )  # length is so long because it is column entities + derived entities
 
         id_entity = entities["derived_id_entity"]
-        assert id_entity.type == EntityType.PRIMARY
+        assert id_entity.type == EntityType.FOREIGN
         assert id_entity.description == "This is the id entity, and it is the primary entity."
         assert id_entity.expr == "id + foreign_id_col"
         assert id_entity.config.meta == {"test_label_thing": "derived_entity_1"}
 
         id_entity_with_no_optional_fields = entities["derived_id_entity_with_no_optional_fields"]
-        assert id_entity_with_no_optional_fields.type == EntityType.PRIMARY
+        assert id_entity_with_no_optional_fields.type == EntityType.FOREIGN
         assert id_entity_with_no_optional_fields.expr == "id + foreign_id_col"
         assert id_entity_with_no_optional_fields.config.meta == {}
 
