@@ -1018,6 +1018,8 @@ class SemanticModelParser(YamlReader):
         patch: ParsedNodePatch,
     ) -> None:
         if patch.semantic_model is None:
+            # We shouldn't be calling this method in this case, but for safety
+            # and typechecking, we'll return early here.
             return
 
         dimensions = self._parse_v2_column_dimensions(patch.columns)

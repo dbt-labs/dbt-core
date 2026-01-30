@@ -514,6 +514,10 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
     versions: Sequence[UnparsedVersion] = field(default_factory=list)
     deprecation_date: Optional[datetime.datetime] = None
     time_spine: Optional[TimeSpine] = None
+    # True indicates that the semantic model is enabeld and will have it's values populated
+    # directly from the model.
+    # Using an UnparsedSemanticModelConfig object allows user to override some of the
+    # values instead.
     semantic_model: Union[UnparsedSemanticModelConfig, bool, None] = None
     agg_time_dimension: Optional[str] = None
     metrics: Optional[List[UnparsedMetricV2]] = None
