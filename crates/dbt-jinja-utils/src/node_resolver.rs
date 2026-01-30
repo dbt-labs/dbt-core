@@ -19,7 +19,7 @@ use dbt_schemas::{
     filter::RunFilter,
     schemas::{
         DbtFunction, DbtSource, InternalDbtNodeAttributes, Nodes,
-        common::DbtQuoting,
+        common::{DbtMaterialization, DbtQuoting},
         ref_and_source::{DbtRef, DbtSourceWrapper},
         telemetry::NodeType,
     },
@@ -179,6 +179,7 @@ impl NodeResolver {
         unique_id: &str,
         deferred_relation: &MinijinjaValue,
         is_frontier: bool,
+        node: &dyn InternalDbtNodeAttributes,
     ) {
         // For each entry that matches the unique_id, set the deferred relation
         entries
@@ -186,8 +187,16 @@ impl NodeResolver {
             .filter(|(id, _, _, _)| id == unique_id)
             .for_each(|(_, relation, _, deferred)| {
                 *deferred = Some(deferred_relation.clone());
-                // If this is a frontier node, we **always** defer if the relation is available
-                if is_frontier {
+                // Update relation to remote for:
+                // - Frontier nodes (dependencies): always update
+                // - Snapshots: always update (need remote for schema merge)
+                // - Incrementals: always update (need remote for schema merge)
+                // - Other selected models: keep local (will be analyzed with local schema)
+                let is_incremental_or_snapshot = matches!(
+                    node.materialized(),
+                    DbtMaterialization::Incremental | DbtMaterialization::Snapshot
+                );
+                if is_frontier || is_incremental_or_snapshot {
                     *relation = deferred_relation.clone();
                 }
             });
@@ -668,7 +677,13 @@ impl NodeResolverTracker for NodeResolver {
 
         if maybe_version == maybe_latest_version {
             let ref_entry = self.refs.entry(model_name.clone()).or_default();
-            Self::set_deferred_relation(ref_entry, &unique_id, &deferred_relation, is_frontier);
+            Self::set_deferred_relation(
+                ref_entry,
+                &unique_id,
+                &deferred_relation,
+                is_frontier,
+                node,
+            );
 
             let package_ref_entry = self
                 .refs
@@ -679,6 +694,7 @@ impl NodeResolverTracker for NodeResolver {
                 &unique_id,
                 &deferred_relation,
                 is_frontier,
+                node,
             );
         }
 
@@ -693,6 +709,7 @@ impl NodeResolverTracker for NodeResolver {
                 &unique_id,
                 &deferred_relation,
                 is_frontier,
+                node,
             );
 
             let package_versioned_ref_entry = self
@@ -704,6 +721,7 @@ impl NodeResolverTracker for NodeResolver {
                 &unique_id,
                 &deferred_relation,
                 is_frontier,
+                node,
             );
         }
 
