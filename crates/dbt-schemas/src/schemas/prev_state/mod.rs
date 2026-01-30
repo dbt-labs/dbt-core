@@ -126,6 +126,11 @@ impl PreviousState {
     ) -> bool {
         // If it's new, it's also considered modified
         if self.is_new(node) {
+            log_state_mod_diff(
+                &node.common().unique_id,
+                node.resource_type().as_static_ref(),
+                [("new node", false, None)],
+            );
             return true;
         }
 
