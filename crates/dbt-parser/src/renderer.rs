@@ -34,7 +34,7 @@ use dbt_schemas::schemas::properties::GetConfig;
 use dbt_schemas::schemas::telemetry::NodeType;
 use dbt_schemas::schemas::{InternalDbtNodeAttributes, IntrospectionKind, Nodes};
 use dbt_schemas::state::{DbtAsset, DbtRuntimeConfig, ModelStatus};
-use dbt_telemetry::{AssetParsed, ExecutionPhase};
+use dbt_telemetry::AssetParsed;
 use std::fmt::Debug;
 use tracing::Instrument as _;
 
@@ -144,13 +144,12 @@ where
     };
     let display_path_str = display_path.display().to_string();
 
-    let span = create_debug_span(AssetParsed::new(
+    let span = create_debug_span(AssetParsed::new_with_phase_from_context(
         package_name.clone(),
         ref_name.to_string(),
         dbt_asset.path.display().to_string(),
         display_path_str.clone(),
         None,
-        ExecutionPhase::Parse,
     ));
 
     render_sql_file_inner(

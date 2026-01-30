@@ -1,5 +1,7 @@
 //! Various manual trait impls and utilities for working with the generated proto code.
 
+#[path = "v1_public_events_fusion_asset.rs"]
+pub mod asset;
 #[path = "v1_public_events_fusion_compat.rs"]
 pub mod compat;
 #[path = "v1_public_events_fusion_deps.rs"]
