@@ -519,6 +519,7 @@ class UnparsedModelUpdate(UnparsedNodeUpdate):
     # Using an UnparsedSemanticModelConfig object allows user to override some of the
     # values instead.
     semantic_model: Union[UnparsedSemanticModelConfig, bool, None] = None
+    primary_entity: Optional[str] = None
     agg_time_dimension: Optional[str] = None
     metrics: Optional[List[UnparsedMetricV2]] = None
     derived_semantics: Optional[UnparsedDerivedSemantics] = None
