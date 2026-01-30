@@ -1099,7 +1099,7 @@ impl SqlType {
             }
             // Redshift system tables have a variety of odd types that come in as Other. Most of them can be safely treated
             // as Utf8, but oid is known BIGINT.
-            (Redshift | RedshiftODBC, Other(name)) if name.to_lowercase().as_str() == "oid" => {
+            (Redshift | RedshiftODBC, Other(name)) if name.eq_ignore_ascii_case("oid") => {
                 DataType::Int64
             }
             (Redshift | RedshiftODBC, Other(_)) => DataType::Utf8,

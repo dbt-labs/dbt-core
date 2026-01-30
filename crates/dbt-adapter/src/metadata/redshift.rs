@@ -114,6 +114,20 @@ fn build_relation_clauses_redshift(
     Ok((where_clauses_by_database, relations_by_database))
 }
 
+// This list was created using brute force since I can't find docs for which tables support it
+const TABLES_WITH_OID: [&str; 10] = [
+    "pg_cast",
+    "pg_opclass",
+    "pg_class",
+    "pg_constraint",
+    "pg_database",
+    "pg_language",
+    "pg_namespace",
+    "pg_operator",
+    "pg_proc",
+    "pg_type",
+];
+
 pub struct RedshiftMetadataAdapter {
     adapter: ConcreteAdapter,
 }
@@ -694,12 +708,9 @@ AND table_name = '{identifier}'"
                 fields.push(field);
             }
 
-            // This list was created using brute force since I can't find docs for which tables support it
-            let tables_with_oid: &'static str = "pg_cast pg_opclass pg_class pg_constraint pg_database pg_language pg_namespace pg_operator pg_proc pg_type";
-
             // Some pg_ tables contain an "invisible" oid column
             // See: https://docs.aws.amazon.com/redshift/latest/dg/c_join_PG.html
-            if schema == "pg_catalog" && tables_with_oid.contains(identifier.as_str()) {
+            if schema == "pg_catalog" && TABLES_WITH_OID.contains(&identifier.as_str()) {
                 let field = make_arrow_field_v2(
                     adapter.engine().type_ops(),
                     String::from("oid"),
