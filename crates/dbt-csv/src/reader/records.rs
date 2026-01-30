@@ -9,6 +9,23 @@ const AVERAGE_FIELD_SIZE: usize = 8;
 /// The minimum amount of data in a single read
 const MIN_CAPACITY: usize = 1024;
 
+/// State machine for tracking empty records (consecutive terminators)
+///
+/// csv_core skips empty lines by default. This state machine tracks
+/// terminators to correctly count and emit empty records.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TerminatorState {
+    /// Normal state - at start of record or parsing fields
+    #[default]
+    AtStart,
+    /// A record just ended with `\r`, waiting to see if `\n` follows
+    /// The `\n` would complete the record's CRLF terminator (not an empty line)
+    RecordEndedWithCR,
+    /// Saw `\r` at the start of a record (potential empty line)
+    /// Waiting to see if `\n` follows (\r\n = 1 empty) or not (\r alone = 1 empty)
+    PendingEmptyCR,
+}
+
 /// [`RecordDecoder`] provides a push-based interface to decoder [`StringRecords`]
 #[derive(Debug)]
 pub struct RecordDecoder {
@@ -29,6 +46,8 @@ pub struct RecordDecoder {
     offsets_len: usize,
 
     /// The number of fields read for the current record
+    /// At 0, it can either be csv_core has not processed any field
+    /// OR it is currently processing the first field, no delimiter found yet
     current_field: usize,
 
     /// The number of rows buffered
@@ -47,6 +66,15 @@ pub struct RecordDecoder {
     /// Default value is false
     /// When enabled fills in missing columns with null
     truncated_rows: bool,
+
+    /// State machine for tracking terminators to emit empty records
+    terminator_state: TerminatorState,
+
+    /// Whether csv_core has partial field data waiting for a terminator.
+    /// Set when read_record returns InputEmpty with bytes consumed but no fields completed.
+    /// When true, the next decode() should NOT pre-check for empty lines because
+    /// csv_core has buffered data and we are in the middle of processing a csv field.
+    has_partial_field: bool,
 }
 
 impl RecordDecoder {
@@ -62,7 +90,183 @@ impl RecordDecoder {
             data: vec![],
             num_rows: 0,
             truncated_rows,
+            terminator_state: TerminatorState::default(),
+            has_partial_field: false,
         }
+    }
+
+    /// Called when a record is emitted. Updates terminator state based on
+    /// whether the record ended with \r (potential CRLF).
+    fn on_record_emitted(&mut self, last_input_byte: Option<u8>) {
+        if last_input_byte == Some(b'\r') {
+            // Record ended with \r, might be followed by \n
+            self.terminator_state = TerminatorState::RecordEndedWithCR;
+        } else {
+            self.terminator_state = TerminatorState::AtStart;
+        }
+    }
+
+    /// Returns true if we are at a clean record boundary with no pending csv_core state.
+    ///
+    /// State matrix for (current_field, has_partial_field):
+    ///   (0, false) = Clean record boundary, csv_core has no buffered data
+    ///   (0, true)  = csv_core is parsing first field, no delimiter found yet
+    ///   (>0, true) = Mid-record, some fields done, more expected
+    ///   (>0, false) = Unlikely in practice (would require csv_core bug)
+    ///
+    /// Only returns true for (0, false) - truly at record boundary.
+    fn at_record_start(&self) -> bool {
+        debug_assert!(
+            self.current_field == 0 || self.has_partial_field,
+            "self.current_field={}, self.has_partial_field =false. This should not happen in the state machine",
+            self.current_field
+        );
+        self.current_field == 0 && !self.has_partial_field
+    }
+
+    /// Insert an empty record (all fields are empty strings).
+    fn insert_empty_record(&mut self) {
+        // Ensure we have space for offsets
+        debug_assert!(
+            self.offsets_len + self.num_columns <= self.offsets.len(),
+            "self.offsets does not have enough room to allocate empty records!"
+        );
+
+        // Offset denotes the end position of a field relative to the start of the row
+        // For an empty record, all field offsets are 0 (relative to this record's data start)
+        // which flush() later converts to absolute positions.
+
+        // self.offsets work hand-in-hand with self.data (containing output data)
+        // each element in self.offsets denote the end index in self.data of the
+        // current csv field.
+        // Example: csv data "a,b\n\nx,y\n"
+        // After csv_core::Reader finished reading the first record,
+        //       self.data = [a, b]
+        //       self.offsets = [0, 1, 2]
+        //       	0: a single sentinel for the entire file
+        //       	1: field "a" ends at index 1
+        //          2: field "b" ends at index 2
+        // Remaining data buffer: \nx,y\n
+        // We detect a new line and inject an empty record as follows:
+        //       self.offsets = [0, 1, 2]
+        //       for every column in the next row, append 0 (relative offset to start of row)
+        //       self.offsets = [0, 1, 2, 0, 0]
+        // csv_core::Reader  reads "x,y\n"
+        // 		self.data = [a, b, x, y]
+        // 		self.offsets = [0, 1, 2, 0, 0, 1, 2]
+        for _ in 0..self.num_columns {
+            self.offsets[self.offsets_len] = 0;
+            self.offsets_len += 1;
+        }
+
+        self.num_rows += 1;
+        self.line_number += 1;
+    }
+
+    /// Handle terminator state from previous decode() call (buffer boundary cases).
+    /// Returns (input_offset, records_read) after processing any pending empty records.
+    ///
+    /// This handles two cases:
+    /// - RecordEndedWithCR: Previous record ended with \r. If input starts with \n,
+    ///   skip it (completing \r\n terminator). NOT an empty line.
+    /// - PendingEmptyCR: Record buffer started with \r at a record boundary.
+    ///   Emit the pending empty record and skip \n if present.
+    fn complete_pending_terminator(&mut self, input: &[u8], to_read: usize) -> (usize, usize) {
+        let mut input_offset = 0;
+        let mut read = 0;
+
+        match self.terminator_state {
+            TerminatorState::RecordEndedWithCR => {
+                // Previous record ended with \r, check if this buffer starts with \n
+                // If so, skip it (completing \r\n terminator). NOT an empty line.
+                if !input.is_empty() && input[0] == b'\n' {
+                    input_offset += 1;
+                }
+                self.terminator_state = TerminatorState::AtStart;
+            }
+            TerminatorState::PendingEmptyCR => {
+                // We are at the start of record and there is an extra \r.
+                // Emit the empty record and skip \n if present
+                self.terminator_state = TerminatorState::AtStart;
+                if read < to_read {
+                    self.insert_empty_record();
+                    read += 1;
+                }
+                if !input.is_empty() && input[0] == b'\n' {
+                    input_offset += 1;
+                }
+            }
+            TerminatorState::AtStart => {}
+        }
+
+        (input_offset, read)
+    }
+
+    /// Insert empty records for terminator tokens at record boundaries.
+    ///
+    /// When at a clean record boundary (no partial field data), this consumes leading
+    /// terminator tokens (\n, \r, \r\n) and inserts empty records for each.
+    /// Also handles RecordEndedWithCR state where the previous record ended with \r
+    /// and we need to check if the current buffer starts with \n (completing \r\n).
+    ///
+    /// Returns updated (input_offset, records_read).
+    fn insert_empty_records_at_boundary(
+        &mut self,
+        input: &[u8],
+        mut input_offset: usize,
+        mut read: usize,
+        to_read: usize,
+    ) -> (usize, usize) {
+        // Last record ended with \r. Current input begins with \n.
+        // We find \r\n, skip \n in the current buffer and reset
+        // TerminatorState to AtStart
+        if self.terminator_state == TerminatorState::RecordEndedWithCR {
+            if input_offset < input.len() && input[input_offset] == b'\n' {
+                input_offset += 1;
+            }
+            self.terminator_state = TerminatorState::AtStart;
+        }
+
+        // If buffer starts with terminator tokens and we are at a clean record
+        // boundary, consume these terminator tokens instead of passing them to
+        // csv_core::Reader (which will silently consume them without giving us
+        // empty records). Inject empty records appropriately.
+        while read < to_read && self.at_record_start() && input_offset < input.len() {
+            let remaining = &input[input_offset..];
+            match remaining[0] {
+                b'\n' => {
+                    // \n = empty line
+                    self.insert_empty_record();
+                    read += 1;
+                    input_offset += 1;
+                }
+                b'\r' => {
+                    if remaining.len() >= 2 {
+                        if remaining[1] == b'\n' {
+                            // \r\n = empty line
+                            self.insert_empty_record();
+                            read += 1;
+                            input_offset += 2;
+                        } else {
+                            // \r followed by non-\n = standalone \r = empty line
+                            self.insert_empty_record();
+                            read += 1;
+                            input_offset += 1;
+                        }
+                    } else {
+                        // Only \r at end of buffer - set state for next decode()
+                        self.terminator_state = TerminatorState::PendingEmptyCR;
+                        input_offset += 1;
+                        // this will fall through to the caller which will stop
+                        // consuming and return
+                        break;
+                    }
+                }
+                _ => break,
+            }
+        }
+
+        (input_offset, read)
     }
 
     /// Decodes records from `input` returning the number of records and bytes read
@@ -73,15 +277,12 @@ impl RecordDecoder {
             return Ok((0, 0));
         }
 
-        // Reserve sufficient capacity in offsets
+        // Reserve sufficient capacity in offsets (extra for potential empty records)
         self.offsets
             .resize(self.offsets_len + to_read * self.num_columns, 0);
 
-        // The current offset into `input`
-        let mut input_offset = 0;
-
-        // The number of rows decoded in this pass
-        let mut read = 0;
+        // Handle terminator state from previous decode() call (buffer boundary cases)
+        let (mut input_offset, mut read) = self.complete_pending_terminator(input, to_read);
 
         loop {
             // Reserve necessary space in output data based on best estimate
@@ -92,6 +293,23 @@ impl RecordDecoder {
 
             // Try to read a record
             loop {
+                // Handle empty records at record boundaries before passing to csv_core
+                (input_offset, read) =
+                    self.insert_empty_records_at_boundary(input, input_offset, read, to_read);
+
+                if read >= to_read {
+                    return Ok((read, input_offset));
+                }
+
+                // Don't return early if we have partial field data - need to call csv_core
+                // to potentially finalize the record on empty input (EOF signal)
+                if input_offset >= input.len() && !self.has_partial_field {
+                    return Ok((read, input_offset));
+                }
+
+                // bytes_read: include terminator tokens read from input buffer
+                // bytes written: terminator token is NOT written to the buffer
+                // end_positions: number of csv fields in the row consumed on this read
                 let (result, bytes_read, bytes_written, end_positions) =
                     self.delimiter.read_record(
                         &input[input_offset..],
@@ -105,8 +323,17 @@ impl RecordDecoder {
                 self.data_len += bytes_written;
 
                 match result {
-                    ReadRecordResult::End | ReadRecordResult::InputEmpty => {
-                        // Reached end of input
+                    ReadRecordResult::End => {
+                        debug_assert!(
+                            self.terminator_state != TerminatorState::PendingEmptyCR,
+                            "PendingEmptyCR should be handled at start of decode()"
+                        );
+                        return Ok((read, input_offset));
+                    }
+                    ReadRecordResult::InputEmpty => {
+                        // Reached end of input and csv_core needs more data to construct record
+                        // Track if csv_core has partial field data
+                        self.has_partial_field = bytes_read > 0 || bytes_written > 0;
                         return Ok((read, input_offset));
                     }
                     // Need to allocate more capacity
@@ -118,11 +345,17 @@ impl RecordDecoder {
                         )));
                     }
                     ReadRecordResult::Record => {
+                        // Finished reading a full row. Make a record.
+                        // Handle row-truncation if current number of fields read differ from num_columns expected
                         if self.current_field != self.num_columns {
                             if self.truncated_rows && self.current_field < self.num_columns {
                                 // If the number of fields is less than expected, pad with nulls
                                 let fill_count = self.num_columns - self.current_field;
                                 let fill_value = self.offsets[self.offsets_len - 1];
+                                debug_assert!(
+                                    self.offsets_len + fill_count <= self.offsets.len(),
+                                    "self.offsets does not have enough room to allocate records!"
+                                );
                                 self.offsets[self.offsets_len..self.offsets_len + fill_count]
                                     .fill(fill_value);
                                 self.offsets_len += fill_count;
@@ -137,6 +370,13 @@ impl RecordDecoder {
                         self.current_field = 0;
                         self.line_number += 1;
                         self.num_rows += 1;
+                        self.has_partial_field = false; // Record complete
+
+                        // Update terminator state for next iteration
+                        if bytes_read > 0 {
+                            let last_byte = input[input_offset - 1];
+                            self.on_record_emitted(Some(last_byte));
+                        }
 
                         if read == to_read {
                             // Read sufficient rows
@@ -296,8 +536,108 @@ mod tests {
     use csv_core::Reader;
     use std::io::{BufRead, BufReader, Cursor};
 
+    /// Marker for an empty row. Use in expected data arrays
+    const EMPTY: &[&str] = &[];
+
+    const BUFFER_SIZES: &[usize] = &[1, 2, 3, 4, 5, 6, 7, 8, 10, 20];
+
+    /// Helper to assert decoded records match expected 2D data.
+    fn assert_records_eq(decoder: &mut RecordDecoder, num_cols: usize, expected: &[&[&str]]) {
+        let batch = decoder.flush().unwrap();
+
+        let records: Vec<Vec<&str>> = batch
+            .iter()
+            .map(|r| (0..num_cols).map(|j| r.get(j)).collect())
+            .collect();
+
+        assert_eq!(
+            records.len(),
+            expected.len(),
+            "Row count mismatch: got {}, expected {}",
+            records.len(),
+            expected.len()
+        );
+
+        for (i, (actual, exp)) in records.iter().zip(expected.iter()).enumerate() {
+            // Expand EMPTY marker to vec of empty strings
+            let expected_row: Vec<&str> = if exp.is_empty() {
+                vec![""; num_cols]
+            } else {
+                exp.to_vec()
+            };
+
+            assert_eq!(
+                actual, &expected_row,
+                "Row {} mismatch:\n  actual:   {:?}\n  expected: {:?}",
+                i, actual, expected_row
+            );
+        }
+    }
+
+    /// Helper to run a stress test with various buffer capacities
+    /// This will aggressively test the terminator state transition
+    /// since buffers are small and we increase the likelihood of spill-over terminator
+    /// tokens cutting \r\n into two consecutive decode calls
+    fn stress_test_with_capacities(
+        csv: &[u8],
+        num_cols: usize,
+        expected_rows: usize,
+        expected: &[&[&str]],
+    ) {
+        for &capacity in BUFFER_SIZES {
+            let mut reader = BufReader::with_capacity(capacity, Cursor::new(csv));
+            let mut decoder = RecordDecoder::new(Reader::new(), num_cols, true);
+            let mut total_read = 0;
+
+            loop {
+                let buf = reader.fill_buf().unwrap();
+                assert!(buf.len() <= capacity);
+                if buf.is_empty() {
+                    // Signal EOF with empty input to finalize any pending records
+                    let (read, _) = decoder.decode(&[], expected_rows).unwrap();
+                    total_read += read;
+                    break;
+                }
+
+                let (read, bytes) = decoder.decode(buf, expected_rows).unwrap();
+                reader.consume(bytes);
+                total_read += read;
+            }
+
+            assert_eq!(
+                total_read, expected_rows,
+                "capacity {}: expected {} records, got {}",
+                capacity, expected_rows, total_read
+            );
+
+            assert_records_eq(&mut decoder, num_cols, expected);
+        }
+    }
+
     #[test]
     fn test_basic() {
+        let csv = "foo,bar,baz\na,b,c\n12,3,5\n\"asda\"\"asas\",\"sdffsnsd\", as\n";
+
+        let mut decoder = RecordDecoder::new(Reader::new(), 3, false);
+        let (read, bytes) = decoder.decode(csv.as_bytes(), 4).unwrap();
+        assert_eq!(read, 4);
+        assert_eq!(bytes, csv.len());
+
+        assert_records_eq(
+            &mut decoder,
+            3,
+            &[
+                &["foo", "bar", "baz"],
+                &["a", "b", "c"],
+                &["12", "3", "5"],
+                &["asda\"asas", "sdffsnsd", " as"],
+            ],
+        );
+    }
+
+    #[test]
+    fn test_basic_buffered() {
+        // Test with small buffer to exercise buffered reading
         let csv = [
             "foo,bar,baz",
             "a,b,c",
@@ -368,12 +708,15 @@ mod tests {
     }
 
     #[test]
-    fn test_skip_insufficient_rows() {
+    fn test_decode_fewer_rows_than_requested() {
+        // Request 3 rows but only 2 available - should return 2
         let csv = "a\nv\n";
         let mut decoder = RecordDecoder::new(Reader::new(), 1, false);
         let (read, bytes) = decoder.decode(csv.as_bytes(), 3).unwrap();
         assert_eq!(read, 2);
         assert_eq!(bytes, csv.len());
+
+        assert_records_eq(&mut decoder, 1, &[&["a"], &["v"]]);
     }
 
     #[test]
@@ -383,5 +726,350 @@ mod tests {
         let (read, bytes) = decoder.decode(csv.as_bytes(), 5).unwrap();
         assert_eq!(read, 5);
         assert_eq!(bytes, csv.len());
+
+        assert_records_eq(
+            &mut decoder,
+            2,
+            &[&["a", "b"], &["v", ""], &["", "1"], &["", "2"], &["", "3"]],
+        );
+    }
+
+    #[test]
+    fn test_cr_line_endings() {
+        // CSV with standalone \r (carriage return) as line endings (classic Mac OS style)
+        let csv = "foo,bar,baz\ra,b,c\r12,3,5\r";
+
+        let mut decoder = RecordDecoder::new(Reader::new(), 3, true);
+        let (read, bytes) = decoder.decode(csv.as_bytes(), 3).unwrap();
+        assert_eq!(read, 3);
+        assert_eq!(bytes, csv.len());
+
+        assert_records_eq(
+            &mut decoder,
+            3,
+            &[&["foo", "bar", "baz"], &["a", "b", "c"], &["12", "3", "5"]],
+        );
+    }
+
+    #[test]
+    fn test_cr_empty_lines() {
+        // CSV with standalone \r line endings and empty lines in the middle
+        let csv = "a,b,c\r\rfoo,bar,baz\r";
+
+        let mut decoder = RecordDecoder::new(Reader::new(), 3, true);
+        let (read, bytes) = decoder.decode(csv.as_bytes(), 3).unwrap();
+        assert_eq!(read, 3);
+        assert_eq!(bytes, csv.len());
+
+        assert_records_eq(
+            &mut decoder,
+            3,
+            &[&["a", "b", "c"], EMPTY, &["foo", "bar", "baz"]],
+        );
+    }
+
+    #[test]
+    fn test_crlf_split_across_buffers() {
+        // Test case: \r\n is split across buffer boundaries
+        // CSV cut into 2 buffers: "a,b,c\r  |   \nx,y,z\r\n"
+        // Should produce 2 rows, NOT 3
+
+        let csv = "a,b,c\r\nx,y,z\r\n";
+        let split_point = 6; // "a,b,c\r" = 6 bytes
+
+        let mut decoder = RecordDecoder::new(Reader::new(), 3, true);
+
+        let (read1, bytes1) = decoder.decode(&csv.as_bytes()[..split_point], 2).unwrap();
+        assert_eq!(read1, 1);
+        assert_eq!(bytes1, split_point);
+
+        let buf2 = &csv.as_bytes()[split_point..];
+        let (read2, bytes2) = decoder.decode(buf2, 1).unwrap();
+        assert_eq!(read2, 1);
+
+        // Consume any remaining bytes (trailing \n handled by next decode call)
+        let mut total_bytes2 = bytes2;
+        if bytes2 < buf2.len() {
+            let (read3, bytes3) = decoder.decode(&buf2[bytes2..], 1).unwrap();
+            assert_eq!(read3, 0); // No more records (just terminator cleanup)
+            total_bytes2 += bytes3;
+        }
+        assert_eq!(total_bytes2, buf2.len());
+
+        assert_records_eq(&mut decoder, 3, &[&["a", "b", "c"], &["x", "y", "z"]]);
+    }
+
+    #[test]
+    fn test_buffer_boundary_after_crlf() {
+        // Test case: buffer cuts cleanly after \r\n
+        // CSV cut into 2 buffers: "a,b,c\r\n  |   x,y,z\r\n"
+        let csv = "a,b,c\r\nx,y,z\r\n";
+        let split_point = 7; // "a,b,c\r\n" = 7 bytes
+
+        let mut decoder = RecordDecoder::new(Reader::new(), 3, true);
+
+        let (read1, bytes1) = decoder.decode(&csv.as_bytes()[..split_point], 2).unwrap();
+        assert_eq!(read1, 1);
+        assert_eq!(bytes1, split_point);
+
+        let buf2 = &csv.as_bytes()[split_point..];
+        let (read2, bytes2) = decoder.decode(buf2, 1).unwrap();
+        assert_eq!(read2, 1);
+
+        // Consume any remaining bytes (trailing \n handled by next decode call)
+        let mut total_bytes2 = bytes2;
+        if bytes2 < buf2.len() {
+            let (read3, bytes3) = decoder.decode(&buf2[bytes2..], 1).unwrap();
+            assert_eq!(read3, 0); // No more records (just terminator cleanup)
+            total_bytes2 += bytes3;
+        }
+        assert_eq!(total_bytes2, buf2.len());
+
+        assert_records_eq(&mut decoder, 3, &[&["a", "b", "c"], &["x", "y", "z"]]);
+    }
+
+    #[test]
+    fn test_crlf_split_with_empty_line() {
+        // Test case: \r\n split with an actual empty line following
+        // CSV cut into  "a,b,c\r  |  \n\r\nx,y,z\r\n"
+        let csv = "a,b,c\r\n\r\nx,y,z\r\n";
+        let split_point = 6; // "a,b,c\r" = 6 bytes
+
+        let mut decoder = RecordDecoder::new(Reader::new(), 3, true);
+
+        let (read1, bytes1) = decoder.decode(&csv.as_bytes()[..split_point], 3).unwrap();
+        // read "a,b,c\r"
+        assert_eq!(read1, 1);
+        assert_eq!(bytes1, split_point);
+
+        let buf2 = &csv.as_bytes()[split_point..];
+        let (read2, bytes2) = decoder.decode(buf2, 2).unwrap();
+        // read \r\n
+        // read x,y,z\r
+        assert_eq!(read2, 2);
+
+        // Consume any remaining bytes (trailing \n handled by next decode call)
+        let mut total_bytes2 = bytes2;
+        if bytes2 < buf2.len() {
+            let (read3, bytes3) = decoder.decode(&buf2[bytes2..], 1).unwrap();
+            assert_eq!(read3, 0); // No more records (just terminator cleanup)
+            total_bytes2 += bytes3;
+        }
+        assert_eq!(total_bytes2, buf2.len());
+
+        assert_records_eq(
+            &mut decoder,
+            3,
+            &[&["a", "b", "c"], EMPTY, &["x", "y", "z"]],
+        );
+    }
+
+    #[test]
+    fn test_standalone_cr_at_buffer_boundary() {
+        // Test case: standalone \r (empty line) at buffer boundary
+        // CSV: "a,b,c\n\rx,y,z\n" split as "a,b,c\n\r" | "x,y,z\n"
+        // Row 1: a,b,c (terminated by \n)
+        // Row 2: empty (standalone \r)
+        // Row 3: x,y,z (terminated by \n)
+        let csv = "a,b,c\n\rx,y,z\n";
+        let split_point = 7; // "a,b,c\n\r" = 7 bytes
+
+        let mut decoder = RecordDecoder::new(Reader::new(), 3, true);
+
+        // First buffer: "a,b,c\n\r"
+        // - csv_core reads "a,b,c", sees \n, returns Record
+        let (read1, bytes1) = decoder.decode(&csv.as_bytes()[..split_point], 3).unwrap();
+        assert_eq!(read1, 1, "Should read 1 row from first buffer");
+        assert_eq!(bytes1, split_point);
+
+        // Second buffer: "x,y,z\n"
+        let (read2, bytes2) = decoder.decode(&csv.as_bytes()[split_point..], 2).unwrap();
+        assert_eq!(read2, 2, "Should read empty line + x,y,z");
+        assert_eq!(bytes2, csv.len() - split_point);
+
+        assert_records_eq(
+            &mut decoder,
+            3,
+            &[&["a", "b", "c"], EMPTY, &["x", "y", "z"]],
+        );
+    }
+
+    #[test]
+    fn test_pending_empty_cr_at_eof() {
+        // CSV: "a\n\r" | "" (EOF) - the \r is an empty line at end of file
+        let csv = b"a\n\r";
+
+        let mut decoder = RecordDecoder::new(Reader::new(), 1, true);
+
+        let (read1, bytes1) = decoder.decode(csv, 10).unwrap();
+        assert_eq!(bytes1, csv.len());
+
+        // Signal EOF with empty input
+        let (read2, _) = decoder.decode(&[], 10 - read1).unwrap();
+
+        assert_eq!(read1 + read2, 2, "expected 2 records (a, empty)");
+        assert_records_eq(&mut decoder, 1, &[&["a"], EMPTY]);
+    }
+
+    #[test]
+    fn test_record_ended_with_cr_then_data() {
+        // The \r was a standalone terminator
+        // CSV: "a,b\r" | "c,d\r\n"
+        let csv = b"a,b\rc,d\r\n";
+        let split = 4; // "a,b\r" | "c,d\r\n"
+
+        let mut decoder = RecordDecoder::new(Reader::new(), 2, true);
+
+        let (read1, _) = decoder.decode(&csv[..split], 10).unwrap();
+        let (read2, _) = decoder.decode(&csv[split..], 10 - read1).unwrap();
+
+        assert_eq!(read1 + read2, 2, "expected 2 records");
+        assert_records_eq(&mut decoder, 2, &[&["a", "b"], &["c", "d"]]);
+    }
+
+    #[test]
+    fn test_record_ended_with_cr_then_empty_cr() {
+        // CSV: "a\r" | "\rb\n" - first \r ends record, second \r is empty line
+        let csv = b"a\r\rb\n";
+        let expected = &[&["a"], EMPTY, &["b"]];
+        stress_test_with_capacities(csv, 1, expected.len(), expected);
+    }
+
+    #[test]
+    fn test_multiple_cr_at_boundary() {
+        // Test multiple \r characters at buffer boundary
+        let csv = b"a\r\r\rb\n";
+        let expected = &[&["a"], EMPTY, EMPTY, &["b"]];
+        stress_test_with_capacities(csv, 1, expected.len(), expected);
+    }
+
+    #[test]
+    fn test_all_terminator_types_with_splits() {
+        // Test all terminator types (\n, \r\n, \r) with systematic buffer splits
+        // CSV: "a\n" "b\r\n" "c\r" "d\n" = 4 records
+        let csv = b"a\nb\r\nc\rd\n";
+        let expected: &[&[&str]] = &[&["a"], &["b"], &["c"], &["d"]];
+
+        stress_test_with_capacities(csv, 1, expected.len(), expected);
+    }
+
+    #[test]
+    fn test_empty_line_at_every_position() {
+        // CSV with empty lines at start, middle, and end
+        // "\n" "a\n" "\n" "b\n" "\n"
+        let csv = b"\na\n\nb\n\n";
+        let expected = &[EMPTY, &["a"], EMPTY, &["b"], EMPTY];
+
+        stress_test_with_capacities(csv, 1, expected.len(), expected);
+    }
+
+    #[test]
+    fn test_consecutive_crlf_empty_lines() {
+        // Multiple \r\n empty lines in a row
+        // CSV: "a\r\n" "\r\n" "\r\n" "b\r\n"
+        let csv = b"a\r\n\r\n\r\nb\r\n";
+        let expected = &[&["a"], EMPTY, EMPTY, &["b"]];
+
+        stress_test_with_capacities(csv, 1, expected.len(), expected);
+    }
+
+    #[test]
+    fn test_mixed_line_endings_with_empty_lines() {
+        let csv = b"a,b,c\r\n\n\rx,y,z\r\n\r\n\n1,2,3\n";
+        let expected = &[
+            &["a", "b", "c"], // row 0 (CRLF)
+            EMPTY,            // row 1: empty (\n)
+            EMPTY,            // row 2: empty (\r standalone)
+            &["x", "y", "z"], // row 3 (CRLF)
+            EMPTY,            // row 4: empty (\r\n)
+            EMPTY,            // row 5: empty (\n)
+            &["1", "2", "3"], // row 6 (LF)
+        ];
+        stress_test_with_capacities(csv, 3, expected.len(), expected);
+    }
+
+    #[test]
+    fn test_alternating_terminators() {
+        // Tests all three terminator types (\n, \r\n, \r) interleaved with data
+        // Pattern: a\n + \r\n (empty) + b\r + \r\n (empty) + c\n
+        let csv = b"a\n\r\nb\r\r\nc\n";
+        let expected: &[&[&str]] = &[&["a"], EMPTY, &["b"], EMPTY, &["c"]];
+
+        stress_test_with_capacities(csv, 1, expected.len(), expected);
+    }
+
+    #[test]
+    fn test_empty_lines_at_start() {
+        // Pattern: \n + \r\n + \r + a,b,c\n
+        let csv = b"\n\r\n\ra,b,c\n";
+        let expected: &[&[&str]] = &[EMPTY, EMPTY, EMPTY, &["a", "b", "c"]];
+
+        stress_test_with_capacities(csv, 3, expected.len(), expected);
+    }
+
+    #[test]
+    fn test_empty_lines_at_end() {
+        // Pattern: a,b,c\n + \n + \r\n + \r (EOF)
+        let csv = b"a,b,c\n\n\r\n\r";
+        let expected: &[&[&str]] = &[&["a", "b", "c"], EMPTY, EMPTY, EMPTY];
+
+        stress_test_with_capacities(csv, 3, expected.len(), expected);
+    }
+
+    #[test]
+    fn test_many_consecutive_empty_lines() {
+        // Pattern: a\n + \n + \n + \r\n + \r\n + \r + \r + b\n
+        let csv = b"a\n\n\n\r\n\r\n\r\rb\n";
+        let expected: &[&[&str]] = &[&["a"], EMPTY, EMPTY, EMPTY, EMPTY, EMPTY, EMPTY, &["b"]];
+
+        stress_test_with_capacities(csv, 1, expected.len(), expected);
+    }
+
+    #[test]
+    fn test_multicolumn_with_empty_lines() {
+        let csv = b"foo,bar,baz\r\n\r\n1,2,3\n\nx,y,z\r";
+        let expected: &[&[&str]] = &[
+            &["foo", "bar", "baz"],
+            EMPTY,
+            &["1", "2", "3"],
+            EMPTY,
+            &["x", "y", "z"],
+        ];
+
+        stress_test_with_capacities(csv, 3, expected.len(), expected);
+    }
+
+    #[test]
+    fn test_quoted_fields_with_empty_lines() {
+        // Tests that terminator state is NOT affected by commas/quotes inside fields
+        // csv_core handles quoted fields; we only track terminators at record boundaries
+        // Pattern: "a,b",c,d\r\n + \n (empty) + "x""y",z,w\n
+        let csv = b"\"a,b\",c,d\r\n\n\"x\"\"y\",z,w\n";
+        let expected: &[&[&str]] = &[&["a,b", "c", "d"], EMPTY, &["x\"y", "z", "w"]];
+
+        stress_test_with_capacities(csv, 3, expected.len(), expected);
+    }
+
+    #[test]
+    fn test_all_empty_file() {
+        // Pattern: \n + \r\n + \r\n + \r (EOF)
+        let csv = b"\n\r\n\r\n\r";
+        let expected: &[&[&str]] = &[EMPTY, EMPTY, EMPTY, EMPTY];
+
+        stress_test_with_capacities(csv, 1, expected.len(), expected);
+    }
+
+    #[test]
+    fn test_quoted_field_spanning_buffer_boundaries() {
+        let csv = b"\"A\r\nB\r\nC\r\nD\",simple\n\nx,\"Y\rZ\"\nz\n";
+
+        let expected: &[&[&str]] = &[
+            &["A\r\nB\r\nC\r\nD", "simple"],
+            EMPTY,
+            &["x", "Y\rZ"],
+            &["z", ""], // missing field padded with empty
+        ];
+
+        stress_test_with_capacities(csv, 2, expected.len(), expected);
     }
 }

@@ -85,7 +85,6 @@ pub struct Format {
     delimiter: Option<u8>,
     escape: Option<u8>,
     quote: Option<u8>,
-    terminator: Option<u8>,
     comment: Option<u8>,
     null_regex: NullRegex,
     truncated_rows: bool,
@@ -99,7 +98,6 @@ impl Default for Format {
             delimiter: Some(b','),
             escape: None,
             quote: Some(b'"'),
-            terminator: None,
             comment: None,
             null_regex: NullRegex::default(),
             truncated_rows: true, // Python-compatible: flexible(true)
@@ -131,7 +129,6 @@ impl Format {
             delimiter: Some(delimiter),
             escape: None,
             quote: Some(b'"'),
-            terminator: None,
             comment: None,
             null_regex: NullRegex::default(),
             truncated_rows: true, // flexible(true) equivalent - matches Python
@@ -161,12 +158,6 @@ impl Format {
     /// Specify a custom quote character, defaults to double quote `'"'`
     pub fn with_quote(mut self, quote: u8) -> Self {
         self.quote = Some(quote);
-        self
-    }
-
-    /// Specify a custom terminator character, defaults to CRLF
-    pub fn with_terminator(mut self, terminator: u8) -> Self {
-        self.terminator = Some(terminator);
         self
     }
 
@@ -369,9 +360,6 @@ impl Format {
         if let Some(c) = self.quote {
             builder.quote(c);
         }
-        if let Some(t) = self.terminator {
-            builder.terminator(csv::Terminator::Any(t));
-        }
         if let Some(comment) = self.comment {
             builder.comment(Some(comment));
         }
@@ -389,9 +377,6 @@ impl Format {
         }
         if let Some(c) = self.quote {
             builder.quote(c);
-        }
-        if let Some(t) = self.terminator {
-            builder.terminator(csv_core::Terminator::Any(t));
         }
         builder.build()
     }
@@ -442,6 +427,10 @@ impl<R: BufRead> BufReader<R> {
     fn read(&mut self) -> Result<Option<RecordBatch>, ArrowError> {
         loop {
             let buf = self.reader.fill_buf()?;
+            // uses `self.delimiter=csv_core::Reader` to perform 0-copy parsing
+            // that handles delimiter, quote and escape characters,
+            // load the data into self.decoder's internal buffer
+            // called `data` with offsets for each row
             let decoded = self.decoder.decode(buf)?;
             self.reader.consume(decoded);
             // Yield if decoded no bytes or the decoder is full
@@ -454,6 +443,8 @@ impl<R: BufRead> BufReader<R> {
             }
         }
 
+        // convert internal buffer with offsets into StringRecords
+        // call parse_agate on StringRecords
         self.decoder.flush()
     }
 }
@@ -1083,12 +1074,6 @@ impl ReaderBuilder {
         self
     }
 
-    /// Provide a custom terminator character, defaults to CRLF
-    pub fn with_terminator(mut self, terminator: u8) -> Self {
-        self.format.terminator = Some(terminator);
-        self
-    }
-
     /// Provide a comment character, lines starting with this character will be ignored
     pub fn with_comment(mut self, comment: u8) -> Self {
         self.format.comment = Some(comment);
@@ -1674,39 +1659,6 @@ mod tests {
     }
 
     #[test]
-    fn test_non_std_terminator() {
-        let schema = Schema::new(vec![
-            Field::new("text1", DataType::Utf8, true),
-            Field::new("text2", DataType::Utf8, true),
-        ]);
-        let agate_schema = crate::type_tester::AgateSchema::from_arrow_schema(&schema);
-        let builder = ReaderBuilder::new(agate_schema)
-            .with_header(false)
-            .with_terminator(b'\n'); // default is CRLF, change to LF
-
-        let mut csv_text = Vec::new();
-        let mut csv_writer = Cursor::new(&mut csv_text);
-        for index in 0..10 {
-            let text1 = format!("id{index:}");
-            let text2 = format!("value{index:}");
-            csv_writer
-                .write_fmt(format_args!("\"{text1}\",\"{text2}\"\n"))
-                .unwrap();
-        }
-        let mut csv_reader = Cursor::new(&csv_text);
-        let mut reader = builder.build(&mut csv_reader).unwrap();
-        let batch = reader.next().unwrap().unwrap();
-        let col0 = batch.column(0);
-        assert_eq!(col0.len(), 10);
-        let col0_arr = col0.as_any().downcast_ref::<StringArray>().unwrap();
-        assert_eq!(col0_arr.value(0), "id0");
-        let col1 = batch.column(1);
-        assert_eq!(col1.len(), 10);
-        let col1_arr = col1.as_any().downcast_ref::<StringArray>().unwrap();
-        assert_eq!(col1_arr.value(5), "value5");
-    }
-
-    #[test]
     fn test_header_bounds() {
         let csv = "a,b\na,b\na,b\na,b\na,b\n";
         let tests = [
@@ -1792,8 +1744,9 @@ mod tests {
         let batches = reader.collect::<Result<Vec<_>, _>>();
         assert!(batches.is_ok());
         let batch = batches.unwrap().into_iter().next().unwrap();
-        // Empty rows are skipped by the underlying csv parser
-        assert_eq!(batch.num_rows(), 3);
+        // Empty rows are preserved (agate-compatible behavior)
+        // Data: 1,2,3 | 4,5 (truncated) | <empty> | 6,7,8 = 4 rows
+        assert_eq!(batch.num_rows(), 4);
 
         let reader = ReaderBuilder::new(agate_schema)
             .with_header(true)
@@ -1828,7 +1781,7 @@ mod tests {
 
         assert_eq!(batches.len(), 1);
         let batch = &batches[0];
-        assert_eq!(batch.num_rows(), 6);
+        assert_eq!(batch.num_rows(), 7);
         assert_eq!(batch.num_columns(), 4);
         let name = batch
             .column(0)
@@ -1855,15 +1808,17 @@ mod tests {
         assert_eq!(name.value(1), "B2");
         assert!(name.is_null(2));
         assert_eq!(name.value(3), "C3");
-        assert_eq!(name.value(4), "D4");
-        assert_eq!(name.value(5), "E5");
+        assert!(name.is_null(4));
+        assert_eq!(name.value(5), "D4");
+        assert_eq!(name.value(6), "E5");
 
         assert_eq!(age.value(0), 34);
         assert_eq!(age.value(1), 29);
         assert!(age.is_null(2));
         assert_eq!(age.value(3), 45);
         assert!(age.is_null(4));
-        assert_eq!(age.value(5), 31);
+        assert!(age.is_null(5));
+        assert_eq!(age.value(6), 31);
 
         assert_eq!(occupation.value(0), "Engineer");
         assert_eq!(occupation.value(1), "Doctor");
@@ -1871,6 +1826,7 @@ mod tests {
         assert_eq!(occupation.value(3), "Artist");
         assert!(occupation.is_null(4));
         assert!(occupation.is_null(5));
+        assert!(occupation.is_null(6));
 
         assert_eq!(dob.value(0), 5675);
         assert!(dob.is_null(1));
@@ -1878,6 +1834,7 @@ mod tests {
         assert_eq!(dob.value(3), -1858);
         assert!(dob.is_null(4));
         assert!(dob.is_null(5));
+        assert!(dob.is_null(6));
     }
 
     #[test]
