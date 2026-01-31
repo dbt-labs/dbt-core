@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Flip default for require_all_warnings_handled_by_warn_error from false to true
+time: 2026-01-12T00:00:42.910114Z
+custom:
+    Author: Fury0508
+    Issue: "12162"
