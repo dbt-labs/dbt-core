@@ -1,6 +1,6 @@
 //! Registry for telemetry attribute types.
 
-use proto_rust::StaticName;
+use crate::StaticName;
 use std::{collections::HashMap, sync::LazyLock};
 
 use super::traits::AnyTelemetryEvent;
@@ -189,7 +189,7 @@ static PUBLIC_TELEMETRY_EVENT_REGISTRY: LazyLock<TelemetryEventTypeRegistry> = L
         faker_for_type_with_oneofs!(
             faker_for_node_evaluated,
             NodeEvaluated,
-            proto_rust::v1::public::events::fusion::node::node_evaluated::NodeOutcomeDetail => node_outcome_detail
+            crate::proto::v1::public::events::fusion::node::node_evaluated::NodeOutcomeDetail => node_outcome_detail
         );
         registry.register(
             DepsAddPackage::FULL_NAME,
@@ -232,7 +232,7 @@ static PUBLIC_TELEMETRY_EVENT_REGISTRY: LazyLock<TelemetryEventTypeRegistry> = L
         faker_for_type_with_oneofs!(
             faker_for_node_processed,
             NodeProcessed,
-            proto_rust::v1::public::events::fusion::node::node_processed::NodeOutcomeDetail => node_outcome_detail
+            crate::proto::v1::public::events::fusion::node::node_processed::NodeOutcomeDetail => node_outcome_detail
         );
         registry.register(
             NodeProcessed::FULL_NAME,
@@ -379,7 +379,7 @@ mod tests {
     #[test]
     fn registry_covers_fusion_subpackage_messages() {
         // Enumerate all top-level messages and filter to supported fusion subpackages.
-        let all = proto_rust::test_utils::all_message_full_names();
+        let all = crate::test_utils::all_message_full_names();
 
         // We intentionally maintain a opt out list of known non-top-level
         // messages that are not first-class events in the registry. This
@@ -387,22 +387,9 @@ mod tests {
         // automatically picked up by this test.
         let expected: HashSet<String> = all
             .into_iter()
-            // As of today this will unfortunately pull in vortex messages
-            // that are not properly scoped in a subpackage
             .filter(|n| n.starts_with("v1.public.events.fusion."))
             .filter(|n| {
                 ![
-                    // Filter legacy vortex events
-                    "v1.public.events.fusion.AdapterInfo",
-                    "v1.public.events.fusion.AdapterInfoV2",
-                    "v1.public.events.fusion.Invocation",
-                    "v1.public.events.fusion.InvocationEnv",
-                    "v1.public.events.fusion.PackageInstall",
-                    "v1.public.events.fusion.ResourceCounts",
-                    "v1.public.events.fusion.RunModel",
-                    "v1.public.events.fusion.Onboarding",
-                    "v1.public.events.fusion.OnboardingScreen",
-                    "v1.public.events.fusion.OnboardingAction",
                     // Ignore helper/embedded types that are not first-class events in the registry.
                     // dev
                     "v1.public.events.fusion.dev.DebugValue",
@@ -446,7 +433,7 @@ mod tests {
     /// # How this test works
     ///
     /// This is a very naive test, but better than nothing. It works by:
-    /// 1. Using proto-rust test utilities to get all messages with oneofs
+    /// 1. Using dbt-telemetry test utilities to get all messages with oneofs
     /// 2. For each registered event type, checking if it's in the oneof list
     /// 3. If it has oneofs, verifying the faker returns > 2 variants
     ///
@@ -464,7 +451,7 @@ mod tests {
     /// single-variant oneofs, as they add unnecessary complexity.
     #[test]
     fn faker_functions_with_oneofs_return_multiple_variants() {
-        let oneofs = proto_rust::test_utils::message_oneofs();
+        let oneofs = crate::test_utils::message_oneofs();
         let registry = TelemetryEventTypeRegistry::public();
 
         // Track which types we've verified have oneofs

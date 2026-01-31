@@ -8,7 +8,7 @@ use crate::{
 };
 use prost::Name;
 
-pub use proto_rust::v1::public::events::fusion::phase::{ExecutionPhase, PhaseExecuted};
+pub use crate::proto::v1::public::events::fusion::phase::{ExecutionPhase, PhaseExecuted};
 use serde_with::skip_serializing_none;
 
 impl ProtoTelemetryEvent for PhaseExecuted {

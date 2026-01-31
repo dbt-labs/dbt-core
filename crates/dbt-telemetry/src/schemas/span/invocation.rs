@@ -4,11 +4,11 @@ use crate::{
     serialize::arrow::ArrowAttributes,
 };
 
-use prost::Name;
-pub use proto_rust::v1::public::events::fusion::invocation::{
+pub use crate::proto::v1::public::events::fusion::invocation::{
     Invocation, InvocationEvalArgs, InvocationMetrics,
 };
-pub use proto_rust::v1::public::events::fusion::process::Process;
+pub use crate::proto::v1::public::events::fusion::process::Process;
+use prost::Name;
 
 impl ProtoTelemetryEvent for Invocation {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;

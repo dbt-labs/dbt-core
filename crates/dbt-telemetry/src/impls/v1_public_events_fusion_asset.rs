@@ -1,4 +1,4 @@
-use crate::v1::public::events::fusion::{asset::AssetParsed, phase::ExecutionPhase};
+use crate::proto::v1::public::events::fusion::{asset::AssetParsed, phase::ExecutionPhase};
 
 impl AssetParsed {
     /// Creates a new `AssetParsed` with phase coming from context.

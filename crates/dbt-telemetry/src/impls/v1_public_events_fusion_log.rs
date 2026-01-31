@@ -1,4 +1,4 @@
-use crate::v1::public::events::fusion::{
+use crate::proto::v1::public::events::fusion::{
     compat::SeverityNumber,
     log::{
         LogMessage, ProgressMessage, ShowDataOutput, ShowDataOutputFormat, ShowResult,

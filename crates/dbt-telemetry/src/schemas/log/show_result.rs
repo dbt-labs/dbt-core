@@ -1,9 +1,9 @@
+pub use crate::proto::v1::public::events::fusion::log::{ShowResult, ShowResultOutputFormat};
 use crate::{
     ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryEventRecType,
     TelemetryOutputFlags, serialize::arrow::ArrowAttributes,
 };
 use prost::Name;
-pub use proto_rust::v1::public::events::fusion::log::{ShowResult, ShowResultOutputFormat};
 use std::borrow::Cow;
 
 /// Internal struct used for serializing/deserializing subset of

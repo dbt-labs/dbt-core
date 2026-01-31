@@ -1,4 +1,4 @@
-use crate::v1::public::events::fusion::deps::{
+use crate::proto::v1::public::events::fusion::deps::{
     DepsAddPackage, DepsAllPackagesInstalled, DepsPackageInstalled, PackageType,
 };
 

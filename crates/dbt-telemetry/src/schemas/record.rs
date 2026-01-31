@@ -11,8 +11,8 @@ use super::{
     },
     otlp::SpanStatus,
 };
+use crate::proto::v1::public::events::fusion::compat::SeverityNumber;
 use dbt_serde_yaml::JsonSchema;
-use proto_rust::v1::public::events::fusion::compat::SeverityNumber;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use strum::EnumDiscriminants;

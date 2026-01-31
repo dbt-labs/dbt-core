@@ -159,7 +159,7 @@ pub trait AnyTelemetryEvent: Debug + Send + Sync + Any {
 /// to ensure that both serialization and deserialization are implemented for types
 /// and then used for blanket implementations as `to_arrow` in `AnyTelemetryEvent`
 /// and the source of deserialization in the registry.
-pub(crate) trait ArrowSerializableTelemetryEvent {
+pub trait ArrowSerializableTelemetryEvent {
     /// Serialize the event data to Arrow compatible record (used in arrow serialization)
     fn to_arrow_record(&self) -> ArrowAttributes<'_>;
 
@@ -174,7 +174,7 @@ pub(crate) trait ArrowSerializableTelemetryEvent {
 /// Implement this trait for all proto defined events, which should be all non-internal events.
 ///
 /// Any type that implements this trait automatically implements AnyTelemetryEvent.
-pub(crate) trait ProtoTelemetryEvent:
+pub trait ProtoTelemetryEvent:
     Debug
     + Clone
     + Send
@@ -182,7 +182,7 @@ pub(crate) trait ProtoTelemetryEvent:
     + Any
     + Serialize
     + PartialEq
-    + proto_rust::StaticName
+    + crate::StaticName
     + ArrowSerializableTelemetryEvent
     + 'static
 {
@@ -261,6 +261,7 @@ pub(crate) trait ProtoTelemetryEvent:
 
 // Blanket implementation of AnyTelemetryEvent for types that implement ProtoTelemetryEvent
 impl<T: ProtoTelemetryEvent> AnyTelemetryEvent for T {
+    #[inline]
     fn event_type(&self) -> &'static str {
         T::FULL_NAME
     }
@@ -281,10 +282,12 @@ impl<T: ProtoTelemetryEvent> AnyTelemetryEvent for T {
         ProtoTelemetryEvent::get_span_status(self)
     }
 
+    #[inline]
     fn record_category(&self) -> TelemetryEventRecType {
         T::RECORD_CATEGORY
     }
 
+    #[inline]
     fn output_flags(&self) -> TelemetryOutputFlags {
         T::OUTPUT_FLAGS
     }
@@ -297,10 +300,12 @@ impl<T: ProtoTelemetryEvent> AnyTelemetryEvent for T {
         ProtoTelemetryEvent::with_code_location(self, location)
     }
 
+    #[inline]
     fn context(&self) -> Option<TelemetryContext> {
         ProtoTelemetryEvent::context(self)
     }
 
+    #[inline]
     fn with_context(&mut self, context: &TelemetryContext) {
         ProtoTelemetryEvent::with_context(self, context)
     }
@@ -314,11 +319,13 @@ impl<T: ProtoTelemetryEvent> AnyTelemetryEvent for T {
     }
 
     /// Helper for downcasting to concrete types.
+    #[inline]
     fn as_any(&self) -> &dyn Any {
         self
     }
 
     /// Helper for downcasting to concrete types (mutable).
+    #[inline]
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }

@@ -5,7 +5,7 @@ use crate::{
 };
 use prost::Name;
 
-pub use proto_rust::v1::public::events::fusion::log::CompiledCodeInline;
+pub use crate::proto::v1::public::events::fusion::log::CompiledCodeInline;
 
 impl ProtoTelemetryEvent for CompiledCodeInline {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Log;

@@ -1,9 +1,9 @@
+pub use crate::proto::v1::public::events::fusion::update::PackageUpdate;
 use crate::{
     AnyTelemetryEvent, ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryOutputFlags,
     attributes::TelemetryEventRecType, serialize::arrow::ArrowAttributes,
 };
 use prost::Name as _;
-pub use proto_rust::v1::public::events::fusion::update::PackageUpdate;
 
 // Our shorthand `ProtoTelemetryEvent` trait requires arrow trait implementation,
 // and since this one is not exported to Parquet, we have to implement the

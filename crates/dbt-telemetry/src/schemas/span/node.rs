@@ -11,11 +11,11 @@ use prost::Name;
 use serde_with::skip_serializing_none;
 use std::borrow::Cow;
 
-pub use proto_rust::impls::node::{
+pub use crate::impls::node::{
     AnyNodeOutcomeDetail, NodeEvent, get_cache_detail, get_freshness_detail,
     get_node_outcome_detail, get_test_outcome, update_dbt_core_event_code_for_node_processed_end,
 };
-pub use proto_rust::v1::public::events::fusion::node::{
+pub use crate::proto::v1::public::events::fusion::node::{
     NodeCacheDetail, NodeCacheReason, NodeCancelReason, NodeErrorType, NodeEvaluated,
     NodeMaterialization, NodeOutcome, NodeProcessed, NodeSkipReason, NodeSkipUpstreamDetail,
     NodeType, SourceFreshnessDetail, SourceFreshnessOutcome, TestEvaluationDetail, TestOutcome,

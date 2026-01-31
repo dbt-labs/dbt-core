@@ -1,13 +1,13 @@
 use std::borrow::Cow;
 
+pub use crate::proto::v1::public::events::fusion::deps::{
+    DepsAddPackage, DepsAllPackagesInstalled, DepsPackageInstalled, PackageType,
+};
 use crate::{
     ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryEventRecType,
     TelemetryOutputFlags, serialize::arrow::ArrowAttributes,
 };
 use prost::Name;
-pub use proto_rust::v1::public::events::fusion::deps::{
-    DepsAddPackage, DepsAllPackagesInstalled, DepsPackageInstalled, PackageType,
-};
 use serde_with::skip_serializing_none;
 
 /// Internal struct used for serializing/deserializing subset of

@@ -5,7 +5,7 @@ use crate::{
 };
 use prost::Name;
 
-pub use proto_rust::v1::public::events::fusion::generic::{
+pub use crate::proto::v1::public::events::fusion::generic::{
     GenericOpExecuted, GenericOpItemProcessed,
 };
 

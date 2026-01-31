@@ -1,12 +1,12 @@
+pub use crate::proto::v1::public::events::fusion::compat::SeverityNumber;
+pub use crate::proto::v1::public::events::fusion::log::{
+    LogMessage, ProgressMessage, UserLogMessage,
+};
 use crate::{
     ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryContext, TelemetryEventRecType,
     TelemetryOutputFlags, schemas::RecordCodeLocation, serialize::arrow::ArrowAttributes,
 };
 use prost::Name;
-pub use proto_rust::v1::public::events::fusion::compat::SeverityNumber;
-pub use proto_rust::v1::public::events::fusion::log::{
-    LogMessage, ProgressMessage, UserLogMessage,
-};
 use serde_with::skip_serializing_none;
 use std::borrow::Cow;
 

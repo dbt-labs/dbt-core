@@ -1,4 +1,4 @@
-use proto_rust::v1::public::events::fusion::phase::ExecutionPhase;
+use crate::proto::v1::public::events::fusion::phase::ExecutionPhase;
 
 /// Context we can extract from spans/events and propagate to children and logs.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

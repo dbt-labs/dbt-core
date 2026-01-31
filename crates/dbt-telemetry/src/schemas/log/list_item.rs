@@ -1,9 +1,9 @@
+pub use crate::proto::v1::public::events::fusion::log::{ListItemOutput, ListOutputFormat};
 use crate::{
     ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryEventRecType,
     TelemetryOutputFlags, serialize::arrow::ArrowAttributes,
 };
 use prost::Name;
-pub use proto_rust::v1::public::events::fusion::log::{ListItemOutput, ListOutputFormat};
 use std::borrow::Cow;
 
 impl ProtoTelemetryEvent for ListItemOutput {

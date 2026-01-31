@@ -5,7 +5,7 @@ use crate::{
 };
 use prost::Name;
 
-pub use proto_rust::v1::public::events::fusion::process::Process;
+pub use crate::proto::v1::public::events::fusion::process::Process;
 
 /// Creates a new instance of `Process` with the current process information.
 pub fn create_process_event_data(package: &str) -> Process {

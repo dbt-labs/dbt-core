@@ -5,7 +5,8 @@ use crate::{
 };
 use prost::Name;
 
-pub use proto_rust::v1::public::events::fusion::onboarding::OnboardingScreenShown;
+pub use crate::proto::v1::public::events::fusion::onboarding::OnboardingScreen;
+pub use crate::proto::v1::public::events::fusion::onboarding::OnboardingScreenShown;
 
 impl ProtoTelemetryEvent for OnboardingScreenShown {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;

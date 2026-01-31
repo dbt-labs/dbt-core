@@ -1,5 +1,5 @@
-use crate::v1::public::events::fusion::dev::DebugValue;
-use crate::v1::public::events::fusion::dev::debug_value::Value;
+use crate::proto::v1::public::events::fusion::dev::DebugValue;
+use crate::proto::v1::public::events::fusion::dev::debug_value::Value;
 
 const MAX_EXACT_I64_IN_F64: i64 = 1i64 << f64::MANTISSA_DIGITS;
 

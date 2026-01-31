@@ -1,4 +1,4 @@
-use crate::v1::public::events::fusion::{
+use crate::proto::v1::public::events::fusion::{
     node::{
         NodeCacheDetail, NodeEvaluated, NodeMaterialization, NodeOutcome, NodeProcessed,
         NodeSkipReason, NodeSkipUpstreamDetail, NodeType, SourceFreshnessDetail,

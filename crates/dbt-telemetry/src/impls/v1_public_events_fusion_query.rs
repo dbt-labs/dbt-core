@@ -1,4 +1,4 @@
-use crate::v1::public::events::fusion::query::{QueryExecuted, QueryOutcome};
+use crate::proto::v1::public::events::fusion::query::{QueryExecuted, QueryOutcome};
 
 // Display trait is intentionally not implemented to avoid inefficient usage.
 // Prefer `[enum].as_ref()` or if you need String use `[enum].as_ref().to_string()`.

@@ -1,5 +1,5 @@
+pub use crate::proto::v1::public::events::fusion::query::{QueryExecuted, QueryOutcome};
 use prost::Name as _;
-pub use proto_rust::v1::public::events::fusion::query::{QueryExecuted, QueryOutcome};
 use serde_with::skip_serializing_none;
 use std::borrow::Cow;
 

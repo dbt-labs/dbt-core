@@ -1,3 +1,4 @@
+pub use crate::proto::v1::public::events::fusion::dev::{CallTrace, DebugValue, Unknown};
 use crate::{
     AnyTelemetryEvent, TelemetryOutputFlags,
     attributes::{ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryEventRecType},
@@ -5,7 +6,6 @@ use crate::{
     serialize::arrow::ArrowAttributes,
 };
 use prost::Name;
-pub use proto_rust::v1::public::events::fusion::dev::{CallTrace, DebugValue, Unknown};
 use std::borrow::Cow;
 
 impl ProtoTelemetryEvent for CallTrace {

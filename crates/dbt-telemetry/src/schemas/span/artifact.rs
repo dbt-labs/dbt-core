@@ -6,7 +6,7 @@ use crate::{
 use prost::Name;
 use std::borrow::Cow;
 
-pub use proto_rust::v1::public::events::fusion::artifact::{ArtifactType, ArtifactWritten};
+pub use crate::proto::v1::public::events::fusion::artifact::{ArtifactType, ArtifactWritten};
 
 impl ProtoTelemetryEvent for ArtifactWritten {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;

@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::v1::public::events::fusion::phase::{ExecutionPhase, PhaseExecuted};
+use crate::proto::v1::public::events::fusion::phase::{ExecutionPhase, PhaseExecuted};
 
 impl Display for ExecutionPhase {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

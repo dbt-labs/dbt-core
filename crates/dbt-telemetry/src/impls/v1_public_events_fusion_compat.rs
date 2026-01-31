@@ -1,4 +1,4 @@
-use crate::v1::public::events::fusion::compat::SeverityNumber;
+use crate::proto::v1::public::events::fusion::compat::SeverityNumber;
 use std::cmp;
 
 /// Convert our proto defined severity level to OpenTelemetry severity text.

@@ -21,8 +21,11 @@ dbt-serde_yaml = { workspace = true }
 opentelemetry = { workspace = true }
 opentelemetry-semantic-conventions = { workspace = true }
 opentelemetry_sdk = { workspace = true }
+pbjson = { workspace = true }
+pbjson-types = { workspace = true }
 prost = { workspace = true }
-proto-rust = { workspace = true }
+prost-types = { workspace = true }
+proto-rust-macros = { workspace = true }
 schemars = { workspace = true }
 serde = { workspace = true }
 serde_arrow = { workspace = true }
@@ -43,12 +46,10 @@ fake = { workspace = true }
 # Used for round-trip testing of serialization
 bytes = { workspace = true }
 parquet = { workspace = true }
-# Enable test-only helpers from proto-rust to enumerate message types
-proto-rust = { workspace = true, features = ["test-utils"] }
 
 [features]
 # Test-only helpers in the registry - this allows tests in dbt-telemetry-private
-test-utils = ["fake", "proto-rust/test-utils"]
+test-utils = ["fake"]
 
 [lib]
 name = "dbt_telemetry"

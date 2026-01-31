@@ -49,7 +49,7 @@ pub fn all_message_full_names() -> Vec<String> {
 /// # Example
 ///
 /// ```
-/// use proto_rust::test_utils::message_oneofs;
+/// use dbt_telemetry::test_utils::message_oneofs;
 ///
 /// let oneofs = message_oneofs();
 /// if let Some(fields) = oneofs.get("v1.public.events.fusion.node.NodeEvaluated") {

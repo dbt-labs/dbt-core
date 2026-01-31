@@ -1,9 +1,9 @@
+pub use crate::proto::v1::public::events::fusion::log::StateModifiedDiff;
 use crate::{
     ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryContext, TelemetryEventRecType,
     TelemetryOutputFlags, serialize::arrow::ArrowAttributes,
 };
 use prost::Name;
-pub use proto_rust::v1::public::events::fusion::log::StateModifiedDiff;
 use serde_with::skip_serializing_none;
 use std::borrow::Cow;
 

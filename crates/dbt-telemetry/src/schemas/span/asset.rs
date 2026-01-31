@@ -1,13 +1,13 @@
+use crate::proto::v1::public::events::fusion::phase::ExecutionPhase;
 use crate::{
     TelemetryOutputFlags,
     attributes::{ArrowSerializableTelemetryEvent, ProtoTelemetryEvent, TelemetryEventRecType},
     serialize::arrow::ArrowAttributes,
 };
 use prost::Name;
-use proto_rust::v1::public::events::fusion::phase::ExecutionPhase;
 use serde_with::skip_serializing_none;
 
-pub use proto_rust::v1::public::events::fusion::asset::AssetParsed;
+pub use crate::proto::v1::public::events::fusion::asset::AssetParsed;
 
 impl ProtoTelemetryEvent for AssetParsed {
     const RECORD_CATEGORY: TelemetryEventRecType = TelemetryEventRecType::Span;
