@@ -497,13 +497,6 @@ class BaseFunctionResolver(BaseResolver):
 class Config(Protocol):
     def __init__(self, model, context_config: Optional[ContextConfig]): ...
 
-
-# Implementation of "config(..)" calls in models
-class ParseConfigObject(Config):
-    def __init__(self, model, context_config: Optional[ContextConfig]):
-        self.model = model
-        self.context_config = context_config
-
     def _transform_config(self, config):
         for oldkey in ("pre_hook", "post_hook"):
             if oldkey in config:
@@ -512,6 +505,13 @@ class ParseConfigObject(Config):
                     raise ConflictingConfigKeysError(oldkey, newkey, node=self.model)
                 config[newkey] = config.pop(oldkey)
         return config
+
+
+# Implementation of "config(..)" calls in models
+class ParseConfigObject(Config):
+    def __init__(self, model, context_config: Optional[ContextConfig]):
+        self.model = model
+        self.context_config = context_config
 
     def __call__(self, *args, **kwargs):
         if len(args) == 1 and len(kwargs) == 0:
@@ -563,9 +563,20 @@ class ParseConfigObject(Config):
 class RuntimeConfigObject(Config):
     def __init__(self, model, context_config: Optional[ContextConfig] = None):
         self.model = model
+        self.rendered_config_call_dict: Dict[str, Any] = {}
         # we never use or get a config, only the parser cares
 
     def __call__(self, *args, **kwargs):
+        if len(args) == 1 and len(kwargs) == 0:
+            opts = args[0]
+        elif len(args) == 0 and len(kwargs) > 0:
+            opts = kwargs
+        else:
+            raise InlineModelConfigError(node=self.model)
+
+        # opts = self._transform_config(opts)
+
+        self.rendered_config_call_dict.update(opts)
         return ""
 
     def set(self, name, value):
@@ -590,6 +601,15 @@ class RuntimeConfigObject(Config):
             result = default
         else:
             result = self.model.config.meta_get(name, default)
+        if result is _MISSING:
+            raise MissingConfigError(unique_id=self.model.unique_id, name=name)
+        return result
+
+    def _lookup_rendered(self, name, default=_MISSING):
+        if not hasattr(self.model, "config"):
+            result = default
+        else:
+            result = self.rendered_config_call_dict.get(name, default)
         if result is _MISSING:
             raise MissingConfigError(unique_id=self.model.unique_id, name=name)
         return result
@@ -620,6 +640,14 @@ class RuntimeConfigObject(Config):
 
     def meta_get(self, name, default=None, validator=None):
         to_return = self._lookup_meta(name, default)
+
+        if validator is not None and default is not None:
+            self._validate(validator, to_return)
+
+        return to_return
+
+    def get_rendered(self, name, default=None, validator=None):
+        to_return = self._lookup_rendered(name, default)
 
         if validator is not None and default is not None:
             self._validate(validator, to_return)
