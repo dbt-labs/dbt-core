@@ -282,7 +282,7 @@ pub async fn resolve_data_tests(
     for SqlFileRenderResult {
         asset: dbt_asset,
         sql_file_info,
-        rendered_sql,
+        rendered_sql: _,
         macro_spans: _macro_spans,
         properties: maybe_properties,
         status,
@@ -425,7 +425,9 @@ pub async fn resolve_data_tests(
                 fqn,
                 // dbt-core: description is always default ''
                 description: Some(properties.description.clone().unwrap_or_default()),
-                checksum: DbtChecksum::hash(rendered_sql.trim().as_bytes()),
+                // Use empty checksum to match Python/Mantle behavior: FileHash.empty().to_dict(omit_none=True)
+                // This ensures stable checksums across test runs when schema names change
+                checksum: DbtChecksum::default(),
                 // TODO: hydrate for generic + singular tests
                 // Examples in Mantle:
                 // - Generic test: "{{ test_not_null(**_dbt_generic_test_kwargs) }}"
