@@ -1,4 +1,6 @@
 import functools
+import os
+import shlex
 from copy import copy
 from dataclasses import dataclass
 from typing import Callable, List, Optional, Union
@@ -37,6 +39,43 @@ class dbtRunnerResult:
     ] = None
 
 
+def get_equivalent_cli_flag(config_name: str, positive_config: bool = True) -> str:
+    """Convert a config name to its equivalent CLI flag"""
+    if positive_config:
+        return f"--{config_name.replace('_', '-')}"
+    else:
+        return f"--no-{config_name.replace('_', '-')}"
+
+
+def get_equivalent_cli_command(args: List[str], **kwargs) -> str:
+    """Convert args and kwargs to a CLI command string that can be used to invoke dbt on a best-effort basis"""
+
+    # Convert all values in `args` to strings
+    cli_args = [str(arg) for arg in args]
+
+    # Convert each keyword arg to its CLI flag equivalent
+    for key, value in kwargs.items():
+        if type(value) is bool:
+            # Add just the flag (without the value) for booleans
+            cli_args.append(get_equivalent_cli_flag(key, value))
+        elif type(value) in {list, tuple}:
+            # Add both the flag and its values for lists/tuples
+            cli_args.append(get_equivalent_cli_flag(key))
+            cli_args.extend(map(str, value))
+        else:
+            # Add both the flag and its value for other types
+            # This is a best-effort conversion, so we ignore exceptions
+            try:
+                cli_args.extend([get_equivalent_cli_flag(key), str(value)])
+            except Exception:
+                pass
+
+    # Ensure all CLI arguments are quoted as needed
+    cli_args = [shlex.quote(v) for v in cli_args]
+
+    return "dbt " + " ".join(cli_args)
+
+
 # Programmatic invocation
 class dbtRunner:
     def __init__(
@@ -63,6 +102,12 @@ class dbtRunner:
                 dbt_ctx.params[key] = value
                 # Hack to set parameter source to custom string
                 dbt_ctx.set_parameter_source(key, "kwargs")  # type: ignore
+
+            # Get equivalent CLI command from args
+            equivalent_command = get_equivalent_cli_command(args, **kwargs)
+
+            # Store the invocation command in an environment variable for access within `cli/flags.py`
+            os.environ["DBT_EQUIVALENT_COMMAND"] = equivalent_command
 
             result, success = cli.invoke(dbt_ctx)
             return dbtRunnerResult(
