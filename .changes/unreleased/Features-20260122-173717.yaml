@@ -1,0 +1,6 @@
+kind: Features
+body: add event_timezone to support custom time zones for microbatch event time filter
+time: 2026-01-22T17:37:17.771208+09:00
+custom:
+    Author: huangxingyi-git
+    Issue: "11578"
