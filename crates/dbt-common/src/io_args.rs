@@ -66,6 +66,8 @@ pub enum FsCommand {
     System,
     Man,
     Debug,
+    Hydrate,
+    Retry,
     /// All other commands provided by private cli's
     Extension(&'static str),
 }
@@ -92,6 +94,8 @@ impl FsCommand {
             FsCommand::System => "system",
             FsCommand::Man => "man",
             FsCommand::Debug => "debug",
+            FsCommand::Hydrate => "hydrate",
+            FsCommand::Retry => "retry",
             FsCommand::Extension(s) => s,
         }
     }
