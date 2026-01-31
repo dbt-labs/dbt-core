@@ -2,13 +2,13 @@
 //!
 //! This adapter provides a Snowflake-compatible interface for sidecar execution mode.
 //! It uses the Snowflake SQL dialect, quoting rules, and type system, but delegates
-//! query execution to a SidecarClient (dbt-db-runner) instead of ADBC/warehouse.
+//! query execution to a SidecarClient instead of ADBC/warehouse.
 //!
 //! # Architecture
 //!
 //! - **Parse phase**: Jinja's `execute=false` prevents adapter method calls
 //! - **Compile/Render phase**: Jinja's `execute=true` allows introspection queries via sidecar
-//! - **Run phase**: Uses DbRunnerBackend directly (not this adapter)
+//! - **Run phase**: Uses RunnerBackend directly (not this adapter)
 //!
 //! The adapter returns results in Snowflake-compatible format (AgateTable)
 

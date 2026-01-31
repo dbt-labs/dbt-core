@@ -2,7 +2,7 @@
 //!
 //! This module defines the interface for adapters that delegate execution
 //! to a subprocess (sidecar) or external service. The actual implementation
-//! is provided by closed-source crates that wrap dbt-db-runner.
+//! is provided by closed-source crates (e.g., dbt-db-client wrapping dbt-db-runner).
 //!
 //! Design: SA crates expose only the trait interface. Implementation details
 //! (RunnerManager, subprocess spawning, message protocol) remain in proprietary code.
@@ -30,8 +30,8 @@ pub struct ColumnInfo {
 
 /// Trait for adapters that execute via subprocess (sidecar) or HTTP service.
 ///
-/// This trait defines the interface for delegation to dbt-db-runner or similar
-/// execution backends. It allows Snowflake (and other) adapters to route
+/// This trait defines the interface for delegation to a sidecar execution backend
+/// (e.g., dbt-db-runner). It allows Snowflake (and other) adapters to route
 /// execution to DuckDB or other engines without exposing implementation details
 /// in SA crates.
 ///
@@ -45,8 +45,8 @@ pub struct ColumnInfo {
 /// # Implementation Notes
 ///
 /// Implementations typically:
-/// - Wrap `RunnerManager` or HTTP client
-/// - Translate adapter calls into `TaskMessage` protocol
+/// - Wrap a subprocess manager or HTTP client
+/// - Translate adapter calls into a task message protocol
 /// - Handle subprocess lifecycle and error recovery
 /// - Manage session isolation and state directories
 pub trait SidecarClient: Debug + Send + Sync {

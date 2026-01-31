@@ -296,7 +296,7 @@ impl MockEngine {
 
 /// Sidecar engine for subprocess-based execution.
 ///
-/// Routes execution to dbt-db-runner (or similar) via SidecarClient trait.
+/// Routes execution to a sidecar backend via SidecarClient trait.
 /// Implementation details (subprocess management, message protocol) remain
 /// in closed-source crates.
 #[derive(Clone)]
