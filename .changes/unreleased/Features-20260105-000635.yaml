@@ -1,0 +1,6 @@
+kind: Features
+body: Add seed header option support
+time: 2026-01-05T00:06:35.693542+01:00
+custom:
+    Author: aammett
+    Issue: "11334"
