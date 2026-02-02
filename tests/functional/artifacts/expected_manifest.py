@@ -199,7 +199,9 @@ def checksum_file(path):
     """
     with open(path, "rb") as fp:
         # We strip the file contents because we want the checksum to match the stored contents
-        hashed = hashlib.sha256(fp.read().strip()).hexdigest()
+        file_contents = fp.read().decode("utf-8").strip()
+        normalized_file_contents = " ".join(file_contents.split()).encode("utf-8")
+        hashed = hashlib.sha256(normalized_file_contents).hexdigest()
     return {
         "name": "sha256",
         "checksum": hashed,
