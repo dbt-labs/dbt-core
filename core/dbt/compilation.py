@@ -583,6 +583,7 @@ class Compiler:
             injected_sql = inject_ctes_into_sql(
                 model.compiled_code,
                 prepended_ctes,
+                model.language,
             )
             model.extra_ctes_injected = True
             model._pre_injected_sql = model.compiled_code
@@ -775,7 +776,7 @@ class Compiler:
         return node
 
 
-def inject_ctes_into_sql(sql: str, ctes: List[InjectedCTE]) -> str:
+def inject_ctes_into_sql(sql: str, ctes: List[InjectedCTE], language: ModelLanguage) -> str:
     """
     `ctes` is a list of InjectedCTEs like:
 
@@ -806,6 +807,12 @@ def inject_ctes_into_sql(sql: str, ctes: List[InjectedCTE]) -> str:
     """
     if len(ctes) == 0:
         return sql
+
+    if language == ModelLanguage.python:
+        code = sql
+        sql = "-- end of cte\n"
+    else:
+        code = ""
 
     parsed_stmts = sqlparse.parse(sql)
     parsed = parsed_stmts[0]
@@ -842,5 +849,8 @@ def inject_ctes_into_sql(sql: str, ctes: List[InjectedCTE]) -> str:
         comma_token = sqlparse.sql.Token(sqlparse.tokens.Punctuation, ", ")
         parsed.insert_after(injected_ctes_token, comma_token)
         # [with][joined_ctes][, ][original_sql]
+
+    if language == ModelLanguage.python:
+        return f'cte_sql = """{parsed}"""\n{code}\n'
 
     return str(parsed)
