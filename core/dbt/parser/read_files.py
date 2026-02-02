@@ -42,7 +42,7 @@ class FileDiff(dbtClassMixin):
 
 
 def normalize_file_contents(contents: str) -> str:
-    """Normalize file contents by compacting whitespace.
+    """Normalize file contents by compacting whitespace and newlines to a single whitespace.
     This ensures consistent checksums regardless of formatting differences.
     """
     return " ".join(contents.split())
