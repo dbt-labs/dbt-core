@@ -136,8 +136,7 @@ def load_seed_source_file(match: FilePath, project_name) -> SourceFile:
         source_file = SourceFile.big_seed(match)
     else:
         file_contents = load_file_contents(match.absolute_path, strip=True)
-        normalized_contents = normalize_file_contents(file_contents)
-        checksum = FileHash.from_contents(normalized_contents)
+        checksum = FileHash.from_contents(file_contents)
         source_file = SourceFile(path=match, checksum=checksum)
         source_file.contents = ""
     source_file.parse_file_type = ParseFileType.Seed
