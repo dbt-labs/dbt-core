@@ -196,12 +196,18 @@ def relation_name_format(quote_database: bool, quote_schema: bool, quote_identif
 def checksum_file(path):
     """windows has silly git behavior that adds newlines, and python does
     silly things if we just open(..., 'r').encode('utf-8').
+
+    seed files should not have their contents normalized to mirror the normalize_file_contents usage during file loading
     """
     with open(path, "rb") as fp:
         # We strip the file contents because we want the checksum to match the stored contents
-        file_contents = fp.read().decode("utf-8").strip()
-        normalized_file_contents = " ".join(file_contents.split()).encode("utf-8")
-        hashed = hashlib.sha256(normalized_file_contents).hexdigest()
+        file_contents = fp.read().strip()
+        # Normalize non-seed contents
+        if not path.endswith(".csv"):
+            file_contents = " ".join(file_contents.decode("utf-8").split()).encode("utf-8")
+
+        hashed = hashlib.sha256(file_contents).hexdigest()
+
     return {
         "name": "sha256",
         "checksum": hashed,
