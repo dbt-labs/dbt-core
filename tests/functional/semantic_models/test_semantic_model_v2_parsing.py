@@ -1,5 +1,6 @@
 import pytest
 
+from core.dbt.contracts.graph.semantic_manifest import SemanticManifest
 from dbt.contracts.graph.manifest import Manifest
 from dbt_semantic_interfaces.type_enums import (
     AggregationType,
@@ -260,6 +261,11 @@ class TestStandaloneMetricParsingWorks:
         assert semantic_model.defaults.agg_time_dimension == "second_dim"
 
         metrics = manifest.metrics
+        semantic_manifest = SemanticManifest(manifest)
+        semantic_manifest_metrics = {
+            metric.name: metric
+            for metric in semantic_manifest._get_pydantic_semantic_manifest().metrics
+        }
         assert len(metrics) == 5
 
         simple_metric = metrics["metric.test.simple_metric"]
@@ -270,6 +276,23 @@ class TestStandaloneMetricParsingWorks:
         assert simple_metric.type_params.metric_aggregation_params.semantic_model == "fct_revenue"
         assert "semantic_model.test.fct_revenue" in simple_metric.depends_on.nodes
         assert simple_metric.type_params.metric_aggregation_params.agg_time_dimension is None
+
+        simple_metric_pydantic = semantic_manifest_metrics["simple_metric"]
+        assert simple_metric_pydantic.name == "simple_metric"
+        assert simple_metric_pydantic.description == "This is our first simple metric."
+        assert simple_metric_pydantic.type == MetricType.SIMPLE
+        assert (
+            simple_metric_pydantic.type_params.metric_aggregation_params.agg
+            == AggregationType.COUNT
+        )
+        assert (
+            simple_metric_pydantic.type_params.metric_aggregation_params.semantic_model
+            == "fct_revenue"
+        )
+        assert (
+            simple_metric_pydantic.type_params.metric_aggregation_params.agg_time_dimension is None
+        )
+        # No 'depends_on' in the pydantic metric
 
         simple_metric_2 = metrics["metric.test.simple_metric_2"]
         assert simple_metric_2.name == "simple_metric_2"
@@ -282,6 +305,24 @@ class TestStandaloneMetricParsingWorks:
         assert "semantic_model.test.fct_revenue" in simple_metric_2.depends_on.nodes
         assert simple_metric_2.type_params.metric_aggregation_params.agg_time_dimension == "ds"
 
+        simple_metric_2_pydantic = semantic_manifest_metrics["simple_metric_2"]
+        assert simple_metric_2_pydantic.name == "simple_metric_2"
+        assert simple_metric_2_pydantic.description == "This is our second simple metric."
+        assert simple_metric_2_pydantic.type == MetricType.SIMPLE
+        assert (
+            simple_metric_2_pydantic.type_params.metric_aggregation_params.agg
+            == AggregationType.COUNT
+        )
+        assert (
+            simple_metric_2_pydantic.type_params.metric_aggregation_params.semantic_model
+            == "fct_revenue"
+        )
+        assert (
+            simple_metric_2_pydantic.type_params.metric_aggregation_params.agg_time_dimension
+            == "ds"
+        )
+
+        # No 'depends_on' in the pydantic metric
         percentile_metric = metrics["metric.test.percentile_metric"]
         assert percentile_metric.name == "percentile_metric"
         assert percentile_metric.description == "This is our percentile metric."
@@ -307,6 +348,35 @@ class TestStandaloneMetricParsingWorks:
         assert "semantic_model.test.fct_revenue" in percentile_metric.depends_on.nodes
         assert percentile_metric.type_params.metric_aggregation_params.agg_time_dimension is None
 
+        percentile_metric_pydantic = semantic_manifest_metrics["percentile_metric"]
+        assert percentile_metric_pydantic.name == "percentile_metric"
+        assert percentile_metric_pydantic.description == "This is our percentile metric."
+        assert percentile_metric_pydantic.type == MetricType.SIMPLE
+        assert (
+            percentile_metric_pydantic.type_params.metric_aggregation_params.agg
+            == AggregationType.PERCENTILE
+        )
+        assert (
+            percentile_metric_pydantic.type_params.metric_aggregation_params.semantic_model
+            == "fct_revenue"
+        )
+        assert (
+            percentile_metric_pydantic.type_params.metric_aggregation_params.agg_params.percentile
+            == 0.99
+        )
+        assert (
+            percentile_metric_pydantic.type_params.metric_aggregation_params.agg_params.use_discrete_percentile
+            is True
+        )
+        assert (
+            percentile_metric_pydantic.type_params.metric_aggregation_params.agg_params.use_approximate_percentile
+            is False
+        )
+        assert (
+            percentile_metric_pydantic.type_params.metric_aggregation_params.agg_time_dimension
+            is None
+        )
+
         cumulative_metric = metrics["metric.test.cumulative_metric"]
         assert cumulative_metric.name == "cumulative_metric"
         assert cumulative_metric.description == "This is our cumulative metric."
@@ -319,6 +389,21 @@ class TestStandaloneMetricParsingWorks:
         assert cumulative_metric.type_params.cumulative_type_params.metric.name == "simple_metric"
         assert "metric.test.simple_metric" in cumulative_metric.depends_on.nodes
         assert cumulative_metric.type_params.metric_aggregation_params is None
+
+        cumulative_metric_pydantic = semantic_manifest_metrics["cumulative_metric"]
+        assert cumulative_metric_pydantic.name == "cumulative_metric"
+        assert cumulative_metric_pydantic.description == "This is our cumulative metric."
+        assert cumulative_metric_pydantic.type == MetricType.CUMULATIVE
+        assert cumulative_metric_pydantic.type_params.cumulative_type_params.grain_to_date == "day"
+        assert (
+            cumulative_metric_pydantic.type_params.cumulative_type_params.period_agg
+            == PeriodAggregation.FIRST
+        )
+        assert (
+            cumulative_metric_pydantic.type_params.cumulative_type_params.metric.name
+            == "simple_metric"
+        )
+        assert cumulative_metric_pydantic.type_params.metric_aggregation_params is None
 
         conversion_metric = metrics["metric.test.conversion_metric"]
         assert conversion_metric.name == "conversion_metric"
@@ -340,6 +425,25 @@ class TestStandaloneMetricParsingWorks:
         assert "metric.test.simple_metric" in conversion_metric.depends_on.nodes
         assert "metric.test.simple_metric_2" in conversion_metric.depends_on.nodes
         assert conversion_metric.type_params.metric_aggregation_params is None
+
+        conversion_metric_pydantic = semantic_manifest_metrics["conversion_metric"]
+        assert conversion_metric_pydantic.name == "conversion_metric"
+        assert conversion_metric_pydantic.description == "This is our conversion metric."
+        assert conversion_metric_pydantic.type == MetricType.CONVERSION
+        assert conversion_metric_pydantic.type_params.conversion_type_params.entity == "id_entity"
+        assert (
+            conversion_metric_pydantic.type_params.conversion_type_params.calculation
+            is ConversionCalculationType.CONVERSION_RATE
+        )
+        assert (
+            conversion_metric_pydantic.type_params.conversion_type_params.base_metric.name
+            == "simple_metric"
+        )
+        assert (
+            conversion_metric_pydantic.type_params.conversion_type_params.conversion_metric.name
+            == "simple_metric_2"
+        )
+        assert conversion_metric_pydantic.type_params.metric_aggregation_params is None
 
 
 class TestStandaloneMetricParsingSimpleMetricFails:
