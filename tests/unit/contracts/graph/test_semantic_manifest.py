@@ -10,10 +10,20 @@ from dbt.artifacts.resources.v1.metric import (
     MetricTypeParams,
 )
 from dbt.artifacts.resources.v1.model import ModelConfig, TimeSpine
+from dbt.artifacts.resources.v1.semantic_model import DimensionType
 from dbt.constants import LEGACY_TIME_SPINE_MODEL_NAME
 from dbt.contracts.files import FileHash
-from dbt.contracts.graph.nodes import ColumnInfo, DependsOn, Metric, ModelNode
+from dbt.contracts.graph.nodes import (
+    ColumnInfo,
+    DependsOn,
+    Metric,
+    ModelNode,
+    SemanticModel,
+)
 from dbt.contracts.graph.semantic_manifest import SemanticManifest
+from dbt.events.types import TimeDimensionsRequireGranularityDeprecation
+from dbt_common.events.event_catcher import EventCatcher
+from dbt_common.events.event_manager_client import add_callback_to_manager
 from dbt_semantic_interfaces.type_enums import TimeGranularity
 from dbt_semantic_interfaces.type_enums.metric_type import MetricType
 
@@ -210,3 +220,24 @@ class TestSemanticManifest:
             sm_manifest = SemanticManifest(manifest)
             assert sm_manifest.validate() != should_error
             assert patched_deprecations.warn.call_count == num_warns
+
+    def test_time_dimensions_require_granularity_deprecation(
+        self, manifest: Manifest, semantic_model: SemanticModel
+    ):
+        # we only do this patch because the semantic manifest validation requires the flag to be set
+        with patch("dbt.contracts.graph.semantic_manifest.get_flags") as patched_get_flags:
+            patched_get_flags.return_value.require_yaml_configuration_for_mf_time_spines = False
+
+            event_catcher = EventCatcher(TimeDimensionsRequireGranularityDeprecation)
+            add_callback_to_manager(event_catcher.catch)
+            sm_manifest = SemanticManifest(manifest)
+            assert sm_manifest.validate() is True, "Semantic manifest should validate successfully"
+            assert len(event_catcher.caught_events) == 0
+
+            # Set the time dimension granularity to None
+            dimension = semantic_model.dimensions[0]
+            assert dimension.type == DimensionType.TIME
+            dimension.type_params = None  # This also removes the time granularity
+            sm_manifest = SemanticManifest(manifest)
+            assert sm_manifest.validate() is True, "Semantic manifest should validate successfully"
+            assert len(event_catcher.caught_events) == 1

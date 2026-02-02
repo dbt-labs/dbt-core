@@ -1,0 +1,6 @@
+kind: Features
+body: Implement agg_time_dimension for new semantic YAML.
+time: 2026-01-29T11:48:32.100015-08:00
+custom:
+    Author: theyostalservice
+    Issue: "12410"

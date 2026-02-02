@@ -2,15 +2,22 @@ from collections.abc import Sequence
 from typing import Any, Dict, List, Optional, Union
 
 from dbt.artifacts.resources import (
+    ColumnDimension,
+    ColumnEntity,
+    ColumnInfo,
     ConversionTypeParams,
     CumulativeTypeParams,
+    Defaults,
     Dimension,
     DimensionTypeParams,
+    DimensionValidityParams,
     Entity,
     Export,
     ExportConfig,
     ExposureConfig,
     Measure,
+    MeasureAggregationParameters,
+    MetricAggregationParams,
     MetricConfig,
     MetricInput,
     MetricInputMeasure,
@@ -34,10 +41,21 @@ from dbt.context.providers import (
     generate_parse_semantic_models,
 )
 from dbt.contracts.files import SchemaSourceFile
-from dbt.contracts.graph.nodes import Exposure, Group, Metric, SavedQuery, SemanticModel
+from dbt.contracts.graph.nodes import (
+    Exposure,
+    Group,
+    Metric,
+    ModelNode,
+    ParsedNodePatch,
+    SavedQuery,
+    SemanticModel,
+)
 from dbt.contracts.graph.unparsed import (
+    PercentileType,
     UnparsedConversionTypeParams,
     UnparsedCumulativeTypeParams,
+    UnparsedDerivedDimensionV2,
+    UnparsedDerivedSemantics,
     UnparsedDimension,
     UnparsedDimensionTypeParams,
     UnparsedEntity,
@@ -46,13 +64,18 @@ from dbt.contracts.graph.unparsed import (
     UnparsedGroup,
     UnparsedMeasure,
     UnparsedMetric,
+    UnparsedMetricBase,
     UnparsedMetricInput,
     UnparsedMetricInputMeasure,
     UnparsedMetricTypeParams,
+    UnparsedMetricV2,
     UnparsedNonAdditiveDimension,
+    UnparsedNonAdditiveDimensionV2,
     UnparsedQueryParams,
     UnparsedSavedQuery,
     UnparsedSemanticModel,
+    UnparsedSemanticModelConfig,
+    UnparsedSemanticResourceConfig,
 )
 from dbt.exceptions import JSONValidationError, YamlParseDictError
 from dbt.node_types import NodeType
@@ -72,7 +95,7 @@ from dbt_semantic_interfaces.type_enums import (
 
 
 def parse_where_filter(
-    where: Optional[Union[List[str], str]]
+    where: Optional[Union[List[str], str]],
 ) -> Optional[WhereFilterIntersection]:
     if where is None:
         return None
@@ -306,11 +329,19 @@ class MetricParser(YamlReader):
 
         return metric_inputs
 
-    def _get_optional_conversion_type_params(
+    def _get_optional_v1_conversion_type_params(
         self, unparsed: Optional[UnparsedConversionTypeParams]
     ) -> Optional[ConversionTypeParams]:
         if unparsed is None:
             return None
+        if unparsed.base_measure is None:
+            raise ValidationError(
+                "base_measure is required for conversion metrics that use type_params."
+            )
+        if unparsed.conversion_measure is None:
+            raise ValidationError(
+                "conversion_measure is required for conversion metrics that use type_params."
+            )
         return ConversionTypeParams(
             base_measure=self._get_input_measure(unparsed.base_measure),
             conversion_measure=self._get_input_measure(unparsed.conversion_measure),
@@ -320,7 +351,30 @@ class MetricParser(YamlReader):
             constant_properties=unparsed.constant_properties,
         )
 
-    def _get_optional_cumulative_type_params(
+    def _get_optional_v2_conversion_type_params(
+        self,
+        unparsed_metric: UnparsedMetricV2,
+    ) -> Optional[ConversionTypeParams]:
+        if MetricType(unparsed_metric.type) is not MetricType.CONVERSION:
+            return None
+
+        if unparsed_metric.base_metric is None:
+            raise ValidationError("base_metric is required for conversion metrics.")
+        if unparsed_metric.conversion_metric is None:
+            raise ValidationError("conversion_metric is required for conversion metrics.")
+        if unparsed_metric.entity is None:
+            raise ValidationError("entity is required for conversion metrics.")
+
+        return ConversionTypeParams(
+            base_metric=self._get_metric_input(unparsed_metric.base_metric),
+            conversion_metric=self._get_metric_input(unparsed_metric.conversion_metric),
+            entity=unparsed_metric.entity,
+            calculation=ConversionCalculationType(unparsed_metric.calculation),
+            window=self._get_optional_time_window(unparsed_metric.window),
+            constant_properties=unparsed_metric.constant_properties,
+        )
+
+    def _get_optional_v1_cumulative_type_params(
         self, unparsed_metric: UnparsedMetric
     ) -> Optional[CumulativeTypeParams]:
         unparsed_type_params = unparsed_metric.type_params
@@ -353,36 +407,119 @@ class MetricParser(YamlReader):
 
         return None
 
-    def _get_metric_type_params(self, unparsed_metric: UnparsedMetric) -> MetricTypeParams:
-        type_params = unparsed_metric.type_params
-
-        grain_to_date: Optional[TimeGranularity] = None
-        if type_params.grain_to_date is not None:
-            # This should've been changed to a string (to support custom grain), but since this
-            # is a legacy field waiting to be deprecated, we will not support custom grain here
-            # in order to force customers off of using this field. The field to use should be
-            # `cumulative_type_params.grain_to_date`
-            grain_to_date = TimeGranularity(type_params.grain_to_date)
-
-        return MetricTypeParams(
-            measure=self._get_optional_input_measure(type_params.measure),
-            numerator=self._get_optional_metric_input(type_params.numerator),
-            denominator=self._get_optional_metric_input(type_params.denominator),
-            expr=str(type_params.expr) if type_params.expr is not None else None,
-            window=self._get_optional_time_window(type_params.window),
-            grain_to_date=grain_to_date,
-            metrics=self._get_metric_inputs(type_params.metrics),
-            conversion_type_params=self._get_optional_conversion_type_params(
-                type_params.conversion_type_params
-            ),
-            cumulative_type_params=self._get_optional_cumulative_type_params(
-                unparsed_metric=unparsed_metric,
-            ),
-            # input measures are calculated via metric processing post parsing
-            # input_measures=?,
+    def _get_optional_v2_cumulative_type_params(
+        self,
+        unparsed_metric: UnparsedMetricV2,
+    ) -> Optional[CumulativeTypeParams]:
+        if MetricType(unparsed_metric.type) is not MetricType.CUMULATIVE:
+            return None
+        input_metric = unparsed_metric.input_metric
+        if input_metric is None:
+            raise ValidationError("input_metric is required for cumulative metrics.")
+        return CumulativeTypeParams(
+            window=self._get_optional_time_window(unparsed_metric.window),
+            grain_to_date=unparsed_metric.grain_to_date,
+            period_agg=self._get_period_agg(unparsed_metric.period_agg),
+            metric=self._get_metric_input(input_metric),
         )
 
-    def parse_metric(self, unparsed: UnparsedMetric, generated_from: Optional[str] = None) -> None:
+    def _get_v2_non_additive_dimension(
+        self,
+        unparsed_non_additive_dimension: Optional[UnparsedNonAdditiveDimensionV2],
+    ) -> Optional[NonAdditiveDimension]:
+        if unparsed_non_additive_dimension is None:
+            return None
+        return NonAdditiveDimension(
+            name=unparsed_non_additive_dimension.name,
+            window_choice=AggregationType(unparsed_non_additive_dimension.window_agg),
+            window_groupings=unparsed_non_additive_dimension.group_by,
+        )
+
+    def _get_metric_type_params(
+        self,
+        unparsed_metric: UnparsedMetricBase,
+        generated_from: Optional[str] = None,
+    ) -> MetricTypeParams:
+        if isinstance(unparsed_metric, UnparsedMetric):
+            type_params = unparsed_metric.type_params
+
+            grain_to_date: Optional[TimeGranularity] = None
+            if type_params.grain_to_date is not None:
+                # This should've been changed to a string (to support custom grain), but since this
+                # is a legacy field waiting to be deprecated, we will not support custom grain here
+                # in order to force customers off of using this field. The field to use should be
+                # `cumulative_type_params.grain_to_date`
+                grain_to_date = TimeGranularity(type_params.grain_to_date)
+
+            return MetricTypeParams(
+                measure=self._get_optional_input_measure(type_params.measure),
+                numerator=self._get_optional_metric_input(type_params.numerator),
+                denominator=self._get_optional_metric_input(type_params.denominator),
+                expr=str(type_params.expr) if type_params.expr is not None else None,
+                window=self._get_optional_time_window(type_params.window),
+                grain_to_date=grain_to_date,
+                metrics=self._get_metric_inputs(type_params.metrics),
+                conversion_type_params=self._get_optional_v1_conversion_type_params(
+                    type_params.conversion_type_params
+                ),
+                cumulative_type_params=self._get_optional_v1_cumulative_type_params(
+                    unparsed_metric=unparsed_metric,
+                ),
+                # input measures are calculated via metric processing post parsing
+                # input_measures=?,
+            )
+        elif isinstance(unparsed_metric, UnparsedMetricV2):
+            if unparsed_metric.agg is not None:
+                if generated_from is None:
+                    raise YamlParseDictError(
+                        self.yaml.path,
+                        self.key,
+                        yaml_data=unparsed_metric.to_dict(),
+                        cause="simple metrics in v2 YAML must be attached to semantic_model",
+                    )
+                metric_aggregation_params = MetricAggregationParams(
+                    semantic_model=generated_from,
+                    agg=AggregationType(unparsed_metric.agg),
+                    agg_params=MeasureAggregationParameters(
+                        percentile=unparsed_metric.percentile,
+                        use_discrete_percentile=(unparsed_metric.percentile_type or "").lower()
+                        == PercentileType.DISCRETE,
+                        use_approximate_percentile=(unparsed_metric.percentile_type or "").lower()
+                        == PercentileType.CONTINUOUS,
+                    ),
+                    agg_time_dimension=unparsed_metric.agg_time_dimension,
+                    non_additive_dimension=self._get_v2_non_additive_dimension(
+                        unparsed_non_additive_dimension=unparsed_metric.non_additive_dimension,
+                    ),
+                )
+            else:
+                metric_aggregation_params = None
+            return MetricTypeParams(
+                numerator=self._get_optional_metric_input(unparsed_metric.numerator),
+                denominator=self._get_optional_metric_input(unparsed_metric.denominator),
+                expr=str(unparsed_metric.expr) if unparsed_metric.expr is not None else None,
+                window=self._get_optional_time_window(unparsed_metric.window),
+                metrics=self._get_metric_inputs(unparsed_metric.input_metrics),
+                conversion_type_params=self._get_optional_v2_conversion_type_params(
+                    unparsed_metric=unparsed_metric,
+                ),
+                cumulative_type_params=self._get_optional_v2_cumulative_type_params(
+                    unparsed_metric=unparsed_metric,
+                ),
+                metric_aggregation_params=metric_aggregation_params,
+                join_to_timespine=unparsed_metric.join_to_timespine or False,
+            )
+        else:
+            raise DbtInternalError(
+                f"Tried to parse type params for a {type(unparsed_metric)}, but expected "
+                "an UnparsedMetric or UnparsedMetricV2",
+            )
+
+    def parse_metric(
+        self,
+        unparsed: UnparsedMetricBase,
+        generated_from: Optional[str] = None,
+    ) -> None:
         package_name = self.project.project_name
         unique_id = f"{NodeType.Metric}.{package_name}.{unparsed.name}"
         path = self.yaml.path.relative_path
@@ -411,10 +548,23 @@ class MetricParser(YamlReader):
                 f"Calculated a {type(config)} for a metric, but expected a MetricConfig"
             )
 
-        # If we have meta in the config, copy to node level, for backwards
-        # compatibility with earlier node-only config.
-        if "meta" in config and config["meta"]:
-            unparsed.meta = config["meta"]
+        if isinstance(unparsed, UnparsedMetric):
+            # If we have meta in the config, copy to node level, for backwards
+            # compatibility with earlier node-only config.
+            if "meta" in config and config["meta"]:
+                unparsed.meta = config["meta"]
+            meta = unparsed.meta
+            tags = unparsed.tags
+        elif isinstance(unparsed, UnparsedMetricV2):
+            # V2 Metrics do not have a top-level meta field; this should be part of
+            # the config.
+            meta = {}
+            tags = []
+        else:
+            raise DbtInternalError(
+                f"Tried to parse a {type(unparsed)} into a metric, but expected "
+                "an UnparsedMetric or UnparsedMetricV2",
+            )
 
         parsed = Metric(
             resource_type=NodeType.Metric,
@@ -425,13 +575,13 @@ class MetricParser(YamlReader):
             fqn=fqn,
             name=unparsed.name,
             description=unparsed.description,
-            label=unparsed.label,
+            label=unparsed.label or unparsed.name,
             type=MetricType(unparsed.type),
-            type_params=self._get_metric_type_params(unparsed),
+            type_params=self._get_metric_type_params(unparsed, generated_from=generated_from),
             time_granularity=unparsed.time_granularity,
             filter=parse_where_filter(unparsed.filter),
-            meta=unparsed.meta,
-            tags=unparsed.tags,
+            meta=meta,
+            tags=tags,
             config=config,
             unrendered_config=unrendered_config,
             group=config.group,
@@ -445,7 +595,7 @@ class MetricParser(YamlReader):
             self.manifest.add_disabled(self.yaml.file, parsed)
 
     def _generate_metric_config(
-        self, target: UnparsedMetric, fqn: List[str], package_name: str, rendered: bool
+        self, target: UnparsedMetricBase, fqn: List[str], package_name: str, rendered: bool
     ):
         generator: BaseContextConfigGenerator
         if rendered:
@@ -468,15 +618,38 @@ class MetricParser(YamlReader):
         )
         return config
 
+    def _parse_v2_metric(
+        self, data: dict[str, Any], semantic_model_name: Optional[str] = None
+    ) -> None:
+        try:
+            UnparsedMetricV2.validate(data)
+            unparsed = UnparsedMetricV2.from_dict(data)
+        except (ValidationError, JSONValidationError) as exc:
+            raise YamlParseDictError(self.yaml.path, self.key, data, exc)
+        self.parse_metric(unparsed=unparsed)
+
+    def parse_v2_metrics_from_dbt_model_patch(self, model_patch: ParsedNodePatch) -> None:
+        if model_patch.metrics is None:
+            return
+        for metric in model_patch.metrics:
+            semantic_model = (
+                model_patch.name if MetricType(metric.type) == MetricType.SIMPLE else None
+            )
+            self.parse_metric(metric, generated_from=semantic_model)
+
     def parse(self) -> None:
         for data in self.get_key_dicts():
-            try:
-                UnparsedMetric.validate(data)
-                unparsed = UnparsedMetric.from_dict(data)
-
-            except (ValidationError, JSONValidationError) as exc:
-                raise YamlParseDictError(self.yaml.path, self.key, data, exc)
-            self.parse_metric(unparsed)
+            # The main differentiator of old-style yaml and new-style is "type_params",
+            # so if that is missing, we'll assume you're using the newer yaml.
+            if "type_params" in data:
+                try:
+                    UnparsedMetric.validate(data)
+                    unparsed = UnparsedMetric.from_dict(data)
+                except (ValidationError, JSONValidationError) as exc:
+                    raise YamlParseDictError(self.yaml.path, self.key, data, exc)
+                self.parse_metric(unparsed)
+            else:
+                self._parse_v2_metric(data)
 
 
 class GroupParser(YamlReader):
@@ -654,7 +827,11 @@ class SemanticModelParser(YamlReader):
         parser.parse_metric(unparsed=unparsed_metric, generated_from=semantic_model_name)
 
     def _generate_semantic_model_config(
-        self, target: UnparsedSemanticModel, fqn: List[str], package_name: str, rendered: bool
+        self,
+        target_config: Dict[str, Any],
+        fqn: List[str],
+        package_name: str,
+        rendered: bool,
     ):
         generator: BaseContextConfigGenerator
         if rendered:
@@ -665,7 +842,7 @@ class SemanticModelParser(YamlReader):
         # configs with precendence set
         precedence_configs = dict()
         # first apply semantic model configs
-        precedence_configs.update(target.config)
+        precedence_configs.update(target_config)
 
         config = generator.calculate_node_config(
             config_call_dict={},
@@ -678,20 +855,242 @@ class SemanticModelParser(YamlReader):
 
         return config
 
-    def parse_semantic_model(self, unparsed: UnparsedSemanticModel) -> None:
-        package_name = self.project.project_name
-        unique_id = f"{NodeType.SemanticModel}.{package_name}.{unparsed.name}"
-        path = self.yaml.path.relative_path
-
-        fqn = self.schema_parser.get_fqn_prefix(path)
-        fqn.append(unparsed.name)
-
+    def _parse_semantic_model_v1(self, unparsed: UnparsedSemanticModel) -> None:
         entities = self._get_entities(unparsed.entities)
         measures = self._get_measures(unparsed.measures)
         dimensions = self._get_dimensions(unparsed.dimensions)
 
+        self._parse_semantic_model_helper(
+            semantic_model_name=unparsed.name,
+            semantic_model_config=unparsed.config,
+            description=unparsed.description,
+            label=unparsed.label,
+            model=unparsed.model,
+            defaults=unparsed.defaults,
+            primary_entity=unparsed.primary_entity,
+            entities=entities,
+            measures=measures,
+            unparsed_measures=unparsed.measures,
+            dimensions=dimensions,
+        )
+
+    def _parse_v2_column_dimensions(self, columns: Dict[str, ColumnInfo]) -> List[Dimension]:
+        dimensions: List[Dimension] = []
+        for column in columns.values():
+            if column.dimension is None:
+                continue
+            elif isinstance(column.dimension, DimensionType):
+                dimensions.append(
+                    Dimension(
+                        name=column.name,
+                        type=column.dimension,
+                        description=column.description,
+                        metadata=None,  # Not yet supported in v1 or v2 YAML
+                        config=SemanticLayerElementConfig(meta=column.config.get("meta", {})),
+                    )
+                )
+            elif isinstance(column.dimension, ColumnDimension):
+                type_params = (
+                    (
+                        DimensionTypeParams(
+                            time_granularity=column.granularity,
+                            validity_params=(
+                                DimensionValidityParams(
+                                    is_start=column.dimension.validity_params.is_start,
+                                    is_end=column.dimension.validity_params.is_end,
+                                )
+                                if column.dimension.validity_params is not None
+                                else None
+                            ),
+                        )
+                        if column.granularity is not None
+                        else None
+                    )
+                    if column.granularity is not None
+                    else None
+                )
+                meta = dict(column.config.get("meta", {}))
+                meta.update((column.dimension.config or {}).get("meta", {}))
+                config = SemanticLayerElementConfig(meta=meta)
+                dimensions.append(
+                    Dimension(
+                        # required
+                        type=DimensionType(column.dimension.type),
+                        # fields that use column's values as fallback values
+                        name=column.dimension.name or column.name,
+                        description=column.dimension.description or column.description,
+                        config=config,
+                        # optional fields
+                        label=column.dimension.label,
+                        is_partition=column.dimension.is_partition,
+                        type_params=type_params,
+                        metadata=None,  # Not yet supported in v1 or v2 YAML
+                        # expr argument is not supported for column-based dimensions
+                    )
+                )
+        return dimensions
+
+    def _parse_v2_derived_dimensions(
+        self,
+        derived_dimensions: List[UnparsedDerivedDimensionV2],
+    ) -> List[Dimension]:
+        dimensions: List[Dimension] = []
+        for derived_dimension in derived_dimensions:
+            type_params = None
+            if derived_dimension.granularity is not None:
+                type_params = DimensionTypeParams(
+                    time_granularity=TimeGranularity(derived_dimension.granularity),
+                    validity_params=(
+                        DimensionValidityParams(
+                            is_start=derived_dimension.validity_params.is_start,
+                            is_end=derived_dimension.validity_params.is_end,
+                        )
+                        if derived_dimension.validity_params is not None
+                        else None
+                    ),
+                )
+            dimensions.append(
+                Dimension(
+                    type=DimensionType(derived_dimension.type),
+                    name=derived_dimension.name,
+                    description=derived_dimension.description,
+                    label=derived_dimension.label,
+                    is_partition=derived_dimension.is_partition,
+                    config=SemanticLayerElementConfig(
+                        meta=derived_dimension.config.get("meta", {})
+                    ),
+                    type_params=type_params,
+                    # fields unique to derived dimensions
+                    expr=derived_dimension.expr,
+                )
+            )
+        return dimensions
+
+    def _parse_v2_column_entities(self, columns: Dict[str, ColumnInfo]) -> List[Entity]:
+        entities: List[Entity] = []
+        for column in columns.values():
+            if column.entity is None:
+                continue
+            elif isinstance(column.entity, ColumnEntity):
+                entities.append(
+                    Entity(
+                        name=column.entity.name,
+                        type=column.entity.type,
+                        description=column.entity.description,
+                        label=column.entity.label,
+                        config=SemanticLayerElementConfig(
+                            meta=column.entity.config.get("meta", column.config.get("meta", {}))
+                        ),
+                    )
+                )
+            elif isinstance(column.entity, EntityType):
+                entities.append(
+                    Entity(
+                        name=column.name,
+                        type=column.entity,
+                        description=column.description,
+                        label=None,  # there's no label to carry through from columns
+                        config=SemanticLayerElementConfig(meta=column.config.get("meta", {})),
+                    )
+                )
+        return entities
+
+    def _parse_v2_derived_semantics_entities(
+        self, derived_semantics: UnparsedDerivedSemantics
+    ) -> List[Entity]:
+        entities: List[Entity] = []
+        for unparsed_entity in derived_semantics.entities:
+            entities.append(
+                Entity(
+                    name=unparsed_entity.name,
+                    type=EntityType(unparsed_entity.type),
+                    description=unparsed_entity.description,
+                    label=unparsed_entity.label,
+                    expr=unparsed_entity.expr,
+                    config=SemanticLayerElementConfig(meta=unparsed_entity.config.get("meta", {})),
+                )
+            )
+        return entities
+
+    def parse_v2_semantic_model_from_dbt_model_patch(
+        self,
+        node: ModelNode,
+        patch: ParsedNodePatch,
+    ) -> None:
+        if patch.semantic_model is None:
+            # We shouldn't be calling this method in this case, but for safety
+            # and typechecking, we'll return early here.
+            return
+
+        dimensions = self._parse_v2_column_dimensions(patch.columns)
+        if patch.derived_semantics is not None:
+            dimensions.extend(
+                self._parse_v2_derived_dimensions(patch.derived_semantics.dimensions)
+            )
+        entities = self._parse_v2_column_entities(patch.columns)
+        if patch.derived_semantics is not None:
+            entities.extend(self._parse_v2_derived_semantics_entities(patch.derived_semantics))
+
+        name = node.name
+        config: Dict[str, Any] = {}
+        if isinstance(patch.semantic_model, UnparsedSemanticModelConfig):
+            if patch.semantic_model.name is not None:
+                name = patch.semantic_model.name
+            if patch.semantic_model.config is not None:
+                unparsed_sub_config = patch.semantic_model.config
+                if isinstance(unparsed_sub_config, UnparsedSemanticResourceConfig):
+                    if unparsed_sub_config.meta is not None:
+                        config["meta"] = unparsed_sub_config.meta
+                if patch.semantic_model.enabled is not None:
+                    config["enabled"] = patch.semantic_model.enabled
+                if patch.semantic_model.group is not None:
+                    config["group"] = patch.semantic_model.group
+        elif isinstance(patch.semantic_model, bool):
+            # boolean value just indicates that the model has a semantic model,
+            # so nothing to do here.
+            pass
+        else:
+            # this should be unreachable, but just in case
+            raise ValueError(f"Invalid semantic model config: {patch.semantic_model}")
+
+        self._parse_semantic_model_helper(
+            semantic_model_name=name,
+            semantic_model_config=config,
+            description=node.description,
+            label=None,  # does not seem to be available in v2 YAML, unless it is part of the semantic model config's 'group'?
+            model=f"ref('{patch.name}')",
+            defaults=Defaults(agg_time_dimension=patch.agg_time_dimension),
+            primary_entity=patch.primary_entity,
+            entities=entities,
+            dimensions=dimensions,
+            # Measures are not part of the v2 YAML design.
+            measures=[],
+            unparsed_measures=[],
+        )
+
+    def _parse_semantic_model_helper(
+        self,
+        semantic_model_name: str,
+        semantic_model_config: Dict[str, Any],
+        description: Optional[str],
+        label: Optional[str],
+        model: str,
+        defaults,
+        primary_entity,
+        entities: List[Entity],
+        dimensions: List[Dimension],
+        measures: List[Measure],  # v1 only
+        unparsed_measures: List[UnparsedMeasure] = [],  # v1 only
+    ) -> None:
+        package_name = self.project.project_name
+        unique_id = f"{NodeType.SemanticModel}.{package_name}.{semantic_model_name}"
+        path = self.yaml.path.relative_path
+
+        fqn = self.schema_parser.get_fqn_prefix(path)
+        fqn.append(semantic_model_name)
+
         config = self._generate_semantic_model_config(
-            target=unparsed,
+            target_config=semantic_model_config,
             fqn=fqn,
             package_name=package_name,
             rendered=True,
@@ -713,18 +1112,18 @@ class SemanticModelParser(YamlReader):
         config = config.finalize_and_validate()
 
         unrendered_config = self._generate_semantic_model_config(
-            target=unparsed,
+            target_config=semantic_model_config,
             fqn=fqn,
             package_name=package_name,
             rendered=False,
         )
 
         parsed = SemanticModel(
-            description=unparsed.description,
-            label=unparsed.label,
+            description=description,
+            label=label,
             fqn=fqn,
-            model=unparsed.model,
-            name=unparsed.name,
+            model=model,
+            name=semantic_model_name,
             node_relation=None,  # Resolved from the value of "model" after parsing
             original_file_path=self.yaml.path.original_file_path,
             package_name=package_name,
@@ -734,8 +1133,8 @@ class SemanticModelParser(YamlReader):
             entities=entities,
             measures=measures,
             dimensions=dimensions,
-            defaults=unparsed.defaults,
-            primary_entity=unparsed.primary_entity,
+            defaults=defaults,
+            primary_entity=primary_entity,
             config=config,
             unrendered_config=unrendered_config,
             group=config.group,
@@ -762,7 +1161,8 @@ class SemanticModelParser(YamlReader):
             self.manifest.add_disabled(self.yaml.file, parsed)
 
         # Create a metric for each measure with `create_metric = True`
-        for measure in unparsed.measures:
+        # This is only relevant for v1 SL YAML; v2 does not include measures at all.
+        for measure in unparsed_measures:
             if measure.create_metric is True:
                 self._create_metric(
                     measure=measure,
@@ -779,7 +1179,7 @@ class SemanticModelParser(YamlReader):
             except (ValidationError, JSONValidationError) as exc:
                 raise YamlParseDictError(self.yaml.path, self.key, data, exc)
 
-            self.parse_semantic_model(unparsed)
+            self._parse_semantic_model_v1(unparsed)
 
 
 class SavedQueryParser(YamlReader):

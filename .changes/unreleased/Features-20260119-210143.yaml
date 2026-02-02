@@ -1,0 +1,6 @@
+kind: Features
+body: Add ability to indicate dbt Model also represents a Semantic Model. (Not fully supported yet.)
+time: 2026-01-19T21:01:43.917805-08:00
+custom:
+    Author: theyostalservice
+    Issue: .

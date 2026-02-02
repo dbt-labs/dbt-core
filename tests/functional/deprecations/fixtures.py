@@ -316,3 +316,9 @@ models:
               arguments:
                 custom: arg
       """
+
+generate_schema_name_null_return_macro_sql = """
+{% macro generate_schema_name(custom_schema_name, node) %}
+    {{ return(custom_schema_name) }}
+{% endmacro %}
+"""

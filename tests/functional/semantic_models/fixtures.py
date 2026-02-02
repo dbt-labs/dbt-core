@@ -1,3 +1,5 @@
+import textwrap
+
 simple_metricflow_time_spine_sql = """
 SELECT to_date('02/20/2023', 'mm/dd/yyyy') as date_day
 """
@@ -540,4 +542,386 @@ semantic_models:
             component_level: "entity_override"
     defaults:
       agg_time_dimension: created_at
+"""
+
+
+semantic_model_schema_yml_v2_template_for_model_configs = """models:
+  - name: fct_revenue
+    description: This is the model fct_revenue. It should be able to use doc blocks
+    {semantic_model_value}
+    columns:
+      - name: id
+        description: This is the id column dim.
+        config:
+          meta:
+          component_level: "original_meta"
+        dimension:
+          name: id_dim
+          label: "ID Dimension"
+          type: categorical
+          is_partition: true
+          config:
+            meta:
+              component_level: "dimension_override"
+        entity:
+          name: id_entity
+          description: This is the id entity, and it is the primary entity.
+          label: ID Entity
+          type: primary
+          config:
+            meta:
+              component_level: "entity_override"
+      - name: second_col
+        description: This is the second column.
+        granularity: day
+        dimension:
+          name: second_dim
+          description: This is the second column (dim).
+          label: Second Dimension
+          type: time
+          validity_params:
+            is_start: true
+            is_end: true
+      - name: foreign_id_col
+        description: This is a foreign id column.
+        entity: foreign
+      - name: col_with_default_dimensions
+        description: This is the column with default dimension settings.
+        dimension: categorical
+        entity:
+          name: col_with_default_entity_testing_default_desc
+          type: natural
+"""
+
+# You can replace the semantic_model variable in the template like this:
+semantic_model_schema_yml_v2 = semantic_model_schema_yml_v2_template_for_model_configs.format(
+    semantic_model_value="semantic_model: true",
+)
+
+semantic_model_schema_yml_v2_disabled = (
+    semantic_model_schema_yml_v2_template_for_model_configs.format(
+        semantic_model_value="semantic_model: false",
+    )
+)
+
+semantic_model_test_groups_yml = """groups:
+  - name: finance
+    owner:
+      # 'name' or 'email' is required; additional properties will no longer be allowed in a future release
+      email: finance@jaffleshop.com
+    config:
+      meta: # optional
+        data_owner: Finance team
+"""
+
+semantic_model_schema_yml_v2_renamed = semantic_model_schema_yml_v2_template_for_model_configs.format(
+    semantic_model_value="""semantic_model:
+      name: renamed_semantic_model
+      enabled: true
+      group: finance
+      config:
+        meta:
+          meta_tag_1: this_meta
+    """,
+)
+
+semantic_model_schema_yml_v2_default_values = semantic_model_schema_yml_v2_template_for_model_configs.format(
+    semantic_model_value="""semantic_model:
+      enabled: true
+    """
+)
+
+semantic_model_schema_yml_v2_disabled = semantic_model_schema_yml_v2_template_for_model_configs.format(
+    semantic_model_value="""semantic_model:
+      enabled: false
+    """,
+)
+
+semantic_model_schema_yml_v2_false_config = (
+    semantic_model_schema_yml_v2_template_for_model_configs.format(
+        semantic_model_value="semantic_model: false",
+    )
+)
+
+semantic_model_config_does_not_exist = (
+    semantic_model_schema_yml_v2_template_for_model_configs.format(
+        semantic_model_value="",
+    )
+)
+
+semantic_model_schema_yml_v2_template_for_primary_entity_tests = """models:
+  - name: fct_revenue
+    description: This is the model fct_revenue. It should be able to use doc blocks
+    semantic_model: true
+    {primary_entity_setting}
+    columns:
+      - name: id
+        description: This is the id column dim.
+        config:
+          meta:
+          component_level: "original_meta"
+        dimension:
+          name: id_dim
+          label: "ID Dimension"
+          type: categorical
+          is_partition: true
+        entity:
+          name: id_entity
+          description: This is the id entity, and it is the primary entity.
+          label: ID Entity
+          type: {id_entity_type}
+      - name: second_col
+        description: This is the second column.
+        granularity: day
+        dimension:
+          name: second_dim
+          description: This is the second column (dim).
+          label: Second Dimension
+          type: time
+          validity_params:
+            is_start: true
+            is_end: true
+      - name: other_id_col
+        description: This is the other id column.
+        entity:
+          name: other_id_entity
+          type: {other_id_entity_type}
+      - name: col_with_default_dimensions
+        description: This is the column with default dimension settings.
+        dimension: categorical
+        entity:
+          name: col_with_default_entity_testing_default_desc
+          type: natural
+"""
+
+semantic_model_schema_yml_v2_with_primary_entity_only_on_column = (
+    semantic_model_schema_yml_v2_template_for_primary_entity_tests.format(
+        primary_entity_setting="",
+        id_entity_type="primary",
+        other_id_entity_type="foreign",
+    )
+)
+
+semantic_model_schema_yml_v2_with_twice_declared_primary_entity = (
+    semantic_model_schema_yml_v2_template_for_primary_entity_tests.format(
+        primary_entity_setting="primary_entity: id_entity",
+        id_entity_type="primary",
+        other_id_entity_type="foreign",
+    )
+)
+
+semantic_model_schema_yml_v2_primary_entity_only_on_model = (
+    semantic_model_schema_yml_v2_template_for_primary_entity_tests.format(
+        primary_entity_setting="primary_entity: id_entity",
+        id_entity_type="foreign",
+        other_id_entity_type="foreign",
+    )
+)
+
+semantic_model_schema_yml_v2_with_two_primary_entities_and_no_model_declaration = (
+    semantic_model_schema_yml_v2_template_for_primary_entity_tests.format(
+        primary_entity_setting="",
+        id_entity_type="primary",
+        other_id_entity_type="primary",
+    )
+)
+
+semantic_model_schema_yml_v2_with_two_primary_entities_and_model_declaration = (
+    semantic_model_schema_yml_v2_template_for_primary_entity_tests.format(
+        primary_entity_setting="primary_entity: id_entity",
+        id_entity_type="primary",
+        other_id_entity_type="primary",
+    )
+)
+
+
+semantic_model_schema_yml_v2 = """models:
+  - name: fct_revenue
+    description: This is the model fct_revenue. It should be able to use doc blocks
+    semantic_model: true
+    columns:
+      - name: id
+        description: This is the id column dim.
+        config:
+          meta:
+          component_level: "original_meta"
+        dimension:
+          name: id_dim
+          label: "ID Dimension"
+          type: categorical
+          is_partition: true
+          config:
+            meta:
+              component_level: "dimension_override"
+        entity:
+          name: id_entity
+          description: This is the id entity, and it is the primary entity.
+          label: ID Entity
+          type: primary
+          config:
+            meta:
+              component_level: "entity_override"
+      - name: second_col
+        description: This is the second column.
+        granularity: day
+        dimension:
+          name: second_dim
+          description: This is the second column (dim).
+          label: Second Dimension
+          type: time
+          validity_params:
+            is_start: true
+            is_end: true
+      - name: foreign_id_col
+        description: This is a foreign id column.
+        entity: foreign
+      - name: col_with_default_dimensions
+        description: This is the column with default dimension settings.
+        dimension: categorical
+        entity:
+          name: col_with_default_entity_testing_default_desc
+          type: natural
+"""
+
+# Separate from the full-spectrum entities and dimensions test because some settings
+# interact with metric validations.
+base_schema_yml_v2 = """models:
+  - name: fct_revenue
+    description: This is the model fct_revenue. It should be able to use doc blocks
+    semantic_model: true
+    agg_time_dimension: second_dim
+    columns:
+      - name: id
+        description: This is the id column dim.
+        config:
+          meta:
+          component_level: "original_meta"
+        dimension:
+          name: id_dim
+          label: "ID Dimension"
+          type: categorical
+          is_partition: true
+          config:
+            meta:
+              component_level: "dimension_override"
+        entity:
+          name: id_entity
+          description: This is the id entity, and it is the primary entity.
+          label: ID Entity
+          type: primary
+          config:
+            meta:
+              component_level: "entity_override"
+      - name: second_col
+        description: This is the second column.
+        granularity: day
+        dimension:
+          name: second_dim
+          description: This is the second column (dim).
+          label: Second Dimension
+          type: time
+      - name: foreign_id_col
+        description: This is a foreign id column.
+        entity: foreign
+      - name: created_at
+        description: This is the time the entry was created.
+        granularity: day
+        dimension:
+          name: ds
+          description: the ds column
+          label: DS Column
+          type: time
+"""
+
+schema_yml_v2_simple_metric_on_model_1 = """
+    metrics:
+      - name: simple_metric
+        description: This is our first simple metric.
+        label: Simple Metric
+        type: simple
+        agg: count
+        expr: id
+      - name: simple_metric_2
+        description: This is our second simple metric.
+        agg_time_dimension: ds
+        label: Simple Metric 2
+        type: simple
+        agg: count
+        expr: second_col
+      - name: percentile_metric
+        description: This is our percentile metric.
+        label: Percentile Metric
+        type: simple
+        agg: percentile
+        percentile: 0.99
+        percentile_type: discrete
+        expr: second_col
+      - name: cumulative_metric
+        description: This is our cumulative metric.
+        label: Cumulative Metric
+        type: cumulative
+        grain_to_date: day
+        period_agg: first
+        input_metric: simple_metric
+      - name: conversion_metric
+        description: This is our conversion metric.
+        label: Conversion Metric
+        type: conversion
+        entity: id_entity
+        calculation: conversion_rate
+        base_metric: simple_metric
+        conversion_metric: simple_metric_2
+"""
+
+schema_yml_v2_cumulative_metric_missing_input_metric = """
+    metrics:
+      - name: cumulative_metric
+        description: This is our cumulative metric.
+        label: Cumulative Metric
+        type: cumulative
+        grain_to_date: day
+        period_agg: first
+"""
+
+schema_yml_v2_conversion_metric_missing_base_metric = """
+    metrics:
+      - name: simple_metric_2
+        description: This is our second simple metric.
+        label: Simple Metric 2
+        type: simple
+        agg: count
+        expr: second_col
+      - name: conversion_metric
+        description: This is our conversion metric.
+        label: Conversion Metric
+        type: conversion
+        entity: id_entity
+        calculation: conversion_rate
+        conversion_metric: simple_metric_2
+"""
+
+schema_yml_v2_standalone_simple_metric = textwrap.dedent(schema_yml_v2_simple_metric_on_model_1)
+
+derived_semantics_yml = """
+    derived_semantics:
+      entities:
+        - name: derived_id_entity
+          description: This is the id entity, and it is the primary entity.
+          label: ID Entity
+          type: foreign
+          expr: "id + foreign_id_col"
+          config:
+            meta:
+              test_label_thing: derived_entity_1
+        - name: derived_id_entity_with_no_optional_fields
+          type: foreign
+          expr: id + foreign_id_col
+      dimensions:
+        - name: derived_id_dimension
+          type: categorical
+          expr: id
+          granularity: day
+          validity_params:
+            is_start: true
+            is_end: true
 """

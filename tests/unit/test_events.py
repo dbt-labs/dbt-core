@@ -179,6 +179,9 @@ sample_values = [
     core_types.DuplicateNameDistinctNodeTypesDeprecation(
         resource_name="", package_name="", unique_id1="", unique_id2=""
     ),
+    core_types.TimeDimensionsRequireGranularityDeprecation(msg=""),
+    core_types.GenericSemanticLayerDeprecation(msg=""),
+    core_types.GenerateSchemaNameNullValueDeprecation(resource_unique_id=""),
     # E - DB Adapter ======================
     adapter_types.AdapterEventDebug(),
     adapter_types.AdapterEventInfo(),

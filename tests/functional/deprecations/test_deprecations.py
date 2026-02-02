@@ -19,6 +19,7 @@ from dbt.events.types import (
     DeprecationsSummary,
     DuplicateYAMLKeysDeprecation,
     EnvironmentVariableNamespaceDeprecation,
+    GenerateSchemaNameNullValueDeprecation,
     GenericJSONSchemaValidationDeprecation,
     MissingArgumentsPropertyInGenericTestDeprecation,
     MissingPlusPrefixDeprecation,
@@ -38,6 +39,7 @@ from tests.functional.deprecations.fixtures import (
     custom_key_in_object_yaml,
     deprecated_model_exposure_yaml,
     duplicate_keys_yaml,
+    generate_schema_name_null_return_macro_sql,
     invalid_deprecation_date_yaml,
     models_custom_key_in_config_non_static_parser_sql,
     models_custom_key_in_config_sql,
@@ -686,7 +688,7 @@ class TestEnvironmentVariableNamespaceDeprecation:
             "DBT_ENGINE_MY_CUSTOM_ENV_VAR_FOR_TESTING": "True",
         },
     )
-    def test_environment_variable_namespace_deprecation(self):
+    def test_environment_variable_namespace_deprecation(self, project):
         event_catcher = EventCatcher(event_to_catch=EnvironmentVariableNamespaceDeprecation)
 
         run_dbt(["parse", "--show-all-deprecations"], callbacks=[event_catcher.catch])
@@ -924,3 +926,30 @@ class TestPrePostHookNoFalsePositiveDeprecation:
             callbacks=[event_catcher.catch],
         )
         assert len(event_catcher.caught_events) == 0
+
+
+class TestGenerateSchemaNameNullValueDeprecation:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "models_trivial.sql": models_trivial__model_sql,
+        }
+
+    @pytest.fixture(scope="class")
+    def macros(self):
+        return {
+            "macros.sql": generate_schema_name_null_return_macro_sql,
+        }
+
+    def test_generate_schema_name_null_value_deprecation(self, project):
+        event_catcher = EventCatcher(GenerateSchemaNameNullValueDeprecation)
+        run_dbt(
+            ["parse", "--no-partial-parse", "--show-all-deprecations"],
+            callbacks=[event_catcher.catch],
+        )
+        assert len(event_catcher.caught_events) == 1
+        assert "Node 'model.test.models_trivial' has a schema set to None as a result of a generate_schema_name call." in event_catcher.caught_events[
+            0
+        ].info.msg.replace(
+            "\n", " "
+        )
