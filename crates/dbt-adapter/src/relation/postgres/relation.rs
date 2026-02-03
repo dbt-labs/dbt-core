@@ -69,7 +69,7 @@ impl PostgresRelation {
     ) -> Result<Self, minijinja::Error> {
         Self::try_new_with_policy(
             RelationPath {
-                database,
+                database: database.filter(|s| !s.is_empty()),
                 schema,
                 identifier,
             },

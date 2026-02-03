@@ -121,7 +121,9 @@ fn get_relation_with_quote_policy(
 
     let quote_char = relation.quote_character();
 
-    let quoted_database = if relation.quote_policy().database {
+    let quoted_database = if database.is_empty() {
+        String::new()
+    } else if relation.quote_policy().database {
         format!("{quote_char}{database}{quote_char}")
     } else {
         database
@@ -718,11 +720,15 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
     ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<Arc<Schema>>>> {
         type Acc = HashMap<String, AdapterResult<Arc<Schema>>>;
 
-        let dbr_version = match self.dbr_version() {
-            Ok(version) => version,
-            Err(e) => {
-                return Box::pin(future::ready(Err(Cancellable::Error(e))));
-            }
+        let dbr_version = match self.adapter.adapter_type() {
+            AdapterType::Spark => None,
+            AdapterType::Databricks => match self.dbr_version() {
+                Ok(version) => Some(version),
+                Err(e) => {
+                    return Box::pin(future::ready(Err(Cancellable::Error(e))));
+                }
+            },
+            _ => unreachable!(),
         };
 
         let adapter = self.adapter.clone(); // clone needed to move it into lambda
@@ -762,12 +768,28 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
             let is_external_system =
                 relation.is_system() && matches!(relation_type, Some(RelationType::External));
 
-            let as_json_unsupported = is_external_system || dbr_version < DbrVersion::Full(16, 2);
+            // TODO(serramatutu/spark): Spark also supports AS JSON, not sure which version is the minimum version
+            let as_json_unsupported = is_external_system
+                || dbr_version
+                    .map(|v| v < DbrVersion::Full(16, 2))
+                    .unwrap_or(false);
+
+            let fqn = match adapter.adapter_type() {
+                AdapterType::Spark => {
+                    debug_assert!(
+                        database.is_empty(),
+                        "Spark database should be empty but got '{database}'"
+                    );
+                    format!("{schema}.{identifier}")
+                }
+                AdapterType::Databricks => format!("{database}.{schema}.{identifier}"),
+                _ => unreachable!(),
+            };
 
             let sql = if as_json_unsupported {
-                format!("DESCRIBE TABLE {database}.{schema}.{identifier};")
+                format!("DESCRIBE TABLE {fqn};")
             } else {
-                format!("DESCRIBE TABLE EXTENDED {database}.{schema}.{identifier} AS JSON;")
+                format!("DESCRIBE TABLE EXTENDED {fqn} AS JSON;")
             };
 
             let ctx = QueryCtx::default().with_desc("Get table schema");
@@ -1068,6 +1090,17 @@ mod tests {
         let (database, schema, identifier) = get_relation_with_quote_policy(&relation).unwrap();
 
         assert_eq!(database, "`test_db`");
+        assert_eq!(schema, "`test_schema`");
+        assert_eq!(identifier, "`test_table`");
+    }
+
+    #[test]
+    fn test_get_relation_with_quote_policy_all_parts_empty_db() {
+        let relation = create_test_relation("", "test_schema", "test_table", true, true, true);
+
+        let (database, schema, identifier) = get_relation_with_quote_policy(&relation).unwrap();
+
+        assert_eq!(database, "");
         assert_eq!(schema, "`test_schema`");
         assert_eq!(identifier, "`test_table`");
     }

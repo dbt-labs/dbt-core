@@ -139,7 +139,7 @@ impl RedshiftRelation {
     ) -> Self {
         Self {
             path: RelationPath {
-                database,
+                database: database.filter(|s| !s.is_empty()),
                 schema,
                 identifier,
             },

@@ -411,10 +411,12 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
         let mut parts = vec![];
 
         if let Ok(database) = self.database_as_str() {
-            if self.quote_policy().database {
-                parts.push(self.quoted(&database));
-            } else {
-                parts.push(self.quoted(&self.normalize_component(&database)));
+            if !database.is_empty() {
+                if self.quote_policy().database {
+                    parts.push(self.quoted(&database));
+                } else {
+                    parts.push(self.quoted(&self.normalize_component(&database)));
+                }
             }
         }
 
@@ -468,6 +470,7 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
 
         if include_policy.database
             && let Some(database) = self.database().as_str()
+            && !database.is_empty()
         {
             parts.push(quote_part(database, quote_policy.database));
         }

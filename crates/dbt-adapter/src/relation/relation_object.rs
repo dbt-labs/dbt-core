@@ -194,18 +194,16 @@ pub fn do_create_relation(
     relation_type: Option<RelationType>,
     custom_quoting: ResolvedQuoting,
 ) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
-    let db = Some(database).filter(|s| !s.is_empty());
-
     let relation = match adapter_type {
         AdapterType::Postgres | AdapterType::Sidecar => Arc::new(PostgresRelation::try_new(
-            db,
+            Some(database),
             Some(schema),
             identifier,
             relation_type,
             custom_quoting,
         )?) as Arc<dyn BaseRelation>,
         AdapterType::Snowflake => Arc::new(SnowflakeRelation::new(
-            db,
+            Some(database),
             Some(schema),
             identifier,
             relation_type,
@@ -213,7 +211,7 @@ pub fn do_create_relation(
             custom_quoting,
         )) as Arc<dyn BaseRelation>,
         AdapterType::Bigquery => Arc::new(BigqueryRelation::new(
-            db,
+            Some(database),
             Some(schema),
             identifier,
             relation_type,
@@ -221,7 +219,7 @@ pub fn do_create_relation(
             custom_quoting,
         )) as Arc<dyn BaseRelation>,
         AdapterType::Redshift => Arc::new(RedshiftRelation::new(
-            db,
+            Some(database),
             Some(schema),
             identifier,
             relation_type,
@@ -230,7 +228,7 @@ pub fn do_create_relation(
         )) as Arc<dyn BaseRelation>,
         AdapterType::Databricks | AdapterType::Spark => Arc::new(DatabricksRelation::new(
             adapter_type,
-            db,
+            Some(database),
             Some(schema),
             identifier,
             relation_type,
@@ -240,7 +238,7 @@ pub fn do_create_relation(
             false,
         )) as Arc<dyn BaseRelation>,
         AdapterType::Salesforce => Arc::new(SalesforceRelation::new(
-            db,
+            Some(database),
             Some(schema),
             identifier,
             relation_type,

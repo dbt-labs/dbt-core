@@ -193,10 +193,12 @@ impl ColumnStatic {
                 "INTEGER" => "INT64",
                 _ => column_type,
             },
-            AdapterType::Databricks => match column_type.to_uppercase().as_str() {
-                "LONG" => "BIGINT",
-                _ => column_type,
-            },
+            AdapterType::Databricks | AdapterType::Spark => {
+                match column_type.to_uppercase().as_str() {
+                    "LONG" => "BIGINT",
+                    _ => column_type,
+                }
+            }
             // https://github.com/dbt-labs/dbt-adapters/blob/fed0e2e7a2e252175dcc9caccbdd91d354ac6a9d/dbt-adapters/src/dbt/adapters/base/column.py#L24
             _ => match column_type.to_uppercase().as_str() {
                 "STRING" => "TEXT",

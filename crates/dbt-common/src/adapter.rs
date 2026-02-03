@@ -74,3 +74,14 @@ impl ExecutionPhase {
         }
     }
 }
+
+pub fn adapter_type_supports_static_analysis(adapter_type: AdapterType) -> bool {
+    matches!(
+        adapter_type,
+        AdapterType::Snowflake
+            | AdapterType::Bigquery
+            | AdapterType::Redshift
+            | AdapterType::Databricks
+            | AdapterType::Spark
+    )
+}

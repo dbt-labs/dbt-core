@@ -174,7 +174,7 @@ impl DatabricksRelation {
         Self {
             adapter_type,
             path: RelationPath {
-                database,
+                database: database.filter(|s| !s.is_empty()),
                 schema,
                 identifier,
             },

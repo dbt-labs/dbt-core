@@ -1203,16 +1203,3 @@ pub trait AdapterFactory: Send + Sync {
         adapter_type: AdapterType,
     ) -> Result<Arc<dyn BaseRelation>, minijinja::Error>;
 }
-
-/// Check if the adapter type is supported
-///
-/// XXX: the definition of "supported" is lost here
-pub fn is_supported_dialect(adapter_type: AdapterType) -> bool {
-    matches!(
-        adapter_type,
-        AdapterType::Snowflake
-            | AdapterType::Bigquery
-            | AdapterType::Redshift
-            | AdapterType::Databricks
-    )
-}

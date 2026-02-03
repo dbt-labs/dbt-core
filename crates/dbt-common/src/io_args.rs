@@ -489,20 +489,29 @@ impl EvalArgsBuilder {
         mut self,
         adapter_type: Option<AdapterType>,
     ) -> Self {
-        match adapter_type {
-            // include adapters that don't support static analysis here
-            Some(AdapterType::Salesforce) | None => {
-                #[cfg(debug_assertions)]
-                {
-                    println!(
-                        "debug:warning=static analysis for adapter: {:?} is disabled",
-                        adapter_type
-                    );
-                }
-                self.args.static_analysis = StaticAnalysisKind::Off;
+        let supported = adapter_type
+            .map(crate::adapter::adapter_type_supports_static_analysis)
+            .unwrap_or(false);
+
+        // FIXME(serramatutu): there is a bug in Postgres' frontend parser that makes
+        // all our recordings invalid if enable it, but we can't disable it otherwise
+        // the recordings will break too. This line should be removed when we fix the
+        // following for Postgres:
+        // dbt1058: Column 'id' in node 'model.test.a' has a type mismatch. Overriding
+        // 'int' with 'integer'.
+        let skip = adapter_type == Some(AdapterType::Postgres);
+
+        if !supported && !skip {
+            #[cfg(debug_assertions)]
+            {
+                println!(
+                    "debug:warning=static analysis for adapter: {:?} is disabled",
+                    adapter_type
+                );
             }
-            _ => {}
+            self.args.static_analysis = StaticAnalysisKind::Off;
         }
+
         self
     }
 

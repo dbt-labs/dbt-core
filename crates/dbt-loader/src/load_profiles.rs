@@ -78,7 +78,8 @@ pub fn load_profiles<S: MinijinjaContext>(
     let database = db_config
         .get_database()
         .map(String::as_str)
-        .unwrap_or("dbt")
+        // NOTE: Spark does not support database/catalog name, and we're using empty string to represent that
+        .unwrap_or_default()
         .to_string();
     let schema = db_config
         .get_schema()
