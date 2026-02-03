@@ -18,9 +18,13 @@ from tests.functional.semantic_models.fixtures import (
     metricflow_time_spine_sql,
     schema_yml_v2_conversion_metric_missing_base_metric,
     schema_yml_v2_cumulative_metric_missing_input_metric,
+    schema_yml_v2_metric_with_doc_jinja,
     schema_yml_v2_simple_metric_on_model_1,
+    schema_yml_v2_standalone_metrics,
+    schema_yml_v2_standalone_metrics_with_doc_jinja,
     schema_yml_v2_standalone_simple_metric,
     semantic_model_config_does_not_exist,
+    semantic_model_descriptions,
     semantic_model_schema_yml_v2,
     semantic_model_schema_yml_v2_default_values,
     semantic_model_schema_yml_v2_disabled,
@@ -241,17 +245,16 @@ class TestSemanticModelFalseConfigIsNotParsed:
         assert len(manifest.semantic_models) == 0
 
 
-class TestStandaloneMetricParsingWorks:
+class TestMetricOnModelParsingWorks:
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "schema.yml": base_schema_yml_v2
-            + schema_yml_v2_simple_metric_on_model_1,  # schema_yml_v2_standalone_metrics,
+            "schema.yml": base_schema_yml_v2 + schema_yml_v2_simple_metric_on_model_1,
             "fct_revenue.sql": fct_revenue_sql,
             "metricflow_time_spine.sql": metricflow_time_spine_sql,
         }
 
-    def test_included_metric_parsing(self, project):
+    def test_metric_on_model_parsing(self, project):
         runner = dbtTestRunner()
         result = runner.invoke(["parse"])
         assert result.success
@@ -464,6 +467,76 @@ class TestStandaloneMetricParsingSimpleMetricFails:
         )
 
 
+class TestStandaloneMetricParsingWorks:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": base_schema_yml_v2
+            + schema_yml_v2_simple_metric_on_model_1
+            + schema_yml_v2_standalone_metrics,
+            "fct_revenue.sql": fct_revenue_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+        }
+
+    def test_included_metric_parsing(self, project):
+        runner = dbtTestRunner()
+        result = runner.invoke(["parse"])
+        assert result.success
+        manifest = result.result
+
+        semantic_model = manifest.semantic_models["semantic_model.test.fct_revenue"]
+        assert semantic_model.defaults.agg_time_dimension == "second_dim"
+
+        metrics = manifest.metrics
+        semantic_manifest = SemanticManifest(manifest)
+        semantic_manifest_metrics = {
+            metric.name: metric
+            for metric in semantic_manifest._get_pydantic_semantic_manifest().metrics
+        }
+        assert len(metrics) == 6
+
+        metric = metrics["metric.test.standalone_conversion_metric"]
+        assert metric.name == "standalone_conversion_metric"
+        assert metric.description == "This is our standalone conversion metric."
+        assert metric.type == MetricType.CONVERSION
+        assert metric.type_params.conversion_type_params.entity == "id_entity"
+        assert (
+            metric.type_params.conversion_type_params.calculation
+            == ConversionCalculationType.CONVERSION_RATE
+        )
+        assert metric.type_params.conversion_type_params.base_metric.name == "simple_metric"
+        assert (
+            metric.type_params.conversion_type_params.conversion_metric.name == "simple_metric_2"
+        )
+        assert set(metric.depends_on.nodes) == set(
+            [
+                "metric.test.simple_metric",
+                "metric.test.simple_metric_2",
+            ]
+        )
+        assert metric.type_params.metric_aggregation_params is None
+        assert metric.filter.where_filters[0].where_sql_template == "id > 0"
+
+        metric_pydantic = semantic_manifest_metrics["standalone_conversion_metric"]
+        assert metric_pydantic.name == "standalone_conversion_metric"
+        assert metric_pydantic.description == "This is our standalone conversion metric."
+        assert metric_pydantic.type == MetricType.CONVERSION
+        assert metric_pydantic.type_params.conversion_type_params.entity == "id_entity"
+        assert (
+            metric_pydantic.type_params.conversion_type_params.calculation
+            == ConversionCalculationType.CONVERSION_RATE
+        )
+        assert (
+            metric_pydantic.type_params.conversion_type_params.base_metric.name == "simple_metric"
+        )
+        assert (
+            metric_pydantic.type_params.conversion_type_params.conversion_metric.name
+            == "simple_metric_2"
+        )
+        assert metric_pydantic.type_params.metric_aggregation_params is None
+        assert metric_pydantic.filter.where_filters[0].where_sql_template == "id > 0"
+
+
 class TestCumulativeMetricNoInputMetricFails:
     @pytest.fixture(scope="class")
     def models(self):
@@ -586,6 +659,67 @@ class TestSemanticModelWithPrimaryEntityOnlyOnModel:
         ]
         assert len(primary_entity) == 0
         assert semantic_model.primary_entity == "id_entity"
+
+
+class TestSimpleSemanticModelWithMetricWithDocJinja:
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": base_schema_yml_v2
+            + schema_yml_v2_simple_metric_on_model_1
+            + schema_yml_v2_metric_with_doc_jinja,
+            "fct_revenue.sql": fct_revenue_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "docs.md": semantic_model_descriptions,
+        }
+
+    def test_simple_metric_with_doc_jinja_parsing(self, project):
+        runner = dbtTestRunner()
+        result = runner.invoke(["parse"])
+        assert result.success
+        manifest = result.result
+        assert len(manifest.semantic_models) == 1
+        metric = manifest.metrics["metric.test.simple_metric_with_doc_jinja"]
+        assert metric.description == "describe away!"
+
+
+class TestTopLevelSemanticsMetricWithDocJinja:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": base_schema_yml_v2
+            + schema_yml_v2_simple_metric_on_model_1
+            + schema_yml_v2_standalone_metrics_with_doc_jinja,
+            "fct_revenue.sql": fct_revenue_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "docs.md": semantic_model_descriptions,
+        }
+
+    def test_top_level_metric_with_doc_jinja_parsing(self, project):
+        runner = dbtTestRunner()
+        result = runner.invoke(["parse"])
+        assert result.success
+        manifest = result.result
+        assert len(manifest.semantic_models) == 1
+        metric = manifest.metrics["metric.test.standalone_conversion_metric"]
+        assert metric.description == "describe away!"
+        assert (
+            metric.filter.where_filters[0].where_sql_template
+            == "{{ Dimension('id_entity__id_dim') }} > 0"
+        )
+
+        semantic_manifest = SemanticManifest(manifest)
+        semantic_manifest_metrics = {
+            metric.name: metric
+            for metric in semantic_manifest._get_pydantic_semantic_manifest().metrics
+        }
+        assert (
+            semantic_manifest_metrics["standalone_conversion_metric"]
+            .filter.where_filters[0]
+            .where_sql_template
+            == "{{ Dimension('id_entity__id_dim') }} > 0"
+        )
 
 
 # TODO DI-4605: add enforcement and a test for when there are validity params with no column granularity
