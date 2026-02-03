@@ -662,10 +662,7 @@ semantic_model_schema_yml_v2_template_for_primary_entity_tests = """models:
           meta:
           component_level: "original_meta"
         dimension:
-          # name: id_dim
-          # label: "ID Dimension"
           type: categorical
-          # is_partition: true
         entity:
           name: id_entity
           description: This is the id entity, and it is the primary entity.
