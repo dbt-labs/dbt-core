@@ -952,7 +952,7 @@ class SemanticModelParser(YamlReader):
             dimensions.append(
                 Dimension(
                     type=DimensionType(derived_dimension.type),
-                    name=derived_dimension.name or "blah",
+                    name=derived_dimension.name,
                     description=derived_dimension.description,
                     label=derived_dimension.label,
                     is_partition=derived_dimension.is_partition,

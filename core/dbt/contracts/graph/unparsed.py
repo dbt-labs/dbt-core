@@ -183,6 +183,7 @@ class UnparsedDimensionV2(UnparsedDimensionBase):
 class UnparsedDerivedDimensionV2(UnparsedDimensionV2):
     """Used for dbt Semantic Layer derived dimensions (v2 YAML)."""
 
+    name: str
     expr: str
     granularity: Optional[str] = None  # str is really a TimeGranularity Enum
 
