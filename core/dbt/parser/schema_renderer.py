@@ -106,6 +106,10 @@ class SchemaYamlRenderer(BaseRenderer):
             elif self._is_norender_key(keypath[0:]):
                 return False
         else:  # models, seeds, snapshots, analyses
+            if keypath[-1] == "filter":
+                # This ensures that metric filters for v2 metrics attached to a dbt model
+                # with Dimension jinja are skipped
+                return False
             if self._is_norender_key(keypath[0:]):
                 return False
         return True
