@@ -7,6 +7,7 @@ members = [
   "crates/dbt-agate",
   "crates/dbt-auth",
   "crates/dbt-cancel",
+  "crates/dbt-clap-core",
   "crates/dbt-common",
   "crates/dbt-csv",
   "crates/dbt-cloud-api",
@@ -169,6 +170,7 @@ dbt-adapter = { path = "crates/dbt-adapter" }
 dbt-agate = { path = "crates/dbt-agate" }
 dbt-auth = { path = "crates/dbt-auth" }
 dbt-cancel = { path = "crates/dbt-cancel" }
+dbt-clap-core = { path = "crates/dbt-clap-core" }
 dbt-cloud-api = { path = "crates/dbt-cloud-api" }
 dbt-common = { path = "crates/dbt-common" }
 dbt-csv = { path = "crates/dbt-csv" }
