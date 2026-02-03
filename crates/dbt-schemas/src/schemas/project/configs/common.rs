@@ -109,6 +109,31 @@ pub fn default_meta_and_tags(
         merge_tags(child_tags_vec, parent_tags_vec).map(StringOrArrayOfStrings::ArrayOfStrings);
 }
 
+/// Helper function to handle default_to logic for packages
+/// Packages should append parent values to child values (parent first, then child)
+/// Note: Unlike tags, packages are NOT deduplicated or sorted, matching dbt-core behavior
+pub fn default_packages(
+    child_packages: &mut Option<StringOrArrayOfStrings>,
+    parent_packages: &Option<StringOrArrayOfStrings>,
+) {
+    // Convert to Vec<String> for merging
+    let child_vec: Option<Vec<String>> = child_packages.take().map(|packages| packages.into());
+    let parent_vec: Option<Vec<String>> = parent_packages.clone().map(|packages| packages.into());
+
+    // Simple append without deduplication or sorting (matches dbt-core)
+    let merged = match (parent_vec, child_vec) {
+        (None, None) => None,
+        (Some(mut parent), Some(child)) => {
+            parent.extend(child);
+            Some(parent)
+        }
+        (Some(parent), None) => Some(parent),
+        (None, Some(child)) => Some(child),
+    };
+
+    *child_packages = merged.map(StringOrArrayOfStrings::ArrayOfStrings);
+}
+
 /// Compare Option<StringOrArrayOfStrings>, treating None and empty array as equal
 pub fn array_of_strings_eq(
     a: &Option<StringOrArrayOfStrings>,

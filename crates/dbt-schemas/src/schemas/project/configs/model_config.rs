@@ -33,6 +33,7 @@ use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::project::configs::common::default_column_types;
 use crate::schemas::project::configs::common::default_hooks;
 use crate::schemas::project::configs::common::default_meta_and_tags;
+use crate::schemas::project::configs::common::default_packages;
 use crate::schemas::project::configs::common::default_quoting;
 use crate::schemas::project::configs::common::default_to_grants;
 use crate::schemas::project::configs::common::log_state_mod_diff;
@@ -902,6 +903,8 @@ impl DefaultTo<ModelConfig> for ModelConfig {
         let column_types = default_column_types(column_types, &parent.column_types);
         #[allow(unused, clippy::let_unit_value)]
         let grants = default_to_grants(grants, &parent.grants);
+        #[allow(unused, clippy::let_unit_value)]
+        let packages = default_packages(packages, &parent.packages);
 
         // Handle Omissible fields for hierarchical overrides
         handle_omissible_override(schema, &parent.schema);
@@ -925,7 +928,6 @@ impl DefaultTo<ModelConfig> for ModelConfig {
                 unique_key,
                 on_schema_change,
                 on_configuration_change,
-                packages,
                 python_version,
                 use_anonymous_sproc,
                 secrets,
@@ -1604,6 +1606,131 @@ mod tests {
                 .as_ref()
                 .and_then(|checks| checks.get("mutating_introspection_queries")),
             Some(&CustomCheckLevel::Warn)
+        );
+    }
+
+    #[test]
+    fn test_packages_append() {
+        use crate::schemas::project::dbt_project::DefaultTo;
+        use crate::schemas::serde::StringOrArrayOfStrings;
+
+        let parent = ModelConfig {
+            packages: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "numpy".to_string(),
+                "pandas".to_string(),
+            ])),
+            ..Default::default()
+        };
+
+        let mut child = ModelConfig {
+            packages: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "matplotlib".to_string(),
+            ])),
+            ..Default::default()
+        };
+
+        child.default_to(&parent);
+
+        // Should have parent packages first, then child packages (no dedup/sort, matches dbt-core)
+        assert_eq!(
+            child.packages,
+            Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "numpy".to_string(),
+                "pandas".to_string(),
+                "matplotlib".to_string(),
+            ]))
+        );
+    }
+
+    #[test]
+    fn test_packages_append_with_string_variant() {
+        use crate::schemas::project::dbt_project::DefaultTo;
+        use crate::schemas::serde::StringOrArrayOfStrings;
+
+        let parent = ModelConfig {
+            packages: Some(StringOrArrayOfStrings::String("numpy".to_string())),
+            ..Default::default()
+        };
+
+        let mut child = ModelConfig {
+            packages: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "pandas".to_string(),
+            ])),
+            ..Default::default()
+        };
+
+        child.default_to(&parent);
+
+        // Should convert String to ArrayOfStrings and merge
+        assert_eq!(
+            child.packages,
+            Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "numpy".to_string(),
+                "pandas".to_string(),
+            ]))
+        );
+    }
+
+    #[test]
+    fn test_packages_none_child_inherits_parent() {
+        use crate::schemas::project::dbt_project::DefaultTo;
+        use crate::schemas::serde::StringOrArrayOfStrings;
+
+        let parent = ModelConfig {
+            packages: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "numpy".to_string(),
+            ])),
+            ..Default::default()
+        };
+
+        let mut child = ModelConfig {
+            packages: None,
+            ..Default::default()
+        };
+
+        child.default_to(&parent);
+
+        // Child should inherit parent's packages
+        assert_eq!(
+            child.packages,
+            Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "numpy".to_string(),
+            ]))
+        );
+    }
+
+    #[test]
+    fn test_packages_no_deduplication() {
+        use crate::schemas::project::dbt_project::DefaultTo;
+        use crate::schemas::serde::StringOrArrayOfStrings;
+
+        let parent = ModelConfig {
+            packages: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "numpy".to_string(),
+                "pandas".to_string(),
+            ])),
+            ..Default::default()
+        };
+
+        let mut child = ModelConfig {
+            packages: Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "numpy".to_string(),
+                "matplotlib".to_string(),
+            ])),
+            ..Default::default()
+        };
+
+        child.default_to(&parent);
+
+        // Should preserve duplicates (no dedup/sort, matches dbt-core behavior)
+        assert_eq!(
+            child.packages,
+            Some(StringOrArrayOfStrings::ArrayOfStrings(vec![
+                "numpy".to_string(),
+                "pandas".to_string(),
+                "numpy".to_string(),
+                "matplotlib".to_string(),
+            ]))
         );
     }
 }
