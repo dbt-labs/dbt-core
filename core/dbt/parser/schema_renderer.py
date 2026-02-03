@@ -106,9 +106,6 @@ class SchemaYamlRenderer(BaseRenderer):
             elif self._is_norender_key(keypath[0:]):
                 return False
         else:  # models, seeds, snapshots, analyses
-            # TODO: double check this logic
-            if keypath[-1] == "filter" or len(keypath) > 1 and keypath[-2] == "filter":
-                return False
             if self._is_norender_key(keypath[0:]):
                 return False
         return True
