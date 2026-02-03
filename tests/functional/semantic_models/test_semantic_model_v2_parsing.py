@@ -19,6 +19,7 @@ from tests.functional.semantic_models.fixtures import (
     schema_yml_v2_conversion_metric_missing_base_metric,
     schema_yml_v2_cumulative_metric_missing_input_metric,
     schema_yml_v2_metric_with_doc_jinja,
+    schema_yml_v2_metric_with_filter_dimension_jinja,
     schema_yml_v2_simple_metric_on_model_1,
     schema_yml_v2_standalone_metrics,
     schema_yml_v2_standalone_metrics_with_doc_jinja,
@@ -682,6 +683,32 @@ class TestSimpleSemanticModelWithMetricWithDocJinja:
         assert len(manifest.semantic_models) == 1
         metric = manifest.metrics["metric.test.simple_metric_with_doc_jinja"]
         assert metric.description == "describe away!"
+
+
+class TestSimpleSemanticModelWithFilterWithFilterDimensionJinja:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": base_schema_yml_v2
+            + schema_yml_v2_simple_metric_on_model_1
+            + schema_yml_v2_metric_with_filter_dimension_jinja,
+            "fct_revenue.sql": fct_revenue_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "docs.md": semantic_model_descriptions,
+        }
+
+    def test_simple_metric_with_filter_with_filter_dimension_jinja_parsing(self, project):
+        runner = dbtTestRunner()
+        result = runner.invoke(["parse"])
+        assert result.success
+        manifest = result.result
+        assert len(manifest.semantic_models) == 1
+        metric = manifest.metrics["metric.test.simple_metric_with_filter_dimension_jinja"]
+        print(metric.filter.where_filters[0].where_sql_template)
+        assert (
+            metric.filter.where_filters[0].where_sql_template
+            == "{{ Dimension('id_entity__id_dim') }} > 0"
+        )
 
 
 class TestTopLevelSemanticsMetricWithDocJinja:

@@ -855,6 +855,17 @@ schema_yml_v2_metric_with_doc_jinja = """
         expr: id
 """
 
+schema_yml_v2_metric_with_filter_dimension_jinja = """
+      - name: simple_metric_with_filter_dimension_jinja
+        description: This is a description
+        label: Simple Metric With Doc Jinja
+        type: simple
+        agg: count
+        expr: id
+        filter: |
+          {{ Dimension('id_entity__id_dim') }} > 0
+"""
+
 schema_yml_v2_cumulative_metric_missing_input_metric = """
     metrics:
       - name: cumulative_metric
@@ -904,7 +915,8 @@ schema_yml_v2_standalone_metrics = schema_yml_v2_standalone_metrics_template.for
 
 schema_yml_v2_standalone_metrics_with_doc_jinja = schema_yml_v2_standalone_metrics_template.format(
     description="\"{{ doc('simple_metric_description') }}\"",
-    filter="filter: \"{{ Dimension('id_entity__id_dim') }} > 0\"",
+    filter="""filter: |
+      {{ Dimension('id_entity__id_dim') }} > 0""",
 )
 
 derived_semantics_yml = """
