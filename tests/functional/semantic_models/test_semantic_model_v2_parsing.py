@@ -704,7 +704,6 @@ class TestSimpleSemanticModelWithFilterWithFilterDimensionJinja:
         manifest = result.result
         assert len(manifest.semantic_models) == 1
         metric = manifest.metrics["metric.test.simple_metric_with_filter_dimension_jinja"]
-        print(metric.filter.where_filters[0].where_sql_template)
         assert (
             metric.filter.where_filters[0].where_sql_template
             == "{{ Dimension('id_entity__id_dim') }} > 0"
