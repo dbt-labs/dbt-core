@@ -904,7 +904,8 @@ schema_yml_v2_standalone_metrics = schema_yml_v2_standalone_metrics_template.for
 
 schema_yml_v2_standalone_metrics_with_doc_jinja = schema_yml_v2_standalone_metrics_template.format(
     description="\"{{ doc('simple_metric_description') }}\"",
-    filter="filter: \"{{ Dimension('id_entity__id_dim') }} > 0\"",
+    filter="""filter: |
+      {{ Dimension('id_entity__id_dim') }} > 0""",
 )
 
 derived_semantics_yml = """
