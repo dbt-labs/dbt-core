@@ -25,14 +25,15 @@ enum DatabricksAuthType {
 
 impl DatabricksAuthType {
     /// Parse auth_type from config.
-    /// - Absent: defaults to token-based authentication
+    /// - Absent or "token": defaults to token-based authentication
     /// - "oauth": OAuth authentication
     /// - Any other value: error
     fn from_config(config: &AdapterConfig) -> Result<Self, AuthError> {
         match config.get_string("auth_type") {
             Some(s) if s.eq_ignore_ascii_case("oauth") => Ok(DatabricksAuthType::OAuth),
+            Some(s) if s.eq_ignore_ascii_case("token") => Ok(DatabricksAuthType::Token),
             Some(invalid) => Err(AuthError::config(format!(
-                "Invalid auth_type '{}'. Valid values are: 'oauth'. Omit auth_type to use token-based authentication.",
+                "Invalid auth_type '{}'. Valid values are: 'oauth', 'token'.",
                 invalid
             ))),
             None => Ok(DatabricksAuthType::Token),
@@ -95,8 +96,10 @@ impl Auth for DatabricksAuth {
             builder.with_named_option(databricks::CATALOG, config.require_string("database")?)?;
             builder.with_named_option(databricks::HTTP_PATH, http_path)?;
 
-            match DatabricksAuthType::from_config(config)? {
-                DatabricksAuthType::OAuth => {
+            // FIXME: dbt-databricks historically has allowed garbage in the auth_type field and only responds to
+            // auth_type 'oauth'. Everything else means token
+            match DatabricksAuthType::from_config(config) {
+                Ok(DatabricksAuthType::OAuth) => {
                     // OAuth authentication: M2M if client_secret present, otherwise External Browser (U2M)
                     if let Some(client_secret) = config.get_string("client_secret") {
                         // M2M
@@ -120,8 +123,8 @@ impl Auth for DatabricksAuth {
                         )?;
                     }
                 }
-                DatabricksAuthType::Token => {
-                    // Token
+                Ok(DatabricksAuthType::Token) | Err(_) => {
+                    // Token (default for unknown auth_type values)
                     builder
                         .with_named_option(databricks::TOKEN, config.require_string("token")?)?;
                     builder.with_named_option(databricks::AUTH_TYPE, databricks::auth_type::PAT)?;
@@ -171,7 +174,8 @@ fn validate_config(config: &AdapterConfig) -> Result<(), AuthError> {
     if !config.contains_key("host") {
         return Err(AuthError::config("host is required".to_string()));
     }
-    DatabricksAuthType::from_config(config)?;
+    // FIXME: auth_type validation is lenient - unknown values default to token auth
+    let _ = DatabricksAuthType::from_config(config);
     if !config.contains_key("client_id") && config.contains_key("client_secret") {
         return Err(AuthError::config(
             "The config 'client_id' is required to connect to Databricks when 'client_secret' is present",
@@ -443,29 +447,8 @@ mod tests {
     }
 
     #[test]
-    fn test_invalid_auth_type_errors() {
-        let config = Mapping::from_iter([
-            ("host".into(), "H".into()),
-            (
-                "http_path".into(),
-                "sql/protocolv1/o/1030i40i30i50i3/my-cluster-id".into(),
-            ),
-            ("schema".into(), "S".into()),
-            ("database".into(), "C".into()),
-            ("auth_type".into(), "external_browser".into()), // Invalid value
-        ]);
-        let auth = DatabricksAuth {};
-        let result = auth.configure(&AdapterConfig::new(config));
-        assert!(result.is_err());
-        assert_eq!(
-            result.unwrap_err().msg(),
-            "Invalid auth_type 'external_browser'. Valid values are: 'oauth'. Omit auth_type to use token-based authentication."
-        );
-    }
-
-    #[test]
-    fn test_invalid_auth_type_pat_errors() {
-        // "pat" is not a valid auth_type value - users should omit auth_type for PAT
+    fn test_unknown_auth_type_defaults_to_token() {
+        // Unknown auth_type values default to token authentication
         let config = Mapping::from_iter([
             ("host".into(), "H".into()),
             (
@@ -475,15 +458,77 @@ mod tests {
             ("schema".into(), "S".into()),
             ("database".into(), "C".into()),
             ("token".into(), "T".into()),
-            ("auth_type".into(), "pat".into()), // Invalid - should omit auth_type
+            ("auth_type".into(), "external_browser".into()), // Unknown value, defaults to token
         ]);
-        let auth = DatabricksAuth {};
-        let result = auth.configure(&AdapterConfig::new(config));
-        assert!(result.is_err());
-        assert_eq!(
-            result.unwrap_err().msg(),
-            "Invalid auth_type 'pat'. Valid values are: 'oauth'. Omit auth_type to use token-based authentication."
-        );
+        let expected = vec![
+            (databricks::TOKEN, "T"),
+            (databricks::SCHEMA, "S"),
+            (databricks::HOST, "H"),
+            (
+                databricks::HTTP_PATH,
+                "sql/protocolv1/o/1030i40i30i50i3/my-cluster-id",
+            ),
+            (databricks::CATALOG, "C"),
+            (databricks::USER_AGENT, USER_AGENT_NAME),
+            (databricks::AUTH_TYPE, databricks::auth_type::PAT),
+        ];
+        run_config_test(config, &expected).unwrap();
+    }
+
+    #[test]
+    fn test_unknown_auth_type_pat_defaults_to_token() {
+        // "pat" is not a recognized auth_type value, but defaults to token auth
+        let config = Mapping::from_iter([
+            ("host".into(), "H".into()),
+            (
+                "http_path".into(),
+                "sql/protocolv1/o/1030i40i30i50i3/my-cluster-id".into(),
+            ),
+            ("schema".into(), "S".into()),
+            ("database".into(), "C".into()),
+            ("token".into(), "T".into()),
+            ("auth_type".into(), "pat".into()), // Unknown value, defaults to token
+        ]);
+        let expected = vec![
+            (databricks::TOKEN, "T"),
+            (databricks::SCHEMA, "S"),
+            (databricks::HOST, "H"),
+            (
+                databricks::HTTP_PATH,
+                "sql/protocolv1/o/1030i40i30i50i3/my-cluster-id",
+            ),
+            (databricks::CATALOG, "C"),
+            (databricks::USER_AGENT, USER_AGENT_NAME),
+            (databricks::AUTH_TYPE, databricks::auth_type::PAT),
+        ];
+        run_config_test(config, &expected).unwrap();
+    }
+
+    #[test]
+    fn test_explicit_token_auth_type() {
+        // Test that auth_type: "token" works the same as omitting auth_type
+        let config = Mapping::from_iter([
+            ("host".into(), "H".into()),
+            ("schema".into(), "S".into()),
+            (
+                "http_path".into(),
+                "/sql/1.0/warehouses/warehouse-id".into(),
+            ),
+            ("token".into(), "T".into()),
+            ("database".into(), "C".into()),
+            ("auth_type".into(), "token".into()),
+        ]);
+
+        let expected = vec![
+            (databricks::TOKEN, "T"),
+            (databricks::SCHEMA, "S"),
+            (databricks::HOST, "H"),
+            (databricks::HTTP_PATH, "/sql/1.0/warehouses/warehouse-id"),
+            (databricks::CATALOG, "C"),
+            (databricks::USER_AGENT, USER_AGENT_NAME),
+            (databricks::AUTH_TYPE, databricks::auth_type::PAT),
+        ];
+        run_config_test(config, &expected).unwrap();
     }
 
     #[test]

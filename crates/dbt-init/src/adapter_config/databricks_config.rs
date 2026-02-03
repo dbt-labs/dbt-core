@@ -50,7 +50,7 @@ impl InteractiveSetup for DatabricksDbConfig {
             "token" => {
                 if let FieldValue::String(s) = value {
                     self.token = Some(s);
-                    self.auth_type = Some("databricks_cli".to_string());
+                    self.auth_type = Some("token".to_string());
                 }
             }
             "auth_method" => {
