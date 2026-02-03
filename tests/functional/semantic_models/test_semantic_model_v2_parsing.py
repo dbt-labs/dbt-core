@@ -706,7 +706,7 @@ class TestTopLevelSemanticsMetricWithDocJinja:
         assert metric.description == "describe away!"
         assert (
             metric.filter.where_filters[0].where_sql_template
-            == "{ Dimension('id_entity__id_dim') } > 0"
+            == "{{ Dimension('id_entity__id_dim') }} > 0"
         )
 
         semantic_manifest = SemanticManifest(manifest)
@@ -718,7 +718,7 @@ class TestTopLevelSemanticsMetricWithDocJinja:
             semantic_manifest_metrics["standalone_conversion_metric"]
             .filter.where_filters[0]
             .where_sql_template
-            == "{ Dimension('id_entity__id_dim') } > 0"
+            == "{{ Dimension('id_entity__id_dim') }} > 0"
         )
 
 
