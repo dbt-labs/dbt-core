@@ -1,15 +1,6 @@
-
 kind: Fixes
-
 body: Add @requires.catalogs decorator to compile command to fix REST Catalog-Linked database compilation
-
 time: 2026-01-24T21:23:00.00000Z
-
 custom:
-
   Author: kalluripradeep
-
   Issue: "12353"
-
-
-
