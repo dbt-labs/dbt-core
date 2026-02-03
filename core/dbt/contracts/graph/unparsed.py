@@ -147,8 +147,8 @@ class HasConfig:
 @dataclass
 class UnparsedDimensionBase(dbtClassMixin):
     # Should we be limiting name length or otherwise validating this?
-    name: str
     type: str  # actually a DimensionType enum value
+    name: Optional[str] = None
     description: Optional[str] = None
     label: Optional[str] = None
     is_partition: bool = False
@@ -163,10 +163,11 @@ class UnparsedDimensionTypeParams(dbtClassMixin):
     validity_params: Optional[DimensionValidityParams] = None
 
 
-@dataclass
+@dataclass(kw_only=True)
 class UnparsedDimension(UnparsedDimensionBase):
     """Used for dbt Semantic Layer dimensions (v1 YAML)."""
 
+    name: str
     type_params: Optional[UnparsedDimensionTypeParams] = None
     expr: Optional[str] = None
 
@@ -182,6 +183,7 @@ class UnparsedDimensionV2(UnparsedDimensionBase):
 class UnparsedDerivedDimensionV2(UnparsedDimensionV2):
     """Used for dbt Semantic Layer derived dimensions (v2 YAML)."""
 
+    name: str
     expr: str
     granularity: Optional[str] = None  # str is really a TimeGranularity Enum
 
