@@ -142,6 +142,7 @@ static GLOBAL_REPLAYER: OnceLock<Arc<EventReplayer>> = OnceLock::new();
 /// * `output_path` - Directory to write recording files
 /// * `adapter_type` - Type of adapter being recorded (e.g., "snowflake")
 /// * `invocation_id` - Unique identifier for this run
+/// * `invocation_command` - The command that was executed (e.g., "dbt build --select ...")
 /// * `token` - Cancellation token for graceful shutdown on CTRL+C
 ///
 /// # Returns
@@ -151,6 +152,7 @@ pub fn get_or_init_recording(
     output_path: impl Into<std::path::PathBuf>,
     adapter_type: impl Into<String>,
     invocation_id: impl Into<String>,
+    invocation_command: Option<String>,
     token: CancellationToken,
 ) -> RecordingHandle {
     let output_path = output_path.into();
@@ -159,7 +161,10 @@ pub fn get_or_init_recording(
 
     GLOBAL_SESSION.get_or_init(|| {
         let (recorder, receiver) = EventRecorder::new();
-        let header = RecordingHeader::new(adapter_type, invocation_id);
+        let mut header = RecordingHeader::new(adapter_type, invocation_id);
+        if let Some(cmd) = invocation_command {
+            header = header.with_invocation_command(cmd);
+        }
         let config = WriterConfig::new(output_path);
         let writer_handle = spawn_writer(receiver, header, config, token);
 

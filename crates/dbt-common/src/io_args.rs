@@ -838,6 +838,9 @@ pub struct TimeMachineRecordConfig {
     pub output_path: PathBuf,
     /// The invocation ID for this run (used as the subdirectory name).
     pub invocation_id: uuid::Uuid,
+    /// The invocation command that was executed (e.g., "dbt build --select ...")
+    /// Stored in header.json for disambiguation when multiple recordings exist.
+    pub invocation_command: Option<String>,
 }
 
 /// Configuration for Time Machine replay mode.

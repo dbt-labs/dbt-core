@@ -224,6 +224,10 @@ pub struct RecordingHeader {
     pub recorded_at: String,
     /// Invocation ID for this run
     pub invocation_id: String,
+    /// The command that was executed (e.g., "dbt build --select ...")
+    /// Helps disambiguate recordings when multiple commands were run.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub invocation_command: Option<String>,
     /// Optional additional metadata
     #[serde(default, skip_serializing_if = "serde_json::Map::is_empty")]
     pub metadata: serde_json::Map<String, serde_json::Value>,
@@ -241,8 +245,15 @@ impl RecordingHeader {
             adapter_type: adapter_type.into(),
             recorded_at: chrono::Utc::now().to_rfc3339(),
             invocation_id: invocation_id.into(),
+            invocation_command: None,
             metadata: serde_json::Map::new(),
         }
+    }
+
+    /// Set the invocation command for this recording header.
+    pub fn with_invocation_command(mut self, command: impl Into<String>) -> Self {
+        self.invocation_command = Some(command.into());
+        self
     }
 }
 
