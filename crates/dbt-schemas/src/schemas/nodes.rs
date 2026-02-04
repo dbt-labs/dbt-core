@@ -644,18 +644,32 @@ fn same_persisted_description(
 /// Compare two vectors of Option<String> treating semantic equivalents of "empty" as equal.
 /// - `None` and `Some("")` are considered equal
 /// - `Some("")` and `Some("   ")` (whitespace-only) are considered equal
-/// - Vectors of different lengths are considered different
+/// - An empty vec `[]` is considered equal to a vec of all-empty strings `[Some(""), ...]`
+/// - Vectors with different non-empty content are considered different
 fn optional_string_vecs_equal(a: &[Option<String>], b: &[Option<String>]) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-
     /// Helper to check if an Option<String> is semantically empty
     fn is_empty(opt: &Option<String>) -> bool {
         match opt {
             None => true,
             Some(s) => s.trim().is_empty(),
         }
+    }
+
+    // Check if all elements in a slice are semantically empty
+    fn all_empty(slice: &[Option<String>]) -> bool {
+        slice.iter().all(is_empty)
+    }
+
+    // Special case: if both are effectively "all empty", treat them as equal
+    // This handles the case where one manifest has `[]` and the other has `[Some(""), Some(""), ...]`
+    // Both represent "no meaningful column descriptions"
+    if all_empty(a) && all_empty(b) {
+        return true;
+    }
+
+    // If lengths differ and not both all-empty, they're different
+    if a.len() != b.len() {
+        return false;
     }
 
     for (a_item, b_item) in a.iter().zip(b.iter()) {
@@ -5332,10 +5346,71 @@ mod tests {
         }
 
         #[test]
-        fn test_different_lengths_are_not_equal() {
+        fn test_different_lengths_with_content_are_not_equal() {
+            // Different lengths with non-empty content should NOT be equal
             let a = vec![Some("a".to_string())];
             let b = vec![Some("a".to_string()), Some("b".to_string())];
             assert!(!optional_string_vecs_equal(&a, &b));
+        }
+
+        #[test]
+        fn test_empty_vec_vs_vec_of_empty_strings_are_equal() {
+            // This is the key fix: empty vec [] should equal vec of all-empty strings
+            // Scenario from state:modified false positive:
+            // - self_value: "[]" (current manifest has no columns)
+            // - other_value: "[Some(\"\"), Some(\"\"), ...]" (state has columns with empty descriptions)
+            let current_manifest: Vec<Option<String>> = vec![];
+            let state_manifest = vec![
+                Some("".to_string()),
+                Some("".to_string()),
+                Some("".to_string()),
+            ];
+            assert!(optional_string_vecs_equal(
+                &current_manifest,
+                &state_manifest
+            ));
+            assert!(optional_string_vecs_equal(
+                &state_manifest,
+                &current_manifest
+            ));
+        }
+
+        #[test]
+        fn test_empty_vec_vs_vec_of_none_are_equal() {
+            let a: Vec<Option<String>> = vec![];
+            let b = vec![None, None, None];
+            assert!(optional_string_vecs_equal(&a, &b));
+            assert!(optional_string_vecs_equal(&b, &a));
+        }
+
+        #[test]
+        fn test_empty_vec_vs_vec_of_whitespace_are_equal() {
+            let a: Vec<Option<String>> = vec![];
+            let b = vec![Some("   ".to_string()), Some("\t\n".to_string())];
+            assert!(optional_string_vecs_equal(&a, &b));
+            assert!(optional_string_vecs_equal(&b, &a));
+        }
+
+        #[test]
+        fn test_empty_vec_vs_vec_with_content_are_not_equal() {
+            // Empty vec should NOT equal a vec that has actual content
+            let a: Vec<Option<String>> = vec![];
+            let b = vec![Some("actual description".to_string())];
+            assert!(!optional_string_vecs_equal(&a, &b));
+            assert!(!optional_string_vecs_equal(&b, &a));
+        }
+
+        #[test]
+        fn test_mixed_empty_and_content_vs_empty_vec_not_equal() {
+            // If the state has some actual content, it should NOT match empty
+            let a: Vec<Option<String>> = vec![];
+            let b = vec![
+                Some("".to_string()),
+                Some("primary key".to_string()),
+                Some("".to_string()),
+            ];
+            assert!(!optional_string_vecs_equal(&a, &b));
+            assert!(!optional_string_vecs_equal(&b, &a));
         }
 
         #[test]
