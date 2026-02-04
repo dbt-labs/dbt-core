@@ -35,7 +35,7 @@ use crate::vm::closure_object::Closure;
 
 pub(crate) use crate::vm::context::{Context, Frame};
 pub use crate::vm::state::State;
-use crate::{CodeLocation, OutputTracker};
+use crate::CodeLocation;
 
 #[cfg(feature = "macros")]
 mod closure_object;
@@ -240,6 +240,7 @@ impl<'env> Vm<'env> {
         ctx.store("kwargs", Value::from_object(kwargs));
 
         ok!(ctx.incr_depth(state.ctx.depth() + MACRO_RECURSION_COST));
+        // Nested macro calls should not use listener's location to avoid sync issues
         self.do_eval(
             &mut State {
                 env: self.env,
@@ -263,6 +264,7 @@ impl<'env> Vm<'env> {
             Stack::from(args),
             pc,
             listeners,
+            false,
         )
     }
 
@@ -273,7 +275,8 @@ impl<'env> Vm<'env> {
         state: &mut State<'_, 'env>,
         listeners: &[Rc<dyn RenderingEventListener>],
     ) -> Result<Value, Error> {
-        self.do_eval(state, Stack::default(), 0, listeners)
+        // Top-level eval: use listener's location for macro span tracking
+        self.do_eval(state, Stack::default(), 0, listeners, true)
     }
 
     /// Performs the actual evaluation, optionally with stack growth functionality.
@@ -284,16 +287,17 @@ impl<'env> Vm<'env> {
         stack: Stack,
         pc: usize,
         listeners: &[Rc<dyn RenderingEventListener>],
+        use_listener_location: bool,
     ) -> Result<Value, Error> {
         #[cfg(feature = "stacker")]
         {
             stacker::maybe_grow(32 * 1024, 1024 * 1024, || {
-                self.eval_impl(state, stack, pc, listeners)
+                self.eval_impl(state, stack, pc, listeners, use_listener_location)
             })
         }
         #[cfg(not(feature = "stacker"))]
         {
-            self.eval_impl(state, stack, pc, listeners)
+            self.eval_impl(state, stack, pc, listeners, use_listener_location)
         }
     }
 
@@ -305,10 +309,22 @@ impl<'env> Vm<'env> {
         mut stack: Stack,
         mut pc: usize,
         listeners: &[Rc<dyn RenderingEventListener>],
+        use_listener_location: bool,
     ) -> Result<Value, Error> {
         let mut rv = String::new();
-        let mut output_tracker = OutputTracker::new(&mut rv);
-        let current_location = output_tracker.location.clone();
+
+        // Only use listener's output tracker for top-level render (macro span tracking).
+        // Nested macro calls must use their own tracker to avoid sync issues.
+        let mut output_tracker = 'tracker: {
+            if use_listener_location {
+                for listener in listeners {
+                    if let Some(tracker) = listener.create_output_tracker(&mut rv) {
+                        break 'tracker tracker;
+                    }
+                }
+            }
+            crate::OutputTracker::new(&mut rv)
+        };
         let mut out = Output::with_write(&mut output_tracker);
 
         let initial_auto_escape = state.auto_escape;
@@ -1287,15 +1303,7 @@ impl<'env> Vm<'env> {
                             };
                         let offset = *index + span.start_offset;
                         listeners.iter().for_each(|listener| {
-                            listener.on_macro_start(
-                                Some(path),
-                                &line,
-                                &col,
-                                &offset,
-                                &current_location.line(),
-                                &current_location.col(),
-                                &current_location.index(),
-                            )
+                            listener.on_macro_start(Some(path), &line, &col, &offset)
                         });
                     }
                 }
@@ -1312,15 +1320,7 @@ impl<'env> Vm<'env> {
                             };
                         let offset = *index + span.start_offset;
                         listeners.iter().for_each(|listener| {
-                            listener.on_macro_stop(
-                                Some(path),
-                                &line,
-                                &col,
-                                &offset,
-                                &current_location.line(),
-                                &current_location.col(),
-                                &current_location.index(),
-                            )
+                            listener.on_macro_stop(Some(path), &line, &col, &offset)
                         });
                     }
                 }

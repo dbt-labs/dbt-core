@@ -7,7 +7,7 @@ use std::{
 };
 
 use minijinja::{
-    CodeLocation, MacroSpans, TypecheckingEventListener,
+    CodeLocation, MacroSpans, OutputTracker, OutputTrackerLocation, TypecheckingEventListener,
     listener::{MacroStart, RenderingEventListener},
     machinery::Span,
 };
@@ -321,6 +321,9 @@ pub struct DefaultRenderingEventListener {
 
     /// inner Vec<MacroStart> means during one function start/stop
     macro_start_stack: RefCell<Vec<Vec<MacroStart>>>,
+
+    /// Output tracker location for tracking expanded positions
+    output_tracker_location: Rc<OutputTrackerLocation>,
 }
 
 impl Default for DefaultRenderingEventListener {
@@ -330,6 +333,7 @@ impl Default for DefaultRenderingEventListener {
             args: IoArgs::default(),
             macro_spans: RefCell::new(MacroSpans::default()),
             macro_start_stack: RefCell::new(vec![vec![]]),
+            output_tracker_location: Rc::new(OutputTrackerLocation::default()),
         }
     }
 }
@@ -342,6 +346,7 @@ impl DefaultRenderingEventListener {
             args: IoArgs::default(),
             macro_spans: RefCell::new(MacroSpans::default()),
             macro_start_stack: RefCell::new(vec![vec![]]),
+            output_tracker_location: Rc::new(OutputTrackerLocation::default()),
         }
     }
 }
@@ -368,16 +373,22 @@ impl RenderingEventListener for DefaultRenderingEventListener {
         "DefaultRenderingEventListener"
     }
 
-    fn on_macro_start(
+    fn create_output_tracker<'a>(
         &self,
-        _file_path: Option<&Path>,
-        line: &u32,
-        col: &u32,
-        offset: &u32,
-        expanded_line: &u32,
-        expanded_col: &u32,
-        expanded_offset: &u32,
-    ) {
+        w: &'a mut (dyn std::fmt::Write + 'a),
+    ) -> Option<OutputTracker<'a>> {
+        Some(OutputTracker::with_location(
+            w,
+            self.output_tracker_location.clone(),
+        ))
+    }
+
+    fn on_macro_start(&self, _file_path: Option<&Path>, line: &u32, col: &u32, offset: &u32) {
+        // Capture current expanded location from our own tracker
+        let expanded_line = self.output_tracker_location.line();
+        let expanded_col = self.output_tracker_location.col();
+        let expanded_offset = self.output_tracker_location.index();
+
         self.macro_start_stack
             .borrow_mut()
             .last_mut()
@@ -386,22 +397,18 @@ impl RenderingEventListener for DefaultRenderingEventListener {
                 line: *line,
                 col: *col,
                 offset: *offset,
-                expanded_line: *expanded_line,
-                expanded_col: *expanded_col,
-                expanded_offset: *expanded_offset,
+                expanded_line,
+                expanded_col,
+                expanded_offset,
             });
     }
 
-    fn on_macro_stop(
-        &self,
-        _file_path: Option<&Path>,
-        line: &u32,
-        col: &u32,
-        offset: &u32,
-        expanded_line: &u32,
-        expanded_col: &u32,
-        expanded_offset: &u32,
-    ) {
+    fn on_macro_stop(&self, _file_path: Option<&Path>, line: &u32, col: &u32, offset: &u32) {
+        // Get current expanded location from our own tracker
+        let expanded_line = self.output_tracker_location.line();
+        let expanded_col = self.output_tracker_location.col();
+        let expanded_offset = self.output_tracker_location.index();
+
         let mut macro_start_stack = self.macro_start_stack.borrow_mut();
         let macro_start_stack_length = macro_start_stack.len();
         let macro_start_stack_last = macro_start_stack.last_mut().unwrap();
@@ -421,9 +428,9 @@ impl RenderingEventListener for DefaultRenderingEventListener {
                     start_line: macro_start.expanded_line,
                     start_col: macro_start.expanded_col,
                     start_offset: macro_start.expanded_offset,
-                    end_line: *expanded_line,
-                    end_col: *expanded_col,
-                    end_offset: *expanded_offset,
+                    end_line: expanded_line,
+                    end_col: expanded_col,
+                    end_offset: expanded_offset,
                 },
             );
         } else {

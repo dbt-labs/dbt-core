@@ -256,7 +256,7 @@ pub use self::environment::Environment;
 pub use self::error::{Error, ErrorKind};
 pub use self::expression::Expression;
 pub use self::output::{MacroSpans, Output};
-pub use self::output_tracker::OutputTracker;
+pub use self::output_tracker::{OutputTracker, OutputTrackerLocation};
 pub use self::template::Template;
 pub use self::utils::{AutoEscape, HtmlEscape, UndefinedBehavior};
 
