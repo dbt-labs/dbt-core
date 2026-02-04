@@ -113,6 +113,16 @@ pub trait JinjaTypeCheckingEventListenerFactory: Send + Sync {
     /// This is for DagExtractListener (Macro depends on) only
     /// We need to type check sql before unique id is determined
     fn update_unique_id(&self, _old_unique_id: &str, _new_unique_id: &str) {}
+
+    /// Whether this listener factory needs *full* Jinja typechecking (fixed-point) semantics.
+    ///
+    /// Most production dependency extraction only needs `on_function_call` (and optionally
+    /// `on_model_reference` / `on_model_source_reference`), which can be satisfied by the
+    /// dependency analyzer. LSP features (like go-to-definition for variables) require `on_lookup`,
+    /// which is currently only produced by the full typechecker.
+    fn requires_full_typecheck(&self) -> bool {
+        false
+    }
 }
 
 /// Default implementation of the `ListenerFactory` trait

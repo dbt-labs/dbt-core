@@ -94,6 +94,25 @@ impl<'env: 'source, 'source> JinjaTemplate<'env, 'source> {
                 ))
             })
     }
+
+    /// Analyze dependencies in the template (macro/function calls) and emit them through
+    /// `TypecheckingEventListener::on_function_call`.
+    pub fn analyze_dependencies(
+        &self,
+        funcsigns: Arc<minijinja::compiler::typecheck::FunctionRegistry>,
+        builtins: Arc<dashmap::DashMap<String, minijinja::Type>>,
+        listener: Rc<dyn minijinja::TypecheckingEventListener>,
+        typecheck_resolved_context: BTreeMap<String, Value>,
+    ) -> FsResult<()> {
+        self.0
+            .analyze_dependencies(funcsigns, builtins, listener, typecheck_resolved_context)
+            .map_err(|e| {
+                Box::new(FsError::from_jinja_err(
+                    e,
+                    "Failed to analyze dependencies for the compiled Jinja template",
+                ))
+            })
+    }
 }
 
 /// A struct that wraps a Minijinja Environment.
