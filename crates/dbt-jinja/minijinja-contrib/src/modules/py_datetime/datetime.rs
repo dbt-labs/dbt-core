@@ -1,5 +1,4 @@
 use std::fmt;
-use std::str::FromStr;
 use std::sync::Arc;
 
 use chrono::{
@@ -119,13 +118,10 @@ impl PyDateTimeClass {
 
         #[expect(clippy::unnecessary_unwrap)] // TODO fix this
         if tz_val.is_none() || (tz_val.is_some() && tz_val.as_ref().unwrap().is_none()) {
-            // tz is None, fall through to default case
-            let local_tz = iana_time_zone::get_timezone().expect("Could not determine timezone.");
-            let local_tz =
-                chrono_tz::Tz::from_str(local_tz.as_str()).expect("Could not determine timezone.");
+            // Return naive local datetime (matches Python behavior)
             let py_dt = PyDateTime {
-                state: DateTimeState::Aware(local_now.with_timezone(&local_tz)),
-                tzinfo: Some(PytzTimezone { tz: local_tz }),
+                state: DateTimeState::Naive(local_now.naive_local()),
+                tzinfo: None,
             };
             Ok(py_dt)
         } else if let Some(tz) = tz_val
