@@ -59,6 +59,22 @@ static MULTI_UNIT_DURATION_PATTERN: Lazy<Regex> = Lazy::new(|| {
 static AGE_PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new(r"\bage:\s*\d+").unwrap());
 static INLINE_SQL_PATTERN: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"inline_[a-f0-9]{8}\.sql").unwrap());
+#[cfg(not(windows))]
+static TEMP_ROOT_PATTERN: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"(?:/private)?/var/folders/[^/]+/[^/]+/T/").unwrap());
+#[cfg(windows)]
+static TEMP_ROOT_PATTERN: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(
+        r"(?i)[A-Z]:\\Users\\[^\\]+\\AppData\\Local\\Temp\\|[A-Z]:\\Windows\\Temp\\|[A-Z]:\\Temp\\",
+    )
+    .unwrap()
+});
+#[cfg(windows)]
+static TEMP_ROOT_PATTERN_ESCAPED: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"(?i)[A-Z]:\\\\Users\\\\[^\\\\]+\\\\AppData\\\\Local\\\\Temp\\\\|[A-Z]:\\\\Windows\\\\Temp\\\\|[A-Z]:\\\\Temp\\\\")
+        .unwrap()
+});
+static MKTEMP_PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new(r"/\.tmp[0-9A-Za-z_-]+").unwrap());
 
 /// Copies a directory and its contents, excluding .gitignored files.
 pub fn copy_dir_non_ignored(src: impl AsRef<Path>, dst: impl AsRef<Path>) -> FsResult<()> {
@@ -173,10 +189,23 @@ pub fn check_set_user_env_var() {
     }
 }
 
-/// Collapse mktemp-style segments like /.tmpabcdef -> /.tmpXXXXXX
+/// Normalize OS temp roots and collapse mktemp-style segments like /.tmpabcdef -> /.tmpXXXXXX.
 pub fn maybe_normalize_tmp_paths(output: String) -> String {
-    let re = Regex::new(r"/\.tmp[0-9A-Za-z_-]+").unwrap();
-    re.replace_all(&output, "/.tmpXXXXXX").to_string()
+    #[cfg(windows)]
+    {
+        let normalized = TEMP_ROOT_PATTERN_ESCAPED.replace_all(&output, "/tmp/");
+        let normalized = TEMP_ROOT_PATTERN.replace_all(&normalized, "/tmp/");
+        MKTEMP_PATTERN
+            .replace_all(&normalized, "/.tmpXXXXXX")
+            .to_string()
+    }
+    #[cfg(not(windows))]
+    {
+        let normalized = TEMP_ROOT_PATTERN.replace_all(&output, "/tmp/");
+        MKTEMP_PATTERN
+            .replace_all(&normalized, "/.tmpXXXXXX")
+            .to_string()
+    }
 }
 
 /// On Windows, this normalizes forward/backward slashes to '|' so as to ignore
