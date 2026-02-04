@@ -13,6 +13,7 @@ workspace = true
 [dependencies]
 arrow = { workspace = true }
 async-trait = { workspace = true }
+base64 = { workspace = true }
 bytes = { workspace = true }
 clap = { workspace = true }
 dbt-common = { workspace = true }
@@ -39,6 +40,7 @@ pretty_assertions = { version = "1.4.1" }
 proto-rust = { workspace = true }
 rand = { workspace = true }
 regex = { workspace = true }
+rusqlite = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tempfile = { workspace = true }

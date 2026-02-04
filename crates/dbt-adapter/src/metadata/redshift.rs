@@ -632,8 +632,8 @@ impl MetadataAdapter for RedshiftMetadataAdapter {
 
     fn list_relations_schemas_inner(
         &self,
-        _unique_id: Option<String>,
-        _phase: Option<ExecutionPhase>,
+        unique_id: Option<String>,
+        phase: Option<ExecutionPhase>,
         relations: &[Arc<dyn BaseRelation>],
     ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<Arc<Schema>>>> {
         type Acc = HashMap<String, AdapterResult<Arc<Schema>>>;
@@ -671,7 +671,13 @@ AND schema_name = '{schema}'
 AND table_name = '{identifier}'"
             );
 
-            let ctx = QueryCtx::default().with_desc("Get table schema");
+            let mut ctx = QueryCtx::new_metadata().with_desc("Get table schema");
+            if let Some(node_id) = unique_id.clone() {
+                ctx = ctx.with_node_id(&node_id);
+            }
+            if let Some(phase) = phase {
+                ctx = ctx.with_phase(phase.as_str());
+            }
             let (_, table) = adapter.query(&ctx, &mut *conn, &sql, None)?;
             let batch = table.original_record_batch();
             // Build fields from the response

@@ -520,6 +520,7 @@ opentelemetry_sdk = "0.30.0"
 # tracing (local profiling)
 # Compile with --features "tracy-client/enable" to enable integration with the
 # Tracy profiler: https://github.com/wolfpld/tracy
+rusqlite = { version = "0.38", features = ["bundled"] }
 tracy-client = { version = "0.18.0", default-features = false }
 unicode-segmentation = "1.12"
 

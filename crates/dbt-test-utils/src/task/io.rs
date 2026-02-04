@@ -1,5 +1,6 @@
 //! Tasks for io.
 
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::sync::Arc;
 use std::{
@@ -14,20 +15,24 @@ use arrow::datatypes::{
     DataType, Int8Type, Int16Type, Int32Type, Int64Type, UInt8Type, UInt16Type, UInt32Type,
     UInt64Type,
 };
+use arrow::ipc::reader::StreamReader as ArrowStreamReader;
+use arrow::ipc::writer::StreamWriter as ArrowStreamWriter;
 use arrow::record_batch::RecordBatch;
 use async_trait::async_trait;
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use dbt_common::constants::DBT_TARGET_DIR_NAME;
 use dbt_common::{
     FsResult,
     stdfs::{self, File},
 };
-use parquet::arrow::ArrowWriter;
-use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
-use parquet::file::properties::WriterProperties;
 use regex::Regex;
+use rusqlite::{Connection, params};
+use serde::{Deserialize, Serialize};
+use std::io::Cursor;
 
-use super::utils::iter_files_recursively;
-use super::{ProjectEnv, Task, TestEnv, TestResult};
+use crate::task::utils::iter_files_recursively;
+use crate::task::{ProjectEnv, Task, TestEnv, TestResult};
 
 pub struct FileWriteTask {
     file_path: String,
@@ -191,6 +196,15 @@ impl Task for RmDirTask {
     }
 }
 
+/// A row in the SQLite recordings.db
+type RecordingRow = (
+    String,
+    String,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+);
+
 // Helper: recursively rebuild string-like arrays (Utf8, LargeUtf8, Utf8View, and dictionary-encoded variants)
 // inside any nesting of Struct (and dictionary) arrays. Non string-like arrays are returned as-is.
 pub fn rebuild_string_like_arrays(
@@ -277,6 +291,87 @@ pub fn rebuild_string_like_arrays(
     }
 }
 
+/// Helper function to normalize SQL strings, error messages, and data in SQLite recordings database
+fn update_sqlite_recordings(db_path: &Path, replace_fn: &dyn Fn(&str) -> String) -> TestResult<()> {
+    let conn = Connection::open(db_path)?;
+
+    // Get all recordings
+    let mut stmt =
+        conn.prepare("SELECT unique_id, record_type, sql, data_base64, error FROM recordings")?;
+    let recordings: Vec<RecordingRow> = stmt
+        .query_map([], |row| {
+            let unique_id: String = row.get(0)?;
+            let record_type: String = row.get(1)?;
+            let sql: Option<String> = row.get(2)?;
+            let data_base64: Option<String> = row.get(3)?;
+            let error: Option<String> = row.get(4)?;
+            Ok((unique_id, record_type, sql, data_base64, error))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+
+    // Update SQL, error, and data fields
+    for (unique_id, record_type, sql, data_base64, error) in recordings {
+        let new_sql = sql.as_ref().map(|s| replace_fn(s));
+        let new_error = error.as_ref().map(|e| replace_fn(e));
+
+        // Process data_base64 if present
+        let new_data_base64 = if let Some(ref data) = data_base64 {
+            // Decode base64 -> Arrow IPC -> process string columns -> encode back
+            match BASE64_STANDARD.decode(data) {
+                Ok(bytes) => {
+                    let cursor = Cursor::new(bytes);
+                    match ArrowStreamReader::try_new(cursor, None) {
+                        Ok(reader) => {
+                            let schema = reader.schema();
+                            let mut output = Vec::new();
+                            let mut writer = ArrowStreamWriter::try_new(&mut output, &schema)?;
+
+                            for batch_result in reader {
+                                match batch_result {
+                                    Ok(batch) => {
+                                        let mut new_columns =
+                                            Vec::with_capacity(batch.num_columns());
+                                        for i in 0..batch.num_columns() {
+                                            let array = batch.column(i);
+                                            let new_array =
+                                                rebuild_string_like_arrays(array, replace_fn);
+                                            new_columns.push(new_array);
+                                        }
+                                        let new_batch =
+                                            RecordBatch::try_new(schema.clone(), new_columns)?;
+                                        writer.write(&new_batch)?;
+                                    }
+                                    Err(_) => {
+                                        // If batch read fails, keep original data
+                                        break;
+                                    }
+                                }
+                            }
+
+                            writer.finish()?;
+                            drop(writer);
+                            Some(BASE64_STANDARD.encode(&output))
+                        }
+                        Err(_) => data_base64.clone(), // Keep original if can't parse
+                    }
+                }
+                Err(_) => data_base64.clone(), // Keep original if can't decode
+            }
+        } else {
+            None
+        };
+
+        if new_sql != sql || new_error != error || new_data_base64 != data_base64 {
+            conn.execute(
+                "UPDATE recordings SET sql = ?1, data_base64 = ?2, error = ?3 WHERE unique_id = ?4 AND record_type = ?5",
+                params![new_sql, new_data_base64, new_error, unique_id, record_type],
+            )?;
+        }
+    }
+
+    Ok(())
+}
+
 /// Used to clean recorded files as they contain timestamps, etc.
 // TODO: this can be generalized more to accept the list of extensions
 // for files to clean (or split based on extension)
@@ -295,6 +390,8 @@ impl Task for SedTask {
         test_env: &TestEnv,
         _task_index: usize,
     ) -> TestResult<()> {
+        static RECORDS_NAME: &str = "recordings.db";
+
         let replace_fn = |content: &str| {
             content
                 .replace(&self.from.to_lowercase(), &self.to)
@@ -303,14 +400,7 @@ impl Task for SedTask {
         let replace_timestamps = move |path: &Path| -> TestResult<()> {
             if path
                 .extension()
-                .map(|ext| {
-                    ext == "sql"
-                        || ext == "stdout"
-                        || ext == "json"
-                        || ext == "jsonl"
-                        || ext == "err"
-                        || ext == "stderr"
-                })
+                .map(|ext| ext == "stdout" || ext == "stderr")
                 .unwrap_or(false)
             {
                 let content = fs::read_to_string(path)?;
@@ -323,140 +413,318 @@ impl Task for SedTask {
 
                 fs::write(path, new_content)?;
             }
-
-            // Perform the same replacement for parquet files
-            // TODO: this only handles replacing schema name from column values of string-like type
-            if path
-                .extension()
-                .map(|ext| ext == "parquet")
-                .unwrap_or(false)
-            {
-                // setup the reader
-                let file = File::open(path)?;
-                let builder = ParquetRecordBatchReaderBuilder::try_new(file)?;
-                let schema = builder.schema().clone();
-                let reader = builder.build()?;
-
-                // setup the writer (use a temp file for later to be renamed)
-                let temp_path = path.with_extension("parquet.tmp");
-                let temp_file = File::create(&temp_path)?;
-                let props = WriterProperties::builder().build();
-                let mut writer = ArrowWriter::try_new(temp_file, schema.clone(), Some(props))?;
-
-                for batch in reader {
-                    let batch = batch?;
-                    let mut new_columns = Vec::with_capacity(batch.num_columns());
-
-                    for i in 0..batch.num_columns() {
-                        let array = batch.column(i);
-                        let new_array = rebuild_string_like_arrays(array, &replace_fn);
-                        new_columns.push(new_array);
-                    }
-
-                    // write back the updated content
-                    let new_batch = RecordBatch::try_new(schema.clone(), new_columns)?;
-                    writer.write(&new_batch)?;
-                }
-
-                // finalize and replace the original file
-                writer.close()?;
-                fs::rename(temp_path, path)?;
-            }
-
-            // Perform the same replacement for arrow IPC files
-            // TODO: this only handles replacing schema name from column values of string-like type
-            if path.extension().map(|ext| ext == "arrow").unwrap_or(false) {
-                use arrow::ipc::reader::FileReader as ArrowFileReader;
-                use arrow::ipc::writer::FileWriter as ArrowFileWriter;
-
-                // setup the reader
-                let file = File::open(path)?;
-                let reader = ArrowFileReader::try_new(file, None)?;
-                let schema = reader.schema();
-
-                // setup the writer (use a temp file for later to be renamed)
-                let temp_path = path.with_extension("arrow.tmp");
-                let temp_file = File::create(&temp_path)?;
-                let mut writer = ArrowFileWriter::try_new(temp_file, &schema)?;
-
-                for batch in reader {
-                    let batch = batch?;
-                    let mut new_columns = Vec::with_capacity(batch.num_columns());
-
-                    for i in 0..batch.num_columns() {
-                        let array = batch.column(i);
-                        let new_array = rebuild_string_like_arrays(array, &replace_fn);
-                        new_columns.push(new_array);
-                    }
-
-                    // write back the updated content
-                    let new_batch = RecordBatch::try_new(schema.clone(), new_columns)?;
-                    writer.write(&new_batch)?;
-                }
-
-                // finalize and replace the original file
-                writer.finish()?;
-                drop(writer);
-                fs::rename(temp_path, path)?;
-            }
             Ok(())
         };
 
+        // Normalize stdout/stdout goldies
         iter_files_recursively(&test_env.golden_dir, &replace_timestamps).await?;
         if let Some(ref dir) = self.dir {
             iter_files_recursively(dir, &replace_timestamps).await?;
         }
 
-        // replace warehouse names
-        let replace_warehouse_names = move |path: &Path| -> TestResult<()> {
-            if path.extension().map(|ext| ext == "sql").unwrap_or(false) {
-                let content = fs::read_to_string(path)?;
-                // we need to normalize
-                // in CI, FUSION_SLT_WAREHOUSE is used,
-                // locally, FUSION_ADAPTER_TESTING is used,
-                // DBT_TESTING_ALT is used for snowflake_warehouse config tests
-                let new_content = content
-                    .replace("FUSION_ADAPTER_TESTING", "[MASKED_WH]")
-                    .replace("FUSION_SLT_WAREHOUSE", "[MASKED_WH]")
-                    .replace("DBT_TESTING_ALT", "[MASKED_WH]");
+        // Normalize SQLite recordings
+        let process_sqlite_db = move |path: &Path| -> TestResult<()> {
+            if path.file_name().and_then(|n| n.to_str()) == Some(RECORDS_NAME) {
+                // Apply basic schema name replacement
+                update_sqlite_recordings(path, &replace_fn)?;
 
-                fs::write(path, new_content)?;
+                // Apply warehouse name replacement
+                let warehouse_replace = |content: &str| -> String {
+                    content
+                        .replace("FUSION_ADAPTER_TESTING", "[MASKED_WH]")
+                        .replace("FUSION_SLT_WAREHOUSE", "[MASKED_WH]")
+                };
+                update_sqlite_recordings(path, &warehouse_replace)?;
+
+                // Apply Time Elapsed regex removal
+                let re_time_elapsed = Regex::new(r"Time Elapsed:.*").unwrap();
+                let time_elapsed_replace = |content: &str| -> String {
+                    re_time_elapsed.replace_all(content, "").to_string()
+                };
+                update_sqlite_recordings(path, &time_elapsed_replace)?;
+
+                // Apply query comment removal if enabled
+                if self.strip_comments {
+                    let comment_replace = |content: &str| -> String {
+                        let mut new_content = content.to_string();
+                        if new_content.starts_with("/*") {
+                            if let Some(comment_end) = new_content.find("*/") {
+                                new_content = new_content[(comment_end + "*/".len())..].to_string();
+                            }
+                        } else if new_content.ends_with("*/") {
+                            if let Some(comment_start) = new_content.rfind("/*") {
+                                new_content = new_content[..comment_start].to_string();
+                            }
+                        }
+                        new_content
+                    };
+                    update_sqlite_recordings(path, &comment_replace)?;
+                }
             }
             Ok(())
         };
 
-        iter_files_recursively(&test_env.golden_dir, &replace_warehouse_names).await?;
         if let Some(ref dir) = self.dir {
-            iter_files_recursively(dir, &replace_warehouse_names).await?;
+            iter_files_recursively(dir, &process_sqlite_db).await?;
         }
 
-        let replace_query_comments = move |path: &Path| -> TestResult<()> {
-            if path.extension().map(|ext| ext == "sql").unwrap_or(false) {
-                let content = fs::read_to_string(path)?;
-                // A query comment only appears either at the beginning or the end of a query.
-                let mut new_content = content;
-                if new_content.starts_with("/*") {
-                    if let Some(comment_end) = new_content.find("*/") {
-                        new_content = new_content[(comment_end + "*/".len())..].to_string();
-                    }
-                } else if new_content.ends_with("*/")
-                    && let Some(comment_start) = new_content.rfind("/*")
-                {
-                    new_content = new_content[..comment_start].to_string();
-                };
-
-                fs::write(path, new_content)?;
-            }
-            Ok(())
-        };
-
-        if self.strip_comments {
-            iter_files_recursively(&test_env.golden_dir, &replace_query_comments).await?;
+        // Dump the SQLite recordings to a YAML
+        if std::env::var("DBT_FS_RECORD_NO_YAML").unwrap_or_default() != "1" {
             if let Some(ref dir) = self.dir {
-                iter_files_recursively(dir, &replace_query_comments).await?;
+                let yaml_path = dir.join("recordings.yaml");
+                let db_path = dir.join(RECORDS_NAME);
+                dump_sqlite_recordings_to_yaml(&db_path, &yaml_path)?;
             }
         }
 
         Ok(())
     }
+}
+
+/// Helper function to dump recordings from SQLite database to YAML format
+fn dump_sqlite_recordings_to_yaml(db_path: &Path, yaml_path: &Path) -> TestResult<()> {
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    #[serde(tag = "type", rename_all = "snake_case")]
+    enum OperationType {
+        Execute {
+            sql: String,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            error: Option<String>,
+        },
+        GetTableSchema {
+            table_name: String,
+            #[serde(skip_serializing_if = "Option::is_none")]
+            error: Option<String>,
+        },
+    }
+
+    #[derive(Debug, Clone, Serialize, Deserialize)]
+    struct YamlOperation {
+        sequence: usize,
+        #[serde(flatten)]
+        operation: OperationType,
+    }
+
+    let conn = Connection::open(db_path)?;
+
+    // Query all recordings, ordered by unique_id for consistency
+    let mut stmt = conn.prepare(
+        "SELECT unique_id, record_type, sql, data_base64, error FROM recordings ORDER BY unique_id",
+    )?;
+
+    let recordings: Vec<RecordingRow> = stmt
+        .query_map([], |row| {
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+            ))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+
+    // Track sequence numbers per base unique_id
+    let mut sequence_counters = HashMap::new();
+
+    // Group operations by base unique_id (using BTreeMap for sorted output)
+    let mut operations_by_model = BTreeMap::new();
+
+    for (unique_id, record_type, sql, _, error) in recordings {
+        // Extract base unique_id by removing sequence suffix (e.g., "model.hello_world.hello-0" -> "model.hello_world.hello")
+        let base_unique_id = if let Some(pos) = unique_id.rfind('-') {
+            // Check if what follows the last '-' is a digit (sequence number)
+            debug_assert!(unique_id[(pos + 1)..].chars().all(|c| c.is_ascii_digit()));
+            unique_id[..pos].to_string()
+        } else {
+            unique_id.clone()
+        };
+
+        let sequence = *sequence_counters.entry(base_unique_id.clone()).or_insert(0);
+        sequence_counters.insert(base_unique_id.clone(), sequence + 1);
+
+        let operation = match record_type.as_str() {
+            "execute" => {
+                let sql = sql.unwrap_or_default();
+
+                YamlOperation {
+                    sequence,
+                    operation: OperationType::Execute { sql, error },
+                }
+            }
+            "get_table_schema" => {
+                // Extract table name from unique_id (format: get_table_schema.HASH-INDEX)
+                let table_name = unique_id
+                    .strip_prefix("get_table_schema.")
+                    .and_then(|s| s.split('-').next())
+                    .unwrap_or(&unique_id)
+                    .to_string();
+
+                YamlOperation {
+                    sequence,
+                    operation: OperationType::GetTableSchema { table_name, error },
+                }
+            }
+            _ => continue, // Skip unknown types
+        };
+
+        // Add operation to the appropriate model group
+        operations_by_model
+            .entry(base_unique_id)
+            .or_insert_with(Vec::new)
+            .push(operation);
+    }
+
+    if operations_by_model.is_empty() {
+        return Ok(());
+    }
+
+    // Serialize to YAML (as a map with model IDs as keys)
+    let yaml_str = dbt_serde_yaml::to_string(&operations_by_model)
+        .map_err(|e| format!("Failed to serialize YAML: {}", e))?;
+
+    // Post-process to use block scalars for multiline SQL
+    let yaml_str = format_multiline_sql(yaml_str);
+
+    // Write to file
+    stdfs::create_dir_all(yaml_path.parent().unwrap())?;
+    stdfs::write(yaml_path, yaml_str)?;
+
+    Ok(())
+}
+
+/// Convert inline multiline strings to YAML block scalar format (|-) for better readability
+/// This function:
+/// 1. Keeps single-line SQL inline (even with trailing comments)
+/// 2. Converts multiline SQL to block scalar format (|-)
+/// 3. Trims excessive leading/trailing empty lines and collapses multiple blank lines
+fn format_multiline_sql(yaml: String) -> String {
+    let mut result = String::with_capacity(yaml.len() * 2);
+    let lines: Vec<&str> = yaml.lines().collect();
+    let mut i = 0;
+
+    while i < lines.len() {
+        let line = lines[i];
+
+        // Check for 'sql: ' followed by either inline string or block scalar
+        if let Some(sql_start) = line.find("sql: ") {
+            let indent = &line[..sql_start];
+            let after_sql = &line[(sql_start + 5)..].trim_start();
+
+            // Case 1: Inline string (might contain \n for multiline)
+            if after_sql.starts_with('"') {
+                let sql_content = after_sql
+                    .trim_start_matches('"')
+                    .trim_end_matches('"')
+                    .replace("\\n", "\n")
+                    .replace("\\\"", "\"")
+                    .replace("\\\\", "\\");
+
+                // Check if it's truly multiline or just has a comment
+                let trimmed = sql_content.trim();
+                let line_count = trimmed.lines().filter(|l| !l.trim().is_empty()).count();
+
+                if line_count <= 1 {
+                    // Single line (possibly with comment) - keep inline
+                    result.push_str(line);
+                    result.push('\n');
+                } else {
+                    // Multiline - use block scalar and normalize indentation
+                    result.push_str(indent);
+                    result.push_str("sql: |-\n");
+
+                    let sql_lines: Vec<&str> = sql_content.lines().collect();
+                    let normalized = normalize_blank_lines(&sql_lines);
+
+                    for sql_line in normalized {
+                        result.push_str(indent);
+                        result.push_str("  ");
+                        result.push_str(&sql_line);
+                        result.push('\n');
+                    }
+                }
+
+                i += 1;
+                continue;
+            }
+
+            // Case 2: Block scalar (e.g., sql: |-, sql: |2-, sql: >, etc.)
+            // Normalize all block scalars to |- and trim excessive whitespace
+            if after_sql.starts_with('|') || after_sql.starts_with('>') {
+                let mut sql_lines = Vec::new();
+                i += 1; // Move past the 'sql: |...' line
+
+                // Collect all SQL content lines
+                while i < lines.len() {
+                    let content_line = lines[i];
+                    // Check if this line is still part of the SQL content
+                    if content_line.is_empty()
+                        || content_line.starts_with(&format!("{}  ", indent))
+                        || content_line.trim().is_empty()
+                    {
+                        if let Some(stripped) = content_line.strip_prefix(&format!("{}  ", indent))
+                        {
+                            sql_lines.push(stripped);
+                        } else if content_line.trim().is_empty() {
+                            sql_lines.push("");
+                        }
+                        i += 1;
+                    } else {
+                        break;
+                    }
+                }
+
+                let normalized = normalize_blank_lines(&sql_lines);
+
+                // Write normalized block scalar
+                result.push_str(indent);
+                result.push_str("sql: |-\n");
+
+                for sql_line in normalized {
+                    result.push_str(indent);
+                    result.push_str("  ");
+                    result.push_str(&sql_line);
+                    result.push('\n');
+                }
+
+                continue;
+            }
+        }
+
+        // Regular line, keep as-is
+        result.push_str(line);
+        result.push('\n');
+        i += 1;
+    }
+
+    result
+}
+
+/// Normalize SQL content indentation and blank lines:
+/// - Convert tabs to spaces
+/// - Strip ALL leading whitespace from all lines for consistent left-aligned output
+/// - Remove leading/trailing blank lines  
+/// - The SQL from the database often has inconsistent/meaningless leading whitespace
+fn normalize_blank_lines(lines: &[&str]) -> Vec<String> {
+    if lines.is_empty() {
+        return Vec::new();
+    }
+
+    // Convert tabs to spaces and strip all leading whitespace for consistent formatting
+    let mut result: Vec<String> = lines
+        .iter()
+        .map(|line| line.replace('\t', "    ").trim_start().to_string())
+        .collect();
+
+    // Trim leading blank lines
+    while result.first().is_some_and(|l| l.is_empty()) {
+        result.remove(0);
+    }
+
+    // Trim trailing blank lines
+    while result.last().is_some_and(|l| l.is_empty()) {
+        result.pop();
+    }
+
+    result
 }

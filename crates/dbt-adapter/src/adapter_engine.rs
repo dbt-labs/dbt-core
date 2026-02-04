@@ -643,6 +643,10 @@ impl AdapterEngine {
                     OptionValue::String(p.to_string()),
                 )?;
             }
+            stmt.set_option(
+                OptionStatement::Other(DBT_METADATA.to_string()),
+                OptionValue::Int(ctx.is_metadata() as i64),
+            )?;
             options
                 .into_iter()
                 .try_for_each(|(key, value)| stmt.set_option(OptionStatement::Other(key), value))?;

@@ -12,8 +12,12 @@ use adbc_core::error::{Error as AdbcError, Result as AdbcResult, Status as AdbcS
 use adbc_core::options::{OptionStatement, OptionValue};
 use arrow::array::{RecordBatch, RecordBatchIterator, RecordBatchReader};
 use arrow::ipc::reader::FileReader as ArrowFileReader;
+use arrow::ipc::reader::StreamReader as ArrowStreamReader;
 use arrow::ipc::writer::FileWriter as ArrowFileWriter;
+use arrow::ipc::writer::StreamWriter as ArrowStreamWriter;
 use arrow_schema::{ArrowError, DataType, Field, Schema, SchemaBuilder};
+use base64::Engine;
+use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use dashmap::DashMap;
 use dbt_common::ErrorCode;
 use dbt_common::adapter::{AdapterType, DBT_EXECUTION_PHASES};
@@ -27,6 +31,7 @@ use parquet::arrow::ArrowWriter;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 use parquet::file::properties::WriterProperties;
 use regex::Regex;
+use rusqlite::params;
 
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -34,6 +39,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::fmt;
 use std::fs::{self, File, create_dir_all, metadata};
 use std::hash::{Hash, Hasher};
+use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -47,6 +53,8 @@ static COUNTERS: Lazy<DashMap<String, usize>> = Lazy::new(DashMap::new);
 static DBT_TMP_UUID_PATTERN: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"dbt_tmp_[0-9a-f]{8}_[0-9a-f]{4}_[0-9a-f]{4}_[0-9a-f]{4}_[0-9a-f]{12}").unwrap()
 });
+
+static RECORDS_NAME: &str = "recordings.db";
 
 // This is cleaning we need to do for our auto generated
 // schemas in tests. Note ideal it is not localized but if things
@@ -70,9 +78,23 @@ fn checksum8(input: &str) -> String {
 // queries thus far. However, for pre-compile we do not have node id
 // and only sql content that we checksum and then append to it a
 // sequence number.
-fn compute_file_name(node_id: Option<&String>, sql: Option<&str>) -> AdbcResult<String> {
+fn compute_file_name(
+    node_id: Option<&String>,
+    sql: Option<&str>,
+    metadata: bool,
+) -> AdbcResult<String> {
     let id = match node_id {
-        Some(node_id) => node_id.to_owned(),
+        Some(node_id) => {
+            if metadata {
+                debug_assert!(
+                    sql.is_some(),
+                    "A Statement with metadata must have a SQL query"
+                );
+                format!("{}-{}", node_id, checksum8(sql.unwrap()))
+            } else {
+                node_id.to_owned()
+            }
+        }
         None => match sql {
             Some(sql) => checksum8(sql),
             None => {
@@ -228,13 +250,28 @@ impl From<serde_json::Error> for FileHandlerError {
     }
 }
 
+impl From<rusqlite::Error> for FileHandlerError {
+    fn from(e: rusqlite::Error) -> Self {
+        FileHandlerError(format!("SQLite error: {e}"))
+    }
+}
+
+impl From<base64::DecodeError> for FileHandlerError {
+    fn from(e: base64::DecodeError) -> Self {
+        FileHandlerError(format!("Base64 decode error: {e}"))
+    }
+}
+
 type FileHandlerResult<T> = Result<T, FileHandlerError>;
 
 // TODO: Move this to test utils for sharing
+// Note: Some methods are only used in file-based replay mode (for drop-in replacement)
+#[allow(dead_code)]
 struct FileHandler {
     format: FileFormat,
 }
 
+#[allow(dead_code)]
 impl FileHandler {
     /// Creates a new handler for recording (defaults to Arrow IPC)
     fn new_for_record() -> Self {
@@ -423,6 +460,201 @@ impl FileHandler {
     }
 }
 
+/// Recordings storage type, used to determine how to read/write recordings
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum StorageType {
+    Sqlite,
+    FileArrowIpc,
+    FileParquet,
+}
+
+/// Detects the storage type for a given recordings directory
+fn detect_storage_type(path: &Path, file_name: &str) -> StorageType {
+    let db_path = path.join(RECORDS_NAME);
+    if db_path.exists() {
+        return StorageType::Sqlite;
+    }
+
+    let arrow_path = path.join(format!("{file_name}.arrow"));
+    if arrow_path.exists() {
+        return StorageType::FileArrowIpc;
+    }
+
+    StorageType::FileParquet
+}
+
+/// Entry read from a SQLite recording
+struct RecordingEntry {
+    sql: Option<String>,
+    data_base64: Option<String>,
+    error: Option<String>,
+}
+
+/// Handler for SQLite-based recordings storage
+struct SqliteHandler {
+    db_path: PathBuf,
+}
+
+impl SqliteHandler {
+    fn new(recordings_dir: &Path) -> Self {
+        Self {
+            db_path: recordings_dir.join(RECORDS_NAME),
+        }
+    }
+
+    #[cfg(test)]
+    fn exists(&self) -> bool {
+        self.db_path.exists()
+    }
+
+    /// TODO: it is not ideal that the a [`rusqlite::Connection``] is instantiated per Statement/Connection operation
+    fn connect(&self) -> FileHandlerResult<rusqlite::Connection> {
+        let conn = rusqlite::Connection::open(&self.db_path)?;
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS recordings (
+                unique_id TEXT NOT NULL,
+                record_type TEXT NOT NULL,
+                sql TEXT,
+                data_base64 TEXT,
+                error TEXT,
+                PRIMARY KEY (unique_id, record_type)
+            )",
+            [],
+        )?;
+        Ok(conn)
+    }
+
+    /// Encodes Arrow record batches to base64-encoded IPC stream
+    fn encode_arrow_ipc(
+        &self,
+        batches: &[RecordBatch],
+        schema: Arc<Schema>,
+    ) -> FileHandlerResult<String> {
+        let mut buffer = Vec::new();
+        {
+            let mut writer = ArrowStreamWriter::try_new(&mut buffer, &schema)?;
+            for batch in batches {
+                writer.write(batch)?;
+            }
+            writer.finish()?;
+        }
+        Ok(BASE64_STANDARD.encode(&buffer))
+    }
+
+    /// Decodes base64-encoded Arrow IPC stream to record batches
+    fn decode_arrow_ipc(
+        &self,
+        data_base64: &str,
+    ) -> FileHandlerResult<Box<dyn RecordBatchReader + Send>> {
+        let bytes = BASE64_STANDARD.decode(data_base64)?;
+        let cursor = Cursor::new(bytes);
+        let reader = ArrowStreamReader::try_new(cursor, None)?;
+        Ok(Box::new(reader))
+    }
+
+    /// Records an execute result (success case with data)
+    fn write_execute(
+        &self,
+        unique_id: &str,
+        sql: &str,
+        batches: &[RecordBatch],
+        schema: Arc<Schema>,
+    ) -> FileHandlerResult<()> {
+        let conn = self.connect()?;
+        let data_base64 = self.encode_arrow_ipc(batches, schema)?;
+        conn.execute(
+            "INSERT OR REPLACE INTO recordings (unique_id, record_type, sql, data_base64, error)
+             VALUES (?1, 'execute', ?2, ?3, NULL)",
+            params![unique_id, sql, data_base64],
+        )?;
+        Ok(())
+    }
+
+    /// Records an execute error
+    fn write_execute_error(
+        &self,
+        unique_id: &str,
+        sql: &str,
+        error_msg: &str,
+    ) -> FileHandlerResult<()> {
+        let conn = self.connect()?;
+        conn.execute(
+            "INSERT OR REPLACE INTO recordings (unique_id, record_type, sql, data_base64, error)
+             VALUES (?1, 'execute', ?2, NULL, ?3)",
+            params![unique_id, sql, error_msg],
+        )?;
+        Ok(())
+    }
+
+    /// Records a get_table_schema result (success case)
+    fn write_schema(&self, unique_id: &str, schema: &Schema) -> FileHandlerResult<()> {
+        let fixed_schema = fix_decimal_precision_in_schema(schema);
+        let schema_ref = Arc::new(fixed_schema);
+        let empty_batch = RecordBatch::new_empty(schema_ref.clone());
+        let data_base64 = self.encode_arrow_ipc(&[empty_batch], schema_ref)?;
+
+        let conn = self.connect()?;
+        conn.execute(
+            "INSERT OR REPLACE INTO recordings (unique_id, record_type, sql, data_base64, error)
+             VALUES (?1, 'get_table_schema', NULL, ?2, NULL)",
+            params![unique_id, data_base64],
+        )?;
+        Ok(())
+    }
+
+    /// Records a get_table_schema error
+    fn write_schema_error(&self, unique_id: &str, error_msg: &str) -> FileHandlerResult<()> {
+        let conn = self.connect()?;
+        conn.execute(
+            "INSERT OR REPLACE INTO recordings (unique_id, record_type, sql, data_base64, error)
+             VALUES (?1, 'get_table_schema', NULL, NULL, ?2)",
+            params![unique_id, error_msg],
+        )?;
+        Ok(())
+    }
+
+    /// Reads an execute recording
+    fn read_execute(&self, unique_id: &str, replay_sql: &str) -> FileHandlerResult<RecordingEntry> {
+        let conn = self.connect()?;
+        let mut stmt = conn.prepare(
+            "SELECT sql, data_base64, error FROM recordings
+             WHERE unique_id = ?1 AND record_type = 'execute'",
+        )?;
+        let entry = stmt
+            .query_row(params![unique_id], |row| {
+                Ok(RecordingEntry {
+                    sql: row.get(0)?,
+                    data_base64: row.get(1)?,
+                    error: row.get(2)?,
+                })
+            })
+            .map_err(|e| {
+                FileHandlerError(format!(
+                    "Failed to read execute replay sql ({replay_sql}) for unique_id '{}': {}",
+                    unique_id, e
+                ))
+            })?;
+        Ok(entry)
+    }
+
+    /// Reads a get_table_schema recording
+    fn read_schema(&self, unique_id: &str) -> FileHandlerResult<RecordingEntry> {
+        let conn = self.connect()?;
+        let mut stmt = conn.prepare(
+            "SELECT sql, data_base64, error FROM recordings
+             WHERE unique_id = ?1 AND record_type = 'get_table_schema'",
+        )?;
+        let entry = stmt.query_row(params![unique_id], |row| {
+            Ok(RecordingEntry {
+                sql: row.get(0)?,
+                data_base64: row.get(1)?,
+                error: row.get(2)?,
+            })
+        })?;
+        Ok(entry)
+    }
+}
+
 pub struct RecordEngineInner {
     /// Path to recordings
     path: PathBuf,
@@ -534,19 +766,20 @@ impl Connection for RecordEngineConnection {
         let path = self.0.path.clone();
         create_dir_all(&path).map_err(|e| from_fs_error(e.into(), Some(&path)))?;
 
-        let full_file_name = compute_file_name_for_table_schema(catalog, db_schema, table_name);
-        let handler = FileHandler::new_for_record();
+        let unique_id = compute_file_name_for_table_schema(catalog, db_schema, table_name);
+
+        let sqlite_handler = SqliteHandler::new(&path);
 
         match result {
             Ok(schema) => {
-                handler
-                    .write_schema(&schema, &path, &full_file_name)
+                sqlite_handler
+                    .write_schema(&unique_id, &schema)
                     .map_err(|e| from_fs_error(e, Some(&path)))?;
                 Ok(schema)
             }
             Err(err) => {
-                handler
-                    .write_error(&path, &full_file_name, &format!("{err}"))
+                sqlite_handler
+                    .write_schema_error(&unique_id, &format!("{err}"))
                     .map_err(|e| from_fs_error(e, Some(&path)))?;
                 Err(AdbcError::with_message_and_status(
                     format!("{err}"),
@@ -567,6 +800,7 @@ struct RecordEngineStatement {
     node_id: Option<String>,
     execution_phase: &'static str,
     sql: Option<String>,
+    metadata: bool,
 }
 
 impl RecordEngineStatement {
@@ -580,6 +814,7 @@ impl RecordEngineStatement {
             node_id: None,
             execution_phase: "",
             sql: None,
+            metadata: false,
         }
     }
 }
@@ -605,22 +840,18 @@ impl Statement for RecordEngineStatement {
         let path = self.record_engine.path.clone();
         create_dir_all(&path).map_err(|e| from_fs_error(e.into(), Some(&path)))?;
 
-        let file_name = compute_file_name(self.node_id.as_ref(), Some(sql))?;
-        let handler = FileHandler::new_for_record();
-        let data_path = path.join(format!("{file_name}.{}", handler.extension()));
+        let unique_id = compute_file_name(self.node_id.as_ref(), Some(sql), self.metadata)?;
 
-        handler
-            .write_sql(&path, &file_name, sql)
-            .map_err(|e| from_fs_error(e, Some(&path)))?;
+        let sqlite_handler = SqliteHandler::new(&path);
 
         match result {
             Ok(mut reader) => {
                 let schema = reader.schema();
                 let batches: Vec<RecordBatch> = reader.by_ref().collect::<Result<_, _>>()?;
 
-                handler
-                    .write_batches(&batches, schema.clone(), &data_path)
-                    .map_err(|e| from_fs_error(e, Some(&data_path)))?;
+                sqlite_handler
+                    .write_execute(&unique_id, sql, &batches, schema.clone())
+                    .map_err(|e| from_fs_error(e, Some(&path)))?;
 
                 // re-construct the stream from the accumulated batches
                 let results = batches
@@ -631,8 +862,8 @@ impl Statement for RecordEngineStatement {
                 Ok(reader)
             }
             Err(err) => {
-                handler
-                    .write_error(&path, &file_name, &format!("{err}"))
+                sqlite_handler
+                    .write_execute_error(&unique_id, sql, &format!("{err}"))
                     .map_err(|e| from_fs_error(e, Some(&path)))?;
                 Err(AdbcError::with_message_and_status(
                     format!("{err}"),
@@ -703,6 +934,10 @@ impl Statement for RecordEngineStatement {
                 if [DBT_NODE_ID, DBT_EXECUTION_PHASE].contains(&name.as_str()) =>
             {
                 debug_assert!(false, "expected string value for {} option", name);
+                Ok(())
+            }
+            (OptionStatement::Other(name), OptionValue::Int(metadata)) if name == DBT_METADATA => {
+                self.metadata = metadata != 0;
                 Ok(())
             }
             (k, v) => self.inner_stmt.set_option(k, v),
@@ -863,31 +1098,62 @@ impl Connection for ReplayEngineConnection {
     ) -> AdbcResult<Schema> {
         let path = self.0.path.clone();
         // Use table identifier for deterministic file naming (order-independent)
-        let full_file_name = compute_file_name_for_table_schema(catalog, db_schema, table_name);
+        let unique_id = compute_file_name_for_table_schema(catalog, db_schema, table_name);
 
-        // FIXME: Compat layer
-        // Try Arrow IPC first, fall back to Parquet
-        let arrow_path = path.join(format!("{full_file_name}.arrow"));
-        let handler = if arrow_path.exists() {
-            FileHandler::new_for_replay(FileFormat::ArrowIPC)
-        } else {
-            FileHandler::new_for_replay(FileFormat::Parquet)
-        };
+        let storage_type = detect_storage_type(&path, &unique_id);
 
-        if let Some(msg) = handler
-            .read_error(&path, &full_file_name)
-            .map_err(|e| from_fs_error(e, Some(&path)))?
-        {
-            return Err(AdbcError::with_message_and_status(
-                msg,
-                AdbcStatus::Internal,
-            ));
+        match storage_type {
+            StorageType::Sqlite => {
+                let sqlite_handler = SqliteHandler::new(&path);
+                let entry = sqlite_handler
+                    .read_schema(&unique_id)
+                    .map_err(|e| from_fs_error(e, Some(&path)))?;
+
+                // Check for recorded error
+                if let Some(msg) = entry.error {
+                    return Err(AdbcError::with_message_and_status(
+                        msg,
+                        AdbcStatus::Internal,
+                    ));
+                }
+
+                let data_base64 = entry.data_base64.ok_or_else(|| {
+                    from_fs_error(
+                        FileHandlerError("Missing data in recording".to_string()),
+                        Some(&path),
+                    )
+                })?;
+
+                let reader = sqlite_handler
+                    .decode_arrow_ipc(&data_base64)
+                    .map_err(|e| from_fs_error(e, Some(&path)))?;
+
+                Ok(reader.schema().as_ref().clone())
+            }
+            StorageType::FileArrowIpc | StorageType::FileParquet => {
+                // Fall back to file-based recordings
+                let handler = if storage_type == StorageType::FileArrowIpc {
+                    FileHandler::new_for_replay(FileFormat::ArrowIPC)
+                } else {
+                    FileHandler::new_for_replay(FileFormat::Parquet)
+                };
+
+                if let Some(msg) = handler
+                    .read_error(&path, &unique_id)
+                    .map_err(|e| from_fs_error(e, Some(&path)))?
+                {
+                    return Err(AdbcError::with_message_and_status(
+                        msg,
+                        AdbcStatus::Internal,
+                    ));
+                }
+
+                let schema = handler
+                    .read_schema(&path, &unique_id)
+                    .map_err(|e| from_fs_error(e, Some(&path)))?;
+                Ok(schema)
+            }
         }
-
-        let schema = handler
-            .read_schema(&path, &full_file_name)
-            .map_err(|e| from_fs_error(e, Some(&path)))?;
-        Ok(schema)
     }
 
     fn update_node_id(&mut self, node_id: Option<String>) {
@@ -900,6 +1166,7 @@ struct ReplayEngineStatement {
     node_id: Option<String>,
     execution_phase: &'static str,
     sql: Option<String>,
+    metadata: bool,
 }
 
 impl ReplayEngineStatement {
@@ -909,6 +1176,7 @@ impl ReplayEngineStatement {
             node_id: None,
             execution_phase: "",
             sql: None,
+            metadata: false,
         }
     }
 }
@@ -938,67 +1206,110 @@ impl Statement for ReplayEngineStatement {
         };
 
         let path = self.replay_engine.full_path();
-        let file_name = compute_file_name(self.node_id.as_ref(), Some(replay_sql))?;
+        let unique_id = compute_file_name(self.node_id.as_ref(), Some(replay_sql), self.metadata)?;
 
-        // FIXME: Compat layer
-        // Try Arrow IPC first, fall back to Parquet
-        let arrow_path = path.join(format!("{file_name}.arrow"));
-        let parquet_path = path.join(format!("{file_name}.parquet"));
-        let (data_path, handler) = if arrow_path.exists() {
-            (
-                arrow_path,
-                FileHandler::new_for_replay(FileFormat::ArrowIPC),
-            )
-        } else {
-            (
-                parquet_path,
-                FileHandler::new_for_replay(FileFormat::Parquet),
-            )
-        };
+        // Detect storage type for backwards compatibility
+        let storage_type = detect_storage_type(&path, &unique_id);
 
-        let sql_path = path.join(format!("{file_name}.sql"));
+        match storage_type {
+            StorageType::Sqlite => {
+                let sqlite_handler = SqliteHandler::new(&path);
+                let entry = sqlite_handler
+                    .read_execute(&unique_id, replay_sql)
+                    .map_err(|e| from_fs_error(e, Some(&path)))?;
 
-        // Query has to match to the recorded one, otherwise we have issues with ordering
-        if !sql_path.exists() {
-            panic!(
-                "Missing query file ({:?}) during replay. Query: {}",
-                &sql_path, replay_sql,
-            );
+                // Query has to match to the recorded one, otherwise we have issues with ordering
+                let record_sql = entry.sql.as_deref().unwrap_or("none");
+                if normalize_sql_for_comparison(record_sql)
+                    != normalize_sql_for_comparison(replay_sql)
+                        .replace("FUSION_ADAPTER_TESTING", "[MASKED_WH]")
+                        .replace("FUSION_SLT_WAREHOUSE", "[MASKED_WH]")
+                {
+                    panic!(
+                        "Recorded query ({record_sql}) and actual query ({replay_sql}) do not match (unique_id: {unique_id})"
+                    );
+                }
+
+                // Check for recorded error
+                if let Some(msg) = entry.error {
+                    return Err(AdbcError::with_message_and_status(
+                        msg,
+                        AdbcStatus::Internal,
+                    ));
+                }
+
+                // Decode the data from Arrow IPC
+                let data_base64 = entry.data_base64.ok_or_else(|| {
+                    from_fs_error(
+                        FileHandlerError("Missing data in recording".to_string()),
+                        Some(&path),
+                    )
+                })?;
+
+                let reader = sqlite_handler
+                    .decode_arrow_ipc(&data_base64)
+                    .map_err(|e| from_fs_error(e, Some(&path)))?;
+                Ok(reader)
+            }
+            StorageType::FileArrowIpc | StorageType::FileParquet => {
+                // Fall back to file-based storage
+                let arrow_path = path.join(format!("{unique_id}.arrow"));
+                let parquet_path = path.join(format!("{unique_id}.parquet"));
+                let (data_path, handler) = if storage_type == StorageType::FileArrowIpc {
+                    (
+                        arrow_path,
+                        FileHandler::new_for_replay(FileFormat::ArrowIPC),
+                    )
+                } else {
+                    (
+                        parquet_path,
+                        FileHandler::new_for_replay(FileFormat::Parquet),
+                    )
+                };
+
+                let sql_path = path.join(format!("{unique_id}.sql"));
+
+                // Query has to match to the recorded one, otherwise we have issues with ordering
+                if !sql_path.exists() {
+                    panic!(
+                        "Missing query file ({:?}) during replay. Query: {}",
+                        &sql_path, replay_sql,
+                    );
+                }
+
+                let record_sql = handler
+                    .read_sql(&path, &unique_id)
+                    .map_err(|e| from_fs_error(e, Some(&path)))?;
+                if normalize_sql_for_comparison(&record_sql)
+                    != normalize_sql_for_comparison(replay_sql)
+                        // we need to normalize
+                        // in CI, FUSION_SLT_WAREHOUSE is used,
+                        // locally, FUSION_ADAPTER_TESTING is used,
+                        .replace("FUSION_ADAPTER_TESTING", "[MASKED_WH]")
+                        .replace("FUSION_SLT_WAREHOUSE", "[MASKED_WH]")
+                {
+                    panic!(
+                        "Recorded query ({record_sql}) and actual query ({replay_sql}) do not match ({sql_path:?})"
+                    );
+                }
+
+                // Check for recorded error
+                if let Some(msg) = handler
+                    .read_error(&path, &unique_id)
+                    .map_err(|e| from_fs_error(e, Some(&path)))?
+                {
+                    return Err(AdbcError::with_message_and_status(
+                        msg,
+                        AdbcStatus::Internal,
+                    ));
+                }
+
+                let reader = handler
+                    .read_batches(&data_path)
+                    .map_err(|e| from_fs_error(e, Some(&data_path)))?;
+                Ok(reader)
+            }
         }
-
-        let record_sql = handler
-            .read_sql(&path, &file_name)
-            .map_err(|e| from_fs_error(e, Some(&path)))?;
-        if normalize_sql_for_comparison(&record_sql)
-            != normalize_sql_for_comparison(replay_sql)
-                // we need to normalize
-                // in CI, FUSION_SLT_WAREHOUSE is used,
-                // locally, FUSION_ADAPTER_TESTING is used,
-                // DBT_TESTING_ALT is used for snowflake_warehouse config tests
-                .replace("FUSION_ADAPTER_TESTING", "[MASKED_WH]")
-                .replace("FUSION_SLT_WAREHOUSE", "[MASKED_WH]")
-                .replace("DBT_TESTING_ALT", "[MASKED_WH]")
-        {
-            panic!(
-                "Recorded query ({record_sql}) and actual query ({replay_sql}) do not match ({sql_path:?})"
-            );
-        }
-
-        // Check for recorded error
-        if let Some(msg) = handler
-            .read_error(&path, &file_name)
-            .map_err(|e| from_fs_error(e, Some(&path)))?
-        {
-            return Err(AdbcError::with_message_and_status(
-                msg,
-                AdbcStatus::Internal,
-            ));
-        }
-
-        let reader = handler
-            .read_batches(&data_path)
-            .map_err(|e| from_fs_error(e, Some(&data_path)))?;
-        Ok(reader)
     }
 
     fn execute_update(&mut self) -> AdbcResult<Option<i64>> {
@@ -1063,6 +1374,10 @@ impl Statement for ReplayEngineStatement {
                 debug_assert!(false, "expected string value for {} option", name);
                 Ok(())
             }
+            (OptionStatement::Other(name), OptionValue::Int(metadata)) if name == DBT_METADATA => {
+                self.metadata = metadata != 0;
+                Ok(())
+            }
             (_k, _v) => {
                 // TODO: Record options and then use those values when finding the file name
                 Ok(())
@@ -1105,6 +1420,7 @@ fn normalize_sql_for_comparison(sql: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::tempdir;
 
     #[test]
     fn test_normalize_dbt_tmp_name() {
@@ -1112,5 +1428,194 @@ mod tests {
         let input = "SELECT * FROM dbt_tmp_800c2fb4_a0ba_4708_a0b1_813316032bfb";
         let expected = "SELECT * FROM dbt_tmp_";
         assert_eq!(normalize_dbt_tmp_name(input), expected);
+    }
+
+    #[test]
+    fn test_sqlite_handler_execute_roundtrip() {
+        let dir = tempdir().unwrap();
+        let handler = SqliteHandler::new(dir.path());
+
+        // Create test data
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("id", DataType::Int32, false),
+            Field::new("name", DataType::Utf8, true),
+        ]));
+        let batch = RecordBatch::try_new(
+            schema.clone(),
+            vec![
+                Arc::new(arrow::array::Int32Array::from(vec![1, 2, 3])),
+                Arc::new(arrow::array::StringArray::from(vec![
+                    Some("alice"),
+                    Some("bob"),
+                    None,
+                ])),
+            ],
+        )
+        .unwrap();
+
+        // Write the recording
+        let unique_id = "test-node-0";
+        let sql = "SELECT * FROM users";
+        handler
+            .write_execute(unique_id, sql, &[batch], schema)
+            .unwrap();
+
+        // Read it back
+        let entry = handler.read_execute(unique_id, sql).unwrap();
+        assert_eq!(entry.sql.as_deref(), Some(sql));
+        assert!(entry.error.is_none());
+        assert!(entry.data_base64.is_some());
+
+        // Decode and verify
+        let mut reader = handler
+            .decode_arrow_ipc(entry.data_base64.as_ref().unwrap())
+            .unwrap();
+        let read_batch = reader.next().unwrap().unwrap();
+        assert_eq!(read_batch.num_rows(), 3);
+        assert_eq!(read_batch.num_columns(), 2);
+    }
+
+    #[test]
+    fn test_sqlite_handler_execute_error_roundtrip() {
+        let dir = tempdir().unwrap();
+        let handler = SqliteHandler::new(dir.path());
+
+        let unique_id = "test-error-0";
+        let sql = "SELECT * FROM nonexistent";
+        let error_msg = "Table not found: nonexistent";
+
+        // Write error recording
+        handler
+            .write_execute_error(unique_id, sql, error_msg)
+            .unwrap();
+
+        // Read it back
+        let entry = handler.read_execute(unique_id, sql).unwrap();
+        assert_eq!(entry.sql.as_deref(), Some(sql));
+        assert_eq!(entry.error.as_deref(), Some(error_msg));
+        assert!(entry.data_base64.is_none());
+    }
+
+    #[test]
+    fn test_sqlite_handler_schema_roundtrip() {
+        let dir = tempdir().unwrap();
+        let handler = SqliteHandler::new(dir.path());
+
+        // Create test schema with metadata
+        let mut metadata = HashMap::new();
+        metadata.insert("custom_key".to_string(), "custom_value".to_string());
+        let schema = Schema::new(vec![
+            Field::new("col1", DataType::Float64, false),
+            Field::new("col2", DataType::Boolean, true),
+        ])
+        .with_metadata(metadata);
+
+        let unique_id = "node-0.get_table_schema";
+
+        // Write the schema
+        handler.write_schema(unique_id, &schema).unwrap();
+
+        // Read it back
+        let entry = handler.read_schema(unique_id).unwrap();
+        assert!(entry.sql.is_none());
+        assert!(entry.error.is_none());
+        assert!(entry.data_base64.is_some());
+
+        // Decode and verify schema
+        let reader = handler
+            .decode_arrow_ipc(entry.data_base64.as_ref().unwrap())
+            .unwrap();
+        let read_schema = reader.schema();
+        assert_eq!(read_schema.fields().len(), 2);
+        assert_eq!(read_schema.field(0).name(), "col1");
+        assert_eq!(read_schema.field(1).name(), "col2");
+        assert_eq!(
+            read_schema.metadata().get("custom_key"),
+            Some(&"custom_value".to_string())
+        );
+    }
+
+    #[test]
+    fn test_sqlite_handler_schema_error_roundtrip() {
+        let dir = tempdir().unwrap();
+        let handler = SqliteHandler::new(dir.path());
+
+        let unique_id = "node-1.get_table_schema";
+        let error_msg = "Schema not found";
+
+        // Write error
+        handler.write_schema_error(unique_id, error_msg).unwrap();
+
+        // Read it back
+        let entry = handler.read_schema(unique_id).unwrap();
+        assert_eq!(entry.error.as_deref(), Some(error_msg));
+        assert!(entry.data_base64.is_none());
+    }
+
+    #[test]
+    fn test_detect_storage_type() {
+        let dir = tempdir().unwrap();
+
+        // No files - defaults to Parquet
+        assert_eq!(
+            detect_storage_type(dir.path(), "test-0"),
+            StorageType::FileParquet
+        );
+
+        // Create recordings.db - should detect SQLite
+        let db_path = dir.path().join(RECORDS_NAME);
+        fs::write(&db_path, "").unwrap();
+        assert_eq!(
+            detect_storage_type(dir.path(), "test-0"),
+            StorageType::Sqlite
+        );
+
+        // Remove db, create arrow file
+        fs::remove_file(&db_path).unwrap();
+        let arrow_path = dir.path().join("test-0.arrow");
+        fs::write(&arrow_path, "").unwrap();
+        assert_eq!(
+            detect_storage_type(dir.path(), "test-0"),
+            StorageType::FileArrowIpc
+        );
+    }
+
+    #[test]
+    fn test_sqlite_handler_exists() {
+        let dir = tempdir().unwrap();
+        let handler = SqliteHandler::new(dir.path());
+
+        // Before any write
+        assert!(!handler.exists());
+
+        // After connecting (which creates the db)
+        handler.connect().unwrap();
+        assert!(handler.exists());
+    }
+
+    #[test]
+    fn test_sqlite_handler_empty_batches() {
+        let dir = tempdir().unwrap();
+        let handler = SqliteHandler::new(dir.path());
+
+        let schema = Arc::new(Schema::new(vec![Field::new("x", DataType::Int32, false)]));
+        let unique_id = "empty-0";
+        let sql = "SELECT x FROM empty_table";
+
+        // Write empty result
+        handler.write_execute(unique_id, sql, &[], schema).unwrap();
+
+        // Read it back
+        let entry = handler.read_execute(unique_id, sql).unwrap();
+        let mut reader = handler
+            .decode_arrow_ipc(entry.data_base64.as_ref().unwrap())
+            .unwrap();
+
+        // Should get no batches
+        assert!(reader.next().is_none());
+
+        // Schema should still be correct
+        assert_eq!(reader.schema().fields().len(), 1);
+        assert_eq!(reader.schema().field(0).name(), "x");
     }
 }

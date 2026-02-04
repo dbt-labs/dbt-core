@@ -714,8 +714,8 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
 
     fn list_relations_schemas_inner(
         &self,
-        _unique_id: Option<String>,
-        _phase: Option<ExecutionPhase>,
+        unique_id: Option<String>,
+        phase: Option<ExecutionPhase>,
         relations: &[Arc<dyn BaseRelation>],
     ) -> AsyncAdapterResult<'_, HashMap<String, AdapterResult<Arc<Schema>>>> {
         type Acc = HashMap<String, AdapterResult<Arc<Schema>>>;
@@ -792,7 +792,14 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
                 format!("DESCRIBE TABLE EXTENDED {fqn} AS JSON;")
             };
 
-            let ctx = QueryCtx::default().with_desc("Get table schema");
+            let mut ctx = QueryCtx::new_metadata().with_desc("Get table schema");
+            if let Some(node_id) = unique_id.clone() {
+                ctx = ctx.with_node_id(&node_id);
+            }
+            if let Some(phase) = phase {
+                ctx = ctx.with_phase(phase.as_str());
+            }
+
             let (_, table) = adapter.query(&ctx, conn, &sql, None)?;
             let batch = table.original_record_batch();
 

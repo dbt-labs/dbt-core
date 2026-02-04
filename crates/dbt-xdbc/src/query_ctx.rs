@@ -7,6 +7,8 @@ pub struct QueryCtx {
     phase: Option<&'static str>,
     // Description (abribrary string) associated with the query
     desc: Option<String>,
+    // Whether the query is for metadata fetch (schema hydration)
+    metadata: bool,
 }
 
 impl QueryCtx {
@@ -16,6 +18,17 @@ impl QueryCtx {
             node_unique_id: None,
             phase: None,
             desc: Some(description.into()),
+            metadata: false,
+        }
+    }
+
+    /// Create a new Query Context for metadata purposes.
+    pub fn new_metadata() -> Self {
+        QueryCtx {
+            node_unique_id: None,
+            phase: None,
+            desc: None,
+            metadata: true,
         }
     }
 
@@ -47,6 +60,10 @@ impl QueryCtx {
     pub fn with_phase(mut self, phase: &'static str) -> Self {
         self.phase = Some(phase);
         self
+    }
+
+    pub fn is_metadata(&self) -> bool {
+        self.metadata
     }
 
     /// Return unique node id associated with this context

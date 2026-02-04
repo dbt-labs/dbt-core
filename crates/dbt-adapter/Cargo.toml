@@ -44,6 +44,7 @@ minijinja-contrib = { workspace = true, features = ["datetime", "timezone"] }
 once_cell = { workspace = true }
 parking_lot = { workspace = true }
 regex = { workspace = true }
+rusqlite = { workspace = true }
 scc = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -56,6 +57,7 @@ uuid = { workspace = true }
 
 [dev-dependencies]
 dbt-test-primitives = { workspace = true }
+tempfile = { workspace = true }
 
 [lib]
 name = "dbt_adapter"

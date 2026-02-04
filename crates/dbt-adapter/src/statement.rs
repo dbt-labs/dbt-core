@@ -15,6 +15,8 @@ use dbt_xdbc::semaphore::AcquireAllSemaphore;
 pub const DBT_NODE_ID: &str = "dbt.node_id";
 /// Name of the [Statement] option that carries the dbt execution phase.
 pub const DBT_EXECUTION_PHASE: &str = "dbt.execution_phase";
+/// Name of the [Statement] option that carries whether the query is for metadata fetch (schema hydration).
+pub const DBT_METADATA: &str = "dbt.metadata";
 
 /// Generate a unique statement ID for each [TrackedStatement]
 /// by incrementing this global atomic counter.

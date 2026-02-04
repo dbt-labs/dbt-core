@@ -506,7 +506,7 @@ impl MetadataAdapter for SnowflakeMetadataAdapter {
                           table_name: &String|
               -> AdapterResult<Arc<Schema>> {
             let sql = format!("describe table {};", &table_name);
-            let mut ctx = QueryCtx::default().with_desc("Get table schema");
+            let mut ctx = QueryCtx::new_metadata().with_desc("Get table schema");
             if let Some(node_id) = unique_id.clone() {
                 ctx = ctx.with_node_id(&node_id);
             }
