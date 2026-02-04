@@ -3,6 +3,9 @@
 use core::fmt;
 use std::rc::Rc;
 use std::sync::Arc;
+use std::sync::Mutex;
+
+use im::HashSet;
 
 use minijinja::arg_utils::ArgsIter;
 use minijinja::listener::RenderingEventListener;
@@ -52,6 +55,16 @@ trait TupleRepr: fmt::Debug + Send + Sync {
     /// Clone this tuple representation (virtually-dispatched).
     fn clone_repr(&self) -> Box<dyn TupleRepr>;
 
+    /// Clone this tuple representation (virtually-dispatched) but exclude the given index.
+    ///
+    /// Default implementation provided.
+    fn excluding(&self, idx: usize) -> Box<dyn TupleRepr> {
+        Box::new(ExcludedTupleRepr {
+            inner: self.clone_repr(),
+            excluded: HashSet::unit(idx),
+        })
+    }
+
     /// Compare this tuple representation (virtually-dispatched).
     ///
     /// Can be specialized on specific tuple representations to
@@ -100,6 +113,110 @@ impl Tuple {
     /// Find the index of a value in the tuple.
     pub fn index(&self, value: &Value) -> Option<usize> {
         self.0.index_of(value)
+    }
+
+    /// Create a new Tuple with a fast clone
+    fn clone_repr(&self) -> Tuple {
+        Tuple(self.0.clone_repr())
+    }
+
+    /// Create a new Tuple with a fast clone excluding the given index
+    fn excluding(&self, idx: usize) -> Tuple {
+        Tuple(self.0.excluding(idx))
+    }
+}
+
+/// A TupleRepr that wraps another TupleRepr and excludes certain indices.
+///
+/// This allows "mutation" by exclusion without materializing a new Vec<Value>.
+/// The excluded set uses `im::HashSet` for efficient cloning.
+#[derive(Debug)]
+pub(crate) struct ExcludedTupleRepr {
+    /// The underlying tuple representation.
+    inner: Box<dyn TupleRepr>,
+    /// The set of excluded indices (in terms of the original inner tuple).
+    excluded: HashSet<usize>,
+}
+
+impl ExcludedTupleRepr {
+    /// Map a visible index to the underlying inner index.
+    /// Returns None if the visible index is out of bounds.
+    fn visible_to_inner(&self, visible_idx: usize) -> Option<usize> {
+        let mut visible_count = 0;
+        for inner_idx in 0..self.inner.len() {
+            if self.excluded.contains(&inner_idx) {
+                continue;
+            }
+            if visible_count == visible_idx {
+                return Some(inner_idx);
+            }
+            visible_count += 1;
+        }
+        None
+    }
+}
+
+impl TupleRepr for ExcludedTupleRepr {
+    fn get_item_by_index(&self, idx: isize) -> Option<Value> {
+        let visible_len = self.len();
+        let adjusted = adjusted_index(idx, visible_len)?;
+        let inner_idx = self.visible_to_inner(adjusted)?;
+        self.inner.get_item_by_index(inner_idx as isize)
+    }
+
+    fn len(&self) -> usize {
+        self.inner.len() - self.excluded.len()
+    }
+
+    fn count_occurrences_of(&self, value: &Value) -> usize {
+        let mut count = 0;
+        for i in 0..self.inner.len() {
+            if self.excluded.contains(&i) {
+                continue;
+            }
+            if let Some(v) = self.inner.get_item_by_index(i as isize) {
+                if v == *value {
+                    count += 1;
+                }
+            }
+        }
+        count
+    }
+
+    fn index_of(&self, value: &Value) -> Option<usize> {
+        let mut visible_idx = 0;
+        for inner_idx in 0..self.inner.len() {
+            if self.excluded.contains(&inner_idx) {
+                continue;
+            }
+            if let Some(v) = self.inner.get_item_by_index(inner_idx as isize) {
+                if v == *value {
+                    return Some(visible_idx);
+                }
+            }
+            visible_idx += 1;
+        }
+        None
+    }
+
+    fn clone_repr(&self) -> Box<dyn TupleRepr> {
+        Box::new(ExcludedTupleRepr {
+            inner: self.inner.clone_repr(),
+            excluded: self.excluded.clone(),
+        })
+    }
+
+    fn excluding(&self, idx: usize) -> Box<dyn TupleRepr> {
+        // idx is a visible index, we need to convert to inner index
+        if let Some(inner_idx) = self.visible_to_inner(idx) {
+            Box::new(ExcludedTupleRepr {
+                inner: self.inner.clone_repr(),
+                excluded: self.excluded.update(inner_idx),
+            })
+        } else {
+            // idx out of bounds, just clone
+            self.clone_repr()
+        }
     }
 }
 
@@ -156,14 +273,14 @@ impl Object for Tuple {
                 let iter = ArgsIter::for_unnamed_pos_args("tuple.count", 1, args);
                 let value = iter.next_arg::<&Value>()?;
                 iter.finish()?;
-                let count = self.0.count_occurrences_of(value);
+                let count = self.count(value);
                 Ok(Value::from(count))
             }
             "index" => {
                 let iter = ArgsIter::for_unnamed_pos_args("tuple.index", 1, args);
                 let value = iter.next_arg::<&Value>()?;
                 iter.finish()?;
-                let idx = self.0.index_of(value);
+                let idx = self.index(value);
                 Ok(Value::from(idx))
             }
             _ => Object::call_method(self, state, name, args, listeners),
@@ -267,70 +384,219 @@ impl TupleRepr for ZippedTupleRepr {
     }
 }
 
-/// An object that behaves like a Python `OrderedDict`.
-///
-/// We need a custom implementation to avoid materializing the map in memory.
-/// All operations are lazy and delegate to the underlying `TupleRepr` objects
-/// produced by `MappedSequence`.
 #[derive(Debug)]
-pub struct OrderedDict {
-    /// The keys in the ordered dictionary.
+struct InnerOrderedDict {
     keys: Tuple,
-    /// The values in the ordered dictionary.
     values: Tuple,
 }
 
-impl OrderedDict {
+impl InnerOrderedDict {
     fn new(keys: Tuple, values: Tuple) -> Self {
         debug_assert!(keys.len() == values.len());
         Self { keys, values }
     }
 
+    /// Count of entries.
+    fn len(&self) -> usize {
+        self.keys.len()
+    }
+
+    /// Pop a key from the ordered dict without any actual mutation.
+    ///
+    /// Returns:
+    /// - `Some((value, new_inner))` if the key existed
+    /// - `None` if the key was not found
+    fn pop(&self, key: &Value) -> Option<(Value, Self)> {
+        for i in 0..self.keys.len() {
+            let k = self.keys.get(i as isize).unwrap_or_default();
+            if k == *key {
+                let value = self.values.get(i as isize).expect("value should exist");
+
+                let new = Self::new(self.keys.excluding(i), self.values.excluding(i));
+
+                return Some((value, new));
+            }
+        }
+        None
+    }
+}
+
+/// An object that behaves like a Python `OrderedDict`.
+///
+/// We need a custom implementation to avoid materializing the map in memory.
+/// All operations are lazy and delegate to the underlying `TupleRepr` objects
+/// produced by `MappedSequence`.
+///
+/// Mutations (like `pop`) are handled by swapping in a new inner dict with
+/// excluded indices, using `im::HashSet` for efficient cloning.
+#[derive(Debug)]
+pub struct OrderedDict {
+    /// The inner state, wrapped in a Mutex for safe swapping.
+    inner: Mutex<InnerOrderedDict>,
+}
+
+impl OrderedDict {
+    fn new(keys: Tuple, values: Tuple) -> Self {
+        debug_assert!(keys.len() == values.len());
+        Self {
+            inner: Mutex::new(InnerOrderedDict::new(keys, values)),
+        }
+    }
+
     /// Retrieve the value for a given key.
     pub fn get(&self, key: &Value) -> Option<Value> {
-        // These ordered maps are small, so a linear search is not only acceptable
-        // but probably faster than building hash maps on value creation.
-        for i in 0..self.keys.len() {
-            if self
-                .keys
-                .get(i as isize)
-                .map(|k| k == *key)
-                .unwrap_or(false)
-            {
-                return self.values.get(i as isize);
+        let inner = self.inner.lock().expect("lock poisoned");
+        for i in 0..inner.keys.len() {
+            let k = inner.keys.get(i as isize)?;
+            if k == *key {
+                return inner.values.get(i as isize);
             }
         }
         None
     }
 
+    /// Return the keys as a Tuple.
+    fn keys(&self) -> Tuple {
+        let inner = self.inner.lock().expect("lock poisoned");
+        inner.keys.clone_repr()
+    }
+
+    /// Return the values as a Tuple.
+    fn values(&self) -> Tuple {
+        let inner = self.inner.lock().expect("lock poisoned");
+        inner.values.clone_repr()
+    }
+
     /// The equivalent of tuple(zip(self.keys(), self.values())).
     pub fn items(&self) -> Option<Tuple> {
-        let keys = self.keys.0.clone_repr();
-        let values = self.values.0.clone_repr();
+        let inner = self.inner.lock().expect("lock poisoned");
+        let keys = inner.keys.0.clone_repr();
+        let values = inner.values.0.clone_repr();
         let zipped = ZippedTupleRepr::new(keys, values);
-        let repr = Box::new(zipped);
-        Some(Tuple(repr))
+        Some(Tuple(Box::new(zipped)))
+    }
+
+    /// Count of entries.
+    #[allow(dead_code)]
+    fn len(&self) -> usize {
+        let inner = self.inner.lock().expect("lock poisoned");
+        inner.len()
     }
 }
 
 impl fmt::Display for OrderedDict {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let len = self.keys.len();
+        let inner = self.inner.lock().expect("lock poisoned");
+        let len = inner.len();
         write!(f, "OrderedDict({{")?;
         for i in 0..len {
-            let key = self.keys.get(i as isize).unwrap();
-            let value = self.values.get(i as isize).unwrap();
-            write!(f, "{key}: {value}")?;
-            if i < len - 1 {
+            let key = inner.keys.get(i as isize).unwrap();
+            let value = inner.values.get(i as isize).unwrap();
+            if i > 0 {
                 write!(f, ", ")?;
             }
+            write!(f, "{key}: {value}")?;
         }
         write!(f, "}})")
     }
 }
 
+// TODO: any other methods we need to implement here?
 impl Object for OrderedDict {
-    // TODO(felipecrv): Implement Object for OrderedDict
+    fn repr(self: &Arc<Self>) -> ObjectRepr {
+        ObjectRepr::Map
+    }
+
+    fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
+        self.get(key)
+    }
+
+    fn call_method(
+        self: &Arc<Self>,
+        _state: &State,
+        name: &str,
+        args: &[Value],
+        _listeners: &[Rc<dyn RenderingEventListener>],
+    ) -> Result<Value, minijinja::Error> {
+        match name {
+            // --- read-only map-like methods ---
+            "get" => {
+                // get(key, default=None)
+                let iter = ArgsIter::new("OrderedDict.get", &["key"], args);
+                let key = iter.next_arg::<&Value>()?;
+                let default = iter.next_kwarg::<Option<&Value>>("default")?;
+                iter.finish()?;
+                Ok(self
+                    .get(key)
+                    .unwrap_or_else(|| default.cloned().unwrap_or_else(|| Value::from(()))))
+            }
+
+            "keys" => {
+                assert_nullary_args!("OrderedDict.keys", args)?;
+                Ok(Value::from_object(self.keys()))
+            }
+
+            "values" => {
+                assert_nullary_args!("OrderedDict.values", args)?;
+                Ok(Value::from_object(self.values()))
+            }
+
+            "items" => {
+                assert_nullary_args!("OrderedDict.items", args)?;
+                Ok(Value::from_object(self.items().unwrap()))
+            }
+
+            "copy" => {
+                assert_nullary_args!("OrderedDict.copy", args)?;
+                // deep-ish copy: tuples are cheap to clone via clone_repr (uses Arc)
+                let inner = self.inner.lock().expect("lock poisoned");
+                let out = OrderedDict {
+                    inner: Mutex::new(InnerOrderedDict::new(
+                        inner.keys.clone_repr(),
+                        inner.values.clone_repr(),
+                    )),
+                };
+                Ok(Value::from_object(out))
+            }
+
+            "contains" => {
+                // non-pythonic helper, but useful: contains(key) -> bool
+                let iter = ArgsIter::for_unnamed_pos_args("OrderedDict.contains", 1, args);
+                let key = iter.next_arg::<&Value>()?;
+                iter.finish()?;
+                Ok(Value::from(self.get(key).is_some()))
+            }
+
+            // --- mutating methods implemented via excluded ---
+            "pop" => {
+                // pop(key, default=())
+                // If key exists: create new inner with excluded index and return value.
+                // If missing: return default if provided, else error.
+                let iter = ArgsIter::new("OrderedDict.pop", &["key"], args);
+                let key = iter.next_arg::<&Value>()?;
+                let default = iter.next_kwarg::<Option<&Value>>("default")?;
+                iter.finish()?;
+
+                let mut inner = self.inner.lock().expect("lock poisoned");
+                if let Some((value, new)) = inner.pop(key) {
+                    *inner = new;
+                    Ok(value)
+                } else if let Some(default) = default {
+                    Ok(default.clone())
+                } else {
+                    Err(minijinja::Error::new(
+                        ErrorKind::NonKey,
+                        "pop(): key not found",
+                    ))
+                }
+            }
+
+            _ => Err(minijinja::Error::new(
+                ErrorKind::UnknownMethod,
+                format!("OrderedDict has no method named {name}"),
+            )),
+        }
+    }
 }
 
 /// A generic container for immutable data that can be accessed either by
@@ -732,5 +998,61 @@ mod tests {
         let dict_value = sequence.call_method(&state, "dict", &[], &[]).unwrap();
         let dict = dict_value.downcast_object_ref::<OrderedDict>().unwrap();
         assert_eq!(dict.to_string(), "OrderedDict({count: 2, name: biscoito})");
+    }
+
+    #[test]
+    fn test_ordered_dict_pop() {
+        // Create an OrderedDict with 3 key-value pairs
+        let keys = Arc::new(vec![Value::from("a"), Value::from("b"), Value::from("c")]);
+        let values = Arc::new(vec![Value::from(1), Value::from(2), Value::from(3)]);
+        let keys_tuple = Tuple(Box::new(TestTupleRepr::new(keys)));
+        let values_tuple = Tuple(Box::new(TestTupleRepr::new(values)));
+        let dict = Arc::new(OrderedDict::new(keys_tuple, values_tuple));
+
+        let env = Environment::new();
+        let state = env.empty_state();
+
+        // Initial state: {"a": 1, "b": 2, "c": 3}
+        assert_eq!(dict.to_string(), "OrderedDict({a: 1, b: 2, c: 3})");
+
+        // pop("b") should return 2 and remove "b"
+        let popped_value = dict
+            .call_method(&state, "pop", &[Value::from("b")], &[])
+            .unwrap();
+        assert_eq!(popped_value, Value::from(2));
+        assert_eq!(dict.to_string(), "OrderedDict({a: 1, c: 3})");
+
+        // After pop, "b" should not be accessible
+        assert!(dict.get(&Value::from("b")).is_none());
+        assert_eq!(dict.get(&Value::from("a")), Some(Value::from(1)));
+        assert_eq!(dict.get(&Value::from("c")), Some(Value::from(3)));
+
+        // pop("a") should return 1 and remove "a"
+        let popped_value = dict
+            .call_method(&state, "pop", &[Value::from("a")], &[])
+            .unwrap();
+        assert_eq!(popped_value, Value::from(1));
+        assert_eq!(dict.to_string(), "OrderedDict({c: 3})");
+
+        // pop("c") should return 3 and leave dict empty
+        let popped_value = dict
+            .call_method(&state, "pop", &[Value::from("c")], &[])
+            .unwrap();
+        assert_eq!(popped_value, Value::from(3));
+        assert_eq!(dict.to_string(), "OrderedDict({})");
+
+        // pop on missing key with default should return default
+        let popped_value = dict
+            .call_method(
+                &state,
+                "pop",
+                &[
+                    Value::from("missing"),
+                    Value::from(Kwargs::from_iter(vec![("default", Value::from(42))])),
+                ],
+                &[],
+            )
+            .unwrap();
+        assert_eq!(popped_value, Value::from(42));
     }
 }
