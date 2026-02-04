@@ -785,9 +785,10 @@ async fn process_model_chunk_for_unsafe_detection<T: InternalDbtNodeAttributes +
 
     for (_key, model) in chunk {
         token.check_cancellation()?;
-        // TODO: for snapshot, use target dir instead of in_dir
+        // For snapshots, use path (generated file in target) instead of original_file_path (source file)
+        // because the generated file may have a different name than the source file
         let absolute_path = if model.resource_type() == NodeType::Snapshot {
-            arg.io.out_dir.join(&model.common().original_file_path)
+            arg.io.out_dir.join(&model.common().path)
         } else {
             arg.io.in_dir.join(&model.common().original_file_path)
         };

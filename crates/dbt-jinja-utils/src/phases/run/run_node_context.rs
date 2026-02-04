@@ -138,7 +138,8 @@ async fn extend_with_model_context<S: Serialize>(
 
     // We are reading the raw_sql here for snapshots and models
     let raw_sql_path = match resource_type {
-        NodeType::Snapshot => Some(io_args.out_dir.join(common_attr.original_file_path.clone())),
+        // For snapshots, use path (generated file path) since original_file_path tracks the source
+        NodeType::Snapshot => Some(io_args.out_dir.join(common_attr.path.clone())),
         NodeType::Model => Some(io_args.in_dir.join(common_attr.original_file_path.clone())),
         _ => None,
     };

@@ -7,7 +7,9 @@ use crate::renderer::{
     render_unresolved_sql_files,
 };
 use crate::sql_file_info::SqlFileInfo;
-use crate::utils::{RelationComponents, get_node_fqn, update_node_relation_components};
+use crate::utils::{
+    RelationComponents, get_node_fqn, get_original_file_path, update_node_relation_components,
+};
 use dbt_common::adapter::AdapterType;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::DBT_SNAPSHOTS_DIR_NAME;
@@ -135,11 +137,12 @@ pub async fn resolve_snapshots(
             stdfs::write(snapshot_path, macro_call)?;
 
             // Track original path for checksum recalculation
-            snapshot_original_paths.insert(target_path.clone(), macro_node.path.clone());
+            snapshot_original_paths
+                .insert(target_path.clone(), macro_node.original_file_path.clone());
 
             snapshot_files.push(DbtAsset {
                 path: target_path.clone(),
-                original_path: macro_node.path.clone(),
+                original_path: macro_node.original_file_path.clone(),
                 package_name: package_name.clone(),
                 base_path: arg.io.out_dir.clone(),
             });
@@ -197,9 +200,16 @@ pub async fn resolve_snapshots(
                     stdfs::create_dir_all(parent)?;
                 }
                 stdfs::write(&snapshot_path, &sql)?;
+                // Compute the original file path relative to in_dir
+                // For package YAML snapshots, this includes the package path
+                let original_path = get_original_file_path(
+                    &package.package_root_path,
+                    &arg.io.in_dir,
+                    &mpe.relative_path,
+                );
                 let asset = DbtAsset {
                     path: target_path.clone(),
-                    original_path: mpe.relative_path.clone(),
+                    original_path,
                     package_name: package_name.clone(),
                     base_path: arg.io.out_dir.clone(),
                 };
@@ -344,8 +354,9 @@ pub async fn resolve_snapshots(
                     // NOTE: raw_code has to be this value for dbt-evaluator to return truthy
                     // hydrating it with get_original_file_contents would actually break dbt-evaluator
                     raw_code: Some("--placeholder--".to_string()),
-                    // The path to the YML file, if it is specified
-                    original_file_path: dbt_asset.path.clone(),
+                    // The original file path where the snapshot was defined
+                    // For package snapshots, this includes the package path (e.g., dbt_packages/my_pkg/snapshots/foo.sql)
+                    original_file_path: dbt_asset.original_path.clone(),
                     unique_id: unique_id.clone(),
                     fqn,
                     description: properties.description.to_owned(),
