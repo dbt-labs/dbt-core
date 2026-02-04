@@ -641,6 +641,11 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                             introspection: IntrospectionKind::None,
                             original_name: None,
                         },
+                        __adapter_attr__: AdapterAttr::from_config_and_dialect(
+                            &test.config.__warehouse_specific_config__,
+                            AdapterType::from_str(&manifest.metadata.adapter_type)
+                                .expect("Unknown or unsupported adapter type"),
+                        ),
                         deprecated_config: test.config,
                         __other__: test.__other__,
                     }),

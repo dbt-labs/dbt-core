@@ -4269,6 +4269,7 @@ pub struct DbtTest {
     pub __common_attr__: CommonAttributes,
     pub __base_attr__: NodeBaseAttributes,
     pub __test_attr__: DbtTestAttr,
+    pub __adapter_attr__: AdapterAttr,
     pub defined_at: Option<dbt_common::CodeLocationWithFile>,
 
     // not to be confused with __common_attr__.original_file_path, which is the path to the generated sql file

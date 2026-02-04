@@ -414,9 +414,11 @@ impl Task for SedTask {
                 // we need to normalize
                 // in CI, FUSION_SLT_WAREHOUSE is used,
                 // locally, FUSION_ADAPTER_TESTING is used,
+                // DBT_TESTING_ALT is used for snowflake_warehouse config tests
                 let new_content = content
                     .replace("FUSION_ADAPTER_TESTING", "[MASKED_WH]")
-                    .replace("FUSION_SLT_WAREHOUSE", "[MASKED_WH]");
+                    .replace("FUSION_SLT_WAREHOUSE", "[MASKED_WH]")
+                    .replace("DBT_TESTING_ALT", "[MASKED_WH]");
 
                 fs::write(path, new_content)?;
             }

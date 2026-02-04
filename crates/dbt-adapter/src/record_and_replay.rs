@@ -974,8 +974,10 @@ impl Statement for ReplayEngineStatement {
                 // we need to normalize
                 // in CI, FUSION_SLT_WAREHOUSE is used,
                 // locally, FUSION_ADAPTER_TESTING is used,
+                // DBT_TESTING_ALT is used for snowflake_warehouse config tests
                 .replace("FUSION_ADAPTER_TESTING", "[MASKED_WH]")
                 .replace("FUSION_SLT_WAREHOUSE", "[MASKED_WH]")
+                .replace("DBT_TESTING_ALT", "[MASKED_WH]")
         {
             panic!(
                 "Recorded query ({record_sql}) and actual query ({replay_sql}) do not match ({sql_path:?})"

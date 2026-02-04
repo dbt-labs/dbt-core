@@ -37,8 +37,8 @@ pub mod schemas {
 
     pub mod nodes;
     pub use nodes::{
-        CommonAttributes, DbtAnalysis, DbtAnalysisAttr, DbtExposure, DbtExposureAttr, DbtFunction,
-        DbtFunctionAttr, DbtModel, DbtModelAttr, DbtSeed, DbtSeedAttr, DbtSnapshot,
+        AdapterAttr, CommonAttributes, DbtAnalysis, DbtAnalysisAttr, DbtExposure, DbtExposureAttr,
+        DbtFunction, DbtFunctionAttr, DbtModel, DbtModelAttr, DbtSeed, DbtSeedAttr, DbtSnapshot,
         DbtSnapshotAttr, DbtSource, DbtSourceAttr, DbtTest, DbtTestAttr, DbtUnitTest,
         DbtUnitTestAttr, ExposureType, InternalDbtNode, InternalDbtNodeAttributes,
         InternalDbtNodeWrapper, IntrospectionKind, NodeBaseAttributes, Nodes, TestMetadata,

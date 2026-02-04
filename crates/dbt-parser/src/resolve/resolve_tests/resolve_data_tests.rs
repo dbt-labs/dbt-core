@@ -48,7 +48,9 @@ use dbt_schemas::schemas::properties::DataTestProperties;
 use dbt_schemas::schemas::properties::ModelProperties;
 use dbt_schemas::schemas::ref_and_source::DbtRef;
 use dbt_schemas::schemas::ref_and_source::DbtSourceWrapper;
-use dbt_schemas::schemas::{CommonAttributes, DbtTest, InternalDbtNode, NodeBaseAttributes};
+use dbt_schemas::schemas::{
+    AdapterAttr, CommonAttributes, DbtTest, InternalDbtNode, NodeBaseAttributes,
+};
 use dbt_schemas::state::DbtRuntimeConfig;
 use dbt_schemas::state::GenericTestAsset;
 use dbt_schemas::state::ModelStatus;
@@ -520,6 +522,10 @@ pub async fn resolve_data_tests(
                     .get(&dbt_asset.path)
                     .and_then(|test_asset| test_asset.original_name.clone()),
             },
+            __adapter_attr__: AdapterAttr::from_config_and_dialect(
+                &test_config.__warehouse_specific_config__,
+                adapter_type,
+            ),
             deprecated_config: *test_config.clone(),
             __other__: BTreeMap::new(),
         };
