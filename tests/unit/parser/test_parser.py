@@ -507,6 +507,17 @@ sources:
       - name: my_table
         loaded_at_field: test
 """
+SOURCE_FRESHNESS_WITH_LOADED_AT_QUERY = """
+sources:
+  - name: my_source
+    tables:
+      - name: my_table
+        config:
+            loaded_at_query: "select 1 as id"
+            freshness:
+                warn_after: {count: 1, period: hour}
+                error_after: {count: 1, period: day}
+"""
 
 
 class SchemaParserTest(BaseParserTest):
@@ -759,6 +770,22 @@ class SchemaParserSourceTest(SchemaParserTest):
         self.assertIsNone(table.description)
         self.assertEqual(len(table.columns), 1)
         self.assertEqual(len(table.columns[0].data_tests), 2)
+
+    @mock.patch(
+        "dbt.parser.sources.get_adapter",
+        return_value=mock.MagicMock(supports=mock.MagicMock(return_value=False)),
+    )
+    @mock.patch("dbt.parser.sources.fire_event")
+    def test__loaded_at_query_does_not_fire_config_problem_event(self, mock_fire_event, _):
+        """Test where we have a loaded_at_query defined but no loaded_at_field and the adapter does not support metadata-based freshness.
+        We should not fire a config problem event.
+        """
+        block = self.file_block_for(SOURCE_FRESHNESS_WITH_LOADED_AT_QUERY, "test_one.yml")
+        dct = yaml_from_file(block.file, validate=True)
+        self.parser.parse_file(block, dct)
+        unpatched_src_default = self.parser.manifest.sources["source.snowplow.my_source.my_table"]
+        self.source_patcher.parse_source(unpatched_src_default)
+        self.assertEqual(mock_fire_event.call_count, 0)
 
 
 class SchemaParserModelsTest(SchemaParserTest):
