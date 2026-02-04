@@ -318,30 +318,8 @@ got {:?}, expected an instance of {}",
     }
 
     pub fn common_args(&self) -> CommonArgs {
-        use CoreCommand::*;
         match &self.command {
-            Command::Core(core_cmd) => match &core_cmd {
-                Init(args) => args.common_args.clone(),
-                Deps(args) => args.common_args.clone(),
-                List(args) => args.common_args.clone(),
-                Ls(args) => args.common_args.clone(),
-                Parse(args) => args.common_args.clone(),
-                Compile(args) => args.common_args.clone(),
-                Run(args) => args.common_args.clone(),
-                RunOperation(args) => args.common_args.clone(),
-                Seed(args) => args.common_args.clone(),
-                Snapshot(args) => args.common_args.clone(),
-                Test(args) => args.common_args.clone(),
-                Build(args) => args.common_args.clone(),
-                Clone(args) => args.common_args.clone(),
-                Clean(args) => args.common_args.clone(),
-                Source(args) => args.common_args().clone(),
-                System(args) => args.common_args.clone(),
-                Show(args) => args.common_args.clone(),
-                Man(args) => args.common_args.clone(),
-                Debug(args) => args.common_args.clone(),
-                Retry(args) => args.common_args.clone(),
-            },
+            Command::Core(core_cmd) => core_cmd.common_args().clone(),
             Command::Extension(ext_cmd) => ext_cmd.common_args(),
         }
     }

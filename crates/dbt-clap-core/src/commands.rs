@@ -3,7 +3,7 @@ use std::fmt;
 
 use clap::error::ErrorKind;
 use dbt_common::FsResult;
-use dbt_common::io_args::{EvalArgs, FsCommand, Phases, SystemArgs};
+use dbt_common::io_args::{EvalArgs, FsCommand, Phases, StaticAnalysisKind, SystemArgs};
 use strum_macros::Display;
 
 use crate::{
@@ -85,6 +85,58 @@ impl CoreCommand {
 
     pub const fn name(&self) -> &'static str {
         self.as_command().as_str()
+    }
+
+    pub fn common_args(&self) -> &CommonArgs {
+        use CoreCommand::*;
+        match self {
+            Init(args) => &args.common_args,
+            Deps(args) => &args.common_args,
+            List(args) => &args.common_args,
+            Ls(args) => &args.common_args,
+            Parse(args) => &args.common_args,
+            Compile(args) => &args.common_args,
+            Run(args) => &args.common_args,
+            RunOperation(args) => &args.common_args,
+            Seed(args) => &args.common_args,
+            Snapshot(args) => &args.common_args,
+            Test(args) => &args.common_args,
+            Build(args) => &args.common_args,
+            Clone(args) => &args.common_args,
+            Clean(args) => &args.common_args,
+            Source(args) => args.common_args(),
+            System(args) => &args.common_args,
+            Show(args) => &args.common_args,
+            Man(args) => &args.common_args,
+            Debug(args) => &args.common_args,
+            Retry(args) => &args.common_args,
+        }
+    }
+
+    pub fn static_analysis(&self) -> Option<StaticAnalysisKind> {
+        use CoreCommand::*;
+        match self {
+            Init(_) => None,
+            Deps(_) => None,
+            Parse(_) => None,
+            List(_) => None,
+            Ls(_) => None,
+            Compile(compile_args) => Some(compile_args.static_analysis),
+            Run(run_args) => Some(run_args.static_analysis),
+            RunOperation(_) => None,
+            Test(test_args) => Some(test_args.static_analysis),
+            Seed(seed_args) => Some(seed_args.static_analysis),
+            Snapshot(snapshot_args) => Some(snapshot_args.static_analysis),
+            Show(show_args) => Some(show_args.static_analysis),
+            Build(build_args) => Some(build_args.static_analysis),
+            Clean(_) => None,
+            Source(_) => None,
+            Clone(_) => None,
+            System(_) => None,
+            Man(_) => None,
+            Debug(_) => None,
+            Retry(retry_args) => retry_args.static_analysis,
+        }
     }
 }
 
