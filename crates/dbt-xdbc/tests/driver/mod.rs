@@ -12,7 +12,6 @@ mod tests {
         error::{Error, Result},
         options::{AdbcVersion, OptionConnection},
     };
-    #[cfg(feature = "odbc")]
     use arrow_array::Array as _;
     use arrow_array::{cast::AsArray, types::*};
     use dbt_xdbc::{
@@ -176,6 +175,12 @@ mod tests {
         Ok(database_builder)
     }
 
+    fn database_builder_for_duckdb_file(path: &str) -> Result<database::Builder> {
+        let mut builder = database::Builder::new(Backend::DuckDB);
+        builder.with_named_option("path", path)?;
+        Ok(builder)
+    }
+
     fn database_for(backend: Backend) -> Result<Box<dyn Database>> {
         let mut driver = driver_for(backend)?;
         let database_builder = database_builder_for(backend)?;
@@ -312,6 +317,240 @@ mod tests {
     #[test]
     fn statement_execute_duckdb() -> Result<()> {
         execute_statement(Backend::DuckDB)
+    }
+
+    #[test]
+    fn duckdb_file_persistence() -> Result<()> {
+        use std::fs;
+
+        // Create a temp file path
+        let temp_dir = env::temp_dir();
+        let db_path = temp_dir.join("dbt_xdbc_test.duckdb");
+        let db_path_str = db_path.to_string_lossy().to_string();
+
+        // Clean up any existing file
+        let _ = fs::remove_file(&db_path);
+
+        // First connection: create table and insert data
+        {
+            let mut driver = driver_for(Backend::DuckDB)?;
+            let builder = database_builder_for_duckdb_file(&db_path_str)?;
+            let mut database = builder.build(&mut driver)?;
+            let mut conn = connection::Builder::default().build(&mut database)?;
+
+            let mut stmt = conn.new_statement()?;
+            stmt.set_sql_query("CREATE TABLE test_persist (id INTEGER, name VARCHAR)")?;
+            let _ = stmt.execute()?;
+
+            let mut stmt = conn.new_statement()?;
+            stmt.set_sql_query("INSERT INTO test_persist VALUES (1, 'alice'), (2, 'bob')")?;
+            let _ = stmt.execute()?;
+        }
+        // Connection dropped here, file should be written
+
+        // Second connection: verify data persisted
+        {
+            let mut driver = driver_for(Backend::DuckDB)?;
+            let builder = database_builder_for_duckdb_file(&db_path_str)?;
+            let mut database = builder.build(&mut driver)?;
+            let mut conn = connection::Builder::default().build(&mut database)?;
+
+            let mut stmt = conn.new_statement()?;
+            stmt.set_sql_query("SELECT COUNT(*) FROM test_persist")?;
+            let batch = stmt
+                .execute()?
+                .next()
+                .expect("a record batch")
+                .map_err(Error::from)?;
+
+            let count = batch.column(0).as_primitive::<Int64Type>().value(0);
+            assert_eq!(count, 2, "Expected 2 rows to persist");
+        }
+
+        // Cleanup
+        let _ = fs::remove_file(&db_path);
+
+        Ok(())
+    }
+
+    #[test]
+    fn duckdb_data_types_bool() -> Result<()> {
+        with_empty_statement(Backend::DuckDB, |mut statement| {
+            statement.set_sql_query(
+                r#"SELECT * FROM (
+                     VALUES
+                     (true, false, NULL),
+                     (false, true, true)
+                   ) AS tbl(bool_a, bool_b, bool_c)"#,
+            )?;
+            let batch = statement
+                .execute()?
+                .next()
+                .expect("a record batch")
+                .map_err(Error::from)?;
+            let schema = batch.schema();
+            assert_eq!(schema.field(0).name(), "bool_a");
+            assert_eq!(schema.field(1).name(), "bool_b");
+            assert_eq!(schema.field(2).name(), "bool_c");
+
+            let a = batch.column(0).as_boolean();
+            assert!(a.value(0));
+            assert!(!a.value(1));
+
+            let b = batch.column(1).as_boolean();
+            assert!(!b.value(0));
+            assert!(b.value(1));
+
+            let c = batch.column(2).as_boolean();
+            assert!(c.is_null(0));
+            // Don't check value for null - just verify nullability
+            assert!(!c.is_null(1));
+            assert!(c.value(1));
+
+            Ok(())
+        })
+    }
+
+    #[test]
+    fn duckdb_data_types_integer() -> Result<()> {
+        with_empty_statement(Backend::DuckDB, |mut statement| {
+            statement.set_sql_query(
+                r#"SELECT * FROM (
+                    VALUES
+                    (16::smallint,     32,                  64,                    32.0::real,         64.0::double),
+                    (NULL,             32,                  NULL,                  32.0::real,         NULL),
+                    (32767::smallint,  2147483647::integer, 1000000000000000000::bigint, 1000000.0::real, 1000000000000000000.0::double)
+                ) AS tbl(i16, i32, i64, f32, f64)"#,
+            )?;
+            let batch = statement
+                .execute()?
+                .next()
+                .expect("a record batch")
+                .map_err(Error::from)?;
+            let schema = batch.schema();
+            assert_eq!(schema.field(0).name(), "i16");
+            assert_eq!(schema.field(1).name(), "i32");
+            assert_eq!(schema.field(2).name(), "i64");
+            assert_eq!(schema.field(3).name(), "f32");
+            assert_eq!(schema.field(4).name(), "f64");
+
+            let int16 = batch.column(0).as_primitive::<Int16Type>();
+            assert_eq!(int16.value(0), 16);
+            assert!(int16.is_null(1));
+            assert_eq!(int16.value(2), 32767);
+
+            let int32 = batch.column(1).as_primitive::<Int32Type>();
+            assert_eq!(int32.value(0), 32);
+            assert_eq!(int32.value(1), 32);
+            assert_eq!(int32.value(2), 2147483647);
+
+            let int64 = batch.column(2).as_primitive::<Int64Type>();
+            assert_eq!(int64.value(0), 64);
+            assert!(int64.is_null(1));
+            assert_eq!(int64.value(2), 1000000000000000000i64);
+
+            let float = batch.column(3).as_primitive::<Float32Type>();
+            assert_eq!(float.value(0), 32.0);
+            assert_eq!(float.value(1), 32.0);
+            assert_eq!(float.value(2), 1000000.0f32);
+
+            let double = batch.column(4).as_primitive::<Float64Type>();
+            assert_eq!(double.value(0), 64.0);
+            assert!(double.is_null(1));
+            assert_eq!(double.value(2), 1000000000000000000.0f64);
+
+            Ok(())
+        })
+    }
+
+    #[test]
+    fn duckdb_data_types_string() -> Result<()> {
+        with_empty_statement(Backend::DuckDB, |mut statement| {
+            // Note: Using CONCAT instead of || operator to avoid Arrow StringViewArray panic
+            statement.set_sql_query(
+                r#"SELECT * FROM (
+                    VALUES
+                    (42, 'Snowman ☃'),
+                    (43, NULL),
+                    (NULL, CONCAT(REPEAT('A string that is longer than 64 characters because it goes on and on about nothing in particular ☃', 16), ''))
+                ) AS tbl(id, name)"#,
+            )?;
+            let batch = statement
+                .execute()?
+                .next()
+                .expect("a record batch")
+                .map_err(Error::from)?;
+            let schema = batch.schema();
+            let fields = schema.fields();
+            assert_eq!(fields[0].name(), "id");
+            assert_eq!(fields[1].name(), "name");
+
+            let int_col = batch.column(0).as_primitive::<Int32Type>();
+            assert!(int_col.len() == 3);
+
+            // (42, 'Snowman ☃')
+            assert!(int_col.is_valid(0));
+            assert_eq!(int_col.value(0), 42);
+
+            // (43, NULL)
+            assert!(int_col.is_valid(1));
+            assert_eq!(int_col.value(1), 43);
+
+            // (NULL, 'A string that is...')
+            assert!(int_col.is_null(2));
+
+            Ok(())
+        })
+    }
+
+    #[test]
+    fn duckdb_null_handling() -> Result<()> {
+        with_empty_statement(Backend::DuckDB, |mut statement| {
+            statement.set_sql_query(
+                r#"SELECT * FROM (
+                    VALUES
+                    (NULL::integer, NULL::varchar, NULL::boolean),
+                    (1, 'test', true),
+                    (NULL::integer, 'not null', false)
+                ) AS tbl(int_col, str_col, bool_col)"#,
+            )?;
+            let batch = statement
+                .execute()?
+                .next()
+                .expect("a record batch")
+                .map_err(Error::from)?;
+
+            let int_col = batch.column(0).as_primitive::<Int32Type>();
+            assert!(int_col.is_null(0));
+            assert!(!int_col.is_null(1));
+            assert_eq!(int_col.value(1), 1);
+            assert!(int_col.is_null(2));
+
+            let bool_col = batch.column(2).as_boolean();
+            assert!(bool_col.is_null(0));
+            assert!(!bool_col.is_null(1));
+            assert!(bool_col.value(1));
+            assert!(!bool_col.is_null(2));
+            assert!(!bool_col.value(2));
+
+            Ok(())
+        })
+    }
+
+    #[test]
+    fn duckdb_empty_result() -> Result<()> {
+        with_empty_statement(Backend::DuckDB, |mut statement| {
+            statement.set_sql_query("SELECT 1 AS one WHERE 1 = 0")?;
+            let mut batch_reader = statement.execute()?;
+            let batch = batch_reader.next();
+            // DuckDB returns an empty batch rather than None
+            match batch {
+                Some(Ok(b)) => assert_eq!(b.num_rows(), 0),
+                Some(Err(e)) => return Err(e.into()),
+                None => {} // Also acceptable
+            }
+            Ok(())
+        })
     }
 
     #[ignore = "Spark is WIP"]

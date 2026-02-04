@@ -283,6 +283,18 @@ pub enum SqlType {
     Integer,
     /// BIGINT
     BigInt,
+    /// HUGEINT (128-bit signed integer, DuckDB)
+    HugeInt,
+    /// UTINYINT (unsigned 8-bit integer, DuckDB)
+    UTinyInt,
+    /// USMALLINT (unsigned 16-bit integer, DuckDB)
+    USmallInt,
+    /// UINTEGER (unsigned 32-bit integer, DuckDB)
+    UInteger,
+    /// UBIGINT (unsigned 64-bit integer, DuckDB)
+    UBigInt,
+    /// UHUGEINT (unsigned 128-bit integer, DuckDB)
+    UHugeInt,
     /// REAL
     Real,
     /// FLOAT [ '(' precision ')' ]
@@ -330,6 +342,8 @@ pub enum SqlType {
     Json,
     /// JSONB
     Jsonb,
+    /// UUID (universally unique identifier)
+    Uuid,
     /// GEOMETRY [ '(' srid | 'ANY' ')' ]
     Geometry(Option<String>),
     /// GEOGRAPHY [ '(' srid | 'ANY' ')' ]
@@ -558,6 +572,13 @@ impl SqlType {
             (_, SmallInt) => write!(out, "SMALLINT"),
             (_, Integer) => write!(out, "INT"),
             (_, BigInt) => write!(out, "BIGINT"),
+            // DuckDB-specific integer types
+            (_, HugeInt) => write!(out, "HUGEINT"),
+            (_, UTinyInt) => write!(out, "UTINYINT"),
+            (_, USmallInt) => write!(out, "USMALLINT"),
+            (_, UInteger) => write!(out, "UINTEGER"),
+            (_, UBigInt) => write!(out, "UBIGINT"),
+            (_, UHugeInt) => write!(out, "UHUGEINT"),
 
             (_, Real) => write!(out, "REAL"),
             (_, Float(Some(p))) => write!(out, "FLOAT({p})"),
@@ -649,6 +670,7 @@ impl SqlType {
             (Snowflake, Json | Jsonb) => write!(out, "VARIANT"),
             (_, Json) => write!(out, "JSON"),
             (_, Jsonb) => write!(out, "JSONB"),
+            (_, Uuid) => write!(out, "UUID"),
             (_, Geometry(srid)) => {
                 write!(out, "GEOMETRY")?;
                 if let Some(srid) = srid {
@@ -1131,6 +1153,15 @@ impl SqlType {
             (_, SmallInt) => DataType::Int16,
             (_, Integer) => DataType::Int32,
             (_, BigInt) => DataType::Int64,
+            // DuckDB-specific integer types
+            // Arrow doesn't have native Int128, so we use Decimal128 for HugeInt
+            (_, HugeInt) => DataType::Decimal128(38, 0),
+            (_, UTinyInt) => DataType::UInt8,
+            (_, USmallInt) => DataType::UInt16,
+            (_, UInteger) => DataType::UInt32,
+            (_, UBigInt) => DataType::UInt64,
+            // Arrow doesn't have native UInt128, so we use Decimal256 for UHugeInt
+            (_, UHugeInt) => DataType::Decimal256(39, 0),
 
             (_, Real) => DataType::Float32,
             (_, Float(_)) => DataType::Float32,
@@ -1322,6 +1353,8 @@ impl SqlType {
                 not_explicitly_handled!(self);
                 DataType::Utf8
             }
+            // UUID is 16 bytes, we represent it as FixedSizeBinary(16)
+            (_, Uuid) => DataType::FixedSizeBinary(16),
             (Snowflake, Variant) => DataType::Binary,
             (_, Variant) => DataType::Utf8,
             (_, Geometry(_)) => DataType::Utf8,
@@ -1995,6 +2028,24 @@ impl<'source> Parser<'source> {
                     || eqi(w, "SERIAL8")
                 {
                     SqlType::BigInt
+                } else if eqi(w, "HUGEINT") || eqi(w, "INT128") {
+                    // DuckDB: 128-bit signed integer
+                    SqlType::HugeInt
+                } else if eqi(w, "UTINYINT") || eqi(w, "UINT1") {
+                    // DuckDB: unsigned 8-bit integer
+                    SqlType::UTinyInt
+                } else if eqi(w, "USMALLINT") || eqi(w, "UINT2") {
+                    // DuckDB: unsigned 16-bit integer
+                    SqlType::USmallInt
+                } else if eqi(w, "UINTEGER") || eqi(w, "UINT4") || eqi(w, "UINT") {
+                    // DuckDB: unsigned 32-bit integer
+                    SqlType::UInteger
+                } else if eqi(w, "UBIGINT") || eqi(w, "UINT8") || eqi(w, "UINT64") {
+                    // DuckDB: unsigned 64-bit integer
+                    SqlType::UBigInt
+                } else if eqi(w, "UHUGEINT") || eqi(w, "UINT128") {
+                    // DuckDB: unsigned 128-bit integer
+                    SqlType::UHugeInt
                 } else if eqi(w, "REAL") {
                     SqlType::Real
                 } else if eqi(w, "FLOAT") {
@@ -2201,6 +2252,8 @@ impl<'source> Parser<'source> {
                     SqlType::Json
                 } else if eqi(w, "JSONB") {
                     SqlType::Jsonb
+                } else if eqi(w, "UUID") {
+                    SqlType::Uuid
                 } else if eqi(w, "GEOMETRY") {
                     let srid = self.srid()?;
                     SqlType::Geometry(srid.map(str::to_string))
