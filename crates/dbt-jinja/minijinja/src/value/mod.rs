@@ -220,7 +220,7 @@ use crate::{functions, UndefinedBehavior};
 
 pub use crate::value::argtypes::{from_args, ArgType, FunctionArgs, FunctionResult, Kwargs, Rest};
 pub use crate::value::object::{
-    mutable_map, mutable_vec, DynObject, Enumerator, Object, ObjectExt, ObjectRepr,
+    mutable_map, mutable_set, mutable_vec, DynObject, Enumerator, Object, ObjectExt, ObjectRepr,
 };
 
 #[macro_use]

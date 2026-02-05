@@ -20,7 +20,7 @@ use dbt_telemetry::UserLogMessage;
 use minijinja::{
     arg_utils::ArgsIter,
     constants::TARGET_PACKAGE_NAME,
-    value::{ValueKind, ValueMap, mutable_map::MutableMap},
+    value::{ValueKind, ValueMap, mutable_map::MutableMap, mutable_set::MutableSet},
 };
 
 use minijinja::{
@@ -871,10 +871,10 @@ pub fn diff_of_two_dicts_fn() -> impl Fn(&[Value], Kwargs) -> Result<Value, Erro
     }
 }
 
-/// Convert any iterable to a sequence of unique elements.
+/// Convert any iterable to a set with unique elements.
 ///
 /// Args:
-///     value: An iterable value to convert to a set
+///     value: An iterable value to convert to a set (required)
 ///     default: (optional) Value to return if conversion fails (can be passed
 ///              as second positional argument or kwarg: default="...")
 ///
@@ -882,14 +882,16 @@ pub fn diff_of_two_dicts_fn() -> impl Fn(&[Value], Kwargs) -> Result<Value, Erro
 /// ```jinja
 /// {% set my_list = [1, 2, 2, 3] %}
 /// {% set unique_values = set(my_list) %}
-/// -- Returns [1, 2, 3]
+/// -- Returns set with {1, 2, 3}
+/// {% set empty = set([]) %}
+/// -- Returns empty set
 /// ```
 pub fn set_fn() -> impl Fn(&[Value], Kwargs) -> Result<Value, Error> {
     move |args: &[Value], kwargs: Kwargs| -> Result<Value, Error> {
         if args.is_empty() || args.len() > 2 {
             return Err(Error::new(
                 ErrorKind::InvalidOperation,
-                "set requires at least 1 argument",
+                "set() requires 1 argument",
             ));
         }
 
@@ -898,10 +900,7 @@ pub fn set_fn() -> impl Fn(&[Value], Kwargs) -> Result<Value, Error> {
         let default = arg_parser.get_optional::<Value>("default");
 
         match value.try_iter() {
-            Ok(iter) => {
-                let set: BTreeSet<_> = iter.map(|v| v.to_string()).collect();
-                Ok(Value::from_iter(set))
-            }
+            Ok(iter) => Ok(Value::from_object(iter.collect::<MutableSet>())),
             Err(_) => match default {
                 Some(def) => Ok(def),
                 None => Ok(Value::from(())),

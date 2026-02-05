@@ -1610,3 +1610,413 @@ pub mod mutable_map {
         }
     }
 }
+
+/// This module contains a mutable set implementation for Python-like set operations.
+pub mod mutable_set {
+    use std::collections::BTreeSet;
+    use std::sync::RwLock;
+
+    use super::*;
+    use crate::value::from_args;
+
+    macro_rules! lock_write {
+        ($self:ident) => {
+            $self.inner.write().expect("lock poisoned")
+        };
+    }
+
+    macro_rules! lock_read {
+        ($self:ident) => {
+            $self.inner.read().expect("lock poisoned")
+        };
+    }
+
+    /// An interior-mutable set.
+    ///
+    /// A [MutableSet] provides Python-like set operations with interior mutability.
+    /// It wraps a `BTreeSet<Value>` and provides methods like `add`, `remove`,
+    /// `union`, `intersection`, etc.
+    #[derive(Debug)]
+    pub struct MutableSet {
+        inner: RwLock<BTreeSet<Value>>,
+    }
+
+    impl Clone for MutableSet {
+        fn clone(&self) -> Self {
+            MutableSet {
+                inner: RwLock::new(lock_read!(self).clone()),
+            }
+        }
+    }
+
+    impl MutableSet {
+        /// Creates a new empty [MutableSet].
+        pub fn new() -> Self {
+            MutableSet {
+                inner: RwLock::new(BTreeSet::new()),
+            }
+        }
+
+        /// Add an element to the set.
+        pub fn add(&self, value: Value) {
+            lock_write!(self).insert(value);
+        }
+
+        /// Remove an element from the set. Raises error if not present.
+        pub fn remove(&self, value: &Value) -> Result<(), Error> {
+            lock_write!(self)
+                .remove(value)
+                .then_some(())
+                .ok_or_else(|| {
+                    Error::new(ErrorKind::InvalidOperation, format!("KeyError: {value}"))
+                })
+        }
+
+        /// Remove an element from the set if present. Does not raise error.
+        pub fn discard(&self, value: &Value) {
+            lock_write!(self).remove(value);
+        }
+
+        /// Remove and return an arbitrary element from the set.
+        pub fn pop(&self) -> Result<Value, Error> {
+            let mut inner = lock_write!(self);
+            inner
+                .pop_first()
+                .ok_or_else(|| Error::new(ErrorKind::InvalidOperation, "pop from an empty set"))
+        }
+
+        /// Remove all elements from the set.
+        pub fn clear(&self) {
+            lock_write!(self).clear();
+        }
+
+        /// Return a shallow copy of the set.
+        pub fn copy(&self) -> MutableSet {
+            MutableSet {
+                inner: RwLock::new(lock_read!(self).clone()),
+            }
+        }
+
+        /// Check if the set contains a value.
+        pub fn contains(&self, value: &Value) -> bool {
+            lock_read!(self).contains(value)
+        }
+
+        /// Return the number of elements in the set.
+        pub fn len(&self) -> usize {
+            lock_read!(self).len()
+        }
+
+        /// Check if the set is empty.
+        pub fn is_empty(&self) -> bool {
+            lock_read!(self).is_empty()
+        }
+
+        /// Return the union of the set and another iterable.
+        pub fn union(&self, other: impl IntoIterator<Item = Value>) -> MutableSet {
+            let self_set = lock_read!(self);
+            let result = self_set
+                .union(&other.into_iter().collect())
+                .cloned()
+                .collect();
+            MutableSet {
+                inner: RwLock::new(result),
+            }
+        }
+
+        /// Return the intersection of the set and another iterable.
+        pub fn intersection(&self, other: impl IntoIterator<Item = Value>) -> MutableSet {
+            let other_set: BTreeSet<Value> = other.into_iter().collect();
+            let self_set = lock_read!(self);
+            let result = self_set.intersection(&other_set).cloned().collect();
+            MutableSet {
+                inner: RwLock::new(result),
+            }
+        }
+
+        /// Return the difference of the set and another iterable.
+        pub fn difference(&self, other: impl IntoIterator<Item = Value>) -> MutableSet {
+            let other_set: BTreeSet<Value> = other.into_iter().collect();
+            let self_set = lock_read!(self);
+            let result = self_set.difference(&other_set).cloned().collect();
+            MutableSet {
+                inner: RwLock::new(result),
+            }
+        }
+
+        /// Return the symmetric difference of the set and another iterable.
+        pub fn symmetric_difference(&self, other: impl IntoIterator<Item = Value>) -> MutableSet {
+            let other_set: BTreeSet<Value> = other.into_iter().collect();
+            let self_set = lock_read!(self);
+            let result = self_set.symmetric_difference(&other_set).cloned().collect();
+            MutableSet {
+                inner: RwLock::new(result),
+            }
+        }
+
+        /// Update the set with the union of itself and another iterable.
+        pub fn update(&self, other: impl IntoIterator<Item = Value>) {
+            lock_write!(self).extend(other);
+        }
+
+        /// Update the set with the intersection of itself and another iterable.
+        pub fn intersection_update(&self, other: impl IntoIterator<Item = Value>) {
+            let other_set: BTreeSet<Value> = other.into_iter().collect();
+            lock_write!(self).retain(|v| other_set.contains(v));
+        }
+
+        /// Update the set with the difference of itself and another iterable.
+        pub fn difference_update(&self, other: impl IntoIterator<Item = Value>) {
+            let other_set: BTreeSet<Value> = other.into_iter().collect();
+            lock_write!(self).retain(|v| !other_set.contains(v));
+        }
+
+        /// Update the set with the symmetric difference of itself and another iterable.
+        pub fn symmetric_difference_update(&self, other: impl IntoIterator<Item = Value>) {
+            let other_set: BTreeSet<Value> = other.into_iter().collect();
+            let mut inner = lock_write!(self);
+            let to_remove: Vec<Value> = inner
+                .iter()
+                .filter(|v| other_set.contains(v))
+                .cloned()
+                .collect();
+            for v in &to_remove {
+                inner.remove(v);
+            }
+            for v in other_set {
+                if !to_remove.contains(&v) {
+                    inner.insert(v);
+                }
+            }
+        }
+
+        /// Return True if the set is a subset of another.
+        pub fn issubset(&self, other: impl IntoIterator<Item = Value>) -> bool {
+            let other_set: BTreeSet<Value> = other.into_iter().collect();
+            lock_read!(self).is_subset(&other_set)
+        }
+
+        /// Return True if the set is a superset of another.
+        pub fn issuperset(&self, other: impl IntoIterator<Item = Value>) -> bool {
+            let other_set: BTreeSet<Value> = other.into_iter().collect();
+            lock_read!(self).is_superset(&other_set)
+        }
+
+        /// Return True if the set has no elements in common with another.
+        pub fn isdisjoint(&self, other: impl IntoIterator<Item = Value>) -> bool {
+            let other_set: BTreeSet<Value> = other.into_iter().collect();
+            lock_read!(self).is_disjoint(&other_set)
+        }
+    }
+
+    impl Default for MutableSet {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
+    impl<T> FromIterator<T> for MutableSet
+    where
+        T: Into<Value>,
+    {
+        fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+            MutableSet {
+                inner: RwLock::new(iter.into_iter().map(Into::into).collect()),
+            }
+        }
+    }
+
+    impl From<MutableSet> for Value {
+        fn from(val: MutableSet) -> Self {
+            Value::from_object(val)
+        }
+    }
+
+    impl Object for MutableSet {
+        fn repr(self: &Arc<Self>) -> ObjectRepr {
+            ObjectRepr::Seq
+        }
+
+        fn is_mutable(self: &Arc<Self>) -> bool {
+            true
+        }
+
+        fn get_value(self: &Arc<Self>, _key: &Value) -> Option<Value> {
+            // Sets don't support indexing
+            None
+        }
+
+        fn enumerate(self: &Arc<Self>) -> Enumerator {
+            Enumerator::Iter(Box::new(
+                lock_read!(self)
+                    .iter()
+                    .cloned()
+                    .collect::<Vec<_>>()
+                    .into_iter(),
+            ))
+        }
+
+        fn call_method(
+            self: &Arc<Self>,
+            _state: &State<'_, '_>,
+            method: &str,
+            args: &[Value],
+            _listeners: &[Rc<dyn RenderingEventListener>],
+        ) -> Result<Value, Error> {
+            match method {
+                "add" => {
+                    let (value,): (Value,) = from_args(args)?;
+                    self.add(value);
+                    Ok(Value::default())
+                }
+                "remove" => {
+                    let (value,): (&Value,) = from_args(args)?;
+                    self.remove(value)?;
+                    Ok(Value::default())
+                }
+                "discard" => {
+                    let (value,): (&Value,) = from_args(args)?;
+                    self.discard(value);
+                    Ok(Value::default())
+                }
+                "pop" => {
+                    let () = from_args(args)?;
+                    self.pop()
+                }
+                "clear" => {
+                    let () = from_args(args)?;
+                    self.clear();
+                    Ok(Value::default())
+                }
+                "copy" => {
+                    let () = from_args(args)?;
+                    Ok(Value::from_object(self.copy()))
+                }
+                "union" => {
+                    // Support multiple arguments like Python's set.union(*others)
+                    let mut result = lock_read!(self).clone();
+                    for arg in args {
+                        let iter = arg.try_iter().map_err(|_| {
+                            Error::new(
+                                ErrorKind::InvalidOperation,
+                                "union() argument must be iterable",
+                            )
+                        })?;
+                        result.extend(iter);
+                    }
+                    Ok(Value::from_object(MutableSet {
+                        inner: RwLock::new(result),
+                    }))
+                }
+                "intersection" => {
+                    let (other,): (&Value,) = from_args(args)?;
+                    let iter = other.try_iter().map_err(|_| {
+                        Error::new(
+                            ErrorKind::InvalidOperation,
+                            "intersection() argument must be iterable",
+                        )
+                    })?;
+                    Ok(Value::from_object(self.intersection(iter)))
+                }
+                "difference" => {
+                    let (other,): (&Value,) = from_args(args)?;
+                    let iter = other.try_iter().map_err(|_| {
+                        Error::new(
+                            ErrorKind::InvalidOperation,
+                            "difference() argument must be iterable",
+                        )
+                    })?;
+                    Ok(Value::from_object(self.difference(iter)))
+                }
+                "symmetric_difference" => {
+                    let (other,): (&Value,) = from_args(args)?;
+                    let iter = other.try_iter().map_err(|_| {
+                        Error::new(
+                            ErrorKind::InvalidOperation,
+                            "symmetric_difference() argument must be iterable",
+                        )
+                    })?;
+                    Ok(Value::from_object(self.symmetric_difference(iter)))
+                }
+                "update" => {
+                    let (other,): (&Value,) = from_args(args)?;
+                    let iter = other.try_iter().map_err(|_| {
+                        Error::new(
+                            ErrorKind::InvalidOperation,
+                            "update() argument must be iterable",
+                        )
+                    })?;
+                    self.update(iter);
+                    Ok(Value::default())
+                }
+                "intersection_update" => {
+                    let (other,): (&Value,) = from_args(args)?;
+                    let iter = other.try_iter().map_err(|_| {
+                        Error::new(
+                            ErrorKind::InvalidOperation,
+                            "intersection_update() argument must be iterable",
+                        )
+                    })?;
+                    self.intersection_update(iter);
+                    Ok(Value::default())
+                }
+                "difference_update" => {
+                    let (other,): (&Value,) = from_args(args)?;
+                    let iter = other.try_iter().map_err(|_| {
+                        Error::new(
+                            ErrorKind::InvalidOperation,
+                            "difference_update() argument must be iterable",
+                        )
+                    })?;
+                    self.difference_update(iter);
+                    Ok(Value::default())
+                }
+                "symmetric_difference_update" => {
+                    let (other,): (&Value,) = from_args(args)?;
+                    let iter = other.try_iter().map_err(|_| {
+                        Error::new(
+                            ErrorKind::InvalidOperation,
+                            "symmetric_difference_update() argument must be iterable",
+                        )
+                    })?;
+                    self.symmetric_difference_update(iter);
+                    Ok(Value::default())
+                }
+                "issubset" => {
+                    let (other,): (&Value,) = from_args(args)?;
+                    let iter = other.try_iter().map_err(|_| {
+                        Error::new(
+                            ErrorKind::InvalidOperation,
+                            "issubset() argument must be iterable",
+                        )
+                    })?;
+                    Ok(Value::from(self.issubset(iter)))
+                }
+                "issuperset" => {
+                    let (other,): (&Value,) = from_args(args)?;
+                    let iter = other.try_iter().map_err(|_| {
+                        Error::new(
+                            ErrorKind::InvalidOperation,
+                            "issuperset() argument must be iterable",
+                        )
+                    })?;
+                    Ok(Value::from(self.issuperset(iter)))
+                }
+                "isdisjoint" => {
+                    let (other,): (&Value,) = from_args(args)?;
+                    let iter = other.try_iter().map_err(|_| {
+                        Error::new(
+                            ErrorKind::InvalidOperation,
+                            "isdisjoint() argument must be iterable",
+                        )
+                    })?;
+                    Ok(Value::from(self.isdisjoint(iter)))
+                }
+                _ => Err(Error::new(
+                    ErrorKind::UnknownMethod,
+                    format!("'set' has no method named '{}'", method),
+                )),
+            }
+        }
+    }
+}
