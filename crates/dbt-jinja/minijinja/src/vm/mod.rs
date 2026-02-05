@@ -984,30 +984,7 @@ impl<'env> Vm<'env> {
                     } else if let Some(func) =
                         state.lookup(name).filter(|func| !func.is_undefined())
                     {
-                        let function_name = func
-                            .get_attr_fast("function_name")
-                            .map(|x| x.to_string())
-                            .unwrap_or_else(|| (*name).to_string());
-
-                        let args: Vec<Value> = if function_name == "ref"
-                            || function_name == "source"
-                            || function_name == "function"
-                        {
-                            let start: (u32, u32, u32) = (
-                                this_span.start_line,
-                                this_span.start_col,
-                                this_span.start_offset,
-                            );
-                            let mut location_arg = value_map_with_capacity(1);
-                            location_arg
-                                .insert(Value::from("location"), Value::from_serialize(start));
-                            let kwargs = Kwargs::wrap(location_arg);
-                            args.iter().cloned().chain(vec![kwargs]).collect()
-                        } else {
-                            args.to_vec()
-                        };
-
-                        let rv = call_wrapper(listeners, || func.call(state, &args, listeners))
+                        let rv = call_wrapper(listeners, || func.call(state, args, listeners))
                             .map_err(|err| state.with_span_error(err, this_span))?;
                         // Handle CallerReturn: when a return() was called inside a {% call %} block,
                         // the caller() function wraps it in CallerReturn. We unwrap it here and
@@ -1118,28 +1095,7 @@ impl<'env> Vm<'env> {
                     let arg_count = args.len();
 
                     let a = {
-                        // For non-namespaced calls, report just the name
-                        let function_name = args[0]
-                            .get_attr_fast("function_name")
-                            .map(|x| x.to_string())
-                            .unwrap_or_else(|| (*name).to_string());
-                        let args_vals = if function_name == "ref"
-                            || function_name == "source"
-                            || function_name == "function"
-                        {
-                            let start: (u32, u32, u32) = (
-                                this_span.start_line,
-                                this_span.start_col,
-                                this_span.start_offset,
-                            );
-                            let mut location_arg = value_map_with_capacity(1);
-                            location_arg
-                                .insert(Value::from("location"), Value::from_serialize(start));
-                            let kwargs = Kwargs::wrap(location_arg);
-                            args[1..].iter().cloned().chain(vec![kwargs]).collect()
-                        } else {
-                            args[1..].to_vec()
-                        };
+                        let args_vals: Vec<Value> = args[1..].to_vec();
                         let res = call_wrapper(listeners, || {
                             args[0].call_method(state, name, &args_vals, listeners)
                         });

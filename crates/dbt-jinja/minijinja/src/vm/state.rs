@@ -126,6 +126,12 @@ impl<'template, 'env> State<'template, 'env> {
         )
     }
 
+    /// Returns the raw [Span] of the current instruction without applying the context offset.
+    /// This is useful for tracking source locations within the current template file.
+    pub fn current_instruction_span(&self) -> Span {
+        self.instructions.get_span(self.pc).unwrap_or_default()
+    }
+
     /// Returns the current path of the template being rendered.
     pub fn current_path(&self) -> &PathBuf {
         &self.ctx.current_path
