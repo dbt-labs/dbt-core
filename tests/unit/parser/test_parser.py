@@ -26,6 +26,7 @@ from dbt.contracts.graph.nodes import (
     SnapshotNode,
     UnpatchedSourceDefinition,
 )
+from dbt.events.types import FreshnessConfigProblem
 from dbt.exceptions import CompilationError, ParsingError, SchemaConfigError
 from dbt.flags import set_from_args
 from dbt.node_types import NodeType
@@ -57,6 +58,8 @@ from dbt.parser.schemas import (
 from dbt.parser.search import FileBlock
 from dbt.parser.sources import SourcePatcher
 from dbt.tests.util import safe_set_invocation_context
+from dbt_common.events.event_catcher import EventCatcher
+from dbt_common.events.event_manager_client import add_callback_to_manager
 from tests.unit.utils import (
     MockNode,
     config_from_parts_or_dicts,
@@ -775,17 +778,20 @@ class SchemaParserSourceTest(SchemaParserTest):
         "dbt.parser.sources.get_adapter",
         return_value=mock.MagicMock(supports=mock.MagicMock(return_value=False)),
     )
-    @mock.patch("dbt.parser.sources.fire_event")
-    def test__loaded_at_query_does_not_fire_config_problem_event(self, mock_fire_event, _):
+    def test__loaded_at_query_does_not_fire_config_problem_event(self, _):
         """Test where we have a loaded_at_query defined but no loaded_at_field and the adapter does not support metadata-based freshness.
         We should not fire a config problem event.
         """
+        catcher = EventCatcher(FreshnessConfigProblem)
+        add_callback_to_manager(catcher.catch)
+
         block = self.file_block_for(SOURCE_FRESHNESS_WITH_LOADED_AT_QUERY, "test_one.yml")
         dct = yaml_from_file(block.file, validate=True)
         self.parser.parse_file(block, dct)
         unpatched_src_default = self.parser.manifest.sources["source.snowplow.my_source.my_table"]
         self.source_patcher.parse_source(unpatched_src_default)
-        self.assertEqual(mock_fire_event.call_count, 0)
+
+        assert len(catcher.caught_events) == 0
 
 
 class SchemaParserModelsTest(SchemaParserTest):
