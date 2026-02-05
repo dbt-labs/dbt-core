@@ -21,6 +21,7 @@ pub mod jinja_environment;
 
 /// Module for building a Minijinja Environment
 mod environment_builder;
+pub use environment_builder::{JinjaEnvBuilder, MacroUnitsWrapper};
 
 /// Implements dbt's flags object for Minijinja
 pub mod flags;

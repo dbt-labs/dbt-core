@@ -64,6 +64,7 @@ impl JinjaEnvBuilder {
         }
     }
 
+    /// Specify the undefined behavior for the environment.
     pub fn with_undefined_behavior(
         mut self,
         undefined_behavior: minijinja::UndefinedBehavior,
@@ -72,6 +73,7 @@ impl JinjaEnvBuilder {
         self
     }
 
+    /// Specify the root package for the environment.
     pub fn with_root_package(mut self, root_package: String) -> Self {
         self.root_package = Some(root_package);
         self.env.add_global(
