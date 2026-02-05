@@ -1103,7 +1103,7 @@ impl<'env> Vm<'env> {
                         let rv = self.env.render_str(
                             rv.as_str().unwrap(),
                             state.get_base_context(),
-                            listeners,
+                            &[],
                         )?;
                         Value::from(rv)
                     } else {
