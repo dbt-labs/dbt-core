@@ -358,6 +358,8 @@ def compile(ctx, **kwargs):
 @p.full_refresh
 @p.show_output_format
 @p.show_limit
+@p.show_max_column_width
+@p.show_max_columns
 @p.introspect
 @p.profiles_dir
 @p.project_dir

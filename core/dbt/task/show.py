@@ -95,7 +95,9 @@ class ShowTask(CompileTask):
             if self.args.output == "json":
                 table.to_json(path=output)
             else:
-                table.print_table(output=output, max_rows=None)
+                max_column_width = None if self.args.max_column_width == 0 else self.args.max_column_width
+                max_columns = None if self.args.max_columns == 0 else self.args.max_columns
+                table.print_table(output=output, max_rows=None, max_column_width=max_column_width, max_columns=max_columns)
 
             node_name = result.node.name
 
@@ -135,7 +137,9 @@ class ShowTaskDirect(ConfiguredTask):
             if self.args.output == "json":
                 table.to_json(path=output)
             else:
-                table.print_table(output=output, max_rows=None)
+                max_column_width = None if self.args.max_column_width == 0 else self.args.max_column_width
+                max_columns = None if self.args.max_columns == 0 else self.args.max_columns
+                table.print_table(output=output, max_rows=None, max_column_width=max_column_width, max_columns=max_columns)
 
             fire_event(
                 ShowNode(

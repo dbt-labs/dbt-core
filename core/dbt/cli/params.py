@@ -587,6 +587,22 @@ show_limit = _create_option_and_track_env_var(
     default=5,
 )
 
+show_max_column_width = _create_option_and_track_env_var(
+    "--max-column-width",
+    envvar=None,
+    help="Maximum width for each column when displaying table output. Pass 0 for unlimited width.",
+    type=click.INT,
+    default=20,
+)
+
+show_max_columns = _create_option_and_track_env_var(
+    "--max-columns",
+    envvar=None,
+    help="Maximum number of columns to display before truncating the data. Pass 0 to display all columns.",
+    type=click.INT,
+    default=6,
+)
+
 show_output_format = _create_option_and_track_env_var(
     "--output",
     envvar=None,

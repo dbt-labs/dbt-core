@@ -263,3 +263,80 @@ class TestShowPrivateModel:
     def test_version_unspecified(self, project):
         run_dbt(["build"])
         run_dbt(["show", "--inline", "select * from {{ ref('private_model') }}"])
+
+
+class TestShowMaxColumnWidth(ShowBase):
+    def test_max_column_width_default(self, project):
+        run_dbt(["build"])
+        (_, log_output) = run_dbt_and_capture(
+            ["show", "--select", "sample_model"]
+        )
+        # Default max_column_width is 20, so long values should be truncated with "..."
+        assert "Previewing node 'sample_model'" in log_output
+
+    def test_max_column_width_unlimited(self, project):
+        run_dbt(["build"])
+        (_, log_output) = run_dbt_and_capture(
+            ["show", "--select", "sample_model", "--max-column-width", "0"]
+        )
+        # With max_column_width=0 (unlimited), all content should be visible
+        assert "Previewing node 'sample_model'" in log_output
+
+    def test_max_column_width_custom(self, project):
+        run_dbt(["build"])
+        (_, log_output) = run_dbt_and_capture(
+            ["show", "--select", "sample_model", "--max-column-width", "50"]
+        )
+        # With max_column_width=50, wider columns should be displayed
+        assert "Previewing node 'sample_model'" in log_output
+
+
+class TestShowMaxColumns(ShowBase):
+    def test_max_columns_default(self, project):
+        run_dbt(["build"])
+        (_, log_output) = run_dbt_and_capture(
+            ["show", "--select", "second_model"]
+        )
+        # Default max_columns is 6, model has 3 columns so all should show
+        assert "Previewing node 'second_model'" in log_output
+        assert "col_one" in log_output
+        assert "col_two" in log_output
+        assert "answer" in log_output
+
+    def test_max_columns_unlimited(self, project):
+        run_dbt(["build"])
+        (_, log_output) = run_dbt_and_capture(
+            ["show", "--select", "second_model", "--max-columns", "0"]
+        )
+        # With max_columns=0 (unlimited), all columns should be displayed
+        assert "Previewing node 'second_model'" in log_output
+        assert "col_one" in log_output
+
+    def test_max_columns_limited(self, project):
+        run_dbt(["build"])
+        (_, log_output) = run_dbt_and_capture(
+            ["show", "--select", "second_model", "--max-columns", "2"]
+        )
+        # With max_columns=2, should only show 2 columns
+        assert "Previewing node 'second_model'" in log_output
+
+
+class TestShowMaxColumnWidthInlineDirect(ShowBase):
+    def test_inline_direct_max_column_width(self, project):
+        query = f"select * from {project.test_schema}.sample_seed"
+        (_, log_output) = run_dbt_and_capture(
+            ["show", "--inline-direct", query, "--max-column-width", "50"]
+        )
+        assert "Previewing inline node" in log_output
+        assert "sample_num" in log_output
+        # See prior test for explanation of why this is here
+        run_dbt(["seed"])
+
+    def test_inline_direct_max_columns(self, project):
+        query = f"select * from {project.test_schema}.sample_seed"
+        (_, log_output) = run_dbt_and_capture(
+            ["show", "--inline-direct", query, "--max-columns", "1"]
+        )
+        assert "Previewing inline node" in log_output
+        # See prior test for explanation of why this is here
+        run_dbt(["seed"])
