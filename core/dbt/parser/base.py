@@ -431,7 +431,12 @@ class ConfiguredParser(
         # read multiple times. Doing the validation here ensures that the config
         # is only validated once.
         if parsed_node.resource_type == NodeType.Model and validate_config_call_dict:
-            validate_model_config(config._config_call_dict, parsed_node.original_file_path)
+            python_model = parsed_node.language == ModelLanguage.python
+            validate_model_config(
+                config._config_call_dict,
+                parsed_node.original_file_path,
+                is_python_model=python_model,
+            )
 
         parsed_node.config_call_dict = config._config_call_dict
         parsed_node.unrendered_config_call_dict = config._unrendered_config_call_dict

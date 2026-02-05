@@ -45,6 +45,8 @@ from tests.functional.deprecations.fixtures import (
     multiple_custom_keys_in_config_yaml,
     pre_post_hook_in_config_yaml,
     property_moved_to_config_yaml,
+    python_model_py,
+    python_model_yml,
     test_missing_arguments_property_yaml,
     test_with_arguments_yaml,
 )
@@ -918,6 +920,25 @@ class TestPrePostHookNoFalsePositiveDeprecation:
 
     @mock.patch("dbt.jsonschemas.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
     def test_pre_post_hook_no_false_positive_deprecation(self, project):
+        event_catcher = EventCatcher(CustomKeyInConfigDeprecation)
+        run_dbt(
+            ["parse", "--no-partial-parse", "--show-all-deprecations"],
+            callbacks=[event_catcher.catch],
+        )
+        assert len(event_catcher.caught_events) == 0
+
+
+class TestPythonModelConfigAdditionsDontRaiseDeprecations:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "trivial_model.sql": models_trivial__model_sql,
+            "python_model.py": python_model_py,
+            "python_model.yml": python_model_yml,
+        }
+
+    @mock.patch("dbt.jsonschemas.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
+    def test_python_model_config_additions_dont_raise_deprecations(self, project):
         event_catcher = EventCatcher(CustomKeyInConfigDeprecation)
         run_dbt(
             ["parse", "--no-partial-parse", "--show-all-deprecations"],
