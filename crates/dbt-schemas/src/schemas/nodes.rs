@@ -645,6 +645,7 @@ fn same_persisted_description(
 /// - `None` and `Some("")` are considered equal
 /// - `Some("")` and `Some("   ")` (whitespace-only) are considered equal
 /// - An empty vec `[]` is considered equal to a vec of all-empty strings `[Some(""), ...]`
+/// - Vectors with the same content but different order are considered equal (order-independent)
 /// - Vectors with different non-empty content are considered different
 fn optional_string_vecs_equal(a: &[Option<String>], b: &[Option<String>]) -> bool {
     /// Helper to check if an Option<String> is semantically empty
@@ -660,6 +661,17 @@ fn optional_string_vecs_equal(a: &[Option<String>], b: &[Option<String>]) -> boo
         slice.iter().all(is_empty)
     }
 
+    /// Normalize an Option<String> to a canonical form for comparison:
+    /// - Empty values (None, Some(""), whitespace-only) become None
+    /// - Non-empty values are normalized using normalize_sql
+    fn normalize_item(opt: &Option<String>) -> Option<String> {
+        match opt {
+            None => None,
+            Some(s) if s.trim().is_empty() => None,
+            Some(s) => Some(normalize_sql(s)),
+        }
+    }
+
     // Special case: if both are effectively "all empty", treat them as equal
     // This handles the case where one manifest has `[]` and the other has `[Some(""), Some(""), ...]`
     // Both represent "no meaningful column descriptions"
@@ -672,27 +684,17 @@ fn optional_string_vecs_equal(a: &[Option<String>], b: &[Option<String>]) -> boo
         return false;
     }
 
-    for (a_item, b_item) in a.iter().zip(b.iter()) {
-        let a_empty = is_empty(a_item);
-        let b_empty = is_empty(b_item);
+    // Create normalized and sorted copies of both vectors for order-independent comparison
+    // This handles the case where columns are the same but in different order
+    let mut a_normalized: Vec<Option<String>> = a.iter().map(normalize_item).collect();
+    let mut b_normalized: Vec<Option<String>> = b.iter().map(normalize_item).collect();
 
-        if a_empty && b_empty {
-            // Both are semantically empty - consider equal
-            continue;
-        }
+    // Sort the normalized vectors for order-independent comparison
+    a_normalized.sort();
+    b_normalized.sort();
 
-        if a_empty != b_empty {
-            // One is empty, one is not - not equal
-            return false;
-        }
-
-        // Both are non-empty, compare using normalize_sql which removes whitespace and lowercases
-        if a_item.as_ref().map(|s| normalize_sql(s)) != b_item.as_ref().map(|s| normalize_sql(s)) {
-            return false;
-        }
-    }
-
-    true
+    // Compare the sorted, normalized vectors
+    a_normalized == b_normalized
 }
 
 fn same_fqn(self_common: &CommonAttributes, other_common: &CommonAttributes) -> bool {
@@ -5472,6 +5474,99 @@ mod tests {
                 Some("same".to_string()),
             ];
             assert!(!optional_string_vecs_equal(&a, &b));
+        }
+
+        #[test]
+        fn test_same_content_different_order_are_equal() {
+            // Vectors with same content but different order should be equal
+            // This is the column ordering issue from state:modified false positives
+            let state_manifest = vec![
+                Some("User ID".to_string()),
+                Some("Email address".to_string()),
+                Some("Created timestamp".to_string()),
+            ];
+            let current_manifest = vec![
+                Some("Email address".to_string()),
+                Some("Created timestamp".to_string()),
+                Some("User ID".to_string()),
+            ];
+            assert!(optional_string_vecs_equal(
+                &state_manifest,
+                &current_manifest
+            ));
+            assert!(optional_string_vecs_equal(
+                &current_manifest,
+                &state_manifest
+            ));
+        }
+
+        #[test]
+        fn test_same_content_different_order_with_normalization() {
+            // Same content, different order, with whitespace differences that get normalized
+            let a = vec![
+                Some("hello world".to_string()),
+                Some("foo bar".to_string()),
+                Some("test".to_string()),
+            ];
+            let b = vec![
+                Some("test".to_string()),
+                Some("hello  world".to_string()), // extra space - should normalize to same
+                Some("foo bar".to_string()),
+            ];
+            assert!(optional_string_vecs_equal(&a, &b));
+        }
+
+        #[test]
+        fn test_same_content_different_order_with_empty_values() {
+            // Same content with some empty values, different order
+            let a = vec![
+                Some("description1".to_string()),
+                None,
+                Some("description2".to_string()),
+                Some("".to_string()),
+            ];
+            let b = vec![
+                Some("".to_string()),
+                Some("description2".to_string()),
+                None,
+                Some("description1".to_string()),
+            ];
+            assert!(optional_string_vecs_equal(&a, &b));
+        }
+
+        #[test]
+        fn test_different_content_same_length_not_equal() {
+            // Different content should NOT be equal even with sorting
+            let a = vec![
+                Some("alpha".to_string()),
+                Some("beta".to_string()),
+                Some("gamma".to_string()),
+            ];
+            let b = vec![
+                Some("alpha".to_string()),
+                Some("beta".to_string()),
+                Some("delta".to_string()), // different from gamma
+            ];
+            assert!(!optional_string_vecs_equal(&a, &b));
+        }
+
+        #[test]
+        fn test_real_world_column_ordering_issue() {
+            // Real-world scenario from DocuSign telemetry:
+            // State has columns from catalog in one order, current has them in YAML order
+            let other_value = vec![
+                Some("Unique identifier for the AAD group".to_string()),
+                Some("Unique identifier for the organizational entity".to_string()),
+                Some("Timestamp when created".to_string()),
+                Some("The user who created".to_string()),
+            ];
+            let self_value = vec![
+                Some("Unique identifier for the AAD group".to_string()),
+                Some("Unique identifier for the organizational entity".to_string()),
+                Some("The user who created".to_string()), // swapped order
+                Some("Timestamp when created".to_string()), // swapped order
+            ];
+            assert!(optional_string_vecs_equal(&other_value, &self_value));
         }
 
         #[test]
