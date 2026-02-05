@@ -646,6 +646,7 @@ fn same_persisted_description(
 /// - `Some("")` and `Some("   ")` (whitespace-only) are considered equal
 /// - An empty vec `[]` is considered equal to a vec of all-empty strings `[Some(""), ...]`
 /// - Vectors with the same content but different order are considered equal (order-independent)
+/// - Vectors with duplicates are equal if the unique content matches (handles duplicate empty strings)
 /// - Vectors with different non-empty content are considered different
 fn optional_string_vecs_equal(a: &[Option<String>], b: &[Option<String>]) -> bool {
     /// Helper to check if an Option<String> is semantically empty
@@ -679,22 +680,39 @@ fn optional_string_vecs_equal(a: &[Option<String>], b: &[Option<String>]) -> boo
         return true;
     }
 
-    // If lengths differ and not both all-empty, they're different
-    if a.len() != b.len() {
+    // Create normalized copies of both vectors
+    let a_normalized: Vec<Option<String>> = a.iter().map(normalize_item).collect();
+    let b_normalized: Vec<Option<String>> = b.iter().map(normalize_item).collect();
+
+    // Determine which is shorter and which is longer
+    let (shorter, longer) = if a_normalized.len() <= b_normalized.len() {
+        (&a_normalized, &b_normalized)
+    } else {
+        (&b_normalized, &a_normalized)
+    };
+
+    // Create a set from the shorter vector for membership checking
+    // This handles duplicates: if the longer vector has duplicate empty strings,
+    // they will all be found in the set (as None after normalization)
+    let shorter_set: std::collections::HashSet<Option<String>> = shorter.iter().cloned().collect();
+
+    // Check that every element in the longer vector is present in the shorter set
+    // If the longer vector has an element not in the set, the vectors are different
+    let mut matched_count = 0;
+    for item in longer.iter() {
+        if !shorter_set.contains(item) {
+            if item.is_none() || item.as_ref().unwrap().is_empty() {
+                continue;
+            }
+            return false;
+        }
+        matched_count += 1;
+    }
+    if matched_count < shorter.len() {
         return false;
     }
 
-    // Create normalized and sorted copies of both vectors for order-independent comparison
-    // This handles the case where columns are the same but in different order
-    let mut a_normalized: Vec<Option<String>> = a.iter().map(normalize_item).collect();
-    let mut b_normalized: Vec<Option<String>> = b.iter().map(normalize_item).collect();
-
-    // Sort the normalized vectors for order-independent comparison
-    a_normalized.sort();
-    b_normalized.sort();
-
-    // Compare the sorted, normalized vectors
-    a_normalized == b_normalized
+    true
 }
 
 fn same_fqn(self_common: &CommonAttributes, other_common: &CommonAttributes) -> bool {
@@ -5581,6 +5599,98 @@ mod tests {
                 Some("The order in which this user was created under the carrier.".to_string()),
             ];
             assert!(optional_string_vecs_equal(&current, &previous));
+        }
+
+        #[test]
+        fn test_duplicate_empty_strings_are_equal() {
+            // This tests the "duplicate columns" issue from NBIM telemetry
+            // State (other_value) has duplicate empty strings for multiple columns
+            // Current (self_value) has fewer empty strings
+            // Both should be equal because the unique content is the same (all empty)
+            let other_value = vec![
+                Some("".to_string()),
+                Some("".to_string()),
+                Some("".to_string()),
+                Some("".to_string()),
+                Some("".to_string()),
+            ];
+            let self_value = vec![Some("".to_string()), Some("".to_string())];
+            assert!(optional_string_vecs_equal(&other_value, &self_value));
+            assert!(optional_string_vecs_equal(&self_value, &other_value));
+        }
+
+        #[test]
+        fn test_duplicate_content_with_different_lengths_are_equal() {
+            // If the longer vector only has duplicates of content in the shorter,
+            // they should be equal
+            let shorter = vec![Some("a".to_string()), Some("b".to_string())];
+            let longer = vec![
+                Some("a".to_string()),
+                Some("b".to_string()),
+                Some("a".to_string()), // duplicate
+                Some("b".to_string()), // duplicate
+            ];
+            assert!(optional_string_vecs_equal(&shorter, &longer));
+            assert!(optional_string_vecs_equal(&longer, &shorter));
+        }
+
+        #[test]
+        fn test_extra_empty_values_in_longer_are_equal() {
+            // Extra None/empty values in the longer vector should not cause inequality
+            // This is the key fix for the duplicate columns issue where state has extra empty descriptions
+            let shorter = vec![Some("a".to_string()), Some("b".to_string())];
+            let longer = vec![Some("a".to_string()), Some("b".to_string()), None];
+            assert!(optional_string_vecs_equal(&shorter, &longer));
+            assert!(optional_string_vecs_equal(&longer, &shorter));
+
+            // Also test with multiple extra empty values
+            let longer_multiple = vec![
+                Some("a".to_string()),
+                Some("b".to_string()),
+                None,
+                Some("".to_string()),
+                Some("   ".to_string()), // whitespace-only
+            ];
+            assert!(optional_string_vecs_equal(&shorter, &longer_multiple));
+            assert!(optional_string_vecs_equal(&longer_multiple, &shorter));
+        }
+
+        #[test]
+        fn test_longer_with_new_content_not_equal() {
+            // If the longer vector has content not in the shorter, they should NOT be equal
+            let shorter = vec![Some("a".to_string()), Some("b".to_string())];
+            let longer = vec![
+                Some("a".to_string()),
+                Some("b".to_string()),
+                Some("c".to_string()), // NEW content not in shorter
+            ];
+            assert!(!optional_string_vecs_equal(&shorter, &longer));
+            assert!(!optional_string_vecs_equal(&longer, &shorter));
+        }
+
+        #[test]
+        fn test_real_world_duplicate_empty_column_descriptions() {
+            // Real scenario from NBIM telemetry:
+            // State has many columns with empty descriptions (duplicates)
+            // Current has fewer columns but all descriptions are also empty
+            let state_manifest = vec![
+                None,
+                Some("".to_string()),
+                None,
+                Some("  ".to_string()), // whitespace only
+                Some("".to_string()),
+                None,
+                Some("".to_string()),
+            ];
+            let current_manifest = vec![Some("".to_string()), None, Some("   ".to_string())];
+            assert!(optional_string_vecs_equal(
+                &state_manifest,
+                &current_manifest
+            ));
+            assert!(optional_string_vecs_equal(
+                &current_manifest,
+                &state_manifest
+            ));
         }
     }
 }
