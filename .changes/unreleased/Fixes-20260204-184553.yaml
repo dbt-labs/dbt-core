@@ -1,6 +1,0 @@
-kind: Fixes
-body: Stop raising deprecation warnings for internal python model configs
-time: 2026-02-04T18:45:53.094578-06:00
-custom:
-  Author: QMalcolm
-  Issue: "12314"
