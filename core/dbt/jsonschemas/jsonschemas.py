@@ -265,7 +265,9 @@ def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path:
             )
 
 
-def validate_model_config(config: Dict[str, Any], file_path: str) -> None:
+def validate_model_config(
+    config: Dict[str, Any], file_path: str, is_python_model: bool = False
+) -> None:
     if not _can_run_validations():
         return
 
@@ -296,6 +298,10 @@ def validate_model_config(config: Dict[str, Any], file_path: str) -> None:
                     # Avoids false positives as described in https://github.com/dbt-labs/dbt-core/issues/12087
                     if key in ("post-hook", "pre-hook"):
                         continue
+
+                    if key in ("config_keys_used", "config_keys_defaults") and is_python_model:
+                        continue
+
                     deprecations.warn(
                         "custom-key-in-config-deprecation",
                         key=key,
