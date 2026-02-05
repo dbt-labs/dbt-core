@@ -23,6 +23,8 @@ pub fn compare_sql(actual: &str, expected: &str) -> AdapterResult<()> {
     let expected = canonicalize_elementary_tmp_suffix(&expected);
     let actual = canonicalize_test_temp_relation_identifiers(&actual);
     let expected = canonicalize_test_temp_relation_identifiers(&expected);
+    let actual = canonicalize_dbt_model_tmp_suffix(&actual);
+    let expected = canonicalize_dbt_model_tmp_suffix(&expected);
     let actual = canonicalize_elementary_metadata_pkg_version(&actual);
     let expected = canonicalize_elementary_metadata_pkg_version(&expected);
     let actual = canonicalize_python_config_dict(&actual, &expected);
@@ -719,6 +721,32 @@ fn canonicalize_test_temp_relation_identifiers(sql: &str) -> String {
 
     let out = RE.replace_all(sql, "${1}ALPHA${2}");
     QUOTED_RE.replace_all(&out, "$1").to_string()
+}
+
+/// Canonicalize dbt model temporary table identifiers that may differ between recorders/runners.
+///
+/// Model materialization creates temporary tables with random numeric suffixes like:
+///   stg_sfmc_open__dbt_tmp192731837139227
+///   stg_sfmc_open__dbt_tmp073022229909
+///
+/// This function normalizes them to a canonical form to allow SQL replay comparison.
+///
+/// Example:
+///   "stg_sfmc_open__dbt_tmp192731837139227" -> "stg_sfmc_open__dbt_tmpSUFFIX"
+///   "stg_sfmc_open__dbt_tmp073022229909" -> "stg_sfmc_open__dbt_tmpSUFFIX"
+fn canonicalize_dbt_model_tmp_suffix(sql: &str) -> String {
+    // Fast-path: avoid regex work on the common case.
+    if !sql.to_ascii_lowercase().contains("__dbt_tmp") {
+        return sql.to_string();
+    }
+
+    static RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
+        // Match __dbt_tmp followed by one or more digits
+        // This captures the pattern used by dbt for temporary table suffixes
+        Regex::new(r"(?i)(__dbt_tmp)\d+").unwrap()
+    });
+
+    RE.replace_all(sql, "${1}SUFFIX").to_string()
 }
 
 /// Check whether two SQL strings are identical modulo a top-level
