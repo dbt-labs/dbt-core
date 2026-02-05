@@ -1,7 +1,10 @@
+from pathlib import Path
+
 import pytest
 
 from dbt.exceptions import DbtRuntimeError
 from dbt.tests.util import run_dbt
+from tests.functional.utils import up_one
 
 
 class TestCleanSourcePath:
@@ -54,3 +57,10 @@ class TestCleanPathOutsideProjectWithFlag:
             match="dbt will not clean the following directories outside the project",
         ):
             run_dbt(["clean", "--clean-project-files-only"])
+
+
+class TestCleanRelativeProjectDir:
+    def test_clean_relative_project_dir(self, project):
+        with up_one():
+            project_dir = Path(project.project_root).relative_to(Path.cwd())
+            run_dbt(["clean", "--project-dir", str(project_dir)])
