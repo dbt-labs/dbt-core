@@ -16,7 +16,7 @@
     fetch=False,
     limit=None,
     options={
-      "adbc.salesforce.dc.dlo.primary_key": config.get('primary_key', default=None),
+      "adbc.salesforce.dc.dlo.primary_key": (config.get('primary_key', default=None) | join(' ')),
       "adbc.salesforce.dc.dlo.category": config.get('category', default='Profile'),
       "adbc.salesforce.dc.dlo.target_dlo": identifier
     })%}
