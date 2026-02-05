@@ -206,7 +206,7 @@ impl DatabricksMetadataAdapter {
         &self,
         state: &State,
         conn: &mut dyn Connection,
-        base_relation: Arc<dyn BaseRelation>,
+        base_relation: &Arc<dyn BaseRelation>,
     ) -> AdapterResult<(RelationType, DatabricksRelationMetadata)> {
         let relation_type = base_relation.relation_type().ok_or_else(|| {
             AdapterError::new(

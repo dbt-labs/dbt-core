@@ -1,4 +1,4 @@
-use crate::relation::RelationObject;
+use crate::{AdapterType, relation::RelationObject};
 
 use dbt_common::FsResult;
 use dbt_frontend_common::ident::Identifier;
@@ -11,22 +11,37 @@ use minijinja::{State, Value};
 
 use std::{any::Any, sync::Arc};
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct InformationSchema {
+    pub adapter_type: AdapterType,
     pub database: Option<String>,
     pub schema: String,
     pub identifier: Option<String>,
     // quote_policy
     pub location: Option<String>,
+    pub is_delta: Option<bool>,
 }
 
 impl InformationSchema {
+    pub fn default(adapter_type: AdapterType) -> Self {
+        Self {
+            adapter_type,
+            database: None,
+            schema: String::default(),
+            identifier: None,
+            location: None,
+            is_delta: None,
+        }
+    }
+
     pub fn try_from_relation(
+        adapter_type: AdapterType,
         relation_database: Option<String>,
         information_schema_view: Option<&str>,
     ) -> Result<Self, minijinja::Error> {
         // Create the InformationSchema object with the database name as none if it is an empty string
         Ok(Self {
+            adapter_type,
             database: if relation_database.is_some() && relation_database.clone().unwrap() == "" {
                 None
             } else {
@@ -35,6 +50,7 @@ impl InformationSchema {
             schema: "INFORMATION_SCHEMA".to_string(),
             identifier: information_schema_view.map(|s| s.to_string()),
             location: None,
+            is_delta: None,
         })
     }
 }
@@ -78,8 +94,20 @@ impl BaseRelation for InformationSchema {
         unimplemented!("information schema as_any trait downcasting")
     }
 
+    fn to_owned(&self) -> Arc<dyn BaseRelation> {
+        Arc::new(self.clone())
+    }
+
     fn create_from(&self, _state: &State, _args: &[Value]) -> Result<Value, minijinja::Error> {
         unimplemented!("information schema relation creation from Jinja values")
+    }
+
+    fn is_delta(&self) -> bool {
+        self.is_delta.unwrap_or(false)
+    }
+
+    fn set_is_delta(&mut self, is_delta: Option<bool>) {
+        self.is_delta = is_delta;
     }
 
     fn database(&self) -> Value {
@@ -98,8 +126,8 @@ impl BaseRelation for InformationSchema {
         Value::from(self.location.clone())
     }
 
-    fn adapter_type(&self) -> Option<String> {
-        unimplemented!("information schema adapter type detection")
+    fn adapter_type(&self) -> AdapterType {
+        self.adapter_type
     }
 
     fn as_value(&self) -> Value {

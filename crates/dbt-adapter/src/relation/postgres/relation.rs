@@ -1,6 +1,7 @@
 use crate::information_schema::InformationSchema;
 use crate::relation::{RelationObject, StaticBaseRelation};
 
+use dbt_common::adapter::AdapterType;
 use dbt_common::{ErrorCode, FsResult, current_function_name, fs_err};
 use dbt_frontend_common::ident::Identifier;
 use dbt_schema_store::CanonicalFqn;
@@ -175,8 +176,16 @@ impl BaseRelation for PostgresRelation {
         self
     }
 
+    fn to_owned(&self) -> Arc<dyn BaseRelation> {
+        Arc::new(self.clone())
+    }
+
     fn create_from(&self, _: &State, _: &[Value]) -> Result<Value, minijinja::Error> {
         unimplemented!("PostgreSQL relation creation from Jinja values")
+    }
+
+    fn set_is_delta(&mut self, _is_delta: Option<bool>) {
+        // no-op
     }
 
     fn database(&self) -> Value {
@@ -199,8 +208,8 @@ impl BaseRelation for PostgresRelation {
         RelationObject::new(Arc::new(self.clone())).into_value()
     }
 
-    fn adapter_type(&self) -> Option<String> {
-        Some("postgres".to_string())
+    fn adapter_type(&self) -> AdapterType {
+        AdapterType::Postgres
     }
 
     fn include_inner(&self, include_policy: Policy) -> Result<Value, minijinja::Error> {
@@ -245,7 +254,8 @@ impl BaseRelation for PostgresRelation {
         database: Option<String>,
         view_name: Option<&str>,
     ) -> Result<Value, minijinja::Error> {
-        let result = InformationSchema::try_from_relation(database, view_name)?;
+        let result =
+            InformationSchema::try_from_relation(self.adapter_type(), database, view_name)?;
         Ok(RelationObject::new(Arc::new(result)).into_value())
     }
 }

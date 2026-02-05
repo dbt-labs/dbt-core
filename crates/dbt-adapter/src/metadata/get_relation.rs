@@ -30,7 +30,7 @@ pub fn get_relation(
     database: &str,
     schema: &str,
     identifier: &str,
-) -> AdapterResult<Option<Arc<dyn BaseRelation>>> {
+) -> AdapterResult<Option<Box<dyn BaseRelation>>> {
     match adapter.adapter_type() {
         AdapterType::Snowflake => {
             snowflake_get_relation(adapter, state, ctx, conn, database, schema, identifier)
@@ -69,7 +69,7 @@ fn snowflake_get_relation(
     database: &str,
     schema: &str,
     identifier: &str,
-) -> AdapterResult<Option<Arc<dyn BaseRelation>>> {
+) -> AdapterResult<Option<Box<dyn BaseRelation>>> {
     let quoted_database = if adapter.quoting().database {
         adapter.quote(database)
     } else {
@@ -166,7 +166,7 @@ fn snowflake_get_relation(
         TableFormat::Default
     };
 
-    Ok(Some(Arc::new(SnowflakeRelation::new(
+    Ok(Some(Box::new(SnowflakeRelation::new(
         Some(database.to_string()),
         Some(schema.to_string()),
         Some(identifier.to_string()),
@@ -184,7 +184,7 @@ fn bigquery_get_relation(
     database: &str,
     schema: &str,
     identifier: &str,
-) -> AdapterResult<Option<Arc<dyn BaseRelation>>> {
+) -> AdapterResult<Option<Box<dyn BaseRelation>>> {
     let query_database = if adapter.quoting().database {
         adapter.quote(database)
     } else {
@@ -235,17 +235,17 @@ fn bigquery_get_relation(
     let relation_type_name = string_array.value(0).to_uppercase();
     let relation_type = RelationType::from_adapter_type(AdapterType::Bigquery, &relation_type_name);
 
-    let mut relation = BigqueryRelation::new(
+    let mut relation = Box::new(BigqueryRelation::new(
         Some(database.to_string()),
         Some(schema.to_string()),
         Some(identifier.to_string()),
         Some(relation_type),
         None,
         adapter.quoting(),
-    );
-    let location = adapter.get_dataset_location(state, conn, Arc::new(relation.clone()))?;
+    ));
+    let location = adapter.get_dataset_location(state, conn, relation.as_ref())?;
     relation.location = location;
-    Ok(Some(Arc::new(relation)))
+    Ok(Some(relation))
 }
 
 fn databricks_get_relation(
@@ -256,7 +256,7 @@ fn databricks_get_relation(
     database: &str,
     schema: &str,
     identifier: &str,
-) -> AdapterResult<Option<Arc<dyn BaseRelation>>> {
+) -> AdapterResult<Option<Box<dyn BaseRelation>>> {
     use crate::metadata::MetadataProcessor as _;
     // though _needs_information is used in dbt to decide if this may be related from relations cache
     // since we don't implement relations cache, it's ignored for now
@@ -321,7 +321,7 @@ fn databricks_get_relation(
         Some(database.to_string())
     };
 
-    Ok(Some(Arc::new(DatabricksRelation::new(
+    Ok(Some(Box::new(DatabricksRelation::new(
         adapter.adapter_type(),
         db,
         Some(schema.to_string()),
@@ -342,7 +342,7 @@ fn redshift_get_relation(
     database: &str,
     schema: &str,
     identifier: &str,
-) -> AdapterResult<Option<Arc<dyn BaseRelation>>> {
+) -> AdapterResult<Option<Box<dyn BaseRelation>>> {
     let query_schema = if adapter.quoting().schema {
         schema.to_string()
     } else {
@@ -401,7 +401,7 @@ LEFT JOIN materialized_views mv
         _ => None,
     };
 
-    Ok(Some(Arc::new(RedshiftRelation::new(
+    Ok(Some(Box::new(RedshiftRelation::new(
         Some(database.to_string()),
         Some(schema.to_string()),
         Some(identifier.to_string()),
@@ -420,7 +420,7 @@ fn postgres_get_relation(
     database: &str,
     schema: &str,
     identifier: &str,
-) -> AdapterResult<Option<Arc<dyn BaseRelation>>> {
+) -> AdapterResult<Option<Box<dyn BaseRelation>>> {
     let query_schema = if adapter.quoting().schema {
         schema.to_string()
     } else {
@@ -481,7 +481,7 @@ fn postgres_get_relation(
         relation_type,
         adapter.quoting(),
     )?;
-    Ok(Some(Arc::new(relation)))
+    Ok(Some(Box::new(relation)))
 }
 
 fn salesforce_get_relation(
@@ -492,10 +492,10 @@ fn salesforce_get_relation(
     database: &str,
     _schema: &str,
     identifier: &str,
-) -> AdapterResult<Option<Arc<dyn BaseRelation>>> {
+) -> AdapterResult<Option<Box<dyn BaseRelation>>> {
     // TODO: resolves relation_table based on the metadata to be returned in schema
     match conn.get_table_schema(Some(database), None, identifier) {
-        Ok(_) => Ok(Some(Arc::new(SalesforceRelation::new(
+        Ok(_) => Ok(Some(Box::new(SalesforceRelation::new(
             Some(database.to_string()),
             None,
             Some(identifier.to_string()),

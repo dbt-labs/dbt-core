@@ -4,6 +4,7 @@ use crate::relation::redshift::materialized_view_config::*;
 use crate::relation::{RelationObject, StaticBaseRelation};
 
 use arrow::array::RecordBatch;
+use dbt_common::adapter::AdapterType;
 use dbt_common::{ErrorCode, FsResult, current_function_name, fs_err};
 use dbt_frontend_common::ident::Identifier;
 use dbt_schema_store::CanonicalFqn;
@@ -170,8 +171,16 @@ impl BaseRelation for RedshiftRelation {
         self
     }
 
+    fn to_owned(&self) -> Arc<dyn BaseRelation> {
+        Arc::new(self.clone())
+    }
+
     fn create_from(&self, _: &State, _: &[Value]) -> Result<Value, minijinja::Error> {
         unimplemented!("Redshift relation creation from Jinja values")
+    }
+
+    fn set_is_delta(&mut self, _is_delta: Option<bool>) {
+        // no-op
     }
 
     fn database(&self) -> Value {
@@ -194,8 +203,8 @@ impl BaseRelation for RedshiftRelation {
         RelationObject::new(Arc::new(self.clone())).into_value()
     }
 
-    fn adapter_type(&self) -> Option<String> {
-        Some("redshift".to_string())
+    fn adapter_type(&self) -> AdapterType {
+        AdapterType::Redshift
     }
 
     fn include_inner(&self, policy: Policy) -> Result<Value, minijinja::Error> {
@@ -237,7 +246,8 @@ impl BaseRelation for RedshiftRelation {
         database: Option<String>,
         view_name: Option<&str>,
     ) -> Result<Value, minijinja::Error> {
-        let result = InformationSchema::try_from_relation(database, view_name)?;
+        let result =
+            InformationSchema::try_from_relation(self.adapter_type(), database, view_name)?;
         Ok(RelationObject::new(Arc::new(result)).into_value())
     }
 

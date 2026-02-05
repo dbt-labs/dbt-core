@@ -143,7 +143,7 @@ pub fn dispatch_adapter_calls(
             let relation = downcast_value_to_dyn_base_relation(relation)?;
             iter.finish()?;
 
-            adapter.get_columns_in_relation(state, relation)
+            adapter.get_columns_in_relation(state, relation.as_ref())
         }
         "build_catalog_relation" => {
             let iter = ArgsIter::new(name, &["model"], args);
@@ -169,7 +169,7 @@ pub fn dispatch_adapter_calls(
             let relation = downcast_value_to_dyn_base_relation(relation)?;
             iter.finish()?;
 
-            adapter.describe_dynamic_table(state, relation)
+            adapter.describe_dynamic_table(state, &relation)
         }
         "get_catalog_integration" => adapter.get_catalog_integration(state, args),
         "type" => Ok(Value::from(adapter.adapter_type().to_string())),
@@ -220,7 +220,7 @@ pub fn dispatch_adapter_calls(
             let relation = downcast_value_to_dyn_base_relation(relation)?;
             iter.finish()?;
 
-            adapter.cache_dropped(state, relation)
+            adapter.cache_dropped(state, &relation)
         }
         "cache_renamed" => {
             // from_relation: BaseRelation, to_relation: BaseRelation
@@ -231,7 +231,7 @@ pub fn dispatch_adapter_calls(
             let to_relation = downcast_value_to_dyn_base_relation(to_relation)?;
             iter.finish()?;
 
-            adapter.cache_renamed(state, from_relation, to_relation)
+            adapter.cache_renamed(state, &from_relation, &to_relation)
         }
         "quote" => {
             // identifier: str
@@ -273,7 +273,7 @@ pub fn dispatch_adapter_calls(
             let relation = downcast_value_to_dyn_base_relation(relation)?;
             iter.finish()?;
 
-            adapter.drop_relation(state, relation)
+            adapter.drop_relation(state, &relation)
         }
         "truncate_relation" => {
             // relation: BaseRelation
@@ -282,7 +282,7 @@ pub fn dispatch_adapter_calls(
             let relation = downcast_value_to_dyn_base_relation(relation)?;
             iter.finish()?;
 
-            adapter.truncate_relation(state, relation)
+            adapter.truncate_relation(state, &relation)
         }
         "rename_relation" => {
             // from_relation: BaseRelation, to_relation: BaseRelation
@@ -293,7 +293,7 @@ pub fn dispatch_adapter_calls(
             let to_relation = downcast_value_to_dyn_base_relation(to_relation)?;
             iter.finish()?;
 
-            adapter.rename_relation(state, from_relation, to_relation)
+            adapter.rename_relation(state, &from_relation, &to_relation)
         }
         "expand_target_column_types" => {
             // from_relation: BaseRelation, to_relation: BaseRelation
@@ -304,7 +304,7 @@ pub fn dispatch_adapter_calls(
             let to_relation = downcast_value_to_dyn_base_relation(to_relation)?;
             iter.finish()?;
 
-            adapter.expand_target_column_types(state, from_relation, to_relation)
+            adapter.expand_target_column_types(state, &from_relation, &to_relation)
         }
         "list_schemas" => {
             // database: str
@@ -321,7 +321,7 @@ pub fn dispatch_adapter_calls(
             let relation = downcast_value_to_dyn_base_relation(relation)?;
             iter.finish()?;
 
-            adapter.create_schema(state, relation)
+            adapter.create_schema(state, &relation)
         }
         "drop_schema" => {
             // relation: BaseRelation
@@ -330,7 +330,7 @@ pub fn dispatch_adapter_calls(
             let relation = downcast_value_to_dyn_base_relation(relation)?;
             iter.finish()?;
 
-            adapter.drop_schema(state, relation)
+            adapter.drop_schema(state, &relation)
         }
         "valid_snapshot_target" => {
             // relation: BaseRelation
@@ -339,7 +339,7 @@ pub fn dispatch_adapter_calls(
             let relation = downcast_value_to_dyn_base_relation(relation)?;
             iter.finish()?;
 
-            adapter.valid_snapshot_target(state, relation)
+            adapter.valid_snapshot_target(state, &relation)
         }
         "assert_valid_snapshot_target_given_strategy" => {
             // relation: BaseRelation, column_names: Optional[Dict[str, str]], strategy: SnapshotStrategy
@@ -374,7 +374,7 @@ pub fn dispatch_adapter_calls(
             let strategy_arc = Arc::new(strategy);
             adapter.assert_valid_snapshot_target_given_strategy(
                 state,
-                relation,
+                &relation,
                 column_names.as_ref(),
                 &strategy_arc,
             )
@@ -388,7 +388,7 @@ pub fn dispatch_adapter_calls(
             let to_relation = downcast_value_to_dyn_base_relation(to_relation)?;
             iter.finish()?;
 
-            adapter.get_missing_columns(state, from_relation, to_relation)
+            adapter.get_missing_columns(state, &from_relation, &to_relation)
         }
         "render_raw_model_constraints" => {
             // raw_constraints: List[ModelConstraint]
@@ -617,7 +617,7 @@ pub fn dispatch_adapter_calls(
                 None
             };
 
-            adapter.is_replaceable(state, relation, partition_by, cluster_by)
+            adapter.is_replaceable(state, relation.as_ref(), partition_by, cluster_by)
         }
         "list_relations_without_caching" => {
             // schema_relation: BaseRelation
@@ -626,7 +626,7 @@ pub fn dispatch_adapter_calls(
             let schema_relation = downcast_value_to_dyn_base_relation(schema_relation)?;
             iter.finish()?;
 
-            adapter.list_relations_without_caching(state, schema_relation)
+            adapter.list_relations_without_caching(state, &schema_relation)
         }
         "copy_table" => {
             // tmp_relation_partitioned: BaseRelation, target_relation_partitioned: BaseRelation, materialization: str
@@ -650,8 +650,8 @@ pub fn dispatch_adapter_calls(
 
             adapter.copy_table(
                 state,
-                tmp_relation_partitioned,
-                target_relation_partitioned,
+                &tmp_relation_partitioned,
+                &target_relation_partitioned,
                 materialization,
             )
         }
@@ -671,7 +671,7 @@ pub fn dispatch_adapter_calls(
                     })?;
             iter.finish()?;
 
-            adapter.update_columns(state, relation, columns)
+            adapter.update_columns(state, &relation, columns)
         }
         "update_table_description" => {
             // In parse mode, skip parameter extraction and return early
@@ -701,7 +701,7 @@ pub fn dispatch_adapter_calls(
             let columns = iter.next_arg::<&Value>()?;
             iter.finish()?;
 
-            adapter.alter_table_add_columns(state, relation, columns)
+            adapter.alter_table_add_columns(state, &relation, columns)
         }
         "load_dataframe" => {
             let iter = ArgsIter::new(
@@ -750,7 +750,7 @@ pub fn dispatch_adapter_calls(
             let relation = downcast_value_to_dyn_base_relation(relation)?;
             iter.finish()?;
 
-            adapter.get_bq_table(state, relation)
+            adapter.get_bq_table(state, &relation)
         }
         "describe_relation" => {
             // relation: BaseRelation
@@ -759,7 +759,7 @@ pub fn dispatch_adapter_calls(
             let relation = downcast_value_to_dyn_base_relation(relation)?;
             iter.finish()?;
 
-            adapter.describe_relation(state, relation)
+            adapter.describe_relation(state, &relation)
         }
         "grant_access_to" => {
             // entity: BaseRelation, entity_type: str, role: Optional[str], grant_target_dict: GrantAccessToTarget
@@ -809,7 +809,7 @@ pub fn dispatch_adapter_calls(
             };
 
             let entity_relation = downcast_value_to_dyn_base_relation(entity)?;
-            adapter.grant_access_to(state, entity_relation, entity_type, role, database, schema)
+            adapter.grant_access_to(state, &entity_relation, entity_type, role, database, schema)
         }
         "get_dataset_location" => {
             // relation: BaseRelation
@@ -818,7 +818,7 @@ pub fn dispatch_adapter_calls(
             let relation = downcast_value_to_dyn_base_relation(relation)?;
             iter.finish()?;
 
-            adapter.get_dataset_location(state, relation)
+            adapter.get_dataset_location(state, relation.as_ref())
         }
         "get_column_schema_from_query" => {
             // sql: str
@@ -938,7 +938,7 @@ pub fn dispatch_adapter_calls(
             let relation = downcast_value_to_dyn_base_relation(relation_val)?;
             iter.finish()?;
 
-            adapter.get_partitions_metadata(state, relation)
+            adapter.get_partitions_metadata(state, relation.as_ref())
         }
         "get_relations_without_caching" => {
             // schema_relation: BaseRelation
@@ -947,7 +947,7 @@ pub fn dispatch_adapter_calls(
             let relation = downcast_value_to_dyn_base_relation(relation_val)?;
             iter.finish()?;
 
-            adapter.get_relations_without_caching(state, relation)
+            adapter.get_relations_without_caching(state, &relation)
         }
         "parse_index" => {
             // raw_index: dict
@@ -1090,7 +1090,7 @@ pub fn dispatch_adapter_calls(
             let relation = downcast_value_to_dyn_base_relation(relation)?;
             iter.finish()?;
 
-            adapter.get_relation_config(state, relation)
+            adapter.get_relation_config(state, &relation)
         }
         "get_config_from_model" => {
             // model: dict

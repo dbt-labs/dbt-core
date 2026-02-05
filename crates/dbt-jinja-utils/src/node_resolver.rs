@@ -231,7 +231,7 @@ impl NodeResolverTracker for NodeResolver {
         };
 
         let relation = RelationObject::new_with_filter(
-            create_relation_from_node(adapter_type, node, Some(self.run_filter.clone()))?,
+            create_relation_from_node(adapter_type, node, Some(self.run_filter.clone()))?.into(),
             self.run_filter.clone(),
             node.event_time(),
         )
@@ -372,7 +372,7 @@ impl NodeResolverTracker for NodeResolver {
             source.quoting(),
         )?;
         let relation = RelationObject::new_with_filter(
-            base_rel,
+            base_rel.into(),
             self.run_filter.clone(),
             source.deprecated_config.event_time.clone(),
         )
@@ -669,7 +669,7 @@ impl NodeResolverTracker for NodeResolver {
         };
 
         let deferred_relation = RelationObject::new_with_filter(
-            create_relation_from_node(adapter_type, node, Some(self.run_filter.clone()))?,
+            create_relation_from_node(adapter_type, node, Some(self.run_filter.clone()))?.into(),
             self.run_filter.clone(),
             node.event_time(),
         )

@@ -1,5 +1,6 @@
 use crate::relation::{RelationObject, StaticBaseRelation};
 
+use dbt_common::adapter::AdapterType;
 use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_frontend_common::ident::Identifier;
 use dbt_schema_store::CanonicalFqn;
@@ -131,9 +132,17 @@ impl BaseRelation for SalesforceRelation {
         self
     }
 
+    fn to_owned(&self) -> Arc<dyn BaseRelation> {
+        Arc::new(self.clone())
+    }
+
     /// Creates a new Salesforce relation from a state and a list of values
     fn create_from(&self, _: &State, _: &[Value]) -> Result<Value, minijinja::Error> {
         unimplemented!("Salesforce relation creation from Jinja values")
+    }
+
+    fn set_is_delta(&mut self, _is_delta: Option<bool>) {
+        // no-op
     }
 
     /// Returns the database name
@@ -160,8 +169,8 @@ impl BaseRelation for SalesforceRelation {
         RelationObject::new(Arc::new(self.clone())).into_value()
     }
 
-    fn adapter_type(&self) -> Option<String> {
-        Some("salesforce".to_string())
+    fn adapter_type(&self) -> AdapterType {
+        AdapterType::Salesforce
     }
 
     fn needs_to_drop(&self, _args: &[Value]) -> Result<Value, minijinja::Error> {

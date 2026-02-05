@@ -78,7 +78,7 @@ pub struct RelationCache {
 
 impl RelationCache {
     /// Retrieves a cached entry by relation
-    pub fn get_relation(&self, relation: &Arc<dyn BaseRelation>) -> Option<RelationCacheEntry> {
+    pub fn get_relation(&self, relation: &dyn BaseRelation) -> Option<RelationCacheEntry> {
         let (schema_key, relation_key) = Self::get_relation_cache_keys(relation);
         if let Some(schema) = self.schemas_and_relations.get(&schema_key) {
             schema
@@ -96,7 +96,7 @@ impl RelationCache {
         relation: Arc<dyn BaseRelation>,
         relation_config: Option<Arc<dyn BaseRelationConfig>>,
     ) -> Option<RelationCacheEntry> {
-        let (schema_key, relation_key) = Self::get_relation_cache_keys(&relation);
+        let (schema_key, relation_key) = Self::get_relation_cache_keys(relation.as_ref());
         let entry = RelationCacheEntry::new(relation, relation_config);
         self.schemas_and_relations
             .entry(schema_key)
@@ -121,7 +121,7 @@ impl RelationCache {
     }
 
     /// Removes and returns a cached entry by relation
-    pub fn evict_relation(&self, relation: &Arc<dyn BaseRelation>) -> Option<RelationCacheEntry> {
+    pub fn evict_relation(&self, relation: &dyn BaseRelation) -> Option<RelationCacheEntry> {
         let (schema_key, relation_key) = Self::get_relation_cache_keys(relation);
         self.evict(&schema_key, &relation_key)
     }
@@ -132,7 +132,7 @@ impl RelationCache {
             .iter()
             .map(|r| {
                 (
-                    Self::get_relation_cache_key_from_relation(r),
+                    Self::get_relation_cache_key_from_relation(r.as_ref() as &dyn BaseRelation),
                     RelationCacheEntry::new(r.clone(), None),
                 )
             })
@@ -148,7 +148,7 @@ impl RelationCache {
     }
 
     /// Drops an entire schema
-    pub fn evict_schema_for_relation(&self, relation: &Arc<dyn BaseRelation>) {
+    pub fn evict_schema_for_relation(&self, relation: &dyn BaseRelation) {
         let schema_key = Self::get_schema_cache_key_from_relation(relation);
         self.schemas_and_relations.remove(&schema_key);
     }
@@ -157,7 +157,7 @@ impl RelationCache {
     ///
     /// If relation provided does not contain catalog/database and schema information
     /// this function will always return false
-    pub fn contains_full_schema_for_relation(&self, relation: &Arc<dyn BaseRelation>) -> bool {
+    pub fn contains_full_schema_for_relation(&self, relation: &dyn BaseRelation) -> bool {
         self.schemas_and_relations
             .get(&Self::get_schema_cache_key_from_relation(relation))
             .map(|entry| entry.is_complete)
@@ -173,7 +173,7 @@ impl RelationCache {
     }
 
     /// Checks if a relation exists in the cache
-    pub fn contains_relation(&self, relation: &Arc<dyn BaseRelation>) -> bool {
+    pub fn contains_relation(&self, relation: &dyn BaseRelation) -> bool {
         let (schema_key, relation_key) = Self::get_relation_cache_keys(relation);
         if let Some(relation_cache) = self.schemas_and_relations.get(&schema_key) {
             relation_cache.value().relations.contains_key(&relation_key)
@@ -186,7 +186,7 @@ impl RelationCache {
     /// Returns the new entry that was inserted
     pub fn rename_relation(
         &self,
-        old: &Arc<dyn BaseRelation>,
+        old: &dyn BaseRelation,
         new: Arc<dyn BaseRelation>,
     ) -> Option<RelationCacheEntry> {
         if let Some(original_entry) = self.evict_relation(old) {
@@ -218,7 +218,7 @@ impl RelationCache {
     }
 
     /// Helper: Generates cache key pairs from a [BaseRelation]
-    fn get_relation_cache_keys(relation: &Arc<dyn BaseRelation>) -> (String, String) {
+    fn get_relation_cache_keys(relation: &dyn BaseRelation) -> (String, String) {
         (
             Self::get_schema_cache_key_from_relation(relation),
             Self::get_relation_cache_key_from_relation(relation),
@@ -226,12 +226,12 @@ impl RelationCache {
     }
 
     /// Helper: Generates a relation cache key from a [BaseRelation]
-    fn get_relation_cache_key_from_relation(relation: &Arc<dyn BaseRelation>) -> String {
+    fn get_relation_cache_key_from_relation(relation: &dyn BaseRelation) -> String {
         relation.semantic_fqn()
     }
 
     /// Helper: Generates a schema cache key from a [BaseRelation]
-    fn get_schema_cache_key_from_relation(relation: &Arc<dyn BaseRelation>) -> String {
+    fn get_schema_cache_key_from_relation(relation: &dyn BaseRelation) -> String {
         CatalogAndSchema::from(relation).to_string()
     }
 }
@@ -250,7 +250,7 @@ mod tests {
         let cache = RelationCache::default();
 
         // Create relations with different combinations of database, schema, identifier
-        let relation1 = do_create_relation(
+        let relation1: Arc<dyn BaseRelation> = do_create_relation(
             AdapterType::Postgres,
             "db1".to_string(),
             "schema1".to_string(),
@@ -258,9 +258,10 @@ mod tests {
             None,
             DEFAULT_RESOLVED_QUOTING,
         )
-        .unwrap();
+        .unwrap()
+        .into();
 
-        let relation2 = do_create_relation(
+        let relation2: Arc<dyn BaseRelation> = do_create_relation(
             AdapterType::Postgres,
             "db2".to_string(),
             "schema1".to_string(),
@@ -268,9 +269,10 @@ mod tests {
             None,
             DEFAULT_RESOLVED_QUOTING,
         )
-        .unwrap();
+        .unwrap()
+        .into();
 
-        let relation3 = do_create_relation(
+        let relation3: Arc<dyn BaseRelation> = do_create_relation(
             AdapterType::Postgres,
             "db1".to_string(),
             "schema2".to_string(),
@@ -278,9 +280,10 @@ mod tests {
             None,
             DEFAULT_RESOLVED_QUOTING,
         )
-        .unwrap();
+        .unwrap()
+        .into();
 
-        let relation4 = do_create_relation(
+        let relation4: Arc<dyn BaseRelation> = do_create_relation(
             AdapterType::Postgres,
             "db1".to_string(),
             "schema1".to_string(),
@@ -288,9 +291,10 @@ mod tests {
             None,
             DEFAULT_RESOLVED_QUOTING,
         )
-        .unwrap();
+        .unwrap()
+        .into();
 
-        let relation1_dup = do_create_relation(
+        let relation1_dup: Arc<dyn BaseRelation> = do_create_relation(
             AdapterType::Postgres,
             "db1".to_string(),
             "schema1".to_string(),
@@ -298,7 +302,8 @@ mod tests {
             None,
             DEFAULT_RESOLVED_QUOTING,
         )
-        .unwrap();
+        .unwrap()
+        .into();
 
         // Insert relations into cache
         cache.insert_relation(relation1.clone(), None);
@@ -308,17 +313,17 @@ mod tests {
         cache.insert_relation(relation1_dup.clone(), None);
 
         // Verify all different relations are cached separately
-        assert!(cache.contains_relation(&relation1));
-        assert!(cache.contains_relation(&relation2));
-        assert!(cache.contains_relation(&relation3));
-        assert!(cache.contains_relation(&relation4));
+        assert!(cache.contains_relation(relation1.as_ref()));
+        assert!(cache.contains_relation(relation2.as_ref()));
+        assert!(cache.contains_relation(relation3.as_ref()));
+        assert!(cache.contains_relation(relation4.as_ref()));
 
         // Verify cache keys are different
-        let key1 = RelationCache::get_relation_cache_key_from_relation(&relation1);
-        let key2 = RelationCache::get_relation_cache_key_from_relation(&relation2);
-        let key3 = RelationCache::get_relation_cache_key_from_relation(&relation3);
-        let key4 = RelationCache::get_relation_cache_key_from_relation(&relation4);
-        let key5 = RelationCache::get_relation_cache_key_from_relation(&relation1_dup);
+        let key1 = RelationCache::get_relation_cache_key_from_relation(relation1.as_ref());
+        let key2 = RelationCache::get_relation_cache_key_from_relation(relation2.as_ref());
+        let key3 = RelationCache::get_relation_cache_key_from_relation(relation3.as_ref());
+        let key4 = RelationCache::get_relation_cache_key_from_relation(relation4.as_ref());
+        let key5 = RelationCache::get_relation_cache_key_from_relation(relation1_dup.as_ref());
 
         // Different relations should have different keys
         assert_ne!(key1, key2);
@@ -338,8 +343,8 @@ mod tests {
 
         let cache = RelationCache::default();
 
-        // With DEFAULT_RESOLVED_QUOTING
-        let relation_quoted = do_create_relation(
+        // With DEFAULT_RESOLVED_QUOT: Arc<dyn BaseRelation> =
+        let relation_quoted: Arc<dyn BaseRelation> = do_create_relation(
             AdapterType::Postgres,
             "MyDB".to_string(),
             "MySchema".to_string(),
@@ -347,10 +352,11 @@ mod tests {
             None,
             DEFAULT_RESOLVED_QUOTING,
         )
-        .unwrap();
+        .unwrap()
+        .into();
 
         // With no quoting
-        let relation_unquoted = do_create_relation(
+        let relation_unquoted: Arc<dyn BaseRelation> = do_create_relation(
             AdapterType::Postgres,
             "MyDB".to_string(),
             "MySchema".to_string(),
@@ -362,10 +368,13 @@ mod tests {
                 identifier: false,
             },
         )
-        .unwrap();
+        .unwrap()
+        .into();
 
-        let key_quoted = RelationCache::get_relation_cache_key_from_relation(&relation_quoted);
-        let key_unquoted = RelationCache::get_relation_cache_key_from_relation(&relation_unquoted);
+        let key_quoted =
+            RelationCache::get_relation_cache_key_from_relation(relation_quoted.as_ref());
+        let key_unquoted =
+            RelationCache::get_relation_cache_key_from_relation(relation_unquoted.as_ref());
 
         // Cache keys should be different due to quoting policy affecting normalization
         // This is intentional! Quoting enforces different semantics within dialects
@@ -376,11 +385,11 @@ mod tests {
         cache.insert_relation(relation_unquoted.clone(), None);
 
         // Both should exist as separate entries
-        assert!(cache.contains_relation(&relation_quoted));
-        assert!(cache.contains_relation(&relation_unquoted));
+        assert!(cache.contains_relation(relation_quoted.as_ref()));
+        assert!(cache.contains_relation(relation_unquoted.as_ref()));
 
         // Test that we find the unquoted relation when searching with unquoted policy
-        let search_relation_unquoted = do_create_relation(
+        let search_relation_unquoted: Arc<dyn BaseRelation> = do_create_relation(
             AdapterType::Postgres,
             "MyDB".to_string(),
             "MySchema".to_string(),
@@ -392,9 +401,10 @@ mod tests {
                 identifier: false,
             },
         )
-        .unwrap();
+        .unwrap()
+        .into();
 
-        let found_unquoted_entry = cache.get_relation(&search_relation_unquoted);
+        let found_unquoted_entry = cache.get_relation(search_relation_unquoted.as_ref());
         assert!(found_unquoted_entry.is_some());
     }
 
@@ -409,7 +419,7 @@ mod tests {
         let num_threads = 8;
         let operations_per_thread = 50;
 
-        let relations: Vec<_> = (0..operations_per_thread)
+        let relations: Vec<Arc<dyn BaseRelation>> = (0..operations_per_thread)
             .flat_map(|i| {
                 // Create relations in 3 different schemas
                 (0..3).map(move |schema_id| {
@@ -422,6 +432,7 @@ mod tests {
                         DEFAULT_RESOLVED_QUOTING,
                     )
                     .unwrap()
+                    .into()
                 })
             })
             .collect();
@@ -442,11 +453,11 @@ mod tests {
                         match i % 7 {
                             0 => {
                                 // Individual relation insert
-                                cache.insert_relation(relation.clone(), None);
+                                cache.insert_relation(Arc::clone(relation), None);
                             }
                             1 => {
                                 // Individual relation evict
-                                cache.evict_relation(relation);
+                                cache.evict_relation(relation.as_ref());
                             }
                             2 => {
                                 // Schema hydration
@@ -460,16 +471,16 @@ mod tests {
                             }
                             3 => {
                                 // Schema eviction
-                                cache.evict_schema_for_relation(relation);
+                                cache.evict_schema_for_relation(relation.as_ref());
                             }
                             4 => {
                                 // Read operations (most common in real usage)
-                                cache.contains_relation(relation);
-                                cache.get_relation(relation);
+                                cache.contains_relation(relation.as_ref());
+                                cache.get_relation(relation.as_ref());
                             }
                             5 => {
                                 // Schema checks
-                                cache.contains_full_schema_for_relation(relation);
+                                cache.contains_full_schema_for_relation(relation.as_ref());
                             }
                             6 => {
                                 // Rename operations (less common but important)
@@ -481,8 +492,9 @@ mod tests {
                                     None,
                                     DEFAULT_RESOLVED_QUOTING,
                                 )
+                                .map(Arc::from)
                                 .unwrap();
-                                cache.rename_relation(relation, new_relation);
+                                cache.rename_relation(relation.as_ref(), new_relation);
                             }
                             _ => unreachable!(),
                         }
@@ -502,8 +514,8 @@ mod tests {
 
         // Verify consistency after all operations
         for relation in relations.iter() {
-            let contains = cache.contains_relation(relation);
-            let get_result = cache.get_relation(relation);
+            let contains = cache.contains_relation(relation.as_ref());
+            let get_result = cache.get_relation(relation.as_ref());
 
             // consistency check: if contains says it exists, it must actually exist!
             if contains {
@@ -515,7 +527,7 @@ mod tests {
             }
 
             // Schema-level consistency
-            let schema_exists = cache.contains_full_schema_for_relation(relation);
+            let schema_exists = cache.contains_full_schema_for_relation(relation.as_ref());
             if schema_exists && contains {
                 assert!(
                     get_result.is_some(),

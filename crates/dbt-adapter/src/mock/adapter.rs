@@ -194,7 +194,7 @@ impl TypedBaseAdapter for MockAdapter {
     fn drop_relation(
         &self,
         _state: &State,
-        _relation: Arc<dyn BaseRelation>,
+        _relation: &Arc<dyn BaseRelation>,
     ) -> AdapterResult<Value> {
         Ok(none_value())
     }

@@ -3,6 +3,7 @@ use crate::need_quotes::need_quotes;
 use crate::relation::{RelationObject, StaticBaseRelation};
 
 use arrow::array::RecordBatch;
+use dbt_common::adapter::AdapterType;
 use dbt_common::{ErrorCode, FsResult, current_function_name, fs_err};
 use dbt_frontend_common::ident::Identifier;
 use dbt_schema_store::CanonicalFqn;
@@ -173,6 +174,14 @@ impl BaseRelation for BigqueryRelation {
         self
     }
 
+    fn to_owned(&self) -> Arc<dyn BaseRelation> {
+        Arc::new(self.clone())
+    }
+
+    fn set_is_delta(&mut self, _is_delta: Option<bool>) {
+        // no-op
+    }
+
     fn create_from(&self, _: &State, _: &[Value]) -> Result<Value, minijinja::Error> {
         unimplemented!("BigQuery relation creation from Jinja values")
     }
@@ -206,8 +215,8 @@ impl BaseRelation for BigqueryRelation {
         RelationObject::new(Arc::new(self.clone())).into_value()
     }
 
-    fn adapter_type(&self) -> Option<String> {
-        Some("bigquery".to_string())
+    fn adapter_type(&self) -> AdapterType {
+        AdapterType::Bigquery
     }
 
     fn include_inner(&self, policy: Policy) -> Result<Value, minijinja::Error> {
@@ -273,7 +282,8 @@ impl BaseRelation for BigqueryRelation {
         database: Option<String>,
         view_name: Option<&str>,
     ) -> Result<Value, minijinja::Error> {
-        let mut info_schema = InformationSchema::try_from_relation(database.clone(), view_name)?;
+        let mut info_schema =
+            InformationSchema::try_from_relation(self.adapter_type(), database.clone(), view_name)?;
 
         let quote_if_needed = |identifier: &str| -> String {
             if need_quotes(Backend::BigQuery, identifier) {

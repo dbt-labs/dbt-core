@@ -279,7 +279,7 @@ impl BridgeAdapter {
     }
 
     /// Checks if the given [BaseRelation] matches the node currently being rendered
-    fn matches_current_relation(&self, state: &State, relation: &Arc<dyn BaseRelation>) -> bool {
+    fn matches_current_relation(&self, state: &State, relation: &dyn BaseRelation) -> bool {
         if let Some((database, schema, alias)) = state.database_schema_alias_from_state() {
             // Lowercase name comparison because relation names from the local project
             // are user specified, whereas the input relation may have been a normalized name
@@ -299,7 +299,7 @@ impl BridgeAdapter {
     }
 
     /// Loads a schema from the schema cache
-    fn get_schema_from_cache(&self, relation: &Arc<dyn BaseRelation>) -> Option<SchemaEntry> {
+    fn get_schema_from_cache(&self, relation: &dyn BaseRelation) -> Option<SchemaEntry> {
         match &self.inner {
             Typed { schema_store, .. } => schema_store
                 .as_ref()
@@ -422,7 +422,10 @@ impl BaseAdapter for BridgeAdapter {
 
     fn is_cached(&self, relation: &Arc<dyn BaseRelation>) -> bool {
         match &self.inner {
-            Typed { .. } => self.engine().relation_cache().contains_relation(relation),
+            Typed { .. } => self
+                .engine()
+                .relation_cache()
+                .contains_relation(relation.as_ref()),
             Parse(_) => false,
         }
     }
@@ -441,7 +444,7 @@ impl BaseAdapter for BridgeAdapter {
         relation: Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
-            Typed { adapter, .. } => adapter.cache_added(state, relation.clone()),
+            Typed { adapter, .. } => adapter.cache_added(state, relation),
             // TODO(jason): We should probably capture any manual user engagement with the cache
             // and use this knowledge for our cache hydration
             Parse(_) => Ok(none_value()),
@@ -452,7 +455,7 @@ impl BaseAdapter for BridgeAdapter {
     fn cache_dropped(
         &self,
         state: &State,
-        relation: Arc<dyn BaseRelation>,
+        relation: &Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => adapter.cache_dropped(state, relation),
@@ -464,8 +467,8 @@ impl BaseAdapter for BridgeAdapter {
     fn cache_renamed(
         &self,
         state: &State,
-        from_relation: Arc<dyn BaseRelation>,
-        to_relation: Arc<dyn BaseRelation>,
+        from_relation: &Arc<dyn BaseRelation>,
+        to_relation: &Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => adapter.cache_renamed(state, from_relation, to_relation),
@@ -726,11 +729,13 @@ impl BaseAdapter for BridgeAdapter {
     fn drop_relation(
         &self,
         state: &State,
-        relation: Arc<dyn BaseRelation>,
+        relation: &Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
-                self.engine().relation_cache().evict_relation(&relation);
+                self.engine()
+                    .relation_cache()
+                    .evict_relation(relation.as_ref() as &dyn BaseRelation);
                 Ok(adapter.drop_relation(state, relation)?)
             }
             Parse(_) => Ok(none_value()),
@@ -741,7 +746,7 @@ impl BaseAdapter for BridgeAdapter {
     fn truncate_relation(
         &self,
         state: &State,
-        relation: Arc<dyn BaseRelation>,
+        relation: &Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => Ok(adapter.truncate_relation(state, relation)?),
@@ -754,15 +759,15 @@ impl BaseAdapter for BridgeAdapter {
     fn rename_relation(
         &self,
         state: &State,
-        from_relation: Arc<dyn BaseRelation>,
-        to_relation: Arc<dyn BaseRelation>,
+        from_relation: &Arc<dyn BaseRelation>,
+        to_relation: &Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
                 // Update cache
-                self.cache_renamed(state, from_relation.clone(), to_relation.clone())?;
+                self.cache_renamed(state, from_relation, to_relation)?;
 
-                adapter.rename_relation(state, from_relation.clone(), to_relation.clone())?;
+                adapter.rename_relation(state, from_relation, to_relation)?;
                 Ok(Value::from(()))
             }
             Parse(_) => Ok(none_value()),
@@ -775,8 +780,8 @@ impl BaseAdapter for BridgeAdapter {
     fn expand_target_column_types(
         &self,
         state: &State,
-        from_relation: Arc<dyn BaseRelation>,
-        to_relation: Arc<dyn BaseRelation>,
+        from_relation: &Arc<dyn BaseRelation>,
+        to_relation: &Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
@@ -809,7 +814,7 @@ impl BaseAdapter for BridgeAdapter {
     fn create_schema(
         &self,
         state: &State,
-        relation: Arc<dyn BaseRelation>,
+        relation: &Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => adapter.create_schema(state, relation),
@@ -822,7 +827,7 @@ impl BaseAdapter for BridgeAdapter {
     fn drop_schema(
         &self,
         state: &State,
-        relation: Arc<dyn BaseRelation>,
+        relation: &Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => adapter.drop_schema(state, relation),
@@ -835,7 +840,7 @@ impl BaseAdapter for BridgeAdapter {
     fn valid_snapshot_target(
         &self,
         state: &State,
-        relation: Arc<dyn BaseRelation>,
+        relation: &Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => adapter.valid_snapshot_target(state, relation),
@@ -859,7 +864,7 @@ impl BaseAdapter for BridgeAdapter {
     fn assert_valid_snapshot_target_given_strategy(
         &self,
         state: &State,
-        relation: Arc<dyn BaseRelation>,
+        relation: &Arc<dyn BaseRelation>,
         column_names: Option<&BTreeMap<String, String>>,
         strategy: &Arc<SnapshotStrategy>,
     ) -> Result<Value, minijinja::Error> {
@@ -912,8 +917,10 @@ impl BaseAdapter for BridgeAdapter {
                         adapter.quoting(),
                     )?;
 
-                    if let Some(cached_entry) =
-                        self.engine().relation_cache().get_relation(&temp_relation)
+                    if let Some(cached_entry) = self
+                        .engine()
+                        .relation_cache()
+                        .get_relation(temp_relation.as_ref())
                     {
                         return Ok(cached_entry.relation().as_value());
                     }
@@ -922,14 +929,14 @@ impl BaseAdapter for BridgeAdapter {
                     else if self
                         .engine()
                         .relation_cache()
-                        .contains_full_schema_for_relation(&temp_relation)
+                        .contains_full_schema_for_relation(temp_relation.as_ref())
                     {
                         return Ok(none_value());
                     }
 
                     let mut conn =
                         self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
-                    let db_schema = CatalogAndSchema::from(&temp_relation);
+                    let db_schema = CatalogAndSchema::from(temp_relation.as_ref());
                     let query_ctx = query_ctx_from_state(state)?
                         .with_desc("get_relation > list_relations call");
                     let maybe_relations_list =
@@ -943,8 +950,10 @@ impl BaseAdapter for BridgeAdapter {
 
                         // After calling list_relations_without_caching, the cache should be populated
                         // with the full schema.
-                        if let Some(cached_entry) =
-                            self.engine().relation_cache().get_relation(&temp_relation)
+                        if let Some(cached_entry) = self
+                            .engine()
+                            .relation_cache()
+                            .get_relation(temp_relation.as_ref())
                         {
                             return Ok(cached_entry.relation().as_value());
                         } else {
@@ -973,16 +982,17 @@ impl BaseAdapter for BridgeAdapter {
                         // cache found relation
                         self.engine()
                             .relation_cache()
-                            .insert_relation(relation.clone(), None);
+                            .insert_relation(Arc::clone(&relation), None);
                         Ok(relation.as_value())
                     }
                     None => Ok(none_value()),
                 }
             }
             Parse(adapter_parse_state) => {
+                let adapter_type = adapter_parse_state.adapter_type;
                 adapter_parse_state
                     .record_get_relation_call(state, database, schema, identifier)?;
-                Ok(RelationObject::new(Arc::new(EmptyRelation {})).into_value())
+                Ok(RelationObject::new(Arc::new(EmptyRelation::new(adapter_type))).into_value())
             }
         }
     }
@@ -1009,8 +1019,8 @@ impl BaseAdapter for BridgeAdapter {
     fn get_missing_columns(
         &self,
         state: &State,
-        from_relation: Arc<dyn BaseRelation>,
-        to_relation: Arc<dyn BaseRelation>,
+        from_relation: &Arc<dyn BaseRelation>,
+        to_relation: &Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
@@ -1025,17 +1035,17 @@ impl BaseAdapter for BridgeAdapter {
     fn get_columns_in_relation(
         &self,
         state: &State,
-        relation: Arc<dyn BaseRelation>,
+        relation: &dyn BaseRelation,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
                 // Check if the relation being queried is the same as the one currently being rendered
                 // Skip local compilation results for the current relation since the compiled sql
                 // may represent a schema that the model will have when the run is done, not the current state
-                let is_current_relation = self.matches_current_relation(state, &relation);
+                let is_current_relation = self.matches_current_relation(state, relation);
 
                 let maybe_from_cache = if !is_current_relation {
-                    self.get_schema_from_cache(&relation)
+                    self.get_schema_from_cache(relation)
                 } else {
                     None
                 };
@@ -1048,7 +1058,7 @@ impl BaseAdapter for BridgeAdapter {
                     #[cfg(debug_assertions)]
                     debug_compare_column_types(
                         state,
-                        relation.clone(),
+                        relation,
                         adapter.as_ref(),
                         from_local.clone(),
                     );
@@ -1062,7 +1072,7 @@ impl BaseAdapter for BridgeAdapter {
                 if let Some(replay_adapter) = adapter.as_replay() {
                     return replay_adapter.replay_get_columns_in_relation(
                         state,
-                        relation,
+                        &relation.to_owned(),
                         maybe_from_local,
                     );
                 }
@@ -1202,7 +1212,7 @@ impl BaseAdapter for BridgeAdapter {
     fn get_bq_table(
         &self,
         state: &State,
-        relation: Arc<dyn BaseRelation>,
+        relation: &Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => adapter.get_bq_table(state, relation),
@@ -1214,7 +1224,7 @@ impl BaseAdapter for BridgeAdapter {
     fn is_replaceable(
         &self,
         state: &State,
-        relation: Option<Arc<dyn BaseRelation>>,
+        relation: Option<&Arc<dyn BaseRelation>>,
         partition_by: Option<BigqueryPartitionConfig>,
         cluster_by: Option<ClusterConfig>,
     ) -> Result<Value, minijinja::Error> {
@@ -1338,7 +1348,7 @@ impl BaseAdapter for BridgeAdapter {
     fn grant_access_to(
         &self,
         state: &State,
-        entity: Arc<dyn BaseRelation>,
+        entity: &Arc<dyn BaseRelation>,
         entity_type: &str,
         role: Option<&str>,
         database: &str,
@@ -1367,7 +1377,7 @@ impl BaseAdapter for BridgeAdapter {
     fn get_dataset_location(
         &self,
         state: &State,
-        relation: Arc<dyn BaseRelation>,
+        relation: &dyn BaseRelation,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
@@ -1411,7 +1421,7 @@ impl BaseAdapter for BridgeAdapter {
     fn alter_table_add_columns(
         &self,
         state: &State,
-        relation: Arc<dyn BaseRelation>,
+        relation: &Arc<dyn BaseRelation>,
         columns: &Value,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
@@ -1434,7 +1444,7 @@ impl BaseAdapter for BridgeAdapter {
     fn update_columns(
         &self,
         state: &State,
-        relation: Arc<dyn BaseRelation>,
+        relation: &Arc<dyn BaseRelation>,
         columns: IndexMap<String, DbtColumn>,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
@@ -1469,7 +1479,7 @@ impl BaseAdapter for BridgeAdapter {
     fn list_relations_without_caching(
         &self,
         state: &State,
-        schema_relation: Arc<dyn BaseRelation>,
+        schema_relation: &Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
@@ -1480,7 +1490,7 @@ impl BaseAdapter for BridgeAdapter {
                 let result = adapter.list_relations(
                     &query_ctx,
                     conn.as_mut(),
-                    &CatalogAndSchema::from(&schema_relation),
+                    &CatalogAndSchema::from(schema_relation.as_ref()),
                 )?;
 
                 Ok(Value::from_object(
@@ -1609,8 +1619,8 @@ impl BaseAdapter for BridgeAdapter {
     fn copy_table(
         &self,
         state: &State,
-        tmp_relation_partitioned: Arc<dyn BaseRelation>,
-        target_relation_partitioned: Arc<dyn BaseRelation>,
+        tmp_relation_partitioned: &Arc<dyn BaseRelation>,
+        target_relation_partitioned: &Arc<dyn BaseRelation>,
         materialization: &str,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
@@ -1638,7 +1648,7 @@ impl BaseAdapter for BridgeAdapter {
     fn describe_relation(
         &self,
         state: &State,
-        relation: Arc<dyn BaseRelation>,
+        relation: &Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
@@ -1692,7 +1702,7 @@ impl BaseAdapter for BridgeAdapter {
     fn get_partitions_metadata(
         &self,
         state: &State,
-        relation: Arc<dyn BaseRelation>,
+        relation: &dyn BaseRelation,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => adapter.get_partitions_metadata(state, relation),
@@ -1733,13 +1743,13 @@ impl BaseAdapter for BridgeAdapter {
     fn get_relation_config(
         &self,
         state: &State,
-        relation: Arc<dyn BaseRelation>,
+        relation: &Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
                 let mut conn =
                     self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
-                let config = adapter.get_relation_config(state, conn.as_mut(), relation.clone())?;
+                let config = adapter.get_relation_config(state, conn.as_mut(), relation)?;
                 Ok(Value::from_object(config))
             }
             Parse(_) => Ok(none_value()),
@@ -1762,7 +1772,7 @@ impl BaseAdapter for BridgeAdapter {
     fn get_relations_without_caching(
         &self,
         state: &State,
-        relation: Arc<dyn BaseRelation>,
+        relation: &Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => adapter.get_relations_without_caching(state, relation),
@@ -1880,7 +1890,7 @@ impl BaseAdapter for BridgeAdapter {
     fn describe_dynamic_table(
         &self,
         state: &State,
-        relation: Arc<dyn BaseRelation>,
+        relation: &Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
@@ -2002,12 +2012,12 @@ impl Object for BridgeAdapter {
 #[cfg(debug_assertions)]
 fn debug_compare_column_types(
     state: &State,
-    relation: Arc<dyn BaseRelation>,
+    relation: &dyn BaseRelation,
     typed_adapter: &dyn TypedBaseAdapter,
     mut from_local: Vec<Column>,
 ) {
     if std::env::var("DEBUG_COMPARE_LOCAL_REMOTE_COLUMNS_TYPES").is_ok() {
-        match typed_adapter.get_columns_in_relation(state, relation.clone()) {
+        match typed_adapter.get_columns_in_relation(state, relation) {
             Ok(mut from_remote) => {
                 from_remote.sort_by(|a, b| a.name().cmp(b.name()));
 

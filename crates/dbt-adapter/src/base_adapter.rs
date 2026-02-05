@@ -155,7 +155,7 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
     fn cache_dropped(
         &self,
         _state: &State,
-        _relation: Arc<dyn BaseRelation>,
+        _relation: &Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
         unimplemented!("cache_dropped")
     }
@@ -174,8 +174,8 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
     fn cache_renamed(
         &self,
         _state: &State,
-        _from_relation: Arc<dyn BaseRelation>,
-        _to_relation: Arc<dyn BaseRelation>,
+        _from_relation: &Arc<dyn BaseRelation>,
+        _to_relation: &Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
         unimplemented!("cache_renamed")
     }
@@ -454,7 +454,7 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
     fn drop_relation(
         &self,
         state: &State,
-        relation: Arc<dyn BaseRelation>,
+        relation: &Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error>;
 
     /// Truncate relation.
@@ -470,7 +470,7 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
     fn truncate_relation(
         &self,
         state: &State,
-        relation: Arc<dyn BaseRelation>,
+        relation: &Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error>;
 
     /// Rename relation.
@@ -487,8 +487,8 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
     fn rename_relation(
         &self,
         state: &State,
-        from_relation: Arc<dyn BaseRelation>,
-        to_relation: Arc<dyn BaseRelation>,
+        from_relation: &Arc<dyn BaseRelation>,
+        to_relation: &Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error>;
 
     /// Expand target column types.
@@ -505,8 +505,8 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
     fn expand_target_column_types(
         &self,
         state: &State,
-        from_relation: Arc<dyn BaseRelation>,
-        to_relation: Arc<dyn BaseRelation>,
+        from_relation: &Arc<dyn BaseRelation>,
+        to_relation: &Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error>;
 
     /// List schemas.
@@ -525,7 +525,7 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
     fn list_relations_without_caching(
         &self,
         state: &State,
-        schema_relation: Arc<dyn BaseRelation>,
+        schema_relation: &Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error>;
 
     /// Create schema.
@@ -541,7 +541,7 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
     fn create_schema(
         &self,
         state: &State,
-        relation: Arc<dyn BaseRelation>,
+        relation: &Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error>;
 
     /// Drop schema.
@@ -557,7 +557,7 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
     fn drop_schema(
         &self,
         state: &State,
-        relation: Arc<dyn BaseRelation>,
+        relation: &Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error>;
 
     /// Valid snapshot target.
@@ -573,7 +573,7 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
     fn valid_snapshot_target(
         &self,
         state: &State,
-        _relation: Arc<dyn BaseRelation>,
+        _relation: &Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error>;
 
     /// Assert valid snapshot target given strategy.
@@ -590,7 +590,7 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
     fn assert_valid_snapshot_target_given_strategy(
         &self,
         state: &State,
-        _relation: Arc<dyn BaseRelation>,
+        _relation: &Arc<dyn BaseRelation>,
         _column_names: Option<&BTreeMap<String, String>>,
         _strategy: &Arc<SnapshotStrategy>,
     ) -> Result<Value, minijinja::Error>;
@@ -658,7 +658,7 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
     fn describe_dynamic_table(
         &self,
         state: &State,
-        relation: Arc<dyn BaseRelation>,
+        relation: &Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error>;
 
     /// Get a catalog integration object.
@@ -694,8 +694,8 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
     fn get_missing_columns(
         &self,
         state: &State,
-        _from_relation: Arc<dyn BaseRelation>,
-        _to_relation: Arc<dyn BaseRelation>,
+        _from_relation: &Arc<dyn BaseRelation>,
+        _to_relation: &Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error>;
 
     /// Get columns in relation.
@@ -711,7 +711,7 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
     fn get_columns_in_relation(
         &self,
         state: &State,
-        relation: Arc<dyn BaseRelation>,
+        relation: &dyn BaseRelation,
     ) -> Result<Value, minijinja::Error>;
 
     /// Render raw columns constraints.
@@ -837,7 +837,7 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
     fn is_replaceable(
         &self,
         _state: &State,
-        _relation: Option<Arc<dyn BaseRelation>>,
+        _relation: Option<&Arc<dyn BaseRelation>>,
         _partition_by: Option<dbt_schemas::schemas::manifest::BigqueryPartitionConfig>,
         _cluster_by: Option<dbt_schemas::schemas::common::ClusterConfig>,
     ) -> Result<Value, minijinja::Error> {
@@ -860,8 +860,8 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
     fn copy_table(
         &self,
         state: &State,
-        tmp_relation_partitioned: Arc<dyn BaseRelation>,
-        target_relation_partitioned: Arc<dyn BaseRelation>,
+        tmp_relation_partitioned: &Arc<dyn BaseRelation>,
+        target_relation_partitioned: &Arc<dyn BaseRelation>,
         materialization: &str,
     ) -> Result<Value, minijinja::Error>;
 
@@ -869,7 +869,7 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
     fn update_columns(
         &self,
         state: &State,
-        relation: Arc<dyn BaseRelation>,
+        relation: &Arc<dyn BaseRelation>,
         columns: IndexMap<String, DbtColumn>,
     ) -> Result<Value, minijinja::Error>;
 
@@ -887,7 +887,7 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
     fn alter_table_add_columns(
         &self,
         state: &State,
-        relation: Arc<dyn BaseRelation>,
+        relation: &Arc<dyn BaseRelation>,
         columns: &Value,
     ) -> Result<Value, minijinja::Error>;
 
@@ -953,21 +953,21 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
     fn get_bq_table(
         &self,
         state: &State,
-        relation: Arc<dyn BaseRelation>,
+        relation: &Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error>;
 
     /// describe_relation
     fn describe_relation(
         &self,
         _state: &State,
-        _relation: Arc<dyn BaseRelation>,
+        _relation: &Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error>;
 
     /// grant_access_to
     fn grant_access_to(
         &self,
         state: &State,
-        entity: Arc<dyn BaseRelation>,
+        entity: &Arc<dyn BaseRelation>,
         entity_type: &str,
         role: Option<&str>,
         database: &str,
@@ -978,7 +978,7 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
     fn get_dataset_location(
         &self,
         state: &State,
-        relation: Arc<dyn BaseRelation>,
+        relation: &dyn BaseRelation,
     ) -> Result<Value, minijinja::Error>;
 
     /// Compare Databricks Runtime version.
@@ -1063,11 +1063,10 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
     /// Get the list of valid incremental strategies for this adapter.
     fn valid_incremental_strategies(&self, _state: &State) -> Result<Value, minijinja::Error>;
 
-    /// get_partitions_metadata
     fn get_partitions_metadata(
         &self,
         _state: &State,
-        _relation: Arc<dyn BaseRelation>,
+        _relation: &dyn BaseRelation,
     ) -> Result<Value, minijinja::Error>;
 
     /// Get columns to persist documentation for.
@@ -1098,7 +1097,7 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
     fn get_relation_config(
         &self,
         _state: &State,
-        _relation: Arc<dyn BaseRelation>,
+        _relation: &Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error>;
 
     /// Get configuration from a model node.
@@ -1115,7 +1114,7 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
     fn get_relations_without_caching(
         &self,
         _state: &State,
-        _relation: Arc<dyn BaseRelation>,
+        _relation: &Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error>;
 
     /// parse_index
@@ -1201,5 +1200,5 @@ pub trait AdapterFactory: Send + Sync {
         &self,
         node: &dyn InternalDbtNodeAttributes,
         adapter_type: AdapterType,
-    ) -> Result<Arc<dyn BaseRelation>, minijinja::Error>;
+    ) -> Result<Box<dyn BaseRelation>, minijinja::Error>;
 }

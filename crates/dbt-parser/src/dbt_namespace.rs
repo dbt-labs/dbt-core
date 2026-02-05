@@ -58,7 +58,7 @@ impl Object for DbtNamespace {
                 self.parse_adapter
                     .parse_adapter_state()
                     .expect("adapter should be configured for the parse phase")
-                    .record_get_columns_in_relation_call(state, relation)?;
+                    .record_get_columns_in_relation_call(state, relation.as_ref())?;
 
                 // Delegate to the original dbt.get_columns_in_relation template
                 let template_name = "dbt.get_columns_in_relation";

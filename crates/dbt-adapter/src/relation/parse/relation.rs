@@ -2,6 +2,7 @@ use crate::funcs::{empty_string_value, none_value};
 use crate::relation::RelationObject;
 
 use dbt_common::FsResult;
+use dbt_common::adapter::AdapterType;
 use dbt_frontend_common::ident::Identifier;
 use dbt_schema_store::CanonicalFqn;
 use dbt_schemas::dbt_types::RelationType;
@@ -14,8 +15,16 @@ use std::sync::Arc;
 /// Empty relation
 ///
 /// A relation that returns empty values for all fields.
-#[derive(Clone, Debug, Default)]
-pub struct EmptyRelation {}
+#[derive(Clone, Debug)]
+pub struct EmptyRelation {
+    adapter_type: AdapterType,
+}
+
+impl EmptyRelation {
+    pub fn new(adapter_type: AdapterType) -> Self {
+        Self { adapter_type }
+    }
+}
 
 impl BaseRelationProperties for EmptyRelation {
     fn is_database_relation(&self) -> bool {
@@ -60,8 +69,20 @@ impl BaseRelation for EmptyRelation {
     fn as_any(&self) -> &dyn Any {
         self
     }
+
+    fn to_owned(&self) -> Arc<dyn BaseRelation> {
+        Arc::new(self.clone())
+    }
+
     fn create_from(&self, _: &State, _: &[Value]) -> Result<Value, minijinja::Error> {
         unimplemented!("relation creation from Jinja values")
+    }
+
+    fn set_is_delta(&mut self, is_delta: Option<bool>) {
+        debug_assert!(
+            is_delta.is_none(),
+            "set_is_delta is unavailable for EmptyRelation"
+        );
     }
 
     fn database(&self) -> Value {
@@ -84,8 +105,8 @@ impl BaseRelation for EmptyRelation {
         RelationObject::new(Arc::new(self.clone())).into_value()
     }
 
-    fn adapter_type(&self) -> Option<String> {
-        None
+    fn adapter_type(&self) -> AdapterType {
+        self.adapter_type
     }
 
     fn include(&self, _args: &[Value]) -> Result<Value, minijinja::Error> {

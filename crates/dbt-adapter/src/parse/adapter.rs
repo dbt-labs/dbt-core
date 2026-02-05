@@ -113,14 +113,14 @@ impl ParseAdapterState {
     pub fn record_get_columns_in_relation_call(
         &self,
         state: &State,
-        relation: Arc<dyn BaseRelation>,
+        relation: &dyn BaseRelation,
     ) -> Result<(), minijinja::Error> {
         if !relation.is_database_relation() {
             return Ok(());
         }
         if state.is_execute() {
             if let Some(unique_id) = state.lookup(TARGET_UNIQUE_ID) {
-                let relation_value = RelationObject::new(relation).into_value();
+                let relation_value = RelationObject::new(relation.to_owned()).into_value();
                 self.call_get_columns_in_relation
                     .entry(unique_id.to_string())
                     .or_default()

@@ -195,7 +195,7 @@ impl TypedBaseAdapter for SnowflakeSidecarAdapter {
     fn get_columns_in_relation(
         &self,
         _state: &State,
-        relation: Arc<dyn BaseRelation>,
+        relation: &dyn BaseRelation,
     ) -> AdapterResult<Vec<Column>> {
         // Build fully qualified relation name: database.schema.identifier
         let database = relation.database_as_str()?;
@@ -244,7 +244,7 @@ impl TypedBaseAdapter for SnowflakeSidecarAdapter {
         let relation_infos = self.sidecar_client.list_relations(&query_schema)?;
 
         // Convert to BaseRelation objects
-        let mut relations = Vec::with_capacity(relation_infos.len());
+        let mut relations: Vec<Arc<dyn BaseRelation>> = Vec::with_capacity(relation_infos.len());
         for (database, schema, name, rel_type) in relation_infos {
             let relation = do_create_relation(
                 self.adapter_type,
@@ -254,7 +254,7 @@ impl TypedBaseAdapter for SnowflakeSidecarAdapter {
                 Some(rel_type),
                 self.quoting,
             )?;
-            relations.push(relation);
+            relations.push(relation.into());
         }
         Ok(relations)
     }
@@ -299,7 +299,7 @@ impl TypedBaseAdapter for SnowflakeSidecarAdapter {
                     Some(rel_type),
                     self.quoting,
                 )?;
-                Ok(Some(relation))
+                Ok(Some(relation.into()))
             }
             None => Ok(None),
         }

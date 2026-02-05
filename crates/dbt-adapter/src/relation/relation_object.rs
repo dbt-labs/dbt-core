@@ -76,6 +76,18 @@ impl Deref for RelationObject {
     }
 }
 
+impl From<Arc<dyn BaseRelation>> for RelationObject {
+    fn from(relation: Arc<dyn BaseRelation>) -> Self {
+        RelationObject::new(relation)
+    }
+}
+
+impl From<Box<dyn BaseRelation>> for RelationObject {
+    fn from(relation: Box<dyn BaseRelation>) -> Self {
+        RelationObject::new(Arc::from(relation))
+    }
+}
+
 impl Object for RelationObject {
     fn call_method(
         self: &Arc<Self>,
@@ -193,40 +205,40 @@ pub fn do_create_relation(
     identifier: Option<String>,
     relation_type: Option<RelationType>,
     custom_quoting: ResolvedQuoting,
-) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
+) -> Result<Box<dyn BaseRelation>, minijinja::Error> {
     let relation = match adapter_type {
-        AdapterType::Postgres | AdapterType::Sidecar => Arc::new(PostgresRelation::try_new(
+        AdapterType::Postgres | AdapterType::Sidecar => Box::new(PostgresRelation::try_new(
             Some(database),
             Some(schema),
             identifier,
             relation_type,
             custom_quoting,
-        )?) as Arc<dyn BaseRelation>,
-        AdapterType::Snowflake => Arc::new(SnowflakeRelation::new(
+        )?) as Box<dyn BaseRelation>,
+        AdapterType::Snowflake => Box::new(SnowflakeRelation::new(
             Some(database),
             Some(schema),
             identifier,
             relation_type,
             TableFormat::Default,
             custom_quoting,
-        )) as Arc<dyn BaseRelation>,
-        AdapterType::Bigquery => Arc::new(BigqueryRelation::new(
+        )) as Box<dyn BaseRelation>,
+        AdapterType::Bigquery => Box::new(BigqueryRelation::new(
             Some(database),
             Some(schema),
             identifier,
             relation_type,
             None,
             custom_quoting,
-        )) as Arc<dyn BaseRelation>,
-        AdapterType::Redshift => Arc::new(RedshiftRelation::new(
+        )) as Box<dyn BaseRelation>,
+        AdapterType::Redshift => Box::new(RedshiftRelation::new(
             Some(database),
             Some(schema),
             identifier,
             relation_type,
             None,
             custom_quoting,
-        )) as Arc<dyn BaseRelation>,
-        AdapterType::Databricks | AdapterType::Spark => Arc::new(DatabricksRelation::new(
+        )) as Box<dyn BaseRelation>,
+        AdapterType::Databricks | AdapterType::Spark => Box::new(DatabricksRelation::new(
             adapter_type,
             Some(database),
             Some(schema),
@@ -236,13 +248,13 @@ pub fn do_create_relation(
             custom_quoting,
             None,
             false,
-        )) as Arc<dyn BaseRelation>,
-        AdapterType::Salesforce => Arc::new(SalesforceRelation::new(
+        )) as Box<dyn BaseRelation>,
+        AdapterType::Salesforce => Box::new(SalesforceRelation::new(
             Some(database),
             Some(schema),
             identifier,
             relation_type,
-        )) as Arc<dyn BaseRelation>,
+        )) as Box<dyn BaseRelation>,
     };
     Ok(relation)
 }
@@ -258,7 +270,7 @@ pub fn create_relation(
     identifier: Option<String>,
     relation_type: Option<RelationType>,
     custom_quoting: ResolvedQuoting,
-) -> FsResult<Arc<dyn BaseRelation>> {
+) -> FsResult<Box<dyn BaseRelation>> {
     let result = do_create_relation(
         adapter_type,
         database,
@@ -275,7 +287,7 @@ pub fn create_relation_from_node(
     adapter_type: AdapterType,
     node: &dyn InternalDbtNodeAttributes,
     _sample_config: Option<RunFilter>,
-) -> FsResult<Arc<dyn BaseRelation>> {
+) -> FsResult<Box<dyn BaseRelation>> {
     create_relation(
         adapter_type,
         node.database(),

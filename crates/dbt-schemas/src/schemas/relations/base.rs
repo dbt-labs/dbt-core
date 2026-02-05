@@ -3,6 +3,7 @@ use crate::dbt_types::RelationType;
 use crate::filter::RunFilter;
 use crate::schemas::common::ResolvedQuoting;
 
+use dbt_common::adapter::AdapterType;
 use dbt_common::constants::DBT_CTE_PREFIX;
 use dbt_common::{FsResult, current_function_name};
 use dbt_schema_store::CanonicalFqn;
@@ -142,6 +143,10 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
 
     /// as_any
     fn as_any(&self) -> &dyn Any;
+
+    /// A helper for situation where only a [&dyn BaseRelation] is available
+    /// but an Arc<dyn BaseRelation> is needed.
+    fn to_owned(&self) -> Arc<dyn BaseRelation>;
 
     /// Create a new relation from the given state and arguments
     fn create_from(&self, state: &State, args: &[Value]) -> Result<Value, MinijinjaError>;
@@ -291,7 +296,7 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
     }
 
     /// Get adapter type
-    fn adapter_type(&self) -> Option<String>;
+    fn adapter_type(&self) -> AdapterType;
 
     /// Helper: check if the relation is a table
     fn is_table(&self) -> bool {
@@ -302,6 +307,8 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
     fn is_delta(&self) -> bool {
         false
     }
+
+    fn set_is_delta(&mut self, is_delta: Option<bool>);
 
     /// Helper: check if the relation is a CTE
     fn is_cte(&self) -> bool {
@@ -852,12 +859,33 @@ mod tests {
     use super::*;
     use std::collections::BTreeMap;
 
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     struct TestRelation {
+        adapter_type: AdapterType,
         database: String,
         schema: String,
         identifier: String,
         quote_policy: Policy,
+        is_delta: Option<bool>,
+    }
+
+    impl TestRelation {
+        pub fn new(
+            adapter_type: AdapterType,
+            database: String,
+            schema: String,
+            identifier: String,
+            quote_policy: Policy,
+        ) -> Self {
+            Self {
+                adapter_type,
+                database,
+                schema,
+                identifier,
+                quote_policy,
+                is_delta: None,
+            }
+        }
     }
 
     impl BaseRelationProperties for TestRelation {
@@ -899,6 +927,10 @@ mod tests {
             self
         }
 
+        fn to_owned(&self) -> Arc<dyn BaseRelation> {
+            Arc::new(self.clone())
+        }
+
         fn database(&self) -> Value {
             Value::from(self.database.clone())
         }
@@ -915,8 +947,17 @@ mod tests {
             Ok(Value::from("test"))
         }
 
-        fn adapter_type(&self) -> Option<String> {
-            Some("test".to_string())
+        fn adapter_type(&self) -> AdapterType {
+            self.adapter_type
+        }
+
+        fn is_delta(&self) -> bool {
+            debug_assert!(self.is_delta.is_some());
+            self.is_delta.unwrap()
+        }
+
+        fn set_is_delta(&mut self, is_delta: Option<bool>) {
+            self.is_delta = is_delta;
         }
 
         fn as_value(&self) -> Value {
@@ -961,12 +1002,13 @@ mod tests {
 
     #[test]
     fn test_get_database() {
-        let relation = TestRelation {
-            database: "test_db".to_string(),
-            schema: "test_schema".to_string(),
-            identifier: "test_table".to_string(),
-            quote_policy: Policy::enabled(),
-        };
+        let relation = TestRelation::new(
+            AdapterType::Postgres,
+            "test_db".to_string(),
+            "test_schema".to_string(),
+            "test_table".to_string(),
+            Policy::enabled(),
+        );
         let mut map = BTreeMap::new();
         map.insert("key", Value::from("database"));
         let args = vec![Value::from(Kwargs::from_iter(map))];
@@ -976,12 +1018,13 @@ mod tests {
 
     #[test]
     fn test_get_schema() {
-        let relation = TestRelation {
-            database: "test_db".to_string(),
-            schema: "test_schema".to_string(),
-            identifier: "test_table".to_string(),
-            quote_policy: Policy::enabled(),
-        };
+        let relation = TestRelation::new(
+            AdapterType::Postgres,
+            "test_db".to_string(),
+            "test_schema".to_string(),
+            "test_table".to_string(),
+            Policy::enabled(),
+        );
         let mut map = BTreeMap::new();
         map.insert("key", Value::from("schema"));
         let args = vec![Value::from(Kwargs::from_iter(map))];
@@ -991,12 +1034,13 @@ mod tests {
 
     #[test]
     fn test_get_identifier() {
-        let relation = TestRelation {
-            database: "test_db".to_string(),
-            schema: "test_schema".to_string(),
-            identifier: "test_table".to_string(),
-            quote_policy: Policy::enabled(),
-        };
+        let relation = TestRelation::new(
+            AdapterType::Postgres,
+            "test_db".to_string(),
+            "test_schema".to_string(),
+            "test_table".to_string(),
+            Policy::enabled(),
+        );
         let mut map = BTreeMap::new();
         map.insert("key", Value::from("identifier"));
         let args = vec![Value::from(Kwargs::from_iter(map))];
@@ -1006,12 +1050,13 @@ mod tests {
 
     #[test]
     fn test_get_metadata() {
-        let relation = TestRelation {
-            database: "test_db".to_string(),
-            schema: "test_schema".to_string(),
-            identifier: "test_table".to_string(),
-            quote_policy: Policy::enabled(),
-        };
+        let relation = TestRelation::new(
+            AdapterType::Postgres,
+            "test_db".to_string(),
+            "test_schema".to_string(),
+            "test_table".to_string(),
+            Policy::enabled(),
+        );
         let mut map = BTreeMap::new();
         map.insert("key", Value::from("metadata"));
         let args = vec![Value::from(Kwargs::from_iter(map))];
@@ -1026,12 +1071,13 @@ mod tests {
 
     #[test]
     fn test_get_nonexistent_with_default() {
-        let relation = TestRelation {
-            database: "test_db".to_string(),
-            schema: "test_schema".to_string(),
-            identifier: "test_table".to_string(),
-            quote_policy: Policy::enabled(),
-        };
+        let relation = TestRelation::new(
+            AdapterType::Postgres,
+            "test_db".to_string(),
+            "test_schema".to_string(),
+            "test_table".to_string(),
+            Policy::enabled(),
+        );
         let mut map = BTreeMap::new();
         map.insert("key", Value::from("nonexistent"));
         map.insert("default", Value::from("default_value"));
@@ -1042,12 +1088,13 @@ mod tests {
 
     #[test]
     fn test_get_nonexistent_without_default() {
-        let relation = TestRelation {
-            database: "test_db".to_string(),
-            schema: "test_schema".to_string(),
-            identifier: "test_table".to_string(),
-            quote_policy: Policy::enabled(),
-        };
+        let relation = TestRelation::new(
+            AdapterType::Postgres,
+            "test_db".to_string(),
+            "test_schema".to_string(),
+            "test_table".to_string(),
+            Policy::enabled(),
+        );
         let mut map = BTreeMap::new();
         map.insert("key", Value::from("nonexistent"));
         let args = vec![Value::from(Kwargs::from_iter(map))];
@@ -1057,48 +1104,51 @@ mod tests {
 
     #[test]
     fn test_normalized_fqn_all_quoted() {
-        let relation = TestRelation {
-            database: "MyDB".to_string(),
-            schema: "MySchema".to_string(),
-            identifier: "MyTable".to_string(),
-            quote_policy: Policy {
+        let relation = TestRelation::new(
+            AdapterType::Postgres,
+            "MyDB".to_string(),
+            "MySchema".to_string(),
+            "MyTable".to_string(),
+            Policy {
                 database: true,
                 schema: true,
                 identifier: true,
             },
-        };
+        );
 
         assert_eq!(relation.semantic_fqn(), "\"MyDB\".\"MySchema\".\"MyTable\"");
     }
 
     #[test]
     fn test_normalized_fqn_none_quoted() {
-        let relation = TestRelation {
-            database: "MyDB".to_string(),
-            schema: "MySchema".to_string(),
-            identifier: "MyTable".to_string(),
-            quote_policy: Policy {
+        let relation = TestRelation::new(
+            AdapterType::Postgres,
+            "MyDB".to_string(),
+            "MySchema".to_string(),
+            "MyTable".to_string(),
+            Policy {
                 database: false,
                 schema: false,
                 identifier: false,
             },
-        };
+        );
 
         assert_eq!(relation.semantic_fqn(), "\"mydb\".\"myschema\".\"mytable\"");
     }
 
     #[test]
     fn test_normalized_fqn_mixed_quoted() {
-        let relation = TestRelation {
-            database: "MyDB".to_string(),
-            schema: "MySchema".to_string(),
-            identifier: "MyTable".to_string(),
-            quote_policy: Policy {
+        let relation = TestRelation::new(
+            AdapterType::Postgres,
+            "MyDB".to_string(),
+            "MySchema".to_string(),
+            "MyTable".to_string(),
+            Policy {
                 database: true,
                 schema: false,
                 identifier: true,
             },
-        };
+        );
 
         assert_eq!(relation.semantic_fqn(), "\"MyDB\".\"myschema\".\"MyTable\"");
     }

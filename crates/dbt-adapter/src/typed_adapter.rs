@@ -172,22 +172,25 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     fn cache_dropped(
         &self,
         _state: &State,
-        relation: Arc<dyn BaseRelation>,
+        relation: &Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
-        let _ = self.engine().relation_cache().evict_relation(&relation);
+        let _ = self
+            .engine()
+            .relation_cache()
+            .evict_relation(relation.as_ref());
         Ok(none_value())
     }
 
     fn cache_renamed(
         &self,
         _state: &State,
-        from_relation: Arc<dyn BaseRelation>,
-        to_relation: Arc<dyn BaseRelation>,
+        from_relation: &Arc<dyn BaseRelation>,
+        to_relation: &Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
         let _ = self
             .engine()
             .relation_cache()
-            .rename_relation(&from_relation, to_relation);
+            .rename_relation(from_relation.as_ref(), Arc::clone(to_relation));
         Ok(none_value())
     }
 
@@ -263,7 +266,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     fn get_partitions_metadata(
         &self,
         _state: &State,
-        _relation: Arc<dyn BaseRelation>,
+        _relation: &dyn BaseRelation,
     ) -> Result<Value, minijinja::Error> {
         unimplemented!("get_partitions_metadata")
     }
@@ -656,9 +659,9 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     fn create_schema(
         &self,
         state: &State,
-        relation: Arc<dyn BaseRelation>,
+        relation: &Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
-        let args = [RelationObject::new(relation).into_value()];
+        let args = [RelationObject::new(Arc::clone(relation)).into_value()];
         execute_macro(state, &args, "create_schema")?;
         Ok(none_value())
     }
@@ -666,12 +669,12 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     fn drop_schema(
         &self,
         state: &State,
-        relation: Arc<dyn BaseRelation>,
+        relation: &Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
         self.engine()
             .relation_cache()
-            .evict_schema_for_relation(&relation);
-        let args = [RelationObject::new(relation).into_value()];
+            .evict_schema_for_relation(relation.as_ref());
+        let args = [RelationObject::new(Arc::clone(relation)).into_value()];
         execute_macro(state, &args, "drop_schema")?;
         Ok(none_value())
     }
@@ -679,7 +682,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     fn valid_snapshot_target(
         &self,
         _state: &State,
-        _relation: Arc<dyn BaseRelation>,
+        _relation: &Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
         unimplemented!("valid_snapshot_target")
     }
@@ -731,7 +734,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             return replay_adapter
                 .replay_get_relation(state, ctx, conn, database, schema, identifier);
         }
-        metadata::get_relation::get_relation(
+        let relation_opt = metadata::get_relation::get_relation(
             self.as_typed_base_adapter(),
             state,
             ctx,
@@ -739,7 +742,9 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             database,
             schema,
             identifier,
-        )
+        )?;
+        let relation = relation_opt.map(|relation| -> Arc<dyn BaseRelation> { relation.into() });
+        Ok(relation)
     }
 
     /// Get a catalog relation, which in Core is a serialized type.
@@ -758,7 +763,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         &self,
         state: &State,
         conn: &'_ mut dyn Connection,
-        relation: Arc<dyn BaseRelation>,
+        relation: &Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
         match self.adapter_type() {
             AdapterType::Snowflake => {
@@ -831,7 +836,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     fn drop_relation(
         &self,
         state: &State,
-        relation: Arc<dyn BaseRelation>,
+        relation: &Arc<dyn BaseRelation>,
     ) -> AdapterResult<Value> {
         if relation.relation_type().is_none() {
             return Err(AdapterError::new(
@@ -839,7 +844,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
                 "relation has no type",
             ));
         }
-        let args = vec![RelationObject::new(relation).as_value()];
+        let args = vec![RelationObject::new(Arc::clone(relation)).as_value()];
         execute_macro(state, &args, "drop_relation")?;
         Ok(none_value())
     }
@@ -859,10 +864,12 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         }
 
         let information_schema = InformationSchema {
+            adapter_type: self.adapter_type(),
             database: Some(database.to_string()),
             schema: "INFORMATION_SCHEMA".to_string(),
             identifier: None,
             location: None,
+            is_delta: None,
         };
 
         let (package_name, macro_name) = self.check_schema_exists_macro(state, &[])?;
@@ -996,8 +1003,8 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     fn rename_relation(
         &self,
         state: &State,
-        from_relation: Arc<dyn BaseRelation>,
-        to_relation: Arc<dyn BaseRelation>,
+        from_relation: &Arc<dyn BaseRelation>,
+        to_relation: &Arc<dyn BaseRelation>,
     ) -> AdapterResult<Value> {
         if let Some(replay_adapter) = self.as_replay() {
             return replay_adapter.replay_rename_relation(state, from_relation, to_relation);
@@ -1005,8 +1012,8 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
 
         // Execute the macro with the relation objects
         let args = vec![
-            RelationObject::new(from_relation).as_value(),
-            RelationObject::new(to_relation).as_value(),
+            RelationObject::new(Arc::clone(from_relation)).as_value(),
+            RelationObject::new(Arc::clone(to_relation)).as_value(),
         ];
 
         let _empty_retval = execute_macro(state, &args, "rename_relation")?;
@@ -1017,12 +1024,12 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     fn get_missing_columns(
         &self,
         state: &State,
-        source_relation: Arc<dyn BaseRelation>,
-        target_relation: Arc<dyn BaseRelation>,
+        source_relation: &Arc<dyn BaseRelation>,
+        target_relation: &Arc<dyn BaseRelation>,
     ) -> AdapterResult<Vec<Column>> {
         // Get columns for both relations
-        let source_cols = self.get_columns_in_relation(state, source_relation)?;
-        let target_cols = self.get_columns_in_relation(state, target_relation)?;
+        let source_cols = self.get_columns_in_relation(state, source_relation.as_ref())?;
+        let target_cols = self.get_columns_in_relation(state, target_relation.as_ref())?;
 
         let source_cols_map: BTreeMap<_, _> = source_cols
             .into_iter()
@@ -1047,7 +1054,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     fn get_columns_in_relation(
         &self,
         state: &State,
-        relation: Arc<dyn BaseRelation>,
+        relation: &dyn BaseRelation,
     ) -> AdapterResult<Vec<Column>> {
         // Mock adapter: return fake column without executing jinja macro
         if self.engine().is_mock() {
@@ -1064,7 +1071,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         let macro_execution_result: AdapterResult<Value> = match self.adapter_type() {
             AdapterType::Databricks => execute_macro_with_package(
                 state,
-                &[RelationObject::new(relation).as_value()],
+                &[RelationObject::new(relation.to_owned()).as_value()],
                 "get_columns_comments",
                 "dbt_databricks",
             ),
@@ -1074,7 +1081,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             | AdapterType::Sidecar
             | AdapterType::Redshift => execute_macro(
                 state,
-                &[RelationObject::new(relation).as_value()],
+                &[RelationObject::new(relation.to_owned()).as_value()],
                 "get_columns_in_relation",
             ),
             // TODO(serramatutu): get back to this later
@@ -1184,7 +1191,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     fn truncate_relation(
         &self,
         state: &State,
-        relation: Arc<dyn BaseRelation>,
+        relation: &Arc<dyn BaseRelation>,
     ) -> AdapterResult<Value> {
         if let Some(replay_adapter) = self.as_replay() {
             return replay_adapter.replay_truncate_relation(state, relation);
@@ -1207,7 +1214,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             | AdapterType::Sidecar
             | AdapterType::Spark => {
                 // downcast relation
-                let relation = RelationObject::new(relation).as_value();
+                let relation = RelationObject::new(Arc::clone(relation)).as_value();
                 execute_macro(state, &[relation], "truncate_relation")?;
                 Ok(none_value())
             }
@@ -1303,8 +1310,8 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     fn expand_target_column_types(
         &self,
         state: &State,
-        from_relation: Arc<dyn BaseRelation>,
-        to_relation: Arc<dyn BaseRelation>,
+        from_relation: &Arc<dyn BaseRelation>,
+        to_relation: &Arc<dyn BaseRelation>,
     ) -> AdapterResult<Value> {
         if let Some(replay_adapter) = self.as_replay() {
             return replay_adapter.replay_expand_target_column_types(
@@ -1318,8 +1325,8 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             // https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L260-L261
             return Ok(none_value());
         }
-        let from_columns = self.get_columns_in_relation(state, from_relation)?;
-        let to_columns = self.get_columns_in_relation(state, to_relation.clone())?;
+        let from_columns = self.get_columns_in_relation(state, from_relation.as_ref())?;
+        let to_columns = self.get_columns_in_relation(state, to_relation.as_ref())?;
 
         // Create HashMaps for efficient lookup
         let from_columns_map = from_columns
@@ -1369,7 +1376,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         &self,
         state: &State,
         conn: &'_ mut dyn Connection,
-        relation: Arc<dyn BaseRelation>,
+        relation: &Arc<dyn BaseRelation>,
         columns: IndexMap<String, DbtColumn>,
     ) -> AdapterResult<Value> {
         match self.adapter_type() {
@@ -1796,7 +1803,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     fn get_bq_table(
         &self,
         _state: &State,
-        _relation: Arc<dyn BaseRelation>,
+        _relation: &Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
         unimplemented!("get_bq_table")
     }
@@ -1806,7 +1813,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         &self,
         state: &State,
         conn: &'_ mut dyn Connection,
-        entity: Arc<dyn BaseRelation>,
+        entity: &Arc<dyn BaseRelation>,
         entity_type: &str,
         // _role is not used since this method only supports view
         // and googleapi doesn't require role if the entity is view, it'll be default to READ always
@@ -1880,7 +1887,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         &self,
         state: &State,
         conn: &'_ mut dyn Connection,
-        relation: Arc<dyn BaseRelation>,
+        relation: &dyn BaseRelation,
     ) -> AdapterResult<Option<String>> {
         match self.adapter_type() {
             AdapterType::Bigquery => {
@@ -2047,7 +2054,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         &self,
         state: &State,
         conn: &'_ mut dyn Connection,
-        relation: Arc<dyn BaseRelation>,
+        relation: &Arc<dyn BaseRelation>,
         columns: Value,
     ) -> AdapterResult<Value> {
         match self.adapter_type() {
@@ -2285,7 +2292,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     fn is_replaceable(
         &self,
         conn: &'_ mut dyn Connection,
-        relation: Arc<dyn BaseRelation>,
+        relation: &Arc<dyn BaseRelation>,
         local_partition_by: Option<BigqueryPartitionConfig>,
         local_cluster_by: Option<ClusterConfig>,
         state: Option<&State>,
@@ -2890,7 +2897,7 @@ prevent unnecessary latency for other users."#,
         &self,
         state: &State,
         conn: &mut dyn Connection,
-        relation: Arc<dyn BaseRelation>,
+        relation: &Arc<dyn BaseRelation>,
     ) -> AdapterResult<RelationConfig> {
         use crate::relation::databricks::config::relation_types;
 
@@ -2946,7 +2953,7 @@ prevent unnecessary latency for other users."#,
     fn get_relations_without_caching(
         &self,
         _state: &State,
-        _relation: Arc<dyn BaseRelation>,
+        _relation: &Arc<dyn BaseRelation>,
     ) -> Result<Value, minijinja::Error> {
         unimplemented!("get_relations_without_caching")
     }
@@ -2997,8 +3004,8 @@ prevent unnecessary latency for other users."#,
         &self,
         state: &State,
         conn: &'_ mut dyn Connection,
-        source: Arc<dyn BaseRelation>,
-        dest: Arc<dyn BaseRelation>,
+        source: &Arc<dyn BaseRelation>,
+        dest: &Arc<dyn BaseRelation>,
         materialization: String,
     ) -> AdapterResult<()> {
         match self.adapter_type() {
@@ -3070,7 +3077,7 @@ prevent unnecessary latency for other users."#,
     fn describe_relation(
         &self,
         conn: &'_ mut dyn Connection,
-        relation: Arc<dyn BaseRelation>,
+        relation: &Arc<dyn BaseRelation>,
         state: Option<&State>,
     ) -> AdapterResult<Option<Value>> {
         match self.adapter_type() {
@@ -3131,11 +3138,11 @@ prevent unnecessary latency for other users."#,
     fn assert_valid_snapshot_target_given_strategy(
         &self,
         state: &State,
-        relation: Arc<dyn BaseRelation>,
+        relation: &Arc<dyn BaseRelation>,
         column_names: Option<BTreeMap<String, String>>,
         strategy: Arc<SnapshotStrategy>,
     ) -> AdapterResult<()> {
-        let columns = self.get_columns_in_relation(state, relation)?;
+        let columns = self.get_columns_in_relation(state, relation.as_ref())?;
         let names_in_relation: Vec<String> =
             columns.iter().map(|c| c.name().to_lowercase()).collect();
 
@@ -3391,7 +3398,7 @@ pub trait ReplayAdapter: TypedBaseAdapter {
     fn replay_truncate_relation(
         &self,
         state: &State,
-        relation: Arc<dyn BaseRelation>,
+        relation: &Arc<dyn BaseRelation>,
     ) -> AdapterResult<Value>;
 
     fn replay_quote(&self, state: &State, identifier: &str) -> AdapterResult<String>;
@@ -3415,8 +3422,8 @@ pub trait ReplayAdapter: TypedBaseAdapter {
     fn replay_rename_relation(
         &self,
         state: &State,
-        from_relation: Arc<dyn BaseRelation>,
-        to_relation: Arc<dyn BaseRelation>,
+        from_relation: &Arc<dyn BaseRelation>,
+        to_relation: &Arc<dyn BaseRelation>,
     ) -> AdapterResult<Value>;
 
     fn replay_get_column_schema_from_query(
@@ -3429,7 +3436,7 @@ pub trait ReplayAdapter: TypedBaseAdapter {
     fn replay_get_columns_in_relation(
         &self,
         state: &State,
-        relation: Arc<dyn BaseRelation>,
+        relation: &Arc<dyn BaseRelation>,
         cache_result: Option<Vec<Column>>,
     ) -> Result<Value, minijinja::Error>;
 
@@ -3457,8 +3464,8 @@ pub trait ReplayAdapter: TypedBaseAdapter {
     fn replay_expand_target_column_types(
         &self,
         state: &State,
-        _from_relation: Arc<dyn BaseRelation>,
-        _to_relation: Arc<dyn BaseRelation>,
+        _from_relation: &Arc<dyn BaseRelation>,
+        _to_relation: &Arc<dyn BaseRelation>,
     ) -> AdapterResult<Value>;
 
     fn replay_is_replaceable(&self, state: &State) -> AdapterResult<bool>;

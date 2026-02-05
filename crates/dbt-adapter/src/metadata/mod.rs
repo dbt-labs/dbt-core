@@ -71,8 +71,8 @@ impl fmt::Display for CatalogAndSchema {
     }
 }
 
-impl From<&Arc<dyn BaseRelation>> for CatalogAndSchema {
-    fn from(relation: &Arc<dyn BaseRelation>) -> Self {
+impl From<&dyn BaseRelation> for CatalogAndSchema {
+    fn from(relation: &dyn BaseRelation) -> Self {
         let resolved_catalog = relation.database_as_resolved_str().unwrap_or_default();
         let rendered_catalog = if resolved_catalog.is_empty() {
             "".to_string()
@@ -98,6 +98,18 @@ impl From<&Arc<dyn BaseRelation>> for CatalogAndSchema {
             resolved_catalog,
             resolved_schema,
         }
+    }
+}
+
+impl From<&Box<dyn BaseRelation>> for CatalogAndSchema {
+    fn from(relation: &Box<dyn BaseRelation>) -> Self {
+        CatalogAndSchema::from(relation.as_ref())
+    }
+}
+
+impl From<&Arc<dyn BaseRelation>> for CatalogAndSchema {
+    fn from(relation: &Arc<dyn BaseRelation>) -> Self {
+        CatalogAndSchema::from(relation.as_ref())
     }
 }
 
@@ -340,16 +352,24 @@ pub fn find_matching_relation(
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 struct MockBaseRelation {
+    adapter_type: AdapterType,
     database: String,
     schema: String,
     identifier: String,
     quote_policy: ResolvedQuoting,
+    is_delta: Option<bool>,
 }
 
 impl MockBaseRelation {
-    #[allow(dead_code)]
-    fn new(database: String, schema: String, identifier: String) -> Self {
+    #[cfg(test)]
+    pub fn new(
+        adapter_type: AdapterType,
+        database: String,
+        schema: String,
+        identifier: String,
+    ) -> Self {
         Self {
+            adapter_type,
             database,
             schema,
             identifier,
@@ -358,6 +378,7 @@ impl MockBaseRelation {
                 schema: true,
                 identifier: true,
             },
+            is_delta: None,
         }
     }
 }
@@ -409,8 +430,20 @@ impl BaseRelation for MockBaseRelation {
         self
     }
 
+    fn to_owned(&self) -> Arc<dyn BaseRelation> {
+        Arc::new(self.clone())
+    }
+
     fn create_from(&self, _state: &State, _args: &[Value]) -> Result<Value, minijinja::Error> {
         Ok(Value::from("test"))
+    }
+
+    fn is_delta(&self) -> bool {
+        self.is_delta.unwrap_or(false)
+    }
+
+    fn set_is_delta(&mut self, is_delta: Option<bool>) {
+        self.is_delta = is_delta;
     }
 
     fn database(&self) -> Value {
@@ -425,8 +458,8 @@ impl BaseRelation for MockBaseRelation {
         Value::from(self.identifier.clone())
     }
 
-    fn adapter_type(&self) -> Option<String> {
-        Some("test".to_string())
+    fn adapter_type(&self) -> AdapterType {
+        self.adapter_type
     }
 
     fn as_value(&self) -> Value {
@@ -502,16 +535,19 @@ mod tests {
     fn test_build_relation_clauses() {
         let relations = vec![
             Arc::new(MockBaseRelation::new(
+                AdapterType::Snowflake,
                 "db1".to_string(),
                 "schema1".to_string(),
                 "table1".to_string(),
             )) as Arc<dyn BaseRelation>,
             Arc::new(MockBaseRelation::new(
+                AdapterType::Snowflake,
                 "db1".to_string(),
                 "schema2".to_string(),
                 "table2".to_string(),
             )) as Arc<dyn BaseRelation>,
             Arc::new(MockBaseRelation::new(
+                AdapterType::Snowflake,
                 "db2".to_string(),
                 "schema1".to_string(),
                 "table3".to_string(),
@@ -543,6 +579,7 @@ mod tests {
     #[test]
     fn test_build_relation_clauses_invalid_fqn() {
         let relations = vec![Arc::new(MockBaseRelation::new(
+            AdapterType::Snowflake,
             "invalid.fqn".to_string(), // This will cause an error as it contains a dot
             "schema1".to_string(),
             "table1".to_string(),
@@ -557,11 +594,13 @@ mod tests {
     fn test_find_matching_relation() {
         let relations = vec![
             Arc::new(MockBaseRelation::new(
+                AdapterType::Snowflake,
                 "db1".to_string(),
                 "schema1".to_string(),
                 "table1".to_string(),
             )) as Arc<dyn BaseRelation>,
             Arc::new(MockBaseRelation::new(
+                AdapterType::Snowflake,
                 "db1".to_string(),
                 "schema2".to_string(),
                 "table2".to_string(),

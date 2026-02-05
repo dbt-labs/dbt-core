@@ -5,6 +5,7 @@ use crate::relation::snowflake::dynamic_table::{
 };
 use crate::relation::{RelationObject, StaticBaseRelation};
 
+use dbt_common::adapter::AdapterType;
 use dbt_common::{ErrorCode, FsResult, current_function_name, fs_err};
 use dbt_frontend_common::ident::Identifier;
 use dbt_schema_store::CanonicalFqn;
@@ -188,9 +189,17 @@ impl BaseRelation for SnowflakeRelation {
         self
     }
 
+    fn to_owned(&self) -> Arc<dyn BaseRelation> {
+        Arc::new(self.clone())
+    }
+
     /// Creates a new Snowflake relation from a state and a list of values
     fn create_from(&self, _: &State, _: &[Value]) -> Result<Value, minijinja::Error> {
         unimplemented!("Snowflake relation creation from Jinja values")
+    }
+
+    fn set_is_delta(&mut self, _is_delta: Option<bool>) {
+        // no-op
     }
 
     /// Returns the database name
@@ -287,8 +296,8 @@ impl BaseRelation for SnowflakeRelation {
         RelationObject::new(Arc::new(self.clone())).into_value()
     }
 
-    fn adapter_type(&self) -> Option<String> {
-        Some("snowflake".to_string())
+    fn adapter_type(&self) -> AdapterType {
+        AdapterType::Snowflake
     }
 
     // https://github.com/dbt-labs/dbt-adapters/blob/2a94cc75dba1f98fa5caff1f396f5af7ee444598/dbt-snowflake/src/dbt/adapters/snowflake/relation.py#L223
@@ -480,7 +489,8 @@ impl BaseRelation for SnowflakeRelation {
         database: Option<String>,
         view_name: Option<&str>,
     ) -> Result<Value, minijinja::Error> {
-        let result = InformationSchema::try_from_relation(database, view_name)?;
+        let result =
+            InformationSchema::try_from_relation(self.adapter_type(), database, view_name)?;
         Ok(RelationObject::new(Arc::new(result)).into_value())
     }
 }

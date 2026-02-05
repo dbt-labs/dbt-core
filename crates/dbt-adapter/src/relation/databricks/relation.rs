@@ -1,6 +1,6 @@
-use crate::AdapterType;
 use crate::relation::{RelationObject, StaticBaseRelation};
 
+use dbt_common::adapter::AdapterType;
 use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_frontend_common::ident::Identifier;
 use dbt_schema_store::CanonicalFqn;
@@ -241,6 +241,10 @@ impl BaseRelation for DatabricksRelation {
         self
     }
 
+    fn to_owned(&self) -> Arc<dyn BaseRelation> {
+        Arc::new(self.clone())
+    }
+
     fn create_from(&self, _: &State, _: &[Value]) -> Result<Value, minijinja::Error> {
         unimplemented!("Databricks relation creation from Jinja values")
     }
@@ -265,8 +269,8 @@ impl BaseRelation for DatabricksRelation {
         RelationObject::new(Arc::new(self.clone())).into_value()
     }
 
-    fn adapter_type(&self) -> Option<String> {
-        Some("databricks".to_string())
+    fn adapter_type(&self) -> AdapterType {
+        AdapterType::Databricks
     }
 
     fn include_inner(&self, policy: Policy) -> Result<Value, minijinja::Error> {
@@ -297,6 +301,10 @@ impl BaseRelation for DatabricksRelation {
 
     fn is_delta(&self) -> bool {
         self.is_delta
+    }
+
+    fn set_is_delta(&mut self, is_delta: Option<bool>) {
+        self.is_delta = is_delta.unwrap_or(self.is_delta);
     }
 
     fn is_materialized_view(&self) -> bool {

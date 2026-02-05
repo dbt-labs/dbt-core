@@ -199,7 +199,7 @@ impl TimeMachineSerializable for RelationObject {
         )
         .ok()?;
 
-        Some(RelationObject::new(relation).into_value())
+        Some(RelationObject::new(relation.into()).into_value())
     }
 }
 
@@ -399,7 +399,7 @@ mod tests {
         )
         .unwrap();
 
-        let original = RelationObject::new(relation);
+        let original = RelationObject::from(relation);
 
         let json = original.to_time_machine_json();
 
@@ -428,7 +428,7 @@ mod tests {
         assert!(restored.quote_policy().identifier);
 
         // Verify adapter type is also restored from serialized data
-        assert_eq!(restored.adapter_type(), Some("snowflake".to_string()));
+        assert!(matches!(restored.adapter_type(), AdapterType::Snowflake));
     }
 
     #[test]

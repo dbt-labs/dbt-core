@@ -881,7 +881,7 @@ fn build_schemas_from_information_schema(
                     return Ok(result);
                 }
             };
-            current_relation = Some(relation);
+            current_relation = Some(relation.into());
         }
 
         let name = column_names.value(i);

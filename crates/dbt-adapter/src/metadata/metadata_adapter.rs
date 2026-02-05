@@ -115,7 +115,7 @@ pub trait MetadataAdapter: Send + Sync {
                     node.quoting(),
                 )
                 .expect("Failed to create relations from nodes");
-                relations.push(relation);
+                relations.push(relation.into());
             }
         }
 
@@ -130,7 +130,7 @@ pub trait MetadataAdapter: Send + Sync {
                     node.quoting(),
                 )
                 .expect("Failed to create relations from nodes");
-                relations.push(relation);
+                relations.push(relation.into());
             }
         }
 
@@ -145,7 +145,7 @@ pub trait MetadataAdapter: Send + Sync {
                     node.quoting(),
                 )
                 .expect("Failed to create relations from nodes");
-                relations.push(relation);
+                relations.push(relation.into());
             }
         }
 
@@ -160,7 +160,7 @@ pub trait MetadataAdapter: Send + Sync {
                     node.quoting(),
                 )
                 .expect("Failed to create relations from nodes");
-                relations.push(relation);
+                relations.push(relation.into());
             }
         }
 
