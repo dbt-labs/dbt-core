@@ -236,8 +236,20 @@ pub struct ProjectModelConfig {
     pub batch_id: Option<String>,
     #[serde(rename = "+dataproc_cluster_name")]
     pub dataproc_cluster_name: Option<String>,
-    #[serde(rename = "+notebook_template_id")]
-    pub notebook_template_id: Option<String>,
+    #[serde(
+        default,
+        rename = "+notebook_template_id",
+        deserialize_with = "u64_or_string_u64"
+    )]
+    pub notebook_template_id: Option<u64>,
+    #[serde(
+        default,
+        rename = "+enable_list_inference",
+        deserialize_with = "bool_or_string_bool"
+    )]
+    pub enable_list_inference: Option<bool>,
+    #[serde(rename = "+intermediate_format")]
+    pub intermediate_format: Option<String>,
     #[serde(rename = "+merge_exclude_columns")]
     pub merge_exclude_columns: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+merge_update_columns")]
@@ -614,6 +626,8 @@ impl From<ProjectModelConfig> for ModelConfig {
                 batch_id: config.batch_id,
                 dataproc_cluster_name: config.dataproc_cluster_name,
                 notebook_template_id: config.notebook_template_id,
+                enable_list_inference: config.enable_list_inference,
+                intermediate_format: config.intermediate_format,
 
                 file_format: config.file_format,
                 catalog_name: config.catalog_name,
@@ -741,6 +755,8 @@ impl From<ModelConfig> for ProjectModelConfig {
             batch_id: config.__warehouse_specific_config__.batch_id,
             dataproc_cluster_name: config.__warehouse_specific_config__.dataproc_cluster_name,
             notebook_template_id: config.__warehouse_specific_config__.notebook_template_id,
+            enable_list_inference: config.__warehouse_specific_config__.enable_list_inference,
+            intermediate_format: config.__warehouse_specific_config__.intermediate_format,
             copy_grants: config.__warehouse_specific_config__.copy_grants,
             secure: config.__warehouse_specific_config__.secure,
             partition_by: config.__warehouse_specific_config__.partition_by,

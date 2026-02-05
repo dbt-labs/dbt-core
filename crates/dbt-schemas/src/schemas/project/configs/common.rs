@@ -293,7 +293,10 @@ pub struct WarehouseSpecificNodeConfig {
     pub timeout: Option<u64>,
     pub batch_id: Option<String>,
     pub dataproc_cluster_name: Option<String>,
-    pub notebook_template_id: Option<String>,
+    #[serde(default, deserialize_with = "u64_or_string_u64")]
+    pub notebook_template_id: Option<u64>,
+    pub intermediate_format: Option<String>,
+    pub enable_list_inference: Option<bool>,
 
     // Used by both Databricks and Bigquery
     pub file_format: Option<String>,
@@ -408,6 +411,8 @@ impl DefaultTo<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConfig {
             batch_id,
             dataproc_cluster_name,
             notebook_template_id,
+            enable_list_inference,
+            intermediate_format,
 
             // Databricks
             file_format,
@@ -523,6 +528,8 @@ impl DefaultTo<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConfig {
                 batch_id,
                 dataproc_cluster_name,
                 notebook_template_id,
+                enable_list_inference,
+                intermediate_format,
                 // Snowflake
                 table_tag,
                 row_access_policy,

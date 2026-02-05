@@ -548,6 +548,8 @@ impl From<ProjectSnapshotConfig> for SnapshotConfig {
                 batch_id: None,
                 dataproc_cluster_name: None,
                 notebook_template_id: None,
+                enable_list_inference: None,
+                intermediate_format: None,
 
                 file_format: config.file_format,
                 catalog_name: config.catalog_name,
