@@ -21,7 +21,7 @@ use crate::syntax::SyntaxConfig;
 use crate::utils::AutoEscape;
 use crate::value::{self, Value};
 use crate::vm::listeners::TypecheckingEventListener;
-use crate::vm::typemeta::{DependencyAnalyzer, TypeChecker};
+use crate::vm::typemeta::TypeChecker;
 use crate::vm::{prepare_blocks, Context, State, Vm};
 use crate::Type;
 
@@ -152,35 +152,6 @@ impl<'env, 'source> Template<'env, 'source> {
                 crate::Error::new(
                     crate::error::ErrorKind::InvalidOperation,
                     format!("Type checking failed: {err}"),
-                )
-            })
-    }
-
-    /// Extracts macro/function call dependencies using a CFG-based analyzer with a tiny abstract
-    /// domain (namespaces + unknown).
-    ///
-    /// This emits dependencies via `TypecheckingEventListener::on_function_call` and intentionally
-    /// does not perform full typechecking.
-    #[allow(clippy::too_many_arguments)]
-    pub fn analyze_dependencies(
-        &self,
-        funcsigns: Arc<FunctionRegistry>,
-        builtins: Arc<DashMap<String, Type>>,
-        listener: Rc<dyn TypecheckingEventListener>,
-        typecheck_resolved_context: BTreeMap<String, Value>,
-    ) -> Result<(), crate::Error> {
-        let instructions = &self.compiled.instructions.instructions;
-        // build CFG
-        let cfg = build_cfg(instructions);
-        // create a dependency analyzer
-        let mut analyzer = DependencyAnalyzer::new(instructions, cfg, funcsigns, builtins);
-
-        analyzer
-            .check(listener, typecheck_resolved_context)
-            .map_err(|err| {
-                crate::Error::new(
-                    crate::error::ErrorKind::InvalidOperation,
-                    format!("Dependency analysis failed: {err}"),
                 )
             })
     }

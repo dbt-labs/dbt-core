@@ -91,7 +91,7 @@ impl FunctionType for ListAppendFunctionType {
         args: &[Type],
         listener: Rc<dyn TypecheckingEventListener>,
     ) -> Result<Type, crate::Error> {
-        if !args[0].is_subtype_of(self.element.as_ref()) {
+        if !args[0].is_compatible_with(self.element.as_ref()) {
             listener.warn(&format!(
                 "list.append expected same type with list element {}, got {}",
                 self.element, args[0]
@@ -128,7 +128,7 @@ impl FunctionType for ListExtendFunctionType {
         args: &[Type],
         listener: Rc<dyn TypecheckingEventListener>,
     ) -> Result<Type, crate::Error> {
-        if !args[0].is_subtype_of(&Type::List(ListType::new(*self.element.clone()))) {
+        if !args[0].is_compatible_with(&Type::List(ListType::new(*self.element.clone()))) {
             listener.warn(&format!(
                 "list.extend expected same type with list {}, got {}",
                 self.element, args[0]

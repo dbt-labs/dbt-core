@@ -1,7 +1,0 @@
-kind: Fixes
-body: Replace Jinja type checking by simple dependency analysis to reduce memory pressure and run-time
-time: 2026-02-03T22:49:14.226099-08:00
-custom:
-    author: ""
-    issue: ""
-    project: dbt-fusion

@@ -298,7 +298,7 @@ where
         && let Ok(unique_id) = model.get_attr("unique_id")
         && let Some(unique_id) = unique_id.as_str()
     {
-        let _ = dbt_jinja_utils::typecheck::analyze_dependencies(
+        let _ = dbt_jinja_utils::typecheck::typecheck(
             &args.io,
             jinja_env.clone(),
             &HashMap::new(),
@@ -1007,7 +1007,7 @@ pub fn collect_hook_dependencies_from_config<T: DefaultTo<T> + 'static>(
             && let Ok(unique_id) = model.get_attr("unique_id")
             && let Some(unique_id) = unique_id.as_str()
         {
-            let _ = dbt_jinja_utils::typecheck::analyze_dependencies(
+            let _ = dbt_jinja_utils::typecheck::typecheck(
                 &io,
                 jinja_env.clone(),
                 &HashMap::new(),

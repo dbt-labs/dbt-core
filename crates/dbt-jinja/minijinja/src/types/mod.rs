@@ -134,6 +134,24 @@ impl fmt::Debug for Type {
 impl crate::value::Object for Type {}
 
 impl Type {
+    /// Compatibility check used for typechecking (permissive).
+    ///
+    /// This is intentionally *not* the same as [`Type::is_subtype_of`]. The subtype relation is
+    /// used as a lattice order for dataflow joins and must remain a partial order for fixed-point
+    /// convergence.
+    ///
+    /// Compatibility is used at call-sites (argument/return validation) where unknowns should
+    /// generally be allowed to pass to avoid false positives.
+    pub fn is_compatible_with(&self, expected: &Type) -> bool {
+        match (self, expected) {
+            // If either side is unknown, accept.
+            (Type::Any { .. }, _) | (_, Type::Any { .. }) => true,
+
+            // For everything else, fall back to the lattice order.
+            _ => self.is_subtype_of(expected),
+        }
+    }
+
     /// Get the attribute of the type
     ///
     /// # Arguments
@@ -289,10 +307,23 @@ impl Type {
     /// ```
     pub fn is_subtype_of(&self, other: &Type) -> bool {
         match (self, other) {
-            (Type::Any { hard: true }, _) => true,
+            // ---- Lattice order (precision) ----
+            //
+            // `Any(hard=true)` is the *top* type: all types flow into it, but it does not flow
+            // into other types.
+            //
+            // `Any(hard=false)` ("soft any") represents unknown due to modeling gaps; it is
+            // intentionally *not* top (to preserve information via unions), but it can flow into
+            // `Any(hard=true)`.
+            (Type::Any { hard: true }, Type::Any { hard: true }) => true,
+            (Type::Any { hard: true }, _) => false,
 
-            // All types are subtypes of Any
+            // Everything is a subtype of hard Any (top).
             (_, Type::Any { hard: true }) => true,
+
+            // Soft Any only subtypes itself (the hard Any case is already handled above).
+            (Type::Any { hard: false }, Type::Any { hard: false }) => true,
+            (_, Type::Any { hard: false }) => matches!(self, Type::Any { hard: false }),
 
             // String types are compatible with each other
             (Type::String(_), Type::String(_)) => true,
@@ -896,3 +927,48 @@ impl Ord for DynObject {
 
 unsafe impl Send for DynObject {}
 unsafe impl Sync for DynObject {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn any_true_is_top_only_not_bottom() {
+        let any_hard = Type::Any { hard: true };
+        let s = Type::String(None);
+
+        // Hard Any should be the TOP type in the lattice order: everything flows into it.
+        assert!(s.is_subtype_of(&any_hard));
+
+        // But it should not flow into concrete types (otherwise the subtype relation is no longer
+        // a partial order and fixed-point joins can become non-monotone).
+        assert!(!any_hard.is_subtype_of(&s));
+        assert!(any_hard.is_subtype_of(&any_hard));
+    }
+
+    #[test]
+    fn union_join_is_upper_bound_for_problematic_witness() {
+        // This is a distilled witness from the fixed-point nontermination investigation:
+        //
+        // dst_before = List(Any(true))
+        // src        = Union(List(String), Any(false))
+        //
+        // A correct join must produce an upper bound of both inputs under `is_subtype_of`.
+        let dst_before = Type::List(ListType::new(Type::Any { hard: true }));
+        let src = Type::Union(UnionType::new([
+            Type::List(ListType::new(Type::String(None))),
+            Type::Any { hard: false },
+        ]));
+
+        let joined = dst_before.union(&src);
+
+        assert!(
+            dst_before.is_subtype_of(&joined),
+            "join must be an upper bound of dst_before; dst_before={dst_before:?} joined={joined:?}"
+        );
+        assert!(
+            src.is_subtype_of(&joined),
+            "join must be an upper bound of src; src={src:?} joined={joined:?}"
+        );
+    }
+}

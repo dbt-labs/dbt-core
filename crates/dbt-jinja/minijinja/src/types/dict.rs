@@ -125,7 +125,7 @@ impl FunctionType for DictGetFunction {
         args: &[Type],
         listener: Rc<dyn TypecheckingEventListener>,
     ) -> Result<Type, crate::Error> {
-        if !args[0].is_subtype_of(self.key.as_ref()) {
+        if !args[0].is_compatible_with(self.key.as_ref()) {
             listener.warn(&format!(
                 "dict.get() expected key type {self:?}, got {:?}",
                 args[0]

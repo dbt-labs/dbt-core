@@ -180,7 +180,7 @@ impl FunctionType for LambdaType {
             ));
         }
         for (arg, actual_arg) in self.args.iter().zip(actual_arguments.iter()) {
-            if !actual_arg.is_subtype_of(arg) {
+            if !actual_arg.is_compatible_with(arg) {
                 listener.warn(&format!("Expected {arg:?}, got {actual_arg:?}"));
             }
         }
@@ -264,7 +264,7 @@ impl FunctionType for UserDefinedFunctionType {
             ));
         } else {
             for (i, (expected, actual)) in self.args.iter().zip(actual_arguments).enumerate() {
-                if !actual.is_subtype_of(&expected.type_) {
+                if !actual.is_compatible_with(&expected.type_) {
                     listener.warn(&format!(
                         "Argument type mismatch: expected {:?}, got {actual:?}, at index {i}",
                         expected.type_,
@@ -458,7 +458,7 @@ impl FunctionType for TryOrCompilerErrorFunctionType {
             listener.warn("Expected at least 3 arguments for try_or_compiler_error function");
             return Ok(Type::Any { hard: false });
         }
-        if !args[0].is_subtype_of(&Type::String(None)) {
+        if !args[0].is_compatible_with(&Type::String(None)) {
             listener.warn("Expected a string argument for try_or_compiler_error function");
             return Ok(Type::Any { hard: false });
         }
@@ -471,7 +471,7 @@ impl FunctionType for TryOrCompilerErrorFunctionType {
             ));
             return Ok(Type::Any { hard: false });
         }
-        if !args[2].is_subtype_of(&Type::String(None)) {
+        if !args[2].is_compatible_with(&Type::String(None)) {
             // It is not possible to resolve the arguments of the function,
             // because the function args are not known.
             // let rest_args = args[2..].to_vec();
@@ -510,21 +510,21 @@ impl FunctionType for SelectAttrFunctionType {
         args: &[Type],
         listener: Rc<dyn TypecheckingEventListener>,
     ) -> Result<Type, crate::Error> {
-        if !args[0].is_subtype_of(&Type::List(ListType::new(Type::Any { hard: true }))) {
+        if !args[0].is_compatible_with(&Type::List(ListType::new(Type::Any { hard: true }))) {
             listener.warn(&format!(
                 "Expected a list argument for selectattr function, got {:?}",
                 args[0]
             ));
             return Ok(Type::Any { hard: false });
         }
-        if !args[1].is_subtype_of(&Type::String(None)) {
+        if !args[1].is_compatible_with(&Type::String(None)) {
             listener.warn(&format!(
                 "Expected a string argument for selectattr function, got {:?}",
                 args[1]
             ));
             return Ok(Type::Any { hard: false });
         }
-        if !args[2].is_subtype_of(&Type::String(None)) {
+        if !args[2].is_compatible_with(&Type::String(None)) {
             listener.warn(&format!(
                 "Expected a string argument for selectattr function, got {:?}",
                 args[2]
@@ -561,21 +561,21 @@ impl FunctionType for RejectAttrFunctionType {
         args: &[Type],
         listener: Rc<dyn TypecheckingEventListener>,
     ) -> Result<Type, crate::Error> {
-        if !args[0].is_subtype_of(&Type::List(ListType::new(Type::Any { hard: true }))) {
+        if !args[0].is_compatible_with(&Type::List(ListType::new(Type::Any { hard: true }))) {
             listener.warn(&format!(
                 "Expected a list argument for rejectattr function, got {:?}",
                 args[0]
             ));
             return Ok(Type::Any { hard: false });
         }
-        if !args[1].is_subtype_of(&Type::String(None)) {
+        if !args[1].is_compatible_with(&Type::String(None)) {
             listener.warn(&format!(
                 "Expected a string argument for rejectattr function, got {:?}",
                 args[1]
             ));
             return Ok(Type::Any { hard: false });
         }
-        if !args[2].is_subtype_of(&Type::String(None)) {
+        if !args[2].is_compatible_with(&Type::String(None)) {
             listener.warn(&format!(
                 "Expected a string argument for rejectattr function, got {:?}",
                 args[2]
@@ -664,7 +664,7 @@ impl FunctionType for BatchFunctionType {
         args: &[Type],
         listener: Rc<dyn TypecheckingEventListener>,
     ) -> Result<Type, crate::Error> {
-        if !args[1].is_subtype_of(&Type::Integer(None)) {
+        if !args[1].is_compatible_with(&Type::Integer(None)) {
             listener.warn("Expected an integer argument for batch function");
         }
 

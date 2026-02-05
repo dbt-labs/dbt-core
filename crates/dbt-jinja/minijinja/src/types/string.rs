@@ -103,7 +103,7 @@ impl FunctionType for StringSplitFunction {
         args: &[Type],
         listener: Rc<dyn TypecheckingEventListener>,
     ) -> Result<Type, crate::Error> {
-        if !args[0].is_subtype_of(&Type::String(None)) {
+        if !args[0].is_compatible_with(&Type::String(None)) {
             listener.warn("Expected a string argument for split function");
         }
         Ok(Type::List(ListType::new(Type::String(None))))
@@ -129,7 +129,7 @@ impl FunctionType for StringFormatFunction {
         args: &[Type],
         listener: Rc<dyn TypecheckingEventListener>,
     ) -> Result<Type, crate::Error> {
-        if !args[0].is_subtype_of(&Type::String(None)) {
+        if !args[0].is_compatible_with(&Type::String(None)) {
             listener.warn("Expected a string argument for format function");
         }
         Ok(Type::String(None))

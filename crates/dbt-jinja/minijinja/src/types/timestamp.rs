@@ -23,7 +23,7 @@ impl FunctionType for PyDateTimeStrftimeFunction {
         args: &[Type],
         listener: Rc<dyn TypecheckingEventListener>,
     ) -> Result<Type, crate::Error> {
-        if !args[0].is_subtype_of(&Type::String(None)) {
+        if !args[0].is_compatible_with(&Type::String(None)) {
             listener.warn(&format!("Expected string, got {}", args[0]));
         }
         Ok(Type::String(None))
