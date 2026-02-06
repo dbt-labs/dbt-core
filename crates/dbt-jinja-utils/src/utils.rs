@@ -22,6 +22,7 @@ use serde::Deserialize;
 use std::any::Any;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::sync::{Arc, LazyLock};
 use std::{
     collections::{HashMap, HashSet},
@@ -29,10 +30,10 @@ use std::{
     sync::Mutex,
 };
 
-use crate::{
-    jinja_environment::JinjaEnv, listener::RenderingEventListenerFactory,
-    phases::parse::sql_resource::SqlResource,
-};
+use crate::listener::RenderingEventListenerFactory;
+use minijinja::listener::RenderingEventListener;
+
+use crate::{jinja_environment::JinjaEnv, phases::parse::sql_resource::SqlResource};
 
 /// The prefix for environment variables that contain secrets
 pub const SECRET_ENV_VAR_PREFIX: &str = "DBT_ENV_SECRET";
@@ -252,6 +253,25 @@ pub fn render_sql(
     for listener in listeners {
         listener_factory.destroy_listener(filename, listener);
     }
+
+    Ok(result)
+}
+
+/// Renders SQL with Jinja macros, using caller-provided listeners
+/// This allows callers to access listener state after rendering
+/// (e.g., for MangledRefWarningPrinter to check for mangled refs)
+#[allow(clippy::too_many_arguments)]
+pub fn render_sql_with_listeners(
+    sql: &str,
+    env: &JinjaEnv,
+    ctx: &BTreeMap<String, Value>,
+    listeners: &[Rc<dyn RenderingEventListener>],
+    filename: &Path,
+) -> FsResult<String> {
+    let result = env
+        .as_ref()
+        .render_named_str(filename.to_str().unwrap(), sql, ctx, listeners)
+        .map_err(|e| FsError::from_jinja_err(e, "Failed to render SQL"))?;
 
     Ok(result)
 }

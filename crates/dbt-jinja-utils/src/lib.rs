@@ -40,3 +40,6 @@ pub mod typecheck;
 
 /// TypecheckingEventListener implementation for YAML Jinja type checking
 pub mod typecheck_listener;
+
+/// Module for rendering-based mangled ref/source checking
+pub mod mangled_ref;

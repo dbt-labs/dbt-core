@@ -948,6 +948,26 @@ impl<'env> Vm<'env> {
                     } else if let Some(func) =
                         state.lookup(name).filter(|func| !func.is_undefined())
                     {
+                        let function_name = func
+                            .get_attr_fast("function_name")
+                            .map(|x| x.to_string())
+                            .unwrap_or_else(|| (*name).to_string());
+
+                        // Notify listeners about ref/source calls for mangled ref detection
+                        if function_name == "ref" || function_name == "source" {
+                            listeners.iter().for_each(|listener| {
+                                listener.on_ref_or_source(
+                                    &function_name,
+                                    this_span.start_line,
+                                    this_span.start_col,
+                                    this_span.start_offset,
+                                    this_span.end_line,
+                                    this_span.end_col,
+                                    this_span.end_offset,
+                                );
+                            });
+                        }
+
                         let rv = call_wrapper(listeners, || func.call(state, args, listeners))
                             .map_err(|err| state.with_span_error(err, this_span))?;
                         // Handle CallerReturn: when a return() was called inside a {% call %} block,

@@ -1007,6 +1007,12 @@ impl DefaultTo<ModelConfig> for ModelConfig {
     fn get_post_hook(&self) -> Option<&Hooks> {
         (*self.post_hook).as_ref()
     }
+
+    fn get_static_analysis(&self) -> Option<StaticAnalysisKind> {
+        self.static_analysis
+            .as_ref()
+            .map(|s| s.clone().into_inner())
+    }
 }
 
 impl ModelConfig {

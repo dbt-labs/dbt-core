@@ -27,6 +27,22 @@ impl StrictnessMode {
             ),
         }
     }
+
+    /// Check if mangled ref warnings should be emitted.
+    /// By default enabled in Strict mode, can be disabled via custom_checks in any mode.
+    pub fn mangled_ref_check(self, custom_checks: &CustomChecks) -> bool {
+        // If explicitly disabled via custom_checks, always respect it
+        if matches!(
+            custom_checks.get("analysis.mangled_ref"),
+            Some(CustomCheckLevel::Off)
+        ) {
+            return false;
+        }
+        match self {
+            StrictnessMode::Baseline => false,
+            StrictnessMode::Strict | StrictnessMode::Custom => true,
+        }
+    }
 }
 
 #[derive(

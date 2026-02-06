@@ -276,6 +276,10 @@ pub trait DefaultTo<T>:
     fn get_post_hook(&self) -> Option<&crate::schemas::common::Hooks> {
         None
     }
+
+    fn get_static_analysis(&self) -> Option<dbt_common::io_args::StaticAnalysisKind> {
+        None
+    }
 }
 
 // Improved macro for simple field defaulting with mutable references

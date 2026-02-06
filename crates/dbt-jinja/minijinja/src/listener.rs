@@ -5,7 +5,7 @@ use std::fmt::Write;
 use std::path::Path;
 
 use crate::output_tracker::OutputTracker;
-use crate::CodeLocation;
+use crate::{machinery::Span, CodeLocation};
 
 /// A listener for rendering events. This is used for LSP
 pub trait RenderingEventListener: std::fmt::Debug {
@@ -40,6 +40,31 @@ pub trait RenderingEventListener: std::fmt::Debug {
 
     /// Called when a function is being exited.
     fn on_function_end(&self);
+
+    /// Called when a ref() or source() call is rendered.
+    /// This is used to detect mangled refs by checking if there are
+    /// non-whitespace characters adjacent to the ref/source span.
+    #[allow(clippy::too_many_arguments)]
+    fn on_ref_or_source(
+        &self,
+        _name: &str,
+        _start_line: u32,
+        _start_col: u32,
+        _start_offset: u32,
+        _end_line: u32,
+        _end_col: u32,
+        _end_offset: u32,
+    ) {
+    }
+
+    /// Called after rendering to check and emit mangled ref warnings.
+    /// Only MangledRefWarningPrinter implements this; default is no-op.
+    fn check_and_emit_mangled_ref_warnings(
+        &self,
+        _rendered_sql: &str,
+        _macro_spans: &[(Span, Span)],
+    ) {
+    }
 }
 
 /// A macro start event.

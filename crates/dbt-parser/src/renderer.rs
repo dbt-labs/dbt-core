@@ -27,7 +27,7 @@ use dbt_jinja_utils::phases::parse::build_resolve_model_context;
 use dbt_jinja_utils::phases::parse::sql_resource::SqlResource;
 use dbt_jinja_utils::serde::into_typed_with_jinja_error_context;
 use dbt_jinja_utils::silence_base_context;
-use dbt_jinja_utils::utils::render_sql;
+use dbt_jinja_utils::utils::{render_sql, render_sql_with_listeners};
 use dbt_schemas::schemas::common::{DbtChecksum, DbtQuoting, Hooks, normalize_sql};
 use dbt_schemas::schemas::project::DefaultTo;
 use dbt_schemas::schemas::properties::GetConfig;
@@ -294,6 +294,13 @@ where
         status_reporter.show_progress(PARSING, &display_path_str, None);
     }
 
+    // Check if mangled ref checking is enabled via strictness settings
+    let check_mangled_refs = runtime_config
+        .inner
+        .strictness
+        .mangled_ref_check(&runtime_config.inner.custom_checks);
+
+    // Run typecheck
     if let Some(model) = resolve_model_context.get("model")
         && let Ok(unique_id) = model.get_attr("unique_id")
         && let Some(unique_id) = unique_id.as_str()
@@ -314,15 +321,25 @@ where
         );
     }
 
-    let listener_factory = DefaultRenderingEventListenerFactory::new(true);
-    let (sql_file_info, status, rendered_sql, macro_spans) = match render_sql(
+    // Create listeners for rendering via factory
+    let listener_factory = if check_mangled_refs {
+        DefaultRenderingEventListenerFactory::with_mangled_ref_checking(true, args.io.clone())
+    } else {
+        DefaultRenderingEventListenerFactory::new(true)
+    };
+    let listeners = listener_factory.create_listeners(
+        &display_path,
+        &dbt_frontend_common::error::CodeLocation::start_of_file(),
+    );
+
+    let (sql_file_info, status, rendered_sql, macro_spans) = match render_sql_with_listeners(
         &sql,
         jinja_env.as_ref(),
         &resolve_model_context,
-        &listener_factory,
+        &listeners,
         &display_path,
     ) {
-        Ok(rendered_sql_except_node_resolver) => {
+        Ok(rendered_sql) => {
             // add root config if rendering a dependency package
             if root_project_name != package_name {
                 let root_config = root_project_config.get_config_for_fqn(&fqn).clone();
@@ -378,14 +395,35 @@ where
                 ModelStatus::Disabled
             };
 
+            // Destroy DefaultRenderingEventListener first to transfer macro_spans to factory
+            // Keep other listeners for later
+            let (default_listeners, other_listeners): (Vec<_>, Vec<_>) =
+                listeners.into_iter().partition(|l| {
+                    l.as_any()
+                        .downcast_ref::<dbt_jinja_utils::listener::DefaultRenderingEventListener>()
+                        .is_some()
+                });
+            for listener in default_listeners {
+                listener_factory.destroy_listener(&display_path, listener);
+            }
+
+            // Now drain macro_spans from factory
             let macro_spans = listener_factory.drain_macro_spans(&display_path);
 
-            (
-                sql_file_info,
-                status,
-                rendered_sql_except_node_resolver,
-                macro_spans,
-            )
+            // Emit mangled ref warnings based on the final config's static_analysis setting
+            // This allows {{ config(static_analysis='off') }} to suppress warnings
+            if sql_file_info.config.get_static_analysis() != Some(StaticAnalysisKind::Off) {
+                for listener in &other_listeners {
+                    listener.check_and_emit_mangled_ref_warnings(&rendered_sql, &macro_spans.items);
+                }
+            }
+
+            // Destroy remaining listeners
+            for listener in other_listeners {
+                listener_factory.destroy_listener(&display_path, listener);
+            }
+
+            (sql_file_info, status, rendered_sql, macro_spans)
         }
         Err(err) => {
             // Build minimal info for error/disabled outcome

@@ -20,7 +20,7 @@ use dbt_common::{
 
 /// Trait for creating and destroying rendering event listeners
 pub trait RenderingEventListenerFactory: Send + Sync {
-    /// Creates a new rendering event listener
+    /// Creates new rendering event listeners
     fn create_listeners(
         &self,
         filename: &Path,
@@ -41,6 +41,10 @@ pub struct DefaultRenderingEventListenerFactory {
     pub quiet: bool,
     /// macro spans
     pub macro_spans: Arc<RwLock<HashMap<PathBuf, MacroSpans>>>,
+    /// Whether to check for mangled refs
+    pub check_mangled_refs: bool,
+    /// IO args for warning emission
+    pub io_args: IoArgs,
 }
 
 impl DefaultRenderingEventListenerFactory {
@@ -49,18 +53,43 @@ impl DefaultRenderingEventListenerFactory {
         Self {
             quiet,
             macro_spans: Arc::new(RwLock::new(HashMap::new())),
+            check_mangled_refs: false,
+            io_args: IoArgs::default(),
+        }
+    }
+
+    /// Creates a new rendering event listener factory with mangled ref checking
+    pub fn with_mangled_ref_checking(quiet: bool, io_args: IoArgs) -> Self {
+        Self {
+            quiet,
+            macro_spans: Arc::new(RwLock::new(HashMap::new())),
+            check_mangled_refs: true,
+            io_args,
         }
     }
 }
 
 impl RenderingEventListenerFactory for DefaultRenderingEventListenerFactory {
-    /// Creates a new rendering event listener
+    /// Creates new rendering event listeners
     fn create_listeners(
         &self,
-        _filename: &Path,
+        filename: &Path,
         _offset: &dbt_frontend_common::error::CodeLocation,
     ) -> Vec<Rc<dyn RenderingEventListener>> {
-        vec![Rc::new(DefaultRenderingEventListener::new(self.quiet))]
+        let mut listeners: Vec<Rc<dyn RenderingEventListener>> = vec![];
+
+        // Always add the default listener for macro spans
+        listeners.push(Rc::new(DefaultRenderingEventListener::new(self.quiet)));
+
+        // Add mangled ref printer if enabled
+        if self.check_mangled_refs {
+            listeners.push(Rc::new(crate::mangled_ref::MangledRefWarningPrinter::new(
+                filename.to_path_buf(),
+                self.io_args.clone(),
+            )));
+        }
+
+        listeners
     }
 
     fn destroy_listener(&self, filename: &Path, listener: Rc<dyn RenderingEventListener>) {
@@ -97,7 +126,7 @@ impl RenderingEventListenerFactory for DefaultRenderingEventListenerFactory {
 
 /// Trait for creating and destroying Jinja type checking event listeners
 pub trait JinjaTypeCheckingEventListenerFactory: Send + Sync {
-    /// Creates a new rendering event listener
+    /// Creates a new type checking event listener
     fn create_listener(
         &self,
         args: &IoArgs,
@@ -106,7 +135,7 @@ pub trait JinjaTypeCheckingEventListenerFactory: Send + Sync {
         unique_id: &str,
     ) -> Rc<dyn TypecheckingEventListener>;
 
-    /// Destroys a rendering event listener
+    /// Destroys a type checking event listener
     fn destroy_listener(&self, filename: &Path, listener: Rc<dyn TypecheckingEventListener>);
 
     /// Update the unique id
@@ -123,7 +152,7 @@ pub struct DefaultJinjaTypeCheckEventListenerFactory {
 }
 
 impl JinjaTypeCheckingEventListenerFactory for DefaultJinjaTypeCheckEventListenerFactory {
-    /// Creates a new rendering event listener
+    /// Creates a new type checking event listener
     fn create_listener(
         &self,
         _args: &IoArgs,
