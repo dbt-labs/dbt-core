@@ -1161,12 +1161,27 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
 
                 let name_string_array = get_column_values::<StringArray>(&result, "col_name")?;
                 let dtype_string_array = get_column_values::<StringArray>(&result, "data_type")?;
+                let comment_string_array =
+                    get_column_values::<StringArray>(&result, "comment").ok();
 
                 // Filter out metadata rows (like "# Partition Information", "# Clustering Information")
                 // These are section headers in DESCRIBE TABLE output, not actual columns.
                 let columns = (0..name_string_array.len())
                     .filter(|&i| !name_string_array.value(i).starts_with('#'))
                     .map(|i| {
+                        let comment = comment_string_array.as_ref().and_then(|arr| {
+                            if arr.is_null(i) {
+                                None
+                            } else {
+                                let s = arr.value(i);
+                                if s.is_empty() {
+                                    None
+                                } else {
+                                    Some(s.to_string())
+                                }
+                            }
+                        });
+
                         Column::new(
                             AdapterType::Databricks,
                             name_string_array.value(i).to_string(),
@@ -1175,6 +1190,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
                             None, // numeric_precision
                             None, // numeric_scale
                         )
+                        .with_comment(comment)
                     })
                     .collect::<Vec<_>>();
                 Ok(columns)
@@ -1627,16 +1643,33 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
                 "get_persist_doc_columns is a Databricks adapter operation",
             ));
         }
-        // TODO(jasonlin45): grab comment info as well - we should avoid persisting for comments that are the same for performance reasons
+        // Upstream semantics (dbt-databricks): persist a column doc update if and only if the
+        // desired comment (model.description, defaulting to "") differs from the existing warehouse
+        // comment (defaulting to "").
+        //
+        // This intentionally supports "clearing" comments: desired="" + existing="foo" => update.
         let mut result = IndexMap::new();
-        // Intersection of existing columns and model columns that have descriptions
+
+        // Case-insensitive lookup for model columns (matches upstream behavior).
+        let mut model_columns_lower: HashMap<String, &DbtColumnRef> = HashMap::new();
+        for (name, col) in &model_columns {
+            model_columns_lower.insert(name.to_lowercase(), col);
+        }
+
         for existing_col in existing_columns {
-            if let Some(model_col) = model_columns.get(existing_col.name())
-                && model_col.description.is_some()
-            {
-                result.insert(existing_col.name().to_string(), model_col.clone());
+            let Some(model_col) = model_columns_lower.get(&existing_col.name().to_lowercase())
+            else {
+                continue;
+            };
+
+            let desired = model_col.description.as_deref().unwrap_or("");
+            let existing = existing_col.comment().unwrap_or("");
+
+            if desired != existing {
+                result.insert(existing_col.name().to_string(), (*model_col).clone());
             }
         }
+
         Ok(result)
     }
 
@@ -3478,7 +3511,9 @@ mod tests {
     use super::*;
     use crate::base_adapter::backend_of;
     use crate::cache::RelationCache;
+    use crate::column::Column;
     use crate::config::AdapterConfig;
+    use crate::mock::adapter::MockAdapter;
     use crate::query_comment::QueryCommentConfig;
     use crate::sql_types::NaiveTypeOpsImpl;
     use crate::stmt_splitter::NaiveStmtSplitter;
@@ -3486,11 +3521,12 @@ mod tests {
     use dbt_auth::auth_for_backend;
     use dbt_common::adapter::AdapterType;
     use dbt_common::{AdapterResult, cancellation::never_cancels};
+    use dbt_schemas::schemas::dbt_column::{DbtColumn, DbtColumnRef};
     use dbt_schemas::schemas::relations::base::ComponentName;
     use dbt_schemas::schemas::relations::{DEFAULT_RESOLVED_QUOTING, SNOWFLAKE_RESOLVED_QUOTING};
     use dbt_serde_yaml::Mapping;
 
-    use minijinja::{Environment, State};
+    use minijinja::{Environment, State, Value};
 
     use AdapterType::*;
 
@@ -3594,5 +3630,75 @@ mod tests {
     fn test_redshift_quote() {
         let adapter = ConcreteAdapter::new(engine(Redshift));
         assert_eq!(adapter.quote("abc"), "\"abc\"");
+    }
+
+    // Checks that get_persist_doc_columns generates an explicit empty comment update only when the existing
+    // warehouse comment is non-empty.
+    #[test]
+    fn test_get_persist_doc_columns_clear_comment_only_when_needed() {
+        let adapter = MockAdapter::new(
+            Databricks,
+            BTreeMap::new(),
+            DEFAULT_RESOLVED_QUOTING,
+            Box::new(NaiveTypeOpsImpl::new(Databricks)),
+            never_cancels(),
+        );
+
+        let env = Environment::new();
+        let state = State::new_for_env(&env);
+
+        // Model column has *no* description, which round-trips through Jinja as `""` (empty string).
+        let model_col = Arc::new(DbtColumn {
+            name: "sales_channel_name".to_string(),
+            description: None,
+            ..Default::default()
+        });
+        let mut model_columns_map: IndexMap<String, DbtColumnRef> = IndexMap::new();
+        model_columns_map.insert("sales_channel_name".to_string(), model_col);
+        let model_columns = Value::from_serialize(model_columns_map);
+
+        let existing_non_empty = Value::from(vec![Value::from_object(
+            Column::new(
+                Databricks,
+                "sales_channel_name".to_string(),
+                "string".to_string(),
+                None,
+                None,
+                None,
+            )
+            .with_comment(Some("Name of the sales channel".to_string())),
+        )]);
+        let selected = adapter
+            .get_persist_doc_columns(&state, &existing_non_empty, &model_columns)
+            .expect("get_persist_doc_columns should succeed");
+        let v = selected
+            .get_item(&Value::from("sales_channel_name"))
+            .expect("get_item should succeed");
+        assert!(
+            !v.is_undefined(),
+            "Expected column to be selected to clear existing non-empty comment, got: {selected:?}"
+        );
+
+        let existing_empty = Value::from(vec![Value::from_object(
+            Column::new(
+                Databricks,
+                "sales_channel_name".to_string(),
+                "string".to_string(),
+                None,
+                None,
+                None,
+            )
+            .with_comment(Some("".to_string())),
+        )]);
+        let selected = adapter
+            .get_persist_doc_columns(&state, &existing_empty, &model_columns)
+            .expect("get_persist_doc_columns should succeed");
+        let v = selected
+            .get_item(&Value::from("sales_channel_name"))
+            .expect("get_item should succeed");
+        assert!(
+            v.is_undefined(),
+            "Expected column NOT to be selected when existing comment is already empty, got: {selected:?}"
+        );
     }
 }

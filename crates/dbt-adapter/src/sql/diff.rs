@@ -28,6 +28,8 @@ pub fn compare_sql(actual: &str, expected: &str) -> AdapterResult<()> {
     let actual = canonicalize_elementary_metadata_pkg_version(&actual);
     let expected = canonicalize_elementary_metadata_pkg_version(&expected);
     let actual = canonicalize_python_config_dict(&actual, &expected);
+    let actual = canonicalize_databricks_legacy_alter_column_comment_to_modern(&actual);
+    let expected = canonicalize_databricks_legacy_alter_column_comment_to_modern(&expected);
 
     // Short-circuit: Elementary-generated SQL is allowed to drift across recorders/runners.
     // We only short-circuit when BOTH sides are clearly Elementary-originated.
@@ -92,6 +94,51 @@ pub fn compare_sql(actual: &str, expected: &str) -> AdapterResult<()> {
         AdapterErrorKind::SqlMismatch,
         format!("SQL mismatch detected:\n\n{diff_info}"),
     ))
+}
+
+/// Canonicalize Databricks legacy column comment DDL to the modern COMMENT ON COLUMN syntax.
+///
+/// dbt-databricks may emit either of the following, which are semantically equivalent:
+/// - `alter table <rel> change column <col> comment '<comment>'`
+/// - `COMMENT ON COLUMN <rel>.<col> IS '<comment>'`
+///
+/// For replay diffs we treat them as equivalent by rewriting the legacy form into the modern form.
+fn canonicalize_databricks_legacy_alter_column_comment_to_modern(sql: &str) -> String {
+    // NOTE: We scope this extremely narrowly (anchored) to avoid masking unrelated DDL.
+    static RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
+        Regex::new(
+            r#"(?is)^\s*alter\s+table\s+(?P<rel>.+?)\s+change\s+column\s+(?P<col>`[^`]+`|[A-Za-z_][A-Za-z0-9_$]*)\s+comment\s+'(?P<comment>(?:\\'|''|[^'])*)'\s*;?\s*$"#,
+        )
+        .unwrap()
+    });
+
+    let Some(caps) = RE.captures(sql) else {
+        return sql.to_string();
+    };
+
+    let rel = caps
+        .name("rel")
+        .expect("rel capture exists")
+        .as_str()
+        .trim();
+    let comment = caps
+        .name("comment")
+        .expect("comment capture exists")
+        .as_str();
+    let mut col = caps
+        .name("col")
+        .expect("col capture exists")
+        .as_str()
+        .trim()
+        .to_string();
+
+    // If the relation uses backtick quoting and the column does not, add backticks around the column
+    // to match the usual COMMENT ON COLUMN rendering.
+    if rel.contains('`') && !col.contains('`') {
+        col = format!("`{col}`");
+    }
+
+    format!("COMMENT ON COLUMN {rel}.{col} IS '{comment}'")
 }
 
 /// Lightweight structural comparator for SQL to relax overly strict mismatches.
@@ -1480,6 +1527,23 @@ mod tests {
         assert!(
             result.is_err(),
             "Should detect placeholder vs value differences"
+        );
+    }
+
+    #[test]
+    fn test_databricks_column_comment_legacy_and_modern_syntax_equivalent() {
+        // Databricks supports persisting column comments via either:
+        // - legacy: ALTER TABLE .. CHANGE COLUMN .. COMMENT '...'
+        // - modern: COMMENT ON COLUMN .. IS '...'
+        //
+        // These are semantically equivalent and should not cause replay-mode SQL mismatches.
+        let actual = "alter table `dbt`.`dbt_entities`.`ent_shopify_inventory_quantity` change column id comment 'Primary key for the inventory quantity record.';";
+        let expected = "COMMENT ON COLUMN `dbt`.`dbt_entities`.`ent_shopify_inventory_quantity`.`id` IS 'Primary key for the inventory quantity record.'";
+
+        let result = compare_sql(actual, expected);
+        assert!(
+            result.is_ok(),
+            "Expected legacy ALTER TABLE CHANGE COLUMN COMMENT to be equivalent to COMMENT ON COLUMN"
         );
     }
 

@@ -354,6 +354,12 @@ pub struct Column {
     /// Name of the column. Confusingly named `column` in dbt-adapters.
     name: String,
 
+    /// Optional comment / description fetched from the warehouse.
+    ///
+    /// This is needed to support upstream-style persist-docs behavior, including clearing existing
+    /// comments by setting them to the empty string when the model column has no description.
+    comment: Option<String>,
+
     /// dbt Core's degenerate representation of dtype, derived from _original_sql_str
     core_dtype: String,
 
@@ -381,6 +387,7 @@ impl Column {
                 .zip(other._fields.iter())
                 .all(|(a, b)| a.cmp_column(b))
             && self.name == other.name
+            && self.comment == other.comment
             && self.core_dtype == other.core_dtype
             && self.core_data_type == other.core_data_type
             && self.char_size == other.char_size
@@ -531,6 +538,7 @@ impl Column {
             _fields: Vec::new(),
             original_sql_str: Some(original_sql_str),
             name,
+            comment: None,
             core_dtype,
             core_data_type,
             char_size,
@@ -550,6 +558,7 @@ impl Column {
             // while roundtripping from Jinja
             original_sql_str: None,
             name: col.name,
+            comment: None,
             core_dtype: col.dtype.clone(),
             core_data_type: col.dtype,
             char_size: col.char_size,
@@ -614,6 +623,7 @@ impl Column {
             _fields: fields.into(),
             original_sql_str: Some(original_sql_str),
             name,
+            comment: None,
             core_dtype,
             core_data_type,
             char_size: None,
@@ -645,6 +655,7 @@ impl Column {
                 _fields: Vec::new(),
                 original_sql_str: Some(raw_data_type.to_string()),
                 name: name.to_string(),
+                comment: None,
                 core_dtype,
                 core_data_type,
                 char_size: None,
@@ -709,6 +720,7 @@ impl Column {
             _fields: Vec::new(),
             original_sql_str: Some(raw_data_type.to_string()),
             name: name.to_string(),
+            comment: None,
             core_dtype: data_type.clone(),
             core_data_type: data_type,
             char_size,
@@ -724,6 +736,15 @@ impl Column {
             (Some(false), _) => BigqueryColumnMode::Required,
             (_, _) => BigqueryColumnMode::Nullable,
         }
+    }
+
+    pub fn comment(&self) -> Option<&str> {
+        self.comment.as_deref()
+    }
+
+    pub fn with_comment(mut self, comment: Option<String>) -> Self {
+        self.comment = comment;
+        self
     }
 
     #[inline]
