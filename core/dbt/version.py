@@ -201,6 +201,7 @@ def get_package_pypi_url(package_name: str) -> str:
 
 def _get_dbt_plugins_info() -> Iterator[Tuple[str, str]]:
     for plugin_name in _get_adapter_plugin_names():
+        print(f"Plugin name: {plugin_name}")
         if plugin_name == "core":
             continue
         try:
@@ -208,24 +209,34 @@ def _get_dbt_plugins_info() -> Iterator[Tuple[str, str]]:
         except ImportError:
             # not an adapter
             continue
+        print(f"Module found: {mod}")
         yield plugin_name, mod.version
 
 
 def _get_adapter_plugin_names() -> Iterator[str]:
-    spec = importlib.util.find_spec("dbt.adapters")
-    # If None, then nothing provides an importable 'dbt.adapters', so we will
-    # not be reporting plugin versions today
-    if spec is None or spec.submodule_search_locations is None:
-        return
+    # Use importlib.metadata to discover adapter packages
+    # This works correctly with editable installs unlike glob-based discovery
+    for dist in importlib_metadata.distributions():
+        name = dist.metadata.get("Name", "")
+        # Look for packages that follow the dbt-<adapter> naming convention
+        if name.startswith("dbt-") and name not in ("dbt-core", "dbt-common", "dbt-adapters"):
+            # Extract the adapter name (e.g., "postgres" from "dbt-postgres")
+            adapter_name = name[4:]  # Remove "dbt-" prefix
+            if adapter_name:
+                yield adapter_name
 
-    for adapters_path in spec.submodule_search_locations:
-        version_glob = os.path.join(adapters_path, "*", "__version__.py")
-        for version_path in glob.glob(version_glob):
-            # the path is like .../dbt/adapters/{plugin_name}/__version__.py
-            # except it could be \\ on windows!
-            plugin_root, _ = os.path.split(version_path)
-            _, plugin_name = os.path.split(plugin_root)
-            yield plugin_name
+    # Also check via glob for backwards compatibility with non-standard installs
+    spec = importlib.util.find_spec("dbt.adapters")
+    if spec is not None and spec.submodule_search_locations is not None:
+        for adapters_path in spec.submodule_search_locations:
+            version_glob = os.path.join(adapters_path, "*", "__version__.py")
+            for version_path in glob.glob(version_glob):
+                # the path is like .../dbt/adapters/{plugin_name}/__version__.py
+                # except it could be \\ on windows!
+                plugin_root, _ = os.path.split(version_path)
+                _, plugin_name = os.path.split(plugin_root)
+                if plugin_name:
+                    yield plugin_name
 
 
 def _resolve_version() -> str:
