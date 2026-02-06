@@ -322,6 +322,13 @@ impl RecordDecoder {
                 input_offset += bytes_read;
                 self.data_len += bytes_written;
 
+                // if any work waas done in this iteration, we are mid-field
+                // otherwise, we persist previous state of has_partial_field
+                // which may have come from previous iterations or previous decode calls
+                if bytes_read > 0 || bytes_written > 0 {
+                    self.has_partial_field = true;
+                }
+
                 match result {
                     ReadRecordResult::End => {
                         debug_assert!(
@@ -332,8 +339,7 @@ impl RecordDecoder {
                     }
                     ReadRecordResult::InputEmpty => {
                         // Reached end of input and csv_core needs more data to construct record
-                        // Track if csv_core has partial field data
-                        self.has_partial_field = bytes_read > 0 || bytes_written > 0;
+                        // has_partial_field already set above
                         return Ok((read, input_offset));
                     }
                     // Need to allocate more capacity
