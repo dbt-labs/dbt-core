@@ -30,6 +30,8 @@
 pub mod mock_store;
 pub mod store;
 
+pub use store::read_cached_schema_from_parquet;
+
 use std::path::PathBuf;
 
 use arrow::array::RecordBatch;

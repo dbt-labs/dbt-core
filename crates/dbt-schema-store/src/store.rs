@@ -780,7 +780,11 @@ fn serialize_arrow_schema(schema: &SchemaRef) -> SchemaStoreResult<Vec<u8>> {
 }
 
 /// Read a cached schema from a Parquet file.
-fn read_cached_schema_from_parquet(
+///
+/// Returns the schema entry and the file's modification timestamp.
+/// The schema entry contains both the canonical schema and optionally
+/// the original warehouse schema if it was embedded in the parquet metadata.
+pub fn read_cached_schema_from_parquet(
     table_path: &Path,
 ) -> SchemaStoreResult<(SchemaEntry, Timestamp)> {
     let file = std::fs::File::open(table_path).map_err(|e| {
