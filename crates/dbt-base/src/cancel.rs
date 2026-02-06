@@ -64,7 +64,7 @@ struct InnerCST {
 /// is dropped, all tokens issued from it will be considered cancelled.
 ///
 /// ```rust
-/// # use dbt_common::cancellation::{
+/// # use dbt_base::cancel::{
 /// #  CancellationTokenSource, CancellationToken, CancelledError
 /// # };
 /// # struct Handler {

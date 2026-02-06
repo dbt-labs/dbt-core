@@ -5,8 +5,8 @@ use std::{
     sync::Arc,
 };
 
-use dashmap::DashMap;
 use dbt_adapter::{AdapterType, load_store::ResultStore};
+use dbt_common::dashmap::DashMap;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::serde_utils::convert_yml_to_dash_map;
 use dbt_schemas::{

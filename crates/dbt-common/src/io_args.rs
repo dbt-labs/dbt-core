@@ -1,13 +1,13 @@
 use clap::ValueEnum;
+use dbt_base::{HashMap, HashSet};
 use dbt_serde_yaml::{JsonSchema, Value};
 use dbt_telemetry::{NodeType, ShowDataOutputFormat};
 use pathdiff::diff_paths;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use std::fs;
 use std::str::FromStr;
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::BTreeMap,
     fmt::{self, Display},
     path::{Path, PathBuf},
     sync::Arc,

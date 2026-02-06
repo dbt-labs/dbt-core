@@ -12,7 +12,7 @@
 #![allow(clippy::only_used_in_recursion)]
 #![allow(clippy::should_implement_trait)]
 
-use dbt_cancel::{Cancellable, CancellationToken, CancelledError};
+use dbt_base::cancel::{Cancellable, CancellationToken, CancelledError};
 use futures::stream::{FuturesUnordered, StreamExt};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::error::SendError;

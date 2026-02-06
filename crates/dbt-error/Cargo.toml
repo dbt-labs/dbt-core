@@ -18,7 +18,7 @@ dbt-frontend-common = { workspace = true }
 dbt-proc-macros = { workspace = true }
 
 # Cancellation error conversion
-dbt-cancel = { workspace = true }
+dbt-base = { workspace = true }
 
 # Core dependencies needed by error types
 arrow = { workspace = true }

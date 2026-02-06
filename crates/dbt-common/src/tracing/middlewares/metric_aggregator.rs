@@ -2,7 +2,6 @@ use dbt_telemetry::{
     Invocation, InvocationMetrics, LogMessage, LogRecordInfo, NodeOutcome, NodeProcessed,
     NodeSkipReason, SeverityNumber, SpanEndInfo, TestOutcome, node_processed::NodeOutcomeDetail,
 };
-use std::collections::HashMap;
 
 use crate::tracing::metrics::NodeOutcomeCountsKey;
 
@@ -105,7 +104,8 @@ impl TelemetryMiddleware for TelemetryMetricAggregator {
             );
 
             // Build node_type_counts hashmap from NodeCounts metrics
-            let node_type_counts: HashMap<String, u64> = data_provider
+            #[allow(clippy::disallowed_types)]
+            let node_type_counts: std::collections::HashMap<String, u64> = data_provider
                 .get_all_metrics()
                 .iter()
                 .filter_map(|(key, count)| match key {
@@ -117,7 +117,8 @@ impl TelemetryMiddleware for TelemetryMetricAggregator {
                 .collect();
 
             // Build status_counts hashmap from aggregated node outcome totals
-            let mut status_counts = HashMap::new();
+            #[allow(clippy::disallowed_types)]
+            let mut status_counts = std::collections::HashMap::new();
 
             for (key, val) in &[
                 ("success", success),

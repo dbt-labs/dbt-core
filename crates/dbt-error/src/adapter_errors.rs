@@ -1,4 +1,4 @@
-use dbt_cancel::Cancellable;
+use dbt_base::Cancellable;
 use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind};
 use std::future::Future;
 use std::io::{self};

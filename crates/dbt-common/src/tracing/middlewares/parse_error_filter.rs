@@ -1,5 +1,4 @@
-use std::collections::HashSet;
-
+use crate::collections::HashSet;
 use dbt_error::ErrorCode;
 use dbt_telemetry::{AnyTelemetryEvent, LogMessage, LogRecordInfo, SeverityNumber};
 
@@ -117,7 +116,7 @@ impl TelemetryMiddleware for TelemetryParsingErrorFilter {
         // If our configuration requires filtering repeated deprecations from packages,
         // initialize the set to track seen deprecations.
         if !self.show_all_deprecations && span.parent_span_id.is_none() {
-            data_provider.init_root(PackageWithLogsSet(HashSet::new()));
+            data_provider.init_root(PackageWithLogsSet(HashSet::default()));
         }
 
         Some(span)

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, time::SystemTime};
+use std::time::SystemTime;
 
 use chrono::Utc;
 use dbt_error::ErrorCode;
@@ -197,7 +197,8 @@ impl JsonCompatLayer {
             ts: Some(Utc::now().into()),
             msg,
             level: level.to_lowercase(),
-            extra: HashMap::new(),
+            #[allow(clippy::disallowed_types)]
+            extra: std::collections::HashMap::new(),
         }
     }
 

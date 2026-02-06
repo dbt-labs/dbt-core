@@ -552,12 +552,12 @@ pub fn emit_strict_parse_error(
     //
     // TODO: It is ugly, and inefficient, but as of time of writing the agreement was to keep
     // the existing architecture. This should be revisited in the future.
-    use dashmap::DashMap;
+    use crate::collections::HashSet;
+    use crate::dashmap::DashMap;
     use once_cell::sync::Lazy;
-    use std::collections::HashSet;
 
     static PACKAGE_WITH_ERRORS_OR_WARNING: Lazy<DashMap<String, HashSet<String>>> =
-        Lazy::new(DashMap::new);
+        Lazy::new(DashMap::default);
 
     /// Marks a package with an error or warning for the given key.
     fn mark_package_with_error_or_warning(key: &str, package_name: &str) {

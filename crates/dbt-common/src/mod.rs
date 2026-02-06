@@ -41,3 +41,52 @@ pub use tracing::{
 
 mod discrete_event_emitter;
 pub use discrete_event_emitter::DiscreteEventEmitter;
+
+pub mod dashmap {
+    /// A DashMap variant that uses a stable hasher in debug builds and a
+    /// DoS-resistant hasher in release builds.
+    #[allow(clippy::disallowed_types)]
+    pub type DashMap<K, V> = dashmap::DashMap<K, V, dbt_base::MaybeStableHasherBuilder>;
+
+    /// Creates a new DashMap with the stable/DoS-resistant hasher. Saves some
+    /// typing compared with `DashMap::with_hasher(...)`.
+    #[inline]
+    pub fn new<K, V>() -> DashMap<K, V>
+    where
+        K: std::hash::Hash + Eq,
+    {
+        DashMap::with_hasher(dbt_base::MaybeStableHasherBuilder::default())
+    }
+}
+
+pub mod sccmap {
+    /// A scc::HashMap variant that uses a stable hasher in debug builds and a
+    /// DoS-resistant hasher in release builds.
+    #[allow(clippy::disallowed_types)]
+    pub type HashMap<K, V> = scc::HashMap<K, V, dbt_base::MaybeStableHasherBuilder>;
+
+    /// Creates a new scc::HashMap with the stable/DoS-resistant hasher. Saves some
+    /// typing compared with `scc::HashMap::with_hasher(...)`.
+    #[inline]
+    pub fn new<K, V>() -> HashMap<K, V>
+    where
+        K: std::hash::Hash + Eq,
+    {
+        HashMap::with_hasher(dbt_base::MaybeStableHasherBuilder::default())
+    }
+}
+
+/// A module for re-exporting commonly used collection types in a centralized
+/// place
+pub mod collections {
+
+    #[doc(inline)]
+    pub use dbt_base::HashMap;
+    #[doc(inline)]
+    pub use dbt_base::HashSet;
+
+    #[doc(inline)]
+    pub use crate::dashmap::DashMap;
+    #[doc(inline)]
+    pub use crate::sccmap::HashMap as SccHashMap;
+}

@@ -22,4 +22,4 @@ pub use types::{
 };
 
 // Re-export Cancellable from dbt-cancel for convenience
-pub use dbt_cancel::Cancellable;
+pub use dbt_base::Cancellable;

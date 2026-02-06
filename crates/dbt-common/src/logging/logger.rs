@@ -1,4 +1,5 @@
 use crate::FsResult;
+use crate::collections::HashMap;
 use crate::constants::{DBT_DEAFULT_LOG_FILE_NAME, DBT_LOG_DIR_NAME};
 use crate::io_args::IoArgs;
 use crate::pretty_string::remove_ansi_codes;
@@ -7,7 +8,6 @@ use clap::ValueEnum;
 use log::{LevelFilter, Metadata, Record};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::collections::HashMap;
 use std::fmt::Display;
 use std::io::{IsTerminal as _, Write};
 use std::path::PathBuf;
@@ -192,7 +192,7 @@ impl Logger {
 
     fn format_json(record: &Record, invocation_id: &str, should_remove_ansi: bool) -> String {
         // Collect key-value pairs
-        let mut kvs = HashMap::new();
+        let mut kvs = HashMap::default();
 
         let key_values = record.key_values();
         let mut visitor = KvVisitor { kvs: &mut kvs };

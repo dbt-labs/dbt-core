@@ -1,5 +1,4 @@
 use std::{
-    collections::HashSet,
     io::{self, Write},
     sync::{
         Arc, OnceLock,
@@ -7,6 +6,7 @@ use std::{
     },
 };
 
+use crate::collections::HashSet;
 use console::Term;
 use dbt_telemetry::{
     AnyTelemetryEvent, AssetParsed, CompiledCodeInline, DepsAddPackage, DepsAllPackagesInstalled,
@@ -257,7 +257,7 @@ pub fn should_show_progress_message(
     phase_allows || show_options.contains(&ShowOptions::All)
 }
 
-use scc::HashMap as SccHashMap;
+use crate::collections::SccHashMap;
 
 /// A tracing layer that handles all terminal user interface on stdout and stderr, including progress bars.
 ///
@@ -330,7 +330,7 @@ impl TuiLayer {
             list_header_emitted: AtomicBool::new(false),
             group_skipped_tests,
             progress,
-            generic_op_is_bar: SccHashMap::new(),
+            generic_op_is_bar: SccHashMap::default(),
             is_nextest: std::env::var("NEXTEST").is_ok(),
         };
 
@@ -343,7 +343,7 @@ impl TuiLayer {
             list_header_emitted: AtomicBool::new(false),
             group_skipped_tests,
             progress,
-            generic_op_is_bar: SccHashMap::new(),
+            generic_op_is_bar: SccHashMap::default(),
         };
 
         res

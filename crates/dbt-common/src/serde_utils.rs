@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::{fmt, marker::PhantomData};
 
-use dashmap::DashMap;
+use crate::dashmap::DashMap;
 use indexmap::IndexMap;
 use minijinja::value::ValueMap;
 use serde::{
@@ -57,7 +57,7 @@ pub fn convert_yml_to_map(yml: YmlValue) -> BTreeMap<String, minijinja::Value> {
 pub fn convert_yml_to_dash_map(yml: YmlValue) -> DashMap<String, minijinja::Value> {
     match yml {
         YmlValue::Mapping(map, _) => {
-            let value_map = DashMap::new();
+            let value_map = DashMap::default();
             for (k, v) in map {
                 value_map.insert(
                     k.as_str().expect("key is not a string").to_string(),
@@ -67,7 +67,7 @@ pub fn convert_yml_to_dash_map(yml: YmlValue) -> DashMap<String, minijinja::Valu
             value_map
         }
         _ => {
-            let map = DashMap::new();
+            let map = DashMap::default();
             map.insert("value".to_string(), convert_yml_value(yml));
             map
         }

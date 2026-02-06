@@ -1,5 +1,6 @@
 use console::Style;
 use dbt_common::cli_parser_trait::CliParserTrait;
+use dbt_common::collections::HashSet;
 use dbt_common::io_utils::determine_project_dir;
 use dbt_common::{ErrorCode, FsResult, fs_err, stdfs};
 use dbt_serde_yaml::Value as YValue;
@@ -11,7 +12,7 @@ use std::ffi::OsString;
 use std::fmt;
 use std::sync::LazyLock;
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::BTreeMap,
     path::{Path, PathBuf},
     str::FromStr,
 };
@@ -1723,9 +1724,11 @@ fn resolve_show_arg(show_arg: &[ShowOptions], quiet: bool) -> HashSet<ShowOption
     let mut show = if show_arg.contains(&ShowOptions::All) {
         ShowOptions::iter().collect()
     } else if show_arg.contains(&ShowOptions::None) {
-        HashSet::new()
+        HashSet::default()
     } else if show_arg.is_empty() {
-        HashSet::from([ShowOptions::Progress, ShowOptions::Completed])
+        [ShowOptions::Progress, ShowOptions::Completed]
+            .into_iter()
+            .collect()
     } else {
         show_arg
             .iter()
@@ -1750,7 +1753,7 @@ fn resolve_show_arg(show_arg: &[ShowOptions], quiet: bool) -> HashSet<ShowOption
 
     // quiet overrules all show options
     if quiet {
-        show = HashSet::new();
+        show = HashSet::default();
     }
 
     show
@@ -2065,7 +2068,9 @@ impl InitArgs {
         let show = if arg.io.show.contains(&ShowOptions::All) {
             ShowOptions::iter().collect()
         } else if arg.io.show.is_empty() {
-            HashSet::from([ShowOptions::Progress, ShowOptions::Completed])
+            [ShowOptions::Progress, ShowOptions::Completed]
+                .into_iter()
+                .collect()
         } else {
             arg.io.show.iter().cloned().collect()
         };

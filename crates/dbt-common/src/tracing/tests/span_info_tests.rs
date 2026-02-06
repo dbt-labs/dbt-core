@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::tracing::{
     emit::{create_info_span, create_root_info_span},
     init::create_tracing_subcriber_with_layer,
@@ -10,6 +8,7 @@ use crate::tracing::{
         record_span_status_from_attrs, record_span_status_with_attrs,
     },
 };
+use dbt_base::{HashMap, hashmap};
 use dbt_telemetry::{AnyTelemetryEvent, SpanStatus, TelemetryAttributes, TelemetryEventRecType};
 use serde::Serialize;
 use tracing_subscriber::{Registry, registry::LookupSpan as _};
@@ -191,7 +190,7 @@ fn test_record_span_attrs_and_status() {
         guard.clone()
     };
 
-    let mut observed: HashMap<String, (Option<SpanStatus>, TestStatusEvent)> = HashMap::new();
+    let mut observed: HashMap<String, (Option<SpanStatus>, TestStatusEvent)> = hashmap::new();
 
     for span_end in &span_ends {
         if let Some(event) = span_end.attributes.downcast_ref::<TestStatusEvent>() {

@@ -6,7 +6,7 @@ members = [
   "crates/dbt-test-primitives",
   "crates/dbt-agate",
   "crates/dbt-auth",
-  "crates/dbt-cancel",
+  "crates/dbt-base",
   "crates/dbt-clap-core",
   "crates/dbt-common",
   "crates/dbt-csv",
@@ -173,7 +173,7 @@ opt-level = 3
 dbt-adapter = { path = "crates/dbt-adapter" }
 dbt-agate = { path = "crates/dbt-agate" }
 dbt-auth = { path = "crates/dbt-auth" }
-dbt-cancel = { path = "crates/dbt-cancel" }
+dbt-base = { path = "crates/dbt-base" }
 dbt-clap-core = { path = "crates/dbt-clap-core" }
 dbt-cloud-api = { path = "crates/dbt-cloud-api" }
 dbt-common = { path = "crates/dbt-common" }

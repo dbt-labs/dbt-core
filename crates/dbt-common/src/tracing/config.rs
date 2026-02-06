@@ -1,4 +1,4 @@
-use std::{collections::HashSet, path::PathBuf};
+use std::path::PathBuf;
 
 use super::{
     convert::log_level_filter_to_tracing,
@@ -18,6 +18,7 @@ use super::{
     middlewares::metric_aggregator::TelemetryMetricAggregator,
     shutdown::TelemetryShutdownItem,
 };
+use crate::collections::HashSet;
 use crate::{
     constants::{
         DBT_DEAFULT_LOG_FILE_NAME, DBT_DEAFULT_QUERY_LOG_FILE_NAME, DBT_LOG_DIR_NAME,
@@ -97,7 +98,7 @@ impl Default for FsTraceConfig {
             export_to_otlp: false,
             log_format: LogFormat::Default,
             enable_query_log: false,
-            show_options: HashSet::new(),
+            show_options: HashSet::default(),
             show_all_deprecations: false,
             disable_console_output: false,
         }

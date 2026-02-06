@@ -1,4 +1,4 @@
-use dashmap::DashMap;
+use dbt_common::collections::DashMap;
 use dbt_common::{
     DiscreteEventEmitter, FsResult,
     stats::{NodeStatus, Stat},

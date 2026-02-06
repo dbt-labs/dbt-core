@@ -1,6 +1,7 @@
 use clap::{ArgAction, builder::BoolishValueParser};
 use console::Style;
 use dbt_common::cli_parser_trait::CliParserTrait;
+use dbt_common::collections::HashSet;
 use dbt_common::constants::{DBT_PROJECT_YML, DBT_TARGET_DIR_NAME};
 use dbt_common::io_utils::determine_project_dir;
 use dbt_common::logging::LogFormat;
@@ -11,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::ffi::OsString;
 use std::sync::LazyLock;
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::BTreeMap,
     path::{Path, PathBuf},
 };
 use strum::{Display, IntoEnumIterator};
@@ -500,7 +501,7 @@ impl InitArgs {
         let show = if arg.io.show.contains(&ShowOptions::All) {
             ShowOptions::iter().collect()
         } else if arg.io.show.is_empty() {
-            HashSet::from([ShowOptions::Progress])
+            [ShowOptions::Progress].into_iter().collect()
         } else {
             arg.io.show.iter().cloned().collect()
         };
@@ -567,9 +568,11 @@ impl CommonArgs {
         let mut show = if self.show.contains(&ShowOptions::All) {
             ShowOptions::iter().collect()
         } else if self.show.contains(&ShowOptions::None) {
-            HashSet::new()
+            HashSet::default()
         } else if self.show.is_empty() {
-            HashSet::from_iter(vec![ShowOptions::Progress, ShowOptions::Completed])
+            [ShowOptions::Progress, ShowOptions::Completed]
+                .into_iter()
+                .collect()
         } else {
             self.show
                 .iter()
@@ -593,7 +596,7 @@ impl CommonArgs {
         };
         // quiet overrules all show options..
         if self.quiet {
-            show = HashSet::new();
+            show = HashSet::default();
         }
 
         EvalArgs {

@@ -18,7 +18,7 @@ dbt-frontend-common = { workspace = true }
 dbt-telemetry = { workspace = true }
 # leaf dependencies (depend on little more than std lib)
 blake3 = { workspace = true }
-dbt-cancel = { workspace = true }
+dbt-base = { workspace = true }
 hex = { workspace = true }
 md5 = { workspace = true }
 once_cell = { workspace = true }

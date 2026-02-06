@@ -5,6 +5,8 @@ use strum_macros::EnumIter;
 use strum_macros::{EnumCount, FromRepr};
 use tracing_subscriber::registry::Extensions;
 
+use crate::sccmap;
+
 use super::{
     constants::ROOT_SPAN_NAME,
     span_info::{SpanAccess, with_root_span},
@@ -74,14 +76,14 @@ struct MetricCounters {
     // Using AtomicU64 for invocation metrics
     invocation_counters: [AtomicU64; InvocationMetricKey::COUNT],
     // Other metrics with complex keys stored in a map
-    metrics: scc::HashMap<MetricKey, u64>,
+    metrics: sccmap::HashMap<MetricKey, u64>,
 }
 
 impl MetricCounters {
     fn new() -> Self {
         Self {
             invocation_counters: std::array::from_fn(|_| AtomicU64::new(0)),
-            metrics: scc::HashMap::new(),
+            metrics: sccmap::new(),
         }
     }
 
@@ -215,7 +217,7 @@ pub fn get_exit_code_from_error_counter() -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashSet;
+    use crate::collections::HashSet;
     use strum::IntoEnumIterator;
 
     #[test]

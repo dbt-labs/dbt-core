@@ -7,7 +7,7 @@ use std::{
     sync::Arc,
 };
 
-use dashmap::DashMap;
+use dbt_common::dashmap::DashMap;
 use dbt_common::{
     CodeLocationWithFile, ErrorCode, fs_err, tracing::emit::emit_warn_log_from_fs_error,
 };
