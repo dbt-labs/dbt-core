@@ -16,6 +16,25 @@ use super::{
 /// Title used for compiled inline node output (matching dbt-core)
 pub const COMPILED_INLINE_NODE_TITLE: &str = "Compiled inline node is:";
 
+/// Get the display alias for a node based on its type.
+///
+/// For tests and unit tests, we use `name` which contains the original (untruncated)
+/// test name for human-readable display. For other nodes, we use `identifier` (the
+/// database-safe alias) with `name` as a fallback.
+///
+/// This matches dbt-core behavior where truncated test names (with MD5 hashes) are
+/// used as database identifiers, but the full readable name is shown in CLI output.
+pub fn get_node_display_alias(node_type: NodeType, identifier: Option<&str>, name: &str) -> String {
+    match node_type {
+        // Tests and unit tests always use `name` for display (contains original untruncated name)
+        NodeType::Test | NodeType::UnitTest => name.to_string(),
+        // Other nodes prefer `identifier` (database alias) with `name` as fallback
+        _ => identifier
+            .map(|s| s.to_string())
+            .unwrap_or_else(|| name.to_string()),
+    }
+}
+
 /// Extract num_failures from test details if available
 pub fn get_num_failures(node: NodeEvent) -> Option<i32> {
     get_node_outcome_detail(node).and_then(|detail| {
@@ -239,7 +258,7 @@ pub fn format_node_processed_start(node: &NodeProcessed, colorize: bool) -> Stri
 
     // Prepare qualifier (schema for all nodes except sources) and alias
     let mut qualifier = node.schema.clone().unwrap_or_default();
-    let mut alias = node.identifier.clone().unwrap_or_else(|| node.name.clone());
+    let alias = get_node_display_alias(node_type, node.identifier.as_deref(), &node.name);
 
     if node_type == NodeType::Source {
         // For sources we show source_name.identifier to match dbt-core output.
@@ -248,10 +267,9 @@ pub fn format_node_processed_start(node: &NodeProcessed, colorize: bool) -> Stri
         }
     }
 
-    // Special handling for unit tests: display test schema + unit test name
+    // Special handling for unit tests: display test schema suffix
     if node_type == NodeType::UnitTest {
         qualifier = format!("{}{}", qualifier, UNIT_TEST_SCHEMA_SUFFIX);
-        alias = node.name.clone();
     }
 
     // Format components
@@ -286,7 +304,7 @@ pub fn format_node_processed_end(
 
     // Prepare qualifier (schema for all nodes except sources) and alias
     let mut qualifier = node.schema.clone().unwrap_or_default();
-    let mut alias = node.identifier.clone().unwrap_or_else(|| node.name.clone());
+    let alias = get_node_display_alias(node_type, node.identifier.as_deref(), &node.name);
 
     if node_type == NodeType::Source {
         // For sources we show source_name.identifier to match dbt-core output.
@@ -295,10 +313,9 @@ pub fn format_node_processed_end(
         }
     }
 
-    // Special handling for unit tests: display test schema + unit test name
+    // Special handling for unit tests: display test schema suffix
     if node_type == NodeType::UnitTest {
         qualifier = format!("{}{}", qualifier, UNIT_TEST_SCHEMA_SUFFIX);
-        alias = node.name.clone();
     }
 
     // Determine description based on outcome
@@ -351,7 +368,7 @@ pub fn format_node_evaluated_start(node: &NodeEvaluated, colorize: bool) -> Stri
 
     // Prepare relation schema and alias
     let relation_schema = node.schema.clone().unwrap_or_default();
-    let alias = node.identifier.clone().unwrap_or_else(|| node.name.clone());
+    let alias = get_node_display_alias(node_type, node.identifier.as_deref(), &node.name);
 
     // Format components
     let qualifier_alias = format_qualifier_alias(&relation_schema, &alias, colorize);
@@ -379,7 +396,7 @@ pub fn format_node_evaluated_end(
 
     // Prepare relation schema and alias
     let relation_schema = node.schema.clone().unwrap_or_default();
-    let alias = node.identifier.clone().unwrap_or_else(|| node.name.clone());
+    let alias = get_node_display_alias(node_type, node.identifier.as_deref(), &node.name);
 
     // Format components
     let qualifier_alias = format_qualifier_alias(&relation_schema, &alias, colorize);

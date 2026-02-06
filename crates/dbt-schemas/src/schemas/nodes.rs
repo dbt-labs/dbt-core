@@ -320,9 +320,10 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
 
         let node_checksum = common.checksum.as_checksum_string().to_string();
 
+        // Use original_name for display if available (for truncated test names)
         NodeEvaluated::start(
             common.unique_id.clone(),
-            common.name.clone(),
+            self.original_name().unwrap_or(&common.name).to_string(),
             Some(database),
             Some(schema),
             identifier,
@@ -390,7 +391,7 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
 
         NodeProcessed::start(
             common.unique_id.clone(),
-            common.name.clone(),
+            self.original_name().unwrap_or(&common.name).to_string(),
             Some(database),
             Some(schema),
             identifier,
