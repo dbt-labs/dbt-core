@@ -2,6 +2,7 @@ use dbt_common::adapter::{DBT_EXECUTION_PHASE_ANALYZE, DBT_EXECUTION_PHASES};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use scc::HashMap as SccHashMap;
+use std::ffi::OsStr;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -76,18 +77,13 @@ impl QueryCacheStatement {
             if let Ok(files) = std::fs::read_dir(output_dir)
                 && let Some(max_index) = files
                     .filter_map(|entry| entry.ok())
-                    .filter(|entry| entry.file_name().to_str().unwrap().starts_with(cache_key))
-                    .map(|entry| {
+                    .filter(|entry| {
                         entry
                             .file_name()
                             .to_str()
-                            .unwrap()
-                            .split("_")
-                            .nth(1)
-                            .unwrap()
-                            .parse::<usize>()
-                            .unwrap()
+                            .is_some_and(|s| s.starts_with(cache_key))
                     })
+                    .filter_map(|entry| parse_cache_file_index(&entry.file_name()))
                     .max()
             {
                 return max_index;
@@ -128,8 +124,13 @@ impl QueryCacheStatement {
         parquet_path: &Path,
         reader: &mut Box<dyn RecordBatchReader + Send + 'a>,
     ) -> AdbcResult<Box<dyn RecordBatchReader + Send + 'a>> {
-        std::fs::create_dir_all(parquet_path.parent().unwrap())
-            .map_err(|e| from_io_error(e, Some(parquet_path.parent().unwrap())))?;
+        let parent_dir = parquet_path.parent().ok_or_else(|| {
+            AdbcError::with_message_and_status(
+                format!("Invalid cache path (no parent): {}", parquet_path.display()),
+                AdbcStatus::Internal,
+            )
+        })?;
+        std::fs::create_dir_all(parent_dir).map_err(|e| from_io_error(e, Some(parent_dir)))?;
         let schema = reader.schema();
         let batches: Vec<RecordBatch> = reader.by_ref().collect::<Result<_, _>>()?;
 
@@ -205,9 +206,9 @@ impl Statement for QueryCacheStatement {
                     if self.check_ttl(&path)? {
                         let cache_read = self.read_cache(&path);
                         return cache_read;
-                    } else {
+                    } else if let Some(parent) = path.parent() {
                         // Try to remove the parent directory if the file is stale
-                        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+                        let _ = std::fs::remove_dir_all(parent);
                     }
                 }
                 // Execute on the actual engine's Statement
@@ -394,4 +395,57 @@ fn normalize_sql_for_comparison(sql: &str) -> String {
     // Also clean up schema names with timestamps
     let re = Regex::new(r"___\d+___").unwrap();
     re.replace_all(&normalized, "").to_string()
+}
+
+/// Extracts the numeric index from a cache filename like "abc12345_1.parquet".
+///
+/// Cache files are named `{hash}_{index}.parquet`. This function parses the index
+/// portion from the filename, handling the `.parquet` extension properly.
+fn parse_cache_file_index(filename: &OsStr) -> Option<usize> {
+    let stem = Path::new(filename).file_stem()?.to_str()?;
+    let num_str = stem.split('_').nth(1)?;
+    num_str.parse().ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_cache_file_index() {
+        // Normal cases
+        assert_eq!(
+            parse_cache_file_index(OsStr::new("abc12345_1.parquet")),
+            Some(1)
+        );
+        assert_eq!(
+            parse_cache_file_index(OsStr::new("abc12345_123.parquet")),
+            Some(123)
+        );
+        assert_eq!(
+            parse_cache_file_index(OsStr::new("a1b2c3d4_42.parquet")),
+            Some(42)
+        );
+
+        // Without extension (edge case)
+        assert_eq!(parse_cache_file_index(OsStr::new("abc_1")), Some(1));
+
+        // Missing number part
+        assert_eq!(parse_cache_file_index(OsStr::new("abc.parquet")), None);
+
+        // Non-numeric index
+        assert_eq!(parse_cache_file_index(OsStr::new("abc_foo.parquet")), None);
+
+        // Empty string
+        assert_eq!(parse_cache_file_index(OsStr::new("")), None);
+
+        // Just underscore
+        assert_eq!(parse_cache_file_index(OsStr::new("_")), None);
+
+        // Index with leading zeros
+        assert_eq!(
+            parse_cache_file_index(OsStr::new("abc_007.parquet")),
+            Some(7)
+        );
+    }
 }
