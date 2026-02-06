@@ -398,6 +398,19 @@ class TestCustomKeyInConfigSQLDeprecation:
             in event_catcher.caught_events[0].info.msg
         )
 
+    @mock.patch("dbt.jsonschemas.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
+    @mock.patch(
+        "dbt.jsonschemas.jsonschemas._get_allowed_config_key_aliases",
+        return_value=["my_custom_key"],
+    )
+    def test_custom_key_in_config_sql_deprecation_adapter_specific_config_key_aliases(self, *_):
+        event_catcher = EventCatcher(CustomKeyInConfigDeprecation)
+        run_dbt(
+            ["parse", "--no-partial-parse", "--show-all-deprecations"],
+            callbacks=[event_catcher.catch],
+        )
+        assert len(event_catcher.caught_events) == 0
+
 
 class TestCustomKeyInConfigComplexSQLDeprecation(TestCustomKeyInConfigSQLDeprecation):
     @pytest.fixture(scope="class")

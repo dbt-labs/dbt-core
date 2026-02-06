@@ -301,6 +301,10 @@ def validate_model_config(
                     if key in python_model_internal_keys and is_python_model:
                         continue
 
+                    # Dont raise deprecation warnings for adapter specific config key aliases
+                    if key in _get_allowed_config_key_aliases():
+                        continue
+
                     # For everything else, emit deprecation warning
                     deprecations.warn(
                         "custom-key-in-config-deprecation",
