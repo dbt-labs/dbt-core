@@ -11,6 +11,7 @@ members = [
   "crates/dbt-common",
   "crates/dbt-csv",
   "crates/dbt-cloud-api",
+  "crates/dbt-df-providers",
   "crates/dbt-features",
   "crates/dbt-init",
   "crates/dbt-error",
@@ -85,6 +86,9 @@ ring = { git = "https://github.com/sdf-labs/ring.git", rev = "3c35ce0b7e1bd9fe83
 # See https://doc.rust-lang.org/cargo/reference/overriding-dependencies.html#the-patch-section
 datafusion-common = { git = "https://github.com/sdf-labs/datafusion", rev = "c0627e28fdd64ad1e33e3e8f3d6515c7ecb886ed" } # @ sdf/50
 datafusion-expr = { git = "https://github.com/sdf-labs/datafusion", rev = "c0627e28fdd64ad1e33e3e8f3d6515c7ecb886ed" } # @ sdf/50
+datafusion = { git = "https://github.com/sdf-labs/datafusion", rev = "c0627e28fdd64ad1e33e3e8f3d6515c7ecb886ed" } # @ sdf/50
+datafusion-catalog = { git = "https://github.com/sdf-labs/datafusion", rev = "c0627e28fdd64ad1e33e3e8f3d6515c7ecb886ed" } # @ sdf/50
+
 
 # sqlparser
 sqlparser = { git = "https://github.com/sdf-labs/datafusion-sqlparser-rs", rev = "36843ce564b129a0e0a15b58997d8c132b7ce6d4" } # @ sdf/0.58.0
@@ -176,6 +180,7 @@ dbt-common = { path = "crates/dbt-common" }
 dbt-csv = { path = "crates/dbt-csv" }
 dbt-dag = { path = "crates/dbt-dag" }
 dbt-deps = { path = "crates/dbt-deps" }
+dbt-df-providers = { path = "crates/dbt-df-providers" }
 dbt-env = { path = "crates/dbt-env" }
 dbt-error = { path = "crates/dbt-error" }
 dbt-features = { path = "crates/dbt-features" }

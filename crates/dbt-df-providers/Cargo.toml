@@ -1,0 +1,34 @@
+[package]
+name = "dbt-df-providers"
+authors.workspace = true
+description.workspace = true
+edition.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+license.workspace = true
+repository.workspace = true
+version.workspace = true
+
+[dependencies]
+dbt-csv = { workspace = true }
+dbt-env = { workspace = true }
+dbt-frontend-common = { workspace = true }
+dbt-ident = { workspace = true }
+dbt-schema-store = { workspace = true }
+
+arrow-schema = { workspace = true }
+async-trait = { workspace = true }
+datafusion = { workspace = true, features = ["parquet"] }
+datafusion-catalog = { workspace = true }
+datafusion-common = { workspace = true }
+datafusion-expr = { workspace = true }
+dbt-fusion-workspace-hack = { version = "0.1" }
+futures = { workspace = true }
+scc = { workspace = true }
+tempfile = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+
+[lints]
+workspace = true
