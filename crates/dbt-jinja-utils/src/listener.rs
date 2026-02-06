@@ -142,6 +142,12 @@ pub trait JinjaTypeCheckingEventListenerFactory: Send + Sync {
     /// This is for DagExtractListener (Macro depends on) only
     /// We need to type check sql before unique id is determined
     fn update_unique_id(&self, _old_unique_id: &str, _new_unique_id: &str) {}
+
+    /// Determines whether or not the listener factory is able to capture
+    /// information on hooks.
+    fn can_listen_on_hooks(&self) -> bool {
+        true
+    }
 }
 
 /// Default implementation of the `ListenerFactory` trait

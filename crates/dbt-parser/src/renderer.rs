@@ -17,8 +17,8 @@ use dbt_common::tracing::span_info::SpanStatusRecorder as _;
 use dbt_common::{ErrorCode, FsError, FsResult, create_debug_span, fs_err};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::listener::{
-    DefaultRenderingEventListenerFactory, JinjaTypeCheckingEventListenerFactory,
-    RenderingEventListenerFactory,
+    DefaultJinjaTypeCheckEventListenerFactory, DefaultRenderingEventListenerFactory,
+    JinjaTypeCheckingEventListenerFactory, RenderingEventListenerFactory,
 };
 use dbt_jinja_utils::node_resolver::NodeResolver;
 use dbt_jinja_utils::phases::build_compile_and_run_base_context;
@@ -1045,11 +1045,18 @@ pub fn collect_hook_dependencies_from_config<T: DefaultTo<T> + 'static>(
             && let Ok(unique_id) = model.get_attr("unique_id")
             && let Some(unique_id) = unique_id.as_str()
         {
+            let jinja_type_checking_event_listener_factory =
+                if jinja_type_checking_event_listener_factory.can_listen_on_hooks() {
+                    jinja_type_checking_event_listener_factory.clone()
+                } else {
+                    Arc::new(DefaultJinjaTypeCheckEventListenerFactory::default())
+                };
+            Arc::new(DefaultJinjaTypeCheckEventListenerFactory::default());
             let _ = dbt_jinja_utils::typecheck::typecheck(
                 &io,
                 jinja_env.clone(),
                 &HashMap::new(),
-                jinja_type_checking_event_listener_factory.clone(),
+                jinja_type_checking_event_listener_factory,
                 None,
                 &jinja_env.env.get_root_package_name(),
                 MinijinjaValue::from_dyn_object(jinja_env.env.get_dbt_and_adapters_namespace()),
