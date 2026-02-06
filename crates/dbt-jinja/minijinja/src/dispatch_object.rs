@@ -401,6 +401,12 @@ pub fn macro_namespace_template_resolver(
         }
     }
 
+    // 4. Direct template name (fallback for tests and simple cases)
+    attempts.push(search_name.to_string());
+    if template_exists(state, search_name) {
+        return Some(search_name.to_string());
+    }
+
     // No template found
     None
 }
