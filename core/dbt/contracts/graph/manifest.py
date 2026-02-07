@@ -984,6 +984,10 @@ class Manifest(MacroMethods, dbtClassMixin):
         default=None,
         metadata={"serialize": lambda x: None, "deserialize": lambda x: None},
     )
+    _custom_granularity_names: Optional[Set[str]] = field(
+        default=None,
+        metadata={"serialize": lambda x: None, "deserialize": lambda x: None},
+    )
 
     def __pre_serialize__(self, context: Optional[Dict] = None):
         # serialization won't work with anything except an empty source_patches because
@@ -1016,6 +1020,16 @@ class Manifest(MacroMethods, dbtClassMixin):
                 k: v.to_dict(omit_none=False) for k, v in self.saved_queries.items()
             },
         }
+
+    def get_custom_granularity_names(self) -> Set[str]:
+        if self._custom_granularity_names is None:
+            names: Set[str] = set()
+            for node in self.nodes.values():
+                if isinstance(node, ModelNode) and node.time_spine:
+                    for custom_granularity in node.time_spine.custom_granularities:
+                        names.add(custom_granularity.name)
+            self._custom_granularity_names = names
+        return self._custom_granularity_names
 
     def build_disabled_by_file_id(self):
         disabled_by_file_id = {}
