@@ -21,6 +21,7 @@ from dbt.artifacts.resources import (
     MetricTypeParams,
     Owner,
     RefArgs,
+    UnitTestOutputFixture,
     WhereFilter,
     WhereFilterIntersection,
 )
@@ -35,6 +36,7 @@ from dbt.contracts.graph.nodes import (
     ModelNode,
     SeedNode,
     SourceDefinition,
+    UnitTestDefinition,
 )
 from dbt.exceptions import AmbiguousResourceNameRefError, ParsingError
 from dbt.flags import set_from_args
@@ -510,6 +512,7 @@ class ManifestTest(unittest.TestCase):
         flat_sources = flat_graph["sources"]
         flat_semantic_models = flat_graph["semantic_models"]
         flat_saved_queries = flat_graph["saved_queries"]
+        flat_unit_tests = flat_graph["unit_tests"]
         self.assertEqual(
             set(flat_graph),
             set(
@@ -522,6 +525,7 @@ class ManifestTest(unittest.TestCase):
                     "metrics",
                     "semantic_models",
                     "saved_queries",
+                    "unit_tests",
                 ]
             ),
         )
@@ -532,8 +536,58 @@ class ManifestTest(unittest.TestCase):
         self.assertEqual(set(flat_sources), set(self.sources))
         self.assertEqual(set(flat_semantic_models), set(self.semantic_models))
         self.assertEqual(set(flat_saved_queries), set(self.saved_queries))
+        self.assertEqual(set(flat_unit_tests), set())
         for node in flat_nodes.values():
             self.assertEqual(frozenset(node), REQUIRED_PARSED_NODE_KEYS)
+
+    def test_build_flat_graph_with_unit_tests(self):
+        """Test that unit tests are included in flat_graph."""
+        nodes = deepcopy(self.nested_nodes)
+        # Create a unit test for the events model
+        unit_test = UnitTestDefinition(
+            name="test_events",
+            model="events",
+            package_name="root",
+            resource_type=NodeType.Unit,
+            path="unit_tests.yml",
+            original_file_path="models/unit_tests.yml",
+            unique_id="unit_test.root.events.test_events",
+            given=[],
+            expect=UnitTestOutputFixture(rows=[{"id": 1}]),
+            fqn=["root", "events", "test_events"],
+            depends_on=DependsOn(nodes=["model.root.events"]),
+        )
+        unit_tests = {unit_test.unique_id: unit_test}
+
+        manifest = Manifest(
+            nodes=nodes,
+            sources=deepcopy(self.sources),
+            macros={},
+            docs={},
+            disabled={},
+            files={},
+            exposures=deepcopy(self.exposures),
+            metrics=deepcopy(self.metrics),
+            groups=deepcopy(self.groups),
+            selectors={},
+            unit_tests=unit_tests,
+        )
+        manifest.build_flat_graph()
+        flat_graph = manifest.flat_graph
+
+        # Verify unit_tests key exists
+        self.assertIn("unit_tests", flat_graph)
+        flat_unit_tests = flat_graph["unit_tests"]
+
+        # Verify the unit test is in flat_graph
+        self.assertEqual(set(flat_unit_tests), set(unit_tests))
+        self.assertIn("unit_test.root.events.test_events", flat_unit_tests)
+
+        # Verify the unit test data is serialized correctly
+        flat_unit_test = flat_unit_tests["unit_test.root.events.test_events"]
+        self.assertEqual(flat_unit_test["name"], "test_events")
+        self.assertEqual(flat_unit_test["model"], "events")
+        self.assertEqual(flat_unit_test["package_name"], "root")
 
     @mock.patch.object(tracking, "active_user")
     @freezegun.freeze_time("2018-02-14T09:15:13Z")
@@ -1041,10 +1095,12 @@ class MixedManifestTest(unittest.TestCase):
                     "sources",
                     "semantic_models",
                     "saved_queries",
+                    "unit_tests",
                 ]
             ),
         )
         self.assertEqual(set(flat_nodes), set(self.nested_nodes))
+        self.assertEqual(set(flat_graph["unit_tests"]), set())
         compiled_count = 0
         for node in flat_nodes.values():
             if node.get("compiled"):
