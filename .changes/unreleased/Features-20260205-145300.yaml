@@ -1,0 +1,6 @@
+kind: Features
+body: Add --max-column-width and --max-columns options to dbt show command
+time: 2026-02-05T14:53:00.000000-06:00
+custom:
+    Author: RamiNoodle733
+    Issue: "12448"
