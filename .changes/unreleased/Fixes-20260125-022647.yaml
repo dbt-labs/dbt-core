@@ -1,0 +1,6 @@
+kind: Fixes
+body: Warn (with seed name/path) when seed column_types references columns not present in the seed CSV header, and ignore those entries to prevent agate warnings.
+time: 2026-01-25T02:26:47.44683+01:00
+custom:
+    Author: hamza-dri
+    Issue: "12379"
