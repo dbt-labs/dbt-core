@@ -466,6 +466,10 @@ class Linker:
 class Compiler:
     def __init__(self, config) -> None:
         self.config = config
+        # Set of unique_ids for nodes selected in the current run.
+        # Used to determine whether FK constraint targets should use
+        # deferred relations or current relations during compilation.
+        self.selected_node_ids: Set[str] = set()
 
     def initialize(self):
         make_directory(self.config.project_target_path)
@@ -661,10 +665,18 @@ class Compiler:
 
         adapter = get_adapter(self.config)
 
+        # Use deferred relation only if:
+        # 1. The foreign key node has a defer_relation (from previous state)
+        # 2. The --defer flag is set
+        # 3. The foreign key node is NOT being built in the current run
+        #    (i.e., not in selected_node_ids)
+        # This mirrors the logic in RuntimeRefResolver.create_relation() for
+        # model body refs, ensuring FK constraints behave consistently.
         if (
             hasattr(foreign_key_node, "defer_relation")
             and foreign_key_node.defer_relation
             and self.config.args.defer
+            and foreign_key_node.unique_id not in self.selected_node_ids
         ):
             return str(adapter.Relation.create_from(self.config, foreign_key_node.defer_relation))
         else:
