@@ -127,6 +127,7 @@ class NodeConfig(NodeAndTestConfig):
     )
     event_time: Any = None
     concurrent_batches: Any = None
+    event_timezone: Any = "UTC"
 
     def __post_init__(self):
         # we validate that node_color has a suitable value to prevent dbt-docs from crashing
