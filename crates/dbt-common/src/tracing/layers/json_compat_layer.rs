@@ -4,11 +4,11 @@ use chrono::Utc;
 use dbt_error::ErrorCode;
 use dbt_telemetry::{
     ArtifactType, ArtifactWritten, CompiledCodeInline, DepsAddPackage, DepsPackageInstalled,
-    ExecutionPhase, Invocation, ListItemOutput, LogMessage, LogRecordInfo, NodeEvaluated,
-    NodeEvent, NodeOutcome, NodeProcessed, NodeSkipReason, NodeType, ProgressMessage,
-    QueryExecuted, SeverityNumber, ShowDataOutput, ShowResult, SpanEndInfo, SpanStartInfo,
-    StatusCode, TelemetryOutputFlags, TestOutcome, UserLogMessage, get_freshness_detail,
-    get_test_outcome,
+    ExecutionPhase, HookProcessed, HookType, Invocation, ListItemOutput, LogMessage, LogRecordInfo,
+    NodeEvaluated, NodeEvent, NodeOutcome, NodeProcessed, NodeSkipReason, NodeType,
+    ProgressMessage, QueryExecuted, SeverityNumber, ShowDataOutput, ShowResult, SpanEndInfo,
+    SpanStartInfo, StatusCode, TelemetryOutputFlags, TestOutcome, UserLogMessage,
+    get_freshness_detail, get_test_outcome,
 };
 
 use serde_json::json;
@@ -20,6 +20,7 @@ use super::super::{
     formatters::{
         deps::{format_package_installed_end, format_package_installed_start, format_package_spec},
         duration::format_timestamp_utc_zulu,
+        hook::format_hook_outcome_as_status,
         invocation::format_invocation_summary,
         log_message::format_log_message,
         node::{
@@ -618,6 +619,95 @@ impl JsonCompatLayer {
         self.writer.writeln(value.as_str());
     }
 
+    /// Handle HookProcessed span start events
+    /// Generates LogHookStartLine (Q032)
+    fn emit_hook_processed_start(&self, hook: &HookProcessed, _span: &SpanStartInfo) {
+        if matches!(hook.hook_type(), HookType::PreHook | HookType::PostHook) {
+            // Dbt core doesn't emit json events for node hooks
+            return;
+        }
+
+        let msg = format!("START hook: {}", hook.unique_id);
+
+        let info_json = serde_json::to_value(self.build_core_event_info(
+            Some("Q032"),
+            Some("LogHookStartLine"),
+            "info",
+            msg,
+        ))
+        .expect("Failed to serialize core event info to JSON");
+
+        let node_info = json!({
+            "unique_id": hook.unique_id,
+            "resource_type": "operation",
+            "node_status": "started",
+            "node_name": hook.name.as_deref().unwrap_or(""),
+        });
+
+        let value = json!({
+            "info": info_json,
+            "data": {
+                "node_info": node_info,
+                "index": hook.hook_index,
+            }
+        })
+        .to_string();
+
+        self.writer.writeln(value.as_str());
+    }
+
+    /// Handle HookProcessed span end events
+    /// Generates LogHookEndLine (Q033)
+    fn emit_hook_processed_end(&self, hook: &HookProcessed, span: &SpanEndInfo) {
+        if matches!(hook.hook_type(), HookType::PreHook | HookType::PostHook) {
+            // Dbt core doesn't emit json events for node hooks
+            return;
+        }
+
+        let hook_outcome = hook.hook_outcome();
+        let status = format_hook_outcome_as_status(hook_outcome, false);
+
+        let duration = span
+            .end_time_unix_nano
+            .duration_since(span.start_time_unix_nano)
+            .unwrap_or_default();
+
+        let msg_status = if hook_outcome == dbt_telemetry::HookOutcome::Success {
+            "OK"
+        } else {
+            "ERROR"
+        };
+        let msg = format!("{msg_status} hook: {}", hook.unique_id,);
+
+        let info_json = serde_json::to_value(self.build_core_event_info(
+            Some("Q033"),
+            Some("LogHookEndLine"),
+            "info",
+            msg,
+        ))
+        .expect("Failed to serialize core event info to JSON");
+
+        let node_info = json!({
+            "unique_id": hook.unique_id,
+            "resource_type": "operation",
+            "node_status": status,
+            "node_name": hook.name.as_deref().unwrap_or(""),
+        });
+
+        let value = json!({
+            "info": info_json,
+            "data": {
+                "node_info": node_info,
+                "index": hook.hook_index,
+                "status": status,
+                "execution_time": duration.as_secs_f32(),
+            }
+        })
+        .to_string();
+
+        self.writer.writeln(value.as_str());
+    }
+
     /// Handle NodeEvaluated span start events
     /// Generates NodeCompiling (Q030) for Render phase or NodeExecuting (Q031) for Run phase
     fn emit_node_evaluated_start(&self, node: &NodeEvaluated, span: &SpanStartInfo) {
@@ -1129,6 +1219,12 @@ impl TelemetryConsumer for JsonCompatLayer {
             return;
         }
 
+        // Dispatch to HookProcessed handler
+        if let Some(hook_processed) = span.attributes.downcast_ref::<HookProcessed>() {
+            self.emit_hook_processed_start(hook_processed, span);
+            return;
+        }
+
         // Dispatch to DepsPackageInstalled handler
         if let Some(pkg) = span.attributes.downcast_ref::<DepsPackageInstalled>() {
             self.emit_dep_installed_start(pkg, span);
@@ -1151,6 +1247,12 @@ impl TelemetryConsumer for JsonCompatLayer {
         // Dispatch to NodeProcessed handler
         if let Some(node_processed) = span.attributes.downcast_ref::<NodeProcessed>() {
             self.emit_node_processed_end(node_processed, span);
+            return;
+        }
+
+        // Dispatch to HookProcessed handler
+        if let Some(hook_processed) = span.attributes.downcast_ref::<HookProcessed>() {
+            self.emit_hook_processed_end(hook_processed, span);
             return;
         }
 

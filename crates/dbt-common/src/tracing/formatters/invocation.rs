@@ -297,6 +297,14 @@ fn format_status_text(errors: u64, warnings: u64, colorize: bool) -> String {
 fn format_evaluated_line(data_provider: &DataProvider<'_>, _colorize: bool) -> Option<String> {
     let mut parts = Vec::new();
 
+    // First, add hooks if any
+    let hook_count = data_provider.get_metric(MetricKey::HookCounts);
+    if hook_count > 0 {
+        let word = if hook_count > 1 { "hooks" } else { "hook" };
+        parts.push(format!("{} {}", hook_count, word));
+    }
+
+    // Then add nodes by type
     for (node_type, count) in data_provider
         .get_all_metrics()
         .iter()

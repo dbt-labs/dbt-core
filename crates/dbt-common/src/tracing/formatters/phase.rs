@@ -15,6 +15,8 @@ pub fn get_phase_action(phase: ExecutionPhase) -> &'static str {
         ExecutionPhase::Lineage => "generating lineage",
         ExecutionPhase::LoadProject => "loading project",
         ExecutionPhase::NodeCacheHydration => "hydrating",
+        ExecutionPhase::OnRunStart => "on-run-start hooks",
+        ExecutionPhase::OnRunEnd => "on-run-end hooks",
         ExecutionPhase::Parse => "parsing",
         ExecutionPhase::Render => "rendering",
         ExecutionPhase::Run => "running",
@@ -40,6 +42,9 @@ pub fn get_phase_progress_text(phase: ExecutionPhase) -> Option<String> {
         ExecutionPhase::Lineage => "Generating",
         ExecutionPhase::LoadProject => "Loading",
         ExecutionPhase::NodeCacheHydration => "Hydrating",
+        // Special case - longer than action column width => no padding
+        ExecutionPhase::OnRunStart => return Some("Running on-run-start".to_string()),
+        ExecutionPhase::OnRunEnd => return Some("Running on-run-end".to_string()),
         ExecutionPhase::Parse => "Parsing",
         ExecutionPhase::Render => "Rendering",
         ExecutionPhase::Run => "Running",

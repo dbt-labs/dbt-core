@@ -30,6 +30,10 @@ pub mod v1 {
                     include!("v1.public.events.fusion.generic.rs");
                     include!("v1.public.events.fusion.generic.serde.rs");
                 }
+                pub mod hook {
+                    include!("v1.public.events.fusion.hook.rs");
+                    include!("v1.public.events.fusion.hook.serde.rs");
+                }
                 pub mod invocation {
                     include!("v1.public.events.fusion.invocation.rs");
                     include!("v1.public.events.fusion.invocation.serde.rs");

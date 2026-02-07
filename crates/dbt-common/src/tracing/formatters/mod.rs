@@ -4,6 +4,7 @@ pub mod constants;
 pub mod deps;
 pub mod duration;
 pub mod generic;
+pub mod hook;
 pub mod invocation;
 pub mod layout;
 pub mod log_message;

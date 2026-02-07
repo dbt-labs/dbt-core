@@ -22,6 +22,8 @@ impl Display for ExecutionPhase {
             Self::Lineage => "Lineage",
             Self::Debug => "Debug",
             Self::Compare => "Compare",
+            Self::OnRunStart => "OnRunStart",
+            Self::OnRunEnd => "OnRunEnd",
         };
         f.write_str(s)
     }

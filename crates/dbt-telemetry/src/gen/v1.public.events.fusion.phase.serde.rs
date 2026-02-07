@@ -22,6 +22,8 @@ impl serde::Serialize for ExecutionPhase {
             Self::FreshnessAnalysis => "EXECUTION_PHASE_FRESHNESS_ANALYSIS",
             Self::Lineage => "EXECUTION_PHASE_LINEAGE",
             Self::Debug => "EXECUTION_PHASE_DEBUG",
+            Self::OnRunStart => "EXECUTION_PHASE_ON_RUN_START",
+            Self::OnRunEnd => "EXECUTION_PHASE_ON_RUN_END",
         };
         serializer.serialize_str(variant)
     }
@@ -50,6 +52,8 @@ impl<'de> serde::Deserialize<'de> for ExecutionPhase {
             "EXECUTION_PHASE_FRESHNESS_ANALYSIS",
             "EXECUTION_PHASE_LINEAGE",
             "EXECUTION_PHASE_DEBUG",
+            "EXECUTION_PHASE_ON_RUN_START",
+            "EXECUTION_PHASE_ON_RUN_END",
         ];
 
         struct GeneratedVisitor;
@@ -107,6 +111,8 @@ impl<'de> serde::Deserialize<'de> for ExecutionPhase {
                     "EXECUTION_PHASE_FRESHNESS_ANALYSIS" => Ok(ExecutionPhase::FreshnessAnalysis),
                     "EXECUTION_PHASE_LINEAGE" => Ok(ExecutionPhase::Lineage),
                     "EXECUTION_PHASE_DEBUG" => Ok(ExecutionPhase::Debug),
+                    "EXECUTION_PHASE_ON_RUN_START" => Ok(ExecutionPhase::OnRunStart),
+                    "EXECUTION_PHASE_ON_RUN_END" => Ok(ExecutionPhase::OnRunEnd),
                     _ => Err(serde::de::Error::unknown_variant(value, FIELDS)),
                 }
             }

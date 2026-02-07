@@ -1,9 +1,10 @@
 use dbt_telemetry::{
-    Invocation, InvocationMetrics, LogMessage, LogRecordInfo, NodeOutcome, NodeProcessed,
-    NodeSkipReason, SeverityNumber, SpanEndInfo, TestOutcome, node_processed::NodeOutcomeDetail,
+    HookProcessed, Invocation, InvocationMetrics, LogMessage, LogRecordInfo, NodeOutcome,
+    NodeProcessed, NodeSkipReason, SeverityNumber, SpanEndInfo, TestOutcome,
+    node_processed::NodeOutcomeDetail,
 };
 
-use crate::tracing::metrics::NodeOutcomeCountsKey;
+use crate::tracing::metrics::{OutcomeCountsKey, OutcomeKind};
 
 use super::super::{
     data_provider::DataProvider,
@@ -46,30 +47,38 @@ impl TelemetryMiddleware for TelemetryMetricAggregator {
                 .get_all_metrics()
                 .iter()
                 .filter_map(|(key, count)| match key {
-                    MetricKey::NodeOutcomeCounts(outcome_key) if *count > 0 => {
+                    MetricKey::OutcomeCounts(outcome_key) if *count > 0 => {
                         Some((outcome_key.into_parts(), *count))
                     }
                     _ => None,
                 })
             {
                 match outcome {
-                    NodeOutcome::Success => match test_outcome {
-                        Some(TestOutcome::Failed) => error += count,
-                        Some(TestOutcome::Warned) => warning += count,
-                        _ => success += count,
-                    },
-                    NodeOutcome::Error => error += count,
-                    NodeOutcome::Skipped => {
-                        if skip_reason == NodeSkipReason::Cached {
-                            reused += count;
-                        } else if skip_reason == NodeSkipReason::NoOp {
-                            no_op += count;
-                        } else {
-                            skipped += count;
+                    OutcomeKind::Node(outcome) => match outcome {
+                        NodeOutcome::Success => match test_outcome {
+                            Some(TestOutcome::Failed) => error += count,
+                            Some(TestOutcome::Warned) => warning += count,
+                            _ => success += count,
+                        },
+                        NodeOutcome::Error => error += count,
+                        NodeOutcome::Skipped => {
+                            if skip_reason == NodeSkipReason::Cached {
+                                reused += count;
+                            } else if skip_reason == NodeSkipReason::NoOp {
+                                no_op += count;
+                            } else {
+                                skipped += count;
+                            }
                         }
-                    }
-                    NodeOutcome::Canceled => canceled += count,
-                    NodeOutcome::Unspecified => no_op += count,
+                        NodeOutcome::Canceled => canceled += count,
+                        NodeOutcome::Unspecified => no_op += count,
+                    },
+                    OutcomeKind::Hook(hook_outcome) => match hook_outcome {
+                        dbt_telemetry::HookOutcome::Success => success += count,
+                        dbt_telemetry::HookOutcome::Error => error += count,
+                        dbt_telemetry::HookOutcome::Canceled => canceled += count,
+                        dbt_telemetry::HookOutcome::Unspecified => no_op += count,
+                    },
                 }
             }
 
@@ -156,8 +165,8 @@ impl TelemetryMiddleware for TelemetryMetricAggregator {
         if let Some(attrs) = span.attributes.downcast_ref::<NodeProcessed>()
             && attrs.in_selection
         {
-            let key = NodeOutcomeCountsKey::new(
-                attrs.node_outcome(),
+            let key = OutcomeCountsKey::new(
+                OutcomeKind::Node(attrs.node_outcome()),
                 attrs.node_skip_reason(),
                 if let Some(NodeOutcomeDetail::NodeTestDetail(ted)) = &attrs.node_outcome_detail {
                     Some(ted.test_outcome())
@@ -165,7 +174,20 @@ impl TelemetryMiddleware for TelemetryMetricAggregator {
                     None
                 },
             );
-            data_provider.increment_metric(MetricKey::NodeOutcomeCounts(key), 1);
+            data_provider.increment_metric(MetricKey::OutcomeCounts(key), 1);
+        }
+
+        // Count hook processed spans - hooks are always counted regardless of selection
+        if let Some(hook_attrs) = span.attributes.downcast_ref::<HookProcessed>() {
+            // Count the hook
+            data_provider.increment_metric(MetricKey::HookCounts, 1);
+
+            let key = OutcomeCountsKey::new(
+                OutcomeKind::Hook(hook_attrs.hook_outcome()),
+                NodeSkipReason::Unspecified,
+                None,
+            );
+            data_provider.increment_metric(MetricKey::OutcomeCounts(key), 1);
         }
 
         Some(span)

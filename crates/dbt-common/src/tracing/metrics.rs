@@ -1,4 +1,4 @@
-use dbt_telemetry::{NodeOutcome, NodeSkipReason, NodeType, TestOutcome};
+use dbt_telemetry::{HookOutcome, NodeOutcome, NodeSkipReason, NodeType, TestOutcome};
 use strum::EnumCount as _;
 #[cfg(test)]
 use strum_macros::EnumIter;
@@ -32,22 +32,28 @@ pub enum InvocationMetricKey {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct NodeOutcomeCountsKey(NodeOutcome, NodeSkipReason, Option<TestOutcome>);
+pub enum OutcomeKind {
+    Node(NodeOutcome),
+    Hook(HookOutcome),
+}
 
-impl NodeOutcomeCountsKey {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct OutcomeCountsKey(OutcomeKind, NodeSkipReason, Option<TestOutcome>);
+
+impl OutcomeCountsKey {
     pub fn new(
-        outcome: NodeOutcome,
+        outcome: OutcomeKind,
         skip_reason: NodeSkipReason,
         test_outcome: Option<TestOutcome>,
     ) -> Self {
         Self(outcome, skip_reason, test_outcome)
     }
 
-    pub fn node_outcome(&self) -> NodeOutcome {
+    pub fn outcome(&self) -> OutcomeKind {
         self.0
     }
 
-    pub fn node_skip_reason(&self) -> NodeSkipReason {
+    pub fn skip_reason(&self) -> NodeSkipReason {
         self.1
     }
 
@@ -55,7 +61,7 @@ impl NodeOutcomeCountsKey {
         self.2
     }
 
-    pub fn into_parts(self) -> (NodeOutcome, NodeSkipReason, Option<TestOutcome>) {
+    pub fn into_parts(self) -> (OutcomeKind, NodeSkipReason, Option<TestOutcome>) {
         (self.0, self.1, self.2)
     }
 }
@@ -64,7 +70,8 @@ impl NodeOutcomeCountsKey {
 pub enum MetricKey {
     InvocationMetric(InvocationMetricKey),
     NodeCounts(NodeType),
-    NodeOutcomeCounts(NodeOutcomeCountsKey),
+    OutcomeCounts(OutcomeCountsKey),
+    HookCounts,
 }
 
 /// A private struct holding all metric counters.
@@ -242,8 +249,8 @@ mod tests {
         // Test NodeType metrics
         for key in [
             MetricKey::NodeCounts(Default::default()),
-            MetricKey::NodeOutcomeCounts(NodeOutcomeCountsKey(
-                Default::default(),
+            MetricKey::OutcomeCounts(OutcomeCountsKey(
+                OutcomeKind::Node(Default::default()),
                 Default::default(),
                 Default::default(),
             )),

@@ -9,7 +9,7 @@ use crate::{
     schemas::{
         ArtifactWritten, AssetParsed, CallTrace, CompiledCodeInline, DepsAddPackage,
         DepsAllPackagesInstalled, DepsPackageInstalled, GenericOpExecuted, GenericOpItemProcessed,
-        Invocation, ListItemOutput, LogMessage, NodeEvaluated, NodeProcessed,
+        HookProcessed, Invocation, ListItemOutput, LogMessage, NodeEvaluated, NodeProcessed,
         OnboardingScreenShown, PackageUpdate, PhaseExecuted, Process, ProgressMessage,
         QueryExecuted, ShowDataOutput, ShowResult, StateModifiedDiff, Unknown, UserLogMessage,
     },
@@ -220,6 +220,12 @@ static PUBLIC_TELEMETRY_EVENT_REGISTRY: LazyLock<TelemetryEventTypeRegistry> = L
             arrow_deserialize_for_type::<GenericOpItemProcessed>,
             #[cfg(any(test, feature = "test-utils"))]
             faker_for_type::<GenericOpItemProcessed>,
+        );
+        registry.register(
+            HookProcessed::FULL_NAME,
+            arrow_deserialize_for_type::<HookProcessed>,
+            #[cfg(any(test, feature = "test-utils"))]
+            faker_for_type::<HookProcessed>,
         );
         registry.register(
             NodeEvaluated::FULL_NAME,

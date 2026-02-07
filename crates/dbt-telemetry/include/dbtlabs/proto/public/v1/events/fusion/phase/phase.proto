@@ -60,6 +60,12 @@ enum ExecutionPhase {
 
   // Debugging connection correctness and availability to the warehouse
   EXECUTION_PHASE_DEBUG = 140;
+
+  // Executing on-run-start hooks at the start of supported dbt commands
+  EXECUTION_PHASE_ON_RUN_START = 150;
+
+  // Executing on-run-end hooks at the end of supported dbt commands
+  EXECUTION_PHASE_ON_RUN_END = 160;
 }
 
 // Top-level event for reporting a build phase, with optional details.
@@ -67,14 +73,14 @@ message PhaseExecuted {
   // The current phase of execution.
   ExecutionPhase phase = 1;
 
-  // Optional count of total individual nodes within the phase (when applicable).
+  // Optional count of total individual items within the phase (nodes or hooks).
   optional uint64 node_count_total = 2;
 
-  // Optional count of skipped nodes within the phase (when applicable).
-  // Skipped means `node_outcome` was set to `NODE_OUTCOME_SKIPPED`.
+  // Optional count of skipped items within the phase.
+  // Skipped means NODE_OUTCOME_SKIPPED for node phases and HOOK_OUTCOME_SKIPPED for hook phases.
   optional uint64 node_count_skipped = 3;
 
-  // Optional count of errored nodes within the phase (when applicable).
-  // Error means `node_outcome` was set to `NODE_OUTCOME_ERROR`.
+  // Optional count of errored items within the phase.
+  // Error means NODE_OUTCOME_ERROR for node phases and HOOK_OUTCOME_ERROR for hook phases.
   optional uint64 node_count_error = 4;
 }

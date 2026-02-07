@@ -11,15 +11,15 @@ pub struct PhaseExecuted {
         dummy(expr = "::fake::Fake::fake::<ExecutionPhase>(&::fake::Faker) as i32")
     )]
     pub phase: i32,
-    /// Optional count of total individual nodes within the phase (when applicable).
+    /// Optional count of total individual items within the phase (nodes or hooks).
     #[prost(uint64, optional, tag = "2")]
     pub node_count_total: ::core::option::Option<u64>,
-    /// Optional count of skipped nodes within the phase (when applicable).
-    /// Skipped means `node_outcome` was set to `NODE_OUTCOME_SKIPPED`.
+    /// Optional count of skipped items within the phase.
+    /// Skipped means NODE_OUTCOME_SKIPPED for node phases and HOOK_OUTCOME_SKIPPED for hook phases.
     #[prost(uint64, optional, tag = "3")]
     pub node_count_skipped: ::core::option::Option<u64>,
-    /// Optional count of errored nodes within the phase (when applicable).
-    /// Error means `node_outcome` was set to `NODE_OUTCOME_ERROR`.
+    /// Optional count of errored items within the phase.
+    /// Error means NODE_OUTCOME_ERROR for node phases and HOOK_OUTCOME_ERROR for hook phases.
     #[prost(uint64, optional, tag = "4")]
     pub node_count_error: ::core::option::Option<u64>,
 }
@@ -77,6 +77,10 @@ pub enum ExecutionPhase {
     Lineage = 130,
     /// Debugging connection correctness and availability to the warehouse
     Debug = 140,
+    /// Executing on-run-start hooks at the start of supported dbt commands
+    OnRunStart = 150,
+    /// Executing on-run-end hooks at the end of supported dbt commands
+    OnRunEnd = 160,
 }
 impl ExecutionPhase {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -102,6 +106,8 @@ impl ExecutionPhase {
             Self::FreshnessAnalysis => "EXECUTION_PHASE_FRESHNESS_ANALYSIS",
             Self::Lineage => "EXECUTION_PHASE_LINEAGE",
             Self::Debug => "EXECUTION_PHASE_DEBUG",
+            Self::OnRunStart => "EXECUTION_PHASE_ON_RUN_START",
+            Self::OnRunEnd => "EXECUTION_PHASE_ON_RUN_END",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -124,6 +130,8 @@ impl ExecutionPhase {
             "EXECUTION_PHASE_FRESHNESS_ANALYSIS" => Some(Self::FreshnessAnalysis),
             "EXECUTION_PHASE_LINEAGE" => Some(Self::Lineage),
             "EXECUTION_PHASE_DEBUG" => Some(Self::Debug),
+            "EXECUTION_PHASE_ON_RUN_START" => Some(Self::OnRunStart),
+            "EXECUTION_PHASE_ON_RUN_END" => Some(Self::OnRunEnd),
             _ => None,
         }
     }

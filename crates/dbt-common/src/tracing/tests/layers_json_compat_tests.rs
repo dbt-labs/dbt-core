@@ -14,12 +14,13 @@ use crate::{
 };
 use dbt_telemetry::{
     ArtifactType, ArtifactWritten, CompiledCodeInline, DepsAddPackage, DepsPackageInstalled,
-    ExecutionPhase, Invocation, InvocationEvalArgs, ListItemOutput, ListOutputFormat, LogMessage,
-    NodeEvaluated, NodeMaterialization, NodeOutcome, NodeOutcomeDetail, NodeProcessed,
-    NodeSkipReason, NodeSkipUpstreamDetail, NodeType, PackageType, ProgressMessage, QueryExecuted,
-    QueryOutcome, SeverityNumber, ShowDataOutput, ShowDataOutputFormat, ShowResult,
-    ShowResultOutputFormat, SourceFreshnessDetail, SourceFreshnessOutcome, TelemetryOutputFlags,
-    UserLogMessage, node_processed, update_dbt_core_event_code_for_node_processed_end,
+    ExecutionPhase, HookOutcome, HookProcessed, HookType, Invocation, InvocationEvalArgs,
+    ListItemOutput, ListOutputFormat, LogMessage, NodeEvaluated, NodeMaterialization, NodeOutcome,
+    NodeOutcomeDetail, NodeProcessed, NodeSkipReason, NodeSkipUpstreamDetail, NodeType,
+    PackageType, ProgressMessage, QueryExecuted, QueryOutcome, SeverityNumber, ShowDataOutput,
+    ShowDataOutputFormat, ShowResult, ShowResultOutputFormat, SourceFreshnessDetail,
+    SourceFreshnessOutcome, TelemetryOutputFlags, UserLogMessage, node_processed,
+    update_dbt_core_event_code_for_node_processed_end,
 };
 use serde_json::{Value, json};
 use tracing::level_filters::LevelFilter;
@@ -1442,5 +1443,76 @@ fn test_freshness_result() {
                 }
             }),
         ],
+    );
+}
+
+#[test]
+fn test_hook_processed() {
+    let invocation_id = Uuid::new_v4();
+
+    test_events_with_msg_fields_to_ignore(
+        "HookProcessed (on-run-start with success)",
+        invocation_id,
+        || {
+            // Create a HookProcessed span for on-run-start hook
+            let _span = create_info_span(HookProcessed {
+                package_name: "my_project".to_string(),
+                name: Some("my_project-on-run-start.1".to_string()),
+                hook_type: HookType::OnRunStart as i32,
+                hook_outcome: HookOutcome::Error as i32,
+                unique_id: "operation.my_project.my_project-on-run-start.1".to_string(),
+                phase: ExecutionPhase::OnRunStart as i32,
+                dbt_core_event_code: "Q032".to_string(),
+                hook_index: 1,
+            });
+        },
+        &["execution_time"],
+        vec![
+            // LogHookEndLine (Q033) - emitted on span end
+            json!({
+                "info": {
+                    "category": "",
+                    "code": "Q033",
+                    "invocation_id": invocation_id.to_string(),
+                    "name": "LogHookEndLine",
+                    "level": "info",
+                    "msg": "ERROR hook: operation.my_project.my_project-on-run-start.1",
+                    "extra": {}
+                },
+                "data": {
+                    "node_info": {
+                        "node_name": "my_project-on-run-start.1",
+                        "unique_id": "operation.my_project.my_project-on-run-start.1",
+                        "resource_type": "operation",
+                        "node_status": "error"
+                    },
+                    "index": 1,
+                    "status": "error",
+                    "execution_time": "<redacted::execution_time>"
+                }
+            }),
+            // LogHookStartLine (Q032) - emitted on span start
+            json!({
+                "info": {
+                    "category": "",
+                    "code": "Q032",
+                    "invocation_id": invocation_id.to_string(),
+                    "name": "LogHookStartLine",
+                    "msg": "START hook: operation.my_project.my_project-on-run-start.1",
+                    "level": "info",
+                    "extra": {}
+                },
+                "data": {
+                    "node_info": {
+                        "node_name": "my_project-on-run-start.1",
+                        "unique_id": "operation.my_project.my_project-on-run-start.1",
+                        "resource_type": "operation",
+                        "node_status": "started"
+                    },
+                    "index": 1
+                }
+            }),
+        ],
+        &[],
     );
 }

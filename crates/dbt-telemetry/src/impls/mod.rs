@@ -8,6 +8,8 @@ pub mod compat;
 pub mod deps;
 #[path = "v1_public_events_fusion_dev.rs"]
 pub mod dev;
+#[path = "v1_public_events_fusion_hook.rs"]
+pub mod hook;
 #[path = "v1_public_events_fusion_log.rs"]
 pub mod log;
 #[path = "v1_public_events_fusion_node.rs"]

@@ -10,11 +10,11 @@ use crate::collections::HashSet;
 use console::Term;
 use dbt_telemetry::{
     AnyTelemetryEvent, AssetParsed, CompiledCodeInline, DepsAddPackage, DepsAllPackagesInstalled,
-    DepsPackageInstalled, ExecutionPhase, GenericOpExecuted, GenericOpItemProcessed, Invocation,
-    ListItemOutput, LogMessage, LogRecordInfo, NodeEvaluated, NodeOutcome, NodeProcessed,
-    NodeSkipReason, NodeType, PhaseExecuted, ProgressMessage, QueryExecuted, SeverityNumber,
-    ShowDataOutput, ShowResult, SpanEndInfo, SpanStartInfo, SpanStatus, StateModifiedDiff,
-    StatusCode, TelemetryOutputFlags, UserLogMessage, node_processed,
+    DepsPackageInstalled, ExecutionPhase, GenericOpExecuted, GenericOpItemProcessed, HookProcessed,
+    Invocation, ListItemOutput, LogMessage, LogRecordInfo, NodeEvaluated, NodeOutcome,
+    NodeProcessed, NodeSkipReason, NodeType, PhaseExecuted, ProgressMessage, QueryExecuted,
+    SeverityNumber, ShowDataOutput, ShowResult, SpanEndInfo, SpanStartInfo, SpanStatus,
+    StateModifiedDiff, StatusCode, TelemetryOutputFlags, UserLogMessage, node_processed,
 };
 use dbt_tui_progress::ProgressController;
 
@@ -41,6 +41,7 @@ use crate::{
                 capitalize_first_letter, format_generic_op_end, format_generic_op_item_end,
                 format_generic_op_item_start, format_generic_op_start,
             },
+            hook::{format_hook_processed_end, format_hook_processed_start},
             invocation::format_invocation_summary,
             layout::{format_delimiter, right_align_action},
             log_message::format_log_message,
@@ -375,11 +376,12 @@ impl TelemetryConsumer for TuiLayer {
         span.attributes
             .output_flags()
             .contains(TelemetryOutputFlags::OUTPUT_CONSOLE)
-            // NodeEvaluated, NodeProcessed & GenericOp should always be let through
+            // NodeEvaluated, NodeProcessed, HookProcessed & GenericOp should always be let through
             // because of progress bars relying on them. Their output is controlled
             // in the handler based on the verbosity level.
             && (span.attributes.is::<NodeEvaluated>()
                 || span.attributes.is::<NodeProcessed>()
+                || span.attributes.is::<HookProcessed>()
                 || span.attributes.is::<GenericOpExecuted>()
                 || span.attributes.is::<GenericOpItemProcessed>()
                 // TOD: This one is also allowed to pass at debug level due to multitude of
@@ -456,6 +458,11 @@ impl TelemetryConsumer for TuiLayer {
 
         if let Some(item) = span.attributes.downcast_ref::<GenericOpItemProcessed>() {
             self.handle_generic_op_item_start(span, item);
+            return;
+        }
+
+        if let Some(hook) = span.attributes.downcast_ref::<HookProcessed>() {
+            self.handle_hook_processed_start(span, hook);
         }
     }
 
@@ -507,6 +514,11 @@ impl TelemetryConsumer for TuiLayer {
 
         if let Some(item) = span.attributes.downcast_ref::<GenericOpItemProcessed>() {
             self.handle_generic_op_item_end(span, item);
+            return;
+        }
+
+        if let Some(hook) = span.attributes.downcast_ref::<HookProcessed>() {
+            self.handle_hook_processed_end(span, hook);
             return;
         }
 
@@ -732,7 +744,9 @@ impl TuiLayer {
             | ExecutionPhase::Debug
             | ExecutionPhase::DeferHydration
             | ExecutionPhase::SchemaHydration
-            | ExecutionPhase::FreshnessAnalysis => {
+            | ExecutionPhase::FreshnessAnalysis
+            | ExecutionPhase::OnRunStart
+            | ExecutionPhase::OnRunEnd => {
                 progress.start_spinner(ProgressId::Phase(phase_enum), progress_text);
             }
             ExecutionPhase::Unspecified
@@ -784,7 +798,9 @@ impl TuiLayer {
             | ExecutionPhase::Debug
             | ExecutionPhase::DeferHydration
             | ExecutionPhase::SchemaHydration
-            | ExecutionPhase::FreshnessAnalysis => {
+            | ExecutionPhase::FreshnessAnalysis
+            | ExecutionPhase::OnRunStart
+            | ExecutionPhase::OnRunEnd => {
                 progress.remove_spinner(&ProgressId::Phase(phase_enum));
             }
             ExecutionPhase::Unspecified
@@ -1315,6 +1331,84 @@ impl TuiLayer {
         );
 
         // Print immediately to stdout
+        self.write_suspended(|| {
+            io::stdout()
+                .lock()
+                .write_all(format!("{}\n", formatted_message).as_bytes())
+                .expect("failed to write to stdout");
+        });
+    }
+
+    fn handle_hook_processed_start(&self, span: &SpanStartInfo, hook: &HookProcessed) {
+        // Handle progress in interactive mode - show hooks in progress
+        if let Some(ref progress) = self.progress
+            && let Some(hook_name) = hook.name.as_deref()
+        {
+            let progress_id = ProgressId::Phase(hook.phase());
+            progress.add_bar_context(&progress_id, hook_name);
+        }
+
+        // Only show if ShowOptions::All is enabled or DEBUG verbosity
+        if !self.show_options.contains(&ShowOptions::All)
+            && self.max_log_verbosity < LevelFilter::DEBUG
+        {
+            return;
+        }
+
+        // Do not show if max verbosity is lower than span verbosity
+        if span.severity_number > self.max_log_verbosity {
+            return;
+        }
+
+        let formatted_message = format_hook_processed_start(hook, true);
+
+        self.write_suspended(|| {
+            io::stdout()
+                .lock()
+                .write_all(format!("{formatted_message}\n").as_bytes())
+                .expect("failed to write to stdout");
+        });
+    }
+
+    fn handle_hook_processed_end(&self, span: &SpanEndInfo, hook: &HookProcessed) {
+        // Handle progress in interactive mode
+        if let Some(ref progress) = self.progress
+            && let Some(hook_name) = hook.name.as_deref()
+        {
+            let progress_id = ProgressId::Phase(hook.phase());
+            let status = match span.status {
+                Some(SpanStatus {
+                    code: StatusCode::Error,
+                    ..
+                }) => Some("failed"),
+                Some(SpanStatus {
+                    code: StatusCode::Ok,
+                    ..
+                }) => Some("succeeded"),
+                _ => None,
+            };
+            progress.finish_bar_context(&progress_id, hook_name, status);
+        }
+
+        // Only show if ShowOptions::Completed or All is enabled
+        if !self.show_options.contains(&ShowOptions::Completed)
+            && !self.show_options.contains(&ShowOptions::All)
+        {
+            return;
+        }
+
+        // Do not show if max verbosity is lower than span verbosity
+        if span.severity_number > self.max_log_verbosity {
+            return;
+        }
+
+        let duration = span
+            .end_time_unix_nano
+            .duration_since(span.start_time_unix_nano)
+            .unwrap_or_default();
+
+        let formatted_message = format_hook_processed_end(hook, duration, true);
+
         self.write_suspended(|| {
             io::stdout()
                 .lock()
