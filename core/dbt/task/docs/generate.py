@@ -301,6 +301,10 @@ class GenerateTask(CompileTask):
             errors = [str(e) for e in exceptions]
 
         nodes, sources = catalog.make_unique_id_map(self.manifest, selected_node_ids)
+
+        # Enrich source columns with YAML descriptions when available
+        sources = self._enrich_source_columns_with_descriptions(sources)
+
         results = self.get_catalog_results(
             nodes=nodes,
             sources=sources,
@@ -352,6 +356,34 @@ class GenerateTask(CompileTask):
             resource_types=EXECUTABLE_NODE_TYPES,
             include_empty_nodes=True,
         )
+
+    def _enrich_source_columns_with_descriptions(
+        self, sources: Dict[str, CatalogTable]
+    ) -> Dict[str, CatalogTable]:
+        """
+        Enrich source catalog entries with column descriptions from YAML when available.
+        Uses database column comments as fallback when YAML descriptions are empty.
+
+        This allows dbt docs to display column descriptions from the database when
+        they haven't been manually documented in YAML files.
+        """
+        for unique_id, catalog_table in sources.items():
+            if unique_id in self.manifest.sources:
+                source_def = self.manifest.sources[unique_id]
+
+                for column_name, column_metadata in catalog_table.columns.items():
+                    # Check if this column is documented in YAML
+                    if column_name in source_def.columns:
+                        yaml_description = source_def.columns[column_name].description
+
+                        # If YAML has a description, use it (takes priority over DB comment)
+                        if yaml_description:
+                            catalog_table.columns[column_name] = replace(
+                                column_metadata, comment=yaml_description
+                            )
+                    # If no YAML description, DB comment (already in column_metadata.comment) is used as fallback
+
+        return sources
 
     def get_catalog_results(
         self,
