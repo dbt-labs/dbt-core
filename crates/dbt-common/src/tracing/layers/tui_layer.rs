@@ -21,7 +21,10 @@ use dbt_tui_progress::ProgressController;
 use dbt_error::ErrorCode;
 use tracing::level_filters::LevelFilter;
 
-use crate::constants::DBT_GENERIC_TESTS_DIR_NAME;
+use crate::{
+    constants::DBT_GENERIC_TESTS_DIR_NAME,
+    tracing::formatters::node::format_node_evaluated_start_legacy,
+};
 use crate::{
     io_args::{FsCommand, ShowOptions},
     logging::LogFormat,
@@ -236,19 +239,20 @@ struct DelayedMessages {
 ///
 /// Messages are also shown if ShowOptions::All is enabled.
 pub fn should_show_progress_message(
-    phase: Option<ExecutionPhase>,
+    phase: ExecutionPhase,
     show_options: &HashSet<ShowOptions>,
 ) -> bool {
     let phase_allows = match phase {
-        Some(ExecutionPhase::Parse) => show_options.contains(&ShowOptions::ProgressParse),
-        Some(ExecutionPhase::Render) => show_options.contains(&ShowOptions::ProgressRender),
-        Some(ExecutionPhase::Analyze) => show_options.contains(&ShowOptions::ProgressAnalyze),
-        Some(ExecutionPhase::Run) => show_options.contains(&ShowOptions::ProgressRun),
-        Some(ExecutionPhase::NodeCacheHydration | ExecutionPhase::DeferHydration) => {
+        ExecutionPhase::Parse => show_options.contains(&ShowOptions::ProgressParse),
+        ExecutionPhase::Render => show_options.contains(&ShowOptions::ProgressRender),
+        ExecutionPhase::Analyze => show_options.contains(&ShowOptions::ProgressAnalyze),
+        ExecutionPhase::Run => show_options.contains(&ShowOptions::ProgressRun),
+        ExecutionPhase::NodeCacheHydration | ExecutionPhase::DeferHydration => {
             show_options.contains(&ShowOptions::ProgressHydrate)
         }
-        Some(ExecutionPhase::SchemaHydration) => {
+        ExecutionPhase::SchemaHydration => {
             show_options.contains(&ShowOptions::ProgressHydrate)
+                // TODO: The following condition is due to historical logic. Maybe worth reviewing later.
                 || show_options.contains(&ShowOptions::Progress)
         }
         // All other phases (including no Phase and Unspecified) match the general Progress option
@@ -814,10 +818,15 @@ impl TuiLayer {
     }
 
     fn handle_node_evaluated_start(&self, span: &SpanStartInfo, ne: &NodeEvaluated) {
+        // Do not emit anything for skipped node phases even in debug
+        if ne.node_outcome() == NodeOutcome::Skipped {
+            return;
+        }
+
+        let phase = ne.phase();
+
         // Handle progress in interactive mode
         if let Some(ref progress) = self.progress {
-            let phase = ne.phase();
-
             if matches!(
                 phase,
                 ExecutionPhase::Render | ExecutionPhase::Analyze | ExecutionPhase::Run
@@ -825,27 +834,59 @@ impl TuiLayer {
                 let formatted_item = format_unique_id_as_progress_item(ne.unique_id.as_str());
                 progress.add_bar_context(&ProgressId::Phase(phase), &formatted_item);
             }
+        } else {
+            let node_type = ne.node_type();
+            let is_yaml_defined_generic_test = node_type == NodeType::Test
+                && (ne.relative_path.ends_with(".yml") || ne.relative_path.ends_with(".yaml"));
+
+            // For text mode, use legacy format & logic to maintain test expectations
+            if should_show_progress_message(phase, &self.show_options)
+                // Only for render & run.
+                // For render, keep legacy filtering: hide seed/unit test and generic YAML tests.
+                // Singular SQL tests should still emit render lines.
+                // TODO: Filter out spurious text outputs from show & clone 
+                // until show_progress! macro is fully eliminated
+                && ((phase == ExecutionPhase::Render
+                    && !(node_type == NodeType::Seed
+                        || node_type == NodeType::UnitTest
+                        || is_yaml_defined_generic_test))
+                    || (phase == ExecutionPhase::Run && self.command != FsCommand::Show && self.command != FsCommand::Clone))
+            {
+                let formatted = format_node_evaluated_start_legacy(ne);
+                self.write_suspended(|| {
+                    io::stdout()
+                        .lock()
+                        .write_all(format!("{}\n", formatted).as_bytes())
+                        .expect("failed to write to stdout");
+                });
+
+                // Avoid double-printing in text mode if this is also debug level
+                return;
+            }
         }
 
-        // Print line only in debug mode
-        if span.severity_number > self.max_log_verbosity {
-            return;
+        // Print line in debug mode using new format (also used by file log & json)
+        if span.severity_number <= self.max_log_verbosity {
+            let formatted = format_node_evaluated_start(ne, true);
+            self.write_suspended(|| {
+                io::stdout()
+                    .lock()
+                    .write_all(format!("{}\n", formatted).as_bytes())
+                    .expect("failed to write to stdout");
+            });
         }
-
-        let formatted = format_node_evaluated_start(ne, true);
-        self.write_suspended(|| {
-            io::stdout()
-                .lock()
-                .write_all(format!("{}\n", formatted).as_bytes())
-                .expect("failed to write to stdout");
-        });
     }
 
     fn handle_node_evaluated_end(&self, span: &SpanEndInfo, ne: &NodeEvaluated) {
+        // Do not emit anything for skipped node phases even in debug
+        if ne.node_outcome() == NodeOutcome::Skipped {
+            return;
+        }
+
+        let phase = ne.phase();
+
         // Handle progress in interactive mode
         if let Some(ref progress) = self.progress {
-            let phase = ne.phase();
-
             if matches!(
                 phase,
                 ExecutionPhase::Render | ExecutionPhase::Analyze | ExecutionPhase::Run
@@ -865,7 +906,9 @@ impl TuiLayer {
             }
         }
 
-        // Print line only in debug mode
+        // Print line only in debug mode.
+        // `should_show_progress_message(phase, &self.show_options)` is not consulted
+        // due to historical behavior where per-phase processing conclusion had no output.
         if span.severity_number > self.max_log_verbosity {
             return;
         }
@@ -1152,7 +1195,7 @@ impl TuiLayer {
         progress_msg: &ProgressMessage,
         severity_number: SeverityNumber,
     ) {
-        if !should_show_progress_message(Some(progress_msg.phase()), &self.show_options) {
+        if !should_show_progress_message(progress_msg.phase(), &self.show_options) {
             return;
         }
 
@@ -1170,7 +1213,7 @@ impl TuiLayer {
         // be replaced with the new end-span rendering (matching file log) once fully migrated.
         // We ignore this span severity level and only check show options for progress.
 
-        if !should_show_progress_message(Some(asset.phase()), &self.show_options)
+        if !should_show_progress_message(asset.phase(), &self.show_options)
             // Legacy filter exclusion for generic tests
             || asset.display_path.contains(DBT_GENERIC_TESTS_DIR_NAME)
         {

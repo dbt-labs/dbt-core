@@ -29,6 +29,7 @@ md5 = { workspace = true }
 merge = { workspace = true }
 minijinja = { workspace = true }
 minijinja-contrib = { workspace = true }
+pathdiff = { workspace = true }
 schemars = { workspace = true }
 serde = { workspace = true }
 serde_derive = { workspace = true }

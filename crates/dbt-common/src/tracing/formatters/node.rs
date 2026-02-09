@@ -5,6 +5,8 @@ use dbt_telemetry::{
     get_node_outcome_detail, get_test_outcome,
 };
 
+use crate::tracing::formatters::phase::get_phase_progress_text;
+
 use super::{
     color::{BLUE, CYAN, GREEN, PLAIN, RED, YELLOW},
     constants::{MAX_QUALIFIER_DISPLAY_LEN, MIN_NODE_TYPE_WIDTH, UNIT_TEST_SCHEMA_SUFFIX},
@@ -378,6 +380,39 @@ pub fn format_node_evaluated_start(node: &NodeEvaluated, colorize: bool) -> Stri
         "Started {} {} {}",
         phase_action, node_type_formatted, qualifier_alias
     )
+}
+
+/// Format a NodeEvaluated event for the start of evaluation (no duration)
+/// using legacy non-interactive format
+///
+/// Returns formatted string in the pattern:
+/// `{padded_action} {path_to_node}`
+pub fn format_node_evaluated_start_legacy(node: &NodeEvaluated) -> String {
+    let phase = node.phase();
+    let Some(phase_action) = get_phase_progress_text(phase) else {
+        unreachable!("Phase action text should be available for NodeEvaluated start");
+    };
+
+    // Generic tests are YAML-defined and should keep the test name for clarity.
+    // Singular SQL tests should keep the old plain path output.
+    let is_yaml_defined_test =
+        node.relative_path.ends_with(".yml") || node.relative_path.ends_with(".yaml");
+
+    if node.node_type() == NodeType::Test && is_yaml_defined_test {
+        let display_path: std::borrow::Cow<str> = if let Some(line) = node.defined_at_line {
+            if let Some(col) = node.defined_at_col {
+                format!("{}:{}:{}", node.relative_path, line, col).into()
+            } else {
+                format!("{}:{}", node.relative_path, line).into()
+            }
+        } else {
+            node.relative_path.as_str().into()
+        };
+
+        format!("{} {} ({})", phase_action, display_path, node.name)
+    } else {
+        format!("{} {}", phase_action, node.relative_path)
+    }
 }
 
 /// Format a NodeEvaluated event for the end of evaluation (with duration and outcome)

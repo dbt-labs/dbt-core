@@ -1,5 +1,6 @@
 use core::fmt;
 use indexmap::IndexMap;
+use std::path::Path;
 use std::str::FromStr;
 use std::{any::Any, collections::BTreeMap, fmt::Display, path::PathBuf, sync::Arc};
 
@@ -261,29 +262,32 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
         }
     }
 
-    fn get_node_end_data(
-        &self,
-        status: &str,
-        node_started_at: DateTime<Utc>,
-        node_finished_at: DateTime<Utc>,
-    ) -> NodeInfoWrapper {
-        NodeInfoWrapper {
-            unique_id: None,
-            skipped_nodes: None,
-            defined_at: self.defined_at().cloned(),
-            node_info: NodeInfo {
-                node_name: self.common().name.clone(),
-                unique_id: self.common().unique_id.clone(),
-                node_started_at: Some(node_started_at.format("%Y-%m-%dT%H:%M:%S%.6f").to_string()),
-                node_finished_at: Some(
-                    node_finished_at.format("%Y-%m-%dT%H:%M:%S%.6f").to_string(),
-                ),
-                node_status: status.to_string(),
-            },
+    /// Returns the relative path from in_dir of the unrendered sql file for the current node.
+    ///
+    /// - For most node types this is the path where the node is defined in the project.
+    /// - For snapshots this is the relative path to the generated snapshot file in the target directory
+    /// - For generic tests this is also the path to generated sql file
+    fn get_node_relative_path(&self, in_dir: &Path, out_dir: &Path) -> std::borrow::Cow<'_, Path> {
+        // For snapshots, use path (generated file) for display since it's unique per snapshot
+        // For other types, use original_file_path - as of today this field already incorporates
+        // the correct path for generic tests.
+        // TODO: the original_file_path should be fixed and the logic moved here
+        if self.resource_type() == NodeType::Snapshot {
+            let out_dir_relative =
+                pathdiff::diff_paths(out_dir, in_dir).unwrap_or_else(|| out_dir.to_owned());
+
+            out_dir_relative.join(&self.common().path).into()
+        } else {
+            self.common().original_file_path.as_path().into()
         }
     }
 
-    fn get_node_evaluated_event(&self, phase: ExecutionPhase, in_dir: &PathBuf) -> NodeEvaluated {
+    fn get_node_evaluated_event(
+        &self,
+        phase: ExecutionPhase,
+        in_dir: &Path,
+        out_dir: &Path,
+    ) -> NodeEvaluated {
         let common = self.common();
         let base = self.base();
         let node_type = self.resource_type();
@@ -301,8 +305,19 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
             None
         };
 
+        // This is a quirk of historical reporting. For generic tests we report the yml source with line:col location,
+        // but for all other node types we follow the logic described in `get_node_relative_path`.
+        // TODO: streamline and ensure the path's reported via events align with what LSP is being sent
         let (relative_path, defined_at_line, defined_at_column) = self.defined_at().map_or_else(
-            || (common.original_file_path.display().to_string(), None, None),
+            || {
+                (
+                    self.get_node_relative_path(in_dir, out_dir)
+                        .display()
+                        .to_string(),
+                    None,
+                    None,
+                )
+            },
             |defined_at| {
                 let relative_path = if defined_at.file.is_absolute() {
                     defined_at
@@ -341,16 +356,18 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
     fn get_node_processed_event(
         &self,
         last_phase: Option<ExecutionPhase>,
-        in_dir: &PathBuf,
+        in_dir: &Path,
+        out_dir: &Path,
         in_selection: bool,
     ) -> NodeProcessed {
-        self.get_node_processed_event_base(last_phase, in_dir, in_selection)
+        self.get_node_processed_event_base(last_phase, in_dir, out_dir, in_selection)
     }
 
     fn get_node_processed_event_base(
         &self,
         last_phase: Option<ExecutionPhase>,
-        in_dir: &PathBuf,
+        in_dir: &Path,
+        out_dir: &Path,
         in_selection: bool,
     ) -> NodeProcessed {
         let common = self.common();
@@ -370,8 +387,19 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
             None
         };
 
+        // This is a quirk of historical reporting. For generic tests we report the yml source with line:col location,
+        // but for all other node types we follow the logic described in `get_node_relative_path`.
+        // TODO: streamline and ensure the path's reported via events align with what LSP is being sent
         let (relative_path, defined_at_line, defined_at_column) = self.defined_at().map_or_else(
-            || (common.original_file_path.display().to_string(), None, None),
+            || {
+                (
+                    self.get_node_relative_path(in_dir, out_dir)
+                        .display()
+                        .to_string(),
+                    None,
+                    None,
+                )
+            },
             |defined_at| {
                 let relative_path = if defined_at.file.is_absolute() {
                     defined_at
@@ -1754,10 +1782,12 @@ impl InternalDbtNode for DbtSource {
     fn get_node_processed_event(
         &self,
         last_phase: Option<ExecutionPhase>,
-        in_dir: &PathBuf,
+        in_dir: &Path,
+        out_dir: &Path,
         in_selection: bool,
     ) -> NodeProcessed {
-        let mut event = self.get_node_processed_event_base(last_phase, in_dir, in_selection);
+        let mut event =
+            self.get_node_processed_event_base(last_phase, in_dir, out_dir, in_selection);
         event.source_name = Some(self.__source_attr__.source_name.clone());
         event
     }
