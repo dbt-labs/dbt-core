@@ -558,6 +558,14 @@ fn same_body(self_common: &CommonAttributes, other_common: &CommonAttributes) ->
     self_common.checksum == other_common.checksum
 }
 
+// Helper function to normalize descriptions: treat None and Some("") as equal
+// and strip all whitespace for non-empty descriptions
+pub(crate) fn normalize_description(desc: &Option<String>) -> Option<String> {
+    desc.as_deref()
+        .filter(|s| !s.is_empty())
+        .map(|s| s.chars().filter(|c| !c.is_whitespace()).collect())
+}
+
 fn same_persisted_description(
     self_common: &CommonAttributes,
     self_base: &NodeBaseAttributes,
@@ -586,14 +594,6 @@ fn same_persisted_description(
         .as_ref()
         .and_then(|pd| pd.columns)
         .unwrap_or(false);
-
-    // Helper function to normalize descriptions: treat None and Some("") as equal
-    // and trim leading/trailing newlines for non-empty descriptions
-    fn normalize_description(desc: &Option<String>) -> Option<String> {
-        desc.as_deref()
-            .filter(|s| !s.is_empty())
-            .map(|s| s.trim_matches('\n').to_string())
-    }
 
     // If relation docs are persisted, compare descriptions
     if self_persist_relation
@@ -5253,7 +5253,9 @@ fn default_introspection() -> IntrospectionKind {
 mod tests {
     use serde::Deserialize;
 
-    use super::{ModelConfig, hooks_equal, persist_docs_configs_equal, quoting_equal};
+    use super::{
+        ModelConfig, hooks_equal, normalize_description, persist_docs_configs_equal, quoting_equal,
+    };
     use crate::schemas::common::{Hooks, PersistDocsConfig};
     use dbt_serde_yaml::Verbatim;
 
@@ -5289,6 +5291,28 @@ mod tests {
 
         // And that two empty configs are equal
         assert!(persist_docs_configs_equal(&empty_config, &empty_config));
+    }
+
+    #[test]
+    fn test_normalize_description_none_vs_empty_string() {
+        let none_desc: Option<String> = None;
+        let empty_desc: Option<String> = Some(String::new());
+
+        assert_eq!(
+            normalize_description(&none_desc),
+            normalize_description(&empty_desc)
+        );
+    }
+
+    #[test]
+    fn test_normalize_description_whitespace_insensitive() {
+        let desc_with_spaces = Some("alpha beta".to_string());
+        let desc_with_mixed_whitespace = Some("\n  alpha\tbeta \n".to_string());
+
+        assert_eq!(
+            normalize_description(&desc_with_spaces),
+            normalize_description(&desc_with_mixed_whitespace)
+        );
     }
 
     #[test]

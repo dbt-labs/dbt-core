@@ -5,6 +5,7 @@ use crate::schemas::project::configs::common::log_state_mod_diff;
 use crate::schemas::serde::typed_struct_from_json_file;
 use crate::schemas::{
     InternalDbtNode, Nodes, nodes::DbtModel, nodes::is_invalid_for_relation_comparison,
+    nodes::normalize_description,
 };
 use dbt_common::tracing::emit::emit_warn_log_message;
 use dbt_common::{ErrorCode, FsResult, constants::DBT_MANIFEST_JSON};
@@ -246,14 +247,6 @@ impl PreviousState {
         // Persist docs for relations and columns are deprecated in fusion, so they are not used
         // as additional check flags as they are in dbt-core.
         // https://github.com/dbt-labs/dbt-core/blob/906e07c1f2161aaf8873f17ba323221a3cf48c9f/core/dbt/contracts/graph/nodes.py#L330-L345
-
-        // Helper function to normalize descriptions: treat None and Some("") as equal
-        // and trim leading/trailing newlines for non-empty descriptions
-        fn normalize_description(desc: &Option<String>) -> Option<String> {
-            desc.as_deref()
-                .filter(|s| !s.is_empty())
-                .map(|s| s.trim_matches('\n').to_string())
-        }
 
         let is_same_desc = normalize_description(&current_node.common().description)
             == normalize_description(&previous_node.common().description);
