@@ -531,3 +531,16 @@ pub fn assert_vec_sorted_eq<T: PartialEq + Clone + Ord + Debug>(expected: Vec<T>
     actual.sort();
     assert_eq!(expected, actual);
 }
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn test_maybe_normalize_schema_name() {
+        let actual =
+            maybe_normalize_schema_name("fusion_tests_schema__alex.dbt_something".to_string());
+        assert_eq!(actual, "fusion_tests_schema__replaced.dbt_something");
+    }
+}
