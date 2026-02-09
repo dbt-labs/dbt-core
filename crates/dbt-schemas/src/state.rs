@@ -617,10 +617,9 @@ pub struct CacheState {
     /// Only needed for incremental compile.
     /// This can be empty for the build cache.
     pub unimpacted_patterned_dangling_sources: PatternedDanglingSources,
-    /// The unchanged nodes, by unique id, based on file changes.
-    /// This does not mean that these nodes are "unimpacted",
-    /// it just means their correpsonding file was not changed.
-    pub unchanged_nodes: Arc<HashSet<String>>,
+    /// The changed nodes, by unique id, based on file changes.
+    /// Does not include any deleted or added nodes.
+    pub changed_nodes: Arc<HashSet<String>>,
 }
 impl CacheState {
     pub fn has_changes(&self) -> bool {
