@@ -550,6 +550,7 @@ class PartialProject(RenderComponents):
             restrict_access=cfg.restrict_access,
             dbt_cloud=dbt_cloud,
             flags=flags,
+            template_extensions=cfg.template_extensions,
         )
         # sanity check - this means an internal issue
         project.validate()
@@ -669,6 +670,7 @@ class Project:
     restrict_access: bool
     dbt_cloud: Dict[str, Any]
     flags: Dict[str, Any]
+    template_extensions: List[str]
 
     @property
     def all_source_paths(self) -> List[str]:
@@ -752,6 +754,7 @@ class Project:
                 "restrict-access": self.restrict_access,
                 "dbt-cloud": self.dbt_cloud,
                 "flags": self.flags,
+                "template-extensions": self.template_extensions,
             }
         )
         if self.query_comment:

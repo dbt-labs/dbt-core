@@ -392,6 +392,15 @@ class ReadFilesFromDiff:
         return file_type_lookup
 
 
+def _get_ext_combinations(bases: List[str], suffixes: List[str]) -> List[str]:
+    """Given a list of base extensions and a list of suffix extensions, return a list of all possible extensions."""
+    extensions = []
+    for base in bases:
+        for suffix in suffixes:
+            extensions.append(f"{base}{suffix}")
+    return extensions
+
+
 def get_file_types_for_project(project):
     file_types = {
         ParseFileType.Macro: {
@@ -431,7 +440,9 @@ def get_file_types_for_project(project):
         },
         ParseFileType.Documentation: {
             "paths": project.docs_paths,
-            "extensions": [".md"],
+            "extensions": _get_ext_combinations(
+                bases=[".md"], suffixes=project.template_extensions
+            ),
             "parser": "DocumentationParser",
         },
         ParseFileType.Schema: {
