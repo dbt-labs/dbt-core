@@ -26,9 +26,9 @@ use std::sync::Arc;
 use std::{fmt, vec};
 
 #[derive(Clone, Debug)]
-pub struct TypeWithConstraint {
-    pub inner: Type,
-    pub constraint: BTreeMap<Part, TypeWithConstraint>,
+struct TypeWithConstraint {
+    inner: Type,
+    constraint: BTreeMap<Part, TypeWithConstraint>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -53,7 +53,7 @@ impl From<Type> for TypeWithConstraint {
 }
 
 impl TypeWithConstraint {
-    pub fn get_attribute(
+    fn get_attribute(
         &self,
         name: &str,
         listener: Rc<dyn TypecheckingEventListener>,
@@ -67,7 +67,7 @@ impl TypeWithConstraint {
         }
     }
 
-    pub fn subscript(
+    fn subscript(
         &self,
         index: &TypeWithConstraint,
         listener: Rc<dyn TypecheckingEventListener>,
@@ -87,19 +87,19 @@ impl TypeWithConstraint {
         }
     }
 
-    pub fn is_subtype_of(&self, other: &TypeWithConstraint) -> bool {
+    fn is_subtype_of(&self, other: &TypeWithConstraint) -> bool {
         // TODO: do we need to check the constraint?
         self.inner.is_subtype_of(&other.inner)
     }
 
-    pub fn union(&self, other: &TypeWithConstraint) -> TypeWithConstraint {
+    fn union(&self, other: &TypeWithConstraint) -> TypeWithConstraint {
         TypeWithConstraint {
             inner: self.inner.union(&other.inner),
             constraint: BTreeMap::new(),
         }
     }
 
-    pub fn can_binary_op_with(
+    fn can_binary_op_with(
         &self,
         other: &TypeWithConstraint,
         op: &'static str,
@@ -110,23 +110,23 @@ impl TypeWithConstraint {
             .map(TypeWithConstraint::from)
     }
 
-    pub fn can_compare_with(&self, other: &TypeWithConstraint, op: &'static str) -> bool {
+    fn can_compare_with(&self, other: &TypeWithConstraint, op: &'static str) -> bool {
         self.inner.can_compare_with(&other.inner, op)
     }
 
-    pub fn is_condition(&self) -> bool {
+    fn is_condition(&self) -> bool {
         self.inner.is_condition()
     }
 
-    pub fn is_any(&self) -> bool {
+    fn is_any(&self) -> bool {
         self.inner.is_any()
     }
 
-    pub fn is_namespace(&self) -> bool {
+    fn is_namespace(&self) -> bool {
         self.inner.is_namespace()
     }
 
-    pub fn call(
+    fn call(
         &self,
         positional_args: &[Type],
         kwargs: &BTreeMap<String, Type>,
@@ -135,29 +135,29 @@ impl TypeWithConstraint {
         self.inner.call(positional_args, kwargs, listener)
     }
 
-    pub fn is_optional(&self) -> bool {
+    fn is_optional(&self) -> bool {
         self.inner.is_optional()
     }
 
-    pub fn is_none(&self) -> bool {
+    fn is_none(&self) -> bool {
         self.inner.is_none()
     }
 
-    pub fn get_non_optional_type(&self) -> Type {
+    fn get_non_optional_type(&self) -> Type {
         self.inner.get_non_optional_type()
     }
 
-    pub fn exclude(&self, other: &Type) -> Type {
+    fn exclude(&self, other: &Type) -> Type {
         self.inner.exclude(other)
     }
 
     // Add convenient method to extract inner Type
-    pub fn into_inner(self) -> Type {
+    fn into_inner(self) -> Type {
         self.inner
     }
 
     #[allow(unconditional_recursion)]
-    pub fn insert(
+    fn insert(
         &mut self,
         path: &[Part],
         type_: Type,
@@ -183,7 +183,7 @@ impl TypeWithConstraint {
         Ok(())
     }
 
-    pub fn get_simple_name(&self) -> String {
+    fn get_simple_name(&self) -> String {
         match &self.inner {
             Type::String(_) => "String".to_string(),
             Type::Integer(_) => "Integer".to_string(),
@@ -220,14 +220,14 @@ impl TypeWithConstraint {
 
 /// symbol table mapping local variable names to their types
 #[derive(Clone, Debug, Default)]
-pub struct SymbolTable {
-    pub builtins: Arc<DashMap<String, Type>>,
-    pub locals: BTreeMap<String, TypeWithConstraint>,
-    pub locals_definitions_location: BTreeMap<String, Vec<Span>>,
+struct SymbolTable {
+    builtins: Arc<DashMap<String, Type>>,
+    locals: BTreeMap<String, TypeWithConstraint>,
+    locals_definitions_location: BTreeMap<String, Vec<Span>>,
 }
 
 impl SymbolTable {
-    pub fn new(builtins: Arc<DashMap<String, Type>>) -> Self {
+    fn new(builtins: Arc<DashMap<String, Type>>) -> Self {
         Self {
             builtins,
             locals: BTreeMap::new(),
@@ -235,7 +235,7 @@ impl SymbolTable {
         }
     }
 
-    pub fn get(
+    fn get(
         &self,
         variable: impl Into<Variable>,
         listener: Rc<dyn TypecheckingEventListener>,
@@ -300,7 +300,7 @@ impl SymbolTable {
         }
     }
 
-    pub fn insert(
+    fn insert(
         &mut self,
         variable: impl Into<Variable>,
         value: Type,
@@ -363,77 +363,77 @@ impl SymbolTable {
         }
     }
 
-    pub fn keys(&self) -> impl Iterator<Item = &String> {
+    fn keys(&self) -> impl Iterator<Item = &String> {
         self.locals.keys()
     }
 
-    pub fn get_mut(&mut self, name: &str) -> Option<&mut TypeWithConstraint> {
+    fn get_mut(&mut self, name: &str) -> Option<&mut TypeWithConstraint> {
         self.locals.get_mut(name)
     }
 
-    pub fn get_ref(&self, name: &str) -> Option<&TypeWithConstraint> {
+    fn get_ref(&self, name: &str) -> Option<&TypeWithConstraint> {
         self.locals.get(name)
     }
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct TypecheckStack(Vec<TypeWithConstraint>);
+struct TypecheckStack(Vec<TypeWithConstraint>);
 
 impl TypecheckStack {
-    pub fn push(&mut self, type_: impl Into<TypeWithConstraint>) {
+    fn push(&mut self, type_: impl Into<TypeWithConstraint>) {
         self.0.push(type_.into());
     }
 
-    pub fn truncate(&mut self, n: usize) {
+    fn truncate(&mut self, n: usize) {
         self.0.truncate(n);
     }
 
-    pub fn len(&self) -> usize {
+    fn len(&self) -> usize {
         self.0.len()
     }
 
-    pub fn last(&self) -> Option<&TypeWithConstraint> {
+    fn last(&self) -> Option<&TypeWithConstraint> {
         self.0.last()
     }
 
-    pub fn drain<R>(&mut self, range: R) -> std::vec::Drain<'_, TypeWithConstraint>
+    fn drain<R>(&mut self, range: R) -> std::vec::Drain<'_, TypeWithConstraint>
     where
         R: RangeBounds<usize>,
     {
         self.0.drain(range)
     }
 
-    pub fn pop(&mut self) -> Option<TypeWithConstraint> {
+    fn pop(&mut self) -> Option<TypeWithConstraint> {
         self.0.pop()
     }
 
     // Add convenient method to pop inner Type directly
-    pub fn pop_inner(&mut self) -> Option<Type> {
+    fn pop_inner(&mut self) -> Option<Type> {
         self.0.pop().map(|t| t.inner)
     }
 
-    pub fn is_empty(&self) -> bool {
+    fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
-    pub fn get(&self, index: usize) -> Option<&TypeWithConstraint> {
+    fn get(&self, index: usize) -> Option<&TypeWithConstraint> {
         self.0.get(index)
     }
 }
 
 /// The states of the type checker
 #[derive(Clone, Debug)]
-pub struct TypecheckState {
-    pub stack: TypecheckStack,
-    pub locals: SymbolTable,
-    pub frame_base: usize,
-    pub cur_loop_obj_type: Option<Type>,
-    pub single_branch_definition_vars: BTreeSet<String>,
-    pub rv_type: Type,
-    pub return_span: Span,
+struct TypecheckState {
+    stack: TypecheckStack,
+    locals: SymbolTable,
+    frame_base: usize,
+    cur_loop_obj_type: Option<Type>,
+    single_branch_definition_vars: BTreeSet<String>,
+    rv_type: Type,
+    return_span: Span,
 }
 
 impl TypecheckState {
-    pub fn new(builtins: Arc<DashMap<String, Type>>) -> Self {
+    fn new(builtins: Arc<DashMap<String, Type>>) -> Self {
         TypecheckState {
             stack: TypecheckStack::default(),
             locals: SymbolTable::new(builtins),
@@ -445,20 +445,20 @@ impl TypecheckState {
         }
     }
 
-    pub fn drop_top(&mut self, n: usize) {
+    fn drop_top(&mut self, n: usize) {
         self.stack.truncate(self.stack.len().saturating_sub(n));
     }
 
     #[track_caller]
-    pub fn peek(&self) -> &TypeWithConstraint {
+    fn peek(&self) -> &TypeWithConstraint {
         self.stack.last().unwrap()
     }
 
-    pub fn push_frame(&mut self) {
+    fn push_frame(&mut self) {
         self.frame_base = self.stack.len();
     }
 
-    pub fn get_call_args(&mut self, n: u16) -> (Vec<Type>, BTreeMap<String, Type>) {
+    fn get_call_args(&mut self, n: u16) -> (Vec<Type>, BTreeMap<String, Type>) {
         // get n items from the stack
         let all_args = self
             .stack
@@ -488,11 +488,11 @@ impl TypecheckState {
 
 /// CFG-based type checker
 pub struct TypeChecker<'src> {
-    pub instr: &'src [Instruction<'src>], // TODO: put instr and &function_registry into in_states
-    pub cfg: CFG,
-    pub in_states: Vec<TypecheckState>,
-    pub function_registry: Arc<FunctionRegistry>,
-    pub builtins: Arc<DashMap<String, Type>>,
+    instr: &'src [Instruction<'src>], // TODO: put instr and &function_registry into in_states
+    cfg: CFG,
+    in_states: Vec<TypecheckState>,
+    function_registry: Arc<FunctionRegistry>,
+    builtins: Arc<DashMap<String, Type>>,
 }
 
 /// Typecheck logic implementation
@@ -518,8 +518,6 @@ impl<'src> TypeChecker<'src> {
         listener: Rc<dyn TypecheckingEventListener>,
         typecheck_resolved_context: BTreeMap<String, Value>,
     ) -> Result<(), crate::Error> {
-        // println!("{}", self.cfg.dump_blocks(self.instr));
-        // println!("{}", self.cfg.to_dot());
         let mut worklist = VecDeque::new();
         let mut visited = vec![false; self.cfg.blocks.len()];
         let mut first_merge = vec![true; self.cfg.blocks.len()];
