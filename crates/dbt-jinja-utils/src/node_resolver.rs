@@ -744,15 +744,17 @@ pub fn resolve_dependencies(
     node_resolver: &NodeResolver,
 ) -> HashSet<String> {
     let mut tests_to_disable = Vec::new();
+    let mut exposures_to_disable = Vec::new();
     let mut nodes_with_errors = HashSet::new();
 
-    // First pass: identify tests with disabled dependencies
+    // First pass: identify tests and exposures with disabled dependencies
     for node in nodes.iter_values_mut() {
         // Clone needed values first to avoid borrowing issues
         let node_path = node.common().path.clone();
         let node_package_name = node.package_name();
         let node_unique_id = node.unique_id();
         let is_test = node.is_test();
+        let is_exposure = node.resource_type() == NodeType::Exposure;
 
         let node_base = node.base_mut();
 
@@ -797,8 +799,8 @@ pub fn resolve_dependencies(
                     }
                 }
                 Err(e) => {
-                    // For tests, warn on missing or disabled dependencies instead of erroring
-                    if is_test
+                    // For tests and exposures, warn on missing or disabled dependencies instead of erroring
+                    if (is_test || is_exposure)
                         && (e.code == ErrorCode::DisabledDependency
                             || e.code == ErrorCode::InvalidConfig)
                     {
@@ -839,8 +841,8 @@ pub fn resolve_dependencies(
                         .push((dependency_id, location));
                 }
                 Err(e) => {
-                    // For tests, warn on missing or disabled dependencies instead of erroring
-                    if is_test
+                    // For tests and exposures, warn on missing or disabled dependencies instead of erroring
+                    if (is_test || is_exposure)
                         && (e.code == ErrorCode::DisabledDependency
                             || e.code == ErrorCode::InvalidConfig)
                     {
@@ -883,9 +885,11 @@ pub fn resolve_dependencies(
                         .push((dependency_id, location));
                 }
                 Err(e) => {
-                    // Check if this is a disabled dependency error
-                    if is_test && e.code == ErrorCode::DisabledDependency {
+                    // Check if this is a disabled dependency error for tests or exposures
+                    if (is_test || is_exposure) && e.code == ErrorCode::DisabledDependency {
                         has_disabled_dependency = true;
+                        let err_with_loc = e.with_location(location);
+                        emit_warn_log_from_fs_error(&err_with_loc, io.status_reporter.as_ref());
                     } else {
                         // Track this node as having an error (unresolved function)
                         nodes_with_errors.insert(node_unique_id.clone());
@@ -897,14 +901,24 @@ pub fn resolve_dependencies(
         }
 
         if is_test && has_disabled_dependency {
-            tests_to_disable.push(node_unique_id);
+            tests_to_disable.push(node_unique_id.clone());
+        }
+
+        if is_exposure && has_disabled_dependency {
+            exposures_to_disable.push(node_unique_id);
         }
     }
 
-    // Second pass: move disabled tests to disabled_nodes
+    // Second pass: move disabled tests and exposures to disabled_nodes
     for test_id in &tests_to_disable {
         if let Some(node) = nodes.tests.remove(test_id) {
             disabled_nodes.tests.insert(test_id.clone(), node);
+        }
+    }
+
+    for exposure_id in &exposures_to_disable {
+        if let Some(node) = nodes.exposures.remove(exposure_id) {
+            disabled_nodes.exposures.insert(exposure_id.clone(), node);
         }
     }
 
