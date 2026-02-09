@@ -981,7 +981,14 @@ impl InternalDbtNode for DbtModel {
                             same_persisted_desc_result,
                             None,
                         ),
-                        ("same_fqn", same_fqn_result, None),
+                        (
+                            "same_fqn",
+                            same_fqn_result,
+                            Some((
+                                format!("{:?}", &self.common().fqn),
+                                format!("{:?}", &other_model.common().fqn),
+                            )),
+                        ),
                         ("same_database_representation", same_db_repr_result, None),
                         ("same_contract", same_contract_result, None),
                     ],
@@ -1383,7 +1390,14 @@ impl InternalDbtNode for DbtSeed {
                             same_persisted_desc_result,
                             None,
                         ),
-                        ("same_fqn", same_fqn_result, None),
+                        (
+                            "same_fqn",
+                            same_fqn_result,
+                            Some((
+                                format!("{:?}", &self.common().fqn),
+                                format!("{:?}", &other_seed.common().fqn),
+                            )),
+                        ),
                         ("same_database_representation", same_db_repr_result, None),
                     ],
                 );
@@ -2387,7 +2401,14 @@ impl InternalDbtNode for DbtSnapshot {
                             same_persisted_desc_result,
                             None,
                         ),
-                        ("same_fqn", same_fqn_result, None),
+                        (
+                            "same_fqn",
+                            same_fqn_result,
+                            Some((
+                                format!("{:?}", &self.common().fqn),
+                                format!("{:?}", &other_snapshot.common().fqn),
+                            )),
+                        ),
                         ("same_database_representation", same_db_repr_result, None),
                     ],
                 );
