@@ -4,6 +4,8 @@ use std::collections::{BTreeMap, HashMap};
 // Type aliases for clarity
 type YmlValue = dbt_serde_yaml::Value;
 
+use serde::ser::{SerializeMap, Serializer};
+
 use crate::schemas::{
     macros::DbtDocsMacro,
     manifest::{
@@ -17,6 +19,50 @@ use crate::schemas::{
 };
 
 use super::{DbtSelector, ManifestGroup};
+
+struct StreamingYamlMap<'a, T> {
+    map: &'a BTreeMap<String, T>,
+}
+
+impl<'a, T> Serialize for StreamingYamlMap<'a, T>
+where
+    T: Serialize,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut m = serializer.serialize_map(Some(self.map.len()))?;
+        for (k, v) in self.map {
+            let yml = dbt_serde_yaml::to_value(v).map_err(serde::ser::Error::custom)?;
+            m.serialize_entry(k, &yml)?;
+        }
+        m.end()
+    }
+}
+
+struct StreamingYamlMapWithResourceType<'a, T> {
+    resource_type: &'static str,
+    map: &'a BTreeMap<String, T>,
+}
+
+impl<'a, T> Serialize for StreamingYamlMapWithResourceType<'a, T>
+where
+    T: Serialize,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut m = serializer.serialize_map(Some(self.map.len()))?;
+        for (k, v) in self.map {
+            let yml = dbt_serde_yaml::to_value(v).map_err(serde::ser::Error::custom)?;
+            let yml = serialize_with_resource_type(yml, self.resource_type);
+            m.serialize_entry(k, &yml)?;
+        }
+        m.end()
+    }
+}
 
 #[derive(Debug, Default, Deserialize, Clone)]
 pub struct DbtManifestV12 {
@@ -60,216 +106,100 @@ impl DbtManifestV12 {
 impl Serialize for DbtManifestV12 {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: serde::Serializer,
+        S: Serializer,
     {
-        let mut map: BTreeMap<String, YmlValue> = BTreeMap::new();
-        map.insert(
-            "metadata".to_string(),
-            dbt_serde_yaml::to_value(&self.metadata).map_err(serde::ser::Error::custom)?,
-        );
-        map.insert(
-            "nodes".to_string(),
-            dbt_serde_yaml::to_value(&self.nodes).map_err(serde::ser::Error::custom)?,
-        );
+        let mut m = serializer.serialize_map(Some(16))?;
 
-        // Serialize sources using InternalDbtNode trait
-        let sources_serialized: BTreeMap<String, YmlValue> = self
-            .sources
-            .iter()
-            .map(|(k, v)| {
-                Ok((
-                    k.clone(),
-                    serialize_with_resource_type(
-                        dbt_serde_yaml::to_value(v).map_err(serde::ser::Error::custom)?,
-                        "source",
-                    ),
-                ))
-            })
-            .collect::<Result<_, _>>()?;
-        map.insert(
-            "sources".to_string(),
-            dbt_serde_yaml::to_value(sources_serialized).map_err(serde::ser::Error::custom)?,
-        );
+        // `ManifestMetadata` must stay in its native shape (not flattened) so downstream tooling
+        // can read `metadata.__base__.*` (notably `dbt_schema_version`).
+        m.serialize_entry("metadata", &self.metadata)?;
 
-        // Serialize macros
-        let macros_serialized: BTreeMap<String, YmlValue> = self
-            .macros
-            .iter()
-            .map(|(k, v)| {
-                Ok((
-                    k.clone(),
-                    serialize_with_resource_type(
-                        dbt_serde_yaml::to_value(v).map_err(serde::ser::Error::custom)?,
-                        "macro",
-                    ),
-                ))
-            })
-            .collect::<Result<_, _>>()?;
-        map.insert(
-            "macros".to_string(),
-            dbt_serde_yaml::to_value(macros_serialized).map_err(serde::ser::Error::custom)?,
-        );
+        m.serialize_entry("nodes", &StreamingYamlMap { map: &self.nodes })?;
+        m.serialize_entry(
+            "sources",
+            &StreamingYamlMapWithResourceType {
+                resource_type: "source",
+                map: &self.sources,
+            },
+        )?;
+        m.serialize_entry(
+            "macros",
+            &StreamingYamlMapWithResourceType {
+                resource_type: "macro",
+                map: &self.macros,
+            },
+        )?;
+        m.serialize_entry(
+            "unit_tests",
+            &StreamingYamlMapWithResourceType {
+                resource_type: "unit_test",
+                map: &self.unit_tests,
+            },
+        )?;
 
-        // Serialize unit_tests using InternalDbtNode trait
-        let unit_tests_serialized: BTreeMap<String, YmlValue> = self
-            .unit_tests
-            .iter()
-            .map(|(k, v)| {
-                Ok((
-                    k.clone(),
-                    serialize_with_resource_type(
-                        dbt_serde_yaml::to_value(v).map_err(serde::ser::Error::custom)?,
-                        "unit_test",
-                    ),
-                ))
-            })
-            .collect::<Result<_, _>>()?;
-        map.insert(
-            "unit_tests".to_string(),
-            dbt_serde_yaml::to_value(unit_tests_serialized).map_err(serde::ser::Error::custom)?,
-        );
+        let docs = dbt_serde_yaml::to_value(&self.docs).map_err(serde::ser::Error::custom)?;
+        m.serialize_entry("docs", &docs)?;
 
-        map.insert(
-            "docs".to_string(),
-            dbt_serde_yaml::to_value(&self.docs).map_err(serde::ser::Error::custom)?,
-        );
+        m.serialize_entry(
+            "semantic_models",
+            &StreamingYamlMapWithResourceType {
+                resource_type: "semantic_model",
+                map: &self.semantic_models,
+            },
+        )?;
+        m.serialize_entry(
+            "saved_queries",
+            &StreamingYamlMapWithResourceType {
+                resource_type: "saved_query",
+                map: &self.saved_queries,
+            },
+        )?;
+        m.serialize_entry(
+            "exposures",
+            &StreamingYamlMapWithResourceType {
+                resource_type: "exposure",
+                map: &self.exposures,
+            },
+        )?;
+        m.serialize_entry(
+            "metrics",
+            &StreamingYamlMapWithResourceType {
+                resource_type: "metric",
+                map: &self.metrics,
+            },
+        )?;
+        m.serialize_entry(
+            "functions",
+            &StreamingYamlMapWithResourceType {
+                resource_type: "function",
+                map: &self.functions,
+            },
+        )?;
 
-        // Serialize semantic_models
-        let semantic_models_serialized: BTreeMap<String, YmlValue> = self
-            .semantic_models
-            .iter()
-            .map(|(k, v)| {
-                Ok((
-                    k.clone(),
-                    serialize_with_resource_type(
-                        dbt_serde_yaml::to_value(v).map_err(serde::ser::Error::custom)?,
-                        "semantic_model",
-                    ),
-                ))
-            })
-            .collect::<Result<_, _>>()?;
-        map.insert(
-            "semantic_models".to_string(),
-            dbt_serde_yaml::to_value(semantic_models_serialized)
-                .map_err(serde::ser::Error::custom)?,
-        );
+        let child_map =
+            dbt_serde_yaml::to_value(&self.child_map).map_err(serde::ser::Error::custom)?;
+        let parent_map =
+            dbt_serde_yaml::to_value(&self.parent_map).map_err(serde::ser::Error::custom)?;
+        let group_map =
+            dbt_serde_yaml::to_value(&self.group_map).map_err(serde::ser::Error::custom)?;
+        let disabled =
+            dbt_serde_yaml::to_value(&self.disabled).map_err(serde::ser::Error::custom)?;
+        let selectors =
+            dbt_serde_yaml::to_value(&self.selectors).map_err(serde::ser::Error::custom)?;
 
-        // Serialize saved queries
-        let saved_queries_serialized: BTreeMap<String, YmlValue> = self
-            .saved_queries
-            .iter()
-            .map(|(k, v)| {
-                Ok((
-                    k.clone(),
-                    serialize_with_resource_type(
-                        dbt_serde_yaml::to_value(v).map_err(serde::ser::Error::custom)?,
-                        "saved_query",
-                    ),
-                ))
-            })
-            .collect::<Result<_, _>>()?;
-        map.insert(
-            "saved_queries".to_string(),
-            dbt_serde_yaml::to_value(saved_queries_serialized)
-                .map_err(serde::ser::Error::custom)?,
-        );
+        m.serialize_entry("child_map", &child_map)?;
+        m.serialize_entry("parent_map", &parent_map)?;
+        m.serialize_entry("group_map", &group_map)?;
+        m.serialize_entry("disabled", &disabled)?;
+        m.serialize_entry("selectors", &selectors)?;
+        m.serialize_entry(
+            "groups",
+            &StreamingYamlMapWithResourceType {
+                resource_type: "group",
+                map: &self.groups,
+            },
+        )?;
 
-        // Serialize exposures
-        let exposures_serialized: BTreeMap<String, YmlValue> = self
-            .exposures
-            .iter()
-            .map(|(k, v)| {
-                Ok((
-                    k.clone(),
-                    serialize_with_resource_type(
-                        dbt_serde_yaml::to_value(v).map_err(serde::ser::Error::custom)?,
-                        "exposure",
-                    ),
-                ))
-            })
-            .collect::<Result<_, _>>()?;
-        map.insert(
-            "exposures".to_string(),
-            dbt_serde_yaml::to_value(exposures_serialized).map_err(serde::ser::Error::custom)?,
-        );
-
-        // Serialize metrics
-        let metrics_serialized: BTreeMap<String, YmlValue> = self
-            .metrics
-            .iter()
-            .map(|(k, v)| {
-                Ok((
-                    k.clone(),
-                    serialize_with_resource_type(
-                        dbt_serde_yaml::to_value(v).map_err(serde::ser::Error::custom)?,
-                        "metric",
-                    ),
-                ))
-            })
-            .collect::<Result<_, _>>()?;
-        map.insert(
-            "metrics".to_string(),
-            dbt_serde_yaml::to_value(metrics_serialized).map_err(serde::ser::Error::custom)?,
-        );
-
-        // Serialize functions
-        let functions_serialized: BTreeMap<String, YmlValue> = self
-            .functions
-            .iter()
-            .map(|(k, v)| {
-                Ok((
-                    k.clone(),
-                    serialize_with_resource_type(
-                        dbt_serde_yaml::to_value(v).map_err(serde::ser::Error::custom)?,
-                        "function",
-                    ),
-                ))
-            })
-            .collect::<Result<_, _>>()?;
-        map.insert(
-            "functions".to_string(),
-            dbt_serde_yaml::to_value(functions_serialized).map_err(serde::ser::Error::custom)?,
-        );
-
-        map.insert(
-            "child_map".to_string(),
-            dbt_serde_yaml::to_value(&self.child_map).map_err(serde::ser::Error::custom)?,
-        );
-        map.insert(
-            "parent_map".to_string(),
-            dbt_serde_yaml::to_value(&self.parent_map).map_err(serde::ser::Error::custom)?,
-        );
-        map.insert(
-            "group_map".to_string(),
-            dbt_serde_yaml::to_value(&self.group_map).map_err(serde::ser::Error::custom)?,
-        );
-        map.insert(
-            "disabled".to_string(),
-            dbt_serde_yaml::to_value(&self.disabled).map_err(serde::ser::Error::custom)?,
-        );
-        map.insert(
-            "selectors".to_string(),
-            dbt_serde_yaml::to_value(&self.selectors).map_err(serde::ser::Error::custom)?,
-        );
-        // Serialize groups
-        let groups_serialized: BTreeMap<String, YmlValue> = self
-            .groups
-            .iter()
-            .map(|(k, v)| {
-                Ok((
-                    k.clone(),
-                    serialize_with_resource_type(
-                        dbt_serde_yaml::to_value(v).map_err(serde::ser::Error::custom)?,
-                        "group",
-                    ),
-                ))
-            })
-            .collect::<Result<_, _>>()?;
-        map.insert(
-            "groups".to_string(),
-            dbt_serde_yaml::to_value(groups_serialized).map_err(serde::ser::Error::custom)?,
-        );
-
-        map.serialize(serializer)
+        m.end()
     }
 }

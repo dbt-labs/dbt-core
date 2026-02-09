@@ -52,6 +52,7 @@ pub enum DbtNode {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct ManifestMetadata {
+    #[serde(flatten)]
     pub __base__: BaseMetadata,
     #[serde(default)]
     pub project_name: String,
