@@ -361,6 +361,7 @@ impl<'env> Vm<'env> {
             }};
         }
 
+        let root_package_name = self.env.get_root_package_name();
         let template_registry = self.env.get_macro_template_registry();
 
         #[allow(clippy::while_let_loop)]
@@ -945,6 +946,41 @@ impl<'env> Vm<'env> {
                         // leave the one argument on the stack for the recursion.  The
                         // recurse_loop! macro itself will perform a jump and not return here.
                         recurse_loop!(true, &this_span);
+                    } else if (*name == "ref" || *name == "source" || *name == "function") && {
+                        // we only consider the ref source override in root package
+                        let template_result = self.env.get_template(name).or_else(|_| {
+                            self.env
+                                .get_template(&format!("{}.{}", root_package_name, *name))
+                        });
+                        template_result.is_ok()
+                    } {
+                        let template = self
+                            .env
+                            .get_template(name)
+                            .or_else(|_| {
+                                self.env
+                                    .get_template(&format!("{}.{}", root_package_name, *name))
+                            })
+                            .unwrap();
+                        let template_registry_entry = template_registry.get(&Value::from(*name));
+                        let path = template_registry_entry
+                            .and_then(|entry| entry.get_attr_fast("path"))
+                            .unwrap_or_else(|| Value::from(*name));
+                        let span = template_registry_entry
+                            .and_then(|entry| entry.get_attr_fast("span"))
+                            .unwrap_or_else(|| Value::from_serialize(Span::default()));
+
+                        let context = state.get_base_context_with_path_and_span(&path, &span);
+
+                        let inner_state: State<'_, '_> = template
+                            .eval_to_state_with_outer_stack_depth(
+                                context,
+                                listeners,
+                                state.ctx.depth() + INCLUDE_RECURSION_COST,
+                            )?;
+                        let func = inner_state.lookup(name).unwrap();
+                        call_wrapper(listeners, || func.call(&inner_state, args, listeners))
+                            .map_err(|err| state.with_span_error(err, this_span))?
                     } else if let Some(func) =
                         state.lookup(name).filter(|func| !func.is_undefined())
                     {
