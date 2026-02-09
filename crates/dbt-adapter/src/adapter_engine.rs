@@ -665,6 +665,9 @@ impl AdapterEngine {
             if !fetch {
                 return Ok((schema, batches));
             }
+
+            // This loop has been discovered to inexplicably hang in some circumstances
+            // See PR https://github.com/dbt-labs/fs/pull/7755
             for res in reader {
                 let batch = res.map_err(adbc_core::error::Error::from)?;
                 batches.push(batch);
