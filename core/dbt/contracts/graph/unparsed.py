@@ -188,6 +188,18 @@ class UnparsedDerivedDimensionV2(UnparsedDimensionV2):
     expr: str
     granularity: Optional[str] = None  # str is really a TimeGranularity Enum
 
+    @classmethod
+    @override
+    def validate(cls, data):
+        super().validate(data)
+        # validity_params may only be set when the derived dimension has a granularity
+        if data.get("validity_params") is not None and not data.get("granularity"):
+            dim_name = data.get("name")
+            raise ValidationError(
+                f"Derived dimension {dim_name} has validity_params, "
+                "so it must specify a granularity."
+            )
+
 
 @dataclass
 class UnparsedEntityBase(dbtClassMixin):

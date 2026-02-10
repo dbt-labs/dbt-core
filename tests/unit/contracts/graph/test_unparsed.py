@@ -21,6 +21,7 @@ from dbt.contracts.graph.unparsed import (
     HasColumnTests,
     UnparsedColumn,
     UnparsedConversionTypeParams,
+    UnparsedDerivedDimensionV2,
     UnparsedDocumentationFile,
     UnparsedExposure,
     UnparsedMacro,
@@ -1227,3 +1228,43 @@ class TestUnparsedColumnTimeDimensionGranularityValidation(ContractTestCase):
         col = self.ContractType.from_dict(column_dict)
         self.assertEqual(col.name, "category")
         self.assertIsNone(col.granularity)
+
+
+class TestUnparsedDerivedDimensionV2ValidityParamsValidation(ContractTestCase):
+    """Test validation that UnparsedDerivedDimensionV2 only has validity_params when it has granularity."""
+
+    ContractType = UnparsedDerivedDimensionV2
+
+    def test_derived_dimension_with_validity_params_without_granularity_fails_validation(self):
+        """Derived dimension with validity_params must have granularity."""
+        dimension_dict = {
+            "type": "time",
+            "name": "valid_from_dim",
+            "expr": "valid_from",
+            "validity_params": {"is_start": True, "is_end": False},
+        }
+        self.assert_fails_validation(dimension_dict)
+
+    def test_derived_dimension_with_validity_params_with_granularity_passes_validation(self):
+        """Derived dimension with validity_params and granularity passes."""
+        dimension_dict = {
+            "type": "time",
+            "name": "valid_from_dim",
+            "expr": "valid_from",
+            "granularity": "day",
+            "validity_params": {"is_start": True, "is_end": True},
+        }
+        dim = self.ContractType.from_dict(dimension_dict)
+        self.assertEqual(dim.granularity, "day")
+        self.assertEqual(dim.name, "valid_from_dim")
+
+    def test_derived_dimension_without_validity_params_passes_without_granularity(self):
+        """Derived dimension without validity_params does not require granularity."""
+        dimension_dict = {
+            "type": "time",
+            "name": "some_dim",
+            "expr": "some_column",
+        }
+        dim = self.ContractType.from_dict(dimension_dict)
+        self.assertEqual(dim.name, "some_dim")
+        self.assertIsNone(dim.granularity)
