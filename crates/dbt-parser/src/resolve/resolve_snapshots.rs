@@ -269,9 +269,7 @@ pub async fn resolve_snapshots(
     });
 
     let all_depends_on = jinja_type_checking_event_listener_factory
-        .all_depends_on
-        .read()
-        .unwrap()
+        .depends_on()
         .clone();
 
     for SqlFileRenderResult {

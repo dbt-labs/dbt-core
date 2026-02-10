@@ -3,7 +3,7 @@ use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet},
     path::{Path, PathBuf},
     rc::Rc,
-    sync::{Arc, RwLock},
+    sync::{Arc, RwLock, RwLockReadGuard},
 };
 
 use minijinja::{
@@ -154,7 +154,15 @@ pub trait JinjaTypeCheckingEventListenerFactory: Send + Sync {
 #[derive(Default, Debug)]
 pub struct DefaultJinjaTypeCheckEventListenerFactory {
     /// all macro depends on
-    pub all_depends_on: Arc<RwLock<BTreeMap<String, BTreeSet<String>>>>,
+    /// NOTE(felipecrv): this should probably be changed to an `im` data-structure
+    all_depends_on: Arc<RwLock<BTreeMap<String, BTreeSet<String>>>>,
+}
+
+impl DefaultJinjaTypeCheckEventListenerFactory {
+    /// Lock the depends_on graph for reading.
+    pub fn depends_on(&self) -> RwLockReadGuard<'_, BTreeMap<String, BTreeSet<String>>> {
+        self.all_depends_on.read().unwrap()
+    }
 }
 
 impl JinjaTypeCheckingEventListenerFactory for DefaultJinjaTypeCheckEventListenerFactory {
