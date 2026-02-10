@@ -142,7 +142,26 @@ pub fn json_to_value(json: &serde_json::Value) -> minijinja::Value {
     json_to_value_with_context(json, &ReplayContext::default())
 }
 
+/// Check if a JSON value is a "zero value" (false, null, 0, "", [], {}).
+///
+/// Used by `values_match` to treat missing keys as equivalent to their default.
+fn is_json_zero_value(v: &serde_json::Value) -> bool {
+    match v {
+        serde_json::Value::Null => true,
+        serde_json::Value::Bool(b) => !b,
+        serde_json::Value::Number(n) => n.as_f64().is_some_and(|f| f == 0.0),
+        serde_json::Value::String(s) => s.is_empty(),
+        serde_json::Value::Array(a) => a.is_empty(),
+        serde_json::Value::Object(o) => o.is_empty(),
+    }
+}
+
 /// Check if two JSON values match semantically, ignoring `__type__` fields.
+///
+/// For objects, keys present in one side but missing in the other are tolerated
+/// if the value is a "zero value" (false, null, 0, "", [], {}). This provides
+/// forward compatibility when new fields with default values are added to
+/// serialization — old recordings without those fields still match.
 pub fn values_match(expected: &serde_json::Value, actual: &serde_json::Value) -> bool {
     match (expected, actual) {
         (serde_json::Value::Null, serde_json::Value::Null) => true,
@@ -153,19 +172,34 @@ pub fn values_match(expected: &serde_json::Value, actual: &serde_json::Value) ->
             a.len() == b.len() && a.iter().zip(b.iter()).all(|(x, y)| values_match(x, y))
         }
         (serde_json::Value::Object(a), serde_json::Value::Object(b)) => {
-            // Compare objects, ignoring __type__ field
+            // Collect keys from both sides, ignoring __type__
             let a_keys: std::collections::HashSet<_> =
                 a.keys().filter(|k| *k != "__type__").collect();
             let b_keys: std::collections::HashSet<_> =
                 b.keys().filter(|k| *k != "__type__").collect();
 
-            if a_keys != b_keys {
-                return false;
+            // Keys present in both must match
+            for k in a_keys.intersection(&b_keys) {
+                if !values_match(a.get(*k).unwrap(), b.get(*k).unwrap()) {
+                    return false;
+                }
             }
 
-            a_keys
-                .iter()
-                .all(|k| values_match(a.get(*k).unwrap(), b.get(*k).unwrap()))
+            // Keys only in `a` (expected) are OK if their value is a zero value
+            for k in a_keys.difference(&b_keys) {
+                if !is_json_zero_value(a.get(*k).unwrap()) {
+                    return false;
+                }
+            }
+
+            // Keys only in `b` (actual) are OK if their value is a zero value
+            for k in b_keys.difference(&a_keys) {
+                if !is_json_zero_value(b.get(*k).unwrap()) {
+                    return false;
+                }
+            }
+
+            true
         }
         _ => false,
     }
@@ -240,5 +274,70 @@ mod tests {
             &serde_json::json!({"a": 1}),
             &serde_json::json!({"a": 2})
         ));
+    }
+
+    #[test]
+    fn test_values_match_tolerates_missing_zero_value_keys() {
+        // Extra key with false value on one side — should match (forward compat)
+        assert!(values_match(
+            &serde_json::json!({"a": 1}),
+            &serde_json::json!({"a": 1, "is_delta": false})
+        ));
+        assert!(values_match(
+            &serde_json::json!({"a": 1, "is_delta": false}),
+            &serde_json::json!({"a": 1})
+        ));
+
+        // Extra key with null value — should match
+        assert!(values_match(
+            &serde_json::json!({"a": 1}),
+            &serde_json::json!({"a": 1, "extra": null})
+        ));
+
+        // Extra key with zero number — should match
+        assert!(values_match(
+            &serde_json::json!({"a": 1, "count": 0}),
+            &serde_json::json!({"a": 1})
+        ));
+
+        // Extra key with empty string — should match
+        assert!(values_match(
+            &serde_json::json!({"a": 1}),
+            &serde_json::json!({"a": 1, "name": ""})
+        ));
+
+        // Extra key with non-zero value — should NOT match
+        assert!(!values_match(
+            &serde_json::json!({"a": 1}),
+            &serde_json::json!({"a": 1, "is_delta": true})
+        ));
+        assert!(!values_match(
+            &serde_json::json!({"a": 1, "extra": "data"}),
+            &serde_json::json!({"a": 1})
+        ));
+        assert!(!values_match(
+            &serde_json::json!({"a": 1}),
+            &serde_json::json!({"a": 1, "count": 42})
+        ));
+    }
+
+    #[test]
+    fn test_values_match_nested_zero_value_tolerance() {
+        // Nested objects: the tolerance applies recursively
+        let old_recording = serde_json::json!({
+            "__type__": "RelationObject",
+            "adapter_type": "snowflake",
+            "database": "raw",
+            "is_table": false,
+        });
+        let new_code = serde_json::json!({
+            "__type__": "RelationObject",
+            "adapter_type": "snowflake",
+            "database": "raw",
+            "is_table": false,
+            "is_delta": false,
+        });
+        assert!(values_match(&old_recording, &new_code));
+        assert!(values_match(&new_code, &old_recording));
     }
 }

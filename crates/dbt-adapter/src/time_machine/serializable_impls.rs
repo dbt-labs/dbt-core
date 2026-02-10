@@ -123,6 +123,7 @@ impl TimeMachineSerializable for RelationObject {
             "is_cte": self.is_cte(),
             "is_dynamic_table": self.is_dynamic_table(),
             "is_streaming_table": self.is_streaming_table(),
+            "is_delta": self.is_delta(),
             "quote_policy": {
                 "database": quote_policy.database,
                 "schema": quote_policy.schema,
@@ -189,7 +190,7 @@ impl TimeMachineSerializable for RelationObject {
             None
         };
 
-        let relation = do_create_relation(
+        let mut relation = do_create_relation(
             adapter_type,
             ext.str_or("database", ""),
             ext.str_or("schema", ""),
@@ -198,6 +199,8 @@ impl TimeMachineSerializable for RelationObject {
             quote_policy,
         )
         .ok()?;
+
+        relation.set_is_delta(Some(ext.bool_or("is_delta", false)));
 
         Some(RelationObject::new(relation.into()).into_value())
     }
@@ -429,6 +432,74 @@ mod tests {
 
         // Verify adapter type is also restored from serialized data
         assert!(matches!(restored.adapter_type(), AdapterType::Snowflake));
+    }
+
+    #[test]
+    fn test_databricks_relation_roundtrip_preserves_is_delta() {
+        use dbt_schemas::dbt_types::RelationType;
+
+        let custom_quoting = ResolvedQuoting {
+            database: false,
+            schema: false,
+            identifier: false,
+        };
+
+        // Create a Databricks relation with is_delta=true (as would come from a real warehouse)
+        let mut relation = do_create_relation(
+            AdapterType::Databricks,
+            "my_catalog".to_string(),
+            "my_schema".to_string(),
+            Some("my_table".to_string()),
+            Some(RelationType::Table),
+            custom_quoting,
+        )
+        .unwrap();
+        relation.set_is_delta(Some(true));
+
+        let original = RelationObject::from(relation);
+        assert!(original.is_delta(), "original should have is_delta=true");
+
+        let json = original.to_time_machine_json();
+        assert_eq!(json["is_delta"], true, "is_delta should be serialized");
+
+        let databricks_ctx = ReplayContext {
+            adapter_type: AdapterType::Databricks,
+            quoting: custom_quoting,
+        };
+
+        let value = RelationObject::from_time_machine_json(&json, &databricks_ctx).unwrap();
+        let restored = value.downcast_object::<RelationObject>().unwrap();
+
+        assert!(
+            restored.is_delta(),
+            "restored relation must preserve is_delta=true"
+        );
+    }
+
+    #[test]
+    fn test_databricks_relation_backward_compat_missing_is_delta() {
+        // Old recordings won't have is_delta in the JSON — should default to false
+        let old_format_json = serde_json::json!({
+            "adapter_type": "databricks",
+            "database": "my_catalog",
+            "schema": "my_schema",
+            "identifier": "my_table",
+            "is_table": true,
+        });
+
+        let databricks_ctx = ReplayContext {
+            adapter_type: AdapterType::Databricks,
+            quoting: ResolvedQuoting::default(),
+        };
+
+        let value =
+            RelationObject::from_time_machine_json(&old_format_json, &databricks_ctx).unwrap();
+        let restored = value.downcast_object::<RelationObject>().unwrap();
+
+        assert!(
+            !restored.is_delta(),
+            "missing is_delta should default to false for backward compat"
+        );
     }
 
     #[test]
