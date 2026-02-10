@@ -644,15 +644,6 @@
         "conversion_rate"
       ]
     },
-    "CustomCheckLevel": {
-      "type": "string",
-      "enum": [
-        "error",
-        "warn",
-        "advisory",
-        "off"
-      ]
-    },
     "CustomTest": {
       "anyOf": [
         {
@@ -3733,15 +3724,6 @@
             "null"
           ]
         },
-        "custom_checks": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": {
-            "$ref": "#/definitions/CustomCheckLevel"
-          }
-        },
         "database": {
           "type": [
             "string",
@@ -4351,16 +4333,6 @@
           "anyOf": [
             {
               "$ref": "#/definitions/StaticAnalysisKind"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "strictness": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/StrictnessMode"
             },
             {
               "type": "null"
@@ -7422,14 +7394,6 @@
         "ephemeral",
         "table",
         "view"
-      ]
-    },
-    "StrictnessMode": {
-      "type": "string",
-      "enum": [
-        "baseline",
-        "strict",
-        "custom"
       ]
     },
     "StringOrArrayOfStrings": {
