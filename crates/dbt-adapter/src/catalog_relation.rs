@@ -120,20 +120,23 @@ impl CatalogRelation {
         );
 
         let model_catalog_name =
-            Self::get_model_config_value(model, "catalog_name").and_then(|s| {
-                let t = s.trim();
-                if t.eq_ignore_ascii_case("none") {
-                    None
-                } else {
-                    Some(t.to_string())
-                }
-            });
+            Self::get_model_config_value(model, "catalog_name", AdapterType::Bigquery).and_then(
+                |s| {
+                    let t = s.trim();
+                    if t.eq_ignore_ascii_case("none") {
+                        None
+                    } else {
+                        Some(t.to_string())
+                    }
+                },
+            );
 
         const BIGQUERY_ICEBERG_TABLE_FORMAT: &str = "iceberg";
-        let wants_iceberg = Self::get_model_config_value(model, "table_format")
-            .as_deref()
-            .map(|s| s.eq_ignore_ascii_case(BIGQUERY_ICEBERG_TABLE_FORMAT))
-            .unwrap_or(false);
+        let wants_iceberg =
+            Self::get_model_config_value(model, "table_format", AdapterType::Bigquery)
+                .as_deref()
+                .map(|s| s.eq_ignore_ascii_case(BIGQUERY_ICEBERG_TABLE_FORMAT))
+                .unwrap_or(false);
 
         match (model_catalog_name.as_deref(), catalogs.as_ref()) {
             (None, _) if !wants_iceberg => Ok(Self::default_catalog_relation_bigquery()),
@@ -174,15 +177,6 @@ impl CatalogRelation {
         catalogs: &YmlMapping,
         catalog_name: &str,
     ) -> AdapterResult<CatalogRelation> {
-        let bigquery_attr = model.get_attr(BIGQUERY_ATTR)?;
-
-        // TODO(anna): Fallback for now since the parse adapter hasn't finished building AdapterAttr
-        let model_config = if bigquery_attr.is_undefined() {
-            &model.get_attr("config")?
-        } else {
-            &bigquery_attr
-        };
-
         let catalog = find_catalog(catalogs, catalog_name).ok_or_else(|| {
             AdapterError::new(
                 AdapterErrorKind::Configuration,
@@ -203,7 +197,7 @@ impl CatalogRelation {
         let write_integration = Self::lookup_write_integration(catalog, &integration_name);
 
         // 3) catalog_type must be in YAML (no model override)
-        if Self::get_model_config_value(model_config, "catalog_type").is_some() {
+        if Self::get_model_config_value(model, "catalog_type", AdapterType::Bigquery).is_some() {
             return Err(AdapterError::new(
                 AdapterErrorKind::Configuration,
                 "catalog_type may only be specified in write integration entries of catalogs.yml",
@@ -229,25 +223,27 @@ impl CatalogRelation {
 
         // 4) table_format: default|iceberg (model > YAML)
         // TODO: handle these again now that you know about the default catalogs
-        let mut table_format = Self::get_model_config_value(model, "table_format")
-            .or_else(|| Self::yml_str(write_integration, "table_format".to_string()))
-            .ok_or_else(|| {
-                AdapterError::new(
-                    AdapterErrorKind::Configuration,
-                    "table_format missing from catalogs.yml (should be impossible by schema)",
-                )
-            })?;
+        let mut table_format =
+            Self::get_model_config_value(model, "table_format", AdapterType::Bigquery)
+                .or_else(|| Self::yml_str(write_integration, "table_format".to_string()))
+                .ok_or_else(|| {
+                    AdapterError::new(
+                        AdapterErrorKind::Configuration,
+                        "table_format missing from catalogs.yml (should be impossible by schema)",
+                    )
+                })?;
         table_format.make_ascii_lowercase();
 
         // file_format: model > YAML
-        let mut file_format = Self::get_model_config_value(model_config, "file_format")
-            .or_else(|| Self::yml_str(write_integration, "file_format".to_string()))
-            .ok_or_else(|| {
-                AdapterError::new(
-                    AdapterErrorKind::Configuration,
-                    "file_format missing from catalogs.yml (should be impossible by schema)",
-                )
-            })?;
+        let mut file_format =
+            Self::get_model_config_value(model, "file_format", AdapterType::Bigquery)
+                .or_else(|| Self::yml_str(write_integration, "file_format".to_string()))
+                .ok_or_else(|| {
+                    AdapterError::new(
+                        AdapterErrorKind::Configuration,
+                        "file_format missing from catalogs.yml (should be impossible by schema)",
+                    )
+                })?;
         file_format.make_ascii_lowercase();
 
         // 6) adapter_properties:
@@ -255,12 +251,14 @@ impl CatalogRelation {
         //    - base_location_subpath (optional)
         //    - storage_uri
         let yaml_adapter_props = Self::get_yaml_adapter_properties(write_integration);
-        let model_adapter_props = Self::get_model_adapter_properties(model_config);
+        let model_adapter_props = Self::get_model_adapter_properties(model, AdapterType::Bigquery);
 
         // base_location_root: model(adapter_properties) > model (legacy) > YAML > default
         let base_location_root =
             Self::get_adapter_property(model_adapter_props.as_ref(), "base_location_root")
-                .or_else(|| Self::get_model_config_value(model_config, "base_location_root"))
+                .or_else(|| {
+                    Self::get_model_config_value(model, "base_location_root", AdapterType::Bigquery)
+                })
                 .or_else(|| {
                     Self::get_adapter_property(yaml_adapter_props.as_ref(), "base_location_root")
                 });
@@ -274,11 +272,17 @@ impl CatalogRelation {
         }
         let base_location_subpath =
             Self::get_adapter_property(model_adapter_props.as_ref(), "base_location_subpath")
-                .or_else(|| Self::get_model_config_value(model_config, "base_location_subpath"));
+                .or_else(|| {
+                    Self::get_model_config_value(
+                        model,
+                        "base_location_subpath",
+                        AdapterType::Bigquery,
+                    )
+                });
 
-        let schema = Self::get_model_config_value(model, "schema");
-        let identifier = Self::get_model_config_value(model, "alias")
-            .or_else(|| Self::get_model_config_value(model, "identifier"));
+        let schema = Self::get_model_config_value(model, "schema", AdapterType::Bigquery);
+        let identifier = Self::get_model_config_value(model, "alias", AdapterType::Bigquery)
+            .or_else(|| Self::get_model_config_value(model, "identifier", AdapterType::Bigquery));
 
         let base_location = Self::build_base_location(
             &base_location_root,
@@ -288,7 +292,7 @@ impl CatalogRelation {
         );
 
         // external_volume must be in YAML (no model override)
-        if Self::get_model_config_value(model_config, "external_volume").is_some() {
+        if Self::get_model_config_value(model, "external_volume", AdapterType::Bigquery).is_some() {
             return Err(AdapterError::new(
                 AdapterErrorKind::Configuration,
                 "external_volume may only be specified in write integration entries of catalogs.yml",
@@ -305,7 +309,7 @@ impl CatalogRelation {
 
         // storage_uri: model (adapter_properties) > model (legacy) > default
         let storage_uri = Self::get_adapter_property(model_adapter_props.as_ref(), "storage_uri")
-            .or_else(|| Self::get_model_config_value(model_config, "storage_uri"))
+            .or_else(|| Self::get_model_config_value(model, "storage_uri", AdapterType::Bigquery))
             .unwrap_or_else(|| format!("{external_volume}/{base_location}"));
 
         let mut adapter_properties =
@@ -341,19 +345,22 @@ impl CatalogRelation {
         );
 
         let model_catalog_name =
-            Self::get_model_config_value(model, "catalog_name").and_then(|s| {
-                let t = s.trim();
-                if t.eq_ignore_ascii_case("none") {
-                    None
-                } else {
-                    Some(t.to_string())
-                }
-            });
+            Self::get_model_config_value(model, "catalog_name", AdapterType::Databricks).and_then(
+                |s| {
+                    let t = s.trim();
+                    if t.eq_ignore_ascii_case("none") {
+                        None
+                    } else {
+                        Some(t.to_string())
+                    }
+                },
+            );
 
-        let wants_iceberg = Self::get_model_config_value(model, "table_format")
-            .as_deref()
-            .map(|s| s.eq_ignore_ascii_case(DBX_ICEBERG_TABLE_FORMAT))
-            .unwrap_or(false);
+        let wants_iceberg =
+            Self::get_model_config_value(model, "table_format", AdapterType::Databricks)
+                .as_deref()
+                .map(|s| s.eq_ignore_ascii_case(DBX_ICEBERG_TABLE_FORMAT))
+                .unwrap_or(false);
 
         match (model_catalog_name.as_deref(), catalogs.as_ref()) {
             (None, None) if !wants_iceberg => Ok(Self::default_catalog_relation_databricks()),
@@ -402,15 +409,6 @@ impl CatalogRelation {
         catalogs: &YmlMapping,
         catalog_name: &str,
     ) -> AdapterResult<CatalogRelation> {
-        let databricks_attr = model.get_attr(DATABRICKS_ATTR)?;
-
-        // TODO(anna): Fallback for now since the parse adapter hasn't finished building AdapterAttr
-        let model_config = if databricks_attr.is_undefined() {
-            &model.get_attr("config")?
-        } else {
-            &databricks_attr
-        };
-
         let catalog = find_catalog(catalogs, catalog_name).ok_or_else(|| {
             AdapterError::new(
                 AdapterErrorKind::Configuration,
@@ -431,7 +429,7 @@ impl CatalogRelation {
         let write_integration = Self::lookup_write_integration(catalog, &integration_name);
 
         // 3) catalog_type must be in YAML (no model override)
-        if Self::get_model_config_value(model_config, "catalog_type").is_some() {
+        if Self::get_model_config_value(model, "catalog_type", AdapterType::Databricks).is_some() {
             return Err(AdapterError::new(
                 AdapterErrorKind::Configuration,
                 "catalog_type may only be specified in write integration entries of catalogs.yml",
@@ -458,9 +456,10 @@ impl CatalogRelation {
         };
 
         // 4) table_format: DEFAULT|ICEBERG (model > YAML > DEFAULT)
-        let table_format_raw = Self::get_model_config_value(model, "table_format")
-            .or_else(|| Self::yml_str(write_integration, "table_format".to_string()))
-            .unwrap_or_else(|| DBX_DEFAULT_TABLE_FORMAT.to_string());
+        let table_format_raw =
+            Self::get_model_config_value(model, "table_format", AdapterType::Databricks)
+                .or_else(|| Self::yml_str(write_integration, "table_format".to_string()))
+                .unwrap_or_else(|| DBX_DEFAULT_TABLE_FORMAT.to_string());
         if !ALLOWED_TABLE_FORMATS_DATABRICKS
             .iter()
             .any(|a| table_format_raw.eq_ignore_ascii_case(a))
@@ -480,9 +479,10 @@ impl CatalogRelation {
         };
 
         // 5) file_format: model > YAML > default(delta)
-        let mut file_format = Self::get_model_config_value(model_config, "file_format")
-            .or_else(|| Self::yml_str(write_integration, "file_format".to_string()))
-            .unwrap_or_else(|| String::from(DBX_DEFAULT_TABLE_FORMAT));
+        let mut file_format =
+            Self::get_model_config_value(model, "file_format", AdapterType::Databricks)
+                .or_else(|| Self::yml_str(write_integration, "file_format".to_string()))
+                .unwrap_or_else(|| String::from(DBX_DEFAULT_TABLE_FORMAT));
         file_format.make_ascii_lowercase();
         let file_format = file_format;
 
@@ -490,13 +490,16 @@ impl CatalogRelation {
         //    - UNITY: allow only location_root (optional; non-blank) or use_uniform (optional)
         //    - HMS: disallow adapter_properties entirely
         let yaml_adapter_props = Self::get_yaml_adapter_properties(write_integration);
-        let model_adapter_props = Self::get_model_adapter_properties(model_config);
+        let model_adapter_props =
+            Self::get_model_adapter_properties(model, AdapterType::Databricks);
         let mut external_volume = None;
 
         // location_root: model(adapter_properties) > model (legacy) > YAML > default
         let location_root =
             Self::get_adapter_property(model_adapter_props.as_ref(), "location_root")
-                .or_else(|| Self::get_model_config_value(model_config, "location_root"))
+                .or_else(|| {
+                    Self::get_model_config_value(model, "location_root", AdapterType::Databricks)
+                })
                 .or_else(|| {
                     Self::get_adapter_property(yaml_adapter_props.as_ref(), "location_root")
                 });
@@ -513,8 +516,7 @@ impl CatalogRelation {
                     "adapter_properties.location_root cannot be blank or whitespace",
                 ));
             }
-            external_volume =
-                Self::dbx_build_external_volume_for_location(model_config, &location_root);
+            external_volume = Self::dbx_build_external_volume_for_location(model, &location_root);
         } else if raw_catalog_type.eq_ignore_ascii_case(DATABRICKS_HIVE_METASTORE)
             && !adapter_properties.is_empty()
         {
@@ -556,37 +558,30 @@ impl CatalogRelation {
         model: &Value,
         location_root: &str,
     ) -> Option<String> {
-        let get_str = |k: &str| -> Option<String> {
-            model.get_attr(k).ok().and_then(|v| {
-                (v.kind() == ValueKind::String)
-                    .then(|| v.to_string().trim().to_owned())
-                    .filter(|s| !s.is_empty())
-            })
-        };
-
-        let include_full_name = model
-            .get_attr("include_full_name_in_path")
-            .ok()
-            .map(|v| match v.kind() {
-                ValueKind::Bool => v.is_true(),
-                ValueKind::String => v.to_string().trim().eq_ignore_ascii_case("true"),
-                _ => false,
-            })
-            .unwrap_or(false);
+        let include_full_name = Self::get_model_config_value(
+            model,
+            "include_full_name_in_path",
+            AdapterType::Databricks,
+        )
+        .map(|v| v.trim().eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
 
         let mut rel = PathBuf::new();
 
-        if let Some(id) = get_str("identifier") {
-            rel.push(id);
-        }
-
         if include_full_name {
-            if let Some(db) = get_str("database") {
+            if let Some(db) =
+                Self::get_model_config_value(model, "database", AdapterType::Databricks)
+            {
                 rel.push(db);
             }
-            if let Some(sc) = get_str("schema") {
+            if let Some(sc) = Self::get_model_config_value(model, "schema", AdapterType::Databricks)
+            {
                 rel.push(sc);
             }
+        }
+
+        if let Some(id) = Self::get_model_config_value(model, "alias", AdapterType::Databricks) {
+            rel.push(id);
         }
 
         Some(
@@ -623,17 +618,19 @@ impl CatalogRelation {
         }
 
         let model_catalog_name =
-            Self::get_model_config_value(model, "catalog_name").and_then(|s| {
-                let t = s.trim();
-                // [DELIBERATE CHANGE] Serialization sometimes makes model configs parse a none
-                // value into Some("none"). Unlikely many users will be naming their catalog names 'none'.
-                // TODO: track that down and patch
-                if t.eq_ignore_ascii_case("none") {
-                    None
-                } else {
-                    Some(t.to_string())
-                }
-            });
+            Self::get_model_config_value(model, "catalog_name", AdapterType::Snowflake).and_then(
+                |s| {
+                    let t = s.trim();
+                    // [DELIBERATE CHANGE] Serialization sometimes makes model configs parse a none
+                    // value into Some("none"). Unlikely many users will be naming their catalog names 'none'.
+                    // TODO: track that down and patch
+                    if t.eq_ignore_ascii_case("none") {
+                        None
+                    } else {
+                        Some(t.to_string())
+                    }
+                },
+            );
 
         match (model_catalog_name.as_deref(), catalogs.as_ref()) {
             // No reconciliation path: only values present on the model config are used.
@@ -683,16 +680,7 @@ impl CatalogRelation {
     /// Helper for building a catalog relation, default or iceberg, for model-configured only
     /// iceberg materializations in Snowflake.
     fn build_without_catalogs_yml(model: &Value) -> AdapterResult<CatalogRelation> {
-        let snowflake_attr = model.get_attr(SNOWFLAKE_ATTR)?;
-
-        // TODO(anna): Fallback for now since the parse adapter hasn't finished building AdapterAttr
-        let model_config = if snowflake_attr.is_undefined() {
-            &model.get_attr("config")?
-        } else {
-            &snowflake_attr
-        };
-
-        if Self::get_model_adapter_properties(model_config).is_some() {
+        if Self::get_model_adapter_properties(model, AdapterType::Snowflake).is_some() {
             return Err(AdapterError::new(
                 AdapterErrorKind::Configuration,
                 "'adapter_properties' may only be specified to override catalogs.yml and cannot be used in a legacy model config",
@@ -702,28 +690,36 @@ impl CatalogRelation {
         // Core does not functionally permit a manually specified catalog_type in a model config.
         // Prompt the user to adopt catalogs.yml. [DELIBERATE CHANGE]: Core only ignores this silently.
         // This should be an impossible field by YAML strict mode.
-        if Self::get_model_config_value(model_config, "catalog_type").is_some() {
+        if Self::get_model_config_value(model, "catalog_type", AdapterType::Snowflake).is_some() {
             return Err(AdapterError::new(
                 AdapterErrorKind::Configuration,
                 "catalog_type may only be specified in catalog entries of catalogs.yml",
             ));
         }
 
-        let transient_spec = Self::get_model_config_value(model_config, "transient");
+        let transient_spec =
+            Self::get_model_config_value(model, "transient", AdapterType::Snowflake);
         let transient_parsed = transient_spec
             .as_ref()
             .map(|s| s.eq_ignore_ascii_case("true"));
 
-        match Self::get_model_config_value(model, "table_format") {
+        match Self::get_model_config_value(model, "table_format", AdapterType::Snowflake) {
             // ===========================================================
             // table_format unspecified so assumed 'default' (legacy path)
             // ===========================================================
             None => {
-                let external_volume = Self::get_model_config_value(model_config, "external_volume");
-                let base_location_root =
-                    Self::get_model_config_value(model_config, "base_location_root");
-                let base_location_subpath =
-                    Self::get_model_config_value(model_config, "base_location_subpath");
+                let external_volume =
+                    Self::get_model_config_value(model, "external_volume", AdapterType::Snowflake);
+                let base_location_root = Self::get_model_config_value(
+                    model,
+                    "base_location_root",
+                    AdapterType::Snowflake,
+                );
+                let base_location_subpath = Self::get_model_config_value(
+                    model,
+                    "base_location_subpath",
+                    AdapterType::Snowflake,
+                );
 
                 if external_volume.is_some()
                     || base_location_root.is_some()
@@ -753,11 +749,18 @@ impl CatalogRelation {
             // table_format='default' (legacy path)
             // ====================================
             Some(table_format) if table_format.eq_ignore_ascii_case(DEFAULT_TABLE_FORMAT) => {
-                let external_volume = Self::get_model_config_value(model_config, "external_volume");
-                let base_location_root =
-                    Self::get_model_config_value(model_config, "base_location_root");
-                let base_location_subpath =
-                    Self::get_model_config_value(model_config, "base_location_subpath");
+                let external_volume =
+                    Self::get_model_config_value(model, "external_volume", AdapterType::Snowflake);
+                let base_location_root = Self::get_model_config_value(
+                    model,
+                    "base_location_root",
+                    AdapterType::Snowflake,
+                );
+                let base_location_subpath = Self::get_model_config_value(
+                    model,
+                    "base_location_subpath",
+                    AdapterType::Snowflake,
+                );
 
                 if external_volume.is_some()
                     || base_location_root.is_some()
@@ -794,15 +797,28 @@ impl CatalogRelation {
                     ));
                 }
 
-                let external_volume = Self::get_model_config_value(model_config, "external_volume");
-                let base_location_root =
-                    Self::get_model_config_value(model_config, "base_location_root");
-                let base_location_subpath =
-                    Self::get_model_config_value(model_config, "base_location_subpath");
+                let external_volume =
+                    Self::get_model_config_value(model, "external_volume", AdapterType::Snowflake);
+                let base_location_root = Self::get_model_config_value(
+                    model,
+                    "base_location_root",
+                    AdapterType::Snowflake,
+                );
+                let base_location_subpath = Self::get_model_config_value(
+                    model,
+                    "base_location_subpath",
+                    AdapterType::Snowflake,
+                );
 
-                let schema = Self::get_model_config_value(model, "schema");
-                let identifier = Self::get_model_config_value(model, "alias")
-                    .or_else(|| Self::get_model_config_value(model, "identifier"));
+                let schema = Self::get_model_config_value(model, "schema", AdapterType::Snowflake);
+                let identifier = Self::get_model_config_value(
+                    model,
+                    "alias",
+                    AdapterType::Snowflake,
+                )
+                .or_else(|| {
+                    Self::get_model_config_value(model, "identifier", AdapterType::Snowflake)
+                });
 
                 let base_location = Self::build_base_location(
                     &base_location_root,
@@ -848,15 +864,6 @@ impl CatalogRelation {
         catalogs: &YmlMapping,
         catalog_name: &str,
     ) -> AdapterResult<CatalogRelation> {
-        let snowflake_attr = model.get_attr(SNOWFLAKE_ATTR)?;
-
-        // TODO(anna): Fallback for now since the parse adapter hasn't finished building AdapterAttr
-        let model_config = if snowflake_attr.is_undefined() {
-            &model.get_attr("config")?
-        } else {
-            &snowflake_attr
-        };
-
         let catalog = find_catalog(catalogs, catalog_name).ok_or_else(|| {
             AdapterError::new(
                 AdapterErrorKind::Configuration,
@@ -873,7 +880,7 @@ impl CatalogRelation {
         // 3) resolve fields: model > write_integration > default/None
 
         // === catalog_type logic forbids overrides as Core hardcodes in catalogs.yml
-        if Self::get_model_config_value(model_config, "catalog_type").is_some() {
+        if Self::get_model_config_value(model, "catalog_type", AdapterType::Snowflake).is_some() {
             return Err(AdapterError::new(
                 AdapterErrorKind::Configuration,
                 "catalog_type may only be specified in write integration entries of catalogs.yml",
@@ -897,14 +904,15 @@ impl CatalogRelation {
             })?
             .as_str();
 
-        let table_format = Self::get_model_config_value(model, "table_format")
-            .or_else(|| Self::yml_str(write_integration, "table_format".to_string()))
-            .ok_or_else(|| {
-                AdapterError::new(
-                    AdapterErrorKind::Configuration,
-                    format!("Missing required table_format for catalog '{catalog_name}'"),
-                )
-            })?;
+        let table_format =
+            Self::get_model_config_value(model, "table_format", AdapterType::Snowflake)
+                .or_else(|| Self::yml_str(write_integration, "table_format".to_string()))
+                .ok_or_else(|| {
+                    AdapterError::new(
+                        AdapterErrorKind::Configuration,
+                        format!("Missing required table_format for catalog '{catalog_name}'"),
+                    )
+                })?;
 
         if !ALLOWED_TABLE_FORMATS_SNOWFLAKE
             .iter()
@@ -920,17 +928,24 @@ impl CatalogRelation {
         }
 
         // === Build up the external volume
-        let external_volume = Self::get_model_config_value(model_config, "external_volume")
-            .or_else(|| Self::yml_str(write_integration, "external_volume".to_string()));
+        let external_volume =
+            Self::get_model_config_value(model, "external_volume", AdapterType::Snowflake)
+                .or_else(|| Self::yml_str(write_integration, "external_volume".to_string()));
 
         // === Build up base location
         let yaml_adapter_props = Self::get_yaml_adapter_properties(write_integration);
-        let model_adapter_props = Self::get_model_adapter_properties(model_config);
+        let model_adapter_props = Self::get_model_adapter_properties(model, AdapterType::Snowflake);
 
         // base_location_root: model(adapter_properties) > model (legacy) > YAML > default
         let base_location_root =
             Self::get_adapter_property(model_adapter_props.as_ref(), "base_location_root")
-                .or_else(|| Self::get_model_config_value(model_config, "base_location_root"))
+                .or_else(|| {
+                    Self::get_model_config_value(
+                        model,
+                        "base_location_root",
+                        AdapterType::Snowflake,
+                    )
+                })
                 .or_else(|| {
                     Self::get_adapter_property(yaml_adapter_props.as_ref(), "base_location_root")
                 });
@@ -944,11 +959,17 @@ impl CatalogRelation {
         }
         let base_location_subpath =
             Self::get_adapter_property(model_adapter_props.as_ref(), "base_location_subpath")
-                .or_else(|| Self::get_model_config_value(model_config, "base_location_subpath"));
+                .or_else(|| {
+                    Self::get_model_config_value(
+                        model,
+                        "base_location_subpath",
+                        AdapterType::Snowflake,
+                    )
+                });
 
-        let schema = Self::get_model_config_value(model, "schema");
-        let identifier = Self::get_model_config_value(model, "alias")
-            .or_else(|| Self::get_model_config_value(model, "identifier"));
+        let schema = Self::get_model_config_value(model, "schema", AdapterType::Snowflake);
+        let identifier = Self::get_model_config_value(model, "alias", AdapterType::Snowflake)
+            .or_else(|| Self::get_model_config_value(model, "identifier", AdapterType::Snowflake));
 
         let base_location = Self::build_base_location(
             &base_location_root,
@@ -962,7 +983,8 @@ impl CatalogRelation {
             Self::merged_adapter_properties(yaml_adapter_props, model_adapter_props);
 
         // 5) transient handling
-        let transient_spec = Self::get_model_config_value(model_config, "transient");
+        let transient_spec =
+            Self::get_model_config_value(model, "transient", AdapterType::Snowflake);
 
         if table_format.eq_ignore_ascii_case(ICEBERG_TABLE_FORMAT) && transient_spec.is_some() {
             return Err(AdapterError::new(
@@ -1074,21 +1096,68 @@ impl CatalogRelation {
 
     // [DELIBERATE CHANGE]: serialization can sometimes serialize None into Some("none")
     // which is not how core reads values in.
-    fn get_model_config_value(model_config: &Value, key: &str) -> Option<String> {
-        match model_config.get_attr(key) {
-            Ok(v) if !v.is_undefined() => {
-                let s = v.to_string();
-                if s.is_empty() || s.eq_ignore_ascii_case("none") {
-                    None
+    //
+    // TODO(anna): At the moment, we don't have the type safety of knowing that `model` has
+    // type `DbtModel`, so we try to get the value at both the top level and under `model.config`.
+    // Once we can enforce the type of `model`, we won't need these value extractors anymore.
+    fn get_model_config_value(
+        model: &Value,
+        key: &str,
+        adapter_type: AdapterType,
+    ) -> Option<String> {
+        let adapter_attr = match adapter_type {
+            AdapterType::Bigquery => BIGQUERY_ATTR,
+            AdapterType::Databricks => DATABRICKS_ATTR,
+            AdapterType::Snowflake => SNOWFLAKE_ATTR,
+            _ => return None,
+        };
+        let model_config = if let Ok(adapter_attr) = model.get_attr(adapter_attr)
+            && !adapter_attr.is_undefined()
+        {
+            adapter_attr
+        } else {
+            model.get_attr("config").ok()?
+        };
+
+        let value = match model.get_attr(key) {
+            Ok(v) if !v.is_undefined() => v,
+            _ => {
+                if let Ok(v) = model_config.get_attr(key)
+                    && !v.is_undefined()
+                {
+                    v
                 } else {
-                    Some(s)
+                    return None;
                 }
             }
-            _ => None,
+        };
+
+        if value.is_none() {
+            None
+        } else {
+            Some(value.to_string())
         }
     }
 
-    fn get_model_adapter_properties(model_config: &Value) -> Option<BTreeMap<String, String>> {
+    // TODO(anna): We can remove this once `model` no longer has type `Value`.
+    fn get_model_adapter_properties(
+        model: &Value,
+        adapter_type: AdapterType,
+    ) -> Option<BTreeMap<String, String>> {
+        let adapter_attr = match adapter_type {
+            AdapterType::Bigquery => BIGQUERY_ATTR,
+            AdapterType::Databricks => DATABRICKS_ATTR,
+            AdapterType::Snowflake => SNOWFLAKE_ATTR,
+            _ => return None,
+        };
+        let model_config = if let Ok(adapter_attr) = model.get_attr(adapter_attr)
+            && !adapter_attr.is_undefined()
+        {
+            adapter_attr
+        } else {
+            model.get_attr("config").ok()?
+        };
+
         if let Ok(adapter_properties_val) = model_config.get_attr("adapter_properties") {
             if adapter_properties_val.is_undefined() {
                 return None;
