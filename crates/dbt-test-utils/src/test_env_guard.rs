@@ -31,6 +31,7 @@ impl TestEnvGuard {
 
     const EXACT_MATCH_VARS: &'static [&'static str] = &[
         "_DBT_FEATURE_GATE_KEY", // Feature gate key, used in conformance tests
+        "_DBT_SKIP_DEV_LICENSE",
         "ADAPTER_AUTH_CREDS",
         "ADAPTER_POSTGRES",
         "ADAPTER_RECORD",

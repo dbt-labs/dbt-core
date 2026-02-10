@@ -12,9 +12,6 @@ edition.workspace = true
 [lints]
 workspace = true
 
-[features]
-task_cache_url = []
-
 [dependencies]
 clap = { workspace = true, features = ["derive"] }
 console = { workspace = true }

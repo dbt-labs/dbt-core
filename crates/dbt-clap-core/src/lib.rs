@@ -1616,7 +1616,7 @@ pub struct CommonArgs {
     // - `redis://<host>` for shared Redis coordination
     //
     /// Task cache coordination URL. Use `redis://<host>` for shared Redis coordination
-    #[clap(long, env = "DBT_TASK_CACHE_URL", default_value = "noop", hide = !cfg!(feature = "task_cache_url"))]
+    #[clap(long, env = "DBT_TASK_CACHE_URL", default_value = "noop", hide = true)]
     pub task_cache_url: String,
 
     // --------------------------------------------------------------------------------------------

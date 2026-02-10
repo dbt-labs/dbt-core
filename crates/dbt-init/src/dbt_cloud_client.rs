@@ -14,6 +14,7 @@ use dbt_schemas::schemas::serde::StringOrInteger;
 
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CloudProject {
@@ -474,8 +475,8 @@ pub struct ConnectionDetails {
 pub struct DbtCloudClient;
 
 impl DbtCloudClient {
-    /// Parse the active cloud project from dbt_cloud.yml based on active-project setting
-    pub fn parse_active_cloud_project() -> FsResult<Option<CloudProject>> {
+    /// Determine the path to the dbt_cloud.yml configuration file
+    pub fn get_cloud_project_path() -> FsResult<PathBuf> {
         // Get home directory
         let home_dir = match dirs::home_dir() {
             Some(dir) => dir,
@@ -487,13 +488,14 @@ impl DbtCloudClient {
             }
         };
 
-        // Check if dbt_cloud.yml exists
-        let dbt_cloud_config_path = home_dir.join(".dbt").join("dbt_cloud.yml");
+        Ok(home_dir.join(".dbt").join("dbt_cloud.yml"))
+    }
+
+    /// Parse the active cloud project from dbt_cloud.yml based on active-project setting
+    pub fn parse_active_cloud_project(
+        dbt_cloud_config_path: PathBuf,
+    ) -> FsResult<Option<CloudProject>> {
         if !dbt_cloud_config_path.exists() {
-            emit_info_log_message(format!(
-                "dbt_cloud.yml not found at {}",
-                dbt_cloud_config_path.display()
-            ));
             return Ok(None);
         }
 
@@ -524,7 +526,16 @@ impl DbtCloudClient {
 
     /// Get current user ID from dbt Cloud API
     pub async fn get_current_user_id(base_url: &str) -> FsResult<u64> {
-        let cloud_project = match Self::parse_active_cloud_project()? {
+        let dbt_cloud_config_path = Self::get_cloud_project_path()?;
+        // Check added here with logging side-effect to keep logging behavior previously present
+        // in parse_active_cloud_project
+        if !dbt_cloud_config_path.exists() {
+            emit_info_log_message(format!(
+                "dbt_cloud.yml not found at {}",
+                dbt_cloud_config_path.display()
+            ));
+        }
+        let cloud_project = match Self::parse_active_cloud_project(dbt_cloud_config_path)? {
             Some(project) => project,
             None => {
                 return Err(fs_err!(
@@ -570,7 +581,16 @@ impl DbtCloudClient {
         project_id: Option<&str>,
         adapter_type: Option<AdapterType>,
     ) -> FsResult<Option<DbConfig>> {
-        let cloud_project = match Self::parse_active_cloud_project()? {
+        let dbt_cloud_config_path = Self::get_cloud_project_path()?;
+        // Check added here with logging side-effect to keep logging behavior previously present
+        // in parse_active_cloud_project
+        if !dbt_cloud_config_path.exists() {
+            emit_info_log_message(format!(
+                "dbt_cloud.yml not found at {}",
+                dbt_cloud_config_path.display()
+            ));
+        }
+        let cloud_project = match Self::parse_active_cloud_project(dbt_cloud_config_path)? {
             Some(project) => project,
             None => {
                 return Err(fs_err!(
