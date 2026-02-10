@@ -37,7 +37,7 @@ class TestJinjaExtensionsParsedWhenFlagIsSet:
 
         expected_nodes = {
             "model.test.model_sql",
-            "model.test.j2_suffixed_model_sql.sql",
+            "model.test.j2_suffixed_model_sql",
         }
         expected_docs = {
             "doc.test.doc_md",
@@ -62,7 +62,7 @@ class TestJinjaExtensionsNotParsedWhenFlagIsNotSet:
         manifest = run_dbt(["parse"], expect_pass=True)
 
         expected_node = "model.test.model_sql"
-        unexpected_node = "model.test.j2_suffixed_model_sql.sql"
+        unexpected_node = "model.test.j2_suffixed_model_sql"
         expected_doc = "doc.test.doc_md"
         unexpected_doc = "doc.test.j2_suffixed_doc_md"
 
