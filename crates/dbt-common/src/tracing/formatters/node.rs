@@ -398,7 +398,9 @@ pub fn format_node_evaluated_start_legacy(node: &NodeEvaluated) -> String {
     let is_yaml_defined_test =
         node.relative_path.ends_with(".yml") || node.relative_path.ends_with(".yaml");
 
-    if node.node_type() == NodeType::Test && is_yaml_defined_test {
+    if (node.node_type() == NodeType::Test || node.node_type() == NodeType::UnitTest)
+        && is_yaml_defined_test
+    {
         let display_path: std::borrow::Cow<str> = if let Some(line) = node.defined_at_line {
             if let Some(col) = node.defined_at_col {
                 format!("{}:{}:{}", node.relative_path, line, col).into()

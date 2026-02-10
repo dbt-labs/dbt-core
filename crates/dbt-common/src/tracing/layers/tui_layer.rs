@@ -848,7 +848,6 @@ impl TuiLayer {
                 // until show_progress! macro is fully eliminated
                 && ((phase == ExecutionPhase::Render
                     && !(node_type == NodeType::Seed
-                        || node_type == NodeType::UnitTest
                         || is_yaml_defined_generic_test))
                     || (phase == ExecutionPhase::Run && self.command != FsCommand::Show && self.command != FsCommand::Clone))
             {

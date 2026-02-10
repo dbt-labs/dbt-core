@@ -7,8 +7,8 @@
 
 use crate::{
     constants::{
-        ANALYZING, COMPILING, DEBUGGED, FAILED, HYDRATING, PARSING, PASSED, PREVIEWING, RENDERED,
-        RENDERING, REUSED, RUNNING, SKIPPED, SUCCEEDED, WARNED,
+        ANALYZING, DEBUGGED, FAILED, HYDRATING, PARSING, PASSED, PREVIEWING, RENDERED, RENDERING,
+        REUSED, RUNNING, SKIPPED, SUCCEEDED, WARNED,
     },
     pretty_string::{GREEN, RED, YELLOW},
     stats::NodeStatus,
@@ -200,7 +200,6 @@ impl From<&str> for LogEvent {
             DEBUGGED => LogEvent::DebugResult,
             PARSING => LogEvent::Parsing,
             ANALYZING => LogEvent::Analyzing,
-            COMPILING => LogEvent::Rendering,
             RENDERING => LogEvent::Rendering,
             HYDRATING => LogEvent::Hydrating,
             REUSED => LogEvent::Skipping,
