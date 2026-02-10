@@ -1,6 +1,6 @@
 mod key_format;
 
-use crate::{AdapterConfig, Auth, AuthError, auth_configure_pipeline};
+use crate::{AdapterConfig, Auth, AuthError, PrivateKeySource, auth_configure_pipeline};
 use database::Builder as DatabaseBuilder;
 use dbt_xdbc::database::LogLevel;
 use dbt_xdbc::{Backend, database, snowflake};
@@ -44,13 +44,6 @@ const DEFAULT_REQUEST_TIMEOUT: &str = "600s";
 /// https://pkg.go.dev/time#ParseDuration for permitted units
 fn postfix_seconds_unit(value: &str) -> String {
     format!("{value}s")
-}
-
-/// Get Snowflake private key by path or from a Base64 encoded DER bytestring
-#[derive(Debug)]
-enum PrivateKeySource<'a> {
-    FilePath(&'a str),
-    Raw(&'a str),
 }
 
 #[derive(Debug)]
@@ -408,7 +401,8 @@ impl Auth for SnowflakeAuth {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use adbc_core::options::{OptionDatabase, OptionValue};
+    use crate::test_options::option_str_value;
+    use adbc_core::options::OptionDatabase;
     use base64::{Engine, engine::general_purpose::STANDARD};
     use dbt_serde_yaml::Mapping;
     use key_format::{
@@ -417,13 +411,6 @@ mod tests {
     use pkcs8::EncodePrivateKey;
     use rsa::RsaPrivateKey;
     use rsa::rand_core::OsRng;
-
-    fn str_value(value: &OptionValue) -> &str {
-        match value {
-            OptionValue::String(s) => s.as_str(),
-            _ => panic!("unexpected value"),
-        }
-    }
 
     // Build a base configuration common to all tests.
     fn base_config() -> Mapping {
@@ -452,7 +439,7 @@ mod tests {
                 OptionDatabase::Other(name) => name.to_owned(),
                 _ => continue,
             };
-            results.insert(key.into(), str_value(&v).into());
+            results.insert(key.into(), option_str_value(&v).into());
         }
 
         for &(key, expected_val) in expected {

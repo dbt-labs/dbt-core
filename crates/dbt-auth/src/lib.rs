@@ -15,6 +15,8 @@ mod redshift;
 mod salesforce;
 mod snowflake;
 mod spark;
+#[cfg(test)]
+mod test_options;
 
 pub use config::AdapterConfig;
 
@@ -116,4 +118,17 @@ impl From<dbt_serde_yaml::Error> for AuthError {
     fn from(err: dbt_serde_yaml::Error) -> Self {
         AuthError::YAML(err)
     }
+}
+
+// Enum for private key providers
+//
+// Cross-adapter spec for how users may provide private keys,
+// either via paths to the keys or the extract key values themselves.
+// Prefer strictness about including PEM headers where possible.
+// For Snowflake, we are forced to support a plethora of legacy
+// compliant PEM encodings. See snowflake/key_format.rs for more
+#[derive(Debug)]
+pub(crate) enum PrivateKeySource<'a> {
+    FilePath(&'a str),
+    Raw(&'a str),
 }

@@ -211,15 +211,8 @@ impl Auth for RedshiftAuth {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use adbc_core::options::{OptionDatabase, OptionValue};
+    use adbc_core::options::OptionDatabase;
     use dbt_serde_yaml::Mapping;
-
-    fn str_value(value: &OptionValue) -> &str {
-        match value {
-            OptionValue::String(s) => s.as_str(),
-            _ => panic!("unexpected value"),
-        }
-    }
 
     #[test]
     fn test_basic_user_password_auth() {
@@ -240,15 +233,21 @@ mod tests {
 
         let mut unknown_options = 0;
         builder.into_iter().for_each(|(k, v)| match k {
-            OptionDatabase::Other(ref name) => match name.as_str() {
-                UID => assert_eq!(str_value(&v), "admin"),
-                PASSWORD => assert_eq!(str_value(&v), "secretpass"),
-                DRIVER => assert_eq!(str_value(&v), odbc_driver_path()),
-                SERVER => assert_eq!(str_value(&v), "redshift-cluster.aws.com"),
-                PORT_NUMBER => assert_eq!(str_value(&v), "5439"),
-                DATABASE => assert_eq!(str_value(&v), "dev"),
-                _ => unknown_options += 1,
-            },
+            OptionDatabase::Other(ref name) => {
+                let value = match v {
+                    adbc_core::options::OptionValue::String(s) => s,
+                    _ => panic!("Expected OptionValue to be String"),
+                };
+                match name.as_str() {
+                    UID => assert_eq!(value, "admin"),
+                    PASSWORD => assert_eq!(value, "secretpass"),
+                    DRIVER => assert_eq!(value, odbc_driver_path()),
+                    SERVER => assert_eq!(value, "redshift-cluster.aws.com"),
+                    PORT_NUMBER => assert_eq!(value, "5439"),
+                    DATABASE => assert_eq!(value, "dev"),
+                    _ => unknown_options += 1,
+                }
+            }
             _ => unknown_options += 1,
         });
         assert_eq!(unknown_options, 0);

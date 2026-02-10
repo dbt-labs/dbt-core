@@ -1,6 +1,57 @@
-use crate::{AdapterConfig, Auth, AuthError};
+use crate::{AdapterConfig, Auth, AuthError, auth_configure_pipeline};
+use database::Builder as DatabaseBuilder;
 
 use dbt_xdbc::{Backend, database};
+use std::borrow::Cow;
+
+#[derive(Debug)]
+enum PostgresAuthIR<'a> {
+    Database {
+        user: &'a str,
+        password: &'a str,
+        host: &'a str,
+        port: Cow<'a, str>,
+        database: &'a str,
+    },
+}
+
+impl<'a> PostgresAuthIR<'a> {
+    pub fn apply(self, mut builder: DatabaseBuilder) -> Result<DatabaseBuilder, AuthError> {
+        match self {
+            Self::Database {
+                user,
+                password,
+                host,
+                port,
+                database,
+            } => {
+                builder.with_parse_uri(format!(
+                    "postgresql://{user}:{password}@{host}:{port}/{database}",
+                ))?;
+            }
+        }
+
+        Ok(builder)
+    }
+}
+
+fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<PostgresAuthIR<'a>, AuthError> {
+    Ok(PostgresAuthIR::Database {
+        user: config.require_str("user")?,
+        password: config.require_str("password")?,
+        host: config.require_str("host")?,
+        // In profiles.yml `port` is commonly an integer; accept both numeric and string values.
+        port: config.require_string("port")?,
+        database: config.require_str("database")?,
+    })
+}
+
+fn apply_connection_args(
+    _config: &AdapterConfig,
+    builder: DatabaseBuilder,
+) -> Result<DatabaseBuilder, AuthError> {
+    Ok(builder)
+}
 
 pub struct PostgresAuth;
 
@@ -10,22 +61,55 @@ impl Auth for PostgresAuth {
     }
 
     fn configure(&self, config: &AdapterConfig) -> Result<database::Builder, AuthError> {
-        let mut builder = database::Builder::new(self.backend());
+        auth_configure_pipeline!(self.backend(), &config, parse_auth, apply_connection_args)
+    }
+}
 
-        let user = config.require_string("user")?;
-        let password = config.require_string("password")?;
-        let host = config.require_string("host")?;
-        let port = config.require_string("port")?;
-        let dbname = config.require_string("database")?;
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_options::uri_value;
+    use dbt_serde_yaml::Mapping;
+    use dbt_test_primitives::assert_contains;
 
-        // TODO: other options
-        // let schema = config.require_to_string("schema")?;
-        // let threads = config.require_to_string("threads")?;
+    #[test]
+    fn test_uri_contains_expected_parts() {
+        let config = Mapping::from_iter([
+            ("user".into(), "alice".into()),
+            ("password".into(), "secret".into()),
+            ("host".into(), "pg.local".into()),
+            ("port".into(), "5432".into()),
+            ("database".into(), "db".into()),
+        ]);
 
-        builder.with_parse_uri(format!(
-            "postgresql://{user}:{password}@{host}:{port}/{dbname}",
-        ))?;
+        let builder = PostgresAuth {}
+            .configure(&AdapterConfig::new(config))
+            .expect("configure");
 
-        Ok(builder)
+        let uri = uri_value(&builder);
+        assert_contains!(&uri, "postgresql://alice:secret@pg.local:5432/db");
+        assert_contains!(&uri, "user=alice");
+        assert_contains!(&uri, "password=secret");
+    }
+
+    #[test]
+    fn test_port_accepts_integer_value() {
+        let config: Mapping = dbt_serde_yaml::from_str(
+            r#"
+user: alice
+password: secret
+host: pg.local
+port: 5432
+database: db
+"#,
+        )
+        .expect("parse yaml");
+
+        let builder = PostgresAuth {}
+            .configure(&AdapterConfig::new(config))
+            .expect("configure");
+
+        let uri = uri_value(&builder);
+        assert_contains!(&uri, "postgresql://alice:secret@pg.local:5432/db");
     }
 }

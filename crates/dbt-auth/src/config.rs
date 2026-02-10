@@ -74,6 +74,15 @@ impl AdapterConfig {
         self.get(field)?.as_str()
     }
 
+    /// Like `require`, but returns a borrowed string.
+    pub fn require_str(&self, field: &str) -> Result<&str, dbt_serde_yaml::Error> {
+        use serde::de::Error as _;
+        // Re-implementation of [dbt_serde_yaml::Error::missing_field]
+        // that doesn't require a &'static str field name.
+        let err = || dbt_serde_yaml::Error::custom(format_args!("missing field `{field}`"));
+        self.get_str(field).ok_or_else(err)
+    }
+
     /// Like `require`, but calls `to_string` on the value.
     pub fn require_string(&self, field: &str) -> Result<Cow<'_, str>, dbt_serde_yaml::Error> {
         self.require(field).map(yml_value_to_string)

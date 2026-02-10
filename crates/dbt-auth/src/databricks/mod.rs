@@ -196,15 +196,9 @@ fn validate_config(config: &AdapterConfig) -> Result<(), AuthError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use adbc_core::options::{OptionDatabase, OptionValue};
+    use crate::test_options::option_str_value;
+    use adbc_core::options::OptionDatabase;
     use dbt_serde_yaml::Mapping;
-
-    fn str_value(value: &OptionValue) -> &str {
-        match value {
-            OptionValue::String(s) => s.as_str(),
-            _ => panic!("unexpected value"),
-        }
-    }
 
     fn run_config_test(config: Mapping, expected: &[(&str, &str)]) -> Result<(), AuthError> {
         let auth = DatabricksAuth {};
@@ -219,7 +213,7 @@ mod tests {
                 OptionDatabase::Other(name) => name.to_owned(),
                 _ => continue,
             };
-            results.insert(key.into(), str_value(&v).into());
+            results.insert(key.into(), option_str_value(&v).into());
         }
 
         for &(key, expected_val) in expected {
