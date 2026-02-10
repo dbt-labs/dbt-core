@@ -7,8 +7,8 @@
 
 use crate::{
     constants::{
-        ANALYZING, DEBUGGED, FAILED, HYDRATING, PARSING, PASSED, PREVIEWING, RENDERED, RENDERING,
-        REUSED, RUNNING, SKIPPED, SUCCEEDED, WARNED,
+        ANALYZING, DEBUGGED, FAILED, HYDRATING, PARSING, PASSED, RENDERED, RENDERING, REUSED,
+        RUNNING, SKIPPED, SUCCEEDED, WARNED,
     },
     pretty_string::{GREEN, RED, YELLOW},
     stats::NodeStatus,
@@ -47,7 +47,6 @@ pub enum LogEvent {
     NodeSuccess,
     TestPass,
     TestWarn,
-    ShowNode,
     Skipping,
     Failed,
     Reused,
@@ -63,7 +62,6 @@ impl LogEvent {
                 "NodeFinished"
             }
             LogEvent::CompiledNode => "CompiledNode",
-            LogEvent::ShowNode => "ShowNode",
             LogEvent::Skipping => "MarkSkippedChildren",
             LogEvent::DebugResult => "DebugCmdResult",
             LogEvent::Parsing => "ParseResource",
@@ -83,7 +81,6 @@ impl LogEvent {
                 "Q025"
             }
             LogEvent::CompiledNode => "Q042",
-            LogEvent::ShowNode => "Q041",
             LogEvent::Skipping | LogEvent::Reused => "Z033",
             LogEvent::DebugResult => "Z048",
             LogEvent::Parsing
@@ -99,7 +96,6 @@ impl LogEvent {
             // Info level events
             // (Everything related to run phase(execute sql remotely) should be at info level.)
             LogEvent::NodeStart
-            | LogEvent::ShowNode
             | LogEvent::DebugResult
             | LogEvent::NodeSuccess
             | LogEvent::Skipping
@@ -123,9 +119,7 @@ impl LogEvent {
             LogEvent::Analyzing => "analyze",
             LogEvent::Hydrating => "hydrate",
             LogEvent::Rendering | LogEvent::CompiledNode => "render",
-            LogEvent::NodeStart | LogEvent::TestPass | LogEvent::ShowNode | LogEvent::TestWarn => {
-                "run"
-            }
+            LogEvent::NodeStart | LogEvent::TestPass | LogEvent::TestWarn => "run",
             LogEvent::NodeSuccess | LogEvent::Failed | LogEvent::Skipping | LogEvent::Reused => {
                 "completed"
             }
@@ -141,7 +135,6 @@ impl LogEvent {
             LogEvent::Failed => FAILED.to_string(),
             // Node status events
             LogEvent::CompiledNode => RENDERED.to_string(),
-            LogEvent::ShowNode => PREVIEWING.to_string(),
             LogEvent::TestPass => PASSED.to_string(),
             LogEvent::TestWarn => WARNED.to_string(),
             // Special events
@@ -194,7 +187,6 @@ impl From<&str> for LogEvent {
             SUCCEEDED => LogEvent::NodeSuccess,
             PASSED => LogEvent::TestPass,
             RENDERED => LogEvent::CompiledNode,
-            PREVIEWING => LogEvent::ShowNode,
             SKIPPED => LogEvent::Skipping,
             FAILED => LogEvent::Failed,
             DEBUGGED => LogEvent::DebugResult,

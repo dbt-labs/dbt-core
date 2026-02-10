@@ -86,33 +86,24 @@ pub const PARSING: &str = "   Parsing";
 // not being issued right now
 pub const SCHEDULING: &str = "Scheduling";
 //
-pub const DOWNLOADED: &str = " Downloaded";
 pub const RENDERING: &str = " Rendering";
-pub const SEEDING: &str = "   Seeding";
 pub const HYDRATING: &str = "  Hydrating";
-pub const TESTING: &str = "   Testing";
 pub const RUNNING: &str = "   Running";
 pub const COMPARING: &str = "   Comparing";
-pub const WAITING: &str = "   Waiting";
 pub const CLONING: &str = "   Cloning";
-pub const ABORTED: &str = "   Aborted";
 pub const SUCCEEDED: &str = " Succeeded";
 pub const PASSED: &str = "    Passed";
 pub const WARNED: &str = "    Warned";
 pub const FAILED: &str = "    Failed";
 pub const REUSED: &str = "    Reused";
-pub const STALE: &str = "     Stale";
 pub const SKIPPED: &str = "   Skipped";
-pub const ANALYZED: &str = "  Analyzed";
 pub const RENDERED: &str = "  Rendered";
-pub const TEST: &str = "      Test";
 
 // debug command
 pub const VALIDATING: &str = "Validating";
 pub const DEBUGGED: &str = "  Debugged";
 
 // other
-pub const PREVIEWING: &str = "Previewing";
 pub const NOOP: &str = "noop";
 
 // cas/node read/write

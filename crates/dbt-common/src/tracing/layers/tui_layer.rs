@@ -844,14 +844,23 @@ impl TuiLayer {
                 // Only for render & run.
                 // For render, keep legacy filtering: hide seed/unit test and generic YAML tests.
                 // Singular SQL tests should still emit render lines.
-                // TODO: Filter out spurious text outputs from show & clone 
+                // TODO: Filter out spurious text outputs from clone 
                 // until show_progress! macro is fully eliminated
                 && ((phase == ExecutionPhase::Render
                     && !(node_type == NodeType::Seed
                         || is_yaml_defined_generic_test))
-                    || (phase == ExecutionPhase::Run && self.command != FsCommand::Show && self.command != FsCommand::Clone))
+                    || (phase == ExecutionPhase::Run && self.command != FsCommand::Clone))
             {
-                let formatted = format_node_evaluated_start_legacy(ne);
+                let formatted = if phase == ExecutionPhase::Run && self.command == FsCommand::Show {
+                    // Show command generated very specific mesages in run phase text output
+                    format!(
+                        "Previewing {} ({})",
+                        ne.node_type().as_static_ref(),
+                        ne.unique_id
+                    )
+                } else {
+                    format_node_evaluated_start_legacy(ne)
+                };
                 self.write_suspended(|| {
                     io::stdout()
                         .lock()
