@@ -199,7 +199,8 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             dependencies=dependencies,
             dbt_cloud=project.dbt_cloud,
             flags=project.flags,
-            template_extensions=project.template_extensions,
+            md_extensions=project.md_extensions,
+            sql_extensions=project.sql_extensions,
         )
 
     # Called by 'load_projects' in this class
