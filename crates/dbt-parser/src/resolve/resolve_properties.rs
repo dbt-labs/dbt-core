@@ -14,7 +14,7 @@ use dbt_schemas::schemas::properties::{
 };
 use dbt_schemas::schemas::serde::FloatOrString;
 use dbt_schemas::state::DbtPackage;
-use dbt_serde_yaml::{Span, Verbatim};
+use dbt_serde_yaml::{ShouldBe, Span, Verbatim};
 use dbt_telemetry::AssetParsed;
 use itertools::Itertools;
 use minijinja::Value as MinijinjaValue;
@@ -643,19 +643,35 @@ pub fn resolve_minimal_properties(
                     if !minimal_resolved_properties.semantic_layer_spec_is_legacy
                         && let Some(_semantic_models) = properties_file_values.semantic_models
                     {
-                        // Top level semantic models are not allowed anymore
-                        // TODO: edit copy to encourage user to use auto-fix.
+                        let has_enabled_package_semantic_models =
+                            if let Some(semantic_models) = &package.dbt_project.semantic_models {
+                                if let Some(props) = semantic_models
+                                    .__additional_properties__
+                                    .get(&package.dbt_project.name)
+                                    && let ShouldBe::AndIs(props) = props
+                                {
+                                    props.enabled.unwrap_or(true)
+                                } else {
+                                    true
+                                }
+                            } else {
+                                true
+                            };
 
-                        emit_warn_log_message(
-                            ErrorCode::SchemaError,
-                            format!(
-                                "The package '{}' defines semantic models and metrics using the legacy YAML. Please migrate to the new YAML to use the semantic layer with dbt Fusion.",
-                                &package.dbt_project.name,
-                            ),
-                            arg.io.status_reporter.as_ref(),
-                        );
+                        if has_enabled_package_semantic_models {
+                            // Top level semantic models are not allowed anymore
+                            // TODO: edit copy to encourage user to use auto-fix.
+                            emit_warn_log_message(
+                                ErrorCode::SchemaError,
+                                format!(
+                                    "The package '{}' defines semantic models and metrics using the legacy YAML. Please migrate to the new YAML to use the semantic layer with dbt Fusion.",
+                                    &package.dbt_project.name,
+                                ),
+                                arg.io.status_reporter.as_ref(),
+                            );
 
-                        minimal_resolved_properties.semantic_layer_spec_is_legacy = true;
+                            minimal_resolved_properties.semantic_layer_spec_is_legacy = true;
+                        }
                     }
 
                     Ok(())
