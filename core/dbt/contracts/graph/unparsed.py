@@ -49,6 +49,7 @@ from dbt_common.dataclass_schema import (
 from dbt_common.exceptions import DbtInternalError
 from dbt_semantic_interfaces.type_enums import (
     ConversionCalculationType,
+    DimensionType,
     PeriodAggregation,
 )
 
@@ -233,6 +234,25 @@ class UnparsedColumn(HasConfig, HasColumnAndTestProps):
     # UnparsedColumnEntityV2 must come before str to parse correctly.  str is assumed to be EntityType enum value
     # Only used in v2 semantic layer.
     entity: Union[UnparsedColumnEntityV2, str, None] = None
+
+    @classmethod
+    @override
+    def validate(cls, data):
+        super().validate(data)
+        if (dimension := data.get("dimension")) is not None:
+            if isinstance(dimension, dict):
+                dim_type_str = dimension.get("type")
+                dim_name = dimension.get("name")
+            else:
+                dim_type_str = dimension
+                dim_name = data.get("name")
+            dim_type = DimensionType(dim_type_str) if dim_type_str is not None else None
+            if dim_type is DimensionType.TIME and not data.get("granularity"):
+                raise ValidationError(
+                    f"Dimension {dim_name} is a time dimension attached to "
+                    f"column {data.get('name')}, "
+                    "so that column must specify a granularity."
+                )
 
 
 @dataclass

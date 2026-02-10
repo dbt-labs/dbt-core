@@ -1137,3 +1137,55 @@ def test_column_parse():
 
     with pytest.raises(ParsingError):
         ParserRef.from_target(unparsed_col)
+
+
+class TestUnparsedColumnTimeDimensionGranularityValidation(ContractTestCase):
+    """Test validation that SL YAML V2 column with time dimension must specify granularity."""
+
+    ContractType = UnparsedColumn
+
+    def test_time_dimension_without_granularity_fails_validation(self):
+        column_dict = {
+            "name": "created_at",
+            "dimension": {"type": "time", "name": "created_at_dim"},
+        }
+        self.assert_fails_validation(column_dict)
+
+    def test_time_dimension_with_granularity_passes_validation(self):
+        column_dict = {
+            "name": "created_at",
+            "granularity": "day",
+            "dimension": {"type": "time", "name": "created_at_dim"},
+        }
+        col = self.ContractType.from_dict(column_dict)
+        self.assertEqual(col.granularity, "day")
+        self.assertEqual(col.name, "created_at")
+
+    def test_time_dimension_string_without_granularity_fails_validation(self):
+        """Dimension as string 'time' without granularity must fail."""
+        column_dict = {
+            "name": "created_at",
+            "dimension": "time",
+        }
+        self.assert_fails_validation(column_dict)
+
+    def test_time_dimension_string_with_granularity_passes_validation(self):
+        """Dimension as string 'time' with granularity must pass."""
+        column_dict = {
+            "name": "created_at",
+            "granularity": "day",
+            "dimension": "time",
+        }
+        col = self.ContractType.from_dict(column_dict)
+        self.assertEqual(col.granularity, "day")
+        self.assertEqual(col.name, "created_at")
+
+    def test_non_time_dimension_string_passes_without_granularity(self):
+        """Dimension as string (e.g. categorical) does not require granularity."""
+        column_dict = {
+            "name": "category",
+            "dimension": "categorical",
+        }
+        col = self.ContractType.from_dict(column_dict)
+        self.assertEqual(col.name, "category")
+        self.assertIsNone(col.granularity)
