@@ -1,7 +1,7 @@
 //! Module defines the input arguments required for resolution
 
 use dbt_common::FsResult;
-use dbt_common::io_args::IoArgs;
+use dbt_common::io_args::{IoArgs, StaticAnalysisKind};
 use dbt_common::{
     io_args::{EvalArgs, FsCommand},
     node_selector::{IndirectSelection, SelectExpression},
@@ -36,6 +36,8 @@ pub struct ResolveArgs {
     pub sample_config: RunFilter,
     /// For remapping unique_is to (database, schema, table) when sampling is enabled
     pub sample_renaming: BTreeMap<String, (String, String, String)>,
+    /// Global static analysis settings
+    pub static_analysis: StaticAnalysisKind,
 }
 
 impl ResolveArgs {
@@ -54,6 +56,7 @@ impl ResolveArgs {
             replay: arg.replay.clone(),
             sample_config: RunFilter::try_from(arg.empty, arg.sample.clone())?,
             sample_renaming: arg.sample_renaming.clone(),
+            static_analysis: arg.static_analysis,
         })
     }
 }

@@ -294,11 +294,9 @@ where
         status_reporter.show_progress(PARSING, &display_path_str, None);
     }
 
-    // Check if mangled ref checking is enabled via strictness settings
-    let check_mangled_refs = runtime_config
-        .inner
-        .strictness
-        .mangled_ref_check(&runtime_config.inner.custom_checks);
+    // Check if mangled ref checking is enabled via global static_analysis settings.
+    // Per node suppression is applied later based on the final config for the node.
+    let check_mangled_refs = args.static_analysis != StaticAnalysisKind::Off;
 
     // Run typecheck
     if let Some(model) = resolve_model_context.get("model")

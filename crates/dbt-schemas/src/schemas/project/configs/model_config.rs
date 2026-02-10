@@ -15,7 +15,6 @@ use std::collections::{BTreeMap, HashSet};
 
 use super::config_keys::ConfigKeys;
 use super::omissible_utils::handle_omissible_override;
-use super::strictness_config::{CustomChecks, StrictnessMode};
 
 use crate::default_to;
 use crate::schemas::common::DbtBatchSize;
@@ -52,7 +51,7 @@ use crate::schemas::serde::{
 use dbt_serde_yaml::ShouldBe;
 
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, Default)]
+#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct ProjectModelConfig {
     #[serde(rename = "+access")]
     pub access: Option<Access>,
@@ -313,14 +312,6 @@ pub struct ProjectModelConfig {
     pub pre_hook: Verbatim<Option<Hooks>>,
     #[serde(rename = "+predicates")]
     pub predicates: Option<Vec<String>>,
-    /// Strictness mode for the model. invisible in schema docs.
-    #[schemars(skip)]
-    #[serde(rename = "+strictness")]
-    pub strictness: Option<StrictnessMode>,
-    /// Custom checks for strictness=custom. invisible in schema docs.
-    #[schemars(skip)]
-    #[serde(rename = "+custom_checks")]
-    pub custom_checks: Option<CustomChecks>,
     #[serde(rename = "+query_tag")]
     pub query_tag: Option<QueryTag>,
     #[serde(rename = "+table_tag")]
@@ -503,10 +494,6 @@ pub struct ModelConfig {
     pub predicates: Option<Vec<String>>,
     /// Schema synchronization configuration
     pub sync: Option<SyncConfig>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub strictness: Option<StrictnessMode>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub custom_checks: Option<CustomChecks>,
     // Adapter specific configs
     pub __warehouse_specific_config__: WarehouseSpecificNodeConfig,
     pub submission_method: Option<String>,
@@ -578,8 +565,6 @@ impl From<ProjectModelConfig> for ModelConfig {
             post_hook: config.post_hook,
             pre_hook: config.pre_hook,
             predicates: config.predicates,
-            strictness: config.strictness,
-            custom_checks: config.custom_checks,
             quoting: config.quoting,
             schema: config.schema,
             sql_header: config.sql_header,
@@ -727,8 +712,6 @@ impl From<ModelConfig> for ProjectModelConfig {
             post_hook: config.post_hook,
             pre_hook: config.pre_hook,
             predicates: config.predicates,
-            strictness: config.strictness,
-            custom_checks: config.custom_checks,
             quoting: config.quoting,
             schema: config.schema,
             sql_header: config.sql_header,
@@ -883,8 +866,6 @@ impl DefaultTo<ModelConfig> for ModelConfig {
             sql_header,
             location,
             predicates,
-            strictness,
-            custom_checks,
             submission_method,
             job_cluster_config,
             python_job_config,
@@ -962,8 +943,6 @@ impl DefaultTo<ModelConfig> for ModelConfig {
                 sql_header,
                 location,
                 predicates,
-                strictness,
-                custom_checks,
                 submission_method,
                 job_cluster_config,
                 python_job_config,
@@ -1093,8 +1072,6 @@ impl ModelConfig {
         let sql_header_eq = self.sql_header == other.sql_header;
         let location_eq = self.location == other.location;
         let predicates_eq = self.predicates == other.predicates;
-        let strictness_eq_result = strictness_eq(&self.strictness, &other.strictness);
-        let custom_checks_eq_result = custom_checks_eq(&self.custom_checks, &other.custom_checks);
         let warehouse_config_eq = same_warehouse_config(
             &self.__warehouse_specific_config__,
             &other.__warehouse_specific_config__,
@@ -1133,8 +1110,6 @@ impl ModelConfig {
             && sql_header_eq
             && location_eq
             && predicates_eq
-            && strictness_eq_result
-            && custom_checks_eq_result
             && warehouse_config_eq;
 
         if !result {
@@ -1374,44 +1349,12 @@ impl ModelConfig {
                             format!("{:?}", &other.predicates),
                         )),
                     ),
-                    (
-                        "strictness",
-                        strictness_eq_result,
-                        Some((
-                            format!("{:?}", &self.strictness),
-                            format!("{:?}", &other.strictness),
-                        )),
-                    ),
-                    (
-                        "custom_checks",
-                        custom_checks_eq_result,
-                        Some((
-                            format!("{:?}", &self.custom_checks),
-                            format!("{:?}", &other.custom_checks),
-                        )),
-                    ),
                     ("warehouse_config", warehouse_config_eq, None),
                 ],
             );
         }
 
         result
-    }
-}
-
-fn strictness_eq(a: &Option<StrictnessMode>, b: &Option<StrictnessMode>) -> bool {
-    match (a, b) {
-        (None, None) => true,
-        (Some(a_val), Some(b_val)) => a_val == b_val,
-        _ => false,
-    }
-}
-
-fn custom_checks_eq(a: &Option<CustomChecks>, b: &Option<CustomChecks>) -> bool {
-    match (a, b) {
-        (None, None) => true,
-        (Some(a_val), Some(b_val)) => a_val == b_val,
-        _ => false,
     }
 }
 
@@ -1583,53 +1526,7 @@ fn materialized_eq(a: &Option<DbtMaterialization>, b: &Option<DbtMaterialization
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
-
-    use super::{CustomChecks, ModelConfig, ProjectModelConfig};
-    use crate::schemas::manifest::manifest_nodes::ManifestModelConfig;
-    use crate::schemas::project::{CustomCheckLevel, StrictnessMode};
-
-    #[test]
-    fn strictness_round_trips_between_configs() {
-        let mut project_config = ProjectModelConfig::default();
-        let mut checks: CustomChecks = BTreeMap::new();
-        checks.insert(
-            "mutating_introspection_queries".to_string(),
-            CustomCheckLevel::Warn,
-        );
-        project_config.strictness = Some(StrictnessMode::Custom);
-        project_config.custom_checks = Some(checks);
-
-        let model_config: ModelConfig = project_config.into();
-        assert_eq!(model_config.strictness, Some(StrictnessMode::Custom));
-        assert_eq!(
-            model_config
-                .custom_checks
-                .as_ref()
-                .and_then(|checks| checks.get("mutating_introspection_queries")),
-            Some(&CustomCheckLevel::Warn)
-        );
-
-        let manifest_config: ManifestModelConfig = model_config.into();
-        assert_eq!(manifest_config.strictness, Some(StrictnessMode::Custom));
-        assert_eq!(
-            manifest_config
-                .custom_checks
-                .as_ref()
-                .and_then(|checks| checks.get("mutating_introspection_queries")),
-            Some(&CustomCheckLevel::Warn)
-        );
-
-        let round_trip: ModelConfig = manifest_config.into();
-        assert_eq!(round_trip.strictness, Some(StrictnessMode::Custom));
-        assert_eq!(
-            round_trip
-                .custom_checks
-                .as_ref()
-                .and_then(|checks| checks.get("mutating_introspection_queries")),
-            Some(&CustomCheckLevel::Warn)
-        );
-    }
+    use super::ModelConfig;
 
     #[test]
     fn test_packages_append() {

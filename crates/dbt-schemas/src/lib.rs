@@ -61,7 +61,7 @@ pub mod schemas {
         mod group;
         #[allow(clippy::module_inception)]
         mod manifest;
-        pub(crate) mod manifest_nodes;
+        mod manifest_nodes;
         pub mod metric;
         mod operation;
         pub mod postgres;
@@ -126,7 +126,6 @@ pub mod schemas {
             pub mod semantic_model_config;
             pub mod snapshot_config;
             pub mod source_config;
-            pub mod strictness_config;
             pub mod unit_test_config;
         }
 
@@ -147,7 +146,6 @@ pub mod schemas {
             ProjectSnapshotConfig, SnapshotConfig, SnapshotMetaColumnNames,
         };
         pub use configs::source_config::{ProjectSourceConfig, SourceConfig};
-        pub use configs::strictness_config::{CustomCheckLevel, CustomChecks, StrictnessMode};
         pub use configs::unit_test_config::{ProjectUnitTestConfig, UnitTestConfig};
         pub use dbt_project::{
             DbtProject, DbtProjectNameOnly, DbtProjectSimplified, DefaultTo, ProjectDbtCloudConfig,

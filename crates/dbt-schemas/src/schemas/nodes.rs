@@ -20,7 +20,7 @@ use crate::schemas::dbt_column::{DbtColumnRef, deserialize_dbt_columns, serializ
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::project::configs::common::log_state_mod_diff;
 use crate::schemas::project::configs::common::{array_of_strings_eq, grants_eq, meta_eq};
-use crate::schemas::project::{StrictnessMode, WarehouseSpecificNodeConfig, same_warehouse_config};
+use crate::schemas::project::{WarehouseSpecificNodeConfig, same_warehouse_config};
 use crate::schemas::serde::{QueryTag, StringOrArrayOfStrings};
 use crate::schemas::{
     common::{
@@ -527,9 +527,6 @@ pub trait InternalDbtNodeAttributes: InternalDbtNode {
         None
     }
 
-    fn strictness(&self) -> Option<StrictnessMode> {
-        None
-    }
     // Setters
 
     fn set_quoting(&mut self, quoting: ResolvedQuoting) {
@@ -1077,10 +1074,6 @@ impl InternalDbtNodeAttributes for DbtModel {
             .sync
             .as_ref()
             .and_then(|sync| sync.schema_refresh_interval.clone())
-    }
-
-    fn strictness(&self) -> Option<StrictnessMode> {
-        self.deprecated_config.strictness
     }
 }
 /// Helper function to compare materialized fields for seeds, treating None and default Seed materialization as equivalent

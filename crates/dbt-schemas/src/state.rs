@@ -17,8 +17,8 @@ use crate::schemas::{
     manifest::{DbtOperation, DbtSelector},
     profiles::DbConfig,
     project::{
-        CustomChecks, DbtProject, ProjectDataTestConfig, ProjectModelConfig, ProjectSeedConfig,
-        ProjectSnapshotConfig, ProjectSourceConfig, QueryComment, StrictnessMode,
+        DbtProject, ProjectDataTestConfig, ProjectModelConfig, ProjectSeedConfig,
+        ProjectSnapshotConfig, ProjectSourceConfig, QueryComment,
     },
     relations::base::{BaseRelation, RelationPattern},
     selectors::ResolvedSelector,
@@ -742,8 +742,6 @@ pub struct DbtRuntimeConfigInner {
     pub config_version: Option<i32>,
     pub require_dbt_version: Option<StringOrArrayOfStrings>,
     pub restrict_access: Option<bool>,
-    pub strictness: StrictnessMode,
-    pub custom_checks: CustomChecks,
 
     // Runtime info
     pub invoked_at: DateTime<Utc>,
@@ -841,12 +839,6 @@ impl DbtRuntimeConfig {
             config_version: package.dbt_project.config_version,
             require_dbt_version: package.dbt_project.require_dbt_version.clone(),
             restrict_access: package.dbt_project.restrict_access,
-            strictness: package.dbt_project.strictness.unwrap_or_default(),
-            custom_checks: package
-                .dbt_project
-                .custom_checks
-                .clone()
-                .unwrap_or_default(),
             invoked_at: Utc::now(),
             args: InvocationArgs::default(),
         };
