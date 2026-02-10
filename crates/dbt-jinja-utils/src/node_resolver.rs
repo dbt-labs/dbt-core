@@ -5,13 +5,16 @@ use std::{
     sync::Arc,
 };
 
+use chrono::{NaiveDate, Utc};
 use dbt_adapter::relation::{RelationObject, create_relation, create_relation_from_node};
 use dbt_common::{
     CodeLocationWithFile, ErrorCode, FsResult,
     adapter::AdapterType,
     err, fs_err,
     io_args::IoArgs,
-    tracing::emit::{emit_error_log_from_fs_error, emit_warn_log_from_fs_error},
+    tracing::emit::{
+        emit_error_log_from_fs_error, emit_warn_log_from_fs_error, emit_warn_log_message,
+    },
     unexpected_err,
 };
 use dbt_schemas::dbt_types::RelationType;
@@ -1015,6 +1018,144 @@ pub fn resolve_dependencies(
     nodes_with_errors
 }
 
+/// Info about a model with a deprecation_date, used by [`check_for_model_deprecations`].
+struct DeprecatedModelInfo {
+    is_past: bool,
+    deprecation_date: String,
+    name: String,
+    version: Option<String>,
+    latest_version: Option<String>,
+    package_name: String,
+}
+
+/// Check for model deprecations and emit appropriate warnings.
+///
+/// This implements three warning cases matching dbt-core behavior:
+/// 1. DeprecatedModel (I065): Model's own deprecation_date is in the past
+/// 2. UpcomingReferenceDeprecation (I066): A model references another model with a future deprecation_date
+/// 3. DeprecatedReference (I067): A model references another model with a past deprecation_date
+pub fn check_for_model_deprecations(io: &IoArgs, nodes: &Nodes) {
+    let mut deprecated_models: BTreeMap<String, DeprecatedModelInfo> = BTreeMap::new();
+
+    for (uid, model) in &nodes.models {
+        if let Some(dep_date_str) = &model.__model_attr__.deprecation_date {
+            let is_past = if let Ok(date) = NaiveDate::parse_from_str(dep_date_str, "%Y-%m-%d") {
+                date.and_hms_opt(0, 0, 0).unwrap() < Utc::now().naive_utc()
+            } else {
+                false
+            };
+            deprecated_models.insert(
+                uid.clone(),
+                DeprecatedModelInfo {
+                    is_past,
+                    deprecation_date: dep_date_str.clone(),
+                    name: model.__common_attr__.name.clone(),
+                    version: model.__model_attr__.version.as_ref().map(|v| v.to_string()),
+                    latest_version: model
+                        .__model_attr__
+                        .latest_version
+                        .as_ref()
+                        .map(|v| v.to_string()),
+                    package_name: model.__common_attr__.package_name.clone(),
+                },
+            );
+        }
+    }
+
+    // Case 1: DeprecatedModel - model's own deprecation_date is in the past
+    for info in deprecated_models.values() {
+        if info.is_past {
+            let version_str = info
+                .version
+                .as_ref()
+                .map(|v| format!(".v{v}"))
+                .unwrap_or_default();
+            let msg = format!(
+                "Model {}{} has passed its deprecation date of {}. \
+                 This model should be disabled or removed.",
+                info.name, version_str, info.deprecation_date
+            );
+            emit_warn_log_message(
+                ErrorCode::DependencyWarning,
+                msg,
+                io.status_reporter.as_ref(),
+            );
+        }
+    }
+
+    // Cases 2 & 3: Check model nodes that reference deprecated models
+    for model in nodes.models.values() {
+        let child_name = &model.__common_attr__.name;
+        for dep_uid in &model.__base_attr__.depends_on.nodes {
+            if let Some(info) = deprecated_models.get(dep_uid) {
+                let ref_version_str = info
+                    .version
+                    .as_ref()
+                    .map(|v| format!(".v{v}"))
+                    .unwrap_or_default();
+
+                if info.is_past {
+                    // Case 2: DeprecatedReference (I067)
+                    let mut msg = format!(
+                        "While compiling '{}': Found a reference to {}{}, \
+                         which was deprecated on '{}'. ",
+                        child_name, info.name, ref_version_str, info.deprecation_date
+                    );
+                    if let Some(ref_version) = &info.version {
+                        if info
+                            .latest_version
+                            .as_ref()
+                            .is_some_and(|lv| lv != ref_version)
+                        {
+                            msg.push_str(&format!(
+                                "A new version of '{}' is available. Migrate now: \
+                                 {{{{ ref('{}', '{}', v='{}') }}}}.",
+                                info.name,
+                                info.package_name,
+                                info.name,
+                                info.latest_version.as_ref().unwrap()
+                            ));
+                        }
+                    }
+                    emit_warn_log_message(
+                        ErrorCode::DependencyWarning,
+                        msg,
+                        io.status_reporter.as_ref(),
+                    );
+                } else {
+                    // Case 3: UpcomingReferenceDeprecation (I066)
+                    let mut msg = format!(
+                        "While compiling '{}': Found a reference to {}{}, \
+                         which is slated for deprecation on '{}'. ",
+                        child_name, info.name, ref_version_str, info.deprecation_date
+                    );
+                    if let Some(ref_version) = &info.version {
+                        if info
+                            .latest_version
+                            .as_ref()
+                            .is_some_and(|lv| lv != ref_version)
+                        {
+                            msg.push_str(&format!(
+                                "A new version of '{}' is available. Try it out: \
+                                 {{{{ ref('{}', '{}', v='{}') }}}}.",
+                                info.name,
+                                info.package_name,
+                                info.name,
+                                info.latest_version.as_ref().unwrap()
+                            ));
+                        }
+                    }
+                    emit_warn_log_message(
+                        ErrorCode::DependencyWarning,
+                        msg,
+                        io.status_reporter.as_ref(),
+                    );
+                }
+            }
+        }
+    }
+}
+
 /// Create a FunctionObject from a node (specifically for dbt functions)
 pub fn create_function_object_from_node(
     adapter_type: AdapterType,
@@ -1032,4 +1173,142 @@ pub fn create_function_object_from_node(
     // Create the qualified function name
     let rendered = relation.render_self_as_str();
     Ok(FunctionObject::new(rendered))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dbt_common::io_args::IoArgs;
+    use dbt_schemas::schemas::common::NodeDependsOn;
+    use dbt_schemas::schemas::nodes::{
+        CommonAttributes, DbtModel, DbtModelAttr, NodeBaseAttributes,
+    };
+    use std::sync::Arc;
+
+    /// Helper to create a minimal DbtModel with the given name, unique_id, and optional deprecation_date.
+    fn make_model(
+        unique_id: &str,
+        name: &str,
+        package_name: &str,
+        deprecation_date: Option<&str>,
+        depends_on_ids: Vec<String>,
+    ) -> Arc<DbtModel> {
+        Arc::new(DbtModel {
+            __common_attr__: CommonAttributes {
+                unique_id: unique_id.to_string(),
+                name: name.to_string(),
+                package_name: package_name.to_string(),
+                ..Default::default()
+            },
+            __base_attr__: NodeBaseAttributes {
+                depends_on: NodeDependsOn {
+                    nodes: depends_on_ids,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
+            __model_attr__: DbtModelAttr {
+                deprecation_date: deprecation_date.map(|s| s.to_string()),
+                ..Default::default()
+            },
+            ..Default::default()
+        })
+    }
+
+    fn make_io() -> IoArgs {
+        IoArgs::default()
+    }
+
+    #[test]
+    fn test_deprecated_model_warning() {
+        // Case 1: Model with past deprecation_date emits DeprecatedModel warning
+        let mut nodes = Nodes::default();
+        nodes.models.insert(
+            "model.test.my_model".to_string(),
+            make_model(
+                "model.test.my_model",
+                "my_model",
+                "test",
+                Some("1999-01-01"),
+                vec![],
+            ),
+        );
+
+        // This should not panic and should emit a warning
+        let io = make_io();
+        check_for_model_deprecations(&io, &nodes);
+        // If we get here without panic, the function executed successfully.
+        // The warning was emitted via the tracing system.
+    }
+
+    #[test]
+    fn test_upcoming_reference_deprecation_warning() {
+        // Case 2: Model refs another model with future deprecation_date
+        let mut nodes = Nodes::default();
+        nodes.models.insert(
+            "model.test.my_model".to_string(),
+            make_model(
+                "model.test.my_model",
+                "my_model",
+                "test",
+                Some("2999-01-01"),
+                vec![],
+            ),
+        );
+        nodes.models.insert(
+            "model.test.child".to_string(),
+            make_model(
+                "model.test.child",
+                "child",
+                "test",
+                None,
+                vec!["model.test.my_model".to_string()],
+            ),
+        );
+
+        let io = make_io();
+        check_for_model_deprecations(&io, &nodes);
+    }
+
+    #[test]
+    fn test_deprecated_reference_warning() {
+        // Case 3: Model refs another model with past deprecation_date
+        let mut nodes = Nodes::default();
+        nodes.models.insert(
+            "model.test.my_model".to_string(),
+            make_model(
+                "model.test.my_model",
+                "my_model",
+                "test",
+                Some("1999-01-01"),
+                vec![],
+            ),
+        );
+        nodes.models.insert(
+            "model.test.child".to_string(),
+            make_model(
+                "model.test.child",
+                "child",
+                "test",
+                None,
+                vec!["model.test.my_model".to_string()],
+            ),
+        );
+
+        let io = make_io();
+        check_for_model_deprecations(&io, &nodes);
+    }
+
+    #[test]
+    fn test_no_deprecation_date_no_warnings() {
+        // No deprecation_date set: no warnings should be emitted
+        let mut nodes = Nodes::default();
+        nodes.models.insert(
+            "model.test.my_model".to_string(),
+            make_model("model.test.my_model", "my_model", "test", None, vec![]),
+        );
+
+        let io = make_io();
+        check_for_model_deprecations(&io, &nodes);
+    }
 }

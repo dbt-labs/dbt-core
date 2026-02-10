@@ -499,7 +499,7 @@ pub async fn resolve_models(
                 version: maybe_version.map(|v| v.into()),
                 latest_version: maybe_latest_version.map(|v| v.into()),
                 constraints: model_constraints,
-                deprecation_date: None,
+                deprecation_date: properties.deprecation_date.clone(),
                 primary_key: vec![], // applied in resolver.rs -> primary_key_inference.rs
                 time_spine,
                 access: model_config.access.clone().unwrap_or_default(),

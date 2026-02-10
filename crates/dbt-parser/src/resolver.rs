@@ -12,7 +12,9 @@ use dbt_common::tracing::event_info::store_event_attributes;
 use dbt_common::{ErrorCode, FsResult, err, fs_err};
 use dbt_jinja_utils::invocation_args::InvocationArgs;
 use dbt_jinja_utils::listener::JinjaTypeCheckingEventListenerFactory;
-use dbt_jinja_utils::node_resolver::{NodeResolver, resolve_dependencies};
+use dbt_jinja_utils::node_resolver::{
+    NodeResolver, check_for_model_deprecations, resolve_dependencies,
+};
 use dbt_jinja_utils::phases::parse::build_resolve_context;
 use dbt_jinja_utils::phases::parse::init::initialize_parse_jinja_environment;
 use dbt_jinja_utils::serde::{into_typed_with_error, into_typed_with_jinja};
@@ -358,6 +360,9 @@ pub async fn resolve(
         &mut operations,
         &node_resolver,
     );
+
+    // Check for model deprecation warnings
+    check_for_model_deprecations(&arg.io, &nodes);
 
     // Check access
     check_access(arg, &nodes, &all_runtime_configs);
