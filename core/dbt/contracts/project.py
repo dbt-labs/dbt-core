@@ -273,8 +273,6 @@ class Project(dbtClassMixin):
     restrict_access: bool = False
     dbt_cloud: Optional[Dict[str, Any]] = None
     flags: Dict[str, Any] = field(default_factory=dict)
-    md_extensions: List[str] = field(default_factory=list)
-    sql_extensions: List[str] = field(default_factory=list)
 
     class Config(dbtMashConfig):
         # These tell mashumaro to use aliases for jsonschema and for "from_dict"
@@ -304,8 +302,6 @@ class Project(dbtClassMixin):
             "semantic_models": "semantic-models",
             "saved_queries": "saved-queries",
             "dbt_cloud": "dbt-cloud",
-            "md_extensions": "md-extensions",
-            "sql_extensions": "sql-extensions",
         }
 
     @classmethod
@@ -355,6 +351,7 @@ class ProjectFlags(ExtensibleDbtClassMixin):
     warn_error: Optional[bool] = None
     warn_error_options: Optional[Dict[str, Union[str, List[str]]]] = None
     write_json: Optional[bool] = None
+    allow_jinja_file_extensions: bool = False
 
     # legacy behaviors - https://github.com/dbt-labs/dbt-core/blob/main/docs/guides/behavior-change-flags.md
     require_batched_execution_for_custom_microbatch_strategy: bool = False
@@ -392,6 +389,7 @@ class ProjectFlags(ExtensibleDbtClassMixin):
             "require_unique_project_resource_names": self.require_unique_project_resource_names,
             "require_ref_searches_node_package_before_root": self.require_ref_searches_node_package_before_root,
             "require_valid_schema_from_generate_schema_name": self.require_valid_schema_from_generate_schema_name,
+            "allow_jinja_file_extensions": self.allow_jinja_file_extensions,
         }
 
 

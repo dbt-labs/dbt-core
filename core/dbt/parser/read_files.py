@@ -1,7 +1,7 @@
 import os
 import pathlib
 from dataclasses import dataclass, field
-from typing import Dict, List, Mapping, MutableMapping, Optional, Protocol
+from typing import Dict, List, Literal, Mapping, MutableMapping, Optional, Protocol
 
 import pathspec  # type: ignore
 
@@ -17,6 +17,7 @@ from dbt.contracts.files import (
 )
 from dbt.events.types import InputFileDiffError
 from dbt.exceptions import ParsingError
+from dbt.flags import get_flags
 from dbt.parser.common import schema_file_keys
 from dbt.parser.schemas import yaml_from_file
 from dbt.parser.search import filesystem_search
@@ -392,46 +393,45 @@ class ReadFilesFromDiff:
         return file_type_lookup
 
 
-def _get_ext_combinations(bases: List[str], suffixes: List[str]) -> List[str]:
-    """Given a list of base extensions and a list of suffix extensions, return a list of all possible extensions."""
-    extensions = bases.copy()
-    for base in bases:
-        for suffix in suffixes:
-            extensions.append(f"{base}{suffix}")
-    return extensions
+def _get_extensions(base_ext: Literal[".sql", ".md"]) -> List[str]:
+    """Given a base extension, returns a list of aliased extensions"""
+    flags = get_flags()
+    if not flags.ALLOW_JINJA_FILE_EXTENSIONS:
+        return [base_ext]
+
+    return [base_ext, f"{base_ext}.j2", f"{base_ext}.jinja2", f"{base_ext}.jinja"]
 
 
 def get_file_types_for_project(project):
     file_types = {
         ParseFileType.Macro: {
             "paths": project.macro_paths,
-            "extensions": _get_ext_combinations(bases=[".sql"], suffixes=project.sql_extensions),
+            "extensions": _get_extensions(".sql"),
             "parser": "MacroParser",
         },
         ParseFileType.Model: {
             "paths": project.model_paths,
-            "extensions": [".py"]
-            + _get_ext_combinations(bases=[".sql"], suffixes=project.sql_extensions),
+            "extensions": [".py"] + _get_extensions(".sql"),
             "parser": "ModelParser",
         },
         ParseFileType.Snapshot: {
             "paths": project.snapshot_paths,
-            "extensions": _get_ext_combinations(bases=[".sql"], suffixes=project.sql_extensions),
+            "extensions": _get_extensions(".sql"),
             "parser": "SnapshotParser",
         },
         ParseFileType.Analysis: {
             "paths": project.analysis_paths,
-            "extensions": _get_ext_combinations(bases=[".sql"], suffixes=project.sql_extensions),
+            "extensions": _get_extensions(".sql"),
             "parser": "AnalysisParser",
         },
         ParseFileType.SingularTest: {
             "paths": project.test_paths,
-            "extensions": _get_ext_combinations(bases=[".sql"], suffixes=project.sql_extensions),
+            "extensions": _get_extensions(".sql"),
             "parser": "SingularTestParser",
         },
         ParseFileType.GenericTest: {
             "paths": project.generic_test_paths,
-            "extensions": _get_ext_combinations(bases=[".sql"], suffixes=project.sql_extensions),
+            "extensions": _get_extensions(".sql"),
             "parser": "GenericTestParser",
         },
         ParseFileType.Seed: {
@@ -441,7 +441,7 @@ def get_file_types_for_project(project):
         },
         ParseFileType.Documentation: {
             "paths": project.docs_paths,
-            "extensions": _get_ext_combinations(bases=[".md"], suffixes=project.md_extensions),
+            "extensions": _get_extensions(".md"),
             "parser": "DocumentationParser",
         },
         ParseFileType.Schema: {
@@ -451,14 +451,12 @@ def get_file_types_for_project(project):
         },
         ParseFileType.Fixture: {
             "paths": project.fixture_paths,
-            "extensions": [".csv"]
-            + _get_ext_combinations(bases=[".sql"], suffixes=project.sql_extensions),
+            "extensions": [".csv"] + _get_extensions(".sql"),
             "parser": "FixtureParser",
         },
         ParseFileType.Function: {
             "paths": project.function_paths,
-            "extensions": [".py"]
-            + _get_ext_combinations(bases=[".sql"], suffixes=project.sql_extensions),
+            "extensions": [".py"] + _get_extensions(".sql"),
             "parser": "FunctionParser",
         },
     }

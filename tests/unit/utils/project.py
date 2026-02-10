@@ -74,8 +74,6 @@ def project(selector_config: SelectorConfig) -> Project:
         restrict_access=False,
         dbt_cloud={},
         flags={},
-        sql_extensions=[],
-        md_extensions=[],
     )
 
 

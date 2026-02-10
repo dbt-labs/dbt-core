@@ -326,8 +326,6 @@ def write_project_files(project_root, dir_name, file_dict):
 def write_project_files_recursively(path, file_dict):
     if type(file_dict) is not dict:
         raise TestProcessingException(f"File dict is not a dict: '{file_dict}' for path '{path}'")
-    # Include .j2 so tests can write custom-extension files (e.g. model.sql.j2, docs.md.j2)
-    # when testing sql_extensions / md_extensions.
     suffix_list = [".sql", ".csv", ".md", ".txt", ".py", ".j2"]
     for name, value in file_dict.items():
         if name.endswith(".yml") or name.endswith(".yaml"):
