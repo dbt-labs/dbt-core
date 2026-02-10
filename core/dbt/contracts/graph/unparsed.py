@@ -253,6 +253,18 @@ class UnparsedColumn(HasConfig, HasColumnAndTestProps):
                     f"column {data.get('name')}, "
                     "so that column must specify a granularity."
                 )
+            # validity_params may only be set when the column has a granularity
+            if (
+                isinstance(dimension, dict)
+                and dimension.get("validity_params") is not None
+                and not data.get("granularity")
+            ):
+                dim_name = dimension.get("name") or data.get("name")
+                raise ValidationError(
+                    f"Dimension {dim_name} has validity_params attached to "
+                    f"column {data.get('name')}, "
+                    "so that column must specify a granularity."
+                )
 
 
 @dataclass

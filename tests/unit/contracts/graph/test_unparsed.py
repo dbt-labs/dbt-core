@@ -1140,7 +1140,8 @@ def test_column_parse():
 
 
 class TestUnparsedColumnTimeDimensionGranularityValidation(ContractTestCase):
-    """Test validation that SL YAML V2 column with time dimension must specify granularity."""
+    """Test validation that SL YAML V2 column with time dimension must specify granularity,
+    and that dimension validity_params require granularity."""
 
     ContractType = UnparsedColumn
 
@@ -1185,6 +1186,43 @@ class TestUnparsedColumnTimeDimensionGranularityValidation(ContractTestCase):
         column_dict = {
             "name": "category",
             "dimension": "categorical",
+        }
+        col = self.ContractType.from_dict(column_dict)
+        self.assertEqual(col.name, "category")
+        self.assertIsNone(col.granularity)
+
+    def test_dimension_with_validity_params_without_granularity_fails_validation(self):
+        """Dimension (dict) with validity_params must have column granularity."""
+        column_dict = {
+            "name": "valid_from",
+            "dimension": {
+                "type": "time",
+                "name": "valid_from_dim",
+                "validity_params": {"is_start": True, "is_end": False},
+            },
+        }
+        self.assert_fails_validation(column_dict)
+
+    def test_dimension_with_validity_params_with_granularity_passes_validation(self):
+        """Dimension (dict) with validity_params and granularity passes."""
+        column_dict = {
+            "name": "valid_from",
+            "granularity": "day",
+            "dimension": {
+                "type": "time",
+                "name": "valid_from_dim",
+                "validity_params": {"is_start": True, "is_end": True},
+            },
+        }
+        col = self.ContractType.from_dict(column_dict)
+        self.assertEqual(col.granularity, "day")
+        self.assertEqual(col.name, "valid_from")
+
+    def test_dimension_without_validity_params_passes_without_granularity_when_not_time(self):
+        """Dimension (dict) without validity_params and not time does not require granularity."""
+        column_dict = {
+            "name": "category",
+            "dimension": {"type": "categorical", "name": "category_dim"},
         }
         col = self.ContractType.from_dict(column_dict)
         self.assertEqual(col.name, "category")
