@@ -1,7 +1,0 @@
-kind: Fixes
-body: "fix materialization for Salesforce:table"
-time: 2026-02-02T11:23:35.858373-07:00
-custom:
-  author: chasewalden
-  issue: ""
-  project: dbt-fusion
