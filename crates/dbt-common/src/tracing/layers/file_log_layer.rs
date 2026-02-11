@@ -616,7 +616,7 @@ impl FileLogLayer {
     }
 
     fn handle_generic_op_start(&self, span: &SpanStartInfo, op: &GenericOpExecuted) {
-        let formatted = format_generic_op_start(op);
+        let formatted = format_generic_op_start(op, false);
         self.write_log_lines(
             span.start_time_unix_nano,
             span.severity_number,
@@ -629,7 +629,7 @@ impl FileLogLayer {
             .end_time_unix_nano
             .duration_since(span.start_time_unix_nano)
             .unwrap_or_default();
-        let formatted = format_generic_op_end(op, duration);
+        let formatted = format_generic_op_end(op, duration, span.status.as_ref(), false);
         self.write_log_lines(span.end_time_unix_nano, span.severity_number, &[formatted]);
     }
 

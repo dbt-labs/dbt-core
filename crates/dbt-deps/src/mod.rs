@@ -13,17 +13,16 @@ pub mod utils;
 
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::DBT_PROJECT_YML;
+use dbt_common::create_info_span;
 use dbt_common::io_args::{IoArgs, ReplayMode, TimeMachineMode};
-use dbt_common::tracing::span_info::SpanStatusRecorder as _;
-use dbt_common::{
-    ErrorCode, FsResult,
-    constants::{FETCHING, LOADING},
-    err, show_progress, stdfs,
+use dbt_common::tracing::emit::emit_info_progress_message;
+use dbt_common::tracing::span_info::{
+    SpanStatusRecorder as _, record_span_status, record_span_status_with_attrs,
 };
-use dbt_common::{create_info_span, fsinfo};
+use dbt_common::{ErrorCode, FsResult, err, stdfs};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_schemas::schemas::packages::{DbtPackagesLock, UpstreamProject};
-use dbt_telemetry::DepsAllPackagesInstalled;
+use dbt_telemetry::{DepsAllPackagesInstalled, GenericOpExecuted};
 use hub_client::{DBT_HUB_URL, HubClient};
 use std::{collections::BTreeMap, path::Path};
 use steps::{
@@ -61,7 +60,13 @@ pub async fn get_or_install_packages(
             load_dbt_packages_lock_without_validation(io, packages_install_path, env, &vars)?
                 .unwrap_or_default();
 
-        show_progress!(io, fsinfo!(LOADING.into(), "package-lock.yml".to_string()));
+        emit_info_progress_message(
+            dbt_telemetry::ProgressMessage::new_from_action_and_target(
+                "Loading".to_string(),
+                "package-lock.yml".to_string(),
+            ),
+            io.status_reporter.as_ref(),
+        );
 
         // Return empty upstream projects since we're not fetching anything
         return Ok((dbt_packages_lock, vec![]));
@@ -100,11 +105,21 @@ pub async fn get_or_install_packages(
                 &vars,
             )?
         {
-            show_progress!(io, fsinfo!(LOADING.into(), package_yml_name.to_string()));
+            emit_info_progress_message(
+                dbt_telemetry::ProgressMessage::new_from_action_and_target(
+                    "Loading".to_string(),
+                    package_yml_name.to_string(),
+                ),
+                io.status_reporter.as_ref(),
+            );
             dbt_packages_lock
         } else {
-            show_progress!(io, fsinfo!(FETCHING.into(), package_yml_name.to_string()));
-            compute_package_lock(
+            let fetch_span = create_info_span(GenericOpExecuted::new(
+                "deps-compute-package-lock".to_string(),
+                format!("resolving packages from {}", package_yml_name),
+                None,
+            ));
+            let lock_result = compute_package_lock(
                 io,
                 &vars,
                 env,
@@ -114,7 +129,27 @@ pub async fn get_or_install_packages(
                 skip_private_deps,
                 token,
             )
-            .await?
+            .instrument(fetch_span.clone())
+            .await;
+
+            match lock_result {
+                Ok(lock) => {
+                    record_span_status_with_attrs(
+                        &fetch_span,
+                        |attrs| {
+                            if let Some(g) = attrs.downcast_mut::<GenericOpExecuted>() {
+                                g.item_count_total = Some(lock.packages.len() as u64);
+                            }
+                        },
+                        None,
+                    );
+                    lock
+                }
+                Err(e) => {
+                    record_span_status(&fetch_span, Some(&e.to_string()));
+                    return Err(e);
+                }
+            }
         }
     } else {
         // No packages.yml defined - try to load from package-lock.yml if it exists
@@ -133,7 +168,13 @@ pub async fn get_or_install_packages(
         if let Some(dbt_packages_lock) =
             load_dbt_packages_lock_without_validation(io, packages_install_path, env, &vars)?
         {
-            show_progress!(io, fsinfo!(LOADING.into(), "package-lock.yml".to_string()));
+            emit_info_progress_message(
+                dbt_telemetry::ProgressMessage::new_from_action_and_target(
+                    "Loading".to_string(),
+                    "package-lock.yml".to_string(),
+                ),
+                io.status_reporter.as_ref(),
+            );
             dbt_packages_lock
         } else {
             // No packages.yml and no valid package-lock.yml - return empty

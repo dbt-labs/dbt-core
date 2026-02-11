@@ -19,13 +19,18 @@ pub fn capitalize_first_letter(s: &str) -> String {
 ///
 /// Returns formatted string in the pattern:
 /// `Started {display_action}` or `Started {display_action} ({total} items)` if total > 0
-pub fn format_generic_op_start(op: &GenericOpExecuted) -> String {
+pub fn format_generic_op_start(op: &GenericOpExecuted, colorize: bool) -> String {
     let total = op.item_count_total.unwrap_or_default();
+    let action = maybe_apply_color(
+        &GREEN,
+        right_align_static_action("Started").as_str(),
+        colorize,
+    );
 
     if total > 0 {
-        format!("Started {} ({} items)", op.display_action, total)
+        format!("{} {} ({} items)", action, op.display_action, total)
     } else {
-        format!("Started {}", op.display_action)
+        format!("{} {}", action, op.display_action)
     }
 }
 
@@ -33,18 +38,30 @@ pub fn format_generic_op_start(op: &GenericOpExecuted) -> String {
 ///
 /// Returns formatted string in the pattern:
 /// `Finished {display_action} [duration]`
-pub fn format_generic_op_end(op: &GenericOpExecuted, duration: std::time::Duration) -> String {
+pub fn format_generic_op_end(
+    op: &GenericOpExecuted,
+    duration: std::time::Duration,
+    status: Option<&SpanStatus>,
+    colorize: bool,
+) -> String {
     let duration_formatted = format_duration_fixed_width(duration);
 
     let total = op.item_count_total.unwrap_or_default();
 
-    if total > 0 {
+    let (action, error_desc) = format_action_with_status_code("Finished", status, colorize);
+
+    if let Some(error) = error_desc {
         format!(
-            "Finished {}  ({} items) [{}]",
-            op.display_action, total, duration_formatted
+            "{} [{}] {} (error: {})",
+            action, duration_formatted, op.display_action, error
+        )
+    } else if total > 0 {
+        format!(
+            "{} [{}] {} ({} items)",
+            action, duration_formatted, op.display_action, total
         )
     } else {
-        format!("Finished {} [{}]", op.display_action, duration_formatted)
+        format!("{} [{}] {}", action, duration_formatted, op.display_action)
     }
 }
 

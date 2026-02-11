@@ -1578,7 +1578,7 @@ impl TuiLayer {
             return;
         }
 
-        let formatted_message = format_generic_op_start(op);
+        let formatted_message = format_generic_op_start(op, true);
 
         self.write_suspended(|| {
             io::stdout()
@@ -1606,11 +1606,10 @@ impl TuiLayer {
                 panic!("A non existing id was used to end a generic operation span!");
             }
 
-            // Return, as we do not want to show both static message and progress bar in interactive mode
-            return;
+            // Progress is transient, so we fall through to allow end line be printed in interactive mode
         }
 
-        // Only show conclusion line if ShowOptions::Completed or All is enabled, non-interactive mode
+        // Only show conclusion line if ShowOptions::Completed or All is enabled
         if !self.show_options.contains(&ShowOptions::Completed)
             && !self.show_options.contains(&ShowOptions::All)
         {
@@ -1629,7 +1628,7 @@ impl TuiLayer {
             .unwrap_or_default();
 
         // Format with shared formatter (colorize = true for TUI)
-        let formatted_message = format_generic_op_end(op, duration);
+        let formatted_message = format_generic_op_end(op, duration, span.status.as_ref(), true);
 
         // Print conclusion line
         self.write_suspended(|| {
