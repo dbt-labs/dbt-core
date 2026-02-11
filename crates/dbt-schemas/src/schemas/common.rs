@@ -1157,28 +1157,6 @@ impl Versions {
         }
     }
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NodeInfoWrapper {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub unique_id: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub skipped_nodes: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub defined_at: Option<CodeLocationWithFile>,
-    pub node_info: NodeInfo,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NodeInfo {
-    pub node_name: String,
-    pub unique_id: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub node_started_at: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub node_finished_at: Option<String>,
-    pub node_status: String,
-}
-
 /// Get the semantic names for database, schema, and identifier
 /// This function will parse the database, schema, and identifier
 /// according to the dialect and quoting rules.

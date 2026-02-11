@@ -841,26 +841,19 @@ impl TuiLayer {
 
             // For text mode, use legacy format & logic to maintain test expectations
             if should_show_progress_message(phase, &self.show_options)
-                // Only for render & run.
+                // Only for render, run, and compare.
                 // For render, keep legacy filtering: hide seed/unit test and generic YAML tests.
                 // Singular SQL tests should still emit render lines.
-                // TODO: Filter out spurious text outputs from clone 
-                // until show_progress! macro is fully eliminated
+                // TODO: This legacy path should be phase-based only and not command-dependent.
+                // Keep command handling here only to preserve legacy text output during migration
+                // until show_progress! macro is fully eliminated.
                 && ((phase == ExecutionPhase::Render
                     && !(node_type == NodeType::Seed
                         || is_yaml_defined_generic_test))
-                    || (phase == ExecutionPhase::Run && self.command != FsCommand::Clone))
+                    || phase == ExecutionPhase::Run
+                    || phase == ExecutionPhase::Compare)
             {
-                let formatted = if phase == ExecutionPhase::Run && self.command == FsCommand::Show {
-                    // Show command generated very specific mesages in run phase text output
-                    format!(
-                        "Previewing {} ({})",
-                        ne.node_type().as_static_ref(),
-                        ne.unique_id
-                    )
-                } else {
-                    format_node_evaluated_start_legacy(ne)
-                };
+                let formatted = format_node_evaluated_start_legacy(ne, self.command);
                 self.write_suspended(|| {
                     io::stdout()
                         .lock()

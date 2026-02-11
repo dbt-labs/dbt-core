@@ -4,7 +4,7 @@ use std::path::Path;
 use std::str::FromStr;
 use std::{any::Any, collections::BTreeMap, fmt::Display, path::PathBuf, sync::Arc};
 
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use dbt_common::adapter::AdapterType;
 use dbt_common::io_args::StaticAnalysisOffReason;
 use dbt_common::tracing::emit::{emit_error_log_message, emit_warn_log_message};
@@ -13,9 +13,7 @@ use dbt_telemetry::{ExecutionPhase, NodeEvaluated, NodeProcessed, NodeType};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 type YmlValue = dbt_serde_yaml::Value;
-use crate::schemas::common::{
-    NodeInfo, NodeInfoWrapper, PersistDocsConfig, hooks_equal, normalize_sql,
-};
+use crate::schemas::common::{PersistDocsConfig, hooks_equal, normalize_sql};
 use crate::schemas::dbt_column::{DbtColumnRef, deserialize_dbt_columns, serialize_dbt_columns};
 use crate::schemas::manifest::GrantAccessToTarget;
 use crate::schemas::project::configs::common::log_state_mod_diff;
@@ -245,21 +243,6 @@ pub trait InternalDbtNode: Any + Send + Sync + fmt::Debug {
     // Incremental strategy validation
     fn warn_on_microbatch(&self) -> FsResult<()> {
         Ok(())
-    }
-
-    fn get_node_start_data(&self, node_started_at: DateTime<Utc>) -> NodeInfoWrapper {
-        NodeInfoWrapper {
-            unique_id: None,
-            skipped_nodes: None,
-            defined_at: self.defined_at().cloned(),
-            node_info: NodeInfo {
-                node_name: self.common().name.clone(),
-                unique_id: self.common().unique_id.clone(),
-                node_started_at: Some(node_started_at.format("%Y-%m-%dT%H:%M:%S%.6f").to_string()),
-                node_finished_at: None,
-                node_status: "executing".to_string(),
-            },
-        }
     }
 
     /// Returns the relative path from in_dir of the unrendered sql file for the current node.

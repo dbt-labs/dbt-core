@@ -5,6 +5,7 @@ use dbt_telemetry::{
     get_node_outcome_detail, get_test_outcome,
 };
 
+use crate::io_args::FsCommand;
 use crate::tracing::formatters::phase::get_phase_progress_text;
 
 use super::{
@@ -387,10 +388,26 @@ pub fn format_node_evaluated_start(node: &NodeEvaluated, colorize: bool) -> Stri
 ///
 /// Returns formatted string in the pattern:
 /// `{padded_action} {path_to_node}`
-pub fn format_node_evaluated_start_legacy(node: &NodeEvaluated) -> String {
+pub fn format_node_evaluated_start_legacy(node: &NodeEvaluated, command: FsCommand) -> String {
+    if node.phase() == ExecutionPhase::Run && command == FsCommand::Show {
+        // Show command generated very specific messages in run phase text output.
+        return format!(
+            "Previewing {} ({})",
+            node.node_type().as_static_ref(),
+            node.unique_id
+        );
+    }
+
     let phase = node.phase();
-    let Some(phase_action) = get_phase_progress_text(phase) else {
-        unreachable!("Phase action text should be available for NodeEvaluated start");
+    let phase_action = if phase == ExecutionPhase::Compare {
+        right_align_static_action("Comparing")
+    } else if phase == ExecutionPhase::Run && command == FsCommand::Clone {
+        right_align_static_action("Cloning")
+    } else {
+        let Some(phase_action) = get_phase_progress_text(phase) else {
+            unreachable!("Phase action text should be available for NodeEvaluated start");
+        };
+        phase_action
     };
 
     // Generic tests are YAML-defined and should keep the test name for clarity.
