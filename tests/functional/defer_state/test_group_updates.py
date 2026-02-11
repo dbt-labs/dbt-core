@@ -1,5 +1,4 @@
 import os
-import sys
 
 import pytest
 
@@ -77,7 +76,6 @@ class TestFullyModifiedGroups(GroupSetup):
         assert model_2_result.group == "accounting"  # new group name!
 
 
-@pytest.mark.skipif(sys.platform == "win32", reason="Extremely slow on Windows")
 class TestPartiallyModifiedGroups(GroupSetup):
     def test_changed_groups(self, project):
         self.group_setup()
