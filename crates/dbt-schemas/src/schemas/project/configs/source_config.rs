@@ -274,6 +274,10 @@ pub struct SourceConfig {
     pub event_time: Option<String>,
     pub meta: Option<IndexMap<String, YmlValue>>,
     pub freshness: Option<FreshnessDefinition>,
+    #[serde(
+        default,
+        serialize_with = "crate::schemas::nodes::serialize_none_as_empty_list"
+    )]
     pub tags: Option<StringOrArrayOfStrings>,
     pub quoting: Option<DbtQuoting>,
     pub loaded_at_field: Option<String>,

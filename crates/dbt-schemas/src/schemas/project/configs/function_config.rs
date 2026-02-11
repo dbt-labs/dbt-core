@@ -177,6 +177,10 @@ pub struct FunctionConfig {
     pub alias: Option<String>,
     pub database: Omissible<Option<String>>,
     pub schema: Omissible<Option<String>>,
+    #[serde(
+        default,
+        serialize_with = "crate::schemas::nodes::serialize_none_as_empty_list"
+    )]
     pub tags: Option<StringOrArrayOfStrings>,
     // need default to ensure None if field is not set
     #[serde(default, deserialize_with = "default_type")]

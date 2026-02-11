@@ -442,6 +442,13 @@ pub struct ModelConfig {
     pub database: Omissible<Option<String>>,
     #[serde(alias = "dataset")]
     pub schema: Omissible<Option<String>>,
+    // serialize_with ensures tags is always present as [] when None for Jinja macros
+    // that call obj.config.tags.extend(...) or similar list operations.
+    // See: https://github.com/dbt-labs/dbt-fusion/issues/1198
+    #[serde(
+        default,
+        serialize_with = "crate::schemas::nodes::serialize_none_as_empty_list"
+    )]
     pub tags: Option<StringOrArrayOfStrings>,
     pub catalog_name: Option<String>,
     // need default to ensure None if field is not set

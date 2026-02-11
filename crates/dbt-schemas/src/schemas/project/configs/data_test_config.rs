@@ -307,6 +307,10 @@ pub struct DataTestConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub store_failures: Option<bool>,
     pub store_failures_as: Option<StoreFailuresAs>,
+    #[serde(
+        default,
+        serialize_with = "crate::schemas::nodes::serialize_none_as_empty_list"
+    )]
     pub tags: Option<StringOrArrayOfStrings>,
     pub warn_if: Option<String>,
     pub quoting: Option<DbtQuoting>,

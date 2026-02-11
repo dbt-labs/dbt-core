@@ -4114,6 +4114,34 @@ where
     }
 }
 
+/// Serialize Option<StringOrArrayOfStrings> as empty array when None, otherwise as an array.
+/// This ensures the field is always present as a list in serialized output, which is required for
+/// Jinja macros that call `obj.config.tags.extend(...)` or similar list operations.
+/// See: https://github.com/dbt-labs/dbt-fusion/issues/1198
+pub fn serialize_none_as_empty_list<S>(
+    value: &Option<StringOrArrayOfStrings>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    use super::serde::StringOrArrayOfStrings::{ArrayOfStrings, String as SingleString};
+    use serde::ser::SerializeSeq;
+
+    match value {
+        Some(ArrayOfStrings(vec)) => vec.serialize(serializer),
+        Some(SingleString(s)) => {
+            let mut seq = serializer.serialize_seq(Some(1))?;
+            seq.serialize_element(s)?;
+            seq.end()
+        }
+        None => {
+            let seq = serializer.serialize_seq(Some(0))?;
+            seq.end()
+        }
+    }
+}
+
 /// Deserialize Option<String>, treating empty string as None for consistency.
 pub fn deserialize_empty_string_as_none<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
 where

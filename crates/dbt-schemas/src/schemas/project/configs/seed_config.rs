@@ -309,6 +309,10 @@ pub struct SeedConfig {
     pub post_hook: Verbatim<Option<Hooks>>,
     #[serde(alias = "pre-hook")]
     pub pre_hook: Verbatim<Option<Hooks>>,
+    #[serde(
+        default,
+        serialize_with = "crate::schemas::nodes::serialize_none_as_empty_list"
+    )]
     pub tags: Option<StringOrArrayOfStrings>,
     pub quoting: Option<DbtQuoting>,
     pub materialized: Option<DbtMaterialization>,
