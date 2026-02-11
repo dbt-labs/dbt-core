@@ -24,12 +24,14 @@ use dbt_common::error::AbstractLocation;
 use dbt_common::fs_err;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::io_args::StaticAnalysisOffReason;
+use dbt_common::tokiofs::read_to_string;
 use dbt_common::tracing::emit::emit_error_log_from_fs_error;
 use dbt_common::tracing::emit::emit_warn_log_from_fs_error;
 use dbt_common::tracing::emit::emit_warn_log_message;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::listener::JinjaTypeCheckingEventListenerFactory;
 use dbt_jinja_utils::node_resolver::NodeResolver;
+use dbt_jinja_utils::serde::from_yaml_raw;
 use dbt_jinja_utils::utils::dependency_package_name_from_ctx;
 use dbt_schemas::schemas::CommonAttributes;
 use dbt_schemas::schemas::DbtModel;
@@ -53,6 +55,7 @@ use dbt_schemas::schemas::nodes::AdapterAttr;
 use dbt_schemas::schemas::project::DbtProject;
 use dbt_schemas::schemas::project::DefaultTo;
 use dbt_schemas::schemas::project::ModelConfig;
+use dbt_schemas::schemas::project::TypedRecursiveConfig;
 use dbt_schemas::schemas::properties::ModelProperties;
 use dbt_schemas::schemas::ref_and_source::{DbtRef, DbtSourceWrapper};
 use dbt_schemas::state::DbtPackage;
@@ -69,6 +72,308 @@ use std::sync::Arc;
 use super::resolve_properties::MinimalPropertiesEntry;
 use super::resolve_tests::persist_generic_data_tests::TestableNodeTrait;
 use super::validate_models::validate_model;
+
+/// Build an *unrendered* project config tree from the raw `dbt_project.yml`.
+/// This lets us populate `unrendered_config` for dbt-core compatible state comparisons.
+async fn build_raw_model_project_config(
+    arg: &ResolveArgs,
+    env: &JinjaEnv,
+    base_ctx: &BTreeMap<String, minijinja::Value>,
+    package: &DbtPackage,
+    package_quoting: DbtQuoting,
+) -> FsResult<crate::dbt_project_config::DbtProjectConfig<ModelConfig>> {
+    #[derive(serde::Deserialize)]
+    struct DbtProjectModelsOnly {
+        models: Option<dbt_schemas::schemas::project::ProjectModelConfig>,
+    }
+
+    /// Build a `DbtProjectConfig` tree without emitting strict-parse errors.
+    ///
+    /// This is used only for hydrating `unrendered_config` for state comparisons and must
+    /// not impact the user-visible parse/compile output. In particular, malformed keys or
+    /// Jinja-y values in `dbt_project.yml` should not add extra errors/warnings.
+    fn recur_build_dbt_project_config_silent<
+        T: DefaultTo<T>,
+        S: TypedRecursiveConfig + Into<T> + Clone,
+    >(
+        parent_config: &T,
+        child: &S,
+    ) -> crate::dbt_project_config::DbtProjectConfig<T> {
+        let mut child_config: T = child.clone().into();
+        child_config.default_to(parent_config);
+
+        let mut children = indexmap::IndexMap::new();
+        for (key, maybe_child_config_variant) in child.iter_children() {
+            let child_config_variant = match maybe_child_config_variant {
+                dbt_serde_yaml::ShouldBe::AndIs(config) => config,
+                dbt_serde_yaml::ShouldBe::ButIsnt(..) => {
+                    // Skip invalid children silently: the fully-rendered dbt_project.yml loader
+                    // will report errors. This raw/unrendered pass must not add noise.
+                    continue;
+                }
+            };
+
+            children.insert(
+                key.clone(),
+                recur_build_dbt_project_config_silent(&child_config, child_config_variant),
+            );
+        }
+
+        crate::dbt_project_config::DbtProjectConfig {
+            config: child_config,
+            children,
+        }
+    }
+
+    let dependency_package_name = dependency_package_name_from_ctx(env, base_ctx);
+    let dbt_project_yml_path = package.package_root_path.join("dbt_project.yml");
+    let raw_yml = read_to_string(&dbt_project_yml_path).await.map_err(|e| {
+        fs_err!(
+            code => ErrorCode::IoError,
+            loc => dbt_project_yml_path.clone(),
+            "Failed to read {}: {}",
+            dbt_project_yml_path.display(),
+            e
+        )
+    })?;
+
+    // NOTE: This is intentionally best-effort. We use it only to populate `unrendered_config`
+    // for state comparisons, and it must not break compilation when the dbt_project.yml contains
+    // Jinja-templated values that don't conform to our typed schema (e.g. model-paths).
+    //
+    // We therefore only deserialize the `models:` subtree and fall back to an empty config tree
+    // if parsing fails for any reason (including Jinja).
+    let raw_models_only: Option<DbtProjectModelsOnly> = from_yaml_raw::<DbtProjectModelsOnly>(
+        &arg.io,
+        &raw_yml,
+        Some(dbt_project_yml_path.as_path()),
+        false,
+        dependency_package_name,
+    )
+    .ok();
+
+    let default_config = ModelConfig {
+        enabled: Some(true),
+        quoting: Some(package_quoting),
+        ..Default::default()
+    };
+
+    // Use the parsed model config if available; otherwise build an empty config tree.
+    // This must be best-effort and must not emit extra errors.
+    Ok(match raw_models_only.and_then(|p| p.models) {
+        Some(models_cfg) => recur_build_dbt_project_config_silent(&default_config, &models_cfg),
+        None => crate::dbt_project_config::DbtProjectConfig {
+            config: default_config,
+            children: indexmap::IndexMap::new(),
+        },
+    })
+}
+
+/// Populate `unrendered_config` on a model node for dbt-core compatible `state:*` comparisons.
+///
+/// This should be called before relation components are rendered/resolved, and it should prefer
+/// values from a raw (unrendered) `dbt_project.yml` config tree.
+fn insert_unrendered_grants(
+    unrendered: &mut BTreeMap<String, dbt_serde_yaml::Value>,
+    unrendered_project_cfg: &ModelConfig,
+) {
+    use dbt_serde_yaml::Value as YmlValue;
+
+    // Config-level unrendered values (e.g. grants) matter for Mantle-compatible `state:modified`
+    // semantics. Mantle compares configured/unrendered config, not rendered config.
+    if let Some(grants) = unrendered_project_cfg.grants.as_ref() {
+        let mut grants_map = dbt_serde_yaml::Mapping::new();
+        for (k, v) in &grants.0 {
+            let key = YmlValue::String(k.clone(), Default::default());
+            let val = match v {
+                dbt_schemas::schemas::serde::StringOrArrayOfStrings::String(s) => {
+                    YmlValue::String(s.clone(), Default::default())
+                }
+                dbt_schemas::schemas::serde::StringOrArrayOfStrings::ArrayOfStrings(vec) => {
+                    YmlValue::Sequence(
+                        vec.iter()
+                            .cloned()
+                            .map(|s| YmlValue::String(s, Default::default()))
+                            .collect(),
+                        Default::default(),
+                    )
+                }
+            };
+            grants_map.insert(key, val);
+        }
+        if !grants_map.is_empty() {
+            unrendered.insert(
+                "grants".to_string(),
+                YmlValue::Mapping(grants_map, Default::default()),
+            );
+        }
+    }
+}
+
+fn insert_unrendered_hooks(
+    unrendered: &mut BTreeMap<String, dbt_serde_yaml::Value>,
+    unrendered_project_cfg: &ModelConfig,
+) {
+    use dbt_serde_yaml::Value as YmlValue;
+
+    // Hooks (`pre-hook` / `post-hook`) show up in dbt-core manifests as lists of SQL strings.
+    // Extract unrendered hook SQL strings in a stable representation.
+    fn hooks_to_yaml(hooks: &dbt_schemas::schemas::common::Hooks) -> YmlValue {
+        match hooks {
+            dbt_schemas::schemas::common::Hooks::String(s) => {
+                YmlValue::String(s.clone(), Default::default())
+            }
+            dbt_schemas::schemas::common::Hooks::ArrayOfStrings(v) => YmlValue::Sequence(
+                v.iter()
+                    .cloned()
+                    .map(|s| YmlValue::String(s, Default::default()))
+                    .collect(),
+                Default::default(),
+            ),
+            dbt_schemas::schemas::common::Hooks::HookConfig(cfg) => YmlValue::Sequence(
+                cfg.sql
+                    .iter()
+                    .cloned()
+                    .map(|s| YmlValue::String(s, Default::default()))
+                    .collect(),
+                Default::default(),
+            ),
+            dbt_schemas::schemas::common::Hooks::HookConfigArray(cfgs) => YmlValue::Sequence(
+                cfgs.iter()
+                    .filter_map(|c| c.sql.clone())
+                    .map(|s| YmlValue::String(s, Default::default()))
+                    .collect(),
+                Default::default(),
+            ),
+        }
+    }
+
+    if let Some(pre) = (*unrendered_project_cfg.pre_hook).as_ref() {
+        unrendered.insert("pre-hook".to_string(), hooks_to_yaml(pre));
+    }
+    if let Some(post) = (*unrendered_project_cfg.post_hook).as_ref() {
+        unrendered.insert("post-hook".to_string(), hooks_to_yaml(post));
+    }
+}
+
+fn insert_unrendered_tags(
+    unrendered: &mut BTreeMap<String, dbt_serde_yaml::Value>,
+    unrendered_project_cfg: &ModelConfig,
+) {
+    use dbt_serde_yaml::Value as YmlValue;
+
+    // Tags: store as list if configured as list, or scalar string if configured as string.
+    if let Some(tags) = unrendered_project_cfg.tags.as_ref() {
+        let yaml = match tags {
+            dbt_schemas::schemas::serde::StringOrArrayOfStrings::String(s) => {
+                YmlValue::String(s.clone(), Default::default())
+            }
+            dbt_schemas::schemas::serde::StringOrArrayOfStrings::ArrayOfStrings(v) => {
+                YmlValue::Sequence(
+                    v.iter()
+                        .cloned()
+                        .map(|s| YmlValue::String(s, Default::default()))
+                        .collect(),
+                    Default::default(),
+                )
+            }
+        };
+        unrendered.insert("tags".to_string(), yaml);
+    }
+}
+
+fn insert_unrendered_persist_docs(
+    unrendered: &mut BTreeMap<String, dbt_serde_yaml::Value>,
+    unrendered_project_cfg: &ModelConfig,
+) {
+    use dbt_serde_yaml::Value as YmlValue;
+
+    // Persist docs: store the configured/unrendered mapping if present.
+    if let Some(pd) = unrendered_project_cfg.persist_docs.as_ref() {
+        let mut pd_map = dbt_serde_yaml::Mapping::new();
+        if let Some(relation) = pd.relation {
+            pd_map.insert(
+                YmlValue::String("relation".to_string(), Default::default()),
+                YmlValue::Bool(relation, Default::default()),
+            );
+        }
+        if let Some(columns) = pd.columns {
+            pd_map.insert(
+                YmlValue::String("columns".to_string(), Default::default()),
+                YmlValue::Bool(columns, Default::default()),
+            );
+        }
+        if !pd_map.is_empty() {
+            unrendered.insert(
+                "persist_docs".to_string(),
+                YmlValue::Mapping(pd_map, Default::default()),
+            );
+        }
+    }
+}
+
+fn set_model_unrendered_relation_config(
+    dbt_model: &mut DbtModel,
+    raw_local_project_config: &crate::dbt_project_config::DbtProjectConfig<ModelConfig>,
+    inline_overrides: &RelationComponents,
+    components: &RelationComponents,
+) {
+    use dbt_serde_yaml::Value as YmlValue;
+
+    let mut unrendered = BTreeMap::new();
+
+    let unrendered_project_cfg =
+        raw_local_project_config.get_config_for_fqn(&dbt_model.__common_attr__.fqn);
+
+    // dbt-core precedence: inline SQL config(...) overrides project-level config.
+    //
+    // For Mantle-compatible `state:*` comparisons, we want the *effective configured*
+    // (unrendered) value, not the rendered target-derived value.
+    let unrendered_db = inline_overrides
+        .database
+        .clone()
+        .or_else(|| {
+            unrendered_project_cfg
+                .database
+                .clone()
+                .into_inner()
+                .unwrap_or(None)
+        })
+        .or_else(|| components.database.clone());
+    let unrendered_schema = inline_overrides
+        .schema
+        .clone()
+        .or_else(|| {
+            unrendered_project_cfg
+                .schema
+                .clone()
+                .into_inner()
+                .unwrap_or(None)
+        })
+        .or_else(|| components.schema.clone());
+    let unrendered_alias = inline_overrides
+        .alias
+        .clone()
+        .or_else(|| unrendered_project_cfg.alias.clone())
+        .or_else(|| components.alias.clone());
+
+    if let Some(db) = unrendered_db.as_ref() {
+        unrendered.insert("database".to_string(), YmlValue::string(db.clone()));
+    }
+    if let Some(sch) = unrendered_schema.as_ref() {
+        unrendered.insert("schema".to_string(), YmlValue::string(sch.clone()));
+    }
+    if let Some(alias) = unrendered_alias.as_ref() {
+        unrendered.insert("alias".to_string(), YmlValue::string(alias.clone()));
+    }
+
+    insert_unrendered_grants(&mut unrendered, unrendered_project_cfg);
+    insert_unrendered_hooks(&mut unrendered, unrendered_project_cfg);
+    insert_unrendered_tags(&mut unrendered, unrendered_project_cfg);
+    insert_unrendered_persist_docs(&mut unrendered, unrendered_project_cfg);
+
+    dbt_model.__base_attr__.unrendered_config = unrendered;
+}
 
 #[allow(
     clippy::cognitive_complexity,
@@ -119,6 +424,10 @@ pub async fn resolve_models(
             dependency_package_name_from_ctx(&env, base_ctx),
         )?
     };
+
+    let raw_local_project_config =
+        build_raw_model_project_config(arg, env.as_ref(), base_ctx, package, package_quoting)
+            .await?;
 
     let render_ctx = RenderCtx {
         inner: Arc::new(RenderCtxInner {
@@ -226,6 +535,23 @@ pub async fn resolve_models(
         let ref_name = dbt_asset.path.file_stem().unwrap().to_str().unwrap();
         // Is there a better way to handle this if the model doesn't have a config?
         let mut model_config = *sql_file_info.config;
+        // Capture inline SQL config overrides (from `{{ config(...) }}`) separately.
+        // This should include only values explicitly set in the SQL file, not inherited defaults.
+        let inline_overrides = if let Some(explicit) = sql_file_info.explicit_config.as_ref() {
+            RelationComponents {
+                database: explicit.database.clone().into_inner().unwrap_or(None),
+                schema: explicit.schema.clone().into_inner().unwrap_or(None),
+                alias: explicit.alias.clone(),
+                store_failures: None,
+            }
+        } else {
+            RelationComponents {
+                database: None,
+                schema: None,
+                alias: None,
+                store_failures: None,
+            }
+        };
         // Default to View if no materialized is set
         if model_config.materialized.is_none() {
             model_config.materialized = Some(DbtMaterialization::View);
@@ -489,6 +815,7 @@ pub async fn resolve_models(
                     == StaticAnalysisKind::Off)
                     .then_some(StaticAnalysisOffReason::ConfiguredOff),
                 static_analysis,
+                unrendered_config: Default::default(),
             },
             __model_attr__: DbtModelAttr {
                 introspection: if sql_file_info.this {
@@ -527,6 +854,15 @@ pub async fn resolve_models(
             alias: model_config.alias.clone(),
             store_failures: None,
         };
+
+        // Record unrendered (configured) values for dbt-core compatible state comparisons.
+        // This must happen *before* we render/resolve target-derived components.
+        set_model_unrendered_relation_config(
+            &mut dbt_model,
+            &raw_local_project_config,
+            &inline_overrides,
+            &components,
+        );
 
         // update model components using the generate_relation_components function
         update_node_relation_components(
@@ -805,6 +1141,7 @@ fn process_python_models(
                 this: false,
                 metrics: vec![],
                 config: Box::new(merged_config),
+                explicit_config: None,
                 tests: vec![],
                 macros: vec![],
                 materializations: vec![],

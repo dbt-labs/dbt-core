@@ -633,6 +633,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                             sources: test.__base_attr__.sources,
                             functions: test.__base_attr__.functions,
                             metrics: test.__base_attr__.metrics,
+                            unrendered_config: test.__base_attr__.unrendered_config,
                         },
                         __test_attr__: DbtTestAttr {
                             column_name: test.column_name,
@@ -725,6 +726,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                             sources: snapshot.__base_attr__.sources,
                             functions: snapshot.__base_attr__.functions,
                             metrics: snapshot.__base_attr__.metrics,
+                            unrendered_config: snapshot.__base_attr__.unrendered_config,
                         },
                         __snapshot_attr__: DbtSnapshotAttr {
                             snapshot_meta_column_names: snapshot
@@ -800,6 +802,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                             sources: seed.__base_attr__.sources,
                             functions: seed.__base_attr__.functions,
                             metrics: seed.__base_attr__.metrics,
+                            unrendered_config: seed.__base_attr__.unrendered_config,
                         },
                         __seed_attr__: DbtSeedAttr {
                             quote_columns: seed.config.quote_columns.unwrap_or_default(),
@@ -885,6 +888,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                             sources: analysis.__base_attr__.sources,
                             metrics: analysis.__base_attr__.metrics,
                             functions: analysis.__base_attr__.functions,
+                            unrendered_config: analysis.__base_attr__.unrendered_config,
                         },
                         __analysis_attr__: DbtAnalysisAttr::default(),
                         deprecated_config: config,
@@ -946,6 +950,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     sources: vec![],
                     functions: vec![],
                     metrics: vec![],
+                    unrendered_config: source.unrendered_config,
                 },
                 __source_attr__: DbtSourceAttr {
                     identifier: source.identifier,
@@ -1002,6 +1007,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     metrics: exposure.__base_attr__.metrics,
                     depends_on: exposure.__base_attr__.depends_on,
                     quoting_ignore_case: false,
+                    unrendered_config: Default::default(),
                 },
                 __exposure_attr__: crate::schemas::nodes::DbtExposureAttr {
                     owner: exposure.owner,
@@ -1060,6 +1066,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     sources: unit_test.__base_attr__.sources,
                     functions: unit_test.__base_attr__.functions,
                     metrics: unit_test.__base_attr__.metrics,
+                    unrendered_config: unit_test.__base_attr__.unrendered_config,
                 },
                 __unit_test_attr__: DbtUnitTestAttr {
                     model: unit_test.model,
@@ -1131,6 +1138,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     metrics: vec![],
                     depends_on: saved_query.__base_attr__.depends_on,
                     quoting_ignore_case: false,
+                    unrendered_config: Default::default(),
                 },
                 __saved_query_attr__: DbtSavedQueryAttr {
                     query_params: saved_query.query_params,
@@ -1185,6 +1193,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     sources: vec![],
                     functions: vec![],
                     metrics: vec![],
+                    unrendered_config: Default::default(),
                 },
                 __group_attr__: DbtGroupAttr { owner: group.owner },
             }),
@@ -1295,6 +1304,7 @@ pub fn manifest_model_to_dbt_model(
             sources: model.__base_attr__.sources,
             functions: model.__base_attr__.functions,
             metrics: model.__base_attr__.metrics,
+            unrendered_config: model.__base_attr__.unrendered_config,
         },
         __model_attr__: DbtModelAttr {
             access: model.config.access.clone().unwrap_or_default(),
@@ -1392,6 +1402,7 @@ pub fn manifest_function_to_dbt_function(
             sources: function.__base_attr__.sources,
             functions: function.__base_attr__.functions,
             metrics: function.__base_attr__.metrics,
+            unrendered_config: function.__base_attr__.unrendered_config,
         },
         __function_attr__: DbtFunctionAttr {
             access: function.access,

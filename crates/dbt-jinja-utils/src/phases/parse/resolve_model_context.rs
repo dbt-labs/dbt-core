@@ -254,6 +254,7 @@ pub fn build_resolve_model_context<T: DefaultTo<T> + 'static>(
             sources: vec![],
             functions: vec![],
             metrics: vec![],
+            unrendered_config: Default::default(),
         },
         __model_attr__: DbtModelAttr {
             introspection: IntrospectionKind::None,

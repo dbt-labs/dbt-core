@@ -264,6 +264,7 @@ pub async fn resolve_semantic_models(
                     nodes_with_ref_location: vec![],
                 },
                 quoting_ignore_case: false,
+                unrendered_config: Default::default(),
             },
             __semantic_model_attr__: DbtSemanticModelAttr {
                 unrendered_config: BTreeMap::new(), // TODO: do we need to hydrate?

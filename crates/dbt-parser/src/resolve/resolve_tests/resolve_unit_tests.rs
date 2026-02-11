@@ -260,6 +260,7 @@ pub fn resolve_unit_tests(
                 static_analysis,
                 columns: vec![],
                 metrics: vec![],
+                unrendered_config: Default::default(),
             },
             __unit_test_attr__: DbtUnitTestAttr {
                 model: unit_test.model.to_owned(),

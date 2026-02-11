@@ -18,6 +18,11 @@ pub struct SqlFileInfo<T: DefaultTo<T>> {
     pub metrics: Vec<(String, Option<String>)>,
     /// e.g. config( a= 1, b = [1,2], c = 'string')
     pub config: Box<T>,
+    /// Merged config values from explicit SQL `{{ config(...) }}` calls only.
+    ///
+    /// This intentionally excludes the initial "base" config pushed into the parse context.
+    /// Used to detect which values were explicitly overridden inline in SQL.
+    pub explicit_config: Option<Box<T>>,
     /// e.g. tests
     pub tests: Vec<(String, Span)>,
     /// e.g. macros
@@ -44,6 +49,7 @@ impl<T: DefaultTo<T>> Default for SqlFileInfo<T> {
             this: false,
             metrics: Vec::new(),
             config: Box::new(T::default()),
+            explicit_config: None,
             tests: Vec::new(),
             macros: Vec::new(),
             materializations: Vec::new(),
@@ -68,6 +74,8 @@ impl<T: DefaultTo<T>> SqlFileInfo<T> {
         let mut this = false;
         let mut metrics = Vec::new();
         let mut config = Box::new(T::default());
+        let mut explicit_config: Option<Box<T>> = None;
+        let mut saw_base_config = false;
         let mut tests = Vec::new();
         let mut macros = Vec::new();
         let mut materializations = Vec::new();
@@ -83,6 +91,20 @@ impl<T: DefaultTo<T>> SqlFileInfo<T> {
                 SqlResource::Function(function) => functions.push(function),
                 SqlResource::Metric(metric) => metrics.push(metric),
                 SqlResource::Config(mut resource_config) => {
+                    if !saw_base_config {
+                        // The parse context always pushes an initial "base" config before
+                        // evaluating the file. Treat the first config resource as this base.
+                        saw_base_config = true;
+                    } else {
+                        // Merge explicit SQL config calls together, excluding the base config.
+                        // This preserves dbt's precedence across multiple `config()` calls
+                        // while avoiding falsely treating inherited/defaulted values as explicit.
+                        let mut explicit_call = resource_config.clone();
+                        if let Some(prev) = explicit_config.as_deref() {
+                            explicit_call.default_to(prev);
+                        }
+                        explicit_config = Some(explicit_call);
+                    }
                     resource_config.default_to(&*config);
                     config = resource_config;
                 }
@@ -104,6 +126,7 @@ impl<T: DefaultTo<T>> SqlFileInfo<T> {
             this,
             metrics,
             config,
+            explicit_config,
             tests,
             macros,
             materializations,

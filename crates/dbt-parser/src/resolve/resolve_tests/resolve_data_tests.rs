@@ -500,6 +500,7 @@ pub async fn resolve_data_tests(
                     })
                     .collect(),
                 metrics: vec![],
+                unrendered_config: Default::default(),
             },
             __test_attr__: DbtTestAttr {
                 column_name: None,

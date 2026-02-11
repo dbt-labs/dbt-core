@@ -754,6 +754,7 @@ impl ExecuteAndCompareTelemetry {
         [
             maybe_normalize_schema_name,
             maybe_normalize_tmp_paths,
+            Self::normalize_unrendered_config_in_model_strings,
             Self::normalize_volatile_keys,
             Self::strip_non_replayable_keys,
             Self::json_safe_normalize_slashes,
@@ -762,6 +763,20 @@ impl ExecuteAndCompareTelemetry {
         ]
         .iter()
         .fold(content, |acc, transform| transform(acc))
+    }
+
+    /// Strip `unrendered_config` from the debug-printed node representation that appears in
+    /// some dev trace telemetry records.
+    ///
+    /// These strings are not a stable schema contract (they're a Python-ish dict dump), and
+    /// adding new internal fields to nodes (like `unrendered_config`) should not churn telemetry
+    /// goldens.
+    fn normalize_unrendered_config_in_model_strings(output: String) -> String {
+        output
+            // common case: `..., 'unrendered_config': {}, ...`
+            .replace(", 'unrendered_config': {}, ", ", ")
+            // if it appears at the end (no trailing comma)
+            .replace(", 'unrendered_config': {}", "")
     }
 }
 

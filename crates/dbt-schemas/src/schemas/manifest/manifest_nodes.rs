@@ -910,7 +910,7 @@ impl From<DbtModel> for ManifestModel {
                 compiled_code: None,
                 checksum: model.__common_attr__.checksum,
                 language: model.__common_attr__.language,
-                unrendered_config: Default::default(),
+                unrendered_config: model.__base_attr__.unrendered_config,
                 doc_blocks: Default::default(),
                 extra_ctes_injected: Default::default(),
                 extra_ctes: Default::default(),

@@ -9,6 +9,7 @@ use crate::schemas::{
 };
 use dbt_common::tracing::emit::emit_warn_log_message;
 use dbt_common::{ErrorCode, FsResult, constants::DBT_MANIFEST_JSON};
+use dbt_telemetry::NodeType;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -150,7 +151,7 @@ impl PreviousState {
                     || self.check_configs_modified(node)
                     || self.check_relation_modified(node)
                     || self.check_persisted_descriptions_modified(node)
-                    || self.check_modified_content(node) // Order is important here, check_modified_content should be last as it is the most generic and could potentially match prevuous cases
+                    || self.check_modified_content(node) // Order is important here, check_modified_content should be last as it is the most generic and could potentially match previous cases
             }
         }
     }
@@ -168,7 +169,23 @@ impl PreviousState {
             None => return !current_node.is_never_new_if_previous_missing(), // If previous node doesn't exist, consider it modified
         };
 
-        !current_node.has_same_content(previous_node)
+        // For models, treat "modified content" as a *body* comparison (checksum/raw_code),
+        // not a full same_contents comparison. Config/relation/persisted-description diffs
+        // are handled by dedicated checks in `state:modified` selection.
+        if current_node.resource_type() == NodeType::Model
+            && previous_node.resource_type() == NodeType::Model
+        {
+            // Fast path: identical checksums => body is unchanged.
+            if current_node.common().checksum == previous_node.common().checksum {
+                return false;
+            }
+        }
+
+        if current_node.has_same_content(previous_node) {
+            return false;
+        }
+
+        true
     }
 
     fn check_configs_modified(&self, current_node: &dyn InternalDbtNode) -> bool {
@@ -182,7 +199,92 @@ impl PreviousState {
             None => return !current_node.is_never_new_if_previous_missing(), // If previous node doesn't exist, consider it modified
         };
 
-        !current_node.has_same_config(previous_node)
+        // Mantle semantics for `state:modified` configs are based on configured/unrendered config,
+        // not rendered config. Compare key config knobs from `unrendered_config` when present.
+        if current_node.resource_type() == NodeType::Model
+            && previous_node.resource_type() == NodeType::Model
+        {
+            use dbt_serde_yaml::Value as YmlValue;
+
+            let current_uc = &current_node.base().unrendered_config;
+            let previous_uc = &previous_node.base().unrendered_config;
+
+            fn is_effectively_empty(v: &YmlValue) -> bool {
+                match v {
+                    YmlValue::Null(_) => true,
+                    YmlValue::Sequence(seq, _) => seq.is_empty(),
+                    YmlValue::Mapping(map, _) => map.is_empty(),
+                    _ => false,
+                }
+            }
+
+            fn canonicalize_str(s: &str) -> &str {
+                s.strip_suffix("\r\n")
+                    .or_else(|| s.strip_suffix('\n'))
+                    .unwrap_or(s)
+            }
+
+            fn uc_eq(a: Option<&YmlValue>, b: Option<&YmlValue>) -> bool {
+                match (a, b) {
+                    (None, None) => true,
+                    (None, Some(v)) | (Some(v), None) => is_effectively_empty(v),
+                    (Some(YmlValue::String(sa, _)), Some(YmlValue::String(sb, _))) => {
+                        canonicalize_str(sa) == canonicalize_str(sb)
+                    }
+                    (Some(va), Some(vb)) => va == vb,
+                }
+            }
+
+            fn get_any<'a>(
+                m: &'a std::collections::BTreeMap<String, YmlValue>,
+                keys: &[&str],
+            ) -> Option<&'a YmlValue> {
+                keys.iter().find_map(|k| m.get(*k))
+            }
+
+            // Key groups: dbt-core has historically used both dash and underscore variants for hooks.
+            let checks: [(&'static str, &[&str]); 5] = [
+                ("grants", &["grants"]),
+                ("pre_hook", &["pre-hook", "pre_hook"]),
+                ("post_hook", &["post-hook", "post_hook"]),
+                ("tags", &["tags"]),
+                ("persist_docs", &["persist_docs"]),
+            ];
+
+            // Only use `unrendered_config` comparisons when *both* current and previous state
+            // manifests contain at least one of these keys.
+            //
+            // Rationale: Mantle-produced state manifests may omit `unrendered_config` entirely
+            // (or not include particular keys), in which case dbt-core effectively falls back to
+            // rendered config comparisons. If we treat "key present only on one side" as a diff,
+            // we'll incorrectly mark nodes modified even when rendered config matches.
+            let any_present = checks.iter().any(|(_, keys)| {
+                keys.iter()
+                    .any(|k| current_uc.contains_key(*k) && previous_uc.contains_key(*k))
+            });
+
+            if any_present {
+                let mut any_diff = false;
+                for (name, keys) in checks {
+                    let a = get_any(current_uc, keys);
+                    let b = get_any(previous_uc, keys);
+                    let eq = uc_eq(a, b);
+                    if !eq {
+                        any_diff = true;
+                        log_state_mod_diff(
+                            &current_node.common().unique_id,
+                            "model_config",
+                            [(name, eq, Some((format!("{:?}", a), format!("{:?}", b))))],
+                        );
+                    }
+                }
+                return any_diff;
+            }
+        }
+
+        let same_config = current_node.has_same_config(previous_node);
+
+        !same_config
     }
 
     fn check_relation_modified(&self, current_node: &dyn InternalDbtNode) -> bool {
@@ -200,9 +302,64 @@ impl PreviousState {
             None => return !current_node.is_never_new_if_previous_missing(), // If previous node doesn't exist, consider it modified
         };
 
-        // Check if database representation changed (database, schema, alias)
-        // For now, we just compare the alias as the database and schema are not
-        // yet available in fusion as underendered values, which is what the dbt-core does
+        // Check if database representation changed (database, schema, alias).
+        //
+        // Prefer comparing unrendered (configured) values, matching dbt-core semantics for
+        // state selection: differences that come purely from target rendering should not
+        // count as modifications.
+        let current_uc = &current_node.base().unrendered_config;
+        let previous_uc = &previous_node.base().unrendered_config;
+
+        fn get<'a>(
+            m: &'a std::collections::BTreeMap<String, dbt_serde_yaml::Value>,
+            k: &str,
+        ) -> Option<&'a str> {
+            m.get(k).and_then(|v| v.as_str())
+        }
+
+        if !current_uc.is_empty() && !previous_uc.is_empty() {
+            let db_eq = get(current_uc, "database") == get(previous_uc, "database");
+            let schema_eq = get(current_uc, "schema") == get(previous_uc, "schema");
+            let alias_eq = get(current_uc, "alias") == get(previous_uc, "alias");
+            let is_same_relation = db_eq && schema_eq && alias_eq;
+
+            if !is_same_relation {
+                log_state_mod_diff(
+                    &current_node.common().unique_id,
+                    "relation",
+                    [
+                        (
+                            "database",
+                            db_eq,
+                            Some((
+                                format!("{:?}", get(current_uc, "database")),
+                                format!("{:?}", get(previous_uc, "database")),
+                            )),
+                        ),
+                        (
+                            "schema",
+                            schema_eq,
+                            Some((
+                                format!("{:?}", get(current_uc, "schema")),
+                                format!("{:?}", get(previous_uc, "schema")),
+                            )),
+                        ),
+                        (
+                            "alias",
+                            alias_eq,
+                            Some((
+                                format!("{:?}", get(current_uc, "alias")),
+                                format!("{:?}", get(previous_uc, "alias")),
+                            )),
+                        ),
+                    ],
+                );
+            }
+
+            return !is_same_relation;
+        }
+
+        // Fallback: compare just the rendered alias (legacy behavior).
         let current_alias = &current_node.base().alias;
         let previous_alias = &previous_node.base().alias;
 

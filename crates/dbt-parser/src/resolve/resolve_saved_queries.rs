@@ -236,6 +236,7 @@ pub async fn resolve_saved_queries(
                     metrics: vec![],
                     depends_on,
                     quoting_ignore_case: false,
+                    unrendered_config: Default::default(),
                 },
                 __saved_query_attr__: DbtSavedQueryAttr {
                     query_params,

@@ -350,6 +350,7 @@ pub fn resolve_sources(
                 functions: vec![],
                 depends_on: NodeDependsOn::default(),
                 metrics: vec![],
+                unrendered_config: Default::default(),
             },
             __source_attr__: DbtSourceAttr {
                 freshness: merged_freshness.clone(),

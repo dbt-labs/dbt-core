@@ -184,6 +184,7 @@ pub async fn resolve_exposures(
                     metrics,
                     depends_on: NodeDependsOn::default(),
                     quoting_ignore_case: false,
+                    unrendered_config: Default::default(),
                 },
                 __exposure_attr__: DbtExposureAttr {
                     owner: exposure.owner,

@@ -410,6 +410,7 @@ pub async fn resolve_snapshots(
                             location: Some(location.with_file(&dbt_asset.path)),
                         })
                         .collect(),
+                    unrendered_config: Default::default(),
                     functions: sql_file_info
                         .functions
                         .iter()

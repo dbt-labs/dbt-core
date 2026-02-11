@@ -241,6 +241,7 @@ pub async fn resolve_functions(
                     })
                     .collect(),
                 metrics: vec![],
+                unrendered_config: Default::default(),
             },
             __function_attr__: DbtFunctionAttr {
                 access: properties

@@ -249,6 +249,7 @@ pub fn resolve_nested_model_metrics(
                             nodes_with_ref_location: vec![],
                         },
                         quoting_ignore_case: false,
+                        unrendered_config: Default::default(),
                     },
                     __metric_attr__: DbtMetricAttr {
                         unrendered_config: BTreeMap::new(), // TODO: do we need to hydrate?
@@ -509,6 +510,7 @@ pub fn resolve_top_level_metrics(
                 metrics: vec![],
                 depends_on,
                 quoting_ignore_case: false,
+                unrendered_config: Default::default(),
             },
             __metric_attr__: DbtMetricAttr {
                 unrendered_config: BTreeMap::new(), // TODO: do we need to hydrate?

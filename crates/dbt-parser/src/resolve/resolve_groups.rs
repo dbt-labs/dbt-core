@@ -93,6 +93,7 @@ pub async fn resolve_groups(
                     sources: vec![],
                     functions: vec![],
                     metrics: vec![],
+                    unrendered_config: Default::default(),
                 },
                 __group_attr__: DbtGroupAttr { owner: group.owner },
             };

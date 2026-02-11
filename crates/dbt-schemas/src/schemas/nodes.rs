@@ -818,10 +818,34 @@ fn persist_docs_configs_equal(
 }
 
 fn same_database_representation_model(
+    self_base: &NodeBaseAttributes,
+    other_base: &NodeBaseAttributes,
     self_config: &ModelConfig,
     other_config: &ModelConfig,
 ) -> bool {
-    // Compare database, schema, alias from the deprecated_config
+    // dbt-core compares the unrendered config representation (database/schema/alias)
+    // to avoid treating target-derived rendering differences as modifications.
+    //
+    // If unrendered config is not available (older Fusion nodes/artifacts), fall back to the
+    // existing behavior for compatibility.
+    let self_uc = &self_base.unrendered_config;
+    let other_uc = &other_base.unrendered_config;
+
+    // Use dbt-core/Mantle semantics whenever possible: compare database/schema/alias using
+    // `unrendered_config`, treating missing keys as `None`.
+    fn get<'a>(m: &'a BTreeMap<String, YmlValue>, k: &str) -> Option<&'a str> {
+        m.get(k).and_then(|v| v.as_str())
+    }
+    let db_eq = get(self_uc, "database") == get(other_uc, "database");
+    let schema_eq = get(self_uc, "schema") == get(other_uc, "schema");
+    let alias_eq = get(self_uc, "alias") == get(other_uc, "alias");
+    let uc_eq = db_eq && schema_eq && alias_eq;
+
+    if uc_eq {
+        return true;
+    }
+
+    // Fallback: Compare rendered database/schema/alias from the deprecated_config (Fusion legacy behavior).
     self_config.same_database_representation(other_config)
 }
 
@@ -965,6 +989,8 @@ impl InternalDbtNode for DbtModel {
             );
             let same_fqn_result = same_fqn(&self.__common_attr__, &other_model.__common_attr__);
             let same_db_repr_result = same_database_representation_model(
+                &self.__base_attr__,
+                &other_model.__base_attr__,
                 &self.deprecated_config,
                 &other_model.deprecated_config,
             );
@@ -4186,6 +4212,13 @@ pub struct NodeBaseAttributes {
 
     // Resolved Dependencies
     pub depends_on: NodeDependsOn,
+
+    /// Unrendered (configured) values used for dbt-core compatible `state:*` comparisons.
+    ///
+    /// In dbt-core manifests, this is emitted as `__base_attr__.unrendered_config` and is used
+    /// by `state:modified` to ignore target-derived rendering differences for database/schema/alias.
+    #[serde(default)]
+    pub unrendered_config: BTreeMap<String, YmlValue>,
 }
 
 #[skip_serializing_none]
