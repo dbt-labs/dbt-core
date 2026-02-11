@@ -6,8 +6,9 @@
 //! - SQL extraction and sanitization for meaningful comparison
 //! - Pluggable sanitizers to clean dynamic content from SQL
 
-use std::fmt;
+use std::{fmt, sync::LazyLock};
 
+use regex::Regex;
 use similar::{ChangeTag, TextDiff};
 
 use crate::time_machine::event::AdapterCallEvent;
@@ -250,6 +251,7 @@ impl TimeMachineEventValidationEngine {
         // Register sanitizers
         engine.register_sanitizer(Box::new(TimestampSanitizer));
         engine.register_sanitizer(Box::new(QueryTagSanitizer));
+        engine.register_sanitizer(Box::new(UuidSanitizer));
         // Whitespace sanitizer should be last to normalize after other sanitizers
         engine.register_sanitizer(Box::new(WhitespaceSanitizer));
 
@@ -386,8 +388,8 @@ fn apply_sanitizers(sql: &str, sanitizers: &[Box<dyn SqlSanitizer>]) -> String {
 // TODO(jason): A real SQL formatter...
 /// Format normalized SQL for readable diff display by looking at certain keywords
 fn format_sql_for_display(normalized_sql: &str) -> String {
-    static RE: once_cell::sync::Lazy<regex::Regex> = once_cell::sync::Lazy::new(|| {
-        regex::Regex::new(
+    static RE: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(
             r"(?i)\b(SELECT|FROM|WHERE|AND|OR|JOIN|LEFT JOIN|RIGHT JOIN|INNER JOIN|OUTER JOIN|CROSS JOIN|ON|GROUP BY|ORDER BY|HAVING|LIMIT|OFFSET|UNION|INTERSECT|EXCEPT|WITH|AS \(|INSERT|UPDATE|DELETE|CREATE|ALTER|DROP|COPY GRANTS|VALUES)\b"
         ).expect("valid regex")
     });
@@ -439,11 +441,9 @@ impl SqlSanitizer for TimestampSanitizer {
 
     fn sanitize(&self, sql: &str) -> String {
         // Match ISO 8601 timestamps: 2026-01-23T00:49:47.760170 or with timezone
-        static RE: once_cell::sync::Lazy<regex::Regex> = once_cell::sync::Lazy::new(|| {
-            regex::Regex::new(
-                r"'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[+-]\d{2}:\d{2})?'",
-            )
-            .expect("valid regex")
+        static RE: LazyLock<Regex> = LazyLock::new(|| {
+            Regex::new(r"'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[+-]\d{2}:\d{2})?'")
+                .expect("valid regex")
         });
         RE.replace_all(sql, "'<TIMESTAMP>'").to_string()
     }
@@ -462,11 +462,30 @@ impl SqlSanitizer for QueryTagSanitizer {
 
     fn sanitize(&self, sql: &str) -> String {
         // Match: alter session set query_tag = '...' (case insensitive)
-        static RE: once_cell::sync::Lazy<regex::Regex> = once_cell::sync::Lazy::new(|| {
-            regex::Regex::new(r"(?i)(alter\s+session\s+set\s+query_tag\s*=\s*)'[^']*'")
+        static RE: LazyLock<Regex> = LazyLock::new(|| {
+            Regex::new(r"(?i)(alter\s+session\s+set\s+query_tag\s*=\s*)'[^']*'")
                 .expect("valid regex")
         });
         RE.replace_all(sql, "${1}''").to_string()
+    }
+}
+
+/// Sanitizer for single-quoted UUID string literals.
+///
+/// Replaces UUIDs like `'8f439b7e-752f-460a-8d1a-f469231d169c'` with `'<UUID>'`.
+pub struct UuidSanitizer;
+
+impl SqlSanitizer for UuidSanitizer {
+    fn name(&self) -> &'static str {
+        "uuid"
+    }
+
+    fn sanitize(&self, sql: &str) -> String {
+        static RE: LazyLock<Regex> = LazyLock::new(|| {
+            Regex::new(r"(?i)'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'")
+                .expect("valid regex")
+        });
+        RE.replace_all(sql, "'<UUID>'").to_string()
     }
 }
 
@@ -484,8 +503,7 @@ impl SqlSanitizer for WhitespaceSanitizer {
 
     fn sanitize(&self, sql: &str) -> String {
         // Collapse all consecutive whitespace (spaces, tabs, newlines) into single space
-        static RE: once_cell::sync::Lazy<regex::Regex> =
-            once_cell::sync::Lazy::new(|| regex::Regex::new(r"\s+").expect("valid regex"));
+        static RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\s+").expect("valid regex"));
         RE.replace_all(sql, " ").trim().to_string()
     }
 }
@@ -586,6 +604,60 @@ mod tests {
         let sql = r#"ALTER SESSION SET QUERY_TAG = '{"thread_id": "Thread-5"}'"#;
         let sanitized = sanitizer.sanitize(sql);
         assert_eq!(sanitized, "ALTER SESSION SET QUERY_TAG = ''");
+    }
+
+    #[test]
+    fn test_uuid_sanitizer() {
+        let sanitizer = UuidSanitizer;
+        let sql = "INSERT INTO t (id) VALUES ('019c48a8-c782-7921-8711-85c75a61128c')";
+        let sanitized = sanitizer.sanitize(sql);
+        assert_eq!(sanitized, "INSERT INTO t (id) VALUES ('<UUID>')");
+    }
+
+    #[test]
+    fn test_uuid_sanitizer_multiple() {
+        let sanitizer = UuidSanitizer;
+        let sql = "VALUES ('019c48a8-c782-7921-8711-85c75a61128c',current_timestamp(),current_timestamp(),'PROD01.MODEL.person_master_bridge_tmp','STARTED')";
+        let sanitized = sanitizer.sanitize(sql);
+        assert_eq!(
+            sanitized,
+            "VALUES ('<UUID>',current_timestamp(),current_timestamp(),'PROD01.MODEL.person_master_bridge_tmp','STARTED')"
+        );
+    }
+
+    #[test]
+    fn test_uuid_sanitizer_case_insensitive() {
+        let sanitizer = UuidSanitizer;
+        let sql = "VALUES ('019C48A8-C782-7921-8711-85C75A61128C')";
+        let sanitized = sanitizer.sanitize(sql);
+        assert_eq!(sanitized, "VALUES ('<UUID>')");
+    }
+
+    #[test]
+    fn test_sanitization_makes_uuid_sql_match() {
+        let engine = TimeMachineEventValidationEngine::new();
+
+        // SQL with different UUIDs
+        let incoming_args = serde_json::json!([
+            "insert into PROD01_SSOT_IDS.MODEL.ssot_dbt_audit_log values ('019c4dc8-1cb3-7bc2-bddf-21f86d6c4ac3',current_timestamp(),current_timestamp(),'PROD01_SSOT_IDS.MODEL.person_master_bridge_tmp','STARTED'); commit;"
+        ]);
+        let recorded_args = serde_json::json!([
+            "insert into PROD01_SSOT_IDS.MODEL.ssot_dbt_audit_log values ('019c48a8-c782-7921-8711-85c75a61128c',current_timestamp(),current_timestamp(),'PROD01_SSOT_IDS.MODEL.person_master_bridge_tmp','STARTED'); commit;"
+        ]);
+
+        let incoming = IncomingEvent::new(
+            "model.SSOT_DBT.person_master_bridge_tmp",
+            "execute",
+            &incoming_args,
+        );
+        let recorded = make_recorded_event(incoming.node_id, "execute", recorded_args);
+
+        let result = engine.validate(&incoming, &recorded);
+        assert!(
+            matches!(result, ValidationResult::Match),
+            "Expected match after UUID sanitization, got {:?}",
+            result
+        );
     }
 
     #[test]
