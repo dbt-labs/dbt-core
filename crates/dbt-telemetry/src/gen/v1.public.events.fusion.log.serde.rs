@@ -1,3 +1,152 @@
+impl serde::Serialize for CompiledCode {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.relative_path.is_empty() {
+            len += 1;
+        }
+        if !self.sql.is_empty() {
+            len += 1;
+        }
+        if !self.unique_id.is_empty() {
+            len += 1;
+        }
+        if !self.node_name.is_empty() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("v1.public.events.fusion.log.CompiledCode", len)?;
+        if !self.relative_path.is_empty() {
+            struct_ser.serialize_field("relative_path", &self.relative_path)?;
+        }
+        if !self.sql.is_empty() {
+            struct_ser.serialize_field("sql", &self.sql)?;
+        }
+        if !self.unique_id.is_empty() {
+            struct_ser.serialize_field("unique_id", &self.unique_id)?;
+        }
+        if !self.node_name.is_empty() {
+            struct_ser.serialize_field("node_name", &self.node_name)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for CompiledCode {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "relative_path",
+            "relativePath",
+            "sql",
+            "unique_id",
+            "uniqueId",
+            "node_name",
+            "nodeName",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            RelativePath,
+            Sql,
+            UniqueId,
+            NodeName,
+            __SkipField__,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "relativePath" | "relative_path" => Ok(GeneratedField::RelativePath),
+                            "sql" => Ok(GeneratedField::Sql),
+                            "uniqueId" | "unique_id" => Ok(GeneratedField::UniqueId),
+                            "nodeName" | "node_name" => Ok(GeneratedField::NodeName),
+                            _ => Ok(GeneratedField::__SkipField__),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = CompiledCode;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct v1.public.events.fusion.log.CompiledCode")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<CompiledCode, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut relative_path__ = None;
+                let mut sql__ = None;
+                let mut unique_id__ = None;
+                let mut node_name__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::RelativePath => {
+                            if relative_path__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("relativePath"));
+                            }
+                            relative_path__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::Sql => {
+                            if sql__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("sql"));
+                            }
+                            sql__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::UniqueId => {
+                            if unique_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("uniqueId"));
+                            }
+                            unique_id__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::NodeName => {
+                            if node_name__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("nodeName"));
+                            }
+                            node_name__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::__SkipField__ => {
+                            let _ = map_.next_value::<serde::de::IgnoredAny>()?;
+                        }
+                    }
+                }
+                Ok(CompiledCode {
+                    relative_path: relative_path__.unwrap_or_default(),
+                    sql: sql__.unwrap_or_default(),
+                    unique_id: unique_id__.unwrap_or_default(),
+                    node_name: node_name__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("v1.public.events.fusion.log.CompiledCode", FIELDS, GeneratedVisitor)
+    }
+}
 impl serde::Serialize for CompiledCodeInline {
     #[allow(deprecated)]
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>

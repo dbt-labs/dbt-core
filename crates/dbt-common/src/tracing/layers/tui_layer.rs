@@ -9,12 +9,13 @@ use std::{
 use crate::collections::HashSet;
 use console::Term;
 use dbt_telemetry::{
-    AnyTelemetryEvent, AssetParsed, CompiledCodeInline, DepsAddPackage, DepsAllPackagesInstalled,
-    DepsPackageInstalled, ExecutionPhase, GenericOpExecuted, GenericOpItemProcessed, HookProcessed,
-    Invocation, ListItemOutput, LogMessage, LogRecordInfo, NodeEvaluated, NodeOutcome,
-    NodeProcessed, NodeSkipReason, NodeType, PhaseExecuted, ProgressMessage, QueryExecuted,
-    SeverityNumber, ShowDataOutput, ShowResult, SpanEndInfo, SpanStartInfo, SpanStatus,
-    StateModifiedDiff, StatusCode, TelemetryOutputFlags, UserLogMessage, node_processed,
+    AnyTelemetryEvent, AssetParsed, CompiledCode, CompiledCodeInline, DepsAddPackage,
+    DepsAllPackagesInstalled, DepsPackageInstalled, ExecutionPhase, GenericOpExecuted,
+    GenericOpItemProcessed, HookProcessed, Invocation, ListItemOutput, LogMessage, LogRecordInfo,
+    NodeEvaluated, NodeOutcome, NodeProcessed, NodeSkipReason, NodeType, PhaseExecuted,
+    ProgressMessage, QueryExecuted, SeverityNumber, ShowDataOutput, ShowResult, SpanEndInfo,
+    SpanStartInfo, SpanStatus, StateModifiedDiff, StatusCode, TelemetryOutputFlags, UserLogMessage,
+    node_processed,
 };
 use dbt_tui_progress::ProgressController;
 
@@ -49,7 +50,7 @@ use crate::{
             layout::{format_delimiter, right_align_action},
             log_message::format_log_message,
             node::{
-                format_compiled_inline_code, format_node_evaluated_end,
+                format_compiled_code, format_compiled_inline_code, format_node_evaluated_end,
                 format_node_evaluated_start, format_node_processed_end, format_skipped_test_group,
             },
             phase::get_phase_progress_text,
@@ -586,6 +587,12 @@ impl TelemetryConsumer for TuiLayer {
         // Handle ShowResult - always show unconditionally. Call-sites decide whether to emit or not.
         if let Some(show_result) = log_record.attributes.downcast_ref::<ShowResult>() {
             self.handle_show_result(show_result);
+            return;
+        }
+
+        // Handle CompiledCode from compile command selected nodes.
+        if let Some(compiled_code) = log_record.attributes.downcast_ref::<CompiledCode>() {
+            self.handle_compiled_code(compiled_code);
             return;
         }
 
@@ -1164,6 +1171,24 @@ impl TuiLayer {
         }
 
         let formatted = format_compiled_inline_code(compiled_code, true);
+        self.write_suspended(|| {
+            io::stdout()
+                .lock()
+                .write_all(format!("{}\n", formatted).as_bytes())
+                .expect("failed to write compiled code to stdout");
+        });
+    }
+
+    fn handle_compiled_code(&self, compiled_code: &CompiledCode) {
+        if self.command != FsCommand::Compile {
+            return;
+        }
+
+        if !should_show_progress_message(ExecutionPhase::Render, &self.show_options) {
+            return;
+        }
+
+        let formatted = format_compiled_code(compiled_code, true);
         self.write_suspended(|| {
             io::stdout()
                 .lock()

@@ -1,6 +1,6 @@
 use dbt_error::ErrorCode;
 use dbt_telemetry::{
-    AssetParsed, CompiledCodeInline, DepsAddPackage, DepsAllPackagesInstalled,
+    AssetParsed, CompiledCode, CompiledCodeInline, DepsAddPackage, DepsAllPackagesInstalled,
     DepsPackageInstalled, GenericOpExecuted, GenericOpItemProcessed, Invocation, ListItemOutput,
     LogMessage, LogRecordInfo, NodeEvaluated, NodeOutcome, NodeProcessed, NodeType, PhaseExecuted,
     ProgressMessage, QueryExecuted, SeverityNumber, ShowDataOutput, ShowResult, SpanEndInfo,
@@ -34,8 +34,8 @@ use super::super::{
         log_message::format_log_message,
         meta::format_severity_fixed_width,
         node::{
-            format_compiled_inline_code, format_node_evaluated_end, format_node_evaluated_start,
-            format_node_processed_end, format_node_processed_start,
+            format_compiled_code, format_compiled_inline_code, format_node_evaluated_end,
+            format_node_evaluated_start, format_node_processed_end, format_node_processed_start,
         },
         phase::{format_phase_executed_end, format_phase_executed_start},
         progress::format_progress_message,
@@ -239,7 +239,7 @@ impl TelemetryConsumer for FileLogLayer {
         }
     }
 
-    fn on_log_record(&self, log_record: &LogRecordInfo, _: &mut DataProvider<'_>) {
+    fn on_log_record(&self, log_record: &LogRecordInfo, _data_provider: &mut DataProvider<'_>) {
         // Check if this is a LogMessage (error/warning)
         if let Some(log_msg) = log_record.attributes.downcast_ref::<LogMessage>() {
             self.handle_log_message(log_msg, log_record);
@@ -278,6 +278,12 @@ impl TelemetryConsumer for FileLogLayer {
         // Handle ShowResult events (verbose/diagnostic output controlled by --show flag)
         if let Some(show_result) = log_record.attributes.downcast_ref::<ShowResult>() {
             self.handle_show_result(log_record, show_result);
+            return;
+        }
+
+        // Handle CompiledCode events (from rendered SQL in project nodes)
+        if let Some(compiled_code) = log_record.attributes.downcast_ref::<CompiledCode>() {
+            self.handle_compiled_code(log_record, compiled_code);
             return;
         }
 
@@ -479,6 +485,15 @@ impl FileLogLayer {
     ) {
         // Write formatted compiled code to file log using the shared formatter
         let formatted = format_compiled_inline_code(compiled_code, false);
+        self.write_log_lines(
+            log_record.time_unix_nano,
+            log_record.severity_number,
+            &[formatted],
+        );
+    }
+
+    fn handle_compiled_code(&self, log_record: &LogRecordInfo, compiled_code: &CompiledCode) {
+        let formatted = format_compiled_code(compiled_code, false);
         self.write_log_lines(
             log_record.time_unix_nano,
             log_record.severity_number,

@@ -3,12 +3,12 @@ use std::time::SystemTime;
 use chrono::Utc;
 use dbt_error::ErrorCode;
 use dbt_telemetry::{
-    ArtifactType, ArtifactWritten, CompiledCodeInline, DepsAddPackage, DepsPackageInstalled,
-    ExecutionPhase, HookProcessed, HookType, Invocation, ListItemOutput, LogMessage, LogRecordInfo,
-    NodeEvaluated, NodeEvent, NodeOutcome, NodeProcessed, NodeSkipReason, NodeType,
-    ProgressMessage, QueryExecuted, SeverityNumber, ShowDataOutput, ShowResult, SpanEndInfo,
-    SpanStartInfo, StatusCode, TelemetryOutputFlags, TestOutcome, UserLogMessage,
-    get_freshness_detail, get_test_outcome,
+    ArtifactType, ArtifactWritten, CompiledCode, CompiledCodeInline, DepsAddPackage,
+    DepsPackageInstalled, ExecutionPhase, HookProcessed, HookType, Invocation, ListItemOutput,
+    LogMessage, LogRecordInfo, NodeEvaluated, NodeEvent, NodeOutcome, NodeProcessed,
+    NodeSkipReason, NodeType, ProgressMessage, QueryExecuted, SeverityNumber, ShowDataOutput,
+    ShowResult, SpanEndInfo, SpanStartInfo, StatusCode, TelemetryOutputFlags, TestOutcome,
+    UserLogMessage, get_freshness_detail, get_test_outcome,
 };
 
 use serde_json::json;
@@ -37,6 +37,7 @@ use super::super::{
     shutdown::TelemetryShutdownItem,
 };
 
+use crate::io_args::FsCommand;
 use proto_rust::v1::public::fields::core_types::CoreEventInfo;
 
 /// Build a JSON compatibility layer. This will write directly to the writer.
@@ -45,8 +46,9 @@ pub fn build_json_compat_layer<W: SharedWriter + 'static>(
     writer: W,
     max_log_verbosity: LevelFilter,
     invocation_id: uuid::Uuid,
+    command: FsCommand,
 ) -> ConsumerLayer {
-    Box::new(JsonCompatLayer::new(writer, invocation_id).with_filter(max_log_verbosity))
+    Box::new(JsonCompatLayer::new(writer, invocation_id, command).with_filter(max_log_verbosity))
 }
 
 /// Build a JSON compatibility layer with a background writer. This is preferred for writing to
@@ -55,11 +57,12 @@ pub fn build_json_compat_layer_with_background_writer<W: std::io::Write + Send +
     writer: W,
     max_log_verbosity: LevelFilter,
     invocation_id: uuid::Uuid,
+    command: FsCommand,
 ) -> (ConsumerLayer, TelemetryShutdownItem) {
     let (writer, handle) = BackgroundWriter::new(writer);
 
     (
-        build_json_compat_layer(writer, max_log_verbosity, invocation_id),
+        build_json_compat_layer(writer, max_log_verbosity, invocation_id, command),
         Box::new(handle),
     )
 }
@@ -163,10 +166,15 @@ struct JsonCompatLayer {
     writer: Box<dyn SharedWriter>,
     invocation_id: uuid::Uuid,
     filter_flag: TelemetryOutputFlags,
+    command: FsCommand,
 }
 
 impl JsonCompatLayer {
-    pub fn new<W: SharedWriter + 'static>(writer: W, invocation_id: uuid::Uuid) -> Self {
+    pub fn new<W: SharedWriter + 'static>(
+        writer: W,
+        invocation_id: uuid::Uuid,
+        command: FsCommand,
+    ) -> Self {
         let is_tty = writer.is_terminal();
 
         Self {
@@ -177,6 +185,7 @@ impl JsonCompatLayer {
             } else {
                 TelemetryOutputFlags::OUTPUT_LOG_FILE
             },
+            command,
         }
     }
 
@@ -1152,6 +1161,38 @@ impl JsonCompatLayer {
         self.writer.writeln(value.as_str());
     }
 
+    /// Handle CompiledCode events (from compile command with selected node)
+    /// Maps to CompiledNode (Q042) for dbt-core compatibility
+    fn emit_compiled_code(&self, compiled_code: &CompiledCode, _log_record: &LogRecordInfo) {
+        if self.command != FsCommand::Compile {
+            return;
+        }
+
+        let info_json = serde_json::to_value(self.build_core_event_info(
+            Some("Q042"),
+            Some("CompiledNode"),
+            "info",
+            compiled_code.sql.clone(),
+        ))
+        .expect("Failed to serialize core event info to JSON");
+
+        let data_obj = json!({
+            "compiled": &compiled_code.sql,
+            "is_inline": false,
+            "node_name": &compiled_code.node_name,
+            "output_format": "text",
+            "unique_id": &compiled_code.unique_id,
+        });
+
+        let value = json!({
+            "info": info_json,
+            "data": data_obj,
+        })
+        .to_string();
+
+        self.writer.writeln(value.as_str());
+    }
+
     /// Handle CompiledCodeInline events (from compile command with inline query)
     /// Maps to CompiledNode (Q042) for dbt-core compatibility
     fn emit_compiled_code_inline(
@@ -1308,6 +1349,12 @@ impl TelemetryConsumer for JsonCompatLayer {
         // Dispatch to ShowResult handler
         if let Some(show_result) = log_record.attributes.downcast_ref::<ShowResult>() {
             self.emit_show_result(show_result, log_record);
+            return;
+        }
+
+        // Dispatch to CompiledCode handler
+        if let Some(compiled_code) = log_record.attributes.downcast_ref::<CompiledCode>() {
+            self.emit_compiled_code(compiled_code, log_record);
             return;
         }
 

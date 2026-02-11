@@ -375,6 +375,7 @@ impl FsTraceConfig {
                         std::io::stdout(),
                         self.max_log_verbosity,
                         self.invocation_id,
+                        self.command,
                     ))
                 }
                 LogFormat::Otel => {
@@ -424,6 +425,7 @@ impl FsTraceConfig {
                     file,
                     self.max_file_log_verbosity,
                     self.invocation_id,
+                    self.command,
                 )),
                 LogFormat::Otel => None,
             } {

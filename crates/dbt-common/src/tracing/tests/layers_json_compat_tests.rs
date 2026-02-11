@@ -1,6 +1,7 @@
 use super::mocks::TestWriter;
 use crate::{
     constants::DBT_TARGET_DIR_NAME,
+    io_args::FsCommand,
     tracing::{
         emit::{
             create_debug_span, create_info_span, create_root_info_span, emit_debug_event,
@@ -13,14 +14,14 @@ use crate::{
     },
 };
 use dbt_telemetry::{
-    ArtifactType, ArtifactWritten, CompiledCodeInline, DepsAddPackage, DepsPackageInstalled,
-    ExecutionPhase, HookOutcome, HookProcessed, HookType, Invocation, InvocationEvalArgs,
-    ListItemOutput, ListOutputFormat, LogMessage, NodeEvaluated, NodeMaterialization, NodeOutcome,
-    NodeOutcomeDetail, NodeProcessed, NodeSkipReason, NodeSkipUpstreamDetail, NodeType,
-    PackageType, ProgressMessage, QueryExecuted, QueryOutcome, SeverityNumber, ShowDataOutput,
-    ShowDataOutputFormat, ShowResult, ShowResultOutputFormat, SourceFreshnessDetail,
-    SourceFreshnessOutcome, TelemetryOutputFlags, UserLogMessage, node_processed,
-    update_dbt_core_event_code_for_node_processed_end,
+    ArtifactType, ArtifactWritten, CompiledCode, CompiledCodeInline, DepsAddPackage,
+    DepsPackageInstalled, ExecutionPhase, HookOutcome, HookProcessed, HookType, Invocation,
+    InvocationEvalArgs, ListItemOutput, ListOutputFormat, LogMessage, NodeEvaluated,
+    NodeMaterialization, NodeOutcome, NodeOutcomeDetail, NodeProcessed, NodeSkipReason,
+    NodeSkipUpstreamDetail, NodeType, PackageType, ProgressMessage, QueryExecuted, QueryOutcome,
+    SeverityNumber, ShowDataOutput, ShowDataOutputFormat, ShowResult, ShowResultOutputFormat,
+    SourceFreshnessDetail, SourceFreshnessOutcome, TelemetryOutputFlags, UserLogMessage,
+    node_processed, update_dbt_core_event_code_for_node_processed_end,
 };
 use serde_json::{Value, json};
 use tracing::level_filters::LevelFilter;
@@ -36,14 +37,15 @@ const TEST_NODE_CHECKSUM: &str = "abcdef1234567890";
 /// Helper function to setup tracing with json compat layer and execute a closure
 /// that produces events. Returns the collected JSON output lines.
 /// Creates a dummy root span and executes test_fn within its scope.
-fn with_json_compat_layer<F>(invocation_id: Uuid, test_fn: F) -> Vec<Value>
+fn with_json_compat_layer<F>(invocation_id: Uuid, command: FsCommand, test_fn: F) -> Vec<Value>
 where
     F: FnOnce(),
 {
     let trace_id = rand::random::<u128>();
     let writer = TestWriter::non_terminal();
 
-    let json_layer = build_json_compat_layer(writer.clone(), LevelFilter::TRACE, invocation_id);
+    let json_layer =
+        build_json_compat_layer(writer.clone(), LevelFilter::TRACE, invocation_id, command);
 
     let subscriber = create_tracing_subcriber_with_layer(
         LevelFilter::TRACE,
@@ -141,9 +143,10 @@ fn test_events<F>(
 ) where
     F: FnOnce(),
 {
-    test_events_with_msg_fields_to_ignore(
+    test_events_with_msg_fields_to_ignore_for_command(
         test_name,
         invocation_id,
+        FsCommand::Build,
         event_fn,
         scrub_data_keys,
         expected,
@@ -163,9 +166,10 @@ fn test_events_scrub_all_msg<F>(
 {
     let events_len = expected.len();
 
-    test_events_with_msg_fields_to_ignore(
+    test_events_with_msg_fields_to_ignore_for_command(
         test_name,
         invocation_id,
+        FsCommand::Build,
         event_fn,
         scrub_data_keys,
         expected,
@@ -179,12 +183,36 @@ fn test_events_with_msg_fields_to_ignore<F>(
     invocation_id: Uuid,
     event_fn: F,
     scrub_data_keys: &[&str],
+    expected: Vec<Value>,
+    ignore_msg_at_indices: &[usize],
+) where
+    F: FnOnce(),
+{
+    test_events_with_msg_fields_to_ignore_for_command(
+        test_name,
+        invocation_id,
+        FsCommand::Build,
+        event_fn,
+        scrub_data_keys,
+        expected,
+        ignore_msg_at_indices,
+    )
+}
+
+/// Helper to test events and compare against expected JSON, optionally ignoring msg fields at
+/// specific indices, using an explicit invocation command for json compat layer configuration.
+fn test_events_with_msg_fields_to_ignore_for_command<F>(
+    test_name: &str,
+    invocation_id: Uuid,
+    command: FsCommand,
+    event_fn: F,
+    scrub_data_keys: &[&str],
     mut expected: Vec<Value>,
     ignore_msg_at_indices: &[usize],
 ) where
     F: FnOnce(),
 {
-    let mut actual_outputs = with_json_compat_layer(invocation_id, event_fn);
+    let mut actual_outputs = with_json_compat_layer(invocation_id, command, event_fn);
 
     assert_eq!(
         actual_outputs.len(),
@@ -1097,6 +1125,48 @@ fn test_progress_message_generic_fallback() {
                 }
             }),
         ],
+    );
+}
+
+#[test]
+fn test_compiled_code() {
+    let invocation_id = Uuid::new_v4();
+
+    test_events_with_msg_fields_to_ignore_for_command(
+        "CompiledCode",
+        invocation_id,
+        FsCommand::Compile,
+        || {
+            emit_debug_event(
+                CompiledCode {
+                    relative_path: "target/compiled/models/my_model.sql".to_string(),
+                    sql: "SELECT 1 AS value".to_string(),
+                    unique_id: "model.my_project.my_model".to_string(),
+                    node_name: "my_model".to_string(),
+                },
+                None,
+            );
+        },
+        &[],
+        vec![json!({
+            "info": {
+                "category": "",
+                "code": "Q042",
+                "invocation_id": invocation_id.to_string(),
+                "name": "CompiledNode",
+                "msg": "SELECT 1 AS value",
+                "level": "info",
+                "extra": {}
+            },
+            "data": {
+                "compiled": "SELECT 1 AS value",
+                "is_inline": false,
+                "node_name": "my_model",
+                "output_format": "text",
+                "unique_id": "model.my_project.my_model"
+            }
+        })],
+        &[],
     );
 }
 

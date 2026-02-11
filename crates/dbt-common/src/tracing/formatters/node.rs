@@ -1,6 +1,6 @@
 use dbt_telemetry::{
-    AnyNodeOutcomeDetail, CompiledCodeInline, ExecutionPhase, NodeEvaluated, NodeEvent,
-    NodeMaterialization, NodeOutcome, NodeProcessed, NodeSkipReason, NodeType,
+    AnyNodeOutcomeDetail, CompiledCode, CompiledCodeInline, ExecutionPhase, NodeEvaluated,
+    NodeEvent, NodeMaterialization, NodeOutcome, NodeProcessed, NodeSkipReason, NodeType,
     SourceFreshnessOutcome, TestOutcome, get_cache_detail, get_freshness_detail,
     get_node_outcome_detail, get_test_outcome,
 };
@@ -548,6 +548,25 @@ pub fn format_compiled_inline_code(compiled_code: &CompiledCodeInline, colorize:
         COMPILED_INLINE_NODE_TITLE.to_string()
     };
     format!("{}\n{}", title, compiled_code.sql)
+}
+
+/// Format compiled project node output.
+///
+/// Returns one-line path-oriented message:
+/// `Compiled SQL for node {unique_id} at {relative_path}`
+pub fn format_compiled_code(compiled_code: &CompiledCode, colorize: bool) -> String {
+    if colorize {
+        format!(
+            "Compiled SQL for node {} at {}",
+            BLUE.apply_to(&compiled_code.unique_id),
+            compiled_code.relative_path
+        )
+    } else {
+        format!(
+            "Compiled SQL for node {} at {}",
+            compiled_code.unique_id, compiled_code.relative_path
+        )
+    }
 }
 
 /// Format a source freshness result
