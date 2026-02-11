@@ -503,7 +503,9 @@ pub async fn resolve_data_tests(
                 unrendered_config: Default::default(),
             },
             __test_attr__: DbtTestAttr {
-                column_name: None,
+                column_name: test_path_to_test_asset
+                    .get(&dbt_asset.path)
+                    .and_then(|test_asset| test_asset.test_metadata_column_name.clone()),
                 attached_node: test_path_to_test_asset
                     .get(&dbt_asset.path)
                     .map(|test_asset| {
