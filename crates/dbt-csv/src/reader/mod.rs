@@ -316,10 +316,25 @@ impl Format {
     }
 
     /// Deduplicate column names matching agate's utils.deduplicate behavior.
-    /// ['abc', 'abc', 'cde', 'abc'] -> ['abc', 'abc_2', 'cde', 'abc_3']
+    /// - Empty/whitespace-only names are replaced with letter_name(i): "a", "b", etc.
+    /// - Duplicate names get suffixes: ['abc', 'abc', 'cde', 'abc'] -> ['abc', 'abc_2', 'cde', 'abc_3']
     fn disambiguate_headers(headers: Vec<String>) -> Vec<String> {
         use std::collections::HashMap;
 
+        // First pass: replace empty/whitespace-only names with letter_name(i)
+        let headers: Vec<String> = headers
+            .into_iter()
+            .enumerate()
+            .map(|(i, name)| {
+                if name.trim().is_empty() {
+                    Self::letter_name(i)
+                } else {
+                    name
+                }
+            })
+            .collect();
+
+        // Second pass: deduplicate duplicate names
         let mut counts: HashMap<&str, usize> = HashMap::new();
 
         headers
@@ -657,6 +672,7 @@ fn parse_agate(
 
 /// Build an Int64 array from integer strings.
 /// Trims whitespace and parses integers according to agate semantics.
+/// Source: https://github.com/dbt-labs/dbt-common/blob/main/dbt_common/clients/agate_helper.py
 fn build_integer_array(
     line_number: usize,
     rows: &StringRecords<'_>,
@@ -667,10 +683,10 @@ fn build_integer_array(
         .enumerate()
         .map(|(row_index, row)| {
             let s = row.get(col_idx);
-            if null_regex.is_null(s) {
+            let trimmed = s.trim();
+            if null_regex.is_null(trimmed) {
                 return Ok(None);
             }
-            let trimmed = s.trim();
             match trimmed.parse::<i64>() {
                 Ok(v) => Ok(Some(v)),
                 Err(_) => Err(ArrowError::ParseError(format!(
@@ -687,6 +703,7 @@ fn build_integer_array(
 
 /// Build a Float64 array from number strings.
 /// Handles percentages, scientific notation, and special values (NaN, inf).
+/// Source: https://github.com/wireservice/agate/blob/553e30ac3a856deffb64178e77a7024bec93028a/agate/data_types/number.py
 fn build_number_array(
     line_number: usize,
     rows: &StringRecords<'_>,
@@ -697,10 +714,11 @@ fn build_number_array(
         .enumerate()
         .map(|(row_index, row)| {
             let s = row.get(col_idx);
-            if null_regex.is_null(s) {
+            let trimmed = s.trim();
+            if null_regex.is_null(trimmed) {
                 return Ok(None);
             }
-            match parse_float64(s) {
+            match parse_float64(trimmed) {
                 Some(v) => Ok(Some(v)),
                 None => Err(ArrowError::ParseError(format!(
                     "Error parsing '{}' as Number at column {} line {}",
@@ -715,6 +733,7 @@ fn build_number_array(
 }
 
 /// Build a Date32 array from date strings (YYYY-MM-DD format).
+/// Source: https://github.com/wireservice/agate/blob/553e30ac3a856deffb64178e77a7024bec93028a/agate/data_types/date.py
 fn build_date_array(
     line_number: usize,
     rows: &StringRecords<'_>,
@@ -725,10 +744,10 @@ fn build_date_array(
         .enumerate()
         .map(|(row_index, row)| {
             let s = row.get(col_idx);
-            if null_regex.is_null(s) {
+            let trimmed = s.trim();
+            if null_regex.is_null(trimmed) {
                 return Ok(None);
             }
-            let trimmed = s.trim();
             // Parse YYYY-MM-DD format
             match chrono::NaiveDate::parse_from_str(trimmed, "%Y-%m-%d") {
                 Ok(date) => {
@@ -750,6 +769,7 @@ fn build_date_array(
 }
 
 /// Build a Timestamp array from datetime strings (YYYY-MM-DD HH:MM:SS format).
+/// Source: https://github.com/wireservice/agate/blob/553e30ac3a856deffb64178e77a7024bec93028a/agate/data_types/date_time.py
 fn build_datetime_array(
     line_number: usize,
     rows: &StringRecords<'_>,
@@ -760,10 +780,10 @@ fn build_datetime_array(
         .enumerate()
         .map(|(row_index, row)| {
             let s = row.get(col_idx);
-            if null_regex.is_null(s) {
+            let trimmed = s.trim();
+            if null_regex.is_null(trimmed) {
                 return Ok(None);
             }
-            let trimmed = s.trim();
             // Parse YYYY-MM-DD HH:MM:SS or YYYY-MM-DDTHH:MM:SS format
             let datetime = chrono::NaiveDateTime::parse_from_str(trimmed, "%Y-%m-%d %H:%M:%S")
                 .or_else(|_| chrono::NaiveDateTime::parse_from_str(trimmed, "%Y-%m-%dT%H:%M:%S"));
@@ -795,6 +815,7 @@ fn build_datetime_array(
 
 /// Build a Timestamp array from ISO 8601 datetime strings.
 /// Supports standard and compact formats with optional timezone.
+/// Source: https://github.com/dbt-labs/dbt-common/blob/main/dbt_common/clients/agate_helper.py
 fn build_iso_datetime_array(
     line_number: usize,
     rows: &StringRecords<'_>,
@@ -805,10 +826,10 @@ fn build_iso_datetime_array(
         .enumerate()
         .map(|(row_index, row)| {
             let s = row.get(col_idx);
-            if null_regex.is_null(s) {
+            let trimmed = s.trim();
+            if null_regex.is_null(trimmed) {
                 return Ok(None);
             }
-            let trimmed = s.trim();
 
             // Normalize compact format if needed
             let normalized = normalize_compact_iso_datetime(trimmed);
@@ -839,6 +860,7 @@ fn build_iso_datetime_array(
 
 /// Build a Boolean array from boolean strings.
 /// Only accepts "true" and "false" (case-insensitive) per agate semantics.
+/// Source: https://github.com/wireservice/agate/blob/553e30ac3a856deffb64178e77a7024bec93028a/agate/data_types/boolean.py
 fn build_boolean_array(
     line_number: usize,
     rows: &StringRecords<'_>,
@@ -849,10 +871,11 @@ fn build_boolean_array(
         .enumerate()
         .map(|(row_index, row)| {
             let s = row.get(col_idx);
-            if null_regex.is_null(s) {
+            let trimmed = s.trim();
+            if null_regex.is_null(trimmed) {
                 return Ok(None);
             }
-            match parse_bool(s) {
+            match parse_bool(trimmed) {
                 Some(v) => Ok(Some(v)),
                 None => Err(ArrowError::ParseError(format!(
                     "Error parsing '{}' as Boolean at column {} line {}",
@@ -867,6 +890,7 @@ fn build_boolean_array(
 }
 
 /// Build a Utf8 array from text strings.
+/// Source: https://github.com/wireservice/agate/blob/553e30ac3a856deffb64178e77a7024bec93028a/agate/data_types/text.py
 fn build_text_array(
     rows: &StringRecords<'_>,
     col_idx: usize,
@@ -876,7 +900,8 @@ fn build_text_array(
         rows.iter()
             .map(|row| {
                 let s = row.get(col_idx);
-                (!null_regex.is_null(s)).then_some(s)
+                let trimmed = s.trim();
+                (!null_regex.is_null(trimmed)).then_some(s)
             })
             .collect::<StringArray>(),
     ) as ArrayRef)
@@ -884,6 +909,7 @@ fn build_text_array(
 
 /// Parse a boolean value, trimming whitespace first.
 /// Only accepts "true" and "false" (case-insensitive) to match Python/agate behavior.
+/// Source: https://github.com/wireservice/agate/blob/553e30ac3a856deffb64178e77a7024bec93028a/agate/data_types/boolean.py
 fn parse_bool(string: &str) -> Option<bool> {
     let trimmed = string.trim();
     if trimmed.eq_ignore_ascii_case("false") {
@@ -2327,6 +2353,87 @@ mod tests {
 
         let col1_second = batch.column(2).as_primitive::<Int64Type>();
         assert_eq!(col1_second.value(0), 3);
+    }
+
+    #[test]
+    fn test_csv_with_empty_column_names() {
+        // CSV with trailing comma creates empty column name: "col_1," -> ["col_1", ""]
+        // Matches agate behavior: empty names are replaced with letter_name(i)
+        let csv = "col_1,\nhey,\nhi,\nhow\nare,\n";
+
+        let format = Format::new(b',', true, true);
+        let (agate_schema, _) = format
+            .infer_agate_schema(Cursor::new(csv.as_bytes()), None)
+            .unwrap();
+
+        assert_eq!(agate_schema.column(0).name, "col_1");
+        assert_eq!(agate_schema.column(1).name, "b"); // was empty "", now "b"
+
+        let batch = ReaderBuilder::new(agate_schema)
+            .with_header(true)
+            .build_buffered(Cursor::new(csv.as_bytes()))
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(batch.num_rows(), 4);
+        assert_eq!(batch.num_columns(), 2);
+    }
+
+    #[test]
+    fn test_csv_with_whitespace_only_column_name() {
+        // CSV with whitespace-only column name: "col_1,   " -> ["col_1", "   "]
+        // Whitespace-only names should also be replaced with letter_name(i)
+        let csv = "col_1,   \n1,2\n";
+
+        let format = Format::new(b',', true, true);
+        let (agate_schema, _) = format
+            .infer_agate_schema(Cursor::new(csv.as_bytes()), None)
+            .unwrap();
+
+        assert_eq!(agate_schema.column(0).name, "col_1");
+        assert_eq!(agate_schema.column(1).name, "b");
+    }
+
+    #[test]
+    fn test_whitespace_only_value_is_null_for_integer() {
+        use crate::type_tester::{AgateColumn, AgateSchema, AgateType};
+
+        // Test that whitespace-only values are treated as NULL for integer columns
+        let csv = "int_col,other_col\n1,\n2, \n3,\n";
+
+        // Create schema with integer column and text column
+        let agate_schema = AgateSchema::new(vec![
+            AgateColumn::new("int_col", AgateType::Integer),
+            AgateColumn::new("other_col", AgateType::Text),
+        ]);
+
+        // Read the data
+        let batch = ReaderBuilder::new(agate_schema)
+            .with_header(true)
+            .build_buffered(Cursor::new(csv.as_bytes()))
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(batch.num_rows(), 3);
+
+        // All rows in other_col should be NULL (empty or whitespace)
+        let other_col = batch.column(1);
+        assert!(other_col.is_null(0), "Empty value '' should be NULL");
+        assert!(
+            other_col.is_null(1),
+            "Whitespace-only value ' ' should be NULL"
+        );
+        assert!(other_col.is_null(2), "Empty value '' should be NULL");
+
+        // int_col should have actual integer values
+        let int_col = batch.column(0).as_primitive::<Int64Type>();
+        assert_eq!(int_col.value(0), 1);
+        assert_eq!(int_col.value(1), 2);
+        assert_eq!(int_col.value(2), 3);
     }
 
     #[test]
