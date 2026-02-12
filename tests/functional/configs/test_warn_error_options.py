@@ -192,6 +192,7 @@ class TestWarnErrorOptionsFromProject:
             "flags": {"warn_error_options": {"error": "all", "warn": ["DeprecationsSummary"]}}
         }
         update_config_file(warn_error_options, project_root, "dbt_project.yml")
+        catcher.flush()
         result = runner.invoke(["run"])
         assert_deprecation_error(result)
 
