@@ -62,7 +62,7 @@ def load_project(
     vars_from_file = vars_data_from_root(project_root)
 
     # Merge: CLI vars take precedence over file vars
-    merged_vars = {**(vars_from_file or {}), **cli_vars}
+    merged_vars = {**vars_from_file, **cli_vars}
 
     # Renderer receives merged vars for Jinja in dbt_project.yml
     project_renderer = DbtProjectYamlRenderer(profile, merged_vars, require_vars=require_vars)
