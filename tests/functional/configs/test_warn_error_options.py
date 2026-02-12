@@ -69,7 +69,7 @@ class TestWarnErrorOptionsFromCLI:
         assert_deprecation_warning(result, catcher)
 
         catcher.flush()
-        result = runner.invoke(["run", "--warn-error-options", "{'include': ['DeprecatedModel']}"])
+        result = runner.invoke(["run", "--warn-error-options", "{'error': ['DeprecatedModel']}"])
         assert_deprecation_error(result)
 
         catcher.flush()
@@ -77,7 +77,7 @@ class TestWarnErrorOptionsFromCLI:
             [
                 "run",
                 "--warn-error-options",
-                "{'include': 'all', 'warn': ['DeprecationsSummary', 'WEOIncludeExcludeDeprecation']}",
+                "{'error': 'all', 'warn': ['DeprecationsSummary', 'WEOIncludeExcludeDeprecation']}",
             ]
         )
         assert_deprecation_error(result)
@@ -133,7 +133,7 @@ class TestWarnErrorOptionsFromCLI:
             [
                 "run",
                 "--warn-error-options",
-                "{'include': 'all', 'exclude': ['DeprecatedModel'], 'warn': ['DeprecatedModel']}",
+                "{'error': 'all', 'exclude': ['DeprecatedModel'], 'warn': ['DeprecatedModel']}",
             ]
         )
         assert not result.success
