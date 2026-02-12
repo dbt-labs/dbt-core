@@ -24,53 +24,52 @@ models:
 """
 
 
-@pytest.fixture(scope="class")
-def models() -> ModelsDictSpec:
-    return {"my_model.sql": my_model_sql, "schema.yml": schema_yml}
+class BaseTestWarnErrorOptions:
+    @pytest.fixture(scope="class")
+    def models(self) -> ModelsDictSpec:
+        return {"my_model.sql": my_model_sql, "schema.yml": schema_yml}
+
+    @pytest.fixture(scope="function")
+    def catcher(self) -> EventCatcher:
+        return EventCatcher(event_to_catch=DeprecatedModel)
+
+    @pytest.fixture(scope="function")
+    def runner(self, catcher: EventCatcher) -> dbtRunner:
+        return dbtRunner(callbacks=[catcher.catch])
+
+    def assert_deprecation_warning(self, result: dbtRunnerResult, catcher: EventCatcher) -> None:
+        assert result.success
+        assert result.exception is None
+        assert len(catcher.caught_events) == 1
+        assert catcher.caught_events[0].info.level == EventLevel.WARN.value
+
+    def assert_deprecation_error(self, result: dbtRunnerResult) -> None:
+        assert not result.success
+        assert result.exception is not None
+        assert "Model my_model has passed its deprecation date of" in str(result.exception)
 
 
-@pytest.fixture(scope="function")
-def catcher() -> EventCatcher:
-    return EventCatcher(event_to_catch=DeprecatedModel)
-
-
-@pytest.fixture(scope="function")
-def runner(catcher: EventCatcher) -> dbtRunner:
-    return dbtRunner(callbacks=[catcher.catch])
-
-
-def assert_deprecation_warning(result: dbtRunnerResult, catcher: EventCatcher) -> None:
-    assert result.success
-    assert result.exception is None
-    assert len(catcher.caught_events) == 1
-    assert catcher.caught_events[0].info.level == EventLevel.WARN.value
-
-
-def assert_deprecation_error(result: dbtRunnerResult) -> None:
-    assert not result.success
-    assert result.exception is not None
-    assert "Model my_model has passed its deprecation date of" in str(result.exception)
-
-
-class TestWarnErrorOptionsFromCLI:
+class TestWarnErrorOptionsFromCLICanSilence(BaseTestWarnErrorOptions):
     def test_can_silence(self, project, catcher: EventCatcher, runner: dbtRunner) -> None:
         result = runner.invoke(["run"])
-        assert_deprecation_warning(result, catcher)
+        self.assert_deprecation_warning(result, catcher)
 
         catcher.flush()
         result = runner.invoke(["run", "--warn-error-options", "{'silence': ['DeprecatedModel']}"])
         assert result.success
         assert len(catcher.caught_events) == 0
 
+
+class TestWarnErrorOptionsFromCLICanRaiseWarningToError(BaseTestWarnErrorOptions):
     def test_can_raise_warning_to_error(
         self, project, catcher: EventCatcher, runner: dbtRunner
     ) -> None:
         result = runner.invoke(["run"])
-        assert_deprecation_warning(result, catcher)
+        self.assert_deprecation_warning(result, catcher)
 
         catcher.flush()
         result = runner.invoke(["run", "--warn-error-options", "{'include': ['DeprecatedModel']}"])
-        assert_deprecation_error(result)
+        self.assert_deprecation_error(result)
 
         catcher.flush()
         result = runner.invoke(
@@ -80,25 +79,27 @@ class TestWarnErrorOptionsFromCLI:
                 "{'include': 'all', 'warn': ['DeprecationsSummary', 'WEOIncludeExcludeDeprecation']}",
             ]
         )
-        assert_deprecation_error(result)
+        self.assert_deprecation_error(result)
 
         catcher.flush()
         result = runner.invoke(["run", "--warn-error-options", "{'error': ['DeprecatedModel']}"])
-        assert_deprecation_error(result)
+        self.assert_deprecation_error(result)
 
         catcher.flush()
         result = runner.invoke(
             ["run", "--warn-error-options", "{'error': 'all', 'warn': ['DeprecationsSummary']}"]
         )
-        assert_deprecation_error(result)
+        self.assert_deprecation_error(result)
 
+
+class TestWarnErrorOptionsFromCLICanExcludeSpecificEvent(BaseTestWarnErrorOptions):
     def test_can_exclude_specific_event(
         self, project, catcher: EventCatcher, runner: dbtRunner
     ) -> None:
         result = runner.invoke(
             ["run", "--warn-error-options", "{'error': 'all', 'warn': ['DeprecationsSummary']}"]
         )
-        assert_deprecation_error(result)
+        self.assert_deprecation_error(result)
 
         catcher.flush()
         result = runner.invoke(
@@ -108,7 +109,7 @@ class TestWarnErrorOptionsFromCLI:
                 "{'error': 'all', 'exclude': ['DeprecatedModel', 'WEOIncludeExcludeDeprecation', 'DeprecationsSummary']}",
             ]
         )
-        assert_deprecation_warning(result, catcher)
+        self.assert_deprecation_warning(result, catcher)
 
         catcher.flush()
         result = runner.invoke(
@@ -118,8 +119,10 @@ class TestWarnErrorOptionsFromCLI:
                 "{'error': 'all', 'warn': ['DeprecatedModel', 'DeprecationsSummary']}",
             ]
         )
-        assert_deprecation_warning(result, catcher)
+        self.assert_deprecation_warning(result, catcher)
 
+
+class TestWarnErrorOptionsFromCLICantSetBothIncludeAndError(BaseTestWarnErrorOptions):
     def test_cant_set_both_include_and_error(self, project, runner: dbtRunner) -> None:
         result = runner.invoke(
             ["run", "--warn-error-options", "{'include': 'all', 'error': 'all'}"]
@@ -141,17 +144,20 @@ class TestWarnErrorOptionsFromCLI:
         assert "Only `exclude` or `warn` can be specified" in str(result.exception)
 
 
-class TestWarnErrorOptionsFromProject:
+class BaseTestWarnErrorOptionsFromProject(BaseTestWarnErrorOptions):
     @pytest.fixture(scope="function")
     def clear_project_flags(self, project_root) -> None:
-        flags = {"flags": {}}
+        # TODO: Is this still necessary now that the project based tests are broken into separate test classes?
+        flags: Dict[str, Any] = {"flags": {}}
         update_config_file(flags, project_root, "dbt_project.yml")
 
+
+class TestWarnErrorOptionsFromProjectCanSilence(BaseTestWarnErrorOptionsFromProject):
     def test_can_silence(
         self, project, clear_project_flags, project_root, catcher: EventCatcher, runner: dbtRunner
     ) -> None:
         result = runner.invoke(["run"])
-        assert_deprecation_warning(result, catcher)
+        self.assert_deprecation_warning(result, catcher)
 
         silence_options = {"flags": {"warn_error_options": {"silence": ["DeprecatedModel"]}}}
         update_config_file(silence_options, project_root, "dbt_project.yml")
@@ -161,11 +167,13 @@ class TestWarnErrorOptionsFromProject:
         assert result.success
         assert len(catcher.caught_events) == 0
 
+
+class TestWarnErrorOptionsFromProjectCanRaiseWarningToError(BaseTestWarnErrorOptionsFromProject):
     def test_can_raise_warning_to_error(
         self, project, clear_project_flags, project_root, catcher: EventCatcher, runner: dbtRunner
     ) -> None:
         result = runner.invoke(["run"])
-        assert_deprecation_warning(result, catcher)
+        self.assert_deprecation_warning(result, catcher)
 
         warn_error_options: Dict[str, Any] = {
             "flags": {"warn_error_options": {"error": ["DeprecatedModel"]}}
@@ -174,7 +182,7 @@ class TestWarnErrorOptionsFromProject:
 
         catcher.flush()
         result = runner.invoke(["run"])
-        assert_deprecation_error(result)
+        self.assert_deprecation_error(result)
 
         warn_error_options = {
             "flags": {"warn_error_options": {"error": "all", "warn": ["DeprecationsSummary"]}}
@@ -183,8 +191,10 @@ class TestWarnErrorOptionsFromProject:
 
         catcher.flush()
         result = runner.invoke(["run"])
-        assert_deprecation_error(result)
+        self.assert_deprecation_error(result)
 
+
+class TestWarnErrorOptionsFromProjectCanExcludeSpecificEvent(BaseTestWarnErrorOptionsFromProject):
     def test_can_exclude_specific_event(
         self, project, clear_project_flags, project_root, catcher: EventCatcher, runner: dbtRunner
     ) -> None:
@@ -193,7 +203,7 @@ class TestWarnErrorOptionsFromProject:
         }
         update_config_file(warn_error_options, project_root, "dbt_project.yml")
         result = runner.invoke(["run"])
-        assert_deprecation_error(result)
+        self.assert_deprecation_error(result)
 
         warn_error_options = {
             "flags": {
@@ -207,8 +217,12 @@ class TestWarnErrorOptionsFromProject:
 
         catcher.flush()
         result = runner.invoke(["run"])
-        assert_deprecation_warning(result, catcher)
+        self.assert_deprecation_warning(result, catcher)
 
+
+class TestWarnErrorOptionsFromProjectCantSetBothIncludeAndError(
+    BaseTestWarnErrorOptionsFromProject
+):
     def test_cant_set_both_include_and_error(
         self, project, clear_project_flags, project_root, runner: dbtRunner
     ) -> None:
@@ -219,6 +233,10 @@ class TestWarnErrorOptionsFromProject:
         assert result.exception is not None
         assert "Only `include` or `error` can be specified" in str(result.exception)
 
+
+class TestWarnErrorOptionsFromProjectCantSetBothExcludeAndWarn(
+    BaseTestWarnErrorOptionsFromProject
+):
     def test_cant_set_both_exclude_and_warn(
         self, project, clear_project_flags, project_root, runner: dbtRunner
     ) -> None:
