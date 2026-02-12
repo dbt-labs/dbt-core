@@ -1,10 +1,10 @@
 # dbt-csv
 
-A CSV reader designed to be **100% conformant with Mantle's CSV parsing behavior**.
+A CSV reader designed to be **100% conformant with Core's CSV parsing behavior**.
 
 ## Background
 
-Mantle's CSV parsing leverages Python's `agate` library via `dbt-common/dbt_common/clients/agate_helper.py`. The parsing pipeline consists of three steps:
+Core's CSV parsing leverages Python's `agate` library via `dbt-common/dbt_common/clients/agate_helper.py`. The parsing pipeline consists of three steps:
 
 1. **Parse CSV** — Use Python's built-in `csv` module to read data as string rows
 2. **Infer types** — Use agate's type testers to determine column types from string values
@@ -14,13 +14,13 @@ This produces a CSV table of Python-typed values (integers, decimals, dates, boo
 
 ## How This Crate Works
 
-This crate replicates Mantle's behavior in Rust, producing Arrow record batches instead of Python objects:
+This crate replicates Core's behavior in Rust, producing Arrow record batches instead of Python objects:
 
 1. **Parse CSV** — Use Rust's `csv` crate to read data as string rows
 2. **Infer types** — Use `type_tester.rs` to infer agate-compatible types (`AgateType`)
 3. **Cast values** — Convert string rows to Arrow arrays based on inferred `AgateType`
 
-The output is a stream of Arrow `RecordBatch` objects with types that match what Mantle would produce.
+The output is a stream of Arrow `RecordBatch` objects with types that match what Core would produce.
 
 ## Type Inference Rules
 
@@ -40,7 +40,7 @@ Following agate's type priority (highest to lowest):
 
 ## Force Text Columns
 
-Agate allows users to override type inference for specific columns. Mantle uses this feature to force user-specified seed columns to be treated as strings, deferring type casting to the warehouse.
+Agate allows users to override type inference for specific columns. Core uses this feature to force user-specified seed columns to be treated as strings, deferring type casting to the warehouse.
 
 This crate provides a constrained API for the same purpose via `infer_agate_schema_with_text_columns`:
 
@@ -53,7 +53,7 @@ let (schema, records_read, missing) = format
 
 **Matching behavior:**
 - Column names are matched **case-insensitively** using `dbt-ident`
-- This differs from Mantle, which does case-sensitive matching because it preserves the user's original casing from the YAML file
+- This differs from Core, which does case-sensitive matching because it preserves the user's original casing from the YAML file
 - In Fusion, `DbtSeed` normalizes `column_types` keys based on warehouse semantics during the resolve phase (e.g., Snowflake uppercases unquoted identifiers), so case-insensitive matching is needed to match normalized keys against original CSV headers
 - Columns not found in CSV headers are returned in `missing` for warning/logging
 
