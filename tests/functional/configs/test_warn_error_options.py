@@ -49,7 +49,7 @@ class BaseTestWarnErrorOptions:
         assert "Model my_model has passed its deprecation date of" in str(result.exception)
 
 
-class TestWarnErrorOptionsFromCLI(BaseTestWarnErrorOptions):
+class TestWarnErrorOptionsFromCLICanSilence(BaseTestWarnErrorOptions):
     def test_can_silence(self, project, catcher: EventCatcher, runner: dbtRunner) -> None:
         result = runner.invoke(["run"])
         self.assert_deprecation_warning(result, catcher)
@@ -59,6 +59,8 @@ class TestWarnErrorOptionsFromCLI(BaseTestWarnErrorOptions):
         assert result.success
         assert len(catcher.caught_events) == 0
 
+
+class TestWarnErrorOptionsFromCLICanRaiseWarningToError(BaseTestWarnErrorOptions):
     def test_can_raise_warning_to_error(
         self, project, catcher: EventCatcher, runner: dbtRunner
     ) -> None:
@@ -89,6 +91,8 @@ class TestWarnErrorOptionsFromCLI(BaseTestWarnErrorOptions):
         )
         self.assert_deprecation_error(result)
 
+
+class TestWarnErrorOptionsFromCLICanExcludeSpecificEvent(BaseTestWarnErrorOptions):
     def test_can_exclude_specific_event(
         self, project, catcher: EventCatcher, runner: dbtRunner
     ) -> None:
@@ -117,6 +121,8 @@ class TestWarnErrorOptionsFromCLI(BaseTestWarnErrorOptions):
         )
         self.assert_deprecation_warning(result, catcher)
 
+
+class TestWarnErrorOptionsFromCLICantSetBothIncludeAndError(BaseTestWarnErrorOptions):
     def test_cant_set_both_include_and_error(self, project, runner: dbtRunner) -> None:
         result = runner.invoke(
             ["run", "--warn-error-options", "{'include': 'all', 'error': 'all'}"]
@@ -138,12 +144,15 @@ class TestWarnErrorOptionsFromCLI(BaseTestWarnErrorOptions):
         assert "Only `exclude` or `warn` can be specified" in str(result.exception)
 
 
-class TestWarnErrorOptionsFromProject(BaseTestWarnErrorOptions):
+class BaseTestWarnErrorOptionsFromProject(BaseTestWarnErrorOptions):
     @pytest.fixture(scope="function")
     def clear_project_flags(self, project_root) -> None:
+        # TODO: Is this still necessary now that the project based tests are broken into separate test classes?
         flags: Dict[str, Any] = {"flags": {}}
         update_config_file(flags, project_root, "dbt_project.yml")
 
+
+class TestWarnErrorOptionsFromProjectCanSilence(BaseTestWarnErrorOptionsFromProject):
     def test_can_silence(
         self, project, clear_project_flags, project_root, catcher: EventCatcher, runner: dbtRunner
     ) -> None:
@@ -158,6 +167,8 @@ class TestWarnErrorOptionsFromProject(BaseTestWarnErrorOptions):
         assert result.success
         assert len(catcher.caught_events) == 0
 
+
+class TestWarnErrorOptionsFromProjectCanRaiseWarningToError(BaseTestWarnErrorOptionsFromProject):
     def test_can_raise_warning_to_error(
         self, project, clear_project_flags, project_root, catcher: EventCatcher, runner: dbtRunner
     ) -> None:
@@ -182,6 +193,8 @@ class TestWarnErrorOptionsFromProject(BaseTestWarnErrorOptions):
         result = runner.invoke(["run"])
         self.assert_deprecation_error(result)
 
+
+class TestWarnErrorOptionsFromProjectCanExcludeSpecificEvent(BaseTestWarnErrorOptionsFromProject):
     def test_can_exclude_specific_event(
         self, project, clear_project_flags, project_root, catcher: EventCatcher, runner: dbtRunner
     ) -> None:
@@ -206,6 +219,10 @@ class TestWarnErrorOptionsFromProject(BaseTestWarnErrorOptions):
         result = runner.invoke(["run"])
         self.assert_deprecation_warning(result, catcher)
 
+
+class TestWarnErrorOptionsFromProjectCantSetBothIncludeAndError(
+    BaseTestWarnErrorOptionsFromProject
+):
     def test_cant_set_both_include_and_error(
         self, project, clear_project_flags, project_root, runner: dbtRunner
     ) -> None:
@@ -216,6 +233,10 @@ class TestWarnErrorOptionsFromProject(BaseTestWarnErrorOptions):
         assert result.exception is not None
         assert "Only `include` or `error` can be specified" in str(result.exception)
 
+
+class TestWarnErrorOptionsFromProjectCantSetBothExcludeAndWarn(
+    BaseTestWarnErrorOptionsFromProject
+):
     def test_cant_set_both_exclude_and_warn(
         self, project, clear_project_flags, project_root, runner: dbtRunner
     ) -> None:
