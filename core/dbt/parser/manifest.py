@@ -1034,8 +1034,8 @@ class ManifestLoader:
             "\x00".join(
                 [
                     stringified_cli_vars,
-                    getattr(config.args, "profile", "") or "",
-                    getattr(config.args, "target", "") or "",
+                    config.profile_name,
+                    config.target_name,
                     __version__,
                 ]
             )
@@ -1044,8 +1044,8 @@ class ManifestLoader:
             StateCheckVarsHash(
                 checksum=vars_hash.checksum,
                 vars=scrub_secrets(stringified_cli_vars, secret_vars),
-                profile=config.args.profile,
-                target=config.args.target,
+                profile=config.profile_name,
+                target=config.target_name,
                 version=__version__,
             )
         )
