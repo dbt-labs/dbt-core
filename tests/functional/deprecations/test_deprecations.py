@@ -403,7 +403,9 @@ class TestCustomKeyInConfigSQLDeprecation:
         "dbt.jsonschemas.jsonschemas._get_allowed_config_key_aliases",
         return_value=["my_custom_key"],
     )
-    def test_custom_key_in_config_sql_deprecation_adapter_specific_config_key_aliases(self, *_):
+    def test_custom_key_in_config_sql_deprecation_adapter_specific_config_key_aliases(
+        self, mock_get_aliases, project
+    ):
         event_catcher = EventCatcher(CustomKeyInConfigDeprecation)
         run_dbt(
             ["parse", "--no-partial-parse", "--show-all-deprecations"],
