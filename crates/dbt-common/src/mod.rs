@@ -2,6 +2,7 @@
 pub mod macros;
 
 pub mod adapter;
+pub mod artifact_io;
 pub mod atomic;
 pub mod cancellation;
 pub mod cli_parser_trait;

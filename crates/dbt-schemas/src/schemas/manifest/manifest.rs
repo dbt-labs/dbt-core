@@ -52,6 +52,7 @@ pub enum DbtNode {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct ManifestMetadata {
+    // NOTE: this flatten should be removed once we completely decouple DbtManifest from Yaml
     #[serde(flatten)]
     pub __base__: BaseMetadata,
     #[serde(default)]
