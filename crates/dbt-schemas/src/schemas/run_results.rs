@@ -9,7 +9,7 @@ use crate::schemas::InternalDbtNodeAttributes;
 use crate::schemas::serde::typed_struct_from_json_file;
 
 // Type aliases for clarity
-type YmlValue = dbt_serde_yaml::Value;
+type YmlValue = dbt_yaml::Value;
 
 /// Metadata about the dbt run invocation.
 #[skip_serializing_none]

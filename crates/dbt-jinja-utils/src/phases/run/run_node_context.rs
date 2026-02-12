@@ -36,7 +36,7 @@ use crate::phases::MacroLookupContext;
 use super::run_config::RunConfig;
 use dbt_schemas::schemas::project::ConfigKeys;
 
-type YmlValue = dbt_serde_yaml::Value;
+type YmlValue = dbt_yaml::Value;
 
 /// Build model-specific context (model, common_attr, alias, quoting, config, resource_type, sql_header)
 #[allow(clippy::too_many_arguments)]
@@ -77,8 +77,7 @@ async fn extend_with_model_context<S: Serialize>(
         MinijinjaValue::from(common_attr.name.clone()),
     );
 
-    let config_yml =
-        dbt_serde_yaml::to_value(deprecated_config).expect("Failed to serialize object");
+    let config_yml = dbt_yaml::to_value(deprecated_config).expect("Failed to serialize object");
 
     if let Some(pre_hook) = config_yml.get("pre_hook") {
         let values: Vec<HookConfig> = match pre_hook {

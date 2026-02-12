@@ -60,7 +60,7 @@ use std::collections::HashSet;
 use std::path::Path;
 
 use dbt_common::{ErrorCode, FsResult, err, fs_err};
-use dbt_serde_yaml::{self as yml};
+use dbt_yaml::{self as yml};
 
 /// A validated catalogs.yml mapping.
 /// - Holds the raw YAML Mapping so external consumers can copy as needed.
@@ -1346,7 +1346,7 @@ pub fn validate_catalogs(spec: &DbtCatalogsView<'_>, _path: &Path) -> FsResult<(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use dbt_serde_yaml as yml;
+    use dbt_yaml as yml;
     use std::path::Path;
 
     fn parse_view_and_validate(yaml: &str) -> FsResult<()> {

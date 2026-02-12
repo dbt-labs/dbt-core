@@ -84,8 +84,7 @@ pub async fn resolve_saved_queries(
                 &package.dbt_project.all_source_paths(),
             );
 
-            let schema_value =
-                std::mem::replace(&mut mpe.schema_value, dbt_serde_yaml::Value::null());
+            let schema_value = std::mem::replace(&mut mpe.schema_value, dbt_yaml::Value::null());
 
             // Parse the saved query properties from YAML
             let saved_query_props: SavedQueriesProperties = into_typed_with_jinja(

@@ -6,7 +6,7 @@ use dbt_xdbc::{Backend, bigquery, database};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
-type YmlValue = dbt_serde_yaml::Value;
+type YmlValue = dbt_yaml::Value;
 
 #[derive(Deserialize, Serialize)]
 struct KeyFileJson {
@@ -121,12 +121,11 @@ impl BigqueryAuth {
         };
 
         // YAML value -> KeyFileJson struct
-        let mut keyfile_json: KeyFileJson =
-            dbt_serde_yaml::from_value(keyfile_yaml).map_err(|e| {
-                AuthError::config(format!(
-                    "Error parsing 'keyfile_json' in BigQuery configuration: {e}"
-                ))
-            })?;
+        let mut keyfile_json: KeyFileJson = dbt_yaml::from_value(keyfile_yaml).map_err(|e| {
+            AuthError::config(format!(
+                "Error parsing 'keyfile_json' in BigQuery configuration: {e}"
+            ))
+        })?;
         // Replace escaped newlines with a single newline
         keyfile_json.private_key = keyfile_json.private_key.replace("\\n", "\n");
 
@@ -266,8 +265,8 @@ impl Auth for BigqueryAuth {
 mod tests {
     use super::*;
     use adbc_core::options::{OptionDatabase, OptionValue};
-    use dbt_serde_yaml::Mapping;
     use dbt_test_primitives::assert_contains;
+    use dbt_yaml::Mapping;
 
     fn base_config_oauth() -> Mapping {
         Mapping::from_iter([
@@ -385,7 +384,7 @@ keyfile_json:
     client_x509_cert_url: https://www.googleapis.com/robot/v1/metadata/x509/fde-bigquery%40fde-testing-450816.iam.gserviceaccount.com
 location: my_location
 "#;
-        let config = dbt_serde_yaml::from_str::<Mapping>(yaml_doc).unwrap();
+        let config = dbt_yaml::from_str::<Mapping>(yaml_doc).unwrap();
         let builder = try_configure(config).unwrap();
         for option in builder.other {
             let value: String = option_string_value(option.1);
@@ -429,7 +428,7 @@ database: my_db
 schema: my_schema
 token: 12345abcde
 "#;
-        let config = dbt_serde_yaml::from_str::<Mapping>(yaml_doc).unwrap();
+        let config = dbt_yaml::from_str::<Mapping>(yaml_doc).unwrap();
 
         let builder = try_configure(config).unwrap();
         let acces_token = other_option_value(&builder, bigquery::AUTH_ACCESS_TOKEN)
@@ -453,7 +452,7 @@ database: my_db
 schema: my_schema
 method: oauth
 "#;
-        let config = dbt_serde_yaml::from_str::<Mapping>(yaml_doc).unwrap();
+        let config = dbt_yaml::from_str::<Mapping>(yaml_doc).unwrap();
         let builder = try_configure(config).unwrap();
         let auth_type = other_option_value(&builder, bigquery::AUTH_TYPE)
             .expect("Expected AUTH_TYPE option to be set");
@@ -473,7 +472,7 @@ method: oauth
 scopes:
     - https://www.googleapis.com/auth/bigquery
 "#;
-        let config = dbt_serde_yaml::from_str::<Mapping>(yaml_doc).unwrap();
+        let config = dbt_yaml::from_str::<Mapping>(yaml_doc).unwrap();
         let builder = try_configure(config).unwrap();
         let auth_type = other_option_value(&builder, bigquery::AUTH_TYPE)
             .expect("Expected AUTH_TYPE option to be set");
@@ -491,7 +490,7 @@ schema: my_schema
 method: oauth
 impersonate_service_account: user@project.iam.gserviceaccount.com
 "#;
-        let config = dbt_serde_yaml::from_str::<Mapping>(yaml_doc).unwrap();
+        let config = dbt_yaml::from_str::<Mapping>(yaml_doc).unwrap();
         let builder = try_configure(config).unwrap();
         let auth_type = other_option_value(&builder, bigquery::AUTH_TYPE)
             .expect("Expected AUTH_TYPE option to be set");

@@ -29,7 +29,7 @@ use minijinja::{
     listener::RenderingEventListener,
     value::{Kwargs, Object},
 };
-type YmlValue = dbt_serde_yaml::Value;
+type YmlValue = dbt_yaml::Value;
 use crate::utils::{
     DBT_INTERNAL_ENV_VAR_PREFIX, ENV_VARS, SECRET_ENV_VAR_PREFIX, get_status_reporter,
     node_metadata_from_state,
@@ -432,13 +432,13 @@ pub trait VarFunction: Object {
 /// https://github.com/dbt-labs/dbt-core/blob/31881d2a3bea030e700e9df126a3445298385698/core/dbt/context/base.py#L139
 #[derive(Debug)]
 pub struct Var {
-    vars: BTreeMap<String, dbt_serde_yaml::Value>,
-    overrides: Option<BTreeMap<String, dbt_serde_yaml::Value>>,
+    vars: BTreeMap<String, dbt_yaml::Value>,
+    overrides: Option<BTreeMap<String, dbt_yaml::Value>>,
 }
 
 impl Var {
     /// Make a new Var struct
-    pub fn new(vars: BTreeMap<String, dbt_serde_yaml::Value>) -> Self {
+    pub fn new(vars: BTreeMap<String, dbt_yaml::Value>) -> Self {
         Self {
             vars,
             overrides: None,
@@ -447,8 +447,8 @@ impl Var {
 
     /// Make a new Var struct with override values
     pub fn with_overrides(
-        vars: BTreeMap<String, dbt_serde_yaml::Value>,
-        overrides: Option<BTreeMap<String, dbt_serde_yaml::Value>>,
+        vars: BTreeMap<String, dbt_yaml::Value>,
+        overrides: Option<BTreeMap<String, dbt_yaml::Value>>,
     ) -> Self {
         Self { vars, overrides }
     }
@@ -612,7 +612,7 @@ pub fn fromjson(_state: &State, args: &[Value]) -> Result<Value, Error> {
         Ok(value) => Ok(Value::from_serialize(value)),
         Err(json_err) => {
             // Fall back to YAML to support unquoted scalars or simple mappings
-            match dbt_serde_yaml::from_str::<dbt_serde_yaml::Value>(string) {
+            match dbt_yaml::from_str::<dbt_yaml::Value>(string) {
                 Ok(yaml_value) => Ok(Value::from_serialize(yaml_value)),
                 Err(_) => match default {
                     Some(default_value) => Ok(default_value),
@@ -725,7 +725,7 @@ pub fn fromyaml(_state: &State, args: &[Value]) -> Result<Value, Error> {
     let default = iter.next_kwarg::<Option<Value>>("default")?;
     iter.finish()?;
 
-    match dbt_serde_yaml::from_str::<dbt_serde_yaml::Value>(value) {
+    match dbt_yaml::from_str::<dbt_yaml::Value>(value) {
         Ok(serde_value) => Ok(Value::from_serialize(serde_value)),
         Err(err) => match default {
             Some(default_value) => Ok(default_value),
@@ -794,7 +794,7 @@ pub fn toyaml(_state: &State, args: &[Value]) -> Result<Value, Error> {
         *obj = sorted_map.into_iter().collect();
     }
 
-    match dbt_serde_yaml::to_string(&json_value) {
+    match dbt_yaml::to_string(&json_value) {
         Ok(yaml_str) => Ok(Value::from(yaml_str)),
         Err(err) => Err(Error::new(
             ErrorKind::InvalidOperation,

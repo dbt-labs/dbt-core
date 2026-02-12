@@ -808,7 +808,7 @@ impl AdapterEngine {
 ///
 /// https://docs.getdbt.com/reference/resource-configs/databricks-configs#selecting-compute-per-model
 fn databricks_compute_from_state(state: &State) -> Option<String> {
-    let yaml_node = dbt_serde_yaml::to_value(state.lookup("model").as_ref()?).ok()?;
+    let yaml_node = dbt_yaml::to_value(state.lookup("model").as_ref()?).ok()?;
 
     if let Ok(model) = DbtModel::deserialize(&yaml_node) {
         if let Some(databricks_attr) = &model.__adapter_attr__.databricks_attr {

@@ -25,7 +25,7 @@ pathdiff = { workspace = true }
 
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
-dbt-serde_yaml = { workspace = true }
+dbt-yaml = { workspace = true }
 indexmap = { workspace = true }
 itertools = { workspace = true }
 md5 = { workspace = true }

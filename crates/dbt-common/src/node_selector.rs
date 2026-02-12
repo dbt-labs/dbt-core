@@ -17,7 +17,7 @@
 //!      |                      # OR
 //!      ^\@([A-Za-z0-9_]+)$                                                   # AtPattern
 
-use dbt_serde_yaml::JsonSchema;
+use dbt_yaml::JsonSchema;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::fmt;

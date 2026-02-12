@@ -1,7 +1,7 @@
 use clap::ValueEnum;
 use dbt_base::{HashMap, HashSet};
-use dbt_serde_yaml::{JsonSchema, Value};
 use dbt_telemetry::{NodeType, ShowDataOutputFormat};
+use dbt_yaml::{JsonSchema, Value};
 use pathdiff::diff_paths;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -1142,7 +1142,7 @@ pub fn check_var(vars: &str) -> Result<BTreeMap<String, Value>, String> {
     };
 
     // Try parsing as YAML first
-    match dbt_serde_yaml::from_str::<BTreeMap<String, Value>>(&yaml_str) {
+    match dbt_yaml::from_str::<BTreeMap<String, Value>>(&yaml_str) {
         Ok(btree) => {
             // Disallow the '{key:value}' format for flow-style YAML syntax
             // to prevent key:value: None interpretation: https://stackoverflow.com/a/70909331
@@ -1171,8 +1171,8 @@ pub fn check_var(vars: &str) -> Result<BTreeMap<String, Value>, String> {
 pub fn check_env_var(vars: &str) -> Result<HashMap<String, String>, String> {
     let config = vars;
     if config.starts_with('{') {
-        let yaml_hashmap: Result<HashMap<String, String>, dbt_serde_yaml::Error> =
-            dbt_serde_yaml::from_str(config);
+        let yaml_hashmap: Result<HashMap<String, String>, dbt_yaml::Error> =
+            dbt_yaml::from_str(config);
 
         match yaml_hashmap {
             Ok(x) => Ok(x),
@@ -1184,8 +1184,8 @@ pub fn check_env_var(vars: &str) -> Result<HashMap<String, String>, String> {
             if path.extension().unwrap() == "yml" {
                 match fs::read_to_string(path) {
                     Ok(yaml_data) => {
-                        let yaml_hashmap: Result<HashMap<String, String>, dbt_serde_yaml::Error> =
-                            dbt_serde_yaml::from_str(&yaml_data);
+                        let yaml_hashmap: Result<HashMap<String, String>, dbt_yaml::Error> =
+                            dbt_yaml::from_str(&yaml_data);
 
                         match yaml_hashmap {
                             Ok(x) => Ok(x),
@@ -1221,10 +1221,8 @@ mod tests {
     #[test]
     fn test_check_single_var() {
         let result = check_var("key: value").unwrap();
-        let expected_result = BTreeMap::from([(
-            "key".to_string(),
-            dbt_serde_yaml::from_str("value").unwrap(),
-        )]);
+        let expected_result =
+            BTreeMap::from([("key".to_string(), dbt_yaml::from_str("value").unwrap())]);
 
         assert_eq!(result, expected_result);
     }
@@ -1232,10 +1230,8 @@ mod tests {
     #[test]
     fn test_check_single_bracket_var() {
         let result = check_var("{key: value}").unwrap();
-        let expected_result = BTreeMap::from([(
-            "key".to_string(),
-            dbt_serde_yaml::from_str("value").unwrap(),
-        )]);
+        let expected_result =
+            BTreeMap::from([("key".to_string(), dbt_yaml::from_str("value").unwrap())]);
 
         assert_eq!(result, expected_result);
     }
@@ -1244,14 +1240,8 @@ mod tests {
     fn test_check_multiple_bracket_var() {
         let result = check_var("{key: value, key2: value2}").unwrap();
         let expected_result = BTreeMap::from([
-            (
-                "key".to_string(),
-                dbt_serde_yaml::from_str("value").unwrap(),
-            ),
-            (
-                "key2".to_string(),
-                dbt_serde_yaml::from_str("value2").unwrap(),
-            ),
+            ("key".to_string(), dbt_yaml::from_str("value").unwrap()),
+            ("key2".to_string(), dbt_yaml::from_str("value2").unwrap()),
         ]);
 
         assert_eq!(result, expected_result);

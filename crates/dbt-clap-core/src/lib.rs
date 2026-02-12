@@ -3,7 +3,7 @@ use dbt_common::cli_parser_trait::CliParserTrait;
 use dbt_common::collections::HashSet;
 use dbt_common::io_utils::determine_project_dir;
 use dbt_common::{ErrorCode, FsResult, fs_err, stdfs};
-use dbt_serde_yaml::Value as YValue;
+use dbt_yaml::Value as YValue;
 use log::LevelFilter;
 use serde::{Deserialize, Serialize};
 
@@ -436,7 +436,7 @@ pub fn struct_to_cli_options<T: Serialize>(s: &T) -> Vec<String> {
                     && !vars_map.is_empty()
                 {
                     // Serialize as JSON string for CLI
-                    let vars_str = dbt_serde_yaml::to_string(&vars_map).unwrap();
+                    let vars_str = dbt_yaml::to_string(&vars_map).unwrap();
                     options.push("--vars".to_string());
                     options.push(vars_str);
                 }

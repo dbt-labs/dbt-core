@@ -126,7 +126,7 @@ mod tests {
         "#;
 
         // Parse YAML to Value first, then render with into_typed_with_jinja
-        let val: dbt_serde_yaml::Value = dbt_serde_yaml::from_str(yaml).unwrap();
+        let val: dbt_yaml::Value = dbt_yaml::from_str(yaml).unwrap();
 
         // Reuse the existing test env setup for a valid Jinja environment
         let (env, _sql_resources, _init_cfg) = setup_test_env();
@@ -154,7 +154,7 @@ mod tests {
         let meta = meta_opt.unwrap();
         let demo_val = meta.get("demo").expect("demo key in +meta");
         match demo_val {
-            dbt_serde_yaml::Value::String(s, _) => assert_eq!(s, "{{ 1 + 2 }}"),
+            dbt_yaml::Value::String(s, _) => assert_eq!(s, "{{ 1 + 2 }}"),
             other => panic!("expected string in +meta.demo, got {other:?}"),
         }
 
@@ -304,7 +304,7 @@ mod tests {
                 map.insert("materialized".to_string(), Value::from("view"));
                 map.insert("enabled".to_string(), Value::from(true)); // this gets inhertied from the global config which is true if not specified (important that this is not overridden)
                 let config: ModelConfig =
-                    dbt_serde_yaml::from_value(dbt_serde_yaml::to_value(map).unwrap()).unwrap();
+                    dbt_yaml::from_value(dbt_yaml::to_value(map).unwrap()).unwrap();
                 SqlResource::Config(Box::new(config))
             };
 
@@ -335,7 +335,7 @@ mod tests {
             let mut env = Environment::new();
             let adapter = Arc::new(BridgeAdapter::new_parse_phase_adapter(
                 AdapterType::Postgres,
-                dbt_serde_yaml::Mapping::default(),
+                dbt_yaml::Mapping::default(),
                 DEFAULT_DBT_QUOTING,
                 Box::new(NaiveTypeOpsImpl::new(AdapterType::Postgres)),
                 never_cancels(),

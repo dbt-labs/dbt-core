@@ -1,17 +1,17 @@
-use dbt_serde_yaml::{JsonSchema, Spanned};
+use dbt_yaml::{JsonSchema, Spanned};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
 
 // Type aliases for clarity
-type YmlValue = dbt_serde_yaml::Value;
+type YmlValue = dbt_yaml::Value;
 
 use crate::schemas::common::DocsConfig;
 use crate::schemas::project::{DefaultTo, TypedRecursiveConfig};
 use crate::schemas::serde::{StringOrArrayOfStrings, bool_or_string_bool};
 use dbt_common::io_args::StaticAnalysisKind;
-use dbt_serde_yaml::ShouldBe;
+use dbt_yaml::ShouldBe;
 use std::collections::btree_map::Iter;
 
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode

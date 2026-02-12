@@ -9,7 +9,7 @@ use dbt_schemas::schemas::project::DefaultTo;
 use dbt_schemas::schemas::{
     CommonAttributes, DbtModel, DbtSeed, DbtSnapshot, DbtTest, DbtUnitTest, InternalDbtNode,
 };
-use dbt_serde_yaml::Spanned;
+use dbt_yaml::Spanned;
 use minijinja::Environment;
 use minijinja::arg_utils::ArgParser;
 use minijinja::constants::{ROOT_PACKAGE_NAME, TARGET_PACKAGE_NAME, TARGET_UNIQUE_ID, THREAD_ID};

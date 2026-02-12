@@ -154,8 +154,7 @@ pub async fn resolve_snapshots(
     for (snapshot_name, mpe) in snapshot_properties.iter_mut() {
         // if mpe.schema_value
         if !mpe.schema_value.is_null() {
-            let schema_value =
-                std::mem::replace(&mut mpe.schema_value, dbt_serde_yaml::Value::null());
+            let schema_value = std::mem::replace(&mut mpe.schema_value, dbt_yaml::Value::null());
             let snapshot: SnapshotProperties = into_typed_with_jinja(
                 &arg.io,
                 schema_value,
@@ -218,7 +217,7 @@ pub async fn resolve_snapshots(
             // Put snapshot back in as it is unused
             let _ = std::mem::replace(
                 &mut mpe.schema_value,
-                dbt_serde_yaml::to_value(snapshot).map_err(|e| {
+                dbt_yaml::to_value(snapshot).map_err(|e| {
                     unexpected_fs_err!("Failed to serialize snapshot properties: {e}")
                 })?,
             );

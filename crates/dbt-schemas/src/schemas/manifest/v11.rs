@@ -2,7 +2,7 @@ use serde::Deserialize;
 use std::collections::BTreeMap;
 
 // Type aliases for clarity
-type YmlValue = dbt_serde_yaml::Value;
+type YmlValue = dbt_yaml::Value;
 
 use super::{DbtSelector, DbtSemanticModel, ManifestGroup};
 use crate::schemas::{

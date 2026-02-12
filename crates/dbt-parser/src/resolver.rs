@@ -68,7 +68,7 @@ use crate::resolve::primary_key_inference::infer_and_apply_primary_keys;
 use crate::resolve::resolve_selectors::{
     resolve_final_selectors, resolve_manifest_selectors, resolve_selectors_from_yaml,
 };
-use dbt_serde_yaml::Value as YmlValue;
+use dbt_yaml::Value as YmlValue;
 
 /// Entrypoint for the resolve phase.
 ///

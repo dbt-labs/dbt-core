@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use dbt_common::adapter::AdapterType;
 use dbt_common::{ErrorCode, FsResult, err};
-use dbt_serde_yaml::Spanned;
+use dbt_yaml::Spanned;
 
 use crate::{constants::DBT_BASE_SCHEMAS_URL, schemas::common::DbtQuoting};
 

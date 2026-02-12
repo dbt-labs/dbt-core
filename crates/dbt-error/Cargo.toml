@@ -34,7 +34,7 @@ pathdiff = { workspace = true }
 regex = { workspace = true }
 
 # Serialization
-dbt-serde_yaml = { workspace = true }
+dbt-yaml = { workspace = true }
 schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

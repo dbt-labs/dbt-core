@@ -9,9 +9,9 @@ use serde::{
     de::{Visitor, value::UnitDeserializer},
 };
 
-type YmlValue = dbt_serde_yaml::Value;
+type YmlValue = dbt_yaml::Value;
 
-/// Converts a [dbt_serde_yaml::Value] to a [minijinja::Value]
+/// Converts a [dbt_yaml::Value] to a [minijinja::Value]
 fn convert_yml_value(yml: YmlValue) -> minijinja::Value {
     match yml {
         YmlValue::Mapping(map, _) => {
@@ -32,7 +32,7 @@ fn convert_yml_value(yml: YmlValue) -> minijinja::Value {
     }
 }
 
-/// Converts a [dbt_serde_yaml::Value] to a [BTreeMap<String, Value>]
+/// Converts a [dbt_yaml::Value] to a [BTreeMap<String, Value>]
 pub fn convert_yml_to_map(yml: YmlValue) -> BTreeMap<String, minijinja::Value> {
     match yml {
         YmlValue::Mapping(map, _) => {
@@ -53,7 +53,7 @@ pub fn convert_yml_to_map(yml: YmlValue) -> BTreeMap<String, minijinja::Value> {
     }
 }
 
-/// Converts a [dbt_serde_yaml::Value] to a [DashMap<String, Value>]
+/// Converts a [dbt_yaml::Value] to a [DashMap<String, Value>]
 pub fn convert_yml_to_dash_map(yml: YmlValue) -> DashMap<String, minijinja::Value> {
     match yml {
         YmlValue::Mapping(map, _) => {
@@ -74,7 +74,7 @@ pub fn convert_yml_to_dash_map(yml: YmlValue) -> DashMap<String, minijinja::Valu
     }
 }
 
-/// Converts a [dbt_serde_yaml::Value] to a [minijinja::Value], preserving order of keys if the value is a mapping
+/// Converts a [dbt_yaml::Value] to a [minijinja::Value], preserving order of keys if the value is a mapping
 // TODO(anna): This now converts to an ordered map by using `ValueMap`, with the assertion that the key is a string.
 // But as I mentioned below, if we implement Object for IndexMap<String, minijinja::Value>, then we don't have to wrap the
 // key in a value.
@@ -99,7 +99,7 @@ fn convert_yml_value_ordered(yml: YmlValue) -> minijinja::Value {
     }
 }
 
-/// Converts a dbt_serde_yaml::Value to an order-preserving minijinja::ValueMap, only converting the first level to a map
+/// Converts a dbt_yaml::Value to an order-preserving minijinja::ValueMap, only converting the first level to a map
 // See: https://docs.rs/minijinja/2.5.0/minijinja/value/trait.Object.html#foreign-impls
 pub fn convert_yml_to_value_map(yml: YmlValue) -> IndexMap<String, minijinja::Value> {
     match yml {
@@ -222,7 +222,7 @@ where
     where
         E: serde::de::Error,
     {
-        // This function is called by the dbt_serde_yaml deserializers for
+        // This function is called by the dbt_yaml deserializers for
         // explicit null values
         T::deserialize(UnitDeserializer::new()).map(Omissible::Present)
     }
@@ -381,8 +381,8 @@ impl<T> From<Option<T>> for Omissible<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use dbt_serde_yaml::JsonSchema;
     use dbt_test_primitives::assert_contains;
+    use dbt_yaml::JsonSchema;
     use indoc::indoc;
     use schemars::schema_for;
 
@@ -396,7 +396,7 @@ mod tests {
         let yaml = r#"
             field: "value"
         "#;
-        let value: TestStruct = dbt_serde_yaml::from_str(yaml).unwrap();
+        let value: TestStruct = dbt_yaml::from_str(yaml).unwrap();
         let expected = TestStruct {
             field: Omissible::Present("value".to_string()),
         };
@@ -404,7 +404,7 @@ mod tests {
 
         let yaml = r#"
         "#;
-        let value: TestStruct = dbt_serde_yaml::from_str(yaml).unwrap();
+        let value: TestStruct = dbt_yaml::from_str(yaml).unwrap();
         let expected = TestStruct {
             field: Omissible::Omitted,
         };
@@ -413,7 +413,7 @@ mod tests {
         let yaml = r#"
             field: 
         "#;
-        let err = dbt_serde_yaml::from_str::<TestStruct>(yaml).unwrap_err();
+        let err = dbt_yaml::from_str::<TestStruct>(yaml).unwrap_err();
         assert_contains!(
             err.to_string(),
             "invalid type: unit value, expected a string"
@@ -422,7 +422,7 @@ mod tests {
         let yaml = r#"
             field: null
         "#;
-        let err = dbt_serde_yaml::from_str::<TestStruct>(yaml).unwrap_err();
+        let err = dbt_yaml::from_str::<TestStruct>(yaml).unwrap_err();
         assert_contains!(
             err.to_string(),
             "invalid type: unit value, expected a string"
@@ -438,7 +438,7 @@ mod tests {
         let yaml = r#"
             field: "value"
         "#;
-        let value: TestStruct = dbt_serde_yaml::from_str(yaml).unwrap();
+        let value: TestStruct = dbt_yaml::from_str(yaml).unwrap();
         let expected = TestStruct {
             field: Omissible::Present(Some("value".to_string())),
         };
@@ -446,7 +446,7 @@ mod tests {
 
         let yaml = r#"
         "#;
-        let value: TestStruct = dbt_serde_yaml::from_str(yaml).unwrap();
+        let value: TestStruct = dbt_yaml::from_str(yaml).unwrap();
         let expected = TestStruct {
             field: Omissible::Omitted,
         };
@@ -455,7 +455,7 @@ mod tests {
         let yaml = r#"
             field: 
         "#;
-        let value: TestStruct = dbt_serde_yaml::from_str(yaml).unwrap();
+        let value: TestStruct = dbt_yaml::from_str(yaml).unwrap();
         let expected = TestStruct {
             field: Omissible::Present(None),
         };
@@ -464,7 +464,7 @@ mod tests {
         let yaml = r#"
             field: null
         "#;
-        let value: TestStruct = dbt_serde_yaml::from_str(yaml).unwrap();
+        let value: TestStruct = dbt_yaml::from_str(yaml).unwrap();
         let expected = TestStruct {
             field: Omissible::Present(None),
         };
@@ -480,7 +480,7 @@ mod tests {
             omissible_option_field: Omissible<Option<String>>,
         }
         let schema = schema_for!(TestStruct);
-        let schema_str = dbt_serde_yaml::to_string(&schema).unwrap();
+        let schema_str = dbt_yaml::to_string(&schema).unwrap();
         println!("{schema_str}");
         assert_eq!(
             schema_str,

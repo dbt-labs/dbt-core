@@ -1,9 +1,9 @@
-use dbt_serde_yaml::JsonSchema;
-use dbt_serde_yaml::Spanned;
-use dbt_serde_yaml::Verbatim;
+use dbt_yaml::JsonSchema;
+use dbt_yaml::Spanned;
+use dbt_yaml::Verbatim;
 use serde::{Deserialize, Serialize};
 // Type aliases for clarity
-type YmlValue = dbt_serde_yaml::Value;
+type YmlValue = dbt_yaml::Value;
 use indexmap::IndexMap;
 use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;

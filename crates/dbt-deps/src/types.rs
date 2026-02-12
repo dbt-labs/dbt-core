@@ -5,7 +5,7 @@ use dbt_common::{ErrorCode, FsError, FsResult, err, fs_err};
 use dbt_schemas::schemas::packages::{
     GitPackage, HubPackage, PackageVersion, PrivatePackage, TarballPackage,
 };
-use dbt_serde_yaml::Value as YmlValue;
+use dbt_yaml::Value as YmlValue;
 
 use super::semver::{
     Matchers, Version, VersionSpecifier, filter_installable, reduce_versions,

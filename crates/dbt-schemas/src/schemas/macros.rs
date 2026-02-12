@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, path::PathBuf};
 
-use dbt_serde_yaml::Value;
+use dbt_yaml::Value;
 use minijinja::{
     ArgSpec,
     machinery::Span,

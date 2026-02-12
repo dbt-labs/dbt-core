@@ -6,7 +6,7 @@ use dbt_common::constants::{DBT_PROJECT_YML, DBT_TARGET_DIR_NAME};
 use dbt_common::io_utils::determine_project_dir;
 use dbt_common::logging::LogFormat;
 use dbt_common::{ErrorCode, FsResult, fs_err, stdfs};
-use dbt_serde_yaml::Value;
+use dbt_yaml::Value;
 use log::LevelFilter;
 use serde::{Deserialize, Serialize};
 use std::ffi::OsString;

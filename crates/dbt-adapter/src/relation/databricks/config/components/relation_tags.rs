@@ -8,7 +8,7 @@ use crate::relation::databricks::config::{
 };
 use dbt_schemas::schemas::DbtModel;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
-use dbt_serde_yaml::Value as YmlValue;
+use dbt_yaml::Value as YmlValue;
 use indexmap::IndexMap;
 use minijinja::value::{Value, ValueMap};
 

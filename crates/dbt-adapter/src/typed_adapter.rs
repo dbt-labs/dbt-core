@@ -58,10 +58,10 @@ use dbt_schemas::schemas::properties::ModelConstraint;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
 use dbt_schemas::schemas::serde::minijinja_value_to_typed_struct;
 use dbt_schemas::schemas::{CommonAttributes, InternalDbtNodeAttributes, InternalDbtNodeWrapper};
-use dbt_serde_yaml::Value as YmlValue;
 use dbt_xdbc::bigquery::*;
 use dbt_xdbc::salesforce::DATA_TRANSFORM_RUN_TIMEOUT;
 use dbt_xdbc::{Connection, QueryCtx};
+use dbt_yaml::Value as YmlValue;
 use indexmap::IndexMap;
 use minijinja::dispatch_object::DispatchObject;
 use minijinja::value::ValueMap;
@@ -3524,7 +3524,7 @@ mod tests {
     use dbt_schemas::schemas::dbt_column::{DbtColumn, DbtColumnRef};
     use dbt_schemas::schemas::relations::base::ComponentName;
     use dbt_schemas::schemas::relations::{DEFAULT_RESOLVED_QUOTING, SNOWFLAKE_RESOLVED_QUOTING};
-    use dbt_serde_yaml::Mapping;
+    use dbt_yaml::Mapping;
 
     use minijinja::{Environment, State, Value};
 

@@ -31,7 +31,7 @@ fn create_macro_unit(name: &str, sql: &str, path: &str) -> MacroUnit {
 fn build_env() -> dbt_common::FsResult<dbt_jinja_utils::jinja_environment::JinjaEnv> {
     let adapter = BridgeAdapter::new_parse_phase_adapter(
         AdapterType::Databricks,
-        dbt_serde_yaml::Mapping::default(),
+        dbt_yaml::Mapping::default(),
         DEFAULT_DBT_QUOTING,
         Box::new(NaiveTypeOpsImpl::new(AdapterType::Databricks)),
         never_cancels(),

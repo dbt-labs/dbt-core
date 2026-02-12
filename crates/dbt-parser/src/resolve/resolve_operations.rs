@@ -26,7 +26,7 @@ use dbt_schemas::{
     },
     state::DbtRuntimeConfig,
 };
-use dbt_serde_yaml::Spanned;
+use dbt_yaml::Spanned;
 use minijinja::constants::TARGET_PACKAGE_NAME;
 
 /// Empty config type used for operations (they don't have traditional config)

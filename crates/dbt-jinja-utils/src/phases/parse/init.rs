@@ -48,7 +48,7 @@ pub fn initialize_parse_jinja_environment(
     package_quoting: DbtQuoting,
     macro_units: BTreeMap<String, Vec<MacroUnit>>,
     vars: BTreeMap<String, IndexMap<String, DbtVars>>,
-    cli_vars: BTreeMap<String, dbt_serde_yaml::Value>,
+    cli_vars: BTreeMap<String, dbt_yaml::Value>,
     flags: BTreeMap<String, MinijinjaValue>,
     run_started_at: DateTime<Tz>,
     invocation_args: &InvocationArgs,

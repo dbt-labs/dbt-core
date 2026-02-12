@@ -23,7 +23,7 @@ use super::load_dbt_packages;
 #[allow(clippy::too_many_arguments)]
 pub async fn compute_package_lock(
     io: &IoArgs,
-    vars: &BTreeMap<String, dbt_serde_yaml::Value>,
+    vars: &BTreeMap<String, dbt_yaml::Value>,
     jinja_env: &JinjaEnv,
     hub_registry: &mut HubClient,
     dbt_packages: &DbtPackages,
@@ -158,7 +158,7 @@ pub async fn compute_package_lock(
 #[allow(clippy::too_many_arguments)]
 async fn resolve_packages(
     io: &IoArgs,
-    vars: &BTreeMap<String, dbt_serde_yaml::Value>,
+    vars: &BTreeMap<String, dbt_yaml::Value>,
     hub_registry: &mut HubClient,
     final_listing: &mut PackageListing,
     package_listing: &mut PackageListing,

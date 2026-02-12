@@ -39,7 +39,7 @@
 //!   duplicate fields so there's no need to resort to `json::Value` to silently
 //!   eat up duplicate fields.
 //!
-//! * Use the `dbt_serde_yaml::Spanned` wrapper type to capture the source
+//! * Use the `dbt_yaml::Spanned` wrapper type to capture the source
 //!   location of any Yaml field.
 //!
 //! * `Option<Verbatim<T>>` does not work as expected due to implementation
@@ -48,14 +48,14 @@
 //! * Avoid using `#[serde(flatten)]` -- `Verbatim<T>` does not work with
 //!   `#[serde(flatten)]`. Instead, use field names that starts and ends with
 //!   `__` (e.g. `__additional_properties__`) -- all such named fields are
-//!   flattened by `dbt_serde_yaml`, just as if they were annotated with
+//!   flattened by `dbt_yaml`, just as if they were annotated with
 //!   `#[serde(flatten)]`. **NOTE** structs containing such fields will not
 //!   serialize correctly with default serde serializers -- if you ever need to
 //!   (re)serialize structs containing such fields, say into a
 //!   `minijinja::Value`, serialize them to a `yaml::Value` *first*, then
 //!   serialize the `yaml::Value` to the target format.
 //!
-//! * Untagged enums (`#[serde(untagged)]`) containing "magic" dbt-serde_yaml
+//! * Untagged enums (`#[serde(untagged)]`) containing "magic" dbt-yaml
 //!   facilities, such as `Verbatim<T>` or `flatten_dunder` fields, does
 //!   *not* work with the default `#[derive(Deserialize)]` decorator -- use
 //!   `#[derive(UntaggedEnumDeserialize)]` instead (Note:
@@ -63,7 +63,7 @@
 //!   types, use the default `#[derive(Deserialize)]` decorator).
 //!
 //! * For the specific use case of error recovery during deserialization, the
-//!   `dbt_serde_yaml::ShouldBe<T>` wrapper type should be preferred -- unlike
+//!   `dbt_yaml::ShouldBe<T>` wrapper type should be preferred -- unlike
 //!   general `#[serde(untagged)]` enums which requires backtracking during
 //!   deserialization, `ShouldBe<T>` does not backtrack and is zero overhead on
 //!   the happy path (see type documentation for more details).
@@ -80,7 +80,7 @@ use dbt_common::{
     io_utils::try_read_yml_to_str, tracing::emit::emit_strict_parse_error,
 };
 use dbt_schemas::schemas::serde::yaml_to_fs_error;
-use dbt_serde_yaml::Value;
+use dbt_yaml::Value;
 use minijinja::{constants::CURRENT_SPAN, listener::RenderingEventListener};
 use regex::Regex;
 use serde::{Serialize, de::DeserializeOwned};
@@ -117,11 +117,11 @@ pub fn value_from_file(
 pub trait MinijinjaContext: Serialize {
     /// Returns [Some] with a new context that has updated itself with the given yaml span.
     /// Returns [None] if the context cannot be updated.
-    fn with_yaml_span(&self, span: &dbt_serde_yaml::Span) -> Option<Box<Self>>;
+    fn with_yaml_span(&self, span: &dbt_yaml::Span) -> Option<Box<Self>>;
 }
 
 impl MinijinjaContext for BTreeMap<String, minijinja::Value> {
-    fn with_yaml_span(&self, span: &dbt_serde_yaml::Span) -> Option<Box<Self>> {
+    fn with_yaml_span(&self, span: &dbt_yaml::Span) -> Option<Box<Self>> {
         let mut ctx = self.clone();
         let minijinja_span = minijinja::compiler::tokens::Span {
             start_line: span.start.line() as u32,
@@ -140,13 +140,13 @@ impl MinijinjaContext for BTreeMap<String, minijinja::Value> {
 }
 
 impl<V: Serialize> MinijinjaContext for HashMap<String, V> {
-    fn with_yaml_span(&self, _span: &dbt_serde_yaml::Span) -> Option<Box<Self>> {
+    fn with_yaml_span(&self, _span: &dbt_yaml::Span) -> Option<Box<Self>> {
         None
     }
 }
 
 impl MinijinjaContext for LoadContext {
-    fn with_yaml_span(&self, _span: &dbt_serde_yaml::Span) -> Option<Box<Self>> {
+    fn with_yaml_span(&self, _span: &dbt_yaml::Span) -> Option<Box<Self>> {
         None
     }
 }
@@ -326,10 +326,10 @@ fn value_from_str(
     show_errors_or_warnings: bool,
     dependency_package_name: Option<&str>,
 ) -> FsResult<Value> {
-    let _f = dbt_serde_yaml::with_filename(error_display_path.map(PathBuf::from));
+    let _f = dbt_yaml::with_filename(error_display_path.map(PathBuf::from));
 
     let mut value = Value::from_str(input, |path, key, existing_key| {
-        let key_repr = dbt_serde_yaml::to_string(&key).unwrap_or_else(|_| "<opaque>".to_string());
+        let key_repr = dbt_yaml::to_string(&key).unwrap_or_else(|_| "<opaque>".to_string());
         let path = strip_dunder_fields_from_path(&path.to_string());
         let duplicate_key_error = fs_err!(
             code => ErrorCode::DuplicateConfigKey,
@@ -346,7 +346,7 @@ fn value_from_str(
             emit_strict_parse_error(&duplicate_key_error, dependency_package_name, io_args);
         }
         // last key wins:
-        dbt_serde_yaml::mapping::DuplicateKey::Overwrite
+        dbt_yaml::mapping::DuplicateKey::Overwrite
     })
     .map_err(|e| yaml_to_fs_error(e, error_display_path))?;
     value
@@ -402,8 +402,8 @@ where
     F: FnMut(&Value) -> Result<Option<Value>, Box<dyn std::error::Error + 'static + Send + Sync>>,
 {
     let mut warnings: Vec<FsError> = Vec::new();
-    let warn_unused_keys = |path: dbt_serde_yaml::path::Path, key: &Value, _: &Value| {
-        let key_repr = dbt_serde_yaml::to_string(key).unwrap_or_else(|_| "<opaque>".to_string());
+    let warn_unused_keys = |path: dbt_yaml::path::Path, key: &Value, _: &Value| {
+        let key_repr = dbt_yaml::to_string(key).unwrap_or_else(|_| "<opaque>".to_string());
         let path = strip_dunder_fields_from_path(&path.to_string());
         warnings.push(*fs_err!(
             code => ErrorCode::UnusedConfigKey,
@@ -438,7 +438,7 @@ fn render_jinja_str<S: Serialize>(
     env: &JinjaEnv,
     ctx: &S,
     listeners: &[Rc<dyn RenderingEventListener>],
-    yaml_span: &dbt_serde_yaml::Span,
+    yaml_span: &dbt_yaml::Span,
 ) -> FsResult<Value> {
     if check_single_expression_without_whitepsace_control(s) {
         let compiled = env.compile_expression(&s[2..s.len() - 2])?;
@@ -454,7 +454,7 @@ fn render_jinja_str<S: Serialize>(
         );
 
         let eval = compiled.eval(ctx, listeners)?;
-        let val = dbt_serde_yaml::to_value(eval).map_err(|e| {
+        let val = dbt_yaml::to_value(eval).map_err(|e| {
             yaml_to_fs_error(
                 e,
                 // The caller will attach the error location using the span in the
@@ -498,7 +498,7 @@ fn render_jinja_str<S: Serialize>(
 fn perform_typecheck<F>(
     io_args: Option<&IoArgs>,
     env: &JinjaEnv,
-    yaml_span: &dbt_serde_yaml::Span,
+    yaml_span: &dbt_yaml::Span,
     typecheck_fn: F,
 ) where
     F: FnOnce(
@@ -593,7 +593,7 @@ pub fn check_single_expression_without_whitepsace_control(input: &str) -> bool {
 mod tests {
     use super::*;
     use dbt_common::io_args::IoArgs;
-    use dbt_serde_yaml::Value;
+    use dbt_yaml::Value;
 
     #[test]
     fn test_check_single_expression_without_whitepsace_control() {

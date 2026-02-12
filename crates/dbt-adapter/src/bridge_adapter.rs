@@ -194,7 +194,7 @@ impl BridgeAdapter {
     /// Create an instance of [BridgeAdapter] that operates in parse phase mode.
     pub fn new_parse_phase_adapter(
         adapter_type: AdapterType,
-        config: dbt_serde_yaml::Mapping,
+        config: dbt_yaml::Mapping,
         package_quoting: DbtQuoting,
         type_ops: Box<dyn TypeOps>,
         token: CancellationToken,
@@ -217,7 +217,7 @@ impl BridgeAdapter {
 
     pub(crate) fn make_parse_adapter_state(
         adapter_type: AdapterType,
-        config: dbt_serde_yaml::Mapping,
+        config: dbt_yaml::Mapping,
         package_quoting: DbtQuoting,
         type_ops: Box<dyn TypeOps>,
         relation_cache: Arc<RelationCache>,

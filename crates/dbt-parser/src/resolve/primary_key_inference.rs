@@ -4,7 +4,7 @@ use std::sync::Arc;
 use dbt_schemas::schemas::common::ConstraintType;
 use dbt_schemas::schemas::nodes::TestMetadata;
 use dbt_schemas::schemas::{DbtModel, DbtTest, Nodes};
-use dbt_serde_yaml::Value as YmlValue;
+use dbt_yaml::Value as YmlValue;
 
 // Test metadata keys
 const KEY_COLUMN_NAME: &str = "column_name";

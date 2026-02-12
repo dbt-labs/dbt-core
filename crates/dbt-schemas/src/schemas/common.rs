@@ -53,12 +53,12 @@ impl FromStr for SchemaOrigin {
 use dbt_common::adapter::AdapterType;
 use dbt_common::{CodeLocationWithFile, ErrorCode, FsError, FsResult, err, fs_err};
 use dbt_frontend_common::Dialect;
-use dbt_serde_yaml::{JsonSchema, Spanned, UntaggedEnumDeserialize, Verbatim};
 use dbt_telemetry::NodeMaterialization;
+use dbt_yaml::{JsonSchema, Spanned, UntaggedEnumDeserialize, Verbatim};
 use hex;
 use serde::{Deserialize, Deserializer, Serialize};
 // Type alias for clarity
-type YmlValue = dbt_serde_yaml::Value;
+type YmlValue = dbt_yaml::Value;
 use serde_with::skip_serializing_none;
 use sha2::{Digest, Sha256};
 use strum::{Display, EnumIter, EnumString};
@@ -1144,15 +1144,15 @@ pub enum Severity {
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct Versions {
     pub v: YmlValue,
-    pub config: Verbatim<Option<dbt_serde_yaml::Value>>,
+    pub config: Verbatim<Option<dbt_yaml::Value>>,
     pub __additional_properties__: Verbatim<HashMap<String, YmlValue>>,
 }
 
 impl Versions {
     pub fn get_version(&self) -> Option<String> {
         match &self.v {
-            dbt_serde_yaml::Value::String(s, _) => Some(s.to_string()),
-            dbt_serde_yaml::Value::Number(n, _) => Some(n.to_string()),
+            dbt_yaml::Value::String(s, _) => Some(s.to_string()),
+            dbt_yaml::Value::Number(n, _) => Some(n.to_string()),
             _ => None,
         }
     }
@@ -1741,9 +1741,9 @@ mod tests {
             let duration_config = Config {
                 interval: "2h".parse().unwrap(),
             };
-            let yaml = dbt_serde_yaml::to_string(&duration_config).unwrap();
+            let yaml = dbt_yaml::to_string(&duration_config).unwrap();
             assert_eq!(
-                dbt_serde_yaml::from_str::<Config>(&yaml).unwrap(),
+                dbt_yaml::from_str::<Config>(&yaml).unwrap(),
                 duration_config
             );
 
@@ -1751,11 +1751,8 @@ mod tests {
             let never_config = Config {
                 interval: SchemaRefreshInterval::Never,
             };
-            let yaml = dbt_serde_yaml::to_string(&never_config).unwrap();
-            assert_eq!(
-                dbt_serde_yaml::from_str::<Config>(&yaml).unwrap(),
-                never_config
-            );
+            let yaml = dbt_yaml::to_string(&never_config).unwrap();
+            assert_eq!(dbt_yaml::from_str::<Config>(&yaml).unwrap(), never_config);
         }
 
         #[test]
@@ -1835,7 +1832,7 @@ mod tests {
         struct TestConfig {
             schedule: Schedule,
         }
-        let config: TestConfig = dbt_serde_yaml::from_str(yaml).unwrap();
+        let config: TestConfig = dbt_yaml::from_str(yaml).unwrap();
 
         // Verify it parsed as Schedule::String
         assert!(matches!(config.schedule, Schedule::String(_)));
@@ -1861,7 +1858,7 @@ schedule:
         struct TestConfig {
             schedule: Schedule,
         }
-        let config: TestConfig = dbt_serde_yaml::from_str(yaml).unwrap();
+        let config: TestConfig = dbt_yaml::from_str(yaml).unwrap();
 
         // Verify it parsed as Schedule::ScheduleConfig
         assert!(matches!(config.schedule, Schedule::ScheduleConfig(_)));
@@ -1899,7 +1896,7 @@ models:
             schedule: Schedule,
         }
 
-        let parsed: ModelsFile = dbt_serde_yaml::from_str(yaml).unwrap();
+        let parsed: ModelsFile = dbt_yaml::from_str(yaml).unwrap();
         assert_eq!(parsed.models.len(), 1);
         assert_eq!(parsed.models[0].name, "some_scheduled_task");
 
@@ -1917,7 +1914,7 @@ models:
 count: 24
 period: hour
 "#;
-        let rules: FreshnessRules = dbt_serde_yaml::from_str(yaml).unwrap();
+        let rules: FreshnessRules = dbt_yaml::from_str(yaml).unwrap();
         assert_eq!(rules.count, Some(24));
         assert_eq!(rules.period, Some(FreshnessPeriod::hour));
     }
@@ -1928,7 +1925,7 @@ period: hour
 count: "24"
 period: hour
 "#;
-        let rules: FreshnessRules = dbt_serde_yaml::from_str(yaml).unwrap();
+        let rules: FreshnessRules = dbt_yaml::from_str(yaml).unwrap();
         assert_eq!(rules.count, Some(24));
         assert_eq!(rules.period, Some(FreshnessPeriod::hour));
     }
@@ -1948,7 +1945,7 @@ period: hour
         );
 
         // Test BigqueryPartitionConfig variant with time partitioning
-        let config_json: YmlValue = dbt_serde_yaml::from_str(
+        let config_json: YmlValue = dbt_yaml::from_str(
             r#"
             field: "partition_date"
             data_type: "date"

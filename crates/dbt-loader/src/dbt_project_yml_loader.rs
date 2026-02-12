@@ -11,7 +11,7 @@ use dbt_schemas::schemas::project::{
     ProjectModelConfig, ProjectSeedConfig, ProjectSemanticModelConfig, ProjectSnapshotConfig,
     ProjectSourceConfig, ProjectUnitTestConfig,
 };
-use dbt_serde_yaml::{ShouldBe, Value as YmlValue};
+use dbt_yaml::{ShouldBe, Value as YmlValue};
 use minijinja::Value;
 use minijinja::constants::CURRENT_PATH;
 use std::{
@@ -161,7 +161,7 @@ pub fn load_project_yml(
     env: &JinjaEnv,
     dbt_project_path: &Path,
     dependency_package_name: Option<&str>,
-    cli_vars: BTreeMap<String, dbt_serde_yaml::Value>,
+    cli_vars: BTreeMap<String, dbt_yaml::Value>,
 ) -> FsResult<DbtProject> {
     let namespace_keys: Vec<String> = env
         .env

@@ -81,7 +81,7 @@ fn extract_model_and_version_config<T: DefaultTo<T>, S: GetConfig<T> + Debug>(
     }
 
     // Swap the schema value for Null - we are doing this so that we don't have to clone
-    let schema_value = std::mem::replace(&mut mpe.schema_value, dbt_serde_yaml::Value::null());
+    let schema_value = std::mem::replace(&mut mpe.schema_value, dbt_yaml::Value::null());
 
     let maybe_model = into_typed_with_jinja_error_context::<S, _>(
         Some(&arg.io),
@@ -1017,7 +1017,7 @@ pub fn collect_hook_dependencies_from_config<T: DefaultTo<T> + 'static>(
     // Note: YAML span information is available in the original Verbatim<Option<Hooks>> wrapper
     // but is not accessible once converted to DbtConfig. To preserve spans, we would need to:
     // 1. Pass the original Verbatim wrappers to this function
-    // 2. Use dbt_serde_yaml APIs to extract span information from the Value objects
+    // 2. Use dbt_yaml APIs to extract span information from the Value objects
     // 3. Update the schema definitions to expose span access methods
     let extract_hook_sqls = |hooks: &Hooks| -> Vec<String> {
         match hooks {

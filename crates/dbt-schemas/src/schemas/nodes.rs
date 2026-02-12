@@ -12,7 +12,7 @@ use dbt_common::{ErrorCode, FsResult, err, io_args::StaticAnalysisKind};
 use dbt_telemetry::{ExecutionPhase, NodeEvaluated, NodeProcessed, NodeType};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
-type YmlValue = dbt_serde_yaml::Value;
+type YmlValue = dbt_yaml::Value;
 use crate::schemas::common::{PersistDocsConfig, hooks_equal, normalize_sql};
 use crate::schemas::dbt_column::{DbtColumnRef, deserialize_dbt_columns, serialize_dbt_columns};
 use crate::schemas::manifest::GrantAccessToTarget;
@@ -41,7 +41,7 @@ use crate::schemas::{
     ref_and_source::{DbtRef, DbtSourceWrapper},
     serde::StringOrInteger,
 };
-use dbt_serde_yaml::{Spanned, UntaggedEnumDeserialize};
+use dbt_yaml::{Spanned, UntaggedEnumDeserialize};
 
 #[derive(
     Default, Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd, Serialize, Deserialize,
@@ -1075,7 +1075,7 @@ impl InternalDbtNodeAttributes for DbtModel {
     }
 
     fn serialized_config(&self) -> YmlValue {
-        dbt_serde_yaml::to_value(&self.deprecated_config).expect("Failed to serialize to YAML")
+        dbt_yaml::to_value(&self.deprecated_config).expect("Failed to serialize to YAML")
     }
 
     fn schema_refresh_interval(&self) -> Option<SchemaRefreshInterval> {
@@ -1453,7 +1453,7 @@ impl InternalDbtNodeAttributes for DbtSeed {
     }
 
     fn serialized_config(&self) -> YmlValue {
-        dbt_serde_yaml::to_value(&self.deprecated_config).expect("Failed to serialize to YAML")
+        dbt_yaml::to_value(&self.deprecated_config).expect("Failed to serialize to YAML")
     }
 }
 
@@ -1628,7 +1628,7 @@ impl InternalDbtNodeAttributes for DbtTest {
     }
 
     fn serialized_config(&self) -> YmlValue {
-        dbt_serde_yaml::to_value(&self.deprecated_config).expect("Failed to serialize to YAML")
+        dbt_yaml::to_value(&self.deprecated_config).expect("Failed to serialize to YAML")
     }
 }
 
@@ -1760,7 +1760,7 @@ impl InternalDbtNodeAttributes for DbtUnitTest {
     }
 
     fn serialized_config(&self) -> YmlValue {
-        dbt_serde_yaml::to_value(&self.deprecated_config).expect("Failed to serialize to YAML")
+        dbt_yaml::to_value(&self.deprecated_config).expect("Failed to serialize to YAML")
     }
 }
 
@@ -2072,7 +2072,7 @@ impl InternalDbtNodeAttributes for DbtSource {
     }
 
     fn serialized_config(&self) -> YmlValue {
-        dbt_serde_yaml::to_value(&self.deprecated_config).expect("Failed to serialize DbtModel")
+        dbt_yaml::to_value(&self.deprecated_config).expect("Failed to serialize DbtModel")
     }
 
     fn schema_origin(&self) -> SchemaOrigin {
@@ -2503,7 +2503,7 @@ impl InternalDbtNodeAttributes for DbtSnapshot {
     }
 
     fn serialized_config(&self) -> YmlValue {
-        dbt_serde_yaml::to_value(&self.deprecated_config).expect("Failed to serialize to YAML")
+        dbt_yaml::to_value(&self.deprecated_config).expect("Failed to serialize to YAML")
     }
 
     fn schema_refresh_interval(&self) -> Option<SchemaRefreshInterval> {
@@ -2665,7 +2665,7 @@ impl InternalDbtNodeAttributes for DbtExposure {
         self.__common_attr__.meta.clone()
     }
     fn serialized_config(&self) -> YmlValue {
-        dbt_serde_yaml::to_value(&self.deprecated_config).expect("Failed to serialize to YAML")
+        dbt_yaml::to_value(&self.deprecated_config).expect("Failed to serialize to YAML")
     }
     fn search_name(&self) -> String {
         self.__common_attr__.name.clone()
@@ -2848,7 +2848,7 @@ impl InternalDbtNodeAttributes for DbtSemanticModel {
         )
     }
     fn serialized_config(&self) -> YmlValue {
-        dbt_serde_yaml::to_value(&self.deprecated_config).expect("Failed to serialize to YAML")
+        dbt_yaml::to_value(&self.deprecated_config).expect("Failed to serialize to YAML")
     }
 }
 
@@ -3025,7 +3025,7 @@ impl InternalDbtNodeAttributes for DbtMetric {
         format!("metric:{}.{}", self.package_name(), self.search_name())
     }
     fn serialized_config(&self) -> YmlValue {
-        dbt_serde_yaml::to_value(&self.deprecated_config).expect("Failed to serialize to YAML")
+        dbt_yaml::to_value(&self.deprecated_config).expect("Failed to serialize to YAML")
     }
 }
 
@@ -3243,7 +3243,7 @@ impl InternalDbtNodeAttributes for DbtSavedQuery {
         format!("saved_query:{}.{}", self.package_name(), self.search_name())
     }
     fn serialized_config(&self) -> YmlValue {
-        dbt_serde_yaml::to_value(&self.deprecated_config).expect("Failed to serialize to YAML")
+        dbt_yaml::to_value(&self.deprecated_config).expect("Failed to serialize to YAML")
     }
 }
 
@@ -3363,7 +3363,7 @@ impl InternalDbtNodeAttributes for DbtFunction {
     }
 
     fn serialized_config(&self) -> YmlValue {
-        dbt_serde_yaml::to_value(&self.deprecated_config).expect("Failed to serialize to YAML")
+        dbt_yaml::to_value(&self.deprecated_config).expect("Failed to serialize to YAML")
     }
 }
 
@@ -4297,9 +4297,7 @@ pub struct DbtExposure {
     pub deprecated_config: ExposureConfig,
 }
 
-#[derive(
-    Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq, dbt_serde_yaml::JsonSchema,
-)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq, dbt_yaml::JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum ExposureType {
     #[default]
@@ -5324,9 +5322,9 @@ mod tests {
         ModelConfig, hooks_equal, normalize_description, persist_docs_configs_equal, quoting_equal,
     };
     use crate::schemas::common::{Hooks, PersistDocsConfig};
-    use dbt_serde_yaml::Verbatim;
+    use dbt_yaml::Verbatim;
 
-    type YmlValue = dbt_serde_yaml::Value;
+    type YmlValue = dbt_yaml::Value;
 
     #[test]
     fn test_hooks_equal_none_vs_empty_array() {
@@ -5455,7 +5453,7 @@ mod tests {
 
     #[test]
     fn test_deserialize_wo_meta() {
-        let config: YmlValue = dbt_serde_yaml::from_str(
+        let config: YmlValue = dbt_yaml::from_str(
             r#"
             enabled: true
             "#,
@@ -5949,7 +5947,7 @@ impl InternalDbtNodeAttributes for DbtAnalysis {
     }
 
     fn serialized_config(&self) -> YmlValue {
-        dbt_serde_yaml::to_value(&self.deprecated_config).expect("Failed to serialize to YAML")
+        dbt_yaml::to_value(&self.deprecated_config).expect("Failed to serialize to YAML")
     }
 }
 // Saved queries don't have a relation, individual exports do.

@@ -7,7 +7,7 @@ use dbt_loader::utils::read_profiles_and_extract_db_config;
 use dbt_schemas::schemas::profiles::{DbConfig, DbTargets};
 
 use dbt_schemas::schemas::serde::yaml_to_fs_error;
-use dbt_serde_yaml;
+use dbt_yaml;
 use std::collections::HashMap;
 use std::fs::File;
 use std::path::{Path, PathBuf};
@@ -113,7 +113,7 @@ pub fn write_db_config_to_test_profile(
             default_target: adapter_type.to_string(),
             outputs: HashMap::from([(
                 adapter_type,
-                dbt_serde_yaml::to_value(db_config).map_err(|e| {
+                dbt_yaml::to_value(db_config).map_err(|e| {
                     fs_err!(
                         ErrorCode::InvalidConfig,
                         "Failed to serialize db config: {}",
@@ -123,7 +123,7 @@ pub fn write_db_config_to_test_profile(
             )]),
         },
     )]);
-    dbt_serde_yaml::to_writer(&mut file, &profile)
+    dbt_yaml::to_writer(&mut file, &profile)
         .map_err(|e| yaml_to_fs_error(e, Some(&profile_path)))?;
     Ok(profile_path)
 }

@@ -6,9 +6,9 @@ use serde_with::skip_serializing_none;
 
 use crate::schemas::serde::OmissibleGrantConfig;
 use dbt_common::serde_utils::Omissible;
-use dbt_serde_yaml::JsonSchema;
-use dbt_serde_yaml::Spanned;
-use dbt_serde_yaml::Verbatim;
+use dbt_yaml::JsonSchema;
+use dbt_yaml::Spanned;
+use dbt_yaml::Verbatim;
 
 use crate::schemas::common::DbtBatchSize;
 use crate::schemas::common::DbtIncrementalStrategy;
@@ -22,7 +22,7 @@ use crate::schemas::properties::ModelFreshness;
 use crate::schemas::serde::{bool_or_string_bool, default_type};
 
 // Type aliases for clarity
-type YmlValue = dbt_serde_yaml::Value;
+type YmlValue = dbt_yaml::Value;
 
 use crate::schemas::{
     CommonAttributes, DbtAnalysis, DbtExposure, DbtFunction, DbtModel, DbtSeed, DbtSnapshot,

@@ -18,7 +18,7 @@ fn load_definitions() -> Vec<Definition> {
         let input = std::str::from_utf8(&asset.data)
             .unwrap_or_else(|_| panic!("{filename}:: corrupted asset: non UTF-8"));
 
-        dbt_serde_yaml::Deserializer::from_str(input)
+        dbt_yaml::Deserializer::from_str(input)
             .map(|doc| {
                 Definition::deserialize(doc)
                     .unwrap_or_else(|e| panic!("{filename}:: corrupted asset: bad definition {e}"))

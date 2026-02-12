@@ -719,7 +719,7 @@ all okay!");
         );
         let adapter = BridgeAdapter::new_parse_phase_adapter(
             AdapterType::Postgres,
-            dbt_serde_yaml::Mapping::default(),
+            dbt_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
             Box::new(NaiveTypeOpsImpl::new(AdapterType::Postgres)),
             never_cancels(),
@@ -807,7 +807,7 @@ all okay!");
         );
         let adapter = BridgeAdapter::new_parse_phase_adapter(
             AdapterType::Postgres,
-            dbt_serde_yaml::Mapping::default(),
+            dbt_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
             Box::new(NaiveTypeOpsImpl::new(AdapterType::Postgres)),
             never_cancels(),
@@ -870,7 +870,7 @@ all okay!");
     fn test_macro_assignment() {
         let adapter = BridgeAdapter::new_parse_phase_adapter(
             AdapterType::Postgres,
-            dbt_serde_yaml::Mapping::default(),
+            dbt_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
             Box::new(NaiveTypeOpsImpl::new(AdapterType::Postgres)),
             never_cancels(),
@@ -991,7 +991,7 @@ all okay!");
 
         let adapter = BridgeAdapter::new_parse_phase_adapter(
             AdapterType::Postgres,
-            dbt_serde_yaml::Mapping::default(),
+            dbt_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
             Box::new(NaiveTypeOpsImpl::new(AdapterType::Postgres)),
             never_cancels(),
@@ -1043,7 +1043,7 @@ all okay!");
 
         let adapter = BridgeAdapter::new_parse_phase_adapter(
             AdapterType::Postgres,
-            dbt_serde_yaml::Mapping::default(),
+            dbt_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
             Box::new(NaiveTypeOpsImpl::new(AdapterType::Postgres)),
             never_cancels(),
@@ -1089,7 +1089,7 @@ all okay!");
 
         let adapter = BridgeAdapter::new_parse_phase_adapter(
             AdapterType::Postgres,
-            dbt_serde_yaml::Mapping::default(),
+            dbt_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
             Box::new(NaiveTypeOpsImpl::new(AdapterType::Postgres)),
             never_cancels(),

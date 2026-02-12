@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 
 // Type aliases for clarity
-type YmlValue = dbt_serde_yaml::Value;
+type YmlValue = dbt_yaml::Value;
 
 use serde::ser::{SerializeMap, Serializer};
 
@@ -34,7 +34,7 @@ where
     {
         let mut m = serializer.serialize_map(Some(self.map.len()))?;
         for (k, v) in self.map {
-            let yml = dbt_serde_yaml::to_value(v).map_err(serde::ser::Error::custom)?;
+            let yml = dbt_yaml::to_value(v).map_err(serde::ser::Error::custom)?;
             m.serialize_entry(k, &yml)?;
         }
         m.end()
@@ -56,7 +56,7 @@ where
     {
         let mut m = serializer.serialize_map(Some(self.map.len()))?;
         for (k, v) in self.map {
-            let yml = dbt_serde_yaml::to_value(v).map_err(serde::ser::Error::custom)?;
+            let yml = dbt_yaml::to_value(v).map_err(serde::ser::Error::custom)?;
             let yml = serialize_with_resource_type(yml, self.resource_type);
             m.serialize_entry(k, &yml)?;
         }
@@ -137,7 +137,7 @@ impl Serialize for DbtManifestV12 {
             },
         )?;
 
-        let docs = dbt_serde_yaml::to_value(&self.docs).map_err(serde::ser::Error::custom)?;
+        let docs = dbt_yaml::to_value(&self.docs).map_err(serde::ser::Error::custom)?;
         m.serialize_entry("docs", &docs)?;
 
         m.serialize_entry(
@@ -176,16 +176,11 @@ impl Serialize for DbtManifestV12 {
             },
         )?;
 
-        let child_map =
-            dbt_serde_yaml::to_value(&self.child_map).map_err(serde::ser::Error::custom)?;
-        let parent_map =
-            dbt_serde_yaml::to_value(&self.parent_map).map_err(serde::ser::Error::custom)?;
-        let group_map =
-            dbt_serde_yaml::to_value(&self.group_map).map_err(serde::ser::Error::custom)?;
-        let disabled =
-            dbt_serde_yaml::to_value(&self.disabled).map_err(serde::ser::Error::custom)?;
-        let selectors =
-            dbt_serde_yaml::to_value(&self.selectors).map_err(serde::ser::Error::custom)?;
+        let child_map = dbt_yaml::to_value(&self.child_map).map_err(serde::ser::Error::custom)?;
+        let parent_map = dbt_yaml::to_value(&self.parent_map).map_err(serde::ser::Error::custom)?;
+        let group_map = dbt_yaml::to_value(&self.group_map).map_err(serde::ser::Error::custom)?;
+        let disabled = dbt_yaml::to_value(&self.disabled).map_err(serde::ser::Error::custom)?;
+        let selectors = dbt_yaml::to_value(&self.selectors).map_err(serde::ser::Error::custom)?;
 
         m.serialize_entry("child_map", &child_map)?;
         m.serialize_entry("parent_map", &parent_map)?;

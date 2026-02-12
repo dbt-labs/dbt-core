@@ -2,8 +2,8 @@ use crate::io_args::{EvalArgs, Phases, StaticAnalysisOffReason};
 use crate::stdfs::File;
 use crate::tracing::metrics::get_exit_code_from_error_counter;
 use crate::{ErrorCode, FsError, FsResult, err, fs_err, stdfs::canonicalize};
-use dbt_serde_yaml::Span;
 use dbt_telemetry::{ExecutionPhase, NodeOutcome};
+use dbt_yaml::Span;
 use pathdiff::diff_paths;
 use std::{
     any::Any,

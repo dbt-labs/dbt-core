@@ -580,7 +580,7 @@ fn dump_sqlite_recordings_to_yaml(db_path: &Path, yaml_path: &Path) -> TestResul
     }
 
     // Serialize to YAML (as a map with model IDs as keys)
-    let yaml_str = dbt_serde_yaml::to_string(&operations_by_model)
+    let yaml_str = dbt_yaml::to_string(&operations_by_model)
         .map_err(|e| format!("Failed to serialize YAML: {}", e))?;
 
     // Post-process to use block scalars for multiline SQL

@@ -1,5 +1,5 @@
 use crate::schemas::{project::DataTestConfig, properties::GetConfig};
-use dbt_serde_yaml::JsonSchema;
+use dbt_yaml::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 

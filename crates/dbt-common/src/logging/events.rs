@@ -17,7 +17,7 @@ use console::{Style, StyledObject};
 use log::Level;
 use serde::{Deserialize, Serialize};
 
-type YmlValue = dbt_serde_yaml::Value;
+type YmlValue = dbt_yaml::Value;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum Severity {

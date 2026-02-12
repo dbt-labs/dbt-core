@@ -335,7 +335,7 @@ impl ProfileSetup {
 
         let mut top: HashMap<String, ProfileTarget> = HashMap::new();
         top.insert(profile_name.to_string(), profile.clone());
-        let new_block = dbt_serde_yaml::to_string(&top).map_err(|e| {
+        let new_block = dbt_yaml::to_string(&top).map_err(|e| {
             fs_err!(
                 ErrorCode::IoError,
                 "Failed to serialize profile block: {}",

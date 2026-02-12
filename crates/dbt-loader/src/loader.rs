@@ -16,8 +16,8 @@ use dbt_schemas::schemas::serde::{StringOrInteger, yaml_to_fs_error};
 use dbt_schemas::schemas::telemetry::{ExecutionPhase, PhaseExecuted};
 use dbt_schemas::schemas::{DbtCloudConfig, DbtCloudProjectConfig};
 use dbt_schemas::state::DbtProfile;
-use dbt_serde_yaml;
 use dbt_telemetry::GenericOpItemProcessed;
+use dbt_yaml;
 use fs_deps::get_or_install_packages;
 use indexmap::IndexMap;
 use pathdiff::diff_paths;
@@ -359,9 +359,9 @@ pub async fn load_catalogs(arg: &LoadArgs, env: &JinjaEnv) -> FsResult<()> {
     let catalogs_yml_path = arg.io.in_dir.join(DBT_CATALOGS_YML);
     match fs::read_to_string(&catalogs_yml_path) {
         Ok(raw_text) => {
-            let raw_text_yml: dbt_serde_yaml::Value = dbt_serde_yaml::from_str(&raw_text)
+            let raw_text_yml: dbt_yaml::Value = dbt_yaml::from_str(&raw_text)
                 .map_err(|e| yaml_to_fs_error(e, Some(&catalogs_yml_path)))?;
-            let text: dbt_serde_yaml::Value =
+            let text: dbt_yaml::Value =
                 into_typed_with_jinja(&arg.io, raw_text_yml, true, env, &ctx, &[], None, true)?;
             load_catalogs::load_catalogs(text, &catalogs_yml_path)
         }
@@ -460,7 +460,7 @@ pub fn load_cloud_project_config(
 
     // Read and parse the dbt_cloud.yml file
     let content = fs::read_to_string(&dbt_cloud_config_path).ok()?;
-    let cloud_config: DbtCloudConfig = dbt_serde_yaml::from_str(&content).ok()?;
+    let cloud_config: DbtCloudConfig = dbt_yaml::from_str(&content).ok()?;
 
     // TODO: unsure if we should exit early if the project_id is not set in dbt_project.yml
     // or if we should fall back to the active_project in dbt_cloud.yml

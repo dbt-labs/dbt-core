@@ -24,7 +24,7 @@ pub fn try_load_valid_dbt_packages_lock(
     dbt_packages_dir: &Path,
     dbt_packages: &DbtPackages,
     jinja_env: &JinjaEnv,
-    vars: &BTreeMap<String, dbt_serde_yaml::Value>,
+    vars: &BTreeMap<String, dbt_yaml::Value>,
 ) -> FsResult<Option<DbtPackagesLock>> {
     let packages_lock_path = io.in_dir.join(DBT_PACKAGES_LOCK_FILE);
     let sha1_hash = fusion_sha1_hash_packages(&dbt_packages.packages);
@@ -68,7 +68,7 @@ fn try_load_from_deprecated_dbt_packages_lock(
     dbt_packages: Option<&DbtPackages>,
     yml_str: &str,
     jinja_env: &JinjaEnv,
-    vars: &BTreeMap<String, dbt_serde_yaml::Value>,
+    vars: &BTreeMap<String, dbt_yaml::Value>,
 ) -> FsResult<Option<DbtPackagesLock>> {
     match from_yaml_raw::<DeprecatedDbtPackagesLock>(io, yml_str, None, true, None) {
         // Here, we need to do a fuzzy lookup on the old dbt_packages_lock.yml file
@@ -333,7 +333,7 @@ pub fn load_dbt_packages_lock_without_validation(
     io: &IoArgs,
     dbt_packages_dir: &Path,
     jinja_env: &JinjaEnv,
-    vars: &BTreeMap<String, dbt_serde_yaml::Value>,
+    vars: &BTreeMap<String, dbt_yaml::Value>,
 ) -> FsResult<Option<DbtPackagesLock>> {
     let packages_lock_path = io.in_dir.join(DBT_PACKAGES_LOCK_FILE);
     if !packages_lock_path.exists() {

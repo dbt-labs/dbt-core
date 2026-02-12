@@ -21,7 +21,7 @@ pub struct LoadArgs {
     // Whether to update dependencies
     pub update_deps: bool,
     // The directory to load the dbt project from
-    pub vars: BTreeMap<String, dbt_serde_yaml::Value>,
+    pub vars: BTreeMap<String, dbt_yaml::Value>,
     /// Whether this is the main command or a subcommand
     pub from_main: bool,
     /// threads

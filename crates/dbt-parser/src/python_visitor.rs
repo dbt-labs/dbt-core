@@ -55,38 +55,38 @@ fn literal_value_to_minijinja(value: &LiteralValue) -> minijinja::value::Value {
     }
 }
 
-/// Convert a Python LiteralValue to a dbt_serde_yaml::Value
+/// Convert a Python LiteralValue to a dbt_yaml::Value
 fn literal_value_to_yaml(
     value: LiteralValue,
-    span: &dbt_serde_yaml::Span,
-) -> Result<dbt_serde_yaml::Value, String> {
+    span: &dbt_yaml::Span,
+) -> Result<dbt_yaml::Value, String> {
     match value {
-        LiteralValue::String(s) => Ok(dbt_serde_yaml::Value::String(s, span.clone())),
-        LiteralValue::Integer(i) => Ok(dbt_serde_yaml::Value::Number(
-            dbt_serde_yaml::Number::from(i),
+        LiteralValue::String(s) => Ok(dbt_yaml::Value::String(s, span.clone())),
+        LiteralValue::Integer(i) => Ok(dbt_yaml::Value::Number(
+            dbt_yaml::Number::from(i),
             span.clone(),
         )),
-        LiteralValue::Float(f) => Ok(dbt_serde_yaml::Value::Number(
-            dbt_serde_yaml::Number::from(f),
+        LiteralValue::Float(f) => Ok(dbt_yaml::Value::Number(
+            dbt_yaml::Number::from(f),
             span.clone(),
         )),
-        LiteralValue::Bool(b) => Ok(dbt_serde_yaml::Value::Bool(b, span.clone())),
-        LiteralValue::None => Ok(dbt_serde_yaml::Value::Null(span.clone())),
+        LiteralValue::Bool(b) => Ok(dbt_yaml::Value::Bool(b, span.clone())),
+        LiteralValue::None => Ok(dbt_yaml::Value::Null(span.clone())),
         LiteralValue::List(items) => {
             let mut sequence = Vec::with_capacity(items.len());
             for item in items {
                 sequence.push(literal_value_to_yaml(item, span)?);
             }
-            Ok(dbt_serde_yaml::Value::Sequence(sequence, span.clone()))
+            Ok(dbt_yaml::Value::Sequence(sequence, span.clone()))
         }
         LiteralValue::Dict(pairs) => {
-            let mut mapping = dbt_serde_yaml::Mapping::with_capacity(pairs.len());
+            let mut mapping = dbt_yaml::Mapping::with_capacity(pairs.len());
             for (key, val) in pairs {
                 let key_yaml = literal_value_to_yaml(key, span)?;
                 let val_yaml = literal_value_to_yaml(val, span)?;
                 mapping.insert(key_yaml, val_yaml);
             }
-            Ok(dbt_serde_yaml::Value::Mapping(mapping, span.clone()))
+            Ok(dbt_yaml::Value::Mapping(mapping, span.clone()))
         }
         LiteralValue::Tuple(items) => {
             // Treat tuples as sequences in YAML
@@ -94,7 +94,7 @@ fn literal_value_to_yaml(
             for item in items {
                 sequence.push(literal_value_to_yaml(item, span)?);
             }
-            Ok(dbt_serde_yaml::Value::Sequence(sequence, span.clone()))
+            Ok(dbt_yaml::Value::Sequence(sequence, span.clone()))
         }
     }
 }
@@ -280,11 +280,11 @@ impl<'a, T: DefaultTo<T>> DbtPythonVisitor<'a, T> {
     fn handle_config(&mut self, kwargs: Vec<(String, LiteralValue)>) {
         // Convert kwargs into YAML mapping and deserialize into config struct
         // This handles all config fields uniformly, similar to SQL models
-        let span = dbt_serde_yaml::Span::default();
-        let mut mapping = dbt_serde_yaml::Mapping::with_capacity(kwargs.len());
+        let span = dbt_yaml::Span::default();
+        let mut mapping = dbt_yaml::Mapping::with_capacity(kwargs.len());
 
         for (key, value) in kwargs {
-            // Convert LiteralValue to dbt_serde_yaml::Value
+            // Convert LiteralValue to dbt_yaml::Value
             let yaml_value = match literal_value_to_yaml(value, &span) {
                 Ok(v) => v,
                 Err(e) => {
@@ -296,11 +296,11 @@ impl<'a, T: DefaultTo<T>> DbtPythonVisitor<'a, T> {
                 }
             };
 
-            mapping.insert(dbt_serde_yaml::Value::String(key, span.clone()), yaml_value);
+            mapping.insert(dbt_yaml::Value::String(key, span.clone()), yaml_value);
         }
 
         // Deserialize the entire mapping into the config struct, emitting strict warnings on unused keys
-        let yaml_value = dbt_serde_yaml::Value::Mapping(mapping, span);
+        let yaml_value = dbt_yaml::Value::Mapping(mapping, span);
         match into_typed_with_error(
             self.io_args,
             yaml_value,

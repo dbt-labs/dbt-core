@@ -16,7 +16,7 @@ use super::VarFunction;
 #[derive(Debug)]
 pub struct ConfiguredVar {
     vars: BTreeMap<String, IndexMap<String, DbtVars>>,
-    cli_vars: BTreeMap<String, dbt_serde_yaml::Value>,
+    cli_vars: BTreeMap<String, dbt_yaml::Value>,
 }
 
 // Similar to Var, but handling package specific vars
@@ -24,7 +24,7 @@ pub struct ConfiguredVar {
 impl ConfiguredVar {
     pub fn new(
         vars: BTreeMap<String, IndexMap<String, DbtVars>>,
-        cli_vars: BTreeMap<String, dbt_serde_yaml::Value>,
+        cli_vars: BTreeMap<String, dbt_yaml::Value>,
     ) -> Self {
         Self { vars, cli_vars }
     }

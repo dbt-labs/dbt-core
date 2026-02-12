@@ -33,8 +33,7 @@ pub async fn resolve_groups(
         if !mpe.schema_value.is_null() {
             let unique_id = format!("group.{}.{}", &package_name, group_name);
 
-            let schema_value =
-                std::mem::replace(&mut mpe.schema_value, dbt_serde_yaml::Value::null());
+            let schema_value = std::mem::replace(&mut mpe.schema_value, dbt_yaml::Value::null());
             // GroupProperties is for the yaml schema
             let group: GroupProperties = into_typed_with_jinja(
                 &args.io,

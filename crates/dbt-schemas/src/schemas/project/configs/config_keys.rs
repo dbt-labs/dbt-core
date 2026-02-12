@@ -1,4 +1,4 @@
-use dbt_serde_yaml::Value as YmlValue;
+use dbt_yaml::Value as YmlValue;
 use serde::Serialize;
 use std::collections::HashSet;
 
@@ -13,7 +13,7 @@ pub trait ConfigKeys: Serialize + Default {
     /// and extracts all keys from the resulting YAML mapping.
     fn valid_field_names() -> HashSet<String> {
         let default_instance = Self::default();
-        let serialized = dbt_serde_yaml::to_value(&default_instance)
+        let serialized = dbt_yaml::to_value(&default_instance)
             .expect("Failed to serialize config for field extraction");
 
         let mut field_names = HashSet::new();

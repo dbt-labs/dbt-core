@@ -6,7 +6,7 @@
 //! 2. We derive JSON Schema for these structs to allow for validation and documentation generation
 //! 3. We subset some of the enums as we are not using all of the values defined in the OTLP spec
 
-use dbt_serde_yaml::JsonSchema;
+use dbt_yaml::JsonSchema;
 #[cfg(test)]
 use fake::Dummy;
 use schemars::JsonSchema_repr;

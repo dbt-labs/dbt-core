@@ -305,8 +305,8 @@ impl From<serde_json::Error> for AdapterError {
     }
 }
 
-impl From<dbt_serde_yaml::Error> for AdapterError {
-    fn from(err: dbt_serde_yaml::Error) -> Self {
+impl From<dbt_yaml::Error> for AdapterError {
+    fn from(err: dbt_yaml::Error) -> Self {
         AdapterError::new(AdapterErrorKind::SerdeYAML, err.to_string())
     }
 }

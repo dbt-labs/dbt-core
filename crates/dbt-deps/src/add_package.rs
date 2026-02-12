@@ -101,7 +101,7 @@ fn parse_package(value: &str) -> PackageSpec {
 /// Packages YAML structure
 #[derive(Debug, Serialize, Deserialize)]
 pub struct PackagesYaml {
-    pub packages: Vec<HashMap<String, dbt_serde_yaml::Value>>,
+    pub packages: Vec<HashMap<String, dbt_yaml::Value>>,
 }
 
 /// Filter out duplicate packages in packages.yml so we don't have two entries for the same package
@@ -131,7 +131,7 @@ fn create_packages_yml_entry(
     package: &str,
     version: Option<&str>,
     source: &str,
-) -> HashMap<String, dbt_serde_yaml::Value> {
+) -> HashMap<String, dbt_yaml::Value> {
     let mut packages_yml_entry = HashMap::new();
 
     let package_key = if source == "hub" { "package" } else { source };
@@ -144,7 +144,7 @@ fn create_packages_yml_entry(
     // Use serde to serialize the package name
     packages_yml_entry.insert(
         package_key.to_string(),
-        dbt_serde_yaml::to_value(package).unwrap(),
+        dbt_yaml::to_value(package).unwrap(),
     );
 
     // For local packages, version is not applicable
@@ -156,13 +156,10 @@ fn create_packages_yml_entry(
             let versions: Vec<String> = ver.split(',').map(|v| v.trim().to_string()).collect();
             packages_yml_entry.insert(
                 version_key.to_string(),
-                dbt_serde_yaml::to_value(versions).unwrap(),
+                dbt_yaml::to_value(versions).unwrap(),
             );
         } else {
-            packages_yml_entry.insert(
-                version_key.to_string(),
-                dbt_serde_yaml::to_value(ver).unwrap(),
-            );
+            packages_yml_entry.insert(version_key.to_string(), dbt_yaml::to_value(ver).unwrap());
         }
     }
 
@@ -183,7 +180,7 @@ pub fn add_package_to_yml(
         let initial_content = PackagesYaml {
             packages: Vec::new(),
         };
-        let yaml_content = match dbt_serde_yaml::to_string(&initial_content) {
+        let yaml_content = match dbt_yaml::to_string(&initial_content) {
             Ok(yaml) => yaml,
             Err(e) => {
                 return err!(
@@ -198,7 +195,7 @@ pub fn add_package_to_yml(
 
     // Read existing packages.yml
     let yaml_content = stdfs::read_to_string(packages_path)?;
-    let mut packages_yml: PackagesYaml = match dbt_serde_yaml::from_str(&yaml_content) {
+    let mut packages_yml: PackagesYaml = match dbt_yaml::from_str(&yaml_content) {
         Ok(yml) => yml,
         Err(e) => return err!(ErrorCode::IoError, "Failed to parse packages.yml: {}", e),
     };
@@ -214,7 +211,7 @@ pub fn add_package_to_yml(
     packages_yml.packages.push(new_package_entry);
 
     // Write back to file
-    let yaml_content = match dbt_serde_yaml::to_string(&packages_yml) {
+    let yaml_content = match dbt_yaml::to_string(&packages_yml) {
         Ok(yaml) => yaml,
         Err(e) => {
             return err!(

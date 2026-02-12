@@ -62,14 +62,14 @@ fn test_tracing_jsonl() {
     fs::remove_file(&temp_file_path).expect("Failed to remove temporary file");
 
     // NOTE: TelemetryRecord no longer implements Deserialize for JSONL output.
-    // We deserialize each line into a generic JSON value (via dbt_serde_yaml which
+    // We deserialize each line into a generic JSON value (via dbt_yaml which
     // is compatible with serde_json) and assert on the JSON structure.
     let trace_id_hex = format!("{trace_id:032x}");
 
     let records: Vec<serde_json::Value> = file_contents
         .lines()
         .map(|line| {
-            dbt_serde_yaml::from_str(line).expect("Failed to parse telemetry JSON line into Value")
+            dbt_yaml::from_str(line).expect("Failed to parse telemetry JSON line into Value")
         })
         .collect();
 
@@ -255,7 +255,7 @@ fn test_jsonl_dynamic_output_flags_filtering() {
 
     let records: Vec<serde_json::Value> = file_contents
         .lines()
-        .map(|line| dbt_serde_yaml::from_str(line).expect("parse jsonl"))
+        .map(|line| dbt_yaml::from_str(line).expect("parse jsonl"))
         .collect();
 
     // Expect exactly 3 records: SpanStart + SpanEnd for exportable span, and one included log
@@ -321,7 +321,7 @@ fn test_jsonl_basic_follows_from() {
 
     let records: Vec<serde_json::Value> = file_contents
         .lines()
-        .map(|line| dbt_serde_yaml::from_str(line).expect("Failed to parse JSON line"))
+        .map(|line| dbt_yaml::from_str(line).expect("Failed to parse JSON line"))
         .collect();
 
     // Find span1 start to get its ID
@@ -401,7 +401,7 @@ fn test_jsonl_multiple_follows_from() {
 
     let records: Vec<serde_json::Value> = file_contents
         .lines()
-        .map(|line| dbt_serde_yaml::from_str(line).expect("Failed to parse JSON line"))
+        .map(|line| dbt_yaml::from_str(line).expect("Failed to parse JSON line"))
         .collect();
 
     // Find span3 end and verify it has links to both span1 and span2
@@ -461,7 +461,7 @@ fn test_jsonl_missing_followed_span() {
 
     let records: Vec<serde_json::Value> = file_contents
         .lines()
-        .map(|line| dbt_serde_yaml::from_str(line).expect("Failed to parse JSON line"))
+        .map(|line| dbt_yaml::from_str(line).expect("Failed to parse JSON line"))
         .collect();
 
     // Find span1 end and verify it has no links (graceful handling)

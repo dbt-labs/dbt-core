@@ -13,7 +13,7 @@ use dbt_schemas::{
     schemas::{InternalDbtNodeAttributes, telemetry::NodeType},
     state::{DbtRuntimeConfig, NodeResolverTracker, ResolverState},
 };
-use dbt_serde_yaml::Spanned;
+use dbt_yaml::Spanned;
 use minijinja::{
     Value as MinijinjaValue,
     constants::{

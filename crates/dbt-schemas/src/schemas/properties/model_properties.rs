@@ -17,7 +17,7 @@ use crate::schemas::properties::properties::GetConfig;
 use crate::schemas::semantic_layer::semantic_manifest::SemanticLayerElementConfig;
 use crate::schemas::serde::FloatOrString;
 use crate::schemas::serde::string_or_array;
-use dbt_serde_yaml::JsonSchema;
+use dbt_yaml::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 
@@ -188,7 +188,7 @@ pub struct DerivedEntity {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use dbt_serde_yaml;
+    use dbt_yaml;
 
     #[test]
     fn test_model_constraint_columns_as_string() {
@@ -196,7 +196,7 @@ mod tests {
 type: primary_key
 columns: mart_hashkey_order
 "#;
-        let constraint: ModelConstraint = dbt_serde_yaml::from_str(yaml).unwrap();
+        let constraint: ModelConstraint = dbt_yaml::from_str(yaml).unwrap();
         assert_eq!(
             constraint.columns,
             Some(vec!["mart_hashkey_order".to_string()])
@@ -210,7 +210,7 @@ columns: mart_hashkey_order
 type: primary_key
 columns: ["mart_hashkey_order"]
 "#;
-        let constraint: ModelConstraint = dbt_serde_yaml::from_str(yaml).unwrap();
+        let constraint: ModelConstraint = dbt_yaml::from_str(yaml).unwrap();
         assert_eq!(
             constraint.columns,
             Some(vec!["mart_hashkey_order".to_string()])
@@ -226,7 +226,7 @@ columns:
   - column1
   - column2
 "#;
-        let constraint: ModelConstraint = dbt_serde_yaml::from_str(yaml).unwrap();
+        let constraint: ModelConstraint = dbt_yaml::from_str(yaml).unwrap();
         assert_eq!(
             constraint.columns,
             Some(vec!["column1".to_string(), "column2".to_string()])
@@ -240,7 +240,7 @@ columns:
 type: check
 expression: "amount > 0"
 "#;
-        let constraint: ModelConstraint = dbt_serde_yaml::from_str(yaml).unwrap();
+        let constraint: ModelConstraint = dbt_yaml::from_str(yaml).unwrap();
         assert_eq!(constraint.columns, None);
         assert_eq!(constraint.type_, ConstraintType::Check);
         assert_eq!(constraint.expression, Some("amount > 0".to_string()));
@@ -254,7 +254,7 @@ columns: order_id
 to: ref('orders')
 to_columns: id
 "#;
-        let constraint: ModelConstraint = dbt_serde_yaml::from_str(yaml).unwrap();
+        let constraint: ModelConstraint = dbt_yaml::from_str(yaml).unwrap();
         assert_eq!(constraint.columns, Some(vec!["order_id".to_string()]));
         assert_eq!(constraint.to_columns, Some(vec!["id".to_string()]));
         assert_eq!(constraint.to, Some("ref('orders')".to_string()));
@@ -273,7 +273,7 @@ to_columns:
   - id
   - organization_id
 "#;
-        let constraint: ModelConstraint = dbt_serde_yaml::from_str(yaml).unwrap();
+        let constraint: ModelConstraint = dbt_yaml::from_str(yaml).unwrap();
         assert_eq!(
             constraint.columns,
             Some(vec!["user_id".to_string(), "org_id".to_string()])
@@ -294,7 +294,7 @@ columns: order_id
 warn_unsupported: true
 warn_unenforced: false
 "#;
-        let constraint: ModelConstraint = dbt_serde_yaml::from_str(yaml).unwrap();
+        let constraint: ModelConstraint = dbt_yaml::from_str(yaml).unwrap();
         assert_eq!(constraint.type_, ConstraintType::PrimaryKey);
         assert_eq!(constraint.name, Some("pk_orders".to_string()));
         assert_eq!(constraint.columns, Some(vec!["order_id".to_string()]));

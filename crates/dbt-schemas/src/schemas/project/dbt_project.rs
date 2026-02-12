@@ -4,14 +4,14 @@ use std::collections::HashMap;
 use std::collections::btree_map::Iter;
 use std::fmt::Debug;
 
-use dbt_serde_yaml::JsonSchema;
+use dbt_yaml::JsonSchema;
 
 // Type aliases for clarity
-type YmlValue = dbt_serde_yaml::Value;
-use dbt_serde_yaml::ShouldBe;
-use dbt_serde_yaml::Spanned;
-use dbt_serde_yaml::UntaggedEnumDeserialize;
-use dbt_serde_yaml::Verbatim;
+type YmlValue = dbt_yaml::Value;
+use dbt_yaml::ShouldBe;
+use dbt_yaml::Spanned;
+use dbt_yaml::UntaggedEnumDeserialize;
+use dbt_yaml::Verbatim;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
@@ -63,7 +63,7 @@ pub struct ProjectDbtCloudConfig {
 pub struct DbtProjectNameOnly {
     pub name: String,
 
-    pub __ignored__: Verbatim<HashMap<String, dbt_serde_yaml::Value>>,
+    pub __ignored__: Verbatim<HashMap<String, dbt_yaml::Value>>,
 }
 
 #[skip_serializing_none]
@@ -86,7 +86,7 @@ pub struct DbtProjectSimplified {
     #[serde(rename = "target-path")]
     pub target_path: Verbatim<Option<String>>,
 
-    pub __ignored__: Verbatim<HashMap<String, dbt_serde_yaml::Value>>,
+    pub __ignored__: Verbatim<HashMap<String, dbt_yaml::Value>>,
 }
 
 #[derive(
@@ -177,7 +177,7 @@ pub struct DbtProject {
     pub require_dbt_version: Option<StringOrArrayOfStrings>,
     #[serde(rename = "restrict-access")]
     pub restrict_access: Option<bool>,
-    pub vars: Verbatim<Option<dbt_serde_yaml::Value>>,
+    pub vars: Verbatim<Option<dbt_yaml::Value>>,
 }
 
 impl DbtProject {

@@ -404,7 +404,7 @@ mod tests {
     use crate::test_options::option_str_value;
     use adbc_core::options::OptionDatabase;
     use base64::{Engine, engine::general_purpose::STANDARD};
-    use dbt_serde_yaml::Mapping;
+    use dbt_yaml::Mapping;
     use key_format::{
         PEM_ENCRYPTED_END, PEM_ENCRYPTED_START, PEM_UNENCRYPTED_END, PEM_UNENCRYPTED_START,
     };

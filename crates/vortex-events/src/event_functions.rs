@@ -419,7 +419,7 @@ pub fn get_user_id(profile_path: &Path) -> String {
         let cookie_path = profiles_dir.join(".user.yml");
         if cookie_path.exists() {
             match fs::read_to_string(&cookie_path) {
-                Ok(contents) => match dbt_serde_yaml::from_str::<UserFile>(&contents) {
+                Ok(contents) => match dbt_yaml::from_str::<UserFile>(&contents) {
                     Ok(user_file) => user_file.id,
                     Err(_) => set_user_cookie(profiles_dir, &cookie_path),
                 },
@@ -441,7 +441,7 @@ fn set_user_cookie(profiles_dir: &Path, cookie_path: &Path) -> String {
         let user_file = UserFile {
             id: user_id.clone(),
         };
-        if let Ok(yaml) = dbt_serde_yaml::to_string(&user_file) {
+        if let Ok(yaml) = dbt_yaml::to_string(&user_file) {
             let _ = fs::write(cookie_path, yaml);
         }
     }

@@ -83,7 +83,7 @@ pub fn read_and_validate_dbt_project(
     checkout_path: &Path,
     show_errors_or_warnings: bool,
     jinja_env: &JinjaEnv,
-    vars: &BTreeMap<String, dbt_serde_yaml::Value>,
+    vars: &BTreeMap<String, dbt_yaml::Value>,
 ) -> FsResult<DbtProject> {
     let path_to_dbt_project = checkout_path.join(DBT_PROJECT_YML);
     if !path_to_dbt_project.exists() {

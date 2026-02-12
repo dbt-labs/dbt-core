@@ -2,8 +2,6 @@ use crate::{AdapterResponse, TypedBaseAdapter};
 use std::collections::HashMap;
 
 use dbt_common::{AdapterError, AdapterErrorKind, AdapterResult};
-use dbt_serde_yaml::Value::Mapping;
-use dbt_serde_yaml::{Error, Value as YmlValue};
 use dbt_xdbc::bigquery::{
     CREATE_BATCH_REQ_BATCH_ID, CREATE_BATCH_REQ_BATCH_YML, CREATE_BATCH_REQ_PARENT,
     CREATE_NOTEBOOK_EXECUTE_JOB_REQ_GSC_BUCKET, CREATE_NOTEBOOK_EXECUTE_JOB_REQ_GSC_PATH,
@@ -15,6 +13,8 @@ use dbt_xdbc::bigquery::{
     WRITE_GCS_CONTENT, WRITE_GCS_OBJECT_NAME,
 };
 use dbt_xdbc::{Connection, QueryCtx};
+use dbt_yaml::Value::Mapping;
+use dbt_yaml::{Error, Value as YmlValue};
 use minijinja::{State, Value};
 use uuid::Uuid;
 
@@ -379,7 +379,7 @@ pub fn batch_to_str(
         merge_yaml(&mut batch, ovr);
     }
 
-    let yaml_string = dbt_serde_yaml::to_string(&batch)?;
+    let yaml_string = dbt_yaml::to_string(&batch)?;
 
     Ok(yaml_string)
 }
@@ -399,7 +399,7 @@ pyspark_batch:
         gcs_path, jar_file_uri
     );
 
-    dbt_serde_yaml::from_str(yaml_str.as_str()).unwrap()
+    dbt_yaml::from_str(yaml_str.as_str()).unwrap()
 }
 
 fn merge_yaml(base: &mut YmlValue, overrides: &YmlValue) {

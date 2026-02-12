@@ -15,7 +15,7 @@ use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
 
 // Type aliases for clarity
-type YmlValue = dbt_serde_yaml::Value;
+type YmlValue = dbt_yaml::Value;
 
 #[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

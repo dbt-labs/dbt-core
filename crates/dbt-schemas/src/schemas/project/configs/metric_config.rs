@@ -1,11 +1,11 @@
-use dbt_serde_yaml::{JsonSchema, ShouldBe};
+use dbt_yaml::{JsonSchema, ShouldBe};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::collections::{BTreeMap, btree_map::Iter};
 
 // Type aliases for clarity
-type YmlValue = dbt_serde_yaml::Value;
+type YmlValue = dbt_yaml::Value;
 
 use crate::{
     default_to,

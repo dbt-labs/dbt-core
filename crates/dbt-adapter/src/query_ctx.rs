@@ -37,7 +37,7 @@ pub fn node_id_from_state(state: &State) -> Option<String> {
     let node = state.lookup("model").as_ref()?.clone();
     // all deserialization must go through yaml value
     // should this be a .ok?
-    let yaml_node = dbt_serde_yaml::to_value(&node)
+    let yaml_node = dbt_yaml::to_value(&node)
         .map_err(|e| {
             minijinja::Error::new(minijinja::ErrorKind::SerdeDeserializeError, e.to_string())
         })

@@ -20,7 +20,7 @@ use dbt_schemas::schemas::{
     },
     serde::yaml_to_fs_error,
 };
-use dbt_serde_yaml::ShouldBe;
+use dbt_yaml::ShouldBe;
 
 /// Used to deserialize the top-level `dbt_project.yml` configuration
 /// for `models`, `data_tests`, `seeds` etc..

@@ -603,7 +603,7 @@ pub enum WrappedError {
     Frontend(FrontendError),
     FrontendInternal(dbt_frontend_common::error::InternalError),
     // ObjectStore(object_store::Error),
-    SerdeYml(dbt_serde_yaml::Error),
+    SerdeYml(dbt_yaml::Error),
     SerdeJson(serde_json::Error),
     NameError(NameError),
     Jinja(minijinja::Error),
@@ -837,20 +837,20 @@ impl From<std::string::FromUtf8Error> for WrappedError {
     }
 }
 
-impl From<dbt_serde_yaml::Error> for WrappedError {
-    fn from(e: dbt_serde_yaml::Error) -> Self {
+impl From<dbt_yaml::Error> for WrappedError {
+    fn from(e: dbt_yaml::Error) -> Self {
         WrappedError::SerdeYml(e)
     }
 }
 
-impl From<dbt_serde_yaml::Error> for FsError {
-    fn from(e: dbt_serde_yaml::Error) -> Self {
+impl From<dbt_yaml::Error> for FsError {
+    fn from(e: dbt_yaml::Error) -> Self {
         FsError::new(ErrorCode::YamlError, "YAML error").with_cause(WrappedError::SerdeYml(e))
     }
 }
 
-impl From<dbt_serde_yaml::Error> for Box<FsError> {
-    fn from(e: dbt_serde_yaml::Error) -> Self {
+impl From<dbt_yaml::Error> for Box<FsError> {
+    fn from(e: dbt_yaml::Error) -> Self {
         Box::new(e.into())
     }
 }

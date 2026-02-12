@@ -4,8 +4,8 @@ use crate::schemas::relations::DEFAULT_DATABRICKS_DATABASE;
 use crate::schemas::serde::{QueryTag, StringOrInteger, StringOrMap};
 
 use dbt_common::adapter::AdapterType;
-use dbt_serde_yaml::JsonSchema;
-use dbt_serde_yaml::UntaggedEnumDeserialize;
+use dbt_yaml::JsonSchema;
+use dbt_yaml::UntaggedEnumDeserialize;
 use merge::Merge;
 use serde_derive::Deserialize;
 use serde_derive::Serialize;
@@ -14,7 +14,7 @@ use std::convert::TryFrom;
 use std::fmt::{self, Debug, Display};
 use std::path::PathBuf;
 
-type YmlValue = dbt_serde_yaml::Value;
+type YmlValue = dbt_yaml::Value;
 
 pub type ProfileName = String;
 pub type TargetName = String;
@@ -22,8 +22,8 @@ pub type DefaultTargetName = String;
 
 #[derive(Debug, Deserialize)]
 pub struct DbtProfilesIntermediate {
-    pub config: Option<dbt_serde_yaml::Value>,
-    pub __profiles__: HashMap<ProfileName, dbt_serde_yaml::Value>,
+    pub config: Option<dbt_yaml::Value>,
+    pub __profiles__: HashMap<ProfileName, dbt_yaml::Value>,
 }
 
 #[derive(Debug, Deserialize, Clone, PartialEq, JsonSchema)]
@@ -243,17 +243,17 @@ impl DbConfig {
         }
     }
 
-    pub fn to_yaml_value(&self) -> Result<YmlValue, dbt_serde_yaml::Error> {
+    pub fn to_yaml_value(&self) -> Result<YmlValue, dbt_yaml::Error> {
         match self {
-            DbConfig::Snowflake(config) => dbt_serde_yaml::to_value(config),
-            DbConfig::Postgres(config) => dbt_serde_yaml::to_value(config),
-            DbConfig::Bigquery(config) => dbt_serde_yaml::to_value(config),
-            DbConfig::Trino(config) => dbt_serde_yaml::to_value(config),
-            DbConfig::Datafusion(config) => dbt_serde_yaml::to_value(config),
-            DbConfig::Redshift(config) => dbt_serde_yaml::to_value(config),
-            DbConfig::Databricks(config) => dbt_serde_yaml::to_value(config),
-            DbConfig::Salesforce(config) => dbt_serde_yaml::to_value(config),
-            DbConfig::Spark(config) => dbt_serde_yaml::to_value(config),
+            DbConfig::Snowflake(config) => dbt_yaml::to_value(config),
+            DbConfig::Postgres(config) => dbt_yaml::to_value(config),
+            DbConfig::Bigquery(config) => dbt_yaml::to_value(config),
+            DbConfig::Trino(config) => dbt_yaml::to_value(config),
+            DbConfig::Datafusion(config) => dbt_yaml::to_value(config),
+            DbConfig::Redshift(config) => dbt_yaml::to_value(config),
+            DbConfig::Databricks(config) => dbt_yaml::to_value(config),
+            DbConfig::Salesforce(config) => dbt_yaml::to_value(config),
+            DbConfig::Spark(config) => dbt_yaml::to_value(config),
         }
     }
 
@@ -342,7 +342,7 @@ impl DbConfig {
         }
     }
 
-    pub fn to_connection_mapping(&self) -> Result<dbt_serde_yaml::Mapping, dbt_serde_yaml::Error> {
+    pub fn to_connection_mapping(&self) -> Result<dbt_yaml::Mapping, dbt_yaml::Error> {
         let connection_keys = self.get_connection_keys();
         let mapping = self.to_mapping()?;
         let filtered = mapping
@@ -356,8 +356,8 @@ impl DbConfig {
         Ok(filtered)
     }
 
-    pub fn to_mapping(&self) -> Result<dbt_serde_yaml::Mapping, dbt_serde_yaml::Error> {
-        let mut mapping = dbt_serde_yaml::Mapping::default();
+    pub fn to_mapping(&self) -> Result<dbt_yaml::Mapping, dbt_yaml::Error> {
+        let mut mapping = dbt_yaml::Mapping::default();
 
         // Convert self to YmlValue and return it as a YAML Mapping value
         let mut yml_value = self.to_yaml_value()?;
@@ -1311,7 +1311,7 @@ mod tests {
 
     #[test]
     fn test_bigquery_adapter_config_parsing() {
-        let config: DbConfig = dbt_serde_yaml::from_str(
+        let config: DbConfig = dbt_yaml::from_str(
             "type: bigquery\n\
              job_creation_timeout_seconds: 123\n\
              job_execution_timeout_seconds: 456\n\

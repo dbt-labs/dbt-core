@@ -8,13 +8,13 @@ use crate::schemas::project::SourceConfig;
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::bool_or_string_bool;
 use dbt_common::serde_utils::Omissible;
-use dbt_serde_yaml::{JsonSchema, Verbatim};
+use dbt_yaml::{JsonSchema, Verbatim};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 
 // Type aliases for clarity
-type YmlValue = dbt_serde_yaml::Value;
+type YmlValue = dbt_yaml::Value;
 
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]

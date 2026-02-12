@@ -1,5 +1,5 @@
 use dbt_common::CodeLocationWithFile;
-use dbt_serde_yaml::JsonSchema;
+use dbt_yaml::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize};
 
 use super::serde::StringOrInteger;

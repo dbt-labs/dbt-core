@@ -69,8 +69,8 @@ pub enum AuthError {
     Config(String),
     /// An error from the [serde_json] crate
     JSON(serde_json::Error),
-    /// An error from the [dbt_serde_yaml] crate
-    YAML(dbt_serde_yaml::Error),
+    /// An error from the [dbt_yaml] crate
+    YAML(dbt_yaml::Error),
     /// I/O error
     Io(io::Error),
 }
@@ -114,8 +114,8 @@ impl From<serde_json::Error> for AuthError {
     }
 }
 
-impl From<dbt_serde_yaml::Error> for AuthError {
-    fn from(err: dbt_serde_yaml::Error) -> Self {
+impl From<dbt_yaml::Error> for AuthError {
+    fn from(err: dbt_yaml::Error) -> Self {
         AuthError::YAML(err)
     }
 }

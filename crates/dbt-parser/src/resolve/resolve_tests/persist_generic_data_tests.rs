@@ -22,10 +22,10 @@ use dbt_schemas::schemas::properties::Tables;
 use dbt_schemas::schemas::properties::{ModelProperties, SeedProperties, SnapshotProperties};
 use dbt_schemas::schemas::serde::yaml_to_fs_error;
 use dbt_schemas::state::{DbtAsset, GenericTestAsset};
-use dbt_serde_yaml::ShouldBe;
-use dbt_serde_yaml::Span;
-use dbt_serde_yaml::Spanned;
-use dbt_serde_yaml::Verbatim;
+use dbt_yaml::ShouldBe;
+use dbt_yaml::Span;
+use dbt_yaml::Spanned;
+use dbt_yaml::Verbatim;
 use itertools::Itertools;
 use md5;
 use regex::Regex;
@@ -401,8 +401,8 @@ struct KwargsExtractionResult {
 /// Simplified extraction of kwargs and Jinja variables for strongly typed custom tests
 #[allow(clippy::cognitive_complexity)]
 fn extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
-    arguments: &Verbatim<Option<dbt_serde_yaml::Value>>,
-    deprecated_args_and_configs: &Verbatim<BTreeMap<String, dbt_serde_yaml::Value>>,
+    arguments: &Verbatim<Option<dbt_yaml::Value>>,
+    deprecated_args_and_configs: &Verbatim<BTreeMap<String, dbt_yaml::Value>>,
     existing_config: &Option<DataTestConfig>,
     io_args: &IoArgs,
     dependency_package_name: Option<&str>,
@@ -502,7 +502,7 @@ fn extract_kwargs_and_jinja_vars_and_dep_kwarg_and_configs(
             merged_map.extend(config_from_deprecated);
         }
 
-        let merged_config_yaml: dbt_serde_yaml::Value =
+        let merged_config_yaml: dbt_yaml::Value =
             serde_json::from_value(merged_config_json).unwrap();
 
         // Deserialize the final merged config
@@ -601,9 +601,7 @@ static CONFIG_ARGS: &[&str] = &[
 ];
 
 /// Extract config keys from a BTreeMap, filtering to only include valid config fields
-fn extract_config_keys_from_map(
-    deprecated_map: &BTreeMap<String, dbt_serde_yaml::Value>,
-) -> Vec<String> {
+fn extract_config_keys_from_map(deprecated_map: &BTreeMap<String, dbt_yaml::Value>) -> Vec<String> {
     deprecated_map
         .keys()
         .filter(|key| CONFIG_ARGS.contains(&key.as_str()))
@@ -689,11 +687,8 @@ fn parse_test_name_and_namespace(test_name: &str) -> (String, Option<String>) {
 /// - For mappings: merge entries; when both sides have a mapping for a key, merge recursively,
 ///   otherwise rhs replaces lhs for that key. The resulting mapping keeps the lhs span.
 /// - For sequences and scalars (or differing kinds): rhs replaces lhs entirely.
-fn merge_yaml_values(
-    lhs: dbt_serde_yaml::Value,
-    rhs: dbt_serde_yaml::Value,
-) -> (bool, dbt_serde_yaml::Value) {
-    use dbt_serde_yaml::Value as Y;
+fn merge_yaml_values(lhs: dbt_yaml::Value, rhs: dbt_yaml::Value) -> (bool, dbt_yaml::Value) {
+    use dbt_yaml::Value as Y;
     match (lhs, rhs) {
         (Y::Mapping(mut lm, lspan), Y::Mapping(rm, _rspan)) => {
             for (rk, rv) in rm.into_iter() {
@@ -992,31 +987,30 @@ fn generate_test_macro(
     // ── serialize & emit the config block ────────────────
     let passed_in_cfg = if let Some(cfg) = config {
         // Strongly-typed config provided
-        let cfg_val = dbt_serde_yaml::to_value(cfg).map_err(|e| yaml_to_fs_error(e, None))?;
+        let cfg_val = dbt_yaml::to_value(cfg).map_err(|e| yaml_to_fs_error(e, None))?;
         // Strip null fields so they don't become undefined in Jinja
         dbt_schemas::schemas::serialization_utils::serialize_with_mode(
             &cfg_val,
             dbt_schemas::schemas::serialization_utils::SerializationMode::OmitNone,
         )
     } else {
-        dbt_serde_yaml::Value::Mapping(dbt_serde_yaml::Mapping::new(), Span::default())
+        dbt_yaml::Value::Mapping(dbt_yaml::Mapping::new(), Span::default())
     };
 
     let embedded_cfg = match kwargs.get("config") {
         Some(Value::Object(obj)) => {
-            // Convert embedded serde_json::Value into dbt_serde_yaml::Value
+            // Convert embedded serde_json::Value into dbt_yaml::Value
             let cfg_json = Value::Object(obj.clone());
-            let cfg_yaml: dbt_serde_yaml::Value =
-                serde_json::from_value(cfg_json).map_err(|e| {
-                    fs_err!(
-                        ErrorCode::SchemaError,
-                        "Failed to convert embedded config: {}",
-                        e
-                    )
-                })?;
+            let cfg_yaml: dbt_yaml::Value = serde_json::from_value(cfg_json).map_err(|e| {
+                fs_err!(
+                    ErrorCode::SchemaError,
+                    "Failed to convert embedded config: {}",
+                    e
+                )
+            })?;
             cfg_yaml
         }
-        _ => dbt_serde_yaml::Value::Mapping(dbt_serde_yaml::Mapping::new(), Span::default()),
+        _ => dbt_yaml::Value::Mapping(dbt_yaml::Mapping::new(), Span::default()),
     };
 
     let (non_empty, cfg_json) = merge_yaml_values(passed_in_cfg, embedded_cfg);
@@ -1191,7 +1185,7 @@ fn collect_versioned_model_tests(
             .__additional_properties__
             .get("tests")
             .or_else(|| version.__additional_properties__.get("data_tests"))
-            && let Ok(version_tests) = dbt_serde_yaml::from_value::<Vec<DataTests>>(tests.clone())
+            && let Ok(version_tests) = dbt_yaml::from_value::<Vec<DataTests>>(tests.clone())
         {
             version_config.model_tests = Some(version_tests);
         }
@@ -1224,9 +1218,7 @@ fn collect_versioned_model_tests(
             };
 
             // Then handle any explicit column test definitions
-            if let Ok(column_map) =
-                dbt_serde_yaml::from_value::<Vec<ColumnProperties>>(columns.clone())
-            {
+            if let Ok(column_map) = dbt_yaml::from_value::<Vec<ColumnProperties>>(columns.clone()) {
                 for col in column_map {
                     if let Some(tests) = col.tests.as_ref() {
                         column_tests.insert(
@@ -1564,8 +1556,8 @@ mod tests {
         // Convert serde_json::Map to BTreeMap for the new function
         let test_args_btree: BTreeMap<String, Value> = test_args.into_iter().collect();
 
-        // Convert to dbt_serde_yaml::Value using the to_value function
-        let yaml_value = dbt_serde_yaml::to_value(&test_args_btree).unwrap();
+        // Convert to dbt_yaml::Value using the to_value function
+        let yaml_value = dbt_yaml::to_value(&test_args_btree).unwrap();
         let verbatim_wrapper = Verbatim::from(Some(yaml_value));
         let empty_deprecated = Verbatim::from(BTreeMap::new());
         let existing_config = None;
@@ -1868,7 +1860,7 @@ mod tests {
             model_tests: Some(vec![DataTests::CustomTest(
                 CustomTest::MultiKey(Box::new(CustomTestMultiKey {
                     arguments: Verbatim::from(Some(
-                        dbt_serde_yaml::to_value(json!({
+                        dbt_yaml::to_value(json!({
                             "column_names": ["id"]
                         }))
                         .unwrap(),
@@ -2131,7 +2123,7 @@ mod tests {
     fn test_extract_kwargs_moves_config_keys_out_of_arguments() {
         // Arrange: config-like keys under `arguments` should not become macro kwargs; they should
         // be routed into an embedded `config` object so `generate_test_macro` emits `{{ config(...) }}`.
-        let args_yaml = dbt_serde_yaml::to_value(serde_json::json!({
+        let args_yaml = dbt_yaml::to_value(serde_json::json!({
             "values": ["APPAREL", "HEADWEAR"],
             "error_if": ">1"
         }))
@@ -2246,7 +2238,7 @@ mod tests {
 
         // Convert to the format expected by the extraction function
         let test_args_btree: BTreeMap<String, Value> = test_args.into_iter().collect();
-        let yaml_value = dbt_serde_yaml::to_value(&test_args_btree).unwrap();
+        let yaml_value = dbt_yaml::to_value(&test_args_btree).unwrap();
         let verbatim_wrapper = Verbatim::from(Some(yaml_value));
         let empty_deprecated = Verbatim::from(BTreeMap::new());
         let existing_config = None;
@@ -2395,7 +2387,7 @@ mod tests {
 
         // Convert to the format expected by the extraction function
         let test_args_btree: BTreeMap<String, Value> = test_args.into_iter().collect();
-        let yaml_value = dbt_serde_yaml::to_value(&test_args_btree).unwrap();
+        let yaml_value = dbt_yaml::to_value(&test_args_btree).unwrap();
         let verbatim_wrapper = Verbatim::from(Some(yaml_value));
         let empty_deprecated = Verbatim::from(BTreeMap::new());
         let existing_config = None;

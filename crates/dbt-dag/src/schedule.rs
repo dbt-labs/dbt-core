@@ -176,8 +176,7 @@ impl Schedule<String> {
             let content = match output_format {
                 ListOutputFormat::Json => {
                     // Use serialize_keep_none to keep null fields for dbt-core compatibility (omit_none=False)
-                    let node_yaml_value =
-                        dbt_serde_yaml::to_value(node.serialize_keep_none()).unwrap();
+                    let node_yaml_value = dbt_yaml::to_value(node.serialize_keep_none()).unwrap();
                     let node_value = serde_json::to_value(node_yaml_value).unwrap();
                     Self::generate_json_output(&node_value, output_keys)
                 }

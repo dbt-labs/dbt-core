@@ -189,7 +189,7 @@ pub fn is_in_dbt_project() -> bool {
 /// Get the profile name from dbt_project.yml if we're in a project
 pub fn get_profile_name_from_project() -> FsResult<String> {
     let content = fs::read_to_string("dbt_project.yml")?;
-    let project: serde_json::Value = dbt_serde_yaml::from_str(&content)
+    let project: serde_json::Value = dbt_yaml::from_str(&content)
         .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to parse dbt_project.yml: {}", e))?;
 
     if let Some(profile_value) = project.get("profile")
@@ -284,7 +284,7 @@ pub fn check_if_profile_exists(profile_name: &str, profiles_dir: &Path) -> FsRes
     }
 
     let content = fs::read_to_string(profiles_file)?;
-    let profiles: serde_json::Value = dbt_serde_yaml::from_str(&content)
+    let profiles: serde_json::Value = dbt_yaml::from_str(&content)
         .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to parse profiles.yml: {}", e))?;
 
     Ok(profiles.get(profile_name).is_some())

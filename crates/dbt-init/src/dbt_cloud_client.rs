@@ -501,7 +501,7 @@ impl DbtCloudClient {
 
         // Read and parse the dbt_cloud.yml file
         let content = fs::read_to_string(&dbt_cloud_config_path)?;
-        let config: DbtCloudYml = dbt_serde_yaml::from_str(&content)
+        let config: DbtCloudYml = dbt_yaml::from_str(&content)
             .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to parse dbt_cloud.yml: {}", e))?;
 
         // Get the active project ID from context

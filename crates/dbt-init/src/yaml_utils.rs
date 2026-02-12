@@ -99,7 +99,7 @@ pub fn read_yaml_as_value<T: serde::de::DeserializeOwned>(path: &Path) -> FsResu
         return Ok(None);
     }
     let content = fs::read_to_string(path)?;
-    match dbt_serde_yaml::from_str::<T>(&content) {
+    match dbt_yaml::from_str::<T>(&content) {
         Ok(v) => Ok(Some(v)),
         Err(e) => Err(fs_err!(
             ErrorCode::IoError,
@@ -112,7 +112,7 @@ pub fn read_yaml_as_value<T: serde::de::DeserializeOwned>(path: &Path) -> FsResu
 
 /// Parse YAML content and check if a top-level key exists using serde.
 pub fn has_top_level_key_parsed_str(content: &str, key: &str) -> bool {
-    if let Ok(val) = dbt_serde_yaml::from_str::<dbt_serde_yaml::Value>(content)
+    if let Ok(val) = dbt_yaml::from_str::<dbt_yaml::Value>(content)
         && let Some(mapping) = val.as_mapping()
     {
         return mapping.iter().any(|(k, _)| k.as_str() == Some(key));

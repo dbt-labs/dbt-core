@@ -1,16 +1,16 @@
 use std::borrow::Cow;
 
-pub use dbt_serde_yaml::Value as YmlValue;
+pub use dbt_yaml::Value as YmlValue;
 
 // TODO(felipecrv): move this struct for generic use as it now has nothing specific to adapters
 
 #[derive(Debug, Default)]
 pub struct AdapterConfig {
-    repr: dbt_serde_yaml::Mapping,
+    repr: dbt_yaml::Mapping,
 }
 
 fn yml_value_to_string<'a>(value: &'a YmlValue) -> Cow<'a, str> {
-    // This function exists because `dbt_serde_yaml::to_string` appends
+    // This function exists because `dbt_yaml::to_string` appends
     // a newline to the end of every string. And, less importantly, it
     // also copies values that are strings already.
     match value {
@@ -19,7 +19,7 @@ fn yml_value_to_string<'a>(value: &'a YmlValue) -> Cow<'a, str> {
         YmlValue::Number(n, _) => Cow::Owned(n.to_string()),
         YmlValue::String(s, _) => Cow::Borrowed(s),
         YmlValue::Sequence(_, _) | YmlValue::Mapping(_, _) => {
-            let res = dbt_serde_yaml::to_string(value);
+            let res = dbt_yaml::to_string(value);
             debug_assert!(
                 res.is_ok(),
                 "failed to convert sequence/mapping to string: {res:?}",
@@ -35,12 +35,12 @@ fn yml_value_to_string<'a>(value: &'a YmlValue) -> Cow<'a, str> {
 }
 
 impl AdapterConfig {
-    pub fn new(mapping: dbt_serde_yaml::Mapping) -> Self {
+    pub fn new(mapping: dbt_yaml::Mapping) -> Self {
         Self { repr: mapping }
     }
 
     /// Get the underlying YAML representation of the configuration.
-    pub fn repr(&self) -> &dbt_serde_yaml::Mapping {
+    pub fn repr(&self) -> &dbt_yaml::Mapping {
         &self.repr
     }
 
@@ -55,11 +55,11 @@ impl AdapterConfig {
     }
 
     /// Like `get`, but returns an error if the field is missing.
-    pub fn require(&self, field: &str) -> Result<&YmlValue, dbt_serde_yaml::Error> {
+    pub fn require(&self, field: &str) -> Result<&YmlValue, dbt_yaml::Error> {
         use serde::de::Error as _;
-        // Re-implementation of [dbt_serde_yaml::Error::missing_field]
+        // Re-implementation of [dbt_yaml::Error::missing_field]
         // that doesn't require a &'static str field name.
-        let err = || dbt_serde_yaml::Error::custom(format_args!("missing field `{field}`"));
+        let err = || dbt_yaml::Error::custom(format_args!("missing field `{field}`"));
         self.get(field).ok_or_else(err)
     }
 
@@ -75,16 +75,16 @@ impl AdapterConfig {
     }
 
     /// Like `require`, but returns a borrowed string.
-    pub fn require_str(&self, field: &str) -> Result<&str, dbt_serde_yaml::Error> {
+    pub fn require_str(&self, field: &str) -> Result<&str, dbt_yaml::Error> {
         use serde::de::Error as _;
-        // Re-implementation of [dbt_serde_yaml::Error::missing_field]
+        // Re-implementation of [dbt_yaml::Error::missing_field]
         // that doesn't require a &'static str field name.
-        let err = || dbt_serde_yaml::Error::custom(format_args!("missing field `{field}`"));
+        let err = || dbt_yaml::Error::custom(format_args!("missing field `{field}`"));
         self.get_str(field).ok_or_else(err)
     }
 
     /// Like `require`, but calls `to_string` on the value.
-    pub fn require_string(&self, field: &str) -> Result<Cow<'_, str>, dbt_serde_yaml::Error> {
+    pub fn require_string(&self, field: &str) -> Result<Cow<'_, str>, dbt_yaml::Error> {
         self.require(field).map(yml_value_to_string)
     }
 }
@@ -97,7 +97,7 @@ mod tests {
 
     #[test]
     fn test_ra3_node_config() {
-        let mapping = dbt_serde_yaml::Mapping::from_iter([
+        let mapping = dbt_yaml::Mapping::from_iter([
             ("ra3_node_bool".into(), YmlValue::bool(true)),
             ("ra3_node_str".into(), YmlValue::string("true".to_string())),
         ]);
@@ -120,7 +120,7 @@ mod tests {
 
     #[test]
     fn test_yaml_value_conversions() {
-        let mapping = dbt_serde_yaml::Mapping::from_iter([
+        let mapping = dbt_yaml::Mapping::from_iter([
             ("null".into(), YmlValue::null()),
             ("bool".into(), YmlValue::bool(true)),
             ("i64".into(), YmlValue::number(42i64.into())),
@@ -133,7 +133,7 @@ mod tests {
             ),
             (
                 "mapping".into(),
-                YmlValue::mapping(dbt_serde_yaml::Mapping::from_iter([
+                YmlValue::mapping(dbt_yaml::Mapping::from_iter([
                     ("key1".into(), "value1".into()),
                     ("key2".into(), "value2".into()),
                 ])),
@@ -159,7 +159,7 @@ key2: value2"#
         );
 
         // check with values that came from a YAML document
-        let value: YmlValue = dbt_serde_yaml::from_str(
+        let value: YmlValue = dbt_yaml::from_str(
             r#"
 test:
   type: snowflake

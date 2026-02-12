@@ -204,7 +204,7 @@ impl PreviousState {
         if current_node.resource_type() == NodeType::Model
             && previous_node.resource_type() == NodeType::Model
         {
-            use dbt_serde_yaml::Value as YmlValue;
+            use dbt_yaml::Value as YmlValue;
 
             let current_uc = &current_node.base().unrendered_config;
             let previous_uc = &previous_node.base().unrendered_config;
@@ -311,7 +311,7 @@ impl PreviousState {
         let previous_uc = &previous_node.base().unrendered_config;
 
         fn get<'a>(
-            m: &'a std::collections::BTreeMap<String, dbt_serde_yaml::Value>,
+            m: &'a std::collections::BTreeMap<String, dbt_yaml::Value>,
             k: &str,
         ) -> Option<&'a str> {
             m.get(k).and_then(|v| v.as_str())

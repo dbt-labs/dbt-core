@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use dbt_common::node_selector::{IndirectSelection, SelectExpression};
-use dbt_serde_yaml::{JsonSchema, UntaggedEnumDeserialize};
+use dbt_yaml::{JsonSchema, UntaggedEnumDeserialize};
 use serde::de::{self, IgnoredAny, MapAccess, Visitor};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;

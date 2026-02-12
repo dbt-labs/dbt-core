@@ -1,4 +1,4 @@
-use dbt_serde_yaml::{JsonSchema, Spanned, UntaggedEnumDeserialize, Verbatim};
+use dbt_yaml::{JsonSchema, Spanned, UntaggedEnumDeserialize, Verbatim};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
@@ -13,7 +13,7 @@ pub enum DataTests {
 }
 
 impl DataTests {
-    pub fn span(&self) -> &dbt_serde_yaml::Span {
+    pub fn span(&self) -> &dbt_yaml::Span {
         match self {
             DataTests::String(spanned) => spanned.span(),
             DataTests::CustomTest(spanned) => spanned.span(),
@@ -35,8 +35,8 @@ pub struct CustomTestInner {
     pub description: Option<String>,
     pub config: Option<DataTestConfig>,
     pub column_name: Option<String>,
-    pub arguments: Verbatim<Option<dbt_serde_yaml::Value>>,
-    pub __deprecated_args_and_configs__: Verbatim<BTreeMap<String, dbt_serde_yaml::Value>>,
+    pub arguments: Verbatim<Option<dbt_yaml::Value>>,
+    pub __deprecated_args_and_configs__: Verbatim<BTreeMap<String, dbt_yaml::Value>>,
 }
 
 #[skip_serializing_none]
@@ -47,8 +47,8 @@ pub struct CustomTestMultiKey {
     pub description: Option<String>,
     pub config: Option<DataTestConfig>,
     pub column_name: Option<String>,
-    pub arguments: Verbatim<Option<dbt_serde_yaml::Value>>,
-    pub __deprecated_args_and_configs__: Verbatim<BTreeMap<String, dbt_serde_yaml::Value>>,
+    pub arguments: Verbatim<Option<dbt_yaml::Value>>,
+    pub __deprecated_args_and_configs__: Verbatim<BTreeMap<String, dbt_yaml::Value>>,
 }
 
 // Helper to extract column name from DataTests

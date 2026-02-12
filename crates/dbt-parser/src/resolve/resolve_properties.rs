@@ -14,8 +14,8 @@ use dbt_schemas::schemas::properties::{
 };
 use dbt_schemas::schemas::serde::FloatOrString;
 use dbt_schemas::state::DbtPackage;
-use dbt_serde_yaml::{ShouldBe, Span, Verbatim};
 use dbt_telemetry::AssetParsed;
+use dbt_yaml::{ShouldBe, Span, Verbatim};
 use itertools::Itertools;
 use minijinja::Value as MinijinjaValue;
 use std::collections::BTreeMap;
@@ -26,8 +26,8 @@ pub struct MinimalPropertiesEntry {
     pub name: String,
     pub name_span: Span,
     pub relative_path: PathBuf,
-    pub schema_value: dbt_serde_yaml::Value,
-    pub table_value: Option<dbt_serde_yaml::Value>,
+    pub schema_value: dbt_yaml::Value,
+    pub table_value: Option<dbt_yaml::Value>,
     pub version_info: Option<VersionInfo>,
     pub duplicate_paths: Vec<PathBuf>,
 }
@@ -150,8 +150,8 @@ impl MinimalProperties {
                     // Set only the tables field to null while preserving all other fields and their spans
                     if let Some(mapping) = schema_value.as_mapping_mut() {
                         mapping.insert(
-                            dbt_serde_yaml::Value::string("tables".to_string()),
-                            dbt_serde_yaml::Value::null(),
+                            dbt_yaml::Value::string("tables".to_string()),
+                            dbt_yaml::Value::null(),
                         );
                     }
 
@@ -696,7 +696,7 @@ pub struct VersionInfo {
     pub version: String,
     pub latest_version: String,
     pub versioned_name: String,
-    pub version_config: Verbatim<Option<dbt_serde_yaml::Value>>,
+    pub version_config: Verbatim<Option<dbt_yaml::Value>>,
     // TODO: Remove this and figure out more efficient way to handle this
     pub all_versions: BTreeMap<String, String>,
 }
@@ -710,8 +710,8 @@ pub fn collect_model_version_info(
             .iter()
             .map(|v| {
                 let version = match &v.v {
-                    dbt_serde_yaml::Value::String(s, _) => Some(s.to_string()),
-                    dbt_serde_yaml::Value::Number(n, _) => Some(n.to_string()),
+                    dbt_yaml::Value::String(s, _) => Some(s.to_string()),
+                    dbt_yaml::Value::Number(n, _) => Some(n.to_string()),
                     _ => None,
                 }
                 .unwrap_or_else(|| {

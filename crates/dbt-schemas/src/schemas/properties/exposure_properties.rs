@@ -1,6 +1,6 @@
 use crate::schemas::manifest::common::DbtOwner;
 use crate::schemas::nodes::ExposureType;
-use dbt_serde_yaml::{JsonSchema, Spanned};
+use dbt_yaml::{JsonSchema, Spanned};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 

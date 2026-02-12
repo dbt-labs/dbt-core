@@ -1,7 +1,7 @@
 use crate::schemas::manifest::postgres::PostgresIndex;
 use dbt_common::serde_utils::Omissible;
 use dbt_common::{CodeLocationWithFile, ErrorCode, FsError, FsResult, stdfs};
-use dbt_serde_yaml::{JsonSchema, Spanned, UntaggedEnumDeserialize};
+use dbt_yaml::{JsonSchema, Spanned, UntaggedEnumDeserialize};
 use indexmap::IndexMap;
 use serde::{
     self, Deserialize, Deserializer, Serialize, Serializer,
@@ -12,7 +12,7 @@ use std::path::Path;
 use std::str::FromStr;
 use std::sync::Arc;
 // Type aliases for clarity
-type YmlValue = dbt_serde_yaml::Value;
+type YmlValue = dbt_yaml::Value;
 type MinijinjaValue = minijinja::Value;
 
 /// Deserializes a JSON file into a `T`, using the file's absolute path for error reporting.
@@ -31,7 +31,7 @@ pub fn typed_struct_to_pretty_json_file<T>(path: &Path, value: &T) -> FsResult<(
 where
     T: Serialize,
 {
-    let yml_val = dbt_serde_yaml::to_value(value).map_err(|e| {
+    let yml_val = dbt_yaml::to_value(value).map_err(|e| {
         FsError::new(
             ErrorCode::SerializationError,
             format!("Failed to convert to YAML: {e}"),
@@ -67,8 +67,8 @@ where
     T::deserialize(yml_val).map_err(|e| yaml_to_fs_error(e, source))
 }
 
-/// Converts a `dbt_serde_yaml::Error` into a `FsError`, attaching the error location
-pub fn yaml_to_fs_error(err: dbt_serde_yaml::Error, filename: Option<&Path>) -> Box<FsError> {
+/// Converts a `dbt_yaml::Error` into a `FsError`, attaching the error location
+pub fn yaml_to_fs_error(err: dbt_yaml::Error, filename: Option<&Path>) -> Box<FsError> {
     let msg = err.display_no_mark().to_string();
     let location = err
         .span()
@@ -94,13 +94,12 @@ pub fn default_type<'de, D>(deserializer: D) -> Result<Option<IndexMap<String, Y
 where
     D: Deserializer<'de>,
 {
-    let value = dbt_serde_yaml::Value::deserialize(deserializer)?;
+    let value = dbt_yaml::Value::deserialize(deserializer)?;
     match value {
-        dbt_serde_yaml::Value::Mapping(map, _) => Ok(Some(
+        dbt_yaml::Value::Mapping(map, _) => Ok(Some(
             map.into_iter()
                 .map(|(k, v)| {
-                    let yml_val =
-                        dbt_serde_yaml::from_value::<YmlValue>(v).unwrap_or(YmlValue::null());
+                    let yml_val = dbt_yaml::from_value::<YmlValue>(v).unwrap_or(YmlValue::null());
                     (
                         k.as_str().expect("key is not a string").to_string(),
                         yml_val,
@@ -108,7 +107,7 @@ where
                 })
                 .collect(),
         )),
-        dbt_serde_yaml::Value::Null(_) => Ok(None),
+        dbt_yaml::Value::Null(_) => Ok(None),
         _ => Err(de::Error::custom("expected an object or null")),
     }
 }
@@ -118,15 +117,15 @@ pub fn string_or_array<'de, D>(deserializer: D) -> Result<Option<Vec<String>>, D
 where
     D: Deserializer<'de>,
 {
-    let value = dbt_serde_yaml::Value::deserialize(deserializer)?;
+    let value = dbt_yaml::Value::deserialize(deserializer)?;
     match value {
-        dbt_serde_yaml::Value::Sequence(arr, _) => Ok(Some(
+        dbt_yaml::Value::Sequence(arr, _) => Ok(Some(
             arr.iter()
                 .map(|v| v.as_str().unwrap().to_string())
                 .collect(),
         )),
-        dbt_serde_yaml::Value::String(s, _) => Ok(Some(vec![s])),
-        dbt_serde_yaml::Value::Null(_) => Ok(None),
+        dbt_yaml::Value::String(s, _) => Ok(Some(vec![s])),
+        dbt_yaml::Value::Null(_) => Ok(None),
         _ => Err(de::Error::custom(
             "expected a string, an array of strings, or null",
         )),
@@ -137,7 +136,7 @@ pub fn bool_or_string_bool<'de, D>(deserializer: D) -> Result<Option<bool>, D::E
 where
     D: Deserializer<'de>,
 {
-    let value = dbt_serde_yaml::Value::deserialize(deserializer)?;
+    let value = dbt_yaml::Value::deserialize(deserializer)?;
     Ok(value
         .as_bool()
         .or_else(|| value.as_str().map(|s| s.to_lowercase() == "true")))
@@ -147,7 +146,7 @@ pub fn bool_or_string_bool_default<'de, D>(deserializer: D) -> Result<bool, D::E
 where
     D: Deserializer<'de>,
 {
-    let value = dbt_serde_yaml::Value::deserialize(deserializer)?;
+    let value = dbt_yaml::Value::deserialize(deserializer)?;
     Ok(value
         .as_bool()
         .or_else(|| value.as_str().map(|s| s.to_lowercase() == "true"))
@@ -158,7 +157,7 @@ pub fn u64_or_string_u64<'de, D>(deserializer: D) -> Result<Option<u64>, D::Erro
 where
     D: Deserializer<'de>,
 {
-    let value = dbt_serde_yaml::Value::deserialize(deserializer)?;
+    let value = dbt_yaml::Value::deserialize(deserializer)?;
     Ok(value
         .as_u64()
         .or_else(|| value.as_str().and_then(|s| s.parse::<u64>().ok())))
@@ -168,7 +167,7 @@ pub fn i64_or_string_i64<'de, D>(deserializer: D) -> Result<Option<i64>, D::Erro
 where
     D: Deserializer<'de>,
 {
-    let value = dbt_serde_yaml::Value::deserialize(deserializer)?;
+    let value = dbt_yaml::Value::deserialize(deserializer)?;
     Ok(value
         .as_i64()
         .or_else(|| value.as_str().and_then(|s| s.parse::<i64>().ok())))
@@ -178,7 +177,7 @@ pub fn f64_or_string_f64<'de, D>(deserializer: D) -> Result<Option<f64>, D::Erro
 where
     D: Deserializer<'de>,
 {
-    let value = dbt_serde_yaml::Value::deserialize(deserializer)?;
+    let value = dbt_yaml::Value::deserialize(deserializer)?;
     Ok(value
         .as_f64()
         .or_else(|| value.as_str().and_then(|s| s.parse::<f64>().ok())))
@@ -247,10 +246,10 @@ impl<'de> Deserialize<'de> for QueryTag {
     where
         D: Deserializer<'de>,
     {
-        let value = dbt_serde_yaml::Value::deserialize(deserializer)?;
+        let value = dbt_yaml::Value::deserialize(deserializer)?;
         match value {
-            dbt_serde_yaml::Value::String(s, _) => Ok(QueryTag(s)),
-            dbt_serde_yaml::Value::Mapping(_, _) | dbt_serde_yaml::Value::Sequence(_, _) => {
+            dbt_yaml::Value::String(s, _) => Ok(QueryTag(s)),
+            dbt_yaml::Value::Mapping(_, _) | dbt_yaml::Value::Sequence(_, _) => {
                 // Convert map or sequence to JSON string to match dbt-core behavior
                 let json_string = serde_json::to_string(&value)
                     .map_err(|e| de::Error::custom(format!("Failed to serialize to JSON: {e}")))?;
@@ -278,7 +277,7 @@ pub fn try_from_value<T: DeserializeOwned>(
 ) -> Result<Option<T>, Box<dyn std::error::Error>> {
     if let Some(value) = value {
         Ok(Some(
-            dbt_serde_yaml::from_value(value).map_err(|e| format!("Error parsing value: {e}"))?,
+            dbt_yaml::from_value(value).map_err(|e| format!("Error parsing value: {e}"))?,
         ))
     } else {
         Ok(None)
@@ -302,7 +301,7 @@ pub fn yml_value_to_minijinja_map(value: YmlValue) -> BTreeMap<String, Minijinja
 }
 
 pub fn minijinja_value_to_typed_struct<T: DeserializeOwned>(value: MinijinjaValue) -> FsResult<T> {
-    let yml_val = dbt_serde_yaml::to_value(value).map_err(|e| {
+    let yml_val = dbt_yaml::to_value(value).map_err(|e| {
         FsError::new(
             ErrorCode::SerializationError,
             format!("Failed to convert MinijinjaValue to YmlValue: {e}"),
@@ -362,10 +361,9 @@ pub fn try_string_to_type<T: DeserializeOwned>(
     value: &Option<String>,
 ) -> Result<Option<T>, Box<dyn std::error::Error>> {
     if let Some(value) = value {
-        Ok(Some(
-            dbt_serde_yaml::from_str(&format!("\"{value}\""))
-                .map_err(|e| format!("Error parsing from_str '{value}': {e}"))?,
-        ))
+        Ok(Some(dbt_yaml::from_str(&format!("\"{value}\"")).map_err(
+            |e| format!("Error parsing from_str '{value}': {e}"),
+        )?))
     } else {
         Ok(None)
     }

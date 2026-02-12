@@ -1,5 +1,5 @@
 use crate::{AdapterConfig, Auth, AuthError};
-use dbt_serde_yaml::Value;
+use dbt_yaml::Value;
 use std::borrow::Cow;
 
 use dbt_xdbc::{Backend, database, databricks};
@@ -198,7 +198,7 @@ mod tests {
     use super::*;
     use crate::test_options::option_str_value;
     use adbc_core::options::OptionDatabase;
-    use dbt_serde_yaml::Mapping;
+    use dbt_yaml::Mapping;
 
     fn run_config_test(config: Mapping, expected: &[(&str, &str)]) -> Result<(), AuthError> {
         let auth = DatabricksAuth {};

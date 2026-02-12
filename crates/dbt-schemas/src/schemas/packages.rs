@@ -4,11 +4,11 @@ use std::{
     path::PathBuf,
 };
 
-use dbt_serde_yaml::{UntaggedEnumDeserialize, Verbatim};
+use dbt_yaml::{UntaggedEnumDeserialize, Verbatim};
 use serde::{Deserialize, Serialize};
 
 // Type aliases for clarity
-type YmlValue = dbt_serde_yaml::Value;
+type YmlValue = dbt_yaml::Value;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct UpstreamProject {

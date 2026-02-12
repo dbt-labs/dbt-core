@@ -1,4 +1,4 @@
-use dbt_serde_yaml::JsonSchema;
+use dbt_yaml::JsonSchema;
 use indexmap::IndexMap;
 
 use serde::{Deserialize, Serialize};
@@ -10,7 +10,7 @@ use crate::schemas::semantic_layer::saved_query::SemanticManifestSavedQuery;
 use crate::schemas::semantic_layer::semantic_model::SemanticManifestSemanticModel;
 
 // Type aliases for clarity
-type YmlValue = dbt_serde_yaml::Value;
+type YmlValue = dbt_yaml::Value;
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct SemanticManifest {

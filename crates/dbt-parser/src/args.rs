@@ -17,7 +17,7 @@ pub struct ResolveArgs {
     /// All io args
     pub io: IoArgs,
     /// Vars to pass to the jinja environment
-    pub vars: BTreeMap<String, dbt_serde_yaml::Value>,
+    pub vars: BTreeMap<String, dbt_yaml::Value>,
     /// Whether this is the main command or a subcommand
     pub from_main: bool,
     /// selector name

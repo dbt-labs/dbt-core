@@ -160,10 +160,10 @@ impl Auth for RedshiftAuth {
 
                     let token_endpoint_value = config.require("token_endpoint")?;
                     let token_endpoint: TokenEndpoint =
-                        dbt_serde_yaml::from_value::<TokenEndpoint>(token_endpoint_value.clone())
+                        dbt_yaml::from_value::<TokenEndpoint>(token_endpoint_value.clone())
                             .map_err(|e| {
-                            AuthError::config(format!("Invalid token_endpoint structure: {e}"))
-                        })?;
+                                AuthError::config(format!("Invalid token_endpoint structure: {e}"))
+                            })?;
 
                     let access_token = task::block_in_place(|| {
                         let rt = Runtime::new().map_err(|e| {
@@ -212,7 +212,7 @@ impl Auth for RedshiftAuth {
 mod tests {
     use super::*;
     use adbc_core::options::OptionDatabase;
-    use dbt_serde_yaml::Mapping;
+    use dbt_yaml::Mapping;
 
     #[test]
     fn test_basic_user_password_auth() {

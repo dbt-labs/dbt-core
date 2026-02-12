@@ -100,7 +100,7 @@ where
         };
 
         let contents = std::fs::read_to_string(&artifact_file)?;
-        let yml_val: dbt_serde_yaml::Value = serde_json::from_str(&contents)?;
+        let yml_val: dbt_yaml::Value = serde_json::from_str(&contents)?;
 
         let actual: T = yml_val
             .into_typed(|_, _, _| {}, |_| Ok(None))

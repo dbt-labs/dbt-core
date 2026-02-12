@@ -114,8 +114,8 @@ impl Auth for SalesforceAuth {
 mod tests {
     use super::*;
     use crate::test_options::other_option_value;
-    use dbt_serde_yaml::Mapping;
     use dbt_test_primitives::assert_contains;
+    use dbt_yaml::Mapping;
 
     #[test]
     fn test_jwt_bearer_private_key() {

@@ -105,8 +105,8 @@ async fn build_raw_model_project_config(
         let mut children = indexmap::IndexMap::new();
         for (key, maybe_child_config_variant) in child.iter_children() {
             let child_config_variant = match maybe_child_config_variant {
-                dbt_serde_yaml::ShouldBe::AndIs(config) => config,
-                dbt_serde_yaml::ShouldBe::ButIsnt(..) => {
+                dbt_yaml::ShouldBe::AndIs(config) => config,
+                dbt_yaml::ShouldBe::ButIsnt(..) => {
                     // Skip invalid children silently: the fully-rendered dbt_project.yml loader
                     // will report errors. This raw/unrendered pass must not add noise.
                     continue;
@@ -174,15 +174,15 @@ async fn build_raw_model_project_config(
 /// This should be called before relation components are rendered/resolved, and it should prefer
 /// values from a raw (unrendered) `dbt_project.yml` config tree.
 fn insert_unrendered_grants(
-    unrendered: &mut BTreeMap<String, dbt_serde_yaml::Value>,
+    unrendered: &mut BTreeMap<String, dbt_yaml::Value>,
     unrendered_project_cfg: &ModelConfig,
 ) {
-    use dbt_serde_yaml::Value as YmlValue;
+    use dbt_yaml::Value as YmlValue;
 
     // Config-level unrendered values (e.g. grants) matter for Mantle-compatible `state:modified`
     // semantics. Mantle compares configured/unrendered config, not rendered config.
     if let Some(grants) = unrendered_project_cfg.grants.as_ref() {
-        let mut grants_map = dbt_serde_yaml::Mapping::new();
+        let mut grants_map = dbt_yaml::Mapping::new();
         for (k, v) in &grants.0 {
             let key = YmlValue::String(k.clone(), Default::default());
             let val = match v {
@@ -211,10 +211,10 @@ fn insert_unrendered_grants(
 }
 
 fn insert_unrendered_hooks(
-    unrendered: &mut BTreeMap<String, dbt_serde_yaml::Value>,
+    unrendered: &mut BTreeMap<String, dbt_yaml::Value>,
     unrendered_project_cfg: &ModelConfig,
 ) {
-    use dbt_serde_yaml::Value as YmlValue;
+    use dbt_yaml::Value as YmlValue;
 
     // Hooks (`pre-hook` / `post-hook`) show up in dbt-core manifests as lists of SQL strings.
     // Extract unrendered hook SQL strings in a stable representation.
@@ -257,10 +257,10 @@ fn insert_unrendered_hooks(
 }
 
 fn insert_unrendered_tags(
-    unrendered: &mut BTreeMap<String, dbt_serde_yaml::Value>,
+    unrendered: &mut BTreeMap<String, dbt_yaml::Value>,
     unrendered_project_cfg: &ModelConfig,
 ) {
-    use dbt_serde_yaml::Value as YmlValue;
+    use dbt_yaml::Value as YmlValue;
 
     // Tags: store as list if configured as list, or scalar string if configured as string.
     if let Some(tags) = unrendered_project_cfg.tags.as_ref() {
@@ -283,14 +283,14 @@ fn insert_unrendered_tags(
 }
 
 fn insert_unrendered_persist_docs(
-    unrendered: &mut BTreeMap<String, dbt_serde_yaml::Value>,
+    unrendered: &mut BTreeMap<String, dbt_yaml::Value>,
     unrendered_project_cfg: &ModelConfig,
 ) {
-    use dbt_serde_yaml::Value as YmlValue;
+    use dbt_yaml::Value as YmlValue;
 
     // Persist docs: store the configured/unrendered mapping if present.
     if let Some(pd) = unrendered_project_cfg.persist_docs.as_ref() {
-        let mut pd_map = dbt_serde_yaml::Mapping::new();
+        let mut pd_map = dbt_yaml::Mapping::new();
         if let Some(relation) = pd.relation {
             pd_map.insert(
                 YmlValue::String("relation".to_string(), Default::default()),
@@ -318,7 +318,7 @@ fn set_model_unrendered_relation_config(
     inline_overrides: &RelationComponents,
     components: &RelationComponents,
 ) {
-    use dbt_serde_yaml::Value as YmlValue;
+    use dbt_yaml::Value as YmlValue;
 
     let mut unrendered = BTreeMap::new();
 
@@ -1010,7 +1010,7 @@ fn process_versioned_columns(
                         .filter_map(|col| col.as_mapping())
                         .filter(|map| !(map.contains_key("include") || map.contains_key("exclude")))
                         .filter_map(|map| {
-                            dbt_serde_yaml::from_value::<ColumnProperties>(map.clone().into()).ok()
+                            dbt_yaml::from_value::<ColumnProperties>(map.clone().into()).ok()
                         })
                         .collect()
                 })
@@ -1180,7 +1180,7 @@ fn extract_model_properties(
     {
         // Consume the schema_value by replacing it with null
         // This marks the entry as "used" to prevent unused warnings
-        let schema_value = std::mem::replace(&mut mpe.schema_value, dbt_serde_yaml::Value::null());
+        let schema_value = std::mem::replace(&mut mpe.schema_value, dbt_yaml::Value::null());
         let properties = dbt_jinja_utils::serde::into_typed_with_jinja::<ModelProperties, _>(
             &arg.io,
             schema_value,

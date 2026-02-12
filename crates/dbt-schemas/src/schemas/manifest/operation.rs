@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 
 // Type aliases for clarity
-type YmlValue = dbt_serde_yaml::Value;
+type YmlValue = dbt_yaml::Value;
 
 use crate::schemas::nodes::{InternalDbtNode, InternalDbtNodeAttributes, IntrospectionKind};
 use crate::schemas::{CommonAttributes, NodeBaseAttributes};
@@ -85,7 +85,7 @@ impl InternalDbtNodeAttributes for DbtOperation {
 
     fn serialized_config(&self) -> YmlValue {
         // Operations don't have config, return empty map
-        dbt_serde_yaml::to_value(BTreeMap::<String, YmlValue>::new())
+        dbt_yaml::to_value(BTreeMap::<String, YmlValue>::new())
             .expect("Failed to serialize to YAML")
     }
 }

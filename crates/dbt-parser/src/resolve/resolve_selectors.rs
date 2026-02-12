@@ -9,7 +9,7 @@ use dbt_schemas::schemas::{
     selectors::{SelectorEntry, SelectorFile},
 };
 use dbt_selector_parser::{ResolvedSelector, SelectorParser};
-use dbt_serde_yaml::Value as YmlValue;
+use dbt_yaml::Value as YmlValue;
 use std::collections::{BTreeMap, HashMap};
 
 use crate::args::ResolveArgs;
@@ -215,7 +215,7 @@ fn resolve_selector_definitions(
 fn select_expression_to_yaml(expr: &SelectExpression) -> YmlValue {
     match expr {
         SelectExpression::Atom(criteria) => {
-            let mut map = dbt_serde_yaml::Mapping::new();
+            let mut map = dbt_yaml::Mapping::new();
             map.insert(
                 YmlValue::String("method".to_string(), Default::default()),
                 YmlValue::String(criteria.method.to_string(), Default::default()),
@@ -267,7 +267,7 @@ fn select_expression_to_yaml(expr: &SelectExpression) -> YmlValue {
         SelectExpression::Or(expressions) => {
             let values: Vec<YmlValue> = expressions.iter().map(select_expression_to_yaml).collect();
 
-            let mut union_map = dbt_serde_yaml::Mapping::new();
+            let mut union_map = dbt_yaml::Mapping::new();
             union_map.insert(
                 YmlValue::String("union".to_string(), Default::default()),
                 YmlValue::Sequence(values, Default::default()),
@@ -277,7 +277,7 @@ fn select_expression_to_yaml(expr: &SelectExpression) -> YmlValue {
         SelectExpression::And(expressions) => {
             let values: Vec<YmlValue> = expressions.iter().map(select_expression_to_yaml).collect();
 
-            let mut intersection_map = dbt_serde_yaml::Mapping::new();
+            let mut intersection_map = dbt_yaml::Mapping::new();
             intersection_map.insert(
                 YmlValue::String("intersection".to_string(), Default::default()),
                 YmlValue::Sequence(values, Default::default()),
@@ -285,7 +285,7 @@ fn select_expression_to_yaml(expr: &SelectExpression) -> YmlValue {
             YmlValue::Mapping(intersection_map, Default::default())
         }
         SelectExpression::Exclude(expr) => {
-            let mut exclude_map = dbt_serde_yaml::Mapping::new();
+            let mut exclude_map = dbt_yaml::Mapping::new();
             exclude_map.insert(
                 YmlValue::String("exclude".to_string(), Default::default()),
                 select_expression_to_yaml(expr),

@@ -1,6 +1,6 @@
 use std::{path::PathBuf, sync::Arc};
 
-use dbt_serde_yaml::JsonSchema;
+use dbt_yaml::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use crate::utils;
@@ -211,8 +211,8 @@ impl From<PathBuf> for CodeLocationWithFile {
     }
 }
 
-impl From<dbt_serde_yaml::Span> for CodeLocationWithFile {
-    fn from(span: dbt_serde_yaml::Span) -> Self {
+impl From<dbt_yaml::Span> for CodeLocationWithFile {
+    fn from(span: dbt_yaml::Span) -> Self {
         CodeLocationWithFile::new_with_arc(
             span.start.line as u32,
             span.start.column as u32,
@@ -347,7 +347,7 @@ impl Span {
         }
     }
 
-    pub fn from_serde_span(span: dbt_serde_yaml::Span, file: impl Into<PathBuf>) -> Self {
+    pub fn from_serde_span(span: dbt_yaml::Span, file: impl Into<PathBuf>) -> Self {
         Span {
             start: CodeLocationWithFile::new(
                 span.start.line as u32,

@@ -16,7 +16,7 @@ workspace = true
 dbt-common = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-schemas = { workspace = true }
-dbt-serde_yaml = { workspace = true }
+dbt-yaml = { workspace = true }
 itertools = { workspace = true }
 serde_json = { workspace = true }
 

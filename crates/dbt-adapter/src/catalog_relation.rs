@@ -2,7 +2,7 @@ use dbt_common::adapter::AdapterType;
 use dbt_schemas::schemas::dbt_catalogs::CatalogType;
 use dbt_schemas::schemas::dbt_catalogs::DbtCatalogs;
 
-use dbt_serde_yaml::{Mapping as YmlMapping, Span, Value as YmlValue};
+use dbt_yaml::{Mapping as YmlMapping, Span, Value as YmlValue};
 use minijinja::{
     Value,
     value::{Object, ValueKind},

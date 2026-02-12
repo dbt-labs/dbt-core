@@ -352,8 +352,8 @@ mod tests {
     use dbt_common::FsError;
     use dbt_common::io_args::{IoArgs, StaticAnalysisOffReason};
     use dbt_common::io_utils::StatusReporter;
-    use dbt_serde_yaml::Span;
     use dbt_telemetry::{ExecutionPhase, NodeOutcome};
+    use dbt_yaml::Span;
     use std::fs;
     use std::path::PathBuf;
     use std::sync::{Arc, Mutex};

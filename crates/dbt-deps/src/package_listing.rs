@@ -1,4 +1,4 @@
-use dbt_serde_yaml::Verbatim;
+use dbt_yaml::Verbatim;
 use std::{
     collections::{BTreeMap, HashMap},
     path::Path,
@@ -71,13 +71,13 @@ impl UnpinnedPackage {
 
 pub struct PackageListing {
     pub io_args: IoArgs,
-    pub vars: BTreeMap<String, dbt_serde_yaml::Value>,
+    pub vars: BTreeMap<String, dbt_yaml::Value>,
     pub packages: HashMap<String, UnpinnedPackage>,
     pub skip_private_deps: bool,
 }
 
 impl PackageListing {
-    pub fn new(io_args: IoArgs, vars: BTreeMap<String, dbt_serde_yaml::Value>) -> Self {
+    pub fn new(io_args: IoArgs, vars: BTreeMap<String, dbt_yaml::Value>) -> Self {
         Self {
             io_args,
             vars,
@@ -122,7 +122,7 @@ impl PackageListing {
         match package {
             DbtPackageEntry::Hub(hub_package) => {
                 let hub_package: HubPackage = {
-                    let value = dbt_serde_yaml::to_value(&hub_package).map_err(|e| {
+                    let value = dbt_yaml::to_value(&hub_package).map_err(|e| {
                         unexpected_fs_err!("Failed to serialize hub package spec: {e}")
                     })?;
                     into_typed_with_jinja(
@@ -159,7 +159,7 @@ impl PackageListing {
             }
             DbtPackageEntry::Git(git_package) => {
                 let git_package: GitPackage = {
-                    let value = dbt_serde_yaml::to_value(&git_package).map_err(|e| {
+                    let value = dbt_yaml::to_value(&git_package).map_err(|e| {
                         unexpected_fs_err!("Failed to serialize git package spec: {e}")
                     })?;
                     into_typed_with_jinja(
@@ -174,7 +174,7 @@ impl PackageListing {
                     )
                 }?;
                 let git_package_url: String = {
-                    let value = dbt_serde_yaml::to_value(&git_package.git).map_err(|e| {
+                    let value = dbt_yaml::to_value(&git_package.git).map_err(|e| {
                         unexpected_fs_err!("Failed to serialize git package URL: {e}")
                     })?;
                     into_typed_with_jinja(
@@ -215,7 +215,7 @@ impl PackageListing {
             }
             DbtPackageEntry::Local(local_package) => {
                 let local_package: LocalPackage = {
-                    let value = dbt_serde_yaml::to_value(&local_package).map_err(|e| {
+                    let value = dbt_yaml::to_value(&local_package).map_err(|e| {
                         unexpected_fs_err!("Failed to serialize local package spec: {e}")
                     })?;
                     into_typed_with_jinja(
@@ -249,7 +249,7 @@ impl PackageListing {
             }
             DbtPackageEntry::Private(private_package) => {
                 let mut private_package: PrivatePackage = {
-                    let value = dbt_serde_yaml::to_value(&private_package).map_err(|e| {
+                    let value = dbt_yaml::to_value(&private_package).map_err(|e| {
                         unexpected_fs_err!("Failed to serialize private package spec: {e}")
                     })?;
                     into_typed_with_jinja(
@@ -264,10 +264,9 @@ impl PackageListing {
                     )
                 }?;
                 let private_package_private: String = {
-                    let value =
-                        dbt_serde_yaml::to_value(&private_package.private).map_err(|e| {
-                            unexpected_fs_err!("Failed to serialize private package URL: {e}")
-                        })?;
+                    let value = dbt_yaml::to_value(&private_package.private).map_err(|e| {
+                        unexpected_fs_err!("Failed to serialize private package URL: {e}")
+                    })?;
                     into_typed_with_jinja(
                         &self.io_args,
                         value,
@@ -320,7 +319,7 @@ impl PackageListing {
             }
             DbtPackageEntry::Tarball(tarball_package) => {
                 let tarball_package: TarballPackage = {
-                    let value = dbt_serde_yaml::to_value(&tarball_package).map_err(|e| {
+                    let value = dbt_yaml::to_value(&tarball_package).map_err(|e| {
                         unexpected_fs_err!("Failed to serialize tarball package spec: {e}")
                     })?;
                     into_typed_with_jinja(
@@ -335,10 +334,9 @@ impl PackageListing {
                     )
                 }?;
                 let tarball_url: String = {
-                    let value =
-                        dbt_serde_yaml::to_value(&tarball_package.tarball).map_err(|e| {
-                            unexpected_fs_err!("Failed to serialize tarball package URL: {e}")
-                        })?;
+                    let value = dbt_yaml::to_value(&tarball_package.tarball).map_err(|e| {
+                        unexpected_fs_err!("Failed to serialize tarball package URL: {e}")
+                    })?;
                     into_typed_with_jinja(
                         &self.io_args,
                         value,

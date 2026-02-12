@@ -89,8 +89,8 @@ pub fn split_versions(models: Vec<&ModelProperties>) -> Vec<ModelProperties> {
             for version in versions {
                 let mut new_model = model.clone();
                 let version_str = match &version.v {
-                    dbt_serde_yaml::Value::String(s, _) => s.clone(),
-                    dbt_serde_yaml::Value::Number(n, _) => n.to_string(),
+                    dbt_yaml::Value::String(s, _) => s.clone(),
+                    dbt_yaml::Value::Number(n, _) => n.to_string(),
                     _ => format!("{:?}", version.v),
                 };
                 new_model.name = format!("{}_v{}", model.name, version_str);

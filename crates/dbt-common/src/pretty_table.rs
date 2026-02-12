@@ -124,13 +124,11 @@ pub fn pretty_data_table(
                 let json_obj: serde_json::Value =
                     serde_json::from_str(line).expect("Failed to parse JSON");
                 // Convert JSON object to YAML
-                let yaml_obj: dbt_serde_yaml::Value =
-                    dbt_serde_yaml::to_value(&json_obj).expect("Failed to convert to YAML");
+                let yaml_obj: dbt_yaml::Value =
+                    dbt_yaml::to_value(&json_obj).expect("Failed to convert to YAML");
                 // Print YAML formatted object
                 out.push_str("---\n");
-                out.push_str(
-                    &dbt_serde_yaml::to_string(&yaml_obj).expect("Failed to serialize to YAML"),
-                );
+                out.push_str(&dbt_yaml::to_string(&yaml_obj).expect("Failed to serialize to YAML"));
                 // Print YAML formatted object
             }
         }

@@ -20,7 +20,7 @@ use dbt_schemas::schemas::properties::ExposureProperties;
 use dbt_schemas::schemas::ref_and_source::{DbtRef, DbtSourceWrapper};
 use dbt_schemas::schemas::relations::DEFAULT_DBT_QUOTING;
 use dbt_schemas::state::{DbtPackage, DbtRuntimeConfig};
-use dbt_serde_yaml::Spanned;
+use dbt_yaml::Spanned;
 use minijinja::value::Value as MinijinjaValue;
 use regex::Regex;
 use std::collections::BTreeMap;
@@ -85,8 +85,7 @@ pub async fn resolve_exposures(
                 &package.dbt_project.all_source_paths(),
             );
 
-            let schema_value =
-                std::mem::replace(&mut mpe.schema_value, dbt_serde_yaml::Value::null());
+            let schema_value = std::mem::replace(&mut mpe.schema_value, dbt_yaml::Value::null());
             // ExposureProperties is for the yaml schema
             let exposure: ExposureProperties = into_typed_with_jinja(
                 &args.io,

@@ -8,7 +8,7 @@ use dbt_agate::AgateTable;
 use dbt_schemas::schemas::{
     common::PartitionConfig, common::*, dbt_column::DbtColumn, nodes::*, project::*,
 };
-use dbt_serde_yaml::{Spanned, Value as YmlValue};
+use dbt_yaml::{Spanned, Value as YmlValue};
 use indexmap::IndexMap;
 use std::io;
 use std::sync::Arc;
@@ -93,7 +93,7 @@ pub(crate) fn create_mock_dbt_model(cfg: TestModelConfig) -> DbtModel {
         tblproperties: Some(
             cfg.tbl_properties
                 .into_iter()
-                .map(|(k, v)| (k, dbt_serde_yaml::Value::from(v)))
+                .map(|(k, v)| (k, dbt_yaml::Value::from(v)))
                 .collect(),
         ),
         partition_by: Some(PartitionConfig::List(cfg.partition_by)),

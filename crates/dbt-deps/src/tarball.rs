@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use dbt_schemas::schemas::packages::{TarballPackage, TarballPackageLock};
-    use dbt_serde_yaml::Verbatim;
+    use dbt_yaml::Verbatim;
     use std::collections::HashMap;
 
     #[test]

@@ -1,6 +1,6 @@
 use dbt_common::{ErrorCode, FsResult, fs_err};
 use dbt_schemas::schemas::{dbt_catalogs::DbtCatalogs, validate_catalogs};
-use dbt_serde_yaml as yml;
+use dbt_yaml as yml;
 use std::path::Path;
 use std::sync::{Arc, RwLock};
 

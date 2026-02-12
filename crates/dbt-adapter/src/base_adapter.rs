@@ -1185,7 +1185,7 @@ pub trait AdapterFactory: Send + Sync {
     fn create_adapter(
         &self,
         adapter_type: AdapterType,
-        config: dbt_serde_yaml::Mapping,
+        config: dbt_yaml::Mapping,
         replay_mode: Option<ReplayMode>,
         flags: BTreeMap<String, Value>,
         schema_cache: Option<Arc<dyn SchemaStoreTrait>>,

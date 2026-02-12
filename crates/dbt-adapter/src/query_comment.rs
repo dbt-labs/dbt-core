@@ -273,7 +273,7 @@ mod tests {
     fn test_query_comment_object_comment() {
         let config_str = "comment: \"cool comment\"";
         let query_comment =
-            QueryComment::deserialize(dbt_serde_yaml::Deserializer::from_str(config_str)).ok();
+            QueryComment::deserialize(dbt_yaml::Deserializer::from_str(config_str)).ok();
 
         for adapter_type in [
             AdapterType::Bigquery,
@@ -316,7 +316,7 @@ mod tests {
     fn test_query_comment_object_append() {
         let config_str = "append: true";
         let query_comment =
-            QueryComment::deserialize(dbt_serde_yaml::Deserializer::from_str(config_str)).ok();
+            QueryComment::deserialize(dbt_yaml::Deserializer::from_str(config_str)).ok();
 
         for adapter_type in [
             AdapterType::Bigquery,
@@ -336,7 +336,7 @@ mod tests {
 
         let config_str = "append: false";
         let query_comment =
-            QueryComment::deserialize(dbt_serde_yaml::Deserializer::from_str(config_str)).ok();
+            QueryComment::deserialize(dbt_yaml::Deserializer::from_str(config_str)).ok();
 
         for adapter_type in [
             AdapterType::Bigquery,
@@ -359,7 +359,7 @@ mod tests {
     fn test_query_comment_object_job_label() {
         let config_str = "job-label: true";
         let query_comment =
-            QueryComment::deserialize(dbt_serde_yaml::Deserializer::from_str(config_str)).ok();
+            QueryComment::deserialize(dbt_yaml::Deserializer::from_str(config_str)).ok();
 
         // This should only work for BigQuery
         for adapter_type in [

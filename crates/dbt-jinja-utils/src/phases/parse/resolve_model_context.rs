@@ -680,13 +680,13 @@ impl<T: DefaultTo<T>> Object for ParseConfig<T> {
                 end_col,
                 end_offset,
             } = state.current_instruction_span();
-            dbt_serde_yaml::Span {
-                start: dbt_serde_yaml::Marker::new(
+            dbt_yaml::Span {
+                start: dbt_yaml::Marker::new(
                     start_offset as usize,
                     start_line as usize,
                     start_col as usize,
                 ),
-                end: dbt_serde_yaml::Marker::new(
+                end: dbt_yaml::Marker::new(
                     end_offset as usize,
                     end_line as usize,
                     end_col as usize,
@@ -695,7 +695,7 @@ impl<T: DefaultTo<T>> Object for ParseConfig<T> {
             }
         };
 
-        let mut mapping = dbt_serde_yaml::Mapping::with_capacity(kwargs.len());
+        let mut mapping = dbt_yaml::Mapping::with_capacity(kwargs.len());
         for (key, value) in kwargs.into_iter() {
             if value.is_undefined() {
                 return Err(minijinja::Error::new(
@@ -707,9 +707,9 @@ impl<T: DefaultTo<T>> Object for ParseConfig<T> {
             let value = if let Some(dyn_obj) = value.as_object()
                 && let Some(pydatetime) = dyn_obj.downcast::<PyDateTime>()
             {
-                dbt_serde_yaml::to_value(pydatetime.chrono_dt())
+                dbt_yaml::to_value(pydatetime.chrono_dt())
             } else {
-                dbt_serde_yaml::to_value(value)
+                dbt_yaml::to_value(value)
             }
             .map_err(|e| {
                 MinijinjaError::new(
@@ -719,10 +719,10 @@ impl<T: DefaultTo<T>> Object for ParseConfig<T> {
             })?
             .with_span(span.clone());
 
-            mapping.insert(dbt_serde_yaml::Value::String(key, span.clone()), value);
+            mapping.insert(dbt_yaml::Value::String(key, span.clone()), value);
         }
 
-        let yaml_value = dbt_serde_yaml::Value::Mapping(mapping, span);
+        let yaml_value = dbt_yaml::Value::Mapping(mapping, span);
         let config: T = into_typed_with_error(
             &self.io_args,
             yaml_value,

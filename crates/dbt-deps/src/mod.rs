@@ -41,7 +41,7 @@ pub async fn get_or_install_packages(
     add_package: Option<String>,
     upgrade: bool,
     lock: bool,
-    vars: BTreeMap<String, dbt_serde_yaml::Value>,
+    vars: BTreeMap<String, dbt_yaml::Value>,
     version_check: bool,
     skip_private_deps: bool,
     replay_mode: Option<&ReplayMode>,

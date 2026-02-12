@@ -1,9 +1,9 @@
 use dbt_common::io_args::StaticAnalysisKind;
-use dbt_serde_yaml::{JsonSchema, ShouldBe, Spanned};
+use dbt_yaml::{JsonSchema, ShouldBe, Spanned};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 // Type aliases for clarity
-type YmlValue = dbt_serde_yaml::Value;
+type YmlValue = dbt_yaml::Value;
 use serde_with::skip_serializing_none;
 use std::collections::{BTreeMap, btree_map::Iter};
 

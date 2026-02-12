@@ -91,7 +91,7 @@ fn create_package_installed_span(
 #[allow(clippy::cognitive_complexity)]
 pub async fn install_packages(
     io_args: &IoArgs,
-    vars: &BTreeMap<String, dbt_serde_yaml::Value>,
+    vars: &BTreeMap<String, dbt_yaml::Value>,
     hub_registry: &mut HubClient,
     jinja_env: &JinjaEnv,
     dbt_packages_lock: &DbtPackagesLock,
@@ -99,7 +99,7 @@ pub async fn install_packages(
     skip_private_deps: bool,
 ) -> FsResult<()> {
     // Cleanup package-lock.yml
-    let package_lock_str = dbt_serde_yaml::to_string(&dbt_packages_lock).unwrap();
+    let package_lock_str = dbt_yaml::to_string(&dbt_packages_lock).unwrap();
     // Create tmp dir for tarball
     let packages_lock_path = &io_args.in_dir.join(DBT_PACKAGES_LOCK_FILE);
     std::fs::write(packages_lock_path, &package_lock_str).map_err(|e| {
@@ -210,7 +210,7 @@ pub async fn install_packages(
 #[allow(clippy::too_many_arguments)]
 async fn install_package(
     io_args: &IoArgs,
-    vars: &BTreeMap<String, dbt_serde_yaml::Value>,
+    vars: &BTreeMap<String, dbt_yaml::Value>,
     hub_registry: &mut HubClient,
     jinja_env: &JinjaEnv,
     packages_install_path: &Path,

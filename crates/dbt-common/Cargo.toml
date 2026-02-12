@@ -38,7 +38,7 @@ chrono = { workspace = true }
 comfy-table = { workspace = true }
 console = { workspace = true }
 dashmap = { workspace = true }
-dbt-serde_yaml = { workspace = true }
+dbt-yaml = { workspace = true }
 humantime = { workspace = true }
 minijinja = { workspace = true }
 parquet = { workspace = true }

@@ -1,5 +1,5 @@
 use chrono_tz::Tz;
-use dbt_serde_yaml::{Spanned, UntaggedEnumDeserialize};
+use dbt_yaml::{Spanned, UntaggedEnumDeserialize};
 use indexmap::IndexMap;
 use std::{
     any::Any,
@@ -205,7 +205,7 @@ pub struct DbtPackage {
 #[serde(untagged)]
 pub enum DbtVars {
     Vars(BTreeMap<String, DbtVars>),
-    Value(dbt_serde_yaml::Value),
+    Value(dbt_yaml::Value),
 }
 
 #[derive(Debug, Clone)]
@@ -215,7 +215,7 @@ pub struct DbtState {
     pub packages: Vec<DbtPackage>,
     /// Key is the package name, value are all package scoped vars
     pub vars: BTreeMap<String, IndexMap<String, DbtVars>>,
-    pub cli_vars: BTreeMap<String, dbt_serde_yaml::Value>,
+    pub cli_vars: BTreeMap<String, dbt_yaml::Value>,
     pub catalogs: Option<Arc<DbtCatalogs>>,
 }
 
@@ -734,7 +734,7 @@ pub struct DbtRuntimeConfigInner {
 
     // Variables and hooks
     pub vars: IndexMap<String, DbtVars>,
-    pub cli_vars: BTreeMap<String, dbt_serde_yaml::Value>,
+    pub cli_vars: BTreeMap<String, dbt_yaml::Value>,
     pub on_run_start: Vec<Spanned<String>>,
     pub on_run_end: Vec<Spanned<String>>,
 
@@ -764,7 +764,7 @@ impl DbtRuntimeConfig {
         profile: &DbtProfile,
         dependency_lookup: &BTreeMap<String, Arc<DbtRuntimeConfig>>,
         vars: &IndexMap<String, DbtVars>,
-        cli_vars: &BTreeMap<String, dbt_serde_yaml::Value>,
+        cli_vars: &BTreeMap<String, dbt_yaml::Value>,
     ) -> Self {
         let runtime_config_inner = DbtRuntimeConfigInner {
             profile_name: profile.profile.clone(),
@@ -846,15 +846,13 @@ impl DbtRuntimeConfig {
         // TODO(anna): Look into whether this should also be Index map
         let mut runtime_config = Self {
             runtime_config: Deserialize::deserialize(
-                dbt_serde_yaml::to_value(&runtime_config_inner).unwrap(),
+                dbt_yaml::to_value(&runtime_config_inner).unwrap(),
             )
             .unwrap(),
             dependencies: BTreeMap::new(),
             vars: minijinja::Value::from_object(VarProvider::new(
-                Deserialize::deserialize(
-                    dbt_serde_yaml::to_value(&runtime_config_inner.vars).unwrap(),
-                )
-                .unwrap(),
+                Deserialize::deserialize(dbt_yaml::to_value(&runtime_config_inner.vars).unwrap())
+                    .unwrap(),
             )),
             inner: runtime_config_inner,
         };

@@ -17,7 +17,7 @@ dbt-env = { workspace = true }
 dbt-fusion-workspace-hack = { version = "0.1" }
 dbt-jinja-utils = { workspace = true }
 dbt-schemas = { workspace = true }
-dbt-serde_yaml = { workspace = true }
+dbt-yaml = { workspace = true }
 md5 = { workspace = true }
 serde = { workspace = true }
 uuid = { workspace = true }

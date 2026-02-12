@@ -2,10 +2,10 @@ use crate::schemas::common::ClusterConfig;
 use crate::schemas::serde::OmissibleGrantConfig;
 use crate::schemas::serde::QueryTag;
 use dbt_common::io_args::StaticAnalysisKind;
-use dbt_serde_yaml::JsonSchema;
-use dbt_serde_yaml::ShouldBe;
-use dbt_serde_yaml::Spanned;
-use dbt_serde_yaml::Verbatim;
+use dbt_yaml::JsonSchema;
+use dbt_yaml::ShouldBe;
+use dbt_yaml::Spanned;
+use dbt_yaml::Verbatim;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
@@ -13,7 +13,7 @@ use std::collections::BTreeMap;
 use std::collections::btree_map::Iter;
 
 // Type aliases for clarity
-type YmlValue = dbt_serde_yaml::Value;
+type YmlValue = dbt_yaml::Value;
 
 use super::config_keys::ConfigKeys;
 use crate::default_to;

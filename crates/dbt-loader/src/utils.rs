@@ -115,7 +115,7 @@ pub fn get_db_config(
             target_name,
         )
     })?;
-    let db_config: DbConfig = dbt_serde_yaml::from_value(db_config_yml.clone()).map_err(|e| {
+    let db_config: DbConfig = dbt_yaml::from_value(db_config_yml.clone()).map_err(|e| {
         fs_err!(
             ErrorCode::InvalidConfig,
             "Failed to parse profiles.yml: {}",
@@ -135,7 +135,7 @@ pub fn read_profiles_and_extract_db_config<S: MinijinjaContext>(
     profile_path: PathBuf,
 ) -> Result<(String, DbConfig), Box<dbt_common::FsError>> {
     let prepared_profile_val = value_from_file(io_args, &profile_path, true, None)?;
-    let dbt_profiles = dbt_serde_yaml::from_value::<DbtProfilesIntermediate>(prepared_profile_val)
+    let dbt_profiles = dbt_yaml::from_value::<DbtProfilesIntermediate>(prepared_profile_val)
         .map_err(|e| yaml_to_fs_error(e, Some(&profile_path)))?;
     if dbt_profiles.config.is_some() {
         return err!(
@@ -145,7 +145,7 @@ pub fn read_profiles_and_extract_db_config<S: MinijinjaContext>(
     }
 
     // get the profile value
-    let profile_val: &dbt_serde_yaml::Value =
+    let profile_val: &dbt_yaml::Value =
         dbt_profiles.__profiles__.get(profile_str).ok_or_else(|| {
             fs_err!(
                 ErrorCode::IoError,
@@ -173,7 +173,7 @@ pub fn read_profiles_and_extract_db_config<S: MinijinjaContext>(
     })?;
 
     // filter the db_targets to only include the target we want to use
-    let unrendered_outputs_filtered: BTreeMap<String, dbt_serde_yaml::Value> = unrendered_outputs
+    let unrendered_outputs_filtered: BTreeMap<String, dbt_yaml::Value> = unrendered_outputs
         .as_mapping()
         .unwrap()
         .iter()
@@ -191,14 +191,14 @@ pub fn read_profiles_and_extract_db_config<S: MinijinjaContext>(
     // render just the target output we want to use
     let rendered_db_target = into_typed_with_jinja(
         io_args,
-        dbt_serde_yaml::to_value(BTreeMap::from([
+        dbt_yaml::to_value(BTreeMap::from([
             (
                 "outputs".to_string(),
-                dbt_serde_yaml::to_value(&unrendered_outputs_filtered).unwrap(),
+                dbt_yaml::to_value(&unrendered_outputs_filtered).unwrap(),
             ),
             (
                 "target".to_string(),
-                dbt_serde_yaml::to_value(&rendered_target).unwrap(),
+                dbt_yaml::to_value(&rendered_target).unwrap(),
             ),
         ]))
         .map_err(|e| yaml_to_fs_error(e, Some(&profile_path)))?,

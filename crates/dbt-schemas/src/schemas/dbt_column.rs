@@ -2,7 +2,7 @@ use indexmap::IndexMap;
 use std::{collections::BTreeMap, sync::Arc};
 
 use dbt_common::FsResult;
-use dbt_serde_yaml::{JsonSchema, UntaggedEnumDeserialize};
+use dbt_yaml::{JsonSchema, UntaggedEnumDeserialize};
 use serde::de::{MapAccess, Visitor};
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -10,7 +10,7 @@ use serde_with::skip_serializing_none;
 use strum::Display;
 
 // Type aliases for clarity
-type YmlValue = dbt_serde_yaml::Value;
+type YmlValue = dbt_yaml::Value;
 
 use crate::schemas::{
     common::DimensionValidityParams, semantic_layer::semantic_manifest::SemanticLayerElementConfig,
@@ -156,29 +156,29 @@ pub struct ColumnInheritanceRules {
 
 impl ColumnInheritanceRules {
     // Given a column block in a versioned model, return the includes and excludes for that model
-    pub fn from_version_columns(columns: &dbt_serde_yaml::Value) -> Option<Self> {
-        if let dbt_serde_yaml::Value::Sequence(cols, _) = columns {
+    pub fn from_version_columns(columns: &dbt_yaml::Value) -> Option<Self> {
+        if let dbt_yaml::Value::Sequence(cols, _) = columns {
             for col in cols {
-                if let dbt_serde_yaml::Value::Mapping(map, _) = col {
+                if let dbt_yaml::Value::Mapping(map, _) = col {
                     // Only create inheritance rules if there's an include or exclude
-                    let include_key = dbt_serde_yaml::Value::string("include".to_string());
-                    let exclude_key = dbt_serde_yaml::Value::string("exclude".to_string());
+                    let include_key = dbt_yaml::Value::string("include".to_string());
+                    let exclude_key = dbt_yaml::Value::string("exclude".to_string());
 
                     if map.contains_key(&include_key) || map.contains_key(&exclude_key) {
                         let includes = map
                             .get(&include_key)
                             .map(|v| match v {
-                                dbt_serde_yaml::Value::String(s, _) if s == "*" || s == "all" => {
+                                dbt_yaml::Value::String(s, _) if s == "*" || s == "all" => {
                                     Vec::new()
                                 } // Empty vec means include all
-                                dbt_serde_yaml::Value::Sequence(arr, _) => arr
+                                dbt_yaml::Value::Sequence(arr, _) => arr
                                     .iter()
                                     .filter_map(|v| match v {
-                                        dbt_serde_yaml::Value::String(s, _) => Some(s.clone()),
+                                        dbt_yaml::Value::String(s, _) => Some(s.clone()),
                                         _ => None,
                                     })
                                     .collect(),
-                                dbt_serde_yaml::Value::String(s, _) => vec![s.clone()],
+                                dbt_yaml::Value::String(s, _) => vec![s.clone()],
                                 _ => Vec::new(),
                             })
                             .unwrap_or_default(); // Default to empty vec (include all)
@@ -186,14 +186,14 @@ impl ColumnInheritanceRules {
                         let excludes = map
                             .get(&exclude_key)
                             .map(|v| match v {
-                                dbt_serde_yaml::Value::Sequence(arr, _) => arr
+                                dbt_yaml::Value::Sequence(arr, _) => arr
                                     .iter()
                                     .filter_map(|v| match v {
-                                        dbt_serde_yaml::Value::String(s, _) => Some(s.clone()),
+                                        dbt_yaml::Value::String(s, _) => Some(s.clone()),
                                         _ => None,
                                     })
                                     .collect(),
-                                dbt_serde_yaml::Value::String(s, _) => vec![s.clone()],
+                                dbt_yaml::Value::String(s, _) => vec![s.clone()],
                                 _ => Vec::new(),
                             })
                             .unwrap_or_default();

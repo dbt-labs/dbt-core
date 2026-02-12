@@ -314,7 +314,7 @@ mod tests {
             _execution_phase: dbt_telemetry::ExecutionPhase,
             _node_outcome: dbt_telemetry::NodeOutcome,
             _upstream_target: Option<(String, String, bool)>,
-            _static_analysis_off_reason: (Option<StaticAnalysisOffReason>, dbt_serde_yaml::Span),
+            _static_analysis_off_reason: (Option<StaticAnalysisOffReason>, dbt_yaml::Span),
         ) {
         }
 

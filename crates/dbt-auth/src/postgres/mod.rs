@@ -69,8 +69,8 @@ impl Auth for PostgresAuth {
 mod tests {
     use super::*;
     use crate::test_options::uri_value;
-    use dbt_serde_yaml::Mapping;
     use dbt_test_primitives::assert_contains;
+    use dbt_yaml::Mapping;
 
     #[test]
     fn test_uri_contains_expected_parts() {
@@ -94,7 +94,7 @@ mod tests {
 
     #[test]
     fn test_port_accepts_integer_value() {
-        let config: Mapping = dbt_serde_yaml::from_str(
+        let config: Mapping = dbt_yaml::from_str(
             r#"
 user: alice
 password: secret

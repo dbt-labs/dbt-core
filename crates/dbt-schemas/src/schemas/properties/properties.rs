@@ -2,9 +2,9 @@ use crate::schemas::common::DocsConfig;
 use crate::schemas::common::Versions;
 use crate::schemas::manifest::common::DbtOwner;
 use crate::schemas::serde::{FloatOrString, bool_or_string_bool, string_or_array};
-use dbt_serde_yaml::JsonSchema;
-use dbt_serde_yaml::Spanned;
-use dbt_serde_yaml::Verbatim;
+use dbt_yaml::JsonSchema;
+use dbt_yaml::Spanned;
+use dbt_yaml::Verbatim;
 use indexmap::IndexMap;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -12,7 +12,7 @@ use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
 
 // Type aliases for clarity
-type YmlValue = dbt_serde_yaml::Value;
+type YmlValue = dbt_yaml::Value;
 
 use super::AnalysesProperties;
 use super::DataTestProperties;
@@ -29,24 +29,24 @@ use super::unit_test_properties::UnitTestProperties;
 #[derive(Deserialize, Debug, Clone)]
 pub struct DbtPropertiesFileValues {
     pub version: Option<FloatOrString>,
-    pub analyses: Option<Vec<dbt_serde_yaml::Value>>,
-    pub exposures: Option<Vec<dbt_serde_yaml::Value>>,
-    pub groups: Option<Vec<dbt_serde_yaml::Value>>,
-    pub macros: Option<Vec<dbt_serde_yaml::Value>>,
-    pub metrics: Option<Vec<dbt_serde_yaml::Value>>,
-    pub models: Option<Vec<dbt_serde_yaml::Value>>,
-    pub functions: Option<Vec<dbt_serde_yaml::Value>>,
-    pub saved_queries: Option<Vec<dbt_serde_yaml::Value>>,
-    pub seeds: Option<Vec<dbt_serde_yaml::Value>>,
+    pub analyses: Option<Vec<dbt_yaml::Value>>,
+    pub exposures: Option<Vec<dbt_yaml::Value>>,
+    pub groups: Option<Vec<dbt_yaml::Value>>,
+    pub macros: Option<Vec<dbt_yaml::Value>>,
+    pub metrics: Option<Vec<dbt_yaml::Value>>,
+    pub models: Option<Vec<dbt_yaml::Value>>,
+    pub functions: Option<Vec<dbt_yaml::Value>>,
+    pub saved_queries: Option<Vec<dbt_yaml::Value>>,
+    pub seeds: Option<Vec<dbt_yaml::Value>>,
     // semantic_models cannot be removed for backward compatibility
     // removal would result in many regression tests failing
-    pub semantic_models: Option<Vec<dbt_serde_yaml::Value>>,
-    pub snapshots: Option<Vec<dbt_serde_yaml::Value>>,
-    pub sources: Option<Vec<dbt_serde_yaml::Value>>,
-    pub unit_tests: Option<Vec<dbt_serde_yaml::Value>>,
-    pub tests: Option<Vec<dbt_serde_yaml::Value>>,
-    pub data_tests: Option<Vec<dbt_serde_yaml::Value>>,
-    pub anchors: Verbatim<Option<Vec<dbt_serde_yaml::Value>>>,
+    pub semantic_models: Option<Vec<dbt_yaml::Value>>,
+    pub snapshots: Option<Vec<dbt_yaml::Value>>,
+    pub sources: Option<Vec<dbt_yaml::Value>>,
+    pub unit_tests: Option<Vec<dbt_yaml::Value>>,
+    pub tests: Option<Vec<dbt_yaml::Value>>,
+    pub data_tests: Option<Vec<dbt_yaml::Value>>,
+    pub anchors: Verbatim<Option<Vec<dbt_yaml::Value>>>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -56,15 +56,15 @@ pub struct MinimalSchemaValue {
     pub latest_version: Option<FloatOrString>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub versions: Option<Vec<Versions>>,
-    pub tables: Verbatim<Option<Vec<dbt_serde_yaml::Value>>>,
-    pub __additional_properties__: Verbatim<BTreeMap<String, dbt_serde_yaml::Value>>,
+    pub tables: Verbatim<Option<Vec<dbt_yaml::Value>>>,
+    pub __additional_properties__: Verbatim<BTreeMap<String, dbt_yaml::Value>>,
 }
 
 #[skip_serializing_none]
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct MinimalTableValue {
     pub name: Spanned<String>,
-    pub __additional_properties__: Verbatim<BTreeMap<String, dbt_serde_yaml::Value>>,
+    pub __additional_properties__: Verbatim<BTreeMap<String, dbt_yaml::Value>>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -73,8 +73,8 @@ pub struct MinimalUnitTestValue {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub versions: Option<dbt_serde_yaml::Value>,
-    pub __additional_properties__: Verbatim<BTreeMap<String, dbt_serde_yaml::Value>>,
+    pub versions: Option<dbt_yaml::Value>,
+    pub __additional_properties__: Verbatim<BTreeMap<String, dbt_yaml::Value>>,
 }
 
 #[skip_serializing_none]
@@ -96,9 +96,9 @@ pub struct DbtPropertiesFile {
     pub functions: Option<Vec<FunctionProperties>>,
     // semantic_models cannot be removed for backward compatibility
     // removal would result in many regression tests failing
-    pub semantic_models: Option<Vec<dbt_serde_yaml::Value>>,
+    pub semantic_models: Option<Vec<dbt_yaml::Value>>,
     pub version: Option<FloatOrString>,
-    pub anchors: Verbatim<Option<Vec<dbt_serde_yaml::Value>>>,
+    pub anchors: Verbatim<Option<Vec<dbt_yaml::Value>>>,
 }
 
 // -- Additional Properties

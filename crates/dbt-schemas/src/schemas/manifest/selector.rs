@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use dbt_serde_yaml::Value;
+use dbt_yaml::Value;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 

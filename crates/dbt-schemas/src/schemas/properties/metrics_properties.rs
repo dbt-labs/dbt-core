@@ -1,7 +1,7 @@
 use crate::schemas::dbt_column::Granularity;
 use crate::schemas::project::MetricConfig;
-use dbt_serde_yaml::JsonSchema;
-use dbt_serde_yaml::UntaggedEnumDeserialize;
+use dbt_yaml::JsonSchema;
+use dbt_yaml::UntaggedEnumDeserialize;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 

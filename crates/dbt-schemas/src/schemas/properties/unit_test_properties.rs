@@ -1,13 +1,13 @@
 use std::collections::BTreeMap;
 
 // Type aliases for clarity
-type YmlValue = dbt_serde_yaml::Value;
+type YmlValue = dbt_yaml::Value;
 
 use crate::schemas::{
     common::{Expect, Given},
     project::UnitTestConfig,
 };
-use dbt_serde_yaml::JsonSchema;
+use dbt_yaml::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 

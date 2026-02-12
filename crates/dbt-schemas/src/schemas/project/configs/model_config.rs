@@ -3,12 +3,12 @@ use crate::schemas::serde::OmissibleGrantConfig;
 use crate::schemas::serde::QueryTag;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::serde_utils::Omissible;
-use dbt_serde_yaml::JsonSchema;
-use dbt_serde_yaml::Spanned;
-use dbt_serde_yaml::Verbatim;
+use dbt_yaml::JsonSchema;
+use dbt_yaml::Spanned;
+use dbt_yaml::Verbatim;
 use serde::{Deserialize, Serialize};
 // Type aliases for clarity
-type YmlValue = dbt_serde_yaml::Value;
+type YmlValue = dbt_yaml::Value;
 use indexmap::IndexMap;
 use std::collections::btree_map::Iter;
 use std::collections::{BTreeMap, HashSet};
@@ -48,7 +48,7 @@ use crate::schemas::serde::{
     IndexesConfig, PrimaryKeyConfig, bool_or_string_bool, default_type, f64_or_string_f64,
     u64_or_string_u64,
 };
-use dbt_serde_yaml::ShouldBe;
+use dbt_yaml::ShouldBe;
 
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
@@ -1368,7 +1368,7 @@ impl ModelConfig {
 impl ConfigKeys for ModelConfig {
     fn valid_field_names() -> HashSet<String> {
         let default_instance = Self::default();
-        let serialized = dbt_serde_yaml::to_value(&default_instance)
+        let serialized = dbt_yaml::to_value(&default_instance)
             .expect("Failed to serialize ModelConfig for field extraction");
 
         let mut field_names = HashSet::new();

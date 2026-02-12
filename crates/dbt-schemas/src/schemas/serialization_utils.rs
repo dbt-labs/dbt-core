@@ -1,7 +1,7 @@
 /// Utilities for handling different serialization modes (Artifact vs Jinja)
 use serde::Serialize;
 
-type YmlValue = dbt_serde_yaml::Value;
+type YmlValue = dbt_yaml::Value;
 
 /// Serialization mode determines how Option fields are handled
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -17,7 +17,7 @@ pub enum SerializationMode {
 /// Note: This assumes config structs do NOT have #[skip_serializing_none],
 /// so None values are serialized as null by default.
 pub fn serialize_with_mode<T: Serialize>(value: &T, mode: SerializationMode) -> YmlValue {
-    let yml_value = dbt_serde_yaml::to_value(value).expect("Failed to serialize to YAML");
+    let yml_value = dbt_yaml::to_value(value).expect("Failed to serialize to YAML");
 
     match mode {
         SerializationMode::KeepNone => yml_value, // Keep everything including nulls
@@ -29,7 +29,7 @@ pub fn serialize_with_mode<T: Serialize>(value: &T, mode: SerializationMode) -> 
 fn strip_null_fields(value: YmlValue) -> YmlValue {
     match value {
         YmlValue::Mapping(map, span) => {
-            let filtered_map: dbt_serde_yaml::Mapping = map
+            let filtered_map: dbt_yaml::Mapping = map
                 .into_iter()
                 .filter_map(|(k, v)| {
                     // Skip null values

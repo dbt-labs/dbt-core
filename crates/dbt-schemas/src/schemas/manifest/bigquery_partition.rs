@@ -1,5 +1,5 @@
 use dbt_common::current_function_name;
-use dbt_serde_yaml::{JsonSchema, UntaggedEnumDeserialize};
+use dbt_yaml::{JsonSchema, UntaggedEnumDeserialize};
 use minijinja::value::Enumerator;
 use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State};
 use minijinja::{
@@ -366,7 +366,7 @@ mod tests {
 
     #[test]
     fn test_deserialize_time_partition_config() {
-        let json = dbt_serde_yaml::from_str(
+        let json = dbt_yaml::from_str(
             r#"
             field: created_at
             data_type: timestamp
@@ -375,7 +375,7 @@ mod tests {
         )
         .unwrap();
 
-        let config: BigqueryPartitionConfig = dbt_serde_yaml::from_value(json).unwrap();
+        let config: BigqueryPartitionConfig = dbt_yaml::from_value(json).unwrap();
         assert!(matches!(
             config.__inner__,
             BigqueryPartitionConfigInner::Time(_)
@@ -384,7 +384,7 @@ mod tests {
 
     #[test]
     fn test_deserialize_range_partition_config() {
-        let json = dbt_serde_yaml::from_str(
+        let json = dbt_yaml::from_str(
             r#"
             field: "user_id"
             data_type: "int64"
@@ -396,7 +396,7 @@ mod tests {
         )
         .unwrap();
 
-        let config: BigqueryPartitionConfig = dbt_serde_yaml::from_value(json).unwrap();
+        let config: BigqueryPartitionConfig = dbt_yaml::from_value(json).unwrap();
         assert!(matches!(
             config.__inner__,
             BigqueryPartitionConfigInner::Range(_)
@@ -407,14 +407,14 @@ mod tests {
 
     #[test]
     fn test_deserialize_with_defaults() {
-        let json = dbt_serde_yaml::from_str(
+        let json = dbt_yaml::from_str(
             r#"
             field: created_at
         "#,
         )
         .unwrap();
 
-        let config: BigqueryPartitionConfig = dbt_serde_yaml::from_value(json).unwrap();
+        let config: BigqueryPartitionConfig = dbt_yaml::from_value(json).unwrap();
         assert_eq!(config.field, "created_at");
         assert_eq!(config.data_type, "date"); // default
         assert!(
@@ -438,7 +438,7 @@ mod tests {
         };
 
         // Serialize to JSON to get all field names
-        let json_value = dbt_serde_yaml::to_value(&config).unwrap();
+        let json_value = dbt_yaml::to_value(&config).unwrap();
         let json_object = json_value.as_mapping().unwrap();
 
         // Test that all JSON fields can be parsed by our enum (except flattened fields)
@@ -473,7 +473,7 @@ mod tests {
         };
 
         // Serialize to JSON to get all field names
-        let json_value = dbt_serde_yaml::to_value(&config).unwrap();
+        let json_value = dbt_yaml::to_value(&config).unwrap();
         let json_object = json_value.as_mapping().unwrap();
 
         // Test that all JSON fields can be parsed by our enum (except nested range fields)

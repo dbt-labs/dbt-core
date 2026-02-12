@@ -1,11 +1,11 @@
 use chrono::{DateTime, Utc};
 use dbt_common::{Span, adapter::AdapterType, io_args::StaticAnalysisKind};
-use dbt_serde_yaml::{Spanned, UntaggedEnumDeserialize};
+use dbt_yaml::{Spanned, UntaggedEnumDeserialize};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::PathBuf, str::FromStr as _, sync::Arc};
 // Type aliases for clarity
-type YmlValue = dbt_serde_yaml::Value;
+type YmlValue = dbt_yaml::Value;
 
 use crate::{
     dbt_utils::get_dbt_schema_version,
@@ -268,8 +268,7 @@ fn build_disabled_map(resolver_state: &ResolverState) -> BTreeMap<String, Vec<Ym
             (
                 id.clone(),
                 vec![
-                    dbt_serde_yaml::to_value(ManifestModel::from((**model).clone()))
-                        .unwrap_or_default(),
+                    dbt_yaml::to_value(ManifestModel::from((**model).clone())).unwrap_or_default(),
                 ],
             )
         })
@@ -282,7 +281,7 @@ fn build_disabled_map(resolver_state: &ResolverState) -> BTreeMap<String, Vec<Ym
                     (
                         id.clone(),
                         vec![
-                            dbt_serde_yaml::to_value(ManifestDataTest::from((**test).clone()))
+                            dbt_yaml::to_value(ManifestDataTest::from((**test).clone()))
                                 .unwrap_or_default(),
                         ],
                     )
@@ -297,7 +296,7 @@ fn build_disabled_map(resolver_state: &ResolverState) -> BTreeMap<String, Vec<Ym
                     (
                         id.clone(),
                         vec![
-                            dbt_serde_yaml::to_value(ManifestSnapshot::from((**snapshot).clone()))
+                            dbt_yaml::to_value(ManifestSnapshot::from((**snapshot).clone()))
                                 .unwrap_or_default(),
                         ],
                     )
@@ -312,7 +311,7 @@ fn build_disabled_map(resolver_state: &ResolverState) -> BTreeMap<String, Vec<Ym
                     (
                         id.clone(),
                         vec![
-                            dbt_serde_yaml::to_value(ManifestSeed::from((**seed).clone()))
+                            dbt_yaml::to_value(ManifestSeed::from((**seed).clone()))
                                 .unwrap_or_default(),
                         ],
                     )
@@ -327,7 +326,7 @@ fn build_disabled_map(resolver_state: &ResolverState) -> BTreeMap<String, Vec<Ym
                     (
                         id.clone(),
                         vec![
-                            dbt_serde_yaml::to_value(ManifestAnalysis::from((**analysis).clone()))
+                            dbt_yaml::to_value(ManifestAnalysis::from((**analysis).clone()))
                                 .unwrap_or_default(),
                         ],
                     )
@@ -342,7 +341,7 @@ fn build_disabled_map(resolver_state: &ResolverState) -> BTreeMap<String, Vec<Ym
                     (
                         id.clone(),
                         vec![
-                            dbt_serde_yaml::to_value(ManifestFunction::from((**function).clone()))
+                            dbt_yaml::to_value(ManifestFunction::from((**function).clone()))
                                 .unwrap_or_default(),
                         ],
                     )
@@ -357,7 +356,7 @@ fn build_disabled_map(resolver_state: &ResolverState) -> BTreeMap<String, Vec<Ym
                     (
                         id.clone(),
                         vec![
-                            dbt_serde_yaml::to_value(ManifestExposure::from((**exposure).clone()))
+                            dbt_yaml::to_value(ManifestExposure::from((**exposure).clone()))
                                 .unwrap_or_default(),
                         ],
                     )
@@ -372,10 +371,8 @@ fn build_disabled_map(resolver_state: &ResolverState) -> BTreeMap<String, Vec<Ym
                     (
                         id.clone(),
                         vec![
-                            dbt_serde_yaml::to_value(ManifestSavedQuery::from(
-                                (**saved_query).clone(),
-                            ))
-                            .unwrap_or_default(),
+                            dbt_yaml::to_value(ManifestSavedQuery::from((**saved_query).clone()))
+                                .unwrap_or_default(),
                         ],
                     )
                 }),
@@ -389,7 +386,7 @@ fn build_disabled_map(resolver_state: &ResolverState) -> BTreeMap<String, Vec<Ym
                     (
                         id.clone(),
                         vec![
-                            dbt_serde_yaml::to_value(ManifestUnitTest::from((**unit_test).clone()))
+                            dbt_yaml::to_value(ManifestUnitTest::from((**unit_test).clone()))
                                 .unwrap_or_default(),
                         ],
                     )
@@ -404,14 +401,14 @@ fn build_disabled_map(resolver_state: &ResolverState) -> BTreeMap<String, Vec<Ym
                     (
                         id.clone(),
                         vec![
-                            dbt_serde_yaml::to_value(ManifestGroup::from((**group).clone()))
+                            dbt_yaml::to_value(ManifestGroup::from((**group).clone()))
                                 .unwrap_or_default(),
                         ],
                     )
                 }),
         )
-        //.chain(resolver_state.disabled_nodes.metrics.iter().map(|(id, metric)| (id.clone(), vec![dbt_serde_yaml::to_value(ManifestMetric::from((**metric).clone())).unwrap_or_default()])))
-        //.chain(resolver_state.disabled_nodes.semantic_models.iter().map(|(id, semantic_model)| (id.clone(), vec![dbt_serde_yaml::to_value(ManifestSemanticModel::from((**semantic_model).clone())).unwrap_or_default()])))
+        //.chain(resolver_state.disabled_nodes.metrics.iter().map(|(id, metric)| (id.clone(), vec![dbt_yaml::to_value(ManifestMetric::from((**metric).clone())).unwrap_or_default()])))
+        //.chain(resolver_state.disabled_nodes.semantic_models.iter().map(|(id, semantic_model)| (id.clone(), vec![dbt_yaml::to_value(ManifestSemanticModel::from((**semantic_model).clone())).unwrap_or_default()])))
         .collect();
     disabled
 }

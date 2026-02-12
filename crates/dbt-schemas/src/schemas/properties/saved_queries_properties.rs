@@ -1,5 +1,5 @@
-use dbt_serde_yaml::JsonSchema;
-use dbt_serde_yaml::Verbatim;
+use dbt_yaml::JsonSchema;
+use dbt_yaml::Verbatim;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 
