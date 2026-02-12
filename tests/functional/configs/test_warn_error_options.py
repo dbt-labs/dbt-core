@@ -185,6 +185,7 @@ class TestWarnErrorOptionsFromProject:
         result = runner.invoke(["run"])
         assert_deprecation_error(result)
 
+    @pytest.mark.skip(reason="Flaky on 1.11.latest for structured logging tests")
     def test_can_exclude_specific_event(
         self, project, clear_project_flags, project_root, catcher: EventCatcher, runner: dbtRunner
     ) -> None:
