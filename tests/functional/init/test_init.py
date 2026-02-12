@@ -85,7 +85,7 @@ class TestInitProjectWithExistingProfilesYml:
 """
             )
 
-    def test_init_task_in_project_specifying_profile_errors(self):
+    def test_init_task_in_project_specifying_profile_errors(self, project):
         with pytest.raises(DbtRuntimeError) as error:
             run_dbt(["init", "--profile", "test"], expect_pass=False)
             assert "Can not init existing project with specified profile" in str(error)
