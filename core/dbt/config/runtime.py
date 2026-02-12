@@ -213,6 +213,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             dependencies=dependencies,
             dbt_cloud=project.dbt_cloud,
             flags=project.flags,
+            vars_from_file=project.vars_from_file,
         )
 
     # Called by 'load_projects' in this class

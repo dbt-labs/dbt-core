@@ -596,6 +596,7 @@ class PartialProject(RenderComponents):
             restrict_access=cfg.restrict_access,
             dbt_cloud=dbt_cloud,
             flags=flags,
+            vars_from_file=vars_from_file or {},
         )
         # sanity check - this means an internal issue
         project.validate()
@@ -715,6 +716,7 @@ class Project:
     restrict_access: bool
     dbt_cloud: Dict[str, Any]
     flags: Dict[str, Any]
+    vars_from_file: Dict[str, Any]
 
     @property
     def all_source_paths(self) -> List[str]:
