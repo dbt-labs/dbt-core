@@ -1,0 +1,6 @@
+kind: Features
+body: Allow continue running child on parent error
+time: 2026-02-12T14:10:41.337083+05:30
+custom:
+    Author: ash2shukla
+    Issue: "2142"

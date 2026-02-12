@@ -192,6 +192,7 @@ def basic_compiled_dict():
             "docs": {"show": True},
             "access": "protected",
             "lookback": 1,
+            "on_error": "skip_children",
         },
         "docs": {"show": True},
         "columns": {},

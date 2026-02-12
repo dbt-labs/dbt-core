@@ -20,7 +20,7 @@ from dbt_common.dataclass_schema import (
 )
 
 
-class OnErrorOptions(enum.Enum):
+class ModelOnErrorOptions(enum.Enum):
     skip_children = "skip_children"
     continue_ = "continue"
 
@@ -83,7 +83,10 @@ class ModelConfig(NodeConfig):
         metadata=MergeBehavior.Clobber.meta(),
     )
     freshness: Optional[ModelFreshness] = None
-    on_error: Optional[OnErrorOptions] = None
+    on_error: Optional[ModelOnErrorOptions] = field(
+        default=ModelOnErrorOptions.skip_children,
+        metadata=MergeBehavior.Clobber.meta(),
+    )
 
     def __post_init__(self):
         super().__post_init__()
