@@ -105,7 +105,7 @@ class TestWarnErrorOptionsFromCLI:
             [
                 "run",
                 "--warn-error-options",
-                "{'error': 'all', 'exclude': ['DeprecatedModel', 'WEOIncludeExcludeDeprecation', 'DeprecationsSummary']}",
+                "{'error': 'all', 'warn': ['DeprecatedModel', 'WEOIncludeExcludeDeprecation', 'DeprecationsSummary']}",
             ]
         )
         assert_deprecation_warning(result, catcher)
