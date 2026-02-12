@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use dbt_common::{AdapterError, AdapterErrorKind, AdapterResult};
+use dbt_sql_utils::sql_split_statements;
 
 use super::tokenizer::{AbstractToken, Token, abstract_tokenize, tokenize};
 use regex::Regex;
@@ -30,6 +31,8 @@ pub fn compare_sql(actual: &str, expected: &str) -> AdapterResult<()> {
     let actual = canonicalize_python_config_dict(&actual, &expected);
     let actual = canonicalize_databricks_legacy_alter_column_comment_to_modern(&actual);
     let expected = canonicalize_databricks_legacy_alter_column_comment_to_modern(&expected);
+    let actual = canonicalize_snowflake_grant_select_to_roles(&actual);
+    let expected = canonicalize_snowflake_grant_select_to_roles(&expected);
 
     // Short-circuit: Elementary-generated SQL is allowed to drift across recorders/runners.
     // We only short-circuit when BOTH sides are clearly Elementary-originated.
@@ -139,6 +142,142 @@ fn canonicalize_databricks_legacy_alter_column_comment_to_modern(sql: &str) -> S
     }
 
     format!("COMMENT ON COLUMN {rel}.{col} IS '{comment}'")
+}
+
+/// Canonicalize Snowflake GRANT SELECT statements where one side has an (invalid) python list
+/// literal and the other side emits one statement per role.
+///
+/// Example (python list form):
+/// - `grant select on DB.SCH.TBL to ['A', 'B'];`
+///
+/// Example (expanded form):
+/// - `grant select on DB.SCH.TBL to A; grant select on DB.SCH.TBL to B;`
+///
+/// We only apply this rewrite when the entire SQL input consists exclusively of GRANT SELECT
+/// statements (possibly separated by semicolons and whitespace). This keeps the heuristic narrow
+/// and avoids masking unrelated DDL mismatches.
+fn canonicalize_snowflake_grant_select_to_roles(sql: &str) -> String {
+    let trimmed = sql.trim();
+    if trimmed.is_empty() {
+        return sql.to_string();
+    }
+
+    let statements = sql_split_statements(trimmed, None);
+    if statements.is_empty() {
+        return sql.to_string();
+    }
+
+    // Match "grant select on <obj> to <to>"
+    static GRANT_RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
+        Regex::new(r#"(?is)^\s*grant\s+select\s+on\s+(?P<object>.+?)\s+to\s+(?P<to>.+?)\s*$"#)
+            .unwrap()
+    });
+
+    let mut grants_by_object: HashMap<String, std::collections::BTreeSet<String>> = HashMap::new();
+
+    for stmt in statements {
+        let stmt = stmt.trim();
+        if stmt.is_empty() {
+            continue;
+        }
+        let Some(caps) = GRANT_RE.captures(stmt) else {
+            // Not exclusively grant-select statements; do not rewrite.
+            return sql.to_string();
+        };
+
+        let object = caps
+            .name("object")
+            .expect("object capture exists")
+            .as_str()
+            .trim()
+            .to_string();
+        let to_raw = caps.name("to").expect("to capture exists").as_str().trim();
+
+        let roles = parse_grant_to_roles(to_raw).unwrap_or_else(|| {
+            // Not a recognizable "to" payload; do not rewrite.
+            Vec::new()
+        });
+        if roles.is_empty() {
+            return sql.to_string();
+        }
+
+        let entry = grants_by_object.entry(object).or_default();
+        for role in roles {
+            entry.insert(role);
+        }
+    }
+
+    if grants_by_object.is_empty() {
+        return sql.to_string();
+    }
+
+    // Emit deterministically: objects sorted, roles sorted (BTreeSet).
+    let mut objects: Vec<String> = grants_by_object.keys().cloned().collect();
+    objects.sort();
+    let mut out = String::new();
+    for object in objects {
+        let Some(roles) = grants_by_object.get(&object) else {
+            continue;
+        };
+        for role in roles {
+            if !out.is_empty() {
+                out.push('\n');
+            }
+            out.push_str(&format!("grant select on {object} to {role};"));
+        }
+    }
+    out
+}
+
+fn parse_grant_to_roles(to_raw: &str) -> Option<Vec<String>> {
+    let mut s = to_raw.trim();
+    // Snowflake syntax sometimes includes "ROLE"; tolerate it.
+    if let Some(rest) = s.strip_prefix("role ") {
+        s = rest.trim();
+    } else if let Some(rest) = s
+        .to_ascii_lowercase()
+        .strip_prefix("role ")
+        .and_then(|_| s.get(5..))
+    {
+        s = rest.trim();
+    }
+
+    // Python-list form: ['A', 'B']
+    if s.starts_with('[') && s.ends_with(']') {
+        let inner = s[1..s.len() - 1].trim();
+        if inner.is_empty() {
+            return None;
+        }
+        let mut roles = Vec::new();
+        for part in inner.split(',') {
+            let role = unquote_identifier_like(part.trim())?;
+            roles.push(role);
+        }
+        return Some(roles);
+    }
+
+    // Single role form.
+    Some(vec![unquote_identifier_like(s)?])
+}
+
+fn unquote_identifier_like(s: &str) -> Option<String> {
+    let s = s.trim();
+    if s.is_empty() {
+        return None;
+    }
+
+    // The only quoting we expect for this replay scenario is a Python string literal wrapper,
+    // e.g. `'ANALYTICS'`. Strip exactly one matching pair of outer single quotes.
+    let s = s
+        .strip_prefix('\'')
+        .and_then(|s| s.strip_suffix('\''))
+        .unwrap_or(s);
+
+    if s.is_empty() {
+        None
+    } else {
+        Some(s.to_string())
+    }
 }
 
 /// Lightweight structural comparator for SQL to relax overly strict mismatches.
@@ -1544,6 +1683,24 @@ mod tests {
         assert!(
             result.is_ok(),
             "Expected legacy ALTER TABLE CHANGE COLUMN COMMENT to be equivalent to COMMENT ON COLUMN"
+        );
+    }
+
+    #[test]
+    fn test_snowflake_grant_select_python_list_equivalent_to_multiple_statements() {
+        let actual = r#"
+            grant select on SILVER_DEV.PRODUCT.products to ['ANALYTICS_PRODUCT', 'ANALYTICS', 'DATA_ENGINEERING'];
+        "#;
+        let expected = r#"
+            grant select on SILVER_DEV.PRODUCT.products to DATA_ENGINEERING;
+            grant select on SILVER_DEV.PRODUCT.products to ANALYTICS;
+            grant select on SILVER_DEV.PRODUCT.products to ANALYTICS_PRODUCT;
+        "#;
+
+        let result = compare_sql(actual, expected);
+        assert!(
+            result.is_ok(),
+            "Expected python-list GRANT form to be equivalent to multiple GRANT statements"
         );
     }
 

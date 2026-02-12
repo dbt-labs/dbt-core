@@ -344,7 +344,7 @@ where
                 sql_resources
                     .lock()
                     .unwrap()
-                    .push(SqlResource::Config(Box::new(root_config)));
+                    .push(SqlResource::BaseConfig(Box::new(root_config)));
             }
 
             let normalized_sql = normalize_sql(&sql);

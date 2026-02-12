@@ -73,6 +73,11 @@ use super::resolve_properties::MinimalPropertiesEntry;
 use super::resolve_tests::persist_generic_data_tests::TestableNodeTrait;
 use super::validate_models::validate_model;
 
+#[derive(serde::Deserialize)]
+struct DbtProjectModelsOnly {
+    models: Option<dbt_schemas::schemas::project::ProjectModelConfig>,
+}
+
 /// Build an *unrendered* project config tree from the raw `dbt_project.yml`.
 /// This lets us populate `unrendered_config` for dbt-core compatible state comparisons.
 async fn build_raw_model_project_config(
@@ -82,11 +87,6 @@ async fn build_raw_model_project_config(
     package: &DbtPackage,
     package_quoting: DbtQuoting,
 ) -> FsResult<crate::dbt_project_config::DbtProjectConfig<ModelConfig>> {
-    #[derive(serde::Deserialize)]
-    struct DbtProjectModelsOnly {
-        models: Option<dbt_schemas::schemas::project::ProjectModelConfig>,
-    }
-
     /// Build a `DbtProjectConfig` tree without emitting strict-parse errors.
     ///
     /// This is used only for hydrating `unrendered_config` for state comparisons and must
@@ -315,15 +315,48 @@ fn insert_unrendered_persist_docs(
 fn set_model_unrendered_relation_config(
     dbt_model: &mut DbtModel,
     raw_local_project_config: &crate::dbt_project_config::DbtProjectConfig<ModelConfig>,
+    raw_root_project_models_cfg: Option<&dbt_schemas::schemas::project::ProjectModelConfig>,
     inline_overrides: &RelationComponents,
     components: &RelationComponents,
 ) {
+    use dbt_common::serde_utils::Omissible;
     use dbt_yaml::Value as YmlValue;
 
     let mut unrendered = BTreeMap::new();
 
+    // Root project config can apply overrides to dependency packages under:
+    //   models:
+    //     <package_name>:
+    //       +schema: ...
+    // Those must be reflected in `unrendered_config` for state comparisons.
+    fn get_root_model_cfg_for_fqn<'a>(
+        root: &'a dbt_schemas::schemas::project::ProjectModelConfig,
+        fqn: &[String],
+    ) -> &'a dbt_schemas::schemas::project::ProjectModelConfig {
+        let mut cur = root;
+        for component in fqn {
+            let Some(child) = cur.__additional_properties__.get(component) else {
+                break;
+            };
+            let dbt_yaml::ShouldBe::AndIs(cfg) = child else {
+                break;
+            };
+            cur = cfg;
+        }
+        cur
+    }
+
+    fn omissible_opt_str(v: &Omissible<Option<String>>) -> Option<String> {
+        match v {
+            Omissible::Present(inner) => inner.clone(),
+            Omissible::Omitted => None,
+        }
+    }
+
     let unrendered_project_cfg =
         raw_local_project_config.get_config_for_fqn(&dbt_model.__common_attr__.fqn);
+    let unrendered_root_cfg = raw_root_project_models_cfg
+        .map(|root| get_root_model_cfg_for_fqn(root, &dbt_model.__common_attr__.fqn));
 
     // dbt-core precedence: inline SQL config(...) overrides project-level config.
     //
@@ -332,6 +365,7 @@ fn set_model_unrendered_relation_config(
     let unrendered_db = inline_overrides
         .database
         .clone()
+        .or_else(|| unrendered_root_cfg.and_then(|cfg| omissible_opt_str(&cfg.database)))
         .or_else(|| {
             unrendered_project_cfg
                 .database
@@ -343,6 +377,7 @@ fn set_model_unrendered_relation_config(
     let unrendered_schema = inline_overrides
         .schema
         .clone()
+        .or_else(|| unrendered_root_cfg.and_then(|cfg| omissible_opt_str(&cfg.schema)))
         .or_else(|| {
             unrendered_project_cfg
                 .schema
@@ -354,6 +389,7 @@ fn set_model_unrendered_relation_config(
     let unrendered_alias = inline_overrides
         .alias
         .clone()
+        .or_else(|| unrendered_root_cfg.and_then(|cfg| cfg.alias.clone()))
         .or_else(|| unrendered_project_cfg.alias.clone())
         .or_else(|| components.alias.clone());
 
@@ -428,6 +464,31 @@ pub async fn resolve_models(
     let raw_local_project_config =
         build_raw_model_project_config(arg, env.as_ref(), base_ctx, package, package_quoting)
             .await?;
+    // Best-effort raw parse of the root project's `models:` subtree, used only to hydrate
+    // dependency package nodes' `unrendered_config` with root overrides (preserving Jinja).
+    let raw_root_project_models_cfg = if package.dbt_project.name == root_project.name {
+        None
+    } else {
+        let dbt_project_yml_path = arg.io.in_dir.join("dbt_project.yml");
+        let raw_yml = read_to_string(&dbt_project_yml_path).await.map_err(|e| {
+            fs_err!(
+                code => ErrorCode::IoError,
+                loc => dbt_project_yml_path.clone(),
+                "Failed to read {}: {}",
+                dbt_project_yml_path.display(),
+                e
+            )
+        })?;
+        from_yaml_raw::<DbtProjectModelsOnly>(
+            &arg.io,
+            &raw_yml,
+            Some(dbt_project_yml_path.as_path()),
+            false,
+            None,
+        )
+        .ok()
+        .and_then(|p| p.models)
+    };
 
     let render_ctx = RenderCtx {
         inner: Arc::new(RenderCtxInner {
@@ -860,6 +921,7 @@ pub async fn resolve_models(
         set_model_unrendered_relation_config(
             &mut dbt_model,
             &raw_local_project_config,
+            raw_root_project_models_cfg.as_ref(),
             &inline_overrides,
             &components,
         );

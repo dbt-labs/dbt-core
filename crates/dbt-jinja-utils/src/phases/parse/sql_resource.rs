@@ -21,8 +21,10 @@ pub enum SqlResource<T: DefaultTo<T>> {
     /// A metric call (e.g. `{{ metric('a', 'b') }}`)
     Metric((String, Option<String>)),
     // If all can be made numeric it is ordered numerically, if not it is ordered lexicographically
-    /// A config call (e.g. `{{ config(database='a', schema='b') }}`)
-    Config(Box<T>),
+    /// The initial "base" config pushed into the parse context before evaluating the file.
+    BaseConfig(Box<T>),
+    /// An explicit `{{ config(...) }}` call encountered in the SQL.
+    ConfigCall(Box<T>),
     /// A test definition (e.g. `{% test foo() %}`)
     Test(String, Span, Span), // name, span, macro_name_span
     /// A macro definition (e.g. `{% macro my_macro(a, b) %}`)
@@ -51,7 +53,8 @@ impl<T: DefaultTo<T>> std::fmt::Display for SqlResource<T> {
             SqlResource::Metric((a, b)) => {
                 write!(f, "Metric({a}, {b:?})")
             }
-            SqlResource::Config(config) => write!(f, "Config({config:?})"),
+            SqlResource::BaseConfig(config) => write!(f, "BaseConfig({config:?})"),
+            SqlResource::ConfigCall(config) => write!(f, "ConfigCall({config:?})"),
             SqlResource::Test(name, span, _) => write!(f, "Test({name} {span:#?})"),
             SqlResource::Macro(name, span, _, _, _) => write!(f, "Macro({name} {span:#?})"),
             SqlResource::Doc(name, span) => write!(f, "Docs({name} {span:#?})"),

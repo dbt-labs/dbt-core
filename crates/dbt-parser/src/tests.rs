@@ -188,7 +188,7 @@ mod tests {
             assert_eq!(
                 sql_resources_locked,
                 vec![
-                    SqlResource::Config(Box::new(init_config)),
+                    SqlResource::BaseConfig(Box::new(init_config)),
                     SqlResource::Ref((
                         "my_table".to_string(),
                         None,
@@ -226,7 +226,7 @@ mod tests {
             assert_eq!(
                 sql_resources_locked,
                 vec![
-                    SqlResource::Config(Box::new(init_config)),
+                    SqlResource::BaseConfig(Box::new(init_config)),
                     SqlResource::Source((
                         "my_schema".to_string(),
                         "my_table".to_string(),
@@ -260,7 +260,7 @@ mod tests {
             assert_eq!(
                 sql_resources_locked,
                 vec![
-                    SqlResource::Config(Box::new(init_config)),
+                    SqlResource::BaseConfig(Box::new(init_config)),
                     SqlResource::Metric(("metric".to_string(), None)),
                     SqlResource::Metric((
                         "metric_two".to_string(),
@@ -305,13 +305,16 @@ mod tests {
                 map.insert("enabled".to_string(), Value::from(true)); // this gets inhertied from the global config which is true if not specified (important that this is not overridden)
                 let config: ModelConfig =
                     dbt_yaml::from_value(dbt_yaml::to_value(map).unwrap()).unwrap();
-                SqlResource::Config(Box::new(config))
+                SqlResource::ConfigCall(Box::new(config))
             };
 
             let sql_resources_locked = sql_resources.lock().unwrap().clone();
             assert_eq!(
                 sql_resources_locked,
-                vec![SqlResource::Config(Box::new(init_config)), expected_config]
+                vec![
+                    SqlResource::BaseConfig(Box::new(init_config)),
+                    expected_config
+                ]
             );
         }
     }

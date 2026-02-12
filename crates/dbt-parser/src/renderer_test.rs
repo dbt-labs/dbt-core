@@ -214,8 +214,8 @@ mod tests {
 
         // Test the correct order: package config first, then root config
         let resources_correct_order = vec![
-            SqlResource::Config(Box::new(package_config.clone())),
-            SqlResource::Config(Box::new(root_config.clone())),
+            SqlResource::BaseConfig(Box::new(package_config.clone())),
+            SqlResource::BaseConfig(Box::new(root_config.clone())),
         ];
 
         let sql_file_info_correct = SqlFileInfo::<ModelConfig>::from_sql_resources(
@@ -237,8 +237,8 @@ mod tests {
 
         // Test the wrong order (what was happening with insert(0)): root config first, then package config
         let resources_wrong_order = vec![
-            SqlResource::Config(Box::new(root_config)),
-            SqlResource::Config(Box::new(package_config)),
+            SqlResource::BaseConfig(Box::new(root_config)),
+            SqlResource::BaseConfig(Box::new(package_config)),
         ];
 
         let sql_file_info_wrong = SqlFileInfo::<ModelConfig>::from_sql_resources(

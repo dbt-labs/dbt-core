@@ -75,7 +75,6 @@ impl<T: DefaultTo<T>> SqlFileInfo<T> {
         let mut metrics = Vec::new();
         let mut config = Box::new(T::default());
         let mut explicit_config: Option<Box<T>> = None;
-        let mut saw_base_config = false;
         let mut tests = Vec::new();
         let mut macros = Vec::new();
         let mut materializations = Vec::new();
@@ -90,21 +89,22 @@ impl<T: DefaultTo<T>> SqlFileInfo<T> {
                 SqlResource::This => this = true,
                 SqlResource::Function(function) => functions.push(function),
                 SqlResource::Metric(metric) => metrics.push(metric),
-                SqlResource::Config(mut resource_config) => {
-                    if !saw_base_config {
-                        // The parse context always pushes an initial "base" config before
-                        // evaluating the file. Treat the first config resource as this base.
-                        saw_base_config = true;
-                    } else {
-                        // Merge explicit SQL config calls together, excluding the base config.
-                        // This preserves dbt's precedence across multiple `config()` calls
-                        // while avoiding falsely treating inherited/defaulted values as explicit.
-                        let mut explicit_call = resource_config.clone();
-                        if let Some(prev) = explicit_config.as_deref() {
-                            explicit_call.default_to(prev);
-                        }
-                        explicit_config = Some(explicit_call);
+                SqlResource::BaseConfig(mut resource_config) => {
+                    // The parse context always pushes exactly one initial "base" config before
+                    // evaluating the file.
+                    resource_config.default_to(&*config);
+                    config = resource_config;
+                }
+                SqlResource::ConfigCall(mut resource_config) => {
+                    // Merge explicit SQL config calls together, excluding the base config.
+                    // This preserves dbt's precedence across multiple `config()` calls
+                    // while avoiding falsely treating inherited/defaulted values as explicit.
+                    let mut explicit_call = resource_config.clone();
+                    if let Some(prev) = explicit_config.as_deref() {
+                        explicit_call.default_to(prev);
                     }
+                    explicit_config = Some(explicit_call);
+
                     resource_config.default_to(&*config);
                     config = resource_config;
                 }
@@ -136,5 +136,62 @@ impl<T: DefaultTo<T>> SqlFileInfo<T> {
             checksum,
             execute,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::SqlFileInfo;
+    use dbt_jinja_utils::phases::parse::sql_resource::SqlResource;
+    use dbt_schemas::schemas::common::DbtChecksum;
+    use dbt_schemas::schemas::project::ModelConfig;
+
+    #[test]
+    fn explicit_config_is_only_from_config_calls_and_last_call_wins() {
+        // Base config only => explicit_config must remain None.
+        let base = Box::new(ModelConfig::default());
+        let info = SqlFileInfo::from_sql_resources(
+            vec![SqlResource::BaseConfig(base)],
+            DbtChecksum::default(),
+            false,
+        );
+        assert!(info.explicit_config.is_none());
+
+        // Multiple config calls => explicit_config should merge, with later calls taking precedence.
+        let call1 = ModelConfig {
+            alias: Some("a1".to_string()),
+            schema: dbt_common::serde_utils::Omissible::Present(Some("s1".to_string())),
+            ..Default::default()
+        };
+
+        let call2 = ModelConfig {
+            alias: Some("a2".to_string()), // overrides call1 alias
+            ..Default::default()
+        };
+        // schema omitted here => should be inherited from call1 in explicit_config
+
+        let info = SqlFileInfo::from_sql_resources(
+            vec![
+                SqlResource::BaseConfig(Box::new(ModelConfig::default())),
+                SqlResource::ConfigCall(Box::new(call1)),
+                SqlResource::ConfigCall(Box::new(call2)),
+            ],
+            DbtChecksum::default(),
+            false,
+        );
+
+        let explicit = info
+            .explicit_config
+            .expect("expected explicit_config to be set");
+        assert_eq!(explicit.alias.as_deref(), Some("a2"));
+        assert_eq!(
+            explicit
+                .schema
+                .clone()
+                .into_inner()
+                .unwrap_or(None)
+                .as_deref(),
+            Some("s1")
+        );
     }
 }

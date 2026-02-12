@@ -184,7 +184,7 @@ pub fn build_resolve_model_context<T: DefaultTo<T> + 'static>(
     sql_resources
         .lock()
         .unwrap()
-        .push(SqlResource::Config(Box::new(config.clone())));
+        .push(SqlResource::BaseConfig(Box::new(config.clone())));
 
     let package_dependency = if package_name == root_project_name {
         None
@@ -739,7 +739,7 @@ impl<T: DefaultTo<T>> Object for ParseConfig<T> {
         self.sql_resources
             .lock()
             .unwrap()
-            .push(SqlResource::Config(Box::new(config)));
+            .push(SqlResource::ConfigCall(Box::new(config)));
         if !enabled {
             return Err(MinijinjaError::new(
                 MinijinjaErrorKind::DisabledModel,
