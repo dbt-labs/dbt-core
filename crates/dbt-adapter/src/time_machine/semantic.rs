@@ -63,8 +63,7 @@ impl SemanticCategory {
             | "get_config_from_model"
             | "compare_dbr_version"
             | "get_missing_columns"
-            | "is_replaceable"
-            | "is_uniform" => SemanticCategory::MetadataRead,
+            | "is_replaceable" => SemanticCategory::MetadataRead,
 
             // Mutate database state (DDL/DML)
             "execute"
@@ -120,7 +119,8 @@ impl SemanticCategory {
             | "get_hard_deletes_behavior"
             | "is_cluster"
             | "build_catalog_relation"
-            | "sync_struct_columns" => SemanticCategory::Pure,
+            | "sync_struct_columns"
+            | "is_uniform" => SemanticCategory::Pure,
 
             _ => {
                 debug_assert!(
