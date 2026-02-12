@@ -83,10 +83,7 @@ class ModelConfig(NodeConfig):
         metadata=MergeBehavior.Clobber.meta(),
     )
     freshness: Optional[ModelFreshness] = None
-    on_error: Optional[ModelOnErrorOptions] = field(
-        default=ModelOnErrorOptions.skip_children,
-        metadata=MergeBehavior.Clobber.meta(),
-    )
+    on_error: Optional[ModelOnErrorOptions] = None
 
     def __post_init__(self):
         super().__post_init__()
