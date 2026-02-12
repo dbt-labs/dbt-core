@@ -109,15 +109,16 @@ def load_yml_dict(file_path):
     return ret
 
 
-def vars_data_from_root(project_root: str) -> Optional[Dict[str, Any]]:
+def vars_data_from_root(project_root: str) -> Dict[str, Any]:
     """Load vars from vars.yml file if it exists.
 
-    Returns the contents of the 'vars' key, or empty dict if file doesn't exist.
+    Returns the contents of the 'vars' key, or empty dict if file doesn't exist or has no vars key.
     """
-    print(f"Loading vars from {project_root}")
     vars_yml_path = os.path.join(project_root, VARS_FILE_NAME)
     vars_file_dict = load_yml_dict(vars_yml_path)
-    return vars_file_dict.get("vars", {}) if vars_file_dict else None
+    if not vars_file_dict:
+        return {}
+    return vars_file_dict.get("vars", {})
 
 
 def validate_vars_not_in_both(
