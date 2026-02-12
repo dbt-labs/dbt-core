@@ -12,6 +12,7 @@ PIN_PACKAGE_URL = (
 )
 
 DBT_PROJECT_FILE_NAME = "dbt_project.yml"
+VARS_FILE_NAME = "vars.yml"
 PACKAGES_FILE_NAME = "packages.yml"
 DEPENDENCIES_FILE_NAME = "dependencies.yml"
 PACKAGE_LOCK_FILE_NAME = "package-lock.yml"
