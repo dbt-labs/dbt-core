@@ -189,6 +189,8 @@ class TestWarnErrorOptionsFromProject:
     def test_can_exclude_specific_event(
         self, project, clear_project_flags, project_root, catcher: EventCatcher, runner: dbtRunner
     ) -> None:
+        set_from_args(Namespace(), {})
+
         warn_error_options: Dict[str, Any] = {
             "flags": {"warn_error_options": {"error": "all", "warn": ["DeprecationsSummary"]}}
         }
@@ -219,7 +221,6 @@ class TestWarnErrorOptionsFromProject:
         assert not result.success
         assert result.exception is not None
         assert "Only `include` or `error` can be specified" in str(result.exception)
-        set_from_args(Namespace(), {})
 
     def test_cant_set_both_exclude_and_warn(
         self, project, clear_project_flags, project_root, runner: dbtRunner
