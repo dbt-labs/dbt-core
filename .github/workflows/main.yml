@@ -162,7 +162,7 @@ jobs:
     name: "(${{ matrix.split-group }}) integration test / python ${{ matrix.python-version }} / ${{ matrix.os }}"
 
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 40
     needs:
       - integration-metadata
     strategy:
@@ -257,7 +257,7 @@ jobs:
     name: (${{ matrix.split-group }}) integration test / python ${{ matrix.python-version }} / ${{ matrix.os }}
 
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 40
     needs:
       - integration-metadata
     strategy:

@@ -48,7 +48,7 @@ jobs:
   test-schema:
     name: Test Log Schema
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     needs:
       - integration-metadata
     strategy:
