@@ -22,6 +22,26 @@ from dbt_common.clients._jinja_blocks import ExtractWarning
 from dbt_common.clients.jinja import BlockTag, extract_toplevel_blocks
 from dbt_common.clients.system import find_matching
 
+JINJA_FILE_EXTENSIONS = (
+    ".j2",
+    ".jinja2",
+    ".jinja",
+)
+
+
+def _get_node_name_from_relative_path(relative_path: str) -> str:
+    """Return the base name for a node from a relative file path.
+
+    Strips the full extension (e.g. .sql.j2 or .md) so that node names are
+    consistent whether the file is model.sql or model.sql.j2.
+    """
+    base = os.path.basename(relative_path)
+    for ext in JINJA_FILE_EXTENSIONS:
+        if base.endswith(ext):
+            base = base[: -len(ext)]
+    name, _ = os.path.splitext(base)
+    return name
+
 
 # What's the point of wrapping a SourceFile with this class?
 # Could it be removed?
@@ -31,9 +51,7 @@ class FileBlock:
 
     @property
     def name(self):
-        base = os.path.basename(self.file.path.relative_path)
-        name, _ = os.path.splitext(base)
-        return name
+        return _get_node_name_from_relative_path(self.file.path.relative_path)
 
     @property
     def contents(self):

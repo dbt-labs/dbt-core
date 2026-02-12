@@ -351,6 +351,7 @@ class ProjectFlags(ExtensibleDbtClassMixin):
     warn_error: Optional[bool] = None
     warn_error_options: Optional[Dict[str, Union[str, List[str]]]] = None
     write_json: Optional[bool] = None
+    allow_jinja_file_extensions: bool = False
 
     # legacy behaviors - https://github.com/dbt-labs/dbt-core/blob/main/docs/guides/behavior-change-flags.md
     require_batched_execution_for_custom_microbatch_strategy: bool = False
@@ -388,6 +389,7 @@ class ProjectFlags(ExtensibleDbtClassMixin):
             "require_unique_project_resource_names": self.require_unique_project_resource_names,
             "require_ref_searches_node_package_before_root": self.require_ref_searches_node_package_before_root,
             "require_valid_schema_from_generate_schema_name": self.require_valid_schema_from_generate_schema_name,
+            "allow_jinja_file_extensions": self.allow_jinja_file_extensions,
         }
 
 
