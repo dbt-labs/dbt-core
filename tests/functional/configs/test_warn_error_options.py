@@ -1,3 +1,4 @@
+from argparse import Namespace
 from typing import Any, Dict, Union
 
 import pytest
@@ -8,7 +9,7 @@ from dbt.events.types import (
     MainEncounteredError,
     MicrobatchModelNoEventTimeInputs,
 )
-from dbt.flags import get_flags
+from dbt.flags import get_flags, set_from_args
 from dbt.tests.util import run_dbt, update_config_file
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.event_catcher import EventCatcher
@@ -218,6 +219,7 @@ class TestWarnErrorOptionsFromProject:
         assert not result.success
         assert result.exception is not None
         assert "Only `include` or `error` can be specified" in str(result.exception)
+        set_from_args(Namespace(), {})
 
     def test_cant_set_both_exclude_and_warn(
         self, project, clear_project_flags, project_root, runner: dbtRunner
