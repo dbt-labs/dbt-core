@@ -248,6 +248,7 @@ pub const fn get_field_sql_type_metadata_key(adapter_type: AdapterType) -> &'sta
         AdapterType::Salesforce => todo!(),
         AdapterType::Spark => todo!(),
         AdapterType::Sidecar => todo!(),
+        AdapterType::DuckDB => todo!(),
     }
 }
 
@@ -291,7 +292,9 @@ impl SdfSchemaBuilder {
         let metadata = field.metadata();
         let comment = match self.adapter_type {
             Bigquery => metadata.get("Description"),
-            Redshift | Databricks | Spark => metadata.get(ARROW_FIELD_COMMENT_METADATA_KEY),
+            Redshift | Databricks | Spark | DuckDB => {
+                metadata.get(ARROW_FIELD_COMMENT_METADATA_KEY)
+            }
             // no evidence that these drivers store comments in metadata, but just in case
             Postgres | Snowflake | Salesforce | Sidecar => {
                 metadata.get(ARROW_FIELD_COMMENT_METADATA_KEY)
@@ -329,7 +332,7 @@ impl SdfSchemaBuilder {
     pub fn build_sdf_schema(self, type_ops: &dyn TypeOps) -> AdapterResult<SdfSchema> {
         use AdapterType::*;
         match self.adapter_type {
-            Bigquery | Redshift | Databricks | Spark | Sidecar => {
+            Bigquery | Redshift | Databricks | Spark | Sidecar | DuckDB => {
                 let original_fields = self.original.fields();
                 let mut sdf_fields = Vec::with_capacity(original_fields.len());
                 for field in original_fields {
@@ -603,7 +606,7 @@ pub const fn max_varchar_size(adapter_type: AdapterType) -> Option<usize> {
         // FIXME: Actual MAX is 134_217_728 - 16_777_216 is the default value
         Snowflake => Some(16_777_216),
         Redshift => Some(256),
-        Postgres | Bigquery | Databricks | Salesforce | Spark | Sidecar => None,
+        Postgres | Bigquery | Databricks | Salesforce | Spark | Sidecar | DuckDB => None,
     }
 }
 
@@ -613,7 +616,7 @@ pub const fn max_varbinary_size(adapter_type: AdapterType) -> Option<usize> {
         Snowflake => Some(16_777_216),
         Redshift => Some(65_535),
         // TODO: define limits for more systems
-        Postgres | Bigquery | Databricks | Salesforce | Spark | Sidecar => None,
+        Postgres | Bigquery | Databricks | Salesforce | Spark | Sidecar | DuckDB => None,
     }
 }
 

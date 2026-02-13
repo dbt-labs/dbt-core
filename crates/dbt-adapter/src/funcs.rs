@@ -975,6 +975,16 @@ pub fn dispatch_adapter_calls(
                 .map_err(minijinja::Error::from)?;
             Ok(Value::from(is_cluster))
         }
+        "is_ducklake" => {
+            // DuckLake is a MotherDuck feature that allows using cloud storage with ACID transactions.
+            // The macro passes a relation, but we just return false since DuckLake isn't supported yet.
+            // relation: Relation
+            let iter = ArgsIter::new(name, &["relation"], args);
+            // Consume the relation argument but don't use it
+            let _ = iter.next_arg::<&Value>()?;
+            iter.finish()?;
+            Ok(Value::from(false))
+        }
         "compare_dbr_version" => {
             // major: i64, minor: i64
             let iter = ArgsIter::new(name, &["major", "minor"], args);
@@ -1173,6 +1183,28 @@ pub fn dispatch_adapter_calls(
             iter.finish()?;
 
             adapter.clean_sql(sql)
+        }
+        "get_seed_file_path" => {
+            // model: dict (seed node)
+            let iter = ArgsIter::new(name, &["model"], args);
+            let model = iter.next_arg::<Value>()?;
+            iter.finish()?;
+
+            // Extract seed file path from the model
+            // The seed file path is root_path + original_file_path
+            let seed =
+                minijinja_value_to_typed_struct::<dbt_schemas::schemas::nodes::DbtSeed>(model)
+                    .map_err(|e| {
+                        minijinja::Error::new(
+                            minijinja::ErrorKind::SerdeDeserializeError,
+                            format!("get_seed_file_path: Failed to deserialize DbtSeed: {e}"),
+                        )
+                    })?;
+
+            let root_path = seed.__seed_attr__.root_path.unwrap_or_default();
+            let original_file_path = &seed.__common_attr__.original_file_path;
+            let full_path = root_path.join(original_file_path);
+            Ok(Value::from(full_path.display().to_string()))
         }
         _ => Err(minijinja::Error::new(
             minijinja::ErrorKind::InvalidOperation,

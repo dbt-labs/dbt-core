@@ -14,6 +14,7 @@ use crate::metadata::{snowflake, try_canonicalize_bool_column_field};
 use crate::record_batch_utils::get_column_values;
 use crate::relation::bigquery::BigqueryRelation;
 use crate::relation::databricks::DatabricksRelation;
+use crate::relation::do_create_relation;
 use crate::relation::postgres::PostgresRelation;
 use crate::relation::redshift::RedshiftRelation;
 use crate::relation::salesforce::SalesforceRelation;
@@ -49,6 +50,9 @@ pub fn get_relation(
         }
         AdapterType::Salesforce => {
             salesforce_get_relation(adapter, state, ctx, conn, database, schema, identifier)
+        }
+        AdapterType::DuckDB => {
+            duckdb_get_relation(adapter, state, ctx, conn, database, schema, identifier)
         }
         AdapterType::Sidecar => {
             // This branch should not be reached - sidecar adapters override get_relation()
@@ -503,4 +507,75 @@ fn salesforce_get_relation(
         )))),
         Err(_) => Ok(None),
     }
+}
+
+fn duckdb_get_relation(
+    adapter: &dyn TypedBaseAdapter,
+    state: &State,
+    ctx: &QueryCtx,
+    conn: &'_ mut dyn Connection,
+    database: &str,
+    schema: &str,
+    identifier: &str,
+) -> AdapterResult<Option<Box<dyn BaseRelation>>> {
+    // DuckDB is case-preserving for quoted identifiers
+    // Unquoted identifiers are lowercase by default
+    let query_schema = if adapter.quoting().schema {
+        schema.to_string()
+    } else {
+        schema.to_lowercase()
+    };
+
+    let query_identifier = if adapter.quoting().identifier {
+        identifier.to_string()
+    } else {
+        identifier.to_lowercase()
+    };
+
+    // Query INFORMATION_SCHEMA.TABLES for relation metadata
+    // DuckDB's table_type values: BASE TABLE, VIEW, LOCAL TEMPORARY
+    let sql = format!(
+        r#"
+            SELECT table_type as type
+            FROM information_schema.tables
+            WHERE table_schema = '{query_schema}'
+              AND table_name = '{query_identifier}'
+        "#,
+    );
+
+    let batch = adapter.engine().execute(Some(state), conn, ctx, &sql)?;
+    if batch.num_rows() == 0 {
+        return Ok(None);
+    }
+
+    let column = batch.column_by_name("type").unwrap();
+    let string_array = column.as_any().downcast_ref::<StringArray>().unwrap();
+
+    if string_array.len() != 1 {
+        return Err(AdapterError::new(
+            AdapterErrorKind::UnexpectedResult,
+            "Did not find 'type' for a relation",
+        ));
+    }
+
+    // Map DuckDB table_type to dbt RelationType
+    let relation_type = match string_array.value(0) {
+        "BASE TABLE" => Some(RelationType::Table),
+        "VIEW" => Some(RelationType::View),
+        "LOCAL TEMPORARY" => Some(RelationType::Table), // Treat temp tables as tables
+        _ => return invalid_value!("Unsupported relation type {}", string_array.value(0)),
+    };
+
+    // Use the logical adapter type to create the appropriate relation
+    // This avoids backend-specific limitations (like Postgres 63-char identifier limit)
+    // when running in sidecar mode
+    let relation = do_create_relation(
+        adapter.adapter_type(),
+        database.to_string(),
+        schema.to_string(),
+        Some(identifier.to_string()),
+        relation_type,
+        adapter.quoting(),
+    )?;
+    Ok(Some(relation))
 }

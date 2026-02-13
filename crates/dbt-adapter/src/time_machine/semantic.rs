@@ -118,8 +118,10 @@ impl SemanticCategory {
             | "compute_external_path"
             | "get_hard_deletes_behavior"
             | "is_cluster"
+            | "is_ducklake"
             | "build_catalog_relation"
             | "sync_struct_columns"
+            | "get_seed_file_path"
             | "is_uniform" => SemanticCategory::Pure,
 
             _ => {

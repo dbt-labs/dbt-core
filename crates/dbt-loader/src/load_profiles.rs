@@ -75,12 +75,7 @@ pub fn load_profiles<S: MinijinjaContext>(
     )?;
 
     // TODO: Certain databases enforce that database and schema are specified
-    let database = db_config
-        .get_database()
-        .map(String::as_str)
-        // NOTE: Spark does not support database/catalog name, and we're using empty string to represent that
-        .unwrap_or_default()
-        .to_string();
+    let database = db_config.get_database_or_default();
     let schema = db_config
         .get_schema()
         .map(String::as_str)

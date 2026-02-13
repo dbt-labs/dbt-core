@@ -248,9 +248,8 @@ impl ProfileSetup {
                 todo!("setup_salesforce_profile")
             }
 
-            AdapterType::Sidecar => {
+            AdapterType::DuckDB => {
                 // DuckDB doesn't require credentials for local file-based operations
-                // For now, return a basic Postgres config as placeholder
                 // TODO: Create proper DuckDB profile setup
                 return Err(fs_err!(
                     ErrorCode::Generic,

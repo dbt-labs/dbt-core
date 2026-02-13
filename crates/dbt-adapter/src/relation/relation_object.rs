@@ -4,7 +4,7 @@ use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::filter::RunFilter;
 use dbt_schemas::schemas::common::{DbtQuoting, ResolvedQuoting};
 use dbt_schemas::schemas::relations::base::{
-    BaseRelation, TableFormat, render_with_run_filter_as_str,
+    BaseRelation, Policy, RelationPath, TableFormat, render_with_run_filter_as_str,
 };
 use dbt_schemas::schemas::serde::minijinja_value_to_typed_struct;
 use dbt_schemas::schemas::{InternalDbtNodeAttributes, InternalDbtNodeWrapper};
@@ -214,6 +214,20 @@ pub fn do_create_relation(
             relation_type,
             custom_quoting,
         )?) as Box<dyn BaseRelation>,
+        AdapterType::DuckDB => {
+            // DuckDB file databases use 2-part names (schema.table) without catalog prefix
+            let include_policy = Policy::new(false, true, true);
+            Box::new(PostgresRelation::try_new_with_policy(
+                RelationPath {
+                    database: Some(database).filter(|s| !s.is_empty()),
+                    schema: Some(schema),
+                    identifier,
+                },
+                relation_type,
+                include_policy,
+                custom_quoting,
+            )?) as Box<dyn BaseRelation>
+        }
         AdapterType::Snowflake => Box::new(SnowflakeRelation::new(
             Some(database),
             Some(schema),

@@ -240,11 +240,15 @@ impl BaseRelation for PostgresRelation {
         relation_type: Option<RelationType>,
         custom_quoting: Policy,
     ) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
-        Ok(Arc::new(PostgresRelation::try_new(
-            database,
-            schema,
-            identifier,
+        // Preserve the include_policy from the original relation (important for DuckDB)
+        Ok(Arc::new(PostgresRelation::try_new_with_policy(
+            RelationPath {
+                database,
+                schema,
+                identifier,
+            },
             relation_type,
+            self.include_policy,
             custom_quoting,
         )?))
     }

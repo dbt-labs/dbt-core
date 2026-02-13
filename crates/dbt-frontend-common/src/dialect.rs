@@ -41,6 +41,7 @@ pub enum Dialect {
     SparkLp,
     Redshift,
     Databricks,
+    Duckdb,
 }
 
 impl Display for Dialect {
@@ -56,6 +57,7 @@ impl Display for Dialect {
             Dialect::SparkLp => write!(f, "spark-lp"),
             Dialect::Redshift => write!(f, "redshift"),
             Dialect::Databricks => write!(f, "databricks"),
+            Dialect::Duckdb => write!(f, "duckdb"),
         }
     }
 }
@@ -77,6 +79,7 @@ impl FromStr for Dialect {
             "spark-lp" => Ok(Dialect::SparkLp),
             "redshift" => Ok(Dialect::Redshift),
             "databricks" => Ok(Dialect::Databricks),
+            "duckdb" => Ok(Dialect::Duckdb),
 
             // "passthrough" adapter type is used to disable most local semantic
             // analysis, so we just map it to the default dialect.
@@ -90,7 +93,7 @@ impl FromStr for Dialect {
 // Miscellaneous dialect-specific functions
 impl Dialect {
     pub const fn max_value() -> u8 {
-        Dialect::Databricks as u8
+        Dialect::Duckdb as u8
     }
 
     pub fn is_default(&self) -> bool {

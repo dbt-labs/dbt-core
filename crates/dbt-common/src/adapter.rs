@@ -25,6 +25,8 @@ pub enum AdapterType {
     Salesforce,
     /// Spark
     Spark,
+    /// DuckDB
+    DuckDB,
     /// Sidecar (internal dispatch type for DuckDB backend in sidecar mode)
     Sidecar,
 }
@@ -42,6 +44,8 @@ impl From<AdapterType> for Dialect {
             // https://developer.salesforce.com/docs/data/data-cloud-query-guide/references/data-cloud-query-api-reference/c360a-api-query-v2-call-overview.html
             // falls back to Postgresql at the moment
             AdapterType::Salesforce => Dialect::Postgresql,
+            // DuckDB is Postgres-compatible, use Redshift dialect (also Postgres-based) for typing support
+            AdapterType::DuckDB => Dialect::Redshift,
             // Sidecar uses DuckDB backend but should be treated as Postgres-like
             AdapterType::Sidecar => Dialect::Postgresql,
         }
@@ -83,5 +87,6 @@ pub fn adapter_type_supports_static_analysis(adapter_type: AdapterType) -> bool 
             | AdapterType::Redshift
             | AdapterType::Databricks
             | AdapterType::Spark
+            | AdapterType::DuckDB
     )
 }

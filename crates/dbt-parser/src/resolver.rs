@@ -121,9 +121,15 @@ pub async fn resolve(
         .db_config
         .adapter_type_if_supported()
         .ok_or_else(|| {
+            let hint = dbt_state
+                .dbt_profile
+                .db_config
+                .unsupported_adapter_hint()
+                .map(|h| format!(" {h}"))
+                .unwrap_or_default();
             fs_err!(
                 ErrorCode::InvalidConfig,
-                "Invalid or unsupported adapter type in profile: {}",
+                "Invalid or unsupported adapter type in profile: {}.{hint}",
                 dbt_state.dbt_profile.db_config.adapter_type()
             )
         })?;

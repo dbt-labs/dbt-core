@@ -23,6 +23,7 @@ use minijinja::{State, Value};
 
 pub(crate) mod bigquery;
 pub mod databricks;
+pub(crate) mod duckdb;
 pub(crate) mod metadata_adapter;
 pub(crate) mod postgres;
 pub(crate) mod redshift;

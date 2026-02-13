@@ -91,6 +91,9 @@ pub fn load_db_config<P: AsRef<Path>>(
         DbConfig::Databricks(db) => {
             db.schema = Some(schema.to_string());
         }
+        DbConfig::DuckDB(duck) => {
+            duck.schema = Some(schema.to_string());
+        }
         _ => {}
     }
 

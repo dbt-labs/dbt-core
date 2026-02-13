@@ -175,10 +175,10 @@ impl MetadataAdapter for PostgresMetadataAdapter {
 
     fn create_schemas_if_not_exists(
         &self,
-        _state: &State<'_, '_>,
-        _catalog_schemas: Vec<(String, String, String)>,
+        state: &State<'_, '_>,
+        catalog_schemas: Vec<(String, String, String)>,
     ) -> AdapterResult<Vec<(String, String, String, AdapterResult<()>)>> {
-        todo!("PostgresAdapter::create_schemas_if_not_exists")
+        create_schemas_if_not_exists(&self.adapter, self, state, catalog_schemas)
     }
 
     fn list_relations_in_parallel_inner(

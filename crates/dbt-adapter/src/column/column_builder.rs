@@ -27,6 +27,7 @@ impl ColumnBuilder {
             Databricks | Spark => Ok(Self::build_databricks(field, type_ops)),
             Redshift => Ok(Self::build_redshift(field, type_ops)),
             Postgres | Salesforce | Sidecar => Ok(Self::build_postgres_like(field, type_ops)),
+            DuckDB => Ok(Self::build_postgres_like(field, type_ops)),
         }
     }
 
@@ -43,6 +44,14 @@ impl ColumnBuilder {
         match self.adapter_type {
             Postgres | Sidecar => Column::new(
                 Postgres,
+                name,
+                dtype,
+                char_size,
+                numeric_precision,
+                numeric_scale,
+            ),
+            DuckDB => Column::new(
+                DuckDB,
                 name,
                 dtype,
                 char_size,

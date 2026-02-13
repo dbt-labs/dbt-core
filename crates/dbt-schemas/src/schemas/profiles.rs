@@ -47,6 +47,7 @@ pub enum DbConfig {
     Spark(Box<SparkDbConfig>),
     Databricks(Box<DatabricksDbConfig>),
     Salesforce(Box<SalesforceDbConfig>),
+    DuckDB(Box<DuckDbConfig>),
     // Hive,
     // Exasol,
     // Oracle,
@@ -69,7 +70,6 @@ pub enum DbConfig {
     // #[serde(rename = "layer_bigquery")]
     // LayerBigquery,
     // Iomete,
-    // DuckDB,
     // SQLite,
     // MySQL,
     // IBMDB2,
@@ -100,6 +100,7 @@ impl_from_db_config!(Bigquery, BigqueryDbConfig);
 impl_from_db_config!(Trino, TrinoDbConfig);
 impl_from_db_config!(Datafusion, DatafusionDbConfig);
 impl_from_db_config!(Databricks, DatabricksDbConfig);
+impl_from_db_config!(DuckDB, DuckDbConfig);
 
 impl DbConfig {
     pub fn get_unique_field(&self) -> Option<&String> {
@@ -112,6 +113,7 @@ impl DbConfig {
             DbConfig::Redshift(config) => config.host.as_ref(),
             DbConfig::Databricks(config) => config.host.as_ref(),
             DbConfig::Salesforce(config) => config.client_id.as_ref(),
+            DbConfig::DuckDB(config) => config.path.as_ref(),
             DbConfig::Spark(config) => config.host.as_ref(),
         }
     }
@@ -216,6 +218,7 @@ impl DbConfig {
             DbConfig::Databricks(_) => &["host", "http_path", "schema"],
             // TODO: Salesforce connection keys
             DbConfig::Salesforce(_) => &["login_url", "database", "data_transform_run_timeout"],
+            DbConfig::DuckDB(_) => &["path", "database", "schema", "extensions", "settings"],
             // TODO(serramatutu): Spark connection keys
             DbConfig::Spark(_) => &[],
             // TODO: Trino and Datafusion connection keys
@@ -227,6 +230,8 @@ impl DbConfig {
     pub fn get_execute_mode(&self) -> Execute {
         match self {
             DbConfig::Snowflake(config) => config.execute.unwrap_or_default(),
+            // DuckDB uses Remote execution to go through the adapter like Snowflake/BigQuery
+            DbConfig::DuckDB(_) => Execute::Remote,
             DbConfig::Datafusion(_) => Execute::Local,
             _ => Execute::Remote,
         }
@@ -263,6 +268,7 @@ impl DbConfig {
             DbConfig::Databricks(config) => dbt_yaml::to_value(config),
             DbConfig::Salesforce(config) => dbt_yaml::to_value(config),
             DbConfig::Spark(config) => dbt_yaml::to_value(config),
+            DbConfig::DuckDB(config) => dbt_yaml::to_value(config),
         }
     }
 
@@ -277,6 +283,7 @@ impl DbConfig {
             DbConfig::Datafusion(..) => "datafusion",
             DbConfig::Databricks(..) => "databricks",
             DbConfig::Salesforce(..) => "salesforce",
+            DbConfig::DuckDB(..) => "duckdb",
             DbConfig::Spark(..) => "spark",
         }
     }
@@ -291,8 +298,15 @@ impl DbConfig {
             DbConfig::Datafusion(..) => None,
             DbConfig::Databricks(..) => Some(AdapterType::Databricks),
             DbConfig::Salesforce(..) => Some(AdapterType::Salesforce),
+            DbConfig::DuckDB(..) => Some(AdapterType::DuckDB),
             DbConfig::Spark(..) => Some(AdapterType::Spark),
         }
+    }
+
+    /// Returns a hint string if the adapter is gated behind an environment variable.
+    /// Used by call sites to produce helpful error messages.
+    pub fn unsupported_adapter_hint(&self) -> Option<&'static str> {
+        None
     }
 
     pub fn get_database(&self) -> Option<&String> {
@@ -305,7 +319,43 @@ impl DbConfig {
             DbConfig::Datafusion(config) => config.database.as_ref(),
             DbConfig::Databricks(config) => config.database.as_ref(),
             DbConfig::Salesforce(config) => config.database.as_ref(),
+            DbConfig::DuckDB(config) => config.database.as_ref(),
             DbConfig::Spark(_) => None,
+        }
+    }
+
+    /// Returns the database name with adapter-specific defaults when not explicitly configured.
+    /// - DuckDB: derived from file path stem (e.g., "jaffle_shop.duckdb" → "jaffle_shop"),
+    ///   or "main" for in-memory (":memory:") or when no path is specified
+    /// - Databricks: uses hive_metastore as default catalog
+    /// - Others: "dbt" as generic fallback
+    pub fn get_database_or_default(&self) -> String {
+        // First check if database is explicitly set
+        if let Some(db) = self.get_database() {
+            return db.clone();
+        }
+
+        // Otherwise, use adapter-specific defaults
+        match self {
+            DbConfig::DuckDB(config) => {
+                // For DuckDB, derive database name from file path
+                if let Some(path) = &config.path {
+                    if path == ":memory:" {
+                        "main".to_string()
+                    } else {
+                        // Extract file stem (e.g., "jaffle_shop.duckdb" → "jaffle_shop")
+                        std::path::Path::new(path)
+                            .file_stem()
+                            .and_then(|s| s.to_str())
+                            .map(|s| s.to_string())
+                            .unwrap_or_else(|| "main".to_string())
+                    }
+                } else {
+                    "main".to_string()
+                }
+            }
+            DbConfig::Databricks(_) => DEFAULT_DATABRICKS_DATABASE.to_string(),
+            _ => "dbt".to_string(),
         }
     }
 
@@ -319,6 +369,7 @@ impl DbConfig {
             DbConfig::Datafusion(config) => config.schema.as_ref(),
             DbConfig::Databricks(config) => config.schema.as_ref(),
             DbConfig::Spark(config) => config.schema.as_ref(),
+            DbConfig::DuckDB(config) => config.schema.as_ref(),
             DbConfig::Salesforce(_) => None,
         }
     }
@@ -331,6 +382,7 @@ impl DbConfig {
             DbConfig::Redshift(config) => config.threads.as_ref(),
             DbConfig::Postgres(config) => config.threads.as_ref(),
             DbConfig::Trino(config) => config.threads.as_ref(),
+            DbConfig::DuckDB(config) => config.threads.as_ref(),
             DbConfig::Datafusion(_) => None,
             DbConfig::Salesforce(_) => None,
             DbConfig::Spark(_) => None,
@@ -345,6 +397,7 @@ impl DbConfig {
             DbConfig::Bigquery(config) => config.threads = threads,
             DbConfig::Trino(config) => config.threads = threads,
             DbConfig::Redshift(config) => config.threads = threads,
+            DbConfig::DuckDB(config) => config.threads = threads,
             DbConfig::Datafusion(_) => (),
             DbConfig::Salesforce(_) => (),
             DbConfig::Spark(_) => (),
@@ -844,6 +897,33 @@ fn default_data_transform_run_timeout() -> Option<i64> {
     Some(180000) // 3 mins
 }
 
+/// DuckDB adapter configuration
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema, Merge)]
+#[merge(strategy = merge_strategies_extend::overwrite_option)]
+#[serde(rename_all = "snake_case")]
+pub struct DuckDbConfig {
+    /// Path to the DuckDB database file. Defaults to in-memory (:memory:)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+    /// Database name (defaults to "main")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub database: Option<String>,
+    /// Schema name (defaults to "main")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub schema: Option<String>,
+    /// Extensions to load (e.g., ["httpfs", "parquet"])
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[merge(strategy = merge_strategies_extend::overwrite_always)]
+    pub extensions: Option<Vec<String>>,
+    /// DuckDB configuration settings (e.g., {"memory_limit": "4GB"})
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[merge(strategy = merge_strategies_extend::overwrite_always)]
+    pub settings: Option<HashMap<String, YmlValue>>,
+    /// Number of threads
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub threads: Option<StringOrInteger>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum SparkMethod {
@@ -943,6 +1023,7 @@ pub enum TargetContext {
     Databricks(DatabricksTargetEnv),
     Redshift(RedshiftTargetEnv),
     Salesforce(SalesforceTargetEnv),
+    DuckDB(DuckDbTargetEnv),
     Spark(SparkTargetEnv),
     // Add other variants as needed
 }
@@ -1084,6 +1165,12 @@ pub struct RedshiftTargetEnv {
 
 #[derive(Serialize, JsonSchema)]
 pub struct SalesforceTargetEnv {
+    pub __common__: CommonTargetContext,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct DuckDbTargetEnv {
+    pub path: Option<String>,
     pub __common__: CommonTargetContext,
 }
 
@@ -1310,6 +1397,39 @@ impl TryFrom<DbConfig> for TargetContext {
                     schema: "".to_string(),
                     type_: adapter_type,
                     threads: None,
+                },
+            })),
+
+            DbConfig::DuckDB(config) => Ok(TargetContext::DuckDB(DuckDbTargetEnv {
+                path: config.path.clone(),
+                __common__: CommonTargetContext {
+                    // Derive database name from path if not explicitly set (same logic as get_database())
+                    database: config.database.clone().unwrap_or_else(|| {
+                        if let Some(path) = &config.path {
+                            if path == ":memory:" {
+                                "main".to_string()
+                            } else {
+                                std::path::Path::new(path)
+                                    .file_stem()
+                                    .and_then(|s| s.to_str())
+                                    .map(|s| s.to_string())
+                                    .unwrap_or_else(|| "main".to_string())
+                            }
+                        } else {
+                            "main".to_string()
+                        }
+                    }),
+                    schema: config.schema.unwrap_or_else(|| "main".to_string()),
+                    type_: adapter_type,
+                    threads: match config.threads {
+                        Some(StringOrInteger::String(threads)) => Some(
+                            threads
+                                .parse::<u16>()
+                                .map_err(|_| "threads must be a positive integer".to_string())?,
+                        ),
+                        Some(StringOrInteger::Integer(threads)) => Some(threads as u16),
+                        None => None,
+                    },
                 },
             })),
 

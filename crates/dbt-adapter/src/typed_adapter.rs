@@ -10,6 +10,7 @@ use crate::metadata::bigquery::BigqueryMetadataAdapter;
 use crate::metadata::bigquery::nest_column_data_types;
 use crate::metadata::databricks::DatabricksMetadataAdapter;
 use crate::metadata::databricks::version::DbrVersion;
+use crate::metadata::duckdb::DuckDBMetadataAdapter;
 use crate::metadata::postgres::PostgresMetadataAdapter;
 use crate::metadata::redshift::RedshiftMetadataAdapter;
 use crate::metadata::salesforce::SalesforceMetadataAdapter;
@@ -217,7 +218,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         static REDSHIFT: [DbtIncrementalStrategy; 4] = [Append, DeleteInsert, Merge, Microbatch];
 
         match self.adapter_type() {
-            AdapterType::Postgres | AdapterType::Sidecar => &POSTGRES,
+            AdapterType::Postgres | AdapterType::Sidecar | AdapterType::DuckDB => &POSTGRES,
             AdapterType::Snowflake => &SNOWFLAKE,
             AdapterType::Bigquery => &BIGQUERY,
             AdapterType::Databricks => &DATABRICKS,
@@ -518,6 +519,21 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
                 )?;
                 Ok(())
             }
+            AdapterType::DuckDB => {
+                self.execute_inner(
+                    self.adapter_type().into(),
+                    Arc::clone(self.engine()),
+                    None,
+                    conn,
+                    ctx,
+                    sql,
+                    auto_begin,
+                    false,
+                    None,
+                    None,
+                )?;
+                Ok(())
+            }
         }
     }
 
@@ -618,6 +634,13 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
                     self.adapter_type()
                 ),
             )),
+            AdapterType::DuckDB => Err(AdapterError::new(
+                AdapterErrorKind::Internal,
+                format!(
+                    "Python models are not supported for {} adapter",
+                    self.adapter_type()
+                ),
+            )),
         }
     }
 
@@ -632,6 +655,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             AdapterType::Bigquery | AdapterType::Databricks | AdapterType::Spark => {
                 format!("`{identifier}`")
             }
+            AdapterType::DuckDB => format!("\"{identifier}\""),
         }
     }
 
@@ -643,6 +667,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
                 AdapterType::Databricks | AdapterType::Spark => "databaseName",
                 AdapterType::Bigquery => "schema_name",
                 AdapterType::Postgres | AdapterType::Redshift | AdapterType::Sidecar => "nspname",
+                AdapterType::DuckDB => "schema_name",
             };
             get_column_values::<StringArray>(&result_set, col_name)?
         };
@@ -820,6 +845,16 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             | AdapterType::Salesforce
             | AdapterType::Sidecar
             | AdapterType::Spark => {
+                let err = format!(
+                    "describe_dynamic_table is not supported by the {} adapter",
+                    self.adapter_type()
+                );
+                Err(minijinja::Error::new(
+                    minijinja::ErrorKind::InvalidOperation,
+                    err,
+                ))
+            }
+            AdapterType::DuckDB => {
                 let err = format!(
                     "describe_dynamic_table is not supported by the {} adapter",
                     self.adapter_type()
@@ -1084,6 +1119,11 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
                 &[RelationObject::new(relation.to_owned()).as_value()],
                 "get_columns_in_relation",
             ),
+            AdapterType::DuckDB => execute_macro(
+                state,
+                &[RelationObject::new(relation.to_owned()).as_value()],
+                "get_columns_in_relation",
+            ),
             // TODO(serramatutu): get back to this later
             AdapterType::Salesforce | AdapterType::Spark => {
                 unimplemented!("get_columns_in_relation not implemented")
@@ -1198,6 +1238,10 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             AdapterType::Salesforce | AdapterType::Spark => {
                 unimplemented!("get_columns_in_relation not implemented")
             }
+            AdapterType::DuckDB => {
+                let result = macro_execution_result?;
+                Ok(Column::vec_from_jinja_value(self.adapter_type(), result)?)
+            }
         }
     }
 
@@ -1230,6 +1274,11 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             | AdapterType::Sidecar
             | AdapterType::Spark => {
                 // downcast relation
+                let relation = RelationObject::new(Arc::clone(relation)).as_value();
+                execute_macro(state, &[relation], "truncate_relation")?;
+                Ok(none_value())
+            }
+            AdapterType::DuckDB => {
                 let relation = RelationObject::new(Arc::clone(relation)).as_value();
                 execute_macro(state, &[relation], "truncate_relation")?;
                 Ok(none_value())
@@ -1277,6 +1326,13 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             | AdapterType::Sidecar
             | AdapterType::Spark => {
                 // https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1072
+                if quote_config.unwrap_or(true) {
+                    Ok(self.quote(column))
+                } else {
+                    Ok(column.to_string())
+                }
+            }
+            AdapterType::DuckDB => {
                 if quote_config.unwrap_or(true) {
                     Ok(self.quote(column))
                 } else {
@@ -1444,6 +1500,9 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             | AdapterType::Spark => {
                 unimplemented!("only available with BigQuery adapter")
             }
+            AdapterType::DuckDB => {
+                unimplemented!("only available with BigQuery adapter")
+            }
         }
     }
 
@@ -1459,7 +1518,8 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             | AdapterType::Redshift
             | AdapterType::Salesforce
             | AdapterType::Sidecar
-            | AdapterType::Spark => {
+            | AdapterType::Spark
+            | AdapterType::DuckDB => {
                 // https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1783
                 let mut result = vec![];
                 for (_, column) in columns_map {
@@ -1625,6 +1685,14 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             (Sidecar, Check) => NotSupported,
             (Sidecar, Custom) => NotSupported,
 
+            // DuckDB - follows Postgres
+            (DuckDB, NotNull) => Enforced,
+            (DuckDB, ForeignKey) => Enforced,
+            (DuckDB, Unique) => NotEnforced,
+            (DuckDB, PrimaryKey) => NotEnforced,
+            (DuckDB, Check) => NotSupported,
+            (DuckDB, Custom) => NotSupported,
+
             // Salesforce
             (Salesforce | Spark, _) => unimplemented!("constraint support not implemented"),
         }
@@ -1786,6 +1854,22 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             AdapterType::Salesforce | AdapterType::Spark => {
                 unimplemented!("grants not implemented")
             }
+            AdapterType::DuckDB => {
+                let grantee_cols = get_column_values::<StringArray>(&record_batch, "grantee")?;
+                let privilege_cols =
+                    get_column_values::<StringArray>(&record_batch, "privilege_type")?;
+
+                let mut result = BTreeMap::new();
+                for i in 0..record_batch.num_rows() {
+                    let privilege = privilege_cols.value(i);
+                    let grantee = grantee_cols.value(i);
+
+                    let list = result.entry(privilege.to_string()).or_insert_with(Vec::new);
+                    list.push(grantee.to_string());
+                }
+
+                Ok(result)
+            }
         }
     }
 
@@ -1803,6 +1887,9 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             | AdapterType::Salesforce
             | AdapterType::Sidecar
             | AdapterType::Spark => {
+                unimplemented!("only available with BigQuery adapter")
+            }
+            AdapterType::DuckDB => {
                 unimplemented!("only available with BigQuery adapter")
             }
         }
@@ -1913,6 +2000,9 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             | AdapterType::Spark => {
                 unimplemented!("only available with BigQuery adapter")
             }
+            AdapterType::DuckDB => {
+                unimplemented!("only available with BigQuery adapter")
+            }
         }
     }
 
@@ -1956,6 +2046,9 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             | AdapterType::Spark => {
                 unimplemented!("only available with BigQuery adapter")
             }
+            AdapterType::DuckDB => {
+                unimplemented!("only available with BigQuery adapter")
+            }
         }
     }
 
@@ -1996,6 +2089,9 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             | AdapterType::Salesforce
             | AdapterType::Sidecar
             | AdapterType::Spark => {
+                unimplemented!("only available with BigQuery adapter")
+            }
+            AdapterType::DuckDB => {
                 unimplemented!("only available with BigQuery adapter")
             }
         }
@@ -2071,6 +2167,9 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             | AdapterType::Spark => {
                 unimplemented!("only available with BigQuery or Salesforce adapter")
             }
+            AdapterType::DuckDB => {
+                unimplemented!("only available with BigQuery or Salesforce adapter")
+            }
         }
     }
 
@@ -2130,6 +2229,9 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             | AdapterType::Salesforce
             | AdapterType::Sidecar
             | AdapterType::Spark => {
+                unimplemented!("only available with BigQuery adapter")
+            }
+            AdapterType::DuckDB => {
                 unimplemented!("only available with BigQuery adapter")
             }
         }
@@ -2312,6 +2414,25 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             | AdapterType::Spark => {
                 unimplemented!("only available with either Postgres or Redshift adapter")
             }
+            AdapterType::DuckDB => {
+                if let Some(configured_database) = self.engine().get_configured_database_name() {
+                    if database == configured_database {
+                        Ok(Value::from(()))
+                    } else {
+                        Err(AdapterError::new(
+                            AdapterErrorKind::UnexpectedDbReference,
+                            format!(
+                                "Cross-db references not allowed in the {} adapter ({} vs {})",
+                                self.adapter_type(),
+                                database,
+                                configured_database
+                            ),
+                        ))
+                    }
+                } else {
+                    Ok(Value::from(()))
+                }
+            }
         }
     }
 
@@ -2388,6 +2509,12 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
                     self.adapter_type()
                 )
             }
+            AdapterType::DuckDB => {
+                unimplemented!(
+                    "is_replaceable is only available with BigQuery adapter, not {}",
+                    self.adapter_type()
+                )
+            }
         }
     }
 
@@ -2432,6 +2559,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             | AdapterType::Salesforce
             | AdapterType::Sidecar
             | AdapterType::Spark => unimplemented!("only available with BigQuery adapter"),
+            AdapterType::DuckDB => unimplemented!("only available with BigQuery adapter"),
         }
     }
 
@@ -2457,6 +2585,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             | AdapterType::Salesforce
             | AdapterType::Sidecar
             | AdapterType::Spark => unimplemented!("only available with BigQuery adapter"),
+            AdapterType::DuckDB => unimplemented!("only available with BigQuery adapter"),
         }
     }
 
@@ -2482,6 +2611,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             | AdapterType::Salesforce
             | AdapterType::Sidecar
             | AdapterType::Spark => unimplemented!("only available with BigQuery adapter"),
+            AdapterType::DuckDB => unimplemented!("only available with BigQuery adapter"),
         }
     }
 
@@ -2510,6 +2640,10 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             | AdapterType::Salesforce
             | AdapterType::Sidecar
             | AdapterType::Spark => Err(minijinja::Error::new(
+                minijinja::ErrorKind::InvalidOperation,
+                "get_common_options is only available with BigQuery adapter",
+            )),
+            AdapterType::DuckDB => Err(minijinja::Error::new(
                 minijinja::ErrorKind::InvalidOperation,
                 "get_common_options is only available with BigQuery adapter",
             )),
@@ -2555,6 +2689,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             | AdapterType::Salesforce
             | AdapterType::Sidecar
             | AdapterType::Spark => unimplemented!("only available with BigQuery adapter"),
+            AdapterType::DuckDB => unimplemented!("only available with BigQuery adapter"),
         }
     }
 
@@ -2580,6 +2715,16 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             Databricks | Spark => databricks::list_relations(adapter, query_ctx, conn, db_schema),
             Redshift => redshift::list_relations(adapter, query_ctx, conn, db_schema),
             Postgres | Salesforce | Sidecar => {
+                let err = AdapterError::new(
+                    AdapterErrorKind::Internal,
+                    format!(
+                        "list_relations_without_caching is not implemented for this adapter: {}",
+                        self.adapter_type()
+                    ),
+                );
+                Err(err)
+            }
+            DuckDB => {
                 let err = AdapterError::new(
                     AdapterErrorKind::Internal,
                     format!(
@@ -2659,6 +2804,7 @@ prevent unnecessary latency for other users."#,
             | AdapterType::Salesforce
             | AdapterType::Sidecar
             | AdapterType::Spark => vec![],
+            AdapterType::DuckDB => vec![],
         }
     }
 
@@ -2697,6 +2843,7 @@ prevent unnecessary latency for other users."#,
             | AdapterType::Salesforce
             | AdapterType::Sidecar
             | AdapterType::Spark => unimplemented!("only available with Databricksadapter"),
+            AdapterType::DuckDB => unimplemented!("only available with Databricksadapter"),
         }
     }
 
@@ -2759,6 +2906,7 @@ prevent unnecessary latency for other users."#,
             | AdapterType::Salesforce
             | AdapterType::Sidecar
             | AdapterType::Spark => unimplemented!("only available with Databricksadapter"),
+            AdapterType::DuckDB => unimplemented!("only available with Databricksadapter"),
         }
     }
 
@@ -2841,6 +2989,7 @@ prevent unnecessary latency for other users."#,
             | AdapterType::Salesforce
             | AdapterType::Sidecar
             | AdapterType::Spark => unimplemented!("only available with Databricks adapter"),
+            AdapterType::DuckDB => unimplemented!("only available with Databricks adapter"),
         }
     }
 
@@ -2921,6 +3070,7 @@ prevent unnecessary latency for other users."#,
             | AdapterType::Salesforce
             | AdapterType::Sidecar
             | AdapterType::Spark => unimplemented!("only available with Databricks adapter"),
+            AdapterType::DuckDB => unimplemented!("only available with Databricks adapter"),
         }
     }
 
@@ -3103,6 +3253,7 @@ prevent unnecessary latency for other users."#,
             | AdapterType::Salesforce
             | AdapterType::Sidecar
             | AdapterType::Spark => unimplemented!("only available with BigQuery adapter"),
+            AdapterType::DuckDB => unimplemented!("only available with BigQuery adapter"),
         }
     }
 
@@ -3158,6 +3309,7 @@ prevent unnecessary latency for other users."#,
             | AdapterType::Salesforce
             | AdapterType::Sidecar
             | AdapterType::Spark => unimplemented!("only available with BigQuery adapter"),
+            AdapterType::DuckDB => unimplemented!("only available with BigQuery adapter"),
         }
     }
 
@@ -3352,6 +3504,9 @@ impl AdapterTyping for ConcreteAdapter {
             }
             AdapterType::Postgres | AdapterType::Sidecar => {
                 Box::new(PostgresMetadataAdapter::new(engine)) as Box<dyn MetadataAdapter>
+            }
+            AdapterType::DuckDB => {
+                Box::new(DuckDBMetadataAdapter::new(engine)) as Box<dyn MetadataAdapter>
             }
         };
         Some(metadata_adapter)

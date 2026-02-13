@@ -168,7 +168,9 @@ pub fn infer_seed_column_name_strategy(
         // In Trino, all names are lowercase, even quoted.
         (_, Dialect::Trino) => InferColumnNameStrategy::Lowercase,
         (true, _) => InferColumnNameStrategy::Verbatim,
-        (false, Dialect::Postgresql | Dialect::Redshift) => InferColumnNameStrategy::Lowercase,
+        (false, Dialect::Postgresql | Dialect::Redshift | Dialect::Duckdb) => {
+            InferColumnNameStrategy::Lowercase
+        }
         (false, Dialect::Snowflake) => InferColumnNameStrategy::Uppercase,
         (
             false,
