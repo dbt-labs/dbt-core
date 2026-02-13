@@ -79,10 +79,7 @@ pub fn build_compile_and_run_base_context(
     builtins.insert("ref".to_string(), ref_value);
 
     // Create source function
-    let source_function = SourceFunction {
-        node_resolver: node_resolver.clone(),
-        package_name: package_name.to_owned(),
-    };
+    let source_function = SourceFunction::new(node_resolver.clone(), package_name.to_owned());
     let source_value = MinijinjaValue::from_object(source_function);
     ctx.insert("source".to_string(), source_value.clone());
     builtins.insert("source".to_string(), source_value);
@@ -457,9 +454,18 @@ impl Object for RefFunction {
 }
 
 #[derive(Debug)]
-struct SourceFunction {
+pub struct SourceFunction {
     node_resolver: Arc<dyn NodeResolverTracker>,
     package_name: String,
+}
+
+impl SourceFunction {
+    pub fn new(node_resolver: Arc<dyn NodeResolverTracker>, package_name: String) -> Self {
+        Self {
+            node_resolver,
+            package_name,
+        }
+    }
 }
 
 impl Object for SourceFunction {

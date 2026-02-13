@@ -23,7 +23,7 @@ use minijinja::{
 };
 
 use crate::phases::MacroLookupContext;
-use crate::phases::compile_and_run_context::FunctionFunction;
+use crate::phases::compile_and_run_context::{FunctionFunction, SourceFunction};
 use dbt_schemas::schemas::project::ConfigKeys;
 
 use super::super::compile_and_run_context::RefFunction;
@@ -237,6 +237,13 @@ where
     let function_value = MinijinjaValue::from_object(function_function);
     ctx.insert("function".to_string(), function_value.clone());
     base_builtins.insert("function".to_string(), function_value);
+
+    // Recreate source function with the node's package_name (not root project's)
+    let source_function =
+        SourceFunction::new(node_resolver.clone(), model.common().package_name.clone());
+    let source_value = MinijinjaValue::from_object(source_function);
+    ctx.insert("source".to_string(), source_value.clone());
+    base_builtins.insert("source".to_string(), source_value);
 
     // Register builtins as a global
     ctx.insert(
