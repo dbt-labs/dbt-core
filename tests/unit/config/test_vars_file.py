@@ -76,12 +76,12 @@ class TestValidateVarsNotInBoth:
     def test_no_error_when_no_vars_file_and_no_project_vars(self) -> None:
         """Should not raise when neither vars.yml nor dbt_project.yml have vars."""
         project_dict: Dict[str, Any] = {"name": "test_project"}
-        validate_vars_not_in_both("/test/path", project_dict, has_vars_file=False)
+        validate_vars_not_in_both(project_dict, has_vars_file=False)
 
     def test_no_error_when_only_vars_file_has_vars(self) -> None:
         """Should not raise when only vars.yml has vars."""
         project_dict: Dict[str, Any] = {"name": "test_project"}
-        validate_vars_not_in_both("/test/path", project_dict, has_vars_file=True)
+        validate_vars_not_in_both(project_dict, has_vars_file=True)
 
     def test_no_error_when_only_project_has_vars(self) -> None:
         """Should not raise when only dbt_project.yml has vars."""
@@ -89,7 +89,7 @@ class TestValidateVarsNotInBoth:
             "name": "test_project",
             "vars": {"my_var": "my_value"},
         }
-        validate_vars_not_in_both("/test/path", project_dict, has_vars_file=False)
+        validate_vars_not_in_both(project_dict, has_vars_file=False)
 
     def test_error_when_both_have_vars(self) -> None:
         """Should raise DbtProjectError when both sources have vars."""
@@ -98,11 +98,10 @@ class TestValidateVarsNotInBoth:
             "vars": {"my_var": "my_value"},
         }
         with pytest.raises(DbtProjectError) as exc_info:
-            validate_vars_not_in_both("/test/path", project_dict, has_vars_file=True)
+            validate_vars_not_in_both(project_dict, has_vars_file=True)
 
         assert "vars.yml" in str(exc_info.value)
         assert "dbt_project.yml" in str(exc_info.value)
-        assert "/test/path" in str(exc_info.value)
 
     def test_no_error_when_project_vars_is_empty(self) -> None:
         """Should not raise when dbt_project.yml vars is empty dict."""
@@ -111,7 +110,7 @@ class TestValidateVarsNotInBoth:
             "vars": {},
         }
         # Empty vars dict is falsy, so this should not raise
-        validate_vars_not_in_both("/test/path", project_dict, has_vars_file=True)
+        validate_vars_not_in_both(project_dict, has_vars_file=True)
 
     def test_no_error_when_project_vars_is_none(self) -> None:
         """Should not raise when dbt_project.yml vars is None."""
@@ -119,7 +118,7 @@ class TestValidateVarsNotInBoth:
             "name": "test_project",
             "vars": None,
         }
-        validate_vars_not_in_both("/test/path", project_dict, has_vars_file=True)
+        validate_vars_not_in_both(project_dict, has_vars_file=True)
 
 
 class TestVarProviderWithVarsFromFile:

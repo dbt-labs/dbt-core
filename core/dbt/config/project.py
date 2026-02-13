@@ -122,7 +122,6 @@ def vars_data_from_root(project_root: str) -> Dict[str, Any]:
 
 
 def validate_vars_not_in_both(
-    project_root: str,
     project_dict: Dict[str, Any],
     has_vars_file: bool,
 ) -> None:
@@ -132,7 +131,6 @@ def validate_vars_not_in_both(
     if has_vars_file and has_project_vars:
         raise DbtProjectError(
             f"Variables cannot be defined in both {VARS_FILE_NAME} and {DBT_PROJECT_FILE_NAME}. "
-            f"Please use only one location for defining variables in project at '{project_root}'."
         )
 
 
@@ -834,7 +832,7 @@ class Project:
         )
 
         # Check mutual exclusivity before rendering
-        validate_vars_not_in_both(project_root, partial.project_dict, bool(vars_from_file))
+        validate_vars_not_in_both(partial.project_dict, bool(vars_from_file))
 
         return partial.render(renderer, vars_from_file=vars_from_file)
 
