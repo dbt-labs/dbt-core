@@ -131,17 +131,8 @@ fn main() -> ExitCode {
 
     // Handle regular execution
     match result {
-        Ok(code) => {
-            // If exec succeeds, exit with status 0 or 1
-            // for 1 it is assumed that the  error was already printed)
-            assert!(code == 0 || code == 1);
-            ExitCode::from(code as u8)
-        }
-        Err(_err) => {
-            // If any step fails, assume error is already printed, just exit with a status 1
-            // show_progress_exit!(arg, start);
-            ExitCode::from(1)
-        }
+        Ok(()) => ExitCode::from(0),
+        Err(err) => ExitCode::from(err.exit_status().unwrap_or(1) as u8),
     }
 }
 

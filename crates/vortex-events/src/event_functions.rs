@@ -112,12 +112,14 @@ impl DiscreteEventEmitter for FusionSaEventEmitter {
     }
 }
 
-pub fn build_result_string(result: &FsResult<i32>) -> String {
-    // result is set to Ok(1) for error and Ok(0) for success
+pub fn build_result_string(result: &FsResult<()>) -> String {
     match result {
-        Ok(1) => "error",
-        Ok(0) => "ok",
-        _ => "unknown",
+        Ok(()) => "ok",
+        Err(err) => match err.exit_status() {
+            Some(0) => "ok",
+            Some(_) => "error",
+            None => "unknown",
+        },
     }
     .to_string()
 }

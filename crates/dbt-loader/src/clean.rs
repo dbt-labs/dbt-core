@@ -15,7 +15,7 @@ use dbt_common::{
     tracing::{
         emit::{emit_error_log_from_fs_error, emit_info_progress_message, emit_trace_log_message},
         event_info::store_event_attributes,
-        metrics::get_exit_code_from_error_counter,
+        metrics::error_count_checkpoint,
     },
 };
 use dbt_jinja_utils::{
@@ -33,7 +33,7 @@ pub async fn execute_clean_command(
     arg: &EvalArgs,
     files: &[String],
     token: &CancellationToken,
-) -> FsResult<i32> {
+) -> FsResult<()> {
     let load_args = LoadArgs::from_eval_args(arg);
     let dbt_state = load_for_clean(&load_args).await?;
     let invocation_args = InvocationArgs::from_eval_args(arg);
@@ -114,7 +114,7 @@ pub async fn execute_clean_command(
         })?;
     }
 
-    Ok(get_exit_code_from_error_counter())
+    error_count_checkpoint()
 }
 
 fn unrelated_paths<P: AsRef<Path>, Q: AsRef<Path>>(io: &IoArgs, to: P, from: Q) -> bool {

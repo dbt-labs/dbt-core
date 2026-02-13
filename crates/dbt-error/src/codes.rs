@@ -223,6 +223,9 @@ pub enum ErrorCode {
     // ExitRepl is not really an error, but a special error code that is used to
     // signal the repl to exit gracefully:
     ExitRepl = 9006,
+    /// Not really an error: signals that main() should exit with a specific
+    /// i32 status code carried in `WrappedError::ExitCode`.
+    ExitWithStatus = 9007,
     // ----------------- Internal errors from frontend [9900, 9999] -----------
     // This section contains the internal error codes from the frontend.
     //

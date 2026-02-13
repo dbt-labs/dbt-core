@@ -1,4 +1,5 @@
 use dbt_telemetry::{HookOutcome, NodeOutcome, NodeSkipReason, NodeType, TestOutcome};
+use error::{FsError, FsResult};
 use strum::EnumCount as _;
 #[cfg(test)]
 use strum_macros::EnumIter;
@@ -213,12 +214,31 @@ pub(super) fn get_all_metrics_from_span_extension(
         .unwrap_or_default()
 }
 
-/// Returns 1 if there were any errors recorded, 0 otherwise.
-pub fn get_exit_code_from_error_counter() -> i32 {
-    let error_count = get_metric(MetricKey::InvocationMetric(
+/// Get the `TotalErrors` invocation metric value.
+pub fn get_error_count() -> u64 {
+    get_metric(MetricKey::InvocationMetric(
         InvocationMetricKey::TotalErrors,
-    ));
-    if error_count > 0 { 1 } else { 0 }
+    ))
+}
+
+/// Produce an error that forces returning an exit code based on the current
+/// error counter. The return effect is achieved through [FsError::ExitWithStatus].
+///
+/// If there were any errors recorded, exit code will be 1, otherwise 0.
+pub fn return_exit_code_from_error_counter() -> Box<FsError> {
+    let exit_code = if get_error_count() > 0 { 1 } else { 0 };
+    FsError::exit_with_status(exit_code)
+}
+
+/// Check the error count and return an status code so the CLI produces a status code immediately.
+///
+/// This is good to run right at the end of functions responsible to handling a CLI sub-command.
+pub fn error_count_checkpoint() -> FsResult<()> {
+    if get_error_count() > 0 {
+        Err(FsError::exit_with_status(1))
+    } else {
+        Ok(())
+    }
 }
 
 #[cfg(test)]

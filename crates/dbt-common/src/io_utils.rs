@@ -1,6 +1,6 @@
 use crate::io_args::{EvalArgs, Phases, StaticAnalysisOffReason};
 use crate::stdfs::File;
-use crate::tracing::metrics::get_exit_code_from_error_counter;
+use crate::tracing::metrics::{error_count_checkpoint, return_exit_code_from_error_counter};
 use crate::{ErrorCode, FsError, FsResult, err, fs_err, stdfs::canonicalize};
 use dbt_telemetry::{ExecutionPhase, NodeOutcome};
 use dbt_yaml::Span;
@@ -176,15 +176,14 @@ pub fn and_n_others(n: usize, items: &[impl ToString]) -> String {
     }
 }
 
-pub fn checkpoint_maybe_exit(arg: &EvalArgs, phase: Phases) -> Option<i32> {
+pub fn checkpoint_maybe_exit(arg: &EvalArgs, phase: Phases) -> FsResult<()> {
     if arg.skip_checkpoints {
-        return None;
+        return Ok(());
     }
 
-    let exit_code = get_exit_code_from_error_counter();
-
-    if arg.phase <= phase || exit_code > 0 {
-        return Some(exit_code);
+    if arg.phase <= phase {
+        Err(return_exit_code_from_error_counter())
+    } else {
+        error_count_checkpoint()
     }
-    None
 }

@@ -323,9 +323,9 @@ pub async fn exec_fs<P: CliParserTrait + Default, Fut>(
     execute_fs: impl FnOnce(SystemArgs, P::CliType, Arc<FeatureStack>, CancellationToken) -> Fut,
     from_lib: impl FnOnce(&P::CliType) -> SystemArgs,
     tracing_handle: TracingReloadHandle,
-) -> FsResult<i32>
+) -> FsResult<()>
 where
-    Fut: Future<Output = FsResult<i32>>,
+    Fut: Future<Output = FsResult<()>>,
 {
     let token = never_cancels();
     // Check if project_dir has a .env.conformance file
@@ -363,9 +363,15 @@ where
         .collect();
 
     match result {
+        Ok(()) if shutdown_errors.is_empty() => result,
+        Err(ref err)
+            if err.exit_status() == Some(0) // early-exit, but successful
+            && shutdown_errors.is_empty() =>
+        {
+            Ok(())
+        }
         // If the run itself failed - return it's error and ignore shutdown
         Err(_) => result,
-        Ok(_) if shutdown_errors.is_empty() => result,
         _ => unexpected_err!("Failed to shutdown telemetry"),
     }
 }

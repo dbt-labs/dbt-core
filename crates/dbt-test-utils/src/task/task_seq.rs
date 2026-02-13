@@ -30,7 +30,7 @@ pub type CommandFn = dyn Fn(
         std::fs::File,
         std::fs::File,
         TracingReloadHandle,
-    ) -> BoxedSendFuture<FsResult<i32>>
+    ) -> BoxedSendFuture<FsResult<()>>
     + Send
     + Sync;
 

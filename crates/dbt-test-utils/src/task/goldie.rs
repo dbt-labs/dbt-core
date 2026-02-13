@@ -205,7 +205,7 @@ pub async fn execute_and_compare(
     .await;
 
     match res {
-        Ok(Ok(_exit_code)) => compare_or_update(
+        Ok(Ok(())) => compare_or_update(
             is_update_golden_files_mode(),
             sort_output,
             compare_env.stderr_path,
@@ -214,7 +214,10 @@ pub async fn execute_and_compare(
             compare_env.goldie_stdout_path,
         ),
         Ok(Err(e)) => {
-            eprintln!("error executing command {cmd_vec:?}: {e}");
+            let code = e.exit_status().unwrap_or(1);
+            if code != 0 {
+                eprintln!("error executing command {cmd_vec:?}: {e}");
+            }
             // TODO: this is kept to preserve existing behavior, where this
             // error was silently ignored. We should probably
             // dump_file_to_stderr then propagate the error instead:

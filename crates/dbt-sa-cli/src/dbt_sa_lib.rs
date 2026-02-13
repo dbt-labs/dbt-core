@@ -6,8 +6,8 @@ use dbt_common::tracing::emit::{
     emit_error_log_from_fs_error, emit_info_log_message, emit_info_progress_message,
 };
 use dbt_common::tracing::invocation::create_invocation_attributes;
-use dbt_common::tracing::metrics::get_exit_code_from_error_counter;
-use dbt_init::init;
+use dbt_common::tracing::metrics::error_count_checkpoint;
+use dbt_init::{FsError, init};
 use dbt_jinja_utils::invocation_args::InvocationArgs;
 use dbt_jinja_utils::listener::DefaultJinjaTypeCheckEventListenerFactory;
 use dbt_loader::clean::execute_clean_command;
@@ -50,7 +50,7 @@ pub async fn execute_fs(
     system_arg: SystemArgs,
     cli: Cli,
     token: CancellationToken,
-) -> FsResult<i32> {
+) -> FsResult<()> {
     // Resolve EvalArgs from SystemArgs and Cli. This will create out folders,
     // for commands that need it and canonicalize the paths. May error on invalid paths.
     let eval_arg = cli.to_eval_args(system_arg)?;
@@ -65,26 +65,23 @@ pub async fn execute_fs(
         .await;
 
     // Record span run result
-    match result {
-        Ok(0) => record_span_status(&invocation_span, None),
-        Ok(_) => record_span_status(&invocation_span, Some("Executed with errors")),
-        Err(ref e) => record_span_status(&invocation_span, Some(format!("Error: {e}").as_str())),
+    let span_status = match &result {
+        Ok(()) => None,
+        Err(err) => match err.exit_status() {
+            Some(0) => None,
+            Some(_) => Some("Executed with errors".to_string()),
+            None => Some(format!("Error: {}", err)),
+        },
     };
+    record_span_status(&invocation_span, span_status.as_deref());
 
     result
 }
 
 #[allow(clippy::cognitive_complexity)]
-async fn do_execute_fs(eval_arg: &EvalArgs, cli: Cli, token: CancellationToken) -> FsResult<i32> {
+async fn do_execute_fs(eval_arg: &EvalArgs, cli: Cli, token: CancellationToken) -> FsResult<()> {
     if let Commands::Man(_) = &cli.command {
-        return match execute_man_command(eval_arg).await {
-            Ok(code) => Ok(code),
-            Err(e) => {
-                emit_error_log_from_fs_error(&e, eval_arg.io.status_reporter.as_ref());
-
-                Ok(1)
-            }
-        };
+        return execute_man_command(eval_arg).await;
     } else if let Commands::Init(init_args) = &cli.command {
         // Handle init command
         use dbt_init::init::run_init_workflow;
@@ -119,7 +116,7 @@ async fn do_execute_fs(eval_arg: &EvalArgs, cli: Cli, token: CancellationToken) 
             Ok(()) => {
                 // If profile setup was not skipped, run debug to validate credentials
                 if init_args.skip_profile_setup {
-                    return Ok(0);
+                    return Ok(());
                 }
 
                 emit_info_log_message(format!(
@@ -129,21 +126,13 @@ async fn do_execute_fs(eval_arg: &EvalArgs, cli: Cli, token: CancellationToken) 
             }
             Err(e) => {
                 emit_error_log_from_fs_error(&e, eval_arg.io.status_reporter.as_ref());
-
-                return Ok(1);
+                return Err(FsError::exit_with_status(e.exit_status().unwrap_or(1)));
             }
         }
     }
 
     // Handle project specific commands
-    match execute_setup_and_all_phases(eval_arg, cli, &token).await {
-        Ok(code) => Ok(code),
-        Err(e) => {
-            emit_error_log_from_fs_error(&e, eval_arg.io.status_reporter.as_ref());
-
-            Ok(1)
-        }
-    }
+    execute_setup_and_all_phases(eval_arg, cli, &token).await
 }
 
 #[allow(clippy::cognitive_complexity)]
@@ -151,7 +140,7 @@ async fn execute_setup_and_all_phases(
     eval_arg: &EvalArgs,
     cli: Cli,
     token: &CancellationToken,
-) -> FsResult<i32> {
+) -> FsResult<()> {
     // Header ..
     // current_exe errors when running in dbt-cloud
     // https://github.com/rust-lang/rust/issues/46090
@@ -185,34 +174,16 @@ async fn execute_setup_and_all_phases(
     }
 
     // Check if the command is `Clean`
-    if let Commands::Clean(ref clean_args) = cli.command {
-        match execute_clean_command(eval_arg, &clean_args.files, token).await {
-            Ok(code) => Ok(code),
-            Err(e) => {
-                emit_error_log_from_fs_error(&e, eval_arg.io.status_reporter.as_ref());
-
-                Ok(1)
-            }
-        }
+    return if let Commands::Clean(ref clean_args) = cli.command {
+        execute_clean_command(eval_arg, &clean_args.files, token).await
     } else {
         // Execute all steps of all other commands, if any throws an error we stop
-        match execute_all_phases(eval_arg, &cli, token).await {
-            Ok(code) => Ok(code),
-            Err(e) => {
-                emit_error_log_from_fs_error(&e, eval_arg.io.status_reporter.as_ref());
-
-                Ok(1)
-            }
-        }
-    }
+        execute_all_phases(eval_arg, &cli, token).await
+    };
 }
 
 #[allow(clippy::cognitive_complexity)]
-async fn execute_all_phases(
-    arg: &EvalArgs,
-    _cli: &Cli,
-    token: &CancellationToken,
-) -> FsResult<i32> {
+async fn execute_all_phases(arg: &EvalArgs, _cli: &Cli, token: &CancellationToken) -> FsResult<()> {
     // Loads all .yml files + collects all included files
     let load_args = LoadArgs::from_eval_args(arg);
     let invocation_args = InvocationArgs::from_eval_args(arg);
@@ -234,12 +205,8 @@ async fn execute_all_phases(
     }
 
     // This also exits the init command b/c init `to_eval_args` sets the phase to debug
-    if let Some(exit_code) = checkpoint_maybe_exit(&arg, Phases::Debug) {
-        return Ok(exit_code);
-    }
-    if let Some(exit_code) = checkpoint_maybe_exit(&arg, Phases::Deps) {
-        return Ok(exit_code);
-    }
+    checkpoint_maybe_exit(&arg, Phases::Debug)?;
+    checkpoint_maybe_exit(&arg, Phases::Deps)?;
 
     // Parses (dbt parses) all .sql files with execute == false
     let resolve_args = ResolveArgs::try_from_eval_args(&arg)?;
@@ -273,5 +240,5 @@ async fn execute_all_phases(
         );
     }
 
-    Ok(get_exit_code_from_error_counter())
+    error_count_checkpoint()
 }

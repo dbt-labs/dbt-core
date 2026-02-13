@@ -10,7 +10,7 @@ use std::{
 use arrow::record_batch::RecordBatch;
 use async_trait::async_trait;
 use dbt_common::{
-    ErrorCode, FsResult,
+    ErrorCode, FsError, FsResult,
     constants::{DBT_INTERNAL_PACKAGES_DIR_NAME, DBT_LOG_DIR_NAME, DBT_TARGET_DIR_NAME},
     err, stdfs,
 };
@@ -179,6 +179,13 @@ impl Task for ExecuteOnly {
         *self.stdout.lock().unwrap() = stdfs::read_to_string(&stdout_path)?;
         *self.stderr.lock().unwrap() = stdfs::read_to_string(&stderr_path)?;
 
+        let res = match res {
+            Ok(()) => Ok(0),
+            Err(err) => match err.exit_status() {
+                Some(code) => Ok(code),
+                None => Err(err),
+            },
+        };
         match res {
             Ok(exit_code) => {
                 self.exit_code
@@ -490,7 +497,7 @@ impl ExecuteAndCompareTelemetry {
             .into_iter()
             .map(|record| {
                 serde_json::to_string(&record).map_err(|err| {
-                    Box::new(dbt_common::FsError::new(
+                    Box::new(FsError::new(
                         ErrorCode::SerializationError,
                         format!("failed to serialize telemetry record to json: {err}"),
                     ))
@@ -512,14 +519,14 @@ impl ExecuteAndCompareTelemetry {
         let reader =
             ParquetRecordBatchReaderBuilder::try_new(bytes::Bytes::from_owner(parquet_bytes))
                 .map_err(|err| {
-                    dbt_common::FsError::new(
+                    FsError::new(
                         ErrorCode::ParquetError,
                         format!("failed to construct parquet reader: {err}"),
                     )
                 })?
                 .build()
                 .map_err(|err| {
-                    dbt_common::FsError::new(
+                    FsError::new(
                         ErrorCode::ParquetError,
                         format!("failed to build parquet batch reader: {err}"),
                     )
@@ -528,13 +535,13 @@ impl ExecuteAndCompareTelemetry {
         let mut records = Vec::new();
         for batch in reader {
             let batch = batch.map_err(|err| {
-                dbt_common::FsError::new(
+                FsError::new(
                     ErrorCode::ParquetError,
                     format!("failed to read parquet batch: {err}"),
                 )
             })?;
             let mut batch_records = deserializer(&batch).map_err(|err| {
-                dbt_common::FsError::new(
+                FsError::new(
                     ErrorCode::ParquetError,
                     format!("failed to deserialize telemetry records: {err}"),
                 )
@@ -911,7 +918,7 @@ async fn exec_sh(
     project_dir: PathBuf,
     stdout_file: std::fs::File,
     stderr_file: std::fs::File,
-) -> FsResult<i32> {
+) -> FsResult<()> {
     let status = Command::new(&cmd_vec[0])
         .args(&cmd_vec[1..])
         .stdout(
@@ -930,12 +937,12 @@ async fn exec_sh(
     match status {
         Ok(mut child) => {
             child.wait().expect("Could not wait on process");
-            Ok(0)
+            Ok(())
         }
         Err(e) => {
             writeln!(&stderr_file, "Error spawning command: {cmd_vec:?} {e}")
                 .expect("Could not write");
-            Ok(1)
+            Err(FsError::exit_with_status(1))
         }
     }
 }

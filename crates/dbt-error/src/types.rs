@@ -502,6 +502,44 @@ impl FsError {
         }
     }
 
+    /// Create an [FsError] that signals main() should exit with the given
+    /// status code. The status code is stored in the cause as
+    /// [WrappedError::ExitCode].
+    #[cold]
+    pub fn exit_with_status(status: i32) -> Box<Self> {
+        let err = FsError {
+            code: ErrorCode::ExitWithStatus,
+            location: None,
+            context: String::new(),
+            cause: Some(WrappedError::ExitCode(status)),
+            backtrace: Backtrace::capture(),
+            next: None,
+        };
+        Box::new(err)
+    }
+
+    /// If this error represents an exit-with-status request, returns the
+    /// status code. Returns [None] for all other errors.
+    pub fn exit_status(&self) -> Option<i32> {
+        match (self.code, &self.cause) {
+            (ErrorCode::ExitWithStatus, Some(WrappedError::ExitCode(status))) => Some(*status),
+            (ErrorCode::ExitWithStatus, Some(_) | None) => {
+                // Anything else if invalid...
+                debug_assert!(
+                    false,
+                    "ExitWithStatus error should have an WrappedError::ExitCode cause; \
+use FsError::exit_with_status() to properly construct these errors"
+                );
+                Some(1) // ...but we signal it as an error so the problem is more likely addressed.
+            }
+            (ErrorCode::ExitRepl, _) => {
+                // ExitRepl is always a successful exit.
+                Some(0)
+            }
+            (_, _) => None,
+        }
+    }
+
     pub fn with_relative_path(mut self, path: &str) -> Self {
         if let Some(ref mut location) = self.location {
             location.file = Arc::new(PathBuf::from(path));
@@ -614,6 +652,7 @@ pub enum WrappedError {
     Generic(String),
     Cli(Box<FsError>),
     // RemoteExecution(reqwest::Error),
+    ExitCode(i32),
 }
 
 impl Display for WrappedError {
@@ -637,6 +676,7 @@ impl Display for WrappedError {
             WrappedError::NameError(e) => write!(f, "{e}"),
             // WrappedError::RemoteExecution(e) => write!(f, "{}", e),
             WrappedError::Fmt(e) => write!(f, "{e}"),
+            WrappedError::ExitCode(code) => write!(f, "exit code {code}"),
         }
     }
 }

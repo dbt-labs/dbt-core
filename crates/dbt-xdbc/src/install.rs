@@ -2,6 +2,7 @@ use core::fmt;
 use std::ffi::OsString;
 use std::io::{Read as _, Write as _};
 use std::path::{Path, PathBuf};
+use std::result::Result;
 use std::time::Duration;
 use std::{env, io};
 
@@ -210,7 +211,11 @@ pub fn format_driver_url(backend_name: &str, version: &str, os: &str) -> String 
 /// Windows
 ///
 /// ${FOLDERID_LocalAppData}/com.getdbt/adbc/x86_64-pc-windows-msvc/adbc_driver_snowflake-0.17.0+dbt0.0.1.dll
-pub fn format_driver_path(backend_name: &str, version: &str, os: &str) -> Result<PathBuf> {
+pub fn format_driver_path(
+    backend_name: &str,
+    version: &str,
+    os: &str,
+) -> Result<PathBuf, InstallError> {
     const APP_ID: &str = "com.getdbt";
     dirs::cache_dir()
         .map(|cache_dir| {
@@ -229,12 +234,10 @@ pub fn format_driver_path(backend_name: &str, version: &str, os: &str) -> Result
         .ok_or(InstallError::DetermineCacheDir)
 }
 
-pub type Result<T> = std::result::Result<T, InstallError>;
-
 /// XDBC users can call this function to pre-install the driver for the given backend.
 ///
 /// Instead of relying on the automatic installation at connection creation time.
-pub fn pre_install_driver(backend: Backend) -> Result<()> {
+pub fn pre_install_driver(backend: Backend) -> Result<(), InstallError> {
     if !is_installable_driver(backend) {
         return Ok(());
     }
@@ -243,7 +246,7 @@ pub fn pre_install_driver(backend: Backend) -> Result<()> {
 }
 
 /// Pre-install all supported drivers for the current platform.
-pub fn pre_install_all_drivers() -> Result<()> {
+pub fn pre_install_all_drivers() -> Result<(), InstallError> {
     for backend in INSTALLABLE_DRIVERS.iter() {
         pre_install_driver(*backend)?;
     }
@@ -325,7 +328,11 @@ fn find_expected_checksum(backend_name: &str, version: &str, os: &str) -> Option
     find_expected_checksum_internal(backend_name, version, os, env::consts::ARCH)
 }
 
-pub fn install_driver_internal(backend_name: &str, version: &str, target_os: &str) -> Result<()> {
+pub fn install_driver_internal(
+    backend_name: &str,
+    version: &str,
+    target_os: &str,
+) -> Result<(), InstallError> {
     let full_driver_path = format_driver_path(backend_name, version, target_os)?;
     let url = format_driver_url(backend_name, version, target_os);
     let checksum = find_expected_checksum(backend_name, version, target_os);
@@ -395,7 +402,7 @@ pub fn download_zst_driver_file<P: AsRef<Path>>(
     url: &str,
     destination: P,
     expected_sha256sum: Option<&str>,
-) -> Result<()> {
+) -> Result<(), InstallError> {
     debug_assert!(
         destination.as_ref().is_absolute(),
         "destination path must be absolute"

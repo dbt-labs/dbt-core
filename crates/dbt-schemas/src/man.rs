@@ -18,7 +18,7 @@ use schemars::schema::{InstanceType, Schema, SchemaObject};
 
 use serde_json::to_string_pretty;
 
-pub async fn execute_man_command(arg: &EvalArgs) -> FsResult<i32> {
+pub async fn execute_man_command(arg: &EvalArgs) -> FsResult<()> {
     // create an error if arg.schema.is_empty
     if arg.schema.is_empty() {
         let available_schemas: Vec<String> = JsonSchemaTypes::iter()
@@ -69,7 +69,7 @@ pub async fn execute_man_command(arg: &EvalArgs) -> FsResult<i32> {
         }
     }
 
-    Ok(0)
+    Ok(())
 }
 
 /// Recursively modifies all object schemas in a `RootSchema`
