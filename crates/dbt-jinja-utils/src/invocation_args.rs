@@ -70,6 +70,8 @@ pub struct InvocationArgs {
     pub full_refresh: bool,
     /// Store test failures in the database
     pub store_failures: bool,
+    /// Empty flag
+    pub empty: bool,
 
     /// Replay mode (when running against a recording)
     pub replay: Option<ReplayMode>,
@@ -107,6 +109,7 @@ impl Default for InvocationArgs {
             write_json: false,
             full_refresh: false,
             store_failures: false,
+            empty: false,
             replay: None,
         }
     }
@@ -188,6 +191,7 @@ impl InvocationArgs {
             write_json: arg.write_json,
             full_refresh: arg.full_refresh,
             store_failures: arg.store_failures,
+            empty: arg.empty,
             replay: arg.replay.clone(),
         }
     }
@@ -274,6 +278,7 @@ impl InvocationArgs {
             "STORE_FAILURES".to_string(),
             Value::from(self.store_failures),
         );
+        dict.insert("EMPTY".to_string(), Value::from(self.empty));
         dict.insert("REPLAY".to_string(), Value::from(self.replay.is_some()));
 
         // !!HACK!!: Inject a lower case version of the upper-case keys, for use

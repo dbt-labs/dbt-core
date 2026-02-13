@@ -88,6 +88,7 @@ impl Flags {
             .insert("STORE_FAILURES".to_string(), Value::from(false));
         self.flags
             .insert("INTROSPECT".to_string(), Value::from(true));
+        self.flags.insert("EMPTY".to_string(), Value::from(false));
         self.flags.insert(
             "STATE_MODIFIED_COMPARE_VARS".to_string(),
             Value::from(false),
@@ -228,6 +229,8 @@ impl Flags {
             "STORE_FAILURES".to_string(),
             Value::from(invocation_args.store_failures),
         );
+        self.flags
+            .insert("EMPTY".to_string(), Value::from(invocation_args.empty));
     }
     /// Override self with other flags
     pub fn join(&mut self, other: Flags) -> Self {
