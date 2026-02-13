@@ -47,7 +47,7 @@ def statically_extract_macro_calls(
             _TESTING_MACRO_CACHE[source] = parsed
             setattr(parsed, "_dbt_cached_calls", func_calls)
 
-    standard_calls = ["source", "ref", "config"]
+    standard_calls = ["source", "ref", "config", "target_ref"]
     possible_macro_calls = []
     for func_call in func_calls:
         func_name = None

@@ -54,6 +54,7 @@ class RefArgs(dbtClassMixin):
     name: str
     package: Optional[str] = None
     version: Optional[NodeVersion] = None
+    is_target: bool = False  # True for target_ref(), affects lineage direction and unit test fixtures
 
     @property
     def positional_args(self) -> List[str]:
