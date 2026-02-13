@@ -57,6 +57,7 @@ pub(crate) mod odbc_api;
 
 pub(crate) mod builder;
 pub(crate) mod checksums;
+pub mod driver_manager;
 pub mod duration;
 pub(crate) mod install;
 

@@ -264,8 +264,9 @@ parquet = { version = "=56.0.0" }
 serde_arrow = { version = "0.13.6", features = ["arrow-56"] }
 
 # xdbc
-adbc-core = { git = "https://github.com/dbt-labs/arrow-adbc", package = "adbc_core", version = "0.22.0", rev = "058cdc0d65baabf0d12c5b8488e7ccb889bbb606" } # @ apache-arrow-adbc-22-rust
-adbc-driver-manager = { git = "https://github.com/dbt-labs/arrow-adbc", package = "adbc_driver_manager", version = "0.22.0", rev = "058cdc0d65baabf0d12c5b8488e7ccb889bbb606" } # @ apache-arrow-adbc-22-rust
+adbc-core = { git = "https://github.com/dbt-labs/arrow-adbc", package = "adbc_core", version = "0.22.0", rev = "2caa4db73b5dee142d71a10e3b3905715c6d99db" } # @ apache-arrow-adbc-22-rust
+adbc-driver-manager = { git = "https://github.com/dbt-labs/arrow-adbc", package = "adbc_driver_manager", version = "0.22.0", rev = "2caa4db73b5dee142d71a10e3b3905715c6d99db" } # @ apache-arrow-adbc-22-rust
+adbc-ffi = { git = "https://github.com/dbt-labs/arrow-adbc", package = "adbc_ffi", version = "0.22.0", rev = "2caa4db73b5dee142d71a10e3b3905715c6d99db" } # @ apache-arrow-adbc-22-rust
 dbt-xdbc = { path = "crates/dbt-xdbc" }
 
 # antlr for frontend

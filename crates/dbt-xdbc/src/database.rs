@@ -2,12 +2,12 @@
 //!
 //!
 
+use crate::driver_manager::ManagedDatabase as ManagedAdbcDatabase;
 use adbc_core::{
     Database as _, Optionable,
     error::{Error, Result, Status},
     options::{AdbcVersion, InfoCode, OptionConnection, OptionDatabase, OptionValue},
 };
-use adbc_driver_manager::ManagedDatabase as ManagedAdbcDatabase;
 use arrow_array::{
     Array,
     cast::AsArray,

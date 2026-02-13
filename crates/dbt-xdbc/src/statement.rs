@@ -5,12 +5,12 @@
 use core::fmt;
 use std::sync::Arc;
 
+use crate::driver_manager::ManagedStatement as ManagedAdbcStatement;
 use adbc_core::{
     Optionable, PartitionedResult, Statement as _,
     error::{Error, Result, Status},
     options::{OptionStatement, OptionValue},
 };
-use adbc_driver_manager::ManagedStatement as ManagedAdbcStatement;
 use arrow_array::{RecordBatch, RecordBatchReader};
 use arrow_schema::Schema;
 

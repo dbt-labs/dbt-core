@@ -6,6 +6,7 @@ use crate::Database;
 use crate::database::AdbcDatabase;
 #[cfg(feature = "odbc")]
 use crate::database::OdbcDatabase;
+use crate::driver_manager::ManagedDriver as ManagedAdbcDriver;
 use crate::install;
 use crate::semaphore::Semaphore;
 use adbc_core::{
@@ -13,7 +14,6 @@ use adbc_core::{
     error::{Error, Result, Status},
     options::{AdbcVersion, OptionDatabase, OptionValue},
 };
-use adbc_driver_manager::ManagedDriver as ManagedAdbcDriver;
 use libloading;
 use parking_lot::RwLockUpgradableReadGuard;
 use std::sync::Arc;
