@@ -1654,21 +1654,57 @@ pub fn build_flat_graph(nodes: &Nodes) -> MutableMap {
         Value::from("exposures"),
         Value::from_serialize(exposures_insert),
     );
-    graph.insert(
-        Value::from("groups"),
-        Value::from_serialize(BTreeMap::<String, Value>::new()),
-    );
+    let groups_insert: BTreeMap<String, Value> = nodes
+        .groups
+        .iter()
+        .map(|(unique_id, group)| (unique_id.clone(), Value::from_serialize(Arc::as_ref(group))))
+        .collect();
+    graph.insert(Value::from("groups"), Value::from_serialize(groups_insert));
+    let metrics_insert: BTreeMap<String, Value> = nodes
+        .metrics
+        .iter()
+        .map(|(unique_id, metric)| {
+            (
+                unique_id.clone(),
+                Value::from_serialize((Arc::as_ref(metric) as &dyn InternalDbtNode).serialize()),
+            )
+        })
+        .collect();
     graph.insert(
         Value::from("metrics"),
-        Value::from_serialize(BTreeMap::<String, Value>::new()),
+        Value::from_serialize(metrics_insert),
     );
+    let semantic_models_insert: BTreeMap<String, Value> = nodes
+        .semantic_models
+        .iter()
+        .map(|(unique_id, semantic_model)| {
+            (
+                unique_id.clone(),
+                Value::from_serialize(
+                    (Arc::as_ref(semantic_model) as &dyn InternalDbtNode).serialize(),
+                ),
+            )
+        })
+        .collect();
     graph.insert(
         Value::from("semantic_models"),
-        Value::from_serialize(BTreeMap::<String, Value>::new()),
+        Value::from_serialize(semantic_models_insert),
     );
+    let saved_queries_insert: BTreeMap<String, Value> = nodes
+        .saved_queries
+        .iter()
+        .map(|(unique_id, saved_query)| {
+            (
+                unique_id.clone(),
+                Value::from_serialize(
+                    (Arc::as_ref(saved_query) as &dyn InternalDbtNode).serialize(),
+                ),
+            )
+        })
+        .collect();
     graph.insert(
         Value::from("saved_queries"),
-        Value::from_serialize(BTreeMap::<String, Value>::new()),
+        Value::from_serialize(saved_queries_insert),
     );
     MutableMap::from(graph)
 }
@@ -1923,5 +1959,55 @@ mod tests {
 
         let rendered = template.render(minijinja::context!(), &[]).unwrap();
         assert_eq!(rendered, "False");
+    }
+
+    #[test]
+    fn build_flat_graph_populates_semantic_models_metrics_saved_queries_and_groups() {
+        use dbt_schemas::schemas::manifest::{DbtMetric, DbtSavedQuery, DbtSemanticModel};
+        use dbt_schemas::schemas::nodes::DbtGroup;
+
+        let mut nodes = Nodes::default();
+
+        // Insert one entry per collection
+        nodes.semantic_models.insert(
+            "semantic_model.pkg.sm1".to_string(),
+            Arc::new(DbtSemanticModel::default()),
+        );
+        nodes.metrics.insert(
+            "metric.pkg.m1".to_string(),
+            Arc::new(DbtMetric {
+                __common_attr__: Default::default(),
+                __base_attr__: Default::default(),
+                __metric_attr__: Default::default(),
+                deprecated_config: Default::default(),
+                __other__: Default::default(),
+            }),
+        );
+        nodes.saved_queries.insert(
+            "saved_query.pkg.sq1".to_string(),
+            Arc::new(DbtSavedQuery {
+                __common_attr__: Default::default(),
+                __base_attr__: Default::default(),
+                __saved_query_attr__: Default::default(),
+                deprecated_config: Default::default(),
+                __other__: Default::default(),
+            }),
+        );
+        nodes
+            .groups
+            .insert("group.pkg.g1".to_string(), Arc::new(DbtGroup::default()));
+
+        let graph = build_flat_graph(&nodes);
+        let graph_val = Value::from_object(graph);
+
+        // Each key should contain exactly one entry
+        for key in &["semantic_models", "metrics", "saved_queries", "groups"] {
+            let collection = graph_val.get_attr(key).unwrap();
+            assert_ne!(
+                collection.len(),
+                Some(0),
+                "expected graph.{key} to be non-empty"
+            );
+        }
     }
 }
