@@ -10,11 +10,6 @@ use dbt_csv::{CustomCsvOptions, read_to_arrow_records};
 use std::path::Path;
 use std::sync::Arc;
 
-/// Check if custom DBT CSV mode is enabled via environment variable.
-pub fn use_dbt_csv() -> bool {
-    dbt_env::env_var_bool("USE_DBT_CSV").unwrap_or(false)
-}
-
 /// Creates a table provider using custom CSV inference and reading.
 ///
 /// This reads the entire CSV into memory using our custom reader.

@@ -62,7 +62,7 @@ let (schema, records_read, missing) = format
 Enable with the environment variable:
 
 ```bash
-USE_DBT_CSV=1 fs seed
+fs seed
 ```
 
 ## Crate Structure
