@@ -1332,13 +1332,13 @@ pub struct CommonArgs {
     #[arg(global = true, long = "single-threaded", action = ArgAction::SetTrue, env = "DBT_SINGLE_THREADED", value_parser = BoolishValueParser::new())]
     pub single_threaded: bool,
 
-    /// Execution backend to use for local runs
+    /// Execution backend to use
     #[arg(
         global = true,
         long = "compute",
         value_enum,
         env = "DBT_COMPUTE",
-        default_value = "inline"
+        default_value = "remote"
     )]
     pub compute: ComputeArg,
 
@@ -1939,6 +1939,7 @@ impl CommonArgs {
 impl From<ComputeArg> for LocalExecutionBackendKind {
     fn from(arg: ComputeArg) -> Self {
         match arg {
+            ComputeArg::Remote => LocalExecutionBackendKind::Remote,
             ComputeArg::Inline => LocalExecutionBackendKind::Inline,
             ComputeArg::Sidecar => LocalExecutionBackendKind::Worker,
             ComputeArg::Service => LocalExecutionBackendKind::Service,
@@ -1953,14 +1954,14 @@ impl From<ComputeArg> for LocalExecutionBackendKind {
 #[clap(rename_all = "kebab-case")]
 pub enum ComputeArg {
     #[default]
+    /// Execute on the remote warehouse (Snowflake, BigQuery, etc.)
+    Remote,
     /// Run computations in-process
     Inline,
     /// Run computations in a separate, ephemeral worker process
     Sidecar,
     /// Run via the remote compute service (persistent workers/cluster).
     Service,
-    // Warehouse is the remote compute, e.g. Snowflake, BigQuery, etc.
-    // Warehouse
 }
 #[derive(
     Debug,

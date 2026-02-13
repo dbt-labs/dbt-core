@@ -226,9 +226,18 @@ impl DbConfig {
 
     pub fn get_execute_mode(&self) -> Execute {
         match self {
-            DbConfig::Snowflake(config) => config.execute,
+            DbConfig::Snowflake(config) => config.execute.unwrap_or_default(),
             DbConfig::Datafusion(_) => Execute::Local,
             _ => Execute::Remote,
+        }
+    }
+
+    /// Returns true if the profile has an explicit `execute:` field set.
+    /// Used to distinguish "no execute: field" (default) from "execute: remote" (explicit).
+    pub fn has_explicit_execute(&self) -> bool {
+        match self {
+            DbConfig::Snowflake(config) => config.execute.is_some(),
+            _ => false,
         }
     }
 
@@ -410,6 +419,56 @@ impl Execute {
     pub fn is_default(&self) -> bool {
         matches!(self, Execute::Remote)
     }
+
+    /// Skip serialization for absent (`None`) or default (`Some(Remote)`) execute values.
+    /// Preserves the prior serialization behavior while allowing `Option<Execute>` for
+    /// distinguishing absent from explicit `execute: remote` at deserialization time.
+    pub fn skip_serialize_option(val: &Option<Execute>) -> bool {
+        match val {
+            None => true,
+            Some(e) => e.is_default(),
+        }
+    }
+
+    /// Compute the effective execute mode for the **execution** phase.
+    ///
+    /// `--compute sidecar|service` overrides the profile `execute:` field unconditionally
+    /// (including `execute: local`). `--compute remote` (default) and `--compute inline`
+    /// (legacy) defer to the profile, preserving `execute: local` (DataFusion dev mode).
+    pub fn for_execution_phase(
+        self,
+        compute_flag: dbt_common::io_args::LocalExecutionBackendKind,
+    ) -> Self {
+        use dbt_common::io_args::LocalExecutionBackendKind;
+        match compute_flag {
+            LocalExecutionBackendKind::Remote => {
+                if self == Execute::Local {
+                    Execute::Local
+                } else {
+                    Execute::Remote
+                }
+            }
+            LocalExecutionBackendKind::Worker => Execute::Sidecar,
+            LocalExecutionBackendKind::Service => Execute::Service,
+            LocalExecutionBackendKind::Inline => self, // legacy: defer to profile
+        }
+    }
+
+    /// Compute the effective execute mode for the **compilation** phase.
+    ///
+    /// `execute: local` is always preserved regardless of `--compute`, because the
+    /// compilation phase uses MockAdapter with no sidecar client, no schema cache
+    /// clearing, and no DuckDB introspection for local profiles. The `--compute`
+    /// override takes effect only during task execution (see [`Self::with_compute`]).
+    pub fn for_compilation_phase(
+        self,
+        compute_flag: dbt_common::io_args::LocalExecutionBackendKind,
+    ) -> Self {
+        if self == Execute::Local {
+            return Execute::Local;
+        }
+        self.for_execution_phase(compute_flag)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -543,9 +602,9 @@ pub struct SnowflakeDbConfig {
     pub private_key_passphrase: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub auth_type: Option<String>,
-    #[serde(default, skip_serializing_if = "Execute::is_default")]
+    #[serde(default, skip_serializing_if = "Execute::skip_serialize_option")]
     #[merge(strategy = merge_strategies_extend::overwrite_always)]
-    pub execute: Execute,
+    pub execute: Option<Execute>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub execution_timezone: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]

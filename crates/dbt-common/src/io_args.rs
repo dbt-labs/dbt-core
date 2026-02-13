@@ -20,6 +20,8 @@ use log::LevelFilter;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum LocalExecutionBackendKind {
     #[default]
+    /// Execute on the remote warehouse (Snowflake, BigQuery, etc.)
+    Remote,
     /// Run models in the current process
     Inline,
     /// Run models in a separate worker process
