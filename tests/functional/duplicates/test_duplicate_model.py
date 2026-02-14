@@ -62,6 +62,44 @@ models:
       - v: 1
 """
 
+external_package_dbt_project_yml = """
+name: 'external_package'
+version: '1.0'
+config-version: 2
+
+profile: 'default'
+
+model-paths: ["models"]
+
+seeds:
+  quote_columns: False
+
+"""
+
+external_package_schema_yml_with_relationship = """
+models:
+  - name: table_model
+    columns:
+      - name: value
+        data_tests:
+          - relationships:
+              to: ref('another_model')
+              field: value
+  - name: another_model
+"""
+
+external_another_model_sql = """
+{{
+    config(
+        enabled=True,
+        materialized="table",
+    )
+}}
+
+select 1 as value
+
+"""
+
 
 class TestDuplicateModelEnabled:
     @pytest.fixture(scope="class")
@@ -159,6 +197,79 @@ class TestDuplicateModelDisabledAcrossPackages:
         model_id = "model.test.table_model"
         assert local_dep_model_id in manifest.nodes
         assert model_id in manifest.disabled
+
+
+class TestDuplicateModelDisabledWithTestAcrossPackages:
+    """
+    Test scenario where:
+    - An external package contains table_model with a relationship test
+    - The local project (test) installs this package but disables the external table_model
+      and creates its own table_model with the same name (override)
+    - The test from the external package should attach to the enabled model in the local project
+    """
+
+    @pytest.fixture(scope="class", autouse=True)
+    def setUp(self, project_root):
+        external_package_files = {
+            "dbt_project.yml": external_package_dbt_project_yml,
+            "models": {
+                "table_model.sql": enabled_model_sql,  # Enabled in the package
+                "another_model.sql": external_another_model_sql,
+                "schema.yml": external_package_schema_yml_with_relationship,
+            },
+        }
+        write_project_files(project_root, "external_package", external_package_files)
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"table_model.sql": enabled_model_sql}
+
+    @pytest.fixture(scope="class")
+    def packages(self):
+        return {"packages": [{"local": "external_package"}]}
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        # Disable the external package's table_model in the local project
+        return {
+            "models": {
+                "external_package": {
+                    "table_model": {
+                        "+enabled": False,
+                    }
+                }
+            }
+        }
+
+    def test_duplicate_model_disabled_with_test_attached_to_enabled(self, project):
+        run_dbt(["deps"])
+        manifest = run_dbt(["parse"])
+
+        assert len(manifest.nodes) == 3
+
+        # Model nodes with duplicate names:
+        external_package_model_id = "model.external_package.table_model"
+        local_project_model_id = "model.test.table_model"
+        another_model_node_id = "model.external_package.another_model"
+
+        assert local_project_model_id in manifest.nodes
+        assert external_package_model_id in manifest.disabled
+        assert another_model_node_id in manifest.nodes
+
+        # Find the test node (hash may vary)
+        test_from_external_package = None
+        for node_id in manifest.nodes:
+            if node_id.startswith(
+                "test.external_package.relationships_table_model_value__value__ref_another_model_"
+            ):
+                test_from_external_package = node_id
+                break
+
+        assert test_from_external_package is not None, "Relationship test not found"
+
+        # The test defined in the external/imported package should be attached to the local overridden model
+        # NOT to the disabled model from the external package
+        assert manifest.nodes[test_from_external_package].attached_node == local_project_model_id
 
 
 class TestDuplicateModelNameWithTestAcrossPackages:
