@@ -234,11 +234,7 @@ impl TypedBaseAdapter for SnowflakeSidecarAdapter {
         db_schema: &CatalogAndSchema,
     ) -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
         // Normalize schema name based on quoting policy
-        let query_schema = if self.quoting.schema {
-            db_schema.resolved_schema.clone()
-        } else {
-            db_schema.resolved_schema.to_lowercase()
-        };
+        let query_schema = db_schema.resolved_schema.clone();
 
         // Delegate to sidecar client
         let relation_infos = self.sidecar_client.list_relations(&query_schema)?;
@@ -271,17 +267,8 @@ impl TypedBaseAdapter for SnowflakeSidecarAdapter {
         schema: &str,
         identifier: &str,
     ) -> AdapterResult<Option<Arc<dyn BaseRelation>>> {
-        // Normalize names based on quoting policy (DuckDB is case-preserving for quoted identifiers)
-        let query_schema = if self.quoting.schema {
-            schema.to_string()
-        } else {
-            schema.to_lowercase()
-        };
-        let query_identifier = if self.quoting.identifier {
-            identifier.to_string()
-        } else {
-            identifier.to_lowercase()
-        };
+        let query_schema = schema.to_string();
+        let query_identifier = identifier.to_string();
 
         // Delegate to sidecar client
         let relation_type = self
