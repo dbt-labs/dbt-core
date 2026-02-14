@@ -644,15 +644,6 @@
         "conversion_rate"
       ]
     },
-    "CustomCheckLevel": {
-      "type": "string",
-      "enum": [
-        "error",
-        "warn",
-        "advisory",
-        "off"
-      ]
-    },
     "CustomTest": {
       "anyOf": [
         {
@@ -1353,6 +1344,7 @@
           ]
         },
         "tags": {
+          "default": [],
           "anyOf": [
             {
               "$ref": "#/definitions/StringOrArrayOfStrings"
@@ -1966,6 +1958,7 @@
           }
         },
         "tags": {
+          "default": [],
           "anyOf": [
             {
               "$ref": "#/definitions/StringOrArrayOfStrings"
@@ -3193,6 +3186,7 @@
           }
         },
         "tags": {
+          "default": [],
           "anyOf": [
             {
               "$ref": "#/definitions/StringOrArrayOfStrings"
@@ -3732,15 +3726,6 @@
             "boolean",
             "null"
           ]
-        },
-        "custom_checks": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": {
-            "$ref": "#/definitions/CustomCheckLevel"
-          }
         },
         "database": {
           "type": [
@@ -4357,16 +4342,6 @@
             }
           ]
         },
-        "strictness": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/StrictnessMode"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
         "submission_method": {
           "type": [
             "string",
@@ -4403,6 +4378,7 @@
           ]
         },
         "tags": {
+          "default": [],
           "anyOf": [
             {
               "$ref": "#/definitions/StringOrArrayOfStrings"
@@ -5099,6 +5075,7 @@
           ]
         },
         "tags": {
+          "default": [],
           "anyOf": [
             {
               "$ref": "#/definitions/StringOrArrayOfStrings"
@@ -5774,6 +5751,7 @@
           ]
         },
         "tags": {
+          "default": [],
           "anyOf": [
             {
               "$ref": "#/definitions/StringOrArrayOfStrings"
@@ -6561,6 +6539,7 @@
           ]
         },
         "tags": {
+          "default": [],
           "anyOf": [
             {
               "$ref": "#/definitions/StringOrArrayOfStrings"
@@ -7284,6 +7263,7 @@
           ]
         },
         "tags": {
+          "default": [],
           "anyOf": [
             {
               "$ref": "#/definitions/StringOrArrayOfStrings"
@@ -7413,6 +7393,8 @@
       "enum": [
         "unsafe",
         "off",
+        "baseline",
+        "strict",
         "on"
       ]
     },
@@ -7422,14 +7404,6 @@
         "ephemeral",
         "table",
         "view"
-      ]
-    },
-    "StrictnessMode": {
-      "type": "string",
-      "enum": [
-        "baseline",
-        "strict",
-        "custom"
       ]
     },
     "StringOrArrayOfStrings": {
