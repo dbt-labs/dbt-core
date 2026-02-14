@@ -15,6 +15,9 @@ use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::DBT_SNAPSHOTS_DIR_NAME;
 use dbt_common::error::AbstractLocation;
 use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
+use dbt_common::static_analysis::{
+    StaticAnalysisDeprecationOrigin, check_deprecated_static_analysis_kind,
+};
 use dbt_common::tokiofs;
 use dbt_common::tracing::emit::{emit_error_log_from_fs_error, emit_warn_log_from_fs_error};
 use dbt_common::{ErrorCode, FsResult, fs_err, stdfs, unexpected_fs_err};
@@ -329,10 +332,20 @@ pub async fn resolve_snapshots(
                     .unwrap_or(&vec![]),
             );
 
-            let static_analysis = final_config
-                .static_analysis
-                .clone()
-                .unwrap_or_else(|| StaticAnalysisKind::On.into());
+            let static_analysis =
+                if let Some(static_analysis) = final_config.static_analysis.clone() {
+                    check_deprecated_static_analysis_kind(
+                        static_analysis.clone().into_inner(),
+                        StaticAnalysisDeprecationOrigin::NodeConfig {
+                            unique_id: unique_id.as_str(),
+                        },
+                        dependency_package_name,
+                        arg.io.status_reporter.as_ref(),
+                    );
+                    static_analysis
+                } else {
+                    StaticAnalysisKind::Strict.into()
+                };
 
             let macro_depends_on = all_depends_on
                 .get(&format!("{package_name}.{snapshot_name}"))

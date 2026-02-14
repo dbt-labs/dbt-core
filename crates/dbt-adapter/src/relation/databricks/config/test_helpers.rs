@@ -59,7 +59,7 @@ pub(crate) fn create_mock_dbt_model(cfg: TestModelConfig) -> DbtModel {
         quoting: dbt_schemas::schemas::relations::DEFAULT_RESOLVED_QUOTING,
         quoting_ignore_case: false,
         materialized: DbtMaterialization::Table,
-        static_analysis: Spanned::new(dbt_common::io_args::StaticAnalysisKind::On),
+        static_analysis: Spanned::new(dbt_common::io_args::StaticAnalysisKind::Strict),
         static_analysis_off_reason: None,
         enabled: true,
         extended_model: false,

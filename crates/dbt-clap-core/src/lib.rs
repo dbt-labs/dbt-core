@@ -553,8 +553,13 @@ pub struct CompileArgs {
     #[arg(global = true, long, aliases = ["format"])]
     pub output: Option<DisplayFormat>,
 
-    /// Flag to enable or disable SQL analysis, or to run SQL in unsafe mode,  enabled by default
-    #[arg(global = true, long, default_value = "on", env = "DBT_STATIC_ANALYSIS")]
+    /// Flag to enable or disable SQL analysis, or to run SQL in unsafe mode, enabled by default
+    #[arg(
+        global = true,
+        long,
+        default_value = "strict",
+        env = "DBT_STATIC_ANALYSIS"
+    )]
     pub static_analysis: StaticAnalysisKind,
 
     /// Drop incremental models and fully recalculate incremental tables.
@@ -621,7 +626,12 @@ pub struct SeedArgs {
     pub no_run_cache: bool,
 
     /// Flag to enable or disable SQL analysis, or to run SQL in unsafe mode, enabled by default
-    #[arg(global = true, long, default_value = "on", env = "DBT_STATIC_ANALYSIS")]
+    #[arg(
+        global = true,
+        long,
+        default_value = "strict",
+        env = "DBT_STATIC_ANALYSIS"
+    )]
     pub static_analysis: StaticAnalysisKind,
 
     /// Drop incremental models and fully recalculate incremental tables.
@@ -726,8 +736,13 @@ pub struct ShowArgs {
     #[arg(global = true, long, aliases = ["format"])]
     pub output: Option<DisplayFormat>,
 
-    /// Flag to enable or disable SQL analysis, or to run SQL in unsafe mode,  enabled by default
-    #[arg(global = true, long, default_value = "on", env = "DBT_STATIC_ANALYSIS")]
+    /// Flag to enable or disable SQL analysis, or to run SQL in unsafe mode, enabled by default
+    #[arg(
+        global = true,
+        long,
+        default_value = "strict",
+        env = "DBT_STATIC_ANALYSIS"
+    )]
     pub static_analysis: StaticAnalysisKind,
 
     /// Do not perform any local type checking on the show target
@@ -806,7 +821,12 @@ pub struct SnapshotArgs {
     pub no_run_cache: bool,
 
     /// Flag to enable or disable SQL analysis, or to run SQL in unsafe mode, enabled by default
-    #[arg(global = true, long, default_value = "on", env = "DBT_STATIC_ANALYSIS")]
+    #[arg(
+        global = true,
+        long,
+        default_value = "strict",
+        env = "DBT_STATIC_ANALYSIS"
+    )]
     pub static_analysis: StaticAnalysisKind,
 }
 
@@ -869,8 +889,13 @@ pub struct TestArgs {
     #[arg(global = true, long, aliases = ["format"])]
     pub output: Option<DisplayFormat>,
 
-    /// Flag to enable or disable SQL analysis, or to run SQL in unsafe mode,  enabled by default
-    #[arg(global = true, long, default_value = "on", env = "DBT_STATIC_ANALYSIS")]
+    /// Flag to enable or disable SQL analysis, or to run SQL in unsafe mode, enabled by default
+    #[arg(
+        global = true,
+        long,
+        default_value = "strict",
+        env = "DBT_STATIC_ANALYSIS"
+    )]
     pub static_analysis: StaticAnalysisKind,
 
     /// Use the samples as given in this YAML/JSON file.
@@ -950,8 +975,13 @@ pub struct BuildArgs {
     #[arg(global = true, long, aliases = ["format"])]
     pub output: Option<DisplayFormat>,
 
-    /// Flag to enable or disable SQL analysis, or to run SQL in unsafe mode,  enabled by default
-    #[arg(global = true, long, default_value = "on", env = "DBT_STATIC_ANALYSIS")]
+    /// Flag to enable or disable SQL analysis, or to run SQL in unsafe mode, enabled by default
+    #[arg(
+        global = true,
+        long,
+        default_value = "strict",
+        env = "DBT_STATIC_ANALYSIS"
+    )]
     pub static_analysis: StaticAnalysisKind,
 
     /// Run models using time-based filters (only applicable to relations created via `ref` or `source`)
@@ -1088,8 +1118,13 @@ pub struct RunArgs {
     #[arg(global = true, long, aliases = ["format"])]
     pub output: Option<DisplayFormat>,
 
-    /// Flag to enable or disable SQL analysis, or to run SQL in unsafe mode,  enabled by default
-    #[arg(global = true, long, default_value = "on", env = "DBT_STATIC_ANALYSIS")]
+    /// Flag to enable or disable SQL analysis, or to run SQL in unsafe mode, enabled by default
+    #[arg(
+        global = true,
+        long,
+        default_value = "strict",
+        env = "DBT_STATIC_ANALYSIS"
+    )]
     pub static_analysis: StaticAnalysisKind,
 
     /// Drop incremental models and fully recalculate incremental tables.

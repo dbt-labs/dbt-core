@@ -483,8 +483,7 @@ pub trait InternalDbtNodeAttributes: InternalDbtNode {
 
     fn static_analysis_enabled(&self) -> Spanned<bool> {
         self.static_analysis().map(|static_analysis| {
-            static_analysis == StaticAnalysisKind::On
-                || static_analysis == StaticAnalysisKind::Unsafe
+            dbt_common::static_analysis::is_static_analysis_enabled(static_analysis)
         })
     }
 

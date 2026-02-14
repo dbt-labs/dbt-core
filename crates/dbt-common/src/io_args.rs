@@ -954,9 +954,13 @@ pub enum Runtime {
 #[serde(rename_all = "lowercase")]
 #[clap(rename_all = "lowercase")]
 pub enum StaticAnalysisKind {
+    #[value(hide = true)]
     Unsafe,
     Off,
+    Baseline,
     #[default]
+    Strict,
+    #[value(hide = true)]
     On,
 }
 
@@ -998,6 +1002,8 @@ impl FromStr for StaticAnalysisKind {
         match s.to_lowercase().as_str() {
             "unsafe" => Ok(StaticAnalysisKind::Unsafe),
             "off" => Ok(StaticAnalysisKind::Off),
+            "baseline" => Ok(StaticAnalysisKind::Baseline),
+            "strict" => Ok(StaticAnalysisKind::Strict),
             "on" => Ok(StaticAnalysisKind::On),
             _ => Err(()),
         }

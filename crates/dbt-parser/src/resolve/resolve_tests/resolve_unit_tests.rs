@@ -13,6 +13,9 @@ use dbt_common::fs_err;
 use dbt_common::io_args::IoArgs;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::io_args::StaticAnalysisOffReason;
+use dbt_common::static_analysis::{
+    StaticAnalysisDeprecationOrigin, check_deprecated_static_analysis_kind,
+};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::phases::parse::build_resolve_model_context;
 use dbt_jinja_utils::phases::parse::sql_resource::SqlResource;
@@ -212,10 +215,20 @@ pub fn resolve_unit_tests(
             }
         };
 
-        let static_analysis = properties_config
-            .static_analysis
-            .clone()
-            .unwrap_or_else(|| StaticAnalysisKind::On.into());
+        let static_analysis =
+            if let Some(static_analysis) = properties_config.static_analysis.clone() {
+                check_deprecated_static_analysis_kind(
+                    static_analysis.clone().into_inner(),
+                    StaticAnalysisDeprecationOrigin::NodeConfig {
+                        unique_id: base_unique_id.as_str(),
+                    },
+                    dependency_package_name,
+                    io_args.status_reporter.as_ref(),
+                );
+                static_analysis
+            } else {
+                StaticAnalysisKind::Strict.into()
+            };
 
         let base_unit_test = DbtUnitTest {
             __common_attr__: CommonAttributes {

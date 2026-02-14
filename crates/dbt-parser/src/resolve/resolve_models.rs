@@ -24,6 +24,9 @@ use dbt_common::error::AbstractLocation;
 use dbt_common::fs_err;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::io_args::StaticAnalysisOffReason;
+use dbt_common::static_analysis::{
+    StaticAnalysisDeprecationOrigin, check_deprecated_static_analysis_kind,
+};
 use dbt_common::tokiofs::read_to_string;
 use dbt_common::tracing::emit::emit_error_log_from_fs_error;
 use dbt_common::tracing::emit::emit_warn_log_from_fs_error;
@@ -445,6 +448,7 @@ pub async fn resolve_models(
     let mut disabled_models: HashMap<String, Arc<DbtModel>> = HashMap::new();
     let mut node_names = HashSet::new();
     let mut rendering_results: HashMap<String, (String, MacroSpans)> = HashMap::new();
+    let dependency_package_name = dependency_package_name_from_ctx(&env, base_ctx);
 
     let local_project_config = if package.dbt_project.name == root_project.name {
         root_project_configs.models.clone()
@@ -457,7 +461,7 @@ pub async fn resolve_models(
                 quoting: Some(package_quoting),
                 ..Default::default()
             },
-            dependency_package_name_from_ctx(&env, base_ctx),
+            dependency_package_name,
         )?
     };
 
@@ -747,10 +751,19 @@ pub async fn resolve_models(
             ModelFreshnessRules::validate(freshness.build_after.as_ref())?;
         }
 
-        let static_analysis = model_config
-            .static_analysis
-            .clone()
-            .unwrap_or_else(|| StaticAnalysisKind::On.into());
+        let static_analysis = if let Some(static_analysis) = model_config.static_analysis.clone() {
+            check_deprecated_static_analysis_kind(
+                static_analysis.clone().into_inner(),
+                StaticAnalysisDeprecationOrigin::NodeConfig {
+                    unique_id: unique_id.as_str(),
+                },
+                dependency_package_name,
+                arg.io.status_reporter.as_ref(),
+            );
+            static_analysis
+        } else {
+            StaticAnalysisKind::Strict.into()
+        };
 
         // Hydrate time_spine from model properties
         let mut time_spine: Option<TimeSpine> = None;
@@ -1336,7 +1349,9 @@ fn merge_python_config(
 
     // Warn if user explicitly enabled static_analysis for a Python model
     // This check happens after all config sources are merged
-    if merged_config.static_analysis == Some(StaticAnalysisKind::On.into()) {
+    if merged_config.static_analysis == Some(StaticAnalysisKind::On.into())
+        || merged_config.static_analysis == Some(StaticAnalysisKind::Strict.into())
+    {
         emit_warn_log_message(
             ErrorCode::InvalidConfig,
             format!(

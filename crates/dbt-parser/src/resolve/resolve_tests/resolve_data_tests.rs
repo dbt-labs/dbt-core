@@ -24,6 +24,9 @@ use dbt_common::fs_err;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::io_args::StaticAnalysisOffReason;
 use dbt_common::io_utils::try_read_yml_to_str;
+use dbt_common::static_analysis::{
+    StaticAnalysisDeprecationOrigin, check_deprecated_static_analysis_kind,
+};
 use dbt_common::stdfs;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::listener::DefaultJinjaTypeCheckEventListenerFactory;
@@ -193,6 +196,7 @@ pub async fn resolve_data_tests(
     let mut nodes_with_execute: HashMap<String, DbtTest> = HashMap::new();
     let mut disabled_tests: HashMap<String, Arc<DbtTest>> = HashMap::new();
     let package_name = package.dbt_project.name.as_str();
+    let dependency_package_name = dependency_package_name_from_ctx(&env, base_ctx);
 
     let tests_config = match (
         package.dbt_project.tests.clone(),
@@ -214,7 +218,7 @@ pub async fn resolve_data_tests(
             quoting: Some(package_quoting),
             ..Default::default()
         },
-        dependency_package_name_from_ctx(&env, base_ctx),
+        dependency_package_name,
     )?;
 
     // Create a map of dbt_asset.path.stem to GenericTestAsset for efficient lookup
@@ -353,10 +357,19 @@ pub async fn resolve_data_tests(
         // Errored models can be enabled, so enabled is set to the opposite of disabled
         test_config.enabled = Some(!(*status == ModelStatus::Disabled));
 
-        let static_analysis = test_config
-            .static_analysis
-            .clone()
-            .unwrap_or_else(|| StaticAnalysisKind::On.into());
+        let static_analysis = if let Some(static_analysis) = test_config.static_analysis.clone() {
+            check_deprecated_static_analysis_kind(
+                static_analysis.clone().into_inner(),
+                StaticAnalysisDeprecationOrigin::NodeConfig {
+                    unique_id: unique_id.as_str(),
+                },
+                dependency_package_name,
+                arg.io.status_reporter.as_ref(),
+            );
+            static_analysis
+        } else {
+            StaticAnalysisKind::Strict.into()
+        };
 
         // For generic tests, only add the test macro itself to depends_on_macros
         // (matching Mantle behavior). For singular tests, use all macros from Jinja rendering.

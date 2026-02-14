@@ -12,6 +12,7 @@ pub mod io_utils;
 pub mod node_selector;
 pub mod pretty_string;
 pub mod pretty_table;
+pub mod static_analysis;
 pub mod stats;
 pub mod stdfs;
 pub mod string_utils;

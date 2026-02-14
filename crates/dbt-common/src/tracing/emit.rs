@@ -502,6 +502,23 @@ pub fn emit_warn_log_message(
     );
 }
 
+/// Emit a package-scoped (coming from a dependency) warning log message.
+#[track_caller]
+pub fn emit_warn_log_message_package_scoped(
+    code: ErrorCode,
+    message: impl AsRef<str>,
+    package_name: &str,
+    status_reporter: Option<&Arc<dyn StatusReporter + 'static>>,
+) {
+    if let Some(status_reporter) = status_reporter {
+        status_reporter.collect_warning(&fs_err!(code, "{}", message.as_ref()));
+    };
+
+    let mut log_message = LogMessage::new_from_level_and_code(code as u32, tracing::Level::WARN);
+    log_message.package_name = Some(package_name.to_string());
+    emit_warn_event(log_message, Some(message.as_ref()));
+}
+
 /// Emit a log message event at WARN level based on the given FsError.
 ///
 /// This will also report the warning to the provided status reporter, if any.

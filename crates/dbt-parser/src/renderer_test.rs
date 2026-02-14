@@ -84,7 +84,7 @@ mod tests {
             replay: None,
             sample_config: RunFilter::default(),
             sample_renaming: BTreeMap::new(),
-            static_analysis: dbt_common::io_args::StaticAnalysisKind::On,
+            static_analysis: dbt_common::io_args::StaticAnalysisKind::Strict,
         };
 
         // Create base context with minimal required values

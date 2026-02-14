@@ -5,6 +5,9 @@ use crate::utils::get_node_fqn;
 
 use dbt_common::adapter::AdapterType;
 use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
+use dbt_common::static_analysis::{
+    StaticAnalysisDeprecationOrigin, check_deprecated_static_analysis_kind,
+};
 use dbt_common::tracing::emit::emit_error_log_from_fs_error;
 use dbt_common::{ErrorCode, FsResult, err};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
@@ -285,10 +288,20 @@ pub fn resolve_sources(
             Some(external) => BTreeMap::from([("external".to_owned(), external.clone())]),
         };
 
-        let static_analysis = source_properties_config
-            .clone()
-            .static_analysis
-            .unwrap_or_else(|| StaticAnalysisKind::On.into());
+        let static_analysis =
+            if let Some(static_analysis) = source_properties_config.clone().static_analysis {
+                check_deprecated_static_analysis_kind(
+                    static_analysis.clone().into_inner(),
+                    StaticAnalysisDeprecationOrigin::NodeConfig {
+                        unique_id: unique_id.as_str(),
+                    },
+                    dependency_package_name,
+                    arg.io.status_reporter.as_ref(),
+                );
+                static_analysis
+            } else {
+                StaticAnalysisKind::Strict.into()
+            };
         // Create a config that respects the table-level overrides of
         // the source-level config.
         // See: https://github.com/dbt-labs/dbt-fusion/issues/767

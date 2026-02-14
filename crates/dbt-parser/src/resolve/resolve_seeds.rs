@@ -6,6 +6,9 @@ use crate::utils::{
 };
 use dbt_common::adapter::AdapterType;
 use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
+use dbt_common::static_analysis::{
+    StaticAnalysisDeprecationOrigin, check_deprecated_static_analysis_kind,
+};
 use dbt_common::tracing::emit::emit_error_log_from_fs_error;
 use dbt_common::{ErrorCode, FsResult, fs_err, stdfs};
 use dbt_frontend_common::Dialect;
@@ -162,10 +165,20 @@ pub fn resolve_seeds(
             project_config.clone()
         };
 
-        let static_analysis = properties_config
-            .static_analysis
-            .clone()
-            .unwrap_or_else(|| StaticAnalysisKind::On.into());
+        let static_analysis =
+            if let Some(static_analysis) = properties_config.static_analysis.clone() {
+                check_deprecated_static_analysis_kind(
+                    static_analysis.clone().into_inner(),
+                    StaticAnalysisDeprecationOrigin::NodeConfig {
+                        unique_id: unique_id.as_str(),
+                    },
+                    dependency_package_name,
+                    arg.io.status_reporter.as_ref(),
+                );
+                static_analysis
+            } else {
+                StaticAnalysisKind::Strict.into()
+            };
 
         // XXX: normalize column_types to uppercase if it is snowflake
         if matches!(adapter_type, AdapterType::Snowflake)

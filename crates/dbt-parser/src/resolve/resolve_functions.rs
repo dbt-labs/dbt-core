@@ -4,6 +4,9 @@ use std::{collections::BTreeMap, sync::Arc};
 use dbt_common::adapter::AdapterType;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::io_args::StaticAnalysisKind;
+use dbt_common::static_analysis::{
+    StaticAnalysisDeprecationOrigin, check_deprecated_static_analysis_kind,
+};
 use dbt_common::tracing::emit::emit_error_log_from_fs_error;
 use dbt_common::{FsResult, error::AbstractLocation};
 use dbt_jinja_utils::listener::DefaultJinjaTypeCheckEventListenerFactory;
@@ -68,6 +71,7 @@ pub async fn resolve_functions(
 )> {
     let mut functions: HashMap<String, Arc<DbtFunction>> = HashMap::new();
     let mut rendering_results: HashMap<String, (String, MacroSpans)> = HashMap::new();
+    let dependency_package_name = dependency_package_name_from_ctx(&env, base_ctx);
 
     let local_project_config = if package.dbt_project.name == root_project.name {
         root_project_configs.functions.clone()
@@ -80,7 +84,7 @@ pub async fn resolve_functions(
                 quoting: Some(package_quoting),
                 ..Default::default()
             },
-            dependency_package_name_from_ctx(&env, base_ctx),
+            dependency_package_name,
         )?
     };
 
@@ -142,6 +146,19 @@ pub async fn resolve_functions(
             get_original_file_path(&dbt_asset.base_path, &arg.io.in_dir, &dbt_asset.path);
 
         let unique_id = get_unique_id(function_name, package_name, None, "function");
+        let static_analysis = if let Some(static_analysis) = model_config.static_analysis {
+            check_deprecated_static_analysis_kind(
+                static_analysis,
+                StaticAnalysisDeprecationOrigin::NodeConfig {
+                    unique_id: unique_id.as_str(),
+                },
+                dependency_package_name,
+                arg.io.status_reporter.as_ref(),
+            );
+            static_analysis
+        } else {
+            StaticAnalysisKind::Strict
+        };
 
         let fqn = get_node_fqn(
             package_name,
@@ -201,7 +218,7 @@ pub async fn resolve_functions(
                 alias: "".to_owned(),           // will be updated below
                 relation_name: None,            // will be updated below
                 materialized: dbt_schemas::schemas::common::DbtMaterialization::Function,
-                static_analysis: StaticAnalysisKind::On.into(),
+                static_analysis: static_analysis.into(),
                 static_analysis_off_reason: None,
                 quoting: package_quoting
                     .try_into()
