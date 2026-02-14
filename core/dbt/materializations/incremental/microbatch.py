@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
+from zoneinfo import ZoneInfo, available_timezones
 
 import pytz
 
@@ -32,11 +33,28 @@ class MicrobatchBuilder:
             )
 
         self.is_incremental = is_incremental
+        if (
+            self.model.config.event_timezone.upper() != "UTC"
+            and self.model.config.event_timezone not in available_timezones()
+        ):
+            raise DbtRuntimeError(
+                f"'event_timezone' config for microbatch model '{model.name}' is not valid (get: {self.model.config.event_timezone})."
+            )
         self.event_time_start = (
-            event_time_start.replace(tzinfo=pytz.UTC) if event_time_start else None
+            event_time_start.replace(tzinfo=ZoneInfo(self.model.config.event_timezone))
+            if event_time_start
+            else None
         )
-        self.event_time_end = event_time_end.replace(tzinfo=pytz.UTC) if event_time_end else None
-        self.default_end_time = default_end_time or datetime.now(pytz.UTC)
+        self.event_time_end = (
+            event_time_end.replace(tzinfo=ZoneInfo(self.model.config.event_timezone))
+            if event_time_end
+            else None
+        )
+        self.default_end_time = (
+            default_end_time.astimezone(tz=ZoneInfo(self.model.config.event_timezone))
+            if default_end_time
+            else datetime.now(ZoneInfo(self.model.config.event_timezone))
+        )
 
     def build_end_time(self):
         """Defaults the end_time to the current time in UTC unless a non `None` event_time_end was provided"""
@@ -166,10 +184,14 @@ class MicrobatchBuilder:
     def truncate_timestamp(timestamp: datetime, batch_size: BatchSize) -> datetime:
         """Truncates the passed in timestamp based on the batch_size.
 
-        2024-09-17 16:06:00 + Batchsize.hour -> 2024-09-17 16:00:00
-        2024-09-17 16:06:00 + Batchsize.day -> 2024-09-17 00:00:00
-        2024-09-17 16:06:00 + Batchsize.month -> 2024-09-01 00:00:00
-        2024-09-17 16:06:00 + Batchsize.year -> 2024-01-01 00:00:00
+        2024-09-17 16:06:00 + Batchsize.hour -> 2024-09-17 16:00:00+00:00
+        2024-09-17 16:06:00 + Batchsize.day -> 2024-09-17 00:00:00+00:00
+        2024-09-17 16:06:00 + Batchsize.month -> 2024-09-01 00:00:00+00:00
+        2024-09-17 16:06:00 + Batchsize.year -> 2024-01-01 00:00:00+00:00
+        2024-09-17 16:06:00+09:00 + Batchsize.hour -> 2024-09-17 16:00:00+09:00
+        2024-09-17 16:06:00+09:00 + Batchsize.day -> 2024-09-16 16:00:00+09:00
+        2024-09-17 16:06:00+09:00 + Batchsize.month -> 2024-08-31 00:00:00+09:00
+        2024-09-17 16:06:00+09:00 + Batchsize.year -> 2024-01-01 00:00:00+09:00
         """
         if batch_size == BatchSize.hour:
             truncated = datetime(
@@ -180,18 +202,34 @@ class MicrobatchBuilder:
                 0,
                 0,
                 0,
-                pytz.utc,
+                timestamp.tzinfo or pytz.UTC,
             )
         elif batch_size == BatchSize.day:
             truncated = datetime(
-                timestamp.year, timestamp.month, timestamp.day, 0, 0, 0, 0, pytz.utc
+                timestamp.year,
+                timestamp.month,
+                timestamp.day,
+                0,
+                0,
+                0,
+                0,
+                timestamp.tzinfo or pytz.UTC,
             )
         elif batch_size == BatchSize.month:
-            truncated = datetime(timestamp.year, timestamp.month, 1, 0, 0, 0, 0, pytz.utc)
+            truncated = datetime(
+                timestamp.year,
+                timestamp.month,
+                1,
+                0,
+                0,
+                0,
+                0,
+                timestamp.tzinfo or pytz.UTC,
+            )
         elif batch_size == BatchSize.year:
-            truncated = datetime(timestamp.year, 1, 1, 0, 0, 0, 0, pytz.utc)
+            truncated = datetime(timestamp.year, 1, 1, 0, 0, 0, 0, timestamp.tzinfo or pytz.UTC)
 
-        return truncated
+        return truncated.astimezone(tz=timestamp.tzinfo or pytz.UTC)
 
     @staticmethod
     def batch_id(start_time: datetime, batch_size: BatchSize) -> str:
