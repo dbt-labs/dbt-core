@@ -349,6 +349,7 @@ impl AdbcDriver {
                             ADBC_LIBS_DIRECTORY.as_ref().unwrap().display()
                         );
                         return Self::try_load_driver_from_name(
+                            backend,
                             backend.adbc_library_name().unwrap(), // safe because it's ADBC
                             backend.adbc_driver_entrypoint(),
                             adbc_version,
@@ -363,6 +364,7 @@ impl AdbcDriver {
 
                 if use_local_snowflake {
                     return ManagedAdbcDriver::load_from_name(
+                        backend,
                         backend.adbc_library_name().unwrap(),
                         backend.adbc_driver_entrypoint(),
                         adbc_version,
@@ -375,6 +377,7 @@ impl AdbcDriver {
             }
             // Drivers that are not published to the dbt Labs CDN.
             Backend::Generic { .. } => Self::try_load_driver_from_name(
+                backend,
                 backend.adbc_library_name().unwrap(),
                 backend.adbc_driver_entrypoint(),
                 adbc_version,
@@ -396,12 +399,14 @@ impl AdbcDriver {
     /// directory it can find. This is used for drivers that are not published to the dbt Labs CDN
     /// or might not be part of the standard set of drivers.
     fn try_load_driver_from_name(
+        backend: Backend,
         name: &str,
         entrypoint: Option<&[u8]>,
         adbc_version: AdbcVersion,
     ) -> Result<ManagedAdbcDriver> {
         // Rely on the OS to find the library in the system path or something like LD_LIBRARY_PATH.
-        let res = ManagedAdbcDriver::load_dynamic_from_name(name, entrypoint, adbc_version);
+        let res =
+            ManagedAdbcDriver::load_dynamic_from_name(backend, name, entrypoint, adbc_version);
         if res.is_ok() {
             return res;
         }
@@ -413,7 +418,12 @@ impl AdbcDriver {
                 .join(qualified_filename)
                 .to_string_lossy()
                 .into_owned();
-            ManagedAdbcDriver::load_dynamic_from_filename(full_path, entrypoint, adbc_version)
+            ManagedAdbcDriver::load_dynamic_from_filename(
+                backend,
+                full_path,
+                entrypoint,
+                adbc_version,
+            )
         } else {
             res
         }
@@ -427,18 +437,24 @@ impl AdbcDriver {
         let (backend_name, version, target_os) = install::driver_parameters(backend);
         let full_driver_path = install::format_driver_path(backend_name, version, target_os)
             .map_err(|e| e.to_adbc_error())?;
-        ManagedAdbcDriver::load_dynamic_from_filename(&full_driver_path, entrypoint, adbc_version)
-            .or_else(|_| {
-                install::install_driver_internal(backend_name, version, target_os)
-                    .map_err(|e| Error::with_message_and_status(e.to_string(), Status::IO))?;
+        ManagedAdbcDriver::load_dynamic_from_filename(
+            backend,
+            &full_driver_path,
+            entrypoint,
+            adbc_version,
+        )
+        .or_else(|_| {
+            install::install_driver_internal(backend_name, version, target_os)
+                .map_err(|e| Error::with_message_and_status(e.to_string(), Status::IO))?;
 
-                let driver = ManagedAdbcDriver::load_dynamic_from_filename(
-                    &full_driver_path,
-                    entrypoint,
-                    adbc_version,
-                )?;
-                Ok(driver)
-            })
+            let driver = ManagedAdbcDriver::load_dynamic_from_filename(
+                backend,
+                &full_driver_path,
+                entrypoint,
+                adbc_version,
+            )?;
+            Ok(driver)
+        })
     }
 }
 

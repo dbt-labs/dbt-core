@@ -102,7 +102,7 @@
 
 use std::collections::HashSet;
 use std::ffi::{CString, OsStr};
-use std::ops::DerefMut;
+use std::ops::{Deref, DerefMut};
 use std::os::raw::c_char;
 use std::path::PathBuf;
 use std::pin::Pin;
@@ -127,12 +127,15 @@ use adbc_ffi::signal::SignalStackGuard;
 
 use adbc_driver_manager::search::{DriverLibrary, parse_driver_uri};
 
+use crate::Backend;
+
 const ERR_CANCEL_UNSUPPORTED: &str =
     "Canceling connection or statement is not supported with ADBC 1.0.0";
 const ERR_STATISTICS_UNSUPPORTED: &str = "Statistics are not supported with ADBC 1.0.0";
 
 #[derive(Debug)]
 struct ManagedDriverInner {
+    backend: Backend,
     driver: adbc_ffi::FFI_AdbcDriver,
     version: AdbcVersion, // Driver version
     // The dynamic library must be kept loaded for the entire lifetime of the driver.
@@ -157,13 +160,20 @@ impl ManagedDriver {
         self.inner.version
     }
 
+    /// Returns the [`Backend`](crate::Backend) of this driver.
+    pub fn backend(&self) -> Backend {
+        self.inner.backend
+    }
+
     /// Load a driver from an initialization function.
     pub fn load_static(
+        backend: Backend,
         init: &adbc_ffi::FFI_AdbcDriverInitFunc,
         version: AdbcVersion,
     ) -> Result<Self> {
         let driver = DriverLibrary::from_static_init(init).init_driver(version)?;
         let inner = Arc::pin(ManagedDriverInner {
+            backend,
             driver,
             version,
             _library: None,
@@ -191,6 +201,7 @@ impl ManagedDriver {
     ///    the relevant directories (based on the set load flags) for a manifest file with this name,
     ///    and if one is not found we see if the name refers to a library on the LD_LIBRARY_PATH etc.
     pub fn load_from_name(
+        backend: Backend,
         name: impl AsRef<OsStr>,
         entrypoint: Option<&[u8]>,
         version: AdbcVersion,
@@ -200,7 +211,7 @@ impl ManagedDriver {
         let search_hit = DriverLibrary::search(name, load_flags, additional_search_paths)?;
 
         let entrypoint = search_hit.resolve_entrypoint(entrypoint).to_vec();
-        Self::load_from_library(search_hit.library, entrypoint.as_ref(), version)
+        Self::load_from_library(backend, search_hit.library, entrypoint.as_ref(), version)
     }
 
     /// Load a driver from a dynamic library filename.
@@ -214,16 +225,18 @@ impl ManagedDriver {
     /// - The absolute path to the library;
     /// - A relative (to the current working directory) path to the library.
     pub fn load_dynamic_from_filename(
+        backend: Backend,
         filename: impl AsRef<OsStr>,
         entrypoint: Option<&[u8]>,
         version: AdbcVersion,
     ) -> Result<Self> {
         let entrypoint = DriverLibrary::derive_entrypoint(entrypoint, filename.as_ref());
         let library = DriverLibrary::load_library(filename)?;
-        Self::load_from_library(library, entrypoint.as_ref(), version)
+        Self::load_from_library(backend, library, entrypoint.as_ref(), version)
     }
 
     fn load_from_library(
+        backend: Backend,
         library: libloading::Library,
         entrypoint: &[u8],
         version: AdbcVersion,
@@ -231,6 +244,7 @@ impl ManagedDriver {
         let driver =
             DriverLibrary::try_from_dynamic_library(&library, entrypoint)?.init_driver(version)?;
         let inner = Arc::pin(ManagedDriverInner {
+            backend,
             driver,
             version,
             _library: Some(library),
@@ -247,13 +261,14 @@ impl ManagedDriver {
     /// The `name` should not include any platform-specific prefixes or suffixes.
     /// For example, use `adbc_driver_sqlite` rather than `libadbc_driver_sqlite.so`.
     pub fn load_dynamic_from_name(
+        backend: Backend,
         name: impl AsRef<str>,
         entrypoint: Option<&[u8]>,
         version: AdbcVersion,
     ) -> Result<Self> {
         let entrypoint = DriverLibrary::derive_entrypoint_from_name(entrypoint, name.as_ref());
         let library = DriverLibrary::load_library_from_name(name.as_ref())?;
-        Self::load_from_library(library, entrypoint.as_ref(), version)
+        Self::load_from_library(backend, library, entrypoint.as_ref(), version)
     }
 
     fn inner_ffi_driver(&self) -> &adbc_ffi::FFI_AdbcDriver {
@@ -300,7 +315,7 @@ impl Driver for ManagedDriver {
         // Initialize the database.
         let database = self.database_init(database)?;
         let inner = Arc::new(ManagedDatabaseInner {
-            database: Mutex::new(database),
+            database: parking_lot::RwLock::new(database),
             driver: self.inner.clone(),
         });
         Ok(Self::DatabaseType { inner })
@@ -322,7 +337,7 @@ impl Driver for ManagedDriver {
         // Initialize the database.
         let database = self.database_init(database)?;
         let inner = Arc::new(ManagedDatabaseInner {
-            database: Mutex::new(database),
+            database: parking_lot::RwLock::new(database),
             driver: self.inner.clone(),
         });
         Ok(Self::DatabaseType { inner })
@@ -330,15 +345,26 @@ impl Driver for ManagedDriver {
 }
 
 struct ManagedDatabaseInner {
-    database: Mutex<adbc_ffi::FFI_AdbcDatabase>,
+    database: parking_lot::RwLock<adbc_ffi::FFI_AdbcDatabase>,
     driver: Pin<Arc<ManagedDriverInner>>,
 }
+
+/// SAFETY: an [adbc_ffi::FFI_AdbcDatabase] hold a raw pointer which is assumed by Rust to not be
+/// [Sync] because it can be aliased and potentially mutated by anything else in the program. But
+/// we declare the wrapper [ManagedDatabaseInner] as [Sync] because we ensure that all access to
+/// the inner database is serialized by a [parking_lot::RwLock], and the driver obeys the
+/// thread-safety expectations that we rely on here.
+///
+/// If we don't know anything about the driver, we require a write lock to access the database,
+/// which means that all access to the database is serialized. But for some operations and specific
+/// [Backend]s we can assume that the structure is thread-safe and only require a read lock.
+unsafe impl Sync for ManagedDatabaseInner {}
 
 impl Drop for ManagedDatabaseInner {
     fn drop(&mut self) {
         let _ = SignalStackGuard::new();
         let driver = &self.driver.driver;
-        let mut database = self.database.lock().unwrap();
+        let mut database = self.database.write();
         let method = driver_method!(driver, DatabaseRelease);
         // TODO(alexandreyc): how should we handle `DatabaseRelease` failing?
         // See: https://github.com/apache/arrow-adbc/pull/1742#discussion_r1574388409
@@ -354,6 +380,7 @@ pub struct ManagedDatabase {
 
 impl ManagedDatabase {
     pub fn from_uri(
+        backend: Backend,
         uri: &str,
         entrypoint: Option<&[u8]>,
         version: AdbcVersion,
@@ -361,6 +388,7 @@ impl ManagedDatabase {
         additional_search_paths: Option<Vec<PathBuf>>,
     ) -> Result<Self> {
         Self::from_uri_with_opts(
+            backend,
             uri,
             entrypoint,
             version,
@@ -371,6 +399,7 @@ impl ManagedDatabase {
     }
 
     pub fn from_uri_with_opts(
+        backend: Backend,
         uri: &str,
         entrypoint: Option<&[u8]>,
         version: AdbcVersion,
@@ -381,6 +410,7 @@ impl ManagedDatabase {
         let (driver, final_uri) = parse_driver_uri(uri)?;
 
         let mut drv = ManagedDriver::load_from_name(
+            backend,
             driver,
             entrypoint,
             version,
@@ -400,6 +430,10 @@ impl ManagedDatabase {
 
     fn driver_version(&self) -> AdbcVersion {
         self.inner.driver.version
+    }
+
+    fn backend(&self) -> Backend {
+        self.inner.driver.backend
     }
 
     /// Returns a new connection using the loaded driver.
@@ -422,12 +456,40 @@ impl ManagedDatabase {
         mut connection: adbc_ffi::FFI_AdbcConnection,
     ) -> Result<adbc_ffi::FFI_AdbcConnection> {
         let driver = self.ffi_driver();
-        let mut database = self.inner.database.lock().unwrap();
 
         // ConnectionInit
         let mut error = adbc_ffi::FFI_AdbcError::with_driver(driver);
-        let method = driver_method!(driver, ConnectionInit);
-        let status = unsafe { method(&mut connection, &mut *database, &mut error) };
+        let status = {
+            let method = driver_method!(driver, ConnectionInit);
+            match self.backend() {
+                // We know the drivers we use for these backends have thread-safe connection
+                // initialization, so we can allow multiple connections to be initialized in
+                // parallel.
+                Backend::Snowflake => {
+                    let database = self.inner.database.read();
+                    let database_ptr = database.deref() as *const adbc_ffi::FFI_AdbcDatabase;
+                    // SAFETY: we're assuming that the driver obeys the thread-safety guarantees
+                    // that we rely on, which means that it's safe to call `ConnectionInit`
+                    // concurrently on multiple threads as long as they are using different
+                    // `FFI_AdbcConnection` objects. We also assume that the driver does not mutate
+                    // the `FFI_AdbcDatabase` object during connection initialization*, which means
+                    // that it's safe to share a pointer to it across threads for this call.
+                    //
+                    // * or performs synchronization internally
+                    unsafe {
+                        method(
+                            &mut connection,
+                            database_ptr as *mut adbc_ffi::FFI_AdbcDatabase,
+                            &mut error,
+                        )
+                    }
+                }
+                _ => {
+                    let mut database = self.inner.database.write();
+                    unsafe { method(&mut connection, &mut *database, &mut error) }
+                }
+            }
+        };
         check_status(status, error)?;
 
         Ok(connection)
@@ -439,7 +501,7 @@ impl Optionable for ManagedDatabase {
 
     fn get_option_bytes(&self, key: Self::Option) -> Result<Vec<u8>> {
         let driver = self.ffi_driver();
-        let database = &mut self.inner.database.lock().unwrap();
+        let database = &mut self.inner.database.write();
         let method = driver_method!(driver, DatabaseGetOptionBytes);
         let populate = |key: *const c_char,
                         value: *mut u8,
@@ -452,7 +514,7 @@ impl Optionable for ManagedDatabase {
 
     fn get_option_double(&self, key: Self::Option) -> Result<f64> {
         let driver = self.ffi_driver();
-        let mut database = self.inner.database.lock().unwrap();
+        let mut database = self.inner.database.write();
         let key = CString::new(key.as_ref())?;
         let mut error = adbc_ffi::FFI_AdbcError::with_driver(driver);
         let mut value: f64 = f64::default();
@@ -464,7 +526,7 @@ impl Optionable for ManagedDatabase {
 
     fn get_option_int(&self, key: Self::Option) -> Result<i64> {
         let driver = self.ffi_driver();
-        let mut database = self.inner.database.lock().unwrap();
+        let mut database = self.inner.database.write();
         let key = CString::new(key.as_ref())?;
         let mut error = adbc_ffi::FFI_AdbcError::with_driver(driver);
         let mut value: i64 = 0;
@@ -476,7 +538,7 @@ impl Optionable for ManagedDatabase {
 
     fn get_option_string(&self, key: Self::Option) -> Result<String> {
         let driver = self.ffi_driver();
-        let mut database = self.inner.database.lock().unwrap();
+        let mut database = self.inner.database.write();
         let method = driver_method!(driver, DatabaseGetOption);
         let populate = |key: *const c_char,
                         value: *mut c_char,
@@ -489,7 +551,7 @@ impl Optionable for ManagedDatabase {
 
     fn set_option(&mut self, key: Self::Option, value: OptionValue) -> Result<()> {
         let driver = self.ffi_driver();
-        let mut database = self.inner.database.lock().unwrap();
+        let mut database = self.inner.database.write();
         set_option_database(
             driver,
             database.deref_mut(),
