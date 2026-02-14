@@ -1,0 +1,6 @@
+kind: Features
+body: Include metric filters in lineage graphs
+time: 2026-01-29T17:44:21.092837-05:00
+custom:
+    Author: will.tremml
+    Issue: "12411"
