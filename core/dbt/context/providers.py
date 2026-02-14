@@ -11,6 +11,7 @@ from typing import (
     List,
     Mapping,
     Optional,
+    Set,
     Tuple,
     Type,
     TypeVar,
@@ -1251,6 +1252,17 @@ class ProviderContext(ManifestContext):
         except Exception:
             raise CompilationError(message_if_exception, self.model)
 
+    @staticmethod
+    def _read_csv_header(path: str, delimiter: str) -> Optional[Set[str]]:
+        try:
+            # Use utf-8-sig to handle BOM if present
+            with open(path, "r", encoding="utf-8-sig", newline="") as f:
+                reader = csv.reader(f, delimiter=delimiter)
+                header = next(reader)
+                return set(header)
+        except (IOError, StopIteration, TypeError):
+            return None
+
     @contextmember()
     def load_agate_table(self) -> "agate.Table":
         from dbt_common.clients import agate_helper
@@ -1269,34 +1281,28 @@ class ProviderContext(ManifestContext):
             assert self.model.root_path
             path = os.path.join(self.model.root_path, self.model.original_file_path)
 
-        column_types = self.model.config.column_types
+        column_types = self.model.config.column_types or {}
         delimiter = self.model.config.delimiter
 
         # Validate that column_types keys exist in the file header
         filtered_column_types = column_types
         if column_types:
-            try:
-                # Use utf-8-sig to handle BOM if present
-                with open(path, "r", encoding="utf-8-sig", newline="") as f:
-                    reader = csv.reader(f, delimiter=delimiter)
-                    header = next(reader)
+            header_set = self._read_csv_header(path, delimiter)
+            if header_set is not None:
+                valid_column_types = set(column_types) & header_set
+                invalid_column_names = set(column_types) - header_set
 
-                header_set = set(header)
-                filtered_column_types = column_types.copy()
-                for col_name in list(column_types.keys()):
-                    if col_name not in header_set:
-                        del filtered_column_types[col_name]
-                        msg = (
-                            f"Column type specified for non-existent column '{col_name}' "
-                            f"in seed '{self.model.name}' (file: {path}). "
-                            "This column type override will be ignored."
-                        )
-                        fire_event(JinjaLogWarning(msg=msg))
+                if invalid_column_names:
+                    invalid_column_names_str = ", ".join(sorted(invalid_column_names))
+                    msg = (
+                        f"Column types specified for non-existent columns in seed '{self.model.name}' (file: {path}): "
+                        f"{invalid_column_names_str}. These column type overrides will be ignored."
+                    )
+                    fire_event(JinjaLogWarning(msg=msg))
 
-            except (IOError, StopIteration, TypeError):
-                # If file cannot be read or is empty, or delimiter is invalid for csv.reader,
-                # we proceed with original column_types and let agate_helper handle it (or fail there).
-                pass
+                filtered_column_types = {
+                    k: v for k, v in column_types.items() if k in valid_column_types
+                }
 
         try:
             table = agate_helper.from_csv(
