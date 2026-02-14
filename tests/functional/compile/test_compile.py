@@ -289,3 +289,55 @@ class TestCompile:
             summary = json.load(summary_file)
             assert "_invocation_id" in summary
             assert "linked" in summary
+
+
+upstream_model_sql = """{{ config(test_config=graph.nodes["model.test.downstream"].relation_name|string, test_nested_config={'a': 1, 'b': graph.nodes["model.test.downstream"].relation_name|string}) }}
+
+{{ "test_config access:" }}
+{{ "config.get:" ~ config.get('test_config') }}
+{{ "config.get_rendered:" ~ config.get_rendered('test_config') }}
+
+{{ "test_nested_config access:" }}
+{{ "config.get_nested:" ~ config.get('test_nested_config') }}
+{{ "config.get_rendered_nested:" ~ config.get_rendered('test_nested_config') }}
+
+select 1 as id"
+"""
+
+downstream_model_sql = """
+select * from {{ ref('upstream') }}
+"""
+
+
+class TestCompileRenderedConfig:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "upstream.sql": upstream_model_sql,
+            "downstream.sql": downstream_model_sql,
+        }
+
+    def test_rendered_config(self, project, unique_schema):
+        expected_upstream_compiled_code = f"""
+test_config access:
+config.get:
+config.get_rendered:"dbt"."{unique_schema}"."downstream"
+
+test_nested_config access:
+config.get_nested:{{'a': 1, 'b': ''}}
+config.get_rendered_nested:{{'a': 1, 'b': '"dbt"."{unique_schema}"."downstream"'}}
+
+select 1 as id"
+"""
+
+        results = run_dbt(["compile"]).results
+
+        assert results[0].node.name == "upstream"
+        assert results[0].node.compiled_code.strip() == expected_upstream_compiled_code.strip()
+
+        # Config is still parsed config, not rendered config
+        assert results[0].node.config.get("test_config") == ""
+        assert results[0].node.config.get("test_nested_config") == {"a": 1, "b": ""}
+
+        # node.depends_on not populated because we are not using `ref` macro
+        assert results[0].node.depends_on.nodes == []
