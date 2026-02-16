@@ -127,6 +127,8 @@ use adbc_ffi::signal::SignalStackGuard;
 
 use adbc_driver_manager::search::{DriverLibrary, parse_driver_uri};
 
+use tracy_client::span;
+
 use crate::Backend;
 
 const ERR_CANCEL_UNSUPPORTED: &str =
@@ -345,19 +347,29 @@ impl Driver for ManagedDriver {
 }
 
 struct ManagedDatabaseInner {
+    /// The inner database object.
+    ///
+    /// Unlike [std::sync::RwLock], this lock is fair to writers and won't block them
+    /// indefinitely if there is a steady flow of readers acquiring the lock.
     database: parking_lot::RwLock<adbc_ffi::FFI_AdbcDatabase>,
     driver: Pin<Arc<ManagedDriverInner>>,
 }
 
-/// SAFETY: an [adbc_ffi::FFI_AdbcDatabase] hold a raw pointer which is assumed by Rust to not be
-/// [Sync] because it can be aliased and potentially mutated by anything else in the program. But
+/// SAFETY: an [adbc_ffi::FFI_AdbcDatabase] holds a raw pointer which is assumed by Rust to not be
+/// [Sync] because it can be aliased and potentially mutated by another thread in the program. But
 /// we declare the wrapper [ManagedDatabaseInner] as [Sync] because we ensure that all access to
-/// the inner database is serialized by a [parking_lot::RwLock], and the driver obeys the
-/// thread-safety expectations that we rely on here.
+/// the inner database is APPROPRIATELY serialized by a [parking_lot::RwLock].
 ///
-/// If we don't know anything about the driver, we require a write lock to access the database,
-/// which means that all access to the database is serialized. But for some operations and specific
-/// [Backend]s we can assume that the structure is thread-safe and only require a read lock.
+/// DATABASE_SYNC_SAFETY: Functions using a read lock are trusting that the driver for a given
+/// [Backend] fulfils thread-safety expectations that are stronger than what the ADBC spec
+/// requires. If we don't know anything about the driver, we require a write lock to fully
+/// synchronize access to the database and prevent concurrent calls.
+///
+/// For example, during connection initialization with `ConnectionInit`, we assume that it's safe
+/// to call this function concurrently on multiple threads as long as they are using different
+/// `FFI_AdbcConnection` objects. We also assume that the driver does not mutate the
+/// `FFI_AdbcDatabase` object during connection initialization (or performs synchronization
+/// internally), which means that it's safe to share a pointer to it across threads for this call.
 unsafe impl Sync for ManagedDatabaseInner {}
 
 impl Drop for ManagedDatabaseInner {
@@ -466,23 +478,15 @@ impl ManagedDatabase {
                 // initialization, so we can allow multiple connections to be initialized in
                 // parallel.
                 Backend::Snowflake => {
-                    let database = self.inner.database.read();
-                    let database_ptr = database.deref() as *const adbc_ffi::FFI_AdbcDatabase;
-                    // SAFETY: we're assuming that the driver obeys the thread-safety guarantees
-                    // that we rely on, which means that it's safe to call `ConnectionInit`
-                    // concurrently on multiple threads as long as they are using different
-                    // `FFI_AdbcConnection` objects. We also assume that the driver does not mutate
-                    // the `FFI_AdbcDatabase` object during connection initialization*, which means
-                    // that it's safe to share a pointer to it across threads for this call.
-                    //
-                    // * or performs synchronization internally
-                    unsafe {
-                        method(
-                            &mut connection,
-                            database_ptr as *mut adbc_ffi::FFI_AdbcDatabase,
-                            &mut error,
-                        )
-                    }
+                    let database = {
+                        let _span = span!("RwLock::read");
+                        self.inner.database.read()
+                    };
+                    let _span = span!("ConnectionInit");
+                    let database_ptr = database.deref() as *const adbc_ffi::FFI_AdbcDatabase
+                        as *mut adbc_ffi::FFI_AdbcDatabase;
+                    // SAFETY: see DATABASE_SYNC_SAFETY.
+                    unsafe { method(&mut connection, database_ptr, &mut error) }
                 }
                 _ => {
                     let mut database = self.inner.database.write();

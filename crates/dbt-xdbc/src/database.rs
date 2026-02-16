@@ -13,7 +13,6 @@ use arrow_array::{
     cast::AsArray,
     types::{Int64Type, UInt32Type},
 };
-use parking_lot::RwLockUpgradableReadGuard;
 use serde::Deserialize;
 use siphasher::sip128::{Hasher128, SipHasher24};
 use std::sync::{Arc, LazyLock};
@@ -21,7 +20,7 @@ use std::time::Duration;
 use std::{collections::HashSet, ffi::c_int};
 use std::{
     hash::{Hash, Hasher},
-    sync::atomic::{AtomicI64, Ordering},
+    ops::Deref,
 };
 use tracy_client::span;
 
@@ -254,15 +253,6 @@ struct InnerAdbcDatabase {
     /// indefinitely if there is a steady flow of readers acquiring the lock.
     pub(crate) managed_database: parking_lot::RwLock<ManagedAdbcDatabase>,
     token_refresher: Option<TokenRefresher>,
-    /// Current number of connection attempts.
-    conn_attempts: AtomicI64,
-    /// Last connection attempt that succeeded.
-    ///
-    /// INVARIANTS:
-    ///     conn_attempts >= 0
-    ///     last_conn_success >= -1
-    ///     last_conn_success < conn_attempts
-    last_conn_success: AtomicI64,
 }
 
 impl InnerAdbcDatabase {
@@ -275,8 +265,6 @@ impl InnerAdbcDatabase {
             backend,
             managed_database: parking_lot::RwLock::new(managed_database),
             token_refresher,
-            conn_attempts: AtomicI64::new(0),
-            last_conn_success: AtomicI64::new(-1),
         }
     }
 
@@ -313,7 +301,6 @@ impl InnerAdbcDatabase {
     ///
     /// NOTE: this function must not try to acquire any locks on the database.
     /// See `new_connection_with_opts()` to see how it's used.
-    #[allow(clippy::ptr_arg)]
     fn will_open_connection(
         &self,
         db_opts: &mut Vec<(OptionDatabase, OptionValue)>,
@@ -337,112 +324,55 @@ impl InnerAdbcDatabase {
 
     fn try_new_connection_with_opts_once(
         &self,
-        conn_opts: Vec<(OptionConnection, OptionValue)>,
+        mut conn_opts: Vec<(OptionConnection, OptionValue)>,
         semaphore: Option<Arc<Semaphore>>,
     ) -> Result<Box<dyn Connection>> {
-        let span = span!("try_new_connection_with_opts_once");
+        let _span = span!("try_new_connection_with_opts_once");
         let mut db_opts = Vec::<(OptionDatabase, OptionValue)>::new();
-        let mut conn_opts = conn_opts;
 
-        // Start the connection creation process with a READ lock
-        let lock_guard = self.managed_database.upgradable_read();
-
-        // Upgrade to a write lock during the connection if it's the first
-        // connection attempt or the last connection attempt has failed.
-        let must_upgrade = {
-            let conn_attempt = self.conn_attempts.fetch_add(1, Ordering::Acquire);
-            let last_conn_success = self.last_conn_success.load(Ordering::Acquire);
-            last_conn_success == -1 || last_conn_success + 1 < conn_attempt
+        // Start the connection creation process with a READ lock to prevent any other thread to
+        // set_option() on the database while we're in the process of creating a connection.
+        let managed_database = {
+            let _span = span!("RwLock::read");
+            self.managed_database.read()
         };
-        let lock_guard = if must_upgrade {
-            let wlock = RwLockUpgradableReadGuard::upgrade(lock_guard);
-            (None, Some(wlock))
-        } else {
-            (Some(lock_guard), None)
-        };
+        let () = self.will_open_connection(&mut db_opts, &mut conn_opts)?; // MUST not lock!
 
-        // Run preparations (doesn't rely on exclusive locking)
-        let prepare_res = self.will_open_connection(&mut db_opts, &mut conn_opts);
-
-        let conn = {
-            // The lock guard only lives until the end of this scope.
-            // Should an upgrade to a write lock be performed?
-            let mut lock_guard = match lock_guard {
-                (Some(rlock), _) => {
-                    if db_opts.is_empty() {
-                        // we have a read lock, but no options to set, don't upgrade
-                        (Some(rlock), None)
-                    } else {
-                        // upgrade the read lock to a write lock
-                        let wlock = RwLockUpgradableReadGuard::upgrade(rlock);
-                        (None, Some(wlock))
-                    }
-                }
-                (_, Some(wlock)) => {
-                    // preserve the write lock we got from the beginning
-                    (None, Some(wlock))
-                }
-                _ => unreachable!(),
-            };
-            prepare_res.and_then(|_| {
-                let res = (|| {
-                    if !db_opts.is_empty() {
-                        let managed_database = match &mut lock_guard {
-                            (_, Some(wlock)) => &mut **wlock,
-                            _ => {
-                                unreachable!("lock_guard must be a write lock when setting options")
-                            }
-                        };
-                        for (key, value) in db_opts.into_iter() {
-                            managed_database.set_option(key, value)?;
-                        }
-                    }
-                    #[cfg(feature = "xdbc-fuzzying")]
-                    {
-                        use rand::Rng as _;
-                        let mut rng = rand::rng();
-                        let x: f32 = rng.random();
-                        if x < 0.25 {
-                            let e = Error::with_message_and_status(
-                                "simulated connection error",
-                                Status::Internal,
-                            );
-                            return Err(e);
-                        }
-                    }
-                    let managed_database = match &lock_guard {
-                        (Some(rlock), _) => &**rlock,
-                        (_, Some(wlock)) => &**wlock,
-                        _ => unreachable!(),
-                    };
-                    if conn_opts.is_empty() {
-                        managed_database.new_connection()
-                    } else {
-                        managed_database.new_connection_with_opts(conn_opts)
-                    }
-                })();
-                if res.is_ok() {
-                    // Upgrade to a write lock so we can set `last_conn_success` to
-                    // `conn_attempts-1`
-                    let wlock_guard = match lock_guard {
-                        (Some(rlock), _) => RwLockUpgradableReadGuard::upgrade(rlock),
-                        (_, Some(wlock)) => wlock,
-                        _ => unreachable!(),
-                    };
-                    self.last_conn_success.store(
-                        self.conn_attempts.load(Ordering::Acquire) - 1,
-                        Ordering::Release,
+        let new_conn = |managed_database: &ManagedAdbcDatabase| -> Result<AdbcConnection> {
+            #[cfg(feature = "xdbc-fuzzying")]
+            {
+                use rand::Rng as _;
+                let mut rng = rand::rng();
+                let x: f32 = rng.random();
+                if x < 0.25 {
+                    let e = Error::with_message_and_status(
+                        "simulated connection error",
+                        Status::Internal,
                     );
-                    // drop() called explicitly to make sure we don't
-                    // accidentally move the lock guard in the code
-                    // above and release the lock before intended.
-                    drop(wlock_guard);
+                    return Err(e);
                 }
-                res
-            })
+            }
+            let conn = if conn_opts.is_empty() {
+                managed_database.new_connection()
+            } else {
+                managed_database.new_connection_with_opts(conn_opts)
+            }?;
+            Ok(AdbcConnection(self.backend, conn, semaphore))
+        };
+
+        let conn = if db_opts.is_empty() {
+            new_conn(managed_database.deref())
+        } else {
+            drop(managed_database); // drop the read lock before acquiring a write lock
+            let mut managed_database_write = {
+                let _span = span!("RwLock::write");
+                self.managed_database.write()
+            };
+            for (key, value) in db_opts.into_iter() {
+                managed_database_write.set_option(key, value)?;
+            }
+            new_conn(managed_database_write.deref())
         }?;
-        let conn = AdbcConnection(self.backend, conn, semaphore);
-        drop(span);
         Ok(Box::new(conn))
     }
 }
