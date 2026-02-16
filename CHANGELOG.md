@@ -34,7 +34,7 @@
 
 ### Fixes
 
-- Upper bound sqlmesh to  <0.5.5 ([#12311](https://github.com/dbt-labs/dbt-core/issues/12311))
+- Upper bound sqlparse to <0.5.5 ([#12311](https://github.com/dbt-labs/dbt-core/issues/12311))
 
 ## dbt-core 1.10.16 - December 16, 2025
 
