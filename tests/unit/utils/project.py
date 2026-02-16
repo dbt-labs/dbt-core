@@ -82,6 +82,8 @@ def mock_project():
     mock_project = MagicMock(RuntimeConfig)
     mock_project.cli_vars = {}
     mock_project.args = MagicMock()
+    mock_project.profile_name = "test"
+    mock_project.target_name = "test"
     mock_project.args.profile = "test"
     mock_project.args.target = "test"
     mock_project.project_env_vars = {}
