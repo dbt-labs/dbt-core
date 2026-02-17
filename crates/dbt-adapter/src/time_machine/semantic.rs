@@ -60,7 +60,6 @@ impl SemanticCategory {
             | "get_dataset_location"
             | "get_catalog_integration"
             | "get_relation_config"
-            | "get_config_from_model"
             | "compare_dbr_version"
             | "get_missing_columns"
             | "is_replaceable" => SemanticCategory::MetadataRead,
@@ -107,6 +106,7 @@ impl SemanticCategory {
             | "valid_incremental_strategies"
             | "get_persist_doc_columns"
             | "get_column_tags_from_model"
+            | "get_config_from_model"
             | "generate_unique_temporary_table_suffix"
             | "parse_columns_and_constraints"
             | "clean_sql"
