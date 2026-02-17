@@ -23,7 +23,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 
 /// Maximum number of connections
-pub const MAX_CONNECTIONS: usize = 128;
+pub const MAX_CONNECTIONS: usize = 48;
 
 // XXX: we should unify relation representation as Arrow schemas across the codebase
 
