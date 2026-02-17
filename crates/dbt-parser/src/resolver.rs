@@ -571,7 +571,10 @@ pub async fn resolve_inner(
             base_ctx
         };
 
-        // Extract metrics to be parsed separately because they are not supposed to be rendered with Jinja
+        // Extract metrics to be parsed separately, without full Jinja rendering.
+        // Metric fields like `filter` and `expr` contain MetricFlow DSL
+        // (e.g. `{{ Dimension('...') }}`) that must not be evaluated at parse time.
+        // The `description` field is rendered selectively in resolve_metrics.
         let mut maybe_model_metrics_yml: Option<YmlValue> = None;
         let mut model_yml = minimal_model_props.clone().schema_value;
         if let Some(m) = model_yml.as_mapping_mut() {

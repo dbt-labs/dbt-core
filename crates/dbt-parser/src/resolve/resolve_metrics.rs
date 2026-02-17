@@ -52,6 +52,27 @@ fn get_effective_metric_config(
     }
 }
 
+/// Render Jinja expressions (e.g. `{{ doc("...") }}`) in a metric description.
+///
+/// Metrics are intentionally excluded from full Jinja rendering because fields
+/// like `filter` and `expr` contain MetricFlow DSL (e.g. `{{ Dimension('...') }}`)
+/// that must not be evaluated during parsing.  Description fields, however,
+/// legitimately use `{{ doc() }}` and need selective rendering.
+fn render_jinja_description(
+    description: &Option<String>,
+    env: &JinjaEnv,
+    base_ctx: &BTreeMap<String, MinijinjaValue>,
+) -> Option<String> {
+    description.as_ref().map(|desc| {
+        if desc.contains("{{") {
+            env.render_str(desc, base_ctx, &[])
+                .unwrap_or_else(|_| desc.clone())
+        } else {
+            desc.clone()
+        }
+    })
+}
+
 #[allow(clippy::too_many_arguments)]
 pub async fn resolve_metrics(
     arg: &ResolveArgs,
@@ -213,7 +234,11 @@ pub fn resolve_nested_model_metrics(
                         patch_path: Some(mpe.relative_path.clone()),
                         unique_id: metric_unique_id.clone(),
                         fqn: metric_fqn.clone(),
-                        description: metric_props.description.clone(),
+                        description: render_jinja_description(
+                            &metric_props.description,
+                            env,
+                            base_ctx,
+                        ),
                         checksum: DbtChecksum::default(),
                         raw_code: None,
                         language: None,
@@ -480,7 +505,7 @@ pub fn resolve_top_level_metrics(
                 patch_path: Some(mpe.relative_path.clone()),
                 unique_id: metric_unique_id.clone(),
                 fqn: metric_fqn.clone(),
-                description: metric_props.description.clone(),
+                description: render_jinja_description(&metric_props.description, env, base_ctx),
                 checksum: DbtChecksum::default(),
                 raw_code: None,
                 language: None,
