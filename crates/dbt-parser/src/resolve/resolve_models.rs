@@ -1271,6 +1271,32 @@ fn extract_model_properties(
     Ok((None, None))
 }
 
+/// Warn when config.get() accesses keys that exist in config.meta
+fn check_config_get_on_meta_keys(
+    python_file_info: &PythonFileInfo<ModelConfig>,
+    config: &ModelConfig,
+    path: &Path,
+    arg: &ResolveArgs,
+) -> FsResult<()> {
+    if let Some(meta) = &config.meta {
+        for key in &python_file_info.config_keys_used {
+            if meta.contains_key(key) {
+                let warning = fs_err!(
+                    code => ErrorCode::Generic,
+                    loc => path.to_path_buf(),
+                    "The key '{}' was accessed using dbt.config.get('{}'), \
+                     but was detected as a custom config under 'meta'. \
+                     Please use dbt.config.meta_get('{}') instead of dbt.config.get('{}') \
+                     to access the custom config value.",
+                    key, key, key, key
+                );
+                emit_warn_log_from_fs_error(&warning, arg.io.status_reporter.as_ref());
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Merge Python model config with project config and schema.yml properties
 ///
 /// Python models collect config from dbt.config() calls during AST analysis.
@@ -1346,6 +1372,15 @@ fn merge_python_config(
         merged_config.config_keys_used = Some(python_file_info.config_keys_used.clone());
         merged_config.config_keys_defaults = Some(python_file_info.config_keys_defaults.clone());
     }
+
+    // Transfer meta key tracking
+    if !python_file_info.meta_keys_used.is_empty() {
+        merged_config.meta_keys_used = Some(python_file_info.meta_keys_used.clone());
+        merged_config.meta_keys_defaults = Some(python_file_info.meta_keys_defaults.clone());
+    }
+
+    // Warn if config.get() used on meta keys
+    check_config_get_on_meta_keys(python_file_info, &merged_config, &python_asset.path, arg)?;
 
     // Warn if user explicitly enabled static_analysis for a Python model
     // This check happens after all config sources are merged

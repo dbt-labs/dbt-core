@@ -29,6 +29,14 @@ pub struct PythonFileInfo<T: DefaultTo<T>> {
     /// Stored as minijinja Values which render as Python literals
     pub config_keys_defaults: Vec<minijinja::value::Value>,
 
+    /// Meta keys accessed via dbt.config.meta_get('key')
+    pub meta_keys_used: Vec<String>,
+
+    /// Default values provided to dbt.config.meta_get('key', default)
+    /// Stored in the same order as meta_keys_used for Jinja zip()
+    /// Stored as minijinja Values which render as Python literals
+    pub meta_keys_defaults: Vec<minijinja::value::Value>,
+
     /// File checksum
     pub checksum: DbtChecksum,
 
@@ -45,6 +53,8 @@ impl<T: DefaultTo<T>> Default for PythonFileInfo<T> {
             packages: Vec::new(),
             config_keys_used: Vec::new(),
             config_keys_defaults: Vec::new(),
+            meta_keys_used: Vec::new(),
+            meta_keys_defaults: Vec::new(),
             checksum: DbtChecksum::default(),
             has_valid_model_function: false,
         }

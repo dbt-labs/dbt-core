@@ -1,7 +1,7 @@
 //! Python AST visitor for extracting dbt function calls
 //!
 //! This module implements an AST visitor that walks Python code to extract
-//! calls to dbt.ref(), dbt.source(), dbt.config(), and dbt.config.get()
+//! calls to dbt.ref(), dbt.source(), dbt.config(), dbt.config.get(), and dbt.config.meta_get()
 
 use crate::python_ast::{
     LiteralValue, PythonLiteralEvalError, compute_line_starts, get_full_attr_name, literal_eval,
@@ -348,6 +348,36 @@ impl<'a, T: DefaultTo<T>> DbtPythonVisitor<'a, T> {
         }
     }
 
+    /// Handle a dbt.config.meta_get() call - Signature: meta_get(key: str, default: Any = None)
+    fn handle_meta_get(&mut self, args: Vec<LiteralValue>, range_line: usize) {
+        match args.len() {
+            1 => {
+                if let Some(key) = args[0].as_string() {
+                    self.file_info.meta_keys_used.push(key);
+                    // No explicit default provided, use Python's None
+                    self.file_info
+                        .meta_keys_defaults
+                        .push(minijinja::value::Value::NONE);
+                }
+            }
+            2 => {
+                if let Some(key) = args[0].as_string() {
+                    self.file_info.meta_keys_used.push(key);
+                    // Convert the default value to minijinja::value::Value for Jinja rendering
+                    let default_value = literal_value_to_minijinja(&args[1]);
+                    self.file_info.meta_keys_defaults.push(default_value);
+                }
+            }
+            _ => {
+                self.errors.push(format!(
+                    "dbt.config.meta_get() expects 1-2 arguments, got {} at line {}",
+                    args.len(),
+                    range_line
+                ));
+            }
+        }
+    }
+
     /// Process a function call that might be a dbt function
     fn process_dbt_call(&mut self, expr: &Expr) {
         if let Expr::Call(ast::ExprCall {
@@ -378,6 +408,10 @@ impl<'a, T: DefaultTo<T>> DbtPythonVisitor<'a, T> {
                 },
                 "dbt.config.get" => match self.extract_call_args(args, keywords) {
                     Ok((positional_args, _)) => self.handle_config_get(positional_args, line),
+                    Err(e) => self.errors.push(e.to_string()),
+                },
+                "dbt.config.meta_get" => match self.extract_call_args(args, keywords) {
+                    Ok((positional_args, _)) => self.handle_meta_get(positional_args, line),
                     Err(e) => self.errors.push(e.to_string()),
                 },
                 _ => {}
@@ -1409,6 +1443,89 @@ def model(dbt, session):
                 .unwrap_err()
                 .to_string()
                 .contains("dbt.ref() expects 1-3 arguments")
+        );
+    }
+
+    #[test]
+    fn test_meta_get_without_default() {
+        let source = r#"
+def model(dbt, session):
+    owner = dbt.config.meta_get('owner')
+    return session.table('data')
+"#;
+        let path = PathBuf::from("test.py");
+        let suite = parse_python(source, &path).unwrap();
+        let result = analyze_python_file::<dbt_schemas::schemas::project::ModelConfig>(
+            &path,
+            source,
+            &suite,
+            DbtChecksum::default(),
+            &IoArgs::default(),
+            None,
+            Some(path.clone()),
+        )
+        .unwrap();
+
+        assert_eq!(result.meta_keys_used.len(), 1);
+        assert_eq!(result.meta_keys_used[0], "owner");
+        assert_eq!(result.meta_keys_defaults.len(), 1);
+        assert!(result.meta_keys_defaults[0].is_none());
+    }
+
+    #[test]
+    fn test_meta_get_with_default() {
+        let source = r#"
+def model(dbt, session):
+    owner = dbt.config.meta_get('owner', 'default-team')
+    priority = dbt.config.meta_get('priority', 1)
+    return session.table('data')
+"#;
+        let path = PathBuf::from("test.py");
+        let suite = parse_python(source, &path).unwrap();
+        let result = analyze_python_file::<dbt_schemas::schemas::project::ModelConfig>(
+            &path,
+            source,
+            &suite,
+            DbtChecksum::default(),
+            &IoArgs::default(),
+            None,
+            Some(path.clone()),
+        )
+        .unwrap();
+
+        assert_eq!(result.meta_keys_used.len(), 2);
+        assert_eq!(result.meta_keys_used[0], "owner");
+        assert_eq!(result.meta_keys_used[1], "priority");
+        assert_eq!(result.meta_keys_defaults.len(), 2);
+        assert_eq!(result.meta_keys_defaults[0].as_str(), Some("default-team"));
+        assert_eq!(result.meta_keys_defaults[1].as_i64(), Some(1));
+    }
+
+    #[test]
+    fn test_meta_get_invalid_args() {
+        let source = r#"
+def model(dbt, session):
+    owner = dbt.config.meta_get('owner', 'default', 'extra')
+    return session.table('data')
+"#;
+        let path = PathBuf::from("test.py");
+        let suite = parse_python(source, &path).unwrap();
+        let result = analyze_python_file::<dbt_schemas::schemas::project::ModelConfig>(
+            &path,
+            source,
+            &suite,
+            DbtChecksum::default(),
+            &IoArgs::default(),
+            None,
+            Some(path.clone()),
+        );
+
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("dbt.config.meta_get() expects 1-2 arguments")
         );
     }
 }

@@ -69,7 +69,21 @@ def source(*args, dbt_load_df_function):
         {%- set value = model.config.get(key, default) -%}
         {%- do config_dict.update({key: value}) -%}
     {%- endfor -%}
+    {# Handle dbt.config.meta_get() calls - use separate dict to avoid overwriting native configs #}
+    {%- set meta_dict = {} -%}
+    {%- if model.config.meta_keys_used -%}
+        {% set meta_dbt_used = zip(model.config.meta_keys_used, model.config.meta_keys_defaults) | list %}
+        {%- for key, default in meta_dbt_used -%}
+            {%- if model.config.meta and key in model.config.meta -%}
+                {%- set value = model.config.meta[key] -%}
+            {%- else -%}
+                {%- set value = default -%}
+            {%- endif -%}
+            {%- do meta_dict.update({key: value}) -%}
+        {%- endfor -%}
+    {%- endif -%}
 config_dict = {{ config_dict }}
+meta_dict = {{ meta_dict }}
 {% endmacro %}
 
 {% macro py_script_postfix(model) %}
@@ -89,6 +103,10 @@ class config:
     @staticmethod
     def get(key, default=None):
         return config_dict.get(key, default)
+
+    @staticmethod
+    def meta_get(key, default=None):
+        return meta_dict.get(key, default)
 
 class this:
     """dbt.this() or dbt.this.identifier"""

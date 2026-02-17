@@ -875,6 +875,8 @@ impl From<ManifestModelConfig> for ModelConfig {
             // They're only in ModelConfig and not persisted to the manifest
             config_keys_used: None,
             config_keys_defaults: None,
+            meta_keys_used: None,
+            meta_keys_defaults: None,
         }
     }
 }
