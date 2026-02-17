@@ -1,0 +1,20 @@
+sources:
+  - name: stripe
+    meta:
+      rationale:
+        intent: "Stripe payment data source"
+        owner: "payments@company.com"
+        domain: "Payments"
+    tables:
+      - name: charges
+        meta:
+          rationale:
+            intent: "Individual charge transactions"
+            owner: "payments@company.com"
+      - name: customers
+        meta:
+          rationale:
+            intent: "Stripe customer records"
+            owner: "payments@company.com"
+      - name: disputes
+        description: "No rationale"

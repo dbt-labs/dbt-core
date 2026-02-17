@@ -1,0 +1,37 @@
+name: Rationale Check
+
+on:
+  pull_request:
+    paths:
+      - '**/*.yml'
+      - '**/*.yaml'
+      - '.rationale.yml'
+
+jobs:
+  rationale:
+    name: Check rationale metadata
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: pip install pyyaml
+
+      - name: Run rationale analysis
+        run: python -m dbt_rationale . --format text
+
+      - name: Upload JSON report
+        if: always()
+        run: |
+          python -m dbt_rationale . --format json > rationale-report.json
+
+      - name: Upload report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rationale-report
+          path: rationale-report.json
