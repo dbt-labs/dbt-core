@@ -607,6 +607,8 @@ class RuntimeConfigObject(Config):
 
         if validator is not None:
             self._validate(validator, to_return)
+        
+        return to_return
 
         return to_return
 
