@@ -1269,8 +1269,19 @@ class ProviderContext(ManifestContext):
 
         column_types = self.model.config.column_types
         delimiter = self.model.config.delimiter
+        header = self.model.config.header
+        column_names = None
+        if not self.model.config.header:
+            column_names = list(self.model.columns.keys())
+
         try:
-            table = agate_helper.from_csv(path, text_columns=column_types, delimiter=delimiter)
+            table = agate_helper.from_csv(
+                path,
+                column_names=column_names,
+                text_columns=column_types,
+                delimiter=delimiter,
+                header=header,
+            )
         except ValueError as e:
             raise LoadAgateTableValueError(e, node=self.model)
         # this is used by some adapters

@@ -16,6 +16,7 @@ class SeedConfig(NodeConfig):
     materialized: str = "seed"
     delimiter: str = ","
     quote_columns: Optional[bool] = None
+    header: bool = True
 
     @classmethod
     def validate(cls, data):
