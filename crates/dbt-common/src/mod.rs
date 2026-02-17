@@ -29,6 +29,7 @@ pub mod embedded_install_scripts;
 pub mod io_args;
 pub mod logging;
 pub mod once_cell_vars;
+pub mod path;
 pub mod row_limit;
 pub mod serde_utils;
 pub mod status_reporter;
