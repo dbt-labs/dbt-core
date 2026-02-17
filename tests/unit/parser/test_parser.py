@@ -1261,6 +1261,57 @@ def model(dbt, session):
     return pd.dataframe([1, 2])
 """
 
+python_model_meta_get = """
+def model(dbt, session):
+    dbt.config(
+        materialized='table',
+        meta={'owner': 'data-team', 'priority': 'high'}
+    )
+    owner = dbt.config.meta_get('owner')
+    priority = dbt.config.meta_get('priority')
+    return dbt.ref("some_model")
+"""
+
+python_model_meta_get_with_defaults = """
+def model(dbt, session):
+    dbt.config(
+        materialized='table',
+        meta={'owner': 'data-team'}
+    )
+    owner = dbt.config.meta_get('owner', 'default-owner')
+    priority = dbt.config.meta_get('priority', 'low')
+    env = dbt.config.meta_get('environment', 'dev')
+    return dbt.ref("some_model")
+"""
+
+python_model_mixed_config_and_meta_get = """
+def model(dbt, session):
+    dbt.config(
+        materialized='table',
+        meta={'owner': 'data-team', 'priority': 'high'}
+    )
+    # Regular config access
+    mat = dbt.config.get('materialized')
+    # Meta access
+    owner = dbt.config.meta_get('owner')
+    priority = dbt.config.meta_get('priority', 'low')
+    return dbt.ref("some_model")
+"""
+
+python_model_meta_get_no_args = """
+def model(dbt, session):
+    dbt.config(materialized='table')
+    value = dbt.config.meta_get()
+    return dbt.ref("some_model")
+"""
+
+python_model_meta_get_too_many_args = """
+def model(dbt, session):
+    dbt.config(materialized='table')
+    value = dbt.config.meta_get('key', 'default', 'extra')
+    return dbt.ref("some_model")
+"""
+
 
 class ModelParserTest(BaseParserTest):
     def setUp(self):
@@ -1453,6 +1504,61 @@ class ModelParserTest(BaseParserTest):
         self.parser.parse_file(block)
         node = list(self.parser.manifest.nodes.values())[0]
         self.assertEqual(node.get_materialization(), "incremental")
+
+    def test_python_model_meta_get(self):
+        """Test that dbt.config.meta_get() calls are tracked correctly"""
+        block = self.file_block_for(python_model_meta_get, "nested/py_model.py")
+        self.parser.manifest.files[block.file.file_id] = block.file
+        self.parser.parse_file(block)
+        node = list(self.parser.manifest.nodes.values())[0]
+        config_dict = node.config.to_dict()
+        self.assertEqual(config_dict["meta_keys_used"], ["owner", "priority"])
+        # Both keys should have None as default since no explicit default was provided
+        self.assertIsNone(config_dict["meta_keys_defaults"][0])
+        self.assertIsNone(config_dict["meta_keys_defaults"][1])
+
+    def test_python_model_meta_get_with_defaults(self):
+        """Test that dbt.config.meta_get() default values are tracked correctly"""
+        block = self.file_block_for(python_model_meta_get_with_defaults, "nested/py_model.py")
+        self.parser.manifest.files[block.file.file_id] = block.file
+        self.parser.parse_file(block)
+        node = list(self.parser.manifest.nodes.values())[0]
+        config_dict = node.config.to_dict()
+        self.assertEqual(config_dict["meta_keys_used"], ["owner", "priority", "environment"])
+        default_values = config_dict["meta_keys_defaults"]
+        self.assertEqual(default_values[0], "default-owner")
+        self.assertEqual(default_values[1], "low")
+        self.assertEqual(default_values[2], "dev")
+
+    def test_python_model_mixed_config_and_meta_get(self):
+        """Test that config.get() and config.meta_get() can be used together"""
+        block = self.file_block_for(python_model_mixed_config_and_meta_get, "nested/py_model.py")
+        self.parser.manifest.files[block.file.file_id] = block.file
+        self.parser.parse_file(block)
+        node = list(self.parser.manifest.nodes.values())[0]
+        config_dict = node.config.to_dict()
+        # Should track both config.get and meta_get calls
+        self.assertEqual(config_dict["config_keys_used"], ["materialized"])
+        self.assertEqual(config_dict["meta_keys_used"], ["owner", "priority"])
+        self.assertIsNone(config_dict["config_keys_defaults"][0])
+        self.assertIsNone(config_dict["meta_keys_defaults"][0])
+        self.assertEqual(config_dict["meta_keys_defaults"][1], "low")
+
+    def test_python_model_meta_get_no_args(self):
+        """Test that meta_get() with no arguments raises an error"""
+        block = self.file_block_for(python_model_meta_get_no_args, "nested/py_model.py")
+        self.parser.manifest.files[block.file.file_id] = block.file
+        with self.assertRaises(ParsingError) as exc:
+            self.parser.parse_file(block)
+        self.assertIn("dbt.config.meta_get() requires at least one argument", str(exc.exception))
+
+    def test_python_model_meta_get_too_many_args(self):
+        """Test that meta_get() with more than 2 arguments raises an error"""
+        block = self.file_block_for(python_model_meta_get_too_many_args, "nested/py_model.py")
+        self.parser.manifest.files[block.file.file_id] = block.file
+        with self.assertRaises(ParsingError) as exc:
+            self.parser.parse_file(block)
+        self.assertIn("dbt.config.meta_get() takes at most 2 arguments", str(exc.exception))
 
 
 class StaticModelParserTest(BaseParserTest):
