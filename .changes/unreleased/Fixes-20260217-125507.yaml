@@ -1,0 +1,7 @@
+kind: Fixes
+body: Strip ref() from SQL comments so Jinja never executes them, preventing false
+  dependencies when ref() appears in -- or /* */ comments
+time: 2026-02-17T12:55:07.125871+05:30
+custom:
+  Author: anjutiwari
+  Issue: "12499"
