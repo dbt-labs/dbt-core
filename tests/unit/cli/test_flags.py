@@ -398,6 +398,57 @@ class TestFlags:
             # sanity check: ensure project_only_flag is not part of the click context
             assert project_only_flag not in run_context.params
 
+    def test_project_id_flag_parsing(self):
+        """Test that the --project-id flag is properly parsed and accessible."""
+        context = self.make_dbt_context("run", ["--project-id", "1234", "run"])
+        flags = Flags(context)
+
+        # Check that the flag is accessible
+        assert hasattr(flags, "PROJECT_ID")
+        assert flags.PROJECT_ID == 1234
+
+    def test_project_id_flag_optional(self):
+        """Test that the --project-id flag is optional and defaults to None."""
+        context = self.make_dbt_context("run", ["run"])
+        flags = Flags(context)
+
+        # When not provided, should be None
+        assert hasattr(flags, "PROJECT_ID")
+        assert flags.PROJECT_ID is None
+
+    def test_project_id_flag_with_different_values(self):
+        """Test the --project-id flag with different integer values."""
+        test_values = [1, 42, 999, 12345]
+
+        for value in test_values:
+            context = self.make_dbt_context("run", ["--project-id", str(value), "run"])
+            flags = Flags(context)
+            assert flags.PROJECT_ID == value
+
+    def test_project_id_flag_available_on_all_commands(self):
+        """Test that --project-id flag is available on various commands."""
+        commands = ["run", "build", "compile", "test", "seed", "snapshot", "docs", "parse"]
+
+        for command in commands:
+            context = self.make_dbt_context(command, ["--project-id", "1234", command])
+            flags = Flags(context)
+            assert hasattr(flags, "PROJECT_ID")
+            assert flags.PROJECT_ID == 1234
+
+    def test_project_id_flag_environment_variable(self, monkeypatch):
+        """Test that the --project-id flag can be set via environment variable."""
+        monkeypatch.setenv("DBT_PROJECT_ID", "5678")
+        context = self.make_dbt_context("run", ["run"])
+        flags = Flags(context)
+        assert flags.PROJECT_ID == 5678
+
+    def test_project_id_flag_cli_overrides_env_var(self, monkeypatch):
+        """Test that CLI flag overrides environment variable."""
+        monkeypatch.setenv("DBT_PROJECT_ID", "5678")
+        context = self.make_dbt_context("run", ["--project-id", "9999", "run"])
+        flags = Flags(context)
+        assert flags.PROJECT_ID == 9999  # CLI should override env var
+
     def _create_flags_from_dict(self, cmd, d):
         write_file("", "profiles.yml")
         result = Flags.from_dict(cmd, d)

@@ -308,6 +308,13 @@ def project(func):
             validate=True,
             require_vars=require_vars,
         )
+
+        # Override dbt-cloud.project-id if --project-id flag is provided
+        if hasattr(flags, 'PROJECT_ID') and flags.PROJECT_ID is not None:
+            if project.dbt_cloud is None:
+                project.dbt_cloud = {}
+            project.dbt_cloud['project-id'] = flags.PROJECT_ID
+   
         ctx.obj["project"] = project
 
         # Plugins
