@@ -109,7 +109,34 @@ class UnitTestMacroGenerator(MacroGenerator):
 # is small enough that I've just chosen the more readable option.
 _HAS_RENDER_CHARS_PAT = re.compile(r"({[{%#]|[#}%]})")
 
+# Pattern to match {{ ref('...') }} in SQL - used to neutralize ref() in comments
+_REF_IN_JINJA_PAT = re.compile(r"\{\{\s*ref\s*\(\s*['\"]([^'\"]+)['\"]\s*\)\s*\}\}")
+
 _render_cache: Dict[str, Any] = dict()
+
+
+# copyright (c) 2026 Atlassian Pty Ltd.
+# copyright (c) 2026 Atlassian US, Inc.
+def _neutralize_ref_in_sql_comments(string: str) -> str:
+    """Replace {{ ref('...') }} in SQL comments with {{ '' }} so Jinja doesn't
+    execute them and create false dependencies.
+    """
+    lines = []
+    in_block_comment = False
+
+    for line in string.split("\n"):
+        stripped = line.lstrip()
+        if stripped.startswith("--"):
+            line = _REF_IN_JINJA_PAT.sub("{{ '' }}", line)
+        elif in_block_comment or "/*" in line:
+            line = _REF_IN_JINJA_PAT.sub("{{ '' }}", line)
+            if "*/" in line:
+                in_block_comment = False
+            elif "/*" in line:
+                in_block_comment = True
+        lines.append(line)
+
+    return "\n".join(lines)
 
 
 def get_rendered(
@@ -132,6 +159,14 @@ def get_rendered(
             return string
         elif string in _render_cache:
             return _render_cache[string]
+
+    if (
+        isinstance(string, str)
+        and ("--" in string or "/*" in string)
+        and "ref" in string
+        and "{{" in string
+    ):
+        string = _neutralize_ref_in_sql_comments(string)
 
     template = get_template(
         string,
