@@ -154,7 +154,8 @@ def package_config_from_data(
 
 
 def load_package_lock_config(project_root: str) -> PackageConfig:
-    locked_packages = load_yml_dict(f"{project_root}/{PACKAGE_LOCK_FILE_NAME}")
+    locked_packages = load_yml_dict(f"{project_root}/{PACKAGE_LOCK_FILE_NAME}") or {"packages": []}
+
     return PackageConfig.from_dict(locked_packages)
 
 
