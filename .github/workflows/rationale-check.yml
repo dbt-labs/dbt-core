@@ -6,6 +6,7 @@ on:
       - '**/*.yml'
       - '**/*.yaml'
       - '.rationale.yml'
+      - 'dbt_rationale/**'
 
 permissions:
   contents: read
@@ -22,7 +23,10 @@ jobs:
           python-version: '3.9'
 
       - name: Install dependencies
-        run: pip install pyyaml
+        run: pip install pyyaml pytest
+
+      - name: Run rationale tests
+        run: python -m pytest dbt_rationale/tests/ -v
 
       - name: Run rationale analysis
         run: python -m dbt_rationale . --format text
