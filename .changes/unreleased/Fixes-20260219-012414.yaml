@@ -1,0 +1,6 @@
+kind: Fixes
+body: Ensure that all locked packages are installed in packages directory
+time: 2026-02-19T01:24:14.439093+05:30
+custom:
+    Author: ash2shukla
+    Issue: CLI-735
