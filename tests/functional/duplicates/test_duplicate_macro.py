@@ -41,7 +41,7 @@ class TestDuplicateMacroEnabledSameFile:
         }
 
     def test_duplicate_macros(self, project):
-        message = 'dbt found two macros named "some_macro" in the project'
+        message = 'dbt found multiple macros named "some_macro" in the project'
         with pytest.raises(CompilationError) as exc:
             run_dbt(["parse"])
         exc_str = " ".join(str(exc.value).split())  # flatten all whitespace
@@ -62,7 +62,7 @@ class TestDuplicateMacroEnabledDifferentFiles:
         }
 
     def test_duplicate_macros(self, project):
-        message = 'dbt found two macros named "some_macro" in the project'
+        message = 'dbt found multiple macros named "some_macro" in the project'
         with pytest.raises(CompilationError) as exc:
             run_dbt(["compile"])
         exc_str = " ".join(str(exc.value).split())  # flatten all whitespace
