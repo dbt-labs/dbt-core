@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::ops::Deref;
 
 use dbt_common::node_selector::{IndirectSelection, SelectExpression};
 use dbt_yaml::{JsonSchema, UntaggedEnumDeserialize};
@@ -7,6 +8,120 @@ use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 
 use super::serde::FloatOrString;
+
+// =============================================================================
+// SelectorValue — accepts any YAML scalar (string, boolean, number) and
+// normalises it to a `String`.
+//
+// This matches dbt-core's Python behaviour where the `value` field in a
+// selector definition is typed as `Any`, so users can write:
+//
+//     value: true          # boolean
+//     value: 42            # number
+//     value: selector_name # string
+//
+// without quoting non-string values.
+// =============================================================================
+
+/// A selector value that accepts any YAML scalar (string, boolean, number)
+/// and normalizes it to a string representation for downstream matching.
+#[derive(Debug, Clone, PartialEq, Eq, JsonSchema)]
+pub struct SelectorValue(pub String);
+
+impl SelectorValue {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl Deref for SelectorValue {
+    type Target = str;
+    fn deref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl AsRef<str> for SelectorValue {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for SelectorValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl From<&str> for SelectorValue {
+    fn from(s: &str) -> Self {
+        SelectorValue(s.to_string())
+    }
+}
+
+impl From<String> for SelectorValue {
+    fn from(s: String) -> Self {
+        SelectorValue(s)
+    }
+}
+
+impl From<SelectorValue> for String {
+    fn from(v: SelectorValue) -> Self {
+        v.0
+    }
+}
+
+impl Serialize for SelectorValue {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.0.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for SelectorValue {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct SelectorValueVisitor;
+
+        impl<'de> Visitor<'de> for SelectorValueVisitor {
+            type Value = SelectorValue;
+
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                f.write_str("a string, boolean, or number")
+            }
+
+            fn visit_str<E: de::Error>(self, v: &str) -> Result<SelectorValue, E> {
+                Ok(SelectorValue(v.to_string()))
+            }
+
+            fn visit_string<E: de::Error>(self, v: String) -> Result<SelectorValue, E> {
+                Ok(SelectorValue(v))
+            }
+
+            fn visit_bool<E: de::Error>(self, v: bool) -> Result<SelectorValue, E> {
+                Ok(SelectorValue(v.to_string()))
+            }
+
+            fn visit_i64<E: de::Error>(self, v: i64) -> Result<SelectorValue, E> {
+                Ok(SelectorValue(v.to_string()))
+            }
+
+            fn visit_u64<E: de::Error>(self, v: u64) -> Result<SelectorValue, E> {
+                Ok(SelectorValue(v.to_string()))
+            }
+
+            fn visit_f64<E: de::Error>(self, v: f64) -> Result<SelectorValue, E> {
+                Ok(SelectorValue(v.to_string()))
+            }
+        }
+
+        deserializer.deserialize_any(SelectorValueVisitor)
+    }
+}
 
 //
 // ---- top-level file -------------------------------------------------------------------------
@@ -166,7 +281,7 @@ pub enum AtomExpr {
     Method(MethodAtomExpr),
     Exclude(ExcludeAtomExpr),
     /// Direct method name as key with value
-    MethodKey(BTreeMap<String, String>),
+    MethodKey(BTreeMap<String, SelectorValue>),
 }
 
 /// A *resolved* selector ⇒ the "include" (`select`) expression and the
@@ -189,7 +304,7 @@ pub struct SelectorEntry {
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 pub struct MethodAtomExpr {
     pub method: String,
-    pub value: String,
+    pub value: SelectorValue,
 
     // graph-walk flags (all optional / default = false)
     #[serde(default)]

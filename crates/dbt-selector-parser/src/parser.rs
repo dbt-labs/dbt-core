@@ -247,7 +247,7 @@ impl<'a> SelectorParser<'a> {
                 let criteria = SelectionCriteria::new(
                     name,
                     args,
-                    value,
+                    value.into(),
                     childrens_parents,
                     pd,
                     cd,
@@ -268,7 +268,7 @@ impl<'a> SelectorParser<'a> {
                 Ok(SelectExpression::Atom(SelectionCriteria::new(
                     name,
                     args,
-                    v,
+                    v.into(),
                     false,
                     None,
                     None,
@@ -293,7 +293,7 @@ impl<'a> SelectorParser<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use dbt_schemas::schemas::selectors::ExcludeAtomExpr;
+    use dbt_schemas::schemas::selectors::{ExcludeAtomExpr, SelectorValue};
     use dbt_test_primitives::assert_contains;
 
     // ============================================================================
@@ -332,7 +332,7 @@ mod tests {
 
         let expr = SelectorExpr::Atom(AtomExpr::Method(MethodAtomExpr {
             method: "tag".to_string(),
-            value: "nightly".to_string(),
+            value: SelectorValue::from("nightly"),
             childrens_parents: false,
             parents: false,
             children: false,
@@ -362,7 +362,7 @@ mod tests {
         let parser = SelectorParser::new(defs, &io_args);
 
         let mut method_value = BTreeMap::new();
-        method_value.insert("tag".to_string(), "nightly".to_string());
+        method_value.insert("tag".to_string(), SelectorValue::from("nightly"));
 
         let result = parser.parse_atom(&AtomExpr::MethodKey(method_value))?;
 
@@ -388,8 +388,8 @@ mod tests {
         let parser = SelectorParser::new(defs, &io_args);
 
         let mut method_value = BTreeMap::new();
-        method_value.insert("tag".to_string(), "nightly".to_string());
-        method_value.insert("path".to_string(), "models/".to_string());
+        method_value.insert("tag".to_string(), SelectorValue::from("nightly"));
+        method_value.insert("path".to_string(), SelectorValue::from("models/"));
 
         let result = parser.parse_atom(&AtomExpr::MethodKey(method_value));
         assert!(result.is_err());
@@ -467,7 +467,7 @@ mod tests {
                         SelectorDefinitionValue::Full(SelectorExpr::Atom(AtomExpr::Method(
                             MethodAtomExpr {
                                 method: "tag".to_string(),
-                                value: "baz".to_string(),
+                                value: SelectorValue::from("baz"),
                                 childrens_parents: false,
                                 parents: false,
                                 children: false,
@@ -535,7 +535,7 @@ mod tests {
         // Test single exclude - should be nested within SelectionCriteria
         let single_result = parser.parse_atom(&AtomExpr::Method(MethodAtomExpr {
             method: "tag".to_string(),
-            value: "nightly".to_string(),
+            value: SelectorValue::from("nightly"),
             childrens_parents: false,
             parents: false,
             children: false,
@@ -569,7 +569,7 @@ mod tests {
         // Test multiple excludes - should be nested within SelectionCriteria as Or
         let multiple_result = parser.parse_atom(&AtomExpr::Method(MethodAtomExpr {
             method: "tag".to_string(),
-            value: "nightly".to_string(),
+            value: SelectorValue::from("nightly"),
             childrens_parents: false,
             parents: false,
             children: false,
@@ -997,7 +997,7 @@ mod tests {
 
         let result = parser.parse_atom(&AtomExpr::Method(MethodAtomExpr {
             method: "tag".to_string(),
-            value: "nightly".to_string(),
+            value: SelectorValue::from("nightly"),
             childrens_parents: true,
             parents: true,
             children: true,
@@ -1095,7 +1095,7 @@ mod tests {
         // Test basic inheritance with additional exclude
         let result = parser.parse_atom(&AtomExpr::Method(MethodAtomExpr {
             method: "selector".to_string(),
-            value: "foo_and_bar".to_string(),
+            value: SelectorValue::from("foo_and_bar"),
             childrens_parents: false,
             parents: false,
             children: false,
@@ -1140,7 +1140,7 @@ mod tests {
                 definition: SelectorDefinitionValue::Full(SelectorExpr::Atom(AtomExpr::Method(
                     MethodAtomExpr {
                         method: "tag".to_string(),
-                        value: "production".to_string(),
+                        value: SelectorValue::from("production"),
                         childrens_parents: false,
                         parents: false,
                         children: false,
@@ -1161,7 +1161,7 @@ mod tests {
         // Reference the base selector and add more excludes
         let result = parser.parse_atom(&AtomExpr::Method(MethodAtomExpr {
             method: "selector".to_string(),
-            value: "base_with_exclude".to_string(),
+            value: SelectorValue::from("base_with_exclude"),
             childrens_parents: false,
             parents: false,
             children: false,
@@ -1246,7 +1246,7 @@ mod tests {
         // Test unknown selector in inheritance
         let inheritance_result = parser.parse_atom(&AtomExpr::Method(MethodAtomExpr {
             method: "selector".to_string(),
-            value: "unknown_selector".to_string(),
+            value: SelectorValue::from("unknown_selector"),
             childrens_parents: false,
             parents: false,
             children: false,
