@@ -39,6 +39,8 @@ class TestUninstalledPackageWithNestedDependency:
         with pytest.raises(UninstalledPackagesFoundError) as exc_info:
             run_dbt(["parse"])
 
+        assert exc_info.value.count_packages_specified == 3
+        assert exc_info.value.count_packages_installed == 2
         assert "nested_dependency" in exc_info.value.uninstalled_packages
 
 

@@ -1089,13 +1089,13 @@ class UninstalledPackagesFoundError(CompilationError):
     def get_message(self) -> str:
         uninstalled_packages_str = ", ".join(self.uninstalled_packages)
         msg = (
-            f"dbt found {self.count_packages_specified} package(s) "
-            f"specified in {self.packages_specified_path}, but "
-            f"{self.count_packages_installed} package(s) installed "
+            f"dbt expects {self.count_packages_specified} package(s) "
+            f"based on packages specified in {self.packages_specified_path}, but "
+            f"found only {self.count_packages_installed} package(s) installed "
             f"in {self.packages_install_path}. "
         )
         if self.uninstalled_packages:
-            msg += f" Following packages were not found: {uninstalled_packages_str}."
+            msg += f"Following packages were not found: {uninstalled_packages_str}. "
 
         msg += 'Run "dbt deps" to install package dependencies.'
         return msg
