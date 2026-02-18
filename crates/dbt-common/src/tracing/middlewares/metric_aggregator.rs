@@ -121,6 +121,7 @@ impl TelemetryMiddleware for TelemetryMetricAggregator {
                     MetricKey::NodeCounts(node_type) if *count > 0 => {
                         Some((node_type.as_static_ref().to_string(), *count))
                     }
+                    MetricKey::HookCounts if *count > 0 => Some(("hook".to_string(), *count)),
                     _ => None,
                 })
                 .collect();
