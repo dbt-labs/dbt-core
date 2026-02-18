@@ -7,6 +7,9 @@ on:
       - '**/*.yaml'
       - '.rationale.yml'
 
+permissions:
+  contents: read
+
 jobs:
   rationale:
     name: Check rationale metadata
