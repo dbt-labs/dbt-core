@@ -4,6 +4,7 @@ import pytest
 
 from dbt_rationale.validator import (
     Severity,
+    ValidationIssue,
     ValidationResult,
     validate_change_rationale,
     validate_exception,
@@ -11,6 +12,45 @@ from dbt_rationale.validator import (
     validate_rationale,
     validate_reference,
 )
+
+
+class TestValidationIssue:
+    def test_str_with_resource(self):
+        issue = ValidationIssue(
+            severity=Severity.ERROR,
+            field="intent",
+            message="required field missing",
+            resource_type="models",
+            resource_name="fct_revenue",
+        )
+        s = str(issue)
+        assert "[error]" in s
+        assert "models/fct_revenue" in s
+        assert "intent" in s
+
+    def test_str_without_resource(self):
+        issue = ValidationIssue(
+            severity=Severity.WARNING,
+            field="domain",
+            message="some warning",
+        )
+        s = str(issue)
+        assert "[warning]" in s
+        assert "domain" in s
+
+
+class TestValidationResult:
+    def test_merge(self):
+        r1 = ValidationResult(issues=[
+            ValidationIssue(Severity.ERROR, "f1", "msg1"),
+        ])
+        r2 = ValidationResult(issues=[
+            ValidationIssue(Severity.WARNING, "f2", "msg2"),
+        ])
+        r1.merge(r2)
+        assert len(r1.issues) == 2
+        assert r1.error_count == 1
+        assert r1.warning_count == 1
 
 
 class TestValidateReference:
@@ -38,6 +78,16 @@ class TestValidateReference:
         issues = validate_reference("not a dict")
         assert len(issues) == 1
         assert issues[0].severity == Severity.ERROR
+
+    def test_non_string_type_value(self):
+        issues = validate_reference({"type": 123, "id": "FIN-1"})
+        errors = [i for i in issues if i.severity == Severity.ERROR]
+        assert any("expected string" in i.message for i in errors)
+
+    def test_unknown_field_warns(self):
+        issues = validate_reference({"type": "jira", "id": "FIN-1", "extra": "field"})
+        warnings = [i for i in issues if i.severity == Severity.WARNING]
+        assert any("unknown field" in i.message for i in warnings)
 
 
 class TestValidateException:
@@ -75,6 +125,50 @@ class TestValidateException:
         })
         errors = [i for i in issues if i.severity == Severity.ERROR]
         assert len(errors) == 0
+
+    def test_not_a_dict(self):
+        issues = validate_exception("not a dict")
+        assert len(issues) == 1
+        assert issues[0].severity == Severity.ERROR
+
+    def test_non_string_required_field(self):
+        issues = validate_exception({
+            "rule": 123,
+            "justification": "reason",
+            "approved_by": "someone",
+        })
+        errors = [i for i in issues if i.severity == Severity.ERROR]
+        assert any("expected string" in i.message for i in errors)
+
+    def test_nested_reference(self):
+        issues = validate_exception({
+            "rule": "R1",
+            "justification": "reason",
+            "approved_by": "someone",
+            "reference": {"type": "jira", "id": "FIN-1"},
+        })
+        errors = [i for i in issues if i.severity == Severity.ERROR]
+        assert len(errors) == 0
+
+    def test_nested_invalid_reference(self):
+        issues = validate_exception({
+            "rule": "R1",
+            "justification": "reason",
+            "approved_by": "someone",
+            "reference": "not a dict",
+        })
+        errors = [i for i in issues if i.severity == Severity.ERROR]
+        assert len(errors) > 0
+
+    def test_unknown_field_warns(self):
+        issues = validate_exception({
+            "rule": "R1",
+            "justification": "reason",
+            "approved_by": "someone",
+            "extra_field": "value",
+        })
+        warnings = [i for i in issues if i.severity == Severity.WARNING]
+        assert any("unknown field" in i.message for i in warnings)
 
 
 class TestValidateObjectRationale:
@@ -156,6 +250,56 @@ class TestValidateObjectRationale:
         })
         assert not result.is_valid
 
+    def test_intent_non_string(self):
+        result = validate_object_rationale({
+            "intent": 123,
+            "owner": "owner",
+        })
+        assert not result.is_valid
+        assert any("intent" in i.field and "expected string" in i.message for i in result.issues)
+
+    def test_references_not_a_list(self):
+        result = validate_object_rationale({
+            "intent": "Intent",
+            "owner": "owner",
+            "references": "not a list",
+        })
+        assert not result.is_valid
+        assert any("references" in i.field for i in result.issues)
+
+    def test_references_with_invalid_entry(self):
+        result = validate_object_rationale({
+            "intent": "Intent",
+            "owner": "owner",
+            "references": [{"type": "jira"}, "not a dict"],
+        })
+        # Second entry is invalid
+        assert any("references[1]" in i.field for i in result.issues)
+
+    def test_policy_bindings_not_a_list(self):
+        result = validate_object_rationale({
+            "intent": "Intent",
+            "owner": "owner",
+            "policy_bindings": "not a list",
+        })
+        assert not result.is_valid
+
+    def test_exceptions_not_a_list(self):
+        result = validate_object_rationale({
+            "intent": "Intent",
+            "owner": "owner",
+            "exceptions": "not a list",
+        })
+        assert not result.is_valid
+
+    def test_exceptions_with_invalid_entry(self):
+        result = validate_object_rationale({
+            "intent": "Intent",
+            "owner": "owner",
+            "exceptions": [{"rule": "R1", "justification": "j", "approved_by": "a"}, "not a dict"],
+        })
+        assert any("exceptions[1]" in i.field for i in result.issues)
+
 
 class TestValidateChangeRationale:
     def test_valid_full(self):
@@ -218,6 +362,70 @@ class TestValidateChangeRationale:
             "risk_level": "Low",
         })
         assert result.is_valid
+
+    def test_not_a_dict(self):
+        result = validate_change_rationale("not a dict")
+        assert not result.is_valid
+        assert any("change_rationale" in i.field for i in result.issues)
+
+    def test_reason_category_not_a_list(self):
+        result = validate_change_rationale({
+            "change_type": "Creation",
+            "reason_category": "Regulatory",
+            "summary": "Created something",
+        })
+        assert not result.is_valid
+        assert any("reason_category" in i.field for i in result.issues)
+
+    def test_summary_non_string(self):
+        result = validate_change_rationale({
+            "change_type": "Creation",
+            "reason_category": ["Regulatory"],
+            "summary": 123,
+        })
+        assert not result.is_valid
+        assert any("summary" in i.field for i in result.issues)
+
+    def test_approved_by_not_a_list(self):
+        result = validate_change_rationale({
+            "change_type": "Creation",
+            "reason_category": ["Bug Fix"],
+            "summary": "Fix",
+            "approved_by": "single@email.com",
+        })
+        assert not result.is_valid
+        assert any("approved_by" in i.field for i in result.issues)
+
+    def test_approved_by_non_string_items(self):
+        result = validate_change_rationale({
+            "change_type": "Creation",
+            "reason_category": ["Bug Fix"],
+            "summary": "Fix",
+            "approved_by": [123],
+        })
+        assert not result.is_valid
+        assert any("approved_by" in i.field and "strings" in i.message for i in result.issues)
+
+    def test_invalid_risk_level(self):
+        result = validate_change_rationale({
+            "change_type": "Creation",
+            "reason_category": ["Bug Fix"],
+            "summary": "Fix",
+            "risk_level": "Critical",
+        })
+        assert not result.is_valid
+        assert any("risk_level" in i.field for i in result.issues)
+
+    def test_unknown_field_warns(self):
+        result = validate_change_rationale({
+            "change_type": "Creation",
+            "reason_category": ["Bug Fix"],
+            "summary": "Fix",
+            "extra_field": "value",
+        })
+        # Unknown fields are warnings, not errors
+        assert result.is_valid
+        assert result.warning_count > 0
 
 
 class TestValidateRationale:

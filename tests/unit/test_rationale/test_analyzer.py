@@ -9,9 +9,11 @@ from dbt_rationale.analyzer import (
     ExpiringException,
     ObjectScore,
     RationaleReport,
+    _find_expiring_exceptions,
+    _score_rationale,
     analyze,
 )
-from dbt_rationale.parser import parse_project
+from dbt_rationale.parser import RationaleEntry, parse_project
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 
@@ -191,6 +193,96 @@ models:
         result = parse_project(str(tmp_path))
         report = analyze(result, today=date(2026, 2, 17))
         assert len(report.expiring_exceptions) == 0
+
+
+class TestScoreRationale:
+    def test_empty_list_fields_score_zero(self):
+        score, breakdown = _score_rationale({
+            "intent": "Intent",
+            "owner": "owner",
+            "references": [],
+            "policy_bindings": [],
+        })
+        assert breakdown["references"] == 0
+        assert breakdown["policy_bindings"] == 0
+        assert score == 60  # intent + owner only
+
+    def test_whitespace_only_string_scores_zero(self):
+        score, breakdown = _score_rationale({
+            "intent": "   ",
+            "owner": "owner",
+        })
+        assert breakdown["intent"] == 0
+        assert score == 20  # only owner
+
+    def test_non_string_non_list_field_scores(self):
+        # If someone puts an unexpected type, it still gets the weight
+        score, breakdown = _score_rationale({
+            "intent": "Intent",
+            "owner": "owner",
+            "domain": 123,  # not a string, but not None
+        })
+        assert breakdown["domain"] == 10
+
+
+class TestFindExpiringExceptions:
+    def test_non_list_exceptions(self):
+        entry = RationaleEntry(
+            resource_type="models",
+            resource_name="m1",
+            file_path="test.yml",
+            rationale={"exceptions": "not a list"},
+        )
+        result = _find_expiring_exceptions(entry, today=date(2026, 2, 17))
+        assert len(result) == 0
+
+    def test_non_dict_exception_entry(self):
+        entry = RationaleEntry(
+            resource_type="models",
+            resource_name="m1",
+            file_path="test.yml",
+            rationale={"exceptions": ["not a dict", 123]},
+        )
+        result = _find_expiring_exceptions(entry, today=date(2026, 2, 17))
+        assert len(result) == 0
+
+    def test_exception_without_expires(self):
+        entry = RationaleEntry(
+            resource_type="models",
+            resource_name="m1",
+            file_path="test.yml",
+            rationale={"exceptions": [
+                {"rule": "R1", "justification": "j", "approved_by": "a"},
+            ]},
+        )
+        result = _find_expiring_exceptions(entry, today=date(2026, 2, 17))
+        assert len(result) == 0
+
+    def test_exception_with_invalid_date_format(self):
+        entry = RationaleEntry(
+            resource_type="models",
+            resource_name="m1",
+            file_path="test.yml",
+            rationale={"exceptions": [
+                {"rule": "R1", "justification": "j", "approved_by": "a", "expires": "not-a-date"},
+            ]},
+        )
+        result = _find_expiring_exceptions(entry, today=date(2026, 2, 17))
+        assert len(result) == 0
+
+    def test_default_today(self):
+        entry = RationaleEntry(
+            resource_type="models",
+            resource_name="m1",
+            file_path="test.yml",
+            rationale={"exceptions": [
+                {"rule": "R1", "justification": "j", "approved_by": "a", "expires": "2020-01-01"},
+            ]},
+        )
+        # Uses default today (should be in the past -> expired)
+        result = _find_expiring_exceptions(entry)
+        assert len(result) == 1
+        assert result[0].is_expired
 
 
 class TestAggregateScoring:

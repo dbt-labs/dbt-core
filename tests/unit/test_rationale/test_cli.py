@@ -5,7 +5,8 @@ import os
 
 import pytest
 
-from dbt_rationale.cli import main
+from dbt_rationale.cli import _emit_github_annotations, _render_text, main
+from dbt_rationale.config import Config, EnforcementLevel
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 
@@ -99,6 +100,118 @@ models:
         exit_code = main([str(tmp_path)])
         assert exit_code == 0
 
+    def test_exception_warn_days_flag(self, tmp_path):
+        models_dir = tmp_path / "models"
+        models_dir.mkdir()
+        (models_dir / "schema.yml").write_text("""
+models:
+  - name: m1
+    meta:
+      rationale:
+        intent: "Intent"
+        owner: "owner"
+""")
+        exit_code = main([str(tmp_path), "--exception-warn-days", "7"])
+        assert exit_code == 0
+
+    def test_text_output_enforcement_off(self, capsys, tmp_path):
+        models_dir = tmp_path / "models"
+        models_dir.mkdir()
+        (models_dir / "schema.yml").write_text("""
+models:
+  - name: m1
+    meta:
+      rationale:
+        intent: "Intent"
+        owner: "owner"
+""")
+        exit_code = main([str(tmp_path), "--enforce", "off"])
+        captured = capsys.readouterr()
+        assert "OFF" in captured.out
+        assert exit_code == 0
+
+    def test_text_output_enforcement_passed(self, capsys, tmp_path):
+        models_dir = tmp_path / "models"
+        models_dir.mkdir()
+        (models_dir / "schema.yml").write_text("""
+models:
+  - name: m1
+    meta:
+      rationale:
+        intent: "Intent"
+        owner: "owner"
+""")
+        exit_code = main([str(tmp_path), "--enforce", "hard"])
+        captured = capsys.readouterr()
+        assert "PASSED" in captured.out
+        assert exit_code == 0
+
+    def test_text_output_with_parse_errors(self, capsys, tmp_path):
+        models_dir = tmp_path / "models"
+        models_dir.mkdir()
+        (models_dir / "bad.yml").write_text("invalid: yaml: [broken")
+        exit_code = main([str(tmp_path)])
+        captured = capsys.readouterr()
+        assert "Parse Errors" in captured.out
+
+    def test_text_output_enforcement_failed_reasons(self, capsys, tmp_path):
+        models_dir = tmp_path / "models"
+        models_dir.mkdir()
+        (models_dir / "schema.yml").write_text("""
+models:
+  - name: bad
+    meta:
+      rationale:
+        domain: "Missing required"
+""")
+        exit_code = main([str(tmp_path), "--enforce", "hard", "--min-score", "80", "--min-coverage", "100"])
+        captured = capsys.readouterr()
+        assert "FAILED" in captured.out
+        assert "validation error" in captured.out
+        assert exit_code == 1
+
+    def test_github_annotations(self, capsys, tmp_path, monkeypatch):
+        monkeypatch.setenv("GITHUB_ACTIONS", "true")
+        models_dir = tmp_path / "models"
+        models_dir.mkdir()
+        (models_dir / "schema.yml").write_text("""
+models:
+  - name: bad
+    meta:
+      rationale:
+        domain: "Missing required"
+        exceptions:
+          - rule: "POLICY"
+            justification: "reason"
+            approved_by: "someone"
+            expires: "2025-01-01"
+""")
+        exit_code = main([str(tmp_path)])
+        captured = capsys.readouterr()
+        assert "::error" in captured.out
+
+    def test_github_annotations_with_expiring(self, capsys, tmp_path, monkeypatch):
+        monkeypatch.setenv("GITHUB_ACTIONS", "true")
+        models_dir = tmp_path / "models"
+        models_dir.mkdir()
+        (models_dir / "schema.yml").write_text("""
+models:
+  - name: m1
+    meta:
+      rationale:
+        intent: "Intent"
+        owner: "owner"
+        exceptions:
+          - rule: "POLICY"
+            justification: "reason"
+            approved_by: "someone"
+            expires: "2026-03-01"
+""")
+        exit_code = main([str(tmp_path)])
+        captured = capsys.readouterr()
+        assert "::warning" in captured.out
+        assert "expires in" in captured.out
+
 
 class TestConfigFile:
     def test_reads_config_from_project(self, tmp_path):
@@ -139,4 +252,33 @@ models:
 """)
         # Config says hard with min_score 90, but CLI overrides to off
         exit_code = main([str(tmp_path), "--enforce", "off"])
+        assert exit_code == 0
+
+    def test_invalid_yaml_config(self, tmp_path):
+        (tmp_path / ".rationale.yml").write_text("invalid: yaml: [broken")
+        exit_code = main([str(tmp_path)])
+        assert exit_code == 0  # Falls back to defaults
+
+    def test_non_dict_config(self, tmp_path):
+        (tmp_path / ".rationale.yml").write_text("just a string")
+        exit_code = main([str(tmp_path)])
+        assert exit_code == 0  # Falls back to defaults
+
+    def test_invalid_enforcement_value_in_config(self, tmp_path):
+        (tmp_path / ".rationale.yml").write_text("""
+enforcement: invalid_value
+""")
+        exit_code = main([str(tmp_path)])
+        assert exit_code == 0  # Falls back to soft
+
+    def test_config_with_resource_types_and_exclude(self, tmp_path):
+        (tmp_path / ".rationale.yml").write_text("""
+enforcement: soft
+resource_types:
+  - models
+  - metrics
+exclude_paths:
+  - staging/
+""")
+        exit_code = main([str(tmp_path)])
         assert exit_code == 0

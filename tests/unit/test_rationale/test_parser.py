@@ -88,6 +88,96 @@ class TestParseYamlFile:
         assert error is not None
         assert "bad.yml" in error["file"]
 
+    def test_non_dict_yaml_content(self, tmp_path):
+        f = tmp_path / "list.yml"
+        f.write_text("- item1\n- item2")
+        entries, uncovered, error = parse_yaml_file(f)
+        assert error is None
+        assert len(entries) == 0
+        assert len(uncovered) == 0
+
+    def test_nonexistent_file(self, tmp_path):
+        f = tmp_path / "missing.yml"
+        entries, uncovered, error = parse_yaml_file(f)
+        assert error is not None
+        assert "missing.yml" in error["file"]
+
+    def test_non_dict_resource_in_list(self, tmp_path):
+        f = tmp_path / "schema.yml"
+        f.write_text("""
+models:
+  - "just a string, not a dict"
+  - name: real_model
+    meta:
+      rationale:
+        intent: "Intent"
+        owner: "owner"
+""")
+        entries, uncovered, error = parse_yaml_file(f)
+        assert error is None
+        assert len(entries) == 1  # Only the real dict entry
+
+    def test_non_dict_source_in_list(self, tmp_path):
+        f = tmp_path / "schema.yml"
+        f.write_text("""
+sources:
+  - "just a string"
+  - name: real_source
+    meta:
+      rationale:
+        intent: "Intent"
+        owner: "owner"
+""")
+        entries, uncovered, error = parse_yaml_file(f)
+        assert error is None
+        assert len(entries) == 1
+
+    def test_rationale_in_config_meta(self, tmp_path):
+        f = tmp_path / "schema.yml"
+        f.write_text("""
+models:
+  - name: model_config_meta
+    config:
+      meta:
+        rationale:
+          intent: "Via config.meta"
+          owner: "team@co.com"
+""")
+        entries, uncovered, error = parse_yaml_file(f)
+        assert error is None
+        assert len(entries) == 1
+        assert entries[0].rationale["intent"] == "Via config.meta"
+
+    def test_source_rationale_in_config_meta(self, tmp_path):
+        f = tmp_path / "schema.yml"
+        f.write_text("""
+sources:
+  - name: my_source
+    config:
+      meta:
+        rationale:
+          intent: "Source via config.meta"
+          owner: "team@co.com"
+""")
+        entries, uncovered, error = parse_yaml_file(f)
+        assert error is None
+        assert len(entries) == 1
+        assert entries[0].rationale["intent"] == "Source via config.meta"
+
+    def test_source_without_rationale_is_uncovered(self, tmp_path):
+        f = tmp_path / "schema.yml"
+        f.write_text("""
+sources:
+  - name: no_rationale_source
+    description: "Source with no rationale"
+""")
+        entries, uncovered, error = parse_yaml_file(f)
+        assert error is None
+        assert len(entries) == 0
+        assert len(uncovered) == 1
+        assert uncovered[0]["resource_type"] == "sources"
+        assert uncovered[0]["resource_name"] == "no_rationale_source"
+
 
 class TestParseProject:
     def test_parse_fixtures_directory(self):
