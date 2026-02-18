@@ -1,0 +1,31 @@
+# Change-level rationale — captures the "why" behind a specific PR or change.
+models:
+  - name: fct_revenue
+    meta:
+      rationale:
+        intent: "Canonical revenue definition aligned with GAAP recognition rules"
+        owner: "finance-analytics@acme.com"
+        domain: "Revenue Analytics"
+        decision_type: "Regulatory"
+        change_rationale:
+          change_type: "Modification"
+          reason_category:
+            - "Regulatory"
+            - "Business Alignment"
+          summary: "Exclude partial refunds to comply with updated GAAP guidance"
+          approved_by:
+            - "cfo@acme.com"
+            - "head-of-data@acme.com"
+          risk_level: "High"
+
+  - name: stg_orders
+    meta:
+      rationale:
+        intent: "Clean and deduplicate raw order records"
+        owner: "data-engineering@acme.com"
+        change_rationale:
+          change_type: "Creation"
+          reason_category:
+            - "Optimization"
+          summary: "Extract staging logic from fct_orders into dedicated model"
+          risk_level: "Low"

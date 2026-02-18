@@ -1,0 +1,35 @@
+# Policy exceptions — temporary overrides with expiry dates and audit trails.
+models:
+  - name: fct_legacy_revenue
+    description: "Legacy revenue model kept alive during migration"
+    meta:
+      rationale:
+        intent: "Backward-compatible revenue numbers for legacy dashboards"
+        owner: "finance-analytics@acme.com"
+        domain: "Revenue Analytics"
+        decision_type: "Technical Optimization"
+        policy_bindings:
+          - "GAAP_v2"
+        exceptions:
+          - rule: "GAAP_v2.recognition_timing"
+            justification: "Uses cash-basis until migration to fct_revenue is complete"
+            approved_by: "cfo@acme.com"
+            expires: "2026-06-30"
+            reference:
+              type: "jira"
+              id: "DATA-4096"
+          - rule: "data_quality.completeness"
+            justification: "Known gap in refund data prior to 2024-01-01"
+            approved_by: "head-of-data@acme.com"
+            expires: "2026-03-31"
+
+  - name: stg_vendor_raw
+    description: "Raw vendor feed with known schema drift"
+    meta:
+      rationale:
+        intent: "Ingest vendor data as-is for downstream cleaning"
+        owner: "data-engineering@acme.com"
+        exceptions:
+          - rule: "schema_stability.no_variant_cols"
+            justification: "Vendor sends free-form JSON; parsed in int layer"
+            approved_by: "data-engineering@acme.com"
