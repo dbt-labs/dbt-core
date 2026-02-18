@@ -146,6 +146,63 @@ impl Flags {
             .collect()
     }
 
+    /// Get dictionary that represents only project flags (excludes CLI flags)
+    /// Returns flags from dbt_project.yml that are not standard CLI flags
+    pub fn project_flags(&self) -> BTreeMap<String, Value> {
+        // Reference: https://github.com/dbt-labs/dbt-core/blob/62757f198761ca3a8b8700535bc8c28f84d5c5d5/core/dbt/flags.py#L46
+        static CLI_FLAG_NAMES: &[&str] = &[
+            "USE_EXPERIMENTAL_PARSER",
+            "STATIC_PARSER",
+            "WARN_ERROR",
+            "WARN_ERROR_OPTIONS",
+            "WRITE_JSON",
+            "PARTIAL_PARSE",
+            "USE_COLORS",
+            "PROFILES_DIR",
+            "DEBUG",
+            "LOG_FORMAT",
+            "VERSION_CHECK",
+            "FAIL_FAST",
+            "SEND_ANONYMOUS_USAGE_STATS",
+            "PRINTER_WIDTH",
+            "INDIRECT_SELECTION",
+            "LOG_CACHE_EVENTS",
+            "QUIET",
+            "NO_PRINT",
+            "CACHE_SELECTED_ONLY",
+            "INTROSPECT",
+            "TARGET_PATH",
+            "LOG_PATH",
+            "INVOCATION_COMMAND",
+            "EMPTY",
+            // Flags set by set_cli_flags()
+            "DEFER",
+            "DEFER_STATE",
+            "LOG_FORMAT_FILE",
+            "LOG_LEVEL_FILE",
+            "LOG_LEVEL",
+            "PROFILE",
+            "PROJECT_DIR",
+            "RESOURCE_TYPE",
+            "STORE_FAILURES",
+            // Default flags set by set_defaults()
+            "FULL_REFRESH",
+            "STRICT_MODE",
+            "STATE_MODIFIED_COMPARE_VARS",
+        ];
+
+        self.flags
+            .iter()
+            .filter_map(|(key, value)| {
+                if CLI_FLAG_NAMES.contains(&key.as_str()) {
+                    None
+                } else {
+                    Some((key.clone(), value.clone()))
+                }
+            })
+            .collect()
+    }
+
     /// Set the flag's according to https://github.com/dbt-labs/dbt-core/blob/HEAD/core/dbt/flags.py
     pub fn set_cli_flags(&mut self, invocation_args: &InvocationArgs) {
         self.flags.insert(

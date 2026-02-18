@@ -118,11 +118,13 @@
 {% endmacro %}
 
 {% macro bigquery__alter_relation_comment(relation, relation_comment) -%}
-  {#
-    DIVERGENCE: FIXME: Fusion needs to implement the adapter.update_table_description method using googleapi.
-    otherwise the existing logic fails on View models.
+  {# DIVERGENCE BEGIN #}
+  {# In BigQuery a DDL already sets the description #}
+  {%- set noop = (relation.type in ['table', 'view'] and not is_incremental()) or adapter.behavior.bigquery_noop_alter_relation_comment.no_warn -%}
+  {%- if not noop -%}
     {% do adapter.update_table_description(relation.database, relation.schema, relation.identifier, relation_comment) %}
-  #}
+  {%- endif -%}
+  {# DIVERGENCE END #}
 {% endmacro %}
 
 {% macro bigquery__alter_column_comment(relation, column_dict) -%}

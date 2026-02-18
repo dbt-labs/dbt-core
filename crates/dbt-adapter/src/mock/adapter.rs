@@ -13,7 +13,7 @@ use arrow::array::{ArrayRef, Decimal128Array};
 use arrow::datatypes::{DataType, Field, Schema};
 use arrow::record_batch::RecordBatch;
 use dbt_agate::AgateTable;
-use dbt_common::behavior_flags::BehaviorFlag;
+use dbt_common::behavior_flags::{Behavior, BehaviorFlag};
 use dbt_common::cancellation::CancellationToken;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::relations::base::{BaseRelation, TableFormat};
@@ -232,7 +232,7 @@ impl TypedBaseAdapter for MockAdapter {
         unimplemented!("type conversion from table column in MockAdapter")
     }
 
-    fn behavior(&self) -> Vec<BehaviorFlag> {
+    fn behavior_object(&self) -> Arc<Behavior> {
         let is_true = self.flags.get("is_true").is_none_or(|v| v.is_true());
         let is_false = self.flags.get("is_false").is_some_and(|v| v.is_true());
         let is_unknown = self.flags.get("is_unknown").is_none_or(|v| v.is_true());
@@ -243,7 +243,7 @@ impl TypedBaseAdapter for MockAdapter {
             BehaviorFlag::new("is_false", is_false, None, None, None),
             BehaviorFlag::new("is_unknown", is_unknown, None, None, None),
         ];
-        flags
+        Arc::new(Behavior::new(&flags, &BTreeMap::new()))
     }
 }
 

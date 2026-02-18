@@ -43,7 +43,7 @@ use arrow_schema::{DataType, Schema};
 use dashmap::DashMap;
 use dbt_agate::AgateTable;
 use dbt_common::adapter::AdapterType;
-use dbt_common::behavior_flags::BehaviorFlag;
+use dbt_common::behavior_flags::{Behavior, BehaviorFlag};
 use dbt_common::tracing::emit::emit_warn_log_message;
 use dbt_common::{ErrorCode, FsResult, unexpected_fs_err};
 use dbt_frontend_common::dialect::Dialect;
@@ -2108,12 +2108,10 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     ) -> AdapterResult<Value> {
         match self.adapter_type() {
             AdapterType::Bigquery => {
-                // https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L626-L627
-                // https://cloud.google.com/bigquery/docs/managing-tables#updating_a_tables_description
-                let sql = format!(
-                    "ALTER TABLE {database}.{schema}.{identifier}
-             SET OPTIONS (description = '{description}')"
-                );
+                // https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L686-L696
+                // Use BigQuery API via driver option instead of SQL
+                // Reuse QUERY_DESTINATION_TABLE for the table reference
+                let table_ref = format!("{database}.{schema}.{identifier}");
 
                 let ctx =
                     query_ctx_from_state(state)?.with_desc("update_table_description adapter call");
@@ -2121,8 +2119,17 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
                     Some(state),
                     &ctx,
                     conn,
-                    &sql,
-                    self.get_adbc_execute_options(state),
+                    "", // Empty SQL - the driver will handle this via the option
+                    vec![
+                        (
+                            QUERY_DESTINATION_TABLE.to_string(),
+                            OptionValue::String(table_ref),
+                        ),
+                        (
+                            UPDATE_TABLE_DESCRIPTION.to_string(),
+                            OptionValue::String(description.to_string()),
+                        ),
+                    ],
                     false,
                 )?;
                 Ok(none_value())
@@ -2792,76 +2799,8 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         }
     }
 
-    /// Behavior (flags)
-    fn behavior(&self) -> Vec<BehaviorFlag> {
-        match self.adapter_type() {
-            AdapterType::Snowflake => {
-                // https://github.com/dbt-labs/dbt-adapters/blob/917301379d4ece300d32a3366c71daf0c4ac44aa/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L87
-                let flag = BehaviorFlag::new(
-                    "enable_iceberg_materializations",
-                    false,
-                    Some(
-                        "Enabling Iceberg materializations introduces latency to metadata queries, specifically within the list_relations_without_caching macro. Since Iceberg benefits only those actively using it, we've made this behavior opt-in to prevent unnecessary latency for other users.",
-                    ),
-                    Some(
-                        r#"Enabling Iceberg materializations introduces latency to metadata queries,
-specifically within the list_relations_without_caching macro. Since Iceberg
-benefits only those actively using it, we've made this behavior opt-in to
-prevent unnecessary latency for other users."#,
-                    ),
-                    Some(
-                        "https://docs.getdbt.com/reference/resource-configs/snowflake-configs#iceberg-table-format",
-                    ),
-                );
-                vec![flag]
-            }
-            AdapterType::Databricks => {
-                // https://github.com/databricks/dbt-databricks/blob/822b105b15e644676d9e1f47cbfd765cd4c1541f/dbt/adapters/databricks/impl.py#L87
-                let use_info_schema_for_columns = BehaviorFlag::new(
-                    "use_info_schema_for_columns",
-                    false,
-                    Some(
-                        "Use info schema to gather column information to ensure complex types are not truncated. Incurs some overhead, so disabled by default.",
-                    ),
-                    None,
-                    None,
-                );
-
-                let use_user_folder_for_python = BehaviorFlag::new(
-                    "use_user_folder_for_python",
-                    false,
-                    Some(
-                        "Use the user's home folder for uploading python notebooks. Shared folder use is deprecated due to governance concerns.",
-                    ),
-                    None,
-                    None,
-                );
-
-                let use_materialization_v2 = BehaviorFlag::new(
-                    "use_materialization_v2",
-                    false,
-                    Some(
-                        "Use revamped materializations based on separating create and insert. This allows more performant column comments, as well as new column features.",
-                    ),
-                    None,
-                    None,
-                );
-
-                vec![
-                    use_info_schema_for_columns,
-                    use_user_folder_for_python,
-                    use_materialization_v2,
-                ]
-            }
-            AdapterType::Bigquery
-            | AdapterType::Postgres
-            | AdapterType::Redshift
-            | AdapterType::Salesforce
-            | AdapterType::Sidecar
-            | AdapterType::Spark => vec![],
-            AdapterType::DuckDB => vec![],
-        }
-    }
+    /// Behavior object - returns the behavior object with user overrides applied
+    fn behavior_object(&self) -> Arc<Behavior>;
 
     /// https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/connections.py#L226-L227
     fn compare_dbr_version(
@@ -3521,6 +3460,105 @@ fn builtin_incremental_strategies(
     result
 }
 
+// https://github.com/dbt-labs/dbt-adapters/blob/3ed165d452a0045887a5032c621e605fd5c57447/dbt-adapters/src/dbt/adapters/base/impl.py#L117
+static DEFAULT_BASE_BEHAVIOR_FLAGS: LazyLock<[BehaviorFlag; 2]> = LazyLock::new(|| {
+    [
+        BehaviorFlag::new(
+            "require_batched_execution_for_custom_microbatch_strategy",
+            false,
+            Some("https://docs.getdbt.com/docs/build/incremental-microbatch"),
+            None,
+            None,
+        ),
+        BehaviorFlag::new("enable_truthy_nulls_equals_macro", false, None, None, None),
+    ]
+});
+
+/// Get adapter-specific behavior flags for a given adapter type
+/// This is a standalone function to avoid needing to create adapter instances
+/// just to get the flags
+pub(crate) fn adapter_specific_behavior_flags(adapter_type: AdapterType) -> Vec<BehaviorFlag> {
+    match adapter_type {
+        AdapterType::Snowflake => {
+            // https://github.com/dbt-labs/dbt-adapters/blob/917301379d4ece300d32a3366c71daf0c4ac44aa/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L87
+            let flag = BehaviorFlag::new(
+                "enable_iceberg_materializations",
+                false,
+                Some(
+                    "Enabling Iceberg materializations introduces latency to metadata queries, specifically within the list_relations_without_caching macro. Since Iceberg benefits only those actively using it, we've made this behavior opt-in to prevent unnecessary latency for other users.",
+                ),
+                Some(
+                    r#"Enabling Iceberg materializations introduces latency to metadata queries,
+specifically within the list_relations_without_caching macro. Since Iceberg
+benefits only those actively using it, we've made this behavior opt-in to
+prevent unnecessary latency for other users."#,
+                ),
+                Some(
+                    "https://docs.getdbt.com/reference/resource-configs/snowflake-configs#iceberg-table-format",
+                ),
+            );
+            vec![flag]
+        }
+        AdapterType::Databricks => {
+            // https://github.com/databricks/dbt-databricks/blob/822b105b15e644676d9e1f47cbfd765cd4c1541f/dbt/adapters/databricks/impl.py#L87
+            let use_info_schema_for_columns = BehaviorFlag::new(
+                "use_info_schema_for_columns",
+                false,
+                Some(
+                    "Use info schema to gather column information to ensure complex types are not truncated. Incurs some overhead, so disabled by default.",
+                ),
+                None,
+                None,
+            );
+
+            let use_user_folder_for_python = BehaviorFlag::new(
+                "use_user_folder_for_python",
+                false,
+                Some(
+                    "Use the user's home folder for uploading python notebooks. Shared folder use is deprecated due to governance concerns.",
+                ),
+                None,
+                None,
+            );
+
+            let use_materialization_v2 = BehaviorFlag::new(
+                "use_materialization_v2",
+                false,
+                Some(
+                    "Use revamped materializations based on separating create and insert. This allows more performant column comments, as well as new column features.",
+                ),
+                None,
+                None,
+            );
+
+            vec![
+                use_info_schema_for_columns,
+                use_user_folder_for_python,
+                use_materialization_v2,
+            ]
+        }
+        AdapterType::Bigquery => {
+            // https://github.com/dbt-labs/dbt-adapters/blob/b9ebd240e39882a8c43ed659de423c7504d4642a/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L109-L110
+            let flag = BehaviorFlag::new(
+                "bigquery_noop_alter_relation_comment",
+                false,
+                Some(
+                    "Make bigquery__alter_relation_comment a no-op. This is useful when relation descriptions are already set in DDL (e.g. via OPTIONS(description=...)) to avoid an unnecessary update.",
+                ),
+                None,
+                None,
+            );
+            vec![flag]
+        }
+        AdapterType::Postgres
+        | AdapterType::Redshift
+        | AdapterType::Salesforce
+        | AdapterType::Sidecar
+        | AdapterType::Spark
+        | AdapterType::DuckDB => vec![],
+    }
+}
+
 /// Temporary before the [TypedBaseAdapter] trait becomes *the* adapter implementation struct.
 ///
 /// Which will be possible when all the implementations of the trait
@@ -3528,15 +3566,57 @@ fn builtin_incremental_strategies(
 #[derive(Clone)]
 pub struct ConcreteAdapter {
     pub engine: Arc<dyn AdapterEngine>,
+    /// User overrides for behavior flags from dbt_project.yml
+    pub behavior_flag_overrides: BTreeMap<String, bool>,
+    /// Resolved behavior object with user overrides applied
+    pub behavior: Arc<Behavior>,
 }
 
 impl ConcreteAdapter {
+    /// Create a new ConcreteAdapter with no behavior flag overrides
     pub fn new(engine: Arc<dyn AdapterEngine>) -> Self {
-        Self { engine }
+        Self::new_with_behavior_flag_overrides(engine, BTreeMap::new())
+    }
+
+    /// Create a new ConcreteAdapter with behavior flag overrides from dbt_project.yml
+    pub fn new_with_behavior_flag_overrides(
+        engine: Arc<dyn AdapterEngine>,
+        behavior_flag_overrides: BTreeMap<String, Value>,
+    ) -> Self {
+        let behavior_flag_overrides = behavior_flag_overrides
+            .into_iter()
+            .map(|(key, value)| {
+                let bool_val = if value.is_true() {
+                    true
+                } else if let Some(s) = value.as_str() {
+                    s == "true" || s.parse::<bool>().unwrap_or(false)
+                } else {
+                    false
+                };
+                (key, bool_val)
+            })
+            .collect::<BTreeMap<_, _>>();
+
+        let mut behavior_flags = adapter_specific_behavior_flags(engine.adapter_type());
+        for flag in DEFAULT_BASE_BEHAVIOR_FLAGS.iter() {
+            behavior_flags.push(flag.clone());
+        }
+
+        let behavior = Arc::new(Behavior::new(&behavior_flags, &behavior_flag_overrides));
+
+        Self {
+            engine,
+            behavior_flag_overrides,
+            behavior,
+        }
     }
 }
 
-impl TypedBaseAdapter for ConcreteAdapter {}
+impl TypedBaseAdapter for ConcreteAdapter {
+    fn behavior_object(&self) -> Arc<Behavior> {
+        Arc::clone(&self.behavior)
+    }
+}
 
 impl AdapterTyping for ConcreteAdapter {
     fn metadata_adapter(&self) -> Option<Box<dyn MetadataAdapter>> {

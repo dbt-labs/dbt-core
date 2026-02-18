@@ -77,6 +77,7 @@ pub const INGEST_FILE_DELIMITER: &str = "adbc.bigquery.ingest.csv_delimiter";
 pub const INGEST_PATH: &str = "adbc.bigquery.ingest.csv_filepath";
 pub const INGEST_SCHEMA: &str = "adbc.bigquery.ingest.csv_schema";
 pub const UPDATE_TABLE_COLUMNS_DESCRIPTION: &str = "adbc.bigquery.table.update_columns_description";
+pub const UPDATE_TABLE_DESCRIPTION: &str = "adbc.bigquery.table.update_description";
 pub const UPDATE_DATASET_AUTHORIZE_VIEW_TO_DATASETS: &str =
     "adbc.bigquery.dataset.authorize_view_to_datasets";
 

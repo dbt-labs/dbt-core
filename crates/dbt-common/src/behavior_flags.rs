@@ -19,7 +19,7 @@ use std::sync::Arc;
 ///     about if, and when, to enable the behavior flag.
 #[derive(Debug, Clone)]
 pub struct BehaviorFlag {
-    name: &'static str,
+    pub name: &'static str,
     #[allow(dead_code)]
     default: bool,
     #[allow(dead_code)]
@@ -28,6 +28,7 @@ pub struct BehaviorFlag {
     description: Option<&'static str>,
     #[allow(dead_code)]
     docs_url: Option<&'static str>,
+    user_override: Option<bool>,
 }
 
 impl BehaviorFlag {
@@ -45,11 +46,18 @@ impl BehaviorFlag {
             source,
             description,
             docs_url,
+            user_override: None,
         }
     }
 
+    pub fn with_override(mut self, override_value: Option<bool>) -> Self {
+        self.user_override = override_value;
+        self
+    }
+
     fn no_warn(&self) -> bool {
-        self.default
+        // User override takes precedence over default
+        self.user_override.unwrap_or(self.default)
     }
 }
 
@@ -66,7 +74,8 @@ impl Object for BehaviorFlag {
 
     // this is invoked when a flag is used in an if statement
     fn is_true(self: &Arc<Self>) -> bool {
-        self.default
+        // User override takes precedence over default
+        self.user_override.unwrap_or(self.default)
     }
 
     fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
@@ -93,17 +102,24 @@ impl Object for BehaviorFlag {
 /// Args:
 ///     flags: a list of configurations, one for each behavior flag
 ///     user_overrides: a set of user settings, which may include overrides on one or more of the behavior flags
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Behavior {
     flags: Vec<BehaviorFlag>,
 }
 
 impl Behavior {
-    /// Creates an instance
-    pub fn new(flags: &[BehaviorFlag]) -> Self {
-        Self {
-            flags: flags.to_vec(),
-        }
+    pub fn new(
+        flags: &[BehaviorFlag],
+        user_overrides: &std::collections::BTreeMap<String, bool>,
+    ) -> Self {
+        let flags = flags
+            .iter()
+            .map(|flag| {
+                flag.clone()
+                    .with_override(user_overrides.get(flag.name).copied())
+            })
+            .collect();
+        Self { flags }
     }
 }
 

@@ -22,7 +22,7 @@ use crate::{AdapterResponse, AdapterResult, BaseAdapter};
 
 use dbt_agate::AgateTable;
 use dbt_auth::{AdapterConfig, Auth, auth_for_backend};
-use dbt_common::behavior_flags::{Behavior, BehaviorFlag};
+use dbt_common::behavior_flags::Behavior;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::{AdapterError, AdapterErrorKind, FsError, FsResult};
 use dbt_schema_store::{SchemaEntry, SchemaStoreTrait};
@@ -50,7 +50,7 @@ use std::fmt;
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
-use std::sync::{Arc, LazyLock};
+use std::sync::Arc;
 
 // Thread-local counter to track adapter call depth.
 // Used to avoid recording/replaying nested adapter calls (e.g., truncate_relation calling execute).
@@ -69,20 +69,6 @@ thread_local! {
 thread_local! {
     static CONNECTION: pri::TlsConnectionContainer = pri::TlsConnectionContainer::new();
 }
-
-// https://github.com/dbt-labs/dbt-adapters/blob/3ed165d452a0045887a5032c621e605fd5c57447/dbt-adapters/src/dbt/adapters/base/impl.py#L117
-static DEFAULT_BASE_BEHAVIOR_FLAGS: LazyLock<[BehaviorFlag; 2]> = LazyLock::new(|| {
-    [
-        BehaviorFlag::new(
-            "require_batched_execution_for_custom_microbatch_strategy",
-            false,
-            Some("https://docs.getdbt.com/docs/build/incremental-microbatch"),
-            None,
-            None,
-        ),
-        BehaviorFlag::new("enable_truthy_nulls_equals_macro", false, None, None, None),
-    ]
-});
 
 /// A connection wrapper that automatically returns the connection to the thread local when dropped
 /// This ensures that for a single thread, a connection is reused across multiple operations
@@ -1463,16 +1449,8 @@ impl BaseAdapter for BridgeAdapter {
     #[tracing::instrument(skip_all, level = "trace")]
     fn behavior(&self) -> Value {
         match &self.inner {
-            Typed { adapter, .. } => {
-                let mut behavior_flags = adapter.behavior();
-                for flag in DEFAULT_BASE_BEHAVIOR_FLAGS.iter() {
-                    behavior_flags.push(flag.clone());
-                }
-                // TODO: support user overrides (using flags from RuntimeConfig)
-                // https://github.com/dbt-labs/dbt-adapters/blob/3ed165d452a0045887a5032c621e605fd5c57447/dbt-adapters/src/dbt/adapters/base/impl.py#L360
-                Value::from_object(Behavior::new(&behavior_flags))
-            }
-            Parse(_) => Value::from_object(Behavior::new(&[])),
+            Typed { adapter, .. } => Value::from_object((*adapter.behavior_object()).clone()),
+            Parse(_) => Value::from_object(Behavior::new(&[], &BTreeMap::new())),
         }
     }
 
