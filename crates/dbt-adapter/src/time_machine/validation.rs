@@ -354,7 +354,7 @@ impl TimeMachineEventValidationEngine {
 
 /// Check if a method executes SQL.
 fn is_sql_method(method: &str) -> bool {
-    method == "execute" || method == "run_query"
+    method == "execute" || method == "run_query" || method == "add_query"
 }
 
 /// Extract SQL string from args.
