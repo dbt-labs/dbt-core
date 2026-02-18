@@ -24,9 +24,10 @@ use dbt_common::constants::{DBT_PROJECT_YML, DBT_TARGET_DIR_NAME, NOOP};
 use dbt_common::io_args::FsCommand;
 use dbt_common::io_args::{BuildCacheMode, DisplayFormat, ListOutputFormat, StaticAnalysisKind};
 use dbt_common::io_args::{
-    ClapResourceType, EvalArgs, IoArgs, JsonSchemaTypes, LocalExecutionBackendKind,
-    OptimizeTestsOptions, Phases, RunCacheMode, ShowOptions, SystemArgs, TimeMachineModeKind,
-    TimeMachineReplayOrdering, check_selector, check_target, check_var, validate_project_name,
+    ClapResourceType, EvalArgs, InternalPackageMode, IoArgs, JsonSchemaTypes,
+    LocalExecutionBackendKind, OptimizeTestsOptions, Phases, RunCacheMode, ShowOptions, SystemArgs,
+    TimeMachineModeKind, TimeMachineReplayOrdering, check_selector, check_target, check_var,
+    validate_project_name,
 };
 use dbt_common::row_limit::RowLimit;
 
@@ -1753,6 +1754,16 @@ pub struct CommonArgs {
     /// Skip installation of private dependencies (useful for build conformance testing)
     #[arg(global = true, long, default_value = "false", action = ArgAction::SetTrue, hide = true)]
     pub skip_private_deps: bool,
+
+    /// How to load internal (embedded) dbt packages: embedded (default), forcewrite, readfromdisk
+    #[arg(
+        global = true,
+        long = "internal-package",
+        env = "DBT_INTERNAL_PACKAGE_MODE",
+        hide = true,
+        default_value_t
+    )]
+    pub internal_package_mode: InternalPackageMode,
 }
 
 fn resolve_show_arg(show_arg: &[ShowOptions], quiet: bool) -> HashSet<ShowOptions> {
@@ -1955,6 +1966,7 @@ impl CommonArgs {
             local_execution_backend: self.compute.into(),
             skip_checkpoints: false,
             skip_private_deps: self.skip_private_deps,
+            internal_package_mode: self.internal_package_mode.clone(),
         }
     }
 

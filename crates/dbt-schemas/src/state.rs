@@ -199,6 +199,10 @@ pub struct DbtPackage {
     pub inline_file: Option<DbtAsset>,
     pub dependencies: BTreeSet<String>,
     pub all_paths: HashMap<ResourcePathKind, Vec<(PathBuf, SystemTime)>>,
+    /// Pre-read file contents for embedded (internal) packages.
+    /// `None` for disk-based packages, `Some(map)` for embedded packages.
+    /// Keyed by relative path (same as DbtAsset.path).
+    pub embedded_file_contents: Option<HashMap<PathBuf, String>>,
 }
 
 #[derive(Clone, Debug, Serialize, UntaggedEnumDeserialize, PartialEq, Eq)]

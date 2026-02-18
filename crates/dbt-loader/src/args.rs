@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::{collections::BTreeMap, path::PathBuf};
 
 pub use dbt_common::io_args::IoArgs;
-use dbt_common::io_args::{EvalArgs, FsCommand, Phases};
+use dbt_common::io_args::{EvalArgs, FsCommand, InternalPackageMode, Phases};
 use dbt_schemas::state::DbtState;
 
 #[derive(Clone, Default)]
@@ -49,6 +49,8 @@ pub struct LoadArgs {
     pub prev_dbt_state: Option<Arc<DbtState>>,
     /// Skip installation of private dependencies
     pub skip_private_deps: bool,
+    /// How to load internal (embedded) dbt packages
+    pub internal_package_mode: InternalPackageMode,
 }
 
 impl LoadArgs {
@@ -74,6 +76,7 @@ impl LoadArgs {
             enable_persist_compare_package: arg.command == FsCommand::Extension("compare"),
             prev_dbt_state: None,
             skip_private_deps: arg.skip_private_deps,
+            internal_package_mode: arg.internal_package_mode.clone(),
         }
     }
 

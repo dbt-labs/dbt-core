@@ -19,7 +19,7 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::resolve::resolve_properties::MinimalPropertiesEntry;
 
@@ -29,11 +29,13 @@ use crate::utils::parse_macro_statements;
 pub fn resolve_docs_macros(
     io: &IoArgs,
     docs_macro_files: &[DbtAsset],
+    embedded_contents: Option<&HashMap<PathBuf, String>>,
 ) -> FsResult<BTreeMap<String, DbtDocsMacro>> {
     let mut docs_map: BTreeMap<String, DbtDocsMacro> = BTreeMap::new();
 
     for docs_asset in docs_macro_files {
-        if let Err(err) = process_docs_macro_file(io, &mut docs_map, docs_asset) {
+        if let Err(err) = process_docs_macro_file(io, &mut docs_map, docs_asset, embedded_contents)
+        {
             let err = err.with_location(docs_asset.path.clone());
             emit_warn_log_from_fs_error(&err, io.status_reporter.as_ref());
         }
@@ -46,16 +48,10 @@ fn process_docs_macro_file(
     io: &IoArgs,
     docs_map: &mut BTreeMap<String, DbtDocsMacro>,
     docs_asset: &DbtAsset,
+    embedded_contents: Option<&HashMap<PathBuf, String>>,
 ) -> FsResult<()> {
     let docs_file_path = docs_asset.base_path.join(&docs_asset.path);
-    let docs_macro = fs::read_to_string(&docs_file_path).map_err(|e| {
-        fs_err!(
-            ErrorCode::IoError,
-            "Failed to read docs file '{}': {}",
-            docs_asset.path.display(),
-            e
-        )
-    })?;
+    let docs_macro = read_file_content(&docs_asset.path, &docs_file_path, embedded_contents)?;
 
     let relative_docs_file_path = &diff_paths(&docs_file_path, &io.in_dir)?;
     let resources = parse_macro_statements(&docs_macro, relative_docs_file_path, &["docs"])?;
@@ -107,6 +103,7 @@ fn process_docs_macro_file(
 pub fn resolve_macros(
     io: &IoArgs,
     macro_files: &[&DbtAsset],
+    embedded_contents: Option<&HashMap<PathBuf, String>>,
 ) -> FsResult<HashMap<String, DbtMacro>> {
     let mut nodes = HashMap::new();
 
@@ -121,13 +118,7 @@ pub fn resolve_macros(
             || macro_file.extension() == Some(OsStr::new("sql"))
         {
             let macro_file_path = base_path.join(macro_file);
-            let macro_sql = fs::read_to_string(&macro_file_path).map_err(|e| {
-                fs_err!(
-                    code => ErrorCode::IoError,
-                    loc => macro_file_path.to_path_buf(),
-                    "Failed to read macro file: {}", e
-                )
-            })?;
+            let macro_sql = read_file_content(macro_file, &macro_file_path, embedded_contents)?;
             let relative_macro_file_path = diff_paths(&macro_file_path, &io.in_dir)?;
             let resources = parse_macro_statements(
                 &macro_sql,
@@ -265,6 +256,24 @@ pub fn resolve_macros(
     }
 
     Ok(nodes)
+}
+
+/// Read file content from the embedded cache or from disk.
+fn read_file_content(
+    relative_path: &Path,
+    absolute_path: &Path,
+    embedded_contents: Option<&HashMap<PathBuf, String>>,
+) -> FsResult<String> {
+    match embedded_contents.and_then(|m| m.get(relative_path)) {
+        Some(content) => Ok(content.clone()),
+        None => fs::read_to_string(absolute_path).map_err(|e| {
+            fs_err!(
+                code => ErrorCode::IoError,
+                loc => absolute_path.to_path_buf(),
+                "Failed to read file: {}", e
+            )
+        }),
+    }
 }
 
 /// Apply macro patches from YAML schema files to the resolved macros.
@@ -460,7 +469,7 @@ mod tests {
                 });
             }
 
-            let _ = resolve_docs_macros(&io_args, &assets)?;
+            let _ = resolve_docs_macros(&io_args, &assets, None)?;
             let warnings = reporter.warnings();
             assert_eq!(
                 warnings.len(),
@@ -502,7 +511,7 @@ mod tests {
             package_name: "pkg".to_string(),
         };
 
-        let docs = resolve_docs_macros(&io_args, &[docs_asset])?;
+        let docs = resolve_docs_macros(&io_args, &[docs_asset], None)?;
         assert!(
             docs.contains_key("doc.pkg.ok_doc"),
             "expected valid doc to be collected"

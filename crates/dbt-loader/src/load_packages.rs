@@ -6,7 +6,7 @@ use indexmap::IndexMap;
 use sha2::{Digest, Sha256};
 use walkdir::WalkDir;
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::io::Read;
 use std::path::{Path, PathBuf};
 
@@ -15,8 +15,9 @@ use dbt_common::constants::DBT_PROJECT_YML;
 use dbt_common::stdfs;
 
 use dbt_common::err;
-use dbt_common::{ErrorCode, FsResult, fs_err};
-use dbt_schemas::state::{DbtPackage, DbtProfile, DbtVars};
+use dbt_common::{ErrorCode, FsResult, fs_err, unexpected_fs_err};
+use dbt_schemas::schemas::project::DbtProject;
+use dbt_schemas::state::{DbtAsset, DbtPackage, DbtProfile, DbtVars, ResourcePathKind};
 
 use crate::args::LoadArgs;
 use crate::loader::load_inner;
@@ -115,15 +116,7 @@ pub fn persist_internal_packages(
     #[allow(unused)] enable_persist_compare_package: bool,
 ) -> FsResult<()> {
     // Copy the dbt-adapters and dbt-{adapter_type} to the packages_install_path
-    let adapter_package = format!("dbt-{adapter_type}");
-    let mut internal_packages = vec!["dbt-adapters", &adapter_package];
-    // Some adapters have extra dependencies
-    match adapter_type {
-        AdapterType::Redshift => internal_packages.push("dbt-postgres"),
-        AdapterType::Databricks => internal_packages.push("dbt-spark"),
-        _ => {}
-    }
-
+    let internal_packages = internal_package_names(adapter_type);
     // Track expected file paths for cleanup
     let mut expected_files: HashSet<PathBuf> = HashSet::new();
 
@@ -131,7 +124,7 @@ pub fn persist_internal_packages(
         let mut found = false;
         for asset in assets::MacroAssets::iter() {
             let asset_path = asset.as_ref();
-            if !asset_path.starts_with(package) {
+            if !asset_path.starts_with(&package) {
                 continue;
             }
             found = true;
@@ -255,4 +248,181 @@ async fn collect_packages(
         }
     }
     Ok(packages)
+}
+
+/// Returns the list of internal package directory names for a given adapter type.
+pub fn internal_package_names(adapter_type: AdapterType) -> Vec<String> {
+    let adapter_package = format!("dbt-{adapter_type}");
+    let mut packages = vec!["dbt-adapters".to_string(), adapter_package];
+    match adapter_type {
+        AdapterType::Redshift => packages.push("dbt-postgres".to_string()),
+        AdapterType::Databricks => packages.push("dbt-spark".to_string()),
+        _ => {}
+    }
+    packages
+}
+
+/// Check if a file path is under macros/ or tests/ directories
+fn is_under_macros_or_tests(path: &Path) -> bool {
+    if let Some(first_component) = path.components().next() {
+        let dir_name = first_component.as_os_str().to_str().unwrap_or("");
+        return dir_name == "macros" || dir_name == "tests";
+    }
+    false
+}
+
+/// Check if a file is a metadata/config file that should be ignored
+fn is_metadata_file(path: &Path) -> bool {
+    matches!(
+        path.to_str().unwrap_or(""),
+        "dbt_project.yml" | "packages.yml" | "profile_template.yml" | "__init__.py"
+    )
+}
+
+/// Build `DbtPackage`s directly from `MacroAssets` (RustEmbed) without any disk I/O.
+/// This function assumes only macros (and generic tests) are included in the internal packages.
+/// A debug assertion will warn if files exist outside macros/ and tests/ directories.
+pub fn construct_internal_packages(
+    adapter_type: AdapterType,
+    synthetic_root: &Path,
+) -> FsResult<Vec<DbtPackage>> {
+    let package_names = internal_package_names(adapter_type);
+    let mut packages = vec![];
+
+    for package_dir_name in &package_names {
+        let prefix = format!("{package_dir_name}/");
+        let package_root = synthetic_root
+            .join("dbt_internal_packages")
+            .join(package_dir_name);
+
+        // 1. Read & parse dbt_project.yml from embedded assets
+        let yml_path = format!("{package_dir_name}/dbt_project.yml");
+        let yml_content = assets::MacroAssets::get(&yml_path)
+            .map(|f| String::from_utf8_lossy(&f.data).into_owned())
+            .ok_or_else(|| {
+                fs_err!(
+                    ErrorCode::InvalidConfig,
+                    "Missing dbt_project.yml in embedded package '{}'",
+                    package_dir_name
+                )
+            })?;
+        let parsed: DbtProject = dbt_yaml::from_str(&yml_content).map_err(|e| {
+            fs_err!(
+                ErrorCode::InvalidConfig,
+                "Failed to parse internal dbt_project.yml: {}",
+                e
+            )
+        })?;
+        let dbt_project = build_internal_dbt_project(parsed)?;
+        let project_name = dbt_project.name.clone();
+
+        // 2. Enumerate ALL files for this package, cache contents
+        let mut macro_files = vec![];
+        let mut embedded_file_contents = HashMap::new();
+
+        for asset_path in assets::MacroAssets::iter() {
+            let asset_str = asset_path.as_ref();
+            if !asset_str.starts_with(&prefix) {
+                continue;
+            }
+            let relative = &asset_str[prefix.len()..];
+            let rel_path = PathBuf::from(relative);
+
+            // Cache all file contents
+            if let Some(file) = assets::MacroAssets::get(asset_str) {
+                let content = String::from_utf8_lossy(&file.data).into_owned();
+                embedded_file_contents.insert(rel_path.clone(), content);
+            }
+
+            // Only add .sql files to macro_files
+            if relative.ends_with(".sql") {
+                macro_files.push(DbtAsset {
+                    package_name: project_name.clone(),
+                    base_path: package_root.clone(),
+                    path: rel_path.clone(),
+                    original_path: rel_path,
+                });
+            }
+        }
+        macro_files.sort_by(|a, b| a.path.cmp(&b.path));
+
+        // Debug-only check: assert all files are under macros/ or tests/ directories
+        debug_assert!(
+            embedded_file_contents
+                .keys()
+                .all(|path| is_metadata_file(path) || is_under_macros_or_tests(path)),
+            "Internal package '{}' contains files outside macros/ and tests/ directories. \
+             Files found: {:?}. The construct_internal_packages function may need to be extended \
+             to handle these resource types.",
+            package_dir_name,
+            embedded_file_contents
+                .keys()
+                .filter(|path| !is_metadata_file(path) && !is_under_macros_or_tests(path))
+                .collect::<Vec<_>>()
+        );
+
+        packages.push(DbtPackage {
+            dbt_project,
+            package_root_path: package_root,
+            macro_files,
+            embedded_file_contents: Some(embedded_file_contents),
+            dependencies: BTreeSet::new(),
+            dbt_properties: vec![],
+            analysis_files: vec![],
+            model_sql_files: vec![],
+            function_sql_files: vec![],
+            test_files: vec![],
+            fixture_files: vec![],
+            seed_files: vec![],
+            docs_files: vec![],
+            snapshot_files: vec![],
+            inline_file: None,
+            all_paths: HashMap::from([
+                (ResourcePathKind::ModelPaths, vec![]),
+                (ResourcePathKind::AnalysisPaths, vec![]),
+                (ResourcePathKind::AssetPaths, vec![]),
+                (ResourcePathKind::DocsPaths, vec![]),
+                (ResourcePathKind::MacroPaths, vec![]),
+                (ResourcePathKind::SeedPaths, vec![]),
+                (ResourcePathKind::SnapshotPaths, vec![]),
+                (ResourcePathKind::TestPaths, vec![]),
+                (ResourcePathKind::FixturePaths, vec![]),
+                (ResourcePathKind::FunctionPaths, vec![]),
+            ]),
+        });
+    }
+    Ok(packages)
+}
+
+/// Fill default paths and clean targets for a parsed DbtProject.
+pub(crate) fn build_internal_dbt_project(mut dbt_project: DbtProject) -> FsResult<DbtProject> {
+    fill_default(&mut dbt_project.analysis_paths, &["analysis", "analyses"]);
+    fill_default(&mut dbt_project.asset_paths, &["assets"]);
+    fill_default(&mut dbt_project.function_paths, &["functions"]);
+    fill_default(&mut dbt_project.macro_paths, &["macros"]);
+    fill_default(&mut dbt_project.model_paths, &["models"]);
+    fill_default(&mut dbt_project.seed_paths, &["seeds"]);
+    fill_default(&mut dbt_project.snapshot_paths, &["snapshots"]);
+    fill_default(&mut dbt_project.test_paths, &["tests"]);
+
+    // Add generic test paths to macro_paths
+    for test_path in dbt_project.test_paths.as_deref().unwrap_or_default() {
+        let path = PathBuf::from(test_path);
+        dbt_project
+            .macro_paths
+            .as_mut()
+            .ok_or_else(|| unexpected_fs_err!("Macro paths should exist"))?
+            .push(path.join("generic").to_string_lossy().to_string());
+    }
+
+    if dbt_project.clean_targets.is_none() {
+        dbt_project.clean_targets = Some(vec![]);
+    }
+    Ok(dbt_project)
+}
+
+fn fill_default(paths: &mut Option<Vec<String>>, defaults: &[&str]) {
+    if paths.as_ref().is_none_or(|v| v.is_empty()) {
+        *paths = Some(defaults.iter().map(|value| (*value).to_string()).collect());
+    }
 }

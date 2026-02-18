@@ -32,6 +32,28 @@ pub enum LocalExecutionBackendKind {
 
 use crate::adapter::AdapterType;
 use crate::constants::DBT_TARGET_DIR_NAME;
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, clap::ValueEnum)]
+#[clap(rename_all = "lowercase")]
+pub enum InternalPackageMode {
+    /// Load internal packages from RustEmbed directly, no disk I/O (default).
+    #[default]
+    Embedded,
+    /// Write embedded assets to disk, then load from disk (legacy).
+    ForceWrite,
+    /// Assume already on disk, just read (skip writing).
+    #[value(alias = "read")]
+    ReadFromDisk,
+}
+
+impl Display for InternalPackageMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.to_possible_value()
+            .expect("no values are skipped")
+            .get_name()
+            .fmt(f)
+    }
+}
 use crate::{
     constants::{DBT_GENERIC_TESTS_DIR_NAME, DBT_SNAPSHOTS_DIR_NAME},
     io_utils::StatusReporter,
@@ -410,6 +432,8 @@ pub struct EvalArgs {
     pub skip_checkpoints: bool,
     /// Skip installation of private dependencies (useful for build conformance testing)
     pub skip_private_deps: bool,
+    /// How to load internal (embedded) dbt packages
+    pub internal_package_mode: InternalPackageMode,
 }
 impl fmt::Debug for EvalArgs {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

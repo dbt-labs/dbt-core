@@ -1,8 +1,8 @@
+use dbt_common::FsResult;
 use dbt_common::constants::DBT_PROJECT_YML;
 use dbt_common::io_args::IoArgs;
 use dbt_common::tracing::emit::emit_warn_log_from_fs_error;
 use dbt_common::{ErrorCode, fs_err};
-use dbt_common::{FsResult, unexpected_fs_err};
 use dbt_jinja_utils::serde::{into_typed_with_jinja, value_from_file};
 use dbt_jinja_utils::{Var, jinja_environment::JinjaEnv, phases::parse::build_resolve_context};
 use dbt_schemas::schemas::project::DbtProject;
@@ -14,10 +14,7 @@ use dbt_schemas::schemas::project::{
 use dbt_yaml::{ShouldBe, Value as YmlValue};
 use minijinja::Value;
 use minijinja::constants::CURRENT_PATH;
-use std::{
-    collections::BTreeMap,
-    path::{Path, PathBuf},
-};
+use std::{collections::BTreeMap, path::Path};
 
 macro_rules! prune_section {
     ($proj:expr, $io:expr, $field:ident, $name:expr, $ty:ty) => {
@@ -194,37 +191,7 @@ pub fn load_project_yml(
     // Prune unexpected null keys (e.g. empty keys) early and emit warnings
     prune_sections(io_args, &mut dbt_project);
 
-    // Set default model paths if not specified
-    fill_default(&mut dbt_project.analysis_paths, &["analysis", "analyses"]);
-    fill_default(&mut dbt_project.asset_paths, &["assets"]);
-    fill_default(&mut dbt_project.function_paths, &["functions"]);
-    fill_default(&mut dbt_project.macro_paths, &["macros"]);
-    fill_default(&mut dbt_project.model_paths, &["models"]);
-    fill_default(&mut dbt_project.seed_paths, &["seeds"]);
-    fill_default(&mut dbt_project.snapshot_paths, &["snapshots"]);
-    fill_default(&mut dbt_project.test_paths, &["tests"]);
-
-    // We need to add the generic test paths for each test path defined in the project
-    for test_path in dbt_project.test_paths.as_deref().unwrap_or_default() {
-        let path = PathBuf::from(test_path);
-        dbt_project
-            .macro_paths
-            .as_mut()
-            .ok_or_else(|| unexpected_fs_err!("Macro paths should exist"))?
-            .push(path.join("generic").to_string_lossy().to_string());
-    }
-
-    if dbt_project.clean_targets.is_none() {
-        dbt_project.clean_targets = Some(vec![])
-    }
-
-    Ok(dbt_project)
-}
-
-fn fill_default(paths: &mut Option<Vec<String>>, defaults: &[&str]) {
-    if paths.as_ref().is_none_or(|v| v.is_empty()) {
-        *paths = Some(defaults.iter().map(|value| (*value).to_string()).collect());
-    }
+    crate::load_packages::build_internal_dbt_project(dbt_project)
 }
 
 pub fn collect_protected_paths(dbt_project: &DbtProject) -> Vec<String> {

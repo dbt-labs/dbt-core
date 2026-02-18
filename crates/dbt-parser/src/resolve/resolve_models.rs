@@ -130,15 +130,28 @@ async fn build_raw_model_project_config(
 
     let dependency_package_name = dependency_package_name_from_ctx(env, base_ctx);
     let dbt_project_yml_path = package.package_root_path.join("dbt_project.yml");
-    let raw_yml = read_to_string(&dbt_project_yml_path).await.map_err(|e| {
-        fs_err!(
-            code => ErrorCode::IoError,
-            loc => dbt_project_yml_path.clone(),
-            "Failed to read {}: {}",
-            dbt_project_yml_path.display(),
-            e
-        )
-    })?;
+
+    // Best-effort read: embedded packages have synthetic paths that don't exist on disk.
+    // Check embedded_file_contents first, then fall back to disk.
+    let raw_yml = match package
+        .embedded_file_contents
+        .as_ref()
+        .and_then(|m| m.get(Path::new("dbt_project.yml")))
+    {
+        Some(content) => content.clone(),
+        None => match read_to_string(&dbt_project_yml_path).await {
+            Ok(content) => content,
+            Err(e) => {
+                return Err(fs_err!(
+                    code => ErrorCode::IoError,
+                    loc => dbt_project_yml_path.clone(),
+                    "Failed to read {}: {}",
+                    dbt_project_yml_path.display(),
+                    e
+                ));
+            }
+        },
+    };
 
     // NOTE: This is intentionally best-effort. We use it only to populate `unrendered_config`
     // for state comparisons, and it must not break compilation when the dbt_project.yml contains

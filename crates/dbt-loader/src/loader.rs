@@ -5,7 +5,7 @@ use dbt_common::cancellation::CancellationToken;
 use dbt_common::constants::{
     DBT_CATALOGS_YML, DBT_DEPENDENCIES_YML, DBT_PACKAGES_LOCK_FILE, DBT_PACKAGES_YML,
 };
-use dbt_common::io_args::{ReplayMode, TimeMachineMode};
+use dbt_common::io_args::{InternalPackageMode, ReplayMode, TimeMachineMode};
 use dbt_common::once_cell_vars::DISPATCH_CONFIG;
 use dbt_common::tracing::span_info::SpanStatusRecorder;
 use dbt_jinja_utils::invocation_args::InvocationArgs;
@@ -51,7 +51,8 @@ use crate::dbt_project_yml_loader::load_project_yml;
 use crate::download_publication::download_publication_artifacts;
 use crate::utils::{collect_file_info, identify_package_dependencies};
 use crate::{
-    load_internal_packages, load_packages, load_profiles, load_vars, persist_internal_packages,
+    construct_internal_packages, load_internal_packages, load_packages, load_profiles, load_vars,
+    persist_internal_packages,
 };
 
 use dbt_jinja_utils::Var;
@@ -111,7 +112,7 @@ pub async fn load(
         None => None,
     };
 
-    // Check if .gitignore exists and add dbt_internal_packages/ if not present
+    // Check if .gitignore exists and add dbt_internal_packages/ to it if not present
     let gitignore_path = arg.io.in_dir.join(".gitignore");
     if gitignore_path.exists() {
         let gitignore_content = fs::read_to_string(&gitignore_path)?;
@@ -225,11 +226,13 @@ pub async fn load(
         &simplified_dbt_project,
     );
 
-    persist_internal_packages(
-        &internal_packages_install_path,
-        adapter_type,
-        arg.enable_persist_compare_package,
-    )?;
+    if arg.internal_package_mode == InternalPackageMode::ForceWrite {
+        persist_internal_packages(
+            &internal_packages_install_path,
+            adapter_type,
+            arg.enable_persist_compare_package,
+        )?;
+    }
 
     let (packages_lock, upstream_projects) = get_or_install_packages(
         &arg.io,
@@ -291,27 +294,38 @@ pub async fn load(
         dbt_state.packages = packages;
     }
     {
-        // TODO: use a dedicated event. Currently this is tightly coupled with tui_layer and assumes
-        // that `ExecutionPhase::LoadProject` will register it's progress spinner with "load" id.
-        let span = create_debug_span(GenericOpItemProcessed::new(
-            "load".to_string(),
-            "loading".to_string(),
-            "loaded".to_string(),
-            "internal packages".to_string(),
-        ));
-
-        let packages = load_internal_packages(
-            &arg,
-            &env,
-            &dbt_state.dbt_profile,
-            &mut collected_vars,
-            &internal_packages_install_path,
-            token,
-        )
-        .instrument(span.clone())
-        .await
-        .record_status(&span)?;
-        dbt_state.packages.extend(packages);
+        let internal_pkgs = match &arg.internal_package_mode {
+            InternalPackageMode::Embedded => {
+                let pkgs = construct_internal_packages(adapter_type, &arg.io.in_dir)?;
+                // Register vars for each internal package
+                for pkg in &pkgs {
+                    load_vars(&pkg.dbt_project.name, None, &mut collected_vars)?;
+                }
+                pkgs
+            }
+            InternalPackageMode::ForceWrite | InternalPackageMode::ReadFromDisk => {
+                // TODO: use a dedicated event. Currently this is tightly coupled with tui_layer and assumes
+                // that `ExecutionPhase::LoadProject` will register it's progress spinner with "load" id.
+                let span = create_debug_span(GenericOpItemProcessed::new(
+                    "load".to_string(),
+                    "loading".to_string(),
+                    "loaded".to_string(),
+                    "internal packages".to_string(),
+                ));
+                load_internal_packages(
+                    &arg,
+                    &env,
+                    &dbt_state.dbt_profile,
+                    &mut collected_vars,
+                    &internal_packages_install_path,
+                    token,
+                )
+                .instrument(span.clone())
+                .await
+                .record_status(&span)?
+            }
+        };
+        dbt_state.packages.extend(internal_pkgs);
         dbt_state.vars = collected_vars.into_iter().collect();
     }
 
@@ -764,6 +778,7 @@ pub async fn load_inner(
         dependencies,
         all_paths: all_files,
         inline_file: None,
+        embedded_file_contents: None,
     })
 }
 
