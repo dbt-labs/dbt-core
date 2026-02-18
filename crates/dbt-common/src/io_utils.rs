@@ -1,4 +1,5 @@
 use crate::io_args::{EvalArgs, Phases, StaticAnalysisOffReason};
+use crate::path::DbtPath;
 use crate::stdfs::File;
 use crate::tracing::metrics::{error_count_checkpoint, return_exit_code_from_error_counter};
 use crate::{ErrorCode, FsError, FsResult, err, fs_err, stdfs::canonicalize};
@@ -29,7 +30,7 @@ pub trait StatusReporter: Any + Send + Sync {
     );
     /// Called to show progress in the UI
     fn show_progress(&self, action: &str, target: &str, description: Option<&str>);
-    fn bulk_publish_empty(&self, file_paths: Vec<PathBuf>);
+    fn bulk_publish_empty(&self, file_paths: Vec<DbtPath>);
 }
 
 /// Reads the contents of a file as a string.

@@ -275,8 +275,8 @@ mod tests {
     use dbt_common::FsError;
     use dbt_common::io_args::{IoArgs, StaticAnalysisOffReason};
     use dbt_common::io_utils::StatusReporter;
+    use dbt_common::path::DbtPath;
     use std::collections::HashMap;
-    use std::path::PathBuf;
     use std::sync::{Arc, Mutex};
 
     // Mock status reporter for testing
@@ -320,7 +320,7 @@ mod tests {
 
         fn show_progress(&self, _action: &str, _target: &str, _description: Option<&str>) {}
 
-        fn bulk_publish_empty(&self, _file_paths: Vec<PathBuf>) {}
+        fn bulk_publish_empty(&self, _file_paths: Vec<DbtPath>) {}
     }
 
     // Helper function to create a test IoArgs

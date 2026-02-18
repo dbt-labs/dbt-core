@@ -3,6 +3,7 @@ use crate::dbt_project_config::strip_resource_paths_from_ref_path;
 use crate::resolve::resolve_properties::MinimalPropertiesEntry;
 use dbt_common::adapter::AdapterType;
 use dbt_common::io_args::IoArgs;
+use dbt_common::path::DbtPath;
 use dbt_common::tracing::emit::emit_error_log_from_fs_error;
 use dbt_common::{ErrorCode, FsError, FsResult, fs_err, stdfs};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
@@ -661,7 +662,7 @@ pub fn clear_package_diagnostics(io: &IoArgs, package: &DbtPackage) {
         if project_file_path.exists() {
             // Get the relative path to the workspace root (arg.io.in_dir)
             if let Ok(workspace_path) = stdfs::diff_paths(&project_file_path, &io.in_dir) {
-                file_paths.push(io.in_dir.join(workspace_path));
+                file_paths.push(DbtPath::from_path(io.in_dir.join(workspace_path)));
             }
         }
 
@@ -673,7 +674,7 @@ pub fn clear_package_diagnostics(io: &IoArgs, package: &DbtPackage) {
             .chain(&package.docs_files)
         {
             let file_path = io.in_dir.join(&asset.path);
-            file_paths.push(file_path);
+            file_paths.push(DbtPath::from_path(file_path));
         }
 
         // Use bulk operation for better performance

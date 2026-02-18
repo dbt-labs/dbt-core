@@ -361,6 +361,7 @@ mod tests {
     use dbt_common::FsError;
     use dbt_common::io_args::{IoArgs, StaticAnalysisOffReason};
     use dbt_common::io_utils::StatusReporter;
+    use dbt_common::path::DbtPath;
     use dbt_telemetry::{ExecutionPhase, NodeOutcome};
     use dbt_yaml::Span;
     use std::fs;
@@ -401,7 +402,7 @@ mod tests {
 
         fn show_progress(&self, _action: &str, _target: &str, _description: Option<&str>) {}
 
-        fn bulk_publish_empty(&self, _file_paths: Vec<PathBuf>) {}
+        fn bulk_publish_empty(&self, _file_paths: Vec<DbtPath>) {}
     }
 
     #[test]
