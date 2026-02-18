@@ -3,7 +3,7 @@ import yaml
 
 from dbt.artifacts.schemas.results import RunStatus
 from dbt.exceptions import DbtProjectError
-from dbt.tests.util import relation_from_name, run_dbt
+from dbt.tests.util import get_manifest, relation_from_name, run_dbt
 from dbt_common.exceptions import CompilationError
 
 # =============================================================================
@@ -70,6 +70,11 @@ class TestDbtProjectVarFromVarsFile:
         assert len(results) == 1
         assert results[0].status == RunStatus.Success
 
+        manifest = get_manifest(project.project_root)
+        assert manifest is not None
+        model = manifest.nodes["model.test.model_with_var"]
+        assert model.config.meta["project_var"] == "project_var_from_file"
+
 
 class TestDbtProjectVarCliOverridesFile:
     """dbt_project.yml with var should use CLI value when set in both vars.yml and cli"""
@@ -96,10 +101,16 @@ class TestDbtProjectVarCliOverridesFile:
         cli_vars = {"my_var": "from_cli", "project_var": "from_cli"}
         results = run_dbt(["run", "--vars", yaml.safe_dump(cli_vars)])
         assert len(results) == 1
-        # Verify CLI value was used
+
+        # Verify CLI value was used in SQL model
         relation = relation_from_name(project.adapter, "model_with_var")
         result = project.run_sql(f"select my_var_value from {relation}", fetch="one")
         assert result[0] == "from_cli"
+
+        # Verify CLI value was used to render dbt_project.yml
+        manifest = get_manifest(project.project_root)
+        model = manifest.nodes["model.test.model_with_var"]
+        assert model.config.meta["project_var"] == "from_cli"
 
 
 class TestDbtProjectVarMissingFromVarsFile:
