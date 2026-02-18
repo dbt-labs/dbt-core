@@ -200,20 +200,25 @@ def _check_enforcement(report: RationaleReport, config: Config) -> tuple:
 # ---------------------------------------------------------------------------
 
 def _emit_github_annotations(report: RationaleReport) -> None:
-    """Emit GitHub Actions workflow commands for inline annotations."""
+    """Emit GitHub Actions workflow commands for inline annotations.
+
+    Writes to stderr so annotations don't interfere with stdout
+    (especially important for --format json).  GitHub Actions reads
+    workflow commands from both stdout and stderr.
+    """
     for obj_score in report.object_scores:
         for issue in obj_score.validation.issues:
             level = "error" if issue.severity == Severity.ERROR else "warning"
             file_arg = f"file={issue.file_path}" if issue.file_path else ""
             msg = f"{issue.resource_type}/{issue.resource_name} -> {issue.field}: {issue.message}"
-            print(f"::{level} {file_arg}::{msg}")
+            print(f"::{level} {file_arg}::{msg}", file=sys.stderr)
 
     for exc in report.expiring_exceptions:
         level = "error" if exc.is_expired else "warning"
         file_arg = f"file={exc.file_path}" if exc.file_path else ""
         status = "EXPIRED" if exc.is_expired else f"expires in {exc.days_remaining} days"
         msg = f"Exception on {exc.rule} {status}"
-        print(f"::{level} {file_arg}::{msg}")
+        print(f"::{level} {file_arg}::{msg}", file=sys.stderr)
 
 
 # ---------------------------------------------------------------------------

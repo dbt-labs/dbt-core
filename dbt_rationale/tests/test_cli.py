@@ -188,7 +188,7 @@ models:
 """)
         exit_code = main([str(tmp_path)])
         captured = capsys.readouterr()
-        assert "::error" in captured.out
+        assert "::error" in captured.err
 
     def test_github_annotations_with_expiring(self, capsys, tmp_path, monkeypatch):
         monkeypatch.setenv("GITHUB_ACTIONS", "true")
@@ -209,8 +209,8 @@ models:
 """)
         exit_code = main([str(tmp_path)])
         captured = capsys.readouterr()
-        assert "::warning" in captured.out
-        assert "expires in" in captured.out
+        assert "::warning" in captured.err
+        assert "expires in" in captured.err
 
 
 class TestConfigFile:
