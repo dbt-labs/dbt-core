@@ -40,3 +40,37 @@ class TestUninstalledPackageWithNestedDependency:
             run_dbt(["parse"])
 
         assert "nested_dependency" in exc_info.value.uninstalled_packages
+
+
+class TestUninstalledPackagesErrorRaisedIfPackageLockDoesNotExist:
+    """When package_lock.yml does not exist, error should be raised if packages.yml is non empty."""
+
+    @pytest.fixture(scope="class")
+    def packages(self):
+        return {
+            "packages": [
+                {"package": "dbt-labs/dbt_utils", "version": "1.1.1"},
+            ]
+        }
+
+    def test_error_raised_if_package_lock_does_not_exist(self, project):
+        package_lock_path = Path(project.project_root) / "package-lock.yml"
+        # ensure that package lock does not exist
+        package_lock_path.unlink(missing_ok=True)
+
+        with pytest.raises(UninstalledPackagesFoundError) as exc_info:
+            run_dbt(["parse"])
+
+        assert len(exc_info.value.uninstalled_packages) == 0
+        assert exc_info.value.count_packages_specified == 1
+        assert exc_info.value.count_packages_installed == 0
+
+
+class TestNoErrorIfPackageYamlDoesNotExist:
+    """When packages.yml does not exist, no error should be raised."""
+
+    def test_no_error_raised_if_package_yml_does_not_exist(self, project):
+        packages_yml_path = Path(project.project_root) / "packages.yml"
+        packages_yml_path.unlink(missing_ok=True)
+
+        run_dbt(["parse"])
