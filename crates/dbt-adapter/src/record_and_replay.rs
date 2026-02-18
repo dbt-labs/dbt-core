@@ -3,6 +3,7 @@ use crate::base_adapter::backend_of;
 use crate::cache::RelationCache;
 use crate::config::AdapterConfig;
 use crate::errors::AdapterResult;
+use crate::query_cache::QueryCache;
 use crate::query_comment::QueryCommentConfig;
 use crate::sql_types::TypeOps;
 use crate::statement::*;
@@ -659,7 +660,7 @@ pub struct RecordEngineInner {
     /// Path to recordings
     path: PathBuf,
     /// Actual (wrapped) engine
-    engine: Arc<AdapterEngine>,
+    engine: Arc<dyn AdapterEngine>,
 }
 
 /// Engine used for recording db interaction; recording engine is
@@ -668,16 +669,58 @@ pub struct RecordEngineInner {
 pub struct RecordEngine(Arc<RecordEngineInner>);
 
 impl RecordEngine {
-    pub fn new(path: PathBuf, engine: Arc<AdapterEngine>) -> Self {
+    pub fn new(path: PathBuf, engine: Arc<dyn AdapterEngine>) -> Self {
         let inner = RecordEngineInner { path, engine };
         RecordEngine(Arc::new(inner))
     }
+}
 
-    pub fn backend(&self) -> Backend {
+impl AdapterEngine for RecordEngine {
+    fn adapter_type(&self) -> AdapterType {
+        self.0.engine.adapter_type()
+    }
+
+    fn backend(&self) -> Backend {
         self.0.engine.backend()
     }
 
-    pub fn new_connection(
+    fn quoting(&self) -> ResolvedQuoting {
+        self.0.engine.quoting()
+    }
+
+    fn splitter(&self) -> &dyn StmtSplitter {
+        self.0.engine.splitter()
+    }
+
+    fn type_ops(&self) -> &dyn TypeOps {
+        self.0.engine.type_ops()
+    }
+
+    fn query_comment(&self) -> &QueryCommentConfig {
+        self.0.engine.query_comment()
+    }
+
+    fn config(&self, key: &str) -> Option<Cow<'_, str>> {
+        self.0.engine.config(key)
+    }
+
+    fn get_config(&self) -> &AdapterConfig {
+        self.0.engine.get_config()
+    }
+
+    fn query_cache(&self) -> Option<&Arc<dyn QueryCache>> {
+        None
+    }
+
+    fn relation_cache(&self) -> &Arc<RelationCache> {
+        self.0.engine.relation_cache()
+    }
+
+    fn cancellation_token(&self) -> CancellationToken {
+        self.0.engine.cancellation_token()
+    }
+
+    fn new_connection(
         &self,
         state: Option<&State>,
         node_id: Option<String>,
@@ -687,45 +730,15 @@ impl RecordEngine {
         Ok(Box::new(conn))
     }
 
-    pub fn get_configured_database_name(&self) -> Option<Cow<'_, str>> {
-        self.0.engine.get_configured_database_name()
+    fn new_connection_with_config(
+        &self,
+        config: &AdapterConfig,
+    ) -> AdapterResult<Box<dyn Connection>> {
+        self.0.engine.new_connection_with_config(config)
     }
 
-    pub fn config(&self, key: &str) -> Option<Cow<'_, str>> {
-        self.0.engine.config(key)
-    }
-
-    pub fn get_config(&self) -> &AdapterConfig {
-        self.0.engine.get_config()
-    }
-
-    pub fn adapter_type(&self) -> AdapterType {
-        self.0.engine.adapter_type()
-    }
-
-    pub fn quoting(&self) -> ResolvedQuoting {
-        self.0.engine.quoting()
-    }
-
-    pub fn splitter(&self) -> &dyn StmtSplitter {
-        self.0.engine.splitter()
-    }
-
-    pub fn query_comment(&self) -> &QueryCommentConfig {
-        self.0.engine.query_comment()
-    }
-
-    pub(crate) fn type_ops(&self) -> &dyn TypeOps {
-        self.0.engine.type_ops()
-    }
-
-    pub fn cancellation_token(&self) -> CancellationToken {
-        self.0.engine.cancellation_token()
-    }
-
-    pub fn relation_cache(&self) -> &Arc<RelationCache> {
-        self.0.engine.relation_cache()
-    }
+    // Uses default execute_with_options (ADBC-based) — recording happens
+    // at the Connection/Statement level via RecordEngineConnection.
 }
 
 struct RecordEngineConnection(Arc<RecordEngineInner>, Box<dyn Connection>, Option<String>);
@@ -967,9 +980,9 @@ struct ReplayEngineInner {
     /// Adapter config
     config: AdapterConfig,
     quoting: ResolvedQuoting,
-    stmt_splitter: Arc<dyn StmtSplitter>,
     query_comment: QueryCommentConfig,
     type_ops: Box<dyn TypeOps>,
+    stmt_splitter: Arc<dyn StmtSplitter>,
     /// Relation cache - caches warehouse relation metadata
     relation_cache: Arc<RelationCache>,
     /// Global CLI cancellation token
@@ -992,9 +1005,9 @@ impl ReplayEngine {
         path: PathBuf,
         config: AdapterConfig,
         quoting: ResolvedQuoting,
-        stmt_splitter: Arc<dyn StmtSplitter>,
         query_comment: QueryCommentConfig,
         type_ops: Box<dyn TypeOps>,
+        stmt_splitter: Arc<dyn StmtSplitter>,
         relation_cache: Arc<RelationCache>,
         token: CancellationToken,
     ) -> Self {
@@ -1004,16 +1017,62 @@ impl ReplayEngine {
             path,
             config,
             quoting,
-            stmt_splitter,
             query_comment,
             type_ops,
+            stmt_splitter,
             relation_cache,
             cancellation_token: token,
         };
         ReplayEngine(Arc::new(inner))
     }
+}
 
-    pub fn new_connection(
+impl AdapterEngine for ReplayEngine {
+    fn adapter_type(&self) -> AdapterType {
+        self.0.adapter_type
+    }
+
+    fn backend(&self) -> Backend {
+        self.0.backend
+    }
+
+    fn quoting(&self) -> ResolvedQuoting {
+        self.0.quoting
+    }
+
+    fn splitter(&self) -> &dyn StmtSplitter {
+        self.0.stmt_splitter.as_ref()
+    }
+
+    fn type_ops(&self) -> &dyn TypeOps {
+        self.0.type_ops.as_ref()
+    }
+
+    fn query_comment(&self) -> &QueryCommentConfig {
+        &self.0.query_comment
+    }
+
+    fn config(&self, key: &str) -> Option<Cow<'_, str>> {
+        self.0.config.get_string(key)
+    }
+
+    fn get_config(&self) -> &AdapterConfig {
+        &self.0.config
+    }
+
+    fn query_cache(&self) -> Option<&Arc<dyn QueryCache>> {
+        None
+    }
+
+    fn relation_cache(&self) -> &Arc<RelationCache> {
+        &self.0.relation_cache
+    }
+
+    fn cancellation_token(&self) -> CancellationToken {
+        self.0.cancellation_token.clone()
+    }
+
+    fn new_connection(
         &self,
         _state: Option<&State>,
         node_id: Option<String>,
@@ -1022,45 +1081,19 @@ impl ReplayEngine {
         Ok(Box::new(conn))
     }
 
-    pub fn adapter_type(&self) -> AdapterType {
-        self.0.adapter_type
+    fn new_connection_with_config(
+        &self,
+        _config: &AdapterConfig,
+    ) -> AdapterResult<Box<dyn Connection>> {
+        self.new_connection(None, None)
     }
 
-    pub fn backend(&self) -> Backend {
-        self.0.backend
+    fn is_replay(&self) -> bool {
+        true
     }
 
-    pub fn config(&self, key: &str) -> Option<Cow<'_, str>> {
-        self.0.config.get_string(key)
-    }
-
-    pub fn get_config(&self) -> &AdapterConfig {
-        &self.0.config
-    }
-
-    pub fn quoting(&self) -> ResolvedQuoting {
-        self.0.quoting
-    }
-
-    pub fn splitter(&self) -> &dyn StmtSplitter {
-        self.0.stmt_splitter.as_ref()
-    }
-
-    pub fn query_comment(&self) -> &QueryCommentConfig {
-        &self.0.query_comment
-    }
-
-    pub(crate) fn type_ops(&self) -> &dyn TypeOps {
-        self.0.type_ops.as_ref()
-    }
-
-    pub fn cancellation_token(&self) -> CancellationToken {
-        self.0.cancellation_token.clone()
-    }
-
-    pub fn relation_cache(&self) -> &Arc<RelationCache> {
-        &self.0.relation_cache
-    }
+    // Uses default execute_with_options (ADBC-based) — replay happens
+    // at the Connection/Statement level via ReplayEngineConnection.
 }
 
 #[allow(dead_code)]

@@ -291,7 +291,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     fn execute_inner(
         &self,
         dialect: Dialect,
-        engine: Arc<AdapterEngine>,
+        engine: Arc<dyn AdapterEngine>,
         state: Option<&State>,
         conn: &'_ mut dyn Connection,
         ctx: &QueryCtx,
@@ -759,6 +759,28 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             return replay_adapter
                 .replay_get_relation(state, ctx, conn, database, schema, identifier);
         }
+
+        // Sidecar adapter: delegate to sidecar client
+        if let Some(client) = self.engine().sidecar_client() {
+            let query_schema = schema.to_string();
+            let query_identifier = identifier.to_string();
+            let relation_type = client.get_relation_type(&query_schema, &query_identifier)?;
+            return match relation_type {
+                Some(rel_type) => {
+                    let relation = crate::relation::do_create_relation(
+                        self.adapter_type(),
+                        database.to_string(),
+                        schema.to_string(),
+                        Some(identifier.to_string()),
+                        Some(rel_type),
+                        self.quoting(),
+                    )?;
+                    Ok(Some(relation.into()))
+                }
+                None => Ok(None),
+            };
+        }
+
         let relation_opt = metadata::get_relation::get_relation(
             self.as_typed_base_adapter(),
             state,
@@ -1101,6 +1123,29 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
                 None,
                 None,
             )]);
+        }
+
+        // Sidecar adapter: delegate to sidecar client
+        if let Some(client) = self.engine().sidecar_client() {
+            let database = relation.database_as_str()?;
+            let schema = relation.schema_as_str()?;
+            let identifier = relation.identifier_as_str()?;
+            let relation_name = format!("{}.{}.{}", database, schema, identifier);
+            let column_infos = client.get_columns(&relation_name)?;
+            let columns = column_infos
+                .into_iter()
+                .map(|info| {
+                    Column::new(
+                        self.adapter_type(),
+                        info.name,
+                        info.data_type,
+                        None,
+                        None,
+                        None,
+                    )
+                })
+                .collect();
+            return Ok(columns);
         }
 
         let macro_execution_result: AdapterResult<Value> = match self.adapter_type() {
@@ -2707,6 +2752,26 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             return replay_adapter.replay_list_relations(query_ctx, conn, db_schema);
         }
 
+        // Sidecar adapter: delegate to sidecar client
+        if let Some(client) = self.engine().sidecar_client() {
+            let query_schema = db_schema.resolved_schema.clone();
+            let relation_infos = client.list_relations(&query_schema)?;
+            let mut relations: Vec<Arc<dyn BaseRelation>> =
+                Vec::with_capacity(relation_infos.len());
+            for (database, schema, name, rel_type) in relation_infos {
+                let relation = crate::relation::do_create_relation(
+                    self.adapter_type(),
+                    database,
+                    schema,
+                    Some(name),
+                    Some(rel_type),
+                    self.quoting(),
+                )?;
+                relations.push(relation.into());
+            }
+            return Ok(relations);
+        }
+
         let adapter = self.as_typed_base_adapter();
         match self.adapter_type() {
             Snowflake => snowflake::list_relations(adapter, query_ctx, conn, db_schema),
@@ -2714,17 +2779,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             // TODO(serramatutu/spark): Spark list_relations breaks with Databricks implementation
             Databricks | Spark => databricks::list_relations(adapter, query_ctx, conn, db_schema),
             Redshift => redshift::list_relations(adapter, query_ctx, conn, db_schema),
-            Postgres | Salesforce | Sidecar => {
-                let err = AdapterError::new(
-                    AdapterErrorKind::Internal,
-                    format!(
-                        "list_relations_without_caching is not implemented for this adapter: {}",
-                        self.adapter_type()
-                    ),
-                );
-                Err(err)
-            }
-            DuckDB => {
+            Postgres | Salesforce | Sidecar | DuckDB => {
                 let err = AdapterError::new(
                     AdapterErrorKind::Internal,
                     format!(
@@ -3472,11 +3527,11 @@ fn builtin_incremental_strategies(
 /// are verticalized in [TypedBaseAdapter].
 #[derive(Clone)]
 pub struct ConcreteAdapter {
-    pub engine: Arc<AdapterEngine>,
+    pub engine: Arc<dyn AdapterEngine>,
 }
 
 impl ConcreteAdapter {
-    pub fn new(engine: Arc<AdapterEngine>) -> Self {
+    pub fn new(engine: Arc<dyn AdapterEngine>) -> Self {
         Self { engine }
     }
 }
@@ -3485,6 +3540,10 @@ impl TypedBaseAdapter for ConcreteAdapter {}
 
 impl AdapterTyping for ConcreteAdapter {
     fn metadata_adapter(&self) -> Option<Box<dyn MetadataAdapter>> {
+        // In sidecar mode, schema hydration is handled via db_runner.
+        if self.engine.is_sidecar() {
+            return None;
+        }
         let engine = Arc::clone(&self.engine);
         let metadata_adapter = match self.adapter_type() {
             AdapterType::Snowflake => {
@@ -3516,7 +3575,7 @@ impl AdapterTyping for ConcreteAdapter {
         self
     }
 
-    fn engine(&self) -> &Arc<AdapterEngine> {
+    fn engine(&self) -> &Arc<dyn AdapterEngine> {
         &self.engine
     }
 }
@@ -3685,7 +3744,7 @@ mod tests {
 
     use AdapterType::*;
 
-    fn engine(adapter_type: AdapterType) -> Arc<AdapterEngine> {
+    fn engine(adapter_type: AdapterType) -> Arc<dyn AdapterEngine> {
         let backend = backend_of(adapter_type);
         let config = match adapter_type {
             Snowflake => Mapping::from_iter([
@@ -3706,15 +3765,15 @@ mod tests {
             Bigquery => DEFAULT_RESOLVED_QUOTING,
             _ => DEFAULT_RESOLVED_QUOTING,
         };
-        AdapterEngine::new(
+        crate::adapter_engine::new_engine(
             adapter_type,
             auth.into(),
             AdapterConfig::new(config),
             resolved_quoting,
-            Arc::new(NaiveStmtSplitter), // XXX: may cause bugs if these tests run SQL
             None,
             QueryCommentConfig::from_query_comment(None, adapter_type, false),
             Box::new(NaiveTypeOpsImpl::new(adapter_type)), // XXX: NaiveTypeOpsImpl
+            Arc::new(NaiveStmtSplitter), // XXX: may cause bugs if these tests run SQL
             Arc::new(RelationCache::default()),
             never_cancels(),
         )
@@ -3796,6 +3855,7 @@ mod tests {
             BTreeMap::new(),
             DEFAULT_RESOLVED_QUOTING,
             Box::new(NaiveTypeOpsImpl::new(Databricks)),
+            Arc::new(NaiveStmtSplitter),
             never_cancels(),
         );
 

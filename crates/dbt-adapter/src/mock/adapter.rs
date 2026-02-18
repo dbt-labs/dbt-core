@@ -31,7 +31,7 @@ use std::sync::Arc;
 pub struct MockAdapter {
     /// Adapter type
     pub adapter_type: AdapterType,
-    engine: Arc<AdapterEngine>,
+    engine: Arc<dyn AdapterEngine>,
     /// Flags available in dbt_project.yml
     flags: BTreeMap<String, Value>,
     /// Quoting Policy
@@ -57,16 +57,18 @@ impl MockAdapter {
         flags: BTreeMap<String, Value>,
         quoting: ResolvedQuoting,
         type_ops: Box<dyn TypeOps>,
+        stmt_splitter: Arc<dyn crate::stmt_splitter::StmtSplitter>,
         token: CancellationToken,
     ) -> Self {
         Self {
             adapter_type,
-            engine: Arc::new(AdapterEngine::Mock(MockEngine::new(
+            engine: Arc::new(MockEngine::new(
                 adapter_type,
-                type_ops,
                 quoting,
+                type_ops,
+                stmt_splitter,
                 Arc::new(RelationCache::default()),
-            ))),
+            )),
             flags,
             quoting,
             cancellation_token: token,
@@ -94,7 +96,7 @@ impl AdapterTyping for MockAdapter {
         self
     }
 
-    fn engine(&self) -> &Arc<AdapterEngine> {
+    fn engine(&self) -> &Arc<dyn AdapterEngine> {
         &self.engine
     }
 
@@ -260,6 +262,7 @@ mod tests {
             BTreeMap::new(),
             SNOWFLAKE_RESOLVED_QUOTING,
             Box::new(NaiveTypeOpsImpl::new(AdapterType::Snowflake)),
+            Arc::new(crate::stmt_splitter::NaiveStmtSplitter),
             never_cancels(),
         );
         assert_eq!(adapter.adapter_type(), AdapterType::Snowflake);
@@ -272,6 +275,7 @@ mod tests {
             BTreeMap::new(),
             SNOWFLAKE_RESOLVED_QUOTING,
             Box::new(NaiveTypeOpsImpl::new(AdapterType::Snowflake)),
+            Arc::new(crate::stmt_splitter::NaiveStmtSplitter),
             never_cancels(),
         );
         assert_eq!(adapter.quote("abc"), "\"abc\"");

@@ -16,7 +16,7 @@ pub struct SalesforceMetadataAdapter {
 }
 
 impl SalesforceMetadataAdapter {
-    pub fn new(engine: Arc<AdapterEngine>) -> Self {
+    pub fn new(engine: Arc<dyn AdapterEngine>) -> Self {
         let adapter = ConcreteAdapter::new(engine);
         Self { adapter }
     }

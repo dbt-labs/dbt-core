@@ -10,6 +10,7 @@ use crate::errors::{
 use crate::query_cache::QueryCache;
 use crate::query_comment::{EMPTY_CONFIG, QueryCommentConfig};
 use crate::record_and_replay::{RecordEngine, ReplayEngine};
+use crate::sidecar_client::SidecarClient;
 use crate::sql_types::TypeOps;
 use crate::statement::*;
 use crate::stmt_splitter::StmtSplitter;
@@ -39,18 +40,11 @@ use tracy_client::span;
 
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::sync::RwLock;
-use std::sync::{Arc, LazyLock};
 use std::{thread, time::Duration};
 
 pub type Options = Vec<(String, OptionValue)>;
-
-/// Naive statement splitter used in the MockAdapter
-///
-/// IMPORTANT: not suitable for production use.
-/// TODO: remove when the full stmt splitter is available to this crate.
-static NAIVE_STMT_SPLITTER: LazyLock<Arc<dyn StmtSplitter>> =
-    LazyLock::new(|| Arc::new(crate::stmt_splitter::NaiveStmtSplitter));
 
 #[derive(Default)]
 pub struct DatabaseMap {
@@ -99,6 +93,306 @@ impl Connection for NoopConnection {
     fn update_node_id(&mut self, _node_id: Option<String>) {}
 }
 
+/// A trait abstracting the layer between the adapter layer and database drivers.
+///
+/// Each concrete engine type (ADBC, mock, sidecar, record, replay) implements this trait
+/// directly. This is the internal adapter service for other Rust modules in Fusion as
+/// the adapter layer interface is forced to abide by what is expected for consumption
+/// from Jinja code.
+pub trait AdapterEngine: Send + Sync {
+    /// Get the adapter type for this engine
+    fn adapter_type(&self) -> AdapterType;
+
+    /// Get the ADBC backend for this engine
+    fn backend(&self) -> Backend;
+
+    /// Get the resolved quoting policy
+    fn quoting(&self) -> ResolvedQuoting;
+
+    /// Get the statement splitter for this engine
+    fn splitter(&self) -> &dyn StmtSplitter;
+
+    /// Get the type operations for this engine
+    fn type_ops(&self) -> &dyn TypeOps;
+
+    /// Get the query comment config for this engine
+    fn query_comment(&self) -> &QueryCommentConfig;
+
+    /// Get a config value by key
+    fn config(&self, key: &str) -> Option<Cow<'_, str>>;
+
+    /// Get the full config object
+    fn get_config(&self) -> &AdapterConfig;
+
+    /// Get the query cache
+    fn query_cache(&self) -> Option<&Arc<dyn QueryCache>>;
+
+    /// Get a reference to the relation cache
+    fn relation_cache(&self) -> &Arc<RelationCache>;
+
+    /// Get the cancellation token
+    fn cancellation_token(&self) -> CancellationToken;
+
+    /// Create a new connection to the warehouse.
+    fn new_connection(
+        &self,
+        state: Option<&State>,
+        node_id: Option<String>,
+    ) -> AdapterResult<Box<dyn Connection>>;
+
+    /// Create a new connection to the warehouse with the given config.
+    fn new_connection_with_config(
+        &self,
+        config: &AdapterConfig,
+    ) -> AdapterResult<Box<dyn Connection>>;
+
+    /// Execute the given SQL query or statement with options.
+    ///
+    /// The default implementation uses ADBC to execute queries. Engines that
+    /// route execution differently (e.g. sidecar) should override this.
+    fn execute_with_options(
+        &self,
+        state: Option<&State>,
+        ctx: &QueryCtx,
+        conn: &'_ mut dyn Connection,
+        sql: &str,
+        options: Options,
+        fetch: bool,
+    ) -> AdapterResult<RecordBatch> {
+        adbc_execute_with_options(self, state, ctx, conn, sql, options, fetch)
+    }
+
+    // -- Methods with default implementations ---------------------------------
+
+    /// Whether this is a mock engine
+    fn is_mock(&self) -> bool {
+        false
+    }
+
+    /// Whether this is a sidecar engine (subprocess-based execution)
+    fn is_sidecar(&self) -> bool {
+        false
+    }
+
+    /// Whether this is a replay engine
+    fn is_replay(&self) -> bool {
+        false
+    }
+
+    /// Get the physical execution backend for sidecar engines.
+    ///
+    /// Returns the actual database backend (DuckDB, Snowflake, etc.) that SQL
+    /// will execute against. This differs from [`adapter_type()`] which returns
+    /// the logical adapter type.
+    fn physical_backend(&self) -> Option<Backend> {
+        None
+    }
+
+    /// Get a reference to the sidecar client, if this is a sidecar engine.
+    fn sidecar_client(&self) -> Option<&dyn SidecarClient> {
+        None
+    }
+
+    /// Execute the given SQL query or statement (convenience wrapper).
+    fn execute(
+        &self,
+        state: Option<&State>,
+        conn: &'_ mut dyn Connection,
+        ctx: &QueryCtx,
+        sql: &str,
+    ) -> AdapterResult<RecordBatch> {
+        self.execute_with_options(state, ctx, conn, sql, Options::new(), true)
+    }
+
+    /// Split SQL statements using the provided dialect.
+    fn split_and_filter_statements(&self, sql: &str, dialect: Dialect) -> Vec<String> {
+        self.splitter()
+            .split(sql, dialect)
+            .into_iter()
+            .filter(|statement| !self.splitter().is_empty(statement, dialect))
+            .collect()
+    }
+
+    /// Get the configured database name.
+    fn get_configured_database_name(&self) -> Option<Cow<'_, str>> {
+        self.config("database")
+    }
+}
+
+/// Default ADBC-based execute_with_options implementation.
+///
+/// Used by engines whose connections implement the full ADBC protocol
+/// (XdbcEngine, RecordEngine, ReplayEngine).
+fn adbc_execute_with_options(
+    engine: &(impl AdapterEngine + ?Sized),
+    state: Option<&State>,
+    ctx: &QueryCtx,
+    conn: &'_ mut dyn Connection,
+    sql: &str,
+    options: Options,
+    fetch: bool,
+) -> AdapterResult<RecordBatch> {
+    assert!(!sql.is_empty() || !options.is_empty());
+
+    let maybe_query_comment = state
+        .map(|s| engine.query_comment().resolve_comment(s))
+        .transpose()?;
+
+    let sql = match &maybe_query_comment {
+        Some(comment) => {
+            let sql = engine.query_comment().add_comment(sql, comment);
+            Cow::Owned(sql)
+        }
+        None => Cow::Borrowed(sql),
+    };
+
+    let mut options = options;
+    if let Some(state) = state
+        && engine.adapter_type() == AdapterType::Bigquery
+    {
+        let mut job_labels = maybe_query_comment
+            .as_ref()
+            .map_or_else(BTreeMap::new, |comment| {
+                engine
+                    .query_comment()
+                    .get_job_labels_from_query_comment(comment)
+            });
+        if let Some(invocation_id_label) = state
+            .lookup("invocation_id")
+            .and_then(|value| value.as_str().map(|label| label.to_owned()))
+        {
+            job_labels.insert("dbt_invocation_id".to_string(), invocation_id_label);
+        }
+
+        let job_label_option =
+            serde_json::to_string(&job_labels).expect("Should be able to serialize job labels");
+        options.push((
+            QUERY_LABELS.to_owned(),
+            OptionValue::String(job_label_option),
+        ));
+    }
+
+    let token = engine.cancellation_token();
+    let do_execute = |conn: &'_ mut dyn Connection| -> Result<
+        (Arc<Schema>, Vec<RecordBatch>),
+        Cancellable<adbc_core::error::Error>,
+    > {
+        use dbt_xdbc::statement::Statement as _;
+
+        let mut stmt = match engine.query_cache() {
+            Some(query_cache) => {
+                let inner_stmt = conn.new_statement()?;
+                query_cache.new_statement(inner_stmt)
+            }
+            None => conn.new_statement()?,
+        };
+        if let Some(node_id) = ctx.node_id() {
+            stmt.set_option(
+                OptionStatement::Other(DBT_NODE_ID.to_string()),
+                OptionValue::String(node_id.clone()),
+            )?;
+        }
+        if let Some(p) = ctx.phase() {
+            stmt.set_option(
+                OptionStatement::Other(DBT_EXECUTION_PHASE.to_string()),
+                OptionValue::String(p.to_string()),
+            )?;
+        }
+        stmt.set_option(
+            OptionStatement::Other(DBT_METADATA.to_string()),
+            OptionValue::Int(ctx.is_metadata() as i64),
+        )?;
+        options
+            .into_iter()
+            .try_for_each(|(key, value)| stmt.set_option(OptionStatement::Other(key), value))?;
+        stmt.set_sql_query(sql.as_ref())?;
+
+        // Make sure we don't create more statements after global cancellation.
+        token.check_cancellation()?;
+
+        // Track the statement so execution can be cancelled
+        // when the user Ctrl-C's the process.
+        let mut stmt = TrackedStatement::new(stmt);
+
+        let reader = stmt.execute()?;
+        let schema = reader.schema();
+        let mut batches = Vec::with_capacity(1);
+        if !fetch {
+            return Ok((schema, batches));
+        }
+
+        // This loop has been discovered to inexplicably hang in some circumstances
+        // See PR https://github.com/dbt-labs/fs/pull/7755
+        for res in reader {
+            let batch = res.map_err(adbc_core::error::Error::from)?;
+            batches.push(batch);
+            // Check for cancellation before processing the next batch
+            // or concatenating the batches produced so far.
+            token.check_cancellation()?;
+        }
+        Ok((schema, batches))
+    };
+    let _span = span!("SqlEngine::execute");
+
+    let sql_hash = code_hash(sql.as_ref());
+    let adapter_type = engine.adapter_type();
+    let _query_span_guard = create_debug_span(QueryExecuted::start(
+        sql.to_string(),
+        sql_hash,
+        adapter_type.as_ref().to_owned(),
+        ctx.node_id().cloned(),
+        ctx.desc().cloned(),
+    ))
+    .entered();
+
+    let (schema, batches) = match do_execute(conn) {
+        Ok(res) => res,
+        Err(Cancellable::Cancelled) => {
+            let e = AdapterError::new(
+                AdapterErrorKind::Cancelled,
+                "SQL statement execution was cancelled",
+            );
+
+            record_current_span_status_from_attrs(|attrs| {
+                if let Some(attrs) = attrs.downcast_mut::<QueryExecuted>() {
+                    attrs.dbt_core_event_code = "E017".to_string();
+                    attrs.set_query_outcome(QueryOutcome::Canceled);
+                }
+            });
+
+            return Err(e);
+        }
+        Err(Cancellable::Error(e)) => {
+            record_current_span_status_from_attrs(|attrs| {
+                if let Some(attrs) = attrs.downcast_mut::<QueryExecuted>() {
+                    attrs.dbt_core_event_code = "E017".to_string();
+                    attrs.set_query_outcome(QueryOutcome::Error);
+                    attrs.query_error_adapter_message =
+                        Some(format!("{:?}: {}", e.status, e.message));
+                    attrs.query_error_vendor_code = Some(e.vendor_code);
+                }
+            });
+
+            return Err(adbc_error_to_adapter_error(e));
+        }
+    };
+    let total_batch = concat_batches(&schema, &batches).map_err(arrow_error_to_adapter_error)?;
+
+    record_current_span_status_from_attrs(|attrs| {
+        if let Some(attrs) = attrs.downcast_mut::<QueryExecuted>() {
+            attrs.dbt_core_event_code = "E017".to_string();
+            attrs.set_query_outcome(QueryOutcome::Success);
+            attrs.query_id = AdapterResponse::query_id(&total_batch, adapter_type)
+        }
+    });
+
+    Ok(total_batch)
+}
+
+// ---------------------------------------------------------------------------
+// XdbcEngine
+// ---------------------------------------------------------------------------
+
 pub struct XdbcEngine {
     adapter_type: AdapterType,
     /// Auth configurator
@@ -111,12 +405,12 @@ pub struct XdbcEngine {
     semaphore: Arc<Semaphore>,
     /// Resolved quoting policy
     quoting: ResolvedQuoting,
-    /// Statement splitter
-    splitter: Arc<dyn StmtSplitter>,
     /// Query comment config
     query_comment: QueryCommentConfig,
-    /// Type operations (e.g. parsing, formatting) for the dilect this engine is for
+    /// Type operations (e.g. parsing, formatting) for the dialect this engine is for
     pub type_ops: Box<dyn TypeOps>,
+    /// Statement splitter
+    splitter: Arc<dyn StmtSplitter>,
     /// Query cache
     query_cache: Option<Arc<dyn QueryCache>>,
     /// Relation cache - caches warehouse relation metadata to avoid repeated queries
@@ -132,9 +426,9 @@ impl XdbcEngine {
         auth: Arc<dyn Auth>,
         config: AdapterConfig,
         quoting: ResolvedQuoting,
-        splitter: Arc<dyn StmtSplitter>,
         query_comment: QueryCommentConfig,
         type_ops: Box<dyn TypeOps>,
+        splitter: Arc<dyn StmtSplitter>,
         query_cache: Option<Arc<dyn QueryCache>>,
         relation_cache: Arc<RelationCache>,
         token: CancellationToken,
@@ -163,18 +457,13 @@ impl XdbcEngine {
             quoting,
             configured_databases: RwLock::new(DatabaseMap::default()),
             semaphore: Arc::new(Semaphore::new(permits)),
-            splitter,
             type_ops,
+            splitter,
             query_comment,
             query_cache,
             relation_cache,
             cancellation_token: token,
         }
-    }
-
-    #[inline]
-    fn adapter_type(&self) -> AdapterType {
-        self.adapter_type
     }
 
     fn load_driver_and_configure_database(
@@ -192,12 +481,6 @@ impl XdbcEngine {
             .with_semaphore(self.semaphore.clone())
             .try_load()
             .map_err(adbc_error_to_adapter_error)?;
-
-        // builder.with_named_option(
-        //     snowflake::LOG_TRACING,
-        //     database::LogLevel::Debug.to_string(),
-        // )?;
-        // ... other configuration steps can be added here...
 
         // The database is configured only once even if this runs multiple times,
         // unless a different configuration is provided.
@@ -223,18 +506,52 @@ impl XdbcEngine {
             }
         }
     }
+}
 
-    fn new_connection_with_config(
-        &self,
-        config: &AdapterConfig,
-    ) -> AdapterResult<Box<dyn Connection>> {
-        let mut database = self.load_driver_and_configure_database(config)?;
-        let connection_builder = connection::Builder::default();
-        let conn = match connection_builder.build(&mut database) {
-            Ok(conn) => conn,
-            Err(e) => return Err(adbc_error_to_adapter_error(e)),
-        };
-        Ok(conn)
+impl AdapterEngine for XdbcEngine {
+    #[inline]
+    fn adapter_type(&self) -> AdapterType {
+        self.adapter_type
+    }
+
+    fn backend(&self) -> Backend {
+        self.auth.backend()
+    }
+
+    fn quoting(&self) -> ResolvedQuoting {
+        self.quoting
+    }
+
+    fn splitter(&self) -> &dyn StmtSplitter {
+        self.splitter.as_ref()
+    }
+
+    fn type_ops(&self) -> &dyn TypeOps {
+        self.type_ops.as_ref()
+    }
+
+    fn query_comment(&self) -> &QueryCommentConfig {
+        &self.query_comment
+    }
+
+    fn config(&self, key: &str) -> Option<Cow<'_, str>> {
+        self.config.get_string(key)
+    }
+
+    fn get_config(&self) -> &AdapterConfig {
+        &self.config
+    }
+
+    fn query_cache(&self) -> Option<&Arc<dyn QueryCache>> {
+        self.query_cache.as_ref()
+    }
+
+    fn relation_cache(&self) -> &Arc<RelationCache> {
+        &self.relation_cache
+    }
+
+    fn cancellation_token(&self) -> CancellationToken {
+        self.cancellation_token.clone()
     }
 
     fn new_connection(
@@ -242,7 +559,7 @@ impl XdbcEngine {
         state: Option<&State>,
         _node_id: Option<String>,
     ) -> AdapterResult<Box<dyn Connection>> {
-        match self.adapter_type() {
+        match self.adapter_type {
             AdapterType::Databricks => {
                 if let Some(databricks_compute) = state.and_then(databricks_compute_from_state) {
                     let augmented_config = {
@@ -263,17 +580,33 @@ impl XdbcEngine {
         }
     }
 
-    fn cancellation_token(&self) -> CancellationToken {
-        self.cancellation_token.clone()
+    fn new_connection_with_config(
+        &self,
+        config: &AdapterConfig,
+    ) -> AdapterResult<Box<dyn Connection>> {
+        let mut database = self.load_driver_and_configure_database(config)?;
+        let connection_builder = connection::Builder::default();
+        let conn = match connection_builder.build(&mut database) {
+            Ok(conn) => conn,
+            Err(e) => return Err(adbc_error_to_adapter_error(e)),
+        };
+        Ok(conn)
     }
+
+    // Uses the default `execute_with_options` (ADBC-based).
 }
+
+// ---------------------------------------------------------------------------
+// MockEngine
+// ---------------------------------------------------------------------------
 
 /// Mock engine state for the MockAdapter
 #[derive(Clone)]
 pub struct MockEngine {
     adapter_type: AdapterType,
-    type_ops: Arc<dyn TypeOps>,
     quoting: ResolvedQuoting,
+    type_ops: Arc<dyn TypeOps>,
+    stmt_splitter: Arc<dyn StmtSplitter>,
     /// Relation cache - caches warehouse relation metadata
     relation_cache: Arc<RelationCache>,
 }
@@ -281,18 +614,101 @@ pub struct MockEngine {
 impl MockEngine {
     pub fn new(
         adapter_type: AdapterType,
-        type_ops: Box<dyn TypeOps>,
         quoting: ResolvedQuoting,
+        type_ops: Box<dyn TypeOps>,
+        stmt_splitter: Arc<dyn StmtSplitter>,
         relation_cache: Arc<RelationCache>,
     ) -> Self {
         Self {
             adapter_type,
-            type_ops: Arc::from(type_ops),
             quoting,
+            type_ops: Arc::from(type_ops),
+            stmt_splitter,
             relation_cache,
         }
     }
 }
+
+impl AdapterEngine for MockEngine {
+    fn adapter_type(&self) -> AdapterType {
+        self.adapter_type
+    }
+
+    fn backend(&self) -> Backend {
+        backend_of(self.adapter_type)
+    }
+
+    fn quoting(&self) -> ResolvedQuoting {
+        self.quoting
+    }
+
+    fn splitter(&self) -> &dyn StmtSplitter {
+        self.stmt_splitter.as_ref()
+    }
+
+    fn type_ops(&self) -> &dyn TypeOps {
+        self.type_ops.as_ref()
+    }
+
+    fn query_comment(&self) -> &QueryCommentConfig {
+        &EMPTY_CONFIG
+    }
+
+    fn config(&self, _key: &str) -> Option<Cow<'_, str>> {
+        None
+    }
+
+    fn get_config(&self) -> &AdapterConfig {
+        unreachable!("Mock engine does not support get_config")
+    }
+
+    fn query_cache(&self) -> Option<&Arc<dyn QueryCache>> {
+        None
+    }
+
+    fn relation_cache(&self) -> &Arc<RelationCache> {
+        &self.relation_cache
+    }
+
+    fn cancellation_token(&self) -> CancellationToken {
+        never_cancels()
+    }
+
+    fn new_connection(
+        &self,
+        _state: Option<&State>,
+        _node_id: Option<String>,
+    ) -> AdapterResult<Box<dyn Connection>> {
+        Ok(Box::new(NoopConnection))
+    }
+
+    fn new_connection_with_config(
+        &self,
+        _config: &AdapterConfig,
+    ) -> AdapterResult<Box<dyn Connection>> {
+        Ok(Box::new(NoopConnection) as Box<dyn Connection>)
+    }
+
+    fn execute_with_options(
+        &self,
+        _state: Option<&State>,
+        _ctx: &QueryCtx,
+        _conn: &'_ mut dyn Connection,
+        _sql: &str,
+        _options: Options,
+        _fetch: bool,
+    ) -> AdapterResult<RecordBatch> {
+        Ok(RecordBatch::new_empty(Arc::new(Schema::empty())))
+    }
+
+    fn is_mock(&self) -> bool {
+        true
+    }
+}
+
+// ---------------------------------------------------------------------------
+// SidecarEngine
+// ---------------------------------------------------------------------------
 
 /// Sidecar engine for subprocess-based execution.
 ///
@@ -303,13 +719,13 @@ impl MockEngine {
 pub struct SidecarEngine {
     adapter_type: AdapterType,
     execution_backend: Backend,
-    #[allow(dead_code)]
-    client: Arc<dyn crate::sidecar_client::SidecarClient>,
+    client: Arc<dyn SidecarClient>,
     quoting: ResolvedQuoting,
     config: Arc<AdapterConfig>,
     type_ops: Arc<dyn TypeOps>,
+    stmt_splitter: Arc<dyn StmtSplitter>,
     query_comment: Arc<QueryCommentConfig>,
-    /// Unused for sidecar adapters - required for API compatibility with AdapterEngine::relation_cache()
+    /// Unused for sidecar adapters - required for API compatibility
     relation_cache: Arc<RelationCache>,
 }
 
@@ -318,10 +734,11 @@ impl SidecarEngine {
     pub fn new(
         adapter_type: AdapterType,
         execution_backend: Backend,
-        client: Arc<dyn crate::sidecar_client::SidecarClient>,
+        client: Arc<dyn SidecarClient>,
         quoting: ResolvedQuoting,
         config: AdapterConfig,
         type_ops: Box<dyn TypeOps>,
+        stmt_splitter: Arc<dyn StmtSplitter>,
         query_comment: QueryCommentConfig,
         relation_cache: Arc<RelationCache>,
     ) -> Self {
@@ -332,477 +749,176 @@ impl SidecarEngine {
             quoting,
             config: Arc::new(config),
             type_ops: Arc::from(type_ops),
+            stmt_splitter,
             query_comment: Arc::new(query_comment),
             relation_cache,
         }
     }
 }
 
-/// A simple bridge between adapters and the drivers.
-#[derive(Clone)]
-pub enum AdapterEngine {
-    /// Xdbc engine
-    Xdbc(Arc<XdbcEngine>),
-    /// Engine used for recording db interaction; recording engine is
-    /// a wrapper around an actual engine
-    Record(RecordEngine),
-    /// Engine used for replaying db interaction
-    Replay(ReplayEngine),
-    /// Mock engine for the MockAdapter
-    Mock(MockEngine),
-    /// Sidecar engine for subprocess execution (Snowflake-on-DuckDB, etc.)
-    Sidecar(Arc<SidecarEngine>),
-}
-
-impl AdapterEngine {
-    /// Create a new [`SqlEngine::Xdbc`] based on the given configuration.
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        adapter_type: AdapterType,
-        auth: Arc<dyn Auth>,
-        config: AdapterConfig,
-        quoting: ResolvedQuoting,
-        stmt_splitter: Arc<dyn StmtSplitter>,
-        query_cache: Option<Arc<dyn QueryCache>>,
-        query_comment: QueryCommentConfig,
-        type_ops: Box<dyn TypeOps>,
-        relation_cache: Arc<RelationCache>,
-        token: CancellationToken,
-    ) -> Arc<Self> {
-        let engine = XdbcEngine::new(
-            adapter_type,
-            auth,
-            config,
-            quoting,
-            stmt_splitter,
-            query_comment,
-            type_ops,
-            query_cache,
-            relation_cache,
-            token,
-        );
-        Arc::new(AdapterEngine::Xdbc(Arc::new(engine)))
+impl AdapterEngine for SidecarEngine {
+    fn adapter_type(&self) -> AdapterType {
+        self.adapter_type
     }
 
-    /// Create a new [`SqlEngine::Replay`] based on the given path and adapter type.
-    #[allow(clippy::too_many_arguments)]
-    pub fn new_for_replaying(
-        adapter_type: AdapterType,
-        path: PathBuf,
-        config: AdapterConfig,
-        quoting: ResolvedQuoting,
-        stmt_splitter: Arc<dyn StmtSplitter>,
-        query_comment: QueryCommentConfig,
-        type_ops: Box<dyn TypeOps>,
-        relation_cache: Arc<RelationCache>,
-        token: CancellationToken,
-    ) -> Arc<Self> {
-        let engine = ReplayEngine::new(
-            adapter_type,
-            path,
-            config,
-            quoting,
-            stmt_splitter,
-            query_comment,
-            type_ops,
-            relation_cache,
-            token,
-        );
-        Arc::new(AdapterEngine::Replay(engine))
+    fn backend(&self) -> Backend {
+        self.execution_backend
     }
 
-    /// Create a new [`SqlEngine::Record`] wrapping the given engine.
-    pub fn new_for_recording(path: PathBuf, engine: Arc<AdapterEngine>) -> Arc<Self> {
-        let engine = RecordEngine::new(path, engine);
-        Arc::new(AdapterEngine::Record(engine))
+    fn quoting(&self) -> ResolvedQuoting {
+        self.quoting
     }
 
-    pub fn is_mock(&self) -> bool {
-        matches!(self, AdapterEngine::Mock(_))
+    fn splitter(&self) -> &dyn StmtSplitter {
+        self.stmt_splitter.as_ref()
     }
 
-    /// Check if this is a sidecar engine (subprocess-based execution)
-    pub fn is_sidecar(&self) -> bool {
-        matches!(self, AdapterEngine::Sidecar(_))
+    fn type_ops(&self) -> &dyn TypeOps {
+        self.type_ops.as_ref()
     }
 
-    /// Get the physical execution backend for sidecar engines
-    ///
-    /// Returns the actual database backend (DuckDB, Snowflake, etc.) that SQL will execute against.
-    /// This differs from adapter_type() which returns the logical adapter type.
-    ///
-    /// Example: Snowflake profile with --execute sidecar
-    /// - adapter_type() returns Snowflake (for type names, Jinja dispatch)
-    /// - physical_backend() returns DuckDB (for SQL execution)
-    pub fn physical_backend(&self) -> Option<Backend> {
-        match self {
-            AdapterEngine::Sidecar(engine) => Some(engine.execution_backend),
-            _ => None,
-        }
+    fn query_comment(&self) -> &QueryCommentConfig {
+        &self.query_comment
     }
 
-    pub fn quoting(&self) -> ResolvedQuoting {
-        match self {
-            AdapterEngine::Xdbc(engine) => engine.quoting,
-            AdapterEngine::Record(engine) => engine.quoting(),
-            AdapterEngine::Replay(engine) => engine.quoting(),
-            AdapterEngine::Mock(engine) => engine.quoting,
-            AdapterEngine::Sidecar(engine) => engine.quoting,
-        }
+    fn config(&self, key: &str) -> Option<Cow<'_, str>> {
+        self.config.get_string(key)
     }
 
-    /// Get the statement splitter for this engine
-    pub fn splitter(&self) -> &dyn StmtSplitter {
-        match self {
-            AdapterEngine::Xdbc(engine) => engine.splitter.as_ref(),
-            AdapterEngine::Record(engine) => engine.splitter(),
-            AdapterEngine::Replay(engine) => engine.splitter(),
-            AdapterEngine::Mock(_) => NAIVE_STMT_SPLITTER.as_ref(),
-            AdapterEngine::Sidecar(_) => NAIVE_STMT_SPLITTER.as_ref(),
-        }
+    fn get_config(&self) -> &AdapterConfig {
+        &self.config
     }
 
-    pub fn type_ops(&self) -> &dyn TypeOps {
-        match self {
-            AdapterEngine::Xdbc(engine) => engine.type_ops.as_ref(),
-            AdapterEngine::Record(engine) => engine.type_ops(),
-            AdapterEngine::Replay(engine) => engine.type_ops(),
-            AdapterEngine::Mock(mock_engine) => mock_engine.type_ops.as_ref(),
-            AdapterEngine::Sidecar(sidecar_engine) => sidecar_engine.type_ops.as_ref(),
-        }
+    fn query_cache(&self) -> Option<&Arc<dyn QueryCache>> {
+        None
     }
 
-    /// Split SQL statements using the provided dialect
-    ///
-    /// This method handles the splitting of SQL statements based on the dialect's rules.
-    /// The dialect must be provided by the caller since the mapping from Backend to
-    /// AdapterType/Dialect is not always deterministic (e.g., Generic backend,
-    /// shared drivers like Postgres/Redshift).
-    pub fn split_and_filter_statements(&self, sql: &str, dialect: Dialect) -> Vec<String> {
-        self.splitter()
-            .split(sql, dialect)
-            .into_iter()
-            .filter(|statement| !self.splitter().is_empty(statement, dialect))
-            .collect()
+    fn relation_cache(&self) -> &Arc<RelationCache> {
+        &self.relation_cache
     }
 
-    /// Get the query comment config for this engine
-    pub fn query_comment(&self) -> &QueryCommentConfig {
-        match self {
-            AdapterEngine::Xdbc(engine) => &engine.query_comment,
-            AdapterEngine::Record(engine) => engine.query_comment(),
-            AdapterEngine::Replay(engine) => engine.query_comment(),
-            AdapterEngine::Mock(_) => &EMPTY_CONFIG,
-            AdapterEngine::Sidecar(sidecar_engine) => &sidecar_engine.query_comment,
-        }
+    fn cancellation_token(&self) -> CancellationToken {
+        never_cancels()
     }
 
-    /// Create a new connection to the warehouse.
-    pub fn new_connection_with_config(
-        &self,
-        config: &AdapterConfig,
-    ) -> AdapterResult<Box<dyn Connection>> {
-        let _span = span!("ActualEngine::new_connection");
-        let conn = match &self {
-            Self::Xdbc(actual_engine) => actual_engine.new_connection_with_config(config),
-            // TODO: the record and replay engines should have a new_connection_with_config()
-            // method instead of a new_connection method
-            Self::Record(record_engine) => record_engine.new_connection(None, None),
-            Self::Replay(replay_engine) => replay_engine.new_connection(None, None),
-            Self::Mock(_) => Ok(Box::new(NoopConnection) as Box<dyn Connection>),
-            // Sidecar mode doesn't use real connections - adapter methods that need
-            // data access should use the sidecar client directly (e.g., get_relation)
-            Self::Sidecar(_) => Ok(Box::new(NoopConnection) as Box<dyn Connection>),
-        }?;
-        Ok(conn)
-    }
-
-    /// Get the adapter type for this engine
-    #[inline]
-    pub fn adapter_type(&self) -> AdapterType {
-        match self {
-            AdapterEngine::Xdbc(actual_engine) => actual_engine.adapter_type(),
-            AdapterEngine::Record(record_engine) => record_engine.adapter_type(),
-            AdapterEngine::Replay(replay_engine) => replay_engine.adapter_type(),
-            AdapterEngine::Mock(mock_engine) => mock_engine.adapter_type,
-            AdapterEngine::Sidecar(sidecar_engine) => sidecar_engine.adapter_type,
-        }
-    }
-
-    pub fn backend(&self) -> Backend {
-        match self {
-            AdapterEngine::Xdbc(actual_engine) => actual_engine.auth.backend(),
-            AdapterEngine::Record(record_engine) => record_engine.backend(),
-            AdapterEngine::Replay(replay_engine) => replay_engine.backend(),
-            AdapterEngine::Mock(mock_engine) => backend_of(mock_engine.adapter_type),
-            AdapterEngine::Sidecar(sidecar_engine) => sidecar_engine.execution_backend,
-        }
-    }
-
-    /// Create a new connection to the warehouse.
-    pub fn new_connection(
+    fn new_connection(
         &self,
         state: Option<&State>,
         node_id: Option<String>,
     ) -> AdapterResult<Box<dyn Connection>> {
-        match &self {
-            Self::Xdbc(actual_engine) => actual_engine.new_connection(state, node_id),
-            Self::Record(record_engine) => record_engine.new_connection(state, node_id),
-            Self::Replay(replay_engine) => replay_engine.new_connection(state, node_id),
-            Self::Mock(_) => Ok(Box::new(NoopConnection)),
-            // Sidecar mode doesn't use real connections - adapter methods that need
-            // data access should use the sidecar client directly (e.g., get_relation)
-            Self::Sidecar(_) => Ok(Box::new(NoopConnection)),
-        }
+        self.client.new_connection(state, node_id)
     }
 
-    /// Execute the given SQL query or statement.
-    pub fn execute(
+    fn new_connection_with_config(
         &self,
-        state: Option<&State>,
-        conn: &'_ mut dyn Connection,
-        ctx: &QueryCtx,
-        sql: &str,
-    ) -> AdapterResult<RecordBatch> {
-        self.execute_with_options(state, ctx, conn, sql, Options::new(), true)
+        _config: &AdapterConfig,
+    ) -> AdapterResult<Box<dyn Connection>> {
+        // Sidecar mode doesn't use config-based connections
+        Ok(Box::new(NoopConnection) as Box<dyn Connection>)
     }
 
-    /// Execute the given SQL query or statement.
-    pub fn execute_with_options(
+    fn execute_with_options(
         &self,
-        state: Option<&State>,
+        _state: Option<&State>,
         ctx: &QueryCtx,
-        conn: &'_ mut dyn Connection,
+        _conn: &'_ mut dyn Connection,
         sql: &str,
-        options: Options,
+        _options: Options,
         fetch: bool,
     ) -> AdapterResult<RecordBatch> {
-        assert!(!sql.is_empty() || !options.is_empty());
-
-        let maybe_query_comment = state
-            .map(|s| self.query_comment().resolve_comment(s))
-            .transpose()?;
-
-        let sql = match &maybe_query_comment {
-            Some(comment) => {
-                let sql = self.query_comment().add_comment(sql, comment);
-                Cow::Owned(sql)
-            }
-            None => Cow::Borrowed(sql),
-        };
-
-        let mut options = options;
-        if let Some(state) = state
-            && self.adapter_type() == AdapterType::Bigquery
-        {
-            let mut job_labels =
-                maybe_query_comment
-                    .as_ref()
-                    .map_or_else(BTreeMap::new, |comment| {
-                        self.query_comment()
-                            .get_job_labels_from_query_comment(comment)
-                    });
-            if let Some(invocation_id_label) = state
-                .lookup("invocation_id")
-                .and_then(|value| value.as_str().map(|label| label.to_owned()))
-            {
-                job_labels.insert("dbt_invocation_id".to_string(), invocation_id_label);
-            }
-
-            let job_label_option =
-                serde_json::to_string(&job_labels).expect("Should be able to serialize job labels");
-            options.push((
-                QUERY_LABELS.to_owned(),
-                OptionValue::String(job_label_option),
-            ));
-        }
-
-        let token = self.cancellation_token();
-        let do_execute = |conn: &'_ mut dyn Connection| -> Result<
-            (Arc<Schema>, Vec<RecordBatch>),
-            Cancellable<adbc_core::error::Error>,
-        > {
-            use dbt_xdbc::statement::Statement as _;
-
-            let mut stmt = match self.query_cache() {
-                Some(query_cache) => {
-                    let inner_stmt = conn.new_statement()?;
-                    query_cache.new_statement(inner_stmt)
-                }
-                None => conn.new_statement()?,
-            };
-            if let Some(node_id) = ctx.node_id() {
-                stmt.set_option(
-                    OptionStatement::Other(DBT_NODE_ID.to_string()),
-                    OptionValue::String(node_id.clone()),
-                )?;
-            }
-            if let Some(p) = ctx.phase() {
-                stmt.set_option(
-                    OptionStatement::Other(DBT_EXECUTION_PHASE.to_string()),
-                    OptionValue::String(p.to_string()),
-                )?;
-            }
-            stmt.set_option(
-                OptionStatement::Other(DBT_METADATA.to_string()),
-                OptionValue::Int(ctx.is_metadata() as i64),
-            )?;
-            options
-                .into_iter()
-                .try_for_each(|(key, value)| stmt.set_option(OptionStatement::Other(key), value))?;
-            stmt.set_sql_query(sql.as_ref())?;
-
-            // Make sure we don't create more statements after global cancellation.
-            token.check_cancellation()?;
-
-            // Track the statement so execution can be cancelled
-            // when the user Ctrl-C's the process.
-            let mut stmt = TrackedStatement::new(stmt);
-
-            let reader = stmt.execute()?;
-            let schema = reader.schema();
-            let mut batches = Vec::with_capacity(1);
-            if !fetch {
-                return Ok((schema, batches));
-            }
-
-            // This loop has been discovered to inexplicably hang in some circumstances
-            // See PR https://github.com/dbt-labs/fs/pull/7755
-            for res in reader {
-                let batch = res.map_err(adbc_core::error::Error::from)?;
-                batches.push(batch);
-                // Check for cancellation before processing the next batch
-                // or concatenating the batches produced so far.
-                token.check_cancellation()?;
-            }
-            Ok((schema, batches))
-        };
-        let _span = span!("SqlEngine::execute");
-
-        let sql_hash = code_hash(sql.as_ref());
-        let adapter_type = self.adapter_type();
-        let _query_span_guard = create_debug_span(QueryExecuted::start(
-            sql.to_string(),
-            sql_hash,
-            adapter_type.as_ref().to_owned(),
-            ctx.node_id().cloned(),
-            ctx.desc().cloned(),
-        ))
-        .entered();
-
-        let (schema, batches) = match do_execute(conn) {
-            Ok(res) => res,
-            Err(Cancellable::Cancelled) => {
-                let e = AdapterError::new(
-                    AdapterErrorKind::Cancelled,
-                    "SQL statement execution was cancelled",
-                );
-
-                // TODO: wouldn't it be possible to salvage query_id if at least one batch was produced?
-                record_current_span_status_from_attrs(|attrs| {
-                    if let Some(attrs) = attrs.downcast_mut::<QueryExecuted>() {
-                        // dbt core had different event codes for start and end of a query
-                        attrs.dbt_core_event_code = "E017".to_string();
-                        attrs.set_query_outcome(QueryOutcome::Canceled);
-                    }
-                });
-
-                return Err(e);
-            }
-            Err(Cancellable::Error(e)) => {
-                // TODO: wouldn't it be possible to salvage query_id if at least one batch was produced?
-                record_current_span_status_from_attrs(|attrs| {
-                    if let Some(attrs) = attrs.downcast_mut::<QueryExecuted>() {
-                        // dbt core had different event codes for start and end of a query
-                        attrs.dbt_core_event_code = "E017".to_string();
-                        attrs.set_query_outcome(QueryOutcome::Error);
-                        attrs.query_error_adapter_message =
-                            Some(format!("{:?}: {}", e.status, e.message));
-                        attrs.query_error_vendor_code = Some(e.vendor_code);
-                    }
-                });
-
-                return Err(adbc_error_to_adapter_error(e));
-            }
-        };
-        let total_batch =
-            concat_batches(&schema, &batches).map_err(arrow_error_to_adapter_error)?;
-
-        record_current_span_status_from_attrs(|attrs| {
-            if let Some(attrs) = attrs.downcast_mut::<QueryExecuted>() {
-                // dbt core had different event codes for start and end of a query
-                attrs.dbt_core_event_code = "E017".to_string();
-                attrs.set_query_outcome(QueryOutcome::Success);
-                attrs.query_id = AdapterResponse::query_id(&total_batch, adapter_type)
-            }
-        });
-
-        Ok(total_batch)
-    }
-
-    /// Get the configured database name. Used by
-    /// adapter.verify_database to check if the database is valid.
-    pub fn get_configured_database_name(&self) -> Option<Cow<'_, str>> {
-        self.config("database")
-    }
-
-    /// Get a config value by key
-    ///
-    /// ## Returns
-    /// always is Ok(None) for non Warehouse/Record variance
-    pub fn config(&self, key: &str) -> Option<Cow<'_, str>> {
-        match self {
-            Self::Xdbc(actual_engine) => actual_engine.config.get_string(key),
-            Self::Record(record_engine) => record_engine.config(key),
-            Self::Replay(replay_engine) => replay_engine.config(key),
-            Self::Mock(_) => None,
-            Self::Sidecar(sidecar_engine) => sidecar_engine.config.get_string(key),
+        // Route through sidecar client
+        let batch_opt = self.client.execute(ctx, sql, fetch)?;
+        match batch_opt {
+            Some(batch) => Ok(batch),
+            None => Ok(RecordBatch::new_empty(Arc::new(Schema::empty()))),
         }
     }
 
-    // Get full config object
-    pub fn get_config(&self) -> &AdapterConfig {
-        match self {
-            Self::Xdbc(actual_engine) => &actual_engine.config,
-            Self::Record(record_engine) => record_engine.get_config(),
-            Self::Replay(replay_engine) => replay_engine.get_config(),
-            Self::Mock(_) => unreachable!("Mock engine does not support get_config"),
-            Self::Sidecar(sidecar_engine) => &sidecar_engine.config,
-        }
+    fn is_sidecar(&self) -> bool {
+        true
     }
 
-    // Get query cache
-    pub fn query_cache(&self) -> Option<&Arc<dyn QueryCache>> {
-        match self {
-            Self::Xdbc(actual_engine) => actual_engine.query_cache.as_ref(),
-            Self::Record(_record_engine) => None,
-            Self::Replay(_replay_engine) => None,
-            Self::Mock(_) => None,
-            Self::Sidecar(_) => None,
-        }
+    fn physical_backend(&self) -> Option<Backend> {
+        Some(self.execution_backend)
     }
 
-    /// Get a reference to the relation cache
-    pub fn relation_cache(&self) -> &Arc<RelationCache> {
-        match self {
-            Self::Xdbc(actual_engine) => &actual_engine.relation_cache,
-            Self::Record(record_engine) => record_engine.relation_cache(),
-            Self::Replay(replay_engine) => replay_engine.relation_cache(),
-            Self::Mock(mock_engine) => &mock_engine.relation_cache,
-            Self::Sidecar(sidecar_engine) => &sidecar_engine.relation_cache,
-        }
-    }
-
-    pub fn cancellation_token(&self) -> CancellationToken {
-        match self {
-            Self::Xdbc(actual_engine) => actual_engine.cancellation_token(),
-            Self::Record(record_engine) => record_engine.cancellation_token(),
-            Self::Replay(replay_engine) => replay_engine.cancellation_token(),
-            Self::Mock(_) => never_cancels(),
-            Self::Sidecar(_) => never_cancels(),
-        }
+    fn sidecar_client(&self) -> Option<&dyn SidecarClient> {
+        Some(self.client.as_ref())
     }
 }
+
+// ---------------------------------------------------------------------------
+// Constructor functions (replacing former enum constructors)
+// ---------------------------------------------------------------------------
+
+/// Create a new XDBC-based [`AdapterEngine`].
+#[allow(clippy::too_many_arguments)]
+pub fn new_engine(
+    adapter_type: AdapterType,
+    auth: Arc<dyn Auth>,
+    config: AdapterConfig,
+    quoting: ResolvedQuoting,
+    query_cache: Option<Arc<dyn QueryCache>>,
+    query_comment: QueryCommentConfig,
+    type_ops: Box<dyn TypeOps>,
+    stmt_splitter: Arc<dyn StmtSplitter>,
+    relation_cache: Arc<RelationCache>,
+    token: CancellationToken,
+) -> Arc<dyn AdapterEngine> {
+    let engine = XdbcEngine::new(
+        adapter_type,
+        auth,
+        config,
+        quoting,
+        query_comment,
+        type_ops,
+        stmt_splitter,
+        query_cache,
+        relation_cache,
+        token,
+    );
+    Arc::new(engine)
+}
+
+/// Create a new replay-based [`AdapterEngine`].
+#[allow(clippy::too_many_arguments)]
+pub fn new_engine_for_replaying(
+    adapter_type: AdapterType,
+    path: PathBuf,
+    config: AdapterConfig,
+    quoting: ResolvedQuoting,
+    query_comment: QueryCommentConfig,
+    type_ops: Box<dyn TypeOps>,
+    stmt_splitter: Arc<dyn StmtSplitter>,
+    relation_cache: Arc<RelationCache>,
+    token: CancellationToken,
+) -> Arc<dyn AdapterEngine> {
+    let engine = ReplayEngine::new(
+        adapter_type,
+        path,
+        config,
+        quoting,
+        query_comment,
+        type_ops,
+        stmt_splitter,
+        relation_cache,
+        token,
+    );
+    Arc::new(engine)
+}
+
+/// Create a new record-wrapping [`AdapterEngine`].
+pub fn new_engine_for_recording(
+    path: PathBuf,
+    engine: Arc<dyn AdapterEngine>,
+) -> Arc<dyn AdapterEngine> {
+    let engine = RecordEngine::new(path, engine);
+    Arc::new(engine)
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 /// Get the Databricks compute engine configured for this model/snapshot
 ///
@@ -833,7 +949,7 @@ fn databricks_compute_from_state(state: &State) -> Option<String> {
 /// https://github.com/dbt-labs/dbt-adapters/blob/996a302fa9107369eb30d733dadfaf307023f33d/dbt-adapters/src/dbt/adapters/sql/connections.py#L84
 #[allow(clippy::too_many_arguments)]
 pub fn execute_query_with_retry(
-    engine: Arc<AdapterEngine>,
+    engine: Arc<dyn AdapterEngine>,
     state: Option<&State>,
     conn: &'_ mut dyn Connection,
     ctx: &QueryCtx,

@@ -1,3 +1,4 @@
+use crate::adapter_engine::AdapterEngine;
 use crate::base_adapter::*;
 use crate::cache::RelationCache;
 use crate::catalog_relation::CatalogRelation;
@@ -17,7 +18,7 @@ use crate::sql_types::TypeOps;
 use crate::stmt_splitter::NaiveStmtSplitter;
 use crate::time_machine::TimeMachine;
 use crate::typed_adapter::{ReplayAdapter, TypedBaseAdapter};
-use crate::{AdapterEngine, AdapterResponse, AdapterResult, BaseAdapter};
+use crate::{AdapterResponse, AdapterResult, BaseAdapter};
 
 use dbt_agate::AgateTable;
 use dbt_auth::{AdapterConfig, Auth, auth_for_backend};
@@ -234,15 +235,15 @@ impl BridgeAdapter {
         let stmt_splitter = Arc::new(NaiveStmtSplitter {});
         let query_comment = QueryCommentConfig::from_query_comment(None, adapter_type, false);
 
-        let engine = AdapterEngine::new(
+        let engine = crate::adapter_engine::new_engine(
             adapter_type,
             auth,
             adapter_config,
             quoting,
-            stmt_splitter,
             None,
             query_comment,
             type_ops,
+            stmt_splitter,
             relation_cache,
             token,
         );
@@ -359,7 +360,7 @@ impl AdapterTyping for BridgeAdapter {
         }
     }
 
-    fn engine(&self) -> &Arc<AdapterEngine> {
+    fn engine(&self) -> &Arc<dyn AdapterEngine> {
         match &self.inner {
             Typed { adapter, .. } => adapter.engine(),
             Parse(state) => &state.engine,

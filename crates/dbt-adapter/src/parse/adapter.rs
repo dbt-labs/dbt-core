@@ -29,7 +29,7 @@ pub struct ParseAdapterState {
     ///
     /// Not actually used to run SQL queries during parse, but needed since
     /// this object carries useful dependencies.
-    pub engine: Arc<AdapterEngine>,
+    pub engine: Arc<dyn AdapterEngine>,
     /// The call_get_relation method calls found during parse
     pub call_get_relation: DashMap<String, Vec<Value>>,
     /// The call_get_columns_in_relation method calls found during parse
@@ -47,7 +47,7 @@ pub struct ParseAdapterState {
 impl ParseAdapterState {
     pub fn new(
         adapter_type: AdapterType,
-        engine: Arc<AdapterEngine>,
+        engine: Arc<dyn AdapterEngine>,
         catalogs: Option<Arc<DbtCatalogs>>,
     ) -> Self {
         ParseAdapterState {

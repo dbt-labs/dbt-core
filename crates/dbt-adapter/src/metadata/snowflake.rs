@@ -140,7 +140,7 @@ pub struct SnowflakeMetadataAdapter {
 }
 
 impl SnowflakeMetadataAdapter {
-    pub fn new(engine: Arc<AdapterEngine>) -> Self {
+    pub fn new(engine: Arc<dyn AdapterEngine>) -> Self {
         let adapter = ConcreteAdapter::new(engine);
         Self { adapter }
     }

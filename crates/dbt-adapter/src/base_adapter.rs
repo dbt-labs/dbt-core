@@ -3,6 +3,7 @@ use crate::column::ColumnStatic;
 use crate::metadata::*;
 use crate::query_cache::QueryCache;
 use crate::snapshots::SnapshotStrategy;
+use crate::stmt_splitter::StmtSplitter;
 use crate::typed_adapter::{ReplayAdapter, TypedBaseAdapter};
 use crate::{AdapterResponse, AdapterResult};
 
@@ -72,8 +73,8 @@ pub trait AdapterTyping {
         Some(value)
     }
 
-    /// Get the [SqlEngine]
-    fn engine(&self) -> &Arc<AdapterEngine>;
+    /// Get the [AdapterEngine]
+    fn engine(&self) -> &Arc<dyn AdapterEngine>;
 
     /// Get the [ResolvedQuoting]
     fn quoting(&self) -> ResolvedQuoting {
@@ -1195,6 +1196,9 @@ pub trait AdapterFactory: Send + Sync {
         query_comment: Option<QueryComment>,
         token: CancellationToken,
     ) -> FsResult<Arc<dyn BaseAdapter>>;
+
+    /// Return the statement splitter used by this factory.
+    fn stmt_splitter(&self) -> Arc<dyn StmtSplitter>;
 
     /// Create a relation from a InternalDbtNode
     fn create_relation_from_node(
