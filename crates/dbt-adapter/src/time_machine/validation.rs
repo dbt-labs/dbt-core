@@ -250,6 +250,7 @@ impl TimeMachineEventValidationEngine {
 
         // Register sanitizers
         engine.register_sanitizer(Box::new(TimestampSanitizer));
+        engine.register_sanitizer(Box::new(DateLiteralSanitizer));
         engine.register_sanitizer(Box::new(QueryTagSanitizer));
         engine.register_sanitizer(Box::new(UuidSanitizer));
         // Whitespace sanitizer should be last to normalize after other sanitizers
@@ -449,6 +450,27 @@ impl SqlSanitizer for TimestampSanitizer {
     }
 }
 
+/// Sanitizer for single-quoted date literal patterns.
+///
+/// Replaces date literals like `'2026-02-12'` with `'<DATE>'`.
+/// This handles SQL that embeds `current_date()` or similar expressions
+/// that produce different dates between recording and replay.
+///
+/// Must run after `TimestampSanitizer` so full timestamps are already replaced.
+pub struct DateLiteralSanitizer;
+
+impl SqlSanitizer for DateLiteralSanitizer {
+    fn name(&self) -> &'static str {
+        "date_literal"
+    }
+
+    fn sanitize(&self, sql: &str) -> String {
+        static RE: LazyLock<Regex> =
+            LazyLock::new(|| Regex::new(r"'\d{4}-\d{2}-\d{2}'").expect("valid regex"));
+        RE.replace_all(sql, "'<DATE>'").to_string()
+    }
+}
+
 /// Sanitizer for query_tag session settings.
 ///
 /// Query tags contain dynamic values like thread IDs that differ between runs.
@@ -588,6 +610,52 @@ mod tests {
         let sql = "INSERT INTO t (ts) VALUES ('2026-01-21T01:04:12.066273')";
         let sanitized = sanitizer.sanitize(sql);
         assert_eq!(sanitized, "INSERT INTO t (ts) VALUES ('<TIMESTAMP>')");
+    }
+
+    #[test]
+    fn test_date_literal_sanitizer() {
+        let sanitizer = DateLiteralSanitizer;
+        let sql = "WHERE partition_date = '2026-02-12' AND last_seen_date < '2026-02-12'";
+        let sanitized = sanitizer.sanitize(sql);
+        assert_eq!(
+            sanitized,
+            "WHERE partition_date = '<DATE>' AND last_seen_date < '<DATE>'"
+        );
+    }
+
+    #[test]
+    fn test_date_literal_sanitizer_does_not_match_timestamps() {
+        // TimestampSanitizer runs first; after that, only bare dates remain.
+        // But standalone, DateLiteralSanitizer should not corrupt timestamps
+        // because dates inside timestamps don't appear as 'YYYY-MM-DD' alone.
+        let sanitizer = DateLiteralSanitizer;
+        let sql = "VALUES ('2026-01-23T00:49:47.760170')";
+        let sanitized = sanitizer.sanitize(sql);
+        // The pattern 'YYYY-MM-DD' doesn't match inside a timestamp
+        // because the timestamp continues past the date portion
+        assert_eq!(sanitized, "VALUES ('2026-01-23T00:49:47.760170')");
+    }
+
+    #[test]
+    fn test_sanitization_makes_date_sql_match() {
+        let engine = TimeMachineEventValidationEngine::new();
+
+        let incoming_args = serde_json::json!([
+            "SELECT * FROM t WHERE partition_date = '2026-02-16' AND last_seen_date < '2026-02-16'"
+        ]);
+        let recorded_args = serde_json::json!([
+            "SELECT * FROM t WHERE partition_date = '2026-02-12' AND last_seen_date < '2026-02-12'"
+        ]);
+
+        let incoming = IncomingEvent::new("model.my_project.my_model", "execute", &incoming_args);
+        let recorded = make_recorded_event(incoming.node_id, "execute", recorded_args);
+
+        let result = engine.validate(&incoming, &recorded);
+        assert!(
+            matches!(result, ValidationResult::Match),
+            "Expected match after date literal sanitization, got {:?}",
+            result
+        );
     }
 
     #[test]
