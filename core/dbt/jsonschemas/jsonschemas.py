@@ -183,6 +183,15 @@ def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path:
                     if key == "type_params":
                         continue
 
+                    # 'dataset' and 'project' are valid top-level source properties for BigQuery
+                    if (
+                        len(error_path) == 2
+                        and error_path[0] == "sources"
+                        and isinstance(error_path[1], int)
+                        and key in _get_allowed_config_key_aliases()
+                    ):
+                        continue
+
                     if key == "overrides" and key_path.startswith("sources"):
                         deprecations.warn(
                             "source-override-deprecation",
@@ -256,7 +265,9 @@ def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path:
             )
 
 
-def validate_model_config(config: Dict[str, Any], file_path: str) -> None:
+def validate_model_config(
+    config: Dict[str, Any], file_path: str, is_python_model: bool = False
+) -> None:
     if not _can_run_validations():
         return
 
@@ -287,6 +298,23 @@ def validate_model_config(config: Dict[str, Any], file_path: str) -> None:
                     # Avoids false positives as described in https://github.com/dbt-labs/dbt-core/issues/12087
                     if key in ("post-hook", "pre-hook"):
                         continue
+
+                    # Special case for python model internal key additions
+                    # These keys are added during python model parsing and are not user-provided
+                    python_model_internal_keys = (
+                        "config_keys_used",
+                        "config_keys_defaults",
+                        "meta_keys_used",
+                        "meta_keys_defaults",
+                    )
+                    if key in python_model_internal_keys and is_python_model:
+                        continue
+
+                    # Dont raise deprecation warnings for adapter specific config key aliases
+                    if key in _get_allowed_config_key_aliases():
+                        continue
+
+                    # For everything else, emit deprecation warning
                     deprecations.warn(
                         "custom-key-in-config-deprecation",
                         key=key,

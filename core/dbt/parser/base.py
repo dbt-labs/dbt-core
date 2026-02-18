@@ -5,7 +5,7 @@ from typing import Any, Dict, Generic, List, Optional, TypeVar
 
 from dbt import deprecations, hooks, utils
 from dbt.adapters.factory import get_adapter  # noqa: F401
-from dbt.artifacts.resources import Contract
+from dbt.artifacts.resources import Contract, Export
 from dbt.clients.jinja import MacroGenerator, get_rendered
 from dbt.config import RuntimeConfig
 from dbt.context.context_config import ContextConfig
@@ -22,6 +22,7 @@ from dbt.exceptions import (
     DbtInternalError,
     DictParseError,
     InvalidAccessTypeError,
+    ParsingError,
 )
 from dbt.flags import get_flags
 from dbt.jsonschemas.jsonschemas import validate_model_config
@@ -30,9 +31,6 @@ from dbt.parser.common import resource_types_to_schema_file_keys
 from dbt.parser.search import FileBlock
 from dbt_common.clients._jinja_blocks import ExtractWarning
 from dbt_common.dataclass_schema import ValidationError
-from dbt_common.events.base_types import EventLevel
-from dbt_common.events.functions import fire_event
-from dbt_common.events.types import Note
 from dbt_common.utils import deep_merge
 
 # internally, the parser may store a less-restrictive type that will be
@@ -305,13 +303,16 @@ class ConfiguredParser(
         # These call the RelationUpdate callable to go through generate_name macros
         self._update_node_database(parsed_node, config_dict.get("database"))
         self._update_node_schema(parsed_node, config_dict.get("schema"))
-        if parsed_node.schema is None:
-            fire_event(
-                Note(
-                    msg=f"Node schema set to None from generate_schema_name call for node '{parsed_node.unique_id}'."
-                ),
-                level=EventLevel.DEBUG,
-            )
+        if not isinstance(parsed_node, Export) and parsed_node.schema is None:
+            if not get_flags().require_valid_schema_from_generate_schema_name:
+                deprecations.warn(
+                    "generate-schema-name-null-value-deprecation",
+                    resource_unique_id=parsed_node.unique_id,
+                )
+            else:
+                raise ParsingError(
+                    f"Node '{parsed_node.unique_id}' has a schema set to None as a result of a generate_schema_name call.\nPlease set a valid schema name, or preserve the legacy behavior by setting the behavior flag 'require_valid_schema_from_generate_schema_name' to True."
+                )
 
         self._update_node_alias(parsed_node, config_dict.get("alias"))
 
@@ -431,7 +432,12 @@ class ConfiguredParser(
         # read multiple times. Doing the validation here ensures that the config
         # is only validated once.
         if parsed_node.resource_type == NodeType.Model and validate_config_call_dict:
-            validate_model_config(config._config_call_dict, parsed_node.original_file_path)
+            python_model = parsed_node.language == ModelLanguage.python
+            validate_model_config(
+                config._config_call_dict,
+                parsed_node.original_file_path,
+                is_python_model=python_model,
+            )
 
         parsed_node.config_call_dict = config._config_call_dict
         parsed_node.unrendered_config_call_dict = config._unrendered_config_call_dict

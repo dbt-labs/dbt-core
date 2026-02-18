@@ -242,6 +242,20 @@ sources:
       - name: "another_table"
 """
 
+python_model_py = """
+def model(dbt, session):
+    finalized_model = dbt.ref("trivial_model")
+    dbt.config.get("materialized")
+    return finalized_model
+"""
+
+python_model_yml = """
+models:
+  - name: python_model
+    config:
+      materialized: table
+"""
+
 test_with_arguments_yaml = """
 models:
   - name: models_trivial
@@ -316,3 +330,9 @@ models:
               arguments:
                 custom: arg
       """
+
+generate_schema_name_null_return_macro_sql = """
+{% macro generate_schema_name(custom_schema_name, node) %}
+    {{ return(custom_schema_name) }}
+{% endmacro %}
+"""

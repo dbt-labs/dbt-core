@@ -133,7 +133,7 @@ jobs:
 
       - name: "Parse Current Version Into Parts for Changelog Directories"
         id: semver-current
-        uses: dbt-labs/actions/parse-semver@main
+        uses: dbt-labs/actions/parse-semver@v1
         with:
           version: ${{ steps.determine_version.outputs.current_version }}
 

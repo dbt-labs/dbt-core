@@ -68,7 +68,7 @@ class SchemaYamlRenderer(BaseRenderer):
 
         if (
             len(keypath) >= 3
-            and keypath[0] in ("columns", "dimensions", "measures", "entities")
+            and keypath[0] in ("columns", "dimensions", "measures", "entities", "metrics")
             and keypath[2] in ("tests", "data_tests", "description")
         ):
             return True
@@ -106,6 +106,8 @@ class SchemaYamlRenderer(BaseRenderer):
             elif self._is_norender_key(keypath[0:]):
                 return False
         else:  # models, seeds, snapshots, analyses
+            if keypath[-1] == "filter" and len(keypath) >= 3 and keypath[-3] == "metrics":
+                return False
             if self._is_norender_key(keypath[0:]):
                 return False
         return True

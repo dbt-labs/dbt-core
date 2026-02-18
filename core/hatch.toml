@@ -57,6 +57,7 @@ dependencies = [
     "pytest-csv~=3.0",
     "pytest-cov",
     "pytest-dotenv",
+    "pytest-ignore-test-results",
     "pytest-mock",
     "pytest-split",
     "pytest-logbook~=1.2",
@@ -87,15 +88,22 @@ dependencies = [
     "protobuf>=6.0,<7.0",
 ]
 
+pre-install-commands = [
+    "pip install -e .",
+]
+
 [envs.default.scripts]
 # Setup commands
 setup = [
-    "pip install -e .",
     "pre-commit install",
 ]
 
+dev-req = [
+    "pip install -e .",
+]
+
 # Code quality commands
-code-quality = "pre-commit run --all-files --show-diff-on-failure"
+code-quality = "pre-commit run --all-files"
 lint = [
     "pre-commit run flake8-check --hook-stage manual --all-files",
     "pre-commit run mypy-check --hook-stage manual --all-files",
@@ -171,11 +179,13 @@ dependencies = [
     "dbt-common @ git+https://github.com/dbt-labs/dbt-common.git@main",
     "dbt-postgres @ git+https://github.com/dbt-labs/dbt-adapters.git@main#subdirectory=dbt-postgres",
     # Testing
+    "pre-commit~=3.7.0",
     "pytest>=7.0,<8.0",
     "pytest-cov",
     "pytest-xdist~=3.6",
     "pytest-csv~=3.0",
     "pytest-dotenv",
+    "pytest-ignore-test-results",
     "pytest-mock",
     "pytest-split",
     "ddtrace==2.21.3",
@@ -193,12 +203,18 @@ DBT_TEST_USER_1 = "dbt_test_user_1"
 DBT_TEST_USER_2 = "dbt_test_user_2"
 DBT_TEST_USER_3 = "dbt_test_user_3"
 
+
+# Note: graph_selection, defer_state, partial_parsing and sources tests are run after the majority of other tests as they are known to be slow (by necessity) and should be split across workers when multiple workers are present.
+
 [envs.ci.scripts]
 unit-tests = "python -m pytest --cov=dbt --cov-report=xml {args} ../tests/unit"
-# Run as single command to avoid pre-install-commands running twice
+code-quality = "pre-commit run --all-files"
 integration-tests = """
-python -m pytest --cov=dbt --cov-append --cov-report=xml {args} ../tests/functional -k "not tests/functional/graph_selection" && \
-python -m pytest --cov=dbt --cov-append --cov-report=xml {args} ../tests/functional/graph_selection
+python -m pytest --ignore-no-tests-collected-error --cov=dbt --cov-append --cov-report=xml {args} ../tests/functional -k "not tests/functional/graph_selection and not tests/functional/defer_state and not tests/functional/partial_parsing and not tests/functional/sources" && \
+python -m pytest --ignore-no-tests-collected-error --cov=dbt --cov-append --cov-report=xml {args} ../tests/functional/graph_selection && \
+python -m pytest --ignore-no-tests-collected-error --cov=dbt --cov-append --cov-report=xml {args} ../tests/functional/defer_state && \
+python -m pytest --ignore-no-tests-collected-error --cov=dbt --cov-append --cov-report=xml {args} ../tests/functional/partial_parsing && \
+python -m pytest --ignore-no-tests-collected-error --cov=dbt --cov-append --cov-report=xml {args} ../tests/functional/sources
 """
 
 # Note: Python version matrix is handled by GitHub Actions CI, not hatch.

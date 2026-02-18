@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix foreign key constraint ref() resolving to deferred relation even when target model is selected for build
+time: 2026-02-05T12:00:00.00000Z
+custom:
+  Author: b-per
+  Issue: "12455"

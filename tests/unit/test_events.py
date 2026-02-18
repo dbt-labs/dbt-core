@@ -181,6 +181,7 @@ sample_values = [
     ),
     core_types.TimeDimensionsRequireGranularityDeprecation(msg=""),
     core_types.GenericSemanticLayerDeprecation(msg=""),
+    core_types.GenerateSchemaNameNullValueDeprecation(resource_unique_id=""),
     # E - DB Adapter ======================
     adapter_types.AdapterEventDebug(),
     adapter_types.AdapterEventInfo(),
