@@ -912,12 +912,13 @@ class SemanticModelParser(YamlReader):
                 meta = dict(column.config.get("meta", {}))
                 meta.update((column.dimension.config or {}).get("meta", {}))
                 config = SemanticLayerElementConfig(meta=meta)
+                dimension_name = column.dimension.name or column.name
                 dimensions.append(
                     Dimension(
                         # required
                         type=DimensionType(column.dimension.type),
                         # fields that use column's values as fallback values
-                        name=column.dimension.name or column.name,
+                        name=dimension_name,
                         description=column.dimension.description or column.description,
                         config=config,
                         # optional fields
@@ -925,7 +926,9 @@ class SemanticModelParser(YamlReader):
                         is_partition=column.dimension.is_partition,
                         type_params=type_params,
                         metadata=None,  # Not yet supported in v1 or v2 YAML
-                        # expr argument is not supported for column-based dimensions
+                        # When the dimension name differs from the column name, set expr
+                        # to the column name so MetricFlow queries the correct warehouse column.
+                        expr=column.name if dimension_name != column.name else None,
                     )
                 )
         return dimensions
@@ -978,6 +981,9 @@ class SemanticModelParser(YamlReader):
                         type=column.entity.type,
                         description=column.entity.description,
                         label=column.entity.label,
+                        # When the entity name differs from the column name, set expr
+                        # to the column name so MetricFlow queries the correct warehouse column.
+                        expr=column.name if column.entity.name != column.name else None,
                         config=SemanticLayerElementConfig(
                             meta=column.entity.config.get("meta", column.config.get("meta", {}))
                         ),
