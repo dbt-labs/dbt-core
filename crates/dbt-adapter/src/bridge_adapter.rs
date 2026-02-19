@@ -1,4 +1,5 @@
 use crate::adapter_engine::AdapterEngine;
+use crate::adapter_engine::XdbcEngine;
 use crate::base_adapter::*;
 use crate::cache::RelationCache;
 use crate::catalog_relation::CatalogRelation;
@@ -221,20 +222,24 @@ impl BridgeAdapter {
         let stmt_splitter = Arc::new(NaiveStmtSplitter {});
         let query_comment = QueryCommentConfig::from_query_comment(None, adapter_type, false);
 
-        let engine = crate::adapter_engine::new_engine(
+        let engine = XdbcEngine::new(
             adapter_type,
             auth,
             adapter_config,
             quoting,
-            None,
             query_comment,
             type_ops,
             stmt_splitter,
+            None,
             relation_cache,
             token,
         );
 
-        Box::new(ParseAdapterState::new(adapter_type, engine, catalogs))
+        Box::new(ParseAdapterState::new(
+            adapter_type,
+            Arc::new(engine),
+            catalogs,
+        ))
     }
 
     /// Get a reference to the time machine, if enabled.

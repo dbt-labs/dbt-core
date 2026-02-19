@@ -3803,6 +3803,7 @@ pub trait ReplayAdapter: TypedBaseAdapter {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::adapter_engine::XdbcEngine;
     use crate::base_adapter::backend_of;
     use crate::cache::RelationCache;
     use crate::column::Column;
@@ -3845,18 +3846,18 @@ mod tests {
             Bigquery => DEFAULT_RESOLVED_QUOTING,
             _ => DEFAULT_RESOLVED_QUOTING,
         };
-        crate::adapter_engine::new_engine(
+        Arc::new(XdbcEngine::new(
             adapter_type,
             auth.into(),
             AdapterConfig::new(config),
             resolved_quoting,
-            None,
             QueryCommentConfig::from_query_comment(None, adapter_type, false),
             Box::new(NaiveTypeOpsImpl::new(adapter_type)), // XXX: NaiveTypeOpsImpl
             Arc::new(NaiveStmtSplitter), // XXX: may cause bugs if these tests run SQL
+            None,
             Arc::new(RelationCache::default()),
             never_cancels(),
-        )
+        ))
     }
 
     #[test]

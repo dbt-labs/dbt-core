@@ -9,7 +9,6 @@ use crate::errors::{
 };
 use crate::query_cache::QueryCache;
 use crate::query_comment::{EMPTY_CONFIG, QueryCommentConfig};
-use crate::record_and_replay::{RecordEngine, ReplayEngine};
 use crate::sidecar_client::SidecarClient;
 use crate::sql_types::TypeOps;
 use crate::statement::*;
@@ -39,7 +38,6 @@ use std::borrow::Cow;
 use tracy_client::span;
 
 use std::collections::{BTreeMap, HashMap};
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::{thread, time::Duration};
@@ -845,75 +843,6 @@ impl AdapterEngine for SidecarEngine {
     fn sidecar_client(&self) -> Option<&dyn SidecarClient> {
         Some(self.client.as_ref())
     }
-}
-
-// ---------------------------------------------------------------------------
-// Constructor functions (replacing former enum constructors)
-// ---------------------------------------------------------------------------
-
-/// Create a new XDBC-based [`AdapterEngine`].
-#[allow(clippy::too_many_arguments)]
-pub fn new_engine(
-    adapter_type: AdapterType,
-    auth: Arc<dyn Auth>,
-    config: AdapterConfig,
-    quoting: ResolvedQuoting,
-    query_cache: Option<Arc<dyn QueryCache>>,
-    query_comment: QueryCommentConfig,
-    type_ops: Box<dyn TypeOps>,
-    stmt_splitter: Arc<dyn StmtSplitter>,
-    relation_cache: Arc<RelationCache>,
-    token: CancellationToken,
-) -> Arc<dyn AdapterEngine> {
-    let engine = XdbcEngine::new(
-        adapter_type,
-        auth,
-        config,
-        quoting,
-        query_comment,
-        type_ops,
-        stmt_splitter,
-        query_cache,
-        relation_cache,
-        token,
-    );
-    Arc::new(engine)
-}
-
-/// Create a new replay-based [`AdapterEngine`].
-#[allow(clippy::too_many_arguments)]
-pub fn new_engine_for_replaying(
-    adapter_type: AdapterType,
-    path: PathBuf,
-    config: AdapterConfig,
-    quoting: ResolvedQuoting,
-    query_comment: QueryCommentConfig,
-    type_ops: Box<dyn TypeOps>,
-    stmt_splitter: Arc<dyn StmtSplitter>,
-    relation_cache: Arc<RelationCache>,
-    token: CancellationToken,
-) -> Arc<dyn AdapterEngine> {
-    let engine = ReplayEngine::new(
-        adapter_type,
-        path,
-        config,
-        quoting,
-        query_comment,
-        type_ops,
-        stmt_splitter,
-        relation_cache,
-        token,
-    );
-    Arc::new(engine)
-}
-
-/// Create a new record-wrapping [`AdapterEngine`].
-pub fn new_engine_for_recording(
-    path: PathBuf,
-    engine: Arc<dyn AdapterEngine>,
-) -> Arc<dyn AdapterEngine> {
-    let engine = RecordEngine::new(path, engine);
-    Arc::new(engine)
 }
 
 // ---------------------------------------------------------------------------
