@@ -1,0 +1,6 @@
+kind: Features
+body: Add support for retrieving column descriptions from database for sources when YAML documentation is unavailable
+time: 2026-01-28T16:30:00.000000+01:00
+custom:
+  Author: tripleaceme
+  Issue: "10476"
