@@ -123,8 +123,6 @@ test = [
     "pre-commit run mypy-check --hook-stage manual --all-files",
 ]
 
-ft = "python -m pytest -x -nauto ../tests/functional/init/test_init.py"
-
 # Database setup
 setup-db = [
     "docker compose up -d database",

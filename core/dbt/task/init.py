@@ -327,7 +327,8 @@ class InitTask(BaseTask):
             if not self.args.skip_profile_setup:
                 profile_name = self.get_profile_name_from_current_project()
                 self.setup_profile(profile_name)
-                self._run_debug()
+                if not self.args.skip_debug:
+                    self._run_debug()
         else:
             # When dbt init is run outside of an existing project,
             # create a new project and set up the user's profile.
@@ -345,7 +346,7 @@ class InitTask(BaseTask):
                         msg="Could not find profile named '{}'".format(user_profile_name)
                     )
                 self.create_new_project(project_name, user_profile_name)
-                debug_success = self._run_debug()
+                debug_success = self._run_debug() if not self.args.skip_debug else None
             else:
                 profile_name = project_name
                 # Create the profile after creating the project to avoid leaving a random profile
@@ -355,7 +356,7 @@ class InitTask(BaseTask):
                 # Ask for adapter only if skip_profile_setup flag is not provided
                 if not self.args.skip_profile_setup:
                     self.setup_profile(profile_name)
-                    debug_success = self._run_debug()
+                    debug_success = self._run_debug() if not self.args.skip_debug else None
                 else:
                     debug_success = None
 

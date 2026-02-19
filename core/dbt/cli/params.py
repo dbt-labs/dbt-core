@@ -631,6 +631,13 @@ skip_profile_setup = _create_option_and_track_env_var(
     is_flag=True,
 )
 
+skip_debug = _create_option_and_track_env_var(
+    "--skip-debug",
+    envvar=None,
+    help="Skip running dbt debug after project initialization.",
+    is_flag=True,
+)
+
 source = _create_option_and_track_env_var(
     "--source",
     envvar=None,

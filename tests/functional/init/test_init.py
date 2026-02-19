@@ -916,6 +916,34 @@ class TestInitDebugSkippedWithSkipProfileSetup(TestInitInsideOfProjectBase):
         mock_run_debug.assert_not_called()
 
 
+class TestInitSkipDebugFlag(TestInitInsideOfProjectBase):
+    @mock.patch("dbt.task.init.InitTask._run_debug")
+    @mock.patch("dbt.task.init._get_adapter_plugin_names")
+    @mock.patch("click.confirm")
+    @mock.patch("click.prompt")
+    def test_debug_skipped_with_skip_debug_flag(
+        self, mock_prompt, mock_confirm, mock_get_adapter, mock_run_debug, project
+    ):
+        """Verify _run_debug is NOT called when --skip-debug is used."""
+        manager = Mock()
+        manager.attach_mock(mock_prompt, "prompt")
+        manager.attach_mock(mock_confirm, "confirm")
+        manager.confirm.side_effect = ["y"]
+        manager.prompt.side_effect = [
+            1,
+            "localhost",
+            5432,
+            "test_user",
+            "test_password",
+            "test_db",
+            "test_schema",
+            4,
+        ]
+        mock_get_adapter.return_value = [project.adapter.type()]
+        run_dbt(["init", "--skip-debug"])
+        mock_run_debug.assert_not_called()
+
+
 class TestInitDebugFailureDoesNotFailInit(TestInitInsideOfProjectBase):
     @mock.patch("dbt.task.init._get_adapter_plugin_names")
     @mock.patch("click.confirm")
