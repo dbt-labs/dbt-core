@@ -29,6 +29,7 @@ from dbt.flags import get_flags
 from dbt.task.base import BaseTask, move_to_nearest_project_dir
 from dbt.version import _get_adapter_plugin_names
 from dbt_common.events.functions import fire_event
+from dbt_common.events.types import Note
 from dbt_common.exceptions import DbtRuntimeError
 
 DOCS_URL = "https://docs.getdbt.com/docs/configure-your-profile"
@@ -279,6 +280,23 @@ class InitTask(BaseTask):
 
         return name
 
+    def _run_debug(self) -> None:
+        from dbt.task.debug import DebugTask
+
+        fire_event(Note(msg="Running dbt debug to validate the project..."))
+
+        try:
+            debug_task = DebugTask(self.args)
+            debug_task.project_dir = Path.cwd()
+            debug_task.project_path = os.path.join(Path.cwd(), "dbt_project.yml")
+            debug_task.run()
+        except Exception:
+            fire_event(
+                Note(
+                    msg="Debug validation encountered an error. Run `dbt debug` manually to troubleshoot."
+                )
+            )
+
     def create_new_project(self, project_name: str, profile_name: str):
         self.copy_starter_repo(project_name)
         os.chdir(project_name)
@@ -318,6 +336,7 @@ class InitTask(BaseTask):
             if not self.args.skip_profile_setup:
                 profile_name = self.get_profile_name_from_current_project()
                 self.setup_profile(profile_name)
+                self._run_debug()
         else:
             # When dbt init is run outside of an existing project,
             # create a new project and set up the user's profile.
@@ -335,6 +354,7 @@ class InitTask(BaseTask):
                         msg="Could not find profile named '{}'".format(user_profile_name)
                     )
                 self.create_new_project(project_name, user_profile_name)
+                self._run_debug()
             else:
                 profile_name = project_name
                 # Create the profile after creating the project to avoid leaving a random profile
@@ -344,3 +364,4 @@ class InitTask(BaseTask):
                 # Ask for adapter only if skip_profile_setup flag is not provided
                 if not self.args.skip_profile_setup:
                     self.setup_profile(profile_name)
+                    self._run_debug()
