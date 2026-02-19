@@ -20,6 +20,7 @@ use minijinja::listener::RenderingEventListener;
 use minijinja::value::{Enumerator, Kwargs, Object, ValueMap, mutable_map::MutableMap};
 use minijinja::{Error, ErrorKind, State, Value};
 use std::cmp::Ordering;
+use std::collections::HashSet;
 use std::hint::unreachable_unchecked;
 use std::io;
 use std::rc::Rc;
@@ -848,6 +849,60 @@ impl AgateTable {
         let repr = TableSetRepr::try_new(tables, keys, key_name, key_type, is_fork)?;
         Ok(TableSet::from_repr(repr))
     }
+
+    fn distinct(&self, key: Option<Vec<String>>) -> Result<AgateTable, Error> {
+        let column_names = match key {
+            Some(keys) => self
+                .column_names()
+                .iter()
+                .filter_map(|key| {
+                    if keys.contains(key) {
+                        Some(key.clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
+            None => self.column_names(),
+        };
+        // TODO: cast the values in `column` according to `key_type`, create a new
+        // table with the casted column, and use that table to create the grouper
+        let grouper = self.grouper(&column_names).map_err(|e| {
+            Error::new(
+                ErrorKind::InvalidOperation,
+                format!("Table.distinct: error creating grouper: {e}"),
+            )
+        })?;
+
+        // Builds a selection vector with the first `row_idx` of every group.
+        // A "group" is the set of rows that are identical, so whenever the
+        // grouper emits a `group_id` we've already seen, we know we shouldn't
+        // emit that `row_idx` because it's not the index of a distinct row.
+        let mut seen_groups = HashSet::new();
+        let indices: Vec<u64> = grouper
+            .iter()
+            .enumerate()
+            .filter_map(|(row_idx, group_id)| {
+                if seen_groups.insert(group_id) {
+                    Some(row_idx as u64)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        let selection_vector = UInt64Array::new(indices.into(), None);
+
+        let repr = self
+            .repr
+            .select_rows(&selection_vector, None)
+            .map_err(|e| {
+                Error::new(
+                    ErrorKind::InvalidOperation,
+                    format!("Table.distinct: error selecting rows: {e}"),
+                )
+            })?;
+        Ok(AgateTable::from_repr(repr.into()))
+    }
 }
 
 impl Default for AgateTable {
@@ -1067,6 +1122,50 @@ impl Object for AgateTable {
                         Error::new(ErrorKind::InvalidOperation, format!("Table.group_by: {e}"))
                     })?;
                 Ok(Value::from_object(table_set))
+            }
+            // ```python
+            // def distinct(self, key=None):
+            //     """
+            //     Create a new table with only unique rows.
+
+            //     :param key:
+            //         Either the name of a single column to use to identify unique rows, a
+            //         sequence of such column names, a :class:`function` that takes a
+            //         row and returns a value to identify unique rows, or `None`, in
+            //         which case the entire row will be checked for uniqueness.
+            //     :returns:
+            //     A new :class:`.Table`.
+            //     """
+            // ```
+            "distinct" => {
+                let iter = ArgsIter::new("Table.distinct", &[], args);
+                let key = iter.next_kwarg::<Option<&Value>>("key")?;
+                iter.finish()?;
+
+                let key = match key {
+                    Some(v) => {
+                        if let Some(s) = v.as_str() {
+                            Some(vec![s.to_string()])
+                        } else if let Ok(iter) = v.try_iter() {
+                            let mut keys = Vec::new();
+                            for key in iter {
+                                match key.as_str() {
+                                    Some(s) => keys.push(s.to_string()),
+                                    None => unimplemented!("distinct with non-string keys"),
+                                }
+                            }
+                            Some(keys)
+                        } else {
+                            None
+                        }
+                    }
+                    None => None,
+                };
+
+                let result = self.as_ref().distinct(key).map_err(|e| {
+                    Error::new(ErrorKind::InvalidOperation, format!("Table.distinct: {e}"))
+                })?;
+                Ok(Value::from_object(result))
             }
             other => unimplemented!("AgateTable::{}", other),
         }
@@ -1928,5 +2027,58 @@ mod tests {
             iter.next().unwrap().to_string()
         );
         assert!(iter.next().is_none());
+    }
+
+    #[test]
+    fn test_distinct() {
+        let env = Environment::new();
+        let state = env.empty_state();
+        let table = Value::from_object(color_table());
+
+        let result = table
+            .call_method(&state, "distinct", &[Value::from("color")], &[])
+            .unwrap();
+
+        let distinct_table = result.downcast_object::<AgateTable>().unwrap();
+
+        // Verify all columns are returned
+        assert_eq!(distinct_table.column_name(0).unwrap(), "id");
+        assert_eq!(distinct_table.column_name(1).unwrap(), "color");
+        assert_eq!(distinct_table.column_name(2).unwrap(), "value");
+
+        // Verify that there are only three rows: red, blue, and green
+        let cols = distinct_table.columns().values();
+        let color = cols.get(1).unwrap();
+        assert_eq!(color.len(), Some(3));
+        assert_eq!(color.get_item_by_index(0).unwrap().as_str().unwrap(), "red");
+        assert_eq!(
+            color.get_item_by_index(1).unwrap().as_str().unwrap(),
+            "blue"
+        );
+        assert_eq!(
+            color.get_item_by_index(2).unwrap().as_str().unwrap(),
+            "green"
+        );
+
+        let result = table
+            .call_method(
+                &state,
+                "distinct",
+                &[Value::from_iter(vec!["id", "color", "value"])],
+                &[],
+            )
+            .unwrap();
+
+        let distinct_table = result.downcast_object::<AgateTable>().unwrap();
+
+        assert_eq!(distinct_table.num_rows(), 6);
+
+        let result = table
+            .call_method(&state, "distinct", &[Value::NONE], &[])
+            .unwrap();
+
+        let distinct_table = result.downcast_object::<AgateTable>().unwrap();
+
+        assert_eq!(distinct_table.num_rows(), 6);
     }
 }

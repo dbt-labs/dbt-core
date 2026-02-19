@@ -108,7 +108,17 @@ macro_rules! make_primitive_array_hasher {
                 } else {
                     let mut value_as_u64: u64 = if is_valid {
                         // hash f32 as u64 by transmuting the bits and zero-extending
-                        unsafe { core::mem::transmute_copy(&value) }
+                        let mut extended = [0u8; 8];
+                        let value_bytes = value.to_le_bytes();
+                        // SAFETY: size of value is less than 8 bytes and pointers are non-overlapping
+                        unsafe {
+                            std::ptr::copy_nonoverlapping(
+                                value_bytes.as_ptr(),
+                                extended.as_mut_ptr(),
+                                mem::size_of_val(&value),
+                            );
+                        };
+                        u64::from_le_bytes(extended)
                     } else {
                         0u64
                     };
