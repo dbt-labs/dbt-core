@@ -24,16 +24,18 @@ _JSONSCHEMA_SUPPORTED_ADAPTERS = {
 }
 
 _HIERARCHICAL_CONFIG_KEYS = {
-    "seeds",
-    "sources",
-    "models",
-    "snapshots",
-    "tests",
-    "exposures",
+    "analysis",
     "data_tests",
+    "exposures",
+    "functions",
     "metrics",
+    "models",
     "saved_queries",
+    "seeds",
     "semantic_models",
+    "snapshots",
+    "sources",
+    "tests",
     "unit_tests",
 }
 
@@ -240,7 +242,7 @@ def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path:
             # dbt_project.yml configs
             elif "dbt_project.yml" in file_path and error_path[0] in _HIERARCHICAL_CONFIG_KEYS:
                 for sub_error in sub_errors:
-                    if isinstance(sub_error, ValidationError) and sub_error.validator == "type":
+                    if isinstance(sub_error, ValidationError) and sub_error.validator == "anyOf":
                         # Only raise type-errors if they are indicating leaf config without a plus prefix
                         if (
                             len(sub_error.path) > 0
