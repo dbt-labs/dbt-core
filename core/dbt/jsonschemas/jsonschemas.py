@@ -37,6 +37,7 @@ _HIERARCHICAL_CONFIG_KEYS = {
     "unit_tests",
 }
 
+# "job_execution_timeout_seconds" can be removed once https://github.com/dbt-labs/dbt-fusion/issues/1330 is resolved
 _ADAPTER_TO_CONFIG_ALIASES = {
     "bigquery": ["dataset", "project", "job_execution_timeout_seconds"],
 }
