@@ -3,7 +3,11 @@ from contextlib import contextmanager
 import pytest
 import yaml
 
-from dbt.clients.jinja import get_rendered, get_template
+from dbt.clients.jinja import (
+    _neutralize_ref_in_sql_comments,
+    get_rendered,
+    get_template,
+)
 from dbt_common.exceptions import JinjaRenderingError
 
 
@@ -414,3 +418,21 @@ def test_native_render():
     s = "{{ 1991 | as_text }}"
     value = get_rendered(s, {}, native=True)
     assert value == "1991"
+
+
+# copyright (c) 2026 Atlassian Pty Ltd.
+# copyright (c) 2026 Atlassian US, Inc.
+def test_neutralize_ref_in_sql_comments_removes_ref_from_line_comment():
+    sql = "-- {{ ref('nonexistent_model') }}\nSELECT 1 as id"
+    result = _neutralize_ref_in_sql_comments(sql)
+    assert "ref('nonexistent_model')" not in result
+    assert "{{ '' }}" in result
+    assert "SELECT 1 as id" in result
+
+# copyright (c) 2026 Atlassian Pty Ltd.
+# copyright (c) 2026 Atlassian US, Inc.
+def test_neutralize_ref_in_sql_comments_preserves_ref_in_executable_sql():
+    sql = "SELECT * FROM {{ ref('my_model') }}"
+    result = _neutralize_ref_in_sql_comments(sql)
+    assert "ref('my_model')" in result
+
