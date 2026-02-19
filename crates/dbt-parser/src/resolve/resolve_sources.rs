@@ -79,6 +79,11 @@ pub fn resolve_sources(
         dependency_package_name,
     )?;
     for ((source_name, table_name), mpe) in source_properties.into_iter() {
+        // Extract raw (unrendered) database and schema from the YAML before Jinja rendering.
+        // These preserve Jinja templates like `{{ env_var('DBT_ENV') }}` for state comparisons.
+        let raw_source_database = mpe.schema_value.get("database").cloned();
+        let raw_source_schema = mpe.schema_value.get("schema").cloned();
+
         let source: SourceProperties = into_typed_with_jinja(
             io_args,
             mpe.schema_value,
@@ -363,7 +368,16 @@ pub fn resolve_sources(
                 functions: vec![],
                 depends_on: NodeDependsOn::default(),
                 metrics: vec![],
-                unrendered_config: Default::default(),
+                unrendered_config: {
+                    let mut uc = BTreeMap::new();
+                    if let Some(db) = raw_source_database {
+                        uc.insert("database".to_string(), db);
+                    }
+                    if let Some(sch) = raw_source_schema {
+                        uc.insert("schema".to_string(), sch);
+                    }
+                    uc
+                },
             },
             __source_attr__: DbtSourceAttr {
                 freshness: merged_freshness.clone(),

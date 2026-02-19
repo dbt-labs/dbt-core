@@ -513,7 +513,7 @@ impl From<DbtSource> for ManifestSource {
                 snowflake_ignore_case: None,
             }),
             source_description: source.__source_attr__.source_description,
-            unrendered_config: BTreeMap::new(),
+            unrendered_config: source.__base_attr__.unrendered_config,
             unrendered_database: None,
             unrendered_schema: None,
             loader: source.__source_attr__.loader,
