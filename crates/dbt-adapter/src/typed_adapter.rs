@@ -3683,6 +3683,18 @@ pub trait ReplayAdapter: TypedBaseAdapter {
 
     fn replay_verify_database(&self, database: &str) -> AdapterResult<Value>;
 
+    /// Non-consuming peek: return true if the next per-node replay record is a BigQuery
+    /// `is_replaceable` record.
+    ///
+    /// This exists for cross-implementation replay compatibility: Mantle recorder may emit an
+    /// `is_replaceable(relation=None, ...)` record even when the adapter implementation would
+    /// trivially return `true` without consulting the warehouse.
+    ///
+    /// Default is `false` to preserve behavior for replay adapters that don't support peeking.
+    fn replay_peek_is_replaceable_next(&self, _state: &State) -> AdapterResult<bool> {
+        Ok(false)
+    }
+
     fn replay_new_connection(
         &self,
         state: Option<&State>,

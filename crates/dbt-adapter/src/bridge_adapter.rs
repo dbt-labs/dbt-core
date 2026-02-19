@@ -1223,7 +1223,37 @@ impl BaseAdapter for BridgeAdapter {
         match &self.inner {
             Typed { adapter, .. } => {
                 let relation = match relation {
-                    None => return Ok(Value::from(true)),
+                    None => {
+                        // Replay compatibility: Mantle recordings may include an is_replaceable call even
+                        // when relation=None (dbt-bigquery passes None when get_relation returns None).
+                        //
+                        // Our typed adapter short-circuits relation=None to true, but in replay mode
+                        // we must optionally consume a recorded is_replaceable to keep the stream aligned.
+                        if adapter.adapter_type() == AdapterType::Bigquery {
+                            if let Some(replay_adapter) = adapter.as_replay() {
+                                if replay_adapter
+                                    .replay_peek_is_replaceable_next(state)
+                                    .map_err(|e| {
+                                        minijinja::Error::new(
+                                            minijinja::ErrorKind::UndefinedError,
+                                            e.to_string(),
+                                        )
+                                    })?
+                                {
+                                    let val = replay_adapter.replay_is_replaceable(state).map_err(
+                                        |e| {
+                                            minijinja::Error::new(
+                                                minijinja::ErrorKind::UndefinedError,
+                                                e.to_string(),
+                                            )
+                                        },
+                                    )?;
+                                    return Ok(Value::from(val));
+                                }
+                            }
+                        }
+                        return Ok(Value::from(true));
+                    }
                     Some(r) => r,
                 };
 

@@ -99,7 +99,7 @@ pub fn resolve_unit_tests(
 
         let location = CodeLocationWithFile::default(); // TODO
         let model_name = format!("model.{}.{}", package_name, unit_test.model);
-        let (database, schema, alias, model_found) = match models.get(&model_name) {
+        let (database, schema, _, model_found) = match models.get(&model_name) {
             Some(model) => (
                 model.__base_attr__.database.clone(),
                 model.__base_attr__.schema.clone(),
@@ -255,7 +255,8 @@ pub fn resolve_unit_tests(
             __base_attr__: NodeBaseAttributes {
                 database: database.to_owned(),
                 schema: schema.to_owned(),
-                alias: alias.to_owned(), // alias will be used to constrcut `this` relation.
+                // match dbt-core semantics for unit test alias
+                alias: unit_test_name.to_owned(),
                 relation_name: None,
                 depends_on: NodeDependsOn::default(),
                 refs: dependent_refs,

@@ -67,7 +67,7 @@ impl ColumnBuilder {
                 numeric_scale,
             ),
             // TODO: BigQuery fields
-            Bigquery => Column::new_bigquery(name, dtype, &[], mode.unwrap()),
+            Bigquery => Column::new_bigquery(name, dtype, &[], mode.unwrap_or_default()),
             Redshift => Column::new(
                 Redshift,
                 name,
