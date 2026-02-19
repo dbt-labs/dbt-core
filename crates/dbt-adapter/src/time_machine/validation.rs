@@ -432,7 +432,7 @@ impl KnownDeviation for DbtPovModelCostCalculatorDeviation {
     }
 }
 
-/// Sanitizer for ISO timestamp patterns.
+/// Sanitizer for ISO timestamp patterns (single or double-quoted).
 pub struct TimestampSanitizer;
 
 impl SqlSanitizer for TimestampSanitizer {
@@ -441,20 +441,25 @@ impl SqlSanitizer for TimestampSanitizer {
     }
 
     fn sanitize(&self, sql: &str) -> String {
-        // Match ISO 8601 timestamps: 2026-01-23T00:49:47.760170 or with timezone
-        static RE: LazyLock<Regex> = LazyLock::new(|| {
+        static SINGLE: LazyLock<Regex> = LazyLock::new(|| {
             Regex::new(r"'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[+-]\d{2}:\d{2})?'")
                 .expect("valid regex")
         });
-        RE.replace_all(sql, "'<TIMESTAMP>'").to_string()
+        static DOUBLE: LazyLock<Regex> = LazyLock::new(|| {
+            Regex::new(r#""\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:[+-]\d{2}:\d{2})?""#)
+                .expect("valid regex")
+        });
+        let sql = SINGLE.replace_all(sql, "'<TIMESTAMP>'");
+        DOUBLE.replace_all(&sql, "\"<TIMESTAMP>\"").to_string()
     }
 }
 
-/// Sanitizer for single-quoted date literal patterns.
+/// Sanitizer for quoted date literal patterns.
 ///
-/// Replaces date literals like `'2026-02-12'` with `'<DATE>'`.
-/// This handles SQL that embeds `current_date()` or similar expressions
-/// that produce different dates between recording and replay.
+/// Replaces date literals like `'2026-02-12'` or `"2026-02-12"` with a
+/// placeholder. This handles SQL that embeds `current_date()` or similar
+/// expressions that produce different dates between recording and replay.
+/// Double-quoted dates appear in Databricks SQL (e.g. `WHERE partition_date = "2026-02-12"`).
 ///
 /// Must run after `TimestampSanitizer` so full timestamps are already replaced.
 pub struct DateLiteralSanitizer;
@@ -465,9 +470,12 @@ impl SqlSanitizer for DateLiteralSanitizer {
     }
 
     fn sanitize(&self, sql: &str) -> String {
-        static RE: LazyLock<Regex> =
+        static SINGLE: LazyLock<Regex> =
             LazyLock::new(|| Regex::new(r"'\d{4}-\d{2}-\d{2}'").expect("valid regex"));
-        RE.replace_all(sql, "'<DATE>'").to_string()
+        static DOUBLE: LazyLock<Regex> =
+            LazyLock::new(|| Regex::new(r#""\d{4}-\d{2}-\d{2}""#).expect("valid regex"));
+        let sql = SINGLE.replace_all(sql, "'<DATE>'");
+        DOUBLE.replace_all(&sql, "\"<DATE>\"").to_string()
     }
 }
 
@@ -624,6 +632,17 @@ mod tests {
     }
 
     #[test]
+    fn test_date_literal_sanitizer_double_quoted() {
+        let sanitizer = DateLiteralSanitizer;
+        let sql = r#"OPTIMIZE db.schema.tbl WHERE partition_date = "2026-02-11" ZORDER BY (puuid)"#;
+        let sanitized = sanitizer.sanitize(sql);
+        assert_eq!(
+            sanitized,
+            r#"OPTIMIZE db.schema.tbl WHERE partition_date = "<DATE>" ZORDER BY (puuid)"#
+        );
+    }
+
+    #[test]
     fn test_date_literal_sanitizer_does_not_match_timestamps() {
         // TimestampSanitizer runs first; after that, only bare dates remain.
         // But standalone, DateLiteralSanitizer should not corrupt timestamps
@@ -654,6 +673,28 @@ mod tests {
         assert!(
             matches!(result, ValidationResult::Match),
             "Expected match after date literal sanitization, got {:?}",
+            result
+        );
+    }
+
+    #[test]
+    fn test_sanitization_makes_double_quoted_date_sql_match() {
+        let engine = TimeMachineEventValidationEngine::new();
+
+        let incoming_args = serde_json::json!([
+            r#"OPTIMIZE db.schema.tbl WHERE partition_date = "2026-02-17" ZORDER BY (game_id, puuid)"#
+        ]);
+        let recorded_args = serde_json::json!([
+            r#"OPTIMIZE db.schema.tbl WHERE partition_date = "2026-02-11" ZORDER BY (game_id, puuid)"#
+        ]);
+
+        let incoming = IncomingEvent::new("model.my_project.my_model", "execute", &incoming_args);
+        let recorded = make_recorded_event(incoming.node_id, "execute", recorded_args);
+
+        let result = engine.validate(&incoming, &recorded);
+        assert!(
+            matches!(result, ValidationResult::Match),
+            "Expected match after double-quoted date sanitization, got {:?}",
             result
         );
     }
