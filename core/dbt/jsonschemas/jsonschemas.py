@@ -38,7 +38,7 @@ _HIERARCHICAL_CONFIG_KEYS = {
 }
 
 _ADAPTER_TO_CONFIG_ALIASES = {
-    "bigquery": ["dataset", "project"],
+    "bigquery": ["dataset", "project", "job_execution_timeout_seconds"],
 }
 
 
