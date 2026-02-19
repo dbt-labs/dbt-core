@@ -160,7 +160,6 @@ class PythonParseVisitor(ast.NodeVisitor):
 
 
 def verify_python_model_code(node):
-    # TODO: add a test for this
     try:
         rendered_python = get_rendered(
             node.raw_code,
