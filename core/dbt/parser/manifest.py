@@ -1518,6 +1518,13 @@ class ManifestLoader:
                             f"Microbatch model '{node.name}' optional 'concurrent_batches' config must be of type `bool` if specified, but got: {type(concurrent_batches)})."
                         )
 
+                    # Optional config: event_timezone (str)
+                    event_timezone = node.config.event_timezone
+                    if not isinstance(event_timezone, str) and event_timezone is not None:
+                        raise dbt.exceptions.ParsingError(
+                            f"Microbatch model '{node.name}' must provide the optional 'event_timezone' config as type str, but got: {type(event_timezone)})."
+                        )
+
     def check_forcing_batch_concurrency(self) -> None:
         if self.manifest.use_microbatch_batches(project_name=self.root_project.project_name):
             adapter = get_adapter(self.root_project)
