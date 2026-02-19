@@ -25,6 +25,7 @@ clean-targets:         # directories to be removed by `dbt clean`
 
 models:
   moms_flower_shop:
+    +static_analysis: strict
     # Config indicated by + and applies to all files under models/example/
     staging:
       +materialized: view

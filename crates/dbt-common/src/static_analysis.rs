@@ -68,7 +68,7 @@ pub fn check_deprecated_static_analysis_kind(
             ),
             StaticAnalysisKind::Unsafe => format!(
                 "Package `{package_name}` uses deprecated `static_analysis: unsafe` in dbt_project.yml or node config. \
-                 It will be removed in May, 2026."
+                 It will be removed in May, 2026. Use `static_analysis: strict` instead."
             ),
             _ => return,
         };
@@ -88,7 +88,9 @@ pub fn check_deprecated_static_analysis_kind(
                 .to_string()
         }
         (StaticAnalysisKind::Unsafe, StaticAnalysisDeprecationOrigin::CliArg) => {
-            "`--static-analysis unsafe` is deprecated and will be removed in May, 2026.".to_string()
+            "`--static-analysis unsafe` is deprecated and will be removed in May, 2026. \
+             Use `--static-analysis strict` instead."
+                .to_string()
         }
         (StaticAnalysisKind::On, StaticAnalysisDeprecationOrigin::ProjectConfig) => {
             "`static_analysis: on` is deprecated and will be removed in May, 2026. \
@@ -96,7 +98,9 @@ pub fn check_deprecated_static_analysis_kind(
                 .to_string()
         }
         (StaticAnalysisKind::Unsafe, StaticAnalysisDeprecationOrigin::ProjectConfig) => {
-            "`static_analysis: unsafe` is deprecated and will be removed in May, 2026.".to_string()
+            "`static_analysis: unsafe` is deprecated and will be removed in May, 2026. \
+             Use `static_analysis: strict` instead."
+                .to_string()
         }
         (StaticAnalysisKind::On, StaticAnalysisDeprecationOrigin::NodeConfig { unique_id }) => {
             format!(
@@ -107,7 +111,7 @@ pub fn check_deprecated_static_analysis_kind(
         (StaticAnalysisKind::Unsafe, StaticAnalysisDeprecationOrigin::NodeConfig { unique_id }) => {
             format!(
                 "Node `{unique_id}` uses deprecated `static_analysis: unsafe`. \
-                 It will be removed in May, 2026."
+                 It will be removed in May, 2026. Use `static_analysis: strict` instead."
             )
         }
         _ => return,
