@@ -8,14 +8,14 @@
 //! 1. Integer → DataType::Int64
 //! 2. Number (decimal) → DataType::Float64
 //! 3. Date (format "%Y-%m-%d") → DataType::Date32 (date-only, days since epoch)
-//! 4. DateTime (format "%Y-%m-%d %H:%M:%S") → DataType::Timestamp(Nanosecond, None)
-//! 5. ISODateTime → DataType::Timestamp(Nanosecond, None) (ISO 8601 with optional TZ)
+//! 4. DateTime (format "%Y-%m-%d %H:%M:%S") → DataType::Timestamp(Microsecond, None)
+//! 5. ISODateTime → DataType::Timestamp(Microsecond, None) (ISO 8601 with optional TZ)
 //! 6. Boolean → DataType::Boolean
 //! 7. Text → DataType::Utf8
 //!
 //! # Arrow Type Mapping Rationale
-//! - Date (YYYY-MM-DD only) → Date32: Preserves date-only semantics, matches DataFusion
-//! - DateTime/ISODateTime → Timestamp(Nanosecond): Full datetime precision, matches DataFusion
+//! - Date (YYYY-MM-DD only) → Date32: Preserves date-only semantics
+//! - DateTime/ISODateTime → Timestamp(Microsecond)
 //!
 //! # Null Handling
 //! Every type in Python agate has `null_values=("null", "")`. This means:
@@ -153,7 +153,7 @@ pub fn test_date(s: &str) -> bool {
 }
 
 /// Test if a string value matches the DateTime type (format "%Y-%m-%d %H:%M:%S").
-/// Maps to DataType::Timestamp(Nanosecond, None).
+/// Maps to DataType::Timestamp(Microsecond, None).
 pub fn test_datetime(s: &str) -> bool {
     if is_null_value(s) {
         return true;
@@ -162,7 +162,7 @@ pub fn test_datetime(s: &str) -> bool {
 }
 
 /// Test if a string value matches the ISODateTime type.
-/// Maps to DataType::Timestamp(Nanosecond, None) - full datetime with optional timezone.
+/// Maps to DataType::Timestamp(Microsecond, None) - datetime with optional timezone.
 pub fn test_iso_datetime(s: &str) -> bool {
     if is_null_value(s) {
         return true;
@@ -200,9 +200,9 @@ pub enum AgateType {
     Number,
     /// Date type (YYYY-MM-DD) - maps to Date32 (days since epoch)
     Date,
-    /// DateTime type (YYYY-MM-DD HH:MM:SS) - maps to Timestamp(Nanosecond, None)
+    /// DateTime type (YYYY-MM-DD HH:MM:SS) - maps to Timestamp(Microsecond, None)
     DateTime,
-    /// ISO 8601 DateTime - maps to Timestamp(Nanosecond, None)
+    /// ISO 8601 DateTime - maps to Timestamp(Microsecond, None)
     ISODateTime,
     /// Boolean type - maps to Boolean
     Boolean,
@@ -232,8 +232,8 @@ impl AgateType {
             AgateType::Integer => DataType::Int64,
             AgateType::Number => DataType::Float64,
             AgateType::Date => DataType::Date32,
-            AgateType::DateTime => DataType::Timestamp(TimeUnit::Nanosecond, None),
-            AgateType::ISODateTime => DataType::Timestamp(TimeUnit::Nanosecond, None),
+            AgateType::DateTime => DataType::Timestamp(TimeUnit::Microsecond, None),
+            AgateType::ISODateTime => DataType::Timestamp(TimeUnit::Microsecond, None),
             AgateType::Boolean => DataType::Boolean,
             AgateType::Text => DataType::Utf8,
         }
@@ -781,15 +781,15 @@ mod tests {
         assert_eq!(AgateType::Number.to_arrow_type(), DataType::Float64);
         // Date (YYYY-MM-DD) maps to Date32 - preserves date-only semantics
         assert_eq!(AgateType::Date.to_arrow_type(), DataType::Date32);
-        // DateTime maps to Timestamp(Nanosecond) - full datetime precision
+        // DateTime maps to Timestamp(Microsecond)
         assert_eq!(
             AgateType::DateTime.to_arrow_type(),
-            DataType::Timestamp(TimeUnit::Nanosecond, None)
+            DataType::Timestamp(TimeUnit::Microsecond, None)
         );
-        // ISODateTime also maps to Timestamp(Nanosecond) - ISO 8601 with optional TZ
+        // ISODateTime also maps to Timestamp(Microsecond) - ISO 8601 with optional TZ
         assert_eq!(
             AgateType::ISODateTime.to_arrow_type(),
-            DataType::Timestamp(TimeUnit::Nanosecond, None)
+            DataType::Timestamp(TimeUnit::Microsecond, None)
         );
         assert_eq!(AgateType::Boolean.to_arrow_type(), DataType::Boolean);
         assert_eq!(AgateType::Text.to_arrow_type(), DataType::Utf8);

@@ -790,16 +790,8 @@ fn build_datetime_array(
 
             match datetime {
                 Ok(dt) => {
-                    // Convert to nanoseconds since epoch
-                    match dt.and_utc().timestamp_nanos_opt() {
-                        Some(nanos) => Ok(Some(nanos)),
-                        None => Err(ArrowError::ParseError(format!(
-                            "DateTime '{}' would overflow at column {} line {}",
-                            s,
-                            col_idx,
-                            line_number + row_index
-                        ))),
-                    }
+                    // Convert to microseconds since epoch
+                    Ok(Some(dt.and_utc().timestamp_micros()))
                 }
                 Err(_) => Err(ArrowError::ParseError(format!(
                     "Error parsing '{}' as DateTime at column {} line {}",
@@ -809,7 +801,7 @@ fn build_datetime_array(
                 ))),
             }
         })
-        .collect::<Result<TimestampNanosecondArray, _>>()
+        .collect::<Result<TimestampMicrosecondArray, _>>()
         .map(|arr| Arc::new(arr) as ArrayRef)
 }
 
@@ -837,15 +829,10 @@ fn build_iso_datetime_array(
 
             // Try parsing with Arrow's string_to_datetime (handles timezones)
             match string_to_datetime(&Utc, to_parse) {
-                Ok(dt) => match dt.timestamp_nanos_opt() {
-                    Some(nanos) => Ok(Some(nanos)),
-                    None => Err(ArrowError::ParseError(format!(
-                        "ISODateTime '{}' would overflow at column {} line {}",
-                        s,
-                        col_idx,
-                        line_number + row_index
-                    ))),
-                },
+                Ok(dt) => {
+                    // Convert to microseconds since epoch
+                    Ok(Some(dt.timestamp_micros()))
+                }
                 Err(_) => Err(ArrowError::ParseError(format!(
                     "Error parsing '{}' as ISODateTime at column {} line {}",
                     s,
@@ -854,7 +841,7 @@ fn build_iso_datetime_array(
                 ))),
             }
         })
-        .collect::<Result<TimestampNanosecondArray, _>>()
+        .collect::<Result<TimestampMicrosecondArray, _>>()
         .map(|arr| Arc::new(arr) as ArrayRef)
 }
 
@@ -2449,5 +2436,139 @@ mod tests {
 
         // Index 51 -> "zz" (wraps to last letter, 51 % 26 = 25 -> 'z', repeat = 2)
         assert_eq!(Format::letter_name(51), "zz");
+    }
+
+    #[test]
+    fn test_datetime_microsecond_precision() {
+        use crate::type_tester::{AgateColumn, AgateSchema, AgateType};
+
+        // DateTime type (no fractional seconds) should produce microsecond timestamps
+        let csv = "ts\n2023-06-21 11:30:00\n2023-06-21 11:30:45\n";
+
+        let agate_schema = AgateSchema::new(vec![AgateColumn::new("ts", AgateType::DateTime)]);
+
+        let batch = ReaderBuilder::new(agate_schema)
+            .with_header(true)
+            .build_buffered(Cursor::new(csv.as_bytes()))
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(batch.num_rows(), 2);
+
+        // Verify schema is Timestamp(Microsecond, None)
+        let schema = batch.schema();
+        let field = schema.field(0);
+        assert_eq!(
+            field.data_type(),
+            &DataType::Timestamp(TimeUnit::Microsecond, None)
+        );
+
+        // Verify values (microseconds since epoch)
+        let ts_col = batch
+            .column(0)
+            .as_any()
+            .downcast_ref::<TimestampMicrosecondArray>()
+            .unwrap();
+
+        // 2023-06-21 11:30:00 UTC = 1687347000 seconds = 1687347000000000 microseconds
+        assert_eq!(ts_col.value(0), 1_687_347_000_000_000);
+        // 2023-06-21 11:30:45 UTC = 1687347045 seconds = 1687347045000000 microseconds
+        assert_eq!(ts_col.value(1), 1_687_347_045_000_000);
+    }
+
+    #[test]
+    fn test_iso_datetime_microsecond_preservation() {
+        use crate::type_tester::{AgateColumn, AgateSchema, AgateType};
+
+        // ISODateTime with 6-digit fractional seconds should preserve microseconds exactly
+        let csv = "ts\n2023-06-21T11:30:00.123456\n2023-06-21T11:30:00.999999\n2023-06-21T11:30:00.000001\n";
+
+        let agate_schema = AgateSchema::new(vec![AgateColumn::new("ts", AgateType::ISODateTime)]);
+
+        let batch = ReaderBuilder::new(agate_schema)
+            .with_header(true)
+            .build_buffered(Cursor::new(csv.as_bytes()))
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(batch.num_rows(), 3);
+
+        // Verify schema is Timestamp(Microsecond, None)
+        let schema = batch.schema();
+        let field = schema.field(0);
+        assert_eq!(
+            field.data_type(),
+            &DataType::Timestamp(TimeUnit::Microsecond, None)
+        );
+
+        let ts_col = batch
+            .column(0)
+            .as_any()
+            .downcast_ref::<TimestampMicrosecondArray>()
+            .unwrap();
+
+        // Base time: 2023-06-21 11:30:00 UTC = 1687347000 seconds
+        let base_micros: i64 = 1_687_347_000_000_000;
+
+        // .123456 -> 123456 microseconds added
+        assert_eq!(ts_col.value(0), base_micros + 123456);
+        // .999999 -> 999999 microseconds added
+        assert_eq!(ts_col.value(1), base_micros + 999999);
+        // .000001 -> 1 microsecond added
+        assert_eq!(ts_col.value(2), base_micros + 1);
+    }
+
+    #[test]
+    fn test_iso_datetime_nanosecond_truncation() {
+        use crate::type_tester::{AgateColumn, AgateSchema, AgateType};
+
+        // ISODateTime with 9-digit fractional seconds should truncate to microseconds
+        // This matches Python agate behavior where datetime.microsecond truncates nanoseconds
+        let csv = "ts\n2023-06-21T11:30:00.123456789\n2023-06-21T11:30:00.999999999\n2023-06-21T11:30:00.000000001\n";
+
+        let agate_schema = AgateSchema::new(vec![AgateColumn::new("ts", AgateType::ISODateTime)]);
+
+        let batch = ReaderBuilder::new(agate_schema)
+            .with_header(true)
+            .build_buffered(Cursor::new(csv.as_bytes()))
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(batch.num_rows(), 3);
+
+        // Verify schema is Timestamp(Microsecond, None)
+        let schema = batch.schema();
+        let field = schema.field(0);
+        assert_eq!(
+            field.data_type(),
+            &DataType::Timestamp(TimeUnit::Microsecond, None)
+        );
+
+        let ts_col = batch
+            .column(0)
+            .as_any()
+            .downcast_ref::<TimestampMicrosecondArray>()
+            .unwrap();
+
+        // Base time: 2023-06-21 11:30:00 UTC = 1687347000 seconds
+        let base_micros: i64 = 1_687_347_000_000_000;
+
+        // .123456789 truncates to .123456 -> 123456 microseconds (last 3 digits lost)
+        // Python agate: 2023-06-21T11:30:00.123456789 -> microsecond=123456
+        assert_eq!(ts_col.value(0), base_micros + 123456);
+
+        // .999999999 truncates to .999999 -> 999999 microseconds (last 3 digits lost)
+        // Python agate: 2023-06-21T11:30:00.999999999 -> microsecond=999999
+        assert_eq!(ts_col.value(1), base_micros + 999999);
+
+        // .000000001 truncates to .000000 -> 0 microseconds (nanosecond completely lost)
+        // Python agate: 2023-06-21T11:30:00.000000001 -> microsecond=0
+        assert_eq!(ts_col.value(2), base_micros);
     }
 }
