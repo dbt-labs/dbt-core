@@ -1,0 +1,6 @@
+kind: Fixes
+body: 'Fix `static_analysis: off` being interpreted as boolean `false` instead of string `"off"` in manifest.json'
+time: 2026-02-19T12:00:00.000000-05:00
+custom:
+    Author: b-per
+    Issue: "12015"
