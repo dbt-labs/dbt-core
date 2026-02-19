@@ -1,0 +1,6 @@
+kind: Fixes
+body: Use resolved profile and target names to allow partial parsing for default profile and target
+time: 2026-02-16T23:08:17.820862+05:30
+custom:
+    Author: akshatha-code71 ash2shukla
+    Issue: "7612"
