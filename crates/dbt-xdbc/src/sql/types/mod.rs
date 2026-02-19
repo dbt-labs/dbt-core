@@ -202,6 +202,7 @@ pub fn default_time_unit(backend: Backend) -> TimeUnit {
         Snowflake | Databricks | DatabricksODBC | Spark => Nanosecond,
         BigQuery | Redshift | RedshiftODBC => Microsecond,
         Postgres | Salesforce | DuckDB => Microsecond,
+        SQLServer => Microsecond,
         Generic { .. } => Microsecond, // a reasonable default
     }
 }
@@ -705,6 +706,7 @@ impl SqlType {
                     Postgres | Salesforce | DuckDB => write!(out, "(")?,
                     // Redshift doesn't support object/struct types
                     Redshift | RedshiftODBC => write!(out, "(")?,
+                    SQLServer => unimplemented!("SQL Server does't have a struct type"),
                     Generic { .. } => write!(out, "STRUCT<")?,
                 }
                 for (i, field) in fields.iter().enumerate() {
@@ -742,6 +744,7 @@ impl SqlType {
                     BigQuery | Databricks | DatabricksODBC | Spark => write!(out, ">"),
                     Postgres | Salesforce | DuckDB => write!(out, ")"),
                     Redshift | RedshiftODBC => write!(out, ")"),
+                    SQLServer => unimplemented!("SQL Server does't have a struct type"),
                     Generic { .. } => write!(out, ">"),
                 }
             }
@@ -1135,6 +1138,14 @@ impl SqlType {
             }
             // }}}
 
+            // SQLServer {{{
+            (SQLServer, Numeric(None) | BigNumeric(None)) => {
+                // SQLServer's DECIMAL/NUMERIC type has a default precision of 18, and default scale of 0.
+                // https://learn.microsoft.com/en-us/sql/t-sql/data-types/decimal-and-numeric-transact-sql?view=fabric
+                DataType::Decimal128(18, 0)
+            }
+            // }}}
+
             // PostgreSQL {{{
             (Postgres | Salesforce | Generic { .. }, Numeric(None) | BigNumeric(None)) => {
                 // PostgreSQL's NUMERIC type is truly arbitrary (precision can go to a 1000!). When
@@ -1209,6 +1220,18 @@ impl SqlType {
                     // TIME's default precision on PostgreSQL is 6 (microseconds)
                     // https://www.postgresql.org/docs/current/datatype-datetime.html
                     (Postgres | Salesforce | DuckDB, None) => TimeUnit::Microsecond,
+                    (SQLServer, None) => {
+                        // In SQL Server, the number enclosed in parenthesis is the fractional second scale, rather than precision.
+                        //
+                        // The default depends on the warehouse:
+                        // - Fabric has no default and must be explicitly specified. limited to the 0-6 range.
+                        // - Otherwise, default is 7 (100 ns) which can't be represented with `TimeUnit` currently.
+                        //
+                        // https://learn.microsoft.com/en-us/sql/t-sql/data-types/time-transact-sql?view=fabric
+                        //
+                        // TODO: fs#8086
+                        TimeUnit::Nanosecond
+                    }
                     (Generic { .. }, None) => {
                         // we pick microseconds as a reasonable default
                         TimeUnit::Microsecond
@@ -1343,6 +1366,7 @@ impl SqlType {
                     }
                     BigQuery | Postgres | DuckDB => MonthDayNano, // MonthDayNano is exactly what BQ and PG use internally
                     Salesforce => MonthDayNano, // Salesforce seems to follow PostgreSQL
+                    SQLServer => MonthDayNano, // SQL Server doesn't appear to have an INTERVAL type
                     Generic { .. } => MonthDayNano, // Reasonable default
                 };
                 DataType::Interval(interval_unit)
@@ -1483,6 +1507,7 @@ const DATABRICKS_KEYS: [&str; 2] = ["DBX:type", "type_text"];
 const REDSHIFT_KEYS: [&str; 2] = ["REDSHIFT:type", "type_text"];
 const DUCKDB_KEYS: [&str; 2] = ["DUCKDB:type", "type_text"];
 const SPARK_KEYS: [&str; 2] = ["SPARK:type", "type_text"];
+const SQLSERVER_KEYS: [&str; 2] = ["SQLSERVER:type", "type_text"];
 const GENERIC_KEYS: [&str; 2] = ["SQL:type", "type_text"];
 
 fn metadata_type_candidate_keys(backend: Backend) -> &'static [&'static str] {
@@ -1495,6 +1520,7 @@ fn metadata_type_candidate_keys(backend: Backend) -> &'static [&'static str] {
         Backend::Redshift | Backend::RedshiftODBC => &REDSHIFT_KEYS,
         Backend::DatabricksODBC => &DATABRICKS_KEYS,
         Backend::DuckDB => &DUCKDB_KEYS,
+        Backend::SQLServer => &SQLSERVER_KEYS, // TODO
         Backend::Generic { .. } => &GENERIC_KEYS,
     }
 }

@@ -55,6 +55,7 @@ pub fn auth_for_backend(backend: Backend) -> Box<dyn Auth> {
         Backend::Salesforce => Box::new(salesforce::SalesforceAuth {}),
         Backend::Spark => Box::new(spark::SparkAuth {}),
         Backend::DuckDB => Box::new(duckdb::DuckDbAuth {}),
+        Backend::SQLServer => unimplemented!("SQL Server authentication"),
         Backend::Generic { .. } => unimplemented!("generic backend authentication"),
     }
 }

@@ -68,6 +68,8 @@ pub enum QuotingStyle {
     Backtick,
     /// U&"..." style quoted identifier like in PostgreSQL.
     UAndDouble,
+    // /// [...] style like in SQL Server (if `QUOTED_IDENTIFIER = OFF`).
+    // Bracketed,
 }
 
 impl QuotingStyle {
@@ -77,6 +79,7 @@ impl QuotingStyle {
             QuotingStyle::Double => "\"",
             QuotingStyle::Backtick => "`",
             QuotingStyle::UAndDouble => "U&\"",
+            // QuotingStyle::Bracketed => "[",
         }
     }
 
@@ -86,6 +89,7 @@ impl QuotingStyle {
             QuotingStyle::Double => "\"",
             QuotingStyle::Backtick => "`",
             QuotingStyle::UAndDouble => "\"",
+            // QuotingStyle::Bracketed => "]",
         }
     }
 }

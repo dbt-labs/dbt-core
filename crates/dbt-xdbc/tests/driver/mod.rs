@@ -149,6 +149,7 @@ mod tests {
                 Ok(builder)
             }
             Backend::Spark => todo!("Spark is WIP"),
+            Backend::SQLServer => todo!("SQL Server is WIP"),
             Backend::Salesforce => {
                 let mut builder = database::Builder::new(backend);
                 builder.with_named_option(salesforce::AUTH_TYPE, salesforce::auth_type::JWT)?;
