@@ -36,7 +36,8 @@ impl<'a> SparkAuthIR<'a> {
 }
 
 fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<SparkAuthIR<'a>, AuthError> {
-    let auth = config.get_str("auth").unwrap_or(DEFAULT_AUTH);
+    let raw_auth = config.get_string("auth");
+    let auth = raw_auth.as_deref().unwrap_or(DEFAULT_AUTH);
 
     match auth {
         "NOSASL" => Ok(SparkAuthIR::Nosasl),
@@ -61,7 +62,8 @@ fn apply_connection_args(
         .ok_or_else(|| AuthError::config("'host' is a required Spark configuration"))?;
     builder.with_named_option(spark::HOST, host)?;
 
-    let port = config.get_str("port").unwrap_or(DEFAULT_PORT);
+    let raw_port = config.get_string("port");
+    let port = raw_port.as_deref().unwrap_or(DEFAULT_PORT);
     builder.with_named_option(spark::PORT, port)?;
 
     // method in Spark is not an authentication field
@@ -91,4 +93,39 @@ impl Auth for SparkAuth {
     }
 }
 
-// TODO: tests
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_options::other_option_value;
+    use dbt_yaml::Mapping;
+    use dbt_yaml::Value as YmlValue;
+
+    #[test]
+    fn test_numeric_port_is_respected() {
+        let config = Mapping::from_iter([
+            ("host".into(), "H".into()),
+            ("method".into(), "thrift".into()),
+            ("port".into(), YmlValue::number(10001i64.into())),
+        ]);
+
+        let builder = SparkAuth {}
+            .configure(&AdapterConfig::new(config))
+            .expect("configure");
+
+        assert_eq!(other_option_value(&builder, spark::PORT), Some("10001"));
+    }
+
+    #[test]
+    fn test_non_string_auth_does_not_silently_default() {
+        let config = Mapping::from_iter([
+            ("host".into(), "H".into()),
+            ("method".into(), "thrift".into()),
+            ("auth".into(), YmlValue::number(1i64.into())),
+        ]);
+
+        let err = SparkAuth {}
+            .configure(&AdapterConfig::new(config))
+            .expect_err("configure should fail");
+        assert_eq!(err.msg(), "Invalid 'auth' method for Spark");
+    }
+}

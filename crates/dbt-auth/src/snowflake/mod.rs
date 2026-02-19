@@ -10,7 +10,7 @@ use std::fs;
 const APP_NAME: &str = "dbt";
 
 // WARNING: Still needs adjustment on what is considered must-have
-const CONNECTION_PARAMS: [&str; 10] = [
+const CONNECTION_PARAMS_STR: [&str; 9] = [
     "user",
     "password",
     "account",
@@ -19,9 +19,10 @@ const CONNECTION_PARAMS: [&str; 10] = [
     "database",
     "schema",
     "host",
-    "port",
     "protocol",
 ];
+
+const CONNECTION_PARAMS: [&str; 1] = ["port"];
 
 /// Configuration values that are needed for an auth method in a dbt-snowflake profile.
 ///
@@ -338,7 +339,7 @@ fn apply_connection_args(
     config: &AdapterConfig,
     mut builder: DatabaseBuilder,
 ) -> Result<DatabaseBuilder, AuthError> {
-    for key in CONNECTION_PARAMS {
+    for key in CONNECTION_PARAMS_STR {
         if let Some(value) = config.get_str(key) {
             match key {
                 "user" => Ok(builder.with_username(value)),
@@ -349,8 +350,16 @@ fn apply_connection_args(
                 "role" => builder.with_named_option(snowflake::ROLE, value),
                 "warehouse" => builder.with_named_option(snowflake::WAREHOUSE, value),
                 "host" => builder.with_named_option(snowflake::HOST, value),
-                "port" => builder.with_named_option(snowflake::PORT, value),
                 "protocol" => builder.with_named_option(snowflake::PROTOCOL, value),
+                _ => panic!("unexpected key: {key}"),
+            }?;
+        }
+    }
+
+    for key in CONNECTION_PARAMS {
+        if let Some(value) = config.get_string(key) {
+            match key {
+                "port" => builder.with_named_option(snowflake::PORT, value.as_ref()),
                 _ => panic!("unexpected key: {key}"),
             }?;
         }
@@ -369,14 +378,14 @@ fn apply_connection_args(
 
     // Timeout Logic
     let connect_timeout = config
-        .get_str("connect_timeout")
-        .map(postfix_seconds_unit)
+        .get_string("connect_timeout")
+        .map(|v| postfix_seconds_unit(v.as_ref()))
         .unwrap_or_else(|| DEFAULT_CONNECT_TIMEOUT.to_string());
     builder.with_named_option(snowflake::LOGIN_TIMEOUT, connect_timeout)?;
 
     let request_timeout = config
-        .get_str("request_timeout")
-        .map(postfix_seconds_unit)
+        .get_string("request_timeout")
+        .map(|v| postfix_seconds_unit(v.as_ref()))
         .unwrap_or_else(|| DEFAULT_REQUEST_TIMEOUT.to_string());
     builder.with_named_option(snowflake::REQUEST_TIMEOUT, request_timeout)?;
 
@@ -405,6 +414,7 @@ mod tests {
     use adbc_core::options::OptionDatabase;
     use base64::{Engine, engine::general_purpose::STANDARD};
     use dbt_yaml::Mapping;
+    use dbt_yaml::Value as YmlValue;
     use key_format::{
         PEM_ENCRYPTED_END, PEM_ENCRYPTED_START, PEM_UNENCRYPTED_END, PEM_UNENCRYPTED_START,
     };
@@ -563,6 +573,44 @@ mod tests {
             (snowflake::LOG_TRACING, "fatal"),
             (snowflake::LOGIN_TIMEOUT, DEFAULT_CONNECT_TIMEOUT),
             (snowflake::REQUEST_TIMEOUT, "0s"),
+        ];
+        run_config_test(config, &expected);
+    }
+
+    #[test]
+    fn test_numeric_timeouts_are_respected() {
+        let mut config = base_config();
+        config.insert("connect_timeout".into(), YmlValue::number(100i64.into()));
+        config.insert("request_timeout".into(), YmlValue::number(0i64.into()));
+        let expected = [
+            ("user", "U"),
+            ("password", "P"),
+            (snowflake::ACCOUNT, "A"),
+            (snowflake::ROLE, "role"),
+            (snowflake::WAREHOUSE, "warehouse"),
+            (snowflake::APPLICATION_NAME, APP_NAME),
+            (snowflake::LOG_TRACING, "fatal"),
+            (snowflake::LOGIN_TIMEOUT, "100s"),
+            (snowflake::REQUEST_TIMEOUT, "0s"),
+        ];
+        run_config_test(config, &expected);
+    }
+
+    #[test]
+    fn test_numeric_port_is_respected() {
+        let mut config = base_config();
+        config.insert("port".into(), YmlValue::number(443u64.into()));
+        let expected = [
+            ("user", "U"),
+            ("password", "P"),
+            (snowflake::ACCOUNT, "A"),
+            (snowflake::ROLE, "role"),
+            (snowflake::WAREHOUSE, "warehouse"),
+            (snowflake::PORT, "443"),
+            (snowflake::APPLICATION_NAME, APP_NAME),
+            (snowflake::LOG_TRACING, "fatal"),
+            (snowflake::LOGIN_TIMEOUT, DEFAULT_CONNECT_TIMEOUT),
+            (snowflake::REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT),
         ];
         run_config_test(config, &expected);
     }
