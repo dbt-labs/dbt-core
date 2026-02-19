@@ -3440,6 +3440,8 @@ pub struct Nodes {
     pub saved_queries: BTreeMap<String, Arc<DbtSavedQuery>>,
     pub groups: BTreeMap<String, Arc<DbtGroup>>,
     pub functions: BTreeMap<String, Arc<DbtFunction>>,
+    /// The root project name. Used to resolve the `package:this` selector.
+    pub project_name: Option<String>,
 }
 
 impl Nodes {
@@ -3523,6 +3525,7 @@ impl Nodes {
             saved_queries,
             groups,
             functions,
+            project_name: self.project_name.clone(),
         }
     }
 

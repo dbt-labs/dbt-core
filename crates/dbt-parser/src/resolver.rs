@@ -381,6 +381,9 @@ pub async fn resolve(
     // Check access
     check_access(arg, &nodes, &all_runtime_configs);
 
+    // Set the project name on nodes so that `package:this` selectors can resolve
+    nodes.project_name = Some(root_project_name.to_string());
+
     Ok((
         ResolverState {
             root_project_name: root_project_name.to_string(),

@@ -1451,6 +1451,7 @@ mod tests {
             saved_queries: BTreeMap::new(),
             groups: BTreeMap::new(),
             functions: BTreeMap::new(),
+            project_name: None,
         }
     }
 
