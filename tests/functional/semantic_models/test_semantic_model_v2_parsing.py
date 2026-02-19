@@ -78,6 +78,9 @@ class TestSemanticModelParsingWorks:
         assert id_dim.label == "ID Dimension"
         assert id_dim.is_partition is True
         assert id_dim.config.meta == {"component_level": "dimension_override"}
+        # dimension name "id_dim" differs from column name "id", so expr must
+        # be set to the column name for MetricFlow to query the correct column.
+        assert id_dim.expr == "id"
         second_dim = dimensions["second_dim"]
         assert second_dim.type == DimensionType.TIME
         assert second_dim.description == "This is the second column (dim)."
@@ -86,6 +89,9 @@ class TestSemanticModelParsingWorks:
         assert second_dim.config.meta == {}
         assert second_dim.type_params.validity_params.is_start is True
         assert second_dim.type_params.validity_params.is_end is True
+        # dimension name "second_dim" differs from column name "second_col",
+        # so expr must be set to the column name.
+        assert second_dim.expr == "second_col"
         col_with_default_dimensions = dimensions["col_with_default_dimensions"]
         assert col_with_default_dimensions.type == DimensionType.CATEGORICAL
         assert (
@@ -96,6 +102,8 @@ class TestSemanticModelParsingWorks:
         assert col_with_default_dimensions.is_partition is False
         assert col_with_default_dimensions.config.meta == {}
         assert col_with_default_dimensions.validity_params is None
+        # dimension name matches column name, so expr should not be set.
+        assert col_with_default_dimensions.expr is None
 
         # Entities
         assert len(semantic_model.entities) == 3
@@ -105,12 +113,17 @@ class TestSemanticModelParsingWorks:
         assert primary_entity.description == "This is the id entity, and it is the primary entity."
         assert primary_entity.label == "ID Entity"
         assert primary_entity.config.meta == {"component_level": "entity_override"}
+        # entity name "id_entity" differs from column name "id", so expr must
+        # be set to the column name for MetricFlow to query the correct column.
+        assert primary_entity.expr == "id"
 
         foreign_id_col = entities["foreign_id_col"]
         assert foreign_id_col.type == EntityType.FOREIGN
         assert foreign_id_col.description == "This is a foreign id column."
         assert foreign_id_col.label is None
         assert foreign_id_col.config.meta == {}
+        # entity name matches column name, so expr should not be set.
+        assert foreign_id_col.expr is None
 
         col_with_default_entity_testing_default_desc = entities[
             "col_with_default_entity_testing_default_desc"
@@ -122,6 +135,8 @@ class TestSemanticModelParsingWorks:
         )
         assert col_with_default_entity_testing_default_desc.label is None
         assert col_with_default_entity_testing_default_desc.config.meta == {}
+        # entity name differs from column name, so expr must be set.
+        assert col_with_default_entity_testing_default_desc.expr == "col_with_default_dimensions"
 
         # No measures in v2 YAML
         assert len(semantic_model.measures) == 0

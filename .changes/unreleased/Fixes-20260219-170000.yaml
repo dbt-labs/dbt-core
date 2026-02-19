@@ -1,0 +1,6 @@
+kind: Fixes
+body: Set expr to column name for column-based dimensions and entities when the semantic layer name differs from the column name, so MetricFlow queries the correct warehouse column
+time: 2026-02-19T17:00:00.000000+00:00
+custom:
+    Author: b-per
+    Issue: "12512"
