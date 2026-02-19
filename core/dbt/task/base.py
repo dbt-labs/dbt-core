@@ -109,8 +109,9 @@ def get_nearest_project_dir(project_dir: Optional[str]) -> Path:
 
 def move_to_nearest_project_dir(project_dir: Optional[str]) -> Path:
     nearest_project_dir = get_nearest_project_dir(project_dir)
-    os.chdir(nearest_project_dir)
-    return nearest_project_dir
+    resolved_nearest_project_dir = nearest_project_dir.resolve()
+    os.chdir(resolved_nearest_project_dir)
+    return resolved_nearest_project_dir
 
 
 # TODO: look into deprecating this class in favor of several small functions that

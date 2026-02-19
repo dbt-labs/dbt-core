@@ -41,6 +41,13 @@ class FileDiff(dbtClassMixin):
     added: List[InputFile]
 
 
+def normalize_file_contents(contents: str) -> str:
+    """Normalize file contents by compacting whitespace and newlines to a single whitespace.
+    This ensures consistent checksums regardless of formatting differences.
+    """
+    return " ".join(contents.split())
+
+
 # This loads the files contents and creates the SourceFile object
 def load_source_file(
     path: FilePath,
@@ -83,7 +90,8 @@ def load_source_file(
         # the checksum to match the stored file contents
         file_contents = load_file_contents(path.absolute_path, strip=True)
         source_file.contents = file_contents
-        source_file.checksum = FileHash.from_contents(file_contents)
+        normalized_contents = normalize_file_contents(file_contents)
+        source_file.checksum = FileHash.from_contents(normalized_contents)
 
     if parse_file_type == ParseFileType.Schema and source_file.contents:
         dfy = yaml_from_file(source_file=source_file, validate=True)

@@ -1,0 +1,6 @@
+kind: Fixes
+body: Dont fire config problem event if loaded_at_query is defined for adapters that dont support metadata-based freshness
+time: 2026-02-04T21:11:28.218659+05:30
+custom:
+    Author: ash2shukla
+    Issue: "12451"

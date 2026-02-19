@@ -1,0 +1,6 @@
+kind: Fixes
+body: Normalize whitespace prior to computing partial parsing checksum when loading model files
+time: 2026-02-02T15:38:35.220621-05:00
+custom:
+    Author: michelleark
+    Issue: "12432"

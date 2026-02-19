@@ -1,0 +1,6 @@
+kind: Fixes
+body: Return correctly resolved project path when changing dirs
+time: 2026-02-02T12:34:53.454501+05:30
+custom:
+    Author: ash2shukla
+    Issue: "9138"
