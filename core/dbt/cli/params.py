@@ -636,6 +636,7 @@ skip_debug = _create_option_and_track_env_var(
     envvar=None,
     help="Skip running dbt debug after project initialization.",
     is_flag=True,
+    default=False,
 )
 
 source = _create_option_and_track_env_var(
