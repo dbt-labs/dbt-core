@@ -20,42 +20,46 @@ pub struct SemanticManifest {
     pub saved_queries: Vec<SemanticManifestSavedQuery>,
 }
 
-impl From<Nodes> for SemanticManifest {
-    fn from(nodes: Nodes) -> Self {
+impl From<&Nodes> for SemanticManifest {
+    fn from(nodes: &Nodes) -> Self {
+        let semantic_models = nodes
+            .semantic_models
+            .values()
+            .map(|m| (**m).clone().into())
+            .collect();
+        let metrics = nodes
+            .metrics
+            .values()
+            .map(|m| {
+                // don't hydrate input measures into semantic_manifest.json (only used for manifest.json)
+                let mut semantic_manifest_metric: SemanticManifestMetric = (**m).clone().into();
+                semantic_manifest_metric.type_params.input_measures = Some(vec![]);
+                semantic_manifest_metric
+            })
+            .collect();
+        let project_configuration = SemanticManifestProjectConfiguration {
+            dsi_package_version: Default::default(),
+            metadata: None,
+            time_spines: nodes
+                .models
+                .values()
+                .filter(|m| m.__model_attr__.time_spine.is_some())
+                .map(|m| (**m).clone().__model_attr__.time_spine.unwrap())
+                .collect(),
+            // deprecated fields
+            time_spine_table_configurations: vec![],
+        };
+        let saved_queries = nodes
+            .saved_queries
+            .values()
+            .map(|m| (**m).clone().into())
+            .collect();
+
         SemanticManifest {
-            semantic_models: nodes
-                .semantic_models
-                .clone()
-                .into_values()
-                .map(|m| (*m).clone().into())
-                .collect(),
-            metrics: nodes
-                .metrics
-                .into_values()
-                .map(|m| {
-                    // don't hydrate input measures into semantic_manifest.json (only used for manifest.json)
-                    let mut semantic_manifest_metric: SemanticManifestMetric = (*m).clone().into();
-                    semantic_manifest_metric.type_params.input_measures = Some(vec![]);
-                    semantic_manifest_metric
-                })
-                .collect(),
-            project_configuration: SemanticManifestProjectConfiguration {
-                dsi_package_version: Default::default(),
-                metadata: None,
-                time_spines: nodes
-                    .models
-                    .into_values()
-                    .filter(|m| m.__model_attr__.time_spine.is_some())
-                    .map(|m| (*m).clone().__model_attr__.time_spine.unwrap())
-                    .collect(),
-                // deprecated fields
-                time_spine_table_configurations: vec![],
-            },
-            saved_queries: nodes
-                .saved_queries
-                .into_values()
-                .map(|m| (*m).clone().into())
-                .collect(),
+            semantic_models,
+            metrics,
+            project_configuration,
+            saved_queries,
         }
     }
 }
