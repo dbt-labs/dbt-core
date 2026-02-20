@@ -154,18 +154,18 @@ dependencies = [
 
 [envs.build.scripts]
 check-all = [
-    "- check-wheel",
-    "- check-sdist",
+    "check-wheel",
+    "check-sdist",
 ]
 check-wheel = [
-    "twine check dist/*",
-    "find ./dist/dbt_core-*.whl -maxdepth 1 -type f | xargs python -m pip install --force-reinstall --find-links=dist/",
+    "twine check ../dist/*",
+    "find ../dist/dbt_core-*.whl -maxdepth 1 -type f | xargs python -m pip install --force-reinstall --find-links=../dist/",
     "pip freeze | grep dbt-core",
     "dbt --version",
 ]
 check-sdist = [
-    "check-wheel-contents dist/*.whl --ignore W007,W008",
-    "find ./dist/dbt_core-*.gz -maxdepth 1 -type f | xargs python -m pip install --force-reinstall --find-links=dist/",
+    "check-wheel-contents ../dist/*.whl --ignore W007,W008",
+    "find ../dist/dbt_core-*.gz -maxdepth 1 -type f | xargs python -m pip install --force-reinstall --find-links=../dist/",
     "pip freeze | grep dbt-core",
     "dbt --version",
 ]
