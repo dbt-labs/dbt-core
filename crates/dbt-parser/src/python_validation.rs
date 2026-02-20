@@ -90,6 +90,12 @@ impl Visitor<'_> for PythonValidationVisitor {
 
 /// Validate a Python model file structure
 pub fn validate_python_model(file_path: &Path, stmts: &[Stmt]) -> FsResult<()> {
+    // Skip validation for empty files (like __init__.py), matching dbt-core behavior
+    // In dbt-core, validation only runs if tree.body is truthy (non-empty)
+    if stmts.is_empty() {
+        return Ok(());
+    }
+
     let mut validator = PythonValidationVisitor::new();
 
     for stmt in stmts {
@@ -264,11 +270,20 @@ def model(dbt, session):
         let source = "    ";
         let path = PathBuf::from("test.py");
         let stmts = parse_python(source, &path).unwrap();
-        let err = validate_python_model(&path, &stmts).unwrap_err();
-        assert!(
-            err.to_string()
-                .contains("dbt allows exactly one model defined per python file, found 0")
-        );
+        // Empty files should be silently skipped, matching dbt-core behavior
+        let result = validate_python_model(&path, &stmts);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_truly_empty_file() {
+        // Test for completely empty file (0 bytes), like __init__.py
+        let source = "";
+        let path = PathBuf::from("__init__.py");
+        let stmts = parse_python(source, &path).unwrap();
+        // Empty files should be silently skipped, matching dbt-core behavior
+        let result = validate_python_model(&path, &stmts);
+        assert!(result.is_ok());
     }
 
     #[test]
