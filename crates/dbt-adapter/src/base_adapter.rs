@@ -4,7 +4,7 @@ use crate::metadata::*;
 use crate::query_cache::QueryCache;
 use crate::snapshots::SnapshotStrategy;
 use crate::stmt_splitter::StmtSplitter;
-use crate::typed_adapter::{ReplayAdapter, TypedBaseAdapter};
+use crate::typed_adapter::*;
 use crate::{AdapterResponse, AdapterResult};
 
 use dbt_agate::AgateTable;
@@ -46,9 +46,20 @@ pub fn backend_of(adapter_type: AdapterType) -> Backend {
 
 /// Type queries to be implemented for every [BaseAdapter]
 pub trait AdapterTyping {
+    /// Returns the [InnerAdapter] discriminator for this adapter.
+    ///
+    /// This is the primary method that implementors should provide.
+    /// Default implementations of [engine()](Self::engine) and
+    /// [as_replay()](Self::as_replay) are derived from this.
+    fn inner_adapter(&self) -> InnerAdapter<'_>;
+
     /// Get name/type of this adapter
     fn adapter_type(&self) -> AdapterType {
-        self.engine().adapter_type()
+        match self.inner_adapter() {
+            InnerAdapter::Impl(adapter_type, _) | InnerAdapter::Replay(adapter_type, _) => {
+                adapter_type
+            }
+        }
     }
 
     /// Build an instance of the metadata adapter if supported.
@@ -64,7 +75,10 @@ pub trait AdapterTyping {
 
     /// This adapter as the replay adapter if it is one, None otherwise.
     fn as_replay(&self) -> Option<&dyn ReplayAdapter> {
-        None
+        match self.inner_adapter() {
+            InnerAdapter::Replay(_, replay) => Some(replay),
+            InnerAdapter::Impl(..) => None,
+        }
     }
 
     /// Get column type instance
@@ -74,11 +88,19 @@ pub trait AdapterTyping {
     }
 
     /// Get the [AdapterEngine]
-    fn engine(&self) -> &Arc<dyn AdapterEngine>;
+    fn engine(&self) -> &Arc<dyn AdapterEngine> {
+        match self.inner_adapter() {
+            InnerAdapter::Impl(_, engine) => engine,
+            InnerAdapter::Replay(_, replay) => replay.engine(),
+        }
+    }
 
     /// Get the [ResolvedQuoting]
     fn quoting(&self) -> ResolvedQuoting {
-        self.engine().quoting()
+        match self.inner_adapter() {
+            InnerAdapter::Impl(_, engine) => engine.quoting(),
+            InnerAdapter::Replay(_, replay) => replay.engine().quoting(),
+        }
     }
 
     /// Quote a component of a relation
@@ -102,7 +124,10 @@ pub trait AdapterTyping {
     }
 
     fn cancellation_token(&self) -> CancellationToken {
-        self.engine().cancellation_token()
+        match self.inner_adapter() {
+            InnerAdapter::Impl(_, engine) => engine.cancellation_token(),
+            InnerAdapter::Replay(_, adapter) => adapter.engine().cancellation_token(),
+        }
     }
 }
 

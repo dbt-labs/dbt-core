@@ -1,4 +1,3 @@
-use crate::adapter_engine::AdapterEngine;
 use crate::adapter_engine::XdbcEngine;
 use crate::base_adapter::*;
 use crate::cache::RelationCache;
@@ -18,7 +17,8 @@ use crate::snapshots::SnapshotStrategy;
 use crate::sql_types::TypeOps;
 use crate::stmt_splitter::NaiveStmtSplitter;
 use crate::time_machine::TimeMachine;
-use crate::typed_adapter::{ReplayAdapter, TypedBaseAdapter};
+use crate::typed_adapter;
+use crate::typed_adapter::TypedBaseAdapter;
 use crate::{AdapterResponse, AdapterResult, BaseAdapter};
 
 use dbt_agate::AgateTable;
@@ -143,7 +143,7 @@ use InnerAdapter::*;
 ///
 /// # Relation Cache
 ///
-/// The relation cache is now managed by the engine. Access via `self.engine().relation_cache()`.
+/// The relation cache is now managed by the engine. Access via `engine().relation_cache()`.
 #[derive(Clone)]
 pub struct BridgeAdapter {
     inner: InnerAdapter,
@@ -232,6 +232,7 @@ impl BridgeAdapter {
             stmt_splitter,
             None,
             relation_cache,
+            BTreeMap::new(),
             token,
         );
 
@@ -309,6 +310,13 @@ impl BridgeAdapter {
 }
 
 impl AdapterTyping for BridgeAdapter {
+    fn inner_adapter(&self) -> typed_adapter::InnerAdapter<'_> {
+        match &self.inner {
+            Typed { adapter, .. } => adapter.inner_adapter(),
+            Parse(state) => typed_adapter::InnerAdapter::Impl(state.adapter_type, &state.engine),
+        }
+    }
+
     fn adapter_type(&self) -> AdapterType {
         match &self.inner {
             Typed { adapter, .. } => adapter.adapter_type(),
@@ -334,13 +342,6 @@ impl AdapterTyping for BridgeAdapter {
         matches!(&self.inner, Parse(_))
     }
 
-    fn as_replay(&self) -> Option<&dyn ReplayAdapter> {
-        match &self.inner {
-            Typed { adapter, .. } => adapter.as_replay(),
-            Parse(_) => None,
-        }
-    }
-
     fn column_type(&self) -> Option<Value> {
         match &self.inner {
             Typed { adapter, .. } => adapter.column_type(),
@@ -351,22 +352,11 @@ impl AdapterTyping for BridgeAdapter {
         }
     }
 
-    fn engine(&self) -> &Arc<dyn AdapterEngine> {
-        match &self.inner {
-            Typed { adapter, .. } => adapter.engine(),
-            Parse(state) => &state.engine,
-        }
-    }
-
     fn quoting(&self) -> ResolvedQuoting {
         match &self.inner {
             Typed { adapter, .. } => adapter.quoting(),
             Parse(state) => state.engine.quoting(),
         }
-    }
-
-    fn cancellation_token(&self) -> CancellationToken {
-        self.engine().cancellation_token()
     }
 }
 
@@ -398,11 +388,12 @@ impl BaseAdapter for BridgeAdapter {
         schema_to_relations_map: BTreeMap<CatalogAndSchema, RelationVec>,
     ) -> FsResult<()> {
         match &self.inner {
-            Typed { .. } => {
+            Typed { adapter, .. } => {
                 schema_to_relations_map
                     .into_iter()
                     .for_each(|(schema, relations)| {
-                        self.engine()
+                        adapter
+                            .engine()
                             .relation_cache()
                             .insert_schema(schema, relations)
                     });
@@ -414,7 +405,7 @@ impl BaseAdapter for BridgeAdapter {
 
     fn is_cached(&self, relation: &Arc<dyn BaseRelation>) -> bool {
         match &self.inner {
-            Typed { .. } => self
+            Typed { adapter, .. } => adapter
                 .engine()
                 .relation_cache()
                 .contains_relation(relation.as_ref()),
@@ -424,7 +415,10 @@ impl BaseAdapter for BridgeAdapter {
 
     fn is_already_fully_cached(&self, schema: &CatalogAndSchema) -> bool {
         match &self.inner {
-            Typed { .. } => self.engine().relation_cache().contains_full_schema(schema),
+            Typed { adapter, .. } => adapter
+                .engine()
+                .relation_cache()
+                .contains_full_schema(schema),
             Parse(_) => false,
         }
     }
@@ -725,7 +719,8 @@ impl BaseAdapter for BridgeAdapter {
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
-                self.engine()
+                adapter
+                    .engine()
                     .relation_cache()
                     .evict_relation(relation.as_ref() as &dyn BaseRelation);
                 Ok(adapter.drop_relation(state, relation)?)
@@ -972,7 +967,8 @@ impl BaseAdapter for BridgeAdapter {
                 match relation {
                     Some(relation) => {
                         // cache found relation
-                        self.engine()
+                        adapter
+                            .engine()
                             .relation_cache()
                             .insert_relation(Arc::clone(&relation), None);
                         Ok(relation.as_value())
@@ -1484,7 +1480,7 @@ impl BaseAdapter for BridgeAdapter {
     #[tracing::instrument(skip_all, level = "trace")]
     fn behavior(&self) -> Value {
         match &self.inner {
-            Typed { adapter, .. } => Value::from_object((*adapter.behavior_object()).clone()),
+            Typed { adapter, .. } => Value::from_object((**adapter.behavior_object()).clone()),
             Parse(_) => Value::from_object(Behavior::new(&[], &BTreeMap::new())),
         }
     }
@@ -1639,7 +1635,8 @@ impl BaseAdapter for BridgeAdapter {
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
-                self.engine()
+                adapter
+                    .engine()
                     .relation_cache()
                     .insert_relation(target_relation_partitioned.clone(), None);
 
@@ -1988,8 +1985,12 @@ impl Object for BridgeAdapter {
         if let Some(ref tm) = self.time_machine
             && tm.is_replaying()
         {
+            let is_mock = match self.inner_adapter() {
+                typed_adapter::InnerAdapter::Impl(_, engine) => engine.is_mock(),
+                typed_adapter::InnerAdapter::Replay(_, replay) => replay.engine().is_mock(),
+            };
             assert!(
-                self.engine().is_mock(),
+                is_mock,
                 "Replay mode requires mock engine; attempted on non-mock engine which risks leaking queries"
             );
         }

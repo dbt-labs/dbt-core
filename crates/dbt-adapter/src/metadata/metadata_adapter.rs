@@ -1,6 +1,5 @@
 use crate::errors::{AdapterError, AdapterResult, AsyncAdapterResult};
 use crate::funcs::execute_macro;
-use crate::metadata::*;
 use crate::relation::{create_relation, do_create_relation};
 use crate::sql_types::{SdfSchema, arrow_schema_to_sdf_schema};
 use crate::time_machine::{
@@ -8,6 +7,7 @@ use crate::time_machine::{
     args_list_relations_schemas_by_patterns, args_list_udfs, with_time_machine_metadata_wrapper,
 };
 use crate::typed_adapter::TypedBaseAdapter;
+use crate::{AdapterEngine, metadata::*};
 
 use arrow::array::RecordBatch;
 use dbt_common::adapter::ExecutionPhase;
@@ -50,8 +50,6 @@ pub const MAX_CONNECTIONS: usize = 48;
 /// }
 /// ```
 pub trait MetadataAdapter: Send + Sync {
-    fn adapter(&self) -> &dyn TypedBaseAdapter;
-
     fn build_schemas_from_stats_sql(
         &self,
         _: Arc<RecordBatch>,
@@ -245,6 +243,7 @@ pub trait MetadataAdapter: Send + Sync {
     /// This wraps `list_relations_schemas` and converts the result.
     fn list_relations_sdf_schemas<'a>(
         &'a self,
+        engine: &'a dyn AdapterEngine,
         unique_id: Option<String>,
         phase: Option<ExecutionPhase>,
         relations: &'a [Arc<dyn BaseRelation>],
@@ -256,10 +255,7 @@ pub trait MetadataAdapter: Send + Sync {
                     map.into_iter()
                         .map(|(k, v)| {
                             let v = v.and_then(|schema| {
-                                arrow_schema_to_sdf_schema(
-                                    schema,
-                                    self.adapter().engine().type_ops(),
-                                )
+                                arrow_schema_to_sdf_schema(schema, engine.type_ops())
                             });
                             (k, v)
                         })

@@ -1,4 +1,4 @@
-use crate::adapter_engine::AdapterEngine;
+use crate::adapter_engine::{AdapterEngine, make_behavior};
 use crate::base_adapter::backend_of;
 use crate::cache::RelationCache;
 use crate::config::AdapterConfig;
@@ -22,6 +22,7 @@ use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use dashmap::DashMap;
 use dbt_common::ErrorCode;
 use dbt_common::adapter::{AdapterType, DBT_EXECUTION_PHASES};
+use dbt_common::behavior_flags::Behavior;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::tracing::emit::emit_warn_log_message;
 use dbt_schemas::schemas::common::ResolvedQuoting;
@@ -35,8 +36,8 @@ use regex::Regex;
 use rusqlite::params;
 
 use std::borrow::Cow;
-use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;
+use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::fs::{self, File, create_dir_all, metadata};
 use std::hash::{Hash, Hasher};
@@ -737,6 +738,14 @@ impl AdapterEngine for RecordEngine {
         self.0.engine.new_connection_with_config(config)
     }
 
+    fn behavior(&self) -> &Arc<Behavior> {
+        self.0.engine.behavior()
+    }
+
+    fn behavior_flag_overrides(&self) -> &BTreeMap<String, bool> {
+        self.0.engine.behavior_flag_overrides()
+    }
+
     // Uses default execute_with_options (ADBC-based) — recording happens
     // at the Connection/Statement level via RecordEngineConnection.
 }
@@ -987,6 +996,8 @@ struct ReplayEngineInner {
     relation_cache: Arc<RelationCache>,
     /// Global CLI cancellation token
     cancellation_token: CancellationToken,
+    /// Resolved behavior object
+    behavior: Arc<Behavior>,
 }
 
 impl ReplayEngineInner {
@@ -1011,6 +1022,7 @@ impl ReplayEngine {
         relation_cache: Arc<RelationCache>,
         token: CancellationToken,
     ) -> Self {
+        let behavior = make_behavior(adapter_type, &BTreeMap::new());
         let inner = ReplayEngineInner {
             adapter_type,
             backend: backend_of(adapter_type),
@@ -1022,6 +1034,7 @@ impl ReplayEngine {
             stmt_splitter,
             relation_cache,
             cancellation_token: token,
+            behavior,
         };
         ReplayEngine(Arc::new(inner))
     }
@@ -1086,6 +1099,15 @@ impl AdapterEngine for ReplayEngine {
         _config: &AdapterConfig,
     ) -> AdapterResult<Box<dyn Connection>> {
         self.new_connection(None, None)
+    }
+
+    fn behavior(&self) -> &Arc<Behavior> {
+        &self.0.behavior
+    }
+
+    fn behavior_flag_overrides(&self) -> &BTreeMap<String, bool> {
+        static EMPTY: BTreeMap<String, bool> = BTreeMap::new();
+        &EMPTY
     }
 
     fn is_replay(&self) -> bool {

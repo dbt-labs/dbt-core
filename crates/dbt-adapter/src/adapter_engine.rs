@@ -13,6 +13,7 @@ use crate::sidecar_client::SidecarClient;
 use crate::sql_types::TypeOps;
 use crate::statement::*;
 use crate::stmt_splitter::StmtSplitter;
+use crate::typed_adapter::{DEFAULT_BASE_BEHAVIOR_FLAGS, adapter_specific_behavior_flags};
 
 use adbc_core::options::{OptionStatement, OptionValue};
 use arrow::array::RecordBatch;
@@ -21,6 +22,7 @@ use arrow_schema::Schema;
 use core::result::Result;
 use dbt_agate::hashers::IdentityBuildHasher;
 use dbt_common::adapter::AdapterType;
+use dbt_common::behavior_flags::Behavior;
 use dbt_common::cancellation::{Cancellable, CancellationToken, never_cancels};
 use dbt_common::create_debug_span;
 use dbt_common::hashing::code_hash;
@@ -91,6 +93,17 @@ impl Connection for NoopConnection {
     fn update_node_id(&mut self, _node_id: Option<String>) {}
 }
 
+pub(crate) fn make_behavior(
+    adapter_type: AdapterType,
+    behavior_flag_overrides: &BTreeMap<String, bool>,
+) -> Arc<Behavior> {
+    let mut behavior_flags = adapter_specific_behavior_flags(adapter_type);
+    for flag in DEFAULT_BASE_BEHAVIOR_FLAGS.iter() {
+        behavior_flags.push(flag.clone());
+    }
+    Arc::new(Behavior::new(&behavior_flags, behavior_flag_overrides))
+}
+
 /// A trait abstracting the layer between the adapter layer and database drivers.
 ///
 /// Each concrete engine type (ADBC, mock, sidecar, record, replay) implements this trait
@@ -130,6 +143,12 @@ pub trait AdapterEngine: Send + Sync {
 
     /// Get the cancellation token
     fn cancellation_token(&self) -> CancellationToken;
+
+    /// Get the resolved behavior object with user overrides applied
+    fn behavior(&self) -> &Arc<Behavior>;
+
+    /// Get the user overrides for behavior flags
+    fn behavior_flag_overrides(&self) -> &BTreeMap<String, bool>;
 
     /// Create a new connection to the warehouse.
     fn new_connection(
@@ -413,6 +432,10 @@ pub struct XdbcEngine {
     query_cache: Option<Arc<dyn QueryCache>>,
     /// Relation cache - caches warehouse relation metadata to avoid repeated queries
     relation_cache: Arc<RelationCache>,
+    /// User overrides for behavior flags from dbt_project.yml
+    behavior_flag_overrides: BTreeMap<String, bool>,
+    /// Resolved behavior object with user overrides applied
+    behavior: Arc<Behavior>,
     /// Global CLI cancellation token
     cancellation_token: CancellationToken,
 }
@@ -429,6 +452,7 @@ impl XdbcEngine {
         splitter: Arc<dyn StmtSplitter>,
         query_cache: Option<Arc<dyn QueryCache>>,
         relation_cache: Arc<RelationCache>,
+        behavior_flag_overrides: BTreeMap<String, bool>,
         token: CancellationToken,
     ) -> Self {
         let threads = config
@@ -448,6 +472,7 @@ impl XdbcEngine {
         } else {
             u32::MAX
         };
+        let behavior = make_behavior(adapter_type, &behavior_flag_overrides);
         Self {
             adapter_type,
             auth,
@@ -461,6 +486,8 @@ impl XdbcEngine {
             query_cache,
             relation_cache,
             cancellation_token: token,
+            behavior_flag_overrides,
+            behavior,
         }
     }
 
@@ -591,6 +618,14 @@ impl AdapterEngine for XdbcEngine {
         Ok(conn)
     }
 
+    fn behavior(&self) -> &Arc<Behavior> {
+        &self.behavior
+    }
+
+    fn behavior_flag_overrides(&self) -> &BTreeMap<String, bool> {
+        &self.behavior_flag_overrides
+    }
+
     // Uses the default `execute_with_options` (ADBC-based).
 }
 
@@ -598,7 +633,7 @@ impl AdapterEngine for XdbcEngine {
 // MockEngine
 // ---------------------------------------------------------------------------
 
-/// Mock engine state for the MockAdapter
+/// Mock engine state for the mock adapter variant of [ConcreteAdapter](crate::typed_adapter::ConcreteAdapter)
 #[derive(Clone)]
 pub struct MockEngine {
     adapter_type: AdapterType,
@@ -607,6 +642,8 @@ pub struct MockEngine {
     stmt_splitter: Arc<dyn StmtSplitter>,
     /// Relation cache - caches warehouse relation metadata
     relation_cache: Arc<RelationCache>,
+    /// Resolved behavior object
+    behavior: Arc<Behavior>,
 }
 
 impl MockEngine {
@@ -617,12 +654,14 @@ impl MockEngine {
         stmt_splitter: Arc<dyn StmtSplitter>,
         relation_cache: Arc<RelationCache>,
     ) -> Self {
+        let behavior = make_behavior(adapter_type, &BTreeMap::new());
         Self {
             adapter_type,
             quoting,
             type_ops: Arc::from(type_ops),
             stmt_splitter,
             relation_cache,
+            behavior,
         }
     }
 }
@@ -699,6 +738,15 @@ impl AdapterEngine for MockEngine {
         Ok(RecordBatch::new_empty(Arc::new(Schema::empty())))
     }
 
+    fn behavior(&self) -> &Arc<Behavior> {
+        &self.behavior
+    }
+
+    fn behavior_flag_overrides(&self) -> &BTreeMap<String, bool> {
+        static EMPTY: BTreeMap<String, bool> = BTreeMap::new();
+        &EMPTY
+    }
+
     fn is_mock(&self) -> bool {
         true
     }
@@ -725,6 +773,8 @@ pub struct SidecarEngine {
     query_comment: Arc<QueryCommentConfig>,
     /// Unused for sidecar adapters - required for API compatibility
     relation_cache: Arc<RelationCache>,
+    /// Resolved behavior object
+    behavior: Arc<Behavior>,
 }
 
 impl SidecarEngine {
@@ -740,6 +790,7 @@ impl SidecarEngine {
         query_comment: QueryCommentConfig,
         relation_cache: Arc<RelationCache>,
     ) -> Self {
+        let behavior = make_behavior(adapter_type, &BTreeMap::new());
         Self {
             adapter_type,
             execution_backend,
@@ -750,6 +801,7 @@ impl SidecarEngine {
             stmt_splitter,
             query_comment: Arc::new(query_comment),
             relation_cache,
+            behavior,
         }
     }
 }
@@ -842,6 +894,15 @@ impl AdapterEngine for SidecarEngine {
 
     fn sidecar_client(&self) -> Option<&dyn SidecarClient> {
         Some(self.client.as_ref())
+    }
+
+    fn behavior(&self) -> &Arc<Behavior> {
+        &self.behavior
+    }
+
+    fn behavior_flag_overrides(&self) -> &BTreeMap<String, bool> {
+        static EMPTY: BTreeMap<String, bool> = BTreeMap::new();
+        &EMPTY
     }
 }
 

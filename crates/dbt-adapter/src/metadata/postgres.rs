@@ -1,5 +1,5 @@
+use crate::AdapterEngine;
 use crate::typed_adapter::ConcreteAdapter;
-use crate::{AdapterEngine, TypedBaseAdapter};
 use crate::{
     AdapterResult, errors::AsyncAdapterResult, metadata::*, record_batch_utils::get_column_values,
 };
@@ -30,10 +30,6 @@ impl PostgresMetadataAdapter {
 }
 
 impl MetadataAdapter for PostgresMetadataAdapter {
-    fn adapter(&self) -> &dyn TypedBaseAdapter {
-        &self.adapter
-    }
-
     fn build_schemas_from_stats_sql(
         &self,
         stats_sql_result: Arc<RecordBatch>,

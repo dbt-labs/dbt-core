@@ -140,10 +140,6 @@ impl RedshiftMetadataAdapter {
 }
 
 impl MetadataAdapter for RedshiftMetadataAdapter {
-    fn adapter(&self) -> &dyn TypedBaseAdapter {
-        &self.adapter
-    }
-
     fn build_schemas_from_stats_sql(
         &self,
         stats_sql_result: Arc<RecordBatch>,

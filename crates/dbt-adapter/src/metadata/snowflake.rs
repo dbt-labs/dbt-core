@@ -147,10 +147,6 @@ impl SnowflakeMetadataAdapter {
 }
 
 impl MetadataAdapter for SnowflakeMetadataAdapter {
-    fn adapter(&self) -> &dyn TypedBaseAdapter {
-        &self.adapter
-    }
-
     fn build_schemas_from_stats_sql(
         &self,
         stats_sql_result: Arc<RecordBatch>,

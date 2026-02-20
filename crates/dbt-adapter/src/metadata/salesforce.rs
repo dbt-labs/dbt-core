@@ -1,6 +1,5 @@
 use crate::errors::{AdapterResult, AsyncAdapterResult};
-use crate::typed_adapter::ConcreteAdapter;
-use crate::{AdapterEngine, TypedBaseAdapter, metadata::*};
+use crate::metadata::*;
 use arrow_array::RecordBatch;
 use arrow_schema::Schema;
 
@@ -11,22 +10,15 @@ use minijinja::State;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 
-pub struct SalesforceMetadataAdapter {
-    adapter: ConcreteAdapter,
-}
+pub struct SalesforceMetadataAdapter;
 
 impl SalesforceMetadataAdapter {
-    pub fn new(engine: Arc<dyn AdapterEngine>) -> Self {
-        let adapter = ConcreteAdapter::new(engine);
-        Self { adapter }
+    pub fn new() -> Self {
+        Self
     }
 }
 
 impl MetadataAdapter for SalesforceMetadataAdapter {
-    fn adapter(&self) -> &dyn TypedBaseAdapter {
-        &self.adapter
-    }
-
     fn build_schemas_from_stats_sql(
         &self,
         _: Arc<RecordBatch>,
