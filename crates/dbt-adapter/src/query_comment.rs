@@ -47,6 +47,9 @@ pub const DEFAULT_QUERY_COMMENT_WITH_CLOUD: &str = "
   {# in the node context, the connection name is the node_id #}
   {%- do comment_dict.update(connection_name=connection_name) -%}
 {%- endif -%}
+{%- if invocation_id is not none -%}
+  {%- do comment_dict.update(invocation_id=invocation_id) -%}
+{%- endif -%}
 {%- set cloud_project_id = env_var('DBT_CLOUD_PROJECT_ID', '') -%}
 {%- if cloud_project_id -%}
   {%- do comment_dict.update(dbt_cloud_project_id=cloud_project_id) -%}
@@ -561,5 +564,17 @@ mod tests {
             },
         );
         clear_cloud_env_vars();
+    }
+
+    #[test]
+    fn test_cloud_query_comment_includes_invocation_id() {
+        assert!(
+            DEFAULT_QUERY_COMMENT_WITH_CLOUD.contains("invocation_id"),
+            "Cloud query comment template should include invocation_id"
+        );
+        assert!(
+            !DEFAULT_QUERY_COMMENT.contains("invocation_id"),
+            "Default query comment template should not include invocation_id"
+        );
     }
 }
