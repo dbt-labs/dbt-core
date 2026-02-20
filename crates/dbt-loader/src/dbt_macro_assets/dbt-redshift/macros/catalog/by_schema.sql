@@ -3,17 +3,18 @@
     {{ adapter.verify_database(dbschema.database) }}
 
     {#-- Compute a left-outer join in memory. Some Redshift queries are
-      -- leader-only, and cannot be joined to other compute-based queries #}
+      -- leader-only, and cannot be joined to other compute-based queries 
+      -- TODO: https://github.com/dbt-labs/fs/issues/6859#issue-3648357670 #}
 
     {% set catalog = _redshift__get_base_catalog_by_schema(dbschema.database, schemas) %}
 
-    {% set select_extended = redshift__can_select_from('svv_table_info') %}
-    {% if select_extended %}
-        {% set extended_catalog = _redshift__get_extended_catalog_by_schema(schemas) %}
-        {% set catalog = catalog.join(extended_catalog, ['table_schema', 'table_name']) %}
-    {% else %}
-        {{ redshift__no_svv_table_info_warning() }}
-    {% endif %}
+    {#% set select_extended = redshift__can_select_from('svv_table_info') %#}
+    {#% if select_extended %#}
+        {#% set extended_catalog = _redshift__get_extended_catalog_by_schema(schemas) %#}
+        {#% set catalog = catalog.join(extended_catalog, ['table_schema', 'table_name']) %#}
+    {#% else %#}
+        {#{ redshift__no_svv_table_info_warning() }#}
+    {#% endif %#}
 
     {{ return(catalog) }}
 

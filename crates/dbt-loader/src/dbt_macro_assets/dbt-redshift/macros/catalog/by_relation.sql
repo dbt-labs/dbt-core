@@ -4,7 +4,8 @@
     {{ adapter.verify_database(dbschema.database) }}
 
     {#-- Compute a left-outer join in memory. Some Redshift queries are
-      -- leader-only, and cannot be joined to other compute-based queries (uncomment when join is supported) #}
+      -- leader-only, and cannot be joined to other compute-based queries
+      -- TODO: https://github.com/dbt-labs/fs/issues/6859#issue-3648357670 #}
 
     {% set catalog = _redshift__get_base_catalog_by_relation(dbschema.database, relations) %}
 
