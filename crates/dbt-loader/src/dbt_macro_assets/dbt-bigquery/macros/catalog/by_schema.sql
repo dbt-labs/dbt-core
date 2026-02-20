@@ -12,7 +12,7 @@
                     {{ _bigquery__get_table_shards_sql(db_schema) }}
                     where (
                         {%- for schema in schemas -%}
-                            upper(tables.dataset_id) = upper('{{ schema }}')
+                            upper(info_tables.table_schema) = upper('{{ schema }}')
                             {%- if not loop.last %} or {% endif -%}
                         {%- endfor -%}
                     )
