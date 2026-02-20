@@ -29,6 +29,43 @@ pub const DEFAULT_QUERY_COMMENT: &str = "
 {{ return(tojson(comment_dict)) }}
 ";
 
+// Extended default query comment that includes dbt Cloud environment variables when present.
+// Used automatically when any DBT_CLOUD_* environment variable is set.
+pub const DEFAULT_QUERY_COMMENT_WITH_CLOUD: &str = "
+{%- set comment_dict = {} -%}
+{%- do comment_dict.update(
+    app='dbt',
+    dbt_version=dbt_version,
+    profile_name=target.get('profile_name'),
+    target_name=target.get('target_name'),
+) -%}
+{%- if node is not none -%}
+  {%- do comment_dict.update(
+    node_id=node.unique_id,
+  ) -%}
+{% else %}
+  {# in the node context, the connection name is the node_id #}
+  {%- do comment_dict.update(connection_name=connection_name) -%}
+{%- endif -%}
+{%- set cloud_project_id = env_var('DBT_CLOUD_PROJECT_ID', '') -%}
+{%- if cloud_project_id -%}
+  {%- do comment_dict.update(dbt_cloud_project_id=cloud_project_id) -%}
+{%- endif -%}
+{%- set cloud_environment_id = env_var('DBT_CLOUD_ENVIRONMENT_ID', '') -%}
+{%- if cloud_environment_id -%}
+  {%- do comment_dict.update(dbt_cloud_environment_id=cloud_environment_id) -%}
+{%- endif -%}
+{%- set cloud_job_id = env_var('DBT_CLOUD_JOB_ID', '') -%}
+{%- if cloud_job_id -%}
+  {%- do comment_dict.update(dbt_cloud_job_id=cloud_job_id) -%}
+{%- endif -%}
+{%- set cloud_run_id = env_var('DBT_CLOUD_RUN_ID', '') -%}
+{%- if cloud_run_id -%}
+  {%- do comment_dict.update(dbt_cloud_run_id=cloud_run_id) -%}
+{%- endif -%}
+{{ return(tojson(comment_dict)) }}
+";
+
 #[derive(Debug)]
 pub struct QueryCommentConfig {
     /// The (unresolved) query comment
@@ -44,6 +81,19 @@ pub static EMPTY_CONFIG: LazyLock<QueryCommentConfig> = LazyLock::new(|| QueryCo
     append: false,
     job_label: false,
 });
+
+/// Returns true if any dbt Cloud environment variables are set (non-empty).
+fn has_dbt_cloud_env_vars() -> bool {
+    const CLOUD_ENV_VARS: &[&str] = &[
+        "DBT_CLOUD_PROJECT_ID",
+        "DBT_CLOUD_ENVIRONMENT_ID",
+        "DBT_CLOUD_JOB_ID",
+        "DBT_CLOUD_RUN_ID",
+    ];
+    CLOUD_ENV_VARS
+        .iter()
+        .any(|var| std::env::var(var).is_ok_and(|v| !v.is_empty()))
+}
 
 impl QueryCommentConfig {
     /// Build a comment config from a QueryComment
@@ -76,7 +126,11 @@ impl QueryCommentConfig {
         QueryCommentConfig {
             comment: config.comment.unwrap_or_else(|| {
                 if use_default {
-                    DEFAULT_QUERY_COMMENT.to_string()
+                    if has_dbt_cloud_env_vars() {
+                        DEFAULT_QUERY_COMMENT_WITH_CLOUD.to_string()
+                    } else {
+                        DEFAULT_QUERY_COMMENT.to_string()
+                    }
                 } else {
                     "".to_string()
                 }
@@ -163,8 +217,14 @@ mod tests {
     use dbt_common::adapter::AdapterType;
     use dbt_schemas::schemas::project::QueryComment;
     use serde::Deserialize;
+    use std::sync::Mutex;
 
-    use crate::query_comment::{DEFAULT_QUERY_COMMENT, QueryCommentConfig};
+    use crate::query_comment::{
+        DEFAULT_QUERY_COMMENT, DEFAULT_QUERY_COMMENT_WITH_CLOUD, QueryCommentConfig,
+    };
+
+    // Env var tests mutate process-wide state, so they must not run in parallel.
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     fn assert_configs_equal(left: &QueryCommentConfig, right: &QueryCommentConfig) {
         assert_eq!(left.comment, right.comment);
@@ -174,6 +234,9 @@ mod tests {
 
     #[test]
     fn test_empty_query_comment() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        clear_cloud_env_vars();
+
         // Test empty query comment with `use_default`
         for adapter_type in [
             AdapterType::Bigquery,
@@ -314,6 +377,9 @@ mod tests {
 
     #[test]
     fn test_query_comment_object_append() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        clear_cloud_env_vars();
+
         let config_str = "append: true";
         let query_comment =
             QueryComment::deserialize(dbt_yaml::Deserializer::from_str(config_str)).ok();
@@ -357,6 +423,9 @@ mod tests {
 
     #[test]
     fn test_query_comment_object_job_label() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        clear_cloud_env_vars();
+
         let config_str = "job-label: true";
         let query_comment =
             QueryComment::deserialize(dbt_yaml::Deserializer::from_str(config_str)).ok();
@@ -385,5 +454,112 @@ mod tests {
             job_label: true,
         };
         assert_configs_equal(&config, &expected_config);
+    }
+
+    const CLOUD_ENV_VARS: &[&str] = &[
+        "DBT_CLOUD_PROJECT_ID",
+        "DBT_CLOUD_ENVIRONMENT_ID",
+        "DBT_CLOUD_JOB_ID",
+        "DBT_CLOUD_RUN_ID",
+    ];
+
+    /// SAFETY: These tests hold ENV_LOCK so no other test mutates env vars concurrently.
+    #[allow(clippy::disallowed_methods)]
+    unsafe fn set_cloud_env(var: &str, val: &str) {
+        unsafe { std::env::set_var(var, val) }
+    }
+
+    /// SAFETY: These tests hold ENV_LOCK so no other test mutates env vars concurrently.
+    #[allow(clippy::disallowed_methods)]
+    unsafe fn remove_cloud_env(var: &str) {
+        unsafe { std::env::remove_var(var) }
+    }
+
+    fn clear_cloud_env_vars() {
+        for var in CLOUD_ENV_VARS {
+            // SAFETY: protected by ENV_LOCK
+            unsafe { remove_cloud_env(var) }
+        }
+    }
+
+    #[test]
+    fn test_cloud_query_comment_with_env_var() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        clear_cloud_env_vars();
+
+        // Set a cloud env var and verify the cloud template is selected
+        // SAFETY: protected by ENV_LOCK
+        unsafe { set_cloud_env("DBT_CLOUD_PROJECT_ID", "12345") };
+        let config = QueryCommentConfig::from_query_comment(None, AdapterType::Bigquery, true);
+        assert_configs_equal(
+            &config,
+            &QueryCommentConfig {
+                comment: DEFAULT_QUERY_COMMENT_WITH_CLOUD.to_string(),
+                append: false,
+                job_label: false,
+            },
+        );
+        clear_cloud_env_vars();
+    }
+
+    #[test]
+    fn test_cloud_query_comment_without_env_var() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        clear_cloud_env_vars();
+
+        let config = QueryCommentConfig::from_query_comment(None, AdapterType::Bigquery, true);
+        assert_configs_equal(
+            &config,
+            &QueryCommentConfig {
+                comment: DEFAULT_QUERY_COMMENT.to_string(),
+                append: false,
+                job_label: false,
+            },
+        );
+    }
+
+    #[test]
+    fn test_cloud_query_comment_not_used_when_user_provides_comment() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        clear_cloud_env_vars();
+
+        // Even with cloud env vars set, user-provided comments take precedence
+        // SAFETY: protected by ENV_LOCK
+        unsafe { set_cloud_env("DBT_CLOUD_PROJECT_ID", "12345") };
+        let config = QueryCommentConfig::from_query_comment(
+            Some(QueryComment::String("user comment".to_string())),
+            AdapterType::Bigquery,
+            true,
+        );
+        assert_configs_equal(
+            &config,
+            &QueryCommentConfig {
+                comment: "user comment".to_string(),
+                append: false,
+                job_label: false,
+            },
+        );
+        clear_cloud_env_vars();
+    }
+
+    #[test]
+    fn test_cloud_query_comment_empty_env_var_ignored() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        clear_cloud_env_vars();
+
+        // An empty env var should not trigger the cloud template
+        // SAFETY: protected by ENV_LOCK
+        unsafe { set_cloud_env("DBT_CLOUD_PROJECT_ID", "") };
+
+        let config = QueryCommentConfig::from_query_comment(None, AdapterType::Bigquery, true);
+        assert_configs_equal(
+            &config,
+            &QueryCommentConfig {
+                comment: DEFAULT_QUERY_COMMENT.to_string(),
+                append: false,
+                job_label: false,
+            },
+        );
+        clear_cloud_env_vars();
     }
 }
