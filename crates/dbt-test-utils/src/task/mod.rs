@@ -2,6 +2,7 @@ mod artifact_validation;
 mod assertions;
 mod check_compiled;
 mod dbt;
+pub mod dir_manifest;
 mod env;
 mod io;
 mod log_capture;
@@ -91,7 +92,10 @@ pub use record_and_replay::RrTask;
 pub use run_results_capture::CaptureRunResults;
 pub use run_results_capture::CompareRunResults;
 pub use tasks::prepare_command_vec;
-pub use tasks::{ExecuteAndCompare, ExecuteAndCompareTelemetry};
+pub use tasks::{CompareStdoutStderr, ExecuteAndCompare, ExecuteAndCompareTelemetry};
+
+// Dir manifest utilities
+pub use dir_manifest::{CompareDirManifest, assert_golden_manifest, compute_dir_manifest};
 
 use async_trait::async_trait;
 

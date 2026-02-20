@@ -30,6 +30,7 @@ use dbt_common::{
 };
 
 pub(super) type TextualPatch = String;
+pub type OutputNormalizer = fn(String) -> String;
 
 // Snowflake prompt for our REPL
 static SNOWFLAKE_PROMPT: Lazy<Regex> =
@@ -63,6 +64,12 @@ fn postprocess_golden(content: String, sort_output: bool) -> String {
     .fold(content, |acc, transform| transform(acc));
 
     if sort_output { sort_lines(res) } else { res }
+}
+
+fn apply_extra_normalizers(content: String, normalizers: &[OutputNormalizer]) -> String {
+    normalizers
+        .iter()
+        .fold(content, |acc, normalizer| normalizer(acc))
 }
 
 pub(super) fn diff_goldie<P: Fn(String) -> String>(
@@ -212,6 +219,7 @@ pub async fn execute_and_compare(
             compare_env.goldie_stderr_path,
             compare_env.stdout_path,
             compare_env.goldie_stdout_path,
+            &[],
         ),
         Ok(Err(e)) => {
             let code = e.exit_status().unwrap_or(1);
@@ -228,6 +236,7 @@ pub async fn execute_and_compare(
                 compare_env.goldie_stderr_path,
                 compare_env.stdout_path,
                 compare_env.goldie_stdout_path,
+                &[],
             )
         }
         Err(payload) => {
@@ -249,11 +258,18 @@ pub fn compare_or_update(
     goldie_stderr_path: PathBuf,
     stdout_path: PathBuf,
     goldie_stdout_path: PathBuf,
+    extra_normalizers: &[OutputNormalizer],
 ) -> FsResult<Vec<TextualPatch>> {
     let stdout_content = stdfs::read_to_string(&stdout_path)?;
-    let stdout_content = postprocess_actual(stdout_content, sort_output);
+    let stdout_content = apply_extra_normalizers(
+        postprocess_actual(stdout_content, sort_output),
+        extra_normalizers,
+    );
     let stderr_content = stdfs::read_to_string(&stderr_path)?;
-    let stderr_content = postprocess_actual(stderr_content, sort_output);
+    let stderr_content = apply_extra_normalizers(
+        postprocess_actual(stderr_content, sort_output),
+        extra_normalizers,
+    );
 
     if is_update {
         // Copy stdout and stderr to goldie_stdout and goldie_stderr Note: we
@@ -269,7 +285,9 @@ pub fn compare_or_update(
             stderr_content,
             true,
             &goldie_stderr_path,
-            |golden| postprocess_golden(golden, sort_output),
+            |golden| {
+                apply_extra_normalizers(postprocess_golden(golden, sort_output), extra_normalizers)
+            },
         )
         .into_iter()
         .chain(diff_goldie(
@@ -277,7 +295,9 @@ pub fn compare_or_update(
             stdout_content,
             true,
             &goldie_stdout_path,
-            |golden| postprocess_golden(golden, sort_output),
+            |golden| {
+                apply_extra_normalizers(postprocess_golden(golden, sort_output), extra_normalizers)
+            },
         ))
         .collect::<Vec<_>>();
         Ok(patches)

@@ -19,7 +19,7 @@ use dbt_test_primitives::is_update_golden_files_mode;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
 
 use crate::task::{
-    goldie::{TextualPatch, diff_goldie},
+    goldie::{OutputNormalizer, TextualPatch, compare_or_update, diff_goldie},
     utils::{
         maybe_normalize_schema_name, maybe_normalize_tmp_paths, normalize_inline_sql_files,
         normalize_version,
@@ -80,6 +80,8 @@ pub struct ExecuteOnly {
     func: Arc<CommandFn>,
     redirect_outputs: bool,
     allow_failure: bool,
+    stdout_name: Arc<Mutex<Option<String>>>,
+    stderr_name: Arc<Mutex<Option<String>>>,
     stdout: Arc<Mutex<String>>,
     stderr: Arc<Mutex<String>>,
     exit_code: AtomicI32,
@@ -102,6 +104,8 @@ impl ExecuteOnly {
             func,
             redirect_outputs,
             allow_failure: false,
+            stdout_name: Arc::new(Mutex::new(None)),
+            stderr_name: Arc::new(Mutex::new(None)),
             stdout: Arc::new(Mutex::new(String::default())),
             stderr: Arc::new(Mutex::new(String::default())),
             exit_code: AtomicI32::new(0),
@@ -123,6 +127,14 @@ impl ExecuteOnly {
 
     pub fn get_stderr(&self) -> String {
         self.stderr.lock().expect("Lock is poisoned").clone()
+    }
+
+    pub fn get_stdout_name(&self) -> Option<String> {
+        self.stdout_name.lock().expect("Lock is poisoned").clone()
+    }
+
+    pub fn get_stderr_name(&self) -> Option<String> {
+        self.stderr_name.lock().expect("Lock is poisoned").clone()
     }
 }
 
@@ -154,12 +166,12 @@ impl Task for ExecuteOnly {
         } else {
             "".to_string()
         };
-        let stdout_path = test_env
-            .temp_dir
-            .join(format!("{}{}.stdout", self.name, task_suffix));
-        let stderr_path = test_env
-            .temp_dir
-            .join(format!("{}{}.stderr", self.name, task_suffix));
+        let stdout_name = format!("{}{}.stdout", self.name, task_suffix);
+        let stderr_name = format!("{}{}.stderr", self.name, task_suffix);
+        *self.stdout_name.lock().unwrap() = Some(stdout_name.clone());
+        *self.stderr_name.lock().unwrap() = Some(stderr_name.clone());
+        let stdout_path = test_env.temp_dir.join(stdout_name);
+        let stderr_path = test_env.temp_dir.join(stderr_name);
 
         let stdout_file = stdfs::File::create(&stdout_path)?;
         let stderr_file = stdfs::File::create(&stderr_path)?;
@@ -219,6 +231,93 @@ impl Task for Arc<ExecuteOnly> {
 
     fn is_counted(&self) -> bool {
         true
+    }
+}
+
+/// Compare stdout/stderr captured by `ExecuteOnly` against golden files.
+///
+/// Use this when you need to inspect captured output or run intermediate tasks
+/// before the snapshot comparison. If you only need run+compare with the
+/// standard normalization, prefer `ExecuteAndCompare`.
+pub struct CompareStdoutStderr {
+    name: String,
+    execute_task: Arc<ExecuteOnly>,
+    extra_normalizers: Vec<OutputNormalizer>,
+}
+
+impl CompareStdoutStderr {
+    pub fn new(
+        name: impl Into<String>,
+        execute_task: Arc<ExecuteOnly>,
+        extra_normalizers: Vec<OutputNormalizer>,
+    ) -> Self {
+        let name = name.into();
+        Self {
+            name,
+            execute_task,
+            extra_normalizers,
+        }
+    }
+}
+
+#[async_trait]
+impl Task for CompareStdoutStderr {
+    async fn run(
+        &self,
+        _project_env: &ProjectEnv,
+        test_env: &TestEnv,
+        _task_index: usize,
+    ) -> TestResult<()> {
+        if self.name != self.execute_task.name {
+            return Err(TestError::new(format!(
+                "CompareStdoutStderr name '{}' must match ExecuteOnly name '{}'",
+                self.name, self.execute_task.name,
+            )));
+        }
+
+        let stdout_name = self.execute_task.get_stdout_name().ok_or_else(|| {
+            TestError::new(
+                "ExecuteOnly did not record stdout file name. Ensure ExecuteOnly runs before CompareStdoutStderr.",
+            )
+        })?;
+        let stderr_name = self.execute_task.get_stderr_name().ok_or_else(|| {
+            TestError::new(
+                "ExecuteOnly did not record stderr file name. Ensure ExecuteOnly runs before CompareStdoutStderr.",
+            )
+        })?;
+
+        let stdout_path = test_env.temp_dir.join(&stdout_name);
+        let stderr_path = test_env.temp_dir.join(&stderr_name);
+        if !stdout_path.exists() || !stderr_path.exists() {
+            return Err(TestError::new(format!(
+                "CompareStdoutStderr expected ExecuteOnly outputs at '{}' and '{}'. \
+Ensure ExecuteOnly completed before comparison.",
+                stdout_path.display(),
+                stderr_path.display(),
+            )));
+        }
+
+        let goldie_stdout_path = test_env.golden_dir.join(stdout_name);
+        let goldie_stderr_path = test_env.golden_dir.join(stderr_name);
+        let patches = compare_or_update(
+            is_update_golden_files_mode(),
+            false,
+            stderr_path,
+            goldie_stderr_path,
+            stdout_path,
+            goldie_stdout_path,
+            &self.extra_normalizers,
+        )?;
+
+        if patches.is_empty() {
+            Ok(())
+        } else {
+            Err(TestError::GoldieMismatch(patches))
+        }
+    }
+
+    fn is_counted(&self) -> bool {
+        false
     }
 }
 

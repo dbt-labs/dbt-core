@@ -43,12 +43,14 @@ regex = { workspace = true }
 rusqlite = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 uuid = { workspace = true }
 vortex-events = { workspace = true }
+walkdir = { workspace = true }
 
 [dev-dependencies]
 pbjson-types = { workspace = true }
