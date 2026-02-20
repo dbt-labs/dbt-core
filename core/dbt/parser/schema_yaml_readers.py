@@ -508,6 +508,7 @@ class MetricParser(YamlReader):
                 ),
                 metric_aggregation_params=metric_aggregation_params,
                 join_to_timespine=unparsed_metric.join_to_timespine or False,
+                is_private=unparsed_metric.hidden,
             )
         else:
             raise DbtInternalError(

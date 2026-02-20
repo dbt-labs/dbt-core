@@ -20,6 +20,7 @@ from tests.functional.semantic_models.fixtures import (
     schema_yml_v2_cumulative_metric_missing_input_metric,
     schema_yml_v2_metric_with_doc_jinja,
     schema_yml_v2_metric_with_filter_dimension_jinja,
+    schema_yml_v2_metrics_with_hidden,
     schema_yml_v2_simple_metric_on_model_1,
     schema_yml_v2_standalone_metrics,
     schema_yml_v2_standalone_metrics_with_doc_jinja,
@@ -463,6 +464,32 @@ class TestMetricOnModelParsingWorks:
             == "simple_metric_2"
         )
         assert conversion_metric_pydantic.type_params.metric_aggregation_params is None
+
+
+class TestMetricHiddenMapsToIsPrivate:
+    """Test that a metric's 'hidden' field in YAML is reflected as 'is_private' on the parsed metric."""
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": base_schema_yml_v2 + schema_yml_v2_metrics_with_hidden,
+            "fct_revenue.sql": fct_revenue_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+        }
+
+    def test_metric_hidden_yaml_maps_to_is_private(self, project):
+        runner = dbtTestRunner()
+        result = runner.invoke(["parse"])
+        assert result.success
+        manifest = result.result
+        metrics = manifest.metrics
+        assert len(metrics) == 2
+
+        public_metric = metrics["metric.test.public_metric"]
+        assert public_metric.type_params.is_private is False
+
+        private_metric = metrics["metric.test.private_metric"]
+        assert private_metric.type_params.is_private is True
 
 
 class TestStandaloneMetricParsingSimpleMetricFails:
