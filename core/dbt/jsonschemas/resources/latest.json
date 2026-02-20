@@ -875,9 +875,13 @@
           ]
         },
         "clustered_by": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "compression": {
@@ -2287,9 +2291,13 @@
           ]
         },
         "clustered_by": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "compression": {
@@ -3678,9 +3686,13 @@
           ]
         },
         "clustered_by": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "column_types": {
@@ -5253,9 +5265,13 @@
           ]
         },
         "clustered_by": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "column_types": {
@@ -6005,9 +6021,13 @@
           ]
         },
         "clustered_by": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "compression": {
@@ -6825,9 +6845,13 @@
           ]
         },
         "clustered_by": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "compression": {
@@ -7753,9 +7777,13 @@
           ]
         },
         "clustered_by": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "compression": {
