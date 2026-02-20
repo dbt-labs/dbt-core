@@ -72,6 +72,13 @@ class NodeAndTestConfig(BaseConfig):
         default=None,
         metadata=CompareBehavior.Exclude.meta(),
     )
+    static_analysis: Optional[str] = None
+
+    def __post_init__(self):
+        # YAML interprets unquoted `on`/`off` as booleans; coerce back to strings
+        # so that `static_analysis: off` serializes as "off", not false.
+        if isinstance(self.static_analysis, bool):
+            self.static_analysis = "on" if self.static_analysis else "off"
 
 
 @dataclass
@@ -129,6 +136,7 @@ class NodeConfig(NodeAndTestConfig):
     concurrent_batches: Any = None
 
     def __post_init__(self):
+        super().__post_init__()
         # we validate that node_color has a suitable value to prevent dbt-docs from crashing
         if self.docs.node_color:
             node_color = self.docs.node_color
