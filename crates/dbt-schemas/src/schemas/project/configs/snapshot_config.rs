@@ -231,7 +231,7 @@ pub struct ProjectSnapshotConfig {
     #[serde(rename = "+catalog")]
     pub catalog: Option<String>,
     #[serde(rename = "+clustered_by")]
-    pub clustered_by: Option<String>,
+    pub clustered_by: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+compression")]
     pub compression: Option<String>,
     #[serde(rename = "+databricks_compute")]

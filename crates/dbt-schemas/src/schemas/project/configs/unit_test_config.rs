@@ -160,7 +160,7 @@ pub struct ProjectUnitTestConfig {
     )]
     pub auto_liquid_cluster: Option<bool>,
     #[serde(rename = "+clustered_by")]
-    pub clustered_by: Option<String>,
+    pub clustered_by: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+buckets")]
     pub buckets: Option<i64>,
     #[serde(rename = "+catalog")]

@@ -5184,7 +5184,7 @@ pub struct DatabricksAttr {
     pub include_full_name_in_path: Option<bool>,
     pub liquid_clustered_by: Option<StringOrArrayOfStrings>,
     pub auto_liquid_cluster: Option<bool>,
-    pub clustered_by: Option<String>,
+    pub clustered_by: Option<StringOrArrayOfStrings>,
     pub buckets: Option<i64>,
     pub catalog: Option<String>,
     pub databricks_tags: Option<BTreeMap<String, YmlValue>>,

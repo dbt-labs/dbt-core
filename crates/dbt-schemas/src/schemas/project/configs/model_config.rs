@@ -98,7 +98,7 @@ pub struct ProjectModelConfig {
     #[serde(rename = "+cluster_by")]
     pub cluster_by: Option<ClusterConfig>,
     #[serde(rename = "+clustered_by")]
-    pub clustered_by: Option<String>,
+    pub clustered_by: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+column_types")]
     pub column_types: Option<BTreeMap<Spanned<String>, String>>,
     #[serde(
