@@ -8,6 +8,7 @@ import pytest
 import yaml
 
 from dbt.exceptions import DbtRuntimeError
+from dbt.task.init import InitTask
 from dbt.tests.util import run_dbt
 
 
@@ -917,14 +918,13 @@ class TestInitDebugSkippedWithSkipProfileSetup(TestInitInsideOfProjectBase):
 
 
 class TestInitSkipDebugFlag(TestInitInsideOfProjectBase):
-    @mock.patch("dbt.task.init.InitTask._run_debug")
     @mock.patch("dbt.task.init._get_adapter_plugin_names")
     @mock.patch("click.confirm")
     @mock.patch("click.prompt")
     def test_debug_skipped_with_skip_debug_flag(
-        self, mock_prompt, mock_confirm, mock_get_adapter, mock_run_debug, project
+        self, mock_prompt, mock_confirm, mock_get_adapter, project
     ):
-        """Verify _run_debug is NOT called when --skip-debug is used."""
+        """Verify DebugTask is NOT instantiated when --skip-debug is used."""
         manager = Mock()
         manager.attach_mock(mock_prompt, "prompt")
         manager.attach_mock(mock_confirm, "confirm")
@@ -940,8 +940,19 @@ class TestInitSkipDebugFlag(TestInitInsideOfProjectBase):
             4,
         ]
         mock_get_adapter.return_value = [project.adapter.type()]
-        run_dbt(["init", "--skip-debug"])
-        mock_run_debug.assert_not_called()
+
+        mock_debug_task_cls = Mock()
+
+        with mock.patch("dbt.task.debug.DebugTask", mock_debug_task_cls):
+            run_dbt(["init", "--skip-debug"])
+
+        mock_debug_task_cls.assert_not_called()
+
+    def test_run_debug_returns_none_when_skip_debug(self):
+        """Verify _run_debug returns None when skip_debug is True."""
+        task = Mock(spec=InitTask)
+        task.args = Mock(skip_debug=True)
+        assert InitTask._run_debug(task) is None
 
 
 class TestInitDebugFailureDoesNotFailInit(TestInitInsideOfProjectBase):
