@@ -95,7 +95,7 @@ class DebugTask(BaseTask):
 
     def run(self) -> bool:
         # WARN: this is a legacy workflow that is not compatible with other runtime flags
-        if self.args.config_dir:
+        if getattr(self.args, "config_dir", None):
             fire_event(
                 OpenCommand(
                     open_cmd=dbt_common.clients.system.open_dir_cmd(),
@@ -133,7 +133,7 @@ class DebugTask(BaseTask):
         load_project_status: SubtaskStatus = self._load_project()
 
         dependencies_statuses: List[SubtaskStatus] = []
-        if self.args.connection:
+        if getattr(self.args, "connection", False):
             fire_event(DebugCmdOut(msg="Skipping steps before connection verification"))
         else:
             # this job's status not logged since already accounted for in _load_* commands

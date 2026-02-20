@@ -171,8 +171,7 @@ class ProfileWrittenWithTargetTemplateYAML(InfoLevel):
     def message(self) -> str:
         return (
             f"Profile {self.name} written to {self.path} using target's "
-            "profile_template.yml and your supplied values. Run 'dbt debug' to "
-            "validate the connection."
+            "profile_template.yml and your supplied values."
         )
 
 
@@ -183,8 +182,7 @@ class ProfileWrittenWithProjectTemplateYAML(InfoLevel):
     def message(self) -> str:
         return (
             f"Profile {self.name} written to {self.path} using project's "
-            "profile_template.yml and your supplied values. Run 'dbt debug' to "
-            "validate the connection."
+            "profile_template.yml and your supplied values."
         )
 
 
