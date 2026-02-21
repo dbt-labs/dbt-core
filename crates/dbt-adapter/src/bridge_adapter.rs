@@ -1481,7 +1481,7 @@ impl BaseAdapter for BridgeAdapter {
     fn behavior(&self) -> Value {
         match &self.inner {
             Typed { adapter, .. } => Value::from_object((**adapter.behavior_object()).clone()),
-            Parse(_) => Value::from_object(Behavior::new(&[], &BTreeMap::new())),
+            Parse(_) => Value::from_object(Behavior::new(vec![], &BTreeMap::new())),
         }
     }
 

@@ -100,7 +100,7 @@ pub(crate) fn make_behavior(
     for flag in DEFAULT_BASE_BEHAVIOR_FLAGS.iter() {
         behavior_flags.push(flag.clone());
     }
-    Arc::new(Behavior::new(&behavior_flags, behavior_flag_overrides))
+    Arc::new(Behavior::new(behavior_flags, behavior_flag_overrides))
 }
 
 /// A trait abstracting the layer between the adapter layer and database drivers.

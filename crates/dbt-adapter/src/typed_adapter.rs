@@ -3440,7 +3440,7 @@ impl ConcreteAdapter {
         let is_false = flags.get("is_false").is_some_and(|v| v.is_true());
         let is_unknown = flags.get("is_unknown").is_none_or(|v| v.is_true());
         let behavior = Arc::new(Behavior::new(
-            &[
+            vec![
                 BehaviorFlag::new("is_true", is_true, None, None, None),
                 BehaviorFlag::new("is_false", is_false, None, None, None),
                 BehaviorFlag::new("is_unknown", is_unknown, None, None, None),

@@ -2,6 +2,7 @@ use minijinja::listener::RenderingEventListener;
 use minijinja::value::Object;
 use minijinja::{State, Value};
 
+use std::collections::BTreeMap;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -48,6 +49,10 @@ impl BehaviorFlag {
             docs_url,
             user_override: None,
         }
+    }
+
+    pub fn set_override(&mut self, override_value: Option<bool>) {
+        self.user_override = override_value;
     }
 
     pub fn with_override(mut self, override_value: Option<bool>) -> Self {
@@ -108,17 +113,11 @@ pub struct Behavior {
 }
 
 impl Behavior {
-    pub fn new(
-        flags: &[BehaviorFlag],
-        user_overrides: &std::collections::BTreeMap<String, bool>,
-    ) -> Self {
-        let flags = flags
-            .iter()
-            .map(|flag| {
-                flag.clone()
-                    .with_override(user_overrides.get(flag.name).copied())
-            })
-            .collect();
+    pub fn new(mut flags: Vec<BehaviorFlag>, user_overrides: &BTreeMap<String, bool>) -> Self {
+        for flag in &mut flags {
+            let user_override: Option<bool> = user_overrides.get(flag.name).copied();
+            flag.set_override(user_override)
+        }
         Self { flags }
     }
 }
