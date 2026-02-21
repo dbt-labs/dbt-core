@@ -1,0 +1,6 @@
+kind: Fixes
+body: attached node of relashionship tests consider override
+time: 2026-01-19T17:23:59.808832+01:00
+custom:
+    Author: MaelleBaillet5 BoltMaud
+    Issue: "12363"
