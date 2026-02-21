@@ -1,0 +1,8 @@
+models:
+  - name: model_without_rationale
+    description: "This model has no rationale metadata"
+
+  - name: another_model
+    description: "Also no rationale"
+    meta:
+      some_other_key: "value"

@@ -1,0 +1,6 @@
+kind: Features
+body: Add structured rationale analyzer for dbt meta.rationale blocks (PRD-263.1 Phase 0)
+time: 2026-02-18T12:00:00.000000+00:00
+custom:
+    Author: mukcool
+    Issue: NA
