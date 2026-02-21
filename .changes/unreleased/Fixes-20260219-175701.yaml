@@ -1,0 +1,6 @@
+kind: Fixes
+body: Skip raising CustomKeyInConfigDeprecation for job_execution_timeout_seconds BigQuery adapter config
+time: 2026-02-19T17:57:01.89103+05:30
+custom:
+    Author: aahel
+    Issue: "575"
