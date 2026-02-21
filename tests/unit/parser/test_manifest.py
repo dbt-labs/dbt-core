@@ -9,13 +9,16 @@ from dbt.adapters.postgres import PostgresAdapter
 from dbt.artifacts.resources.base import FileHash
 from dbt.config import RuntimeConfig
 from dbt.contracts.graph.manifest import Manifest, ManifestStateCheck
+from dbt.contracts.graph.semantic_manifest import SemanticManifest
 from dbt.events.types import InvalidConcurrentBatchesConfig, UnusedResourceConfigPath
+from dbt.exceptions import ParsingError
 from dbt.flags import set_from_args
 from dbt.parser.manifest import ManifestLoader, _warn_for_unused_resource_config_paths
 from dbt.parser.read_files import FileDiff
 from dbt.tracking import User
 from dbt_common.events.event_catcher import EventCatcher
 from dbt_common.events.event_manager_client import add_callback_to_manager
+from dbt_semantic_interfaces.validations.validator_helpers import ValidationError, ValidationIssueContext, FileContext
 from tests.unit.fixtures import model_node
 
 
@@ -296,3 +299,45 @@ class TestCheckForcingConcurrentBatches:
             assert "Batches will be run sequentially" in event_catcher.caught_events[0].info.msg  # type: ignore
         else:
             assert len(event_catcher.caught_events) == 0
+
+
+class TestSemanticManifestValidation:
+    @patch("dbt.contracts.graph.semantic_manifest.SemanticManifest.validate")
+    def test_semantic_manifest_validation_error_message(self, mock_validate, mock_project):
+        """Test that the Semantic Manifest validation raises ParsingError when validation fails."""
+        # Setup a mock validation error
+        mock_error = ValidationError(
+            context=ValidationIssueContext(
+                file_context=FileContext(),
+                object_name="test_metric",
+                object_type="metric",
+            ),
+            message="Test validation error message"
+        )
+        mock_validate.return_value = [mock_error]
+        
+        # Create manifest loader
+        manifest_loader = ManifestLoader(
+            root_project=mock_project,
+            all_projects={mock_project.project_name: mock_project},
+        )
+        manifest_loader.manifest = Manifest()
+        
+        # Check that ParsingError is raised when validation fails
+        with pytest.raises(ParsingError) as exc_info:
+            manifest_loader._process_sources = MagicMock()
+            manifest_loader._process_refs = MagicMock()
+            manifest_loader.process_unit_tests = MagicMock()
+            manifest_loader.process_docs = MagicMock()
+            manifest_loader.process_metrics = MagicMock()
+            manifest_loader.process_saved_queries = MagicMock()
+            manifest_loader.process_model_inferred_primary_keys = MagicMock()
+            manifest_loader.check_valid_group_config = MagicMock()
+            manifest_loader.check_valid_access_property = MagicMock()
+            manifest_loader.check_valid_snapshot_config = MagicMock()
+            manifest_loader.check_valid_microbatch_config = MagicMock()
+            manifest_loader.load()
+        
+        # Verify error message indicates validation failure
+        assert "Semantic Manifest validation failed" in str(exc_info.value)
+        assert "See errors above for details" in str(exc_info.value)
