@@ -192,6 +192,7 @@ def basic_compiled_dict():
             "docs": {"show": True},
             "access": "protected",
             "lookback": 1,
+            "event_timezone": "UTC",
         },
         "docs": {"show": True},
         "columns": {},
