@@ -31,24 +31,36 @@ pub enum AdapterType {
     Sidecar,
 }
 
-impl From<AdapterType> for Dialect {
-    fn from(value: AdapterType) -> Self {
-        match value {
-            AdapterType::Postgres => Dialect::Postgresql,
-            AdapterType::Snowflake => Dialect::Snowflake,
-            AdapterType::Bigquery => Dialect::Bigquery,
-            // TODO(serramatutu): switch Spark to Spark dialect once frontend looks good
-            AdapterType::Databricks | AdapterType::Spark => Dialect::Databricks,
-            AdapterType::Redshift => Dialect::Redshift,
-            // Salesforce dialect is unclear, it claims ANSI vaguely
-            // https://developer.salesforce.com/docs/data/data-cloud-query-guide/references/data-cloud-query-api-reference/c360a-api-query-v2-call-overview.html
-            // falls back to Postgresql at the moment
-            AdapterType::Salesforce => Dialect::Postgresql,
-            // DuckDB is Postgres-compatible, use Redshift dialect (also Postgres-based) for typing support
-            AdapterType::DuckDB => Dialect::Redshift,
-            // Sidecar uses DuckDB backend but should be treated as Postgres-like
-            AdapterType::Sidecar => Dialect::Postgresql,
-        }
+pub fn dialect_of(adapter_type: AdapterType) -> Option<Dialect> {
+    use AdapterType::*;
+    let dialect = match adapter_type {
+        Postgres => Dialect::Postgresql,
+        Snowflake => Dialect::Snowflake,
+        Bigquery => Dialect::Bigquery,
+        // TODO(serramatutu): switch Spark to Spark dialect once frontend looks good
+        Databricks | Spark => Dialect::Databricks,
+        Redshift => Dialect::Redshift,
+        // Salesforce dialect is unclear, it claims ANSI vaguely
+        // https://developer.salesforce.com/docs/data/data-cloud-query-guide/references/data-cloud-query-api-reference/c360a-api-query-v2-call-overview.html
+        // falls back to Postgresql at the moment
+        Salesforce => Dialect::Postgresql,
+        // DuckDB is Postgres-compatible, use Redshift dialect (also Postgres-based) for typing support
+        DuckDB => Dialect::Redshift,
+        // Sidecar uses DuckDB backend but should be treated as Postgres-like
+        Sidecar => Dialect::Postgresql,
+        #[allow(unused)]
+        _ => return None,
+    };
+    Some(dialect)
+}
+
+pub fn quote_char(adapter_type: AdapterType) -> char {
+    match dialect_of(adapter_type) {
+        Some(dialect) => dialect.quote_char(),
+        None => match adapter_type {
+            AdapterType::DuckDB => '"',
+            _ => unimplemented!("quote_char() is not defined for {adapter_type}"),
+        },
     }
 }
 

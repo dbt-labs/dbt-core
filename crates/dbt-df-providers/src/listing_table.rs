@@ -8,7 +8,7 @@ use datafusion::{
 };
 use datafusion_catalog::Session;
 use datafusion_common::DataFusionError;
-use dbt_frontend_common::Dialect;
+use dbt_common::adapter::AdapterType;
 use std::{path::Path, sync::Arc};
 /// Supported on-disk table formats.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -162,24 +162,25 @@ pub fn adapt_schema(
 /// configuration flags and dialect-specific casing rules.
 pub fn infer_seed_column_name_strategy(
     quote_columns: bool,
-    dialect: Dialect,
+    adapter_type: AdapterType,
 ) -> InferColumnNameStrategy {
-    match (quote_columns, dialect) {
+    match (quote_columns, adapter_type) {
         // In Trino, all names are lowercase, even quoted.
-        (_, Dialect::Trino) => InferColumnNameStrategy::Lowercase,
         (true, _) => InferColumnNameStrategy::Verbatim,
-        (false, Dialect::Postgresql | Dialect::Redshift | Dialect::Duckdb) => {
-            InferColumnNameStrategy::Lowercase
-        }
-        (false, Dialect::Snowflake) => InferColumnNameStrategy::Uppercase,
         (
             false,
-            Dialect::Sdf
-            | Dialect::Bigquery
-            | Dialect::DataFusion
-            | Dialect::Databricks
-            | Dialect::SparkSql
-            | Dialect::SparkLp,
+            AdapterType::Postgres
+            | AdapterType::Salesforce
+            | AdapterType::Redshift
+            | AdapterType::DuckDB,
+        ) => InferColumnNameStrategy::Lowercase,
+        (false, AdapterType::Snowflake) => InferColumnNameStrategy::Uppercase,
+        (
+            false,
+            AdapterType::Bigquery
+            | AdapterType::Databricks
+            | AdapterType::Spark
+            | AdapterType::Sidecar,
         ) => InferColumnNameStrategy::Verbatim,
     }
 }

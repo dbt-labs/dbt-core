@@ -10,6 +10,7 @@ repository.workspace = true
 version.workspace = true
 
 [dependencies]
+dbt-common = { workspace = true }
 dbt-csv = { workspace = true }
 dbt-env = { workspace = true }
 dbt-frontend-common = { workspace = true }

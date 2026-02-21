@@ -50,9 +50,8 @@ impl FromStr for SchemaOrigin {
     }
 }
 
-use dbt_common::adapter::AdapterType;
+use dbt_common::adapter::{AdapterType, quote_char};
 use dbt_common::{CodeLocationWithFile, ErrorCode, FsError, FsResult, err, fs_err};
-use dbt_frontend_common::Dialect;
 use dbt_telemetry::NodeMaterialization;
 use dbt_yaml::{JsonSchema, Spanned, UntaggedEnumDeserialize, Verbatim};
 use hex;
@@ -1167,11 +1166,10 @@ pub fn normalize_quoting(
     schema: &str,
     identifier: &str,
 ) -> (String, String, String, ResolvedQuoting) {
-    let dialect: Dialect = Dialect::from(adapter_type);
-    let (database, database_quoting) = _normalize_quote(quoting.database, &dialect, database);
-    let (schema, schema_quoting) = _normalize_quote(quoting.schema, &dialect, schema);
+    let (database, database_quoting) = _normalize_quote(quoting.database, adapter_type, database);
+    let (schema, schema_quoting) = _normalize_quote(quoting.schema, adapter_type, schema);
     let (identifier, identifier_quoting) =
-        _normalize_quote(quoting.identifier, &dialect, identifier);
+        _normalize_quote(quoting.identifier, adapter_type, identifier);
     (
         database,
         schema,
@@ -1185,14 +1183,12 @@ pub fn normalize_quoting(
 }
 
 pub fn normalize_quote(quoting: bool, adapter_type: AdapterType, name: &str) -> (String, bool) {
-    let dialect: Dialect = Dialect::from(adapter_type);
-    _normalize_quote(quoting, &dialect, name)
+    _normalize_quote(quoting, adapter_type, name)
 }
 
-pub fn _normalize_quote(quoting: bool, dialect: &Dialect, name: &str) -> (String, bool) {
-    let quoted = name.len() > 1
-        && name.starts_with(dialect.quote_char())
-        && name.ends_with(dialect.quote_char());
+pub fn _normalize_quote(quoting: bool, adapter_type: AdapterType, name: &str) -> (String, bool) {
+    let q = quote_char(adapter_type);
+    let quoted = name.len() > 1 && name.starts_with(q) && name.ends_with(q);
 
     // If the name is quoted, but the quote config is false, we need to unquote the name
     if (quoted && !quoting) && !name.is_empty() {

@@ -4,7 +4,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use dbt_adapter::{BaseAdapter, BridgeAdapter, sql_types::NaiveTypeOpsImpl};
+use dbt_adapter::{BaseAdapter, BridgeAdapter, sql_types::SATypeOpsImpl};
 use dbt_common::{adapter::AdapterType, cancellation::never_cancels};
 use dbt_jinja_utils::{JinjaEnvBuilder, MacroUnitsWrapper};
 use dbt_schemas::schemas::relations::DEFAULT_DBT_QUOTING;
@@ -56,7 +56,7 @@ fn build_env() -> dbt_common::FsResult<dbt_jinja_utils::jinja_environment::Jinja
         AdapterType::Databricks,
         dbt_yaml::Mapping::default(),
         DEFAULT_DBT_QUOTING,
-        Box::new(NaiveTypeOpsImpl::new(AdapterType::Databricks)),
+        Box::new(SATypeOpsImpl::new(AdapterType::Databricks)),
         never_cancels(),
         None,
     );

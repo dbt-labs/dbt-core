@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::sql_types::NaiveTypeOpsImpl;
+    use crate::sql_types::SATypeOpsImpl;
     use crate::typed_adapter::ConcreteAdapter;
     use dbt_common::adapter::AdapterType;
     use dbt_common::cancellation::never_cancels;
@@ -18,7 +18,7 @@ mod tests {
             AdapterType::Snowflake,
             BTreeMap::new(),
             SNOWFLAKE_RESOLVED_QUOTING,
-            Box::new(NaiveTypeOpsImpl::new(AdapterType::Snowflake)),
+            Box::new(SATypeOpsImpl::new(AdapterType::Snowflake)),
             Arc::new(crate::stmt_splitter::NaiveStmtSplitter),
             never_cancels(),
         );
@@ -31,7 +31,7 @@ mod tests {
             AdapterType::Snowflake,
             BTreeMap::new(),
             SNOWFLAKE_RESOLVED_QUOTING,
-            Box::new(NaiveTypeOpsImpl::new(AdapterType::Snowflake)),
+            Box::new(SATypeOpsImpl::new(AdapterType::Snowflake)),
             Arc::new(crate::stmt_splitter::NaiveStmtSplitter),
             never_cancels(),
         );

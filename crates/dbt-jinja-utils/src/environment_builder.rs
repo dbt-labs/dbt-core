@@ -584,7 +584,7 @@ mod tests {
     use std::{collections::BTreeSet, path::PathBuf, sync::Mutex};
 
     use dbt_adapter::BridgeAdapter;
-    use dbt_adapter::sql_types::NaiveTypeOpsImpl;
+    use dbt_adapter::sql_types::SATypeOpsImpl;
     use dbt_common::adapter::AdapterType;
     use dbt_common::cancellation::never_cancels;
     use dbt_schemas::schemas::relations::DEFAULT_DBT_QUOTING;
@@ -721,7 +721,7 @@ all okay!");
             AdapterType::Postgres,
             dbt_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
-            Box::new(NaiveTypeOpsImpl::new(AdapterType::Postgres)),
+            Box::new(SATypeOpsImpl::new(AdapterType::Postgres)),
             never_cancels(),
             None,
         );
@@ -809,7 +809,7 @@ all okay!");
             AdapterType::Postgres,
             dbt_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
-            Box::new(NaiveTypeOpsImpl::new(AdapterType::Postgres)),
+            Box::new(SATypeOpsImpl::new(AdapterType::Postgres)),
             never_cancels(),
             None,
         );
@@ -872,7 +872,7 @@ all okay!");
             AdapterType::Postgres,
             dbt_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
-            Box::new(NaiveTypeOpsImpl::new(AdapterType::Postgres)),
+            Box::new(SATypeOpsImpl::new(AdapterType::Postgres)),
             never_cancels(),
             None,
         );
@@ -993,7 +993,7 @@ all okay!");
             AdapterType::Postgres,
             dbt_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
-            Box::new(NaiveTypeOpsImpl::new(AdapterType::Postgres)),
+            Box::new(SATypeOpsImpl::new(AdapterType::Postgres)),
             never_cancels(),
             None,
         );
@@ -1045,7 +1045,7 @@ all okay!");
             AdapterType::Postgres,
             dbt_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
-            Box::new(NaiveTypeOpsImpl::new(AdapterType::Postgres)),
+            Box::new(SATypeOpsImpl::new(AdapterType::Postgres)),
             never_cancels(),
             None,
         );
@@ -1091,7 +1091,7 @@ all okay!");
             AdapterType::Postgres,
             dbt_yaml::Mapping::default(),
             DEFAULT_DBT_QUOTING,
-            Box::new(NaiveTypeOpsImpl::new(AdapterType::Postgres)),
+            Box::new(SATypeOpsImpl::new(AdapterType::Postgres)),
             never_cancels(),
             None,
         );

@@ -83,16 +83,17 @@ pub trait TypeOps: Send + Sync {
     }
 }
 
-pub struct NaiveTypeOpsImpl(AdapterType, dbt_xdbc::Backend);
+/// Source-available [TypeOps] implementation.
+pub struct SATypeOpsImpl(AdapterType, dbt_xdbc::Backend);
 
-impl NaiveTypeOpsImpl {
+impl SATypeOpsImpl {
     pub fn new(adapter_type: AdapterType) -> Self {
         let backend = backend_of(adapter_type);
         Self(adapter_type, backend)
     }
 }
 
-impl TypeOps for NaiveTypeOpsImpl {
+impl TypeOps for SATypeOpsImpl {
     fn adapter_type(&self) -> AdapterType {
         self.0
     }

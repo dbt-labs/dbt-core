@@ -8,7 +8,7 @@ use std::{
 
 use chrono::DateTime;
 use chrono_tz::Tz;
-use dbt_adapter::{BaseAdapter, BridgeAdapter, sql_types::NaiveTypeOpsImpl};
+use dbt_adapter::{BaseAdapter, BridgeAdapter, sql_types::SATypeOpsImpl};
 use dbt_common::{
     ErrorCode, FsResult, adapter::AdapterType, cancellation::CancellationToken, fs_err,
     io_args::IoArgs,
@@ -116,7 +116,7 @@ pub fn initialize_parse_jinja_environment(
             "Unknown or unsupported adapter type '{adapter_type}'",
         )
     })?;
-    let type_formatter = Box::new(NaiveTypeOpsImpl::new(adapter_type));
+    let type_formatter = Box::new(SATypeOpsImpl::new(adapter_type));
     let adapter = BridgeAdapter::new_parse_phase_adapter(
         adapter_type,
         adapter_config_mapping,

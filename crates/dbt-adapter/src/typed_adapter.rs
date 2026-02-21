@@ -48,7 +48,6 @@ use dbt_common::behavior_flags::{Behavior, BehaviorFlag};
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::tracing::emit::emit_warn_log_message;
 use dbt_common::{ErrorCode, FsResult, unexpected_fs_err};
-use dbt_frontend_common::dialect::Dialect;
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::common::ConstraintType;
 use dbt_schemas::schemas::common::DbtIncrementalStrategy;
@@ -308,7 +307,6 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
     #[inline(always)]
     fn execute_inner(
         &self,
-        dialect: Dialect,
         engine: Arc<dyn AdapterEngine>,
         state: Option<&State>,
         conn: &'_ mut dyn Connection,
@@ -319,16 +317,17 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         _limit: Option<i64>,
         options: Option<HashMap<String, String>>,
     ) -> AdapterResult<(AdapterResponse, AgateTable)> {
+        let adapter_type = self.adapter_type();
         // BigQuery API supports multi-statement
         // https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language
-        let statements = if self.adapter_type() == Bigquery {
-            if engine.splitter().is_empty(sql, dialect) {
+        let statements = if adapter_type == Bigquery {
+            if engine.splitter().is_empty(sql, adapter_type) {
                 vec![]
             } else {
                 vec![sql.to_owned()]
             }
         } else {
-            engine.split_and_filter_statements(sql, dialect)
+            engine.split_and_filter_statements(sql)
         };
         if statements.is_empty() {
             return Ok((AdapterResponse::default(), AgateTable::default()));
@@ -413,8 +412,7 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
             Replay(_, replay) => {
                 replay.replay_execute(state, conn, ctx, sql, auto_begin, fetch, limit, options)
             }
-            Impl(adapter_type, engine) => self.execute_inner(
-                adapter_type.into(),
+            Impl(_, engine) => self.execute_inner(
                 Arc::clone(engine),
                 state,
                 conn,
@@ -510,9 +508,8 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
                     "bigquery.add_query",
                 ))
             }
-            Impl(adapter_type, engine) => {
+            Impl(_, engine) => {
                 self.execute_inner(
-                    adapter_type.into(),
                     Arc::clone(engine),
                     None,
                     conn,
@@ -541,10 +538,9 @@ pub trait TypedBaseAdapter: fmt::Debug + Send + Sync + AdapterTyping {
         compiled_code: &str,
     ) -> AdapterResult<AdapterResponse> {
         match self.inner_adapter() {
-            Impl(adapter_type @ Snowflake, engine) => {
+            Impl(Snowflake, engine) => {
                 let code = python::snowflake::finalize_python_code(state, model, compiled_code)?;
                 let (response, _) = self.execute_inner(
-                    adapter_type.into(),
                     Arc::clone(engine),
                     Some(state),
                     conn,
@@ -3529,8 +3525,7 @@ impl TypedBaseAdapter for ConcreteAdapter {
             Replay(_, replay) => {
                 replay.replay_execute(state, conn, ctx, sql, auto_begin, fetch, limit, options)
             }
-            Impl(adapter_type, engine) => self.execute_inner(
-                adapter_type.into(),
+            Impl(_, engine) => self.execute_inner(
                 Arc::clone(engine),
                 state,
                 conn,
@@ -3565,9 +3560,8 @@ impl TypedBaseAdapter for ConcreteAdapter {
                 AdapterErrorKind::NotSupported,
                 "bigquery.add_query",
             )),
-            Impl(adapter_type, engine) => {
+            Impl(_, engine) => {
                 self.execute_inner(
-                    adapter_type.into(),
                     Arc::clone(engine),
                     None,
                     conn,
@@ -4067,7 +4061,7 @@ mod tests {
     use crate::column::Column;
     use crate::config::AdapterConfig;
     use crate::query_comment::QueryCommentConfig;
-    use crate::sql_types::NaiveTypeOpsImpl;
+    use crate::sql_types::SATypeOpsImpl;
     use crate::stmt_splitter::NaiveStmtSplitter;
 
     use dbt_auth::auth_for_backend;
@@ -4107,7 +4101,7 @@ mod tests {
             AdapterConfig::new(config),
             resolved_quoting,
             QueryCommentConfig::from_query_comment(None, adapter_type, false),
-            Box::new(NaiveTypeOpsImpl::new(adapter_type)), // XXX: NaiveTypeOpsImpl
+            Box::new(SATypeOpsImpl::new(adapter_type)), // XXX: NaiveTypeOpsImpl
             Arc::new(NaiveStmtSplitter), // XXX: may cause bugs if these tests run SQL
             None,
             Arc::new(RelationCache::default()),
@@ -4191,7 +4185,7 @@ mod tests {
             Databricks,
             BTreeMap::new(),
             DEFAULT_RESOLVED_QUOTING,
-            Box::new(NaiveTypeOpsImpl::new(Databricks)),
+            Box::new(SATypeOpsImpl::new(Databricks)),
             Arc::new(NaiveStmtSplitter),
             never_cancels(),
         );

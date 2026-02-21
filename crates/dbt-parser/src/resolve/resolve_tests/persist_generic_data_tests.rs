@@ -3,6 +3,8 @@ use crate::args::ResolveArgs;
 use dbt_common::FsError;
 use dbt_common::FsResult;
 use dbt_common::adapter::AdapterType;
+use dbt_common::adapter::dialect_of;
+use dbt_common::adapter::quote_char;
 use dbt_common::constants::DBT_GENERIC_TESTS_DIR_NAME;
 use dbt_common::io_args;
 use dbt_common::io_args::IoArgs;
@@ -60,7 +62,6 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
     ) -> FsResult<()> {
         let test_configs: Vec<GenericTestConfig> = self.try_into()?;
         // Process tests for each version (or single resource)
-        let dialect = Dialect::from(adapter_type);
         let mut seen_tests: HashSet<String> = HashSet::new();
         for test_config in test_configs {
             // Handle model-level tests
@@ -91,12 +92,8 @@ impl<T: TestableNodeTrait> TestableNode<'_, T> {
                             normalize_quote(*should_quote, adapter_type, column_name);
 
                         let quoted_column_name = if should_quote {
-                            format!(
-                                "{}{}{}",
-                                dialect.quote_char(),
-                                column_name,
-                                dialect.quote_char()
-                            )
+                            let q = quote_char(adapter_type).to_string();
+                            format!("{}{}{}", q, column_name, q)
                         } else {
                             column_name.to_string()
                         };

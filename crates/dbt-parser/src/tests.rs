@@ -2,7 +2,7 @@
 #[cfg(test)]
 #[allow(clippy::module_inception)]
 mod tests {
-    use dbt_adapter::sql_types::NaiveTypeOpsImpl;
+    use dbt_adapter::sql_types::SATypeOpsImpl;
     use dbt_adapter::{BaseAdapter, BridgeAdapter};
     use dbt_common::adapter::AdapterType;
     use dbt_common::cancellation::never_cancels;
@@ -340,7 +340,7 @@ mod tests {
                 AdapterType::Postgres,
                 dbt_yaml::Mapping::default(),
                 DEFAULT_DBT_QUOTING,
-                Box::new(NaiveTypeOpsImpl::new(AdapterType::Postgres)),
+                Box::new(SATypeOpsImpl::new(AdapterType::Postgres)),
                 never_cancels(),
                 None,
             )) as Arc<dyn BaseAdapter>;

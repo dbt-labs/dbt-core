@@ -749,7 +749,7 @@ pub fn cluster_by_from_schema(schema: &Schema) -> Result<Vec<String>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sql_types::NaiveTypeOpsImpl;
+    use crate::sql_types::SATypeOpsImpl;
     use arrow::datatypes::DataType;
     use arrow_schema::{Field, Fields, TimeUnit};
     use dbt_common::adapter::AdapterType;
@@ -758,7 +758,7 @@ mod tests {
     /// can be parsed into a `BigqueryPartitionConfigRepr`
     #[test]
     fn test_materialized_view_from_schema() {
-        let tf = Box::new(NaiveTypeOpsImpl::new(AdapterType::Bigquery)) as Box<dyn TypeOps>;
+        let tf = Box::new(SATypeOpsImpl::new(AdapterType::Bigquery)) as Box<dyn TypeOps>;
         // Metadata reference: https://github.com/apache/arrow-adbc/blob/f5c0354ac80eaa829c1228e1e0dba7ddc7fd1787/go/adbc/driver/bigquery/connection.go#L703
         let fields = Fields::from(vec![Field::new(
             "my_field",
@@ -861,7 +861,7 @@ mod tests {
     /// can be parsed into a `PartitionConfig`
     #[test]
     fn test_empty_partition_config_from_schema() {
-        let tf = Box::new(NaiveTypeOpsImpl::new(AdapterType::Bigquery)) as Box<dyn TypeOps>;
+        let tf = Box::new(SATypeOpsImpl::new(AdapterType::Bigquery)) as Box<dyn TypeOps>;
 
         let schema = Schema::new(Fields::empty());
         assert!(
@@ -875,7 +875,7 @@ mod tests {
     /// can be parsed into a `PartitionConfig`
     #[test]
     fn test_partition_config_from_schema() {
-        let tf = Box::new(NaiveTypeOpsImpl::new(AdapterType::Bigquery)) as Box<dyn TypeOps>;
+        let tf = Box::new(SATypeOpsImpl::new(AdapterType::Bigquery)) as Box<dyn TypeOps>;
         // Metadata reference: https://github.com/apache/arrow-adbc/blob/f5c0354ac80eaa829c1228e1e0dba7ddc7fd1787/go/adbc/driver/bigquery/connection.go#L703
         let metadata = HashMap::from_iter(
             [

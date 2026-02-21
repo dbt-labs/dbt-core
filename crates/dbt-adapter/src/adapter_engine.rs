@@ -27,7 +27,6 @@ use dbt_common::cancellation::{Cancellable, CancellationToken, never_cancels};
 use dbt_common::create_debug_span;
 use dbt_common::hashing::code_hash;
 use dbt_common::tracing::span_info::record_current_span_status_from_attrs;
-use dbt_frontend_common::dialect::Dialect;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::telemetry::{QueryExecuted, QueryOutcome};
 use dbt_schemas::schemas::{DbtModel, DbtSnapshot};
@@ -222,11 +221,12 @@ pub trait AdapterEngine: Send + Sync {
     }
 
     /// Split SQL statements using the provided dialect.
-    fn split_and_filter_statements(&self, sql: &str, dialect: Dialect) -> Vec<String> {
+    fn split_and_filter_statements(&self, sql: &str) -> Vec<String> {
+        let adapter_type = self.adapter_type();
         self.splitter()
-            .split(sql, dialect)
+            .split(sql, adapter_type)
             .into_iter()
-            .filter(|statement| !self.splitter().is_empty(statement, dialect))
+            .filter(|statement| !self.splitter().is_empty(statement, adapter_type))
             .collect()
     }
 
