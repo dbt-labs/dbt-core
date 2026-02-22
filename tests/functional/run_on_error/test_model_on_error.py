@@ -2,80 +2,19 @@ import pytest
 
 from dbt.artifacts.schemas.results import RunStatus
 from dbt.tests.util import run_dbt, write_file
-
-models__parent_success_sql = """
-{{ config(materialized='table') }}
-
-select 1 as id
-"""
-
-models__parent_error_sql = """
-{{ config(materialized='table') }}
-
-select 1 / 0 as id
-"""
-
-models__child_sql = """
-{{ config(materialized='table') }}
-
-select * from {{ ref('parent') }}
-"""
-
-schema_skip_children_yml = """
-models:
-  - name: parent
-    config:
-      on_error: skip_children
-"""
-
-schema_continue_yml = """
-models:
-  - name: parent
-    config:
-      on_error: continue
-"""
-
-models__parent1_success_sql = """
-{{ config(materialized='table') }}
-
-select 1 as id
-"""
-
-models__parent1_error_sql = """
-{{ config(materialized='table') }}
-
-select 1 / 0 as id
-"""
-
-models__parent2_success_sql = """
-{{ config(materialized='table') }}
-
-select 2 as id
-"""
-
-models__parent2_error_sql = """
-{{ config(materialized='table') }}
-
-select 1 / 0 as id
-"""
-
-models__child_two_parents_sql = """
-{{ config(materialized='table') }}
-
-select id from {{ ref('parent1') }}
-union all
-select id from {{ ref('parent2') }}
-"""
-
-schema_two_parents_yml = """
-models:
-  - name: parent1
-    config:
-      on_error: skip_children
-  - name: parent2
-    config:
-      on_error: continue
-"""
+from tests.functional.run_on_error.fixtures import (
+    models__child_sql,
+    models__child_two_parents_sql,
+    models__parent1_error_sql,
+    models__parent1_success_sql,
+    models__parent2_error_sql,
+    models__parent2_success_sql,
+    models__parent_error_sql,
+    models__parent_success_sql,
+    schema_continue_yml,
+    schema_skip_children_yml,
+    schema_two_parents_yml,
+)
 
 
 class TestOnErrorUnspecifiedSkipsChildren:
