@@ -18,6 +18,7 @@ from dbt import deprecations
 from dbt.config import Project
 from dbt.contracts.files import AnySourceFile, FilePath
 from dbt.exceptions import DbtInternalError, ParsingError
+from dbt.flags import get_flags
 from dbt_common.clients._jinja_blocks import ExtractWarning
 from dbt_common.clients.jinja import BlockTag, extract_toplevel_blocks
 from dbt_common.clients.system import find_matching
@@ -51,7 +52,12 @@ class FileBlock:
 
     @property
     def name(self):
-        return _get_node_name_from_relative_path(self.file.path.relative_path)
+        if get_flags().ALLOW_JINJA_FILE_EXTENSIONS:
+            return _get_node_name_from_relative_path(self.file.path.relative_path)
+
+        base = os.path.basename(self.file.path.relative_path)
+        name, _ = os.path.splitext(base)
+        return name
 
     @property
     def contents(self):

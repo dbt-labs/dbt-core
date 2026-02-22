@@ -395,8 +395,7 @@ class ReadFilesFromDiff:
 
 def _get_extensions(base_ext: Literal[".sql", ".md"]) -> List[str]:
     """Given a base extension, returns a list of aliased extensions"""
-    flags = get_flags()
-    if not flags.ALLOW_JINJA_FILE_EXTENSIONS:
+    if not get_flags().ALLOW_JINJA_FILE_EXTENSIONS:
         return [base_ext]
 
     return [base_ext, f"{base_ext}.j2", f"{base_ext}.jinja2", f"{base_ext}.jinja"]
