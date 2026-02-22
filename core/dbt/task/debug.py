@@ -338,13 +338,24 @@ class DebugTask(BaseTask):
                 renderer,
                 verify_version=self.args.VERSION_CHECK,
             )
-        except dbt_common.exceptions.DbtConfigError as exc:
+        except (
+            dbt_common.exceptions.DbtConfigError,
+            dbt_common.exceptions.CompilationError,
+        ) as exc:
+            details = str(exc)
+            if self.profile is None:
+                details = (
+                    f"{details}\n"
+                    "Note: The profile was not loaded successfully. "
+                    "Project rendering errors (such as undefined 'target') "
+                    "may be caused by the profile failure above."
+                )
             return SubtaskStatus(
                 log_msg=red("ERROR invalid"),
                 run_status=RunStatus.Error,
-                details=str(exc),
+                details=details,
                 summary_message=(
-                    f"Project loading failed for the following reason:" f"\n{str(exc)}" f"\n"
+                    f"Project loading failed for the following reason:\n{details}\n"
                 ),
             )
         else:
