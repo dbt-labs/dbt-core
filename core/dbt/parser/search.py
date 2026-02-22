@@ -52,7 +52,7 @@ class FileBlock:
 
     @property
     def name(self):
-        if get_flags().ALLOW_JINJA_FILE_EXTENSIONS:
+        if getattr(get_flags(), "ALLOW_JINJA_FILE_EXTENSIONS", False):
             return _get_node_name_from_relative_path(self.file.path.relative_path)
 
         base = os.path.basename(self.file.path.relative_path)
