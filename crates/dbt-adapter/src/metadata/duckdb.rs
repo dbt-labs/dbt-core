@@ -1,6 +1,6 @@
 use crate::sql_types::{TypeOps, make_arrow_field_v2};
 use crate::typed_adapter::ConcreteAdapter;
-use crate::{AdapterEngine, AdapterTyping, TypedBaseAdapter};
+use crate::{AdapterEngine, AdapterTyping};
 use crate::{
     AdapterResult, errors::AsyncAdapterResult, metadata::*, record_batch_utils::get_column_values,
 };

@@ -4,7 +4,7 @@ use crate::metadata::*;
 use crate::record_batch_utils::get_column_values;
 use crate::relation::bigquery::BigqueryRelation;
 use crate::typed_adapter::ConcreteAdapter;
-use crate::{AdapterEngine, AdapterResult, AdapterTyping, TypedBaseAdapter};
+use crate::{AdapterEngine, AdapterResult, AdapterTyping};
 
 use arrow_array::*;
 use arrow_schema::*;

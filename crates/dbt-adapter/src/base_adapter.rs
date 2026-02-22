@@ -65,8 +65,8 @@ pub trait AdapterTyping {
     /// Build an instance of the metadata adapter if supported.
     fn metadata_adapter(&self) -> Option<Box<dyn MetadataAdapter>>;
 
-    /// Get a reference to the typed base adapter if supported.
-    fn as_typed_base_adapter(&self) -> &dyn TypedBaseAdapter;
+    /// Get a reference to the concrete adapter if supported.
+    fn as_concrete_adapter(&self) -> &ConcreteAdapter;
 
     /// True if called on the [ParseAdapter].
     fn is_parse(&self) -> bool {
@@ -116,7 +116,7 @@ pub trait AdapterTyping {
             ComponentName::Identifier => self.quoting().identifier,
         };
         if quoted {
-            let adapter = self.as_typed_base_adapter();
+            let adapter = self.as_concrete_adapter();
             Ok(adapter.quote(identifier))
         } else {
             Ok(identifier.to_string())

@@ -74,7 +74,6 @@ pub use errors::AdapterResult;
 pub use funcs::{execute_macro_with_package, execute_macro_wrapper_with_package};
 pub use response::AdapterResponse;
 pub use typed_adapter::ConcreteAdapter;
-pub use typed_adapter::TypedBaseAdapter;
 
 // Exposing structs for testing
 pub use adapter_engine::AdapterEngine as SqlEngineForTesting;

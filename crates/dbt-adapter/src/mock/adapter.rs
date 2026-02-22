@@ -10,7 +10,6 @@ mod tests {
     use std::sync::Arc;
 
     use crate::AdapterTyping;
-    use crate::TypedBaseAdapter;
 
     #[test]
     fn test_adapter_type() {

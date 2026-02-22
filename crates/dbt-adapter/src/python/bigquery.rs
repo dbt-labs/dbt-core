@@ -1,4 +1,5 @@
-use crate::{AdapterResponse, TypedBaseAdapter};
+use crate::AdapterResponse;
+use crate::typed_adapter::ConcreteAdapter;
 use std::collections::HashMap;
 
 use dbt_common::{AdapterError, AdapterErrorKind, AdapterResult};
@@ -29,7 +30,7 @@ enum SubmissionMethod {
 }
 
 pub struct JobContext<'a> {
-    pub adapter: &'a dyn TypedBaseAdapter,
+    pub adapter: &'a ConcreteAdapter,
     pub ctx: &'a QueryCtx,
     pub conn: &'a mut dyn Connection,
     pub config: &'a Value,
@@ -73,7 +74,7 @@ impl SubmissionMethod {
 }
 
 pub fn submit_python_job(
-    adapter: &dyn TypedBaseAdapter,
+    adapter: &ConcreteAdapter,
     ctx: &QueryCtx,
     conn: &'_ mut dyn Connection,
     _state: &State,

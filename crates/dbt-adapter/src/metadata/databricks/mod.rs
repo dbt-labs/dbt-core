@@ -34,7 +34,7 @@ use crate::relation::databricks::config::{
 use crate::sql_types::{TypeOps, make_arrow_field_v2};
 use crate::typed_adapter::ConcreteAdapter;
 use crate::{AdapterEngine, AdapterResponse};
-use crate::{AdapterTyping, TypedBaseAdapter, metadata::*};
+use crate::{AdapterTyping, metadata::*};
 
 pub mod describe_table;
 pub mod schemas;
@@ -175,7 +175,7 @@ impl DatabricksMetadataAdapter {
     ///
     /// See: https://github.com/databricks/dbt-databricks/blob/822b105b15e644676d9e1f47cbfd765cd4c1541f/dbt/adapters/databricks/handle.py#L129
     pub fn get_dbr_version(
-        adapter: &dyn TypedBaseAdapter,
+        adapter: &ConcreteAdapter,
         ctx: &QueryCtx,
         conn: &mut dyn Connection,
     ) -> AdapterResult<DbrVersion> {

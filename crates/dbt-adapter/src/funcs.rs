@@ -970,7 +970,7 @@ pub fn dispatch_adapter_calls(
                 return Ok(Value::from(false));
             }
             let is_cluster = adapter
-                .as_typed_base_adapter()
+                .as_concrete_adapter()
                 .is_cluster()
                 .map_err(minijinja::Error::from)?;
             Ok(Value::from(is_cluster))

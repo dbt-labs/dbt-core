@@ -18,7 +18,7 @@ use crate::sql_types::TypeOps;
 use crate::stmt_splitter::NaiveStmtSplitter;
 use crate::time_machine::TimeMachine;
 use crate::typed_adapter;
-use crate::typed_adapter::TypedBaseAdapter;
+use crate::typed_adapter::ConcreteAdapter;
 use crate::{AdapterResponse, AdapterResult, BaseAdapter};
 
 use dbt_agate::AgateTable;
@@ -110,7 +110,7 @@ enum InnerAdapter {
     /// The actual implementation for all phases except parsing.
     /// The relation cache is now stored in the engine, not here.
     Typed {
-        adapter: Arc<dyn TypedBaseAdapter>,
+        adapter: Arc<ConcreteAdapter>,
         schema_store: Option<Arc<dyn SchemaStoreTrait>>,
     },
     /// The state necessary to perform operation in a shallow way during the parsing phase.
@@ -165,7 +165,7 @@ impl BridgeAdapter {
     ///
     /// The relation cache is obtained from the engine. No longer needs to be passed explicitly.
     pub fn new(
-        adapter: Arc<dyn TypedBaseAdapter>,
+        adapter: Arc<ConcreteAdapter>,
         schema_store: Option<Arc<dyn SchemaStoreTrait>>,
         time_machine: Option<TimeMachine>,
     ) -> Self {
@@ -331,10 +331,10 @@ impl AdapterTyping for BridgeAdapter {
         }
     }
 
-    fn as_typed_base_adapter(&self) -> &dyn TypedBaseAdapter {
+    fn as_concrete_adapter(&self) -> &ConcreteAdapter {
         match &self.inner {
             Typed { adapter, .. } => adapter.as_ref(),
-            Parse(_) => unimplemented!("as_typed_base_adapter"),
+            Parse(_) => unimplemented!("as_concrete_adapter"),
         }
     }
 
@@ -2028,7 +2028,7 @@ impl Object for BridgeAdapter {
 fn debug_compare_column_types(
     state: &State,
     relation: &dyn BaseRelation,
-    typed_adapter: &dyn TypedBaseAdapter,
+    typed_adapter: &ConcreteAdapter,
     mut from_local: Vec<Column>,
 ) {
     if std::env::var("DEBUG_COMPARE_LOCAL_REMOTE_COLUMNS_TYPES").is_ok() {

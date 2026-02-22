@@ -8,7 +8,7 @@ use dbt_schemas::schemas::relations::base::{BaseRelation, TableFormat};
 use dbt_xdbc::{Connection, QueryCtx};
 use minijinja::State;
 
-use crate::TypedBaseAdapter;
+use crate::AdapterTyping;
 use crate::metadata::databricks::describe_table::DatabricksTableMetadata;
 use crate::metadata::{snowflake, try_canonicalize_bool_column_field};
 use crate::record_batch_utils::get_column_values;
@@ -19,12 +19,13 @@ use crate::relation::postgres::PostgresRelation;
 use crate::relation::redshift::RedshiftRelation;
 use crate::relation::salesforce::SalesforceRelation;
 use crate::relation::snowflake::SnowflakeRelation;
+use crate::typed_adapter::ConcreteAdapter;
 
 // TODO: turn this into a struct and collapse all the common code from X_get_relation functions
 
 #[inline(never)]
 pub fn get_relation(
-    adapter: &dyn TypedBaseAdapter,
+    adapter: &ConcreteAdapter,
     state: &State,
     ctx: &QueryCtx,
     conn: &'_ mut dyn Connection,
@@ -66,7 +67,7 @@ pub fn get_relation(
 
 // https://github.com/dbt-labs/dbt-adapters/blob/ace1709df001df4232a66f9d5f331a5fda4d3389/dbt-snowflake/src/dbt/include/snowflake/macros/adapters.sql#L138
 fn snowflake_get_relation(
-    adapter: &dyn TypedBaseAdapter,
+    adapter: &ConcreteAdapter,
     state: &State,
     ctx: &QueryCtx,
     conn: &'_ mut dyn Connection,
@@ -181,7 +182,7 @@ fn snowflake_get_relation(
 }
 
 fn bigquery_get_relation(
-    adapter: &dyn TypedBaseAdapter,
+    adapter: &ConcreteAdapter,
     state: &State,
     ctx: &QueryCtx,
     conn: &'_ mut dyn Connection,
@@ -253,7 +254,7 @@ fn bigquery_get_relation(
 }
 
 fn databricks_get_relation(
-    adapter: &dyn TypedBaseAdapter,
+    adapter: &ConcreteAdapter,
     state: &State,
     ctx: &QueryCtx,
     conn: &mut dyn Connection,
@@ -339,7 +340,7 @@ fn databricks_get_relation(
 }
 
 fn redshift_get_relation(
-    adapter: &dyn TypedBaseAdapter,
+    adapter: &ConcreteAdapter,
     state: &State,
     ctx: &QueryCtx,
     conn: &mut dyn Connection,
@@ -417,7 +418,7 @@ LEFT JOIN materialized_views mv
 
 // reference: https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-postgres/src/dbt/include/postgres/macros/adapters.sql#L85
 fn postgres_get_relation(
-    adapter: &dyn TypedBaseAdapter,
+    adapter: &ConcreteAdapter,
     state: &State,
     ctx: &QueryCtx,
     conn: &'_ mut dyn Connection,
@@ -489,7 +490,7 @@ fn postgres_get_relation(
 }
 
 fn salesforce_get_relation(
-    _adapter: &dyn TypedBaseAdapter,
+    _adapter: &ConcreteAdapter,
     _state: &State,
     _query_ctx: &QueryCtx,
     conn: &'_ mut dyn Connection,
@@ -510,7 +511,7 @@ fn salesforce_get_relation(
 }
 
 fn duckdb_get_relation(
-    adapter: &dyn TypedBaseAdapter,
+    adapter: &ConcreteAdapter,
     state: &State,
     ctx: &QueryCtx,
     conn: &'_ mut dyn Connection,

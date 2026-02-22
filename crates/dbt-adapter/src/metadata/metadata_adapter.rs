@@ -1,3 +1,4 @@
+use crate::AdapterTyping;
 use crate::errors::{AdapterError, AdapterResult, AsyncAdapterResult};
 use crate::funcs::execute_macro;
 use crate::relation::{create_relation, do_create_relation};
@@ -6,7 +7,7 @@ use crate::time_machine::{
     args_freshness, args_list_relations_in_parallel, args_list_relations_schemas,
     args_list_relations_schemas_by_patterns, args_list_udfs, with_time_machine_metadata_wrapper,
 };
-use crate::typed_adapter::TypedBaseAdapter;
+use crate::typed_adapter::ConcreteAdapter;
 use crate::{AdapterEngine, metadata::*};
 
 use arrow::array::RecordBatch;
@@ -363,7 +364,7 @@ pub trait MetadataAdapter: Send + Sync {
 /// before using it to create schemas
 #[allow(clippy::type_complexity)]
 pub fn create_schemas_if_not_exists(
-    adapter: &dyn TypedBaseAdapter,
+    adapter: &ConcreteAdapter,
     metadata_adapter: &dyn MetadataAdapter,
     state: &State,
     catalog_schemas: Vec<(String, String, String)>,
