@@ -18,6 +18,7 @@ from dbt.tests.util import (
     run_dbt_and_capture,
     write_file,
 )
+from dbt_common.clients import system
 from tests.functional.utils import up_one
 
 # todo: make self.unique_schema to fixture
@@ -393,15 +394,63 @@ class TestDependencyTestsConfig(BaseDependencyTest):
         assert "project-test-config" not in deprecations.active_deprecations
 
 
-class TestLocalPackageInstallModeDeepcopy(BaseDependencyTest):
+class TestLocalPackageInstallModeEditableRaisesWhenSymlinksUnsupported(BaseDependencyTest):
     @pytest.fixture(scope="class")
     def packages(self):
-        return {"packages": [{"local": "local_dependency", "install_mode": "deepcopy"}]}
+        return {"packages": [{"local": "local_dependency", "install_mode": "editable"}]}
 
-    def test_install_mode_deepcopy_installs_directory_not_symlink(self, project):
+    @mock.patch("dbt.contracts.project.system.supports_symlinks", return_value=False)
+    def test_install_mode_editable_raises_ValidationError_when_symlinks_unsupported(
+        self, mock_supports_symlinks
+    ):
+        with pytest.raises(dbt.exceptions.DbtProjectError) as exc_info:
+            run_dbt(["deps"], expect_pass=False)
+
+        assert "not supported on this platform" in exc_info.value.msg
+
+
+@pytest.mark.skipif(
+    not system.supports_symlinks(), reason="Symlinks are not supported on this platform"
+)
+class TestLocalPackageInstallModeEditable(BaseDependencyTest):
+    @pytest.fixture(scope="class")
+    def packages(self):
+        return {"packages": [{"local": "local_dependency", "install_mode": "editable"}]}
+
+    def test_install_mode_editable_creates_symlink_only(self, project):
+        run_dbt(["deps"])
+
+        dest_path = Path(project.project_root) / "dbt_packages" / "local_dep"
+        assert dest_path.exists()
+        assert dest_path.is_symlink()
+
+
+class TestLocalPackageInstallModeFrozen(BaseDependencyTest):
+    @pytest.fixture(scope="class")
+    def packages(self):
+        return {"packages": [{"local": "local_dependency", "install_mode": "frozen"}]}
+
+    def test_install_mode_frozen_installs_directory_not_symlink(self, project):
         run_dbt(["deps"])
 
         dest_path = Path(project.project_root) / "dbt_packages" / "local_dep"
         assert dest_path.exists()
         assert dest_path.is_dir()
         assert not dest_path.is_symlink()
+
+
+class TestLocalPackageInstallModeAuto(BaseDependencyTest):
+    @pytest.fixture(scope="class")
+    def packages(self):
+        return {"packages": [{"local": "local_dependency"}]}
+
+    def test_install_mode_auto_installs_and_run_succeeds(self, project):
+        run_dbt(["deps"])
+
+        dest_path = Path(project.project_root) / "dbt_packages" / "local_dep"
+        assert dest_path.exists()
+
+        if system.supports_symlinks():
+            assert dest_path.is_symlink()
+        else:
+            assert dest_path.is_dir()
