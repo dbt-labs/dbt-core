@@ -1872,6 +1872,7 @@ impl BaseAdapter for BridgeAdapter {
         table_name: &str,
         agate_table: Arc<AgateTable>,
         file_path: &str,
+        column_overrides: IndexMap<String, String>,
         field_delimiter: &str,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
@@ -1889,6 +1890,7 @@ impl BaseAdapter for BridgeAdapter {
                     table_name,
                     agate_table,
                     file_path,
+                    column_overrides,
                     field_delimiter,
                 )?;
                 Ok(result)

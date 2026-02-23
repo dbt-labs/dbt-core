@@ -9,8 +9,8 @@
 
 {% macro bigquery__load_csv_rows(model, agate_table) %}
 
-  {# DIVERGENCE BEGIN: already layered into the schema of the agate table upstream #}
-  {%- set table_after_schema_override = agate_table -%}
+  {# DIVERGENCE BEGIN: Need to pass path to the dataframe file #}
+  {%- set column_override = model['config'].get('column_types', {}) -%}
 
   {%- set delimiter = model['config'].get('delimiter', ',') -%}
   {{ adapter.load_dataframe(
@@ -19,6 +19,7 @@
       model['alias'],
       model['project_root'] | string ~ model['original_file_path'] | string,
       agate_table,
+      column_override,
       delimiter,
   ) }}
   {# DIVERGENCE END #}

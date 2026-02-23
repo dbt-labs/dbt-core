@@ -710,8 +710,9 @@ pub fn dispatch_adapter_calls(
                     "database",
                     "schema",
                     "table_name",
-                    "field_path",
+                    "file_path",
                     "agate_table",
+                    "column_overrides",
                     "field_delimiter",
                 ],
                 args,
@@ -729,6 +730,15 @@ pub fn dispatch_adapter_calls(
                         "agate_table must be an agate.Table",
                     )
                 })?;
+            let column_overrides = iter.next_arg::<Value>()?;
+            let column_overrides =
+                minijinja_value_to_typed_struct::<IndexMap<String, String>>(column_overrides)
+                    .map_err(|e| {
+                        minijinja::Error::new(
+                            minijinja::ErrorKind::SerdeDeserializeError,
+                            e.to_string(),
+                        )
+                    })?;
             let field_delimiter = iter.next_arg::<&str>()?;
             iter.finish()?;
 
@@ -739,6 +749,7 @@ pub fn dispatch_adapter_calls(
                 table_name,
                 agate_table,
                 file_path,
+                column_overrides,
                 field_delimiter,
             )
         }

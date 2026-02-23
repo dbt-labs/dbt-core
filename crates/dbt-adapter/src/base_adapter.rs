@@ -928,6 +928,7 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
         _table_name: &str,
         _agate_table: Arc<AgateTable>,
         _file_path: &str,
+        _column_overrides: IndexMap<String, String>,
         _field_delimiter: &str,
     ) -> Result<Value, minijinja::Error>;
 

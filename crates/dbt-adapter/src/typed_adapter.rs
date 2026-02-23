@@ -2064,6 +2064,7 @@ impl ConcreteAdapter {
         table_name: &str,
         agate_table: Arc<AgateTable>,
         file_path: &str,
+        column_overrides: IndexMap<String, String>,
         field_delimiter: &str,
     ) -> AdapterResult<Value> {
         match self.adapter_type() {
@@ -2074,15 +2075,33 @@ impl ConcreteAdapter {
                 // one. Later we can document to end users that their old way of using this macro
                 // is bugged. The fix will be trivial for any power user relying on this adapter
                 // method and we can provide clear guidance for migration.
+
+                // Apply column overrides to Arrow schema first
+                let arrow_schema = agate_table.original_record_batch().schema();
+                let new_fields = arrow_schema
+                    .fields()
+                    .iter()
+                    .map(|field| {
+                        let field = field.as_ref().clone();
+                        let new_field = if let Some(data_type) = column_overrides.get(field.name())
+                        {
+                            let type_ops = self.engine().type_ops();
+                            let new_data_type = type_ops.parse_into_arrow_type(data_type)?;
+                            field.with_data_type(new_data_type)
+                        } else {
+                            field
+                        };
+                        Ok(new_field)
+                    })
+                    .collect::<AdapterResult<Vec<Field>>>()?;
+                let ingest_schema = Schema::new(new_fields);
+
                 let serialized_ingest_schema: Vec<u8> = {
                     // serialize the Arrow schema as an Arrow IPC byte blob
                     let mut buf = Vec::<u8>::new();
-                    let () = StreamWriter::try_new(
-                        &mut buf,
-                        agate_table.original_record_batch().schema().as_ref(),
-                    )
-                    .and_then(|mut w| w.finish())
-                    .map_err(arrow_error_to_adapter_error)?;
+                    let () = StreamWriter::try_new(&mut buf, &ingest_schema)
+                        .and_then(|mut w| w.finish())
+                        .map_err(arrow_error_to_adapter_error)?;
                     Ok(buf) as AdapterResult<Vec<u8>>
                 }?;
 
