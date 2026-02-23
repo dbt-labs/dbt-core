@@ -18,6 +18,7 @@ from dbt.config.utils import normalize_warn_error_options
 from dbt.constants import (
     DBT_PROJECT_FILE_NAME,
     DEPENDENCIES_FILE_NAME,
+    PACKAGE_LOCK_FILE_NAME,
     PACKAGE_LOCK_HASH_KEY,
     PACKAGES_FILE_NAME,
 )
@@ -150,6 +151,12 @@ def package_config_from_data(
     except ValidationError as e:
         raise DbtProjectError(MALFORMED_PACKAGE_ERROR.format(error=str(e.message))) from e
     return packages
+
+
+def load_package_lock_config(project_root: str) -> PackageConfig:
+    locked_packages = load_yml_dict(f"{project_root}/{PACKAGE_LOCK_FILE_NAME}") or {"packages": []}
+
+    return PackageConfig.from_dict(locked_packages)
 
 
 def _parse_versions(versions: Union[List[str], str]) -> List[VersionSpecifier]:

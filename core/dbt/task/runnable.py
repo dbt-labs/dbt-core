@@ -185,6 +185,12 @@ class GraphRunnableTask(ConfiguredTask):
 
         self.job_queue = self.get_graph_queue()
 
+        # Set selected node IDs on the compiler so FK constraint compilation
+        # can determine whether to use deferred relations or current relations.
+        # FK targets that ARE selected should use current relations (being built now).
+        # FK targets that are NOT selected should use deferred relations (from state).
+        self.compiler.selected_node_ids = set(self.job_queue.get_selected_nodes())
+
         # we use this a couple of times. order does not matter.
         self._flattened_nodes = []
         for uid in self.job_queue.get_selected_nodes():
@@ -234,7 +240,10 @@ class GraphRunnableTask(ConfiguredTask):
         if cls is None:
             raise DbtInternalError("Could not find runner type for node.")
 
-        return cls(self.config, adapter, node, run_count, num_nodes)
+        runner = cls(self.config, adapter, node, run_count, num_nodes)
+        # Propagate selected node IDs to the runner's compiler for FK constraint resolution
+        runner.compiler.selected_node_ids = self.compiler.selected_node_ids
+        return runner
 
     def call_runner(self, runner: BaseRunner) -> RunResult:
         with log_contextvars(node_info=runner.node.node_info):

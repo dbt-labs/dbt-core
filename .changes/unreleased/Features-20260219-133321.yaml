@@ -1,0 +1,6 @@
+kind: Features
+body: execute dbt debug logic after creating a new project in dbt init
+time: 2026-02-19T13:33:21.891997+05:30
+custom:
+    Author: sriramr98
+    Issue: "12510"

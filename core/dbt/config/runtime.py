@@ -24,7 +24,7 @@ from dbt.adapters.contracts.connection import (
 from dbt.adapters.contracts.relation import ComponentName
 from dbt.adapters.factory import get_include_paths, get_relation_class_by_name
 from dbt.artifacts.resources import Quoting
-from dbt.config.project import load_raw_project
+from dbt.config.project import load_package_lock_config, load_raw_project
 from dbt.contracts.graph.manifest import ManifestMetadata
 from dbt.contracts.project import Configuration
 from dbt.events.types import UnusedResourceConfigPath
@@ -400,15 +400,30 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
                 # Test setup -- we want to load macros without dependencies
                 project_paths = itertools.chain(internal_packages)
             else:
-                # raise exception if fewer installed packages than in packages.yml
-                count_packages_specified = len(self.packages.packages)  # type: ignore
-                count_packages_installed = len(tuple(self._get_project_directories()))
-                if count_packages_specified > count_packages_installed:
+                locked_packages = load_package_lock_config(self.project_root)
+                specified_packages = locked_packages.packages
+
+                if not specified_packages:
+                    specified_packages = self.packages.packages
+
+                specified_package_names = {
+                    p.name for p in locked_packages.packages if p.name is not None
+                }
+                installed_package_names = {p.stem for p in self._get_project_directories()}
+
+                count_packages_specified = len(specified_packages)
+                count_packages_installed = len(installed_package_names)
+
+                uninstalled_packages = specified_package_names - installed_package_names
+
+                # we expect same number of packages specified and installed
+                if count_packages_specified != count_packages_installed:
                     raise UninstalledPackagesFoundError(
-                        count_packages_specified,
                         count_packages_installed,
-                        self.packages_specified_path,
-                        self.packages_install_path,
+                        count_packages_specified,
+                        packages_specified_path=self.packages_specified_path,
+                        packages_install_path=self.packages_install_path,
+                        uninstalled_packages=tuple(uninstalled_packages),
                     )
                 project_paths = itertools.chain(internal_packages, self._get_project_directories())
             for project_name, project in self.load_projects(project_paths):

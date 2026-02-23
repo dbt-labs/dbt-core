@@ -846,6 +846,24 @@ schema_yml_v2_simple_metric_on_model_1 = """
         conversion_metric: simple_metric_2
 """
 
+schema_yml_v2_metrics_with_hidden = """
+    metrics:
+      - name: public_metric
+        description: A metric that is not hidden.
+        label: Public Metric
+        type: simple
+        agg: count
+        expr: id
+        hidden: false
+      - name: private_metric
+        description: A metric that is hidden.
+        label: Private Metric
+        type: simple
+        agg: count
+        expr: id
+        hidden: true
+"""
+
 schema_yml_v2_metric_with_doc_jinja = """
       - name: simple_metric_with_doc_jinja
         description: "{{ doc('simple_metric_description') }}"
