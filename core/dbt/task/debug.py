@@ -354,9 +354,7 @@ class DebugTask(BaseTask):
                 log_msg=red("ERROR invalid"),
                 run_status=RunStatus.Error,
                 details=details,
-                summary_message=(
-                    f"Project loading failed for the following reason:\n{details}\n"
-                ),
+                summary_message=(f"Project loading failed for the following reason:\n{details}\n"),
             )
         else:
             return SubtaskStatus(
