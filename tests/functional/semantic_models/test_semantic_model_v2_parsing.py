@@ -20,6 +20,8 @@ from tests.functional.semantic_models.fixtures import (
     schema_yml_v2_cumulative_metric_missing_input_metric,
     schema_yml_v2_metric_with_doc_jinja,
     schema_yml_v2_metric_with_filter_dimension_jinja,
+    schema_yml_v2_metric_with_input_metrics_filter_dimension_jinja,
+    schema_yml_v2_metric_with_numerator_filter_dimension_jinja,
     schema_yml_v2_metrics_with_hidden,
     schema_yml_v2_simple_metric_on_model_1,
     schema_yml_v2_standalone_metrics,
@@ -787,6 +789,57 @@ class TestTopLevelSemanticsMetricWithDocJinja:
             .filter.where_filters[0]
             .where_sql_template
             == "{{ Dimension('id_entity__id_dim') }} > 0"
+        )
+
+
+class TestDerivedMetricWithInputMetricsFilterDimensionJinja:
+    """Test that {{ Dimension(...) }} jinja in input_metrics[].filter is not rendered at parse time."""
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": base_schema_yml_v2
+            + schema_yml_v2_metric_with_input_metrics_filter_dimension_jinja,
+            "fct_revenue.sql": fct_revenue_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+        }
+
+    def test_input_metrics_filter_jinja_not_rendered(self, project):
+        runner = dbtTestRunner()
+        result = runner.invoke(["parse"])
+        assert result.success
+        manifest = result.result
+        metric = manifest.metrics["metric.test.derived_metric_with_jinja_filter"]
+        assert metric.type == MetricType.DERIVED
+        # The input metric filter should preserve the Dimension jinja template
+        offset_input = [m for m in metric.type_params.metrics if m.alias == "offset_metric"][0]
+        assert "{{ Dimension('id_entity__id_dim') }} > 0" in (
+            offset_input.filter.where_filters[0].where_sql_template
+        )
+
+
+class TestRatioMetricWithNumeratorFilterDimensionJinja:
+    """Test that {{ Dimension(...) }} jinja in numerator.filter is not rendered at parse time."""
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": base_schema_yml_v2
+            + schema_yml_v2_metric_with_numerator_filter_dimension_jinja,
+            "fct_revenue.sql": fct_revenue_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+        }
+
+    def test_numerator_filter_jinja_not_rendered(self, project):
+        runner = dbtTestRunner()
+        result = runner.invoke(["parse"])
+        assert result.success
+        manifest = result.result
+        metric = manifest.metrics["metric.test.ratio_metric_with_jinja_filter"]
+        assert metric.type == MetricType.RATIO
+        # The numerator filter should preserve the Dimension jinja template
+        assert "{{ Dimension('id_entity__id_dim') }} > 0" in (
+            metric.type_params.numerator.filter.where_filters[0].where_sql_template
         )
 
 
