@@ -254,7 +254,7 @@ pub async fn load(
     // In replay mode, we're replaying a recorded session and don't need to download anything
     let is_time_machine_replay = matches!(
         &iarg.replay,
-        Some(ReplayMode::TimeMachine(TimeMachineMode::Replay(_)))
+        Some(ReplayMode::FsTimeMachine(TimeMachineMode::Replay(_)))
     );
 
     if !is_time_machine_replay {

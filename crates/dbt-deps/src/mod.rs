@@ -51,7 +51,7 @@ pub async fn get_or_install_packages(
     // We should only load the existing package-lock.yml from disk
     let is_time_machine_replay = matches!(
         replay_mode,
-        Some(ReplayMode::TimeMachine(TimeMachineMode::Replay(_)))
+        Some(ReplayMode::FsTimeMachine(TimeMachineMode::Replay(_)))
     );
 
     if is_time_machine_replay {

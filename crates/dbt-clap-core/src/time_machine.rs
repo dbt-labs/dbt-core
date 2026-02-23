@@ -51,7 +51,7 @@ pub fn pick_replay_mode(
             });
             // Capture the invocation command for disambiguation in the recording header
             let invocation_command = Some(std::env::args().collect::<Vec<_>>().join(" "));
-            Some(ReplayMode::TimeMachine(TimeMachineMode::Record(
+            Some(ReplayMode::FsTimeMachine(TimeMachineMode::Record(
                 TimeMachineRecordConfig {
                     output_path,
                     invocation_id,
@@ -65,7 +65,7 @@ pub fn pick_replay_mode(
                 let base_dir = out_dir.join("time_machine");
                 find_latest_recording(&base_dir).unwrap_or(base_dir)
             });
-            Some(ReplayMode::TimeMachine(TimeMachineMode::Replay(
+            Some(ReplayMode::FsTimeMachine(TimeMachineMode::Replay(
                 TimeMachineReplayConfig {
                     artifact_path,
                     ordering: common_args.time_machine_ordering,
@@ -80,7 +80,7 @@ pub fn pick_replay_mode(
                 &common_args.fs_replay,
             ) {
                 (Some(dbt_replay), None, None) => {
-                    Some(ReplayMode::DbtReplay(dbt_replay.to_path_buf()))
+                    Some(ReplayMode::MantleReplay(dbt_replay.to_path_buf()))
                 }
                 (None, Some(fs_record), None) => Some(ReplayMode::FsRecord(fs_record.clone())),
                 (None, None, Some(fs_replay)) => Some(ReplayMode::FsReplay(fs_replay.clone())),

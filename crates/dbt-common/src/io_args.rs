@@ -836,18 +836,21 @@ impl ListOutputFormat {
 
 #[derive(Debug, Clone)]
 pub enum ReplayMode {
-    DbtReplay(PathBuf),
+    /// Replay recordings generated from Mantle
+    MantleReplay(PathBuf),
+    /// Make recordings at the driver level
     FsRecord(PathBuf),
+    /// Replay at the driver level
     FsReplay(PathBuf),
     /// Time Machine mode for cross-version compatibility testing
-    TimeMachine(TimeMachineMode),
+    FsTimeMachine(TimeMachineMode),
 }
 
 impl ReplayMode {
     /// Returns the time machine mode if this is a TimeMachine variant.
     pub fn as_time_machine(&self) -> Option<&TimeMachineMode> {
         match self {
-            ReplayMode::TimeMachine(mode) => Some(mode),
+            ReplayMode::FsTimeMachine(mode) => Some(mode),
             _ => None,
         }
     }

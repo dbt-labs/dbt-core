@@ -634,6 +634,7 @@ impl AdapterEngine for XdbcEngine {
 // ---------------------------------------------------------------------------
 
 /// Mock engine state for the mock adapter variant of [ConcreteAdapter](crate::typed_adapter::ConcreteAdapter)
+// TODO: Used currently for F2F Time Machine replay and mantle (build conformance) replay modes to avoid real warehouse connections - eventually should use XdbcEngine as functionality is pushed down
 #[derive(Clone)]
 pub struct MockEngine {
     adapter_type: AdapterType,
