@@ -30,6 +30,17 @@ pub struct RunConfig {
 }
 
 impl Object for RunConfig {
+    /// Make config callable as {{ config(...) }} - returns empty string at runtime
+    /// since config blocks have already been processed during parse/compile phase
+    fn call(
+        self: &Arc<Self>,
+        _state: &State<'_, '_>,
+        _args: &[Value],
+        _listeners: &[Rc<dyn RenderingEventListener>],
+    ) -> Result<Value, MinijinjaError> {
+        Ok(Value::from(""))
+    }
+
     /// Get the value of a key from the config
     fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
         if key.as_str().unwrap() == "model" {

@@ -4,11 +4,15 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Debug;
 use std::sync::{Arc, OnceLock};
 
+use chrono::{DateTime, Utc};
+
 use crate::functions::build_flat_graph;
 use crate::jinja_environment::JinjaEnv;
 use dbt_adapter::BaseAdapter;
 use dbt_adapter::load_store::ResultStore;
+use dbt_adapter::relation::RelationObject;
 use dbt_common::once_cell_vars::DISPATCH_CONFIG;
+use dbt_schemas::filter::{RunFilter, Sample};
 use dbt_schemas::schemas::Nodes;
 use dbt_schemas::state::{DbtRuntimeConfig, NodeResolverTracker};
 use minijinja::arg_utils::{ArgParser, ArgsIter};
@@ -238,6 +242,58 @@ impl DbtNamespace {
     }
 }
 
+/// Context for microbatch ref filtering.
+///
+/// When this is set on a `RefFunction`, refs to models with event_time
+/// configured will be filtered to only include rows within the batch window.
+#[derive(Debug, Clone)]
+pub struct MicrobatchRefContext {
+    /// Start of the batch window (inclusive)
+    pub event_time_start: DateTime<Utc>,
+    /// End of the batch window (exclusive)
+    pub event_time_end: DateTime<Utc>,
+    /// Mapping of unique_id -> event_time column name
+    pub event_time_mapping: Arc<BTreeMap<String, String>>,
+}
+
+impl MicrobatchRefContext {
+    /// Create a new MicrobatchRefContext.
+    pub fn new(
+        event_time_start: DateTime<Utc>,
+        event_time_end: DateTime<Utc>,
+        event_time_mapping: Arc<BTreeMap<String, String>>,
+    ) -> Self {
+        Self {
+            event_time_start,
+            event_time_end,
+            event_time_mapping,
+        }
+    }
+
+    /// Get the event_time column for a given unique_id, if configured.
+    pub fn get_event_time(&self, unique_id: &str) -> Option<&str> {
+        self.event_time_mapping.get(unique_id).map(|s| s.as_str())
+    }
+
+    /// Create a RunFilter for this batch context and a specific event_time column.
+    pub fn to_run_filter(&self) -> RunFilter {
+        RunFilter {
+            empty: false,
+            sample: Some(Sample {
+                start: Some(self.event_time_start),
+                end: Some(self.event_time_end),
+            }),
+        }
+    }
+}
+
+/// Function for resolving ref() calls in Jinja templates.
+///
+/// This function supports:
+/// - Basic ref resolution: `ref('model_name')`
+/// - Package-qualified refs: `ref('package_name', 'model_name')`
+/// - Versioned refs: `ref('model_name', version=1)`
+/// - Microbatch-aware filtering when `microbatch_context` is set
 #[derive(Debug)]
 pub struct RefFunction {
     node_resolver: Arc<dyn NodeResolverTracker>,
@@ -247,6 +303,8 @@ pub struct RefFunction {
     validation_config: Option<RefValidationConfig>,
     /// Only meaningful for node contexts; base context leaves this unset
     static_analysis_unsafe: Option<bool>,
+    /// Optional microbatch context for filtering refs during batch execution
+    microbatch_context: Option<MicrobatchRefContext>,
 }
 
 #[derive(Debug)]
@@ -270,6 +328,7 @@ impl RefFunction {
             runtime_config,
             validation_config: None,
             static_analysis_unsafe: None,
+            microbatch_context: None,
         }
     }
 
@@ -291,6 +350,43 @@ impl RefFunction {
                 skip_validation,
             }),
             static_analysis_unsafe: Some(static_analysis_unsafe),
+            microbatch_context: None,
+        }
+    }
+
+    /// Create a new RefFunction with microbatch context for filtering refs.
+    ///
+    /// This is used during microbatch execution to filter refs to models
+    /// with event_time configured to only include rows within the batch window.
+    pub fn new_with_microbatch_context(
+        node_resolver: Arc<dyn NodeResolverTracker>,
+        package_name: String,
+        runtime_config: Arc<DbtRuntimeConfig>,
+        allowed_dependencies: Arc<BTreeSet<String>>,
+        skip_validation: bool,
+        static_analysis_unsafe: bool,
+        microbatch_context: MicrobatchRefContext,
+    ) -> Self {
+        Self {
+            node_resolver,
+            package_name,
+            runtime_config,
+            validation_config: Some(RefValidationConfig {
+                allowed_dependencies,
+                skip_validation,
+            }),
+            static_analysis_unsafe: Some(static_analysis_unsafe),
+            microbatch_context: Some(microbatch_context),
+        }
+    }
+
+    /// Set the microbatch context on this RefFunction.
+    ///
+    /// Returns a new RefFunction with the microbatch context set.
+    pub fn with_microbatch_context(self, microbatch_context: MicrobatchRefContext) -> Self {
+        Self {
+            microbatch_context: Some(microbatch_context),
+            ..self
         }
     }
 
@@ -361,7 +457,7 @@ impl RefFunction {
                 MinijinjaErrorKind::InvalidOperation,
                 format!(
                     "dbt was unable to infer all dependencies for the model \"{model_name}\". This typically happens when ref() is placed within a conditional block.
-To fix this, add the following hint to the top of the model \"{model_name}\": 
+To fix this, add the following hint to the top of the model \"{model_name}\":
 -- depends_on: {ref_string}"
                 ),
             ))
@@ -395,6 +491,27 @@ impl Object for RefFunction {
                     (true, Some(deferred)) => deferred,
                     _ => relation,
                 };
+
+                // Apply microbatch filtering if we have a microbatch context and
+                // the referenced model has event_time configured
+                if let Some(ref microbatch_ctx) = self.microbatch_context {
+                    if let Some(event_time_col) = microbatch_ctx.get_event_time(&unique_id) {
+                        // Extract the RelationObject and apply the filter
+                        if let Some(relation_obj) = resolved_relation
+                            .as_object()
+                            .and_then(|obj| obj.downcast_ref::<RelationObject>())
+                        {
+                            // TODO(chasewalden): What happens if there is already a run filter due to `--sample`?
+                            //  What if the existing run filter's event_time_col doesn't agree with the one we pass?
+                            let filtered = relation_obj.with_filter(
+                                microbatch_ctx.to_run_filter(),
+                                Some(event_time_col.to_string()),
+                            );
+                            return Ok(filtered.into_value());
+                        }
+                    }
+                }
+
                 Ok(resolved_relation)
             }
             Err(_) => Err(MinijinjaError::new(
@@ -453,17 +570,39 @@ impl Object for RefFunction {
     }
 }
 
+/// Function for resolving source() calls in Jinja templates.
 #[derive(Debug)]
 pub struct SourceFunction {
     node_resolver: Arc<dyn NodeResolverTracker>,
     package_name: String,
+    microbatch_context: Option<MicrobatchRefContext>,
 }
 
 impl SourceFunction {
+    /// Create a new Source with microbatch context for filtering sources.
+    ///
+    /// This is used during microbatch execution to filter sources to models
+    /// with event_time configured to only include rows within the batch window.
+    pub fn new_with_microbatch_context(
+        node_resolver: Arc<dyn NodeResolverTracker>,
+        package_name: String,
+        microbatch_context: MicrobatchRefContext,
+    ) -> Self {
+        Self {
+            node_resolver,
+            package_name,
+            microbatch_context: Some(microbatch_context),
+        }
+    }
+}
+
+impl SourceFunction {
+    /// Construct a new `SourceFunction` from a `NodeResolver` and package name.
     pub fn new(node_resolver: Arc<dyn NodeResolverTracker>, package_name: String) -> Self {
         Self {
             node_resolver,
             package_name,
+            microbatch_context: None,
         }
     }
 }
@@ -495,7 +634,27 @@ impl Object for SourceFunction {
             .node_resolver
             .lookup_source(&self.package_name, &source_name, &table_name)
         {
-            Ok((_, relation, _)) => Ok(relation),
+            Ok((unique_id, relation, _)) => {
+                // Apply microbatch filtering if we have a microbatch context and
+                // the referenced source has event_time configured
+                if let Some(ref microbatch_ctx) = self.microbatch_context {
+                    if let Some(event_time_col) = microbatch_ctx.get_event_time(&unique_id) {
+                        // Extract the RelationObject and apply the filter
+                        if let Some(relation_obj) = relation
+                            .as_object()
+                            .and_then(|obj| obj.downcast_ref::<RelationObject>())
+                        {
+                            let filtered = relation_obj.with_filter(
+                                microbatch_ctx.to_run_filter(),
+                                Some(event_time_col.to_string()),
+                            );
+                            return Ok(filtered.into_value());
+                        }
+                    }
+                }
+
+                Ok(relation)
+            }
             Err(_) => Err(MinijinjaError::new(
                 MinijinjaErrorKind::NonKey,
                 format!(
@@ -611,7 +770,7 @@ impl FunctionFunction {
                 MinijinjaErrorKind::InvalidOperation,
                 format!(
                     "dbt was unable to infer all dependencies for the function \"{function_name}\". This typically happens when function() is placed within a conditional block.
-To fix this, add the following hint to the top of the model: 
+To fix this, add the following hint to the top of the model:
 -- depends_on: {function_string}"
                 ),
             ))

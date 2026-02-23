@@ -3,9 +3,7 @@ use dbt_common::{FsError, FsResult};
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::filter::RunFilter;
 use dbt_schemas::schemas::common::{DbtQuoting, ResolvedQuoting};
-use dbt_schemas::schemas::relations::base::{
-    BaseRelation, Policy, RelationPath, TableFormat, render_with_run_filter_as_str,
-};
+use dbt_schemas::schemas::relations::base::{BaseRelation, Policy, RelationPath, TableFormat};
 use dbt_schemas::schemas::serde::minijinja_value_to_typed_struct;
 use dbt_schemas::schemas::{InternalDbtNodeAttributes, InternalDbtNodeWrapper};
 use minijinja::arg_utils::ArgsIter;
@@ -59,6 +57,27 @@ impl RelationObject {
 
     pub fn inner(&self) -> Arc<dyn BaseRelation> {
         self.relation.clone()
+    }
+
+    /// Create a new RelationObject with a run filter applied.
+    ///
+    /// This is used for microbatch execution to filter refs by event_time.
+    pub fn with_filter(&self, run_filter: RunFilter, event_time: Option<String>) -> Self {
+        Self {
+            relation: self.relation.clone(),
+            run_filter: Some(run_filter),
+            event_time,
+        }
+    }
+
+    /// Check if this relation has a filter applied.
+    pub fn has_filter(&self) -> bool {
+        self.run_filter.is_some()
+    }
+
+    /// Get the event_time column name if configured.
+    pub fn event_time(&self) -> Option<&str> {
+        self.event_time.as_deref()
     }
 }
 
@@ -179,18 +198,14 @@ impl Object for RelationObject {
     where
         Self: Sized + 'static,
     {
-        if let Some(run_filter) = &self.run_filter
-            && run_filter.enabled()
-        {
-            let rendered = self.render_self_as_str();
-            return write!(
-                f,
-                "{}",
-                render_with_run_filter_as_str(rendered, run_filter, &self.event_time)
-            );
-        }
+        let rendered = match self.run_filter {
+            Some(ref run_filter) if run_filter.enabled() => self
+                .render_with_run_filter(run_filter, &self.event_time)
+                .expect("could not render self with run rilter"),
+            _ => self.render_self().expect("could not render self"),
+        };
 
-        write!(f, "{}", self.render_self().expect("could not render self"))
+        write!(f, "{}", rendered)
     }
 }
 

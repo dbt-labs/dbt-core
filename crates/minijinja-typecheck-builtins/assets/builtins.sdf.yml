@@ -805,7 +805,9 @@ alias:
   id: model.batch
   type: >-
     struct{
-      id: string
+      id: string,
+      event_time_start: optional[string],
+      event_time_end: optional[string]
     }
 ---
 alias:

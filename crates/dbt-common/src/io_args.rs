@@ -432,6 +432,10 @@ pub struct EvalArgs {
     pub skip_checkpoints: bool,
     /// Skip installation of private dependencies (useful for build conformance testing)
     pub skip_private_deps: bool,
+    /// Override end datetime when generating microbatches
+    pub event_time_end: Option<String>,
+    /// Override start datetime when generating microbatches
+    pub event_time_start: Option<String>,
     /// How to load internal (embedded) dbt packages
     pub internal_package_mode: InternalPackageMode,
 }

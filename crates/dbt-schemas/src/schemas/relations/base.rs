@@ -502,17 +502,80 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
         Ok(Value::from(self.render_self_as_str()))
     }
 
+    /// Render this relation with a run filter.
+    fn render_with_run_filter_as_str(
+        &self,
+        run_filter: &RunFilter,
+        event_time: &Option<String>,
+    ) -> String {
+        let rendered = self.render_self_as_str();
+
+        let rendered = if run_filter.empty {
+            format!("(select * from {rendered} limit 0)")
+        } else {
+            rendered
+        };
+
+        // no event_time? no filter
+        let Some(event_time) = event_time.as_deref() else {
+            return rendered;
+        };
+
+        // get start/end times
+        let (start, end) = run_filter.sample_times();
+
+        // convert to ISO format
+        let start = start.map(|t| PyDateTime::new_naive(t.naive_utc()).isoformat());
+        let end = end.map(|t| PyDateTime::new_naive(t.naive_utc()).isoformat());
+
+        // render the filter conditions
+        let (start, end) = match self.adapter_type() {
+            // See: https://github.com/dbt-labs/dbt-adapters/blob/221923bf60efc6a099681a82be89e86bef587f55/dbt-snowflake/src/dbt/adapters/snowflake/relation.py#L201
+            AdapterType::Snowflake => (
+                start.map(|start| format!("{event_time} >= to_timestamp_tz('{start}')")),
+                end.map(|end| format!("{event_time} < to_timestamp_tz('{end}')")),
+            ),
+
+            // See: https://github.com/dbt-labs/dbt-adapters/blob/221923bf60efc6a099681a82be89e86bef587f55/dbt-bigquery/src/dbt/adapters/bigquery/relation.py#L124
+            AdapterType::Bigquery => (
+                start.map(|start| format!("cast({event_time} as timestamp) >= '{start}'")),
+                end.map(|end| format!("cast({event_time} as timestamp) < '{end}'")),
+            ),
+
+            AdapterType::Postgres
+            | AdapterType::Databricks
+            | AdapterType::Redshift
+            | AdapterType::Salesforce
+            | AdapterType::Spark
+            | AdapterType::DuckDB
+            | AdapterType::Sidecar => (
+                start.map(|start| format!("{event_time} >= '{start}'")),
+                end.map(|end| format!("{event_time} < '{end}'")),
+            ),
+        };
+
+        // create the filter expression
+        let filter = match (start, end) {
+            (None, None) => return rendered,
+            (Some(start), Some(end)) => format!("{start} and {end}"),
+            (Some(start), None) => start,
+            (None, Some(end)) => end,
+        };
+
+        // FIXME: for Postgres, we need to support _render_subquery_alias for the returned result
+        // reference: https://github.com/dbt-labs/dbt-adapters/blob/d2f725651c05be0de07f3152d5b4842feae8a18a/dbt-adapters/src/dbt/adapters/base/relation.py#L222
+        format!("(select * from {rendered} where {filter})")
+    }
+
     /// Render this relation with a run filter
     fn render_with_run_filter(
         &self,
         run_filter: &RunFilter,
         event_time: &Option<String>,
     ) -> Result<Value, MinijinjaError> {
-        Ok(Value::from(render_with_run_filter_as_str(
-            self.render_self_as_str(),
-            run_filter,
-            event_time,
-        )))
+        Ok(Value::from(
+            self.render_with_run_filter_as_str(run_filter, event_time),
+        ))
     }
 
     /// Relation without any identifier
@@ -788,65 +851,6 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
     fn materialized_view_config_changeset(&self, _args: &[Value]) -> Result<Value, MinijinjaError> {
         unimplemented!("Available only for BigQuery and Redshift")
     }
-}
-
-/// Render this relation with a run filter.
-///
-// FIXME: for Postgres, we need to support _render_subquery_alias for the returned result
-// reference: https://github.com/dbt-labs/dbt-adapters/blob/d2f725651c05be0de07f3152d5b4842feae8a18a/dbt-adapters/src/dbt/adapters/base/relation.py#L222
-pub fn render_with_run_filter_as_str(
-    rendered: String,
-    run_filter: &RunFilter,
-    event_time: &Option<String>,
-) -> String {
-    let rendered = if run_filter.empty {
-        format!("(select * from {rendered} limit 0)")
-    } else {
-        rendered
-    };
-
-    // TODO(harry): warn? error is not a good idea here since this is used by Object::render method
-    // the caller returns a fmt::Error that cannot carry extra error message, and suggested to be infallible
-    if let Some(ref sample) = run_filter.sample
-        && (sample.start.is_some() || sample.end.is_some())
-        && event_time.is_none()
-    {
-        return rendered;
-    }
-
-    let start = run_filter
-        .sample
-        .as_ref()
-        .and_then(|s| s.start.map(|s| PyDateTime::new_naive(s.naive_utc())));
-    let end = run_filter
-        .sample
-        .as_ref()
-        .and_then(|s| s.end.map(|s| PyDateTime::new_naive(s.naive_utc())));
-
-    let filter = match (end, start) {
-        (Some(end), Some(start)) => {
-            format!(
-                "{} >= '{}' and {} < '{}'",
-                event_time.as_ref().unwrap(),
-                start.isoformat(),
-                event_time.as_ref().unwrap(),
-                end.isoformat()
-            )
-        }
-        (Some(end), None) => {
-            format!("{} < '{}'", event_time.as_ref().unwrap(), end.isoformat())
-        }
-        (None, Some(start)) => {
-            format!(
-                "{} >= '{}'",
-                event_time.as_ref().unwrap(),
-                start.isoformat()
-            )
-        }
-        (None, None) => return rendered,
-    };
-
-    format!("(select * from {rendered} where {filter})")
 }
 
 #[cfg(test)]
@@ -1155,32 +1159,52 @@ mod tests {
 
     #[test]
     fn test_render_with_run_filter_empty() {
+        let relation = TestRelation::new(
+            AdapterType::Postgres,
+            "my_db".to_string(),
+            "my_schema".to_string(),
+            "my_table".to_string(),
+            Policy::disabled(),
+        );
         let run_filter = RunFilter {
             empty: true,
             sample: None,
         };
-        let rendered = "my_table".to_string();
         let event_time = None;
 
-        let result = render_with_run_filter_as_str(rendered, &run_filter, &event_time);
-        assert_eq!(result, "(select * from my_table limit 0)");
+        let result = relation.render_with_run_filter_as_str(&run_filter, &event_time);
+
+        assert_eq!(result, "(select * from my_db.my_schema.my_table limit 0)");
     }
 
     #[test]
     fn test_render_with_run_filter_no_sample() {
+        let relation = TestRelation::new(
+            AdapterType::Postgres,
+            "my_db".to_string(),
+            "my_schema".to_string(),
+            "my_table".to_string(),
+            Policy::disabled(),
+        );
         let run_filter = RunFilter {
             empty: false,
             sample: None,
         };
-        let rendered = "my_table".to_string();
         let event_time = Some("created_at".to_string());
 
-        let result = render_with_run_filter_as_str(rendered, &run_filter, &event_time);
-        assert_eq!(result, "my_table");
+        let result = relation.render_with_run_filter_as_str(&run_filter, &event_time);
+        assert_eq!(result, "my_db.my_schema.my_table");
     }
 
     #[test]
     fn test_render_with_run_filter_both_start_and_end() {
+        let relation = TestRelation::new(
+            AdapterType::Postgres,
+            "my_db".to_string(),
+            "my_schema".to_string(),
+            "my_table".to_string(),
+            Policy::disabled(),
+        );
         let start = NaiveDate::from_ymd_opt(2024, 7, 1)
             .unwrap()
             .and_hms_opt(0, 0, 0)
@@ -1199,18 +1223,24 @@ mod tests {
             empty: false,
             sample: Some(sample),
         };
-        let rendered = "my_table".to_string();
         let event_time = Some("created_at".to_string());
 
-        let result = render_with_run_filter_as_str(rendered, &run_filter, &event_time);
+        let result = relation.render_with_run_filter_as_str(&run_filter, &event_time);
         assert_eq!(
             result,
-            "(select * from my_table where created_at >= '2024-07-01T00:00:00' and created_at < '2024-07-08T18:00:00')"
+            "(select * from my_db.my_schema.my_table where created_at >= '2024-07-01T00:00:00' and created_at < '2024-07-08T18:00:00')"
         );
     }
 
     #[test]
     fn test_render_with_run_filter_start_only() {
+        let relation = TestRelation::new(
+            AdapterType::Postgres,
+            "my_db".to_string(),
+            "my_schema".to_string(),
+            "my_table".to_string(),
+            Policy::disabled(),
+        );
         let start = NaiveDate::from_ymd_opt(2024, 7, 1)
             .unwrap()
             .and_hms_opt(0, 0, 0)
@@ -1225,18 +1255,24 @@ mod tests {
             empty: false,
             sample: Some(sample),
         };
-        let rendered = "my_table".to_string();
         let event_time = Some("created_at".to_string());
 
-        let result = render_with_run_filter_as_str(rendered, &run_filter, &event_time);
+        let result = relation.render_with_run_filter_as_str(&run_filter, &event_time);
         assert_eq!(
             result,
-            "(select * from my_table where created_at >= '2024-07-01T00:00:00')"
+            "(select * from my_db.my_schema.my_table where created_at >= '2024-07-01T00:00:00')"
         );
     }
 
     #[test]
     fn test_render_with_run_filter_end_only() {
+        let relation = TestRelation::new(
+            AdapterType::Postgres,
+            "my_db".to_string(),
+            "my_schema".to_string(),
+            "my_table".to_string(),
+            Policy::disabled(),
+        );
         let end = NaiveDate::from_ymd_opt(2024, 7, 8)
             .unwrap()
             .and_hms_opt(18, 0, 0)
@@ -1251,18 +1287,24 @@ mod tests {
             empty: false,
             sample: Some(sample),
         };
-        let rendered = "my_table".to_string();
         let event_time = Some("created_at".to_string());
 
-        let result = render_with_run_filter_as_str(rendered, &run_filter, &event_time);
+        let result = relation.render_with_run_filter_as_str(&run_filter, &event_time);
         assert_eq!(
             result,
-            "(select * from my_table where created_at < '2024-07-08T18:00:00')"
+            "(select * from my_db.my_schema.my_table where created_at < '2024-07-08T18:00:00')"
         );
     }
 
     #[test]
     fn test_render_with_run_filter_sample_none_values() {
+        let relation = TestRelation::new(
+            AdapterType::Postgres,
+            "my_db".to_string(),
+            "my_schema".to_string(),
+            "my_table".to_string(),
+            Policy::disabled(),
+        );
         let sample = Sample {
             start: None,
             end: None,
@@ -1272,15 +1314,21 @@ mod tests {
             empty: false,
             sample: Some(sample),
         };
-        let rendered = "my_table".to_string();
         let event_time = Some("created_at".to_string());
 
-        let result = render_with_run_filter_as_str(rendered, &run_filter, &event_time);
-        assert_eq!(result, "my_table");
+        let result = relation.render_with_run_filter_as_str(&run_filter, &event_time);
+        assert_eq!(result, "my_db.my_schema.my_table");
     }
 
     #[test]
     fn test_render_with_run_filter_no_event_time_error() {
+        let relation = TestRelation::new(
+            AdapterType::Postgres,
+            "my_db".to_string(),
+            "my_schema".to_string(),
+            "my_table".to_string(),
+            Policy::disabled(),
+        );
         let start = NaiveDate::from_ymd_opt(2024, 7, 1)
             .unwrap()
             .and_hms_opt(0, 0, 0)
@@ -1295,15 +1343,21 @@ mod tests {
             empty: false,
             sample: Some(sample),
         };
-        let rendered = "my_table".to_string();
         let event_time = None;
 
-        let result = render_with_run_filter_as_str(rendered, &run_filter, &event_time);
-        assert_eq!(result, "my_table");
+        let result = relation.render_with_run_filter_as_str(&run_filter, &event_time);
+        assert_eq!(result, "my_db.my_schema.my_table");
     }
 
     #[test]
     fn test_render_with_run_filter_empty_and_sample() {
+        let relation = TestRelation::new(
+            AdapterType::Postgres,
+            "my_db".to_string(),
+            "my_schema".to_string(),
+            "my_table".to_string(),
+            Policy::disabled(),
+        );
         let start = NaiveDate::from_ymd_opt(2024, 7, 1)
             .unwrap()
             .and_hms_opt(0, 0, 0)
@@ -1322,13 +1376,12 @@ mod tests {
             empty: true,
             sample: Some(sample),
         };
-        let rendered = "my_table".to_string();
         let event_time = Some("created_at".to_string());
 
-        let result = render_with_run_filter_as_str(rendered, &run_filter, &event_time);
+        let result = relation.render_with_run_filter_as_str(&run_filter, &event_time);
         assert_eq!(
             result,
-            "(select * from (select * from my_table limit 0) where created_at >= '2024-07-01T00:00:00' and created_at < '2024-07-08T18:00:00')"
+            "(select * from (select * from my_db.my_schema.my_table limit 0) where created_at >= '2024-07-01T00:00:00' and created_at < '2024-07-08T18:00:00')"
         );
     }
 }

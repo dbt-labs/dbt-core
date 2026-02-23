@@ -5,10 +5,12 @@ use std::{
     sync::Arc,
 };
 
+use chrono::TimeZone;
+use chrono_tz::{Europe::London, Tz};
 use dbt_adapter::{AdapterType, load_store::ResultStore};
-use dbt_common::dashmap::DashMap;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::serde_utils::convert_yml_to_dash_map;
+use dbt_common::{dashmap::DashMap, serde_utils::convert_yml_to_value_map};
 use dbt_schemas::{
     schemas::{InternalDbtNodeAttributes, telemetry::NodeType},
     state::{DbtRuntimeConfig, NodeResolverTracker, ResolverState},
@@ -21,6 +23,7 @@ use minijinja::{
     },
     machinery::Span,
 };
+use minijinja_contrib::modules::{py_datetime::datetime::PyDateTime, pytz::PytzTimezone};
 
 use crate::phases::MacroLookupContext;
 use crate::phases::compile_and_run_context::{FunctionFunction, SourceFunction};
@@ -250,9 +253,14 @@ where
         "builtins".to_owned(),
         MinijinjaValue::from_object(base_builtins),
     );
+    let mut model_map = convert_yml_to_value_map(model.serialize());
+    model_map.insert(
+        "batch".to_owned(),
+        MinijinjaValue::from_object(init_batch_context()),
+    );
     ctx.insert(
         "model".to_owned(),
-        MinijinjaValue::from_serialize(model.serialize()),
+        MinijinjaValue::from_serialize(MinijinjaValue::from_object(model_map)),
     );
 
     let result_store = ResultStore::default();
@@ -307,4 +315,27 @@ where
         MinijinjaValue::from("render"),
     );
     (ctx, config_map)
+}
+
+fn init_batch_context() -> BTreeMap<String, MinijinjaValue> {
+    // TODO: batch map should have valid event_time_start and event_time_end
+    // for now, we are just using now
+    let datetime = London.with_ymd_and_hms(2025, 1, 1, 1, 1, 1).unwrap();
+    let mut batch_map = BTreeMap::new();
+    batch_map.insert("id".to_string(), MinijinjaValue::from(""));
+    batch_map.insert(
+        "event_time_start".to_string(),
+        MinijinjaValue::from_object(PyDateTime::new_aware(
+            datetime,
+            Some(PytzTimezone::new(Tz::UTC)),
+        )),
+    );
+    batch_map.insert(
+        "event_time_end".to_string(),
+        MinijinjaValue::from_object(PyDateTime::new_aware(
+            datetime,
+            Some(PytzTimezone::new(Tz::UTC)),
+        )),
+    );
+    batch_map
 }

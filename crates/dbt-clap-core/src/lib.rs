@@ -1755,6 +1755,14 @@ pub struct CommonArgs {
     #[arg(global = true, long, default_value = "false", action = ArgAction::SetTrue, hide = true)]
     pub skip_private_deps: bool,
 
+    /// If specified, the end datetime dbt uses to filter microbatch model inputs (exclusive).
+    #[arg(global = true, long, env = "DBT_EVENT_TIME_END")]
+    pub event_time_end: Option<String>,
+
+    /// If specified, the start datetime dbt uses to filter microbatch model inputs (inclusive).
+    #[arg(global = true, long, env = "DBT_EVENT_TIME_START")]
+    pub event_time_start: Option<String>,
+
     /// How to load internal (embedded) dbt packages: embedded (default), forcewrite, readfromdisk
     #[arg(
         global = true,
@@ -1966,6 +1974,8 @@ impl CommonArgs {
             local_execution_backend: self.compute.into(),
             skip_checkpoints: false,
             skip_private_deps: self.skip_private_deps,
+            event_time_end: self.event_time_end.clone(),
+            event_time_start: self.event_time_start.clone(),
             internal_package_mode: self.internal_package_mode.clone(),
         }
     }

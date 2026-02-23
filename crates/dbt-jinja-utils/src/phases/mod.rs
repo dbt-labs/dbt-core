@@ -6,6 +6,6 @@ pub mod run;
 mod utils;
 
 pub use compile_and_run_context::{
-    MacroLookupContext, build_compile_and_run_base_context,
-    configure_compile_and_run_jinja_environment,
+    MacroLookupContext, MicrobatchRefContext, RefFunction, SourceFunction,
+    build_compile_and_run_base_context, configure_compile_and_run_jinja_environment,
 };

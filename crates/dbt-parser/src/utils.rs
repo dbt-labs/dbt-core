@@ -22,6 +22,7 @@ use minijinja::machinery::{Span, WhitespaceConfig};
 use minijinja::syntax::SyntaxConfig;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
+use tokio::fs;
 
 use std::path::Path;
 use std::path::PathBuf;
@@ -122,6 +123,15 @@ pub fn get_original_file_path(base_path: &Path, in_dir: &Path, sub_path: &Path) 
 pub fn get_original_file_contents(in_dir: &Path, original_file_path: &PathBuf) -> Option<String> {
     let absolute_path = in_dir.join(original_file_path);
     stdfs::read_to_string(&absolute_path).ok()
+}
+
+/// Returns the contents of a file given an original_file_path and in_dir, async
+pub async fn get_original_file_contents_async(
+    in_dir: &Path,
+    original_file_path: &PathBuf,
+) -> Option<String> {
+    let absolute_path = in_dir.join(original_file_path);
+    fs::read_to_string(&absolute_path).await.ok()
 }
 
 /// Prepares package dependencies for resolution and sets thread local dependencies.

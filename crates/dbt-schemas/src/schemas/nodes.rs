@@ -1041,13 +1041,7 @@ impl InternalDbtNode for DbtModel {
     }
 
     fn warn_on_microbatch(&self) -> FsResult<()> {
-        if let Some(DbtIncrementalStrategy::Microbatch) = self.__model_attr__.incremental_strategy {
-            return err!(
-                code => ErrorCode::UnsupportedFeature,
-                loc => self.path(),
-                "Microbatch incremental strategy is not supported. Use --exclude config.incremental_strategy:microbatch to exclude these models."
-            );
-        }
+        // Microbatch incremental strategy is now supported
         Ok(())
     }
 }

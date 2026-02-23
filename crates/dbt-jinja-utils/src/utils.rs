@@ -1,7 +1,7 @@
 use dbt_adapter::relation::create_relation;
 use dbt_adapter::{AdapterTyping, BridgeAdapter};
 use dbt_common::io_utils::StatusReporter;
-use dbt_common::{ErrorCode, FsError, fs_err, stdfs};
+use dbt_common::{ErrorCode, FsError, fs_err};
 use dbt_common::{FsResult, constants::DBT_CTE_PREFIX, error::MacroSpan, tokiofs};
 use dbt_frontend_common::{error::CodeLocation, span::Span};
 use dbt_schemas::schemas::common::ResolvedQuoting;
@@ -171,23 +171,9 @@ pub async fn inject_and_persist_ephemeral_models(
         }
         return Ok(sql);
     }
-    // Extract all model names from __dbt__cte__ references
-    let mut ephemeral_model_names = Vec::new();
-    let mut pos = 0;
-    let mut final_sql = sql;
 
-    while let Some(start) = final_sql[pos..].find(DBT_CTE_PREFIX) {
-        pos += start + DBT_CTE_PREFIX.len();
-        let name_end = final_sql[pos..]
-            .find(|c: char| !c.is_alphanumeric() && c != '_')
-            .unwrap_or_else(|| final_sql[pos..].len());
-        let model_name = &final_sql[pos..pos + name_end];
-        // Only add if not already seen
-        if !ephemeral_model_names.contains(&model_name.to_string()) {
-            ephemeral_model_names.push(model_name.to_string());
-        }
-        pos += name_end;
-    }
+    let mut final_sql = sql;
+    let ephemeral_model_names = extract_ephemeral_model_names(&final_sql);
 
     // Read ephemeral SQL from ephemeral dir and build cumulative CTEs
     let sep = "\x00";
@@ -196,7 +182,7 @@ pub async fn inject_and_persist_ephemeral_models(
 
     for model_name in ephemeral_model_names {
         let path = format!("{}/{}.sql", ephemeral_dir.to_str().unwrap(), model_name);
-        let ephemeral_sql = stdfs::read_to_string(&path)?;
+        let ephemeral_sql = tokiofs::read_to_string(&path).await?;
 
         // Split existing CTEs and add any new ones
         let existing_ctes: Vec<String> = ephemeral_sql.split(sep).map(|s| s.to_string()).collect();
@@ -234,6 +220,28 @@ pub async fn inject_and_persist_ephemeral_models(
         span.1.end_offset += added_offset as u32;
     }
     Ok(final_sql)
+}
+
+/// Extract all model names from `__dbt__cte__` references
+fn extract_ephemeral_model_names(sql: &str) -> Vec<&str> {
+    let mut seen = HashSet::new();
+
+    // Split on DBT_CTE_PREFIX
+    //  "WITH __dbt__cte__foo AS (SELECT 1), __dbt__cte__bar AS (SELECT 2), ..."
+    //
+    // becomes
+    //  "WITH __dbt__cte__"
+    //  "foo AS (SELECT 1), __dbt__cte__"
+    //  "bar AS (SELECT 2), ..."
+    sql.split(DBT_CTE_PREFIX)
+        .skip(1) // first Item is a excluded, remaining Items begin with the model name
+        .flat_map(|part| {
+            // extract by splitting again, taking first Item
+            part.split(|c: char| !c.is_alphanumeric() && c != '_')
+                .next()
+        })
+        .filter(|&name| seen.insert(name)) // Deduplicate the extracted names
+        .collect()
 }
 
 /// Renders SQL with Jinja macros

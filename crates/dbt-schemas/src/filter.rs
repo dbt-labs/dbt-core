@@ -32,6 +32,14 @@ impl RunFilter {
         self.empty || self.sample.is_some()
     }
 
+    // Convenience fn to access the sample start & end times
+    pub fn sample_times(&self) -> (Option<DateTime<Utc>>, Option<DateTime<Utc>>) {
+        let sample = self.sample.as_ref();
+        let sample_start = sample.and_then(|s| s.start);
+        let sample_end = sample.and_then(|s| s.end);
+        (sample_start, sample_end)
+    }
+
     /// Validate then collect the filter options into a [RunFilter] struct
     pub fn try_from(empty: bool, sample: Option<String>) -> FsResult<Self> {
         let parsed_sample = if let Some(sample_str) = sample {
