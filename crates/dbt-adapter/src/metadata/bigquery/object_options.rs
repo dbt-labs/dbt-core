@@ -10,6 +10,40 @@ use minijinja::value::mutable_vec::MutableVec;
 use crate::catalog_relation::CatalogRelation;
 use crate::{AdapterType, load_catalogs};
 
+/// Escape a string like Python's json.dumps() does with ensure_ascii=True.
+/// This converts non-ASCII characters (Unicode > 127) to \uXXXX escape sequences,
+/// matching dbt-core's sql_escape behavior.
+fn sql_escape_like_python_json(s: &str) -> String {
+    let mut result = String::with_capacity(s.len() * 2);
+    for c in s.chars() {
+        match c {
+            '\\' => result.push_str("\\\\"),
+            '"' => result.push_str("\\\""),
+            '\n' => result.push_str("\\n"),
+            '\r' => result.push_str("\\r"),
+            '\t' => result.push_str("\\t"),
+            c if c as u32 > 127 => {
+                // Non-ASCII: encode as \uXXXX
+                if c as u32 <= 0xFFFF {
+                    result.push_str(&format!("\\u{:04x}", c as u32));
+                } else {
+                    // Surrogate pair for characters outside BMP
+                    let code = c as u32 - 0x10000;
+                    let high = 0xD800 + (code >> 10);
+                    let low = 0xDC00 + (code & 0x3FF);
+                    result.push_str(&format!("\\u{:04x}\\u{:04x}", high, low));
+                }
+            }
+            c if c < ' ' => {
+                // Control characters
+                result.push_str(&format!("\\u{:04x}", c as u32));
+            }
+            _ => result.push(c),
+        }
+    }
+    result
+}
+
 /// Shared, pure helper to compute common table options for BigQuery without DB access.
 pub(crate) fn get_common_table_options_value(
     state: &minijinja::State,
@@ -32,7 +66,7 @@ pub(crate) fn get_common_table_options_value(
         && persist_docs.relation.unwrap_or(false)
         && let Some(description) = &common_attr.description
     {
-        let escaped_description = description.replace('\\', "\\\\").replace('"', "\\\"");
+        let escaped_description = sql_escape_like_python_json(description);
         result.insert(
             "description".to_string(),
             Value::from(format!("\"\"\"{escaped_description}\"\"\"")),
@@ -185,4 +219,101 @@ pub(crate) fn get_table_options_value(
     }
 
     Ok(opts)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sql_escape_ascii() {
+        // ASCII characters should pass through unchanged (except special chars)
+        assert_eq!(sql_escape_like_python_json("hello world"), "hello world");
+        assert_eq!(sql_escape_like_python_json("test123"), "test123");
+    }
+
+    #[test]
+    fn test_sql_escape_special_chars() {
+        // Special characters should be escaped
+        assert_eq!(
+            sql_escape_like_python_json("hello\\world"),
+            "hello\\\\world"
+        );
+        assert_eq!(
+            sql_escape_like_python_json("say \"hello\""),
+            "say \\\"hello\\\""
+        );
+        assert_eq!(sql_escape_like_python_json("line1\nline2"), "line1\\nline2");
+        assert_eq!(sql_escape_like_python_json("tab\there"), "tab\\there");
+        assert_eq!(
+            sql_escape_like_python_json("carriage\rreturn"),
+            "carriage\\rreturn"
+        );
+    }
+
+    #[test]
+    fn test_sql_escape_japanese() {
+        // Japanese characters should be converted to \uXXXX
+        assert_eq!(sql_escape_like_python_json("通販"), "\\u901a\\u8ca9");
+        assert_eq!(
+            sql_escape_like_python_json("通販する蔵"),
+            "\\u901a\\u8ca9\\u3059\\u308b\\u8535"
+        );
+    }
+
+    #[test]
+    fn test_sql_escape_french() {
+        // French accented characters should be escaped
+        assert_eq!(
+            sql_escape_like_python_json("propriétaires"),
+            "propri\\u00e9taires"
+        );
+        assert_eq!(sql_escape_like_python_json("café"), "caf\\u00e9");
+    }
+
+    #[test]
+    fn test_sql_escape_chinese() {
+        // Chinese characters should be converted to \uXXXX
+        assert_eq!(
+            sql_escape_like_python_json("明日以降"),
+            "\\u660e\\u65e5\\u4ee5\\u964d"
+        );
+    }
+
+    #[test]
+    fn test_sql_escape_mixed() {
+        // Mixed ASCII and non-ASCII
+        assert_eq!(
+            sql_escape_like_python_json("Hello 世界"),
+            "Hello \\u4e16\\u754c"
+        );
+        assert_eq!(
+            sql_escape_like_python_json("Test \"with\" 日本語"),
+            "Test \\\"with\\\" \\u65e5\\u672c\\u8a9e"
+        );
+    }
+
+    #[test]
+    fn test_sql_escape_emoji() {
+        // Emoji (outside BMP) should use surrogate pairs
+        // 😀 (U+1F600) should be encoded as surrogate pair
+        let result = sql_escape_like_python_json("😀");
+        // U+1F600 - 0x10000 = 0xF600
+        // high = 0xD800 + (0xF600 >> 10) = 0xD800 + 0x3D = 0xD83D
+        // low = 0xDC00 + (0xF600 & 0x3FF) = 0xDC00 + 0x200 = 0xDE00
+        assert_eq!(result, "\\ud83d\\ude00");
+    }
+
+    #[test]
+    fn test_sql_escape_control_chars() {
+        // Control characters should be escaped
+        assert_eq!(sql_escape_like_python_json("\x00"), "\\u0000");
+        assert_eq!(sql_escape_like_python_json("\x01"), "\\u0001");
+        assert_eq!(sql_escape_like_python_json("\x1f"), "\\u001f");
+    }
+
+    #[test]
+    fn test_sql_escape_empty() {
+        assert_eq!(sql_escape_like_python_json(""), "");
+    }
 }
