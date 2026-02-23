@@ -56,6 +56,7 @@ class Package(dbtClassMixin):
 @dataclass
 class LocalPackage(Package):
     local: str
+    install_mode: str = field(default="symlink")
     unrendered: Dict[str, Any] = field(default_factory=dict)
     name: Optional[str] = None
 

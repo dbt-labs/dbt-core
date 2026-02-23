@@ -391,3 +391,17 @@ class TestDependencyTestsConfig(BaseDependencyTest):
         # Check that project-test-config is NOT in active deprecations, since "tests" is only
         # in a dependent project.
         assert "project-test-config" not in deprecations.active_deprecations
+
+
+class TestLocalPackageInstallModeDeepcopy(BaseDependencyTest):
+    @pytest.fixture(scope="class")
+    def packages(self):
+        return {"packages": [{"local": "local_dependency", "install_mode": "deepcopy"}]}
+
+    def test_install_mode_deepcopy_installs_directory_not_symlink(self, project):
+        run_dbt(["deps"])
+
+        dest_path = Path(project.project_root) / "dbt_packages" / "local_dep"
+        assert dest_path.exists()
+        assert dest_path.is_dir()
+        assert not dest_path.is_symlink()

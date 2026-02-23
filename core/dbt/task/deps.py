@@ -271,7 +271,6 @@ class DepsTask(BaseTask):
         packages_installed[PACKAGE_LOCK_HASH_KEY] = _create_sha1_hash(
             self.project.packages.packages
         )
-
         with open(lock_filepath, "w") as lock_obj:
             yaml.dump(packages_installed, lock_obj, Dumper=dbtPackageDumper)
 
@@ -327,7 +326,6 @@ class DepsTask(BaseTask):
                 package_name = package.name
                 source_type = package.source_type()
                 version = package.get_version()
-
                 fire_event(DepsStartPackageInstall(package_name=package_name))
                 package.install(self.project, renderer)
 

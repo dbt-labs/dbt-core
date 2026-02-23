@@ -11,9 +11,10 @@ from dbt_common.events.functions import fire_event
 
 
 class LocalPackageMixin:
-    def __init__(self, local: str) -> None:
+    def __init__(self, local: str, install_mode: str = "symlink") -> None:
         super().__init__()
         self.local = local
+        self.install_mode = install_mode
 
     @property
     def name(self):
@@ -24,12 +25,13 @@ class LocalPackageMixin:
 
 
 class LocalPinnedPackage(LocalPackageMixin, PinnedPackage):
-    def __init__(self, local: str) -> None:
-        super().__init__(local)
+    def __init__(self, local: str, install_mode: str = "symlink") -> None:
+        super().__init__(local, install_mode)
 
     def to_dict(self) -> Dict[str, str]:
         return {
             "local": self.local,
+            "install_mode": self.install_mode,
         }
 
     def get_version(self):
@@ -59,21 +61,26 @@ class LocalPinnedPackage(LocalPackageMixin, PinnedPackage):
                 system.rmdir(dest_path)
             else:
                 system.remove_file(dest_path)
-        try:
-            fire_event(DepsCreatingLocalSymlink())
-            system.make_symlink(src_path, dest_path)
-        except OSError:
-            fire_event(DepsSymlinkNotAvailable())
+
+        if self.install_mode == "deepcopy":
             shutil.copytree(src_path, dest_path)
+        else:
+            try:
+                fire_event(DepsCreatingLocalSymlink())
+                system.make_symlink(src_path, dest_path)
+            except OSError:
+                fire_event(DepsSymlinkNotAvailable())
+                shutil.copytree(src_path, dest_path)
 
 
 class LocalUnpinnedPackage(LocalPackageMixin, UnpinnedPackage[LocalPinnedPackage]):
     @classmethod
     def from_contract(cls, contract: LocalPackage) -> "LocalUnpinnedPackage":
-        return cls(local=contract.local)
+        install_mode = getattr(contract, "install_mode", None) or "symlink"
+        return cls(local=contract.local, install_mode=install_mode)
 
     def incorporate(self, other: "LocalUnpinnedPackage") -> "LocalUnpinnedPackage":
-        return LocalUnpinnedPackage(local=self.local)
+        return LocalUnpinnedPackage(local=self.local, install_mode=self.install_mode)
 
     def resolved(self) -> LocalPinnedPackage:
-        return LocalPinnedPackage(local=self.local)
+        return LocalPinnedPackage(local=self.local, install_mode=self.install_mode)
