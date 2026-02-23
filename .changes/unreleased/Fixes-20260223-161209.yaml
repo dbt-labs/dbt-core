@@ -1,6 +1,0 @@
-kind: Fixes
-body: Fix dbt retry for microbatch models to use the original invocation time instead of the current time when recomputing batches
-time: 2026-02-23T16:12:09.350209+05:30
-custom:
-    Author: aahel
-    Issue: "11423"
