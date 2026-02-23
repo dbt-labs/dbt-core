@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix custom macros in per-version column `data_tests` failing with "is undefined"
+time: 2026-02-23T19:10:00.000000-00:00
+custom:
+    Author: mshelto3
+    Issue: "12526"

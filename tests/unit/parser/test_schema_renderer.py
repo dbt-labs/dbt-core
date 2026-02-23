@@ -44,6 +44,46 @@ class TestYamlRendering(unittest.TestCase):
         dct = renderer.render_data(dct)
         self.assertEqual(expected, dct)
 
+        # Verify data_tests in per-version columns are not rendered
+        dct = {
+            "name": "my_model",
+            "attribute": "{{ test_var }}",
+            "versions": [
+                {
+                    "v": 1,
+                    "columns": [
+                        {
+                            "name": "my_col",
+                            "data_tests": [
+                                "not_null",
+                                {"accepted_values": {"arguments": {"values": "{{ test_var }}"}}},
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+        expected = {
+            "name": "my_model",
+            "attribute": "1234",
+            "versions": [
+                {
+                    "v": 1,
+                    "columns": [
+                        {
+                            "name": "my_col",
+                            "data_tests": [
+                                "not_null",
+                                {"accepted_values": {"arguments": {"values": "{{ test_var }}"}}},
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+        dct = renderer.render_data(dct)
+        self.assertEqual(expected, dct)
+
     def test__sources(self):
 
         context = {
