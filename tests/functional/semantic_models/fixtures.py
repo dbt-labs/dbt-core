@@ -881,7 +881,7 @@ schema_yml_v2_metric_with_filter_dimension_jinja = """
         agg: count
         expr: id
         filter: |
-          {{ Dimension('id_entity__id_dim') }} > 0
+          {{ Dimension('id_entity__id_dim') }} > 0 and {{ TimeDimension('id_entity__id_dim', 'day') }} > '2020-01-01'
 """
 
 schema_yml_v2_cumulative_metric_missing_input_metric = """

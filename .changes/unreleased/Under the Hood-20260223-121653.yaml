@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Make test case for parsing metric filters slightly more robust.
+time: 2026-02-23T12:16:53.395517-08:00
+custom:
+    Author: theyostalservice
+    Issue: "12528"
