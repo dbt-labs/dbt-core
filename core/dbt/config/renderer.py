@@ -1,13 +1,17 @@
 import re
 from datetime import date
-from typing import Any, Callable, Dict, Optional, Tuple, Union
+from types import SimpleNamespace
+from typing import Any, Callable, Dict, Optional, Tuple, Union, cast
 
 from dbt.adapters.contracts.connection import HasCredentials
-from dbt.clients.jinja import get_rendered
+from dbt.adapters.factory import get_adapter_package_names
+from dbt.clients.jinja import MacroStack, get_rendered
 from dbt.constants import DEPENDENCIES_FILE_NAME, SECRET_PLACEHOLDER
 from dbt.context.base import BaseContext
+from dbt.context.macros import MacroNamespaceBuilder
 from dbt.context.secret import SecretContext
 from dbt.context.target import TargetContext
+from dbt.contracts.graph.manifest import Manifest
 from dbt.exceptions import DbtProjectError
 from dbt_common.clients.jinja import catch_jinja
 from dbt_common.constants import SECRET_ENV_PREFIX
@@ -156,7 +160,80 @@ class DbtProjectYamlRenderer(BaseRenderer):
         else:
             return package_renderer.render_data(packages)
 
-    def render_selectors(self, selectors: Dict[str, Any]):
+    def _render_selectors_with_project_macros(
+        self,
+        selectors: Dict[str, Any],
+        project: Optional[Dict[str, Any]],
+        project_root: Optional[str],
+    ) -> Optional[Dict[str, Any]]:
+        # Imported lazily to avoid creating a config<->parser import cycle.
+        from dbt.contracts.files import ParseFileType
+        from dbt.parser.macros import MacroParser
+        from dbt.parser.read_files import load_source_file
+        from dbt.parser.search import FileBlock
+
+        if not project or not project_root:
+            return None
+
+        project_name = project.get("name")
+        if not isinstance(project_name, str) or not project_name:
+            return None
+
+        macro_paths = project.get("macro-paths")
+        if not isinstance(macro_paths, list) or not macro_paths:
+            macro_paths = ["macros"]
+
+        manifest = Manifest()
+        parser_project: Any = SimpleNamespace(
+            project_name=project_name, project_root=project_root, macro_paths=macro_paths
+        )
+        parser = MacroParser(cast(Any, parser_project), manifest)
+        for path in parser.get_paths():
+            source_file = load_source_file(path, ParseFileType.Macro, project_name, {})
+            if source_file is None:
+                continue
+            parser.parse_file(FileBlock(source_file))
+
+        if not manifest.macros:
+            return None
+
+        internal_packages = []
+        if self.profile:
+            internal_packages = get_adapter_package_names(self.profile.credentials.type)
+
+        builder = MacroNamespaceBuilder(
+            project_name, project_name, MacroStack(), internal_packages, None
+        )
+        namespace = builder.build_namespace(manifest.get_macros_by_package(), self.context)
+
+        macro_context = dict(self.context)
+        macro_context.update(namespace)
+        macro_renderer = self.__class__(
+            profile=self.profile,
+            cli_vars=self.cli_vars,
+            require_vars=self.ctx_obj.require_vars,
+        )
+        macro_renderer.context = macro_context
+        macro_renderer.ctx_obj = self.ctx_obj
+        return macro_renderer.render_data(selectors)
+
+    def render_selectors(
+        self,
+        selectors: Dict[str, Any],
+        project: Optional[Dict[str, Any]] = None,
+        project_root: Optional[str] = None,
+    ):
+        try:
+            return self.render_data(selectors)
+        except CompilationError as exc:
+            # Keep existing behavior unless we're failing on undefined symbols,
+            # then retry with root project macros loaded into the selector context.
+            if "is undefined" not in exc.msg:
+                raise
+
+        rendered = self._render_selectors_with_project_macros(selectors, project, project_root)
+        if rendered is not None:
+            return rendered
         return self.render_data(selectors)
 
     def render_entry(self, value: Any, keypath: Keypath) -> Any:
