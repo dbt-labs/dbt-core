@@ -750,7 +750,7 @@ class TestSimpleSemanticModelWithFilterWithFilterDimensionJinja:
         metric = manifest.metrics["metric.test.simple_metric_with_filter_dimension_jinja"]
         assert (
             metric.filter.where_filters[0].where_sql_template
-            == "{{ Dimension('id_entity__id_dim') }} > 0"
+            == "{{ Dimension('id_entity__id_dim') }} > 0 and {{ TimeDimension('id_entity__id_dim', 'day') }} > '2020-01-01'"
         )
 
 
