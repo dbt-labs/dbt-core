@@ -123,7 +123,7 @@ def _get_allowed_config_key_aliases() -> List[str]:
 def _get_allowed_config_fields_for_project_property(schema, property_field_name) -> List[str]:
     property_defn = schema["properties"].get(property_field_name)
     property_defn_name = None
-    if "anyOf" in property_defn:
+    if property_defn and "anyOf" in property_defn:
         for any_of_item in property_defn["anyOf"]:
             if "$ref" in any_of_item:
                 property_defn_name = any_of_item["$ref"].split("/")[-1]
