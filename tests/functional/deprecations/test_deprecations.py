@@ -22,7 +22,6 @@ from dbt.events.types import (
     GenerateSchemaNameNullValueDeprecation,
     GenericJSONSchemaValidationDeprecation,
     MissingArgumentsPropertyInGenericTestDeprecation,
-    MissingPlusPrefixDeprecation,
     ModelParamUsageDeprecation,
     ModulesItertoolsUsageDeprecation,
     PackageRedirectDeprecation,
@@ -714,45 +713,6 @@ class TestEnvironmentVariableNamespaceDeprecation:
             "DBT_ENGINE_MY_CUSTOM_ENV_VAR_FOR_TESTING"
             == event_catcher.caught_events[0].data.env_var
         )
-
-
-class TestMissingPlusPrefixDeprecation:
-    @pytest.fixture(scope="class")
-    def project_config_update(self):
-        return {"seeds": {"path": {"enabled": True}}}
-
-    @mock.patch("dbt.jsonschemas.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
-    def test_missing_plus_prefix_deprecation(self, project):
-        event_catcher = EventCatcher(MissingPlusPrefixDeprecation)
-        run_dbt(["parse", "--no-partial-parse"], callbacks=[event_catcher.catch])
-        assert len(event_catcher.caught_events) == 1
-        assert "Missing '+' prefix on `enabled`" in event_catcher.caught_events[0].info.msg
-
-
-class TestMissingPlusPrefixDeprecationSubPath:
-    @pytest.fixture(scope="class")
-    def project_config_update(self):
-        return {"seeds": {"path": {"+enabled": True, "sub_path": {"enabled": True}}}}
-
-    @mock.patch("dbt.jsonschemas.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
-    def test_missing_plus_prefix_deprecation_sub_path(self, project):
-        event_catcher = EventCatcher(MissingPlusPrefixDeprecation)
-        run_dbt(["parse", "--no-partial-parse"], callbacks=[event_catcher.catch])
-        assert len(event_catcher.caught_events) == 1
-        assert "Missing '+' prefix on `enabled`" in event_catcher.caught_events[0].info.msg
-
-
-class TestMissingPlusPrefixDeprecationCustomConfig:
-    @pytest.fixture(scope="class")
-    def project_config_update(self):
-        return {"seeds": {"path": {"custom_config": True, "sub_path": {"+enabled": True}}}}
-
-    @mock.patch("dbt.jsonschemas.jsonschemas._JSONSCHEMA_SUPPORTED_ADAPTERS", {"postgres"})
-    def test_missing_plus_prefix_deprecation_sub_path(self, project):
-        event_catcher = EventCatcher(MissingPlusPrefixDeprecation)
-        run_dbt(["parse", "--no-partial-parse"], callbacks=[event_catcher.catch])
-        assert len(event_catcher.caught_events) == 1
-        assert "Missing '+' prefix on `custom_config`" in event_catcher.caught_events[0].info.msg
 
 
 class TestCustomConfigInDbtProjectYmlNoDeprecation:
