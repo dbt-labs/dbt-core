@@ -639,6 +639,7 @@ impl AdapterEngine for XdbcEngine {
 pub struct MockEngine {
     adapter_type: AdapterType,
     quoting: ResolvedQuoting,
+    config: Arc<AdapterConfig>,
     type_ops: Arc<dyn TypeOps>,
     stmt_splitter: Arc<dyn StmtSplitter>,
     /// Relation cache - caches warehouse relation metadata
@@ -655,10 +656,29 @@ impl MockEngine {
         stmt_splitter: Arc<dyn StmtSplitter>,
         relation_cache: Arc<RelationCache>,
     ) -> Self {
+        Self::new_with_config(
+            adapter_type,
+            AdapterConfig::default(),
+            quoting,
+            type_ops,
+            stmt_splitter,
+            relation_cache,
+        )
+    }
+
+    pub fn new_with_config(
+        adapter_type: AdapterType,
+        config: AdapterConfig,
+        quoting: ResolvedQuoting,
+        type_ops: Box<dyn TypeOps>,
+        stmt_splitter: Arc<dyn StmtSplitter>,
+        relation_cache: Arc<RelationCache>,
+    ) -> Self {
         let behavior = make_behavior(adapter_type, &BTreeMap::new());
         Self {
             adapter_type,
             quoting,
+            config: Arc::new(config),
             type_ops: Arc::from(type_ops),
             stmt_splitter,
             relation_cache,
@@ -692,12 +712,12 @@ impl AdapterEngine for MockEngine {
         &EMPTY_CONFIG
     }
 
-    fn config(&self, _key: &str) -> Option<Cow<'_, str>> {
-        None
+    fn config(&self, key: &str) -> Option<Cow<'_, str>> {
+        self.config.get_string(key)
     }
 
     fn get_config(&self) -> &AdapterConfig {
-        unreachable!("Mock engine does not support get_config")
+        self.config.as_ref()
     }
 
     fn query_cache(&self) -> Option<&Arc<dyn QueryCache>> {

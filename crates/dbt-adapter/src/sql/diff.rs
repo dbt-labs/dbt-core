@@ -75,6 +75,15 @@ pub fn compare_sql(actual: &str, expected: &str) -> AdapterResult<()> {
         expected_normalized
     };
 
+    // Ignore a single trailing semicolon (statement terminator). Some recorders include it
+    // while others omit it for otherwise identical single statements.
+    let actual_normalized = actual_normalized
+        .strip_suffix(';')
+        .unwrap_or(&actual_normalized);
+    let expected_normalized = expected_normalized
+        .strip_suffix(';')
+        .unwrap_or(&expected_normalized);
+
     // Direct comparison first
     if actual_normalized == expected_normalized {
         return Ok(());
@@ -1720,6 +1729,33 @@ mod tests {
                 "Should ignore all whitespace variations: '{sql1}' vs '{sql2}'"
             );
         }
+    }
+
+    #[test]
+    fn test_trailing_semicolon_is_ignorable_for_single_statement() {
+        // Semicolons are statement terminators and should be treated as ignorable for replay
+        // SQL matching when the statements are otherwise identical.
+        let actual = r#"
+            SELECT column_name, tag_name, tag_value
+              FROM `system`.`information_schema`.`column_tags`
+             WHERE catalog_name = 'dbt'
+               AND schema_name = 'dbt_staging'
+               AND table_name = 'stg_shopify_order_stage'
+        "#;
+
+        let expected = r#"
+            SELECT column_name, tag_name, tag_value
+              FROM `system`.`information_schema`.`column_tags`
+             WHERE catalog_name = 'dbt'
+               AND schema_name = 'dbt_staging'
+               AND table_name = 'stg_shopify_order_stage';
+        "#;
+
+        let result = compare_sql(actual, expected);
+        assert!(
+            result.is_ok(),
+            "Trailing semicolon should not cause SQL mismatch for single-statement queries"
+        );
     }
 
     #[test]

@@ -152,6 +152,10 @@ impl DatabricksMetadataAdapter {
         Self { adapter }
     }
 
+    pub fn new_from_adapter(adapter: ConcreteAdapter) -> Self {
+        Self { adapter }
+    }
+
     /// Get the Databricks Runtime version, caching the result for subsequent calls.
     ///
     /// To bypass the cache, use [`get_dbr_version()`](Self::get_dbr_version) directly.
@@ -221,14 +225,24 @@ impl DatabricksMetadataAdapter {
         let rendered_relation = base_relation.render_self_as_str();
 
         let mut metadata = IndexMap::new();
-        metadata.insert(
-            DatabricksRelationMetadataKey::DescribeExtended,
-            self.describe_extended(&database, &schema, &identifier, state, &mut *conn)?,
-        );
-        metadata.insert(
-            DatabricksRelationMetadataKey::ShowTblProperties,
-            self.show_tblproperties(&rendered_relation, state, &mut *conn)?,
-        );
+        // IMPORTANT (Mantle replay): query ordering is observable in replay.
+        //
+        // dbt-databricks (Python) emits relation introspection queries in a specific sequence.
+        // Mantle recordings capture that sequence, and replay matching is order-sensitive.
+        //
+        // In particular, for `RelationType::Table`, dbt-databricks records the information_schema
+        // queries (tags/constraints/masks) before `SHOW TBLPROPERTIES` and `DESCRIBE EXTENDED`.
+        // We preserve that ordering here by deferring those two calls for tables.
+        if relation_type != RelationType::Table {
+            metadata.insert(
+                DatabricksRelationMetadataKey::DescribeExtended,
+                self.describe_extended(&database, &schema, &identifier, state, &mut *conn)?,
+            );
+            metadata.insert(
+                DatabricksRelationMetadataKey::ShowTblProperties,
+                self.show_tblproperties(&rendered_relation, state, &mut *conn)?,
+            );
+        }
 
         // Add materialization-specific metadata
         // https://github.com/databricks/dbt-databricks/blob/9e2566fdb56318cb7a59a4492f96c7aaa7af73b0/dbt/adapters/databricks/impl.py#L914-L1021
@@ -316,6 +330,16 @@ impl DatabricksMetadataAdapter {
                     DatabricksRelationMetadataKey::ColumnMasks,
                     self.fetch_column_masks(&database, &schema, &identifier, state, &mut *conn)?,
                 );
+
+                // Match dbt-databricks/Mantle ordering: SHOW TBLPROPERTIES then DESCRIBE EXTENDED.
+                metadata.insert(
+                    DatabricksRelationMetadataKey::ShowTblProperties,
+                    self.show_tblproperties(&rendered_relation, state, &mut *conn)?,
+                );
+                metadata.insert(
+                    DatabricksRelationMetadataKey::DescribeExtended,
+                    self.describe_extended(&database, &schema, &identifier, state, &mut *conn)?,
+                );
             }
             RelationType::CTE
             | RelationType::Ephemeral
@@ -370,7 +394,8 @@ impl DatabricksMetadataAdapter {
         state: &State,
         conn: &mut dyn Connection,
     ) -> AdapterResult<AgateTable> {
-        let sql = format!("DESCRIBE EXTENDED `{database}`.`{schema}`.`{identifier}`;");
+        // match Mantle casing
+        let sql = format!("describe extended `{database}`.`{schema}`.`{identifier}`;");
         let (_, result) =
             self.execute_sql_with_context(&sql, state, "Describe table extended", conn)?;
         Ok(result)
