@@ -3,4 +3,4 @@ body: Fix v2 metric parsing using model name instead of custom semantic_model.na
 time: 2026-02-24T11:55:46.515181-08:00
 custom:
     Author: theyostalservice
-    Issue: .
+    Issue: "12532"
