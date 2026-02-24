@@ -3508,6 +3508,10 @@ impl ConcreteAdapter {
         }
     }
 
+    fn is_explicit_mock(&self) -> bool {
+        matches!(&self.inner, ConcreteAdapterInner::Mock(_))
+    }
+
     fn introspect_enabled(&self) -> bool {
         match self.mock_state() {
             Some(mock) => mock
@@ -3539,8 +3543,8 @@ impl AdapterTyping for ConcreteAdapter {
                 if engine.is_sidecar() {
                     return None;
                 }
-                // Mock adapter has no metadata adapter.
-                if engine.is_mock() {
+                // The explicit mock adapter variant has no metadata adapter.
+                if self.is_explicit_mock() {
                     return None;
                 }
                 let engine = Arc::clone(engine);
