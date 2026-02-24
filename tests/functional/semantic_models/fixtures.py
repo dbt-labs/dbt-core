@@ -884,6 +884,53 @@ schema_yml_v2_metric_with_filter_dimension_jinja = """
           {{ Dimension('id_entity__id_dim') }} > 0
 """
 
+schema_yml_v2_metric_with_input_metrics_filter_dimension_jinja = """
+    metrics:
+      - name: simple_metric
+        description: This is our first simple metric.
+        label: Simple Metric
+        type: simple
+        agg: count
+        expr: id
+      - name: derived_metric_with_jinja_filter
+        description: This is a derived metric with a jinja filter on an input metric.
+        label: Derived Metric With Jinja Filter
+        type: derived
+        expr: simple_metric - offset_metric
+        input_metrics:
+          - name: simple_metric
+          - name: simple_metric
+            alias: offset_metric
+            filter: |
+              {{ Dimension('id_entity__id_dim') }} > 0
+            offset_window: 1 week
+"""
+
+schema_yml_v2_metric_with_numerator_filter_dimension_jinja = """
+    metrics:
+      - name: simple_metric
+        description: This is our first simple metric.
+        label: Simple Metric
+        type: simple
+        agg: count
+        expr: id
+      - name: simple_metric_2
+        description: This is our second simple metric.
+        label: Simple Metric 2
+        type: simple
+        agg: count
+        expr: second_col
+      - name: ratio_metric_with_jinja_filter
+        description: This is a ratio metric with a jinja filter on the numerator.
+        label: Ratio Metric With Jinja Filter
+        type: ratio
+        numerator:
+          name: simple_metric
+          filter: |
+            {{ Dimension('id_entity__id_dim') }} > 0
+        denominator: simple_metric_2
+"""
+
 schema_yml_v2_cumulative_metric_missing_input_metric = """
     metrics:
       - name: cumulative_metric
