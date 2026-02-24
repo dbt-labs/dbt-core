@@ -1,0 +1,6 @@
+kind: Features
+body: Added support for custom project macros in `\selectors.yml` definitions by rendering selectors with root-project macro context when needed.
+time: 2026-02-23T23:16:34.288843-08:00
+custom:
+    Author: adaviscourt
+    Issue: "12530"
