@@ -984,6 +984,55 @@ schema_yml_v2_standalone_metrics_with_doc_jinja = schema_yml_v2_standalone_metri
       {{ Dimension('id_entity__id_dim') }} > 0""",
 )
 
+base_schema_yml_v2_with_custom_sm_name = """models:
+  - name: fct_revenue
+    description: This is the model fct_revenue. It should be able to use doc blocks
+    semantic_model:
+      name: custom_semantic_model
+    agg_time_dimension: second_dim
+    columns:
+      - name: id
+        description: This is the id column dim.
+        config:
+          meta:
+          component_level: "original_meta"
+        dimension:
+          name: id_dim
+          label: "ID Dimension"
+          type: categorical
+          is_partition: true
+          config:
+            meta:
+              component_level: "dimension_override"
+        entity:
+          name: id_entity
+          description: This is the id entity, and it is the primary entity.
+          label: ID Entity
+          type: primary
+          config:
+            meta:
+              component_level: "entity_override"
+      - name: second_col
+        description: This is the second column.
+        granularity: day
+        dimension:
+          name: second_dim
+          description: This is the second column (dim).
+          label: Second Dimension
+          type: time
+      - name: foreign_id_col
+        description: This is a foreign id column.
+        entity: foreign
+      - name: created_at
+        description: This is the time the entry was created.
+        granularity: day
+        dimension:
+          name: ds
+          description: the ds column
+          label: DS Column
+          type: time
+"""
+
 derived_semantics_yml = """
     derived_semantics:
       entities:
