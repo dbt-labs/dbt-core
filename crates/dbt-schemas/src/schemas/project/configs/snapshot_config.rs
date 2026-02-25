@@ -185,6 +185,12 @@ pub struct ProjectSnapshotConfig {
         deserialize_with = "u64_or_string_u64"
     )]
     pub hours_to_expiration: Option<u64>,
+    #[serde(
+        default,
+        rename = "+job_execution_timeout_seconds",
+        deserialize_with = "u64_or_string_u64"
+    )]
+    pub job_execution_timeout_seconds: Option<u64>,
     #[serde(rename = "+kms_key_name")]
     pub kms_key_name: Option<String>,
     #[serde(rename = "+labels")]
@@ -536,6 +542,7 @@ impl From<ProjectSnapshotConfig> for SnapshotConfig {
                 partition_by: config.partition_by,
                 cluster_by: config.cluster_by,
                 hours_to_expiration: config.hours_to_expiration,
+                job_execution_timeout_seconds: config.job_execution_timeout_seconds,
                 labels: config.labels,
                 labels_from_meta: config.labels_from_meta,
                 kms_key_name: config.kms_key_name,
@@ -651,6 +658,9 @@ impl From<SnapshotConfig> for ProjectSnapshotConfig {
             partition_by: config.__warehouse_specific_config__.partition_by,
             cluster_by: config.__warehouse_specific_config__.cluster_by,
             hours_to_expiration: config.__warehouse_specific_config__.hours_to_expiration,
+            job_execution_timeout_seconds: config
+                .__warehouse_specific_config__
+                .job_execution_timeout_seconds,
             labels: config.__warehouse_specific_config__.labels,
             labels_from_meta: config.__warehouse_specific_config__.labels_from_meta,
             kms_key_name: config.__warehouse_specific_config__.kms_key_name,

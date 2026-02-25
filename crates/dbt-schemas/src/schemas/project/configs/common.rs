@@ -273,6 +273,8 @@ pub struct WarehouseSpecificNodeConfig {
     pub description: Option<String>,
     #[serde(default, deserialize_with = "u64_or_string_u64")]
     pub hours_to_expiration: Option<u64>,
+    #[serde(default, deserialize_with = "u64_or_string_u64")]
+    pub job_execution_timeout_seconds: Option<u64>,
     pub labels: Option<BTreeMap<String, String>>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub labels_from_meta: Option<bool>,
@@ -395,6 +397,7 @@ impl DefaultTo<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConfig {
             description,
             cluster_by,
             hours_to_expiration,
+            job_execution_timeout_seconds,
             labels,
             labels_from_meta,
             kms_key_name,
@@ -488,6 +491,7 @@ impl DefaultTo<WarehouseSpecificNodeConfig> for WarehouseSpecificNodeConfig {
                 description,
                 cluster_by,
                 hours_to_expiration,
+                job_execution_timeout_seconds,
                 labels,
                 labels_from_meta,
                 kms_key_name,
@@ -661,6 +665,8 @@ pub fn same_warehouse_config(
     let partition_by_eq = self_wh.partition_by == other_wh.partition_by;
     let cluster_by_eq = self_wh.cluster_by == other_wh.cluster_by;
     let hours_to_expiration_eq = self_wh.hours_to_expiration == other_wh.hours_to_expiration;
+    let job_execution_timeout_seconds_eq =
+        self_wh.job_execution_timeout_seconds == other_wh.job_execution_timeout_seconds;
     let labels_eq = self_wh.labels == other_wh.labels;
     let labels_from_meta_eq = self_wh.labels_from_meta == other_wh.labels_from_meta;
     let kms_key_name_eq = self_wh.kms_key_name == other_wh.kms_key_name;
@@ -731,6 +737,7 @@ pub fn same_warehouse_config(
     let result = partition_by_eq
         && cluster_by_eq
         && hours_to_expiration_eq
+        && job_execution_timeout_seconds_eq
         && labels_eq
         && labels_from_meta_eq
         && kms_key_name_eq
@@ -818,6 +825,14 @@ pub fn same_warehouse_config(
                     Some((
                         format!("{:?}", &self_wh.hours_to_expiration),
                         format!("{:?}", &other_wh.hours_to_expiration),
+                    )),
+                ),
+                (
+                    "job_execution_timeout_seconds",
+                    job_execution_timeout_seconds_eq,
+                    Some((
+                        format!("{:?}", &self_wh.job_execution_timeout_seconds),
+                        format!("{:?}", &other_wh.job_execution_timeout_seconds),
                     )),
                 ),
                 (

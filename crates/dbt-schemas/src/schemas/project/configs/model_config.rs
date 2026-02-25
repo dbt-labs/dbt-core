@@ -193,6 +193,12 @@ pub struct ProjectModelConfig {
     pub hours_to_expiration: Option<u64>,
     #[serde(
         default,
+        rename = "+job_execution_timeout_seconds",
+        deserialize_with = "u64_or_string_u64"
+    )]
+    pub job_execution_timeout_seconds: Option<u64>,
+    #[serde(
+        default,
         rename = "+include_full_name_in_path",
         deserialize_with = "bool_or_string_bool"
     )]
@@ -612,6 +618,7 @@ impl From<ProjectModelConfig> for ModelConfig {
                 partition_by: config.partition_by,
                 cluster_by: config.cluster_by,
                 hours_to_expiration: config.hours_to_expiration,
+                job_execution_timeout_seconds: config.job_execution_timeout_seconds,
                 labels: config.labels,
                 labels_from_meta: config.labels_from_meta,
                 kms_key_name: config.kms_key_name,
@@ -764,6 +771,9 @@ impl From<ModelConfig> for ProjectModelConfig {
             partition_by: config.__warehouse_specific_config__.partition_by,
             cluster_by: config.__warehouse_specific_config__.cluster_by,
             hours_to_expiration: config.__warehouse_specific_config__.hours_to_expiration,
+            job_execution_timeout_seconds: config
+                .__warehouse_specific_config__
+                .job_execution_timeout_seconds,
             labels: config.__warehouse_specific_config__.labels,
             labels_from_meta: config.__warehouse_specific_config__.labels_from_meta,
             resource_tags: config.__warehouse_specific_config__.resource_tags,
