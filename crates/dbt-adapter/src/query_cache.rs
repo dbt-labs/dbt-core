@@ -1,11 +1,10 @@
 use dbt_common::adapter::{DBT_EXECUTION_PHASE_ANALYZE, DBT_EXECUTION_PHASES};
-use once_cell::sync::Lazy;
 use regex::Regex;
 use scc::HashMap as SccHashMap;
 use std::ffi::OsStr;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use std::time::Duration;
 
 use adbc_core::error::{Error as AdbcError, Result as AdbcResult, Status as AdbcStatus};
@@ -64,7 +63,8 @@ impl QueryCacheStatement {
         let mut hasher = DefaultHasher::new();
         sql.hash(&mut hasher);
         let hash = hasher.finish();
-        format!("{hash:x}")[..8.min(format!("{hash:x}").len())].to_string()
+        let hex = format!("{hash:x}");
+        hex[..8.min(hex.len())].to_string()
     }
 
     /// PRECONDITION: phase is one of [DBT_EXECUTION_PHASES]
@@ -375,26 +375,21 @@ fn from_parquet_error(e: parquet::errors::ParquetError) -> adbc_core::error::Err
     )
 }
 
-// Static regex pattern for matching dbt temporary table names with UUIDs
-static DBT_TMP_UUID_PATTERN: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"dbt_tmp_[0-9a-f]{8}_[0-9a-f]{4}_[0-9a-f]{4}_[0-9a-f]{4}_[0-9a-f]{12}").unwrap()
-});
-
 /// Replaces the UUID in a relation name created adapter.generate_unique_temporary_table_suffix
 /// Example: "dbt_tmp_800c2fb4_a0ba_4708_a0b1_813316032bfb" -> "dbt_tmp_"
 pub fn normalize_dbt_tmp_name(sql: &str) -> String {
-    // Replace all matches with "dbt_tmp_"
-    DBT_TMP_UUID_PATTERN
-        .replace_all(&strip_sql_comments(sql), "dbt_tmp_")
+    static RE: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"dbt_tmp_[0-9a-f]{8}_[0-9a-f]{4}_[0-9a-f]{4}_[0-9a-f]{4}_[0-9a-f]{12}").unwrap()
+    });
+    RE.replace_all(&strip_sql_comments(sql), "dbt_tmp_")
         .to_string()
 }
 
 /// Normalizes SQL for comparison by removing both temporary table UUIDs and schema timestamps
 fn normalize_sql_for_comparison(sql: &str) -> String {
+    static RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"___\d+___").unwrap());
     let normalized = normalize_dbt_tmp_name(sql);
-    // Also clean up schema names with timestamps
-    let re = Regex::new(r"___\d+___").unwrap();
-    re.replace_all(&normalized, "").to_string()
+    RE.replace_all(&normalized, "").to_string()
 }
 
 /// Extracts the numeric index from a cache filename like "abc12345_1.parquet".
