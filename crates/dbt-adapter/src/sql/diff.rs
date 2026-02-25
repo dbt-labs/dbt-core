@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::AdapterType;
 use dbt_common::{AdapterError, AdapterErrorKind, AdapterResult};
 use dbt_sql_utils::sql_split_statements;
 
@@ -7,6 +8,24 @@ use super::tokenizer::{AbstractToken, Token, abstract_tokenize, tokenize};
 use regex::Regex;
 
 pub fn compare_sql(actual: &str, expected: &str) -> AdapterResult<()> {
+    compare_sql_inner(actual, expected, None)
+}
+
+/// Compare two SQL strings using deviation and canonicalization checks before strict comparison,
+/// using adapter-specific canonicalization where applicable.
+pub fn compare_sql_for_adapter(
+    adapter_type: AdapterType,
+    actual: &str,
+    expected: &str,
+) -> AdapterResult<()> {
+    compare_sql_inner(actual, expected, Some(adapter_type))
+}
+
+fn compare_sql_inner(
+    actual: &str,
+    expected: &str,
+    adapter_type: Option<AdapterType>,
+) -> AdapterResult<()> {
     // Canonicalize ignorable differences first
     let actual = canonicalize_query_tag(actual);
     let expected = canonicalize_query_tag(expected);
@@ -38,6 +57,39 @@ pub fn compare_sql(actual: &str, expected: &str) -> AdapterResult<()> {
     // We only short-circuit when BOTH sides are clearly Elementary-originated.
     if is_elementary_query(&actual) && is_elementary_query(&expected) {
         return Ok(());
+    }
+
+    // Databricks/Spark: dbt tmp view definitions may differ in TEMPORARY vs non-temporary and
+    // qualified vs unqualified view naming across runners/recorders. We treat these as equivalent
+    // only for dbt tmp relations, and only when BOTH sides match the pattern.
+    if matches!(
+        adapter_type,
+        Some(AdapterType::Databricks | AdapterType::Spark)
+    ) {
+        if let (Some(actual_canon), Some(expected_canon)) = (
+            canonicalize_databricks_tmp_view_definition(&actual),
+            canonicalize_databricks_tmp_view_definition(&expected),
+        ) {
+            // Avoid recursion loops: only re-compare if we actually changed something.
+            if actual_canon != actual || expected_canon != expected {
+                if compare_sql_inner(&actual_canon, &expected_canon, adapter_type).is_ok() {
+                    return Ok(());
+                }
+            }
+        }
+
+        // Same pattern for MERGE ... USING: the __dbt_tmp relation may be qualified on one side
+        // and unqualified on the other.
+        if let (Some(actual_canon), Some(expected_canon)) = (
+            canonicalize_databricks_tmp_merge_using(&actual),
+            canonicalize_databricks_tmp_merge_using(&expected),
+        ) {
+            if actual_canon != actual || expected_canon != expected {
+                if compare_sql_inner(&actual_canon, &expected_canon, adapter_type).is_ok() {
+                    return Ok(());
+                }
+            }
+        }
     }
 
     // Heuristic: treat queries as equal if they only differ by a top-level
@@ -95,7 +147,7 @@ pub fn compare_sql(actual: &str, expected: &str) -> AdapterResult<()> {
     }
 
     // lightweight structural comparison (includes CTE normalization)
-    if compare_sql_structurally(&actual, &expected) {
+    if compare_sql_structurally(&actual, &expected, adapter_type) {
         return Ok(());
     }
 
@@ -106,6 +158,102 @@ pub fn compare_sql(actual: &str, expected: &str) -> AdapterResult<()> {
         AdapterErrorKind::SqlMismatch,
         format!("SQL mismatch detected:\n\n{diff_info}"),
     ))
+}
+
+/// Canonicalize Databricks/Spark dbt tmp view definitions that can be semantically equivalent for replay:
+///
+/// - `create or replace temporary view <name> as <query>`
+/// - `create or replace view <db>.<schema>.<name> as <query>`
+///
+/// We keep this intentionally narrow:
+/// - Only applies to `create or replace ... view ... as ...`
+/// - Only applies when the view name's base identifier contains `__dbt_tmp`
+/// - Strips leading `-- ...` line comments (e.g. replay-only divergence markers)
+/// - Drops any qualification and normalizes to `create or replace temporary view <base> as <query>`
+fn canonicalize_databricks_tmp_view_definition(sql: &str) -> Option<String> {
+    // Fast-path: avoid regex work on the common case.
+    let lower = sql.to_ascii_lowercase();
+    if !lower.contains("__dbt_tmp") || !lower.contains("view") || !lower.contains(" as") {
+        return None;
+    }
+
+    static RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
+        // Note: we only strip *leading* line comments; we do not attempt full comment-aware parsing.
+        Regex::new(
+            r"(?is)^\s*(?:--[^\n]*\n\s*)*create\s+or\s+replace\s+(?:(?P<temp>temporary)\s+)?view\s+(?P<name>.+?)\s+as\s+(?P<body>.*)$",
+        )
+        .unwrap()
+    });
+
+    let caps = RE.captures(sql)?;
+    let name = caps.name("name")?.as_str().trim();
+    let body = caps.name("body")?.as_str();
+
+    // Extract the base identifier from a possibly-qualified name like:
+    //   `dbt`.`schema`.`sources__dbt_tmp`  -> `sources__dbt_tmp`
+    //   sources__dbt_tmp                  -> sources__dbt_tmp
+    // We treat dots as separators regardless of quoting (good enough for this narrow rule).
+    let base = name
+        .rsplit('.')
+        .next()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())?;
+
+    let base_unquoted = base
+        .trim_matches('`')
+        .trim_matches('"')
+        .to_ascii_lowercase();
+    if !base_unquoted.contains("__dbt_tmp") {
+        return None;
+    }
+
+    Some(format!("create or replace temporary view {base} as {body}"))
+}
+
+/// Canonicalize Databricks/Spark MERGE statements where the `USING` clause may reference a
+/// `__dbt_tmp` relation with different levels of qualification across runners:
+///
+/// - Fusion:  `merge into <target> ... using `db`.`schema`.`name__dbt_tmp` as ...`
+/// - Mantle:  `merge into <target> ... using `name__dbt_tmp` as ...`
+///
+/// We normalize the `USING` relation to its unqualified base identifier (the last dot-segment)
+/// when that identifier contains `__dbt_tmp`.
+fn canonicalize_databricks_tmp_merge_using(sql: &str) -> Option<String> {
+    let lower = sql.to_ascii_lowercase();
+    if !lower.contains("__dbt_tmp") || !lower.contains("merge") || !lower.contains("using") {
+        return None;
+    }
+
+    static RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
+        // Match the USING <relation> portion of a MERGE statement, allowing leading line comments.
+        // The relation may be a multi-part quoted name like `db`.`schema`.`table__dbt_tmp`.
+        Regex::new(
+            r"(?is)(?P<prefix>^\s*(?:--[^\n]*\n\s*)*merge\s+into\s+.+?\s+using\s+)(?P<relation>(?:`[^`]+`\.)*`[^`]+`)(?P<suffix>\s+as\s+.*)$",
+        )
+        .unwrap()
+    });
+
+    let caps = RE.captures(sql)?;
+    let relation = caps.name("relation")?.as_str().trim();
+
+    // Extract the base identifier from a possibly-qualified name.
+    let base = relation
+        .rsplit('.')
+        .next()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())?;
+
+    let base_unquoted = base
+        .trim_matches('`')
+        .trim_matches('"')
+        .to_ascii_lowercase();
+    if !base_unquoted.contains("__dbt_tmp") {
+        return None;
+    }
+
+    let prefix = caps.name("prefix")?.as_str();
+    let suffix = caps.name("suffix")?.as_str();
+    Some(format!("{prefix}{base}{suffix}"))
 }
 
 /// Canonicalize Databricks legacy column comment DDL to the modern COMMENT ON COLUMN syntax.
@@ -299,7 +447,11 @@ fn unquote_identifier_like(s: &str) -> Option<String> {
 /// - Else, if both look like a `union all` chain at top level, split into components,
 ///   sort components, and recursively compare pair-wise.
 /// - All recursive comparisons call back into `compare_sql`.
-fn compare_sql_structurally(actual: &str, expected: &str) -> bool {
+fn compare_sql_structurally(
+    actual: &str,
+    expected: &str,
+    adapter_type: Option<AdapterType>,
+) -> bool {
     // Quick trims to reduce edge whitespace noise
     let a = actual.trim();
     let b = expected.trim();
@@ -312,7 +464,8 @@ fn compare_sql_structurally(actual: &str, expected: &str) -> bool {
         parse_select_star_from_parenthesized(a),
         parse_select_star_from_parenthesized(b),
     ) {
-        return compare_sql(a_sub, b_sub).is_ok() && compare_sql(a_rest, b_rest).is_ok();
+        return compare_sql_inner(a_sub, b_sub, adapter_type).is_ok()
+            && compare_sql_inner(a_rest, b_rest, adapter_type).is_ok();
     }
 
     // 2) with n1 as (<sub1>), ..., nk as (<subk>) <sub>
@@ -333,18 +486,18 @@ fn compare_sql_structurally(actual: &str, expected: &str) -> bool {
             if a_name != b_name {
                 return false;
             }
-            if compare_sql(a_sql, b_sql).is_err() {
+            if compare_sql_inner(a_sql, b_sql, adapter_type).is_err() {
                 return false;
             }
         }
-        return compare_sql(a_tail, b_tail).is_ok();
+        return compare_sql_inner(a_tail, b_tail, adapter_type).is_ok();
     }
 
     // 3) CREATE [OR REPLACE] <stuff> AS (<subquery>)
     if let (Some((a_stuff, a_sub)), Some((b_stuff, b_sub))) =
         (parse_create_as_subquery(&a), parse_create_as_subquery(&b))
     {
-        return a_stuff == b_stuff && compare_sql(a_sub, b_sub).is_ok();
+        return a_stuff == b_stuff && compare_sql_inner(a_sub, b_sub, adapter_type).is_ok();
     }
 
     // 4) <sub1> union all <sub2> ... union all <sub_q>
@@ -357,7 +510,7 @@ fn compare_sql_structurally(actual: &str, expected: &str) -> bool {
             b_parts.sort();
 
             for (ax, bx) in a_parts.iter().zip(b_parts.iter()) {
-                if compare_sql(ax, bx).is_err() {
+                if compare_sql_inner(ax, bx, adapter_type).is_err() {
                     return false;
                 }
             }
@@ -2186,6 +2339,90 @@ LEFT OUTER JOIN
 "#;
         let result = compare_sql(sql1, sql2);
         assert!(result.is_ok(), "Should match");
+    }
+
+    #[test]
+    fn test_databricks_temp_view_vs_persisted_view_equivalent() {
+        // Mantle recordings (dbt-databricks) may emit:
+        //   create or replace temporary view `sources__dbt_tmp` as ...
+        //
+        // Fusion may emit (not temporary, and fully-qualified), plus extra line comments:
+        //   -- DIVERGENCE
+        //   create or replace view `dbt`.`dbt_dbt_audit`.`sources__dbt_tmp` as ...
+        //
+        // For replay, these should be treated as equivalent when the query body is identical and the
+        // view name is a dbt tmp relation.
+        let actual = r#"
+-- DIVERGENCE
+create or replace view `dbt`.`dbt_dbt_audit`.`sources__dbt_tmp` as
+/* Bigquery won't let us `where` without `from` so we use this workaround */
+with dummy_cte as (select 1 as foo)
+select
+    cast(null as string) as command_invocation_id
+from dummy_cte
+where 1 = 0
+"#;
+
+        let expected = r#"
+create or replace temporary view `sources__dbt_tmp` as
+/* Bigquery won't let us `where` without `from` so we use this workaround */
+with dummy_cte as (select 1 as foo)
+select
+    cast(null as string) as command_invocation_id
+from dummy_cte
+where 1 = 0
+"#;
+
+        compare_sql_for_adapter(AdapterType::Databricks, actual, expected)
+            .expect("should treat persisted view vs temp view as equivalent");
+
+        // Same pattern but in a MERGE statement: Fusion uses a three-part qualified name for the
+        // __dbt_tmp temp table in the USING clause, while Mantle uses just the identifier.
+        let merge_actual = r#"
+-- back compat for old kwarg name
+
+
+
+    merge
+    into
+        `dbt`.`dbt_dbt_audit`.`seed_executions` as DBT_INTERNAL_DEST
+    using
+        `dbt`.`dbt_dbt_audit`.`seed_executions__dbt_tmp` as DBT_INTERNAL_SOURCE
+    on
+        FALSE
+    when matched
+        then update set
+            *
+    when not matched
+        then insert
+            *
+"#;
+
+        let merge_expected = r#"
+-- back compat for old kwarg name
+
+
+
+
+      
+
+    merge
+    into
+        `dbt`.`dbt_dbt_audit`.`seed_executions` as DBT_INTERNAL_DEST
+    using
+        `seed_executions__dbt_tmp` as DBT_INTERNAL_SOURCE
+    on
+        FALSE
+    when matched
+        then update set
+            *
+    when not matched
+        then insert
+            *
+"#;
+
+        compare_sql_for_adapter(AdapterType::Databricks, merge_actual, merge_expected)
+            .expect("should treat qualified vs unqualified __dbt_tmp in MERGE USING as equivalent");
     }
 
     #[test]

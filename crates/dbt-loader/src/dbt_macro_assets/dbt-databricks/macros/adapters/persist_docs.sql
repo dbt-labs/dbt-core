@@ -13,7 +13,7 @@
 
 {% macro alter_table_comment(relation, model) %}
   {% set comment_query %}
-    comment on table {{ relation.render()|lower }} is '{{ model.description | replace("'", "\\'") }}'
+    COMMENT ON TABLE {{ relation.render()|lower }} IS '{{ model.description | replace("'", "\\'") }}'
   {% endset %}
   {% do run_query(comment_query) %}
 {% endmacro %}
