@@ -73,6 +73,15 @@ class SchemaYamlRenderer(BaseRenderer):
         ):
             return True
 
+        # derived_semantics descriptions (v2 semantic layer)
+        if (
+            len(keypath) >= 4
+            and keypath[0] == "derived_semantics"
+            and keypath[1] in ("dimensions", "entities")
+            and keypath[3] in ("tests", "data_tests", "description")
+        ):
+            return True
+
         return False
 
     # don't render descriptions or test keyword arguments
