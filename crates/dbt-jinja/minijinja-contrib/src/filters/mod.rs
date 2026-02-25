@@ -79,7 +79,10 @@ pub fn random(state: &minijinja::State, seq: &Value) -> Result<Value, Error> {
     use minijinja::value::ValueKind;
     use rand::Rng;
 
-    if matches!(seq.kind(), ValueKind::Seq | ValueKind::String) {
+    if matches!(
+        seq.kind(),
+        ValueKind::Seq | ValueKind::String | ValueKind::Iterable
+    ) {
         let len = seq.len().unwrap_or(0);
         let idx = get_rng(state).gen_range(0..len);
         seq.get_item_by_index(idx)
