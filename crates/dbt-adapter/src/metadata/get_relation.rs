@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use arrow::array::{Array as _, StringArray};
@@ -263,9 +264,11 @@ fn databricks_get_relation(
     identifier: &str,
 ) -> AdapterResult<Option<Box<dyn BaseRelation>>> {
     use crate::metadata::MetadataProcessor as _;
-    // though _needs_information is used in dbt to decide if this may be related from relations cache
-    // since we don't implement relations cache, it's ignored for now
-    // see https://github.com/databricks/dbt-databricks/blob/822b105b15e644676d9e1f47cbfd765cd4c1541f/dbt/adapters/databricks/impl.py#L418
+    use crate::metadata::databricks::DatabricksMetadataAdapter;
+    use crate::metadata::databricks::version::DbrVersion;
+    use crate::relation::databricks::{INFORMATION_SCHEMA_SCHEMA, SYSTEM_DATABASE};
+
+    // This function is only called when full metadata is needed. See https://github.com/databricks/dbt-databricks/blob/822b105b15e644676d9e1f47cbfd765cd4c1541f/dbt/adapters/databricks/impl.py#L418
 
     let query_catalog = if adapter.quoting().database {
         adapter.quote(database)
@@ -283,19 +286,38 @@ fn databricks_get_relation(
         identifier.to_string()
     };
 
-    // this deviates from what the existing dbt-adapter impl - here `AS JSON` is used
-    // and a critical reason is `DESCRIBE TABLE EXTENDED` returns different results
-    // for example, when database is set to the default `hive_metastore` it misses 'Provider' and 'Type' rows
-    // and we don't need to parse through rows, see reference https://github.com/databricks/dbt-databricks/blob/822b105b15e644676d9e1f47cbfd765cd4c1541f/dbt/adapters/databricks/impl.py#L433
-    //
-    // But this will lead to differences the metadata field
-    // more details see docs from DatabricksDescribeTableExtended::to_metadata
-    // WARNING: system tables from DBX only supports the basic "DESCRIBE TABLE"
-    // though I assume it's highly unlikely and unfathomable a user would want to call adapter.get_relation on a system table
-    let sql = if database.is_empty() {
-        format!("DESCRIBE TABLE EXTENDED {query_schema}.{query_identifier} AS JSON")
+    // Determine whether `DESCRIBE TABLE EXTENDED ... AS JSON` is supported.
+    // This mirrors the safety checks in list_relations_schemas_inner:
+    // - External system tables (system.information_schema.*) don't support AS JSON
+    // - DBR versions < 16.2 don't support AS JSON
+    // - Spark adapter: skip version check (no DBR version concept)
+    // See also: https://github.com/databricks/dbt-databricks/blob/822b105b15e644676d9e1f47cbfd765cd4c1541f/dbt/adapters/databricks/impl.py#L423
+    let dbr_version = match adapter.adapter_type() {
+        AdapterType::Spark => None,
+        AdapterType::Databricks => Some(DatabricksMetadataAdapter::get_dbr_version(
+            adapter, ctx, conn,
+        )?),
+        _ => unreachable!(),
+    };
+
+    let is_external_system = database.eq_ignore_ascii_case(SYSTEM_DATABASE)
+        && schema.eq_ignore_ascii_case(INFORMATION_SCHEMA_SCHEMA);
+
+    let as_json_unsupported = is_external_system
+        || dbr_version
+            .map(|v| v < DbrVersion::Full(16, 2))
+            .unwrap_or(false);
+
+    let fqn = if database.is_empty() {
+        format!("{query_schema}.{query_identifier}")
     } else {
-        format!("DESCRIBE TABLE EXTENDED {query_catalog}.{query_schema}.{query_identifier} AS JSON")
+        format!("{query_catalog}.{query_schema}.{query_identifier}")
+    };
+
+    let sql = if as_json_unsupported {
+        format!("DESCRIBE TABLE EXTENDED {fqn}")
+    } else {
+        format!("DESCRIBE TABLE EXTENDED {fqn} AS JSON")
     };
 
     let batch = adapter.engine().execute(Some(state), conn, ctx, &sql);
@@ -309,15 +331,59 @@ fn databricks_get_relation(
     if batch.num_rows() == 0 {
         return Ok(None);
     }
-    debug_assert_eq!(batch.num_rows(), 1);
 
-    let json_metadata = DatabricksTableMetadata::from_record_batch(Arc::new(batch))?;
-    let is_delta = json_metadata.provider.as_deref() == Some("delta");
-    let relation_type = match json_metadata.type_.as_str() {
-        "VIEW" => Some(RelationType::View),
-        "MATERIALIZED_VIEW" => Some(RelationType::MaterializedView),
-        "STREAMING_TABLE" => Some(RelationType::StreamingTable),
-        _ => Some(RelationType::Table),
+    let (relation_type, is_delta, metadata) = if as_json_unsupported {
+        // Parse the non-JSON DESCRIBE TABLE EXTENDED output.
+        // The result has col_name/data_type/comment columns. Column definitions come
+        // first, followed by an empty separator row, then metadata key-value pairs.
+        // Some databases (e.g. hive_metastore) may be missing 'Type' and 'Provider'
+        // rows, so we default gracefully.
+        let col_names = get_column_values::<StringArray>(&batch, "col_name")?;
+        let data_types = get_column_values::<StringArray>(&batch, "data_type")?;
+
+        let mut metadata_map = BTreeMap::new();
+        let mut type_str = None;
+        let mut provider_str = None;
+        let mut in_metadata_section = false;
+
+        for i in 0..batch.num_rows() {
+            let key = col_names.value(i).trim();
+            let value = data_types.value(i).trim();
+
+            if key.is_empty() {
+                in_metadata_section = true;
+                continue;
+            }
+            if !in_metadata_section || key.starts_with('#') {
+                continue;
+            }
+
+            metadata_map.insert(key.to_string(), value.to_string());
+            match key {
+                "Type" => type_str = Some(value.to_string()),
+                "Provider" => provider_str = Some(value.to_string()),
+                _ => {}
+            }
+        }
+
+        // The non-JSON Type field returns raw Databricks types (MANAGED, EXTERNAL,
+        // FOREIGN, VIEW, etc.) — use from_adapter_type for proper mapping.
+        let relation_type = Some(match type_str.as_deref() {
+            Some(t) => RelationType::from_adapter_type(adapter.adapter_type(), t),
+            None => RelationType::Table,
+        });
+        let is_delta = provider_str.as_deref() == Some("delta");
+
+        (relation_type, is_delta, Some(metadata_map))
+    } else {
+        debug_assert_eq!(batch.num_rows(), 1);
+        let json_metadata = DatabricksTableMetadata::from_record_batch(Arc::new(batch))?;
+        let is_delta = json_metadata.provider.as_deref() == Some("delta");
+        let relation_type = Some(RelationType::from_adapter_type(
+            adapter.adapter_type(),
+            &json_metadata.type_,
+        ));
+        (relation_type, is_delta, Some(json_metadata.into_metadata()))
     };
 
     let db = if database.is_empty() {
@@ -334,8 +400,9 @@ fn databricks_get_relation(
         relation_type,
         None,
         adapter.quoting(),
-        Some(json_metadata.into_metadata()),
+        metadata,
         is_delta,
+        false,
     ))))
 }
 

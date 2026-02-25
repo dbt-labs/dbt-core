@@ -3,9 +3,10 @@
 
   {%- set catalog_relation = adapter.build_catalog_relation(config.model) -%}
 
-  {#-- Core discrepancy: this line has been removed but it is a nice pre-database validation step;
+  {#-- DIVERGENCE START: this line has been removed but it is a nice pre-database validation step;
     -- todo(versusfacit) make this a model-level config check or catalog_relation check #}
   {%- set _ = dbt_databricks_validate_get_file_format(catalog_relation.file_format) -%}
+  {#-- DIVERGENCE END #}
 
   {%- set existing_relation = load_relation_with_metadata(this) %}
   {%- set target_relation = this.incorporate(type='table') -%}
@@ -16,6 +17,9 @@
   {%- set language = model['language'] -%}
   {%- set on_schema_change = incremental_validate_on_schema_change(config.get('on_schema_change'), default='ignore') -%}
   {%- set is_delta = (catalog_relation.file_format == 'delta' and existing_relation.is_delta) -%}
+  {% set is_iceberg = (catalog_relation.file_format == 'iceberg' and existing_relation.is_iceberg) %}
+  {% set is_replaceable_format = is_delta or is_iceberg %}
+  {% set compiled_code = adapter.clean_sql(model['compiled_code']) %}
 
   {% if adapter.behavior.use_materialization_v2 %}
     {{ log("USING V2 MATERIALIZATION") }}
@@ -23,7 +27,7 @@
     {% set safe_create = config.get('use_safer_relation_operations', False) | as_bool  %}
     {{ log("Safe create: " ~ safe_create) }}
     {% set should_replace = existing_relation.is_dlt or existing_relation.is_view or full_refresh %}
-    {% set is_replaceable = existing_relation.can_be_replaced and is_delta and config.get("location_root") %}
+    {% set is_replaceable = existing_relation.can_be_replaced and is_replaceable_format %}
 
     {% set intermediate_relation = make_intermediate_relation(target_relation) %}
     {% set staging_relation = make_staging_relation(target_relation) %}
@@ -63,9 +67,18 @@
       {{ process_config_changes(target_relation) }}
       {% set build_sql = get_build_sql(incremental_strategy, target_relation, intermediate_relation) %}
       {%- if language == 'sql' -%}
-        {%- call statement('main') -%}
-          {{ build_sql }}
-        {%- endcall -%}
+        {#-- Check if build_sql is a list (multi-statement strategy) or a string (single statement) --#}
+        {%- if build_sql is sequence and build_sql is not string -%}
+          {%- for sql_statement in build_sql -%}
+            {%- call statement('main') -%}
+              {{ sql_statement }}
+            {%- endcall -%}
+          {%- endfor -%}
+        {%- else -%}
+          {%- call statement('main') -%}
+            {{ build_sql }}
+          {%- endcall -%}
+        {%- endif -%}
       {%- elif language == 'python' -%}
         {%- call statement_with_staging_table('main', intermediate_relation) -%}
           {{ build_sql }}
@@ -100,10 +113,12 @@
       {%- endcall -%}
       {% do persist_constraints(target_relation, model) %}
       {% do apply_tags(target_relation, tags) %}
+      {#-- DIVERGENCE START: Core does not set column tags for incremental #}
       {% set column_tags = adapter.get_column_tags_from_model(config.model) %}
       {% if column_tags and column_tags.tags %}
         {% do apply_column_tags(target_relation, column_tags) %}
       {% endif %}
+      {#-- DIVERGENCE END #}
       {%- if language == 'python' -%}
         {%- do apply_tblproperties(target_relation, tblproperties) %}
       {%- endif -%}
@@ -111,7 +126,7 @@
       {% do persist_docs(target_relation, model, for_relation=language=='python') %}
     {%- elif existing_relation.is_view or existing_relation.is_materialized_view or existing_relation.is_streaming_table or should_full_refresh() -%}
       {#-- Relation must be dropped & recreated --#}
-      {% if not is_delta %} {#-- If Delta, we will `create or replace` below, so no need to drop --#}
+      {% if not is_replaceable_format %} {#-- If Delta or Iceberg, we will `create or replace` below, so no need to drop --#}
         {% do adapter.drop_relation(existing_relation) %}
       {% endif %}
       {%- call statement('main', language=language) -%}
@@ -149,9 +164,18 @@
               'incremental_predicates': incremental_predicates}) -%}
       {%- set build_sql = strategy_sql_macro_func(strategy_arg_dict) -%}
       {%- if language == 'sql' -%}
-        {%- call statement('main') -%}
-          {{ build_sql }}
-        {%- endcall -%}
+        {#-- Check if build_sql is a list (multi-statement strategy) or a string (single statement) --#}
+        {%- if build_sql is sequence and build_sql is not string -%}
+          {%- for sql_statement in build_sql -%}
+            {%- call statement('main') -%}
+              {{ sql_statement }}
+            {%- endcall -%}
+          {%- endfor -%}
+        {%- else -%}
+          {%- call statement('main') -%}
+            {{ build_sql }}
+          {%- endcall -%}
+        {%- endif -%}
       {%- elif language == 'python' -%}
         {%- call statement_with_staging_table('main', temp_relation) -%}
           {{ build_sql }}
@@ -172,9 +196,11 @@
         {% if tags is not none %}
           {% do apply_tags(target_relation, tags.set_tags) %}
         {%- endif -%}
+        {#-- DIVERGENCE START: Core does not set column tags for incremental #} 
         {% if column_tags is not none %}
           {% do apply_column_tags(target_relation, column_tags) %}
         {%- endif -%}
+        {#-- DIVERGENCE END #}
         {% if tblproperties is not none %}
           {% do apply_tblproperties(target_relation, tblproperties.tblproperties) %}
         {%- endif -%}
@@ -190,12 +216,7 @@
     {% do optimize(target_relation) %}
 
     {{ run_hooks(post_hooks) }}
-    -- This is intentional - it's to create a view relation instead of a temp view
-    -- since DBX v2 api doesn't support session
-    {% if temp_relation %}
-      {% do adapter.drop_relation(temp_relation) %}
-    {% endif %}
-  {%- endif %}
+  {%- endif -%}
 
   {%- if incremental_strategy == 'insert_overwrite' and not full_refresh -%}
     {{ set_overwrite_mode('STATIC') }}

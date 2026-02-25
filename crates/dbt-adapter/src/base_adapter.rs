@@ -647,16 +647,21 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
     ///     self,
     ///     database: str,
     ///     schema: str,
-    ///     identifier: str
+    ///     identifier: str,
+    ///     needs_information: bool = False
     /// )  -> Optional[BaseRelation]
     /// ```
     ///
+    /// When `needs_information` is false (default): returns cached relation only; no extra
+    /// database call. When true: guarantees the relation has catalog metadata (Provider, Owner,
+    /// Statistics, etc.), running DESCRIBE EXTENDED if needed (Databricks).
     fn get_relation(
         &self,
         state: &State,
         database: &str,
         schema: &str,
         identifier: &str,
+        needs_information: bool,
     ) -> Result<Value, minijinja::Error>;
 
     /// Get a catalog relation object.
@@ -1009,6 +1014,17 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
         relation: &dyn BaseRelation,
     ) -> Result<Value, minijinja::Error>;
 
+    /// Check if a DBR capability is available for current compute.
+    ///
+    /// Accepts capability names as strings (e.g. 'replace_on', 'insert_by_name').
+    ///
+    /// https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/impl.py#L336-L354
+    fn has_dbr_capability(
+        &self,
+        _state: &State,
+        _capability_name: &str,
+    ) -> Result<Value, minijinja::Error>;
+
     /// Compare Databricks Runtime version.
     ///
     /// https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/connections.py#L226-L227
@@ -1064,6 +1080,19 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
         _state: &State,
         _config: dbt_schemas::schemas::project::ModelConfig,
         _node: &dbt_schemas::schemas::InternalDbtNodeWrapper,
+    ) -> Result<Value, minijinja::Error>;
+
+    /// Resolve file format from model config.
+    ///
+    /// Returns the file_format from config, or adapter-specific default.
+    /// Databricks default: "delta". Used by clone materialization.
+    ///
+    /// https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/impl.py
+    /// DatabricksConfig has file_format: str = "delta"
+    fn resolve_file_format(
+        &self,
+        _state: &State,
+        _config: dbt_schemas::schemas::project::ModelConfig,
     ) -> Result<Value, minijinja::Error>;
 
     /// Generate a unique temporary table suffix.

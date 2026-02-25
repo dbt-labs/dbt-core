@@ -36,6 +36,7 @@ use crate::typed_adapter::ConcreteAdapter;
 use crate::{AdapterEngine, AdapterResponse};
 use crate::{AdapterTyping, metadata::*};
 
+pub mod dbr_capabilities;
 pub mod describe_table;
 pub mod schemas;
 pub(crate) mod version;
@@ -105,6 +106,7 @@ WHERE table_catalog = '{}'
             adapter.quoting(),
             None,
             is_delta,
+            false,
         )) as Arc<dyn BaseRelation>;
         relations.push(relation);
     }
@@ -1082,6 +1084,7 @@ mod tests {
             None,
             quote_policy,
             None,
+            false,
             false,
         ))
     }

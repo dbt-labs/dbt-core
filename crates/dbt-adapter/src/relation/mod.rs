@@ -163,6 +163,7 @@ mod tests {
             ResolvedQuoting::disabled(),
             None,
             false,
+            false,
         );
         let start = NaiveDate::from_ymd_opt(2024, 7, 1)
             .unwrap()

@@ -5,7 +5,7 @@
   {% set model_constraints = model.get('constraints', []) %}
   {% set columns_and_constraints = adapter.parse_columns_and_constraints(existing_columns, model_columns, model_constraints) %}
   {% set target_relation = relation.enrich(columns_and_constraints[1]) %}
-
+  
   {% call statement('main') %}
     {{ get_create_table_sql(target_relation, columns_and_constraints[0], compiled_code) }}
   {% endcall %}
@@ -13,12 +13,12 @@
   {{ apply_alter_constraints(target_relation) }}
   {{ apply_tags(target_relation, tags) }}
   {% set column_tags = adapter.get_column_tags_from_model(config.model) %}
-  {% if column_tags and column_tags.tags %}
-    {% do apply_column_tags(target_relation, column_tags) %}
+  {% if column_tags and column_tags.set_column_tags %}
+    {{ apply_column_tags(target_relation, column_tags) }}
   {% endif %}
 
   {% call statement('merge into target') %}
-    insert into {{ target_relation }} select * from {{ intermediate_relation }}
+    insert into {{ target_relation }} by name select * from {{ intermediate_relation }}
   {% endcall %}
 {% endmacro %}
 
@@ -32,7 +32,7 @@
     {{ get_assert_columns_equivalent(compiled_code) }}
   {%- endif -%}
 
-  {%- if catalog_relation.file_format == 'delta' %}
+  {%- if catalog_relation.file_format in ('delta', 'iceberg') %}
   create or replace table {{ target_relation.render() }}
   {% else %}
   create table {{ target_relation.render() }}
@@ -49,13 +49,12 @@
 {% endmacro %}
 
 {% macro databricks__create_table_as(temporary, relation, compiled_code, language='sql') -%}
+
   {%- set catalog_relation = adapter.build_catalog_relation(config.model) -%}
 
   {%- if language == 'sql' -%}
     {%- if temporary -%}
-      -- DIVERGENCE
-      -- create_temporary_view method cannot be used here, because DBX v2 api doesn't support session
-      {{ _create_view_simple(relation, compiled_code) }}
+      {{ create_temporary_view(relation, compiled_code) }}
     {%- else -%}
       {% if catalog_relation.file_format == 'delta' %}
         create or replace table {{ relation.render() }}
@@ -91,10 +90,18 @@
 {%- endmacro -%}
 
 {% macro databricks__options_clause(catalog_relation=none) -%}
+  {#-
+    Moving forward, this macro should require a `catalog_relation`, which is covered by the first condition.
+    However, there could be existing macros that is still passing no arguments, including user macros.
+    Hence, we need to support the old code still, which is covered by the second condition.
+    Additionally, since this rolls up to `options_clause` in `dbt-spark`, which does not have any arguments,
+    all calls to `options_clause` will take the second path. This macro needs to be called directly
+    via `databricks__options_clause`.
+  -#}
   {%- if catalog_relation is not none -%}
     {%- set file_format = catalog_relation.file_format -%}
   {%- else -%}
-    {%- set file_format = config.get('file_format', default='delta') -%}
+    {%- set file_format = adapter.resolve_file_format(config) -%}
   {%- endif -%}
 
   {%- set options = config.get('options') -%}
@@ -118,18 +125,9 @@
   {%- endif %}
 {%- endmacro -%}
 
-
--- DIVERGENCE
-{% macro _create_view_simple(relation, compiled_code) -%}
-    create or replace view {{ relation }} as
-      {{ compiled_code }}
-{%- endmacro -%}
-
 {% macro get_create_intermediate_table(relation, compiled_code, language) %}
   {%- if language == 'sql' -%}
-    -- DIVERGENCE
-    -- create_temporary_view method cannot be used here, because DBX v2 api doesn't support session
-    {{ _create_view_simple(relation, compiled_code) }}
+    {{ create_temporary_view(relation, compiled_code) }}
   {%- else -%}
     {{ create_python_intermediate_table(relation, compiled_code) }}
   {%- endif -%}

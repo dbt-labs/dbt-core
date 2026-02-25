@@ -747,6 +747,26 @@ impl Column {
         self
     }
 
+    /// Enrich column with model config (Databricks/Spark).
+    ///
+    /// Returns a new Column with data_type, comment, and nullability from model config.
+    ///
+    /// Reference: https://github.com/databricks/dbt-databricks/blob/822b105b15e644676d9e1f47cbfd765cd4c1541f/dbt/adapters/databricks/column.py#L153-L166
+    pub fn enrich_for_create(&self, model_column: Option<&DbtColumn>, not_null: bool) -> Self {
+        let mut col = self.clone();
+        if let Some(mc) = model_column {
+            if let Some(ref dt) = mc.data_type {
+                col.core_dtype = dt.clone();
+                col.core_data_type = dt.clone();
+            }
+            if let Some(ref desc) = mc.description {
+                col.comment = Some(desc.clone());
+            }
+        }
+        col._nullable = Some(!not_null);
+        col
+    }
+
     #[inline]
     pub fn name(&self) -> &str {
         &self.name
@@ -910,6 +930,28 @@ impl Column {
         }
     }
 
+    /// Render column DDL for CREATE TABLE (Databricks/Spark).
+    ///
+    /// Returns e.g. `` `col` BIGINT NOT NULL COMMENT 'comment' ``
+    ///
+    /// Reference: https://github.com/databricks/dbt-databricks/blob/822b105b15e644676d9e1f47cbfd765cd4c1541f/dbt/adapters/databricks/column.py#L167-L179
+    pub fn render_for_create(&self) -> String {
+        match self._adapter_type {
+            AdapterType::Databricks | AdapterType::Spark => {
+                let mut s = format!("{} {}", self.quoted(), self.data_type());
+                if self._nullable == Some(false) {
+                    s.push_str(" NOT NULL");
+                }
+                if let Some(comment) = &self.comment {
+                    let escaped = comment.replace('\\', "\\\\").replace('\'', "\\'");
+                    s.push_str(&format!(" COMMENT '{escaped}'"));
+                }
+                s
+            }
+            _ => unimplemented!("render_for_create is only available for Databricks/Spark"),
+        }
+    }
+
     pub fn char_size(&self) -> Option<u32> {
         self.char_size
     }
@@ -1010,6 +1052,8 @@ impl Object for Column {
             }
             // Bigquery only
             "flatten" => Ok(Value::from(self.flatten())),
+            // Databricks/Spark only - render column DDL for CREATE TABLE
+            "render_for_create" => Ok(Value::from(self.render_for_create())),
 
             _ => Err(minijinja::Error::new(
                 minijinja::ErrorKind::InvalidOperation,

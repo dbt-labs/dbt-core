@@ -141,6 +141,13 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
         false
     }
 
+    /// Whether the relation has catalog metadata.
+    /// Used by Databricks `needs_information` to avoid redundant DESCRIBE EXTENDED calls.
+    /// Default true: relations without this concept are always considered to have information.
+    fn has_information(&self) -> bool {
+        true
+    }
+
     /// as_any
     fn as_any(&self) -> &dyn Any;
 
@@ -845,6 +852,11 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
 
     fn is_hive_metastore(&self) -> Value {
         unimplemented!("Available only for databricks")
+    }
+
+    /// Whether the relation is a temporary view (session-scoped).
+    fn is_temporary(&self) -> bool {
+        false
     }
 
     /// materialized_view_config_changeset

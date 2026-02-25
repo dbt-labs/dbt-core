@@ -88,11 +88,6 @@ impl From<&dyn BaseRelation> for CatalogAndSchema {
             relation.quoted(&resolved_schema)
         };
 
-        assert!(
-            !(resolved_catalog.is_empty() && resolved_schema.is_empty()),
-            "Either resolved_catalog or resolved_schema must be present"
-        );
-
         Self {
             rendered_catalog,
             rendered_schema,

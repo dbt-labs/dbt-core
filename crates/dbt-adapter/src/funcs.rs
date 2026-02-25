@@ -121,6 +121,7 @@ pub fn dispatch_adapter_calls(
             // database: str
             // schema: str
             // identifier: str
+            // needs_information: bool = False
             let iter = ArgsIter::new(name, &["database", "schema", "identifier"], args);
 
             let database = iter.next_arg::<&str>().or_else(|e| {
@@ -132,9 +133,12 @@ pub fn dispatch_adapter_calls(
             })?;
             let schema = iter.next_arg::<&str>()?;
             let identifier = iter.next_arg::<&str>()?;
+            let needs_information = iter
+                .next_kwarg::<Option<bool>>("needs_information")?
+                .unwrap_or(false);
             iter.finish()?;
 
-            adapter.get_relation(state, database, schema, identifier)
+            adapter.get_relation(state, database, schema, identifier, needs_information)
         }
         "get_columns_in_relation" => {
             // relation: BaseRelation
@@ -986,6 +990,14 @@ pub fn dispatch_adapter_calls(
                 .map_err(minijinja::Error::from)?;
             Ok(Value::from(is_cluster))
         }
+        "has_dbr_capability" => {
+            // capability_name: str
+            let iter = ArgsIter::new(name, &["capability_name"], args);
+            let capability_name = iter.next_arg::<&str>()?;
+            iter.finish()?;
+
+            adapter.has_dbr_capability(state, capability_name)
+        }
         "is_ducklake" => {
             // DuckLake is a MotherDuck feature that allows using cloud storage with ACID transactions.
             // The macro passes a relation, but we just return false since DuckLake isn't supported yet.
@@ -1099,6 +1111,24 @@ pub fn dispatch_adapter_calls(
             })?;
 
             adapter.is_uniform(state, config, &node_wrapper)
+        }
+        "resolve_file_format" => {
+            // config: dict
+            let iter = ArgsIter::new(name, &["config"], args);
+            let config_val = iter.next_arg::<&Value>()?;
+            iter.finish()?;
+
+            let config = minijinja_value_to_typed_struct::<
+                dbt_schemas::schemas::project::ModelConfig,
+            >(config_val.clone())
+            .map_err(|e| {
+                minijinja::Error::new(
+                    minijinja::ErrorKind::SerdeDeserializeError,
+                    format!("resolve_file_format: Failed to deserialize config: {e}"),
+                )
+            })?;
+
+            adapter.resolve_file_format(state, config)
         }
         "valid_incremental_strategies" => {
             // No arguments required

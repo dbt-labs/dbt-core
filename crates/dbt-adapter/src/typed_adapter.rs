@@ -9,6 +9,7 @@ use crate::information_schema::InformationSchema;
 use crate::metadata::bigquery::BigqueryMetadataAdapter;
 use crate::metadata::bigquery::nest_column_data_types;
 use crate::metadata::databricks::DatabricksMetadataAdapter;
+use crate::metadata::databricks::dbr_capabilities;
 use crate::metadata::databricks::version::DbrVersion;
 use crate::metadata::duckdb::DuckDBMetadataAdapter;
 use crate::metadata::postgres::PostgresMetadataAdapter;
@@ -2683,6 +2684,40 @@ impl ConcreteAdapter {
         self.engine().behavior()
     }
 
+    /// Check if a DBR capability is available for current compute.
+    ///
+    /// https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/impl.py#L336-L354
+    pub fn has_dbr_capability(
+        &self,
+        state: &State,
+        conn: &mut dyn Connection,
+        capability_name: &str,
+    ) -> AdapterResult<bool> {
+        match self.adapter_type() {
+            Databricks => {
+                let capability = dbr_capabilities::DbrCapability::from_str(capability_name)
+                    .map_err(|e| AdapterError::new(AdapterErrorKind::Configuration, e))?;
+
+                let is_cluster = self.is_cluster()?;
+                let is_sql_warehouse = !is_cluster;
+
+                let query_ctx =
+                    query_ctx_from_state(state)?.with_desc("has_dbr_capability adapter call");
+                let dbr_version =
+                    DatabricksMetadataAdapter::get_dbr_version(self, &query_ctx, conn)?;
+
+                Ok(dbr_capabilities::has_capability(
+                    capability,
+                    dbr_version,
+                    is_sql_warehouse,
+                ))
+            }
+            Postgres | Snowflake | Bigquery | Redshift | Salesforce | Sidecar | DuckDB | Spark => {
+                unimplemented!("has_dbr_capability: Only available for Databricks Adapter")
+            }
+        }
+    }
+
     /// https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/connections.py#L226-L227
     pub fn compare_dbr_version(
         &self,
@@ -2930,6 +2965,28 @@ impl ConcreteAdapter {
         }
     }
 
+    /// Resolve file format from model config.
+    ///
+    /// Returns the file_format from config, or adapter-specific default.
+    /// Databricks default: "delta". Used by clone materialization.
+    ///
+    /// https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/impl.py
+    /// DatabricksConfig has file_format: str = "delta"
+    pub fn resolve_file_format(&self, config: ModelConfig) -> AdapterResult<String> {
+        match self.adapter_type() {
+            Databricks => {
+                let file_format = config
+                    .__warehouse_specific_config__
+                    .file_format
+                    .as_deref()
+                    .unwrap_or("delta")
+                    .to_string();
+                Ok(file_format)
+            }
+            _ => unimplemented!("resolve_file_format is only supported in Databricks"),
+        }
+    }
+
     /// Given a relation, fetch its configurations from the remote data warehouse
     /// reference: https://github.com/databricks/dbt-databricks/blob/13686739eb59566c7a90ee3c357d12fe52ec02ea/dbt/adapters/databricks/impl.py#L797
     pub fn get_relation_config(
@@ -2990,6 +3047,108 @@ impl ConcreteAdapter {
         };
         let config = config_loader.from_local_config(model);
         Ok(Value::from_object(config))
+    }
+
+    /// Parse columns and constraints for table creation (Databricks).
+    ///
+    /// Returns [enriched_columns, typed_constraints] for use with get_column_and_constraints_sql
+    /// and relation.enrich().
+    ///
+    /// Reference: https://github.com/databricks/dbt-databricks/blob/25caa2a14ed0535f08f6fd92e29b39df1f453e4d/dbt/adapters/databricks/impl.py
+    pub fn parse_columns_and_constraints(
+        &self,
+        _state: &State,
+        existing_columns: &Value,
+        model_columns: &Value,
+        model_constraints: &Value,
+    ) -> Result<Value, minijinja::Error> {
+        use crate::relation::databricks::typed_constraint;
+        use std::collections::BTreeMap;
+
+        if self.adapter_type() != Databricks && self.adapter_type() != Spark {
+            return Err(minijinja::Error::new(
+                minijinja::ErrorKind::InvalidOperation,
+                "parse_columns_and_constraints is only available for Databricks/Spark adapter",
+            ));
+        }
+
+        let columns: Vec<Column> = existing_columns
+            .try_iter()
+            .map_err(|e| {
+                minijinja::Error::new(
+                    minijinja::ErrorKind::InvalidOperation,
+                    format!("existing_columns must be iterable: {e}"),
+                )
+            })?
+            .map(|v| {
+                v.downcast_object_ref::<Column>().cloned().ok_or_else(|| {
+                    minijinja::Error::new(
+                        minijinja::ErrorKind::InvalidOperation,
+                        "existing_columns must contain Column objects",
+                    )
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let model_columns_map: BTreeMap<String, DbtColumn> =
+            minijinja_value_to_typed_struct(model_columns.clone()).map_err(|e| {
+                minijinja::Error::new(
+                    minijinja::ErrorKind::SerdeDeserializeError,
+                    format!("model_columns: {e}"),
+                )
+            })?;
+
+        let model_constraints_vec: Vec<ModelConstraint> =
+            minijinja_value_to_typed_struct(model_constraints.clone()).map_err(|e| {
+                minijinja::Error::new(
+                    minijinja::ErrorKind::SerdeDeserializeError,
+                    format!("model_constraints: {e}"),
+                )
+            })?;
+
+        let column_refs: Vec<DbtColumnRef> = model_columns_map
+            .values()
+            .map(|c| Arc::new(c.clone()))
+            .collect();
+
+        let (not_nulls, typed_constraints) =
+            typed_constraint::parse_constraints(&column_refs, &model_constraints_vec).map_err(
+                |e| {
+                    minijinja::Error::new(
+                        minijinja::ErrorKind::InvalidOperation,
+                        format!("parse_constraints: {e}"),
+                    )
+                },
+            )?;
+
+        let model_columns_lower: BTreeMap<String, &DbtColumn> = model_columns_map
+            .iter()
+            .map(|(k, v)| (k.to_lowercase(), v))
+            .collect();
+
+        let enriched_columns: Vec<Column> = columns
+            .iter()
+            .map(|col| {
+                let model_col = model_columns_lower.get(&col.name().to_lowercase()).copied();
+                let not_null = not_nulls.contains(col.name());
+                col.enrich_for_create(model_col, not_null)
+            })
+            .collect();
+
+        let columns_value: Vec<Value> = enriched_columns
+            .into_iter()
+            .map(Value::from_object)
+            .collect();
+
+        let constraints_value: Vec<Value> = typed_constraints
+            .into_iter()
+            .map(|c| Value::from_serialize(&c))
+            .collect();
+
+        Ok(Value::from(vec![
+            Value::from(columns_value),
+            Value::from(constraints_value),
+        ]))
     }
 
     pub fn get_relations_without_caching(

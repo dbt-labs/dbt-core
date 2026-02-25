@@ -61,6 +61,7 @@ impl SemanticCategory {
             | "get_catalog_integration"
             | "get_relation_config"
             | "compare_dbr_version"
+            | "has_dbr_capability"
             | "get_missing_columns"
             | "is_replaceable" => SemanticCategory::MetadataRead,
 
@@ -121,6 +122,7 @@ impl SemanticCategory {
             | "is_ducklake"
             | "build_catalog_relation"
             | "sync_struct_columns"
+            | "resolve_file_format"
             | "get_seed_file_path"
             | "is_uniform" => SemanticCategory::Pure,
 

@@ -2,11 +2,6 @@
     {{ return(True) }}
 {% endmacro %}
 
-{% macro databricks__create_or_replace_clone(this_relation, defer_relation) %}
-    create or replace
-    table {{ this_relation }}
-    shallow clone {{ defer_relation }}
-{% endmacro %}
 
 {%- materialization clone, adapter='databricks' -%}
 
@@ -27,14 +22,16 @@
   {%- endif -%}
 
   {%- set other_existing_relation = load_cached_relation(defer_relation) -%}
-  {%- set file_format = config.get('file_format', validator=validation.any[basestring]) -%}
+  {%- set file_format = adapter.resolve_file_format(config) -%}
 
   -- If this is a database that can do zero-copy cloning of tables, and the other relation is a table, then this will be a table
   -- Otherwise, this will be a view
 
   {% set can_clone_table = can_clone_table() %}
 
-  {%- if other_existing_relation and other_existing_relation.type == 'table' and can_clone_table -%}
+  {# DIVERGENCE BEGIN: relation.type is an Object in Fusion; upstream uses StrEnum. Use '.is_table' instead of `== 'table'`#}
+  {%- if other_existing_relation and other_existing_relation.is_table and can_clone_table -%}
+  {# DIVERGENCE END #}
 
       {%- set target_relation = this.incorporate(type='table') -%}
       {% if existing_relation is not none and not existing_relation.is_table %}
@@ -43,9 +40,15 @@
       {% endif %}
 
       -- as a general rule, data platforms that can clone tables can also do atomic 'create or replace'
-      {% call statement('main') %}
-          {{ create_or_replace_clone(target_relation, defer_relation) }}
-      {% endcall %}
+      {% if other_existing_relation.is_external_table %}
+          {% call statement('main') %}
+              {{ create_or_replace_clone_external(target_relation, defer_relation) }}
+          {% endcall %}
+      {% else %}
+          {% call statement('main') %}
+              {{ create_or_replace_clone(target_relation, defer_relation) }}
+          {% endcall %}
+      {% endif %}
 
       {% set should_revoke = should_revoke(existing_relation, full_refresh_mode=True) %}
       {% do apply_grants(target_relation, grant_config, should_revoke=should_revoke) %}

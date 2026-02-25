@@ -47,7 +47,7 @@
 
 {% macro databricks__reset_csv_table(model, full_refresh, old_relation, agate_table) %}
     {% if old_relation %}
-      {% if old_relation.is_delta and config.get('file_format', default='delta') == 'delta' %}
+      {% if old_relation.can_be_replaced and adapter.resolve_file_format(config) in ('delta', 'iceberg') %}
         {% set sql = create_or_replace_csv_table(model, agate_table, True) %}
       {% else %}
         {{ adapter.drop_relation(old_relation) }}
@@ -80,7 +80,7 @@
             {%- set type = column_override.get(col_name, inferred_type) -%}
             {%- set column_name = (col_name | string) -%}
             {%- set column_comment_clause = "" -%}
-            {%- if column_comment and col_name in model.columns.keys() -%}
+            {%- if column_comment and col_name in model.columns.keys() -%}   
               {%- set comment = model.columns[col_name]['description'] | replace("'", "\\'") -%}
               {%- if comment and comment != "" -%}
                 {%- set column_comment_clause = "comment '" ~ comment ~ "'" -%}
@@ -106,4 +106,13 @@
 
 {% macro databricks__create_csv_table(model, agate_table) %}
   {{ return(create_or_replace_csv_table(model, agate_table)) }}
+{% endmacro %}
+
+{% macro log_seed_operation(agate_table, full_refresh_mode, create_table_sql, sql) %}
+  {% set code = 'CREATE' if full_refresh_mode else 'INSERT' %}
+  {% set rows_affected = (agate_table.rows | length) %}
+
+  {% call noop_statement('main', code ~ ' ' ~ rows_affected, code, rows_affected) %}
+    {{ get_csv_sql(create_table_sql, sql) }};
+  {% endcall %}
 {% endmacro %}

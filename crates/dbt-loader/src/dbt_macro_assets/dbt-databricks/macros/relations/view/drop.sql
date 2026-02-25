@@ -1,3 +1,3 @@
 {% macro databricks__drop_view(relation) -%}
-    drop view if exists {{ relation.render() }}
+  DROP VIEW IF EXISTS {{ relation.render() }}
 {%- endmacro %}

@@ -15,3 +15,28 @@
 
   {%- endif -%}
 {%- endmacro %}
+
+{% macro execute_multiple_statements(statements) %}
+  {%- if statements is string %}
+    {% call statement(name="main") %}
+      {{ statements }}
+    {% endcall %}
+  {%- else %}
+    {%- for sql in statements %}
+      {% call statement(name="main") %}
+        {{ sql }}
+      {% endcall %}
+    {% endfor %}
+  {% endif %}
+{% endmacro %}
+
+{# a user-friendly interface into statements #}
+{% macro run_query_as(sql, name, fetch_result=True) %}
+  {% call statement(name, fetch_result, auto_begin=False) %}
+    {{ sql }}
+  {% endcall %}
+
+  {% if fetch_result %}
+    {{ return(load_result(name).table) }}
+  {% endif %}
+{% endmacro %}

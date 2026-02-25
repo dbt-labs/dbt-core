@@ -77,7 +77,5 @@
     {%- endif %}
   {% endset %}
 
-  {% do log("Running COPY INTO" ~ adapter.redact_credentials(query), info=True) %}
-  {% do run_query(query) %}
-
+  {{ run_query_as(query, 'copy_into', fetch_result=False) }}
 {% endmacro %}

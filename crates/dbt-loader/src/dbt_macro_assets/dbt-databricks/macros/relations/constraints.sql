@@ -9,9 +9,9 @@
   {% set has_databricks_constraints = config.get('persist_constraints', False) %}
 
   {% if (has_model_contract or has_databricks_constraints) %}
-    {% if config.get('file_format', 'delta') != 'delta' %}
+    {% if adapter.resolve_file_format(config) != 'delta' %}
       {# Constraints are only supported for delta tables #}
-      {{ exceptions.warn("Constraints not supported for file format: " ~ config.get('file_format')) }}
+      {{ exceptions.warn("Constraints not supported for file format: " ~ adapter.resolve_file_format(config)) }}
     {% elif relation.is_view %}
       {# Constraints are not supported for views. This point in the code should not have been reached. #}
       {{ exceptions.raise_compiler_error("Constraints not supported for views.") }}
@@ -131,7 +131,7 @@
         {{ exceptions.raise_compiler_error("Constraint of type " ~ type ~ " with no `name` provided, and no md5 utility.") }}
       {% endif %}
     {% endif %}
-    {% set stmt = "alter table " ~ relation ~ " add constraint " ~ name ~ " check (" ~ expression ~ ");" %}
+    {% set stmt = "alter table " ~ relation.render() ~ " add constraint " ~ name ~ " check (" ~ expression ~ ");" %}
     {% do statements.append(stmt) %}
   {% elif type == 'not_null' %}
     {% set column_names = constraint.get('columns', []) %}
@@ -141,7 +141,7 @@
     {% for column_name in column_names %}
       {% set column = model.get('columns', {}).get(column_name) %}
       {% if column %}
-        {% set quoted_name = api.Column.get_name(column) %}
+        {% set quoted_name = adapter.quote(column['name']) %}
         {% set stmt = "alter table " ~ relation.render() ~ " change column " ~ quoted_name ~ " set not null " ~ (constraint.expression or "") ~ ";" %}
         {% do statements.append(stmt) %}
       {% else %}
@@ -162,7 +162,7 @@
       {% if not column %}
         {{ exceptions.warn('Invalid primary key column: ' ~ column_name) }}
       {% else %}
-        {% set quoted_name = api.Column.get_name(column) %}
+        {% set quoted_name = adapter.quote(column['name']) %}
         {% do quoted_names.append(quoted_name) %}
       {% endif %}
     {% endfor %}
@@ -211,7 +211,7 @@
         {% if not column %}
           {{ exceptions.warn('Invalid foreign key column: ' ~ column_name) }}
         {% else %}
-          {% set quoted_name = api.Column.get_name(column) %}
+          {% set quoted_name = adapter.quote(column['name']) %}
           {% do quoted_names.append(quoted_name) %}
         {% endif %}
       {% endfor %}
@@ -223,7 +223,8 @@
         {{ exceptions.raise_compiler_error('No parent table defined for foreign key: ' ~ expression) }}
       {% endif %}
       {% if not "." in parent %}
-        {% set parent = relation.schema ~ "." ~ parent%}
+        {% set parent_relation = api.Relation.create(database=relation.database, schema=relation.schema, identifier=parent, type='table') %}
+        {% set parent = parent_relation.render() %}
       {% endif %}
 
       {% if not name %}
@@ -238,7 +239,11 @@
       {% set stmt = "alter table " ~ relation.render() ~ " add constraint " ~ name ~ " foreign key(" ~ joined_names ~ ") references " ~ parent %}
       {% set parent_columns = constraint.get('to_columns') %}
       {% if parent_columns %}
-        {% set stmt = stmt ~ "(" ~ parent_columns|join(", ") ~ ")"%}
+        {% set quoted_parent_columns = [] %}
+        {% for parent_column in parent_columns %}
+          {% do quoted_parent_columns.append(adapter.quote(parent_column)) %}
+        {% endfor %}
+        {% set stmt = stmt ~ "(" ~ quoted_parent_columns|join(", ") ~ ")"%}
       {% endif %}
     {% endif %}
     {% set stmt = stmt ~ ";" %}

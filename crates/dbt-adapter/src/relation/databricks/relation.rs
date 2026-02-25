@@ -41,6 +41,7 @@ impl StaticBaseRelation for DatabricksRelationType {
         identifier: Option<String>,
         relation_type: Option<RelationType>,
         custom_quoting: Option<ResolvedQuoting>,
+        temporary: Option<bool>,
     ) -> Result<Value, minijinja::Error> {
         Ok(RelationObject::new(Arc::new(DatabricksRelation::new(
             self.adapter_type,
@@ -53,6 +54,7 @@ impl StaticBaseRelation for DatabricksRelationType {
             custom_quoting.unwrap_or(self.quoting),
             None,
             false,
+            temporary.unwrap_or(false),
         )))
         .into_value())
     }
@@ -86,6 +88,8 @@ pub struct DatabricksRelation {
     pub create_constraints: Vec<super::typed_constraint::TypedConstraint>,
     /// Constraints to be applied during ALTER operations
     pub alter_constraints: Vec<super::typed_constraint::TypedConstraint>,
+    /// Whether the relation is a temporary view (session-scoped).
+    pub temporary: bool,
 }
 
 impl BaseRelationProperties for DatabricksRelation {
@@ -166,6 +170,7 @@ impl DatabricksRelation {
         custom_quoting: ResolvedQuoting,
         metadata: Option<BTreeMap<String, String>>,
         is_delta: bool,
+        temporary: bool,
     ) -> Self {
         debug_assert!(matches!(
             adapter_type,
@@ -186,10 +191,12 @@ impl DatabricksRelation {
             is_delta,
             create_constraints: Vec::new(),
             alter_constraints: Vec::new(),
+            temporary,
         }
     }
 
     /// Create a new relation with a policy
+    #[allow(clippy::too_many_arguments)]
     pub fn new_with_policy(
         adapter_type: AdapterType,
         path: RelationPath,
@@ -198,6 +205,7 @@ impl DatabricksRelation {
         quote_policy: Policy,
         metadata: Option<BTreeMap<String, String>>,
         is_delta: bool,
+        temporary: bool,
     ) -> Self {
         Self {
             adapter_type,
@@ -210,6 +218,7 @@ impl DatabricksRelation {
             is_delta,
             create_constraints: Vec::new(),
             alter_constraints: Vec::new(),
+            temporary,
         }
     }
 
@@ -226,6 +235,28 @@ impl DatabricksRelation {
             }
         }
     }
+
+    /// Create a copy of the relation with the given constraints added.
+    ///
+    /// Reference: https://github.com/databricks/dbt-databricks/blob/25caa2a14ed0535f08f6fd92e29b39df1f453e4d/dbt/adapters/databricks/relation.py#L213-L217
+    pub fn enrich(&self, constraints: &[super::typed_constraint::TypedConstraint]) -> Self {
+        let mut relation = self.clone();
+        for constraint in constraints {
+            relation.add_constraint(constraint.clone());
+        }
+        relation
+    }
+
+    /// Render constraint DDL for CREATE TABLE.
+    ///
+    /// Reference: https://github.com/databricks/dbt-databricks/blob/25caa2a14ed0535f08f6fd92e29b39df1f453e4d/dbt/adapters/databricks/relation.py#L219-L221
+    pub fn render_constraints_for_create(&self) -> String {
+        self.create_constraints
+            .iter()
+            .map(|c| c.render())
+            .collect::<Vec<_>>()
+            .join(", ")
+    }
 }
 
 impl BaseRelation for DatabricksRelation {
@@ -235,6 +266,10 @@ impl BaseRelation for DatabricksRelation {
         self.path.database.as_ref().map(|s| s.to_lowercase()) == Some(SYSTEM_DATABASE.to_string())
             || self.path.schema.as_ref().map(|s| s.to_lowercase())
                 == Some(INFORMATION_SCHEMA_SCHEMA.to_string())
+    }
+
+    fn has_information(&self) -> bool {
+        self.metadata.is_some()
     }
 
     fn as_any(&self) -> &dyn Any {
@@ -282,6 +317,7 @@ impl BaseRelation for DatabricksRelation {
             self.quote_policy,
             self.metadata.clone(),
             self.is_delta,
+            self.temporary,
         );
 
         // Preserve constraints
@@ -297,6 +333,10 @@ impl BaseRelation for DatabricksRelation {
                 == Some(DEFAULT_DATABRICKS_DATABASE.to_string());
 
         Value::from(result)
+    }
+
+    fn is_temporary(&self) -> bool {
+        self.temporary
     }
 
     fn is_delta(&self) -> bool {
@@ -334,6 +374,7 @@ impl BaseRelation for DatabricksRelation {
             custom_quoting,
             None,
             false,
+            false,
         )))
     }
 
@@ -364,6 +405,7 @@ mod tests {
                 Some("i".to_string()),
                 Some(RelationType::Table),
                 Some(DEFAULT_RESOLVED_QUOTING),
+                None,
             )
             .unwrap();
 
@@ -388,6 +430,7 @@ mod tests {
                 Some("i".to_string()),
                 Some(RelationType::Table),
                 Some(DEFAULT_RESOLVED_QUOTING),
+                None,
             )
             .unwrap();
 
@@ -411,6 +454,7 @@ mod tests {
             DEFAULT_RESOLVED_QUOTING,
             None,
             false,
+            false,
         );
         assert!(relation.is_system());
 
@@ -424,6 +468,7 @@ mod tests {
             None,
             DEFAULT_RESOLVED_QUOTING,
             None,
+            false,
             false,
         );
         assert!(relation.is_system());
@@ -439,6 +484,7 @@ mod tests {
             DEFAULT_RESOLVED_QUOTING,
             None,
             false,
+            false,
         );
         assert!(relation.is_system());
 
@@ -452,6 +498,7 @@ mod tests {
             None,
             DEFAULT_RESOLVED_QUOTING,
             None,
+            false,
             false,
         );
         assert!(relation.is_system());
@@ -467,6 +514,7 @@ mod tests {
             DEFAULT_RESOLVED_QUOTING,
             None,
             false,
+            false,
         );
         assert!(!relation.is_system());
 
@@ -480,6 +528,7 @@ mod tests {
             None,
             DEFAULT_RESOLVED_QUOTING,
             None,
+            false,
             false,
         );
         assert!(!relation.is_system());
@@ -495,6 +544,7 @@ mod tests {
             DEFAULT_RESOLVED_QUOTING,
             None,
             false,
+            false,
         );
         assert!(!relation.is_system());
 
@@ -508,6 +558,7 @@ mod tests {
             None,
             DEFAULT_RESOLVED_QUOTING,
             None,
+            false,
             false,
         );
         assert!(relation.is_system());
@@ -526,6 +577,7 @@ mod tests {
             None,
             DEFAULT_RESOLVED_QUOTING,
             None,
+            false,
             false,
         );
 

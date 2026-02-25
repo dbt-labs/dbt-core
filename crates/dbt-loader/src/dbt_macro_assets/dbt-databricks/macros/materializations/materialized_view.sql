@@ -5,8 +5,9 @@
     {{ run_hooks(pre_hooks, inside_transaction=False) }}
 
     {% set build_sql = materialized_view_get_build_sql(existing_relation, target_relation) %}
+
     {% if build_sql == '' %}
-        {{ materialized_view_execute_no_op(target_relation) }}
+        {{ execute_no_op(target_relation) }}
     {% else %}
         {{ materialized_view_execute_build_sql(build_sql, existing_relation, target_relation, post_hooks) }}
     {% endif %}
@@ -17,8 +18,8 @@
 
 {% endmaterialization %}
 
-
 {% macro materialized_view_get_build_sql(existing_relation, target_relation) %}
+    {% set sql = adapter.clean_sql(sql) %}
 
     {% set full_refresh_mode = should_full_refresh() %}
 
@@ -31,10 +32,11 @@
 
         -- get config options
         {% set on_configuration_change = config.get('on_configuration_change') %}
-        {% set configuration_changes = get_materialized_view_configuration_changes(existing_relation, config) %}
+        {% set configuration_changes = get_configuration_changes(existing_relation) %}
 
         {% if configuration_changes is none %}
             {% set build_sql = refresh_materialized_view(target_relation) %}
+
         {% elif on_configuration_change == 'apply' %}
             {% set build_sql = get_alter_materialized_view_as_sql(target_relation, configuration_changes, sql, existing_relation, None, None) %}
         {% elif on_configuration_change == 'continue' %}
@@ -56,44 +58,25 @@
 {% endmacro %}
 
 
-{% macro materialized_view_execute_no_op(target_relation) %}
-    {% do store_raw_result(
-        name="main",
-        message="skip " ~ target_relation,
-        code="skip",
-        rows_affected="-1"
-    ) %}
-{% endmacro %}
-
-
 {% macro materialized_view_execute_build_sql(build_sql, existing_relation, target_relation, post_hooks) %}
 
     -- `BEGIN` happens here:
     {{ run_hooks(pre_hooks, inside_transaction=True) }}
 
     {% set grant_config = config.get('grants') %}
-    {%- if build_sql is string %}
-        {% call statement(name="main") %}
-            {{ build_sql }}
-        {% endcall %}
-    {%- else %}
-        {%- for sql in build_sql %}
-            {% call statement(name="main") %}
-                {{ sql }}
-            {% endcall %}
-        {% endfor %}
-    {% endif %}
+    {% set tags = config.get('databricks_tags') %}
 
+    {{ execute_multiple_statements(build_sql) }}
+
+    {%- do apply_tags(target_relation, tags) -%}
+
+    {% set column_tags = adapter.get_column_tags_from_model(config.model) %}
+    {% if column_tags %}
+      {{ apply_column_tags(target_relation, column_tags) }}
+    {% endif %}
 
     {% set should_revoke = should_revoke(existing_relation, full_refresh_mode=True) %}
     {% do apply_grants(target_relation, grant_config, should_revoke=should_revoke) %}
-
-    {% set column_tags = adapter.get_column_tags_from_model(config.model) %}
-    {% if column_tags and column_tags.tags %}
-      {% do apply_column_tags(target_relation, column_tags) %}
-    {% endif %}
-
-    {% do persist_docs(target_relation, model, for_relation=False) %}
 
     {{ run_hooks(post_hooks, inside_transaction=True) }}
 

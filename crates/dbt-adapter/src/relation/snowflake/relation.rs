@@ -34,6 +34,7 @@ impl StaticBaseRelation for SnowflakeRelationType {
         _identifier: Option<String>,
         _relation_type: Option<RelationType>,
         _custom_quoting: Option<ResolvedQuoting>,
+        _temporary: Option<bool>,
     ) -> Result<Value, minijinja::Error> {
         Err(minijinja::Error::new(
             minijinja::ErrorKind::InvalidOperation,

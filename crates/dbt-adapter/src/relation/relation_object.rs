@@ -12,7 +12,7 @@ use minijinja::{State, Value, listener::RenderingEventListener};
 use serde::Deserialize;
 
 use crate::relation::bigquery::*;
-use crate::relation::databricks::DatabricksRelation;
+use crate::relation::databricks::{DatabricksRelation, typed_constraint::TypedConstraint};
 use crate::relation::postgres::PostgresRelation;
 use crate::relation::redshift::RedshiftRelation;
 use crate::relation::salesforce::SalesforceRelation;
@@ -79,6 +79,64 @@ impl RelationObject {
     pub fn event_time(&self) -> Option<&str> {
         self.event_time.as_deref()
     }
+
+    /// Databricks: enrich relation with constraints (for get_column_and_constraints_sql)
+    fn relation_enrich(self: &Arc<Self>, args: &[Value]) -> Result<Value, minijinja::Error> {
+        let dbx = self
+            .relation
+            .as_any()
+            .downcast_ref::<DatabricksRelation>()
+            .ok_or_else(|| {
+                minijinja::Error::new(
+                    minijinja::ErrorKind::InvalidOperation,
+                    "enrich is only available for Databricks relations",
+                )
+            })?;
+        let constraints_val = args.first().cloned().unwrap_or_default();
+        let constraints: Vec<TypedConstraint> = constraints_val
+            .try_iter()
+            .map_err(|e| {
+                minijinja::Error::new(
+                    minijinja::ErrorKind::InvalidOperation,
+                    format!("enrich constraints must be iterable: {e}"),
+                )
+            })?
+            .map(|v| {
+                minijinja_value_to_typed_struct::<TypedConstraint>(v).map_err(|e| {
+                    minijinja::Error::new(
+                        minijinja::ErrorKind::SerdeDeserializeError,
+                        format!("enrich constraint item: {e}"),
+                    )
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let enriched = dbx.enrich(&constraints);
+        Ok(RelationObject::new(Arc::new(enriched)).into_value())
+    }
+
+    /// Databricks: render constraints DDL for CREATE TABLE
+    fn relation_render_constraints_for_create(self: &Arc<Self>) -> Result<Value, minijinja::Error> {
+        let dbx = self
+            .relation
+            .as_any()
+            .downcast_ref::<DatabricksRelation>()
+            .ok_or_else(|| {
+                minijinja::Error::new(
+                    minijinja::ErrorKind::InvalidOperation,
+                    "render_constraints_for_create is only available for Databricks relations",
+                )
+            })?;
+        Ok(Value::from(dbx.render_constraints_for_create()))
+    }
+
+    /// Databricks: get create_constraints for get_column_and_constraints_sql
+    fn relation_create_constraints(self: &Arc<Self>) -> Option<Value> {
+        let dbx = self
+            .relation
+            .as_any()
+            .downcast_ref::<DatabricksRelation>()?;
+        Some(Value::from_serialize(&dbx.create_constraints))
+    }
 }
 
 impl fmt::Debug for RelationObject {
@@ -137,6 +195,8 @@ impl Object for RelationObject {
             "is_iceberg_format" => Ok(self.is_iceberg_format()),
             // Below are available for Databricks
             "is_hive_metastore" => Ok(self.is_hive_metastore()),
+            "enrich" => self.relation_enrich(args),
+            "render_constraints_for_create" => self.relation_render_constraints_for_create(),
             // Below are available for BigQuery and Redshift
             "materialized_view_config_changeset" => self.materialized_view_config_changeset(args),
             _ => Err(minijinja::Error::new(
@@ -154,12 +214,14 @@ impl Object for RelationObject {
 
             Some("is_table") => Some(Value::from(self.is_table())),
             Some("is_delta") => Some(Value::from(self.is_delta())),
+            Some("create_constraints") => self.relation_create_constraints(),
             Some("is_view") => Some(Value::from(self.is_view())),
             Some("is_materialized_view") => Some(Value::from(self.is_materialized_view())),
             Some("is_streaming_table") => Some(Value::from(self.is_streaming_table())),
             Some("is_dynamic_table") => Some(Value::from(self.is_dynamic_table())),
             Some("is_cte") => Some(Value::from(self.is_cte())),
             Some("is_pointer") => Some(Value::from(self.is_pointer())),
+            Some("temporary") => Some(Value::from(self.is_temporary())),
             Some("type") => Some(self.relation_type_as_value()),
             Some("can_be_renamed") => Some(Value::from(self.can_be_renamed())),
             Some("can_be_replaced") => Some(Value::from(self.can_be_replaced())),
@@ -276,6 +338,7 @@ pub fn do_create_relation(
             None,
             custom_quoting,
             None,
+            false,
             false,
         )) as Box<dyn BaseRelation>,
         AdapterType::Salesforce => Box::new(SalesforceRelation::new(
@@ -424,6 +487,7 @@ pub trait StaticBaseRelation: fmt::Debug + Send + Sync {
         identifier: Option<String>,
         relation_type: Option<RelationType>,
         custom_quoting: Option<ResolvedQuoting>,
+        temporary: Option<bool>,
     ) -> Result<Value, minijinja::Error>;
 
     fn get_adapter_type(&self) -> String;
@@ -437,6 +501,7 @@ pub trait StaticBaseRelation: fmt::Debug + Send + Sync {
         let identifier = iter.next_kwarg::<Option<String>>("identifier")?;
         let relation_type = iter.next_kwarg::<Option<Value>>("type")?;
         let custom_quoting = iter.next_kwarg::<Option<Value>>("quote_policy")?;
+        let temporary = iter.next_kwarg::<Option<bool>>("temporary")?;
         iter.finish()?;
 
         // error is intentionally silenced
@@ -461,6 +526,7 @@ pub trait StaticBaseRelation: fmt::Debug + Send + Sync {
                 }
             }),
             custom_quoting,
+            temporary,
         )
     }
 

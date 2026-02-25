@@ -7,7 +7,7 @@
 {% set build_sql = streaming_table_get_build_sql(existing_relation, target_relation) %}
 
     {% if build_sql == '' %}
-        {{ streaming_table_execute_no_op(target_relation) }}
+        {{ execute_no_op(target_relation) }}
     {% else %}
         {{ streaming_table_execute_build_sql(build_sql, existing_relation, target_relation, post_hooks) }}
     {% endif %}
@@ -20,6 +20,7 @@
 
 
 {% macro streaming_table_get_build_sql(existing_relation, target_relation) %}
+    {% set sql = adapter.clean_sql(sql) %}
 
     {% set full_refresh_mode = should_full_refresh() %}
 
@@ -31,8 +32,8 @@
     {% else %}
 
         -- get config options
-        {% set on_configuration_change = config.get('on_configuration_change', 'apply') %}
-        {% set configuration_changes = get_streaming_table_configuration_changes(existing_relation, config) %}
+        {% set on_configuration_change = config.get('on_configuration_change') %}
+        {% set configuration_changes = get_configuration_changes(existing_relation) %}
         {% if configuration_changes is none %}
             {{ log("REFRESHING STREAMING TABLE: " ~ target_relation) }}
             {% set build_sql = refresh_streaming_table(target_relation, sql) %}
@@ -57,46 +58,25 @@
 
 {% endmacro %}
 
-
-{% macro streaming_table_execute_no_op(target_relation) %}
-    {% do store_raw_result(
-        name="main",
-        message="skip " ~ target_relation,
-        code="skip",
-        rows_affected="-1"
-    ) %}
-{% endmacro %}
-
-
 {% macro streaming_table_execute_build_sql(build_sql, existing_relation, target_relation, post_hooks) %}
 
     -- `BEGIN` happens here:
     {{ run_hooks(pre_hooks, inside_transaction=True) }}
 
     {% set grant_config = config.get('grants') %}
+    {% set tags = config.get('databricks_tags') %}
 
-    {%- if build_sql is string %}
-        {% call statement(name="main") %}
-            {{ build_sql }}
-        {% endcall %}
-    {%- else %}
-        {%- for sql in build_sql %}
-            {% call statement(name="main") %}
-                {{ sql }}
-            {% endcall %}
-        {% endfor %}
-    {% endif %}
+    {{ execute_multiple_statements(build_sql) }}
 
+    {%- do apply_tags(target_relation, tags) -%}
 
     {% set should_revoke = should_revoke(existing_relation, full_refresh_mode=True) %}
     {% do apply_grants(target_relation, grant_config, should_revoke=should_revoke) %}
 
     {% set column_tags = adapter.get_column_tags_from_model(config.model) %}
-    {% if column_tags and column_tags.tags %}
-      {% do apply_column_tags(target_relation, column_tags) %}
+    {% if column_tags and column_tags.set_column_tags %}
+        {{ apply_column_tags(target_relation, column_tags) }}
     {% endif %}
-
-    {% do persist_docs(target_relation, model, for_relation=False) %}
 
     {{ run_hooks(post_hooks, inside_transaction=True) }}
 

@@ -30,6 +30,9 @@ use dbt_features::feature_stack::FeatureStack;
 // Pre-compiled regex patterns for optimal performance
 static SCHEMA_PATTERN: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"(?i)fusion_tests_schema__[a-zA-Z0-9_]*").unwrap());
+/// Matches the ___<timestamp>___ suffix from random_schema() used for test isolation
+static SCHEMA_TIMESTAMP_SUFFIX_PATTERN: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"___\d+___").unwrap());
 static ISO_TIMESTAMP_PATTERN: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z").unwrap());
 static TIME_PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new(r"\b\d{2}:\d{2}:\d{2}\b").unwrap());
@@ -226,8 +229,12 @@ pub fn maybe_normalize_slashes(output: String) -> String {
 pub fn maybe_normalize_schema_name(output: String) -> String {
     // Use pre-compiled regex to replace schema patterns like "fusion_tests_schema__alex"
     // with "fusion_tests_schema__replaced" without breaking duration patterns like "44.65s"
-    SCHEMA_PATTERN
+    let replaced = SCHEMA_PATTERN
         .replace_all(&output, "fusion_tests_schema__replaced")
+        .to_string();
+    // Strip ___<timestamp>___ suffix from random_schema() used for test isolation
+    SCHEMA_TIMESTAMP_SUFFIX_PATTERN
+        .replace_all(&replaced, "")
         .to_string()
 }
 

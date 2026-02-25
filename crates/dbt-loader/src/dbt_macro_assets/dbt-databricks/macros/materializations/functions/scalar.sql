@@ -6,5 +6,5 @@
 
 {% macro databricks__scalar_function_body_sql() %}
     RETURN
-    {{ compiled_code }}
+    {{ model.compiled_code }}
 {% endmacro %}

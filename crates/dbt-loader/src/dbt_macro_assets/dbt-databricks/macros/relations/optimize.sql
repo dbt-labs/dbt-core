@@ -5,7 +5,7 @@
 {%- macro databricks__optimize(relation) -%}
   {%- if var('DATABRICKS_SKIP_OPTIMIZE', 'false')|lower != 'true' and
         var('databricks_skip_optimize', 'false')|lower != 'true' and
-        config.get('file_format', 'delta') == 'delta' -%}
+        adapter.resolve_file_format(config) == 'delta' -%}
     {%- if (config.get('zorder', False) or config.get('liquid_clustered_by', False)) or config.get('auto_liquid_cluster', False) -%}
       {%- call statement('run_optimize_stmt') -%}
         {{ get_optimize_sql(relation) }}
@@ -15,8 +15,8 @@
 {%- endmacro -%}
 
 {%- macro get_optimize_sql(relation) %}
-  optimize {{ relation }}
-  {%- if config.get('zorder', False) and config.get('file_format', 'delta') == 'delta' %}
+  optimize {{ relation.render() }}
+  {%- if config.get('zorder', False) and adapter.resolve_file_format(config) == 'delta' %}
     {%- if config.get('liquid_clustered_by', False) or config.get('auto_liquid_cluster', False) %}
       {{ exceptions.warn("Both zorder and liquid_clustering are set but they are incompatible. zorder will be ignored.") }}
     {%- else %}

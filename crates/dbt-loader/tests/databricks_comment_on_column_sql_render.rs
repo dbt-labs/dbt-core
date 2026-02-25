@@ -96,6 +96,6 @@ fn databricks_comment_on_column_sql_uses_legacy_alter_table_syntax() {
 
     assert_eq!(
         rendered.trim(),
-        "alter table `dbt`.`dbt_entities`.`ent_shopify_inventory_quantity` change column `id` comment 'Primary key for the inventory quantity record.'"
+        "ALTER TABLE `dbt`.`dbt_entities`.`ent_shopify_inventory_quantity` ALTER COLUMN `id` COMMENT 'Primary key for the inventory quantity record.'"
     );
 }

@@ -87,6 +87,9 @@ impl Object for DbtNamespace {
                 let database = iter.next_arg::<&str>()?;
                 let schema = iter.next_arg::<&str>()?;
                 let identifier = iter.next_arg::<&str>()?;
+                // Consume optional needs_information (dbt-databricks v11.4+); we don't use it for
+                // parse-phase tracking; the adapter ignores it when relations cache isn't implemented.
+                let _ = iter.next_kwarg::<Option<bool>>("needs_information")?;
                 iter.finish()?;
                 // NOTE(felipecrv): this doens't have to be called directly when we move to BridgeAdapter
                 self.parse_adapter

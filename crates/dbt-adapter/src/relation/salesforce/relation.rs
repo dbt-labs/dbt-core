@@ -26,6 +26,7 @@ impl StaticBaseRelation for SalesforceRelationType {
         identifier: Option<String>,
         relation_type: Option<RelationType>,
         _custom_quoting: Option<ResolvedQuoting>,
+        _temporary: Option<bool>,
     ) -> Result<Value, minijinja::Error> {
         Ok(RelationObject::new(Arc::new(SalesforceRelation::new(
             database,

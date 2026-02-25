@@ -20,8 +20,10 @@
 {% macro apply_tblproperties(relation, tblproperties) -%}
   {% set tblproperty_statment = databricks__tblproperties_clause(tblproperties) %}
   {% if tblproperty_statment %}
-    {%- call statement('apply_tblproperties') -%}
-      ALTER {{ relation.type }} {{ relation.render() }} SET {{ tblproperty_statment}}
+    {%- call statement('main') -%}
+      {#- DIVERGENCE BEGIN: upstream uses relation.type.render(); we use render_type() Jinja macro instead -#}
+      ALTER {{ render_type(relation.type) }} {{ relation.render() }} SET {{ tblproperty_statment}}
+      {#- DIVERGENCE END -#}
     {%- endcall -%}
   {% endif %}
 {%- endmacro -%}

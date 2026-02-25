@@ -889,70 +889,88 @@ impl BaseAdapter for BridgeAdapter {
         database: &str,
         schema: &str,
         identifier: &str,
+        needs_information: bool,
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
                 // Skip cache in replay mode
                 let is_replay = adapter.as_replay().is_some();
-                if !is_replay {
-                    let temp_relation = crate::relation::do_create_relation(
-                        adapter.adapter_type(),
-                        database.to_string(),
-                        schema.to_string(),
-                        Some(identifier.to_string()),
-                        None,
-                        adapter.quoting(),
-                    )?;
 
+                let temp_relation = crate::relation::do_create_relation(
+                    adapter.adapter_type(),
+                    database.to_string(),
+                    schema.to_string(),
+                    Some(identifier.to_string()),
+                    None,
+                    adapter.quoting(),
+                )?;
+
+                let maybe_cache_result = if is_replay {
+                    None
+                } else {
+                    // Cache hit
+                    if let Some(cache_result) =
+                        self.get_relation_value_from_cache(temp_relation.as_ref())
+                    {
+                        Some(cache_result)
+                    } else {
+                        // Cache miss: execute list_relations
+                        // Skip when relation has neither catalog nor schema (e.g. temporary view)
+                        // - list_relations cannot query without schema
+                        // - CatalogAndSchema::from would panic
+                        let resolved_catalog =
+                            temp_relation.database_as_resolved_str().unwrap_or_default();
+                        let resolved_schema =
+                            temp_relation.schema_as_resolved_str().unwrap_or_default();
+                        let has_schema =
+                            !resolved_catalog.is_empty() || !resolved_schema.is_empty();
+
+                        if has_schema {
+                            let mut conn = self
+                                .borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
+                            let db_schema = CatalogAndSchema::from(temp_relation.as_ref());
+                            let query_ctx = query_ctx_from_state(state)?
+                                .with_desc("get_relation > list_relations call");
+                            let maybe_relations_list =
+                                adapter.list_relations(&query_ctx, conn.as_mut(), &db_schema);
+
+                            if let Ok(relations_list) = maybe_relations_list {
+                                let _ = self.update_relation_cache(BTreeMap::from([(
+                                    db_schema,
+                                    relations_list,
+                                )]));
+
+                                self.get_relation_value_from_cache(temp_relation.as_ref())
+                                    .or(Some(none_value()))
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    }
+                };
+
+                // Return early when cache is sufficient:
+                // - Relation doesn't exist (contains_full_schema): return none_value
+                // - Cache hit with relation: return cached value unless needs_information && !has_information
+                if let Some(cache_result) = maybe_cache_result {
                     if let Some(cached_entry) = self
                         .engine()
                         .relation_cache()
                         .get_relation(temp_relation.as_ref())
                     {
-                        return Ok(cached_entry.relation().as_value());
-                    }
-                    // If we have captured the entire schema previously, we can check for non-existence
-                    // In these cases, return early with a None value
-                    else if self
-                        .engine()
-                        .relation_cache()
-                        .contains_full_schema_for_relation(temp_relation.as_ref())
-                    {
-                        return Ok(none_value());
-                    }
-
-                    let mut conn =
-                        self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
-                    let db_schema = CatalogAndSchema::from(temp_relation.as_ref());
-                    let query_ctx = query_ctx_from_state(state)?
-                        .with_desc("get_relation > list_relations call");
-                    let maybe_relations_list =
-                        adapter.list_relations(&query_ctx, conn.as_mut(), &db_schema);
-
-                    // TODO(jason): We are ignoring this optimization in the logging
-                    // this needs to be reported somewhere
-                    if let Ok(relations_list) = maybe_relations_list {
-                        let _ = self
-                            .update_relation_cache(BTreeMap::from([(db_schema, relations_list)]));
-
-                        // After calling list_relations_without_caching, the cache should be populated
-                        // with the full schema.
-                        if let Some(cached_entry) = self
-                            .engine()
-                            .relation_cache()
-                            .get_relation(temp_relation.as_ref())
-                        {
+                        let can_use_cache =
+                            !needs_information || cached_entry.relation().has_information();
+                        if can_use_cache {
                             return Ok(cached_entry.relation().as_value());
-                        } else {
-                            return Ok(none_value());
                         }
+                    } else {
+                        return Ok(cache_result);
                     }
                 }
 
-                // TODO(jason): Adjust replay mode to be integrated with the cache
-                // Move on to query against the remote when we have:
-                // 1. A cache miss and we failed to execute list_relations
-                // 2. The schema was not previously cached
+                // Execute get_relation when: cache miss, list_relations failed, or needs_information && !has_information
                 let mut conn =
                     self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                 let query_ctx = query_ctx_from_state(state)?.with_desc("get_relation adapter call");
@@ -977,6 +995,7 @@ impl BaseAdapter for BridgeAdapter {
                 }
             }
             Parse(adapter_parse_state) => {
+                // TODO(jason): record needs_information calls in parse phase for prefetc
                 let adapter_type = adapter_parse_state.adapter_type;
                 adapter_parse_state
                     .record_get_relation_call(state, database, schema, identifier)?;
@@ -1493,6 +1512,14 @@ impl BaseAdapter for BridgeAdapter {
     ) -> Result<Value, minijinja::Error> {
         match &self.inner {
             Typed { adapter, .. } => {
+                let resolved_catalog = schema_relation
+                    .database_as_resolved_str()
+                    .unwrap_or_default();
+                let resolved_schema = schema_relation.schema_as_resolved_str().unwrap_or_default();
+                if resolved_catalog.is_empty() && resolved_schema.is_empty() {
+                    return Ok(empty_vec_value());
+                }
+
                 let query_ctx = query_ctx_from_state(state)?
                     .with_desc("list_relations_without_caching adapter call");
                 let mut conn =
@@ -1511,6 +1538,23 @@ impl BaseAdapter for BridgeAdapter {
                 ))
             }
             Parse(_) => Ok(empty_vec_value()),
+        }
+    }
+
+    #[tracing::instrument(skip(self, state), level = "trace")]
+    fn has_dbr_capability(
+        &self,
+        state: &State,
+        capability_name: &str,
+    ) -> Result<Value, minijinja::Error> {
+        match &self.inner {
+            Typed { adapter, .. } => {
+                let mut conn =
+                    self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
+                let result = adapter.has_dbr_capability(state, conn.as_mut(), capability_name)?;
+                Ok(Value::from(result))
+            }
+            Parse(_) => Ok(Value::from(false)),
         }
     }
 
@@ -1622,6 +1666,21 @@ impl BaseAdapter for BridgeAdapter {
                 Ok(Value::from(result))
             }
             Parse(_) => Ok(Value::from(false)),
+        }
+    }
+
+    #[tracing::instrument(skip(self, config), level = "trace")]
+    fn resolve_file_format(
+        &self,
+        _: &State,
+        config: ModelConfig,
+    ) -> Result<Value, minijinja::Error> {
+        match &self.inner {
+            Typed { adapter, .. } => {
+                let file_format = adapter.resolve_file_format(config)?;
+                Ok(Value::from(file_format))
+            }
+            Parse(_) => Ok(Value::from("delta")),
         }
     }
 
@@ -1747,6 +1806,28 @@ impl BaseAdapter for BridgeAdapter {
                 Ok(result)
             }
             Parse(_) => Ok(none_value()),
+        }
+    }
+
+    #[tracing::instrument(skip_all, level = "trace")]
+    fn parse_columns_and_constraints(
+        &self,
+        state: &State,
+        existing_columns: &Value,
+        model_columns: &Value,
+        model_constraints: &Value,
+    ) -> Result<Value, minijinja::Error> {
+        match &self.inner {
+            Typed { adapter, .. } => adapter.parse_columns_and_constraints(
+                state,
+                existing_columns,
+                model_columns,
+                model_constraints,
+            ),
+            Parse(_) => Ok(Value::from(vec![
+                Value::from(Vec::<Value>::new()),
+                Value::from(Vec::<Value>::new()),
+            ])),
         }
     }
 
@@ -2023,6 +2104,25 @@ impl Object for BridgeAdapter {
 
     fn get_value(self: &Arc<Self>, key: &Value) -> Option<Value> {
         dispatch_adapter_get_value(&**self, key)
+    }
+}
+
+impl BridgeAdapter {
+    fn get_relation_value_from_cache(&self, temp_relation: &dyn BaseRelation) -> Option<Value> {
+        if let Some(cached_entry) = self.engine().relation_cache().get_relation(temp_relation) {
+            Some(cached_entry.relation().as_value())
+        }
+        // If we have captured the entire schema previously, we can check for non-existence
+        // In these cases, return early with a None value
+        else if self
+            .engine()
+            .relation_cache()
+            .contains_full_schema_for_relation(temp_relation)
+        {
+            Some(none_value())
+        } else {
+            None
+        }
     }
 }
 
