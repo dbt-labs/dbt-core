@@ -356,6 +356,13 @@ impl BaseRelation for DatabricksRelation {
         component.to_lowercase()
     }
 
+    /// Mirrors Python `DatabricksRelation.render()` → `super().render().lower()`.
+    /// Databricks identifiers are case-insensitive even when backtick-quoted,
+    /// so lowercasing the rendered string is semantically correct.
+    fn render_self_as_str(&self) -> String {
+        self.base_render_self_as_str().to_ascii_lowercase()
+    }
+
     fn create_relation(
         &self,
         database: Option<String>,
@@ -438,6 +445,34 @@ mod tests {
         assert_eq!(
             relation.inner().render_self().unwrap().as_str().unwrap(),
             "`s`.`i`"
+        );
+    }
+
+    #[test]
+    fn test_render_lowercases_identifiers() {
+        // Python DatabricksRelation.render() calls super().render().lower(),
+        // lowercasing the entire rendered relation string.
+        // Databricks backtick-quoted identifiers are case-insensitive, so
+        // this is semantically correct and matches Mantle's behavior.
+        let relation_type = DatabricksRelationType {
+            adapter_type: AdapterType::Databricks,
+            quoting: DEFAULT_RESOLVED_QUOTING,
+        };
+        let relation = relation_type
+            .try_new(
+                Some("dbt".to_string()),
+                Some("dbt_staging".to_string()),
+                Some("stg_pinterest_campaign_INT".to_string()),
+                Some(RelationType::Table),
+                Some(DEFAULT_RESOLVED_QUOTING),
+                None,
+            )
+            .unwrap();
+
+        let relation = relation.downcast_object::<RelationObject>().unwrap();
+        assert_eq!(
+            relation.inner().render_self().unwrap().as_str().unwrap(),
+            "`dbt`.`dbt_staging`.`stg_pinterest_campaign_int`"
         );
     }
 

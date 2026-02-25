@@ -464,8 +464,12 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
     /// For example, they'll be upper case in Snowflake https://docs.snowflake.com/en/sql-reference/identifiers-syntax#unquoted-identifiers
     fn normalize_component(&self, component: &str) -> String;
 
-    /// Render this relation as a string
-    fn render_self_as_str(&self) -> String {
+    /// Base rendering logic shared by all adapters.
+    ///
+    /// Adapter-specific overrides of [`render_self_as_str`] can call this
+    /// to get the default rendering and then post-process it (e.g. Databricks
+    /// lowercases the result to match Python `DatabricksRelation.render()`).
+    fn base_render_self_as_str(&self) -> String {
         if let Some(RelationType::Ephemeral) = self.relation_type() {
             return format!("{}{}", DBT_CTE_PREFIX, self.identifier());
         }
@@ -502,6 +506,15 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
         }
 
         parts.join(".")
+    }
+
+    /// Render this relation as a string.
+    ///
+    /// The default delegates to [`base_render_self_as_str`].  Adapters that
+    /// need post-processing (e.g. lowercasing) should override this method
+    /// and call `base_render_self_as_str()` internally.
+    fn render_self_as_str(&self) -> String {
+        self.base_render_self_as_str()
     }
 
     /// Render this relation
