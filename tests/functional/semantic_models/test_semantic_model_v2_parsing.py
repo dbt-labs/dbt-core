@@ -14,6 +14,7 @@ from tests.functional.assertions.test_runner import dbtTestRunner
 from tests.functional.semantic_models.fixtures import (
     base_schema_yml_v2,
     base_schema_yml_v2_with_custom_sm_name,
+    derived_semantics_with_doc_jinja_yml,
     derived_semantics_yml,
     fct_revenue_sql,
     metricflow_time_spine_sql,
@@ -614,6 +615,29 @@ class TestConversionMetricNoBaseMetricFails:
         result = runner.invoke(["parse"])
         assert not result.success
         assert "base_metric is required for conversion metrics." in str(result.exception)
+
+
+class TestDerivedSemanticsWithDocJinjaParsingWorks:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": semantic_model_schema_yml_v2 + derived_semantics_with_doc_jinja_yml,
+            "fct_revenue.sql": fct_revenue_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "docs.md": semantic_model_descriptions,
+        }
+
+    def test_derived_semantics_doc_jinja_parsing(self, project) -> None:
+        runner = dbtTestRunner()
+        result = runner.invoke(["parse"])
+        assert result.success
+        manifest = result.result
+        assert len(manifest.semantic_models) == 1
+        semantic_model = manifest.semantic_models["semantic_model.test.fct_revenue"]
+        entities = {entity.name: entity for entity in semantic_model.entities}
+        assert entities["derived_id_entity"].description == "qux"
+        dimensions = {dimension.name: dimension for dimension in semantic_model.dimensions}
+        assert dimensions["derived_id_dimension"].description == "bar"
 
 
 class TestDerivedSemanticsParsingWorks:
