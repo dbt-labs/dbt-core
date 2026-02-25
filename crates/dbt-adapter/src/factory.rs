@@ -51,6 +51,11 @@ pub fn create_static_relation(
             let salesforce_relation_type = SalesforceRelationType(quoting);
             StaticBaseRelationObject::new(Arc::new(salesforce_relation_type))
         }
+        AdapterType::Fabric => {
+            // let fabric_relation_type = FabricRelationType(quoting);
+            // StaticBaseRelationObject::new(Arc::new(fabric_relation_type))
+            todo!()
+        }
     };
     Some(Value::from_object(result))
 }

@@ -56,6 +56,7 @@ pub fn get_relation(
         AdapterType::DuckDB => {
             duckdb_get_relation(adapter, state, ctx, conn, database, schema, identifier)
         }
+        AdapterType::Fabric => todo!(),
         AdapterType::Sidecar => {
             // This branch should not be reached - sidecar adapters override get_relation()
             Err(AdapterError::new(
@@ -431,7 +432,7 @@ fn redshift_get_relation(
 ),
 all_objects AS (
     SELECT table_name AS object_name,
-        CASE 
+        CASE
             WHEN table_type ILIKE 'BASE TABLE' THEN 'table'::text
             WHEN table_type ILIKE 'VIEW' THEN 'view'::text
             ELSE 'table'

@@ -27,6 +27,8 @@ pub enum AdapterType {
     Spark,
     /// DuckDB
     DuckDB,
+    // Microsoft Fabric DWH
+    Fabric,
     /// Sidecar (internal dispatch type for DuckDB backend in sidecar mode)
     Sidecar,
 }
@@ -48,7 +50,6 @@ pub fn dialect_of(adapter_type: AdapterType) -> Option<Dialect> {
         DuckDB => Dialect::Redshift,
         // Sidecar uses DuckDB backend but should be treated as Postgres-like
         Sidecar => Dialect::Postgresql,
-        #[allow(unused)]
         _ => return None,
     };
     Some(dialect)
@@ -58,6 +59,7 @@ pub fn quote_char(adapter_type: AdapterType) -> char {
     match dialect_of(adapter_type) {
         Some(dialect) => dialect.quote_char(),
         None => match adapter_type {
+            AdapterType::Fabric => '"',
             AdapterType::DuckDB => '"',
             _ => unimplemented!("quote_char() is not defined for {adapter_type}"),
         },

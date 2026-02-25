@@ -247,6 +247,13 @@ impl ProfileSetup {
                 };
                 todo!("setup_salesforce_profile")
             }
+            AdapterType::Fabric => {
+                let _fabric_config = match existing_config {
+                    Some(DbConfig::Fabric(config)) => Some(config),
+                    _ => None,
+                };
+                todo!("setup_fabric_profile")
+            }
 
             AdapterType::DuckDB => {
                 // DuckDB doesn't require credentials for local file-based operations

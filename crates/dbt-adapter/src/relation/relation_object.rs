@@ -347,6 +347,15 @@ pub fn do_create_relation(
             identifier,
             relation_type,
         )) as Box<dyn BaseRelation>,
+        AdapterType::Fabric => {
+            // Box::new(FabricRelation::new(
+            //     Some(database),
+            //     Some(schema),
+            //     identifier,
+            //     relation_type,
+            // )) as Box<dyn BaseRelation>
+            todo!()
+        }
     };
     Ok(relation)
 }

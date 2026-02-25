@@ -41,6 +41,7 @@ pub fn backend_of(adapter_type: AdapterType) -> Backend {
         AdapterType::Spark => Backend::Spark,
         AdapterType::DuckDB => Backend::DuckDB,
         AdapterType::Sidecar => Backend::DuckDB,
+        AdapterType::Fabric => todo!(),
     }
 }
 

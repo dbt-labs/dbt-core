@@ -180,6 +180,7 @@ pub fn infer_seed_column_name_strategy(
             AdapterType::Bigquery
             | AdapterType::Databricks
             | AdapterType::Spark
+            | AdapterType::Fabric
             | AdapterType::Sidecar,
         ) => InferColumnNameStrategy::Verbatim,
     }

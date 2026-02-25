@@ -12,6 +12,7 @@ use crate::metadata::databricks::DatabricksMetadataAdapter;
 use crate::metadata::databricks::dbr_capabilities;
 use crate::metadata::databricks::version::DbrVersion;
 use crate::metadata::duckdb::DuckDBMetadataAdapter;
+use crate::metadata::fabric::FabricMetadataAdapter;
 use crate::metadata::postgres::PostgresMetadataAdapter;
 use crate::metadata::redshift::RedshiftMetadataAdapter;
 use crate::metadata::salesforce::SalesforceMetadataAdapter;
@@ -245,6 +246,7 @@ impl ConcreteAdapter {
             Salesforce | Spark => {
                 unimplemented!("valid_incremental_strategies not implemented")
             }
+            Fabric => todo!(),
         }
     }
 
@@ -605,11 +607,13 @@ impl ConcreteAdapter {
                 replay.replay_submit_python_job(ctx, conn, state, model, compiled_code)
             }
             Replay(
-                adapter_type @ (Postgres | Redshift | Salesforce | Sidecar | DuckDB | Spark),
+                adapter_type @ (Postgres | Redshift | Salesforce | Sidecar | DuckDB | Spark
+                | Fabric),
                 _,
             )
             | Impl(
-                adapter_type @ (Postgres | Redshift | Salesforce | Sidecar | DuckDB | Spark),
+                adapter_type @ (Postgres | Redshift | Salesforce | Sidecar | DuckDB | Spark
+                | Fabric),
                 _,
             ) => Err(AdapterError::new(
                 AdapterErrorKind::Internal,
@@ -623,11 +627,12 @@ impl ConcreteAdapter {
             return format!("\"{identifier}\"");
         }
         match self.adapter_type() {
-            Snowflake | Redshift | Postgres | Sidecar | Salesforce => format!("\"{identifier}\""),
+            Snowflake | Redshift | Postgres | Sidecar | Salesforce | DuckDB | Fabric => {
+                format!("\"{identifier}\"")
+            }
             Bigquery | Databricks | Spark => {
                 format!("`{identifier}`")
             }
-            DuckDB => format!("\"{identifier}\""),
         }
     }
 
@@ -642,6 +647,7 @@ impl ConcreteAdapter {
                 Bigquery => "schema_name",
                 Postgres | Redshift | Sidecar => "nspname",
                 DuckDB => "schema_name",
+                Fabric => todo!(),
             };
             get_column_values::<StringArray>(&result_set, col_name)?
         };
@@ -844,17 +850,8 @@ impl ConcreteAdapter {
                     Value::from_object(table),
                 )])))
             }
-            Postgres | Bigquery | Databricks | Redshift | Salesforce | Sidecar | Spark => {
-                let err = format!(
-                    "describe_dynamic_table is not supported by the {} adapter",
-                    adapter_type
-                );
-                Err(minijinja::Error::new(
-                    minijinja::ErrorKind::InvalidOperation,
-                    err,
-                ))
-            }
-            DuckDB => {
+            Postgres | Bigquery | Databricks | Redshift | Salesforce | Sidecar | Spark | DuckDB
+            | Fabric => {
                 let err = format!(
                     "describe_dynamic_table is not supported by the {} adapter",
                     adapter_type
@@ -1145,16 +1142,13 @@ impl ConcreteAdapter {
                 "get_columns_comments",
                 "dbt_databricks",
             ),
-            Postgres | Snowflake | Bigquery | Sidecar | Redshift => execute_macro(
-                state,
-                &[RelationObject::new(relation.to_owned()).as_value()],
-                "get_columns_in_relation",
-            ),
-            DuckDB => execute_macro(
-                state,
-                &[RelationObject::new(relation.to_owned()).as_value()],
-                "get_columns_in_relation",
-            ),
+            Postgres | Snowflake | Bigquery | Sidecar | Redshift | DuckDB | Fabric => {
+                execute_macro(
+                    state,
+                    &[RelationObject::new(relation.to_owned()).as_value()],
+                    "get_columns_in_relation",
+                )
+            }
             // TODO(serramatutu): get back to this later
             Salesforce | Spark => {
                 unimplemented!("get_columns_in_relation not implemented")
@@ -1263,7 +1257,7 @@ impl ConcreteAdapter {
                     .collect::<Vec<_>>();
                 Ok(columns)
             }
-            Salesforce | Spark => {
+            Salesforce | Spark | Fabric => {
                 unimplemented!("get_columns_in_relation not implemented")
             }
             adapter_type @ DuckDB => {
@@ -1294,7 +1288,7 @@ impl ConcreteAdapter {
             }
             Impl(
                 Snowflake | Databricks | Redshift | Salesforce | Postgres | Sidecar | Spark
-                | DuckDB,
+                | DuckDB | Fabric,
                 _,
             ) => {
                 // downcast relation
@@ -1336,7 +1330,10 @@ impl ConcreteAdapter {
                     Ok(column.to_string())
                 }
             }
-            Impl(Postgres | Bigquery | Databricks | Redshift | Sidecar | Spark | DuckDB, _) => {
+            Impl(
+                Postgres | Bigquery | Databricks | Redshift | Sidecar | Spark | DuckDB | Fabric,
+                _,
+            ) => {
                 // https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1072
                 if quote_config.unwrap_or(true) {
                     Ok(self.quote(column))
@@ -1490,10 +1487,8 @@ impl ConcreteAdapter {
                     .execute_with_options(Some(state), &ctx, conn, sql, options, false)?;
                 Ok(none_value())
             }
-            Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark => {
-                unimplemented!("only available with BigQuery adapter")
-            }
-            DuckDB => {
+            Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark
+            | Fabric | DuckDB => {
                 unimplemented!("only available with BigQuery adapter")
             }
         }
@@ -1506,7 +1501,7 @@ impl ConcreteAdapter {
     ) -> AdapterResult<Vec<String>> {
         match self.adapter_type() {
             Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark
-            | DuckDB => {
+            | DuckDB | Fabric => {
                 // https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1783
                 let mut result = vec![];
                 for (_, column) in columns_map {
@@ -1674,6 +1669,8 @@ impl ConcreteAdapter {
             (DuckDB, Check) => NotSupported,
             (DuckDB, Custom) => NotSupported,
 
+            (Fabric, _) => todo!(),
+
             // Salesforce
             (Salesforce | Spark, _) => unimplemented!("constraint support not implemented"),
         }
@@ -1825,7 +1822,7 @@ impl ConcreteAdapter {
 
                 Ok(result)
             }
-            Salesforce | Spark => {
+            Salesforce | Spark | Fabric => {
                 unimplemented!("grants not implemented")
             }
             DuckDB => {
@@ -1854,10 +1851,8 @@ impl ConcreteAdapter {
     ) -> AdapterResult<IndexMap<String, DbtColumn>> {
         match self.adapter_type() {
             Bigquery => nest_column_data_types(columns, constraints),
-            Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark => {
-                unimplemented!("only available with BigQuery adapter")
-            }
-            DuckDB => {
+            Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark
+            | DuckDB | Fabric => {
                 unimplemented!("only available with BigQuery adapter")
             }
         }
@@ -1959,10 +1954,8 @@ impl ConcreteAdapter {
                     .execute_with_options(Some(state), &ctx, conn, sql, options, false)?;
                 Ok(none_value())
             }
-            Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark => {
-                unimplemented!("only available with BigQuery adapter")
-            }
-            DuckDB => {
+            Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark
+            | DuckDB | Fabric => {
                 unimplemented!("only available with BigQuery adapter")
             }
         }
@@ -1999,10 +1992,8 @@ impl ConcreteAdapter {
                     Ok(None)
                 }
             }
-            Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark => {
-                unimplemented!("only available with BigQuery adapter")
-            }
-            DuckDB => {
+            Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark
+            | DuckDB | Fabric => {
                 unimplemented!("only available with BigQuery adapter")
             }
         }
@@ -2045,10 +2036,8 @@ impl ConcreteAdapter {
                 )?;
                 Ok(none_value())
             }
-            Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark => {
-                unimplemented!("only available with BigQuery adapter")
-            }
-            DuckDB => {
+            Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark
+            | DuckDB | Fabric => {
                 unimplemented!("only available with BigQuery adapter")
             }
         }
@@ -2135,10 +2124,7 @@ impl ConcreteAdapter {
                 Ok(none_value())
             }
             Salesforce => todo!("load_dataframe() for the Salesforce adapter"),
-            Postgres | Snowflake | Databricks | Redshift | Sidecar | Spark => {
-                unimplemented!("only available with BigQuery or Salesforce adapter")
-            }
-            DuckDB => {
+            Postgres | Snowflake | Databricks | Redshift | Sidecar | Spark | DuckDB | Fabric => {
                 unimplemented!("only available with BigQuery or Salesforce adapter")
             }
         }
@@ -2193,10 +2179,8 @@ impl ConcreteAdapter {
 
                 Ok(none_value())
             }
-            Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark => {
-                unimplemented!("only available with BigQuery adapter")
-            }
-            DuckDB => {
+            Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark
+            | DuckDB | Fabric => {
                 unimplemented!("only available with BigQuery adapter")
             }
         }
@@ -2381,7 +2365,10 @@ impl ConcreteAdapter {
                     Ok(Value::from(()))
                 }
             }
-            Impl(adapter_type @ (Snowflake | Bigquery | Databricks | Salesforce | Spark), _) => {
+            Impl(
+                adapter_type @ (Snowflake | Bigquery | Databricks | Salesforce | Spark | Fabric),
+                _,
+            ) => {
                 unimplemented!(
                     "verify_database is not implemented for the {} adapter",
                     adapter_type
@@ -2452,7 +2439,7 @@ impl ConcreteAdapter {
                 }
             }
             adapter_type @ (Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar
-            | Spark | DuckDB) => {
+            | Spark | DuckDB | Fabric) => {
                 unimplemented!(
                     "is_replaceable is only available with BigQuery adapter, not {}",
                     adapter_type
@@ -2495,10 +2482,10 @@ impl ConcreteAdapter {
 
                 Ok(Value::from_object(validated_config))
             }
-            Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark => {
+            Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark
+            | DuckDB | Fabric => {
                 unimplemented!("only available with BigQuery adapter")
             }
-            DuckDB => unimplemented!("only available with BigQuery adapter"),
         }
     }
 
@@ -2517,10 +2504,10 @@ impl ConcreteAdapter {
                 temporary,
                 adapter_type,
             ),
-            Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark => {
+            Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark
+            | DuckDB | Fabric => {
                 unimplemented!("only available with BigQuery adapter")
             }
-            DuckDB => unimplemented!("only available with BigQuery adapter"),
         }
     }
 
@@ -2539,10 +2526,10 @@ impl ConcreteAdapter {
                     false,
                 ),
             ),
-            Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark => {
+            Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark
+            | DuckDB | Fabric => {
                 unimplemented!("only available with BigQuery adapter")
             }
-            DuckDB => unimplemented!("only available with BigQuery adapter"),
         }
     }
 
@@ -2564,13 +2551,8 @@ impl ConcreteAdapter {
                 );
                 Ok(Value::from_serialize(options))
             }
-            Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark => {
-                Err(minijinja::Error::new(
-                    minijinja::ErrorKind::InvalidOperation,
-                    "get_common_options is only available with BigQuery adapter",
-                ))
-            }
-            DuckDB => Err(minijinja::Error::new(
+            Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark
+            | DuckDB | Fabric => Err(minijinja::Error::new(
                 minijinja::ErrorKind::InvalidOperation,
                 "get_common_options is only available with BigQuery adapter",
             )),
@@ -2608,10 +2590,10 @@ impl ConcreteAdapter {
 
                 Ok(Value::from(result))
             }
-            Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark => {
+            Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark
+            | DuckDB | Fabric => {
                 unimplemented!("only available with BigQuery adapter")
             }
-            DuckDB => unimplemented!("only available with BigQuery adapter"),
         }
     }
 
@@ -2665,7 +2647,7 @@ impl ConcreteAdapter {
                 databricks::list_relations(self, query_ctx, conn, db_schema)
             }
             Impl(Redshift, _) => redshift::list_relations(self, query_ctx, conn, db_schema),
-            Impl(adapter_type @ (Postgres | Salesforce | Sidecar | DuckDB), _) => {
+            Impl(adapter_type @ (Postgres | Salesforce | Sidecar | DuckDB | Fabric), _) => {
                 let err = AdapterError::new(
                     AdapterErrorKind::Internal,
                     format!(
@@ -2712,7 +2694,8 @@ impl ConcreteAdapter {
                     is_sql_warehouse,
                 ))
             }
-            Postgres | Snowflake | Bigquery | Redshift | Salesforce | Sidecar | DuckDB | Spark => {
+            Postgres | Snowflake | Bigquery | Redshift | Salesforce | Sidecar | DuckDB | Spark
+            | Fabric => {
                 unimplemented!("has_dbr_capability: Only available for Databricks Adapter")
             }
         }
@@ -2743,10 +2726,10 @@ impl ConcreteAdapter {
 
                 Ok(Value::from(result))
             }
-            Postgres | Snowflake | Bigquery | Redshift | Salesforce | Sidecar | Spark => {
+            Postgres | Snowflake | Bigquery | Redshift | Salesforce | Sidecar | Spark | DuckDB
+            | Fabric => {
                 unimplemented!("only available with Databricksadapter")
             }
-            DuckDB => unimplemented!("only available with Databricksadapter"),
         }
     }
 
@@ -2802,10 +2785,10 @@ impl ConcreteAdapter {
                 Ok(path)
             }
 
-            Postgres | Snowflake | Bigquery | Redshift | Salesforce | Sidecar | Spark => {
-                unimplemented!("only available with Databricksadapter")
+            Postgres | Snowflake | Bigquery | Redshift | Salesforce | Sidecar | Spark | DuckDB
+            | Fabric => {
+                unimplemented!("only available with Databricks adapter")
             }
-            DuckDB => unimplemented!("only available with Databricksadapter"),
         }
     }
 
@@ -2881,10 +2864,10 @@ impl ConcreteAdapter {
                 }
                 Ok(())
             }
-            Postgres | Snowflake | Bigquery | Redshift | Salesforce | Sidecar | Spark => {
+            Postgres | Snowflake | Bigquery | Redshift | Salesforce | Sidecar | Spark | DuckDB
+            | Fabric => {
                 unimplemented!("only available with Databricks adapter")
             }
-            DuckDB => unimplemented!("only available with Databricks adapter"),
         }
     }
 
@@ -2958,10 +2941,10 @@ impl ConcreteAdapter {
 
                 Ok(use_uniform)
             }
-            Postgres | Snowflake | Bigquery | Redshift | Salesforce | Sidecar | Spark => {
+            Postgres | Snowflake | Bigquery | Redshift | Salesforce | Sidecar | Spark | DuckDB
+            | Fabric => {
                 unimplemented!("only available with Databricks adapter")
             }
-            DuckDB => unimplemented!("only available with Databricks adapter"),
         }
     }
 
@@ -3268,10 +3251,10 @@ impl ConcreteAdapter {
 
                 Ok(())
             }
-            Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark => {
+            Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark
+            | DuckDB | Fabric => {
                 unimplemented!("only available with BigQuery adapter")
             }
-            DuckDB => unimplemented!("only available with BigQuery adapter"),
         }
     }
 
@@ -3320,10 +3303,10 @@ impl ConcreteAdapter {
 
                 Ok(None)
             }
-            Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark => {
+            Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark
+            | DuckDB | Fabric => {
                 unimplemented!("only available with BigQuery adapter")
             }
-            DuckDB => unimplemented!("only available with BigQuery adapter"),
         }
     }
 
@@ -3588,7 +3571,7 @@ prevent unnecessary latency for other users."#,
             );
             vec![flag]
         }
-        Postgres | Redshift | Salesforce | Sidecar | Spark | DuckDB => vec![],
+        Postgres | Redshift | Salesforce | Sidecar | Spark | DuckDB | Fabric => vec![],
     }
 }
 
@@ -3727,6 +3710,9 @@ impl AdapterTyping for ConcreteAdapter {
                             as Box<dyn MetadataAdapter>,
                         DuckDB => {
                             Box::new(DuckDBMetadataAdapter::new(engine)) as Box<dyn MetadataAdapter>
+                        }
+                        Fabric => {
+                            Box::new(FabricMetadataAdapter::new(engine)) as Box<dyn MetadataAdapter>
                         }
                     };
                 Some(metadata_adapter)

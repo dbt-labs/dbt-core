@@ -52,7 +52,7 @@ pub enum DbConfig {
     // Exasol,
     // Oracle,
     // Synapse,
-    // Fabric,
+    Fabric(Box<FabricDbConfig>),
     // Dremio,
     // ClickHouse,
     // Materialize,
@@ -101,6 +101,7 @@ impl_from_db_config!(Trino, TrinoDbConfig);
 impl_from_db_config!(Datafusion, DatafusionDbConfig);
 impl_from_db_config!(Databricks, DatabricksDbConfig);
 impl_from_db_config!(DuckDB, DuckDbConfig);
+impl_from_db_config!(Fabric, FabricDbConfig);
 
 impl DbConfig {
     pub fn get_unique_field(&self) -> Option<&String> {
@@ -115,6 +116,7 @@ impl DbConfig {
             DbConfig::Salesforce(config) => config.client_id.as_ref(),
             DbConfig::DuckDB(config) => config.path.as_ref(),
             DbConfig::Spark(config) => config.host.as_ref(),
+            DbConfig::Fabric(config) => config.host.as_ref(),
         }
     }
 
@@ -224,6 +226,23 @@ impl DbConfig {
             // TODO: Trino and Datafusion connection keys
             DbConfig::Trino(_) => &[],
             DbConfig::Datafusion(_) => &[],
+            DbConfig::Fabric(_) => &[
+                "server",
+                "database",
+                "schema",
+                "warehouse_snapshot_name",
+                "snapshot_timestamp",
+                "UID",
+                "workspace_id",
+                "authentication",
+                "retries",
+                "login_timeout",
+                "query_timeout",
+                "trace_flag",
+                "encrypt",
+                "trust_cert",
+                "api_url",
+            ],
         }
     }
 
@@ -268,6 +287,7 @@ impl DbConfig {
             DbConfig::Databricks(config) => dbt_yaml::to_value(config),
             DbConfig::Salesforce(config) => dbt_yaml::to_value(config),
             DbConfig::Spark(config) => dbt_yaml::to_value(config),
+            DbConfig::Fabric(config) => dbt_yaml::to_value(config),
             DbConfig::DuckDB(config) => dbt_yaml::to_value(config),
         }
     }
@@ -285,6 +305,7 @@ impl DbConfig {
             DbConfig::Salesforce(..) => "salesforce",
             DbConfig::DuckDB(..) => "duckdb",
             DbConfig::Spark(..) => "spark",
+            DbConfig::Fabric(..) => "fabric",
         }
     }
 
@@ -300,6 +321,7 @@ impl DbConfig {
             DbConfig::Salesforce(..) => Some(AdapterType::Salesforce),
             DbConfig::DuckDB(..) => Some(AdapterType::DuckDB),
             DbConfig::Spark(..) => Some(AdapterType::Spark),
+            DbConfig::Fabric(..) => Some(AdapterType::Fabric),
         }
     }
 
@@ -321,6 +343,7 @@ impl DbConfig {
             DbConfig::Salesforce(config) => config.database.as_ref(),
             DbConfig::DuckDB(config) => config.database.as_ref(),
             DbConfig::Spark(_) => None,
+            DbConfig::Fabric(config) => config.database.as_ref(),
         }
     }
 
@@ -371,6 +394,7 @@ impl DbConfig {
             DbConfig::Spark(config) => config.schema.as_ref(),
             DbConfig::DuckDB(config) => config.schema.as_ref(),
             DbConfig::Salesforce(_) => None,
+            DbConfig::Fabric(config) => config.schema.as_ref(),
         }
     }
 
@@ -386,6 +410,7 @@ impl DbConfig {
             DbConfig::Datafusion(_) => None,
             DbConfig::Salesforce(_) => None,
             DbConfig::Spark(_) => None,
+            DbConfig::Fabric(_) => None,
         }
     }
 
@@ -401,6 +426,7 @@ impl DbConfig {
             DbConfig::Datafusion(_) => (),
             DbConfig::Salesforce(_) => (),
             DbConfig::Spark(_) => (),
+            DbConfig::Fabric(_) => (),
         }
     }
 
@@ -1010,6 +1036,100 @@ pub struct SparkDbConfig {
     // - token
 }
 
+// https://docs.getdbt.com/docs/core/connect-data-platform/fabric-setup#microsoft-entra-id-authentication
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "PascalCase")]
+pub enum FabricAuth {
+    #[default]
+    #[serde(alias = "ServicePrincipal")]
+    ActiveDirectoryServicePrincipal,
+    // TODO: other auth methods
+
+    // ActiveDirectoryPassword,
+
+    // #[serde(rename = "environment")]
+    // Environment,
+
+    // #[serde(rename = "CLI")]
+    // AzureCLI,
+
+    // /// Tries the following in order:
+    // /// 1. Environment
+    // /// 2. Managed Identity (not supported)
+    // /// 3. Visual Studio (Windows only)
+    // /// 4. VSCode
+    // /// 5. Azure CLI
+    // /// 6. Azure PowerShell module
+    // #[serde(rename = "auto")]
+    // Auto,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, Merge)]
+#[merge(strategy = merge_strategies_extend::overwrite_option)]
+#[serde(rename_all = "snake_case")]
+pub struct FabricDbConfig {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub driver: Option<String>, // TODO: this seems to be ODBC related... keep it?
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(alias = "server")]
+    pub host: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub database: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub schema: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "UID", alias = "user", alias = "username")]
+    pub user: Option<String>, // default = None
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "PWD", alias = "pass", alias = "password")]
+    pub password: Option<String>, // default = None
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(alias = "trusted_connection")]
+    pub windows_login: Option<bool>, // default = False
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(alias = "SQL_ATTR_TRACE")]
+    pub trace_flag: Option<bool>, // default = False
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tenant_id: Option<String>, // default = None
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(alias = "app_id")]
+    pub client_id: Option<String>, // default = None
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(alias = "app_secret")]
+    pub client_secret: Option<String>, // default = None
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub access_token: Option<String>, // default = None
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub access_token_expires_on: Option<String>, // default = 0 | Added for access token expiration for oAuth and integration tests scenarios.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(alias = "auth")]
+    pub authentication: Option<FabricAuth>, // default = "ActiveDirectoryServicePrincipal"
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub encrypt: Option<bool>, // default = True  | default value in MS ODBC Driver 18 as well
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(alias = "TrustServerCertificate")]
+    pub trust_cert: Option<bool>, // default = False  | default value in MS ODBC Driver 18 as well
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub retries: Option<i64>, // default = 3
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(alias = "schema_auth")]
+    pub schema_authorization: Option<String>, // default = None
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub login_timeout: Option<i64>, // default = 0
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub query_timeout: Option<i64>, // default = 0
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub workspace_id: Option<String>, // default = None
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub warehouse_snapshot_name: Option<String>, // default = None
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub warehouse_snapshot_id: Option<String>, // default = None
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub snapshot_timestamp: Option<String>, // default = None
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_url: Option<String>, // default = "https://api.fabric.microsoft.com/v1"
+}
+
 #[derive(Serialize, JsonSchema)]
 #[serde(untagged)]
 #[serde(rename_all = "snake_case")]
@@ -1025,6 +1145,7 @@ pub enum TargetContext {
     Salesforce(SalesforceTargetEnv),
     DuckDB(DuckDbTargetEnv),
     Spark(SparkTargetEnv),
+    Fabric(FabricTargetEnv),
     // Add other variants as needed
 }
 
@@ -1184,6 +1305,13 @@ pub struct SparkTargetEnv {
     pub auth: SparkAuth,
     pub use_ssl: bool,
     pub kerberos_service_name: String,
+}
+
+#[derive(Serialize, JsonSchema)]
+pub struct FabricTargetEnv {
+    pub __common__: CommonTargetContext,
+    pub authentication: FabricAuth,
+    // TODO: ...
 }
 
 fn missing(field: &str) -> String {
@@ -1450,6 +1578,21 @@ impl TryFrom<DbConfig> for TargetContext {
                     threads: None,
                 },
             })),
+            DbConfig::Fabric(config) => {
+                let common = CommonTargetContext {
+                    database: config.database.ok_or_else(|| missing("database"))?,
+                    schema: config.schema.ok_or_else(|| missing("schema"))?,
+                    type_: adapter_type,
+                    threads: None,
+                };
+
+                let authentication = config.authentication.unwrap_or_default();
+
+                Ok(TargetContext::Fabric(FabricTargetEnv {
+                    __common__: common,
+                    authentication,
+                }))
+            }
         }
     }
 }
