@@ -1008,6 +1008,27 @@ pub fn dispatch_adapter_calls(
             iter.finish()?;
             Ok(Value::from(false))
         }
+        "is_motherduck" => {
+            // MotherDuck is a cloud service for DuckDB. Not supported yet, always return false.
+            let iter = ArgsIter::new(name, &[], args);
+            iter.finish()?;
+            Ok(Value::from(false))
+        }
+        "disable_transactions" => {
+            // DuckDB/MotherDuck transaction control. Not supported yet, always return false.
+            let iter = ArgsIter::new(name, &[], args);
+            iter.finish()?;
+            Ok(Value::from(false))
+        }
+        "get_temp_relation_path" => {
+            // Returns a path for temp tables on MotherDuck. Since is_motherduck() returns false,
+            // this code path should never be reached, but we stub it to avoid runtime errors.
+            let iter = ArgsIter::new(name, &["relation", "batch_id"], args);
+            let _ = iter.next_arg::<&Value>()?;
+            let _ = iter.next_arg::<&Value>()?;
+            iter.finish()?;
+            Ok(Value::UNDEFINED)
+        }
         "compare_dbr_version" => {
             // major: i64, minor: i64
             let iter = ArgsIter::new(name, &["major", "minor"], args);

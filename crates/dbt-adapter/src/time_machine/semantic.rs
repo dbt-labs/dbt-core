@@ -120,6 +120,8 @@ impl SemanticCategory {
             | "get_hard_deletes_behavior"
             | "is_cluster"
             | "is_ducklake"
+            | "is_motherduck"
+            | "disable_transactions"
             | "build_catalog_relation"
             | "sync_struct_columns"
             | "resolve_file_format"

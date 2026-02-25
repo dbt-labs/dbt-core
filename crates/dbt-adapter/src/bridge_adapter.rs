@@ -71,16 +71,27 @@ thread_local! {
     static CONNECTION: pri::TlsConnectionContainer = pri::TlsConnectionContainer::new();
 }
 
-/// A connection wrapper that automatically returns the connection to the thread local when dropped
-/// This ensures that for a single thread, a connection is reused across multiple operations
+/// A connection wrapper that automatically returns the connection to the thread local when dropped.
+/// This ensures that for a single thread, a connection is reused across multiple operations.
+///
+/// For DuckDB, `stash_on_drop` is set to `false` so that connections are dropped immediately
+/// instead of being cached in the thread-local. This is necessary because DuckDB uses
+/// process-level file locks: connections hold an internal reference to the database handle,
+/// and as long as any connection exists, the file lock is held. Since compilation runs on
+/// tokio worker threads, stashed connections would persist on those threads and keep the
+/// database locked even after the adapter is dropped — preventing the CLI from accessing
+/// the database file. DuckDB connections are in-process and cheap to create, so skipping
+/// the cache has negligible performance impact.
 pub struct ConnectionGuard<'a> {
     conn: Option<Box<dyn Connection>>,
+    stash_on_drop: bool,
     _phantom: PhantomData<&'a ()>,
 }
 impl ConnectionGuard<'_> {
-    fn new(conn: Box<dyn Connection>) -> Self {
+    fn new(conn: Box<dyn Connection>, stash_on_drop: bool) -> Self {
         Self {
             conn: Some(conn),
+            stash_on_drop,
             _phantom: PhantomData,
         }
     }
@@ -99,6 +110,11 @@ impl DerefMut for ConnectionGuard<'_> {
 }
 impl Drop for ConnectionGuard<'_> {
     fn drop(&mut self) {
+        if !self.stash_on_drop {
+            // For file-locking databases (DuckDB), drop the connection immediately
+            // so the file lock is released when the database handle is dropped.
+            return;
+        }
         let conn = self.conn.take();
         CONNECTION.with(|c| c.replace(conn));
     }
@@ -260,14 +276,20 @@ impl BridgeAdapter {
         node_id: Option<String>,
     ) -> Result<ConnectionGuard<'_>, minijinja::Error> {
         let _span = span!("BridgeAdapter::borrow_thread_local_connection");
-        let mut conn = CONNECTION.with(|c| c.take());
+        let stash_on_drop = self.adapter_type() != AdapterType::DuckDB;
+        let mut conn = if stash_on_drop {
+            CONNECTION.with(|c| c.take())
+        } else {
+            // DuckDB: skip thread-local cache to avoid holding file locks
+            None
+        };
         if conn.is_none() {
             self.new_connection(state, node_id)
                 .map(|new_conn| conn.replace(new_conn))?;
         } else if let Some(c) = conn.as_mut() {
             c.update_node_id(node_id);
         }
-        let guard = ConnectionGuard::new(conn.unwrap());
+        let guard = ConnectionGuard::new(conn.unwrap(), stash_on_drop);
         Ok(guard)
     }
 

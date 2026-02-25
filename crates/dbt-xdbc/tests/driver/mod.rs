@@ -907,4 +907,217 @@ mod tests {
             Ok(())
         })
     }
+
+    /// Verifies that DuckDB releases the file lock when the database handle is dropped,
+    /// allowing a second connection to open the same file for writing.
+    ///
+    /// This test exists because the LSP holds a DuckDB database handle in a cache
+    /// (DatabaseMap in XdbcEngine) and connections in thread-local storage, which
+    /// keeps the file locked and prevents CLI commands from accessing the database.
+    #[test]
+    fn duckdb_file_lock_released_after_drop() -> Result<()> {
+        use std::fs;
+
+        let temp_dir = env::temp_dir();
+        let db_path = temp_dir.join("dbt_xdbc_test_lock.duckdb");
+        let db_path_str = db_path.to_string_lossy().to_string();
+
+        // Clean up any existing file
+        let _ = fs::remove_file(&db_path);
+        let _ = fs::remove_file(format!("{}.wal", db_path_str));
+
+        // Open database and create a table, then drop everything
+        {
+            let mut driver = driver_for(Backend::DuckDB)?;
+            let builder = database_builder_for_duckdb_file(&db_path_str)?;
+            let mut database = builder.build(&mut driver)?;
+            let mut conn = connection::Builder::default().build(&mut database)?;
+
+            let mut stmt = conn.new_statement()?;
+            stmt.set_sql_query("CREATE TABLE lock_test (id INTEGER)")?;
+            let _ = stmt.execute()?;
+
+            // Explicitly drop in order: statement, connection, database
+            drop(stmt);
+            drop(conn);
+            drop(database);
+            drop(driver);
+        }
+
+        // After dropping, a second process/connection should be able to open
+        // the same file for writing (no lingering lock).
+        {
+            let mut driver = driver_for(Backend::DuckDB)?;
+            let builder = database_builder_for_duckdb_file(&db_path_str)?;
+            let mut database = builder.build(&mut driver)?;
+            let mut conn = connection::Builder::default().build(&mut database)?;
+
+            let mut stmt = conn.new_statement()?;
+            stmt.set_sql_query("INSERT INTO lock_test VALUES (42)")?;
+            let _ = stmt.execute()?;
+        }
+
+        // Cleanup
+        let _ = fs::remove_file(&db_path);
+        let _ = fs::remove_file(format!("{}.wal", db_path_str));
+
+        Ok(())
+    }
+
+    /// Verifies that DuckDB file locks are cross-process: while one process
+    /// holds a database handle open, another process cannot open it for writing.
+    /// Dropping the handle releases the lock, allowing the other process in.
+    ///
+    /// This simulates the LSP scenario: the LSP process holds a DuckDB database
+    /// handle in its DatabaseMap cache. The CLI (a separate process) cannot
+    /// access the database until the LSP releases it.
+    #[test]
+    fn duckdb_file_lock_is_cross_process() -> Result<()> {
+        use std::fs;
+        use std::process::Command;
+
+        // Skip if duckdb CLI is not installed
+        if Command::new("duckdb").arg("--version").output().is_err() {
+            eprintln!("Skipping: duckdb CLI not installed");
+            return Ok(());
+        }
+
+        let temp_dir = env::temp_dir();
+        let db_path = temp_dir.join("dbt_xdbc_test_cross_process_lock.duckdb");
+        let db_path_str = db_path.to_string_lossy().to_string();
+
+        // Clean up any existing file
+        let _ = fs::remove_file(&db_path);
+        let _ = fs::remove_file(format!("{}.wal", db_path_str));
+
+        // Open database and keep the handle alive (simulates LSP holding the lock)
+        let mut driver = driver_for(Backend::DuckDB)?;
+        let builder = database_builder_for_duckdb_file(&db_path_str)?;
+        let mut database = builder.build(&mut driver)?;
+
+        // Use it to create a table
+        {
+            let mut conn = connection::Builder::default().build(&mut database)?;
+            let mut stmt = conn.new_statement()?;
+            stmt.set_sql_query("CREATE TABLE cross_proc_test (id INTEGER)")?;
+            let _ = stmt.execute()?;
+        }
+        // Connection dropped, but database handle still alive
+
+        // Try to access from a subprocess while we hold the handle.
+        // The DuckDB CLI should fail with a lock error.
+        let output = Command::new("duckdb")
+            .arg(&db_path_str)
+            .arg("-c")
+            .arg("INSERT INTO cross_proc_test VALUES (1);")
+            .output()
+            .expect("failed to spawn duckdb CLI");
+
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            !output.status.success() && stderr.contains("lock"),
+            "Expected cross-process lock error while database handle is alive, got: {}",
+            stderr
+        );
+
+        // Drop the database handle (simulates clearing the DatabaseMap)
+        drop(database);
+        drop(driver);
+
+        // Now the subprocess should succeed
+        let output = Command::new("duckdb")
+            .arg(&db_path_str)
+            .arg("-c")
+            .arg("INSERT INTO cross_proc_test VALUES (1);")
+            .output()
+            .expect("failed to spawn duckdb CLI");
+
+        assert!(
+            output.status.success(),
+            "Expected CLI access to succeed after dropping database handle, got: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+
+        // Cleanup
+        let _ = fs::remove_file(&db_path);
+        let _ = fs::remove_file(format!("{}.wal", db_path_str));
+
+        Ok(())
+    }
+
+    /// Simulates the LSP bug: a connection kept alive (as in a thread-local cache)
+    /// prevents the file lock from being released even after the database handle
+    /// (DatabaseMap) is cleared.
+    ///
+    /// This is the OLD behavior: ConnectionGuard stashes the connection in a
+    /// thread-local, so dropping the database handle alone is not enough.
+    #[test]
+    fn duckdb_connection_kept_alive_holds_lock_after_database_drop() -> Result<()> {
+        use std::fs;
+        use std::process::Command;
+
+        if Command::new("duckdb").arg("--version").output().is_err() {
+            eprintln!("Skipping: duckdb CLI not installed");
+            return Ok(());
+        }
+
+        let temp_dir = env::temp_dir();
+        let db_path = temp_dir.join("dbt_xdbc_test_conn_holds_lock.duckdb");
+        let db_path_str = db_path.to_string_lossy().to_string();
+        let _ = fs::remove_file(&db_path);
+        let _ = fs::remove_file(format!("{}.wal", db_path_str));
+
+        // Create database and a connection
+        let mut driver = driver_for(Backend::DuckDB)?;
+        let builder = database_builder_for_duckdb_file(&db_path_str)?;
+        let mut database = builder.build(&mut driver)?;
+        let mut conn = connection::Builder::default().build(&mut database)?;
+
+        // Use the connection
+        let mut stmt = conn.new_statement()?;
+        stmt.set_sql_query("CREATE TABLE conn_lock_test (id INTEGER)")?;
+        let _ = stmt.execute()?;
+        drop(stmt);
+
+        // Simulate clearing the DatabaseMap (drop the database handle)
+        // but keep the connection alive (simulates thread-local stashing)
+        drop(database);
+        drop(driver);
+
+        // The file should STILL be locked because the connection is alive
+        let output = Command::new("duckdb")
+            .arg(&db_path_str)
+            .arg("-c")
+            .arg("INSERT INTO conn_lock_test VALUES (1);")
+            .output()
+            .expect("failed to spawn duckdb CLI");
+
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            !output.status.success() && stderr.contains("lock"),
+            "Expected lock error while connection is alive (simulates old behavior), got: {}",
+            stderr
+        );
+
+        // Now drop the connection (simulates the fix: stash_on_drop = false)
+        drop(conn);
+
+        // File should now be unlocked
+        let output = Command::new("duckdb")
+            .arg(&db_path_str)
+            .arg("-c")
+            .arg("INSERT INTO conn_lock_test VALUES (1);")
+            .output()
+            .expect("failed to spawn duckdb CLI");
+
+        assert!(
+            output.status.success(),
+            "Expected CLI access to succeed after dropping connection, got: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+
+        let _ = fs::remove_file(&db_path);
+        let _ = fs::remove_file(format!("{}.wal", db_path_str));
+        Ok(())
+    }
 }
