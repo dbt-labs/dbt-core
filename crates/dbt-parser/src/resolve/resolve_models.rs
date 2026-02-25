@@ -438,7 +438,7 @@ pub async fn resolve_models(
     package_quoting: DbtQuoting,
     root_project: &DbtProject,
     root_project_configs: &RootProjectConfigs,
-    models_properties: &mut BTreeMap<String, MinimalPropertiesEntry>,
+    models_properties: &BTreeMap<String, MinimalPropertiesEntry>,
     database: &str,
     schema: &str,
     adapter_type: AdapterType,

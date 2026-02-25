@@ -187,7 +187,6 @@ pub async fn resolve_data_tests(
     runtime_config: Arc<DbtRuntimeConfig>,
     collected_generic_tests: &[GenericTestAsset],
     node_resolver: &NodeResolver,
-    jinja_env: Arc<JinjaEnv>,
     token: &CancellationToken,
 ) -> FsResult<(HashMap<String, Arc<DbtTest>>, HashMap<String, Arc<DbtTest>>)> {
     let jinja_type_checking_event_listener_factory =
@@ -590,7 +589,7 @@ pub async fn resolve_data_tests(
         arg,
         nodes_with_execute,
         node_resolver,
-        jinja_env,
+        env.clone(),
         adapter_type,
         package.dbt_project.name.as_str(),
         &root_project.name,

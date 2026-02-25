@@ -511,7 +511,7 @@ pub async fn resolve_inner(
     adapter_type: AdapterType,
     macros: &Macros,
     jinja_env: Arc<JinjaEnv>,
-    node_resolver: &mut NodeResolver,
+    mut node_resolver: NodeResolver,
     runtime_config: Arc<DbtRuntimeConfig>,
     test_name_truncations: &mut HashMap<String, String>,
     token: &CancellationToken,
@@ -636,7 +636,7 @@ pub async fn resolve_inner(
         &jinja_env,
         &mut collected_generic_tests,
         test_name_truncations,
-        node_resolver,
+        &mut node_resolver,
     )?;
     nodes.sources.extend(sources);
     disabled_nodes.sources.extend(disabled_sources);
@@ -657,7 +657,7 @@ pub async fn resolve_inner(
         &base_ctx,
         &mut collected_generic_tests,
         test_name_truncations,
-        node_resolver,
+        &mut node_resolver,
     )?;
     nodes.seeds.extend(seeds);
     disabled_nodes.seeds.extend(disabled_seeds);
@@ -677,7 +677,7 @@ pub async fn resolve_inner(
         jinja_env.clone(),
         &base_ctx,
         runtime_config.clone(),
-        node_resolver,
+        &mut node_resolver,
         token,
     )
     .await?;
@@ -691,7 +691,7 @@ pub async fn resolve_inner(
         package_quoting,
         dbt_state.root_project(),
         root_project_configs,
-        &mut min_properties.models.clone(),
+        &min_properties.models,
         // TODO: pass in typed_models_properties
         database,
         schema,
@@ -702,7 +702,7 @@ pub async fn resolve_inner(
         runtime_config.clone(),
         &mut collected_generic_tests,
         test_name_truncations,
-        node_resolver,
+        &mut node_resolver,
         token,
         jinja_type_checking_event_listener_factory.clone(),
     )
@@ -744,7 +744,7 @@ pub async fn resolve_inner(
         jinja_env.clone(),
         &base_ctx,
         runtime_config.clone(),
-        node_resolver,
+        &mut node_resolver,
         token,
     )
     .await?;
@@ -772,9 +772,9 @@ pub async fn resolve_inner(
             arg,
             package,
             root_project_configs,
-            &mut min_properties.models.clone(),
+            &min_properties.models,
             &typed_models_properties,
-            nodes.clone().models,
+            &nodes.models,
             package_name,
             &jinja_env,
             &base_ctx,
@@ -789,8 +789,8 @@ pub async fn resolve_inner(
             arg,
             package,
             root_project_configs,
-            &mut min_properties.models.clone(),
-            &mut min_properties.metrics.clone(),
+            &min_properties.models,
+            &min_properties.metrics,
             &typed_models_properties,
             package_name,
             &jinja_env,
@@ -831,8 +831,7 @@ pub async fn resolve_inner(
         &base_ctx,
         runtime_config.clone(),
         &collected_generic_tests,
-        node_resolver,
-        jinja_env.clone(),
+        &node_resolver,
         token,
     )
     .await?;
@@ -887,7 +886,7 @@ pub async fn resolve_inner(
         nodes,
         disabled_nodes,
         collector,
-        node_resolver.clone(),
+        node_resolver,
         semantic_layer_spec_is_legacy,
         macro_properties,
     ))
@@ -929,15 +928,15 @@ pub fn check_relation_uniqueness(nodes: &Nodes) -> FsResult<()> {
 #[allow(clippy::too_many_arguments)]
 async fn resolve_package(
     package_name: String,
-    arg: ResolveArgs,
+    arg: &ResolveArgs,
     dbt_state: Arc<DbtState>,
     root_project_name: String,
     root_project_configs: Arc<RootProjectConfigs>,
     adapter_type: AdapterType,
-    macros: Macros,
+    macros: &Macros,
     jinja_env: Arc<JinjaEnv>,
     node_resolver: NodeResolver,
-    all_runtime_configs: BTreeMap<String, Arc<DbtRuntimeConfig>>,
+    all_runtime_configs: &BTreeMap<String, Arc<DbtRuntimeConfig>>,
     token: &CancellationToken,
     jinja_type_checking_event_listener_factory: Arc<dyn JinjaTypeCheckingEventListenerFactory>,
 ) -> FsResult<(
@@ -971,7 +970,7 @@ async fn resolve_package(
         &arg.io.in_dir,
         package,
         &dbt_state.dbt_profile,
-        &all_runtime_configs,
+        all_runtime_configs,
         vars,
         &dbt_state.cli_vars.clone(),
     ));
@@ -985,15 +984,15 @@ async fn resolve_package(
         semantic_layer_spec_is_legacy,
         macro_properties,
     ) = resolve_inner(
-        &arg,
+        arg,
         package,
         dbt_state.clone(),
         &root_project_name,
         &root_project_configs,
         adapter_type,
-        &macros,
+        macros,
         jinja_env.clone(),
-        &mut node_resolver.clone(),
+        node_resolver,
         runtime_config.clone(),
         &mut test_name_truncations,
         token,
@@ -1055,15 +1054,15 @@ async fn resolve_packages_sequentially(
         for package_name in package_wave {
             let result = resolve_package(
                 package_name.clone(),
-                arg.clone(),
+                arg,
                 dbt_state.clone(),
                 root_project_name.to_string(),
                 root_project_configs.clone(),
                 adapter_type,
-                macros.clone(),
+                macros,
                 jinja_env.clone(),
                 node_resolver.clone(),
-                all_runtime_configs.clone(),
+                all_runtime_configs,
                 token,
                 jinja_type_checking_event_listener_factory.clone(),
             )
@@ -1151,7 +1150,11 @@ async fn resolve_packages_parallel(
         String,
         BTreeMap<String, resolve_properties::MinimalPropertiesEntry>,
     > = BTreeMap::new();
+    let arg = Arc::new(arg.clone());
+    let macros = Arc::new(macros.clone());
+
     for package_wave in package_waves {
+        let all_runtime_configs_snapshot_arc = Arc::new(all_runtime_configs.clone()); // update snapshot after each wave
         token.check_cancellation()?;
 
         let mut handles = Vec::new();
@@ -1163,7 +1166,7 @@ async fn resolve_packages_parallel(
             let macros = macros.clone();
             let jinja_env = jinja_env.clone();
             let node_resolver = node_resolver.clone();
-            let all_runtime_configs = all_runtime_configs.clone(); // read-only for this wave
+            let all_runtime_configs_snapshot = all_runtime_configs_snapshot_arc.clone();
             let dbt_state = dbt_state.clone();
             let token = token.clone();
             let jinja_type_checking_event_listener_factory =
@@ -1172,15 +1175,15 @@ async fn resolve_packages_parallel(
                 async move {
                     resolve_package(
                         package_name,
-                        arg,
+                        &arg,
                         dbt_state,
                         root_project_name,
                         root_project_configs,
                         adapter_type,
-                        macros,
+                        &macros,
                         jinja_env,
                         node_resolver,
-                        all_runtime_configs,
+                        &all_runtime_configs_snapshot,
                         &token,
                         jinja_type_checking_event_listener_factory,
                     )

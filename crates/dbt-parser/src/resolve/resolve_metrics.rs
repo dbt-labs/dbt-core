@@ -78,8 +78,8 @@ pub async fn resolve_metrics(
     arg: &ResolveArgs,
     package: &DbtPackage,
     root_project_configs: &RootProjectConfigs,
-    minimal_model_properties: &mut BTreeMap<String, MinimalPropertiesEntry>,
-    minimal_metric_properties: &mut BTreeMap<String, MinimalPropertiesEntry>,
+    minimal_model_properties: &BTreeMap<String, MinimalPropertiesEntry>,
+    minimal_metric_properties: &BTreeMap<String, MinimalPropertiesEntry>,
     typed_models_properties: &BTreeMap<String, ModelProperties>,
     package_name: &str,
     env: &JinjaEnv,
@@ -124,7 +124,7 @@ pub fn resolve_nested_model_metrics(
     arg: &ResolveArgs,
     package: &DbtPackage,
     root_project_configs: &RootProjectConfigs,
-    minimal_model_properties: &mut BTreeMap<String, MinimalPropertiesEntry>,
+    minimal_model_properties: &BTreeMap<String, MinimalPropertiesEntry>,
     typed_models_properties: &BTreeMap<String, ModelProperties>,
     package_name: &str,
     env: &JinjaEnv,
@@ -315,7 +315,7 @@ pub fn resolve_top_level_metrics(
     arg: &ResolveArgs,
     package: &DbtPackage,
     root_project_configs: &RootProjectConfigs,
-    minimal_metric_properties: &mut BTreeMap<String, MinimalPropertiesEntry>,
+    minimal_metric_properties: &BTreeMap<String, MinimalPropertiesEntry>,
     package_name: &str,
     env: &JinjaEnv,
     base_ctx: &BTreeMap<String, MinijinjaValue>,
@@ -339,7 +339,7 @@ pub fn resolve_top_level_metrics(
         dependency_package_name,
     )?;
 
-    for (metric_name, mpe) in minimal_metric_properties.iter_mut() {
+    for (metric_name, mpe) in minimal_metric_properties.iter() {
         if mpe.schema_value.is_null() {
             continue;
         }
