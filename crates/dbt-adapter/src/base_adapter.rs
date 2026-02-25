@@ -75,7 +75,7 @@ pub trait AdapterTyping {
     }
 
     /// This adapter as the replay adapter if it is one, None otherwise.
-    fn as_replay(&self) -> Option<&dyn ReplayAdapter> {
+    fn as_replay(&self) -> Option<&dyn Replayer> {
         match self.inner_adapter() {
             InnerAdapter::Replay(_, replay) => Some(replay),
             InnerAdapter::Impl(..) => None,

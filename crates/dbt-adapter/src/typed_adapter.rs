@@ -129,7 +129,7 @@ pub enum InnerAdapter<'a> {
     /// The standard implementation for running against live databases.
     Impl(AdapterType, &'a Arc<dyn AdapterEngine>),
     /// Delegates to a replay adapter for recorded trace playback.
-    Replay(AdapterType, &'a dyn ReplayAdapter),
+    Replay(AdapterType, &'a dyn Replayer),
 }
 
 /// Methods formerly on the `TypedBaseAdapter` trait, now inherent on [ConcreteAdapter].
@@ -3593,7 +3593,7 @@ struct MockState {
 #[derive(Clone)]
 enum ConcreteAdapterInner {
     Impl(Arc<dyn AdapterEngine>),
-    Replay(Arc<dyn ReplayAdapter>),
+    Replay(Arc<dyn Replayer>),
     Mock(MockState),
 }
 
@@ -3604,7 +3604,7 @@ impl ConcreteAdapter {
         }
     }
 
-    pub fn new_replay(replay: Arc<dyn ReplayAdapter>) -> Self {
+    pub fn new_replay(replay: Arc<dyn Replayer>) -> Self {
         Self {
             inner: ConcreteAdapterInner::Replay(replay),
         }
@@ -3744,10 +3744,9 @@ impl fmt::Debug for ConcreteAdapter {
     }
 }
 
-/// Abstract interface for the concrete replay adapter implementation.
-///
-/// NOTE: this is a growing interface that is currently growing.
-pub trait ReplayAdapter: fmt::Debug + Send + Sync {
+/// Abstract interface for the functions that the adapter can call to perform replays
+/// consuming recorded runs instead of making real calls to the data warehouse.
+pub trait Replayer: fmt::Debug + Send + Sync {
     fn engine(&self) -> &Arc<dyn AdapterEngine>;
 
     fn adapter_type(&self) -> AdapterType {
