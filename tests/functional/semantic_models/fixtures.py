@@ -1056,3 +1056,17 @@ derived_semantics_yml = """
             is_start: true
             is_end: true
 """
+
+derived_semantics_with_doc_jinja_yml = """
+    derived_semantics:
+      entities:
+        - name: derived_id_entity
+          description: "{{ doc('entity_description') }}"
+          type: foreign
+          expr: "id + foreign_id_col"
+      dimensions:
+        - name: derived_id_dimension
+          description: "{{ doc('dimension_description') }}"
+          type: categorical
+          expr: id
+"""

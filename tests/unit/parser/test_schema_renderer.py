@@ -118,3 +118,55 @@ class TestYamlRendering(unittest.TestCase):
         }
         dct = renderer.render_data(dct)
         self.assertEqual(dct, expected)
+
+    def test__derived_semantics_descriptions(self):
+        context = {
+            "test_var": "1234",
+        }
+        renderer = SchemaYamlRenderer(context, "models")
+
+        # Verify descriptions inside derived_semantics.dimensions and
+        # derived_semantics.entities are not rendered (they contain doc()
+        # Jinja that is resolved later in process_docs)
+        dct = {
+            "name": "my_model",
+            "attribute": "{{ test_var }}",
+            "derived_semantics": {
+                "dimensions": [
+                    {
+                        "name": "my_dim",
+                        "description": "{{ test_var }}",
+                        "type": "categorical",
+                    },
+                ],
+                "entities": [
+                    {
+                        "name": "my_entity",
+                        "description": "{{ test_var }}",
+                        "type": "foreign",
+                    },
+                ],
+            },
+        }
+        expected = {
+            "name": "my_model",
+            "attribute": "1234",
+            "derived_semantics": {
+                "dimensions": [
+                    {
+                        "name": "my_dim",
+                        "description": "{{ test_var }}",
+                        "type": "categorical",
+                    },
+                ],
+                "entities": [
+                    {
+                        "name": "my_entity",
+                        "description": "{{ test_var }}",
+                        "type": "foreign",
+                    },
+                ],
+            },
+        }
+        dct = renderer.render_data(dct)
+        self.assertEqual(expected, dct)
