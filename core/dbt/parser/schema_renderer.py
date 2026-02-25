@@ -73,6 +73,10 @@ class SchemaYamlRenderer(BaseRenderer):
         ):
             return True
 
+        # per-version column data_tests (e.g. versions.0.columns.0.data_tests.*)
+        if any(k in ("tests", "data_tests") for k in keypath):
+            return True
+
         return False
 
     # don't render descriptions or test keyword arguments
