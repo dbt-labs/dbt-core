@@ -1,0 +1,6 @@
+kind: Features
+body: Added support for vars.yml to declare project variables
+time: 2026-02-12T23:27:28.294557+05:30
+custom:
+    Author: sriramr98
+    Issue: 11144 2955
