@@ -1,0 +1,6 @@
+kind: Fixes
+body: Enable sql_header config to work with unit tests and data tests (singular and generic).
+time: 2026-02-25T20:31:31.854988+05:30
+custom:
+    Author: aahelguha
+    Issue: "9775"
