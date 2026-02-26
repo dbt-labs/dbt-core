@@ -12,7 +12,7 @@
         },
         "dbt_version": {
           "type": "string",
-          "default": "1.10.0a1"
+          "default": "1.11.6"
         },
         "generated_at": {
           "type": "string"
