@@ -75,11 +75,13 @@ jobs:
           ref: "main"
           path: ${{ env.SCHEMA_REPO_DIRECTORY }}
 
+      - name: "Install hatch"
+        uses: pypa/hatch@257e27e51a6a5616ed08a39a408a21c35c9931bc # pypa/hatch@install
+
       - name: Generate current schema
         if: steps.check_artifact_changes.outputs.artifacts_changed == 'true'
         run: |
           cd ${{ env.DBT_REPO_DIRECTORY }}/core
-          pip install --upgrade pip "virtualenv<20.26" hatch
           hatch run setup
           hatch run json-schema -- --path ${{ env.LATEST_SCHEMA_PATH }}
 
