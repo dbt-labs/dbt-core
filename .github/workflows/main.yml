@@ -222,7 +222,7 @@ jobs:
           timeout_minutes: 30
           max_attempts: 3
           shell: bash
-          command: cd core && hatch -v run ci:integration-tests -- --ddtrace --splits ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }} --group ${{ matrix.split-group }}
+          command: cd core && hatch -v run ci:integration-tests -- --ddtrace --durations-path .test_durations --splits ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }} --group ${{ matrix.split-group }}
 
       - name: Get current date
         if: always()
@@ -299,7 +299,7 @@ jobs:
           timeout_minutes: 30
           max_attempts: 3
           shell: bash
-          command: cd core && hatch -v run ci:integration-tests -- --ddtrace --splits ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }} --group ${{ matrix.split-group }}
+          command: cd core && hatch -v run ci:integration-tests -- --ddtrace --durations-path .test_durations --splits ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }} --group ${{ matrix.split-group }}
 
       - name: Get current date
         if: always()
