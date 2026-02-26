@@ -220,7 +220,15 @@ impl DbConfig {
             DbConfig::Databricks(_) => &["host", "http_path", "schema"],
             // TODO: Salesforce connection keys
             DbConfig::Salesforce(_) => &["login_url", "database", "data_transform_run_timeout"],
-            DbConfig::DuckDB(_) => &["path", "database", "schema", "extensions", "settings"],
+            DbConfig::DuckDB(_) => &[
+                "path",
+                "database",
+                "schema",
+                "extensions",
+                "settings",
+                "secrets",
+                "attach",
+            ],
             // TODO(serramatutu): Spark connection keys
             DbConfig::Spark(_) => &[],
             // TODO: Trino and Datafusion connection keys
@@ -923,6 +931,52 @@ fn default_data_transform_run_timeout() -> Option<i64> {
     Some(180000) // 3 mins
 }
 
+/// A DuckDB secret for the Secrets Manager.
+/// Corresponds to upstream dbt-duckdb `Secret` dataclass.
+/// Generates a `CREATE OR REPLACE SECRET` statement.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub struct DuckDbSecret {
+    /// Secret type: s3, azure, gcs, r2, huggingface, etc.
+    #[serde(rename = "type")]
+    pub secret_type: String,
+    /// Optional name. Auto-generated as `__dbt_secret_{index}` if omitted.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// Optional provider (e.g., "credential_chain" for AWS default creds).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider: Option<String>,
+    /// Optional scope restriction (e.g., "s3://my-bucket").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scope: Option<String>,
+    /// Whether this is a persistent secret (survives restarts).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub persistent: Option<bool>,
+    /// All other key-value params become CREATE SECRET parameters.
+    /// E.g., key_id, secret, region, endpoint, account_id, token, etc.
+    #[serde(flatten)]
+    pub params: HashMap<String, YmlValue>,
+}
+
+/// A DuckDB database attachment.
+/// Corresponds to upstream dbt-duckdb `Attachment` dataclass.
+/// Generates an `ATTACH IF NOT EXISTS` statement.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub struct DuckDbAttachment {
+    /// Path to the database file or connection string.
+    pub path: String,
+    /// Alias name for the attached database.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub alias: Option<String>,
+    /// Database type (e.g., "duckdb", "sqlite", "postgres").
+    #[serde(rename = "type", skip_serializing_if = "Option::is_none")]
+    pub db_type: Option<String>,
+    /// Whether to attach read-only.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub read_only: Option<bool>,
+}
+
 /// DuckDB adapter configuration
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema, Merge)]
 #[merge(strategy = merge_strategies_extend::overwrite_option)]
@@ -948,6 +1002,14 @@ pub struct DuckDbConfig {
     /// Number of threads
     #[serde(skip_serializing_if = "Option::is_none")]
     pub threads: Option<StringOrInteger>,
+    /// Secrets to register with DuckDB's Secrets Manager.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[merge(strategy = merge_strategies_extend::overwrite_always)]
+    pub secrets: Option<Vec<DuckDbSecret>>,
+    /// External databases to attach.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[merge(strategy = merge_strategies_extend::overwrite_always)]
+    pub attach: Option<Vec<DuckDbAttachment>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema)]

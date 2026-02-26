@@ -20,6 +20,7 @@ mod spark;
 mod test_options;
 
 pub use config::AdapterConfig;
+pub use duckdb::init::generate_duckdb_init_sql;
 
 /// Authorization trait.
 pub trait Auth: Send + Sync {

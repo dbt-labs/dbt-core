@@ -1,3 +1,5 @@
+pub mod init;
+
 use crate::{AdapterConfig, Auth, AuthError};
 
 use dbt_xdbc::{Backend, database};

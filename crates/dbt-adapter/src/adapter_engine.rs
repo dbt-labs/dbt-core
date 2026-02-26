@@ -523,13 +523,45 @@ impl XdbcEngine {
                 let database: Box<dyn Database> = database.clone();
                 Ok(database)
             } else {
-                let database = driver
+                let mut database = driver
                     .new_database_with_opts(opts)
                     .map_err(adbc_error_to_adapter_error)?;
+                // DuckDB: apply extensions, settings, secrets, and attachments
+                if self.adapter_type == AdapterType::DuckDB {
+                    self.apply_duckdb_init_sql(&mut database, config)?;
+                }
                 write_guard.inner.insert(fingerprint, database.clone());
                 Ok(database)
             }
         }
+    }
+
+    /// Apply DuckDB init SQL (extensions, settings, secrets, attachments)
+    /// to a newly created database instance. Uses a temporary connection.
+    fn apply_duckdb_init_sql(
+        &self,
+        database: &mut Box<dyn Database>,
+        config: &AdapterConfig,
+    ) -> AdapterResult<()> {
+        let init_stmts = dbt_auth::generate_duckdb_init_sql(config);
+        if init_stmts.is_empty() {
+            return Ok(());
+        }
+        let mut conn = database
+            .new_connection()
+            .map_err(adbc_error_to_adapter_error)?;
+        for sql in &init_stmts {
+            let mut stmt = conn.new_statement().map_err(adbc_error_to_adapter_error)?;
+            stmt.set_sql_query(sql)
+                .map_err(adbc_error_to_adapter_error)?;
+            let _ = stmt.execute_update().map_err(|e| {
+                adbc_error_to_adapter_error(adbc_core::error::Error::with_message_and_status(
+                    format!("DuckDB init SQL failed on '{sql}': {e}"),
+                    adbc_core::error::Status::Internal,
+                ))
+            })?;
+        }
+        Ok(())
     }
 }
 
