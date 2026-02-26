@@ -1,0 +1,95 @@
+# **what?**
+# Generates and commits pytest-split test duration data for optimized test splitting.
+
+# **why?**
+# pytest-split uses duration data to balance test workloads across workers.
+# Without this data, tests are split evenly by count which can cause imbalanced runs.
+
+# **when?**
+# Runs weekly on Sunday at midnight UTC, and can be manually triggered as needed.
+
+name: Update Test Durations
+
+on:
+  schedule:
+    - cron: "0 0 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  generate-durations:
+    name: "Generate Test Durations"
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    env:
+      DBT_INVOCATION_ENV: github-actions
+      DBT_TEST_USER_1: dbt_test_user_1
+      DBT_TEST_USER_2: dbt_test_user_2
+      DBT_TEST_USER_3: dbt_test_user_3
+
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_PASSWORD: password
+          POSTGRES_USER: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: "Check out the repository"
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
+        with:
+          ref: main
+
+      - name: "Set up Python 3.11"
+        uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: "Run postgres setup script"
+        run: ./scripts/setup_db.sh
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGPASSWORD: password
+
+      - name: "Install hatch"
+        uses: pypa/hatch@257e27e51a6a5616ed08a39a408a21c35c9931bc # pypa/hatch@install
+
+      - name: "Run integration tests and store durations"
+        run: |
+          cd core
+          hatch -v run ci:integration-tests -- --store-durations --durations-path .test_durations || true
+
+      - name: "Code quality"
+        run: |
+          cd core
+          git add .test_durations
+          hatch run pre-commit run end-of-file-fixer --files .test_durations
+
+      - name: "Commit updated durations file"
+        run: |
+          git config user.name "Github Build Bot"
+          git config user.email "buildbot@fishtownanalytics.com"
+          if [ -f core/.test_durations ]; then
+            git add core/.test_durations
+            git diff --staged --quiet || git commit -m "Update test durations for pytest-split"
+            git push
+          else
+            echo "No .test_durations file generated"
+            exit 1
+          fi
