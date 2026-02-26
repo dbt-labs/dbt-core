@@ -63,9 +63,6 @@ pub trait AdapterTyping {
         }
     }
 
-    /// Build an instance of the metadata adapter if supported.
-    fn metadata_adapter(&self) -> Option<Box<dyn MetadataAdapter>>;
-
     /// Get a reference to the concrete adapter if supported.
     fn as_concrete_adapter(&self) -> &ConcreteAdapter;
 
@@ -134,6 +131,9 @@ pub trait AdapterTyping {
 
 /// Base adapter
 pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
+    /// Build an instance of the metadata adapter if supported.
+    fn metadata_adapter(&self) -> Option<Box<dyn MetadataAdapter>>;
+
     /// Commit
     ///
     /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L000

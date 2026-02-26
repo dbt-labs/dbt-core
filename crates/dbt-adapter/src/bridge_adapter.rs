@@ -346,13 +346,6 @@ impl AdapterTyping for BridgeAdapter {
         }
     }
 
-    fn metadata_adapter(&self) -> Option<Box<dyn MetadataAdapter>> {
-        match &self.inner {
-            Typed { adapter, .. } => adapter.metadata_adapter(),
-            Parse(_) => None, // TODO: implement metadata_adapter() for ParseAdapter
-        }
-    }
-
     fn as_concrete_adapter(&self) -> &ConcreteAdapter {
         match &self.inner {
             Typed { adapter, .. } => adapter.as_ref(),
@@ -383,6 +376,13 @@ impl AdapterTyping for BridgeAdapter {
 }
 
 impl BaseAdapter for BridgeAdapter {
+    fn metadata_adapter(&self) -> Option<Box<dyn MetadataAdapter>> {
+        match &self.inner {
+            Typed { adapter, .. } => adapter.metadata_adapter(),
+            Parse(_) => None, // TODO: implement metadata_adapter() for ParseAdapter
+        }
+    }
+
     fn as_value(&self) -> Value {
         Value::from_object(self.clone())
     }

@@ -134,6 +134,46 @@ pub enum InnerAdapter<'a> {
 
 /// Methods formerly on the `TypedBaseAdapter` trait, now inherent on [ConcreteAdapter].
 impl ConcreteAdapter {
+    pub fn metadata_adapter(&self) -> Option<Box<dyn MetadataAdapter>> {
+        match self.inner_adapter() {
+            Replay(_, replay) => replay.metadata_adapter(),
+            Impl(_, engine) => {
+                // In sidecar mode, schema hydration is handled via db_runner.
+                if engine.is_sidecar() {
+                    return None;
+                }
+                // The explicit mock adapter variant has no metadata adapter.
+                if self.is_explicit_mock() {
+                    return None;
+                }
+                let engine = Arc::clone(engine);
+                let metadata_adapter =
+                    match self.adapter_type() {
+                        Snowflake => Box::new(SnowflakeMetadataAdapter::new(engine))
+                            as Box<dyn MetadataAdapter>,
+                        Bigquery => Box::new(BigqueryMetadataAdapter::new(engine))
+                            as Box<dyn MetadataAdapter>,
+                        Databricks | Spark => Box::new(DatabricksMetadataAdapter::new(engine))
+                            as Box<dyn MetadataAdapter>,
+                        Redshift => Box::new(RedshiftMetadataAdapter::new(engine))
+                            as Box<dyn MetadataAdapter>,
+                        Salesforce => {
+                            Box::new(SalesforceMetadataAdapter::new()) as Box<dyn MetadataAdapter>
+                        }
+                        Postgres | Sidecar => Box::new(PostgresMetadataAdapter::new(engine))
+                            as Box<dyn MetadataAdapter>,
+                        DuckDB => {
+                            Box::new(DuckDBMetadataAdapter::new(engine)) as Box<dyn MetadataAdapter>
+                        }
+                        Fabric => {
+                            Box::new(FabricMetadataAdapter::new(engine)) as Box<dyn MetadataAdapter>
+                        }
+                    };
+                Some(metadata_adapter)
+            }
+        }
+    }
+
     /// Execute `use warehouse [name]` statement for Snowflake.
     /// For other warehouses, this is noop.
     pub fn use_warehouse(
@@ -3696,46 +3736,6 @@ impl AdapterTyping for ConcreteAdapter {
                 Replay(replay.engine().adapter_type(), replay.as_ref())
             }
             ConcreteAdapterInner::Mock(mock) => Impl(mock.engine.adapter_type(), &mock.engine),
-        }
-    }
-
-    fn metadata_adapter(&self) -> Option<Box<dyn MetadataAdapter>> {
-        match self.inner_adapter() {
-            Replay(_, replay) => replay.metadata_adapter(),
-            Impl(_, engine) => {
-                // In sidecar mode, schema hydration is handled via db_runner.
-                if engine.is_sidecar() {
-                    return None;
-                }
-                // The explicit mock adapter variant has no metadata adapter.
-                if self.is_explicit_mock() {
-                    return None;
-                }
-                let engine = Arc::clone(engine);
-                let metadata_adapter =
-                    match self.adapter_type() {
-                        Snowflake => Box::new(SnowflakeMetadataAdapter::new(engine))
-                            as Box<dyn MetadataAdapter>,
-                        Bigquery => Box::new(BigqueryMetadataAdapter::new(engine))
-                            as Box<dyn MetadataAdapter>,
-                        Databricks | Spark => Box::new(DatabricksMetadataAdapter::new(engine))
-                            as Box<dyn MetadataAdapter>,
-                        Redshift => Box::new(RedshiftMetadataAdapter::new(engine))
-                            as Box<dyn MetadataAdapter>,
-                        Salesforce => {
-                            Box::new(SalesforceMetadataAdapter::new()) as Box<dyn MetadataAdapter>
-                        }
-                        Postgres | Sidecar => Box::new(PostgresMetadataAdapter::new(engine))
-                            as Box<dyn MetadataAdapter>,
-                        DuckDB => {
-                            Box::new(DuckDBMetadataAdapter::new(engine)) as Box<dyn MetadataAdapter>
-                        }
-                        Fabric => {
-                            Box::new(FabricMetadataAdapter::new(engine)) as Box<dyn MetadataAdapter>
-                        }
-                    };
-                Some(metadata_adapter)
-            }
         }
     }
 
