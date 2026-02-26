@@ -48,6 +48,8 @@ fn compare_sql_inner(
     let actual = canonicalize_elementary_metadata_pkg_version(&actual);
     let expected = canonicalize_elementary_metadata_pkg_version(&expected);
     let actual = canonicalize_python_config_dict(&actual, &expected);
+    let actual = canonicalize_python_meta_dict(&actual);
+    let expected = canonicalize_python_meta_dict(&expected);
     let actual = canonicalize_databricks_legacy_alter_column_comment_to_modern(&actual);
     let expected = canonicalize_databricks_legacy_alter_column_comment_to_modern(&expected);
     let actual = canonicalize_snowflake_grant_select_to_roles(&actual);
@@ -1305,6 +1307,37 @@ fn canonicalize_python_config_dict(actual: &str, expected: &str) -> String {
     }
 
     actual.to_string()
+}
+
+/// Strip the `meta_dict = {}` variable and the `meta_get` static method that Fusion emits inside
+/// the Python `config` helper class for Snowflake Python models.  Mantle does not emit these, but
+/// they are semantically inert – removing them makes both sides identical.
+fn canonicalize_python_meta_dict(sql: &str) -> String {
+    // Fast-path: nothing to do when there is no meta_dict.
+    if !sql.contains("meta_dict") {
+        return sql.to_string();
+    }
+
+    // 1. Remove the standalone `meta_dict = {}` line (with surrounding blank lines collapsed).
+    static RE_META_DICT_VAR: once_cell::sync::Lazy<Regex> =
+        once_cell::sync::Lazy::new(|| Regex::new(r"(?m)^\s*meta_dict\s*=\s*\{\}\s*\n").unwrap());
+
+    // 2. Remove the `meta_get` static method block inside the config class.
+    //    Matches:
+    //        @staticmethod
+    //        def meta_get(key, default=None):
+    //            return meta_dict.get(key, default)
+    //    (with flexible indentation and an optional trailing blank line)
+    static RE_META_GET_METHOD: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
+        Regex::new(
+                r"(?m)^[ \t]*@staticmethod\s*\n[ \t]*def meta_get\(.*?\):\s*\n[ \t]*return meta_dict\.get\(.*?\)\s*\n?"
+            )
+            .unwrap()
+    });
+
+    let result = RE_META_DICT_VAR.replace_all(sql, "");
+    let result = RE_META_GET_METHOD.replace_all(&result, "");
+    result.into_owned()
 }
 
 /// Extract config_dict string from Python SQL
@@ -3871,6 +3904,53 @@ where 1 = 0";
         assert!(
             result.is_ok(),
             "ALTER TABLE SET tblproperties should be order-independent: {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_python_meta_dict_and_meta_get_are_ignorable() {
+        // Fusion emits `meta_dict = {}` and a `meta_get` static method inside the
+        // `config` helper class for Snowflake Python models.  Mantle does not.
+        // The extra code is semantically inert and should not cause a mismatch.
+        let actual = r#"
+config_dict = {}
+meta_dict = {}
+
+class config:
+    def __init__(self, *args, **kwargs):
+        pass
+
+    @staticmethod
+    def get(key, default=None):
+        return config_dict.get(key, default)
+
+    @staticmethod
+    def meta_get(key, default=None):
+        return meta_dict.get(key, default)
+
+class this:
+    database = "DB"
+"#;
+
+        let expected = r#"
+config_dict = {}
+
+class config:
+    def __init__(self, *args, **kwargs):
+        pass
+
+    @staticmethod
+    def get(key, default=None):
+        return config_dict.get(key, default)
+
+class this:
+    database = "DB"
+"#;
+
+        let result = compare_sql(actual, expected);
+        assert!(
+            result.is_ok(),
+            "meta_dict and meta_get differences should be ignorable: {result:?}"
         );
     }
 }
