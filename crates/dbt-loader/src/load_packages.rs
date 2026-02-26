@@ -328,6 +328,14 @@ pub fn construct_internal_packages(
             let relative = &asset_str[prefix.len()..];
             let rel_path = PathBuf::from(relative);
 
+            // Ignore anything inside the target/ directory
+            if let Some(first_component) = rel_path.components().next() {
+                let dir_name = first_component.as_os_str().to_str().unwrap_or("");
+                if dir_name == "target" {
+                    continue;
+                }
+            }
+
             // Cache all file contents
             if let Some(file) = assets::MacroAssets::get(asset_str) {
                 let content = String::from_utf8_lossy(&file.data).into_owned();
