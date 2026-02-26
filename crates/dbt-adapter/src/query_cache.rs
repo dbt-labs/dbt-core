@@ -7,6 +7,8 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, LazyLock};
 use std::time::Duration;
 
+use crate::sql::normalize::normalize_dbt_tmp_name;
+
 use adbc_core::error::{Error as AdbcError, Result as AdbcResult, Status as AdbcStatus};
 use adbc_core::options::{OptionStatement, OptionValue};
 use arrow::array::{RecordBatch, RecordBatchIterator, RecordBatchReader};
@@ -19,14 +21,6 @@ use parquet::file::properties::WriterProperties;
 
 use crate::sql::normalize::strip_sql_comments;
 use crate::statement::*;
-
-#[derive(Default, Clone)]
-pub enum QueryCacheMode {
-    Read,
-    Write,
-    #[default]
-    ReadWrite,
-}
 
 pub trait QueryCache: Send + Sync {
     fn new_statement(&self, inner_stmt: Box<dyn Statement>) -> Box<dyn Statement>;
@@ -193,37 +187,29 @@ impl Statement for QueryCacheStatement {
             return self.inner_stmt.execute();
         };
 
-        match self.query_cache_config.mode {
-            QueryCacheMode::Read | QueryCacheMode::Write => {
-                unimplemented!("QueryCacheMode::Read | QueryCacheMode::Write is not implemented")
+        let sql_hash = self.compute_sql_hash();
+        let index = self.compute_file_index(node_id, phase, &sql_hash);
+        let path = self.construct_output_file_name(node_id, &sql_hash, index);
+        if path.exists() {
+            if self.check_ttl(&path)? {
+                let cache_read = self.read_cache(&path);
+                return cache_read;
+            } else if let Some(parent) = path.parent() {
+                // Try to remove the parent directory if the file is stale
+                let _ = std::fs::remove_dir_all(parent);
             }
-            QueryCacheMode::ReadWrite => {
-                // First, compute the file name by hashing the query and suffixing the index
-                let sql_hash = self.compute_sql_hash();
-                let index = self.compute_file_index(node_id, phase, &sql_hash);
-                let path = self.construct_output_file_name(node_id, &sql_hash, index);
-                if path.exists() {
-                    if self.check_ttl(&path)? {
-                        let cache_read = self.read_cache(&path);
-                        return cache_read;
-                    } else if let Some(parent) = path.parent() {
-                        // Try to remove the parent directory if the file is stale
-                        let _ = std::fs::remove_dir_all(parent);
-                    }
-                }
-                // Execute on the actual engine's Statement
-                let result = self.inner_stmt.execute();
-                // TODO: Add invalidation logic to ensure when a cache hit is not found, we invalidate downstreams (in Render Phase)
-                match result {
-                    Ok(mut reader) => QueryCacheStatement::write_cache(&path, &mut reader),
-                    Err(err) => {
-                        let err_msg = format!("{err}");
-                        Err(AdbcError::with_message_and_status(
-                            err_msg,
-                            AdbcStatus::Internal,
-                        ))
-                    }
-                }
+        }
+        // Execute on the actual engine's Statement
+        let result = self.inner_stmt.execute();
+        // TODO: Add invalidation logic to ensure when a cache hit is not found, we invalidate downstreams (in Render Phase)
+        match result {
+            Ok(mut reader) => QueryCacheStatement::write_cache(&path, &mut reader),
+            Err(err) => {
+                let err_msg = format!("{err}");
+                Err(AdbcError::with_message_and_status(
+                    err_msg,
+                    AdbcStatus::Internal,
+                ))
             }
         }
     }
@@ -309,21 +295,14 @@ impl Statement for QueryCacheStatement {
 }
 
 pub struct QueryCacheConfig {
-    mode: QueryCacheMode,
     root_path: PathBuf,
     ttl: Option<Duration>,
     phases: Vec<&'static str>,
 }
 
 impl QueryCacheConfig {
-    pub fn new(
-        mode: QueryCacheMode,
-        root_path: PathBuf,
-        ttl: Option<Duration>,
-        phases: Vec<&'static str>,
-    ) -> Self {
+    pub fn new(root_path: PathBuf, ttl: Option<Duration>, phases: Vec<&'static str>) -> Self {
         Self {
-            mode,
             root_path,
             ttl,
             phases,
@@ -375,21 +354,19 @@ fn from_parquet_error(e: parquet::errors::ParquetError) -> adbc_core::error::Err
     )
 }
 
-/// Replaces the UUID in a relation name created adapter.generate_unique_temporary_table_suffix
-/// Example: "dbt_tmp_800c2fb4_a0ba_4708_a0b1_813316032bfb" -> "dbt_tmp_"
-pub fn normalize_dbt_tmp_name(sql: &str) -> String {
-    static RE: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"dbt_tmp_[0-9a-f]{8}_[0-9a-f]{4}_[0-9a-f]{4}_[0-9a-f]{4}_[0-9a-f]{12}").unwrap()
-    });
-    RE.replace_all(&strip_sql_comments(sql), "dbt_tmp_")
-        .to_string()
-}
-
-/// Normalizes SQL for comparison by removing both temporary table UUIDs and schema timestamps
+/// Normalizes SQL for cache-key comparison:
+/// 1. Strips SQL comments (so comment-only changes don't bust the cache)
+/// 2. Replaces dbt temporary table UUIDs (so re-runs with new UUIDs hit the cache)
+/// 3. Removes schema timestamp markers (`___<digits>___`)
+///
+/// NOTE: `record_and_replay` has its own variant that collapses whitespace instead
+/// of stripping timestamps, and does *not* strip comments (recordings must be
+/// byte-for-byte reproducible).
 fn normalize_sql_for_comparison(sql: &str) -> String {
     static RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"___\d+___").unwrap());
-    let normalized = normalize_dbt_tmp_name(sql);
-    RE.replace_all(&normalized, "").to_string()
+    let without_comments = strip_sql_comments(sql);
+    let without_uuids = normalize_dbt_tmp_name(&without_comments);
+    RE.replace_all(&without_uuids, "").to_string()
 }
 
 /// Extracts the numeric index from a cache filename like "abc12345_1.parquet".
@@ -405,6 +382,67 @@ fn parse_cache_file_index(filename: &OsStr) -> Option<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use arrow::array::PrimitiveArray;
+    use arrow::datatypes::{DataType, Int32Type};
+
+    struct NoopStatement;
+
+    impl Statement for NoopStatement {
+        fn bind(&mut self, _: RecordBatch) -> AdbcResult<()> {
+            Ok(())
+        }
+        fn bind_stream(&mut self, _: Box<dyn RecordBatchReader + Send>) -> AdbcResult<()> {
+            Ok(())
+        }
+        fn execute<'a>(&'a mut self) -> AdbcResult<Box<dyn RecordBatchReader + Send + 'a>> {
+            let schema = Arc::new(Schema::empty());
+            let batch = RecordBatch::new_empty(schema.clone());
+            Ok(Box::new(RecordBatchIterator::new(vec![Ok(batch)], schema)))
+        }
+        fn execute_update(&mut self) -> AdbcResult<Option<i64>> {
+            Ok(None)
+        }
+        fn execute_schema(&mut self) -> AdbcResult<Schema> {
+            Ok(Schema::empty())
+        }
+        fn execute_partitions(&mut self) -> AdbcResult<adbc_core::PartitionedResult> {
+            unimplemented!()
+        }
+        fn get_parameter_schema(&self) -> AdbcResult<Schema> {
+            Ok(Schema::empty())
+        }
+        fn prepare(&mut self) -> AdbcResult<()> {
+            Ok(())
+        }
+        fn set_sql_query(&mut self, _: &str) -> AdbcResult<()> {
+            Ok(())
+        }
+        fn set_substrait_plan(&mut self, _: &[u8]) -> AdbcResult<()> {
+            Ok(())
+        }
+        fn cancel(&mut self) -> AdbcResult<()> {
+            Ok(())
+        }
+    }
+
+    fn make_config(ttl: Option<Duration>) -> Arc<QueryCacheConfig> {
+        Arc::new(QueryCacheConfig::new(
+            PathBuf::from("/tmp/test_cache"),
+            ttl,
+            vec![],
+        ))
+    }
+
+    fn make_stmt(sql: &str) -> QueryCacheStatement {
+        QueryCacheStatement {
+            query_cache_config: make_config(None),
+            counters: Arc::new(SccHashMap::new()),
+            inner_stmt: Box::new(NoopStatement),
+            node_id: None,
+            execution_phase: "",
+            sql: sql.to_string(),
+        }
+    }
 
     #[test]
     fn test_parse_cache_file_index() {
@@ -442,5 +480,156 @@ mod tests {
             parse_cache_file_index(OsStr::new("abc_007.parquet")),
             Some(7)
         );
+    }
+
+    #[test]
+    fn test_normalize_strips_uuid() {
+        let a = "SELECT * FROM dbt_tmp_800c2fb4_a0ba_4708_a0b1_813316032bfb";
+        let b = "SELECT * FROM dbt_tmp_11111111_2222_3333_4444_555555555555";
+        assert_eq!(
+            normalize_sql_for_comparison(a),
+            normalize_sql_for_comparison(b)
+        );
+    }
+
+    #[test]
+    fn test_normalize_strips_schema_timestamps() {
+        let a = "SELECT * FROM schema___1234567890___table";
+        let b = "SELECT * FROM schema___9999999999___table";
+        assert_eq!(
+            normalize_sql_for_comparison(a),
+            normalize_sql_for_comparison(b)
+        );
+        assert_eq!(normalize_sql_for_comparison(a), "SELECT * FROM schematable");
+    }
+
+    #[test]
+    fn test_normalize_strips_comments() {
+        let a = "SELECT 1 -- comment";
+        let b = "SELECT 1 -- different comment";
+        assert_eq!(
+            normalize_sql_for_comparison(a),
+            normalize_sql_for_comparison(b)
+        );
+    }
+
+    #[test]
+    fn test_normalize_combined() {
+        let a = "/* v1 */ SELECT * FROM schema___111___ WHERE dbt_tmp_aaaaaaaa_bbbb_cccc_dddd_eeeeeeeeeeee";
+        let b = "/* v2 */ SELECT * FROM schema___222___ WHERE dbt_tmp_11111111_2222_3333_4444_555555555555";
+        assert_eq!(
+            normalize_sql_for_comparison(a),
+            normalize_sql_for_comparison(b)
+        );
+    }
+
+    #[test]
+    fn test_normalize_passthrough() {
+        let sql = "SELECT id, name FROM users WHERE active = true";
+        assert_eq!(normalize_sql_for_comparison(sql), sql);
+    }
+
+    // -- compute_sql_hash -------------------------------------------------------
+
+    #[test]
+    fn test_compute_sql_hash_deterministic() {
+        let stmt = make_stmt("SELECT 1");
+        let h1 = stmt.compute_sql_hash();
+        let h2 = stmt.compute_sql_hash();
+        assert_eq!(h1, h2);
+    }
+
+    #[test]
+    fn test_compute_sql_hash_length() {
+        let stmt = make_stmt("SELECT 1");
+        assert_eq!(stmt.compute_sql_hash().len(), 8);
+        assert!(
+            stmt.compute_sql_hash()
+                .chars()
+                .all(|c| c.is_ascii_hexdigit())
+        );
+    }
+
+    #[test]
+    fn test_compute_sql_hash_differs_for_different_sql() {
+        let s1 = make_stmt("SELECT 1");
+        let s2 = make_stmt("SELECT 2");
+        assert_ne!(s1.compute_sql_hash(), s2.compute_sql_hash());
+    }
+
+    #[test]
+    fn test_compute_sql_hash_empty_sql() {
+        let s1 = make_stmt("");
+        let s2 = make_stmt("");
+        assert_eq!(s1.compute_sql_hash(), s2.compute_sql_hash());
+    }
+
+    #[test]
+    fn test_compute_sql_hash_ignores_uuid_differences() {
+        let s1 = make_stmt("SELECT * FROM dbt_tmp_aaaaaaaa_bbbb_cccc_dddd_eeeeeeeeeeee");
+        let s2 = make_stmt("SELECT * FROM dbt_tmp_11111111_2222_3333_4444_555555555555");
+        assert_eq!(s1.compute_sql_hash(), s2.compute_sql_hash());
+    }
+
+    // -- write_cache / read_cache round-trip -------------------------------------
+
+    fn make_test_batch() -> RecordBatch {
+        let schema = Arc::new(Schema::new(vec![Field::new("x", DataType::Int32, false)]));
+        let col = PrimitiveArray::<Int32Type>::from(vec![1, 2, 3]);
+        RecordBatch::try_new(schema, vec![Arc::new(col)]).unwrap()
+    }
+
+    #[test]
+    fn test_write_read_cache_roundtrip() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("node1").join("abc_1.parquet");
+
+        let batch = make_test_batch();
+        let schema = batch.schema();
+        let mut reader: Box<dyn RecordBatchReader + Send> =
+            Box::new(RecordBatchIterator::new(vec![Ok(batch.clone())], schema));
+
+        let returned = QueryCacheStatement::write_cache(&path, &mut reader).unwrap();
+        let returned_batches: Vec<RecordBatch> = returned.collect::<Result<_, _>>().unwrap();
+        assert_eq!(returned_batches.len(), 1);
+        assert_eq!(returned_batches[0], batch);
+
+        let stmt = make_stmt("SELECT 1");
+        let read_back = stmt.read_cache(&path).unwrap();
+        let read_batches: Vec<RecordBatch> = read_back.collect::<Result<_, _>>().unwrap();
+        assert_eq!(read_batches.len(), 1);
+        assert_eq!(read_batches[0], batch);
+    }
+
+    #[test]
+    fn test_read_cache_empty_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("empty.parquet");
+        std::fs::write(&path, b"").unwrap();
+
+        let stmt = make_stmt("SELECT 1");
+        let reader = stmt.read_cache(&path).unwrap();
+        let batches: Vec<RecordBatch> = reader.collect::<Result<_, _>>().unwrap();
+        assert_eq!(batches.len(), 1);
+        assert_eq!(batches[0].num_rows(), 0);
+    }
+
+    // -- check_ttl --------------------------------------------------------------
+
+    #[test]
+    fn test_check_ttl_no_ttl_always_valid() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("file.parquet");
+        std::fs::write(&path, b"data").unwrap();
+
+        let stmt = make_stmt("x");
+        assert!(stmt.check_ttl(&path).unwrap());
+    }
+
+    #[test]
+    fn test_check_ttl_missing_file() {
+        let mut stmt = make_stmt("");
+        stmt.query_cache_config = make_config(Some(Duration::from_secs(3600)));
+        assert!(!stmt.check_ttl(Path::new("/nonexistent/file")).unwrap());
     }
 }

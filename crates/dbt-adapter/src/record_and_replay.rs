@@ -5,6 +5,7 @@ use crate::config::AdapterConfig;
 use crate::errors::AdapterResult;
 use crate::query_cache::QueryCache;
 use crate::query_comment::QueryCommentConfig;
+use crate::sql::normalize::normalize_dbt_tmp_name;
 use crate::sql_types::TypeOps;
 use crate::statement::*;
 use crate::stmt_splitter::StmtSplitter;
@@ -50,11 +51,6 @@ use std::sync::Arc;
 // we might be running multiple fs commands in a single test (which
 // can create more than one adapter total).
 static COUNTERS: Lazy<DashMap<String, usize>> = Lazy::new(DashMap::new);
-
-// Static regex pattern for matching dbt temporary table names with UUIDs
-static DBT_TMP_UUID_PATTERN: Lazy<Regex> = Lazy::new(|| {
-    Regex::new(r"dbt_tmp_[0-9a-f]{8}_[0-9a-f]{4}_[0-9a-f]{4}_[0-9a-f]{4}_[0-9a-f]{12}").unwrap()
-});
 
 static RECORDS_NAME: &str = "recordings.db";
 
@@ -1455,18 +1451,14 @@ impl Statement for ReplayEngineStatement {
     }
 }
 
-/// Replaces the UUID in a relation name created adapter.generate_unique_temporary_table_suffix
-/// Example: "dbt_tmp_800c2fb4_a0ba_4708_a0b1_813316032bfb" -> "dbt_tmp_"
-pub fn normalize_dbt_tmp_name(sql: &str) -> String {
-    // Replace all matches with "dbt_tmp_"
-    DBT_TMP_UUID_PATTERN
-        .replace_all(sql, "dbt_tmp_")
-        .to_string()
-}
-
-/// Normalizes SQL for comparison by:
-/// 1. Normalizing dbt_tmp UUIDs
-/// 2. Collapsing all whitespace (spaces, tabs, newlines) into single spaces
+/// Normalizes SQL for replay comparison:
+/// 1. Replaces dbt temporary table UUIDs
+/// 2. Collapses all whitespace into single spaces
+///
+/// NOTE: `query_cache` has its own variant that strips SQL comments and removes
+/// schema timestamp markers instead of collapsing whitespace, because the cache
+/// key must be insensitive to comments and timestamps but preserves whitespace
+/// structure.
 fn normalize_sql_for_comparison(sql: &str) -> String {
     let normalized = normalize_dbt_tmp_name(sql);
     normalized.split_whitespace().collect::<Vec<_>>().join(" ")
