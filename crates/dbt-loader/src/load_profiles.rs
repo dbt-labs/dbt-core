@@ -1,4 +1,4 @@
-use dbt_common::tracing::emit::emit_info_progress_message;
+use dbt_common::tracing::emit::{emit_info_progress_message, emit_warn_log_message};
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use dbt_jinja_utils::serde::MinijinjaContext;
 use dbt_telemetry::ProgressMessage;
@@ -73,6 +73,16 @@ pub fn load_profiles<S: MinijinjaContext>(
         &profile_str,
         profile_path,
     )?;
+
+    if db_config.has_removed_execute_field() {
+        emit_warn_log_message(
+            ErrorCode::DeprecatedOption,
+            "The `execute:` field in profiles.yml is no longer supported and will be ignored. \
+             Use the `--compute inline|sidecar|service|remote` CLI flag instead. \
+             Please remove `execute:` from your profile.",
+            arg.io.status_reporter.as_ref(),
+        );
+    }
 
     // TODO: Certain databases enforce that database and schema are specified
     let database = db_config.get_database_or_default();

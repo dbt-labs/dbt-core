@@ -3,12 +3,10 @@ hello_world:
   outputs:
     datafusion:
       type: datafusion
-      execute: local
       database: js
       schema: pub
     snowflake_local:
       type: snowflake
-      execute: local
       database: js
       schema: pub
       # these shouldn't be necessary, but they are today
