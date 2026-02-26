@@ -171,9 +171,7 @@ class RetryTask(ConfiguredTask):
             self.manifest,
         )
 
-        # issubclass ensures that BuildTask (which extends RunTask)
-        # also gets microbatch retry behavior
-        if issubclass(self.task_class, RunTask):
+        if self.task_class == RunTask or self.task_class == BuildTask:
             task.batch_map = batch_map
             task.original_invocation_started_at = (
                 self.previous_results.metadata.invocation_started_at
