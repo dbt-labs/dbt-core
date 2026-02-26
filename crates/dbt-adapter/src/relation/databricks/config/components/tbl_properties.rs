@@ -9,7 +9,7 @@ use crate::relation::databricks::config::{
 use dbt_schemas::schemas::DbtModel;
 use dbt_schemas::schemas::InternalDbtNodeAttributes;
 use dbt_yaml::Value as YmlValue;
-use indexmap::{IndexMap, IndexSet};
+use indexmap::IndexMap;
 use minijinja::value::{Value, ValueMap};
 
 pub(crate) const TYPE_NAME: &str = "tblproperties";
@@ -79,34 +79,32 @@ fn new(properties: IndexMap<String, String>) -> TblProperties {
     }
 }
 
-/// Takes the diff between two `TblProperties` by only comparing the non-ignored keys
+/// Takes the diff between two `TblProperties` by comparing the non-ignored keys.
+///
+/// Matches the Python dbt-databricks `TblPropertiesConfig.__eq__` semantics: both dicts are
+/// filtered by `EQ_IGNORE_LIST`, then compared for full equality. If they differ (including
+/// when the current state has extra non-ignored keys absent from the desired state), a diff
+/// is reported. The returned value is the full desired state (matching Python's `get_diff`
+/// which returns `self`).
 fn diff(
     desired_state: &IndexMap<String, String>,
     current_state: &IndexMap<String, String>,
 ) -> Option<IndexMap<String, String>> {
-    let all_keys: IndexSet<_> = desired_state
-        .keys()
-        .chain(current_state.keys())
-        .filter(|key| !EQ_IGNORE_LIST.contains(&key.as_str()))
+    let filtered_desired: IndexMap<&String, &String> = desired_state
+        .iter()
+        .filter(|(k, _)| !EQ_IGNORE_LIST.contains(&k.as_str()))
         .collect();
 
-    let changed_keys: IndexMap<String, String> = all_keys
-        .into_iter()
-        .filter_map(|key| {
-            let desired_val = desired_state.get(key.as_str());
-            if desired_val.is_some() && desired_val != current_state.get(key.as_str()) {
-                let desired_val = desired_val.cloned().unwrap_or_default();
-                Some((key.clone(), desired_val))
-            } else {
-                None
-            }
-        })
+    let filtered_current: IndexMap<&String, &String> = current_state
+        .iter()
+        .filter(|(k, _)| !EQ_IGNORE_LIST.contains(&k.as_str()))
         .collect();
 
-    if !changed_keys.is_empty() {
-        Some(changed_keys)
-    } else {
+    if filtered_desired == filtered_current {
         None
+    } else {
+        // Match Python: get_diff returns self (the full desired config)
+        Some(desired_state.clone())
     }
 }
 
@@ -294,9 +292,66 @@ mod tests {
 
         let diff = diff(&next, &prev).unwrap();
 
-        assert_eq!(diff.len(), 2);
+        // diff returns the full desired state (matching Python's get_diff returning self)
+        assert_eq!(diff.len(), 3);
+        assert_eq!(
+            diff.get("pipelines.pipelineId").unwrap().as_str(),
+            "pipeline123456"
+        );
         assert_eq!(diff.get("custom.change").unwrap().as_str(), "new");
         assert_eq!(diff.get("custom.add").unwrap().as_str(), "new");
+    }
+
+    /// The model config has tblproperties:
+    ///   {"delta.enableChangeDataFeed": "true", "delta.columnMapping.mode": "name"}
+    ///
+    /// The existing table (SHOW TBLPROPERTIES) has those plus a few other properties
+    /// like delta.checkpoint.*, delta.parquet.*, etc.
+    ///
+    /// Python dbt-databricks does a full-dict equality check (__eq__) after filtering the ignore
+    /// list from both sides. Since the desired dict (1 key after filtering) differs from the
+    /// current dict (6+ keys), __eq__ returns False, and get_diff returns the desired config.
+    ///
+    /// The Rust diff function currently does per-key comparison and returns None because every
+    /// key present in the desired state matches the current state. This is a behavioral
+    /// divergence — we should match Python and report a diff when the current state has extra
+    /// non-ignored keys not present in the desired state.
+    #[test]
+    fn test_diff_extra_current_keys_should_report_change() {
+        // Desired state: what from_local_config produces from the model config.
+        // Note: delta.enableChangeDataFeed is in the model config but will be
+        // filtered by EQ_IGNORE_LIST in the diff function.
+        let desired = IndexMap::from_iter([
+            ("delta.enableChangeDataFeed".to_string(), "true".to_string()),
+            ("delta.columnMapping.mode".to_string(), "name".to_string()),
+        ]);
+
+        // Current state: what from_remote_state produces from SHOW TBLPROPERTIES.
+        // from_remote_state already filters EQ_IGNORE_LIST, so delta.enableChangeDataFeed
+        // is NOT here. But extra system properties (not in ignore list) ARE here.
+        let current = IndexMap::from_iter([
+            (
+                "delta.checkpoint.writeStatsAsJson".to_string(),
+                "false".to_string(),
+            ),
+            (
+                "delta.checkpoint.writeStatsAsStruct".to_string(),
+                "true".to_string(),
+            ),
+            ("delta.columnMapping.mode".to_string(), "name".to_string()),
+            (
+                "delta.parquet.compression.codec".to_string(),
+                "zstd".to_string(),
+            ),
+        ]);
+
+        // Python dbt-databricks reports a diff here because the filtered dicts are unequal
+        // (desired has 1 non-ignored key, current has 4 keys). We must match that behavior.
+        let result = diff(&desired, &current);
+        assert!(
+            result.is_some(),
+            "Expected diff when current state has extra non-ignored keys not in desired state"
+        );
     }
 
     #[test]

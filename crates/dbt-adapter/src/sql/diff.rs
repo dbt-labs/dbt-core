@@ -52,6 +52,10 @@ fn compare_sql_inner(
     let expected = canonicalize_databricks_legacy_alter_column_comment_to_modern(&expected);
     let actual = canonicalize_snowflake_grant_select_to_roles(&actual);
     let expected = canonicalize_snowflake_grant_select_to_roles(&expected);
+    let actual = canonicalize_numeric_to_decimal(&actual);
+    let expected = canonicalize_numeric_to_decimal(&expected);
+    let actual = canonicalize_alter_table_set_tblproperties_order(&actual);
+    let expected = canonicalize_alter_table_set_tblproperties_order(&expected);
 
     // Short-circuit: Elementary-generated SQL is allowed to drift across recorders/runners.
     // We only short-circuit when BOTH sides are clearly Elementary-originated.
@@ -435,6 +439,57 @@ fn unquote_identifier_like(s: &str) -> Option<String> {
     } else {
         Some(s.to_string())
     }
+}
+
+/// Canonicalize `ALTER TABLE ... SET tblproperties (...)` by sorting the key-value
+/// entries alphabetically by key. Databricks/Spark tblproperties are an unordered set
+/// of key-value pairs, but Fusion and dbt-databricks may emit them in different order.
+fn canonicalize_alter_table_set_tblproperties_order(sql: &str) -> String {
+    // Match: ALTER TABLE <name> SET tblproperties (<entries>)
+    // Anchored to the full statement to avoid masking unrelated DDL.
+    static RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
+        Regex::new(r"(?is)^(\s*ALTER\s+TABLE\s+.+?\s+SET\s+tblproperties\s*\()(.+?)(\)\s*)$")
+            .unwrap()
+    });
+
+    let Some(caps) = RE.captures(sql) else {
+        return sql.to_string();
+    };
+
+    let prefix = &caps[1]; // "ALTER TABLE ... SET tblproperties ("
+    let entries_raw = &caps[2]; // "'key1' = 'val1' , 'key2' = 'val2' , ..."
+    let suffix = &caps[3]; // ")"
+
+    // Extract 'key' = 'value' pairs via regex to avoid breaking on commas inside quoted values.
+    static ENTRY_RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
+        Regex::new(r"'(?:[^'\\]|\\.)*'\s*=\s*'(?:[^'\\]|\\.)*'").unwrap()
+    });
+
+    let mut entries: Vec<&str> = ENTRY_RE
+        .find_iter(entries_raw)
+        .map(|m| m.as_str())
+        .collect();
+    if entries.is_empty() {
+        return sql.to_string();
+    }
+    entries.sort();
+
+    format!("{}{}{}", prefix, entries.join(" , "), suffix)
+}
+
+/// NUMERIC and DECIMAL are SQL-standard synonyms. Fusion may emit one while the
+/// recording uses the other. Normalize `numeric(` → `decimal(` so comparisons succeed.
+fn canonicalize_numeric_to_decimal(sql: &str) -> String {
+    static NUMERIC_RE: once_cell::sync::Lazy<Regex> =
+        once_cell::sync::Lazy::new(|| Regex::new(r"(?i)\bnumeric\s*\(").unwrap());
+    NUMERIC_RE
+        .replace_all(sql, |caps: &regex::Captures<'_>| {
+            // Preserve original whitespace between "numeric" and "("
+            let matched = &caps[0];
+            let paren_idx = matched.find('(').unwrap();
+            format!("decimal{}", &matched[paren_idx..])
+        })
+        .into_owned()
 }
 
 /// Lightweight structural comparator for SQL to relax overly strict mismatches.
@@ -3769,6 +3824,53 @@ select * from outer_cte
         assert!(
             canonicalized.contains("indirect_selection"),
             "Should preserve actual's extra meta keys when non-meta keys differ"
+        );
+    }
+
+    #[test]
+    fn test_numeric_and_decimal_are_equivalent() {
+        // Databricks (and SQL standard) treat NUMERIC and DECIMAL as synonyms.
+        // Fusion may emit `numeric(28,6)` while Mantle recordings have `decimal(28,6)`.
+        // These should be treated as equivalent during SQL comparison.
+        let actual = "create or replace table `dbt`.`dbt_staging`.`my_model`
+as
+select
+    cast(null as numeric(28,6)) as amount,
+    cast(null as string) as name
+from dummy_cte
+where 1 = 0";
+
+        let expected = "create or replace table `dbt`.`dbt_staging`.`my_model`
+as
+select
+    cast(null as decimal(28,6)) as amount,
+    cast(null as string) as name
+from dummy_cte
+where 1 = 0";
+
+        let result = compare_sql_for_adapter(AdapterType::Databricks, actual, expected);
+        assert!(
+            result.is_ok(),
+            "numeric(28,6) and decimal(28,6) should be treated as equivalent: {result:?}"
+        );
+    }
+
+    #[test]
+    fn test_alter_table_set_tblproperties_order_independent() {
+        // Fusion and dbt-databricks may emit the same tblproperties in different order.
+        // The properties are a set of key-value pairs — ordering is not semantically meaningful.
+        let actual = r#"ALTER TABLE `dbt`.`dbt_staging`.`stg_aa_base_philosophy` SET 
+    tblproperties ('delta.columnMapping.mode' = 'name' , 'delta.enableChangeDataFeed' = 'true' 
+    )"#;
+
+        let expected = r#"ALTER TABLE `dbt`.`dbt_staging`.`stg_aa_base_philosophy` SET 
+    tblproperties ('delta.enableChangeDataFeed' = 'true' , 'delta.columnMapping.mode' = 'name' 
+    )"#;
+
+        let result = compare_sql_for_adapter(AdapterType::Databricks, actual, expected);
+        assert!(
+            result.is_ok(),
+            "ALTER TABLE SET tblproperties should be order-independent: {result:?}"
         );
     }
 }
