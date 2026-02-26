@@ -2462,16 +2462,35 @@ impl ConcreteAdapter {
                     return Ok(none_value());
                 }
 
-                let partition_by =
-                    minijinja_value_to_typed_struct::<PartitionConfig>(raw_partition_by.clone())
-                        .map_err(|e| {
-                            minijinja::Error::new(
-                                minijinja::ErrorKind::SerdeDeserializeError,
-                                format!(
-                                    "adapter.parse_partition_by failed on {raw_partition_by:?}: {e}"
-                                ),
-                            )
-                        })?;
+                // Lowercase all string values to match dbt-core behavior
+                // Reference: https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/relation_configs/_partition.py#L82-L97
+                let normalized = if let Ok(partition_by_map) =
+                    minijinja_value_to_typed_struct::<IndexMap<String, Value>>(
+                        raw_partition_by.clone(),
+                    ) {
+                    let new_map: IndexMap<String, Value> = partition_by_map
+                        .into_iter()
+                        .map(|(key, value)| {
+                            let normalized_value = if let Some(s) = value.as_str() {
+                                Value::from(s.to_lowercase())
+                            } else {
+                                value
+                            };
+                            (key, normalized_value)
+                        })
+                        .collect();
+                    Value::from_serialize(&new_map)
+                } else {
+                    raw_partition_by.clone()
+                };
+
+                let partition_by = minijinja_value_to_typed_struct::<PartitionConfig>(normalized)
+                    .map_err(|e| {
+                    minijinja::Error::new(
+                        minijinja::ErrorKind::SerdeDeserializeError,
+                        format!("adapter.parse_partition_by failed on {raw_partition_by:?}: {e}"),
+                    )
+                })?;
 
                 let validated_config = partition_by.into_bigquery().ok_or_else(|| {
                     minijinja::Error::new(
