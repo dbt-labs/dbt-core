@@ -102,7 +102,7 @@ jobs:
         run: |
           pip install --user --upgrade pip
           pip --version
-          pip install hatch
+          pip install "virtualenv<20.26" hatch
           hatch --version
 
       - name: Run postgres setup script

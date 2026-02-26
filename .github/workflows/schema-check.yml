@@ -79,7 +79,7 @@ jobs:
         if: steps.check_artifact_changes.outputs.artifacts_changed == 'true'
         run: |
           cd ${{ env.DBT_REPO_DIRECTORY }}/core
-          pip install --upgrade pip hatch
+          pip install --upgrade pip "virtualenv<20.26" hatch
           hatch run setup
           hatch run json-schema -- --path ${{ env.LATEST_SCHEMA_PATH }}
 

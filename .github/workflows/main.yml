@@ -60,7 +60,7 @@ jobs:
         run: |
           python -m pip install --user --upgrade pip
           python -m pip --version
-          python -m pip install hatch
+          python -m pip install "virtualenv<20.26" hatch
           cd core
           hatch -v run setup
 
@@ -98,7 +98,7 @@ jobs:
         run: |
           python -m pip install --user --upgrade pip
           python -m pip --version
-          python -m pip install hatch
+          python -m pip install "virtualenv<20.26" hatch
           hatch --version
 
       - name: Run unit tests
@@ -221,7 +221,7 @@ jobs:
         run: |
           python -m pip install --user --upgrade pip
           python -m pip --version
-          python -m pip install hatch
+          python -m pip install "virtualenv<20.26" hatch
           hatch --version
 
       - name: Run integration tests
@@ -302,7 +302,7 @@ jobs:
         run: |
           python -m pip install --user --upgrade pip
           python -m pip --version
-          python -m pip install hatch
+          python -m pip install "virtualenv<20.26" hatch
           hatch --version
 
       - name: Run integration tests
@@ -368,7 +368,7 @@ jobs:
       - name: Install python dependencies
         run: |
           python -m pip install --user --upgrade pip
-          python -m pip install --upgrade hatch twine check-wheel-contents
+          python -m pip install --upgrade "virtualenv<20.26" hatch twine check-wheel-contents
           python -m pip --version
 
       - name: Build distributions
