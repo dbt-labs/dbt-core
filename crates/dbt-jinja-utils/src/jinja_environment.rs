@@ -201,6 +201,12 @@ impl JinjaEnv {
         adapter.downcast_object::<BridgeAdapter>()
     }
 
+    /// Get the adapter reference from the environment.
+    pub fn get_adapter_ref(&self) -> Option<&BridgeAdapter> {
+        let adapter = self.env.get_global_ref("adapter")?;
+        adapter.downcast_object_ref::<BridgeAdapter>()
+    }
+
     /// Get the adapter from the environment
     pub fn get_base_adapter(&self) -> Option<Arc<dyn BaseAdapter>> {
         self.get_adapter()

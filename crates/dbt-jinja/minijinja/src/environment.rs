@@ -863,6 +863,12 @@ impl<'source> Environment<'source> {
         self.globals.get(name).cloned()
     }
 
+    /// Looks up a global [Value] and return a reference to it.
+    pub fn get_global_ref<'a>(&'a self, name: &str) -> Option<&'a Value> {
+        let kv = self.globals.get_key_value(name)?;
+        Some(kv.1)
+    }
+
     /// Get the macros registered in the dbt and adapters namespace in the correct lookup order
     pub fn get_dbt_and_adapters_namespace(&self) -> Arc<ValueMap> {
         self.get_global(DBT_AND_ADAPTERS_NAMESPACE)

@@ -81,6 +81,21 @@ pub trait TypeOps: Send + Sync {
                     .map(|_| Cow::Owned(out))
             })
     }
+
+    /// Return internal type representation for the given source type inferred from seed data.
+    /// The correct mapping is not necessarily the same, or logically the same, as the source type.
+    /// The mapping is defined for compatibility with DBT seed files and is determined as follows:
+    ///
+    /// 1. Create a seed CSV file for which DataFusion listing table provider would return
+    ///    the source type.
+    /// 2. Run pure-Python `dbt seed` on that file on that file and checking what gets created in
+    ///    the remote data warehouse.
+    /// 3. Return corresponding internal type for given warehouse's type for given dialect.
+    ///
+    /// Note that in particular DataFusion listing table provider may return same Arrow DataType
+    /// for data that's treated differently by pure-Python `dbt seed`. In such case, the mapping is
+    /// not well defined and we have a problem.
+    fn adapt_seed_type(&self, _data_type: &DataType) -> Option<DataType>;
 }
 
 /// Source-available [TypeOps] implementation.
@@ -137,6 +152,22 @@ impl TypeOps for SATypeOpsImpl {
                 (arrow_type, nullable)
             })
             .map_err(|e| AdapterError::new(AdapterErrorKind::UnexpectedResult, e))
+    }
+
+    fn adapt_seed_type(&self, _data_type: &DataType) -> Option<DataType> {
+        use AdapterType::*;
+        match self.adapter_type() {
+            adapter_type @ (Snowflake | Bigquery | Databricks | Redshift) => {
+                debug_assert!(
+                    false,
+                    "adapt_seed_type() for {adapter_type} is not source-available yet"
+                );
+                None
+            }
+            Sidecar => None,
+            Postgres | Salesforce | Spark | DuckDB => None, // these must be implemented at some point
+            Fabric => todo!("adapt_seed_type() for Fabric"),
+        }
     }
 }
 
