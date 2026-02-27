@@ -9,6 +9,7 @@ use dbt_schemas::{schemas::InternalDbtNodeAttributes, state::ResolverState};
 use proto_rust::v1::public::events::fusion::{
     AdapterInfo, AdapterInfoV2, Invocation, InvocationEnv, PackageInstall, ResourceCounts, RunModel,
 };
+use proto_rust::v1::public::fields::core_types::ObservabilityMetric;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -273,6 +274,47 @@ pub fn run_model_event(
         enrichment: None,
         // The resource type of the node (model, test, etc.)
         resource_type,
+    };
+
+    let _ = log_proto(message);
+}
+
+/// Emit ObservabilityMetric for private package resolution visibility (Datadog/Vortex).
+/// Called when resolving a private package via cloud providers - on success and failure.
+pub fn private_package_usage_event(
+    package_name: &str,
+    provider: Option<&str>,
+    matched: bool,
+    matched_provider: Option<&str>,
+) {
+    let mut tags = vec![
+        format!("package:{package_name}"),
+        format!("provider:{}", provider.unwrap_or("unspecified")),
+        format!("matched:{}", matched),
+    ];
+    if let Some(mp) = matched_provider {
+        tags.push(format!("matched_provider:{mp}"));
+    }
+    tags.extend([
+        format!(
+            "account:{}",
+            std::env::var("DBT_CLOUD_ACCOUNT_ID").unwrap_or_else(|_| "unknown".to_string())
+        ),
+        format!(
+            "project:{}",
+            std::env::var("DBT_CLOUD_PROJECT_ID").unwrap_or_else(|_| "unknown".to_string())
+        ),
+        format!(
+            "environment:{}",
+            std::env::var("DBT_CLOUD_ENVIRONMENT_ID").unwrap_or_else(|_| "unknown".to_string())
+        ),
+    ]);
+
+    let message = ObservabilityMetric {
+        label: "private_package_usage".to_string(),
+        value: if matched { 1.0 } else { 0.0 },
+        tags,
+        debug_message: String::new(),
     };
 
     let _ = log_proto(message);

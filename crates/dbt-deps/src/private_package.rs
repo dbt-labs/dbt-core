@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json;
 use std::ops::Deref;
 use url::Url;
+use vortex_events::private_package_usage_event;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ProviderDetail {
@@ -222,11 +223,23 @@ pub fn get_resolved_url(private_package: &PrivatePackage) -> FsResult<String> {
     // Iterate over all providers and try to match each one
     for provider in provider_info {
         if provider.matches_private_definition(&private_def, private_package.provider.as_deref()) {
+            private_package_usage_event(
+                private_package.private.deref(),
+                private_package.provider.as_deref(),
+                true,
+                provider.provider.as_deref(),
+            );
             return Ok(provider.resolved_url(&private_def.repo_name));
         }
     }
 
     // No matching provider found
+    private_package_usage_event(
+        private_package.private.deref(),
+        private_package.provider.as_deref(),
+        false,
+        None,
+    );
     err!(
         ErrorCode::InvalidConfig,
         "No matching provider found for private definition '{}' with provider {:?}",
