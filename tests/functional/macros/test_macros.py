@@ -5,9 +5,11 @@ import pytest
 
 import dbt_common.exceptions
 from dbt.tests.fixtures.project import write_project_files
-from dbt.tests.util import check_relations_equal, run_dbt
+from dbt.tests.util import check_relations_equal, get_manifest, run_dbt
 from tests.functional.macros.fixtures import (
     dbt_project__incorrect_dispatch,
+    macros__config_sql,
+    macros__config_yml,
     macros__deprecated_adapter_macro,
     macros__incorrect_dispatch,
     macros__my_macros,
@@ -270,3 +272,77 @@ class TestAdapterMacroDeprecated:
             run_dbt()
 
         assert 'The "adapter_macro" macro has been deprecated' in str(exc.value)
+
+
+class TestMacroMetaDocsMerge:
+    @pytest.fixture(scope="class")
+    def macros(self):
+        return {"macro_config.sql": macros__config_sql, "macro_config.yml": macros__config_yml}
+
+    def test_only_top_level_defined(self, project) -> None:
+        """If only top-level defined then it exists both in top-level and config."""
+
+        run_dbt(["parse"])
+
+        manifest = get_manifest(project.project_root)
+        assert manifest is not None
+
+        macro = manifest.macros.get("macro.test.macro_top_only")
+        assert macro is not None
+
+        expected_meta = {"top_k": "top_v"}
+        expected_docs_show = True
+        expected_docs_node_color = "#AAAAAA"
+
+        assert macro.meta == expected_meta
+        assert macro.config.meta == expected_meta
+        assert macro.docs.show == expected_docs_show
+        assert macro.docs.node_color == expected_docs_node_color
+        assert macro.config.docs.show == expected_docs_show
+        assert macro.config.docs.node_color == expected_docs_node_color
+
+    def test_only_config_defined(self, project) -> None:
+        """If only config defined then it exists both in top-level and config."""
+
+        run_dbt(["parse"])
+
+        manifest = get_manifest(project.project_root)
+        assert manifest is not None
+
+        macro = manifest.macros.get("macro.test.macro_config_only")
+        assert macro is not None
+
+        expected_meta = {"cm_k": "cm_v"}
+        expected_docs_show = False
+        expected_docs_node_color = "#BBBBBB"
+
+        assert macro.meta == expected_meta
+        assert macro.config.meta == expected_meta
+        assert macro.docs.show == expected_docs_show
+        assert macro.docs.node_color == expected_docs_node_color
+        assert macro.config.docs.show == expected_docs_show
+        assert macro.config.docs.node_color == expected_docs_node_color
+
+    def test_both_config_and_top_level_defined(self, project) -> None:
+        """If both defined then config overrides top-level."""
+
+        run_dbt(["parse"])
+
+        manifest = get_manifest(project.project_root)
+        assert manifest is not None
+
+        macro = manifest.macros.get("macro.test.macro_config")
+        assert macro is not None
+
+        expected_meta = {
+            "cm_k": "cm_v",
+        }
+        expected_docs_show = True
+        expected_docs_node_color = "#BBBBBB"
+
+        assert macro.meta == expected_meta
+        assert macro.config.meta == expected_meta
+        assert macro.docs.show == expected_docs_show
+        assert macro.docs.node_color == expected_docs_node_color
+        assert macro.config.docs.show == expected_docs_show
+        assert macro.config.docs.node_color == expected_docs_node_color

@@ -166,3 +166,48 @@ profile: 'default'
 
 macro-paths: ["macros"]
 """
+
+
+macros__config_sql = """
+{% macro macro_config() %}
+{% endmacro %}
+
+{% macro macro_top_only() %}
+{% endmacro %}
+
+{% macro macro_config_only() %}
+{% endmacro %}
+"""
+
+macros__config_yml = """
+macros:
+  - name: macro_top_only
+    description: Macro with only top-level meta and docs
+    meta:
+      top_k: top_v
+    docs:
+      show: true
+      node_color: "#AAAAAA"
+
+  - name: macro_config_only
+    description: Macro with only config meta and docs
+    config:
+      meta:
+        cm_k: cm_v
+      docs:
+        show: false
+        node_color: "#BBBBBB"
+
+  - name: macro_config
+    description: Macro with merged meta and docs
+    meta:
+      top_k: top_v
+    docs:
+      show: true
+      node_color: "#AAAAAA"
+    config:
+      meta:
+        cm_k: cm_v
+      docs:
+        node_color: "#BBBBBB"
+"""
