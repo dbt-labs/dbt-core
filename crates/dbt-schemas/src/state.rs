@@ -26,7 +26,9 @@ use crate::schemas::{
 };
 use blake3::Hasher;
 use chrono::{DateTime, Local, Utc};
-use dbt_common::{ErrorCode, FsResult, adapter::AdapterType, fs_err, io_args::FsCommand};
+use dbt_common::{
+    ErrorCode, FsResult, adapter::AdapterType, fs_err, io_args::FsCommand, path::DbtPath,
+};
 use minijinja::{MacroSpans, Value as MinijinjaValue, value::Object};
 use serde::Deserialize;
 use serde::Serialize;
@@ -198,11 +200,11 @@ pub struct DbtPackage {
     pub snapshot_files: Vec<DbtAsset>,
     pub inline_file: Option<DbtAsset>,
     pub dependencies: BTreeSet<String>,
-    pub all_paths: HashMap<ResourcePathKind, Vec<(PathBuf, SystemTime)>>,
+    pub all_paths: HashMap<ResourcePathKind, Vec<(DbtPath, SystemTime)>>,
     /// Pre-read file contents for embedded (internal) packages.
     /// `None` for disk-based packages, `Some(map)` for embedded packages.
     /// Keyed by relative path (same as DbtAsset.path).
-    pub embedded_file_contents: Option<HashMap<PathBuf, String>>,
+    pub embedded_file_contents: Option<HashMap<DbtPath, String>>,
 }
 
 #[derive(Clone, Debug, Serialize, UntaggedEnumDeserialize, PartialEq, Eq)]

@@ -1,4 +1,5 @@
 use dbt_common::io_args::IoArgs;
+use dbt_common::path::DbtPath;
 use dbt_common::{
     ErrorCode, FsResult,
     constants::{DBT_DEPENDENCIES_YML, DBT_PACKAGES_YML},
@@ -34,7 +35,7 @@ use walkdir::WalkDir;
 pub fn collect_file_info<P: AsRef<Path>, T: Fn(&Path) -> bool>(
     base_path: P,
     relative_paths: &[String],
-    info_paths: &mut Vec<(PathBuf, SystemTime)>,
+    info_paths: &mut Vec<(DbtPath, SystemTime)>,
     dbtignore: Option<&Gitignore>,
     filter: T,
 ) -> io::Result<()> {
@@ -81,7 +82,7 @@ pub fn collect_file_info<P: AsRef<Path>, T: Fn(&Path) -> bool>(
                 }
                 let metadata = metadata(entry.path())?;
                 let modified_time = metadata.modified()?;
-                info_paths.push((entry.path().to_path_buf(), modified_time));
+                info_paths.push((DbtPath::from_path(entry.path()), modified_time));
             }
         }
     }

@@ -24,6 +24,7 @@ use dbt_common::error::AbstractLocation;
 use dbt_common::fs_err;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::io_args::StaticAnalysisOffReason;
+use dbt_common::path::DbtPath;
 use dbt_common::static_analysis::{
     StaticAnalysisDeprecationOrigin, check_deprecated_static_analysis_kind,
 };
@@ -136,7 +137,7 @@ async fn build_raw_model_project_config(
     let raw_yml = match package
         .embedded_file_contents
         .as_ref()
-        .and_then(|m| m.get(Path::new("dbt_project.yml")))
+        .and_then(|m| m.get(&DbtPath::from("dbt_project.yml")))
     {
         Some(content) => content.clone(),
         None => match read_to_string(&dbt_project_yml_path).await {

@@ -1,6 +1,7 @@
 use dbt_common::ErrorCode;
 use dbt_common::FsResult;
 use dbt_common::io_args::IoArgs;
+use dbt_common::path::DbtPath;
 use dbt_common::stdfs::diff_paths;
 use dbt_common::tracing::emit::{emit_warn_log_from_fs_error, emit_warn_log_message};
 use dbt_common::{err, fs_err};
@@ -29,7 +30,7 @@ use crate::utils::parse_macro_statements;
 pub fn resolve_docs_macros(
     io: &IoArgs,
     docs_macro_files: &[DbtAsset],
-    embedded_contents: Option<&HashMap<PathBuf, String>>,
+    embedded_contents: Option<&HashMap<DbtPath, String>>,
 ) -> FsResult<BTreeMap<String, DbtDocsMacro>> {
     let mut docs_map: BTreeMap<String, DbtDocsMacro> = BTreeMap::new();
 
@@ -48,7 +49,7 @@ fn process_docs_macro_file(
     io: &IoArgs,
     docs_map: &mut BTreeMap<String, DbtDocsMacro>,
     docs_asset: &DbtAsset,
-    embedded_contents: Option<&HashMap<PathBuf, String>>,
+    embedded_contents: Option<&HashMap<DbtPath, String>>,
 ) -> FsResult<()> {
     let docs_file_path = docs_asset.base_path.join(&docs_asset.path);
     let docs_macro = read_file_content(&docs_asset.path, &docs_file_path, embedded_contents)?;
@@ -103,7 +104,7 @@ fn process_docs_macro_file(
 pub fn resolve_macros(
     io: &IoArgs,
     macro_files: &[&DbtAsset],
-    embedded_contents: Option<&HashMap<PathBuf, String>>,
+    embedded_contents: Option<&HashMap<DbtPath, String>>,
 ) -> FsResult<HashMap<String, DbtMacro>> {
     let mut nodes = HashMap::new();
 
@@ -262,9 +263,9 @@ pub fn resolve_macros(
 fn read_file_content(
     relative_path: &Path,
     absolute_path: &Path,
-    embedded_contents: Option<&HashMap<PathBuf, String>>,
+    embedded_contents: Option<&HashMap<DbtPath, String>>,
 ) -> FsResult<String> {
-    match embedded_contents.and_then(|m| m.get(relative_path)) {
+    match embedded_contents.and_then(|m| m.get(&DbtPath::from_path(relative_path))) {
         Some(content) => Ok(content.clone()),
         None => fs::read_to_string(absolute_path).map_err(|e| {
             fs_err!(

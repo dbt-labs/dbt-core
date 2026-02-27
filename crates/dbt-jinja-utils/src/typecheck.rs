@@ -1,7 +1,8 @@
 use crate::{jinja_environment::JinjaEnv, listener};
 use dbt_adapter::AdapterType;
 use dbt_common::{
-    ErrorCode, FsError, FsResult, io_args::IoArgs, tracing::emit::emit_error_log_message,
+    ErrorCode, FsError, FsResult, io_args::IoArgs, path::DbtPath,
+    tracing::emit::emit_error_log_message,
 };
 use minijinja::{
     AdapterDispatchFunction, Value,
@@ -11,7 +12,7 @@ use minijinja::{
 };
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
-    path::{Path, PathBuf},
+    path::Path,
     sync::Arc,
 };
 
@@ -20,7 +21,7 @@ use std::{
 pub fn typecheck(
     arg_io: &IoArgs,
     env: Arc<JinjaEnv>,
-    noqa_comments: &HashMap<PathBuf, HashSet<u32>>,
+    noqa_comments: &HashMap<DbtPath, HashSet<u32>>,
     jinja_typechecking_listener_factory: Arc<dyn listener::JinjaTypeCheckingEventListenerFactory>,
     target_package_name: Option<String>,
     root_package_name: &str,
@@ -68,7 +69,9 @@ pub fn typecheck(
     let listener = jinja_typechecking_listener_factory.create_listener(
         arg_io,
         offset.clone(),
-        noqa_comments.get(relative_file_path).cloned(),
+        noqa_comments
+            .get(&DbtPath::from_path(relative_file_path))
+            .cloned(),
         unique_id,
     );
 

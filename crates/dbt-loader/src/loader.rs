@@ -7,6 +7,7 @@ use dbt_common::constants::{
 };
 use dbt_common::io_args::{InternalPackageMode, ReplayMode, TimeMachineMode};
 use dbt_common::once_cell_vars::DISPATCH_CONFIG;
+use dbt_common::path::DbtPath;
 use dbt_common::tracing::span_info::SpanStatusRecorder;
 use dbt_jinja_utils::invocation_args::InvocationArgs;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
@@ -514,7 +515,7 @@ pub async fn load_inner(
     collected_vars: &mut Vec<(String, IndexMap<String, DbtVars>)>,
 ) -> FsResult<DbtPackage> {
     // all read files
-    let mut all_files: HashMap<ResourcePathKind, Vec<(PathBuf, SystemTime)>> = HashMap::new();
+    let mut all_files: HashMap<ResourcePathKind, Vec<(DbtPath, SystemTime)>> = HashMap::new();
 
     let dbt_project_path = package_path.join(DBT_PROJECT_YML);
 
@@ -580,14 +581,14 @@ pub async fn load_inner(
 
     // Collect file paths and their timestamps for fields with a suffix `_paths`
     let all_dirs = collect_paths(&dbt_project);
-    let all_included_files: HashMap<ResourcePathKind, Vec<(PathBuf, SystemTime)>> =
+    let all_included_files: HashMap<ResourcePathKind, Vec<(DbtPath, SystemTime)>> =
         collect_all_files(all_dirs, package_path)?;
     all_files.extend(all_included_files);
 
     // make all paths relative to the project directory
     for (_, files) in all_files.iter_mut() {
         for (path, _) in files.iter_mut() {
-            *path = diff_paths(&mut *path, package_path).unwrap().to_path_buf();
+            *path = DbtPath::from_path(diff_paths(path.as_path(), package_path).unwrap());
         }
         //
         // make deterministic: Sort files based on their relative paths
@@ -812,7 +813,7 @@ fn find_files_by_kind_and_extension(
     project_name: &str,
     path_kind: &ResourcePathKind,
     extensions: &[&str],
-    all_paths: &HashMap<ResourcePathKind, Vec<(PathBuf, SystemTime)>>,
+    all_paths: &HashMap<ResourcePathKind, Vec<(DbtPath, SystemTime)>>,
 ) -> Vec<DbtAsset> {
     let default = vec![];
     let paths_to_filter: Vec<_> = all_paths
@@ -827,12 +828,12 @@ fn find_files_by_kind_and_extension(
             path.extension()
                 .and_then(OsStr::to_str)
                 .filter(|ext| extensions.contains(&ext.to_lowercase().as_str()))
-                .filter(|_| !should_exclude_path(path_kind, path))
+                .filter(|_| !should_exclude_path(path_kind, path.as_path()))
                 .map(|_| DbtAsset {
                     package_name: project_name.to_string(),
                     base_path: in_dir.to_path_buf(),
-                    path: path.clone(),
-                    original_path: path.clone(),
+                    path: path.to_path_buf(),
+                    original_path: path.to_path_buf(),
                 })
         })
         .collect::<HashSet<_>>()
@@ -876,11 +877,11 @@ fn load_dbtignore(path: &Path) -> FsResult<Option<Gitignore>> {
 fn collect_all_files(
     all_dirs: HashMap<ResourcePathKind, Vec<String>>,
     base_path: &Path,
-) -> FsResult<HashMap<ResourcePathKind, Vec<(PathBuf, SystemTime)>>> {
+) -> FsResult<HashMap<ResourcePathKind, Vec<(DbtPath, SystemTime)>>> {
     // Load .dbtignore file if it exists
     let dbtignore = load_dbtignore(base_path)?;
     // Remove debug statement for tests
-    let mut all_paths: HashMap<ResourcePathKind, Vec<(PathBuf, SystemTime)>> = HashMap::new();
+    let mut all_paths: HashMap<ResourcePathKind, Vec<(DbtPath, SystemTime)>> = HashMap::new();
     for (kind, paths) in &all_dirs {
         let mut info_paths = Vec::new();
 
@@ -1012,11 +1013,14 @@ fn get_packages_install_path(
 
 fn collect_profiles_yml_if_exists(
     dbt_profile: &DbtProfile,
-    all_paths: &mut HashMap<ResourcePathKind, Vec<(PathBuf, SystemTime)>>,
+    all_paths: &mut HashMap<ResourcePathKind, Vec<(DbtPath, SystemTime)>>,
 ) {
     if let Ok(timestamp) = last_modified(&dbt_profile.relative_profile_path) {
         let entry = all_paths.entry(ResourcePathKind::ProfilePaths).or_default();
-        entry.push((dbt_profile.relative_profile_path.clone(), timestamp));
+        entry.push((
+            DbtPath::from_path(&dbt_profile.relative_profile_path),
+            timestamp,
+        ));
     }
 }
 
@@ -1031,7 +1035,7 @@ pub fn get_session_relative_file_paths() -> Vec<String> {
     ]
 }
 
-fn find_session_files(package_path: &Path) -> FsResult<Vec<(PathBuf, SystemTime)>> {
+fn find_session_files(package_path: &Path) -> FsResult<Vec<(DbtPath, SystemTime)>> {
     let mut result = Vec::new();
 
     for relative_path in get_session_relative_file_paths() {
@@ -1040,11 +1044,11 @@ fn find_session_files(package_path: &Path) -> FsResult<Vec<(PathBuf, SystemTime)
         if relative_path == DBT_PROJECT_YML {
             let dbt_project_path = package_path.join(relative_path);
             let dbt_project_timestamp = last_modified(&dbt_project_path)?;
-            result.push((dbt_project_path, dbt_project_timestamp));
+            result.push((DbtPath::from_path(dbt_project_path), dbt_project_timestamp));
         } else {
             let path = package_path.join(relative_path);
             if let Ok(timestamp) = last_modified(&path) {
-                result.push((path, timestamp));
+                result.push((DbtPath::from_path(path), timestamp));
             }
         }
     }
@@ -1122,19 +1126,19 @@ mod tests {
 
         // Create mock file paths with timestamps
         let now = SystemTime::now();
-        let mut all_paths: HashMap<ResourcePathKind, Vec<(PathBuf, SystemTime)>> = HashMap::new();
+        let mut all_paths: HashMap<ResourcePathKind, Vec<(DbtPath, SystemTime)>> = HashMap::new();
 
         // Add test files - paths include test directory name as first component
         let test_files = vec![
-            (PathBuf::from("tests/test_model.sql"), now),
-            (PathBuf::from("tests/integration/test_integration.sql"), now),
-            (PathBuf::from("tests/generic/test_generic.sql"), now), // Should be excluded
-            (PathBuf::from("tests/generic/nested/test_nested.sql"), now), // Should be excluded
-            (PathBuf::from("tests/custom/test_custom.sql"), now),
-            (PathBuf::from("tests/schema.yml"), now),
-            (PathBuf::from("tests/generic/schema.yml"), now), // Should be excluded
-            (PathBuf::from("data-tests/generic/is_even.sql"), now), // Should be excluded
-            (PathBuf::from("data-tests/singular/my_test.sql"), now),
+            (DbtPath::from("tests/test_model.sql"), now),
+            (DbtPath::from("tests/integration/test_integration.sql"), now),
+            (DbtPath::from("tests/generic/test_generic.sql"), now), // Should be excluded
+            (DbtPath::from("tests/generic/nested/test_nested.sql"), now), // Should be excluded
+            (DbtPath::from("tests/custom/test_custom.sql"), now),
+            (DbtPath::from("tests/schema.yml"), now),
+            (DbtPath::from("tests/generic/schema.yml"), now), // Should be excluded
+            (DbtPath::from("data-tests/generic/is_even.sql"), now), // Should be excluded
+            (DbtPath::from("data-tests/singular/my_test.sql"), now),
         ];
 
         all_paths.insert(ResourcePathKind::TestPaths, test_files);
@@ -1293,7 +1297,7 @@ mod tests {
         let in_dir = PathBuf::from("/project");
         let project_name = "test_project";
         let extensions = &["sql"];
-        let all_paths: HashMap<ResourcePathKind, Vec<(PathBuf, SystemTime)>> = HashMap::new();
+        let all_paths: HashMap<ResourcePathKind, Vec<(DbtPath, SystemTime)>> = HashMap::new();
 
         let result = find_files_by_kind_and_extension(
             &in_dir,
@@ -1317,13 +1321,13 @@ mod tests {
         let extensions = &["sql"]; // Only SQL files
 
         let now = SystemTime::now();
-        let mut all_paths: HashMap<ResourcePathKind, Vec<(PathBuf, SystemTime)>> = HashMap::new();
+        let mut all_paths: HashMap<ResourcePathKind, Vec<(DbtPath, SystemTime)>> = HashMap::new();
 
         let test_files = vec![
-            (PathBuf::from("tests/test.sql"), now), // Should be included
-            (PathBuf::from("tests/test.yml"), now), // Should be excluded (wrong extension)
-            (PathBuf::from("tests/test.py"), now),  // Should be excluded (wrong extension)
-            (PathBuf::from("tests/test"), now),     // Should be excluded (no extension)
+            (DbtPath::from("tests/test.sql"), now), // Should be included
+            (DbtPath::from("tests/test.yml"), now), // Should be excluded (wrong extension)
+            (DbtPath::from("tests/test.py"), now),  // Should be excluded (wrong extension)
+            (DbtPath::from("tests/test"), now),     // Should be excluded (no extension)
         ];
 
         all_paths.insert(ResourcePathKind::TestPaths, test_files);
@@ -1348,12 +1352,12 @@ mod tests {
         let extensions = &["sql"];
 
         let now = SystemTime::now();
-        let mut all_paths: HashMap<ResourcePathKind, Vec<(PathBuf, SystemTime)>> = HashMap::new();
+        let mut all_paths: HashMap<ResourcePathKind, Vec<(DbtPath, SystemTime)>> = HashMap::new();
 
         // Add model files with generic in path (should NOT be excluded for models)
         let model_files = vec![
-            (PathBuf::from("models/generic/my_model.sql"), now),
-            (PathBuf::from("models/other/model.sql"), now),
+            (DbtPath::from("models/generic/my_model.sql"), now),
+            (DbtPath::from("models/other/model.sql"), now),
         ];
 
         all_paths.insert(ResourcePathKind::ModelPaths, model_files);

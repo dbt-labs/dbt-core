@@ -1,5 +1,6 @@
 use dbt_common::adapter::AdapterType;
 use dbt_common::cancellation::CancellationToken;
+use dbt_common::path::DbtPath;
 use dbt_common::tracing::emit::emit_warn_log_message;
 use dbt_jinja_utils::jinja_environment::JinjaEnv;
 use indexmap::IndexMap;
@@ -339,7 +340,7 @@ pub fn construct_internal_packages(
             // Cache all file contents
             if let Some(file) = assets::MacroAssets::get(asset_str) {
                 let content = String::from_utf8_lossy(&file.data).into_owned();
-                embedded_file_contents.insert(rel_path.clone(), content);
+                embedded_file_contents.insert(DbtPath::from_path(&rel_path), content);
             }
 
             // Only add .sql files to macro_files
@@ -358,14 +359,16 @@ pub fn construct_internal_packages(
         debug_assert!(
             embedded_file_contents
                 .keys()
-                .all(|path| is_metadata_file(path) || is_under_macros_or_tests(path)),
+                .all(|path| is_metadata_file(path.as_path())
+                    || is_under_macros_or_tests(path.as_path())),
             "Internal package '{}' contains files outside macros/ and tests/ directories. \
              Files found: {:?}. The construct_internal_packages function may need to be extended \
              to handle these resource types.",
             package_dir_name,
             embedded_file_contents
                 .keys()
-                .filter(|path| !is_metadata_file(path) && !is_under_macros_or_tests(path))
+                .filter(|path| !is_metadata_file(path.as_path())
+                    && !is_under_macros_or_tests(path.as_path()))
                 .collect::<Vec<_>>()
         );
 
