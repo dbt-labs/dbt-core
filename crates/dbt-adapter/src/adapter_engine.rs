@@ -1,6 +1,5 @@
 use crate::AdapterResponse;
 use crate::auth::Auth;
-use crate::base_adapter::backend_of;
 use crate::cache::RelationCache;
 use crate::config::AdapterConfig;
 use crate::errors::{
@@ -8,7 +7,7 @@ use crate::errors::{
     arrow_error_to_adapter_error,
 };
 use crate::query_cache::QueryCache;
-use crate::query_comment::{EMPTY_CONFIG, QueryCommentConfig};
+use crate::query_comment::QueryCommentConfig;
 use crate::sidecar_client::SidecarClient;
 use crate::sql_types::TypeOps;
 use crate::statement::*;
@@ -105,7 +104,7 @@ pub(crate) fn make_behavior(
 
 /// A trait abstracting the layer between the adapter layer and database drivers.
 ///
-/// Each concrete engine type (ADBC, mock, sidecar, record, replay) implements this trait
+/// Each concrete engine type (ADBC, sidecar, record, replay) implements this trait
 /// directly. This is the internal adapter service for other Rust modules in Fusion as
 /// the adapter layer interface is forced to abide by what is expected for consumption
 /// from Jinja code.
@@ -410,6 +409,26 @@ fn adbc_execute_with_options(
 // XdbcEngine
 // ---------------------------------------------------------------------------
 
+/// Operational mode for [`XdbcEngine`].
+///
+/// Controls how the engine creates connections and executes queries.
+// TODO: add Record and Replay variants here when verticalizing
+// RecordEngine / ReplayEngine into XdbcEngine.
+#[derive(Debug)]
+pub enum EngineMode {
+    /// Normal ADBC execution against a live warehouse.
+    Live,
+    /// Stubbed connections and execution
+    Mock,
+}
+
+impl EngineMode {
+    /// Whether this mode connects to a real warehouse.
+    pub fn has_real_connections(&self) -> bool {
+        matches!(self, EngineMode::Live)
+    }
+}
+
 pub struct XdbcEngine {
     adapter_type: AdapterType,
     /// Auth configurator
@@ -438,6 +457,8 @@ pub struct XdbcEngine {
     behavior: Arc<Behavior>,
     /// Global CLI cancellation token
     cancellation_token: CancellationToken,
+    /// Controls connection/execution behaviour.
+    mode: EngineMode,
 }
 
 impl XdbcEngine {
@@ -488,20 +509,62 @@ impl XdbcEngine {
             cancellation_token: token,
             behavior_flag_overrides,
             behavior,
+            mode: EngineMode::Live,
         }
+    }
+
+    /// Create a mock engine that stubs out connections and execution.
+    ///
+    /// Used for replay modes and test adapters that must never talk to a
+    /// real warehouse.
+    pub fn new_mock(
+        adapter_type: AdapterType,
+        auth: Arc<dyn Auth>,
+        config: AdapterConfig,
+        quoting: ResolvedQuoting,
+        type_ops: Box<dyn TypeOps>,
+        splitter: Arc<dyn StmtSplitter>,
+        relation_cache: Arc<RelationCache>,
+    ) -> Self {
+        let behavior = make_behavior(adapter_type, &BTreeMap::new());
+        Self {
+            adapter_type,
+            auth,
+            config,
+            quoting,
+            configured_databases: RwLock::new(DatabaseMap::default()),
+            semaphore: Arc::new(Semaphore::new(u32::MAX)),
+            type_ops,
+            splitter,
+            query_comment: QueryCommentConfig::from_query_comment(None, adapter_type, false),
+            query_cache: None,
+            relation_cache,
+            cancellation_token: never_cancels(),
+            behavior_flag_overrides: BTreeMap::new(),
+            behavior,
+            mode: EngineMode::Mock,
+        }
+    }
+
+    /// Get the engine mode.
+    pub fn mode(&self) -> &EngineMode {
+        &self.mode
     }
 
     fn load_driver_and_configure_database(
         &self,
         config: &AdapterConfig,
     ) -> AdapterResult<Box<dyn Database>> {
-        // Delegate the configuration of the database::Builder to the Auth implementation.
+        assert!(
+            self.mode.has_real_connections(),
+            "load_driver_and_configure_database called in {:?} mode",
+            self.mode,
+        );
         let builder = self
             .auth
             .configure(config)
             .map_err(crate::errors::auth_error_to_adapter_error)?;
 
-        // The driver is loaded only once even if this runs multiple times.
         let mut driver = driver::Builder::new(self.auth.backend())
             .with_semaphore(self.semaphore.clone())
             .try_load()
@@ -575,6 +638,10 @@ impl AdapterEngine for XdbcEngine {
         self.auth.backend()
     }
 
+    fn is_mock(&self) -> bool {
+        matches!(self.mode, EngineMode::Mock)
+    }
+
     fn quoting(&self) -> ResolvedQuoting {
         self.quoting
     }
@@ -616,6 +683,9 @@ impl AdapterEngine for XdbcEngine {
         state: Option<&State>,
         _node_id: Option<String>,
     ) -> AdapterResult<Box<dyn Connection>> {
+        if !self.mode.has_real_connections() {
+            return Ok(Box::new(NoopConnection));
+        }
         match self.adapter_type {
             AdapterType::Databricks => {
                 if let Some(databricks_compute) = state.and_then(databricks_compute_from_state) {
@@ -641,6 +711,9 @@ impl AdapterEngine for XdbcEngine {
         &self,
         config: &AdapterConfig,
     ) -> AdapterResult<Box<dyn Connection>> {
+        if !self.mode.has_real_connections() {
+            return Ok(Box::new(NoopConnection));
+        }
         let mut database = self.load_driver_and_configure_database(config)?;
         let connection_builder = connection::Builder::default();
         let conn = match connection_builder.build(&mut database) {
@@ -650,158 +723,27 @@ impl AdapterEngine for XdbcEngine {
         Ok(conn)
     }
 
+    fn execute_with_options(
+        &self,
+        state: Option<&State>,
+        ctx: &QueryCtx,
+        conn: &'_ mut dyn Connection,
+        sql: &str,
+        options: Options,
+        fetch: bool,
+    ) -> AdapterResult<RecordBatch> {
+        if !self.mode.has_real_connections() {
+            return Ok(RecordBatch::new_empty(Arc::new(Schema::empty())));
+        }
+        adbc_execute_with_options(self, state, ctx, conn, sql, options, fetch)
+    }
+
     fn behavior(&self) -> &Arc<Behavior> {
         &self.behavior
     }
 
     fn behavior_flag_overrides(&self) -> &BTreeMap<String, bool> {
         &self.behavior_flag_overrides
-    }
-
-    // Uses the default `execute_with_options` (ADBC-based).
-}
-
-// ---------------------------------------------------------------------------
-// MockEngine
-// ---------------------------------------------------------------------------
-
-/// Mock engine state for the mock adapter variant of [ConcreteAdapter](crate::typed_adapter::ConcreteAdapter)
-// TODO: Used currently for F2F Time Machine replay and mantle (build conformance) replay modes to avoid real warehouse connections - eventually should use XdbcEngine as functionality is pushed down
-#[derive(Clone)]
-pub struct MockEngine {
-    adapter_type: AdapterType,
-    quoting: ResolvedQuoting,
-    config: Arc<AdapterConfig>,
-    type_ops: Arc<dyn TypeOps>,
-    stmt_splitter: Arc<dyn StmtSplitter>,
-    /// Relation cache - caches warehouse relation metadata
-    relation_cache: Arc<RelationCache>,
-    /// Resolved behavior object
-    behavior: Arc<Behavior>,
-}
-
-impl MockEngine {
-    pub fn new(
-        adapter_type: AdapterType,
-        quoting: ResolvedQuoting,
-        type_ops: Box<dyn TypeOps>,
-        stmt_splitter: Arc<dyn StmtSplitter>,
-        relation_cache: Arc<RelationCache>,
-    ) -> Self {
-        Self::new_with_config(
-            adapter_type,
-            AdapterConfig::default(),
-            quoting,
-            type_ops,
-            stmt_splitter,
-            relation_cache,
-        )
-    }
-
-    pub fn new_with_config(
-        adapter_type: AdapterType,
-        config: AdapterConfig,
-        quoting: ResolvedQuoting,
-        type_ops: Box<dyn TypeOps>,
-        stmt_splitter: Arc<dyn StmtSplitter>,
-        relation_cache: Arc<RelationCache>,
-    ) -> Self {
-        let behavior = make_behavior(adapter_type, &BTreeMap::new());
-        Self {
-            adapter_type,
-            quoting,
-            config: Arc::new(config),
-            type_ops: Arc::from(type_ops),
-            stmt_splitter,
-            relation_cache,
-            behavior,
-        }
-    }
-}
-
-impl AdapterEngine for MockEngine {
-    fn adapter_type(&self) -> AdapterType {
-        self.adapter_type
-    }
-
-    fn backend(&self) -> Backend {
-        backend_of(self.adapter_type)
-    }
-
-    fn quoting(&self) -> ResolvedQuoting {
-        self.quoting
-    }
-
-    fn splitter(&self) -> &dyn StmtSplitter {
-        self.stmt_splitter.as_ref()
-    }
-
-    fn type_ops(&self) -> &dyn TypeOps {
-        self.type_ops.as_ref()
-    }
-
-    fn query_comment(&self) -> &QueryCommentConfig {
-        &EMPTY_CONFIG
-    }
-
-    fn config(&self, key: &str) -> Option<Cow<'_, str>> {
-        self.config.get_string(key)
-    }
-
-    fn get_config(&self) -> &AdapterConfig {
-        self.config.as_ref()
-    }
-
-    fn query_cache(&self) -> Option<&Arc<dyn QueryCache>> {
-        None
-    }
-
-    fn relation_cache(&self) -> &Arc<RelationCache> {
-        &self.relation_cache
-    }
-
-    fn cancellation_token(&self) -> CancellationToken {
-        never_cancels()
-    }
-
-    fn new_connection(
-        &self,
-        _state: Option<&State>,
-        _node_id: Option<String>,
-    ) -> AdapterResult<Box<dyn Connection>> {
-        Ok(Box::new(NoopConnection))
-    }
-
-    fn new_connection_with_config(
-        &self,
-        _config: &AdapterConfig,
-    ) -> AdapterResult<Box<dyn Connection>> {
-        Ok(Box::new(NoopConnection) as Box<dyn Connection>)
-    }
-
-    fn execute_with_options(
-        &self,
-        _state: Option<&State>,
-        _ctx: &QueryCtx,
-        _conn: &'_ mut dyn Connection,
-        _sql: &str,
-        _options: Options,
-        _fetch: bool,
-    ) -> AdapterResult<RecordBatch> {
-        Ok(RecordBatch::new_empty(Arc::new(Schema::empty())))
-    }
-
-    fn behavior(&self) -> &Arc<Behavior> {
-        &self.behavior
-    }
-
-    fn behavior_flag_overrides(&self) -> &BTreeMap<String, bool> {
-        static EMPTY: BTreeMap<String, bool> = BTreeMap::new();
-        &EMPTY
-    }
-
-    fn is_mock(&self) -> bool {
-        true
     }
 }
 

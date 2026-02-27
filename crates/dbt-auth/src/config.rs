@@ -4,7 +4,7 @@ pub use dbt_yaml::Value as YmlValue;
 
 // TODO(felipecrv): move this struct for generic use as it now has nothing specific to adapters
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct AdapterConfig {
     repr: dbt_yaml::Mapping,
 }

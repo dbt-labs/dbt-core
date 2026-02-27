@@ -3677,8 +3677,12 @@ impl ConcreteAdapter {
         stmt_splitter: Arc<dyn crate::stmt_splitter::StmtSplitter>,
         token: CancellationToken,
     ) -> Self {
-        let engine: Arc<dyn AdapterEngine> = Arc::new(crate::adapter_engine::MockEngine::new(
+        let backend = crate::base_adapter::backend_of(adapter_type);
+        let auth: Arc<dyn dbt_auth::Auth> = dbt_auth::auth_for_backend(backend).into();
+        let engine: Arc<dyn AdapterEngine> = Arc::new(crate::adapter_engine::XdbcEngine::new_mock(
             adapter_type,
+            auth,
+            crate::config::AdapterConfig::default(),
             quoting,
             type_ops,
             stmt_splitter,
