@@ -311,3 +311,25 @@ class TestSqlParseGroupingTokenLimit:
 
         # Flag set to 10000: compile succeeds
         run_dbt(["compile", "--max-sql-grouping-tokens", "10000"])
+
+
+class TestSqlParseGroupingDepthLimit:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "first_ephemeral_model.sql": first_ephemeral_model_sql,
+            "second_ephemeral_model.sql": second_ephemeral_model_sql,
+            "third_ephemeral_model.sql": third_ephemeral_model_sql,
+            "with_recursive_model.sql": with_recursive_model_sql,
+        }
+
+    def test_sqlparse_grouping_token_limit(self, project):
+        # No flag: compile succeeds (default is no limit)
+        run_dbt(["compile"])
+
+        # Flag set to 0: compile fails because token limit is exceeded
+        with pytest.raises(DbtRuntimeError):
+            run_dbt(["compile", "--max-sql-grouping-depth", "0"])
+
+        # Flag set to 10000: compile succeeds
+        run_dbt(["compile", "--max-sql-grouping-depth", "10000"])
