@@ -3580,20 +3580,9 @@ prevent unnecessary latency for other users."#,
             vec![flag]
         }
         Databricks => {
-            // https://github.com/databricks/dbt-databricks/blob/822b105b15e644676d9e1f47cbfd765cd4c1541f/dbt/adapters/databricks/impl.py#L87
-            let use_info_schema_for_columns = BehaviorFlag::new(
-                "use_info_schema_for_columns",
-                false,
-                Some(
-                    "Use info schema to gather column information to ensure complex types are not truncated. Incurs some overhead, so disabled by default.",
-                ),
-                None,
-                None,
-            );
-
             let use_user_folder_for_python = BehaviorFlag::new(
                 "use_user_folder_for_python",
-                false,
+                true,
                 Some(
                     "Use the user's home folder for uploading python notebooks. Shared folder use is deprecated due to governance concerns.",
                 ),
@@ -3611,11 +3600,7 @@ prevent unnecessary latency for other users."#,
                 None,
             );
 
-            vec![
-                use_info_schema_for_columns,
-                use_user_folder_for_python,
-                use_materialization_v2,
-            ]
+            vec![use_user_folder_for_python, use_materialization_v2]
         }
         Bigquery => {
             // https://github.com/dbt-labs/dbt-adapters/blob/b9ebd240e39882a8c43ed659de423c7504d4642a/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L109-L110

@@ -20,11 +20,13 @@ use arrow::compute::concat_batches;
 use arrow_schema::Schema;
 use core::result::Result;
 use dbt_agate::hashers::IdentityBuildHasher;
+use dbt_common::ErrorCode;
 use dbt_common::adapter::AdapterType;
 use dbt_common::behavior_flags::Behavior;
 use dbt_common::cancellation::{Cancellable, CancellationToken, never_cancels};
 use dbt_common::create_debug_span;
 use dbt_common::hashing::code_hash;
+use dbt_common::tracing::emit::emit_warn_log_message;
 use dbt_common::tracing::span_info::record_current_span_status_from_attrs;
 use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::telemetry::{QueryExecuted, QueryOutcome};
@@ -91,6 +93,19 @@ impl Connection for NoopConnection {
     fn update_node_id(&mut self, _node_id: Option<String>) {}
 }
 
+/// Behavior flags from dbt-core that have been removed in Fusion.
+/// The new behavior is always enabled; these flags are accepted but ignored.
+/// See: https://docs.getdbt.com/reference/global-configs/behavior-changes
+const REMOVED_IN_FUSION: &[&str] = &[
+    "use_info_schema_for_columns",
+    "require_explicit_package_overrides_for_builtin_materializations",
+    "require_resource_names_without_spaces",
+    "source_freshness_run_project_hooks",
+    "skip_nodes_if_on_run_start_fails",
+    "state_modified_compare_more_unrendered_values",
+    "require_yaml_configuration_for_mf_time_spines",
+];
+
 pub(crate) fn make_behavior(
     adapter_type: AdapterType,
     behavior_flag_overrides: &BTreeMap<String, bool>,
@@ -98,6 +113,20 @@ pub(crate) fn make_behavior(
     let mut behavior_flags = adapter_specific_behavior_flags(adapter_type);
     for flag in DEFAULT_BASE_BEHAVIOR_FLAGS.iter() {
         behavior_flags.push(flag.clone());
+    }
+    for key in behavior_flag_overrides.keys() {
+        if !behavior_flags.iter().any(|f| f.name == key)
+            && REMOVED_IN_FUSION.contains(&key.as_str())
+        {
+            emit_warn_log_message(
+                ErrorCode::InvalidConfig,
+                format!(
+                    "Behavior flag '{key}' has been removed in dbt Fusion. \
+                     This flag can be safely removed from your dbt_project.yml."
+                ),
+                None,
+            );
+        }
     }
     Arc::new(Behavior::new(behavior_flags, behavior_flag_overrides))
 }
