@@ -1117,7 +1117,7 @@ class JinjaLogWarning(WarnLevel):
         return "I061"
 
     def message(self) -> str:
-        return self.msg
+        return warning_tag(self.msg)
 
 
 class JinjaLogInfo(InfoLevel):
