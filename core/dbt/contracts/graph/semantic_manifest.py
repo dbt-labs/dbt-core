@@ -14,7 +14,7 @@ from dbt.flags import get_flags
 from dbt_common.clients.system import write_file
 from dbt_common.events.base_types import EventLevel
 from dbt_common.events.functions import fire_event
-from dbt_common.ui import error_tag
+from dbt_common.ui import error_tag, warning_tag
 from dbt_semantic_interfaces.implementations.metric import PydanticMetric
 from dbt_semantic_interfaces.implementations.node_relation import PydanticNodeRelation
 from dbt_semantic_interfaces.implementations.project_configuration import (
@@ -112,7 +112,7 @@ class SemanticManifest:
             )
 
         for warning in validation_results.warnings:
-            fire_event(SemanticValidationFailure(msg=warning.message))
+            fire_event(SemanticValidationFailure(msg=warning_tag(warning.message)))
 
         for deprecation in validation_results.future_errors:
             if (
