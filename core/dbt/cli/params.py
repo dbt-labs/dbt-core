@@ -393,7 +393,7 @@ def _set_sqlparse_max_grouping_tokens(ctx, param, value):
 
 max_sql_grouping_depth = _create_option_and_track_env_var(
     "--max-sql-grouping-depth",
-    envvar="DBT_MAX_SQL_GROUPING_DEPTH",
+    envvar="DBT_ENGINE_MAX_SQL_GROUPING_DEPTH",
     help="Set the maximum grouping depth for sqlparse.",
     type=click.INT,
     default=None,
@@ -403,7 +403,7 @@ max_sql_grouping_depth = _create_option_and_track_env_var(
 
 max_sql_grouping_tokens = _create_option_and_track_env_var(
     "--max-sql-grouping-tokens",
-    envvar="DBT_MAX_SQL_GROUPING_TOKENS",
+    envvar="DBT_ENGINE_MAX_SQL_GROUPING_TOKENS",
     help="Set the maximum grouping tokens for sqlparse.",
     type=click.INT,
     default=None,
