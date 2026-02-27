@@ -1,5 +1,5 @@
 kind: Fixes
-body: Warnings will now have [WARNING] in yellow preprended to the warning message to make it clearer
+body: Better error and warnings logs with [WARNING] / [ERROR] messages prepended to the logs
 time: 2026-02-27T14:00:09.850547+05:30
 custom:
     Author: sriramr98
