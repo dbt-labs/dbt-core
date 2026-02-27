@@ -378,6 +378,39 @@ macro_debugging = _create_option_and_track_env_var(
     hidden=True,
 )
 
+
+def _set_sqlparse_max_grouping_depth(ctx, param, value):
+    import sqlparse
+
+    sqlparse.engine.grouping.MAX_GROUPING_DEPTH = value
+
+
+def _set_sqlparse_max_grouping_tokens(ctx, param, value):
+    import sqlparse
+
+    sqlparse.engine.grouping.MAX_GROUPING_TOKENS = value
+
+
+max_sql_grouping_depth = _create_option_and_track_env_var(
+    "--max-sql-grouping-depth",
+    envvar="DBT_ENGINE_MAX_SQL_GROUPING_DEPTH",
+    help="Set the maximum grouping depth for sqlparse.",
+    type=click.INT,
+    default=None,
+    callback=_set_sqlparse_max_grouping_depth,
+    is_eager=True,
+)
+
+max_sql_grouping_tokens = _create_option_and_track_env_var(
+    "--max-sql-grouping-tokens",
+    envvar="DBT_ENGINE_MAX_SQL_GROUPING_TOKENS",
+    help="Set the maximum grouping tokens for sqlparse.",
+    type=click.INT,
+    default=None,
+    callback=_set_sqlparse_max_grouping_tokens,
+    is_eager=True,
+)
+
 models = _create_option_and_track_env_var(*model_decls, **select_attrs)  # type: ignore[arg-type]
 
 # This less standard usage of --output where output_path below is more standard

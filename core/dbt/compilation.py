@@ -45,6 +45,7 @@ from dbt_common.events.contextvars import get_node_info
 from dbt_common.events.format import pluralize
 from dbt_common.events.functions import fire_event
 from dbt_common.events.types import Note
+from dbt_common.exceptions import CompilationError
 from dbt_common.invocation import get_invocation_id
 
 graph_file_name = "graph.gpickle"
@@ -819,7 +820,11 @@ def inject_ctes_into_sql(sql: str, ctes: List[InjectedCTE]) -> str:
     if len(ctes) == 0:
         return sql
 
-    parsed_stmts = sqlparse.parse(sql)
+    try:
+        parsed_stmts = sqlparse.parse(sql)
+    except Exception as e:
+        raise CompilationError(str(e))
+
     parsed = parsed_stmts[0]
 
     with_stmt = None
