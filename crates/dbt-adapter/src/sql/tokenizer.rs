@@ -1,4 +1,16 @@
+use once_cell::sync::Lazy;
 use regex::Regex;
+
+static TIMESTAMP_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}").unwrap());
+// Same as `TIMESTAMP_REGEX`, but for finding timestamps embedded in larger tokens
+// (e.g. when surrounded by quotes/parens).
+static TIMESTAMP_FIND_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}").unwrap());
+static TIMESTAMP_REGEX_IGNORE_T: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^\d{4}-\d{2}-\d{2}\d{2}:\d{2}:\d{2}$").unwrap());
+static DATE_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\d{4}-\d{2}-\d{2}$").unwrap());
+static TIME_REGEX: Lazy<Regex> = Lazy::new(|| Regex::new(r"^\d{2}:\d{2}:\d{2}$").unwrap());
 #[derive(Clone)]
 pub(crate) struct Token {
     pub value: String,
@@ -110,13 +122,6 @@ impl std::fmt::Debug for AbstractToken {
 pub(crate) fn abstract_tokenize(tokens: Vec<Token>) -> Vec<AbstractToken> {
     let mut abstract_tokens = Vec::new();
     let mut index = 0;
-    let timestamp_regex = Regex::new(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}").unwrap();
-    // Same as `timestamp_regex`, but for finding timestamps embedded in larger tokens
-    // (e.g. when surrounded by quotes/parens).
-    let timestamp_find_regex = Regex::new(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}").unwrap();
-    let timestamp_regex_ignore_t = Regex::new(r"^\d{4}-\d{2}-\d{2}\d{2}:\d{2}:\d{2}$").unwrap();
-    let date_regex = Regex::new(r"^\d{4}-\d{2}-\d{2}$").unwrap();
-    let time_regex = Regex::new(r"^\d{2}:\d{2}:\d{2}$").unwrap();
     while index < tokens.len() {
         let token = tokens.get(index).unwrap();
         if token.matches("_") {
@@ -165,7 +170,7 @@ pub(crate) fn abstract_tokenize(tokens: Vec<Token>) -> Vec<AbstractToken> {
                 abstract_tokens.push(AbstractToken::Token(token.clone()));
             }
             index += 1;
-        } else if let Some(m) = timestamp_find_regex.find(&token.value) {
+        } else if let Some(m) = TIMESTAMP_FIND_REGEX.find(&token.value) {
             // Handle timestamps that don't start at a fixed suffix boundary, e.g.:
             //   cast('2025-12-23T07:06:03' as timestamp)
             // where the token may include leading '(' / '\'' and trailing '\''.
@@ -193,7 +198,7 @@ pub(crate) fn abstract_tokenize(tokens: Vec<Token>) -> Vec<AbstractToken> {
             });
         } else if token.value.chars().count() >= 19
             && let Some(start_byte) = token.value.char_indices().rev().nth(18).map(|(i, _)| i)
-            && timestamp_regex.is_match(&token.value[start_byte..])
+            && TIMESTAMP_REGEX.is_match(&token.value[start_byte..])
         {
             let (first, last) = token.value.split_at(start_byte);
             if !first.is_empty() {
@@ -218,7 +223,7 @@ pub(crate) fn abstract_tokenize(tokens: Vec<Token>) -> Vec<AbstractToken> {
             });
         } else if token.value.chars().count() >= 18
             && let Some(start_byte) = token.value.char_indices().rev().nth(17).map(|(i, _)| i)
-            && timestamp_regex_ignore_t.is_match(&token.value[start_byte..])
+            && TIMESTAMP_REGEX_IGNORE_T.is_match(&token.value[start_byte..])
         {
             let (first, last) = token.value.split_at(start_byte);
             if !first.is_empty() {
@@ -245,7 +250,7 @@ pub(crate) fn abstract_tokenize(tokens: Vec<Token>) -> Vec<AbstractToken> {
             }
         } else if token.value.chars().count() >= 10
             && let Some(start_byte) = token.value.char_indices().rev().nth(9).map(|(i, _)| i)
-            && date_regex.is_match(&token.value[start_byte..])
+            && DATE_REGEX.is_match(&token.value[start_byte..])
         {
             let (first, last) = token.value.split_at(start_byte);
             if !first.is_empty() {
@@ -257,7 +262,7 @@ pub(crate) fn abstract_tokenize(tokens: Vec<Token>) -> Vec<AbstractToken> {
 
             let date_token = last.to_string();
             if let Some(next_token) = tokens.get(index + 1)
-                && time_regex.is_match(&next_token.value)
+                && TIME_REGEX.is_match(&next_token.value)
             {
                 let timestamp_token = format!("{date_token}T{}", next_token.value);
                 if let Some(next2_token) = tokens.get(index + 2)
