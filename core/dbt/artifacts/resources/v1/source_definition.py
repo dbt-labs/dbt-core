@@ -25,6 +25,11 @@ class SourceConfig(BaseConfig):
     loaded_at_query: Optional[str] = None
     meta: Dict[str, Any] = field(default_factory=dict, metadata=MergeBehavior.Update.meta())
     tags: List[str] = field(default_factory=list)
+    static_analysis: Optional[str] = None
+
+    def __post_init__(self):
+        if isinstance(self.static_analysis, bool):
+            self.static_analysis = "on" if self.static_analysis else "off"
 
 
 @dataclass
