@@ -491,8 +491,12 @@ class ManifestLoader:
             self.check_valid_microbatch_config()
 
             semantic_manifest = SemanticManifest(self.manifest)
-            if not semantic_manifest.validate():
-                raise dbt.exceptions.ParsingError("Semantic Manifest validation failed.")
+            validation_errors = semantic_manifest.validate()
+            if validation_errors:
+                # Individual validation errors are already logged via events in semantic_manifest.validate()
+                raise dbt.exceptions.ParsingError(
+                    "Semantic Manifest validation failed. See errors above for details."
+                )
 
             # update tracking data
             self._perf_info.process_manifest_elapsed = time.perf_counter() - start_process
