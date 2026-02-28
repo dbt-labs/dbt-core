@@ -1,7 +1,9 @@
 import os
+from pathlib import Path
 
 import pytest
 
+from core.dbt.config.runtime import load_profile
 from dbt.exceptions import DbtInternalError, ParsingError
 from dbt.tests.util import read_file, run_dbt, run_dbt_and_capture
 from dbt_common.constants import SECRET_ENV_PREFIX
@@ -72,16 +74,22 @@ select
 
 class TestAllowSecretProfilePackage(FirstDependencyProject):
     @pytest.fixture(scope="class", autouse=True)
-    def setup(self):
-        os.environ[SECRET_ENV_PREFIX + "_USER"] = "root"
-        os.environ[SECRET_ENV_PREFIX + "_PASS"] = "password"
+    def setup(self, tmp_path_factory: pytest.TempPathFactory):
+
+        secret_file: Path = tmp_path_factory.mktemp("secret") / "file"
+        secret_file.write_text("pass_via_secret_file")
+
+        os.environ[SECRET_ENV_PREFIX + "_USER"] = "root_via_secret_var"
+        os.environ[SECRET_ENV_PREFIX + "_PASS_FILE"] = str(secret_file)
         os.environ[SECRET_ENV_PREFIX + "_PACKAGE"] = "first_dependency"
         os.environ[SECRET_ENV_PREFIX + "_GIT_TOKEN"] = "abc123"
         yield
         del os.environ[SECRET_ENV_PREFIX + "_USER"]
-        del os.environ[SECRET_ENV_PREFIX + "_PASS"]
+        del os.environ[SECRET_ENV_PREFIX + "_PASS_FILE"]
         del os.environ[SECRET_ENV_PREFIX + "_PACKAGE"]
         del os.environ[SECRET_ENV_PREFIX + "_GIT_TOKEN"]
+        secret_file.unlink()
+        secret_file.parent.rmdir()
 
     @pytest.fixture(scope="class")
     def models(self):
@@ -108,7 +116,8 @@ class TestAllowSecretProfilePackage(FirstDependencyProject):
         }
 
     @pytest.fixture(scope="class")
-    def profile_target(self):
+    def dbt_profile_target(self):
+        # this was not being invoked. is the loaded-back profile checked, elsewhere?
         return {
             "type": "postgres",
             "threads": 1,
@@ -116,7 +125,7 @@ class TestAllowSecretProfilePackage(FirstDependencyProject):
             "port": 5432,
             # root/password
             "user": "{{ env_var('DBT_ENV_SECRET_USER') }}",
-            "pass": "{{ env_var('DBT_ENV_SECRET_PASS') }}",
+            "pass": "{{ env_var('DBT_ENV_SECRET_PASS_FILE') }}",
             "dbname": "dbt",
         }
 
@@ -132,6 +141,14 @@ class TestAllowSecretProfilePackage(FirstDependencyProject):
         # this will be scrubbed from logs, but not from the lock file
         assert not ("first_dependency" in log_output)
         assert "first_dependency" in lock_file_contents
+
+    def test_file_resolved_in_profile(self, profiles_root, project_root):
+        profile = load_profile(
+            project_root=project_root,
+            cli_vars={},
+        )
+        assert profile.credentials.user == "root_via_secret_var"
+        assert profile.credentials.password == "pass_via_secret_file"
 
 
 class TestCloneFailSecretScrubbed:
