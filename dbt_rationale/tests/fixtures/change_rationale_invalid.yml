@@ -1,0 +1,13 @@
+models:
+  - name: high_risk_no_approval
+    meta:
+      rationale:
+        intent: "Some intent"
+        owner: "team@company.com"
+        change_rationale:
+          change_type: "Modification"
+          reason_category:
+            - "Bug Fix"
+          summary: "Fixed a calculation"
+          risk_level: "High"
+          # Missing approved_by — required when risk_level is High

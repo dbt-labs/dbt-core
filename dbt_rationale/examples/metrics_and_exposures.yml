@@ -1,0 +1,45 @@
+# Rationale for metrics and exposures.
+metrics:
+  - name: monthly_recurring_revenue
+    meta:
+      rationale:
+        intent: "Core KPI for board reporting and investor updates"
+        owner: "finance-analytics@acme.com"
+        domain: "Revenue Analytics"
+        decision_type: "Business Definition"
+        policy_bindings:
+          - "GAAP_v2"
+          - "SOX_reporting"
+        references:
+          - type: "confluence"
+            url: "https://wiki.acme.com/mrr-definition"
+
+  - name: customer_acquisition_cost
+    meta:
+      rationale:
+        intent: "Unit economics metric for growth planning"
+        owner: "growth-analytics@acme.com"
+        domain: "Growth"
+        decision_type: "Business Definition"
+
+exposures:
+  - name: executive_dashboard
+    meta:
+      rationale:
+        intent: "Weekly executive dashboard consumed by C-suite"
+        owner: "bi-team@acme.com"
+        domain: "Executive Reporting"
+        references:
+          - type: "looker"
+            url: "https://looker.acme.com/dashboards/42"
+
+  - name: regulatory_filing
+    meta:
+      rationale:
+        intent: "Quarterly SEC filing data pipeline"
+        owner: "finance-analytics@acme.com"
+        domain: "Compliance"
+        decision_type: "Regulatory"
+        policy_bindings:
+          - "SOX_reporting"
+          - "SEC_10Q"
