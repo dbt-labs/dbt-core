@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any, ClassVar, Dict, List, Optional, Union
 
 from mashumaro.jsonschema.annotations import Pattern
@@ -7,6 +8,7 @@ from typing_extensions import Annotated
 
 from dbt.adapters.contracts.connection import QueryComment
 from dbt.contracts.util import Identifier, list_str
+from dbt_common.clients import system
 from dbt_common.contracts.util import Mergeable
 from dbt_common.dataclass_schema import (
     ExtensibleDbtClassMixin,
@@ -41,6 +43,12 @@ class Quoting(dbtClassMixin, Mergeable):
     snowflake_ignore_case: Optional[bool] = None
 
 
+class LocalPackageInstallMode(str, Enum):
+    auto = "auto"
+    editable = "editable"
+    frozen = "frozen"
+
+
 @dataclass
 class Package(dbtClassMixin):
 
@@ -56,8 +64,23 @@ class Package(dbtClassMixin):
 @dataclass
 class LocalPackage(Package):
     local: str
+    install_mode: LocalPackageInstallMode = field(default=LocalPackageInstallMode.auto)
     unrendered: Dict[str, Any] = field(default_factory=dict)
     name: Optional[str] = None
+
+    @classmethod
+    def validate(cls, data):
+        install_mode = data.get("install_mode", LocalPackageInstallMode.auto)
+        is_editable = (
+            install_mode == LocalPackageInstallMode.editable
+            or install_mode == LocalPackageInstallMode.editable.value
+        )
+        if is_editable and not system.supports_symlinks():
+            raise ValidationError(
+                "Install mode 'editable' is not supported on this platform. "
+                "Use 'frozen' or 'auto' instead."
+            )
+        super().validate(data)
 
 
 # `float` also allows `int`, according to PEP484 (and jsonschema!)
@@ -137,6 +160,9 @@ class PackageConfig(dbtClassMixin):
                     raise ValidationError(
                         "A git package is missing the value. It is a required property."
                     )
+                # Validate local package
+                if "local" in package and package.get("local"):
+                    LocalPackage.validate(package)
             if isinstance(package, dict) and package.get("package"):
                 if not package["version"]:
                     raise ValidationError(
