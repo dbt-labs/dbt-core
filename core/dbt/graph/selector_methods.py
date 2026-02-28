@@ -15,6 +15,7 @@ from typing import (
     Union,
 )
 
+from dbt.artifacts.resources.types import AccessType
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import (
     Exposure,
@@ -52,6 +53,7 @@ class MethodName(StrEnum):
     Path = "path"
     File = "file"
     Package = "package"
+    Project = "project"
     Config = "config"
     TestName = "test_name"
     TestType = "test_type"
@@ -509,6 +511,33 @@ class PackageSelectorMethod(SelectorMethod):
                 yield unique_id
 
 
+class ProjectSelectorMethod(SelectorMethod):
+    def search(self, included_nodes: Set[UniqueId], selector: str) -> Iterator[UniqueId]:
+        """Yields nodes from the specified project/package with special handling for dependency type.
+
+        This is an alias for the package selector with the following behavior:
+        - For package-type dependencies: selects all nodes in the package (same as package selector)
+        - For project-type dependencies: selects only public models from the project
+        """
+        # `this` is an alias for the current dbt project name
+        if selector == "this" and self.manifest.metadata.project_name is not None:
+            selector = self.manifest.metadata.project_name
+
+        for unique_id, node in self.all_nodes(included_nodes):
+            if fnmatch(node.package_name, selector):
+                if node.package_name == self.manifest.metadata.project_name:
+                    # Always include nodes from the current project
+                    yield unique_id
+                elif hasattr(node, "resource_type") and node.resource_type == NodeType.Model:
+                    # For models in other projects, only include if they're public
+                    if hasattr(node, "access") and node.access == AccessType.Public:
+                        yield unique_id
+                else:
+                    # For non-model nodes, exclude them since the project selector
+                    # should only select public models from external projects
+                    pass
+
+
 def _getattr_descend(obj: Any, attrs: List[str]) -> Any:
     value = obj
     for attr in attrs:
@@ -951,6 +980,7 @@ class MethodManager:
         MethodName.Path: PathSelectorMethod,
         MethodName.File: FileSelectorMethod,
         MethodName.Package: PackageSelectorMethod,
+        MethodName.Project: ProjectSelectorMethod,
         MethodName.Config: ConfigSelectorMethod,
         MethodName.TestName: TestNameSelectorMethod,
         MethodName.TestType: TestTypeSelectorMethod,

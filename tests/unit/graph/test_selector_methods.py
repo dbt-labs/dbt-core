@@ -20,6 +20,7 @@ from dbt.graph.selector_methods import (
     MetricSelectorMethod,
     PackageSelectorMethod,
     PathSelectorMethod,
+    ProjectSelectorMethod,
     QualifiedNameSelectorMethod,
     SavedQuerySelectorMethod,
     SemanticModelSelectorMethod,
@@ -372,6 +373,48 @@ def test_select_package_this(manifest):
         "unique_table_model_id",
         "unit_test_table_model",
     }
+
+
+def test_select_project(manifest, view_model):
+    new_manifest = copy.deepcopy(manifest)
+    new_manifest.metadata.project_name = "pkg"
+    # Set up view_model with public access
+    view_model_public = replace(view_model, access="public")
+    new_manifest.nodes[view_model_public.unique_id] = view_model_public
+    # Create another model with private access
+    table_model = new_manifest.nodes["model.pkg.table_model"]
+    table_model_private = replace(table_model, access="private")
+    new_manifest.nodes[table_model_private.unique_id] = table_model_private
+    # Create a model from an external project
+    ext_model = new_manifest.nodes["model.ext.ext_model"]
+
+    # Test with public access
+    ext_model_public = replace(ext_model, access="public")
+    new_manifest.nodes[ext_model_public.unique_id] = ext_model_public
+    methods = MethodManager(new_manifest, None)
+    method = methods.get_method("project", [])
+    assert isinstance(method, ProjectSelectorMethod)
+    assert method.arguments == []
+
+    current_project_results = search_manifest_using_method(new_manifest, method, "pkg")
+    assert "view_model" in current_project_results
+    assert "table_model" in current_project_results
+
+    ext_project_results = search_manifest_using_method(new_manifest, method, "ext")
+    assert "ext_model" in ext_project_results
+
+    # Replace the external model with a private one
+    ext_model_private = replace(ext_model, access="private")
+    new_manifest.nodes[ext_model_private.unique_id] = ext_model_private
+
+    # Now the external private model should not be included
+    ext_project_results = search_manifest_using_method(new_manifest, method, "ext")
+    assert "ext_model" not in ext_project_results
+
+    # Test with "this" alias
+    this_results = search_manifest_using_method(new_manifest, method, "this")
+    assert "view_model" in this_results
+    assert "table_model" in this_results
 
 
 def test_select_config_materialized(manifest):
