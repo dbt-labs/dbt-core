@@ -23,6 +23,8 @@ from .renderer import ProfileRenderer
 
 DEFAULT_THREADS = 1
 
+# testing
+
 INVALID_PROFILE_MESSAGE = """
 dbt encountered an error while trying to read your profiles.yml file.
 
