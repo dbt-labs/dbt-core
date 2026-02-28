@@ -8,6 +8,7 @@ use crate::errors::{
 };
 use crate::query_cache::QueryCache;
 use crate::query_comment::QueryCommentConfig;
+use crate::record_and_replay::{RecordEngineConnection, ReplayEngineConnection};
 use crate::sidecar_client::SidecarClient;
 use crate::sql_types::TypeOps;
 use crate::statement::*;
@@ -40,6 +41,7 @@ use std::borrow::Cow;
 use tracy_client::span;
 
 use std::collections::{BTreeMap, HashMap};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::{thread, time::Duration};
@@ -133,10 +135,10 @@ pub(crate) fn make_behavior(
 
 /// A trait abstracting the layer between the adapter layer and database drivers.
 ///
-/// Each concrete engine type (ADBC, sidecar, record, replay) implements this trait
-/// directly. This is the internal adapter service for other Rust modules in Fusion as
-/// the adapter layer interface is forced to abide by what is expected for consumption
-/// from Jinja code.
+/// Each concrete engine type (XDBC with live/mock/record/replay modes, sidecar)
+/// implements this trait directly. This is the internal adapter service for other
+/// Rust modules in Fusion as the adapter layer interface is forced to abide by
+/// what is expected for consumption from Jinja code.
 pub trait AdapterEngine: Send + Sync {
     /// Get the adapter type for this engine
     fn adapter_type(&self) -> AdapterType;
@@ -267,7 +269,7 @@ pub trait AdapterEngine: Send + Sync {
 /// Default ADBC-based execute_with_options implementation.
 ///
 /// Used by engines whose connections implement the full ADBC protocol
-/// (XdbcEngine, RecordEngine, ReplayEngine).
+/// (XdbcEngine in Live, Record, and Replay modes).
 fn adbc_execute_with_options(
     engine: &(impl AdapterEngine + ?Sized),
     state: Option<&State>,
@@ -441,20 +443,22 @@ fn adbc_execute_with_options(
 /// Operational mode for [`XdbcEngine`].
 ///
 /// Controls how the engine creates connections and executes queries.
-// TODO: add Record and Replay variants here when verticalizing
-// RecordEngine / ReplayEngine into XdbcEngine.
 #[derive(Debug)]
 pub enum EngineMode {
     /// Normal ADBC execution against a live warehouse.
     Live,
     /// Stubbed connections and execution
     Mock,
+    /// Live execution with recording of all results to disk.
+    Record(PathBuf),
+    /// Replay previously recorded results from disk.
+    Replay(PathBuf),
 }
 
 impl EngineMode {
     /// Whether this mode connects to a real warehouse.
     pub fn has_real_connections(&self) -> bool {
-        matches!(self, EngineMode::Live)
+        matches!(self, EngineMode::Live | EngineMode::Record(_))
     }
 }
 
@@ -492,7 +496,7 @@ pub struct XdbcEngine {
 
 impl XdbcEngine {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(
+    fn build(
         adapter_type: AdapterType,
         auth: Arc<dyn Auth>,
         config: AdapterConfig,
@@ -504,21 +508,24 @@ impl XdbcEngine {
         relation_cache: Arc<RelationCache>,
         behavior_flag_overrides: BTreeMap<String, bool>,
         token: CancellationToken,
+        mode: EngineMode,
     ) -> Self {
-        let threads = config
-            .get("threads")
-            .and_then(|t| {
-                let u = t.as_u64();
-                debug_assert!(u.is_some(), "threads must be an integer if specified");
-                u
-            })
-            .map(|t| t as u32)
-            .unwrap_or(0u32);
-
-        let permits = if matches!(adapter_type, AdapterType::Redshift | AdapterType::Bigquery)
-            && threads > 0
-        {
-            threads
+        let permits = if mode.has_real_connections() {
+            let threads = config
+                .get("threads")
+                .and_then(|t| {
+                    let u = t.as_u64();
+                    debug_assert!(u.is_some(), "threads must be an integer if specified");
+                    u
+                })
+                .map(|t| t as u32)
+                .unwrap_or(0u32);
+            if matches!(adapter_type, AdapterType::Redshift | AdapterType::Bigquery) && threads > 0
+            {
+                threads
+            } else {
+                u32::MAX
+            }
         } else {
             u32::MAX
         };
@@ -538,8 +545,38 @@ impl XdbcEngine {
             cancellation_token: token,
             behavior_flag_overrides,
             behavior,
-            mode: EngineMode::Live,
+            mode,
         }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        adapter_type: AdapterType,
+        auth: Arc<dyn Auth>,
+        config: AdapterConfig,
+        quoting: ResolvedQuoting,
+        query_comment: QueryCommentConfig,
+        type_ops: Box<dyn TypeOps>,
+        splitter: Arc<dyn StmtSplitter>,
+        query_cache: Option<Arc<dyn QueryCache>>,
+        relation_cache: Arc<RelationCache>,
+        behavior_flag_overrides: BTreeMap<String, bool>,
+        token: CancellationToken,
+    ) -> Self {
+        Self::build(
+            adapter_type,
+            auth,
+            config,
+            quoting,
+            query_comment,
+            type_ops,
+            splitter,
+            query_cache,
+            relation_cache,
+            behavior_flag_overrides,
+            token,
+            EngineMode::Live,
+        )
     }
 
     /// Create a mock engine that stubs out connections and execution.
@@ -555,24 +592,83 @@ impl XdbcEngine {
         splitter: Arc<dyn StmtSplitter>,
         relation_cache: Arc<RelationCache>,
     ) -> Self {
-        let behavior = make_behavior(adapter_type, &BTreeMap::new());
-        Self {
+        Self::build(
             adapter_type,
             auth,
             config,
             quoting,
-            configured_databases: RwLock::new(DatabaseMap::default()),
-            semaphore: Arc::new(Semaphore::new(u32::MAX)),
+            QueryCommentConfig::from_query_comment(None, adapter_type, false),
             type_ops,
             splitter,
-            query_comment: QueryCommentConfig::from_query_comment(None, adapter_type, false),
-            query_cache: None,
+            None,
             relation_cache,
-            cancellation_token: never_cancels(),
-            behavior_flag_overrides: BTreeMap::new(),
-            behavior,
-            mode: EngineMode::Mock,
-        }
+            BTreeMap::new(),
+            never_cancels(),
+            EngineMode::Mock,
+        )
+    }
+
+    /// Create a recording engine that wraps live warehouse connections
+    /// and persists all query results to `recordings_path`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_record(
+        adapter_type: AdapterType,
+        auth: Arc<dyn Auth>,
+        config: AdapterConfig,
+        quoting: ResolvedQuoting,
+        query_comment: QueryCommentConfig,
+        type_ops: Box<dyn TypeOps>,
+        splitter: Arc<dyn StmtSplitter>,
+        relation_cache: Arc<RelationCache>,
+        behavior_flag_overrides: BTreeMap<String, bool>,
+        token: CancellationToken,
+        recordings_path: PathBuf,
+    ) -> Self {
+        Self::build(
+            adapter_type,
+            auth,
+            config,
+            quoting,
+            query_comment,
+            type_ops,
+            splitter,
+            None,
+            relation_cache,
+            behavior_flag_overrides,
+            token,
+            EngineMode::Record(recordings_path),
+        )
+    }
+
+    /// Create a replay engine that serves previously recorded results
+    /// from `recordings_path` without connecting to a warehouse.
+    #[allow(clippy::too_many_arguments)]
+    pub fn new_replay(
+        adapter_type: AdapterType,
+        auth: Arc<dyn Auth>,
+        config: AdapterConfig,
+        quoting: ResolvedQuoting,
+        query_comment: QueryCommentConfig,
+        type_ops: Box<dyn TypeOps>,
+        splitter: Arc<dyn StmtSplitter>,
+        relation_cache: Arc<RelationCache>,
+        token: CancellationToken,
+        recordings_path: PathBuf,
+    ) -> Self {
+        Self::build(
+            adapter_type,
+            auth,
+            config,
+            quoting,
+            query_comment,
+            type_ops,
+            splitter,
+            None,
+            relation_cache,
+            BTreeMap::new(),
+            token,
+            EngineMode::Replay(recordings_path),
+        )
     }
 
     /// Get the engine mode.
@@ -671,6 +767,10 @@ impl AdapterEngine for XdbcEngine {
         matches!(self.mode, EngineMode::Mock)
     }
 
+    fn is_replay(&self) -> bool {
+        matches!(self.mode, EngineMode::Replay(_))
+    }
+
     fn quoting(&self) -> ResolvedQuoting {
         self.quoting
     }
@@ -710,12 +810,17 @@ impl AdapterEngine for XdbcEngine {
     fn new_connection(
         &self,
         state: Option<&State>,
-        _node_id: Option<String>,
+        node_id: Option<String>,
     ) -> AdapterResult<Box<dyn Connection>> {
-        if !self.mode.has_real_connections() {
-            return Ok(Box::new(NoopConnection));
+        match &self.mode {
+            EngineMode::Mock => return Ok(Box::new(NoopConnection)),
+            EngineMode::Replay(path) => {
+                return Ok(Box::new(ReplayEngineConnection::new(path.clone(), node_id)));
+            }
+            EngineMode::Live | EngineMode::Record(_) => {}
         }
-        match self.adapter_type {
+
+        let conn = match self.adapter_type {
             AdapterType::Databricks => {
                 if let Some(databricks_compute) = state.and_then(databricks_compute_from_state) {
                     let augmented_config = {
@@ -723,16 +828,26 @@ impl AdapterEngine for XdbcEngine {
                         mapping.insert("databricks_compute".into(), databricks_compute.into());
                         AdapterConfig::new(mapping)
                     };
-                    self.new_connection_with_config(&augmented_config)
+                    self.new_connection_with_config(&augmented_config)?
                 } else {
-                    self.new_connection_with_config(&self.config)
+                    self.new_connection_with_config(&self.config)?
                 }
             }
             _ => {
                 // TODO(felipecrv): Make this codepath more efficient
                 // (no need to reconfigure the default database)
-                self.new_connection_with_config(&self.config)
+                self.new_connection_with_config(&self.config)?
             }
+        };
+
+        if let EngineMode::Record(path) = &self.mode {
+            Ok(Box::new(RecordEngineConnection::new(
+                path.clone(),
+                conn,
+                node_id,
+            )))
+        } else {
+            Ok(conn)
         }
     }
 
@@ -740,6 +855,9 @@ impl AdapterEngine for XdbcEngine {
         &self,
         config: &AdapterConfig,
     ) -> AdapterResult<Box<dyn Connection>> {
+        if let EngineMode::Replay(path) = &self.mode {
+            return Ok(Box::new(ReplayEngineConnection::new(path.clone(), None)));
+        }
         if !self.mode.has_real_connections() {
             return Ok(Box::new(NoopConnection));
         }
@@ -761,7 +879,7 @@ impl AdapterEngine for XdbcEngine {
         options: Options,
         fetch: bool,
     ) -> AdapterResult<RecordBatch> {
-        if !self.mode.has_real_connections() {
+        if matches!(self.mode, EngineMode::Mock) {
             return Ok(RecordBatch::new_empty(Arc::new(Schema::empty())));
         }
         adbc_execute_with_options(self, state, ctx, conn, sql, options, fetch)

@@ -2036,7 +2036,7 @@ impl Object for BridgeAdapter {
             return dispatch_adapter_calls(&**self, state, name, args, listeners);
         }
         // NOTE(jason): This function uses the time machine - cross version Fusion snapshot tests
-        // not to be confused with conformance ReplayAdapter or RecordEngine/ReplayEngine
+        // not to be confused with conformance ReplayAdapter or Adapter Record/Replay modes
         let node_id = node_id_from_state(state).unwrap_or_else(|| "global".to_string());
 
         // Determine the semantic category of this call for time machine handling.

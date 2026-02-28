@@ -1,14 +1,5 @@
-use crate::adapter_engine::{AdapterEngine, make_behavior};
-use crate::base_adapter::backend_of;
-use crate::cache::RelationCache;
-use crate::config::AdapterConfig;
-use crate::errors::AdapterResult;
-use crate::query_cache::QueryCache;
-use crate::query_comment::QueryCommentConfig;
 use crate::sql::normalize::normalize_dbt_tmp_name;
-use crate::sql_types::TypeOps;
 use crate::statement::*;
-use crate::stmt_splitter::StmtSplitter;
 
 use adbc_core::error::{Error as AdbcError, Result as AdbcResult, Status as AdbcStatus};
 use adbc_core::options::{OptionStatement, OptionValue};
@@ -22,13 +13,9 @@ use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64_STANDARD;
 use dashmap::DashMap;
 use dbt_common::ErrorCode;
-use dbt_common::adapter::{AdapterType, DBT_EXECUTION_PHASES};
-use dbt_common::behavior_flags::Behavior;
-use dbt_common::cancellation::CancellationToken;
+use dbt_common::adapter::DBT_EXECUTION_PHASES;
 use dbt_common::tracing::emit::emit_warn_log_message;
-use dbt_schemas::schemas::common::ResolvedQuoting;
-use dbt_xdbc::{Backend, Connection, Statement};
-use minijinja::State;
+use dbt_xdbc::{Connection, Statement};
 use once_cell::sync::Lazy;
 use parquet::arrow::ArrowWriter;
 use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
@@ -36,9 +23,8 @@ use parquet::file::properties::WriterProperties;
 use regex::Regex;
 use rusqlite::params;
 
-use std::borrow::Cow;
+use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;
-use std::collections::{BTreeMap, HashMap};
 use std::fmt;
 use std::fs::{self, File, create_dir_all, metadata};
 use std::hash::{Hash, Hasher};
@@ -653,100 +639,25 @@ impl SqliteHandler {
     }
 }
 
-pub struct RecordEngineInner {
-    /// Path to recordings
-    path: PathBuf,
-    /// Actual (wrapped) engine
-    engine: Arc<dyn AdapterEngine>,
+pub(crate) struct RecordEngineConnection {
+    recordings_path: PathBuf,
+    inner: Box<dyn Connection>,
+    node_id: Option<String>,
 }
 
-/// Engine used for recording db interaction; recording engine is
-/// a wrapper around an actual engine
-#[derive(Clone)]
-pub struct RecordEngine(Arc<RecordEngineInner>);
-
-impl RecordEngine {
-    pub fn new(path: PathBuf, engine: Arc<dyn AdapterEngine>) -> Self {
-        let inner = RecordEngineInner { path, engine };
-        RecordEngine(Arc::new(inner))
-    }
-}
-
-impl AdapterEngine for RecordEngine {
-    fn adapter_type(&self) -> AdapterType {
-        self.0.engine.adapter_type()
-    }
-
-    fn backend(&self) -> Backend {
-        self.0.engine.backend()
-    }
-
-    fn quoting(&self) -> ResolvedQuoting {
-        self.0.engine.quoting()
-    }
-
-    fn splitter(&self) -> &dyn StmtSplitter {
-        self.0.engine.splitter()
-    }
-
-    fn type_ops(&self) -> &dyn TypeOps {
-        self.0.engine.type_ops()
-    }
-
-    fn query_comment(&self) -> &QueryCommentConfig {
-        self.0.engine.query_comment()
-    }
-
-    fn config(&self, key: &str) -> Option<Cow<'_, str>> {
-        self.0.engine.config(key)
-    }
-
-    fn get_config(&self) -> &AdapterConfig {
-        self.0.engine.get_config()
-    }
-
-    fn query_cache(&self) -> Option<&Arc<dyn QueryCache>> {
-        None
-    }
-
-    fn relation_cache(&self) -> &Arc<RelationCache> {
-        self.0.engine.relation_cache()
-    }
-
-    fn cancellation_token(&self) -> CancellationToken {
-        self.0.engine.cancellation_token()
-    }
-
-    fn new_connection(
-        &self,
-        state: Option<&State>,
+impl RecordEngineConnection {
+    pub(crate) fn new(
+        recordings_path: PathBuf,
+        inner: Box<dyn Connection>,
         node_id: Option<String>,
-    ) -> AdapterResult<Box<dyn Connection>> {
-        let actual_conn = self.0.engine.new_connection(state, node_id.clone())?;
-        let conn = RecordEngineConnection(self.0.clone(), actual_conn, node_id);
-        Ok(Box::new(conn))
+    ) -> Self {
+        Self {
+            recordings_path,
+            inner,
+            node_id,
+        }
     }
-
-    fn new_connection_with_config(
-        &self,
-        config: &AdapterConfig,
-    ) -> AdapterResult<Box<dyn Connection>> {
-        self.0.engine.new_connection_with_config(config)
-    }
-
-    fn behavior(&self) -> &Arc<Behavior> {
-        self.0.engine.behavior()
-    }
-
-    fn behavior_flag_overrides(&self) -> &BTreeMap<String, bool> {
-        self.0.engine.behavior_flag_overrides()
-    }
-
-    // Uses default execute_with_options (ADBC-based) — recording happens
-    // at the Connection/Statement level via RecordEngineConnection.
 }
-
-struct RecordEngineConnection(Arc<RecordEngineInner>, Box<dyn Connection>, Option<String>);
 
 impl fmt::Debug for RecordEngineConnection {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -756,21 +667,21 @@ impl fmt::Debug for RecordEngineConnection {
 
 impl Connection for RecordEngineConnection {
     fn new_statement(&mut self) -> AdbcResult<Box<dyn Statement>> {
-        let inner_stmt = self.1.new_statement()?;
-        let stmt = RecordEngineStatement::new(self.0.clone(), inner_stmt);
+        let inner_stmt = self.inner.new_statement()?;
+        let stmt = RecordEngineStatement::new(self.recordings_path.clone(), inner_stmt);
         Ok(Box::new(stmt))
     }
 
     fn cancel(&mut self) -> AdbcResult<()> {
-        self.1.cancel()
+        self.inner.cancel()
     }
 
     fn commit(&mut self) -> AdbcResult<()> {
-        self.1.commit()
+        self.inner.commit()
     }
 
     fn rollback(&mut self) -> AdbcResult<()> {
-        self.1.rollback()
+        self.inner.rollback()
     }
 
     fn get_table_schema(
@@ -779,9 +690,9 @@ impl Connection for RecordEngineConnection {
         db_schema: Option<&str>,
         table_name: &str,
     ) -> AdbcResult<Schema> {
-        let result = self.1.get_table_schema(catalog, db_schema, table_name);
+        let result = self.inner.get_table_schema(catalog, db_schema, table_name);
 
-        let path = self.0.path.clone();
+        let path = self.recordings_path.clone();
         create_dir_all(&path).map_err(|e| from_fs_error(e.into(), Some(&path)))?;
 
         let unique_id = compute_file_name_for_table_schema(catalog, db_schema, table_name);
@@ -808,12 +719,12 @@ impl Connection for RecordEngineConnection {
     }
 
     fn update_node_id(&mut self, node_id: Option<String>) {
-        self.2 = node_id
+        self.node_id = node_id
     }
 }
 
 struct RecordEngineStatement {
-    record_engine: Arc<RecordEngineInner>,
+    recordings_path: PathBuf,
     inner_stmt: Box<dyn Statement>,
     node_id: Option<String>,
     execution_phase: &'static str,
@@ -822,12 +733,9 @@ struct RecordEngineStatement {
 }
 
 impl RecordEngineStatement {
-    pub fn new(
-        record_engine: Arc<RecordEngineInner>,
-        inner_stmt: Box<dyn Statement>,
-    ) -> RecordEngineStatement {
+    fn new(recordings_path: PathBuf, inner_stmt: Box<dyn Statement>) -> RecordEngineStatement {
         RecordEngineStatement {
-            record_engine,
+            recordings_path,
             inner_stmt,
             node_id: None,
             execution_phase: "",
@@ -855,7 +763,7 @@ impl Statement for RecordEngineStatement {
         // Execute on the actual engine's Statement
         let result = self.inner_stmt.execute();
 
-        let path = self.record_engine.path.clone();
+        let path = self.recordings_path.clone();
         create_dir_all(&path).map_err(|e| from_fs_error(e.into(), Some(&path)))?;
 
         let unique_id = compute_file_name(self.node_id.as_ref(), Some(sql), self.metadata)?;
@@ -977,145 +885,19 @@ impl Statement for RecordEngineStatement {
     }
 }
 
-struct ReplayEngineInner {
-    adapter_type: AdapterType,
-    backend: Backend,
-    /// Path to recordings
-    path: PathBuf,
-    /// Adapter config
-    config: AdapterConfig,
-    quoting: ResolvedQuoting,
-    query_comment: QueryCommentConfig,
-    type_ops: Box<dyn TypeOps>,
-    stmt_splitter: Arc<dyn StmtSplitter>,
-    /// Relation cache - caches warehouse relation metadata
-    relation_cache: Arc<RelationCache>,
-    /// Global CLI cancellation token
-    cancellation_token: CancellationToken,
-    /// Resolved behavior object
-    behavior: Arc<Behavior>,
+pub(crate) struct ReplayEngineConnection {
+    recordings_path: PathBuf,
+    node_id: Option<String>,
 }
 
-impl ReplayEngineInner {
-    pub fn full_path(&self) -> PathBuf {
-        self.path.clone()
+impl ReplayEngineConnection {
+    pub(crate) fn new(recordings_path: PathBuf, node_id: Option<String>) -> Self {
+        Self {
+            recordings_path,
+            node_id,
+        }
     }
 }
-
-#[derive(Clone)]
-pub struct ReplayEngine(Arc<ReplayEngineInner>);
-
-impl ReplayEngine {
-    #[allow(clippy::too_many_arguments)]
-    pub fn new(
-        adapter_type: AdapterType,
-        path: PathBuf,
-        config: AdapterConfig,
-        quoting: ResolvedQuoting,
-        query_comment: QueryCommentConfig,
-        type_ops: Box<dyn TypeOps>,
-        stmt_splitter: Arc<dyn StmtSplitter>,
-        relation_cache: Arc<RelationCache>,
-        token: CancellationToken,
-    ) -> Self {
-        let behavior = make_behavior(adapter_type, &BTreeMap::new());
-        let inner = ReplayEngineInner {
-            adapter_type,
-            backend: backend_of(adapter_type),
-            path,
-            config,
-            quoting,
-            query_comment,
-            type_ops,
-            stmt_splitter,
-            relation_cache,
-            cancellation_token: token,
-            behavior,
-        };
-        ReplayEngine(Arc::new(inner))
-    }
-}
-
-impl AdapterEngine for ReplayEngine {
-    fn adapter_type(&self) -> AdapterType {
-        self.0.adapter_type
-    }
-
-    fn backend(&self) -> Backend {
-        self.0.backend
-    }
-
-    fn quoting(&self) -> ResolvedQuoting {
-        self.0.quoting
-    }
-
-    fn splitter(&self) -> &dyn StmtSplitter {
-        self.0.stmt_splitter.as_ref()
-    }
-
-    fn type_ops(&self) -> &dyn TypeOps {
-        self.0.type_ops.as_ref()
-    }
-
-    fn query_comment(&self) -> &QueryCommentConfig {
-        &self.0.query_comment
-    }
-
-    fn config(&self, key: &str) -> Option<Cow<'_, str>> {
-        self.0.config.get_string(key)
-    }
-
-    fn get_config(&self) -> &AdapterConfig {
-        &self.0.config
-    }
-
-    fn query_cache(&self) -> Option<&Arc<dyn QueryCache>> {
-        None
-    }
-
-    fn relation_cache(&self) -> &Arc<RelationCache> {
-        &self.0.relation_cache
-    }
-
-    fn cancellation_token(&self) -> CancellationToken {
-        self.0.cancellation_token.clone()
-    }
-
-    fn new_connection(
-        &self,
-        _state: Option<&State>,
-        node_id: Option<String>,
-    ) -> AdapterResult<Box<dyn Connection>> {
-        let conn = ReplayEngineConnection(self.0.clone(), node_id);
-        Ok(Box::new(conn))
-    }
-
-    fn new_connection_with_config(
-        &self,
-        _config: &AdapterConfig,
-    ) -> AdapterResult<Box<dyn Connection>> {
-        self.new_connection(None, None)
-    }
-
-    fn behavior(&self) -> &Arc<Behavior> {
-        &self.0.behavior
-    }
-
-    fn behavior_flag_overrides(&self) -> &BTreeMap<String, bool> {
-        static EMPTY: BTreeMap<String, bool> = BTreeMap::new();
-        &EMPTY
-    }
-
-    fn is_replay(&self) -> bool {
-        true
-    }
-
-    // Uses default execute_with_options (ADBC-based) — replay happens
-    // at the Connection/Statement level via ReplayEngineConnection.
-}
-
-#[allow(dead_code)]
-struct ReplayEngineConnection(Arc<ReplayEngineInner>, Option<String>);
 
 impl fmt::Debug for ReplayEngineConnection {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -1125,7 +907,7 @@ impl fmt::Debug for ReplayEngineConnection {
 
 impl Connection for ReplayEngineConnection {
     fn new_statement(&mut self) -> AdbcResult<Box<dyn Statement>> {
-        let stmt = ReplayEngineStatement::new(self.0.clone());
+        let stmt = ReplayEngineStatement::new(self.recordings_path.clone());
         Ok(Box::new(stmt))
     }
 
@@ -1147,7 +929,7 @@ impl Connection for ReplayEngineConnection {
         db_schema: Option<&str>,
         table_name: &str,
     ) -> AdbcResult<Schema> {
-        let path = self.0.path.clone();
+        let path = self.recordings_path.clone();
         // Use table identifier for deterministic file naming (order-independent)
         let unique_id = compute_file_name_for_table_schema(catalog, db_schema, table_name);
 
@@ -1208,12 +990,12 @@ impl Connection for ReplayEngineConnection {
     }
 
     fn update_node_id(&mut self, node_id: Option<String>) {
-        self.1 = node_id
+        self.node_id = node_id
     }
 }
 
 struct ReplayEngineStatement {
-    replay_engine: Arc<ReplayEngineInner>,
+    recordings_path: PathBuf,
     node_id: Option<String>,
     execution_phase: &'static str,
     sql: Option<String>,
@@ -1221,9 +1003,9 @@ struct ReplayEngineStatement {
 }
 
 impl ReplayEngineStatement {
-    fn new(replay_engine: Arc<ReplayEngineInner>) -> ReplayEngineStatement {
+    fn new(recordings_path: PathBuf) -> ReplayEngineStatement {
         ReplayEngineStatement {
-            replay_engine,
+            recordings_path,
             node_id: None,
             execution_phase: "",
             sql: None,
@@ -1256,7 +1038,7 @@ impl Statement for ReplayEngineStatement {
             None => "none",
         };
 
-        let path = self.replay_engine.full_path();
+        let path = self.recordings_path.clone();
         let unique_id = compute_file_name(self.node_id.as_ref(), Some(replay_sql), self.metadata)?;
 
         // Detect storage type for backwards compatibility
