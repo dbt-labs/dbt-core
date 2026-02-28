@@ -94,6 +94,7 @@ class TestBuilder(Generic[Testable]):
         "fail_calc",
         "store_failures",
         "store_failures_as",
+        "sql_header",
         "meta",
         "database",
         "schema",

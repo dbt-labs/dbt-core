@@ -158,6 +158,7 @@ def get_rendered_tst_config(**updates):
         "severity": "ERROR",
         "store_failures": None,
         "store_failures_as": None,
+        "sql_header": None,
         "warn_if": "!= 0",
         "error_if": "!= 0",
         "fail_calc": "count(*)",
