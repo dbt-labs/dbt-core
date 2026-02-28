@@ -1,0 +1,6 @@
+kind: Fixes
+body: Allow macros invoked via run-operation to ref() private and protected models
+time: 2026-02-27T13:34:24.449177+05:30
+custom:
+    Author: aahel
+    Issue: 8248
