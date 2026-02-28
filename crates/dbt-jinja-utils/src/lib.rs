@@ -43,3 +43,7 @@ pub mod typecheck_listener;
 
 /// Module for rendering-based mangled ref/source checking
 pub mod mangled_ref;
+
+/// Mock Jinja object
+#[cfg(any(test, feature = "testing"))]
+pub mod mock_object;

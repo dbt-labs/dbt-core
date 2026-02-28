@@ -42,6 +42,8 @@ uuid = { workspace = true }
 walkdir = { workspace = true }
 
 [dev-dependencies]
+dbt-jinja-utils = { workspace = true, features = ["testing"] }
+dbt-parser = { workspace = true }
 tempfile = { workspace = true }
 
 [lib]
