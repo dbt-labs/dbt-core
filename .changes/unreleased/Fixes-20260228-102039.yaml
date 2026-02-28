@@ -1,0 +1,6 @@
+kind: Fixes
+body: Surface real profile error when dbt debug encounters duplicate connection attributes
+time: 2026-02-28T10:20:39.1497187Z
+custom:
+    Author: kalluripradeep
+    Issue: "12502"
