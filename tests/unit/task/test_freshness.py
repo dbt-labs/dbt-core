@@ -153,3 +153,121 @@ class TestFreshnessTaskMetadataCache:
         task.populate_metadata_freshness_cache(adapter, {source_no_loaded_at_field.unique_id})
 
         assert task.get_freshness_metadata_cache() == {}
+
+class TestFreshnessTaskEndMessages:
+    @pytest.fixture(scope="class")
+    def args(self):
+        mock_args = mock.Mock()
+        mock_args.state = None
+        mock_args.defer_state = None
+        mock_args.write_json = None
+        return mock_args
+
+    @pytest.fixture(scope="class")
+    def config(self):
+        mock_config = mock.Mock()
+        mock_config.threads = 1
+        mock_config.target_name = "mock_config_target_name"
+        return mock_config
+
+    @pytest.fixture(scope="class")
+    def manifest(self):
+        return mock.Mock()
+
+    def _create_result(self, status, source_name="test_source", table_name="test_table"):
+        """Helper to create a mock freshness result"""
+        result = mock.Mock()
+        result.status = status
+        result.node = mock.Mock()
+        result.node.source_name = source_name
+        result.node.name = table_name
+        return result
+
+    def test_task_end_messages_all_pass(self, args, config, manifest):
+        """Test with all freshness checks passing"""
+        from dbt.contracts.results import FreshnessStatus
+        
+        task = FreshnessTask(args=args, config=config, manifest=manifest)
+        
+        # Create all passing results
+        results = [
+            self._create_result(FreshnessStatus.Pass, "source1", "table1"),
+            self._create_result(FreshnessStatus.Pass, "source2", "table2"),
+        ]
+        
+        # Should not raise any errors
+        task.task_end_messages(results)
+
+    def test_task_end_messages_some_warnings(self, args, config, manifest):
+        """Test with some warnings"""
+        from dbt.contracts.results import FreshnessStatus
+        
+        task = FreshnessTask(args=args, config=config, manifest=manifest)
+        
+        results = [
+            self._create_result(FreshnessStatus.Pass, "source1", "table1"),
+            self._create_result(FreshnessStatus.Warn, "source2", "table2"),
+            self._create_result(FreshnessStatus.Warn, "source3", "table3"),
+        ]
+        
+        # Should not raise any errors
+        task.task_end_messages(results)
+
+    def test_task_end_messages_some_errors(self, args, config, manifest):
+        """Test with some errors"""
+        from dbt.contracts.results import FreshnessStatus
+        
+        task = FreshnessTask(args=args, config=config, manifest=manifest)
+        
+        results = [
+            self._create_result(FreshnessStatus.Pass, "source1", "table1"),
+            self._create_result(FreshnessStatus.Error, "source2", "table2"),
+            self._create_result(FreshnessStatus.RuntimeErr, "source3", "table3"),
+        ]
+        
+        # Should not raise any errors
+        task.task_end_messages(results)
+
+    def test_task_end_messages_mixed_results(self, args, config, manifest):
+        """Test with mixed pass, warn, and error results"""
+        from dbt.contracts.results import FreshnessStatus
+        
+        task = FreshnessTask(args=args, config=config, manifest=manifest)
+        
+        results = [
+            self._create_result(FreshnessStatus.Pass, "source1", "table1"),
+            self._create_result(FreshnessStatus.Warn, "source2", "table2"),
+            self._create_result(FreshnessStatus.Error, "source3", "table3"),
+            self._create_result(FreshnessStatus.RuntimeErr, "source4", "table4"),
+        ]
+        
+        # Should not raise any errors
+        task.task_end_messages(results)
+
+    def test_task_end_messages_empty_results(self, args, config, manifest):
+        """Test with empty results list"""
+        task = FreshnessTask(args=args, config=config, manifest=manifest)
+        
+        # Should handle empty list without errors
+        task.task_end_messages([])
+
+    def test_task_end_messages_result_without_node(self, args, config, manifest):
+        """Test with result that has source_name and table_name but no node"""
+        from dbt.contracts.results import FreshnessStatus
+        
+        task = FreshnessTask(args=args, config=config, manifest=manifest)
+        
+        # Create result without node attribute
+        result = mock.Mock()
+        result.status = FreshnessStatus.Error
+        result.source_name = "direct_source"
+        result.table_name = "direct_table"
+        # Remove node attribute
+        del result.node
+        
+        results = [result]
+        
+        # Should handle this case without errors
+        task.task_end_messages(results)
+
+
