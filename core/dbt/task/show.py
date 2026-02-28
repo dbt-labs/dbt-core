@@ -79,7 +79,7 @@ class ShowTask(CompileTask):
         else:
             matched_results = []
             for result in results:
-                if result.node.name in self.selection_arg[0]:
+                if result.node.name in self.selection_arg:
                     matched_results.append(result)
                 else:
                     fire_event(
@@ -147,3 +147,4 @@ class ShowTaskDirect(ConfiguredTask):
                     quiet=get_flags().QUIET,
                 )
             )
+
