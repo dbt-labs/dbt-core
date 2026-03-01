@@ -804,3 +804,11 @@ upload_artifacts = _create_option_and_track_env_var(
     help="Whether or not to upload the artifacts to the dbt Cloud API",
     default=False,
 )
+
+project_id = _create_option_and_track_env_var(
+    "--project-id",
+    envvar="DBT_PROJECT_ID",
+    help="Override the dbt Cloud project ID. This value will be set in the dbt-cloud.project-id field of dbt_project.yml",
+    type=click.INT,
+    default=None,
+)
