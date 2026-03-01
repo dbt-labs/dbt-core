@@ -261,8 +261,9 @@ class Flags:
             else:
                 project_flags = None
 
-        # Add entire invocation command to flags
-        object.__setattr__(self, "INVOCATION_COMMAND", "dbt " + " ".join(sys.argv[1:]))
+        # Add entire invocation command to flags on a best-effort basis (either from env var or from sys.argv)
+        invocation_command = os.getenv("DBT_EQUIVALENT_COMMAND", "dbt " + " ".join(sys.argv[1:]))
+        object.__setattr__(self, "INVOCATION_COMMAND", invocation_command)
 
         if project_flags:
             # Overwrite default assignments with project flags if available.
