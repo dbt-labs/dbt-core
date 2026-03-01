@@ -15,9 +15,12 @@ from dbt.tests.util import (
 from tests.functional.retry.fixtures import (
     macros__alter_timezone_sql,
     macros__success_macro_sql,
+    models__model_with_null,
+    models__model_with_null_fixed,
     models__sample_model,
     models__second_model,
     models__union_model,
+    schema_model_with_null_yml,
     schema_yml,
     simple_model,
     simple_schema,
@@ -494,3 +497,46 @@ class TestFixRetryHook:
             "model.test.second_model": RunStatus.Success,
             "model.test.union_model": RunStatus.Success,
         }
+
+
+class TestRetryWithFailedTest:
+    """Test that dbt retry rebuilds models when their tests fail.
+
+    This tests the fix for GitHub issue #10164:
+    https://github.com/dbt-labs/dbt-core/issues/10164
+
+    When a test fails and you fix the model code, running `dbt retry` should
+    also rebuild the model(s) that the test depends on, not just re-run the test.
+    """
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "model_with_null.sql": models__model_with_null,
+            "schema.yml": schema_model_with_null_yml,
+        }
+
+    def test_retry_rebuilds_model_for_failed_test(self, project):
+        # Run build - model succeeds but test fails due to null value
+        results = run_dbt(["build"], expect_pass=False)
+
+        expected_statuses = {
+            "model_with_null": RunStatus.Success,
+            "not_null_model_with_null_id": TestStatus.Fail,
+        }
+        assert {r.node.name: r.status for r in results.results} == expected_statuses
+
+        # Fix the model by removing the null value
+        write_file(models__model_with_null_fixed, "models", "model_with_null.sql")
+
+        # Retry - should rebuild the model AND re-run the test, both should pass
+        results = run_dbt(["retry"])
+
+        expected_statuses = {
+            "model_with_null": RunStatus.Success,
+            "not_null_model_with_null_id": TestStatus.Pass,
+        }
+        assert {r.node.name: r.status for r in results.results} == expected_statuses
+
+        # Restore original file for other tests
+        write_file(models__model_with_null, "models", "model_with_null.sql")
