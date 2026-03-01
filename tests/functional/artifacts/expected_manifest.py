@@ -1667,6 +1667,12 @@ def expected_references_manifest(project):
                 "meta": {
                     "some_key": 100,
                 },
+                "config": {
+                    "meta": {
+                        "some_key": 100,
+                    },
+                    "docs": {"node_color": None, "show": True},
+                },
                 "patch_path": "test://" + os.path.join("macros", "schema.yml"),
                 "resource_type": "macro",
                 "unique_id": "macro.test.test_nothing",
