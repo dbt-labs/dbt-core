@@ -175,6 +175,8 @@ class TestConfig(NodeAndTestConfig):
     severity: Annotated[Severity, Pattern(SEVERITY_PATTERN)] = Severity("ERROR")
     store_failures: Optional[bool] = None
     store_failures_as: Optional[str] = None
+    store_failures_unique: Optional[bool] = None
+    store_failures_suffix: Optional[str] = None
     where: Optional[str] = None
     limit: Optional[int] = None
     fail_calc: str = "count(*)"
