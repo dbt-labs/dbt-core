@@ -1871,6 +1871,13 @@ class ModelContext(ProviderContext):
             return None
 
     @contextproperty()
+    def sql_full_refresh(self) -> Optional[str]:
+        if self.model.language == ModelLanguage.sql:  # type: ignore[union-attr]
+            return self.model.compiled_code_full_refresh
+        else:
+            return None
+
+    @contextproperty()
     def database(self) -> str:
         return getattr(self.model, "database", self.config.credentials.database)
 
