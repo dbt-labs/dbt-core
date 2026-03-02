@@ -4,6 +4,7 @@ use crate::AdapterType;
 use crate::relation::StaticBaseRelationObject;
 use crate::relation::bigquery::BigqueryRelationType;
 use crate::relation::databricks::DatabricksRelationType;
+use crate::relation::duckdb::DuckDBRelationType;
 use crate::relation::postgres::PostgresRelationType;
 use crate::relation::redshift::RedshiftRelationType;
 use crate::relation::salesforce::SalesforceRelationType;
@@ -27,10 +28,9 @@ pub fn create_static_relation(
             let postgres_relation_type = PostgresRelationType(quoting);
             StaticBaseRelationObject::new(Arc::new(postgres_relation_type))
         }
-        // TODO(duckdb): use proper DuckDB relation type once available
         AdapterType::DuckDB => {
-            let postgres_relation_type = PostgresRelationType(quoting);
-            StaticBaseRelationObject::new(Arc::new(postgres_relation_type))
+            let duckdb_relation_type = DuckDBRelationType(quoting);
+            StaticBaseRelationObject::new(Arc::new(duckdb_relation_type))
         }
         AdapterType::Bigquery => {
             let bigquery_relation_type = BigqueryRelationType(quoting);

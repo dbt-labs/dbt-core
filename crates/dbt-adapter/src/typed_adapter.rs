@@ -2706,7 +2706,8 @@ impl ConcreteAdapter {
                 databricks::list_relations(self, query_ctx, conn, db_schema)
             }
             Impl(Redshift, _) => redshift::list_relations(self, query_ctx, conn, db_schema),
-            Impl(adapter_type @ (Postgres | Salesforce | Sidecar | DuckDB | Fabric), _) => {
+            Impl(DuckDB, _) => duckdb::list_relations(self, query_ctx, conn, db_schema),
+            Impl(adapter_type @ (Postgres | Salesforce | Sidecar | Fabric), _) => {
                 let err = AdapterError::new(
                     AdapterErrorKind::Internal,
                     format!(

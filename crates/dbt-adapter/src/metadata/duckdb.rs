@@ -1,3 +1,4 @@
+use crate::relation::do_create_relation;
 use crate::sql_types::{TypeOps, make_arrow_field_v2};
 use crate::typed_adapter::ConcreteAdapter;
 use crate::{AdapterEngine, AdapterTyping};
@@ -10,6 +11,7 @@ use arrow_array::{RecordBatch, StringArray};
 
 use dbt_common::adapter::ExecutionPhase;
 use dbt_common::cancellation::Cancellable;
+use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::{
     legacy_catalog::{CatalogTable, ColumnMetadata},
     relations::base::{BaseRelation, RelationPattern},
@@ -133,12 +135,120 @@ impl MetadataAdapter for DuckDBMetadataAdapter {
 
     fn list_relations_in_parallel_inner(
         &self,
-        _db_schemas: &[CatalogAndSchema],
+        db_schemas: &[CatalogAndSchema],
     ) -> AsyncAdapterResult<'_, BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>> {
-        // FIXME: Implement cache hydration
-        let future = async move { Ok(BTreeMap::new()) };
-        Box::pin(future)
+        type Acc = BTreeMap<CatalogAndSchema, AdapterResult<RelationVec>>;
+
+        let adapter = self.adapter.clone();
+        let new_connection_f = move || {
+            adapter
+                .new_connection(None, None)
+                .map_err(Cancellable::Error)
+        };
+
+        let adapter = self.adapter.clone();
+        let map_f = move |conn: &'_ mut dyn Connection,
+                          db_schema: &CatalogAndSchema|
+              -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
+            let ctx = QueryCtx::default().with_desc("list_relations_in_parallel");
+            list_relations(&adapter, &ctx, conn, db_schema)
+        };
+
+        let reduce_f = move |acc: &mut Acc,
+                             db_schema: CatalogAndSchema,
+                             relations: AdapterResult<Vec<Arc<dyn BaseRelation>>>|
+              -> Result<(), Cancellable<AdapterError>> {
+            match &relations {
+                Ok(_) => {
+                    acc.insert(db_schema, relations);
+                }
+                Err(e) => {
+                    // If the schema doesn't exist, treat as empty (no relations).
+                    // DuckDB raises "Catalog Error: Schema with name <x> does not exist"
+                    if e.message().contains("does not exist") {
+                        acc.insert(db_schema, Ok(Vec::new()));
+                    } else {
+                        return Err(Cancellable::Error(AdapterError::new(
+                            AdapterErrorKind::Internal,
+                            e.message(),
+                        )));
+                    }
+                }
+            }
+            Ok(())
+        };
+
+        let map_reduce = MapReduce::new(
+            Box::new(new_connection_f),
+            Box::new(map_f),
+            Box::new(reduce_f),
+            MAX_CONNECTIONS,
+        );
+        let token = self.adapter.cancellation_token();
+        map_reduce.run(Arc::new(db_schemas.to_vec()), token)
     }
+}
+
+/// List all relations (tables, views) in a given schema.
+///
+/// Queries DuckDB's `information_schema.tables` and maps the results to
+/// `BaseRelation` objects suitable for populating the adapter relation cache.
+pub fn list_relations(
+    adapter: &dyn AdapterTyping,
+    ctx: &QueryCtx,
+    conn: &'_ mut dyn Connection,
+    db_schema: &CatalogAndSchema,
+) -> AdapterResult<Vec<Arc<dyn BaseRelation>>> {
+    let query_schema = if adapter.quoting().schema {
+        db_schema.resolved_schema.clone()
+    } else {
+        db_schema.resolved_schema.to_lowercase()
+    };
+
+    let sql = format!(
+        "SELECT table_catalog, table_schema, table_name, table_type \
+         FROM information_schema.tables \
+         WHERE table_schema = '{query_schema}'"
+    );
+
+    let batch = adapter.engine().execute(None, conn, ctx, &sql)?;
+
+    if batch.num_rows() == 0 {
+        return Ok(Vec::new());
+    }
+
+    let table_catalogs = get_column_values::<StringArray>(&batch, "table_catalog")?;
+    let table_schemas = get_column_values::<StringArray>(&batch, "table_schema")?;
+    let table_names = get_column_values::<StringArray>(&batch, "table_name")?;
+    let table_types = get_column_values::<StringArray>(&batch, "table_type")?;
+
+    let mut relations = Vec::with_capacity(batch.num_rows());
+    for i in 0..batch.num_rows() {
+        let database = table_catalogs.value(i);
+        let schema = table_schemas.value(i);
+        let name = table_names.value(i);
+        // DuckDB table_type values: "BASE TABLE", "VIEW", "LOCAL TEMPORARY"
+        let relation_type = match table_types.value(i) {
+            "BASE TABLE" => RelationType::Table,
+            "VIEW" => RelationType::View,
+            "LOCAL TEMPORARY" => RelationType::Table,
+            other => RelationType::from_adapter_type(adapter.adapter_type(), other),
+        };
+
+        let relation = do_create_relation(
+            adapter.adapter_type(),
+            database.to_string(),
+            schema.to_string(),
+            Some(name.to_string()),
+            Some(relation_type),
+            adapter.quoting(),
+        )
+        .map_err(|e| AdapterError::new(AdapterErrorKind::Internal, e.to_string()))?;
+
+        relations.push(Arc::from(relation));
+    }
+
+    Ok(relations)
 }
 
 /// Build an Arrow Schema from DuckDB's DESCRIBE output.
