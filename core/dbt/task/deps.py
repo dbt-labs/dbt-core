@@ -15,7 +15,11 @@ from dbt.constants import PACKAGE_LOCK_FILE_NAME, PACKAGE_LOCK_HASH_KEY
 from dbt.contracts.project import PackageSpec
 from dbt.deps.base import downloads_directory
 from dbt.deps.registry import RegistryPinnedPackage
-from dbt.deps.resolver import resolve_lock_packages, resolve_packages
+from dbt.deps.resolver import (
+    get_package_identifier,
+    resolve_lock_packages,
+    resolve_packages,
+)
 from dbt.events.types import (
     DepsAddPackage,
     DepsFoundDuplicatePackage,
@@ -250,7 +254,16 @@ class DepsTask(BaseTask):
     def lock(self) -> None:
         lock_filepath = f"{self.project.project_root}/{PACKAGE_LOCK_FILE_NAME}"
 
-        packages = self.project.packages.packages
+        all_packages = self.project.packages.packages
+
+        packages = []
+        for pkg in all_packages:
+            if pkg.enabled is False:
+                identifier = get_package_identifier(pkg)
+                fire_event(Formatting(msg=f"Skipping disabled package {identifier}"))
+            else:
+                packages.append(pkg)
+
         packages_installed: Dict[str, Any] = {"packages": []}
 
         if not packages:

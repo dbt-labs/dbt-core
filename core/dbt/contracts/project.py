@@ -44,12 +44,13 @@ class Quoting(dbtClassMixin, Mergeable):
 @dataclass
 class Package(dbtClassMixin):
 
-    # Exclude {'name': None} from to_dict result to avoid changing sha1_hash result
-    # when user has not changed their 'packages' configuration.
+    # Exclude {'name': None} and {'enabled': None} from to_dict result to avoid changing sha1_hash result when user has not changed their 'packages' configuration.
     def __post_serialize__(self, data, context: Optional[Dict]):
-        if "name" in data.keys() and data["name"] is None:
+        keys = data.keys()
+        if "name" in keys and data["name"] is None:
             data.pop("name")
-            return data
+        if "enabled" in keys and data["enabled"] is None:
+            data.pop("enabled")
         return data
 
 
@@ -58,6 +59,7 @@ class LocalPackage(Package):
     local: str
     unrendered: Dict[str, Any] = field(default_factory=dict)
     name: Optional[str] = None
+    enabled: Optional[bool] = None
 
 
 # `float` also allows `int`, according to PEP484 (and jsonschema!)
@@ -69,6 +71,7 @@ class TarballPackage(Package):
     tarball: str
     name: str
     unrendered: Dict[str, Any] = field(default_factory=dict)
+    enabled: Optional[bool] = None
 
 
 @dataclass
@@ -79,6 +82,7 @@ class GitPackage(Package):
     subdirectory: Optional[str] = None
     unrendered: Dict[str, Any] = field(default_factory=dict)
     name: Optional[str] = None
+    enabled: Optional[bool] = None
 
     def get_revisions(self) -> List[str]:
         if self.revision is None:
@@ -96,6 +100,7 @@ class PrivatePackage(Package):
     subdirectory: Optional[str] = None
     unrendered: Dict[str, Any] = field(default_factory=dict)
     name: Optional[str] = None
+    enabled: Optional[bool] = None
 
 
 @dataclass
@@ -105,6 +110,7 @@ class RegistryPackage(Package):
     install_prerelease: Optional[bool] = False
     unrendered: Dict[str, Any] = field(default_factory=dict)
     name: Optional[str] = None
+    enabled: Optional[bool] = None
 
     def get_versions(self) -> List[str]:
         if isinstance(self.version, list):

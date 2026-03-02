@@ -352,8 +352,15 @@ class PartialProject(RenderComponents):
         renderer: DbtProjectYamlRenderer,
     ) -> RenderComponents:
         rendered_project = renderer.render_project(self.project_dict, self.project_root)
+
+        # Extract raw project vars for package rendering context
+        raw_project_vars = self.project_dict.get("vars", {})
+
         rendered_packages = renderer.render_packages(
-            self.packages_dict, self.packages_specified_path
+            self.packages_dict,
+            self.packages_specified_path,
+            project_vars=raw_project_vars,
+            project_name=self.project_name,
         )
         rendered_selectors = renderer.render_selectors(self.selectors_dict)
 

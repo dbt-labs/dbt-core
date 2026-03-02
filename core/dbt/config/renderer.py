@@ -133,8 +133,17 @@ class DbtProjectYamlRenderer(BaseRenderer):
         "Project config"
 
     # Uses SecretRenderer
-    def get_package_renderer(self) -> BaseRenderer:
-        return PackageRenderer(self.ctx_obj.cli_vars)
+    def get_package_renderer(
+        self,
+        project_vars: Optional[Dict[str, Any]] = None,
+        project_name: Optional[str] = None,
+    ) -> BaseRenderer:
+        target_dict = getattr(self.ctx_obj, "target_dict", None)
+        all_vars: Dict[str, Any] = {}
+        if project_vars:
+            all_vars.update(project_vars)
+        all_vars.update(self.ctx_obj.cli_vars)
+        return PackageRenderer(all_vars, target_dict=target_dict, project_name=project_name)
 
     def render_project(
         self,
@@ -146,10 +155,18 @@ class DbtProjectYamlRenderer(BaseRenderer):
         rendered_project["project-root"] = project_root
         return rendered_project
 
-    def render_packages(self, packages: Dict[str, Any], packages_specified_path: str):
+    def render_packages(
+        self,
+        packages: Dict[str, Any],
+        packages_specified_path: str,
+        project_vars: Optional[Dict[str, Any]] = None,
+        project_name: Optional[str] = None,
+    ):
         """Render the given packages dict"""
         packages = packages or {}  # Sometimes this is none in tests
-        package_renderer = self.get_package_renderer()
+        package_renderer = self.get_package_renderer(
+            project_vars=project_vars, project_name=project_name
+        )
         if packages_specified_path == DEPENDENCIES_FILE_NAME:
             # We don't want to render the "packages" dictionary that came from dependencies.yml
             return packages
@@ -238,6 +255,18 @@ class ProfileRenderer(SecretRenderer):
 
 
 class PackageRenderer(SecretRenderer):
+    def __init__(
+        self,
+        cli_vars: Dict[str, Any] = {},
+        target_dict: Optional[Dict[str, Any]] = None,
+        project_name: Optional[str] = None,
+    ) -> None:
+        super().__init__(cli_vars)
+        if target_dict is not None:
+            self.context["target"] = target_dict
+        if project_name is not None:
+            self.context["project_name"] = project_name
+
     @property
     def name(self):
         return "Packages config"
