@@ -1393,7 +1393,7 @@ class MacroPatchParser(PatchParser[UnparsedMacroUpdate, ParsedMacroPatch]):
         macro.description = patch.description
         macro.created_at = time.time()
 
-        meta = patch.config.get("meta") or patch.meta
+        meta = {**(patch.meta or {}), **(patch.config.get("meta") or {})}
         docs = patch.config.get("docs") or patch.docs
 
         # config inherits from HasConfig which is a dict so we need to cast it to Docs

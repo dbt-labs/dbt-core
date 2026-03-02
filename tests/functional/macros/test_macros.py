@@ -335,6 +335,7 @@ class TestMacroMetaDocsMerge:
         assert macro is not None
 
         expected_meta = {
+            "top_k": "top_v",
             "cm_k": "cm_v",
         }
         expected_docs_show = True
