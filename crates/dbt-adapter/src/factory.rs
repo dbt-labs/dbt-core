@@ -5,6 +5,7 @@ use crate::relation::StaticBaseRelationObject;
 use crate::relation::bigquery::BigqueryRelationType;
 use crate::relation::databricks::DatabricksRelationType;
 use crate::relation::duckdb::DuckDBRelationType;
+use crate::relation::fabric::FabricRelationType;
 use crate::relation::postgres::PostgresRelationType;
 use crate::relation::redshift::RedshiftRelationType;
 use crate::relation::salesforce::SalesforceRelationType;
@@ -52,9 +53,8 @@ pub fn create_static_relation(
             StaticBaseRelationObject::new(Arc::new(salesforce_relation_type))
         }
         AdapterType::Fabric => {
-            // let fabric_relation_type = FabricRelationType(quoting);
-            // StaticBaseRelationObject::new(Arc::new(fabric_relation_type))
-            todo!()
+            let fabric_relation_type = FabricRelationType(quoting);
+            StaticBaseRelationObject::new(Arc::new(fabric_relation_type))
         }
     };
     Some(Value::from_object(result))

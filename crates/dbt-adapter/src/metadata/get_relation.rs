@@ -10,12 +10,14 @@ use dbt_xdbc::{Connection, QueryCtx};
 use minijinja::State;
 
 use crate::AdapterTyping;
+use crate::formatter::SqlLiteralFormatter;
 use crate::metadata::databricks::describe_table::DatabricksTableMetadata;
 use crate::metadata::{snowflake, try_canonicalize_bool_column_field};
 use crate::record_batch_utils::get_column_values;
 use crate::relation::bigquery::BigqueryRelation;
 use crate::relation::databricks::DatabricksRelation;
 use crate::relation::do_create_relation;
+use crate::relation::fabric::FabricRelation;
 use crate::relation::postgres::PostgresRelation;
 use crate::relation::redshift::RedshiftRelation;
 use crate::relation::salesforce::SalesforceRelation;
@@ -56,7 +58,9 @@ pub fn get_relation(
         AdapterType::DuckDB => {
             duckdb_get_relation(adapter, state, ctx, conn, database, schema, identifier)
         }
-        AdapterType::Fabric => todo!(),
+        AdapterType::Fabric => {
+            fabric_get_relation(adapter, state, ctx, conn, database, schema, identifier)
+        }
         AdapterType::Sidecar => {
             // This branch should not be reached - sidecar adapters override get_relation()
             Err(AdapterError::new(
@@ -647,4 +651,72 @@ fn duckdb_get_relation(
         adapter.quoting(),
     )?;
     Ok(Some(relation))
+}
+
+fn fabric_get_relation(
+    adapter: &ConcreteAdapter,
+    state: &State,
+    ctx: &QueryCtx,
+    conn: &'_ mut dyn Connection,
+    database: &str,
+    schema: &str,
+    identifier: &str,
+) -> AdapterResult<Option<Box<dyn BaseRelation>>> {
+    // Can't use `conn.get_table_schema()` here because the driver doesn't use the proper identifier casing in its internal query.
+    // Same goes for `conn.get_objects()`
+    //
+    // What we should ideally do is use
+    // ```sql
+    // EXEC sys.sp_tables @table_qualifier = '<catalog>', @table_owner = '<schema>', @table_name = '<identifier>'
+    // ```
+    //
+    // Which would give back:
+    //
+    // | TABLE_QUALIFIER | TABLE_OWNER | TABLE_NAME   | TABLE_TYPE       | REMARKS |
+    // | --------------- | ----------- | ------------ | ---------------- | ------- |
+    // | <catalog>       | <schema>    | <identifier> | 'VIEW' / 'TABLE' | NULL    |
+    //
+    // > See: https://learn.microsoft.com/en-us/sql/relational-databases/system-stored-procedures/sp-tables-transact-sql?view=fabric#remarks
+
+    let lit_fmt = SqlLiteralFormatter::new(adapter.adapter_type());
+
+    let sql = format!(
+        "EXEC sys.sp_tables @table_qualifier = {}, @table_owner = {}, @table_name = {}",
+        lit_fmt.format_str(database),
+        lit_fmt.format_str(schema),
+        lit_fmt.format_str(identifier),
+    );
+
+    let batch = adapter.engine().execute(Some(state), conn, ctx, &sql)?;
+
+    if batch.num_rows() == 0 {
+        // If there are no rows, then we did not find the object
+        return Ok(None);
+    }
+
+    let column = batch.column_by_name("TABLE_TYPE").unwrap();
+    let string_array = column.as_any().downcast_ref::<StringArray>().unwrap();
+
+    if string_array.len() != 1 {
+        return Err(AdapterError::new(
+            AdapterErrorKind::UnexpectedResult,
+            "Did not find 'TABLE_TYPE' for a relation",
+        ));
+    }
+
+    // https://learn.microsoft.com/en-us/sql/relational-databases/system-stored-procedures/sp-tables-transact-sql?view=sql-server-ver17#----table_type
+    let relation_type = match string_array.value(0) {
+        // "SYSTEMTABLE" => ??? // do we treat this as a table too?
+        "TABLE" => Some(RelationType::Table),
+        "VIEW" => Some(RelationType::View),
+        _ => None,
+    };
+
+    Ok(Some(Box::new(FabricRelation::new(
+        Some(database.to_string()),
+        Some(schema.to_string()),
+        Some(identifier.to_string()),
+        relation_type,
+        adapter.quoting(),
+    ))))
 }

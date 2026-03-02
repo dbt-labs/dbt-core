@@ -13,6 +13,7 @@ use serde::Deserialize;
 
 use crate::relation::bigquery::*;
 use crate::relation::databricks::{DatabricksRelation, typed_constraint::TypedConstraint};
+use crate::relation::fabric::FabricRelation;
 use crate::relation::postgres::PostgresRelation;
 use crate::relation::redshift::RedshiftRelation;
 use crate::relation::salesforce::SalesforceRelation;
@@ -347,15 +348,13 @@ pub fn do_create_relation(
             identifier,
             relation_type,
         )) as Box<dyn BaseRelation>,
-        AdapterType::Fabric => {
-            // Box::new(FabricRelation::new(
-            //     Some(database),
-            //     Some(schema),
-            //     identifier,
-            //     relation_type,
-            // )) as Box<dyn BaseRelation>
-            todo!()
-        }
+        AdapterType::Fabric => Box::new(FabricRelation::new(
+            Some(database),
+            Some(schema),
+            identifier,
+            relation_type,
+            custom_quoting,
+        )) as Box<dyn BaseRelation>,
     };
     Ok(relation)
 }

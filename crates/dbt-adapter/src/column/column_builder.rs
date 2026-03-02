@@ -28,7 +28,7 @@ impl ColumnBuilder {
             Redshift => Ok(Self::build_redshift(field, type_ops)),
             Postgres | Salesforce | Sidecar => Ok(Self::build_postgres_like(field, type_ops)),
             DuckDB => Ok(Self::build_postgres_like(field, type_ops)),
-            Fabric => todo!(),
+            Fabric => Ok(Self::build_fabric(field, type_ops)),
         }
     }
 
@@ -85,9 +85,21 @@ impl ColumnBuilder {
                 None, // numeric_precision
                 None, // numeric_scale
             ),
-            Fabric => todo!("Fabric column creation not implemented yet"),
             Salesforce => todo!("Salesforce column creation not implemented yet"),
+            Fabric => Column::new(
+                Fabric,
+                name,
+                dtype,
+                char_size,
+                numeric_precision,
+                numeric_scale,
+            ),
         }
+    }
+
+    fn build_fabric(field: &FieldRef, type_ops: &dyn TypeOps) -> Column {
+        let _ = (field, type_ops);
+        unimplemented!("implement")
     }
 
     fn build_snowflake(field: &FieldRef, type_ops: &dyn TypeOps) -> Column {

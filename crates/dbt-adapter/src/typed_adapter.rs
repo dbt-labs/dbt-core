@@ -53,9 +53,9 @@ use dbt_common::{ErrorCode, FsResult, unexpected_fs_err};
 use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::common::ConstraintType;
 use dbt_schemas::schemas::common::DbtIncrementalStrategy;
+use dbt_schemas::schemas::common::DbtMaterialization;
 use dbt_schemas::schemas::common::ResolvedQuoting;
-use dbt_schemas::schemas::common::{ClusterConfig, ConstraintSupport, PartitionConfig};
-use dbt_schemas::schemas::common::{Constraint, DbtMaterialization};
+use dbt_schemas::schemas::common::{ClusterConfig, Constraint, ConstraintSupport, PartitionConfig};
 use dbt_schemas::schemas::dbt_column::{DbtColumn, DbtColumnRef};
 use dbt_schemas::schemas::manifest::BigqueryPartitionConfig;
 use dbt_schemas::schemas::project::ModelConfig;
@@ -276,6 +276,7 @@ impl ConcreteAdapter {
         static DATABRICKS: [DbtIncrementalStrategy; 4] =
             [Append, Merge, InsertOverwrite, ReplaceWhere];
         static REDSHIFT: [DbtIncrementalStrategy; 4] = [Append, DeleteInsert, Merge, Microbatch];
+        static FABRIC: [DbtIncrementalStrategy; 4] = [Append, DeleteInsert, Merge, Microbatch];
 
         match self.adapter_type() {
             Postgres | Sidecar | DuckDB => &POSTGRES,
@@ -286,7 +287,7 @@ impl ConcreteAdapter {
             Salesforce | Spark => {
                 unimplemented!("valid_incremental_strategies not implemented")
             }
-            Fabric => todo!(),
+            Fabric => &FABRIC,
         }
     }
 
@@ -687,7 +688,7 @@ impl ConcreteAdapter {
                 Bigquery => "schema_name",
                 Postgres | Redshift | Sidecar => "nspname",
                 DuckDB => "schema_name",
-                Fabric => todo!(),
+                Fabric => "schema",
             };
             get_column_values::<StringArray>(&result_set, col_name)?
         };
@@ -1709,7 +1710,13 @@ impl ConcreteAdapter {
             (DuckDB, Check) => NotSupported,
             (DuckDB, Custom) => NotSupported,
 
-            (Fabric, _) => todo!(),
+            // Fabric
+            (Fabric, Check) => NotSupported,
+            (Fabric, NotNull) => Enforced,
+            (Fabric, Unique) => Enforced,
+            (Fabric, PrimaryKey) => Enforced,
+            (Fabric, ForeignKey) => Enforced,
+            (Fabric, Custom) => NotSupported,
 
             // Salesforce
             (Salesforce | Spark, _) => unimplemented!("constraint support not implemented"),
@@ -3621,7 +3628,6 @@ prevent unnecessary latency for other users."#,
 }
 
 /// The concrete adapter implementation. All typed adapter methods live here.
-
 #[derive(Clone)]
 pub struct ConcreteAdapter {
     inner: ConcreteAdapterInner,

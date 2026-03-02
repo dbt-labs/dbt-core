@@ -16,6 +16,7 @@ pub const REDSHIFT_METADATA_SQL_TYPE_KEY: &str = "Type";
 pub const BIGQUERY_METADATA_SQL_TYPE_KEY: &str = "Type";
 // XXX: Snowflake does DATA_TYPE for GetTableSchema and SNOWFLAKE_TYPE for other queries...
 pub const SNOWFLAKE_METADATA_SQL_TYPE_KEY: &str = "DATA_TYPE";
+pub const FABRIC_METADATA_SQL_TYPE_KEY: &str = "DATA_TYPE";
 
 /// An Arrow schema containing SDF types
 #[derive(Clone)]
@@ -281,7 +282,7 @@ pub const fn get_field_sql_type_metadata_key(adapter_type: AdapterType) -> &'sta
         AdapterType::Spark => todo!(),
         AdapterType::Sidecar => todo!(),
         AdapterType::DuckDB => todo!(),
-        AdapterType::Fabric => todo!(),
+        AdapterType::Fabric => FABRIC_METADATA_SQL_TYPE_KEY,
     }
 }
 
@@ -466,9 +467,10 @@ impl TryFrom<&DataType> for SqlTypeHint {
 ///
 /// Databricks uses the conversion rules from Spark [3].
 ///
-/// [1] https://github.com/dbt-labs/dbt-adapters/blob/b0223a88d67012bcc4c6cce5449c4fe10c6ed198/dbt-adapters/src/dbt/adapters/sql/impl.py
-/// [2] https://github.com/dbt-labs/dbt-adapters/blob/b0223a88d67012bcc4c6cce5449c4fe10c6ed198/dbt-bigquery/src/dbt/adapters/bigquery/impl.py
-/// [3] https://github.com/dbt-labs/dbt-adapters/blob/b0223a88d67012bcc4c6cce5449c4fe10c6ed198/dbt-spark/src/dbt/adapters/spark/impl.py
+/// [1]: https://github.com/dbt-labs/dbt-adapters/blob/b0223a88d67012bcc4c6cce5449c4fe10c6ed198/dbt-adapters/src/dbt/adapters/sql/impl.py
+/// [2]: https://github.com/dbt-labs/dbt-adapters/blob/b0223a88d67012bcc4c6cce5449c4fe10c6ed198/dbt-bigquery/src/dbt/adapters/bigquery/impl.py
+/// [3]: https://github.com/dbt-labs/dbt-adapters/blob/b0223a88d67012bcc4c6cce5449c4fe10c6ed198/dbt-spark/src/dbt/adapters/spark/impl.py
+/// [4]: https://github.com/microsoft/dbt-fabric/blob/81d9764e24b00e7c923a2235ba68fa6bd6b90ea9/dbt/adapters/fabric/fabric_adapter.py
 pub fn sql_type_hint_to_str<'a>(
     hint: SqlTypeHint,
     _has_decimal_places: bool,
@@ -487,26 +489,37 @@ pub fn sql_type_hint_to_str<'a>(
         (Bigquery, Decimal) => "float64", // TODO: fix to "int64" if has_decimal_places is false
         (Databricks, Floating) => "bigint", // TODO: fix to "double" if has_decimal_places is true
         (Databricks, Decimal) => "double", // TODO: fix to "bigint" if has_decimal_places is false
-        (_, Floating) => "integer",      // TODO: fix to "float8" if has_decimal_places is true
-        (_, Decimal) => "float8",        // TODO: fix to "integer" if has_decimal_places is false
+        (Fabric, Decimal) => "float",
+        (Fabric, Floating) => "int",
+        (_, Floating) => "integer", // TODO: fix to "float8" if has_decimal_places is true
+        (_, Decimal) => "float8",   // TODO: fix to "integer" if has_decimal_places is false
 
         // ## convert_boolean_type()
         (Bigquery, Boolean) => "bool",
+        (Fabric, Boolean) => "bit",
         (_, Boolean) => "boolean",
 
         // ## convert_datetime_type()
         (Bigquery, Datetime) => "datetime",
         (Databricks, Datetime) => "timestamp",
+        (Fabric, Datetime) => "datetime2(6)",
         (_, Datetime) => "timestamp without time zone",
 
         // ## convert_date_type()
         (_, Date) => "date",
 
         // ## convert_time_type()
+        (Fabric, Time) => "time(6)",
         (_, Time) => "time",
 
         // ## convert_text_type()
         (Bigquery | Databricks, Text) => "string",
+        // technically should be `varchar(N)`
+        // where `N` is based on the max length of the strings in the column
+        // but that information isn't available here
+        // - N = 64 if column is empty
+        // - N = max(16, max_length) if column is not empty
+        (Fabric, Text) => "varchar",
         (_, Text) => "text",
     };
     Cow::Borrowed(str)
@@ -524,8 +537,8 @@ pub mod bigquery {
     pub fn field_to_string<'a>(field: &'a Field) -> Option<Cow<'a, str>> {
         let type_key = get_field_sql_type_metadata_key(AdapterType::Bigquery);
 
-        if let Some(original_type) = field.metadata().get(type_key) {
-            let inner_sql_type = match original_type.as_str() {
+        if let Some(original_ctype) = field.metadata().get(type_key) {
+            let inner_sql_type = match original_ctype.as_str() {
                 "RECORD" => {
                     // STRUCT/RECORD type, recurse and build original type
                     match field.data_type() {
@@ -540,7 +553,7 @@ pub mod bigquery {
                                 .collect::<Option<Vec<_>>>()?;
                             Cow::Owned(format!("STRUCT<{}>", field_strings.join(", ")))
                         }
-                        _ => Cow::Borrowed(original_type.as_str()),
+                        _ => Cow::Borrowed(original_ctype.as_str()),
                     }
                 }
                 "INTEGER" => Cow::Borrowed("INT64"),
