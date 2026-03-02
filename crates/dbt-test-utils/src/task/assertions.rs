@@ -15,13 +15,20 @@ pub struct AssertFileContainsTask {
     rel_file_path: PathBuf,
     /// Text to check if in the file
     text: String,
+    /// Is `rel_file_path` relative to the test env tmp dir?
+    use_test_env_path: bool,
 }
 
 impl AssertFileContainsTask {
-    pub fn new(rel_file_path: impl Into<PathBuf>, text: impl Into<String>) -> Self {
+    pub fn new(
+        rel_file_path: impl Into<PathBuf>,
+        text: impl Into<String>,
+        use_test_env_path: bool,
+    ) -> Self {
         Self {
             rel_file_path: rel_file_path.into(),
             text: text.into(),
+            use_test_env_path,
         }
     }
 }
@@ -31,11 +38,16 @@ impl Task for AssertFileContainsTask {
     async fn run(
         &self,
         project_env: &ProjectEnv,
-        _test_env: &TestEnv,
+        test_env: &TestEnv,
         _task_index: usize,
     ) -> TestResult<()> {
         // First we check that file actually exists.
-        let path = project_env.absolute_project_dir.join(&self.rel_file_path);
+        let path = if self.use_test_env_path {
+            test_env.temp_dir.join(&self.rel_file_path)
+        } else {
+            project_env.absolute_project_dir.join(&self.rel_file_path)
+        };
+
         assert!(path.exists(), "Path {} does not exist", path.display());
 
         let mut file = File::open(&path)?;

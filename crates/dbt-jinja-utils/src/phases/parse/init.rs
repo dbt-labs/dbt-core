@@ -108,6 +108,7 @@ pub fn initialize_parse_jinja_environment(
         ),
         ("database".to_string(), MinijinjaValue::from(database)),
         ("schema".to_string(), MinijinjaValue::from(schema)),
+        ("write".to_string(), MinijinjaValue::NONE),
     ]);
 
     let adapter_type = AdapterType::from_str(adapter_type).map_err(|_| {

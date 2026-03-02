@@ -275,7 +275,7 @@ pub async fn build_run_node_context<S: Serialize>(
     context.insert(
         "write".to_owned(),
         MinijinjaValue::from_object(WriteConfig {
-            model_name,
+            node_name: model_name,
             resource_type: resource_type.as_static_ref().to_string(),
             project_root: io_args.in_dir.clone(),
             target_path: io_args.out_dir.clone(),
@@ -381,11 +381,16 @@ impl std::fmt::Debug for HookConfig {
     }
 }
 
+/// Context function that writes a payload to file
 #[derive(Debug)]
 pub struct WriteConfig {
-    pub model_name: String,
+    /// The node ({operation, model}) name
+    pub node_name: String,
+    /// The resource type string (see `fusion::node::NodeType`)
     pub resource_type: String,
+    /// The DBT project root
     pub project_root: PathBuf,
+    /// The directory to write the file into
     pub target_path: PathBuf,
 }
 
@@ -418,7 +423,7 @@ impl Object for WriteConfig {
         match write_file(
             &self.project_root,
             &self.target_path,
-            &self.model_name,
+            &self.node_name,
             &self.resource_type,
             payload,
         ) {

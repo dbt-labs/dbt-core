@@ -13,6 +13,7 @@ mod assertions {
             .task(Box::new(AssertFileContainsTask::new(
                 "profiles.yml",
                 "datafusion",
+                false,
             )))
             .execute_in(&env)
             .await?;
