@@ -155,7 +155,7 @@ dependencies = [
 [envs.build.scripts]
 check-all = [
     # Run check-wheel-contents first, before any installation overwrites dependencies
-    "check-wheel-contents ../dist/*.whl --ignore W007,W008",
+    "check-wheel-contents ./dist/*.whl --ignore W007,W008",
     "check-wheel",
     "check-sdist",
 ]
