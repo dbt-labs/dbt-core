@@ -823,7 +823,12 @@ def inject_ctes_into_sql(sql: str, ctes: List[InjectedCTE]) -> str:
     try:
         parsed_stmts = sqlparse.parse(sql)
     except Exception as e:
-        raise CompilationError(str(e))
+        compilation_exception_msg = str(e)
+        if "grouping depth exceeded" in compilation_exception_msg.lower():
+            compilation_exception_msg = f"{compilation_exception_msg} You may raise the limit via --max-sql-grouping-depth."
+        if "number of tokens exceeded" in compilation_exception_msg.lower():
+            compilation_exception_msg = f"{compilation_exception_msg} You may raise the limit via --max-sql-grouping-tokens."
+        raise CompilationError(compilation_exception_msg)
 
     parsed = parsed_stmts[0]
 

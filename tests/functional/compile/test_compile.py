@@ -306,7 +306,9 @@ class TestSqlParseGroupingTokenLimit:
         run_dbt(["compile"])
 
         # Flag set to 0: compile fails because token limit is exceeded
-        with pytest.raises(DbtRuntimeError):
+        with pytest.raises(
+            DbtRuntimeError, match="You may raise the limit via --max-sql-grouping-tokens"
+        ):
             run_dbt(["compile", "--max-sql-grouping-tokens", "0"])
 
         # Flag set to 10000: compile succeeds
@@ -328,7 +330,9 @@ class TestSqlParseGroupingDepthLimit:
         run_dbt(["compile"])
 
         # Flag set to 0: compile fails because token limit is exceeded
-        with pytest.raises(DbtRuntimeError):
+        with pytest.raises(
+            DbtRuntimeError, match="You may raise the limit via --max-sql-grouping-depth"
+        ):
             run_dbt(["compile", "--max-sql-grouping-depth", "0"])
 
         # Flag set to 10000: compile succeeds
