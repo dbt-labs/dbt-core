@@ -212,6 +212,54 @@ fn test_truncate() {
 }
 
 #[test]
+fn test_truncate_positional_args() {
+    use minijinja::render;
+    use minijinja_contrib::filters::truncate;
+
+    const LONG_TEXT: &str = "Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever since the 1500s, when an unknown printer took a galley of type and scrambled it to make a type specimen book. It has survived not only five centuries, but also the leap into electronic typesetting, remaining essentially unchanged. It was popularised in the 1960s with the release of Letraset sheets containing Lorem Ipsum passages, and more recently with desktop publishing software like Aldus PageMaker including versions of Lorem Ipsum.";
+    const SHORT_TEXT: &str = "Fifteen chars !";
+
+    let mut env = Environment::new();
+    env.add_filter("truncate", truncate);
+
+    // Positional argument: truncate(length)
+    insta::assert_snapshot!(
+        render!(in env, r"{{ text|truncate(10) }}", text=>LONG_TEXT),
+        @"Lorem..."
+    );
+
+    // Positional arguments: truncate(length, killwords)
+    insta::assert_snapshot!(
+        render!(in env, r"{{ text|truncate(10, true) }}", text=>LONG_TEXT),
+        @"Lorem I..."
+    );
+
+    // Positional arguments: truncate(length, killwords, end)
+    insta::assert_snapshot!(
+        render!(in env, r"{{ text|truncate(10, true, '') }}", text=>LONG_TEXT),
+        @"Lorem Ipsu"
+    );
+
+    // Positional arguments: truncate(length, killwords, end, leeway)
+    insta::assert_snapshot!(
+        render!(in env, r"{{ text|truncate(10, false, '...', 0) }}", text=>SHORT_TEXT),
+        @"Fifteen..."
+    );
+
+    // Mixed positional + keyword: truncate(length, end='')
+    insta::assert_snapshot!(
+        render!(in env, r"{{ text|truncate(64, end='') }}", text=>"this_is_a_long_column_name_that_exceeds_sixty_four_characters_and_should_be_truncated"),
+        @"this_is_a_long_column_name_that_exceeds_sixty_four_characters_an"
+    );
+
+    // Keyword-only still works: truncate(length=10)
+    insta::assert_snapshot!(
+        render!(in env, r"{{ text|truncate(length=10) }}", text=>LONG_TEXT),
+        @"Lorem..."
+    );
+}
+
+#[test]
 #[cfg(feature = "wordwrap")]
 fn test_wordcount() {
     use minijinja_contrib::filters::wordcount;
@@ -381,5 +429,53 @@ fn test_wordwrap() {
         )
         .unwrap(),
         "This-is-a-\nhyphenated\n-word"
+    );
+}
+
+#[test]
+#[cfg(feature = "wordwrap")]
+fn test_wordwrap_positional_args() {
+    use minijinja_contrib::filters::wordwrap;
+
+    let mut env = minijinja::Environment::new();
+    env.add_filter("wordwrap", wordwrap);
+
+    // Positional argument: wordwrap(width)
+    assert_eq!(
+        env.render_str(
+            "{{ text|wordwrap(20) }}",
+            context! {
+                text => "This is a long piece of text that should be wrapped at a specific width."
+            },
+            &[]
+        )
+        .unwrap(),
+        "This is a long piece\nof text that should\nbe wrapped at a\nspecific width."
+    );
+
+    // Mixed positional + keyword: wordwrap(width, wrapstring='<br>')
+    assert_eq!(
+        env.render_str(
+            "{{ text|wordwrap(10, wrapstring=' <br> ') }}",
+            context! {
+                text => "This is a test of custom wrap strings."
+            },
+            &[]
+        )
+        .unwrap(),
+        "This is <br> a test <br> of custom <br> wrap <br> strings."
+    );
+
+    // Keyword-only still works: wordwrap(width=20)
+    assert_eq!(
+        env.render_str(
+            "{{ text|wordwrap(width=20) }}",
+            context! {
+                text => "This is a long piece of text that should be wrapped at a specific width."
+            },
+            &[]
+        )
+        .unwrap(),
+        "This is a long piece\nof text that should\nbe wrapped at a\nspecific width."
     );
 }

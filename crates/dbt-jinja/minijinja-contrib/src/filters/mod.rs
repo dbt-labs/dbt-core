@@ -1,6 +1,7 @@
 use std::convert::TryFrom;
 
-use minijinja::value::{Kwargs, Value, ValueKind};
+use minijinja::arg_utils::ArgsIter;
+use minijinja::value::{Rest, Value, ValueKind};
 use minijinja::State;
 use minijinja::{Error, ErrorKind};
 
@@ -137,10 +138,11 @@ pub fn filesizeformat(value: f64, binary: Option<bool>) -> String {
 /// whole words.
 ///
 /// ```jinja
+/// {{ "Hello World"|truncate(5) }}
 /// {{ "Hello World"|truncate(length=5) }}
 /// ```
 ///
-/// The filter accepts a few keyword arguments:
+/// The filter accepts parameters as positional or keyword arguments:
 /// * `length`: maximum length of the output string (defaults to 255)
 /// * `killwords`: set to `true` if you want to cut text exactly at length; if `false`,
 ///   the filter will preserve last word (defaults to `false`)
@@ -170,7 +172,25 @@ pub fn filesizeformat(value: f64, binary: Option<bool>) -> String {
 ///     leeway=2
 /// ) }}
 /// ```
-pub fn truncate(state: &State, value: &Value, kwargs: Kwargs) -> Result<String, Error> {
+pub fn truncate(state: &State, value: &Value, args: Rest<Value>) -> Result<String, Error> {
+    let iter = ArgsIter::new("truncate", &[], &args);
+    let length = iter.next_kwarg::<Option<usize>>("length")?.unwrap_or(255);
+    let killwords = iter
+        .next_kwarg::<Option<bool>>("killwords")?
+        .unwrap_or_default();
+    let end = iter.next_kwarg::<Option<String>>("end")?;
+    let leeway = iter
+        .next_kwarg::<Option<usize>>("leeway")?
+        .unwrap_or_else(|| {
+            state
+                .lookup("TRUNCATE_LEEWAY")
+                .and_then(|x| usize::try_from(x).ok())
+                .unwrap_or(5)
+        });
+    iter.finish()?;
+
+    let end = end.as_deref().unwrap_or("...");
+
     if matches!(value.kind(), ValueKind::None | ValueKind::Undefined) {
         return Ok("".into());
     }
@@ -181,18 +201,6 @@ pub fn truncate(state: &State, value: &Value, kwargs: Kwargs) -> Result<String, 
             format!("expected string, got {}", value.kind()),
         )
     })?;
-
-    let length = kwargs.get::<Option<usize>>("length")?.unwrap_or(255);
-    let killwords = kwargs.get::<Option<bool>>("killwords")?.unwrap_or_default();
-    let end = kwargs.get::<Option<&str>>("end")?.unwrap_or("...");
-    let leeway = kwargs.get::<Option<usize>>("leeway")?.unwrap_or_else(|| {
-        state
-            .lookup("TRUNCATE_LEEWAY")
-            .and_then(|x| usize::try_from(x).ok())
-            .unwrap_or(5)
-    });
-
-    kwargs.assert_all_used()?;
 
     let end_len = end.chars().count();
     if length < end_len {
@@ -264,19 +272,23 @@ pub fn wordcount(value: &Value) -> Result<Value, Error> {
 /// - `wrapstring`: String to join each wrapped line (default: newline)
 #[cfg(feature = "wordwrap")]
 #[cfg_attr(docsrs, doc(any(cfg(feature = "wordwrap"), cfg = "unicode_wordwrap")))]
-pub fn wordwrap(value: &Value, kwargs: Kwargs) -> Result<Value, Error> {
+pub fn wordwrap(value: &Value, args: Rest<Value>) -> Result<Value, Error> {
     use textwrap::{wrap, Options as WrapOptions, WordSplitter};
-    let s = value.as_str().unwrap_or_default();
 
-    let width = kwargs.get::<Option<usize>>("width")?.unwrap_or(79);
-    let break_long_words = kwargs
-        .get::<Option<bool>>("break_long_words")?
+    // Jinja2 positional order: width, break_long_words, wrapstring, break_on_hyphens
+    let iter = ArgsIter::new("wordwrap", &[], &args);
+    let width = iter.next_kwarg::<Option<usize>>("width")?.unwrap_or(79);
+    let break_long_words = iter
+        .next_kwarg::<Option<bool>>("break_long_words")?
         .unwrap_or(true);
-    let break_on_hyphens = kwargs
-        .get::<Option<bool>>("break_on_hyphens")?
+    let wrapstring = iter.next_kwarg::<Option<String>>("wrapstring")?;
+    let break_on_hyphens = iter
+        .next_kwarg::<Option<bool>>("break_on_hyphens")?
         .unwrap_or(true);
-    let wrapstring = kwargs.get::<Option<&str>>("wrapstring")?.unwrap_or("\n");
-    kwargs.assert_all_used()?;
+    iter.finish()?;
+
+    let wrapstring = wrapstring.as_deref().unwrap_or("\n");
+    let s = value.as_str().unwrap_or_default();
 
     let mut options = WrapOptions::new(width).break_words(break_long_words);
 
