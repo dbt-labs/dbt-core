@@ -360,7 +360,6 @@ class PartialProject(RenderComponents):
             self.packages_dict,
             self.packages_specified_path,
             project_vars=raw_project_vars,
-            project_name=self.project_name,
         )
         rendered_selectors = renderer.render_selectors(self.selectors_dict)
 

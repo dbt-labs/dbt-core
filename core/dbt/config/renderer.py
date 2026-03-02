@@ -136,14 +136,13 @@ class DbtProjectYamlRenderer(BaseRenderer):
     def get_package_renderer(
         self,
         project_vars: Optional[Dict[str, Any]] = None,
-        project_name: Optional[str] = None,
     ) -> BaseRenderer:
         target_dict = getattr(self.ctx_obj, "target_dict", None)
         all_vars: Dict[str, Any] = {}
         if project_vars:
             all_vars.update(project_vars)
         all_vars.update(self.ctx_obj.cli_vars)
-        return PackageRenderer(all_vars, target_dict=target_dict, project_name=project_name)
+        return PackageRenderer(all_vars, target_dict=target_dict)
 
     def render_project(
         self,
@@ -160,13 +159,10 @@ class DbtProjectYamlRenderer(BaseRenderer):
         packages: Dict[str, Any],
         packages_specified_path: str,
         project_vars: Optional[Dict[str, Any]] = None,
-        project_name: Optional[str] = None,
     ):
         """Render the given packages dict"""
         packages = packages or {}  # Sometimes this is none in tests
-        package_renderer = self.get_package_renderer(
-            project_vars=project_vars, project_name=project_name
-        )
+        package_renderer = self.get_package_renderer(project_vars=project_vars)
         if packages_specified_path == DEPENDENCIES_FILE_NAME:
             # We don't want to render the "packages" dictionary that came from dependencies.yml
             return packages
@@ -259,13 +255,10 @@ class PackageRenderer(SecretRenderer):
         self,
         cli_vars: Dict[str, Any] = {},
         target_dict: Optional[Dict[str, Any]] = None,
-        project_name: Optional[str] = None,
     ) -> None:
         super().__init__(cli_vars)
         if target_dict is not None:
             self.context["target"] = target_dict
-        if project_name is not None:
-            self.context["project_name"] = project_name
 
     @property
     def name(self):

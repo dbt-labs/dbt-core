@@ -1333,18 +1333,6 @@ class TestPackageRendererContext(unittest.TestCase):
         renderer = PackageRenderer(cli_vars={})
         self.assertNotIn("target", renderer.context)
 
-    def test_renderer_with_project_name(self):
-        from dbt.config.renderer import PackageRenderer
-
-        renderer = PackageRenderer(cli_vars={}, project_name="my_project")
-        self.assertEqual(renderer.context["project_name"], "my_project")
-
-    def test_renderer_without_project_name(self):
-        from dbt.config.renderer import PackageRenderer
-
-        renderer = PackageRenderer(cli_vars={})
-        self.assertNotIn("project_name", renderer.context)
-
     def test_renderer_renders_target_expression(self):
         from dbt.config.renderer import PackageRenderer
 
@@ -1352,10 +1340,3 @@ class TestPackageRendererContext(unittest.TestCase):
         renderer = PackageRenderer(cli_vars={}, target_dict=target)
         result = renderer.render_value("{{ target.name }}")
         self.assertEqual(result, "dev")
-
-    def test_renderer_renders_project_name_expression(self):
-        from dbt.config.renderer import PackageRenderer
-
-        renderer = PackageRenderer(cli_vars={}, project_name="my_project")
-        result = renderer.render_value("{{ project_name }}")
-        self.assertEqual(result, "my_project")
