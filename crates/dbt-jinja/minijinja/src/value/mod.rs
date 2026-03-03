@@ -542,6 +542,8 @@ impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         match (&self.0, &other.0) {
             (ValueRepr::None, ValueRepr::None) => true,
+            (ValueRepr::None, ValueRepr::Undefined) => false,
+            (ValueRepr::Undefined, ValueRepr::None) => false,
             (ValueRepr::Undefined, ValueRepr::Undefined) => true,
             (ValueRepr::String(ref a, _), ValueRepr::String(ref b, _)) => a == b,
             (ValueRepr::SmallStr(a), ValueRepr::SmallStr(b)) => a.as_str() == b.as_str(),
@@ -1876,6 +1878,33 @@ mod tests {
         assert_eq!(char::try_from(val).unwrap(), 'a');
         let val = Value::from("wat");
         assert!(char::try_from(val).is_err());
+    }
+
+    #[test]
+    fn test_none_undefined_not_equal() {
+        // Test that None and Undefined are not equal (commutative check)
+        let none_value = Value::from(());
+        let undefined_value = Value::UNDEFINED;
+
+        // None == Undefined should be false
+        assert!(
+            none_value != undefined_value,
+            "None should not be equal to Undefined"
+        );
+
+        // Undefined == None should be false (commutative)
+        assert!(
+            undefined_value != none_value,
+            "Undefined should not be equal to None"
+        );
+
+        // Sanity checks: None == None and Undefined == Undefined should be true
+        assert_eq!(none_value, Value::from(()), "None should equal None");
+        assert_eq!(
+            undefined_value,
+            Value::UNDEFINED,
+            "Undefined should equal Undefined"
+        );
     }
 
     #[test]
