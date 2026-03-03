@@ -8,6 +8,7 @@ from dbt.cli.option_types import (
     ChoiceTuple,
     Package,
     SampleType,
+    SqlParseOptionsType,
     WarnErrorOptionsType,
 )
 from dbt.cli.options import MultiOption
@@ -379,39 +380,13 @@ macro_debugging = _create_option_and_track_env_var(
 )
 
 
-def _set_sqlparse_options(ctx, param, value):
-    if value is None:
-        return
-    import json
-
-    import sqlparse
-
-    try:
-        options = json.loads(value)
-    except json.JSONDecodeError as e:
-        raise click.BadParameter(f"Invalid JSON: {e}")
-
-    valid_keys = {"MAX_GROUPING_DEPTH", "MAX_GROUPING_TOKENS"}
-    for key, val in options.items():
-        if key not in valid_keys:
-            raise click.BadParameter(
-                f"Unknown sqlparse option: {key}. Valid options: {', '.join(sorted(valid_keys))}"
-            )
-        try:
-            int_val = int(val)
-        except (TypeError, ValueError):
-            raise click.BadParameter(f"Value for {key} must be an integer, got: {val}")
-        setattr(sqlparse.engine.grouping, key, int_val)
-
-
 sqlparse_options = _create_option_and_track_env_var(
     "--sqlparse",
     envvar="DBT_SQLPARSE",
     hidden=True,
-    help="Set sqlparse options as JSON.",
-    type=click.STRING,
+    help="Set sqlparse options as YAML.",
+    type=SqlParseOptionsType(),
     default=None,
-    callback=_set_sqlparse_options,
     is_eager=True,
 )
 
