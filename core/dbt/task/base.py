@@ -314,7 +314,7 @@ class BaseRunner(metaclass=ABCMeta):
                 with collect_timing_info("execute", ctx.timing.append):
                     result = self.run(ctx.node, manifest)
                     ctx.node = result.node
-                fire_event(    # ← 16 spaces indent, inside the if block
+                fire_event(    
                     TimingInfoCollected(node_info=ctx.node.node_info, timing_info=ctx.timing[-1])
                 )
 
