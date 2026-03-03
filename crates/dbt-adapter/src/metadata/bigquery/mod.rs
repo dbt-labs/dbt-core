@@ -801,7 +801,7 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
                 };
                 let node = CatalogTable {
                     metadata: node_metadata,
-                    columns: BTreeMap::new(),
+                    columns: IndexMap::new(),
                     stats,
                     unique_id: None,
                 };

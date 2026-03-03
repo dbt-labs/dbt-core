@@ -14,6 +14,7 @@ use dbt_schemas::dbt_types::RelationType;
 use dbt_schemas::schemas::legacy_catalog::*;
 use dbt_schemas::schemas::relations::base::*;
 use dbt_xdbc::*;
+use indexmap::IndexMap;
 use minijinja::State;
 
 use std::collections::btree_map::Entry;
@@ -564,7 +565,7 @@ impl MetadataAdapter for RedshiftMetadataAdapter {
 
                 let node = CatalogTable {
                     metadata: node_metadata,
-                    columns: BTreeMap::new(),
+                    columns: IndexMap::new(),
                     stats,
                     unique_id: None,
                 };
@@ -945,7 +946,7 @@ fn build_schema_from_stats_sql_without_stats(
 
             let node = CatalogTable {
                 metadata: node_metadata,
-                columns: BTreeMap::new(),
+                columns: IndexMap::new(),
                 stats: BTreeMap::from([(
                     "has_stats".to_string(),
                     CatalogNodeStats {

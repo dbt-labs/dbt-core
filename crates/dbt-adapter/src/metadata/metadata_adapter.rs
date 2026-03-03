@@ -12,13 +12,14 @@ use crate::{AdapterEngine, metadata::*};
 
 use arrow::array::RecordBatch;
 use dbt_common::adapter::ExecutionPhase;
-use dbt_schemas::schemas::InternalDbtNodeAttributes;
+
 use dbt_schemas::schemas::{
     legacy_catalog::{CatalogTable, ColumnMetadata},
     relations::base::{BaseRelation, RelationPattern},
 };
 use dbt_schemas::state::ResolverState;
 use dbt_schemas::stats::Stats;
+use dbt_telemetry::NodeType;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
@@ -79,33 +80,37 @@ pub trait MetadataAdapter: Send + Sync {
         &self,
         resolved_state: &ResolverState,
         run_stats: &Stats,
-        parent_map: &BTreeMap<String, Vec<String>>,
     ) -> Vec<Arc<dyn BaseRelation>> {
+        let catalog_resource_types = [
+            NodeType::Source,
+            NodeType::Model,
+            NodeType::Snapshot,
+            NodeType::Seed,
+        ];
         let adapter_type = resolved_state.adapter_type;
-        let mut relations: Vec<Arc<dyn BaseRelation>> = Vec::new();
-        let mut executed_unique_ids = run_stats
-            .stats
+
+        // Collect executed nodes and their direct source dependencies
+        let mut relevant_ids = BTreeSet::new();
+        for stat in &run_stats.stats {
+            let unique_id = &stat.unique_id;
+            let Some(node) = resolved_state.nodes.get_node(unique_id) else {
+                continue;
+            };
+            if !catalog_resource_types.contains(&node.resource_type()) {
+                continue;
+            }
+
+            relevant_ids.insert(unique_id.clone());
+            // Include direct source parents from the parent map
+            let parents = &node.base().depends_on.nodes;
+            relevant_ids.extend(parents.iter().filter(|p| p.starts_with("source.")).cloned());
+        }
+
+        relevant_ids
             .iter()
-            .map(|stat| stat.unique_id.clone())
-            .collect::<Vec<String>>();
-        let mut nodes_to_add = Vec::new();
-        nodes_to_add.extend(executed_unique_ids.clone());
-        // Add all nodes that are dependencies of the executed nodes
-        while let Some(unique_id) = nodes_to_add.pop() {
-            if !executed_unique_ids.contains(&unique_id) {
-                executed_unique_ids.push(unique_id.clone());
-            }
-            if let Some(parents) = parent_map.get(&unique_id) {
-                nodes_to_add.extend(parents.clone());
-            }
-        }
-        let nodes = match run_stats.nodes.as_ref() {
-            Some(nodes) => nodes,
-            None => return relations,
-        };
-        for (unique_id, node) in nodes.models.iter() {
-            if executed_unique_ids.contains(unique_id) {
-                let relation = create_relation(
+            .filter_map(|uid| resolved_state.nodes.get_node(uid))
+            .map(|node| {
+                create_relation(
                     adapter_type,
                     node.database(),
                     node.schema(),
@@ -113,57 +118,10 @@ pub trait MetadataAdapter: Send + Sync {
                     None,
                     node.quoting(),
                 )
-                .expect("Failed to create relations from nodes");
-                relations.push(relation.into());
-            }
-        }
-
-        for (unique_id, node) in nodes.snapshots.iter() {
-            if executed_unique_ids.contains(unique_id) {
-                let relation = create_relation(
-                    adapter_type,
-                    node.database(),
-                    node.schema(),
-                    Some(node.alias()),
-                    None,
-                    node.quoting(),
-                )
-                .expect("Failed to create relations from nodes");
-                relations.push(relation.into());
-            }
-        }
-
-        for (unique_id, node) in nodes.seeds.iter() {
-            if executed_unique_ids.contains(unique_id) {
-                let relation = create_relation(
-                    adapter_type,
-                    node.database(),
-                    node.schema(),
-                    Some(node.alias()),
-                    None,
-                    node.quoting(),
-                )
-                .expect("Failed to create relations from nodes");
-                relations.push(relation.into());
-            }
-        }
-
-        for (unique_id, node) in nodes.sources.iter() {
-            if executed_unique_ids.contains(unique_id) {
-                let relation = create_relation(
-                    adapter_type,
-                    node.database(),
-                    node.schema(),
-                    Some(node.alias()),
-                    None,
-                    node.quoting(),
-                )
-                .expect("Failed to create relations from nodes");
-                relations.push(relation.into());
-            }
-        }
-
-        relations
+                .expect("Failed to create relations from nodes")
+                .into()
+            })
+            .collect()
     }
 
     /// Create schemas if they don't exist

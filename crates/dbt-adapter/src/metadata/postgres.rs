@@ -12,6 +12,7 @@ use dbt_schemas::schemas::{
     legacy_catalog::{CatalogNodeStats, CatalogTable, ColumnMetadata, TableMetadata},
     relations::base::{BaseRelation, RelationPattern},
 };
+use indexmap::IndexMap;
 use minijinja::State;
 
 use std::collections::btree_map::Entry;
@@ -84,7 +85,7 @@ impl MetadataAdapter for PostgresMetadataAdapter {
 
                 let node = CatalogTable {
                     metadata: node_metadata,
-                    columns: BTreeMap::new(),
+                    columns: IndexMap::new(),
                     stats: BTreeMap::from([("has_stats".to_string(), no_stats)]),
                     unique_id: None,
                 };

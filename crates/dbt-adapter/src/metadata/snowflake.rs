@@ -17,6 +17,7 @@ use dbt_schemas::schemas::common::ResolvedQuoting;
 use dbt_schemas::schemas::legacy_catalog::*;
 use dbt_schemas::schemas::relations::base::*;
 use dbt_xdbc::{Connection, MapReduce, QueryCtx};
+use indexmap::IndexMap;
 use minijinja::State;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -309,7 +310,7 @@ impl MetadataAdapter for SnowflakeMetadataAdapter {
 
                 let node = CatalogTable {
                     metadata: node_metadata,
-                    columns: BTreeMap::new(),
+                    columns: IndexMap::new(),
                     stats,
                     unique_id: None,
                 };

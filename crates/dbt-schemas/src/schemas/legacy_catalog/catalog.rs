@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 
 use chrono::{DateTime, Utc};
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -25,7 +26,7 @@ pub struct CatalogMetadata {
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct CatalogTable {
     pub metadata: TableMetadata,
-    pub columns: BTreeMap<String, ColumnMetadata>,
+    pub columns: IndexMap<String, ColumnMetadata>,
     pub stats: BTreeMap<String, CatalogNodeStats>,
     pub unique_id: Option<String>,
 }
@@ -67,6 +68,17 @@ pub struct DbtCatalog {
     pub errors: Option<Vec<String>>,
 }
 
+fn columns_sorted_by_index(
+    columns: &BTreeMap<String, ColumnMetadata>,
+) -> IndexMap<String, ColumnMetadata> {
+    let mut entries: Vec<_> = columns.iter().collect();
+    entries.sort_by_key(|(_, col)| col.index);
+    entries
+        .into_iter()
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect()
+}
+
 // TODO: dedupe code below
 pub fn build_catalog(
     invocation_id: &str,
@@ -98,10 +110,11 @@ pub fn build_catalog(
                     Some(node) => {
                         let mut result = node.to_owned();
                         result.unique_id = Some(id.clone());
-                        result.columns = node_columns
-                            .get(&fully_qualified_name)
-                            .unwrap_or(&BTreeMap::new())
-                            .to_owned();
+                        result.columns = columns_sorted_by_index(
+                            node_columns
+                                .get(&fully_qualified_name)
+                                .unwrap_or(&BTreeMap::new()),
+                        );
                         Some((id.clone(), result))
                     }
                     None => None,
@@ -124,10 +137,11 @@ pub fn build_catalog(
                             Some(node) => {
                                 let mut result = node.to_owned();
                                 result.unique_id = Some(id.clone());
-                                result.columns = node_columns
-                                    .get(&fully_qualified_name)
-                                    .unwrap_or(&BTreeMap::new())
-                                    .to_owned();
+                                result.columns = columns_sorted_by_index(
+                                    node_columns
+                                        .get(&fully_qualified_name)
+                                        .unwrap_or(&BTreeMap::new()),
+                                );
                                 Some((id.clone(), result))
                             }
                             None => None,
@@ -146,10 +160,11 @@ pub fn build_catalog(
                     Some(node) => {
                         let mut result = node.to_owned();
                         result.unique_id = Some(id.clone());
-                        result.columns = node_columns
-                            .get(&fully_qualified_name)
-                            .unwrap_or(&BTreeMap::new())
-                            .to_owned();
+                        result.columns = columns_sorted_by_index(
+                            node_columns
+                                .get(&fully_qualified_name)
+                                .unwrap_or(&BTreeMap::new()),
+                        );
                         Some((id.clone(), result))
                     }
                     None => None,
@@ -167,10 +182,11 @@ pub fn build_catalog(
                     Some(node) => {
                         let mut result = node.to_owned();
                         result.unique_id = Some(id.clone());
-                        result.columns = node_columns
-                            .get(&fully_qualified_name)
-                            .unwrap_or(&BTreeMap::new())
-                            .to_owned();
+                        result.columns = columns_sorted_by_index(
+                            node_columns
+                                .get(&fully_qualified_name)
+                                .unwrap_or(&BTreeMap::new()),
+                        );
                         Some((id.clone(), result))
                     }
                     None => None,
@@ -193,10 +209,11 @@ pub fn build_catalog(
                     Some(node) => {
                         let mut result = node.to_owned();
                         result.unique_id = Some(id.clone());
-                        result.columns = node_columns
-                            .get(&fully_qualified_name)
-                            .unwrap_or(&BTreeMap::new())
-                            .to_owned();
+                        result.columns = columns_sorted_by_index(
+                            node_columns
+                                .get(&fully_qualified_name)
+                                .unwrap_or(&BTreeMap::new()),
+                        );
                         Some((id.clone(), result))
                     }
                     None => None,

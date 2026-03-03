@@ -675,7 +675,7 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
 
                 let node = CatalogTable {
                     metadata: node_metadata,
-                    columns: BTreeMap::new(),
+                    columns: IndexMap::new(),
                     stats,
                     unique_id: None,
                 };
