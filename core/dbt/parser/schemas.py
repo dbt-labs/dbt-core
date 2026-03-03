@@ -92,7 +92,7 @@ from dbt_common.dataclass_schema import ValidationError, dbtClassMixin
 from dbt_common.events import EventLevel
 from dbt_common.events.functions import fire_event, warn_or_error
 from dbt_common.events.types import Note
-from dbt_common.exceptions import DbtValidationError, EventCompilationError
+from dbt_common.exceptions import DbtValidationError
 from dbt_common.utils import deep_merge
 
 # ===============================================================================
@@ -624,7 +624,6 @@ class PatchParser(YamlReader, Generic[NonSourceTarget, Parsed]):
         # UnparsedMacroUpdate (MacroPatchParser, 'macros')
         #      = HasDocs
         # correspond to this parser's 'key'
-        parse_errors: List[str] = []
         for node in self.get_unparsed_target():
             # node_block is a TargetBlock (Macro or Analysis)
             # or a TestBlock (all of the others)
@@ -642,12 +641,8 @@ class PatchParser(YamlReader, Generic[NonSourceTarget, Parsed]):
                 refs = ParserRef()
 
             # There's no unique_id on the node yet so cannot add to disabled dict
-            try:
-                self.parse_patch(node_block, refs)
-            except EventCompilationError as e:
-                parse_errors.append(str(e))
-        if parse_errors:
-            raise EventCompilationError("\n".join(parse_errors), None)
+            self.parse_patch(node_block, refs)
+
         return ParseResult(test_blocks, versioned_test_blocks)
 
     def get_unparsed_target(self) -> Iterable[NonSourceTarget]:
@@ -1504,6 +1499,3 @@ def match_arg_list(buffer: str, arg_count: int) -> Tuple[Optional[str], str]:
         return None, buffer
     else:
         return "", remainder[1:]
-
-
-
