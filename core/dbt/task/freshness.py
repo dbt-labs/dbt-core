@@ -21,7 +21,7 @@ from dbt.context.providers import RuntimeProvider, SourceContext
 from dbt.contracts.graph.manifest import Manifest
 from dbt.contracts.graph.nodes import HookNode, SourceDefinition
 from dbt.contracts.results import RunStatus
-from dbt.events.types import FreshnessCheckComplete, LogFreshnessResult, LogStartLine
+from dbt.events.types import EndOfRunSummary, FreshnessCheckComplete, LogFreshnessResult, LogStartLine, StatsLine
 from dbt.graph import ResourceTypeSelector
 from dbt.node_types import NodeType, RunHookType
 from dbt_common.events.base_types import EventLevel
@@ -300,10 +300,12 @@ class FreshnessTask(RunTask):
         if errors or warnings:
             fire_event(Formatting(""))
             fire_event(
-                Note(
-                    msg=f"Completed with {len(errors)} error{'s' if len(errors) != 1 else ''} and {len(warnings)} warning{'s' if len(warnings) != 1 else ''}:"
-                ),
-                EventLevel.INFO,
+                EndOfRunSummary(
+                    num_errors=len(errors),
+                    num_warnings=len(warnings),
+                    keyboard_interrupt=False,
+                    num_partial_success=0,
+                )
             )
             
             # Print each error using helper
@@ -322,10 +324,16 @@ class FreshnessTask(RunTask):
         
         fire_event(Formatting(""))
         fire_event(
-            Note(
-                msg=f"Done. PASS={pass_count} WARN={warn_count} ERROR={error_count} TOTAL={total_count}"
-            ),
-            EventLevel.INFO,
+            StatsLine(
+                stats={
+                    "pass": pass_count,
+                    "warn": warn_count,
+                    "error": error_count,
+                    "skip": 0,
+                    "noop": 0,
+                    "total": total_count,
+                }
+            )
         )
         
         fire_event(FreshnessCheckComplete())

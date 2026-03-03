@@ -1,0 +1,6 @@
+kind: Fixes
+body: Add summary output for dbt source freshness command showing errors and warnings at end of execution
+time: 2026-03-03T10:58:33.9755689Z
+custom:
+    Author: kalluripradeep
+    Issue: "6248"
