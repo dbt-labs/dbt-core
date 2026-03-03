@@ -254,7 +254,11 @@ class TestFreshnessTaskEndMessages:
             assert "StatsLine" in fired_types
             assert "FreshnessCheckComplete" in fired_types
             # Verify error and warning counts are correct
-            summary_calls = [c for c in mock_fire.call_args_list if type(c.args[0]).__name__ == "EndOfRunSummary"]
+            summary_calls = [
+                c
+                for c in mock_fire.call_args_list
+                if type(c.args[0]).__name__ == "EndOfRunSummary"
+            ]
             assert summary_calls[0].args[0].num_errors == 2
             assert summary_calls[0].args[0].num_warnings == 1
 
@@ -267,4 +271,3 @@ class TestFreshnessTaskEndMessages:
             # FreshnessCheckComplete should always fire even with no results
             assert "FreshnessCheckComplete" in fired_types
             assert "EndOfRunSummary" not in fired_types
-

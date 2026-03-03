@@ -30,7 +30,6 @@ from dbt_common.events.types import Formatting, Note
 from dbt_common.exceptions import DbtInternalError, DbtRuntimeError
 
 from .base import BaseRunner
-from .printer import print_run_result_error
 from .run import RunTask
 
 
