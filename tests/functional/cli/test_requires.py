@@ -3,7 +3,7 @@ import os
 import pytest
 from pytest_mock import MockerFixture
 
-from dbt.events.types import JinjaLogInfo
+from dbt.events.types import JinjaLogInfo, PartialParsingNotEnabled
 from dbt.tests.util import run_dbt
 from dbt_common.events.event_catcher import EventCatcher
 
@@ -44,3 +44,22 @@ class TestOldEngineEnvVarPropagation:
                 assert event.data.msg.endswith(f"{expect}")
             else:
                 assert False, "Unexpected log message"
+
+
+class TestEngineEnvVarPickedUpByClick:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {"model_one.sql": model_one_sql}
+
+    def test_engine_env_var_picked_up_by_cli_flags(self, project, mocker: MockerFixture):
+        event_catcher = EventCatcher(event_to_catch=PartialParsingNotEnabled)
+
+        run_dbt(["parse"], callbacks=[event_catcher.catch])
+        assert len(event_catcher.caught_events) == 0
+
+        run_dbt(["parse"], callbacks=[event_catcher.catch])
+        assert len(event_catcher.caught_events) == 0
+
+        mocker.patch.dict(os.environ, {"DBT_ENGINE_PARTIAL_PARSE": "False"})
+        run_dbt(["parse"], callbacks=[event_catcher.catch])
+        assert len(event_catcher.caught_events) == 1
