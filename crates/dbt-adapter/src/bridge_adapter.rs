@@ -23,6 +23,7 @@ use crate::{AdapterResponse, AdapterResult, BaseAdapter};
 
 use dbt_agate::AgateTable;
 use dbt_auth::{AdapterConfig, Auth, auth_for_backend};
+use dbt_common::adapter::AdapterType;
 use dbt_common::behavior_flags::Behavior;
 use dbt_common::cancellation::CancellationToken;
 use dbt_common::{AdapterError, AdapterErrorKind, FsError, FsResult};
@@ -46,12 +47,15 @@ use tracing;
 use tracy_client::span;
 
 use std::cell::{Cell, RefCell};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::fmt;
 use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut};
+use std::pin::Pin;
 use std::rc::Rc;
-use std::sync::Arc;
+use std::sync::atomic::{AtomicIsize, Ordering};
+use std::sync::{Arc, Mutex};
+use std::task::{Poll, Waker};
 
 // Thread-local counter to track adapter call depth.
 // Used to avoid recording/replaying nested adapter calls (e.g., truncate_relation calling execute).
@@ -71,6 +75,29 @@ thread_local! {
     static CONNECTION: pri::TlsConnectionContainer = pri::TlsConnectionContainer::new();
 }
 
+/// Global atomic counting active/borrowed connections.
+static ACTIVE_CONNECTIONS: AtomicIsize = AtomicIsize::new(0);
+/// Wakers registered by [`ConnectionBackpressure`] futures waiting for capacity.
+static BACKPRESSURE_WAKERS: Mutex<VecDeque<Waker>> = Mutex::new(VecDeque::new());
+
+fn will_activate_connection() {
+    ACTIVE_CONNECTIONS.fetch_add(1, Ordering::AcqRel);
+}
+
+fn did_deactivate_connection() {
+    let prev = ACTIVE_CONNECTIONS.fetch_sub(1, Ordering::AcqRel);
+    debug_assert!(prev > 0, "ACTIVE_CONNECTIONS counter underflow");
+    // Wake one waiter — the freed slot can only be used by one task.
+    // If that task finds capacity is gone, it re-registers on its next poll.
+    if let Some(waker) = BACKPRESSURE_WAKERS.lock().unwrap().pop_front() {
+        waker.wake();
+    }
+}
+
+fn num_active_connections() -> isize {
+    ACTIVE_CONNECTIONS.load(Ordering::Acquire)
+}
+
 /// A connection wrapper that automatically returns the connection to the thread local when dropped.
 /// This ensures that for a single thread, a connection is reused across multiple operations.
 ///
@@ -87,8 +114,10 @@ pub struct ConnectionGuard<'a> {
     stash_on_drop: bool,
     _phantom: PhantomData<&'a ()>,
 }
+
 impl ConnectionGuard<'_> {
     fn new(conn: Box<dyn Connection>, stash_on_drop: bool) -> Self {
+        will_activate_connection();
         Self {
             conn: Some(conn),
             stash_on_drop,
@@ -117,6 +146,79 @@ impl Drop for ConnectionGuard<'_> {
         }
         let conn = self.conn.take();
         CONNECTION.with(|c| c.replace(conn));
+        did_deactivate_connection();
+    }
+}
+
+/// [Future] that stays in [Pending](Poll::Pending) mode until DB connection capacity is available.
+///
+/// This follows Rust's [Future] polling pattern:
+/// - check capacity
+/// - register wakeup
+/// - return pending until notified
+///
+/// This is intentionally a soft controller: delays scheduling based on current load.
+/// Bursts can still overshoot the configured threshold.
+pub struct ConnectionBackpressure {
+    max_water_mark: Option<usize>,
+}
+
+impl ConnectionBackpressure {
+    pub fn new(max_water_mark: Option<usize>) -> Self {
+        Self { max_water_mark }
+    }
+
+    pub fn from_config(adapter_type: AdapterType, max_threads: Option<usize>) -> Self {
+        use AdapterType::*;
+        let max_water_mark = match (adapter_type, max_threads) {
+            (Redshift, _) => max_threads,
+            // no backpressure for non-Redshift adapters for now, but this can be extended in the future
+            (_, _) => None,
+        };
+        Self::new(max_water_mark)
+    }
+}
+
+impl Future for ConnectionBackpressure {
+    type Output = NextBackpressureWakerGuard;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
+        let max_water_mark = match self.max_water_mark {
+            // No max water mark means no backpressure, so we can immediately return ready.
+            None => return Poll::Ready(NextBackpressureWakerGuard),
+            Some(max_water_mark) => max_water_mark.min(isize::MAX as usize) as isize,
+        };
+
+        if num_active_connections() < max_water_mark {
+            return Poll::Ready(NextBackpressureWakerGuard);
+        }
+
+        // Register the waker BEFORE checking the condition again to avoid a race where
+        // a connection is released between the check and the registration (which would
+        // cause us to miss the wake-up and sleep forever).
+        let mut wakers = BACKPRESSURE_WAKERS.lock().unwrap();
+        wakers.push_back(cx.waker().clone());
+
+        if num_active_connections() < max_water_mark {
+            Poll::Ready(NextBackpressureWakerGuard)
+        } else {
+            Poll::Pending
+        }
+    }
+}
+
+/// Guard returned by [`ConnectionBackpressure`] that ensures the notification chain
+/// is never broken. When dropped, it wakes the next waiter so that tasks which
+/// complete without ever acquiring a connection don't stall the queue.
+///
+/// https://en.wikipedia.org/wiki/Semaphore_(programming)#Passing_the_baton_pattern
+pub struct NextBackpressureWakerGuard;
+
+impl Drop for NextBackpressureWakerGuard {
+    fn drop(&mut self) {
+        if let Some(waker) = BACKPRESSURE_WAKERS.lock().unwrap().pop_front() {
+            waker.wake();
+        }
     }
 }
 
