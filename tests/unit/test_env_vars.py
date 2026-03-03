@@ -45,5 +45,5 @@ def test_engine_env_vars_with_old_names_has_not_increased():
     # In the case of (2), we should increase the number here.
     # In the case of (3), we should decrease the number here.
     assert (
-        engine_env_vars_with_old_names == 65
+        engine_env_vars_with_old_names == 66
     ), "We've added a new engine env var _without_ using the new naming scheme"
