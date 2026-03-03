@@ -160,7 +160,9 @@ impl Display for PackageVersion {
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 pub struct DbtPackagesLock {
+    #[serde(default)]
     pub packages: Vec<DbtPackageLock>,
+    #[serde(default)]
     pub sha1_hash: String,
 }
 
@@ -366,4 +368,24 @@ pub struct DeprecatedTarballPackageLock {
     pub tarball: String,
     #[serde(default, skip_serializing)]
     pub __unrendered__: HashMap<String, YmlValue>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_empty_packages_lock_deserializes() {
+        // Empty string (empty file)
+        let result: DbtPackagesLock = dbt_yaml::from_str("").unwrap();
+        assert!(result.packages.is_empty());
+        assert!(result.sha1_hash.is_empty());
+
+        // Fully commented-out content
+        let commented =
+            "# packages:\n#   - package: foo/bar\n#     version: 1.0.0\n# sha1_hash: abc123\n";
+        let result: DbtPackagesLock = dbt_yaml::from_str(commented).unwrap();
+        assert!(result.packages.is_empty());
+        assert!(result.sha1_hash.is_empty());
+    }
 }
