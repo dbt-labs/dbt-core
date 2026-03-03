@@ -383,7 +383,8 @@ class TestSemanticManifestUnaffectedByCacheConfig(BaseConfigProject):
         assert isinstance(result.result, Manifest)
 
         saved_query = result.result.saved_queries["saved_query.test.test_saved_query"]
-        assert saved_query.config.cache.enabled is False
+        baseline_cache_enabled = saved_query.config.cache.enabled
+        assert baseline_cache_enabled is False
 
         # Build semantic manifest and capture the saved query representation
         sm = SemanticManifest(result.result)
@@ -414,5 +415,7 @@ class TestSemanticManifestUnaffectedByCacheConfig(BaseConfigProject):
         assert len(pydantic_sm.saved_queries) == 1
         cache_enabled_sq_dict = pydantic_sm.saved_queries[0].dict()
 
-        # The semantic manifest output should be identical regardless of cache config
+        # Sanity: the Manifest *did* change (cache flipped False → True) ...
+        assert saved_query.config.cache.enabled is not baseline_cache_enabled
+        # ... but the semantic manifest output is identical regardless
         assert baseline_sq_dict == cache_enabled_sq_dict
