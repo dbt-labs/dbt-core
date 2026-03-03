@@ -291,6 +291,7 @@ class FreshnessTask(RunTask):
         errors, warnings = [], []
         
         for result in results:
+            # freshness tasks use FreshnessStatus (Error/RuntimeErr/Warn/Pass) and not RunStatus
             if result.status in (FreshnessStatus.Error, FreshnessStatus.RuntimeErr):
                 errors.append(result)
             elif result.status == FreshnessStatus.Warn:
