@@ -93,3 +93,19 @@ jobs:
             echo "No .test_durations file generated"
             exit 1
           fi
+
+  slack-notification:
+    runs-on: ubuntu-latest
+    needs: [generate-durations]
+    steps:
+      - name: "Post Slack Notification"
+        uses: ravsamhq/notify-slack-action@be814b201e233b2dc673608aa46e5447c8ab13f2 # ravsamhq/notify-slack-action@v2
+        with:
+          status: ${{ job.status}}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          notification_title: "Update Test Durations Failed"
+          message_format: "{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}@{branch}> on <{commit_url}|{commit_sha}>"
+          footer: "<{run_url}|View Run>"
+          notify_when: "failure"
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_DEV_CORE_ALERTS }}
