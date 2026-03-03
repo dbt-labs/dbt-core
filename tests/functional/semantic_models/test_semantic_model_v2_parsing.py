@@ -13,6 +13,8 @@ from dbt_semantic_interfaces.type_enums import (
 from tests.functional.assertions.test_runner import dbtTestRunner
 from tests.functional.semantic_models.fixtures import (
     base_schema_yml_v2,
+    base_schema_yml_v2_with_custom_sm_name,
+    derived_semantics_with_doc_jinja_yml,
     derived_semantics_yml,
     fct_revenue_sql,
     metricflow_time_spine_sql,
@@ -615,6 +617,29 @@ class TestConversionMetricNoBaseMetricFails:
         assert "base_metric is required for conversion metrics." in str(result.exception)
 
 
+class TestDerivedSemanticsWithDocJinjaParsingWorks:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": semantic_model_schema_yml_v2 + derived_semantics_with_doc_jinja_yml,
+            "fct_revenue.sql": fct_revenue_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "docs.md": semantic_model_descriptions,
+        }
+
+    def test_derived_semantics_doc_jinja_parsing(self, project) -> None:
+        runner = dbtTestRunner()
+        result = runner.invoke(["parse"])
+        assert result.success
+        manifest = result.result
+        assert len(manifest.semantic_models) == 1
+        semantic_model = manifest.semantic_models["semantic_model.test.fct_revenue"]
+        entities = {entity.name: entity for entity in semantic_model.entities}
+        assert entities["derived_id_entity"].description == "qux"
+        dimensions = {dimension.name: dimension for dimension in semantic_model.dimensions}
+        assert dimensions["derived_id_dimension"].description == "bar"
+
+
 class TestDerivedSemanticsParsingWorks:
     @pytest.fixture(scope="class")
     def models(self):
@@ -840,6 +865,122 @@ class TestRatioMetricWithNumeratorFilterDimensionJinja:
         # The numerator filter should preserve the Dimension jinja template
         assert "{{ Dimension('id_entity__id_dim') }} > 0" in (
             metric.type_params.numerator.filter.where_filters[0].where_sql_template
+        )
+
+
+class TestMetricOnModelWithCustomSemanticModelName:
+    """Test that metrics correctly reference the custom semantic model name when
+    semantic_model.name is set, rather than using the dbt model name."""
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": base_schema_yml_v2_with_custom_sm_name
+            + schema_yml_v2_simple_metric_on_model_1,
+            "fct_revenue.sql": fct_revenue_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+        }
+
+    def test_metrics_use_custom_semantic_model_name(self, project):
+        runner = dbtTestRunner()
+        result = runner.invoke(["parse"])
+        assert result.success
+        manifest = result.result
+
+        # Semantic model should be registered under the custom name
+        assert "semantic_model.test.custom_semantic_model" in manifest.semantic_models
+        semantic_model = manifest.semantic_models["semantic_model.test.custom_semantic_model"]
+        assert semantic_model.name == "custom_semantic_model"
+        # But it still points to the fct_revenue model
+        assert semantic_model.node_relation.alias == "fct_revenue"
+
+        # Simple metrics should reference the custom semantic model name
+        simple_metric = manifest.metrics["metric.test.simple_metric"]
+        assert (
+            simple_metric.type_params.metric_aggregation_params.semantic_model
+            == "custom_semantic_model"
+        )
+        assert "semantic_model.test.custom_semantic_model" in simple_metric.depends_on.nodes
+
+        simple_metric_2 = manifest.metrics["metric.test.simple_metric_2"]
+        assert (
+            simple_metric_2.type_params.metric_aggregation_params.semantic_model
+            == "custom_semantic_model"
+        )
+        assert "semantic_model.test.custom_semantic_model" in simple_metric_2.depends_on.nodes
+
+        # Conversion metric should pass validation (it references simple metrics
+        # which are linked to the custom-named semantic model)
+        conversion_metric = manifest.metrics["metric.test.conversion_metric"]
+        assert conversion_metric.type == MetricType.CONVERSION
+        assert (
+            conversion_metric.type_params.conversion_type_params.base_metric.name
+            == "simple_metric"
+        )
+        assert (
+            conversion_metric.type_params.conversion_type_params.conversion_metric.name
+            == "simple_metric_2"
+        )
+
+        # Verify semantic manifest validation also passes
+        semantic_manifest = SemanticManifest(manifest)
+        semantic_manifest_metrics = {
+            metric.name: metric
+            for metric in semantic_manifest._get_pydantic_semantic_manifest().metrics
+        }
+        assert (
+            semantic_manifest_metrics[
+                "simple_metric"
+            ].type_params.metric_aggregation_params.semantic_model
+            == "custom_semantic_model"
+        )
+
+
+class TestMetricOnModelWithoutCustomSemanticModelName:
+    """Test that metrics correctly use the dbt model name as the semantic model name
+    when no custom semantic_model.name is set (semantic_model: true)."""
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": base_schema_yml_v2 + schema_yml_v2_simple_metric_on_model_1,
+            "fct_revenue.sql": fct_revenue_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+        }
+
+    def test_metrics_use_model_name_as_semantic_model_name(self, project):
+        runner = dbtTestRunner()
+        result = runner.invoke(["parse"])
+        assert result.success
+        manifest = result.result
+
+        # Semantic model should be registered under the model name
+        assert "semantic_model.test.fct_revenue" in manifest.semantic_models
+
+        # Simple metrics should reference the model name
+        simple_metric = manifest.metrics["metric.test.simple_metric"]
+        assert simple_metric.type_params.metric_aggregation_params.semantic_model == "fct_revenue"
+        assert "semantic_model.test.fct_revenue" in simple_metric.depends_on.nodes
+
+        # Conversion metric should pass validation
+        conversion_metric = manifest.metrics["metric.test.conversion_metric"]
+        assert conversion_metric.type == MetricType.CONVERSION
+        assert (
+            conversion_metric.type_params.conversion_type_params.base_metric.name
+            == "simple_metric"
+        )
+
+        # Verify semantic manifest validation also passes
+        semantic_manifest = SemanticManifest(manifest)
+        semantic_manifest_metrics = {
+            metric.name: metric
+            for metric in semantic_manifest._get_pydantic_semantic_manifest().metrics
+        }
+        assert (
+            semantic_manifest_metrics[
+                "simple_metric"
+            ].type_params.metric_aggregation_params.semantic_model
+            == "fct_revenue"
         )
 
 

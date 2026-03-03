@@ -18,7 +18,7 @@ rm -rf "$DBT_PATH"/core/build
 mkdir -p "$DBT_PATH"/dist
 
 cd "$DBT_PATH"/core
-$PYTHON_BIN -m pip install --upgrade hatch
+$PYTHON_BIN -m pip install --upgrade "virtualenv<20.26" hatch
 hatch build --clean
 
 # Move built distributions to top-level dist/
