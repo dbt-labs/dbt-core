@@ -362,13 +362,14 @@ jobs:
           python -m pip install --upgrade twine check-wheel-contents
           python -m pip --version
 
-      - name: Build distributions
-        run: ./scripts/build-dist.sh
+      - name: "Build Distributions"
+        working-directory: core
+        run: hatch build
 
-      - name: Show distributions
+      - name: "Show Distributions"
+        working-directory: core
         run: ls -lh dist/
 
-      - name: Check distribution descriptions
-        run: |
-          cd core
-          hatch -v run build:check-all
+      - name: "Check and Verify Distributions"
+        working-directory: core
+        run: hatch -v run build:check-all
