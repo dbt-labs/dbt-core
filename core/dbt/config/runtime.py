@@ -24,7 +24,11 @@ from dbt.adapters.contracts.connection import (
 from dbt.adapters.contracts.relation import ComponentName
 from dbt.adapters.factory import get_include_paths, get_relation_class_by_name
 from dbt.artifacts.resources import Quoting
-from dbt.config.project import load_package_lock_config, load_raw_project
+from dbt.config.project import (
+    load_package_lock_config,
+    load_raw_project,
+    vars_data_from_root,
+)
 from dbt.contracts.graph.manifest import ManifestMetadata
 from dbt.contracts.project import Configuration
 from dbt.events.types import UnusedResourceConfigPath
@@ -54,10 +58,24 @@ def load_project(
     validate: bool = False,
     require_vars: bool = True,
 ) -> Project:
-    # get the project with all of the provided information
-    project_renderer = DbtProjectYamlRenderer(profile, cli_vars, require_vars=require_vars)
+
+    if cli_vars is None:
+        cli_vars = {}
+
+    # Load vars.yml first (before rendering dbt_project.yml)
+    vars_from_file = vars_data_from_root(project_root)
+
+    # Merge: CLI vars take precedence over file vars
+    merged_vars = {**vars_from_file, **cli_vars}
+
+    # Renderer receives merged vars for Jinja in dbt_project.yml
+    project_renderer = DbtProjectYamlRenderer(profile, merged_vars, require_vars=require_vars)
     project = Project.from_project_root(
-        project_root, project_renderer, verify_version=version_check, validate=validate
+        project_root,
+        project_renderer,
+        verify_version=version_check,
+        validate=validate,
+        vars_from_file=vars_from_file,
     )
 
     # Save env_vars encountered in rendering for partial parsing
@@ -199,6 +217,7 @@ class RuntimeConfig(Project, Profile, AdapterRequiredConfig):
             dependencies=dependencies,
             dbt_cloud=project.dbt_cloud,
             flags=project.flags,
+            vars_from_file=project.vars_from_file,
         )
 
     # Called by 'load_projects' in this class

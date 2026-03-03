@@ -191,7 +191,7 @@ def project_config_update():
 # Combines the project_config_update dictionary with project_config defaults to
 # produce a project_yml config and write it out as dbt_project.yml
 @pytest.fixture(scope="class")
-def dbt_project_yml(project_root, project_config_update):
+def dbt_project_yml(project_root, project_config_update, vars_yml):
     project_config = {
         "name": "test",
         "profile": "test",
@@ -257,6 +257,23 @@ def selectors_yml(project_root, selectors):
         else:
             data = yaml.safe_dump(selectors)
         write_file(data, project_root, "selectors.yml")
+
+
+# Fixture to provide vars as either yaml or dictionary
+@pytest.fixture(scope="class")
+def vars_yml_update():
+    return {}
+
+
+# Write out the vars.yml file
+@pytest.fixture(scope="class")
+def vars_yml(project_root, vars_yml_update):
+    if vars_yml_update:
+        if isinstance(vars_yml_update, str):
+            data = vars_yml_update
+        else:
+            data = yaml.safe_dump(vars_yml_update)
+        write_file(data, project_root, "vars.yml")
 
 
 # This fixture ensures that the logging infrastructure does not accidentally
@@ -407,6 +424,7 @@ def project_files(
     selectors_yml,
     dependencies_yml,
     packages_yml,
+    vars_yml,
     dbt_project_yml,
 ):
     write_project_files(project_root, "models", {**models, **properties})

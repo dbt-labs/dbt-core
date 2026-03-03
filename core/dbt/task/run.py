@@ -727,12 +727,18 @@ class MicrobatchModelRunner(ModelRunner):
             event_time_start = self.config.args.sample.start
             event_time_end = self.config.args.sample.end
 
+        # During retry, use the original invocation time so that the same
+        # batches are recomputed rather than batches relative to "now".
+        default_end_time = (
+            self.parent_task.original_invocation_started_at or get_invocation_started_at()
+        )
+
         return MicrobatchBuilder(
             model=model,
             is_incremental=self._is_incremental(model),
             event_time_start=event_time_start,
             event_time_end=event_time_end,
-            default_end_time=get_invocation_started_at(),
+            default_end_time=default_end_time,
         )
 
     def get_batches(self, model: ModelNode) -> Dict[int, BatchType]:
@@ -846,6 +852,7 @@ class RunTask(CompileTask):
     ) -> None:
         super().__init__(args, config, manifest)
         self.batch_map = batch_map
+        self.original_invocation_started_at: Optional[datetime] = None
 
     def raise_on_first_error(self) -> bool:
         return False

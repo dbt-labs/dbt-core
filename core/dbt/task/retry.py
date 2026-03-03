@@ -171,8 +171,12 @@ class RetryTask(ConfiguredTask):
             self.manifest,
         )
 
-        if self.task_class == RunTask:
+        if self.task_class == RunTask or self.task_class == BuildTask:
             task.batch_map = batch_map
+            task.original_invocation_started_at = (
+                self.previous_results.metadata.invocation_started_at
+                or self.previous_results.metadata.generated_at
+            )
 
         return_value = task.run()
         return return_value

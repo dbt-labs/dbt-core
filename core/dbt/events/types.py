@@ -1,4 +1,5 @@
 import json
+import os
 from typing import List
 
 from dbt.constants import MAXIMUM_SEED_SIZE_NAME, PIN_PACKAGE_URL
@@ -171,8 +172,7 @@ class ProfileWrittenWithTargetTemplateYAML(InfoLevel):
     def message(self) -> str:
         return (
             f"Profile {self.name} written to {self.path} using target's "
-            "profile_template.yml and your supplied values. Run 'dbt debug' to "
-            "validate the connection."
+            "profile_template.yml and your supplied values."
         )
 
 
@@ -183,8 +183,7 @@ class ProfileWrittenWithProjectTemplateYAML(InfoLevel):
     def message(self) -> str:
         return (
             f"Profile {self.name} written to {self.path} using project's "
-            "profile_template.yml and your supplied values. Run 'dbt debug' to "
-            "validate the connection."
+            "profile_template.yml and your supplied values."
         )
 
 
@@ -217,8 +216,8 @@ class ProjectCreated(InfoLevel):
         return "A026"
 
     def message(self) -> str:
-        return f"""
-Your new dbt project "{self.project_name}" was created!
+        return f"""Your new dbt project "{self.project_name}" was created!
+Initialized new project in {os.path.abspath(self.project_name)}
 
 For more information on how to configure the profiles.yml file,
 please consult the dbt documentation here:

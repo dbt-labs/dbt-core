@@ -473,6 +473,7 @@ def deps(ctx, **kwargs):
 @p.profiles_dir_exists_false
 @p.project_dir
 @p.skip_profile_setup
+@p.skip_debug
 @p.vars
 @requires.postflight
 @requires.preflight
