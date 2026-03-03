@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix TimingInfoCollected event (Z010) never fired in compile_and_execute
+time: 2026-03-03T10:14:30.8243287Z
+custom:
+    Author: kalluripradeep
+    Issue: "12581"
