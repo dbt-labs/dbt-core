@@ -1175,6 +1175,7 @@ class RunTask(CompileTask):
             manifest=self.manifest,
             previous_state=self.previous_state,
             resource_types=[NodeType.Model],
+            selectors=self.config.selectors,
         )
 
     def get_runner_type(self, node) -> Optional[Type[BaseRunner]]:
