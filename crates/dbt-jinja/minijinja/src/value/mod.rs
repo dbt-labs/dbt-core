@@ -542,8 +542,6 @@ impl PartialEq for Value {
     fn eq(&self, other: &Self) -> bool {
         match (&self.0, &other.0) {
             (ValueRepr::None, ValueRepr::None) => true,
-            (ValueRepr::None, ValueRepr::Undefined) => true,
-            (ValueRepr::Undefined, ValueRepr::None) => true,
             (ValueRepr::Undefined, ValueRepr::Undefined) => true,
             (ValueRepr::String(ref a, _), ValueRepr::String(ref b, _)) => a == b,
             (ValueRepr::SmallStr(a), ValueRepr::SmallStr(b)) => a.as_str() == b.as_str(),

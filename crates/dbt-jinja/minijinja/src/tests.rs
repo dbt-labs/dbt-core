@@ -272,8 +272,11 @@ mod builtins {
     /// {{ 41 is odd }} -> true
     /// ```
     #[cfg_attr(docsrs, doc(cfg(feature = "builtins")))]
-    pub fn is_odd(v: Value) -> bool {
-        i128::try_from(v).ok().is_some_and(|x| x % 2 != 0)
+    pub fn is_odd(v: Value) -> Result<bool, Error> {
+        if v.is_undefined() {
+            return Err(Error::from(ErrorKind::UndefinedError));
+        }
+        Ok(i128::try_from(v).ok().is_some_and(|x| x % 2 != 0))
     }
 
     /// Checks if a value is even.
@@ -282,8 +285,11 @@ mod builtins {
     /// {{ 42 is even }} -> true
     /// ```
     #[cfg_attr(docsrs, doc(cfg(feature = "builtins")))]
-    pub fn is_even(v: Value) -> bool {
-        i128::try_from(v).ok().is_some_and(|x| x % 2 == 0)
+    pub fn is_even(v: Value) -> Result<bool, Error> {
+        if v.is_undefined() {
+            return Err(Error::from(ErrorKind::UndefinedError));
+        }
+        Ok(i128::try_from(v).ok().is_some_and(|x| x % 2 == 0))
     }
 
     /// Return true if the value is divisible by another one.
@@ -292,11 +298,14 @@ mod builtins {
     /// {{ 42 is divisibleby(2) }} -> true
     /// ```
     #[cfg_attr(docsrs, doc(cfg(feature = "builtins")))]
-    pub fn is_divisibleby(v: &Value, other: &Value) -> bool {
+    pub fn is_divisibleby(v: &Value, other: &Value) -> Result<bool, Error> {
+        if v.is_undefined() || other.is_undefined() {
+            return Err(Error::from(ErrorKind::UndefinedError));
+        }
         match coerce(v, other, false) {
-            Some(CoerceResult::I128(a, b)) => (a % b) == 0,
-            Some(CoerceResult::F64(a, b)) => (a % b) == 0.0,
-            _ => false,
+            Some(CoerceResult::I128(a, b)) => Ok((a % b) == 0),
+            Some(CoerceResult::F64(a, b)) => Ok((a % b) == 0.0),
+            _ => Ok(false),
         }
     }
 
@@ -352,7 +361,9 @@ mod builtins {
     /// ```
     #[cfg_attr(docsrs, doc(cfg(feature = "builtins")))]
     pub fn is_sequence(v: &Value) -> bool {
-        matches!(v.kind(), ValueKind::Seq)
+        // https://github.com/pallets/jinja/blob/5ef70112a1ff19c05324ff889dd30405b1002044/src/jinja2/runtime.py#L878
+        // Since `__getitem__` is technically implemented, {{ undefined is sequence }} is true.
+        matches!(v.kind(), ValueKind::Seq | ValueKind::Undefined)
     }
 
     /// Checks if this value can be iterated over.
@@ -446,8 +457,11 @@ mod builtins {
     /// By default aliased to `lessthan` and `<`.
     #[cfg_attr(docsrs, doc(cfg(feature = "builtins")))]
     #[cfg(feature = "builtins")]
-    pub fn is_lt(value: &Value, other: &Value) -> bool {
-        *value < *other
+    pub fn is_lt(value: &Value, other: &Value) -> Result<bool, Error> {
+        if value.is_undefined() || other.is_undefined() {
+            return Err(Error::from(ErrorKind::UndefinedError));
+        }
+        Ok(*value < *other)
     }
 
     /// Test version of `<=`.
@@ -462,8 +476,11 @@ mod builtins {
     /// By default aliased to `<=`.
     #[cfg_attr(docsrs, doc(cfg(feature = "builtins")))]
     #[cfg(feature = "builtins")]
-    pub fn is_le(value: &Value, other: &Value) -> bool {
-        *value <= *other
+    pub fn is_le(value: &Value, other: &Value) -> Result<bool, Error> {
+        if value.is_undefined() || other.is_undefined() {
+            return Err(Error::from(ErrorKind::UndefinedError));
+        }
+        Ok(*value <= *other)
     }
 
     /// Test version of `>`.
@@ -478,8 +495,11 @@ mod builtins {
     /// By default aliased to `greaterthan` and `>`.
     #[cfg_attr(docsrs, doc(cfg(feature = "builtins")))]
     #[cfg(feature = "builtins")]
-    pub fn is_gt(value: &Value, other: &Value) -> bool {
-        *value > *other
+    pub fn is_gt(value: &Value, other: &Value) -> Result<bool, Error> {
+        if value.is_undefined() || other.is_undefined() {
+            return Err(Error::from(ErrorKind::UndefinedError));
+        }
+        Ok(*value > *other)
     }
 
     /// Test version of `>=`.
@@ -494,8 +514,11 @@ mod builtins {
     /// By default aliased to `>=`.
     #[cfg_attr(docsrs, doc(cfg(feature = "builtins")))]
     #[cfg(feature = "builtins")]
-    pub fn is_ge(value: &Value, other: &Value) -> bool {
-        *value >= *other
+    pub fn is_ge(value: &Value, other: &Value) -> Result<bool, Error> {
+        if value.is_undefined() || other.is_undefined() {
+            return Err(Error::from(ErrorKind::UndefinedError));
+        }
+        Ok(*value >= *other)
     }
 
     /// Test version of `in`.

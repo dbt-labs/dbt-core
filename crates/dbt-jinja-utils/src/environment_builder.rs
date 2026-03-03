@@ -568,8 +568,11 @@ impl JinjaEnvBuilder {
     }
 
     fn register_tests(&mut self) {
-        self.env
-            .add_test("callable", |value: Value| value.as_object().is_some());
+        // https://github.com/pallets/jinja/blob/5ef70112a1ff19c05324ff889dd30405b1002044/src/jinja2/runtime.py#L878
+        // Since `__call__` is technically implemented, {{ undefined is callable }} is true.
+        self.env.add_test("callable", |value: Value| {
+            value.is_undefined() || value.as_object().is_some()
+        });
     }
 }
 
