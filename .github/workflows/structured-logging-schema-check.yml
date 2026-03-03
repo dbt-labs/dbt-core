@@ -24,6 +24,13 @@ permissions: read-all
 env:
   # number of parallel processes to spawn for python testing
   PYTHON_INTEGRATION_TEST_WORKERS: 15
+  # pytest-split algorithm: we use 'least_duration' instead of the default 'duration_based_chunks'
+  # because duration_based_chunks maintains alphabetical order and can create very uneven test
+  # counts per group (e.g., 294 tests in group 1 vs 90 in others). Even with equal total duration,
+  # more tests means more per-test overhead (fixture setup/teardown, DB connections, temp files)
+  # which causes timeouts. least_duration distributes tests evenly across groups by count while
+  # still balancing duration, avoiding the overhead problem.
+  PYTEST_SPLIT_ALGORITHM: least_duration
 
 jobs:
   integration-metadata:
@@ -121,7 +128,7 @@ jobs:
           max_attempts: 3
           command: cd core && hatch -v run ci:integration-tests -- -nauto
         env:
-          PYTEST_ADDOPTS: ${{ format('--durations-path .test_durations --splits {0} --group {1}', env.PYTHON_INTEGRATION_TEST_WORKERS, matrix.split-group) }}
+          PYTEST_ADDOPTS: ${{ format('--durations-path .test_durations --splitting-algorithm {0} --splits {1} --group {2}', env.PYTEST_SPLIT_ALGORITHM, env.PYTHON_INTEGRATION_TEST_WORKERS, matrix.split-group) }}
 
   test-schema-report:
     name: Log Schema Test Suite
