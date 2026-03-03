@@ -27,7 +27,7 @@ jobs:
     name: "Generate Test Durations"
 
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 360
 
     env:
       DBT_INVOCATION_ENV: github-actions
@@ -77,7 +77,7 @@ jobs:
         run: |
           cd core
           git add .test_durations
-          hatch run pre-commit run end-of-file-fixer --files .test_durations
+          hatch run pre-commit run end-of-file-fixer --files .test_durations || true
 
       - name: "Commit updated durations file"
         run: |
