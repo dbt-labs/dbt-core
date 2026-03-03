@@ -27,7 +27,7 @@ jobs:
     name: "Generate Test Durations"
 
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 360
 
     env:
       DBT_INVOCATION_ENV: github-actions
