@@ -70,11 +70,16 @@ fn metadata_args_match(recorded: &MetadataCallArgs, actual: &MetadataCallArgs) -
                 ..
             },
         ) => {
-            // Check that every relation in actual is present in recorded (superset check)
-            let recorded_set: std::collections::HashSet<_> = recorded_relations.iter().collect();
+            // Case-insensitive superset check: semantic_fqn strings may differ
+            // only in casing due to identifier normalization (e.g. Snowflake
+            // uppercasing unquoted identifiers), so we compare uppercased forms.
+            let recorded_set: std::collections::HashSet<String> = recorded_relations
+                .iter()
+                .map(|r| r.to_ascii_uppercase())
+                .collect();
             actual_relations
                 .iter()
-                .all(|rel| recorded_set.contains(rel))
+                .all(|rel| recorded_set.contains(&rel.to_ascii_uppercase()))
         }
         // For other types, use exact value matching
         _ => {
@@ -1922,5 +1927,45 @@ mod tests {
         // Should have SAO event for skipped node
         assert!(recording.events_for_node("model.test.skipped").is_none());
         assert!(recording.has_sao_event("model.test.skipped"));
+    }
+
+    #[test]
+    fn test_metadata_args_match_list_relations_case_insensitive() {
+        let recorded = MetadataCallArgs::ListRelationsSchemas {
+            unique_id: Some("model.proj.my_model".to_string()),
+            phase: Some("analyze".to_string()),
+            relations: vec![
+                "\"my_database\".\"public\".\"TABLE_A\"".to_string(),
+                "\"my_database\".\"public\".\"TABLE_B\"".to_string(),
+            ],
+        };
+
+        let actual = MetadataCallArgs::ListRelationsSchemas {
+            unique_id: Some("model.proj.my_model".to_string()),
+            phase: Some("analyze".to_string()),
+            relations: vec!["\"MY_DATABASE\".\"PUBLIC\".\"TABLE_A\"".to_string()],
+        };
+
+        assert!(
+            metadata_args_match(&recorded, &actual),
+            "should match relations with different identifier casing"
+        );
+
+        let actual_exact = MetadataCallArgs::ListRelationsSchemas {
+            unique_id: None,
+            phase: None,
+            relations: vec!["\"my_database\".\"public\".\"TABLE_A\"".to_string()],
+        };
+        assert!(metadata_args_match(&recorded, &actual_exact));
+
+        let actual_missing = MetadataCallArgs::ListRelationsSchemas {
+            unique_id: None,
+            phase: None,
+            relations: vec!["\"MY_DATABASE\".\"PUBLIC\".\"TABLE_C\"".to_string()],
+        };
+        assert!(
+            !metadata_args_match(&recorded, &actual_missing),
+            "should not match a relation that was never recorded"
+        );
     }
 }
