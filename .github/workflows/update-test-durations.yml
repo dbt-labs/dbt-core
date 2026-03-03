@@ -52,8 +52,6 @@ jobs:
     steps:
       - name: "Check out the repository"
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
-        with:
-          ref: main
 
       - name: "Set up Python 3.11"
         uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # actions/setup-python@v6
