@@ -382,11 +382,11 @@ macro_debugging = _create_option_and_track_env_var(
 
 sqlparse_options = _create_option_and_track_env_var(
     "--sqlparse",
-    envvar="DBT_SQLPARSE",
+    envvar="DBT_ENGINE_SQLPARSE",
     hidden=True,
-    help="Set sqlparse options as YAML.",
+    help="Set sqlparse options MAX_GROUPING_DEPTH and MAX_GROUPING_TOKENS as YAML.",
     type=SqlParseOptionsType(),
-    default=None,
+    default='{"MAX_GROUPING_DEPTH": null, "MAX_GROUPING_TOKENS": null}',
     is_eager=True,
 )
 

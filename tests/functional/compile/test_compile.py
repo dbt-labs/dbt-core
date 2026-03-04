@@ -3,6 +3,7 @@ import pathlib
 import re
 
 import pytest
+import sqlparse
 
 from dbt.tests.util import read_file, run_dbt, run_dbt_and_capture
 from dbt_common.exceptions import DbtBaseException as DbtException
@@ -304,6 +305,7 @@ class TestSqlParseGroupingTokenLimit:
     def test_sqlparse_grouping_token_limit(self, project):
         # No flag: compile succeeds (default is no limit)
         run_dbt(["compile"])
+        assert sqlparse.engine.grouping.MAX_GROUPING_TOKENS is None
 
         # Flag set to 0: compile fails because token limit is exceeded
         with pytest.raises(DbtRuntimeError, match="You may raise the limit via --sqlparse"):
@@ -326,6 +328,7 @@ class TestSqlParseGroupingDepthLimit:
     def test_sqlparse_grouping_depth_limit(self, project):
         # No flag: compile succeeds (default is no limit)
         run_dbt(["compile"])
+        assert sqlparse.engine.grouping.MAX_GROUPING_DEPTH is None
 
         # Flag set to 0: compile fails because depth limit is exceeded
         with pytest.raises(DbtRuntimeError, match="You may raise the limit via --sqlparse"):

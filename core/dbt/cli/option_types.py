@@ -88,11 +88,14 @@ class SqlParseOptionsType(YAML):
                     param,
                     ctx,
                 )
-            try:
-                int_val = int(val)
-            except (TypeError, ValueError):
-                self.fail(f"Value for {key} must be an integer, got: {val}", param, ctx)
-            setattr(sqlparse.engine.grouping, key, int_val)
+            if val is None:
+                setattr(sqlparse.engine.grouping, key, None)
+            else:
+                try:
+                    int_val = int(val)
+                except (TypeError, ValueError):
+                    self.fail(f"Value for {key} must be an integer, got: {val}", param, ctx)
+                setattr(sqlparse.engine.grouping, key, int_val)
 
         return options
 
