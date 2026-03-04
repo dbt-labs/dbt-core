@@ -5,6 +5,9 @@ All adapter macros are currently maintained in:
 
 ## Changelog
 
+### [2026-03-04]
+  - dbt-databricks: v1.11.5 (commit 24325a3195171d36972804e545b2ccf967ab575d)
+
 ### [2024-06-10]
   - dbt-databricks: commit ed96fec25ebdcf3f434819b4f15706cebd236a78 (HEAD -> 1.9.latest, origin/1.9.latest)
 

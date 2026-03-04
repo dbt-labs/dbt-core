@@ -3,7 +3,7 @@
 //! Provides constraint types and parsing utilities for the Databricks adapter.
 //! Supports check, primary key, foreign key, and custom constraints with validation and DDL rendering.
 //!
-//! Reference: https://github.com/databricks/dbt-databricks/blob/e7099a2c75a92fa5240989b19d246a0ca8a313ef/dbt/adapters/databricks/constraints.py
+//! Reference: https://github.com/databricks/dbt-databricks/blob/24325a3195171d36972804e545b2ccf967ab575d/dbt/adapters/databricks/constraints.py
 
 use dbt_schemas::schemas::{common::ConstraintType, properties::ModelConstraint};
 use serde::{Deserialize, Serialize};
@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 /// Supports check constraints with expressions, primary/foreign key constraints with column references,
 /// and custom constraints. Each variant includes optional naming and validation logic.
 ///
-/// Reference: https://github.com/databricks/dbt-databricks/blob/e7099a2c75a92fa5240989b19d246a0ca8a313ef/dbt/adapters/databricks/constraints.py#L33-L138
+/// Reference: https://github.com/databricks/dbt-databricks/blob/24325a3195171d36972804e545b2ccf967ab575d/dbt/adapters/databricks/constraints.py#L33-L138
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum TypedConstraint {
     Check {
@@ -61,7 +61,7 @@ impl TypedConstraint {
 
     /// Validates constraint configuration and returns errors for invalid states
     ///
-    /// Reference: https://github.com/databricks/dbt-databricks/blob/e7099a2c75a92fa5240989b19d246a0ca8a313ef/dbt/adapters/databricks/constraints.py#L85-L138
+    /// Reference: https://github.com/databricks/dbt-databricks/blob/24325a3195171d36972804e545b2ccf967ab575d/dbt/adapters/databricks/constraints.py#L85-L138
     pub fn validate(&self) -> Result<(), String> {
         match self {
             TypedConstraint::Check { expression, .. } => {
@@ -110,7 +110,7 @@ impl TypedConstraint {
 
     /// Renders constraint as DDL SQL for use in CREATE/ALTER TABLE statements
     ///
-    /// Reference: https://github.com/databricks/dbt-databricks/blob/e7099a2c75a92fa5240989b19d246a0ca8a313ef/dbt/adapters/databricks/constraints.py#L47-L51
+    /// Reference: https://github.com/databricks/dbt-databricks/blob/24325a3195171d36972804e545b2ccf967ab575d/dbt/adapters/databricks/constraints.py#L47-L51
     pub fn render(&self) -> String {
         let prefix = self.render_prefix();
         let suffix = self.render_suffix();
@@ -153,13 +153,22 @@ impl TypedConstraint {
                 expression,
                 ..
             } => {
-                let mut suffix = format!("FOREIGN KEY ({})", columns.join(", "));
                 if let Some(expr) = expression {
-                    suffix.push_str(&format!(" {expr}"));
+                    if expr.trim_start().starts_with('(') {
+                        format!("FOREIGN KEY {expr}")
+                    } else {
+                        format!("FOREIGN KEY ({}) {expr}", columns.join(", "))
+                    }
                 } else if let (Some(to_table), Some(to_cols)) = (to, to_columns) {
-                    suffix.push_str(&format!(" REFERENCES {to_table} ({})", to_cols.join(", ")));
+                    format!(
+                        "FOREIGN KEY ({}) REFERENCES {} ({})",
+                        columns.join(", "),
+                        to_table,
+                        to_cols.join(", ")
+                    )
+                } else {
+                    format!("FOREIGN KEY ({})", columns.join(", "))
                 }
-                suffix
             }
             TypedConstraint::Custom { expression, .. } => expression.clone(),
         }
@@ -171,7 +180,7 @@ impl TypedConstraint {
 /// This provides the bridge between raw YAML constraint definitions and our processed constraint representation,
 /// similar to how Python's TypedConstraint.from_constraint() works.
 ///
-/// Reference: https://github.com/databricks/dbt-databricks/blob/e7099a2c75a92fa5240989b19d246a0ca8a313ef/dbt/adapters/databricks/constraints.py#L238-L243
+/// Reference: https://github.com/databricks/dbt-databricks/blob/24325a3195171d36972804e545b2ccf967ab575d/dbt/adapters/databricks/constraints.py#L238-L243
 impl TryFrom<&ModelConstraint> for TypedConstraint {
     type Error = String;
 
@@ -331,7 +340,7 @@ impl From<&TypedConstraint> for ModelConstraint {
 /// Returns a tuple of (not_null_columns, typed_constraints) parsed from both column-level
 /// and model-level constraint definitions in the dbt node.
 ///
-/// Reference: https://github.com/databricks/dbt-databricks/blob/e7099a2c75a92fa5240989b19d246a0ca8a313ef/dbt/adapters/databricks/constraints.py#L184-L190
+/// Reference: https://github.com/databricks/dbt-databricks/blob/24325a3195171d36972804e545b2ccf967ab575d/dbt/adapters/databricks/constraints.py#L184-L190
 pub fn parse_constraints(
     columns: &Vec<dbt_schemas::schemas::dbt_column::DbtColumnRef>,
     model_constraints: &[ModelConstraint],
@@ -352,7 +361,7 @@ pub fn parse_constraints(
 
 /// Processes column-level constraint definitions
 ///
-/// Reference: https://github.com/databricks/dbt-databricks/blob/e7099a2c75a92fa5240989b19d246a0ca8a313ef/dbt/adapters/databricks/constraints.py#L193-L208
+/// Reference: https://github.com/databricks/dbt-databricks/blob/24325a3195171d36972804e545b2ccf967ab575d/dbt/adapters/databricks/constraints.py#L193-L208
 pub fn parse_column_constraints(
     columns: &Vec<dbt_schemas::schemas::dbt_column::DbtColumnRef>,
 ) -> Result<(std::collections::BTreeSet<String>, Vec<TypedConstraint>), String> {
@@ -388,7 +397,7 @@ pub fn parse_column_constraints(
 
 /// Processes model-level constraint definitions
 ///
-/// Reference: https://github.com/databricks/dbt-databricks/blob/e7099a2c75a92fa5240989b19d246a0ca8a313ef/dbt/adapters/databricks/constraints.py#L211-L225
+/// Reference: https://github.com/databricks/dbt-databricks/blob/24325a3195171d36972804e545b2ccf967ab575d/dbt/adapters/databricks/constraints.py#L211-L225
 pub fn parse_model_constraints(
     model_constraints: &[ModelConstraint],
 ) -> Result<(std::collections::BTreeSet<String>, Vec<TypedConstraint>), String> {
@@ -584,6 +593,45 @@ mod tests {
             expression: None,
         };
         assert_eq!(pk.render(), "CONSTRAINT pk_users PRIMARY KEY (id)");
+
+        // Foreign key with to/to_columns
+        let fk = TypedConstraint::ForeignKey {
+            name: Some("fk_user_org".to_string()),
+            columns: vec!["org_id".to_string()],
+            to: Some("`main`.`default`.`organizations`".to_string()),
+            to_columns: Some(vec!["id".to_string()]),
+            expression: None,
+        };
+        assert_eq!(
+            fk.render(),
+            "CONSTRAINT fk_user_org FOREIGN KEY (org_id) REFERENCES `main`.`default`.`organizations` (id)"
+        );
+
+        // Foreign key with expression starting with '(' (expression includes columns)
+        let fk_expr_paren = TypedConstraint::ForeignKey {
+            name: Some("fk_test".to_string()),
+            columns: vec!["col_a".to_string()],
+            to: None,
+            to_columns: None,
+            expression: Some("(col_a) REFERENCES other_table (id)".to_string()),
+        };
+        assert_eq!(
+            fk_expr_paren.render(),
+            "CONSTRAINT fk_test FOREIGN KEY (col_a) REFERENCES other_table (id)"
+        );
+
+        // Foreign key with non-parenthesized expression
+        let fk_expr = TypedConstraint::ForeignKey {
+            name: Some("fk_inline".to_string()),
+            columns: vec!["col_b".to_string()],
+            to: None,
+            to_columns: None,
+            expression: Some("REFERENCES target_table (pk)".to_string()),
+        };
+        assert_eq!(
+            fk_expr.render(),
+            "CONSTRAINT fk_inline FOREIGN KEY (col_b) REFERENCES target_table (pk)"
+        );
 
         // Custom constraint
         let custom = TypedConstraint::Custom {
