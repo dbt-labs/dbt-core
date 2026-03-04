@@ -22,6 +22,14 @@ impl Auth for DuckDbAuth {
                 .map_err(|e| AuthError::Config(e.to_string()))?;
         }
 
+        // motherduck_token must be set at database init time (DuckDB rejects
+        // SET motherduck_token after initialization)
+        if let Some(token) = init::resolve_motherduck_token(config) {
+            builder
+                .with_named_option("motherduck_token", token)
+                .map_err(|e| AuthError::Config(e.to_string()))?;
+        }
+
         Ok(builder)
     }
 }

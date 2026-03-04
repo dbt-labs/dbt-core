@@ -228,6 +228,7 @@ impl DbConfig {
                 "settings",
                 "secrets",
                 "attach",
+                "motherduck_token",
             ],
             // TODO(serramatutu): Spark connection keys
             DbConfig::Spark(_) => &[],
@@ -359,6 +360,8 @@ impl DbConfig {
                 if let Some(path) = &config.path {
                     if path == ":memory:" {
                         "main".to_string()
+                    } else if let Some(dbname) = duckdb_motherduck_database_name(path) {
+                        dbname
                     } else {
                         // Extract file stem (e.g., "jaffle_shop.duckdb" → "jaffle_shop")
                         std::path::Path::new(path)
@@ -1332,6 +1335,28 @@ pub struct FabricTargetEnv {
     // TODO: ...
 }
 
+/// Derive a database name from a MotherDuck path (`md:` or `motherduck:` prefix).
+///
+/// Returns `None` if the path is not a MotherDuck path.
+/// `md:my_db` → `Some("my_db")`, `md:` → `Some("my_db")` (default), strips query params.
+fn duckdb_motherduck_database_name(path: &str) -> Option<String> {
+    let lower = path.to_lowercase();
+    let prefix_len = if lower.starts_with("motherduck:") {
+        "motherduck:".len()
+    } else if lower.starts_with("md:") {
+        "md:".len()
+    } else {
+        return None;
+    };
+    let stripped = &path[prefix_len..];
+    let name = stripped.split('?').next().unwrap_or("");
+    if name.is_empty() {
+        Some("my_db".to_owned())
+    } else {
+        Some(name.to_owned())
+    }
+}
+
 fn missing(field: &str) -> String {
     format!("In file `profiles.yml`, field `{field}` is required.")
 }
@@ -1554,6 +1579,8 @@ impl TryFrom<DbConfig> for TargetContext {
                         if let Some(path) = &config.path {
                             if path == ":memory:" {
                                 "main".to_string()
+                            } else if let Some(dbname) = duckdb_motherduck_database_name(path) {
+                                dbname
                             } else {
                                 std::path::Path::new(path)
                                     .file_stem()

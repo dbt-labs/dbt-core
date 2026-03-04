@@ -1700,6 +1700,38 @@ impl BaseAdapter for BridgeAdapter {
         }
     }
 
+    #[tracing::instrument(skip(self), level = "trace")]
+    fn is_motherduck(&self) -> bool {
+        match &self.inner {
+            Typed { adapter, .. } => adapter.is_motherduck(),
+            Parse(_) => false,
+        }
+    }
+
+    #[tracing::instrument(skip(self), level = "trace")]
+    fn disable_transactions(&self) -> bool {
+        match &self.inner {
+            Typed { adapter, .. } => adapter.disable_transactions(),
+            Parse(_) => false,
+        }
+    }
+
+    #[tracing::instrument(skip(self), level = "trace")]
+    fn get_temp_relation_path(
+        &self,
+        database: &str,
+        identifier: &str,
+        batch_id: &str,
+    ) -> AdapterResult<BTreeMap<String, Value>> {
+        match &self.inner {
+            Typed { adapter, .. } => adapter.get_temp_relation_path(database, identifier, batch_id),
+            Parse(_) => Err(AdapterError::new(
+                AdapterErrorKind::NotSupported,
+                "get_temp_relation_path is not available during parsing",
+            )),
+        }
+    }
+
     #[tracing::instrument(skip_all, level = "trace")]
     fn compute_external_path(
         &self,

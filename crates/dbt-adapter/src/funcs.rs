@@ -1009,25 +1009,59 @@ pub fn dispatch_adapter_calls(
             Ok(Value::from(false))
         }
         "is_motherduck" => {
-            // MotherDuck is a cloud service for DuckDB. Not supported yet, always return false.
             let iter = ArgsIter::new(name, &[], args);
             iter.finish()?;
-            Ok(Value::from(false))
+            Ok(Value::from(adapter.is_motherduck()))
         }
         "disable_transactions" => {
-            // DuckDB/MotherDuck transaction control. Not supported yet, always return false.
             let iter = ArgsIter::new(name, &[], args);
             iter.finish()?;
-            Ok(Value::from(false))
+            Ok(Value::from(adapter.disable_transactions()))
         }
         "get_temp_relation_path" => {
-            // Returns a path for temp tables on MotherDuck. Since is_motherduck() returns false,
-            // this code path should never be reached, but we stub it to avoid runtime errors.
-            let iter = ArgsIter::new(name, &["relation", "batch_id"], args);
-            let _ = iter.next_arg::<&Value>()?;
-            let _ = iter.next_arg::<&Value>()?;
+            // model: Any, batch_id: str = ""
+            let iter = ArgsIter::new(name, &["relation"], args);
+            let relation_val = iter.next_arg::<&Value>()?;
+            let batch_id = iter.next_kwarg::<Option<&str>>("batch_id")?.unwrap_or("");
             iter.finish()?;
-            Ok(Value::UNDEFINED)
+            let database = relation_val
+                .get_attr("database")
+                .ok()
+                .and_then(|v| {
+                    if v.is_undefined() || v.is_none() {
+                        None
+                    } else {
+                        v.as_str().map(|s| s.to_owned())
+                    }
+                })
+                .filter(|s| !s.is_empty())
+                .ok_or_else(|| {
+                    minijinja::Error::new(
+                        minijinja::ErrorKind::InvalidOperation,
+                        "get_temp_relation_path: relation.database is required",
+                    )
+                })?;
+            let identifier = relation_val
+                .get_attr("identifier")
+                .ok()
+                .and_then(|v| {
+                    if v.is_undefined() || v.is_none() {
+                        None
+                    } else {
+                        v.as_str().map(|s| s.to_owned())
+                    }
+                })
+                .filter(|s| !s.is_empty())
+                .ok_or_else(|| {
+                    minijinja::Error::new(
+                        minijinja::ErrorKind::InvalidOperation,
+                        "get_temp_relation_path: relation.identifier is required",
+                    )
+                })?;
+            let path = adapter
+                .get_temp_relation_path(&database, &identifier, batch_id)
+                .map_err(minijinja::Error::from)?;
+            Ok(Value::from_object(path))
         }
         "compare_dbr_version" => {
             // major: i64, minor: i64

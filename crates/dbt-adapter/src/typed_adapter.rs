@@ -1076,6 +1076,36 @@ impl ConcreteAdapter {
         Ok(false)
     }
 
+    /// Check if the current DuckDB connection targets MotherDuck.
+    pub fn is_motherduck(&self) -> bool {
+        self.engine()
+            .config("path")
+            .map(|p| dbt_auth::is_motherduck_path(&p))
+            .unwrap_or(false)
+    }
+
+    /// MotherDuck does not support explicit transactions.
+    pub fn disable_transactions(&self) -> bool {
+        self.is_motherduck()
+    }
+
+    /// Returns a dict with database/schema/identifier for temp tables on MotherDuck.
+    pub fn get_temp_relation_path(
+        &self,
+        database: &str,
+        identifier: &str,
+        batch_id: &str,
+    ) -> AdapterResult<BTreeMap<String, Value>> {
+        let mut path = BTreeMap::new();
+        path.insert("database".to_owned(), Value::from(database));
+        path.insert("schema".to_owned(), Value::from("dbt_temp"));
+        path.insert(
+            "identifier".to_owned(),
+            Value::from(format!("{identifier}__{batch_id}")),
+        );
+        Ok(path)
+    }
+
     /// Rename relation
     pub fn rename_relation(
         &self,

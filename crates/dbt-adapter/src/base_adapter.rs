@@ -1181,6 +1181,17 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
     /// redact_credentials
     fn redact_credentials(&self, _state: &State, _sql: &str) -> Result<Value, minijinja::Error>;
 
+    fn is_motherduck(&self) -> bool;
+
+    fn disable_transactions(&self) -> bool;
+
+    fn get_temp_relation_path(
+        &self,
+        database: &str,
+        identifier: &str,
+        batch_id: &str,
+    ) -> AdapterResult<BTreeMap<String, Value>>;
+
     /// Behavior (flags)
     fn behavior(&self) -> Value;
 
