@@ -27,6 +27,7 @@ pub use dbt_error::{
 pub mod behavior_flags;
 pub mod embedded_install_scripts;
 pub mod io_args;
+pub mod lease;
 pub mod logging;
 pub mod once_cell_vars;
 pub mod path;

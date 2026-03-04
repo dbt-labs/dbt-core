@@ -3,7 +3,7 @@ use crate::{
     dbt_project_yml_loader::{collect_protected_paths, load_project_yml},
     load_for_clean,
 };
-use std::{collections::BTreeMap, path::Path};
+use std::{collections::BTreeMap, path::Path, time::Duration};
 
 use dbt_common::{
     ErrorCode, FsResult,
@@ -11,6 +11,7 @@ use dbt_common::{
     constants::DBT_PROJECT_YML,
     err, fs_err,
     io_args::{EvalArgs, EvalArgsBuilder, IoArgs},
+    lease::{self, Lease},
     stdfs,
     tracing::{
         emit::{emit_error_log_from_fs_error, emit_info_progress_message, emit_trace_log_message},
@@ -95,8 +96,17 @@ pub async fn execute_clean_command(
     });
 
     if all_safe {
-        paths_to_delete.iter().try_for_each(|path| {
+        for path in &paths_to_delete {
             if path.exists() {
+                if let Some(lease_dir_name) = lease::dir_name_for_file_lease(&arg.io.in_dir, path) {
+                    let mut lease = {
+                        let target_lease_path =
+                            lease::lease_file_path(&arg.io.in_dir, &lease_dir_name);
+                        Lease::new(target_lease_path, lease_dir_name, Duration::ZERO)
+                    };
+                    lease.acquire(Duration::from_millis(1000)).await?;
+                }
+
                 emit_info_progress_message(
                     ProgressMessage::new_from_action_and_target(
                         "Removing".to_string(),
@@ -104,14 +114,13 @@ pub async fn execute_clean_command(
                     ),
                     arg.io.status_reporter.as_ref(),
                 );
-                stdfs::remove_dir_all(path)
+                stdfs::remove_dir_all(path)?;
             } else {
                 emit_trace_log_message(|| {
                     format!("The target directory does not exist: {}", path.display())
                 });
-                Ok(())
             }
-        })?;
+        }
     }
 
     error_count_checkpoint()
