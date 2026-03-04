@@ -1,10 +1,14 @@
-use dbt_common::adapter::{DBT_EXECUTION_PHASE_ANALYZE, DBT_EXECUTION_PHASES};
+use dbt_common::adapter::{
+    DBT_EXECUTION_PHASE_ANALYZE, DBT_EXECUTION_PHASE_RENDER, DBT_EXECUTION_PHASES,
+};
 use regex::Regex;
 use scc::HashMap as SccHashMap;
+use scc::HashSet as SccHashSet;
+use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, LazyLock};
+use std::sync::{Arc, LazyLock, OnceLock};
 use std::time::Duration;
 
 use crate::sql::normalize::normalize_dbt_tmp_name;
@@ -22,16 +26,25 @@ use parquet::file::properties::WriterProperties;
 use crate::sql::normalize::strip_sql_comments;
 use crate::statement::*;
 
+type NodeId = String;
+
 pub trait QueryCache: Send + Sync {
     fn new_statement(&self, inner_stmt: Box<dyn Statement>) -> Box<dyn Statement>;
+
+    /// Provide the reverse dependency graph so the cache can invalidate
+    /// downstream nodes on a render-phase miss.  Keys are node-ids; values are
+    /// the set of **direct** downstream node-ids.
+    fn set_reverse_deps(&self, _reverse_deps: HashMap<NodeId, HashSet<NodeId>>) {}
 }
 
 pub struct QueryCacheStatement {
     query_cache_config: Arc<QueryCacheConfig>,
-    counters: Arc<SccHashMap<String, usize>>,
+    counters: Arc<SccHashMap<NodeId, usize>>,
+    reverse_deps: Arc<OnceLock<HashMap<NodeId, HashSet<NodeId>>>>,
+    invalidated_nodes: Arc<SccHashSet<NodeId>>,
     inner_stmt: Box<dyn Statement>,
     /// Node ID associated with this query
-    node_id: Option<String>,
+    node_id: Option<NodeId>,
     /// One of [DBT_EXECUTION_PHASES] or ""
     execution_phase: &'static str,
     sql: String,
@@ -146,6 +159,28 @@ impl QueryCacheStatement {
         Ok(reader)
     }
 
+    /// Mark all transitive downstream nodes as invalidated so they
+    /// clear their own cache directories when they next execute.
+    fn invalidate_downstreams(&self, node_id: &str) {
+        let Some(reverse_deps) = self.reverse_deps.get() else {
+            return;
+        };
+        let mut stack = vec![node_id];
+        let mut visited = HashSet::new();
+        visited.insert(node_id);
+
+        while let Some(current) = stack.pop() {
+            if let Some(downstreams) = reverse_deps.get(current) {
+                for ds in downstreams {
+                    if visited.insert(ds.as_str()) {
+                        let _ = self.invalidated_nodes.insert_sync(ds.clone());
+                        stack.push(ds.as_str());
+                    }
+                }
+            }
+        }
+    }
+
     fn check_ttl(&self, file_path: &Path) -> AdbcResult<bool> {
         if let Some(ttl) = self.query_cache_config.ttl {
             if let Ok(metadata) = std::fs::metadata(file_path) {
@@ -187,21 +222,35 @@ impl Statement for QueryCacheStatement {
             return self.inner_stmt.execute();
         };
 
+        // If an upstream node had a cache miss and marked this node as invalid,
+        // delete this node's cache directory now. This is safe because the task runner
+        // runs nodes in order, so upstream nodes have already finished, and only this node touches its own directory.
+        if self.invalidated_nodes.remove_sync(node_id).is_some() {
+            let dir = self.construct_output_dir(node_id);
+            let _ = std::fs::remove_dir_all(&dir);
+        }
+
         let sql_hash = self.compute_sql_hash();
         let index = self.compute_file_index(node_id, phase, &sql_hash);
         let path = self.construct_output_file_name(node_id, &sql_hash, index);
         if path.exists() {
             if self.check_ttl(&path)? {
-                let cache_read = self.read_cache(&path);
-                return cache_read;
-            } else if let Some(parent) = path.parent() {
-                // Try to remove the parent directory if the file is stale
+                if let Ok(reader) = self.read_cache(&path) {
+                    return Ok(reader);
+                }
+            }
+            if let Some(parent) = path.parent() {
                 let _ = std::fs::remove_dir_all(parent);
             }
         }
-        // Execute on the actual engine's Statement
+
+        // We have a cache miss -- invalidate downstream nodes so they also
+        // re-execute instead of serving stale cached results.
+        if phase == DBT_EXECUTION_PHASE_RENDER {
+            self.invalidate_downstreams(node_id);
+        }
+
         let result = self.inner_stmt.execute();
-        // TODO: Add invalidation logic to ensure when a cache hit is not found, we invalidate downstreams (in Render Phase)
         match result {
             Ok(mut reader) => QueryCacheStatement::write_cache(&path, &mut reader),
             Err(err) => {
@@ -312,8 +361,9 @@ impl QueryCacheConfig {
 
 pub struct QueryCacheImpl {
     config: Arc<QueryCacheConfig>,
-    // We need to keep track of which index we are on per node id (NodeId, StatementCount)
-    counters: Arc<SccHashMap<String, usize>>,
+    counters: Arc<SccHashMap<NodeId, usize>>,
+    reverse_deps: Arc<OnceLock<HashMap<NodeId, HashSet<NodeId>>>>,
+    invalidated_nodes: Arc<SccHashSet<NodeId>>,
 }
 
 impl QueryCacheImpl {
@@ -321,6 +371,8 @@ impl QueryCacheImpl {
         Self {
             config: Arc::new(config),
             counters: Arc::new(SccHashMap::new()),
+            reverse_deps: Arc::new(OnceLock::new()),
+            invalidated_nodes: Arc::new(SccHashSet::new()),
         }
     }
 }
@@ -330,11 +382,17 @@ impl QueryCache for QueryCacheImpl {
         Box::new(QueryCacheStatement {
             query_cache_config: self.config.clone(),
             counters: self.counters.clone(),
+            reverse_deps: self.reverse_deps.clone(),
+            invalidated_nodes: self.invalidated_nodes.clone(),
             inner_stmt,
             node_id: None,
             execution_phase: "",
             sql: "".to_string(),
         })
+    }
+
+    fn set_reverse_deps(&self, reverse_deps: HashMap<NodeId, HashSet<NodeId>>) {
+        let _ = self.reverse_deps.set(reverse_deps);
     }
 }
 
@@ -437,6 +495,8 @@ mod tests {
         QueryCacheStatement {
             query_cache_config: make_config(None),
             counters: Arc::new(SccHashMap::new()),
+            reverse_deps: Arc::new(OnceLock::new()),
+            invalidated_nodes: Arc::new(SccHashSet::new()),
             inner_stmt: Box::new(NoopStatement),
             node_id: None,
             execution_phase: "",
@@ -631,5 +691,118 @@ mod tests {
         let mut stmt = make_stmt("");
         stmt.query_cache_config = make_config(Some(Duration::from_secs(3600)));
         assert!(!stmt.check_ttl(Path::new("/nonexistent/file")).unwrap());
+    }
+
+    fn make_stmt_with_cache_dir(root: &Path) -> QueryCacheStatement {
+        QueryCacheStatement {
+            query_cache_config: Arc::new(QueryCacheConfig::new(root.to_path_buf(), None, vec![])),
+            counters: Arc::new(SccHashMap::new()),
+            reverse_deps: Arc::new(OnceLock::new()),
+            invalidated_nodes: Arc::new(SccHashSet::new()),
+            inner_stmt: Box::new(NoopStatement),
+            node_id: None,
+            execution_phase: "",
+            sql: String::new(),
+        }
+    }
+
+    #[test]
+    fn test_invalidate_downstreams_marks_direct_downstreams() {
+        let stmt = make_stmt_with_cache_dir(Path::new("/tmp/unused"));
+        let _ = stmt.reverse_deps.set(HashMap::from([(
+            "A".to_string(),
+            HashSet::from(["B".into(), "C".into()]),
+        )]));
+
+        stmt.invalidate_downstreams("A");
+
+        assert!(
+            !stmt.invalidated_nodes.contains_sync(&"A".to_string()),
+            "upstream should not be marked"
+        );
+        assert!(stmt.invalidated_nodes.contains_sync(&"B".to_string()));
+        assert!(stmt.invalidated_nodes.contains_sync(&"C".to_string()));
+    }
+
+    #[test]
+    fn test_invalidate_downstreams_marks_transitive() {
+        let stmt = make_stmt_with_cache_dir(Path::new("/tmp/unused"));
+        let _ = stmt.reverse_deps.set(HashMap::from([
+            ("A".to_string(), HashSet::from(["B".into()])),
+            ("B".to_string(), HashSet::from(["C".into()])),
+        ]));
+
+        stmt.invalidate_downstreams("A");
+
+        assert!(!stmt.invalidated_nodes.contains_sync(&"A".to_string()));
+        assert!(stmt.invalidated_nodes.contains_sync(&"B".to_string()));
+        assert!(stmt.invalidated_nodes.contains_sync(&"C".to_string()));
+    }
+
+    #[test]
+    fn test_invalidate_downstreams_no_deps_is_noop() {
+        let stmt = make_stmt_with_cache_dir(Path::new("/tmp/unused"));
+        stmt.invalidate_downstreams("A");
+
+        assert!(!stmt.invalidated_nodes.contains_sync(&"A".to_string()));
+        assert!(!stmt.invalidated_nodes.contains_sync(&"B".to_string()));
+    }
+
+    #[test]
+    fn test_invalidate_downstreams_does_not_mark_unrelated_nodes() {
+        let stmt = make_stmt_with_cache_dir(Path::new("/tmp/unused"));
+        let _ = stmt.reverse_deps.set(HashMap::from([(
+            "A".to_string(),
+            HashSet::from(["B".into()]),
+        )]));
+
+        stmt.invalidate_downstreams("A");
+
+        assert!(stmt.invalidated_nodes.contains_sync(&"B".to_string()));
+        assert!(
+            !stmt.invalidated_nodes.contains_sync(&"X".to_string()),
+            "unrelated node should not be marked"
+        );
+    }
+
+    #[test]
+    fn test_invalidated_node_clears_own_cache_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+
+        std::fs::create_dir_all(root.join("B")).unwrap();
+        assert!(root.join("B").exists());
+
+        let stmt = make_stmt_with_cache_dir(root);
+        let _ = stmt.invalidated_nodes.insert_sync("B".to_string());
+
+        assert!(stmt.invalidated_nodes.contains_sync(&"B".to_string()));
+
+        // Simulate what execute() does when it sees the node in the set
+        if stmt
+            .invalidated_nodes
+            .remove_sync(&"B".to_string())
+            .is_some()
+        {
+            let cache_dir = stmt.query_cache_config.root_path.join("B");
+            let _ = std::fs::remove_dir_all(&cache_dir);
+        }
+
+        assert!(!root.join("B").exists(), "cache dir should be removed");
+        assert!(!stmt.invalidated_nodes.contains_sync(&"B".to_string()));
+    }
+
+    #[test]
+    fn test_set_reverse_deps_via_trait() {
+        let cache = QueryCacheImpl::new(QueryCacheConfig::new(
+            PathBuf::from("/tmp/test"),
+            None,
+            vec![],
+        ));
+        let mut deps = HashMap::new();
+        deps.insert("A".to_string(), HashSet::from(["B".into()]));
+        cache.set_reverse_deps(deps.clone());
+
+        assert_eq!(*cache.reverse_deps.get().unwrap(), deps);
     }
 }
