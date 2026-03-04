@@ -138,6 +138,19 @@ class TestBuilder(Generic[Testable]):
         if "config" in self.args:
             self.config.update(self._render_values(self.args.pop("config", {})))
 
+        # Gate sql_header behind behavior change flag
+        if (
+            self.config.get("sql_header") is not None
+            and not get_flags().require_sql_header_in_test_configs
+        ):
+            deprecations.warn(
+                "custom-key-in-config-deprecation",
+                key="sql_header",
+                file=target.original_file_path,
+                key_path="models.config",
+            )
+            self.config["sql_header"] = None
+
         if self.namespace is not None:
             self.package_name = self.namespace
 
