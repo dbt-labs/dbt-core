@@ -209,7 +209,7 @@ DBT_TEST_USER_3 = "dbt_test_user_3"
 [envs.ci.scripts]
 unit-tests = "python -m pytest --cov=dbt --cov-report=xml {args} ../tests/unit"
 code-quality = "pre-commit run --all-files"
-integration-tests = "python -m pytest --cov=dbt --cov-report=xml {args} ../tests/functional"
+integration-tests = "python -m pytest --cov=dbt --cov-report=xml -nauto {args} ../tests/functional"
 
 # Note: Python version matrix is handled by GitHub Actions CI, not hatch.
 # This avoids running tests 4x per job. The CI sets up the Python version
