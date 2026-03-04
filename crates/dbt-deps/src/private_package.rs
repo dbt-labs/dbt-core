@@ -259,7 +259,7 @@ fn get_local_resolved_url(private_package: &PrivatePackage) -> FsResult<String> 
             "git@gitlab.com:{}.git",
             private_package.private.deref()
         )),
-        "ado" => Ok(format!(
+        "ado" | "azure_devops" => Ok(format!(
             "git@ssh.dev.azure.com:v3/{}",
             private_package.private.deref()
         )),
