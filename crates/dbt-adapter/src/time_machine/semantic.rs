@@ -63,7 +63,8 @@ impl SemanticCategory {
             | "compare_dbr_version"
             | "has_dbr_capability"
             | "get_missing_columns"
-            | "is_replaceable" => SemanticCategory::MetadataRead,
+            | "is_replaceable"
+            | "location_exists" => SemanticCategory::MetadataRead,
 
             // Mutate database state (DDL/DML)
             "execute"
@@ -126,7 +127,10 @@ impl SemanticCategory {
             | "sync_struct_columns"
             | "resolve_file_format"
             | "get_seed_file_path"
-            | "is_uniform" => SemanticCategory::Pure,
+            | "is_uniform"
+            | "external_root"
+            | "external_write_options"
+            | "external_read_location" => SemanticCategory::Pure,
 
             _ => {
                 debug_assert!(

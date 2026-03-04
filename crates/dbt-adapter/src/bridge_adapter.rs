@@ -1722,6 +1722,56 @@ impl BaseAdapter for BridgeAdapter {
     }
 
     #[tracing::instrument(skip_all, level = "trace")]
+    fn external_root(&self, _state: &State) -> Result<Value, minijinja::Error> {
+        match &self.inner {
+            Typed { adapter, .. } => Ok(Value::from(adapter.external_root())),
+            Parse(_) => Ok(Value::from(".")),
+        }
+    }
+
+    #[tracing::instrument(skip_all, level = "trace")]
+    fn external_write_options(
+        &self,
+        _state: &State,
+        write_location: &str,
+        rendered_options: &Value,
+    ) -> Result<Value, minijinja::Error> {
+        match &self.inner {
+            Typed { adapter, .. } => Ok(Value::from(
+                adapter.external_write_options(write_location, rendered_options),
+            )),
+            Parse(_) => Ok(empty_string_value()),
+        }
+    }
+
+    #[tracing::instrument(skip_all, level = "trace")]
+    fn external_read_location(
+        &self,
+        _state: &State,
+        write_location: &str,
+        rendered_options: &Value,
+    ) -> Result<Value, minijinja::Error> {
+        match &self.inner {
+            Typed { adapter, .. } => Ok(Value::from(
+                adapter.external_read_location(write_location, rendered_options),
+            )),
+            Parse(_) => Ok(Value::from(write_location)),
+        }
+    }
+
+    #[tracing::instrument(skip_all, level = "trace")]
+    fn location_exists(&self, state: &State, location: &str) -> Result<Value, minijinja::Error> {
+        match &self.inner {
+            Typed { .. } => {
+                let sql = format!("select 1 from '{}' where 1=0", location);
+                let result = self.execute(state, &sql, false, false, None, None);
+                Ok(Value::from(result.is_ok()))
+            }
+            Parse(_) => Ok(Value::from(false)),
+        }
+    }
+
+    #[tracing::instrument(skip_all, level = "trace")]
     fn compute_external_path(
         &self,
         _state: &State,

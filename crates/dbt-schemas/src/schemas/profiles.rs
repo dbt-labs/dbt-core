@@ -969,6 +969,9 @@ pub struct DuckDbConfig {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[merge(strategy = merge_strategies_extend::overwrite_always)]
     pub attach: Option<Vec<DuckDbAttachment>>,
+    /// Root path for external materializations (defaults to ".")
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub external_root: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema)]

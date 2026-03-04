@@ -1041,6 +1041,24 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
         _minor: i64,
     ) -> Result<Value, minijinja::Error>;
 
+    fn external_root(&self, state: &State) -> Result<Value, minijinja::Error>;
+
+    fn external_write_options(
+        &self,
+        state: &State,
+        write_location: &str,
+        rendered_options: &Value,
+    ) -> Result<Value, minijinja::Error>;
+
+    fn external_read_location(
+        &self,
+        state: &State,
+        write_location: &str,
+        rendered_options: &Value,
+    ) -> Result<Value, minijinja::Error>;
+
+    fn location_exists(&self, state: &State, location: &str) -> Result<Value, minijinja::Error>;
+
     /// Compute external path for Databricks external tables.
     ///
     /// https://github.com/databricks/dbt-databricks/blob/main/dbt/adapters/databricks/impl.py#L208-L209
