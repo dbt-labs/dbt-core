@@ -490,24 +490,17 @@ impl<'env> Vm<'env> {
                 }
                 Instruction::GetAttr(name, span) => {
                     let a = stack.pop();
-                    if let Some(value) = a.get_attr_fast(name) {
-                        stack.push(
-                            value
-                                .validate()
-                                .map_err(|e| state.with_span_error(e, span))?,
-                        );
-                    } else if let Some(result) = a
-                        .as_object()
-                        .and_then(|obj| obj.get_property(state, name, listeners).ok())
-                    {
-                        stack.push(result);
-                    } else {
-                        stack.push(
-                            undefined_behavior
-                                .handle_undefined(a.is_undefined())
-                                .map_err(|e| state.with_span_error(e, span))?,
-                        );
-                    }
+                    let value = a
+                        .get_attr_fast(name)
+                        .or_else(|| a.as_object()?.get_property(state, name, listeners).ok());
+                    stack.push(match value {
+                        Some(value) => value
+                            .validate()
+                            .map_err(|e| state.with_span_error(e, span))?,
+                        None => undefined_behavior
+                            .handle_undefined(a.is_undefined())
+                            .map_err(|e| state.with_span_error(e, span))?,
+                    });
                 }
                 Instruction::SetAttr(name, span) => {
                     let b = stack.pop();
@@ -527,7 +520,12 @@ impl<'env> Vm<'env> {
                 Instruction::GetItem(span) => {
                     let a = stack.pop();
                     let b = stack.pop();
-                    stack.push(match b.get_item_opt(&a) {
+                    // Fall back to get_property for string keys, mirroring GetAttr behavior
+                    let value = b.get_item_opt(&a).or_else(|| {
+                        let key = a.as_str()?;
+                        b.as_object()?.get_property(state, key, listeners).ok()
+                    });
+                    stack.push(match value {
                         Some(value) => value
                             .validate()
                             .map_err(|e| state.with_span_error(e, span))?,
