@@ -149,7 +149,6 @@ class TestBuilder(Generic[Testable]):
                 file=target.original_file_path,
                 key_path="models.config",
             )
-            self.config["sql_header"] = None
 
         if self.namespace is not None:
             self.package_name = self.namespace

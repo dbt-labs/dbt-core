@@ -153,7 +153,7 @@ class TestGenericDataTestSqlHeaderDeprecation:
             "Custom key `sql_header` found in `config`" in event_catcher.caught_events[0].info.msg
         )
 
-        # Verify sql_header is suppressed in the manifest
+        # Verify sql_header is preserved in the manifest
         manifest = get_manifest(project.project_root)
         pattern = re.compile(r"test\.test\.generic_test_with_sql_header")
         test_node = None
@@ -163,4 +163,4 @@ class TestGenericDataTestSqlHeaderDeprecation:
                 break
 
         assert test_node is not None, "Generic test node not found in manifest"
-        assert test_node.config.sql_header is None
+        assert test_node.config.sql_header == SQL_HEADER_MARKER
