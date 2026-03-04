@@ -178,7 +178,7 @@ pub fn truncate(state: &State, value: &Value, args: Rest<Value>) -> Result<Strin
     let killwords = iter
         .next_kwarg::<Option<bool>>("killwords")?
         .unwrap_or_default();
-    let end = iter.next_kwarg::<Option<String>>("end")?;
+    let end = iter.next_kwarg::<Option<&str>>("end")?.unwrap_or("...");
     let leeway = iter
         .next_kwarg::<Option<usize>>("leeway")?
         .unwrap_or_else(|| {
@@ -188,8 +188,6 @@ pub fn truncate(state: &State, value: &Value, args: Rest<Value>) -> Result<Strin
                 .unwrap_or(5)
         });
     iter.finish()?;
-
-    let end = end.as_deref().unwrap_or("...");
 
     if matches!(value.kind(), ValueKind::None | ValueKind::Undefined) {
         return Ok("".into());
@@ -281,13 +279,14 @@ pub fn wordwrap(value: &Value, args: Rest<Value>) -> Result<Value, Error> {
     let break_long_words = iter
         .next_kwarg::<Option<bool>>("break_long_words")?
         .unwrap_or(true);
-    let wrapstring = iter.next_kwarg::<Option<String>>("wrapstring")?;
+    let wrapstring = iter
+        .next_kwarg::<Option<&str>>("wrapstring")?
+        .unwrap_or("\n");
     let break_on_hyphens = iter
         .next_kwarg::<Option<bool>>("break_on_hyphens")?
         .unwrap_or(true);
     iter.finish()?;
 
-    let wrapstring = wrapstring.as_deref().unwrap_or("\n");
     let s = value.as_str().unwrap_or_default();
 
     let mut options = WrapOptions::new(width).break_words(break_long_words);
