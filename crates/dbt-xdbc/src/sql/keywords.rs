@@ -11,13 +11,13 @@ pub fn sorted_keywords_for(backend: Backend) -> &'static [&'static str] {
         Snowflake => SNOWFLAKE_RESERVED_KEYWORDS,
         BigQuery => BIGQUERY_RESERVED_KEYWORDS,
         Redshift | RedshiftODBC => REDSHIFT_RESERVED_KEYWORDS,
+        DuckDB => DUCKDB_RESERVED_KEYWORDS,
         // TODO: fill in other dialects' keywords and define a default fallback
         Databricks
         | DatabricksODBC
         | Postgres
         | Spark
         | Salesforce
-        | DuckDB
         | SQLServer
         | Generic { .. } => &[],
     }
@@ -212,6 +212,86 @@ static SNOWFLAKE_RESERVED_KEYWORDS: &[&str] = &[
     "WITH",
 ];
 
+/// DuckDB reserved keywords.
+/// Source: https://github.com/duckdb/duckdb/blob/main/extension/autocomplete/grammar/keywords/reserved_keyword.list
+static DUCKDB_RESERVED_KEYWORDS: &[&str] = &[
+    "ALL",
+    "ANALYSE",
+    "ANALYZE",
+    "AND",
+    "ANY",
+    "ARRAY",
+    "AS",
+    "ASC",
+    "ASYMMETRIC",
+    "BOTH",
+    "CASE",
+    "CAST",
+    "CHECK",
+    "COLLATE",
+    "COLUMN",
+    "CONSTRAINT",
+    "CREATE",
+    "DEFAULT",
+    "DEFERRABLE",
+    "DESC",
+    "DESCRIBE",
+    "DISTINCT",
+    "DO",
+    "ELSE",
+    "END",
+    "EXCEPT",
+    "FALSE",
+    "FETCH",
+    "FOR",
+    "FOREIGN",
+    "FROM",
+    "GROUP",
+    "HAVING",
+    "IN",
+    "INITIALLY",
+    "INTERSECT",
+    "INTO",
+    "LAMBDA",
+    "LATERAL",
+    "LEADING",
+    "LIMIT",
+    "NOT",
+    "NULL",
+    "OFFSET",
+    "ON",
+    "ONLY",
+    "OR",
+    "ORDER",
+    "PIVOT",
+    "PIVOT_LONGER",
+    "PIVOT_WIDER",
+    "PLACING",
+    "PRIMARY",
+    "QUALIFY",
+    "REFERENCES",
+    "RETURNING",
+    "SELECT",
+    "SHOW",
+    "SOME",
+    "SUMMARIZE",
+    "SYMMETRIC",
+    "TABLE",
+    "THEN",
+    "TO",
+    "TRAILING",
+    "TRUE",
+    "UNION",
+    "UNIQUE",
+    "UNPIVOT",
+    "USING",
+    "VARIADIC",
+    "WHEN",
+    "WHERE",
+    "WINDOW",
+    "WITH",
+];
+
 #[allow(dead_code)]
 static TRINO_RESERVED_KEYWORDS: &[&str] = &[
     "ALTER",
@@ -350,6 +430,11 @@ mod tests {
     #[test]
     fn test_trino_keywords_sorted() {
         assert_is_sorted(TRINO_RESERVED_KEYWORDS);
+    }
+
+    #[test]
+    fn test_duckdb_keywords_sorted() {
+        assert_is_sorted(DUCKDB_RESERVED_KEYWORDS);
     }
 
     #[test]
