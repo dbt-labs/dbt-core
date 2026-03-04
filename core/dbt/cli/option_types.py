@@ -88,7 +88,8 @@ class SqlParseOptionsType(YAML):
                     param,
                     ctx,
                 )
-            if val is None:
+            # None params may get stringified during `dbt retry`
+            if val is None or (isinstance(val, str) and val.lower() == "none"):
                 setattr(sqlparse.engine.grouping, key, None)
             else:
                 try:
