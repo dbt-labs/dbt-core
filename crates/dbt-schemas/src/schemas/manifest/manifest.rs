@@ -1146,6 +1146,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                     unrendered_config: saved_query.__base_attr__.unrendered_config,
                     created_at: saved_query.__base_attr__.created_at,
                     group: saved_query.group,
+                    cache: saved_query.config.cache.clone(),
                 },
                 deprecated_config: saved_query.config,
                 __other__: saved_query.__other__,

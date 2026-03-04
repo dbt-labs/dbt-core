@@ -8,7 +8,7 @@ type YmlValue = dbt_yaml::Value;
 use crate::schemas::{
     CommonAttributes, NodeBaseAttributes,
     manifest::common::SourceFileMetadata,
-    project::{ExportConfigExportAs, SavedQueryConfig},
+    project::{ExportConfigExportAs, SavedQueryCache, SavedQueryConfig},
 };
 
 use super::common::WhereFilterIntersection;
@@ -35,6 +35,7 @@ pub struct DbtSavedQueryAttr {
     pub unrendered_config: BTreeMap<String, YmlValue>,
     pub created_at: f64,
     pub group: Option<String>,
+    pub cache: Option<SavedQueryCache>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

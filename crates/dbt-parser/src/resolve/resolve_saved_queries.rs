@@ -245,6 +245,7 @@ pub async fn resolve_saved_queries(
                     unrendered_config: BTreeMap::new(),
                     group: saved_query_config.group.clone(),
                     created_at: chrono::Utc::now().timestamp() as f64,
+                    cache: saved_query_config.cache.clone(),
                 },
                 deprecated_config: saved_query_config.clone(),
                 __other__: BTreeMap::new(),
