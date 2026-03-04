@@ -265,6 +265,12 @@ got {:?}, expected an instance of {}",
                     // These commands do not require a project directory
                     (PathBuf::from("."), PathBuf::from("."))
                 }
+                Command::Extension(_) => {
+                    // Extension commands determine their own project requirements.
+                    // Avoid resolving project dir here, which can fail for commands
+                    // that intentionally run outside project context.
+                    (PathBuf::from("."), PathBuf::from("."))
+                }
                 _ => in_out_dir(&common_args)?,
             }
         };
