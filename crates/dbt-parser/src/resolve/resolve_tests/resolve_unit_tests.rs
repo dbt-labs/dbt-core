@@ -328,19 +328,36 @@ pub fn resolve_unit_tests(
 
             // Create a unit test node for each version
             for version in versions {
-                let versioned_model_id = version_info
-                    .all_versions
-                    .get(version as &str) // Explicitly convert to &str for lookup
-                    .expect("Version should exist in lookup");
+                let versioned_model_unique_id = get_unique_id(
+                    &unit_test.model,
+                    package_name,
+                    Some(version.clone()),
+                    "model",
+                );
+
+                // Look up database/schema from the versioned model
+                let (ver_database, ver_schema) = models
+                    .get(&versioned_model_unique_id)
+                    .map(|m| {
+                        (
+                            m.__base_attr__.database.clone(),
+                            m.__base_attr__.schema.clone(),
+                        )
+                    })
+                    .unwrap_or_default();
 
                 let mut versioned_test = base_unit_test.clone();
                 versioned_test.__common_attr__.unique_id = format!("{base_unique_id}.v{version}");
                 versioned_test.__unit_test_attr__.version = Some(version.clone().into());
-                versioned_test.__base_attr__.depends_on.nodes = vec![versioned_model_id.clone()];
+                versioned_test.__base_attr__.database = ver_database;
+                versioned_test.__base_attr__.schema = ver_schema;
+                versioned_test.__base_attr__.depends_on.nodes =
+                    vec![versioned_model_unique_id.clone()];
                 versioned_test
                     .__base_attr__
                     .depends_on
-                    .nodes_with_ref_location = vec![(versioned_model_id.clone(), location.clone())];
+                    .nodes_with_ref_location =
+                    vec![(versioned_model_unique_id.clone(), location.clone())];
 
                 unit_tests.insert(
                     versioned_test.__common_attr__.unique_id.clone(),
