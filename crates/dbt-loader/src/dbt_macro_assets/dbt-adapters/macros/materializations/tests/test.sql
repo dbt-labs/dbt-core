@@ -2,6 +2,7 @@
 
   {% set relations = [] %}
   {% set limit = config.get('limit') %}
+  {% set sql_header = config.get('sql_header') %}
 
   {% set sql_with_limit %}
     {{ get_limit_subquery_sql(sql, limit) }}
@@ -31,6 +32,7 @@
     {% endif %}
 
     {% call statement(auto_begin=True) %}
+        {% if sql_header %}{{ sql_header }}{% endif %}
         {{ get_create_sql(target_relation, sql_with_limit) }}
     {% endcall %}
 
@@ -56,6 +58,7 @@
 
   {% call statement('main', fetch_result=True) -%}
 
+    {% if sql_header %}{{ sql_header }}{% endif %}
     {# The limit has already been included above, and we do not want to duplicate it again. We also want to be safe for macro overrides treating `limit` as a required parameter. #}
     {{ get_test_sql(main_sql, fail_calc, warn_if, error_if, limit=none)}}
 

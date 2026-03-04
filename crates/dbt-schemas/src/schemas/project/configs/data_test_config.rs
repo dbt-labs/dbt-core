@@ -60,6 +60,8 @@ pub struct ProjectDataTestConfig {
     pub store_failures: Option<bool>,
     #[serde(rename = "+store_failures_as")]
     pub store_failures_as: Option<StoreFailuresAs>,
+    #[serde(rename = "+sql_header")]
+    pub sql_header: Option<String>,
     #[serde(rename = "+tags")]
     pub tags: Option<StringOrArrayOfStrings>,
     #[serde(rename = "+warn_if")]
@@ -313,6 +315,7 @@ pub struct DataTestConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub store_failures: Option<bool>,
     pub store_failures_as: Option<StoreFailuresAs>,
+    pub sql_header: Option<String>,
     #[serde(
         default,
         serialize_with = "crate::schemas::nodes::serialize_none_as_empty_list"
@@ -344,6 +347,7 @@ impl From<ProjectDataTestConfig> for DataTestConfig {
             severity: config.severity,
             store_failures: config.store_failures,
             store_failures_as: config.store_failures_as,
+            sql_header: config.sql_header,
             tags: config.tags,
             warn_if: config.warn_if,
             quoting: config.quoting,
@@ -454,6 +458,7 @@ impl From<DataTestConfig> for ProjectDataTestConfig {
             severity: config.severity,
             store_failures: config.store_failures,
             store_failures_as: config.store_failures_as,
+            sql_header: config.sql_header,
             tags: config.tags,
             warn_if: config.warn_if,
             quoting: config.quoting,
@@ -570,6 +575,7 @@ impl DefaultTo<DataTestConfig> for DataTestConfig {
             severity,
             store_failures,
             store_failures_as,
+            sql_header,
             tags,
             warn_if,
             quoting,
@@ -598,6 +604,7 @@ impl DefaultTo<DataTestConfig> for DataTestConfig {
                 enabled,
                 store_failures,
                 store_failures_as,
+                sql_header,
                 limit,
                 severity,
                 error_if,

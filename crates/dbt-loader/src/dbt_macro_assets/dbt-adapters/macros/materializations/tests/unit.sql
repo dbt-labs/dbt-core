@@ -1,6 +1,7 @@
 {%- materialization unit, default -%}
 
   {% set relations = [] %}
+  {% set sql_header = config.get('sql_header') %}
 
   {% set expected_rows = config.get('expected_rows') %}
   {% set expected_sql = config.get('expected_sql') %}
@@ -29,6 +30,7 @@
 
   {% call statement('main', fetch_result=True) -%}
 
+    {% if sql_header %}{{ sql_header }}{% endif %}
     {{ unit_test_sql }}
 
   {%- endcall %}
