@@ -40,6 +40,7 @@ use serde::Deserialize;
 use std::borrow::Cow;
 use tracy_client::span;
 
+use indexmap::IndexMap;
 use std::collections::{BTreeMap, HashMap};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -299,7 +300,7 @@ fn adbc_execute_with_options(
     {
         let mut job_labels = maybe_query_comment
             .as_ref()
-            .map_or_else(BTreeMap::new, |comment| {
+            .map_or_else(IndexMap::new, |comment| {
                 engine
                     .query_comment()
                     .get_job_labels_from_query_comment(comment)

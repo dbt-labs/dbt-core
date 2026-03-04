@@ -194,7 +194,7 @@ pub struct ProjectSnapshotConfig {
     #[serde(rename = "+kms_key_name")]
     pub kms_key_name: Option<String>,
     #[serde(rename = "+labels")]
-    pub labels: Option<BTreeMap<String, String>>,
+    pub labels: Option<IndexMap<String, String>>,
     #[serde(
         default,
         rename = "+labels_from_meta",

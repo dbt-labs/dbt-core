@@ -275,7 +275,7 @@ pub struct WarehouseSpecificNodeConfig {
     pub hours_to_expiration: Option<u64>,
     #[serde(default, deserialize_with = "u64_or_string_u64")]
     pub job_execution_timeout_seconds: Option<u64>,
-    pub labels: Option<BTreeMap<String, String>>,
+    pub labels: Option<IndexMap<String, String>>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub labels_from_meta: Option<bool>,
     pub kms_key_name: Option<String>,
@@ -289,7 +289,7 @@ pub struct WarehouseSpecificNodeConfig {
     pub enable_refresh: Option<bool>,
     #[serde(default, deserialize_with = "f64_or_string_f64")]
     pub refresh_interval_minutes: Option<f64>,
-    pub resource_tags: Option<BTreeMap<String, String>>,
+    pub resource_tags: Option<IndexMap<String, String>>,
     pub max_staleness: Option<String>,
     pub jar_file_uri: Option<String>,
     pub timeout: Option<u64>,

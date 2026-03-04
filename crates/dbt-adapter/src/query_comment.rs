@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use indexmap::IndexMap;
 use std::{fmt::Debug, sync::LazyLock};
 
 use dbt_common::adapter::AdapterType;
@@ -170,9 +170,9 @@ impl QueryCommentConfig {
     pub fn get_job_labels_from_query_comment(
         &self,
         resolved_comment: &str,
-    ) -> BTreeMap<String, String> {
+    ) -> IndexMap<String, String> {
         if !self.job_label {
-            return BTreeMap::new();
+            return IndexMap::new();
         }
 
         let job_labels = match serde_json::from_str::<JsonMap<String, JsonValue>>(resolved_comment)
@@ -180,10 +180,11 @@ impl QueryCommentConfig {
             Ok(json) => json
                 .into_iter()
                 .map(|(key, value)| {
-                    (
-                        sanitize_label(&key),
-                        sanitize_label(value.as_str().expect("Expected job label to be a string")),
-                    )
+                    let value_str = match value.as_str() {
+                        Some(s) => s.to_string(),
+                        None => value.to_string(), // Convert non-string values to string
+                    };
+                    (sanitize_label(&key), sanitize_label(&value_str))
                 })
                 .collect(),
             Err(_) => vec![(
@@ -192,7 +193,7 @@ impl QueryCommentConfig {
             )],
         };
 
-        BTreeMap::from_iter(job_labels)
+        IndexMap::from_iter(job_labels)
     }
 }
 

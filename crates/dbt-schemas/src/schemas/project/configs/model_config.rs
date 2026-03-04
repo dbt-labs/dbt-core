@@ -212,7 +212,7 @@ pub struct ProjectModelConfig {
     #[serde(rename = "+kms_key_name")]
     pub kms_key_name: Option<String>,
     #[serde(rename = "+labels")]
-    pub labels: Option<BTreeMap<String, String>>,
+    pub labels: Option<IndexMap<String, String>>,
     #[serde(
         default,
         rename = "+labels_from_meta",
@@ -335,7 +335,7 @@ pub struct ProjectModelConfig {
     )]
     pub refresh_interval_minutes: Option<f64>,
     #[serde(rename = "+resource_tags")]
-    pub resource_tags: Option<BTreeMap<String, String>>,
+    pub resource_tags: Option<IndexMap<String, String>>,
     #[serde(
         default,
         rename = "+require_partition_filter",

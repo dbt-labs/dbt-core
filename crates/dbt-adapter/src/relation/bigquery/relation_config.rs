@@ -13,6 +13,7 @@ use dbt_schemas::schemas::{
     nodes::BigQueryAttr,
 };
 use dbt_xdbc::duration::parse_duration;
+use indexmap::IndexMap;
 use minijinja::value::Object;
 use minijinja_contrib::modules::py_datetime::datetime::PyDateTime;
 use std::{
@@ -127,8 +128,8 @@ pub trait BigqueryMaterializedViewConfig: std::fmt::Debug + Sync + Send {
     fn dataset_id(&self) -> &str;
     fn project_id(&self) -> &str;
 
-    fn tags(&self) -> &BTreeMap<String, String>;
-    fn labels(&self) -> &BTreeMap<String, String>;
+    fn tags(&self) -> &IndexMap<String, String>;
+    fn labels(&self) -> &IndexMap<String, String>;
     fn kms_key_name(&self) -> &str;
     fn description(&self) -> &str;
     fn partition_by(&self) -> Option<&BigqueryPartitionConfig>;
@@ -242,13 +243,13 @@ impl dyn BigqueryMaterializedViewConfig {
                 .get("Labels")
                 .map(|labels_json| {
                     if labels_json.is_empty() {
-                        Ok(BTreeMap::new())
+                        Ok(IndexMap::new())
                     } else {
                         serde_json::from_str(labels_json)
                             .map_err(|_err| "Could not parse 'Labels' as valid JSON".to_string())
                     }
                 })
-                .unwrap_or_else(|| Ok(BTreeMap::new()))?,
+                .unwrap_or_else(|| Ok(IndexMap::new()))?,
             description: schema
                 .metadata
                 .get("Description")
@@ -287,14 +288,14 @@ impl dyn BigqueryMaterializedViewConfig {
                 .get("ResourceTags")
                 .map(|tags_json| {
                     if tags_json.is_empty() {
-                        Ok(BTreeMap::new())
+                        Ok(IndexMap::new())
                     } else {
                         serde_json::from_str(tags_json).map_err(|_err| {
                             "Could not parse 'ResourceTags' as valid JSON".to_string()
                         })
                     }
                 })
-                .unwrap_or_else(|| Ok(BTreeMap::new()))?,
+                .unwrap_or_else(|| Ok(IndexMap::new()))?,
         }))
     }
 }
@@ -433,8 +434,8 @@ struct BigqueryMaterializedViewConfigRepr {
     dataset_id: String,
     project_id: String,
 
-    tags: BTreeMap<String, String>,
-    labels: BTreeMap<String, String>,
+    tags: IndexMap<String, String>,
+    labels: IndexMap<String, String>,
     kms_key_name: String,
     enable_refresh: bool,
     expiration_timestamp_ns: u64,
@@ -460,11 +461,11 @@ impl BigqueryMaterializedViewConfig for BigqueryMaterializedViewConfigRepr {
         self.project_id.as_str()
     }
 
-    fn tags(&self) -> &BTreeMap<String, String> {
+    fn tags(&self) -> &IndexMap<String, String> {
         &self.tags
     }
 
-    fn labels(&self) -> &BTreeMap<String, String> {
+    fn labels(&self) -> &IndexMap<String, String> {
         &self.labels
     }
 
@@ -516,7 +517,9 @@ impl BigqueryMaterializedViewConfigFromDbtModel {
     }
 }
 
-static EMPTY_BTREEMAP: BTreeMap<String, String> = BTreeMap::new();
+use once_cell::sync::Lazy;
+
+static EMPTY_INDEXMAP: Lazy<IndexMap<String, String>> = Lazy::new(IndexMap::new);
 
 impl BigqueryMaterializedViewConfig for BigqueryMaterializedViewConfigFromDbtModel {
     fn table_id(&self) -> &str {
@@ -536,15 +539,15 @@ impl BigqueryMaterializedViewConfig for BigqueryMaterializedViewConfigFromDbtMod
         self.0.base().database.as_ref()
     }
 
-    fn tags(&self) -> &BTreeMap<String, String> {
+    fn tags(&self) -> &IndexMap<String, String> {
         self.attr()
             .resource_tags
             .as_ref()
-            .unwrap_or(&EMPTY_BTREEMAP)
+            .unwrap_or(&EMPTY_INDEXMAP)
     }
 
-    fn labels(&self) -> &BTreeMap<String, String> {
-        self.attr().labels.as_ref().unwrap_or(&EMPTY_BTREEMAP)
+    fn labels(&self) -> &IndexMap<String, String> {
+        self.attr().labels.as_ref().unwrap_or(&EMPTY_INDEXMAP)
     }
 
     fn kms_key_name(&self) -> &str {
@@ -837,7 +840,7 @@ mod tests {
 
         assert_eq!(
             mv.tags(),
-            &BTreeMap::from([("my_tag".to_owned(), "my_val".to_owned())])
+            &IndexMap::from([("my_tag".to_owned(), "my_val".to_owned())])
         );
         assert_eq!(
             mv.expiration_timestamp_ns(),

@@ -136,7 +136,7 @@ pub struct ProjectSeedConfig {
     )]
     pub job_execution_timeout_seconds: Option<u64>,
     #[serde(rename = "+labels")]
-    pub labels: Option<BTreeMap<String, String>>,
+    pub labels: Option<IndexMap<String, String>>,
     #[serde(
         default,
         rename = "+labels_from_meta",
