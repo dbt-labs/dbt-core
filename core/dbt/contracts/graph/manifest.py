@@ -1585,6 +1585,8 @@ class Manifest(MacroMethods, dbtClassMixin):
             # don't raise this reference error for ad hoc 'preview' queries
             and node.resource_type != NodeType.SqlOperation
             and node.resource_type != NodeType.RPCCall  # TODO: rm
+            # macros are outside the group/access system (e.g. run-operation)
+            and node.resource_type != NodeType.Macro
         )
         target_dependency = dependencies.get(target_model.package_name)
         restrict_package_access = target_dependency.restrict_access if target_dependency else False
@@ -1611,6 +1613,8 @@ class Manifest(MacroMethods, dbtClassMixin):
             # don't raise this reference error for ad hoc 'preview' queries
             and node.resource_type != NodeType.SqlOperation
             and node.resource_type != NodeType.RPCCall  # TODO: rm
+            # macros are outside the group/access system (e.g. run-operation)
+            and node.resource_type != NodeType.Macro
         )
         target_dependency = dependencies.get(target_model.package_name)
         restrict_package_access = target_dependency.restrict_access if target_dependency else False
