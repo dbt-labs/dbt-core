@@ -55,6 +55,7 @@ class RunHookType(StrEnum):
 class ModelLanguage(StrEnum):
     python = "python"
     sql = "sql"
+    js = "js"
 
 
 class ModelHookType(StrEnum):
