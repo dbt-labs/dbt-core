@@ -987,7 +987,12 @@ class SelectorSelectorMethod(SelectorMethod):
             )
 
         for matched_selector_dfn in matched_selector_dfns:
-            yield from self._search_for_matched_selector(included_nodes, matched_selector_dfn)
+            try:
+                yield from self._search_for_matched_selector(included_nodes, matched_selector_dfn)
+            except RecursionError as e:
+                raise DbtRuntimeError(
+                    f"Circular dependency detected in selector: {matched_selector_dfn.raw}"
+                ) from e
 
 
 class MethodManager:

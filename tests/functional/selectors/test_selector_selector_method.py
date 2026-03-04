@@ -2,6 +2,7 @@ from typing import Any
 
 import pytest
 
+from dbt.exceptions import DbtRuntimeError
 from dbt.tests.util import run_dbt
 
 models__model_a_sql = """
@@ -85,6 +86,18 @@ selectors:
       union:
         - model_c
         - selector:model_[ab]_selector
+
+  - name: circular_selection_hop
+    description: Selects circular selection hop models
+    definition:
+      union:
+        - selector:circular_dependency_selector
+
+  - name: circular_dependency_selector
+    description: Selects circular dependency models
+    definition:
+      union:
+        - selector:circular_selection_hop
 """
 
 
@@ -209,3 +222,9 @@ class TestSelectorSelectorMethod:
     def test_recursive_with_wildcards(self, project):
         result = run_dbt(["ls", "--select", "selector:recursive_with_wildcards"])
         assert_result_set(result, {"test.model_a", "test.model_b", "test.model_c"})
+
+    def test_circular_dependency(self, project):
+        with pytest.raises(DbtRuntimeError) as exc:
+            run_dbt(["ls", "--select", "selector:circular_dependency_selector"], expect_pass=False)
+
+        assert "selector:circular_selection_hop" in exc.value.msg
