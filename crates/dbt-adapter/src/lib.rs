@@ -11,6 +11,8 @@ pub mod bridge_adapter;
 pub mod cache;
 pub mod catalog_relation;
 pub mod column;
+/// Connection management, thread-local storage, and connection backpressure.
+pub mod connection;
 pub mod errors;
 pub mod factory;
 pub mod formatter;

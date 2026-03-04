@@ -18,7 +18,7 @@ use dbt_schemas::schemas::dbt_column::DbtColumn;
 use dbt_schemas::schemas::project::QueryComment;
 use dbt_schemas::schemas::properties::ModelConstraint;
 use dbt_schemas::schemas::relations::base::{BaseRelation, ComponentName};
-use dbt_xdbc::{Backend, Connection};
+use dbt_xdbc::Backend;
 use indexmap::IndexMap;
 use minijinja::dispatch_object::DispatchObject;
 use minijinja::{State, Value};
@@ -144,13 +144,6 @@ pub trait BaseAdapter: fmt::Debug + AdapterTyping + Send + Sync {
     fn commit(&self) -> Result<Value, minijinja::Error> {
         Ok(Value::from(true))
     }
-
-    /// Create a new connection
-    fn new_connection(
-        &self,
-        state: Option<&State>,
-        node_id: Option<String>,
-    ) -> Result<Box<dyn Connection>, minijinja::Error>;
 
     /// Cache added
     ///
