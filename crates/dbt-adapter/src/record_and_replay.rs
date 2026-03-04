@@ -1055,6 +1055,7 @@ impl Statement for ReplayEngineStatement {
                 let record_sql = entry.sql.as_deref().unwrap_or("none");
                 if normalize_sql_for_comparison(record_sql)
                     != normalize_sql_for_comparison(replay_sql)
+                        .replace("DBT_TESTING_ALT", "[MASKED_ALT_WH]")
                         .replace("FUSION_ADAPTER_TESTING", "[MASKED_WH]")
                         .replace("FUSION_SLT_WAREHOUSE", "[MASKED_WH]")
                 {

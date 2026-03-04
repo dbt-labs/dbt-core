@@ -431,6 +431,7 @@ impl Task for SedTask {
                 // Apply warehouse name replacement
                 let warehouse_replace = |content: &str| -> String {
                     content
+                        .replace("DBT_TESTING_ALT", "[MASKED_ALT_WH]")
                         .replace("FUSION_ADAPTER_TESTING", "[MASKED_WH]")
                         .replace("FUSION_SLT_WAREHOUSE", "[MASKED_WH]")
                 };
