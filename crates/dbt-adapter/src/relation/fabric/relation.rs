@@ -11,7 +11,10 @@ use dbt_schemas::{
     },
 };
 
-use crate::relation::{RelationObject, StaticBaseRelation};
+use crate::{
+    information_schema::InformationSchema,
+    relation::{RelationObject, StaticBaseRelation},
+};
 
 #[derive(Clone, Debug, Copy)]
 pub struct FabricRelationType(pub ResolvedQuoting);
@@ -26,15 +29,15 @@ impl StaticBaseRelation for FabricRelationType {
         custom_quoting: Option<ResolvedQuoting>,
         temporary: Option<bool>,
     ) -> Result<minijinja::Value, minijinja::Error> {
-        let _ = (
+        let _ = temporary; // TODO: what to do with this
+        Ok(RelationObject::new(Arc::new(FabricRelation::new(
             database,
             schema,
             identifier,
             relation_type,
-            custom_quoting,
-            temporary,
-        );
-        todo!()
+            custom_quoting.unwrap_or(self.0),
+        )))
+        .into_value())
     }
 
     fn get_adapter_type(&self) -> String {
@@ -135,11 +138,14 @@ impl BaseRelation for FabricRelation {
 
     fn create_from(
         &self,
-        state: &minijinja::State,
-        args: &[minijinja::Value],
+        _state: &minijinja::State,
+        _args: &[minijinja::Value],
     ) -> Result<minijinja::Value, minijinja::Error> {
-        let _ = (state, args);
-        todo!()
+        unimplemented!("Fabric relation creation from Jinja values")
+    }
+
+    fn relation_type(&self) -> Option<RelationType> {
+        self.relation_type
     }
 
     fn database(&self) -> minijinja::Value {
@@ -158,23 +164,21 @@ impl BaseRelation for FabricRelation {
         AdapterType::Fabric
     }
 
-    fn set_is_delta(&mut self, is_delta: Option<bool>) {
-        let _ = is_delta;
-        todo!()
-    }
+    fn set_is_delta(&mut self, _is_delta: Option<bool>) {}
 
     fn as_value(&self) -> minijinja::Value {
         RelationObject::new(BaseRelation::to_owned(self)).into_value()
     }
 
     fn normalize_component(&self, component: &str) -> String {
-        let _ = component;
-        todo!()
+        component.to_lowercase()
     }
 
     fn include_inner(&self, policy: Policy) -> Result<minijinja::Value, minijinja::Error> {
-        let _ = policy;
-        todo!()
+        let mut relation = self.clone();
+        relation.include_policy = policy;
+
+        Ok(relation.as_value())
     }
 
     fn create_relation(
@@ -185,8 +189,13 @@ impl BaseRelation for FabricRelation {
         relation_type: Option<RelationType>,
         quote_policy: Policy,
     ) -> Result<Arc<dyn BaseRelation>, minijinja::Error> {
-        let _ = (database, schema, identifier, relation_type, quote_policy);
-        todo!()
+        Ok(Arc::new(FabricRelation::new(
+            database,
+            schema,
+            identifier,
+            relation_type,
+            quote_policy,
+        )))
     }
 
     fn information_schema_inner(
@@ -194,7 +203,8 @@ impl BaseRelation for FabricRelation {
         database: Option<String>,
         view_name: Option<&str>,
     ) -> Result<minijinja::Value, minijinja::Error> {
-        let _ = (database, view_name);
-        todo!()
+        let result =
+            InformationSchema::try_from_relation(self.adapter_type(), database, view_name)?;
+        Ok(RelationObject::new(Arc::new(result)).into_value())
     }
 }

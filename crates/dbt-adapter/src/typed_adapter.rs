@@ -3750,7 +3750,19 @@ prevent unnecessary latency for other users."#,
             );
             vec![flag]
         }
-        Postgres | Redshift | Salesforce | Sidecar | Spark | DuckDB | Fabric => vec![],
+        Fabric => {
+            let flag = BehaviorFlag::new(
+                "empty",
+                false,
+                Some(
+                    "When enabled, table and view materializations will be created as empty structures (no data).",
+                ),
+                None,
+                None,
+            );
+            vec![flag]
+        }
+        Postgres | Redshift | Salesforce | Sidecar | Spark | DuckDB => vec![],
     }
 }
 
