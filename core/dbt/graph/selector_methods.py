@@ -977,7 +977,12 @@ class SelectorSelectorMethod(SelectorMethod):
             raise DbtRuntimeError("Cannot use selector: method if selectors.yml is not provided")
         matched_selector_dfns = []
 
-        for s_name, s_value in self._selectors.items():
+        # ensure that selectors are sorted to make the execution deterministic
+        # this will ensure that when circular depdencies are detected
+        # the same selector is used as the "head" of the circular dependency on every run
+        sorted_selectors = sorted(self._selectors.items(), key=lambda x: x[0])
+
+        for s_name, s_value in sorted_selectors:
             if fnmatch(s_name, selector):
                 matched_selector_dfns.append(s_value["definition"])
 
