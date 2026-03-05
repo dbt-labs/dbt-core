@@ -47,6 +47,8 @@ pub struct QueryCacheStatement {
     node_id: Option<NodeId>,
     /// One of [DBT_EXECUTION_PHASES] or ""
     execution_phase: &'static str,
+    /// Whether the caller expects results (`true` = read/SELECT, `false` = DDL/DML).
+    fetch: bool,
     sql: String,
 }
 
@@ -212,6 +214,7 @@ impl Statement for QueryCacheStatement {
     fn execute<'a>(&'a mut self) -> AdbcResult<Box<dyn RecordBatchReader + Send + 'a>> {
         self.inner_stmt.set_sql_query(&self.sql)?;
         let (node_id, phase) = if let Some(node_id) = &self.node_id
+            && self.fetch
             && self
                 .query_cache_config
                 .phases
@@ -319,10 +322,14 @@ impl Statement for QueryCacheStatement {
                 self.execution_phase = execution_phase;
                 Ok(())
             }
+            (OptionStatement::Other(name), OptionValue::Int(fetch_flag)) if name == DBT_FETCH => {
+                self.fetch = fetch_flag != 0;
+                Ok(())
+            }
             (OptionStatement::Other(name), _)
-                if [DBT_NODE_ID, DBT_EXECUTION_PHASE].contains(&name.as_str()) =>
+                if [DBT_NODE_ID, DBT_EXECUTION_PHASE, DBT_FETCH].contains(&name.as_str()) =>
             {
-                debug_assert!(false, "expected string value for {} option", name);
+                debug_assert!(false, "expected correct value type for {name} option");
                 Ok(())
             }
             (k, v) => self.inner_stmt.set_option(k, v),
@@ -387,6 +394,7 @@ impl QueryCache for QueryCacheImpl {
             inner_stmt,
             node_id: None,
             execution_phase: "",
+            fetch: true,
             sql: "".to_string(),
         })
     }
@@ -500,6 +508,7 @@ mod tests {
             inner_stmt: Box::new(NoopStatement),
             node_id: None,
             execution_phase: "",
+            fetch: true,
             sql: sql.to_string(),
         }
     }
@@ -702,6 +711,7 @@ mod tests {
             inner_stmt: Box::new(NoopStatement),
             node_id: None,
             execution_phase: "",
+            fetch: true,
             sql: String::new(),
         }
     }
@@ -804,5 +814,65 @@ mod tests {
         cache.set_reverse_deps(deps.clone());
 
         assert_eq!(*cache.reverse_deps.get().unwrap(), deps);
+    }
+
+    #[test]
+    fn test_fetch_false_bypasses_cache() {
+        use dbt_common::adapter::DBT_EXECUTION_PHASE_RENDER;
+
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let phases = vec![DBT_EXECUTION_PHASE_RENDER];
+        let config = Arc::new(QueryCacheConfig::new(root.to_path_buf(), None, phases));
+
+        let mut stmt = QueryCacheStatement {
+            query_cache_config: config,
+            counters: Arc::new(SccHashMap::new()),
+            reverse_deps: Arc::new(OnceLock::new()),
+            invalidated_nodes: Arc::new(SccHashSet::new()),
+            inner_stmt: Box::new(NoopStatement),
+            node_id: Some("model.test".to_string()),
+            execution_phase: DBT_EXECUTION_PHASE_RENDER,
+            fetch: false,
+            sql: "CREATE TABLE t (id INT)".to_string(),
+        };
+
+        stmt.execute().unwrap();
+
+        let cache_dir = root.join("model.test");
+        assert!(
+            !cache_dir.exists(),
+            "fetch=false should bypass caching entirely; no cache dir should be created"
+        );
+    }
+
+    #[test]
+    fn test_fetch_true_uses_cache() {
+        use dbt_common::adapter::DBT_EXECUTION_PHASE_RENDER;
+
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let phases = vec![DBT_EXECUTION_PHASE_RENDER];
+        let config = Arc::new(QueryCacheConfig::new(root.to_path_buf(), None, phases));
+
+        let mut stmt = QueryCacheStatement {
+            query_cache_config: config,
+            counters: Arc::new(SccHashMap::new()),
+            reverse_deps: Arc::new(OnceLock::new()),
+            invalidated_nodes: Arc::new(SccHashSet::new()),
+            inner_stmt: Box::new(NoopStatement),
+            node_id: Some("model.test".to_string()),
+            execution_phase: DBT_EXECUTION_PHASE_RENDER,
+            fetch: true,
+            sql: "SELECT 1".to_string(),
+        };
+
+        stmt.execute().unwrap();
+
+        let cache_dir = root.join("model.test");
+        assert!(
+            cache_dir.exists(),
+            "fetch=true should write to cache; cache dir should exist"
+        );
     }
 }
