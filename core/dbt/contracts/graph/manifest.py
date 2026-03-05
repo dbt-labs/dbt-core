@@ -34,6 +34,7 @@ from dbt.adapters.factory import get_adapter_package_names
 # to preserve import paths
 from dbt.artifacts.resources import (
     BaseResource,
+    DeferFunction,
     DeferRelation,
     NodeConfig,
     NodeVersion,
@@ -1629,6 +1630,8 @@ class Manifest(MacroMethods, dbtClassMixin):
         with a counterpart in the stateful manifest used for deferral.
 
         Only non-ephemeral refable nodes are examined.
+        Function nodes from the deferred manifest are merged so that models
+        depending on functions can resolve them via deferral.
         """
         refables = set(REFABLE_NODE_TYPES)
         for unique_id, node in other.nodes.items():
@@ -1649,6 +1652,28 @@ class Manifest(MacroMethods, dbtClassMixin):
                     config=node.config,
                 )
                 self.nodes[unique_id] = replace(current, defer_relation=defer_relation)
+
+        for unique_id, function in other.functions.items():
+            current = self.functions.get(unique_id)
+            if current:
+                defer_fn = DeferFunction(
+                    database=function.database,
+                    schema=function.schema,
+                    alias=function.alias,
+                    arguments=function.arguments,
+                    returns=function.returns,
+                    resource_type=function.resource_type,
+                    name=function.name,
+                    description=function.description,
+                    compiled_code=function.compiled_code,
+                    meta=function.meta,
+                    tags=function.tags,
+                    config=function.config,
+                )
+                self.functions[unique_id] = replace(current, defer_function=defer_fn)
+            else:
+                self.functions[unique_id] = function
+        self._function_lookup = None
 
         # Rebuild the flat_graph, which powers the 'graph' context variable
         self.build_flat_graph()

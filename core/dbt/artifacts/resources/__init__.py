@@ -38,6 +38,7 @@ from dbt.artifacts.resources.v1.exposure import (
     MaturityType,
 )
 from dbt.artifacts.resources.v1.function import (
+    DeferFunction,
     Function,
     FunctionArgument,
     FunctionConfig,
