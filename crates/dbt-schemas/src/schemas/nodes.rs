@@ -573,7 +573,7 @@ pub(crate) fn normalize_description(desc: &Option<String>) -> Option<String> {
         .map(|s| s.chars().filter(|c| !c.is_whitespace()).collect())
 }
 
-fn same_persisted_description(
+pub(crate) fn same_persisted_description(
     self_common: &CommonAttributes,
     self_base: &NodeBaseAttributes,
     other_common: &CommonAttributes,

@@ -5,7 +5,7 @@ use crate::schemas::project::configs::common::log_state_mod_diff;
 use crate::schemas::serde::typed_struct_from_json_file;
 use crate::schemas::{
     InternalDbtNode, Nodes, nodes::DbtModel, nodes::is_invalid_for_relation_comparison,
-    nodes::normalize_description,
+    nodes::same_persisted_description,
 };
 use dbt_common::tracing::emit::emit_warn_log_message;
 use dbt_common::{ErrorCode, FsResult, constants::DBT_MANIFEST_JSON};
@@ -235,6 +235,39 @@ impl PreviousState {
                 }
             }
 
+            // dbt-core (and Mantle-produced manifests) may represent a single tag as a scalar
+            // string, while Fusion may produce a one-element list. These are semantically equal.
+            fn tags_eq(a: Option<&YmlValue>, b: Option<&YmlValue>) -> Option<bool> {
+                fn norm(v: Option<&YmlValue>) -> Option<Vec<String>> {
+                    use dbt_yaml::Value as YmlValue;
+                    match v {
+                        None => Some(vec![]),
+                        Some(YmlValue::Null(_)) => Some(vec![]),
+                        Some(YmlValue::String(s, _)) => Some(vec![canonicalize_str(s).to_string()]),
+                        Some(YmlValue::Sequence(seq, _)) => {
+                            let mut out = Vec::with_capacity(seq.len());
+                            for item in seq {
+                                match item {
+                                    YmlValue::String(s, _) => {
+                                        out.push(canonicalize_str(s).to_string());
+                                    }
+                                    // Unexpected element types: fall back to raw equality.
+                                    _ => return None,
+                                }
+                            }
+                            // Tags are order-insensitive.
+                            out.sort_unstable();
+                            out.dedup();
+                            Some(out)
+                        }
+                        // Unexpected tags type: fall back to raw equality.
+                        _ => None,
+                    }
+                }
+
+                Some(norm(a)? == norm(b)?)
+            }
+
             fn get_any<'a>(
                 m: &'a std::collections::BTreeMap<String, YmlValue>,
                 keys: &[&str],
@@ -268,7 +301,11 @@ impl PreviousState {
                 for (name, keys) in checks {
                     let a = get_any(current_uc, keys);
                     let b = get_any(previous_uc, keys);
-                    let eq = uc_eq(a, b);
+                    let eq = if name == "tags" {
+                        tags_eq(a, b).unwrap_or_else(|| uc_eq(a, b))
+                    } else {
+                        uc_eq(a, b)
+                    };
                     if !eq {
                         any_diff = true;
                         log_state_mod_diff(
@@ -317,7 +354,15 @@ impl PreviousState {
             m.get(k).and_then(|v| v.as_str())
         }
 
-        if !current_uc.is_empty() && !previous_uc.is_empty() {
+        // Only use `unrendered_config` for relation comparison when both sides actually contain
+        // relation keys (database/schema/alias). Mantle-produced manifests may populate
+        // `unrendered_config` for sources with non-relation config keys (loaded_at_field/meta/tags),
+        // which would otherwise cause false positives here.
+        let has_relation_keys_on_both_sides = ["database", "schema", "alias"]
+            .iter()
+            .any(|k| current_uc.contains_key(*k) && previous_uc.contains_key(*k));
+
+        if has_relation_keys_on_both_sides {
             let db_eq = get(current_uc, "database") == get(previous_uc, "database");
             let schema_eq = get(current_uc, "schema") == get(previous_uc, "schema");
             let alias_eq = get(current_uc, "alias") == get(previous_uc, "alias");
@@ -359,7 +404,52 @@ impl PreviousState {
             return !is_same_relation;
         }
 
-        // Fallback: compare just the rendered alias (legacy behavior).
+        // Fallback:
+        // - For sources, compare rendered database/schema/identifier (stored in alias) like dbt-core.
+        // - For other nodes, compare just the rendered alias (legacy behavior).
+        if current_node.resource_type() == NodeType::Source
+            && previous_node.resource_type() == NodeType::Source
+        {
+            let db_eq = current_node.base().database == previous_node.base().database;
+            let schema_eq = current_node.base().schema == previous_node.base().schema;
+            let alias_eq = current_node.base().alias == previous_node.base().alias;
+            let is_same_relation = db_eq && schema_eq && alias_eq;
+            if !is_same_relation {
+                log_state_mod_diff(
+                    &current_node.common().unique_id,
+                    "relation",
+                    [
+                        (
+                            "database",
+                            db_eq,
+                            Some((
+                                format!("{:?}", &current_node.base().database),
+                                format!("{:?}", &previous_node.base().database),
+                            )),
+                        ),
+                        (
+                            "schema",
+                            schema_eq,
+                            Some((
+                                format!("{:?}", &current_node.base().schema),
+                                format!("{:?}", &previous_node.base().schema),
+                            )),
+                        ),
+                        (
+                            "alias",
+                            alias_eq,
+                            Some((
+                                format!("{:?}", &current_node.base().alias),
+                                format!("{:?}", &previous_node.base().alias),
+                            )),
+                        ),
+                    ],
+                );
+            }
+            return !is_same_relation;
+        }
+
+        // Non-source nodes fallback: compare just the rendered alias (legacy behavior).
         let current_alias = &current_node.base().alias;
         let previous_alias = &previous_node.base().alias;
 
@@ -400,28 +490,12 @@ impl PreviousState {
             None => return !current_node.is_never_new_if_previous_missing(), // If previous node doesn't exist, consider it modified
         };
 
-        // Check if persisted descriptions changed
-        // Persist docs for relations and columns are deprecated in fusion, so they are not used
-        // as additional check flags as they are in dbt-core.
-        // https://github.com/dbt-labs/dbt-core/blob/906e07c1f2161aaf8873f17ba323221a3cf48c9f/core/dbt/contracts/graph/nodes.py#L330-L345
-
-        let is_same_desc = normalize_description(&current_node.common().description)
-            == normalize_description(&previous_node.common().description);
-        if !is_same_desc {
-            log_state_mod_diff(
-                &current_node.common().unique_id,
-                "persisted_descriptions",
-                [(
-                    "description",
-                    false,
-                    Some((
-                        format!("{:?}", &current_node.common().description),
-                        format!("{:?}", &previous_node.common().description),
-                    )),
-                )],
-            );
-        }
-        !is_same_desc
+        !same_persisted_description(
+            current_node.common(),
+            current_node.base(),
+            previous_node.common(),
+            previous_node.base(),
+        )
     }
 
     fn check_contract_modified(&self, current_node: &dyn InternalDbtNode) -> bool {
