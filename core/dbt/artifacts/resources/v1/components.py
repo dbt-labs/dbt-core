@@ -1,3 +1,4 @@
+import threading
 import time
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -257,12 +258,20 @@ class CompiledResource(ParsedResource):
     extra_ctes_injected: bool = False
     extra_ctes: List[InjectedCTE] = field(default_factory=list)
     _pre_injected_sql: Optional[str] = None
+    _lock: threading.Lock = field(
+        default_factory=threading.Lock,
+        compare=False,
+        repr=False,
+        metadata={"serialize": lambda x: None, "deserialize": lambda x: None},
+    )
     contract: Contract = field(default_factory=Contract)
 
     def __post_serialize__(self, dct: Dict, context: Optional[Dict] = None):
         dct = super().__post_serialize__(dct, context)
         if "_pre_injected_sql" in dct:
             del dct["_pre_injected_sql"]
+        if "_lock" in dct:
+            del dct["_lock"]
         # Remove compiled attributes
         if "compiled" in dct and dct["compiled"] is False:
             del dct["compiled"]
@@ -272,3 +281,8 @@ class CompiledResource(ParsedResource):
             if "compiled_code" in dct:
                 del dct["compiled_code"]
         return dct
+
+    @classmethod
+    def __post_deserialize__(cls, obj):
+        obj._lock = threading.Lock()
+        return obj
