@@ -23,8 +23,8 @@ pub enum RetrieveAccountConnectionError {
 /// Retrieve details of a specific Account Connection.
 pub async fn retrieve_account_connection(
     configuration: &configuration::Configuration,
-    account_id: i32,
-    id: i32,
+    account_id: i64,
+    id: i64,
 ) -> Result<models::AccountConnectionDetailResponse, Error<RetrieveAccountConnectionError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_account_id = account_id;

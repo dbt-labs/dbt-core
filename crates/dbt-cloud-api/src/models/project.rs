@@ -18,22 +18,22 @@ pub struct Project {
     pub name: String,
     /// The account the project is associated with
     #[serde(rename = "account_id")]
-    pub account_id: i32,
+    pub account_id: i64,
     /// The description of the project
     #[serde(rename = "description", skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     /// The active connection
     #[serde(rename = "connection_id", skip_serializing_if = "Option::is_none")]
-    pub connection_id: Option<i32>,
+    pub connection_id: Option<i64>,
     /// The active repository
     #[serde(rename = "repository_id", skip_serializing_if = "Option::is_none")]
-    pub repository_id: Option<i32>,
+    pub repository_id: Option<i64>,
     /// The active semantic layer configuration
     #[serde(
         rename = "semantic_layer_config_id",
         skip_serializing_if = "Option::is_none"
     )]
-    pub semantic_layer_config_id: Option<i32>,
+    pub semantic_layer_config_id: Option<i64>,
     /// A value of 1 means this entity is active and a value of 2 means this entity is deleted
     #[serde(rename = "state")]
     pub state: i32,
@@ -45,17 +45,17 @@ pub struct Project {
     pub dbt_project_subdirectory: Option<String>,
     /// The job used for docs generation
     #[serde(rename = "docs_job_id", skip_serializing_if = "Option::is_none")]
-    pub docs_job_id: Option<i32>,
+    pub docs_job_id: Option<i64>,
     /// The job used for source freshness generation
     #[serde(rename = "freshness_job_id", skip_serializing_if = "Option::is_none")]
-    pub freshness_job_id: Option<i32>,
+    pub freshness_job_id: Option<i64>,
     /// The type of the project  * `0` - DEFAULT * `1` - HYBRID
     #[serde(rename = "type")]
     pub r#type: models::Type24eEnum,
 }
 
 impl Project {
-    pub fn new(name: String, account_id: i32, state: i32, r#type: models::Type24eEnum) -> Project {
+    pub fn new(name: String, account_id: i64, state: i32, r#type: models::Type24eEnum) -> Project {
         Project {
             name,
             account_id,

@@ -14,9 +14,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct RedshiftCredentials {
     #[serde(rename = "account_id")]
-    pub account_id: i32,
+    pub account_id: i64,
     #[serde(rename = "project_id", skip_serializing_if = "Option::is_none")]
-    pub project_id: Option<i32>,
+    pub project_id: Option<i64>,
     #[serde(rename = "type")]
     pub r#type: models::ConnectionTypeEnum,
     /// A value of 1 means this entity is active and a value of 2 means this entity is deleted
@@ -39,7 +39,7 @@ pub struct RedshiftCredentials {
 
 impl RedshiftCredentials {
     pub fn new(
-        account_id: i32,
+        account_id: i64,
         r#type: models::ConnectionTypeEnum,
         state: i32,
         threads: i32,

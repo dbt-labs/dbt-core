@@ -14,19 +14,19 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct UserCredentialsResponse {
     #[serde(rename = "id")]
-    pub id: i32,
+    pub id: i64,
     /// The account the user credentials are associated with
     #[serde(rename = "account_id", skip_serializing_if = "Option::is_none")]
-    pub account_id: Option<i32>,
+    pub account_id: Option<i64>,
     /// The user the user credentials are associated with
     #[serde(rename = "user_id", skip_serializing_if = "Option::is_none")]
-    pub user_id: Option<i32>,
+    pub user_id: Option<i64>,
     /// The project the user credentials are associated with
     #[serde(rename = "project_id", skip_serializing_if = "Option::is_none")]
-    pub project_id: Option<u64>,
+    pub project_id: Option<i64>,
     /// The credentials the user is associated with
     #[serde(rename = "credentials_id", skip_serializing_if = "Option::is_none")]
-    pub credentials_id: Option<i32>,
+    pub credentials_id: Option<i64>,
     /// A value of 1 means this entity is active and a value of 2 means this entity is deleted
     #[serde(rename = "state", skip_serializing_if = "Option::is_none")]
     pub state: Option<i32>,
@@ -42,7 +42,7 @@ pub struct UserCredentialsResponse {
 
 impl UserCredentialsResponse {
     pub fn new(
-        id: i32,
+        id: i64,
         created_at: String,
         updated_at: String,
         credentials: models::UserCredentialsResponseCredentials,

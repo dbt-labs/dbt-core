@@ -54,7 +54,7 @@ pub struct DbtCloudContext {
 pub struct CredentialInfo {
     pub adapter_type: String,
     pub target_name: String,
-    pub project_id: Option<u64>,
+    pub project_id: Option<i64>,
     pub state: i32,
 }
 

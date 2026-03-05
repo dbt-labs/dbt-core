@@ -14,14 +14,14 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct AccountConnectionDetail {
     #[serde(rename = "id")]
-    pub id: i32,
+    pub id: i64,
     #[serde(rename = "created_at")]
     pub created_at: String,
     #[serde(rename = "updated_at")]
     pub updated_at: String,
     /// The account the connection is associated with
     #[serde(rename = "account_id")]
-    pub account_id: i32,
+    pub account_id: i64,
     /// The name of the connection
     #[serde(rename = "name")]
     pub name: String,
@@ -45,7 +45,7 @@ pub struct AccountConnectionDetail {
         rename = "oauth_configuration_id",
         skip_serializing_if = "Option::is_none"
     )]
-    pub oauth_configuration_id: Option<i32>,
+    pub oauth_configuration_id: Option<i64>,
     #[serde(
         rename = "is_configured_for_native_oauth",
         skip_serializing_if = "Option::is_none"
@@ -55,17 +55,17 @@ pub struct AccountConnectionDetail {
         rename = "platform_metadata_credentials_id",
         skip_serializing_if = "Option::is_none"
     )]
-    pub platform_metadata_credentials_id: Option<i32>,
+    pub platform_metadata_credentials_id: Option<i64>,
     #[serde(rename = "config")]
     pub config: Box<models::Config>,
 }
 
 impl AccountConnectionDetail {
     pub fn new(
-        id: i32,
+        id: i64,
         created_at: String,
         updated_at: String,
-        account_id: i32,
+        account_id: i64,
         name: String,
         adapter_version: models::DbtAdapterVersion,
         oauth_redirect_uri: String,

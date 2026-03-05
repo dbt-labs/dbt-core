@@ -23,8 +23,8 @@ pub enum ListCredentialsError {
 /// List the credentials for a given project.
 pub async fn list_credentials(
     configuration: &configuration::Configuration,
-    account_id: i32,
-    project_id: i32,
+    account_id: i64,
+    project_id: i64,
 ) -> Result<models::CredentialsResponseListEnveloped, Error<ListCredentialsError>> {
     // add a prefix to parameters to efficiently prevent name collisions
     let p_account_id = account_id;
