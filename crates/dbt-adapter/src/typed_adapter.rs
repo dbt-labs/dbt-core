@@ -362,9 +362,11 @@ impl ConcreteAdapter {
         options: Option<HashMap<String, String>>,
     ) -> AdapterResult<(AdapterResponse, AgateTable)> {
         let adapter_type = self.adapter_type();
-        // BigQuery API supports multi-statement
-        // https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language
-        let statements = if adapter_type == Bigquery {
+        // BigQuery and DuckDB support multi-statement execution.
+        // BigQuery: https://cloud.google.com/bigquery/docs/reference/standard-sql/procedural-language
+        // DuckDB: temp tables are connection-scoped; batching CREATE TEMP + DML in one
+        // execute() call avoids the need for cross-call connection caching.
+        let statements = if adapter_type == Bigquery || adapter_type == DuckDB {
             if engine.splitter().is_empty(sql, adapter_type) {
                 vec![]
             } else {
@@ -1456,9 +1458,11 @@ impl ConcreteAdapter {
             Replay(_, replay) => {
                 replay.replay_expand_target_column_types(state, from_relation, to_relation)
             }
-            Impl(Bigquery, _) => {
-                // This method is a noop for BigQuery
-                // https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L260-L261
+            Impl(Bigquery, _) | Impl(DuckDB, _) => {
+                // This method is a noop for BigQuery and DuckDB.
+                // BigQuery: https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L260-L261
+                // DuckDB: type widening (e.g. INT→BIGINT) is handled implicitly;
+                // real mismatches surface as SQL errors.
                 Ok(none_value())
             }
             Impl(_, _) => {

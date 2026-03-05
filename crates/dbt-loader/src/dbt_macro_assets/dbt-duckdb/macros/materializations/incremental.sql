@@ -61,14 +61,62 @@
       {% call statement("pre", language=language) %}
         {{- build_python }}
       {% endcall %}
-    {% else %} {# SQL #}
-      {% do run_query(create_table_as(temporary, temp_relation, compiled_code, language)) %}
     {% endif %}
-    {% do adapter.expand_target_column_types(
-             from_relation=temp_relation,
-             to_relation=target_relation) %}
-    {#-- Process schema changes. Returns dict of changes if successful. Use source columns for upserting/merging --#}
-    {% set dest_columns = process_schema_changes(on_schema_change, temp_relation, existing_relation) %}
+
+    {#-- DuckDB schema-change detection diverges from the standard incremental path.
+         Normally, the temp table is created BEFORE schema comparison so that
+         get_columns_in_relation(temp_relation) can introspect it. In DuckDB the
+         temp table creation is batched into the multi-statement execute() call
+         (CREATE TEMP + strategy DML in one batch), so it does NOT exist yet at
+         schema-check time.
+
+         Instead we use get_column_schema_from_query(compiled_code) to introspect
+         source columns directly from the SELECT, and sync_column_schemas() (shared
+         lib) to reconcile differences. For 'ignore' mode, we skip straight to
+         get_columns_in_relation on the TARGET (the existing table). --#}
+    {% if on_schema_change != 'ignore' and language == 'sql' %}
+      {#-- Get source columns by introspecting the query, not a temp table --#}
+      {% set source_columns = get_column_schema_from_query(compiled_code) %}
+      {% set target_columns = adapter.get_columns_in_relation(existing_relation) %}
+      {% set source_not_in_target = diff_columns(source_columns, target_columns) %}
+      {% set target_not_in_source = diff_columns(target_columns, source_columns) %}
+      {% set new_target_types = diff_column_data_types(source_columns, target_columns) %}
+
+      {% set schema_changed = source_not_in_target != [] or target_not_in_source != [] or new_target_types != [] %}
+      {% set schema_changes_dict = {
+        'schema_changed': schema_changed,
+        'source_not_in_target': source_not_in_target,
+        'target_not_in_source': target_not_in_source,
+        'source_columns': source_columns,
+        'target_columns': target_columns,
+        'new_target_types': new_target_types
+      } %}
+
+      {% if schema_changed %}
+        {% if on_schema_change == 'fail' %}
+          {% set fail_msg %}
+              The source and target schemas on this incremental model are out of sync!
+              They can be reconciled in several ways:
+                - set the `on_schema_change` config to either append_new_columns or sync_all_columns, depending on your situation.
+                - Re-run the incremental model with `full_refresh: True` to update the target schema.
+                - update the schema manually and re-run the process.
+
+              Additional troubleshooting context:
+                 Source columns not in target: {{ source_not_in_target }}
+                 Target columns not in source: {{ target_not_in_source }}
+                 New column types: {{ new_target_types }}
+          {% endset %}
+          {% do exceptions.raise_compiler_error(fail_msg) %}
+        {% else %}
+          {% do sync_column_schemas(on_schema_change, existing_relation, schema_changes_dict) %}
+        {% endif %}
+      {% endif %}
+
+      {% set dest_columns = schema_changes_dict['source_columns'] %}
+    {% else %}
+      {% set dest_columns = process_schema_changes(on_schema_change, temp_relation, existing_relation) %}
+    {% endif %}
+
     {% if not dest_columns %}
       {% set dest_columns = adapter.get_columns_in_relation(existing_relation) %}
     {% endif %}
@@ -80,6 +128,12 @@
     {% set strategy_arg_dict = ({'target_relation': target_relation, 'temp_relation': temp_relation, 'unique_key': unique_key, 'dest_columns': dest_columns, 'incremental_predicates': incremental_predicates }) %}
     {% set build_sql = strategy_sql_macro_func(strategy_arg_dict) %}
     {% set language = "sql" %}
+
+    {#-- Emit CREATE TEMP TABLE + strategy as ONE multi-statement batch.
+         DuckDB does not split on ';', so the entire batch runs in a single execute() call
+         on one connection, ensuring the temp table is visible to the subsequent DML. --#}
+    {% set create_tmp_sql = create_table_as(temporary, temp_relation, compiled_code) %}
+    {% set build_sql = create_tmp_sql ~ ";\n" ~ build_sql %}
 
   {% endif %}
 
