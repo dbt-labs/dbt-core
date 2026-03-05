@@ -1149,7 +1149,7 @@ where
             source_name: value.inner.source_name(),
         };
         if let Some(versions) = value.inner.versions() {
-            Ok(collect_versioned_model_tests(&base, versions))
+            collect_versioned_model_tests(&base, versions)
         } else {
             Ok(vec![base])
         }
@@ -1161,16 +1161,17 @@ where
 fn collect_versioned_model_tests(
     base_test_config: &GenericTestConfig,
     versions: &[Versions],
-) -> Vec<GenericTestConfig> {
+) -> FsResult<Vec<GenericTestConfig>> {
     let mut version_tests = vec![];
     // For each version, merge base tests with version-specific tests
     for version in versions {
-        let version_suffix = version.get_version().unwrap_or_else(|| {
-            panic!(
+        let Some(version_suffix) = version.get_version() else {
+            return err!(
+                ErrorCode::InvalidSchema,
                 "Version '{:?}' does not meet the required format",
                 version.v
             );
-        });
+        };
 
         // Start with base tests but set the version number
         let mut version_config = base_test_config.clone();
@@ -1217,7 +1218,15 @@ fn collect_versioned_model_tests(
             // Then handle any explicit column test definitions
             if let Ok(column_map) = dbt_yaml::from_value::<Vec<ColumnProperties>>(columns.clone()) {
                 for col in column_map {
-                    if let Some(tests) = col.tests.as_ref() {
+                    if col.tests.is_some() && col.data_tests.is_some() {
+                        return err!(
+                            ErrorCode::InvalidSchema,
+                            "Cannot have both 'tests' and 'data_tests' defined"
+                        );
+                    }
+                    // In properties files, column tests may be specified via either `tests` or
+                    // `data_tests`. Treat them equivalently (same as non-versioned columns).
+                    if let Some(tests) = col.tests.as_ref().or(col.data_tests.as_ref()) {
                         column_tests.insert(
                             col.name.clone(),
                             (col.quote.unwrap_or(false), tests.clone()),
@@ -1237,7 +1246,7 @@ fn collect_versioned_model_tests(
         // Use versioned name as key
         version_tests.push(version_config);
     }
-    version_tests
+    Ok(version_tests)
 }
 
 /// The minimal info we need to generate generic tests for a single dbt resource.
