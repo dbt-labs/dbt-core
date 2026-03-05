@@ -39,13 +39,6 @@ defaults:
 env:
   # number of parallel processes to spawn for python integration testing
   PYTHON_INTEGRATION_TEST_WORKERS: 15
-  # pytest-split algorithm: we use 'least_duration' instead of the default 'duration_based_chunks'
-  # because duration_based_chunks maintains alphabetical order and can create very uneven test
-  # counts per group (e.g., 294 tests in group 1 vs 90 in others). Even with equal total duration,
-  # more tests means more per-test overhead (fixture setup/teardown, DB connections, temp files)
-  # which causes timeouts. least_duration distributes tests evenly across groups by count while
-  # still balancing duration, avoiding the overhead problem.
-  PYTEST_SPLIT_ALGORITHM: least_duration
 
 jobs:
   code-quality:
@@ -229,7 +222,7 @@ jobs:
           timeout_minutes: 30
           max_attempts: 3
           shell: bash
-          command: cd core && hatch -v run ci:integration-tests -- --ddtrace --durations-path .test_durations --splitting-algorithm ${{ env.PYTEST_SPLIT_ALGORITHM }} --splits ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }} --group ${{ matrix.split-group }}
+          command: cd core && hatch -v run ci:integration-tests -- --ddtrace --splits ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }} --group ${{ matrix.split-group }}
 
       - name: Get current date
         if: always()
@@ -306,7 +299,7 @@ jobs:
           timeout_minutes: 30
           max_attempts: 3
           shell: bash
-          command: cd core && hatch -v run ci:integration-tests -- --ddtrace --durations-path .test_durations --splitting-algorithm ${{ env.PYTEST_SPLIT_ALGORITHM }} --splits ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }} --group ${{ matrix.split-group }}
+          command: cd core && hatch -v run ci:integration-tests -- --ddtrace --splits ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }} --group ${{ matrix.split-group }}
 
       - name: Get current date
         if: always()

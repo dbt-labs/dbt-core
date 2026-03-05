@@ -71,7 +71,7 @@ jobs:
       - name: "Run integration tests and store durations"
         run: |
           cd core
-          hatch -v run ci:integration-tests -- --store-durations --durations-path .test_durations || true
+          hatch -v run ci:integration-tests-generate-durations -- --store-durations --durations-path .test_durations || true
 
       - name: "Code quality"
         run: |
