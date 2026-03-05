@@ -817,42 +817,41 @@ impl AdapterEngine for XdbcEngine {
         state: Option<&State>,
         node_id: Option<String>,
     ) -> AdapterResult<Box<dyn Connection>> {
+        let do_create_connection =
+            |adapter_type: AdapterType| -> AdapterResult<Box<dyn Connection>> {
+                let config = match adapter_type {
+                    AdapterType::Databricks => {
+                        if let Some(databricks_compute) =
+                            state.and_then(databricks_compute_from_state)
+                        {
+                            let augmented_config = {
+                                let mut mapping = self.config.repr().clone();
+                                mapping
+                                    .insert("databricks_compute".into(), databricks_compute.into());
+                                AdapterConfig::new(mapping)
+                            };
+                            Cow::Owned(augmented_config)
+                        } else {
+                            Cow::Borrowed(&self.config)
+                        }
+                    }
+                    _ => Cow::Borrowed(&self.config),
+                };
+                self.new_connection_with_config(config.as_ref())
+            };
+
         match &self.mode {
-            EngineMode::Mock => return Ok(Box::new(NoopConnection)),
+            EngineMode::Mock => Ok(Box::new(NoopConnection)),
             EngineMode::Replay(path) => {
-                return Ok(Box::new(ReplayEngineConnection::new(path.clone(), node_id)));
+                let replay_engine_conn = ReplayEngineConnection::new(path.clone(), node_id);
+                Ok(Box::new(replay_engine_conn))
             }
-            EngineMode::Live | EngineMode::Record(_) => {}
-        }
-
-        let conn = match self.adapter_type {
-            AdapterType::Databricks => {
-                if let Some(databricks_compute) = state.and_then(databricks_compute_from_state) {
-                    let augmented_config = {
-                        let mut mapping = self.config.repr().clone();
-                        mapping.insert("databricks_compute".into(), databricks_compute.into());
-                        AdapterConfig::new(mapping)
-                    };
-                    self.new_connection_with_config(&augmented_config)?
-                } else {
-                    self.new_connection_with_config(&self.config)?
-                }
+            EngineMode::Live => do_create_connection(self.adapter_type),
+            EngineMode::Record(path) => {
+                let conn = do_create_connection(self.adapter_type)?;
+                let record_engine_conn = RecordEngineConnection::new(path.clone(), conn, node_id);
+                Ok(Box::new(record_engine_conn))
             }
-            _ => {
-                // TODO(felipecrv): Make this codepath more efficient
-                // (no need to reconfigure the default database)
-                self.new_connection_with_config(&self.config)?
-            }
-        };
-
-        if let EngineMode::Record(path) = &self.mode {
-            Ok(Box::new(RecordEngineConnection::new(
-                path.clone(),
-                conn,
-                node_id,
-            )))
-        } else {
-            Ok(conn)
         }
     }
 

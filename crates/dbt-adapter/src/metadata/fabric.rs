@@ -151,6 +151,7 @@ impl MetadataAdapter for FabricMetadataAdapter {
             let adapter = self.adapter.clone();
             move || {
                 adapter
+                    .engine()
                     .new_connection(None, None)
                     .map_err(Cancellable::Error)
             }

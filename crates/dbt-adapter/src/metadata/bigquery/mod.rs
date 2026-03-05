@@ -877,6 +877,7 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
             // when relations are more than one, do we want to enforce single connection in record and replay tests?
             let node_id = unique_id.clone().unwrap_or_else(|| "sources".to_string());
             adapter
+                .engine()
                 .new_connection(None, Some(node_id))
                 .map_err(Cancellable::Error)
         });
@@ -990,6 +991,7 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
         let adapter = self.adapter.clone();
         let new_connection_f = move || {
             adapter
+                .engine()
                 .new_connection(None, None)
                 .map_err(Cancellable::Error)
         };
@@ -1052,6 +1054,7 @@ impl MetadataAdapter for BigqueryMetadataAdapter {
         let adapter = self.adapter.clone();
         let new_connection_f = move || {
             adapter
+                .engine()
                 .new_connection(None, None)
                 .map_err(Cancellable::Error)
         };

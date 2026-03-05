@@ -1,6 +1,7 @@
 use crate::adapter_engine::{AdapterEngine, Options as ExecuteOptions, execute_query_with_retry};
 use crate::catalog_relation::CatalogRelation;
 use crate::column::{BigqueryColumnMode, Column, ColumnBuilder};
+use crate::connection::{ConnectionGuard, borrow_tlocal_connection};
 use crate::errors::{
     AdapterError, AdapterErrorKind, adbc_error_to_adapter_error, arrow_error_to_adapter_error,
 };
@@ -334,16 +335,18 @@ impl ConcreteAdapter {
         unimplemented!("get_partitions_metadata")
     }
 
-    /// Create a new connection
-    pub fn new_connection(
+    /// Borrow the current thread-local connection or create one if it's not set yet.
+    ///
+    /// A guard is returned. When destroyed, the guard returns the connection to
+    /// the thread-local variable. If another connection became the thread-local
+    /// in the mean time, that connection is dropped and the return proceeds as
+    /// normal.
+    pub fn borrow_tlocal_connection(
         &self,
         state: Option<&State>,
         node_id: Option<String>,
-    ) -> AdapterResult<Box<dyn Connection>> {
-        match self.inner_adapter() {
-            Replay(_, replay) => replay.replay_new_connection(state, node_id),
-            Impl(_, engine) => engine.new_connection(state, node_id),
-        }
+    ) -> Result<ConnectionGuard<'_>, minijinja::Error> {
+        borrow_tlocal_connection(self.engine().as_ref(), state, node_id)
     }
 
     /// Helper method for execute
@@ -537,19 +540,6 @@ impl ConcreteAdapter {
             limit, // limit
             None,  // options
         )
-    }
-
-    /// Execute a query with a new connection
-    pub fn execute_with_new_connection(
-        &self,
-        ctx: &QueryCtx,
-        sql: &str,
-        auto_begin: bool,
-        fetch: bool,
-        limit: Option<i64>,
-    ) -> AdapterResult<(AdapterResponse, AgateTable)> {
-        let mut conn = self.new_connection(None, None)?;
-        self.execute(None, &mut *conn, ctx, sql, auto_begin, fetch, limit, None)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -3942,12 +3932,6 @@ pub trait Replayer: fmt::Debug + Send + Sync {
     fn replay_peek_is_replaceable_next(&self, _state: &State) -> AdapterResult<bool> {
         Ok(false)
     }
-
-    fn replay_new_connection(
-        &self,
-        state: Option<&State>,
-        node_id: Option<String>,
-    ) -> AdapterResult<Box<dyn Connection>>;
 
     #[allow(clippy::too_many_arguments)]
     fn replay_execute(

@@ -5,7 +5,6 @@ use crate::catalog_relation::CatalogRelation;
 #[cfg(debug_assertions)]
 use crate::column::Column;
 use crate::column::ColumnStatic;
-use crate::connection::*;
 use crate::funcs::*;
 use crate::metadata::*;
 use crate::parse::adapter::ParseAdapterState;
@@ -90,9 +89,9 @@ use InnerAdapter::*;
 /// thread-local. This allows Jinja code to use the connection without
 /// explicitly referring to database connections.
 ///
-/// Use the `borrow_tlocal_connection` function, which returns a guard that
-/// can be dereferenced into a mutable [Box<dyn Connection>]. When the
-/// guard instance is destroyed, the connection returns to the thread-local
+/// Use the [ConcreateAdapter::borrow_tlocal_connection] function, which returns
+/// a guard that can be dereferenced into a mutable [Box<dyn Connection>]. When
+/// the guard instance is destroyed, the connection returns to the thread-local
 /// variable.
 ///
 /// # Relation Cache
@@ -200,26 +199,6 @@ impl BridgeAdapter {
     /// Get a reference to the time machine, if enabled.
     pub fn time_machine(&self) -> Option<&TimeMachine> {
         self.time_machine.as_ref()
-    }
-
-    /// Borrow the current thread-local connection or create one if it's not set yet.
-    ///
-    /// A guard is returned. When destroyed, the guard returns the connection to
-    /// the thread-local variable. If another connection became the thread-local
-    /// in the mean time, that connection is dropped and the return proceeds as
-    /// normal.
-    ///
-    /// # Panic
-    ///
-    /// This method will panic if called on a [BridgeAdapter] in parse mode, since
-    /// the parse adapter does not support real connections.
-    pub(crate) fn borrow_tlocal_connection(
-        &self,
-        state: Option<&State>,
-        node_id: Option<String>,
-    ) -> Result<ConnectionGuard<'_>, minijinja::Error> {
-        let adapter = self.as_concrete_adapter();
-        borrow_tlocal_connection(adapter, state, node_id)
     }
 
     /// Checks if the given [BaseRelation] matches the node currently being rendered
@@ -551,11 +530,8 @@ impl BaseAdapter for BridgeAdapter {
     ) -> AdapterResult<(AdapterResponse, AgateTable)> {
         match &self.inner {
             Typed { adapter, .. } => {
-                let mut conn = borrow_tlocal_connection(
-                    adapter.as_ref(),
-                    Some(state),
-                    node_id_from_state(state),
-                )?;
+                let mut conn =
+                    adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                 let ctx = query_ctx_from_state(state)?.with_desc("execute adapter call");
                 let (response, table) = adapter.execute(
                     Some(state),
@@ -609,7 +585,7 @@ impl BaseAdapter for BridgeAdapter {
                 };
 
                 let mut conn =
-                    self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
+                    adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                 let ctx = query_ctx_from_state(state)?.with_desc("add_query adapter call");
 
                 adapter.add_query(
@@ -635,7 +611,7 @@ impl BaseAdapter for BridgeAdapter {
         match &self.inner {
             Typed { adapter, .. } => {
                 let mut conn =
-                    self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
+                    adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                 let ctx = query_ctx_from_state(state)?.with_desc("submit_python_job adapter call");
 
                 adapter.submit_python_job(&ctx, conn.as_mut(), state, model, compiled_code)
@@ -865,7 +841,7 @@ impl BaseAdapter for BridgeAdapter {
                             !resolved_catalog.is_empty() || !resolved_schema.is_empty();
 
                         if has_schema {
-                            let mut conn = self
+                            let mut conn = adapter
                                 .borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                             let db_schema = CatalogAndSchema::from(temp_relation.as_ref());
                             let query_ctx = query_ctx_from_state(state)?
@@ -911,7 +887,7 @@ impl BaseAdapter for BridgeAdapter {
 
                 // Execute get_relation when: cache miss, list_relations failed, or needs_information && !has_information
                 let mut conn =
-                    self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
+                    adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                 let query_ctx = query_ctx_from_state(state)?.with_desc("get_relation adapter call");
                 let relation = adapter.get_relation(
                     state,
@@ -1097,7 +1073,7 @@ impl BaseAdapter for BridgeAdapter {
                 let ctx = query_ctx_from_state(state)?
                     .with_desc("get_column_schema_from_query adapter call");
                 let mut conn =
-                    self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
+                    adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                 let result =
                     adapter.get_column_schema_from_query(state, conn.as_mut(), &ctx, sql)?;
                 Ok(Value::from(result))
@@ -1121,7 +1097,7 @@ impl BaseAdapter for BridgeAdapter {
                 let ctx = query_ctx_from_state(state)?
                     .with_desc("get_column_schema_from_query adapter call");
                 let mut conn =
-                    self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
+                    adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                 let result =
                     adapter.get_column_schema_from_query(state, conn.as_mut(), &ctx, sql)?;
                 Ok(Value::from(result))
@@ -1212,7 +1188,7 @@ impl BaseAdapter for BridgeAdapter {
                 };
 
                 let mut conn =
-                    self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
+                    adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                 let result = adapter.is_replaceable(
                     conn.as_mut(),
                     relation,
@@ -1333,7 +1309,7 @@ impl BaseAdapter for BridgeAdapter {
         match &self.inner {
             Typed { adapter, .. } => {
                 let mut conn =
-                    self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
+                    adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                 let result = adapter.grant_access_to(
                     state,
                     conn.as_mut(),
@@ -1358,7 +1334,7 @@ impl BaseAdapter for BridgeAdapter {
         match &self.inner {
             Typed { adapter, .. } => {
                 let mut conn =
-                    self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
+                    adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                 let result = adapter.get_dataset_location(state, conn.as_mut(), relation)?;
                 Ok(Value::from(result))
             }
@@ -1378,7 +1354,7 @@ impl BaseAdapter for BridgeAdapter {
         match &self.inner {
             Typed { adapter, .. } => {
                 let mut conn =
-                    self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
+                    adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                 let result = adapter.update_table_description(
                     state,
                     conn.as_mut(),
@@ -1403,7 +1379,7 @@ impl BaseAdapter for BridgeAdapter {
         match &self.inner {
             Typed { adapter, .. } => {
                 let mut conn =
-                    self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
+                    adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                 let result = adapter.alter_table_add_columns(
                     state,
                     conn.as_mut(),
@@ -1426,7 +1402,7 @@ impl BaseAdapter for BridgeAdapter {
         match &self.inner {
             Typed { adapter, .. } => {
                 let mut conn =
-                    self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
+                    adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                 let result =
                     adapter.update_columns_descriptions(state, conn.as_mut(), relation, columns)?;
                 Ok(result)
@@ -1462,7 +1438,7 @@ impl BaseAdapter for BridgeAdapter {
                 let query_ctx = query_ctx_from_state(state)?
                     .with_desc("list_relations_without_caching adapter call");
                 let mut conn =
-                    self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
+                    adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                 let result = adapter.list_relations(
                     &query_ctx,
                     conn.as_mut(),
@@ -1489,7 +1465,7 @@ impl BaseAdapter for BridgeAdapter {
         match &self.inner {
             Typed { adapter, .. } => {
                 let mut conn =
-                    self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
+                    adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                 let result = adapter.has_dbr_capability(state, conn.as_mut(), capability_name)?;
                 Ok(Value::from(result))
             }
@@ -1507,7 +1483,7 @@ impl BaseAdapter for BridgeAdapter {
         match &self.inner {
             Typed { adapter, .. } => {
                 let mut conn =
-                    self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
+                    adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                 let result = adapter.compare_dbr_version(state, conn.as_mut(), major, minor)?;
                 Ok(result)
             }
@@ -1655,7 +1631,7 @@ impl BaseAdapter for BridgeAdapter {
                 };
 
                 let mut conn =
-                    self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
+                    adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                 adapter.update_tblproperties_for_uniform_iceberg(
                     state,
                     conn.as_mut(),
@@ -1682,7 +1658,7 @@ impl BaseAdapter for BridgeAdapter {
                     unimplemented!("is_uniform is only supported in Databricks")
                 }
                 let mut conn =
-                    self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
+                    adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                 let result = adapter.is_uniform(state, conn.as_mut(), config, node)?;
                 Ok(Value::from(result))
             }
@@ -1721,7 +1697,7 @@ impl BaseAdapter for BridgeAdapter {
                     .insert_relation(target_relation_partitioned.clone(), None);
 
                 let mut conn =
-                    self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
+                    adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                 adapter.copy_table(
                     state,
                     conn.as_mut(),
@@ -1744,7 +1720,7 @@ impl BaseAdapter for BridgeAdapter {
         match &self.inner {
             Typed { adapter, .. } => {
                 let mut conn =
-                    self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
+                    adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                 let result = adapter.describe_relation(conn.as_mut(), relation, Some(state))?;
                 Ok(result.map_or_else(none_value, Value::from_serialize))
             }
@@ -1861,7 +1837,7 @@ impl BaseAdapter for BridgeAdapter {
         match &self.inner {
             Typed { adapter, .. } => {
                 let mut conn =
-                    self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
+                    adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                 let config = adapter.get_relation_config(state, conn.as_mut(), relation)?;
                 Ok(Value::from_object(config))
             }
@@ -1930,7 +1906,7 @@ impl BaseAdapter for BridgeAdapter {
                     return Ok(false);
                 }
 
-                let mut conn = self
+                let mut conn = adapter
                     .borrow_tlocal_connection(None, Some(node_id.to_string()))
                     .map_err(|e| FsError::from_jinja_err(e, "Failed to create a connection"))?;
                 adapter.use_warehouse(conn.as_mut(), warehouse.unwrap(), node_id)?;
@@ -1955,7 +1931,7 @@ impl BaseAdapter for BridgeAdapter {
 
         match &self.inner {
             Typed { adapter, .. } => {
-                let mut conn = self
+                let mut conn = adapter
                     .borrow_tlocal_connection(None, Some(node_id.to_string()))
                     .map_err(|e| FsError::from_jinja_err(e, "Failed to create a connection"))?;
                 adapter.restore_warehouse(conn.as_mut(), node_id)?;
@@ -1980,7 +1956,7 @@ impl BaseAdapter for BridgeAdapter {
         match &self.inner {
             Typed { adapter, .. } => {
                 let mut conn =
-                    self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
+                    adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                 let ctx = query_ctx_from_state(state)?.with_desc("load_dataframe");
                 let sql = "";
                 let result = adapter.load_dataframe(
@@ -2010,7 +1986,7 @@ impl BaseAdapter for BridgeAdapter {
         match &self.inner {
             Typed { adapter, .. } => {
                 let mut conn =
-                    self.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
+                    adapter.borrow_tlocal_connection(Some(state), node_id_from_state(state))?;
                 adapter.describe_dynamic_table(state, conn.as_mut(), relation)
             }
             Parse(_) => {

@@ -638,6 +638,7 @@ impl MetadataAdapter for RedshiftMetadataAdapter {
         let adapter = self.adapter.clone();
         let new_connection_f = Box::new(move || {
             adapter
+                .engine()
                 .new_connection(None, None)
                 .map_err(Cancellable::Error)
         });
@@ -792,6 +793,7 @@ AND table_name = '{identifier}'"
         let adapter = self.adapter.clone();
         let new_connection_f = move || {
             adapter
+                .engine()
                 .new_connection(None, None)
                 .map_err(Cancellable::Error)
         };
@@ -882,6 +884,7 @@ AND table_name = '{identifier}'"
         let adapter = self.adapter.clone();
         let new_connection_f = move || {
             adapter
+                .engine()
                 .new_connection(None, None)
                 .map_err(Cancellable::Error)
         };

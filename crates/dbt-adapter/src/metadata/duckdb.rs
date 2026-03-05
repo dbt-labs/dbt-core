@@ -69,6 +69,7 @@ impl MetadataAdapter for DuckDBMetadataAdapter {
         let adapter = self.adapter.clone();
         let new_connection_f = Box::new(move || {
             adapter
+                .engine()
                 .new_connection(None, None)
                 .map_err(Cancellable::Error)
         });
@@ -142,6 +143,7 @@ impl MetadataAdapter for DuckDBMetadataAdapter {
         let adapter = self.adapter.clone();
         let new_connection_f = move || {
             adapter
+                .engine()
                 .new_connection(None, None)
                 .map_err(Cancellable::Error)
         };

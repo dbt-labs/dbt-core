@@ -394,6 +394,7 @@ impl MetadataAdapter for SnowflakeMetadataAdapter {
         let adapter = self.adapter.clone();
         let new_connection_f = move || {
             adapter
+                .engine()
                 .new_connection(None, None)
                 .map_err(Cancellable::Error)
         };
@@ -494,6 +495,7 @@ impl MetadataAdapter for SnowflakeMetadataAdapter {
         let adapter = self.adapter.clone(); // clone needed to move it into lambda
         let new_connection_f = Box::new(move || {
             adapter
+                .engine()
                 .new_connection(None, None)
                 .map_err(Cancellable::Error)
         });
@@ -584,6 +586,7 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
         let adapter = self.adapter.clone();
         let new_connection_f = move || {
             adapter
+                .engine()
                 .new_connection(None, None)
                 .map_err(Cancellable::Error)
         };
@@ -649,6 +652,7 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
         let adapter = self.adapter.clone();
         let new_connection_f = move || {
             adapter
+                .engine()
                 .new_connection(None, None)
                 .map_err(Cancellable::Error)
         };
@@ -726,6 +730,7 @@ ORDER BY TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, ORDINAL_POSITION"
         let adapter = self.adapter.clone();
         let new_connection_f = move || {
             adapter
+                .engine()
                 .new_connection(None, None)
                 .map_err(Cancellable::Error)
         };

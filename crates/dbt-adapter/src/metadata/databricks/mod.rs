@@ -1,6 +1,5 @@
 use std::collections::{BTreeMap, HashMap};
 use std::future;
-use std::ops::DerefMut;
 use std::sync::Arc;
 use std::sync::OnceLock;
 
@@ -167,8 +166,8 @@ impl DatabricksMetadataAdapter {
         CACHED_DBR_VERSION
             .get_or_init(|| {
                 let query_ctx = QueryCtx::default().with_desc("get_dbr_version adapter call");
-                let mut conn = self.adapter.new_connection(None, None)?;
-                Self::get_dbr_version(&self.adapter, &query_ctx, conn.deref_mut())
+                let mut conn = self.adapter.borrow_tlocal_connection(None, None)?;
+                Self::get_dbr_version(&self.adapter, &query_ctx, conn.as_mut())
             })
             .clone()
     }
@@ -757,6 +756,7 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
         let adapter = self.adapter.clone(); // clone needed to move it into lambda
         let new_connection_f = Box::new(move || {
             adapter
+                .engine()
                 .new_connection(None, None)
                 .map_err(Cancellable::Error)
         });
@@ -877,6 +877,7 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
         let adapter = self.adapter.clone();
         let new_connection_f = move || {
             adapter
+                .engine()
                 .new_connection(None, None)
                 .map_err(Cancellable::Error)
         };
@@ -960,6 +961,7 @@ impl MetadataAdapter for DatabricksMetadataAdapter {
         let adapter = self.adapter.clone();
         let new_connection_f = move || {
             adapter
+                .engine()
                 .new_connection(None, None)
                 .map_err(Cancellable::Error)
         };

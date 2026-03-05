@@ -12,7 +12,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicIsize, Ordering};
 use std::task::{Poll, Waker};
 
-use crate::{AdapterTyping, ConcreteAdapter};
+use crate::AdapterEngine;
 
 /// Global atomic counting active/borrowed connections.
 static ACTIVE_CONNECTIONS: AtomicIsize = AtomicIsize::new(0);
@@ -55,13 +55,13 @@ fn num_active_connections() -> isize {
 /// in the mean time, that connection is dropped and the return proceeds as
 /// normal.
 pub(crate) fn borrow_tlocal_connection<'a>(
-    adapter: &ConcreteAdapter,
+    engine: &dyn AdapterEngine,
     state: Option<&State>,
     node_id: Option<String>,
 ) -> Result<ConnectionGuard<'a>, minijinja::Error> {
     let _span = span!("borrow_thread_local_connection");
     let conn = match CONNECTION.with(|c| c.take()) {
-        None => adapter.new_connection(state, node_id)?,
+        None => engine.new_connection(state, node_id)?,
         Some(mut c) => {
             c.update_node_id(node_id);
             c
@@ -73,7 +73,7 @@ pub(crate) fn borrow_tlocal_connection<'a>(
     // this case, so the connection is dropped immediately after use instead of being returned
     // to the thread-local. This gives other processes a chance to acquire a connection to the
     // same database file.
-    guard.persist = adapter.adapter_type() != AdapterType::DuckDB;
+    guard.persist = engine.adapter_type() != AdapterType::DuckDB;
     Ok(guard)
 }
 
