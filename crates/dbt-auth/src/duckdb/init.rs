@@ -3,8 +3,9 @@
 //! Produces statements in the same order as upstream dbt-duckdb:
 //! 1. `INSTALL` + `LOAD` for each extension (including auto-injected `motherduck`)
 //! 2. `CREATE OR REPLACE SECRET` for each secret
-//! 3. `SET` for each setting (including auto-injected `motherduck_token`)
-//! 4. `ATTACH IF NOT EXISTS` for each attachment
+//! 3. `SET motherduck_token` (for MotherDuck paths, when resolved)
+//! 4. `SET` for each setting
+//! 5. `ATTACH IF NOT EXISTS` for each attachment
 
 use crate::config::{AdapterConfig, YmlValue};
 
@@ -54,6 +55,17 @@ pub fn motherduck_database_name(path: &str) -> String {
     } else {
         name.to_owned()
     }
+}
+
+/// Normalize a MotherDuck attach path by dropping URL query parameters.
+///
+/// Examples:
+/// - `md:my_db?motherduck_token=tok` -> `md:my_db`
+/// - `motherduck:sales?user=1` -> `motherduck:sales`
+fn motherduck_attach_path(path: &str) -> String {
+    path.split_once('?')
+        .map(|(base, _)| base.to_owned())
+        .unwrap_or_else(|| path.to_owned())
 }
 
 /// Resolve the MotherDuck token from config, path query string, or environment.
@@ -136,10 +148,9 @@ pub fn generate_duckdb_init_sql(config: &AdapterConfig) -> Vec<String> {
 
     generate_extension_sql(config, &mut stmts);
     generate_secret_sql(config, &mut stmts);
+    generate_motherduck_token_sql(config, &mut stmts);
     generate_setting_sql(config, &mut stmts);
-    // Note: motherduck_token is NOT set here — it must be passed as a database
-    // init option (DuckDB rejects SET motherduck_token after initialization).
-    // See DuckDbAuth::configure() which calls resolve_motherduck_token().
+    generate_motherduck_path_attach_sql(config, &mut stmts);
     generate_attachment_sql(config, &mut stmts);
     stmts
 }
@@ -305,6 +316,42 @@ fn generate_setting_sql(config: &AdapterConfig, stmts: &mut Vec<String>) {
             }
         }
     }
+}
+
+fn generate_motherduck_token_sql(config: &AdapterConfig, stmts: &mut Vec<String>) {
+    if let Some(token) = resolve_motherduck_token(config) {
+        stmts.push(format!(
+            "SET motherduck_token = '{}'",
+            escape_single_quotes(&token)
+        ));
+    }
+}
+
+fn generate_motherduck_path_attach_sql(config: &AdapterConfig, stmts: &mut Vec<String>) {
+    let Some(path) = config.get("path").and_then(|v| v.as_str()) else {
+        return;
+    };
+    if !is_motherduck_path(path) {
+        return;
+    }
+
+    let alias = config
+        .get("database")
+        .and_then(|v| v.as_str())
+        .map(sanitize_identifier)
+        .unwrap_or_else(|| sanitize_identifier(&motherduck_database_name(path)));
+    let alias = if alias.is_empty() {
+        "my_db".to_owned()
+    } else {
+        alias
+    };
+
+    let attach_path = motherduck_attach_path(path);
+    stmts.push(format!(
+        "ATTACH IF NOT EXISTS '{}' AS {alias}",
+        escape_single_quotes(&attach_path),
+    ));
+    stmts.push(format!("USE {alias}"));
 }
 
 // ---------------------------------------------------------------------------
@@ -734,6 +781,19 @@ settings:
     }
 
     #[test]
+    fn test_motherduck_attach_path_strips_query() {
+        assert_eq!(
+            motherduck_attach_path("md:my_db?motherduck_token=tok"),
+            "md:my_db"
+        );
+        assert_eq!(
+            motherduck_attach_path("motherduck:sales?user=1"),
+            "motherduck:sales"
+        );
+        assert_eq!(motherduck_attach_path("md:plain"), "md:plain");
+    }
+
+    #[test]
     fn test_motherduck_auto_extension() {
         let config = config_from_yaml(
             r#"
@@ -762,8 +822,32 @@ extensions:
     }
 
     #[test]
-    fn test_motherduck_token_not_in_init_sql() {
-        // motherduck_token must be set at database init, never via SET statement
+    fn test_motherduck_path_is_auto_attached() {
+        let config = config_from_yaml(
+            r#"
+path: "md:stocks_dev"
+"#,
+        );
+        let stmts = generate_duckdb_init_sql(&config);
+        assert!(stmts.contains(&"ATTACH IF NOT EXISTS 'md:stocks_dev' AS stocks_dev".to_owned()));
+        assert!(stmts.contains(&"USE stocks_dev".to_owned()));
+    }
+
+    #[test]
+    fn test_motherduck_path_uses_explicit_database_alias() {
+        let config = config_from_yaml(
+            r#"
+path: "md:stocks_dev"
+database: "analytics"
+"#,
+        );
+        let stmts = generate_duckdb_init_sql(&config);
+        assert!(stmts.contains(&"ATTACH IF NOT EXISTS 'md:stocks_dev' AS analytics".to_owned()));
+        assert!(stmts.contains(&"USE analytics".to_owned()));
+    }
+
+    #[test]
+    fn test_motherduck_token_set_in_init_sql() {
         let config = config_from_yaml(
             r#"
 path: "md:my_db"
@@ -773,8 +857,61 @@ settings:
         );
         let stmts = generate_duckdb_init_sql(&config);
         assert!(
-            !stmts.iter().any(|s| s.contains("motherduck_token")),
-            "motherduck_token should not appear in init SQL"
+            stmts.contains(&"SET motherduck_token = 'my_secret_token'".to_owned()),
+            "motherduck_token should be emitted in init SQL for MotherDuck paths"
+        );
+    }
+
+    #[test]
+    fn test_motherduck_token_settings_wins_in_init_sql() {
+        let config = config_from_yaml(
+            r#"
+path: "md:my_db?motherduck_token=tok_from_path"
+settings:
+  motherduck_token: "tok_from_settings"
+"#,
+        );
+        let stmts = generate_duckdb_init_sql(&config);
+        assert!(stmts.contains(&"SET motherduck_token = 'tok_from_settings'".to_owned()));
+    }
+
+    #[test]
+    fn test_motherduck_token_set_before_attach() {
+        let config = config_from_yaml(
+            r#"
+path: "md:my_db?motherduck_token=tok_from_path"
+"#,
+        );
+        let stmts = generate_duckdb_init_sql(&config);
+        let token_idx = stmts
+            .iter()
+            .position(|s| s == "SET motherduck_token = 'tok_from_path'")
+            .expect("expected motherduck token SET statement");
+        let attach_idx = stmts
+            .iter()
+            .position(|s| s == "ATTACH IF NOT EXISTS 'md:my_db' AS my_db")
+            .expect("expected ATTACH statement");
+        let use_idx = stmts
+            .iter()
+            .position(|s| s == "USE my_db")
+            .expect("expected USE statement");
+        assert!(token_idx < attach_idx);
+        assert!(attach_idx < use_idx);
+    }
+
+    #[test]
+    fn test_motherduck_token_not_set_for_local_path() {
+        let config = config_from_yaml(
+            r#"
+path: "/tmp/local.duckdb"
+settings:
+  motherduck_token: "my_secret_token"
+"#,
+        );
+        let stmts = generate_duckdb_init_sql(&config);
+        assert!(
+            !stmts.iter().any(|s| s.starts_with("SET motherduck_token")),
+            "motherduck_token should not be emitted for local DuckDB paths"
         );
     }
 
