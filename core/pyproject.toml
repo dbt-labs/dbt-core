@@ -55,7 +55,7 @@ dependencies = [
     "dbt-semantic-interfaces>=0.10.2,<0.11",
     # Minor versions for these are expected to be backwards-compatible
     "dbt-common>=1.37.3,<2.0",
-    "dbt-adapters>=1.22.7,<2.0",
+    "dbt-adapters>=1.22.8,<2.0",
     "dbt-protos>=1.0.419,<2.0",
     "pydantic<3",
     # ----
