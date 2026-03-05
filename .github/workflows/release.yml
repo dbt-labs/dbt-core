@@ -129,7 +129,7 @@ jobs:
       env_setup_script_path: "scripts/env-setup.sh"
       test_run: ${{ inputs.test_run }}
       nightly_release: ${{ inputs.nightly_release }}
-      use_hatch: ${{ needs.job-setup.outputs.use_hatch == 'true' }}  # workflow outputs are strings...
+      use_hatch: ${{ needs.job-setup.outputs.use_hatch == 'true' }} # workflow outputs are strings...
 
     secrets: inherit
 
@@ -163,13 +163,13 @@ jobs:
       package_test_command: "dbt --version"
       test_run: ${{ inputs.test_run }}
       nightly_release: ${{ inputs.nightly_release }}
-      use_hatch: ${{ needs.job-setup.outputs.use_hatch == 'true' }}  # workflow outputs are strings...
+      use_hatch: ${{ needs.job-setup.outputs.use_hatch == 'true' }} # workflow outputs are strings...
 
   github-release:
     name: GitHub Release
     if: ${{ !failure() && !cancelled() && !inputs.only_docker }}
 
-    needs: [bump-version-generate-changelog, build-test-package]
+    needs: [job-setup, bump-version-generate-changelog, build-test-package]
 
     uses: dbt-labs/dbt-release/.github/workflows/github-release.yml@main
 
@@ -178,17 +178,19 @@ jobs:
       version_number: ${{ inputs.version_number }}
       changelog_path: ${{ needs.bump-version-generate-changelog.outputs.changelog_path }}
       test_run: ${{ inputs.test_run }}
+      use_hatch: ${{ needs.job-setup.outputs.use_hatch == 'true' }} # workflow outputs are strings...
 
   pypi-release:
     name: PyPI Release
 
-    needs: [github-release]
+    needs: [job-setup, github-release]
 
     uses: dbt-labs/dbt-release/.github/workflows/pypi-release.yml@main
 
     with:
       version_number: ${{ inputs.version_number }}
       test_run: ${{ inputs.test_run }}
+      use_hatch: ${{ needs.job-setup.outputs.use_hatch == 'true' }} # workflow outputs are strings...
 
     secrets:
       PYPI_API_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
