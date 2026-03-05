@@ -8,10 +8,9 @@
 
 -- funcsign: (relation, list[base_column]) -> string
 {% macro default__create_columns(relation, columns) %}
-  {# DIVERGENCE: FIXME: support expanded_data_type on Column #}
   {% for column in columns %}
     {% call statement() %}
-      alter table {{ relation.render() }} add column {{ adapter.quote(column.name) }} {{ column.data_type }}; {# DIVERGENCE: FIXME: support expanded_data_type on Column #}
+      alter table {{ relation.render() }} add column {{ adapter.quote(column.name) }} {{ column.expanded_data_type }};
     {% endcall %}
   {% endfor %}
 {% endmacro %}

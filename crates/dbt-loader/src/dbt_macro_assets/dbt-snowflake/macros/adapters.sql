@@ -200,7 +200,7 @@
       {{ column.data_type }}
     {% endif %}
   {% else %}
-    {{ column.data_type }}
+    {{ column.expanded_data_type }}
   {% endif %}
 {% endmacro %}
 

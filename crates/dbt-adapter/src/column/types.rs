@@ -20,6 +20,10 @@ use crate::base_adapter::backend_of;
 static LOG_RE: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"([^(]+)(\([^)]+\))?").expect("A valid regex"));
 
+/// Matches a COLLATE clause such as `COLLATE 'en-ci'` (case-insensitive).
+static COLLATION_RE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"(?i)\s+COLLATE\s+'([^']+)'").expect("A valid regex"));
+
 /// A struct representing a column type for use with static methods
 #[derive(Clone, Copy, Debug)]
 pub struct ColumnStatic(AdapterType);
@@ -373,6 +377,10 @@ pub struct Column {
     // TODO no need for u64; this should use 32 as char size (for consistency) or less; in some database scale can be negative
     numeric_precision: Option<u64>,
     numeric_scale: Option<u64>,
+
+    /// Collation specifier for string columns (e.g. `"en-ci"` from `VARCHAR(10) COLLATE 'en-ci'`).
+    /// Populated when parsing Snowflake raw data types that include a COLLATE clause.
+    collation: Option<String>,
 }
 
 impl Column {
@@ -393,6 +401,7 @@ impl Column {
             && self.char_size == other.char_size
             && self.numeric_precision == other.numeric_precision
             && self.numeric_scale == other.numeric_scale
+            && self.collation == other.collation
     }
 
     fn make_degenerate_data_type_from_parsed_struct_fields(
@@ -544,6 +553,7 @@ impl Column {
             char_size,
             numeric_precision,
             numeric_scale,
+            collation: None,
         }
     }
 
@@ -564,6 +574,7 @@ impl Column {
             char_size: col.char_size,
             numeric_precision: col.numeric_precision,
             numeric_scale: col.numeric_scale,
+            collation: None,
         }
     }
 
@@ -629,6 +640,7 @@ impl Column {
             char_size: None,
             numeric_precision: None,
             numeric_scale: None,
+            collation: None,
         }
     }
 
@@ -638,8 +650,19 @@ impl Column {
 
     /// Parse a Snowflake raw data type into a tuple of (data_type, char_size, numeric_precision, numeric_scale)
     fn try_from_snowflake_raw_data_type(name: &str, raw_data_type: &str) -> Result<Column, String> {
+        // Extract and strip any COLLATE clause before further parsing.
+        // e.g. "VARCHAR(10) COLLATE 'en-ci'" → collation = Some("en-ci"), type_without_collation = "VARCHAR(10)"
+        let collation = COLLATION_RE.captures(raw_data_type).map(|c| {
+            c.get(1)
+                .expect("capture group 1 exists")
+                .as_str()
+                .to_string()
+        });
+        let type_without_collation = COLLATION_RE.replace(raw_data_type, "");
+        let raw_data_type_for_parse: &str = &type_without_collation;
+
         // We want to pass through numeric parsing for composite types
-        let raw_data_type_trimmed = raw_data_type.trim().to_lowercase();
+        let raw_data_type_trimmed = raw_data_type_for_parse.trim().to_lowercase();
         if raw_data_type_trimmed.starts_with("array")
             || raw_data_type_trimmed.starts_with("object")
             || raw_data_type_trimmed.starts_with("map")
@@ -661,12 +684,14 @@ impl Column {
                 char_size: None,
                 numeric_precision: None,
                 numeric_scale: None,
+                collation: None,
             });
         }
         // Parse data type using regex pattern ([^(]+)(\([^)]+\))?
+        // Use the collation-stripped version for parsing, but keep the original for original_sql_str.
 
         let captures = LOG_RE
-            .captures(raw_data_type)
+            .captures(raw_data_type_for_parse)
             .ok_or_else(|| format!("Could not interpret raw_data_type \"{raw_data_type}\""))?;
 
         let data_type = captures
@@ -726,6 +751,7 @@ impl Column {
             char_size,
             numeric_precision,
             numeric_scale,
+            collation,
         })
     }
 
@@ -964,6 +990,20 @@ impl Column {
         self.numeric_scale
     }
 
+    pub fn collation(&self) -> Option<&str> {
+        self.collation.as_deref()
+    }
+
+    /// Returns `data_type()` with collation appended for string columns that have one.
+    /// e.g. `VARCHAR(10) collate 'en-ci'` instead of just `VARCHAR(10)`.
+    pub fn expanded_data_type(&self) -> String {
+        let base = self.data_type();
+        match &self.collation {
+            Some(c) if self.is_string() => format!("{base} collate '{c}'"),
+            _ => base,
+        }
+    }
+
     /// Returns True if this column can be expanded to the size of the other column
     /// https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/column.py#L102-L103
     ///
@@ -1073,6 +1113,8 @@ impl Object for Column {
             Some("char_size") => Some(Value::from(self.char_size)),
             Some("numeric_precision") => Some(Value::from(self.numeric_precision)),
             Some("numeric_scale") => Some(Value::from(self.numeric_scale)),
+            Some("collation") => Some(Value::from(self.collation.as_deref())),
+            Some("expanded_data_type") => Some(Value::from(self.expanded_data_type())),
             Some("mode") => Some(Value::from(self.mode().as_ref())),
             Some("fields") => Some(Value::from(
                 self._fields
@@ -1284,5 +1326,58 @@ mod tests {
                 )
                 .all(|(a, b)| a.cmp_column(b))
         );
+    }
+
+    #[test]
+    fn test_snowflake_collation_parsing() {
+        let col =
+            Column::try_from_snowflake_raw_data_type("c", "VARCHAR(10) COLLATE 'en-ci'").unwrap();
+        assert_eq!(col.collation(), Some("en-ci"));
+        assert_eq!(col.char_size, Some(10));
+        assert_eq!(col.dtype(), "VARCHAR");
+        // original_sql_str preserves the full string including collation
+        assert_eq!(col.original_sql_str(), Some("VARCHAR(10) COLLATE 'en-ci'"));
+    }
+
+    #[test]
+    fn test_snowflake_collation_case_insensitive() {
+        let col =
+            Column::try_from_snowflake_raw_data_type("c", "varchar(20) collate 'utf8'").unwrap();
+        assert_eq!(col.collation(), Some("utf8"));
+        assert_eq!(col.char_size, Some(20));
+    }
+
+    #[test]
+    fn test_snowflake_no_collation() {
+        let col = Column::try_from_snowflake_raw_data_type("c", "VARCHAR(10)").unwrap();
+        assert_eq!(col.collation(), None);
+        assert_eq!(col.char_size, Some(10));
+    }
+
+    #[test]
+    fn test_expanded_data_type_with_collation() {
+        let col =
+            Column::try_from_snowflake_raw_data_type("c", "VARCHAR(10) COLLATE 'en-ci'").unwrap();
+        assert_eq!(col.data_type(), "character varying(10)");
+        assert_eq!(
+            col.expanded_data_type(),
+            "character varying(10) collate 'en-ci'"
+        );
+    }
+
+    #[test]
+    fn test_expanded_data_type_without_collation() {
+        let col = Column::try_from_snowflake_raw_data_type("c", "VARCHAR(10)").unwrap();
+        assert_eq!(col.expanded_data_type(), col.data_type());
+    }
+
+    #[test]
+    fn test_can_expand_to_with_collation() {
+        let small =
+            Column::try_from_snowflake_raw_data_type("c", "VARCHAR(10) COLLATE 'en-ci'").unwrap();
+        let large =
+            Column::try_from_snowflake_raw_data_type("c", "VARCHAR(20) COLLATE 'en-ci'").unwrap();
+        assert!(small.can_expand_to(&large).unwrap());
+        assert!(!large.can_expand_to(&small).unwrap());
     }
 }

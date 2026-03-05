@@ -131,7 +131,6 @@
   {{ return(adapter.dispatch('alter_relation_add_remove_columns', 'dbt')(relation, add_columns, remove_columns)) }}
 {% endmacro %}
 
-{# DIVERGENCE: FIXME: support expanded_data_type on Column #}
 -- funcsign: (relation, optional[list[base_column]], optional[list[base_column]]) -> string
 {% macro default__alter_relation_add_remove_columns(relation, add_columns, remove_columns) %}
 
@@ -147,7 +146,7 @@
      alter {{ relation.type }} {{ relation.render() }}
 
             {% for column in add_columns %}
-               add column {{ column.name }} {{ column.data_type }}{{ ',' if not loop.last }}
+               add column {{ column.name }} {{ column.expanded_data_type }}{{ ',' if not loop.last }}
             {% endfor %}{{ ',' if add_columns and remove_columns }}
 
             {% for column in remove_columns %}

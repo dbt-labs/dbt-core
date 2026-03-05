@@ -1484,9 +1484,14 @@ impl ConcreteAdapter {
                         let col_string_size = reference_column.string_size().map_err(|msg| {
                             AdapterError::new(AdapterErrorKind::UnexpectedResult, msg)
                         })?;
-                        let new_type = reference_column
+                        let mut new_type = reference_column
                             .as_static()
                             .string_type(Some(col_string_size as usize));
+
+                        // Preserve collation from the target (existing) column
+                        if let Some(collation) = target_column.collation() {
+                            new_type = format!("{new_type} collate '{collation}'");
+                        }
 
                         // Create args for macro execution
                         execute_macro(
