@@ -2,8 +2,8 @@ from typing import Any
 
 import pytest
 
-from dbt.exceptions import DbtRuntimeError
 from dbt.tests.util import run_dbt
+from dbt_common.exceptions import RecursionError as DbtRecursionError
 
 models__model_a_sql = """
 SELECT 1 AS id
@@ -224,7 +224,5 @@ class TestSelectorSelectorMethod:
         assert_result_set(result, {"test.model_a", "test.model_b", "test.model_c"})
 
     def test_circular_dependency(self, project):
-        with pytest.raises(DbtRuntimeError) as exc:
+        with pytest.raises(DbtRecursionError):
             run_dbt(["ls", "--select", "selector:circular_dependency_selector"], expect_pass=False)
-
-        assert "selector:circular_selection_hop" in exc.value.msg

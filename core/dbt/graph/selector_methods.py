@@ -37,6 +37,7 @@ from dbt.node_types import NodeType
 from dbt_common.dataclass_schema import StrEnum
 from dbt_common.events.contextvars import get_project_root
 from dbt_common.exceptions import CompilationError, DbtInternalError, DbtRuntimeError
+from dbt_common.exceptions import RecursionError as DbtRecursionError
 
 from .graph import UniqueId
 
@@ -995,7 +996,7 @@ class SelectorSelectorMethod(SelectorMethod):
             try:
                 yield from self._search_for_matched_selector(included_nodes, matched_selector_dfn)
             except RecursionError as e:
-                raise DbtRuntimeError(
+                raise DbtRecursionError(
                     f"Circular dependency detected in selector: {matched_selector_dfn.raw}"
                 ) from e
 
