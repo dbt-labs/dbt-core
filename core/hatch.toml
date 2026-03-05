@@ -203,6 +203,8 @@ pre-install-commands = [
 DBT_TEST_USER_1 = "dbt_test_user_1"
 DBT_TEST_USER_2 = "dbt_test_user_2"
 DBT_TEST_USER_3 = "dbt_test_user_3"
+# Use new ddtrace pytest plugin to avoid deprecation warnings (old plugin removed in 3.0.0)
+DD_PYTEST_USE_NEW_PLUGIN_BETA = "true"
 
 
 
