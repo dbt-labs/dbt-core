@@ -120,3 +120,16 @@ class TestLockSerialization:
         # Verify the lock actually works
         assert restored._lock.acquire(timeout=1)
         restored._lock.release()
+
+    def test_lock_survives_pickle_roundtrip(self):
+        """Pickle/unpickle a node, assert _lock is a working Lock."""
+        import pickle
+
+        node = _make_model_node(compiled=True)
+        node.extra_ctes_injected = True
+        data = pickle.dumps(node)
+        restored = pickle.loads(data)
+        assert hasattr(restored, "_lock")
+        assert isinstance(restored._lock, type(threading.Lock()))
+        assert restored._lock.acquire(timeout=1)
+        restored._lock.release()

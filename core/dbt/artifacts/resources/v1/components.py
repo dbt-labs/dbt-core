@@ -286,3 +286,12 @@ class CompiledResource(ParsedResource):
     def __post_deserialize__(cls, obj):
         obj._lock = threading.Lock()
         return obj
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state.pop("_lock", None)
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self._lock = threading.Lock()
