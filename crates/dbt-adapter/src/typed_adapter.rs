@@ -1199,12 +1199,45 @@ impl ConcreteAdapter {
         }
 
         let macro_execution_result: AdapterResult<Value> = match self.adapter_type() {
-            Databricks => execute_macro_with_package(
-                state,
-                &[RelationObject::new(relation.to_owned()).as_value()],
-                "get_columns_comments",
-                "dbt_databricks",
-            ),
+            Databricks => {
+                // use DESCRIBE TABLE EXTENDED ... AS JSON for full type strings
+                // Plain DESCRIBE TABLE truncates long data types server-side
+                //
+                // https://github.com/databricks/dbt-databricks/blob/822b105b15e644676d9e1f47cbfd765cd4c1541f/dbt/adapters/databricks/impl.py#L439-L452
+                let use_legacy = relation.is_hive_metastore().is_true()
+                    || relation.is_materialized_view()
+                    || relation.is_streaming_table();
+
+                if !use_legacy {
+                    let json_result = execute_macro_with_package(
+                        state,
+                        &[RelationObject::new(relation.to_owned()).as_value()],
+                        "get_columns_comments_as_json",
+                        "dbt_databricks",
+                    );
+                    match json_result {
+                        Ok(ref val) => {
+                            if let Some(columns) = self.try_columns_from_json_describe(val) {
+                                return columns;
+                            }
+                        }
+                        Err(ref e) => {
+                            if e.message().contains("[TABLE_OR_VIEW_NOT_FOUND]") {
+                                return Ok(Vec::new());
+                            }
+                            // PARSE_SYNTAX_ERROR / UNSUPPORTED_FEATURE -> DBR < 16.2;
+                            // fall through to legacy DESCRIBE TABLE
+                        }
+                    }
+                }
+
+                execute_macro_with_package(
+                    state,
+                    &[RelationObject::new(relation.to_owned()).as_value()],
+                    "get_columns_comments",
+                    "dbt_databricks",
+                )
+            }
             Postgres | Snowflake | Bigquery | Sidecar | Redshift | DuckDB | Fabric => {
                 execute_macro(
                     state,
@@ -1328,6 +1361,43 @@ impl ConcreteAdapter {
                 Ok(Column::vec_from_jinja_value(adapter_type, result)?)
             }
         }
+    }
+
+    /// Try to parse columns from a `DESCRIBE TABLE EXTENDED ... AS JSON` result.
+    ///
+    /// Returns `Some(Ok(columns))` on success, `Some(Err(...))` on hard failure,
+    /// or `None` if the result couldn't be parsed as JSON metadata (caller should
+    /// fall back to plain DESCRIBE TABLE).
+    fn try_columns_from_json_describe(&self, result: &Value) -> Option<AdapterResult<Vec<Column>>> {
+        use crate::metadata::MetadataProcessor as _;
+        use crate::metadata::databricks::describe_table::DatabricksTableMetadata;
+
+        let batch = match convert_macro_result_to_record_batch(result) {
+            Ok(b) => b,
+            Err(_) => return None,
+        };
+        let metadata = match DatabricksTableMetadata::from_record_batch(batch) {
+            Ok(m) => m,
+            Err(_) => return None,
+        };
+
+        let columns = metadata
+            .columns
+            .iter()
+            .map(|col| {
+                let comment = col.comment.clone().filter(|s| !s.is_empty());
+                Column::new(
+                    Databricks,
+                    col.name.clone(),
+                    col.type_.sql_type(),
+                    None,
+                    None,
+                    None,
+                )
+                .with_comment(comment)
+            })
+            .collect();
+        Some(Ok(columns))
     }
 
     /// Truncate relation
