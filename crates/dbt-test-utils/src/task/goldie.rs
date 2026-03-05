@@ -194,6 +194,7 @@ pub async fn execute_and_compare(
     // necessary/common preparation
     sort_output: bool,
     exe: Arc<CommandFn>,
+    extra_normalizers: &[OutputNormalizer],
 ) -> FsResult<Vec<TextualPatch>> {
     let compare_env = create_compare_env(name, project_env, test_env, task_index);
 
@@ -219,7 +220,7 @@ pub async fn execute_and_compare(
             compare_env.goldie_stderr_path,
             compare_env.stdout_path,
             compare_env.goldie_stdout_path,
-            &[],
+            extra_normalizers,
         ),
         Ok(Err(e)) => {
             let code = e.exit_status().unwrap_or(1);
@@ -236,7 +237,7 @@ pub async fn execute_and_compare(
                 compare_env.goldie_stderr_path,
                 compare_env.stdout_path,
                 compare_env.goldie_stdout_path,
-                &[],
+                extra_normalizers,
             )
         }
         Err(payload) => {

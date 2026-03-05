@@ -3,9 +3,7 @@ use crate::task::env::TracingReloadHandle;
 use super::TestResult;
 use super::log_capture::JsonLogEvent;
 use dbt_common::{
-    FsError,
-    cancellation::{CancellationToken, never_cancels},
-    cli_parser_trait::CliParserTrait,
+    FsError, cancellation::CancellationToken, cli_parser_trait::CliParserTrait,
     tracing::FsTraceConfig,
 };
 use std::fmt::Debug;
@@ -330,11 +328,11 @@ pub async fn exec_fs<P: CliParserTrait + Default, Fut>(
     execute_fs: impl FnOnce(SystemArgs, P::CliType, Arc<FeatureStack>, CancellationToken) -> Fut,
     from_lib: impl FnOnce(&P::CliType) -> SystemArgs,
     tracing_handle: TracingReloadHandle,
+    token: CancellationToken,
 ) -> FsResult<()>
 where
     Fut: Future<Output = FsResult<()>>,
 {
-    let token = never_cancels();
     // Check if project_dir has a .env.conformance file
     // NOTE: this has to be done before we parse Cli
     let conformance_file = project_dir.join(".env.conformance");

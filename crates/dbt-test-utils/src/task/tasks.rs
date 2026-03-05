@@ -327,6 +327,7 @@ pub struct ExecuteAndCompare {
     threads: usize,
     use_recording: bool,
     func: Arc<CommandFn>,
+    normalizers: Vec<OutputNormalizer>,
 }
 
 impl ExecuteAndCompare {
@@ -348,6 +349,7 @@ impl ExecuteAndCompare {
             threads: 1,
             use_recording,
             func,
+            normalizers: vec![],
         }
     }
 
@@ -371,12 +373,15 @@ impl ExecuteAndCompare {
             threads,
             use_recording: false,
             func,
+            normalizers: vec![],
         }
     }
-    // cmd_vec: &[String],
-    // project_dir: PathBuf,
-    // stdout_file: File,
-    // stderr_file: File,
+
+    /// Set extra output normalizers applied before golden comparison.
+    pub fn with_normalizers(mut self, normalizers: Vec<OutputNormalizer>) -> Self {
+        self.normalizers = normalizers;
+        self
+    }
 }
 
 #[async_trait]
@@ -414,6 +419,7 @@ impl Task for ExecuteAndCompare {
             task_index,
             self.threads != 1,
             self.func.clone(),
+            &self.normalizers,
         )
         .await
         {
@@ -905,6 +911,7 @@ impl Task for ExecuteAndCompareTelemetry {
             task_index,
             false,
             self.func.clone(),
+            &[],
         )
         .await
         {
@@ -997,6 +1004,7 @@ impl Task for ShExecute {
             task_index,
             false,
             boxed_fn,
+            &[],
         )
         .await
         {
