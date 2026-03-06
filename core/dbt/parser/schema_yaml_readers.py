@@ -549,18 +549,20 @@ class MetricParser(YamlReader):
                 f"Calculated a {type(config)} for a metric, but expected a MetricConfig"
             )
 
+        config_tags = sorted(config.get("tags") or [])
+
         if isinstance(unparsed, UnparsedMetric):
             # If we have meta in the config, copy to node level, for backwards
             # compatibility with earlier node-only config.
             if "meta" in config and config["meta"]:
                 unparsed.meta = config["meta"]
             meta = unparsed.meta
-            tags = unparsed.tags
+            tags = sorted(set(unparsed.tags + config_tags))
         elif isinstance(unparsed, UnparsedMetricV2):
             # V2 Metrics do not have a top-level meta field; this should be part of
             # the config.
             meta = {}
-            tags = []
+            tags = config_tags
         else:
             raise DbtInternalError(
                 f"Tried to parse a {type(unparsed)} into a metric, but expected "
