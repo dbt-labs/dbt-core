@@ -413,15 +413,14 @@ class CompiledNode(CompiledResource, ParsedNode):
         """This is the equivalent of what self.extra_ctes[cte_id] = sql would
         do if extra_ctes were an OrderedDict
         """
-        with self._lock:
-            for cte in self.extra_ctes:
-                # Because it's possible that multiple threads are compiling the
-                # node at the same time, we don't want to overwrite already compiled
-                # sql in the extra_ctes with empty sql.
-                if cte.id == cte_id:
-                    break
-            else:
-                self.extra_ctes.append(InjectedCTE(id=cte_id, sql=sql))
+        for cte in self.extra_ctes:
+            # Because it's possible that multiple threads are compiling the
+            # node at the same time, we don't want to overwrite already compiled
+            # sql in the extra_ctes with empty sql.
+            if cte.id == cte_id:
+                break
+        else:
+            self.extra_ctes.append(InjectedCTE(id=cte_id, sql=sql))
 
     @property
     def depends_on_nodes(self):

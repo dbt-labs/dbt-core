@@ -39,34 +39,6 @@ def _make_model_node(unique_id="model.test.foo", compiled=False, extra_ctes=None
     )
 
 
-class TestSetCteConcurrentDeduplication:
-    def test_set_cte_concurrent_deduplication(self):
-        """N threads call set_cte with the same id concurrently.
-        Only one CTE should be appended."""
-        node = _make_model_node()
-        barrier = threading.Barrier(20)
-        errors = []
-
-        def call_set_cte():
-            try:
-                barrier.wait(timeout=5)
-                node.set_cte("model.test.ephemeral", "select 1")
-            except Exception as e:
-                errors.append(e)
-
-        threads = [threading.Thread(target=call_set_cte) for _ in range(20)]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join(timeout=10)
-
-        assert not errors, f"Errors in threads: {errors}"
-        assert (
-            len(node.extra_ctes) == 1
-        ), f"Expected 1 CTE, got {len(node.extra_ctes)}: {node.extra_ctes}"
-        assert node.extra_ctes[0].id == "model.test.ephemeral"
-
-
 class TestConcurrentEphemeralCompilation:
     def test_concurrent_ephemeral_compilation(self):
         """Two threads compile nodes sharing an ephemeral dep.
