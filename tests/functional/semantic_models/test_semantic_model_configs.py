@@ -17,6 +17,87 @@ from tests.functional.semantic_models.fixtures import (
 )
 
 
+# Test tags config in dbt_project.yml
+class TestSemanticModelTagsConfigProjectLevel:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "people.sql": models_people_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "semantic_models.yml": semantic_model_people_yml,
+            "people_metrics.yml": models_people_metrics_yml,
+            "groups.yml": groups_yml,
+        }
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "semantic-models": {
+                "test": {
+                    "+tags": ["project_tag"],
+                }
+            }
+        }
+
+    def test_tags_semantic_model_config_dbt_project(self, project):
+        run_dbt(["parse"])
+        manifest = get_manifest(project.project_root)
+        sm_node = manifest.semantic_models.get("semantic_model.test.semantic_people")
+        assert sm_node is not None
+        assert "project_tag" in sm_node.tags
+
+
+# Test tags config in yaml file
+class TestSemanticModelTagsConfigYamlLevel:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "people.sql": models_people_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "semantic_models.yml": enabled_semantic_model_people_yml,
+            "people_metrics.yml": models_people_metrics_yml,
+            "groups.yml": groups_yml,
+        }
+
+    def test_tags_semantic_model_config_yaml(self, project):
+        run_dbt(["parse"])
+        manifest = get_manifest(project.project_root)
+        sm_node = manifest.semantic_models.get("semantic_model.test.semantic_people")
+        assert sm_node is not None
+        assert "yaml_tag" in sm_node.tags
+
+
+# Test tags config merging from both dbt_project.yml and yaml file
+class TestSemanticModelTagsConfigMerge:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "people.sql": models_people_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "semantic_models.yml": enabled_semantic_model_people_yml,
+            "people_metrics.yml": models_people_metrics_yml,
+            "groups.yml": groups_yml,
+        }
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "semantic-models": {
+                "test": {
+                    "+tags": ["project_tag"],
+                }
+            }
+        }
+
+    def test_tags_merge(self, project):
+        run_dbt(["parse"])
+        manifest = get_manifest(project.project_root)
+        sm_node = manifest.semantic_models.get("semantic_model.test.semantic_people")
+        assert sm_node is not None
+        assert "project_tag" in sm_node.tags
+        assert "yaml_tag" in sm_node.tags
+
+
 # Test disabled config at semantic_models level in yaml file
 class TestConfigYamlLevel:
     @pytest.fixture(scope="class")

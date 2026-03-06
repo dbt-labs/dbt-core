@@ -172,6 +172,10 @@ class SemanticModelConfig(BaseConfig):
         default_factory=dict,
         metadata=MergeBehavior.Update.meta(),
     )
+    tags: List[str] = field(
+        default_factory=list,
+        metadata=MergeBehavior.Append.meta(),
+    )
 
 
 @dataclass
@@ -192,6 +196,7 @@ class SemanticModel(GraphResource):
     unrendered_config: Dict[str, Any] = field(default_factory=dict)
     primary_entity: Optional[str] = None
     group: Optional[str] = None
+    tags: List[str] = field(default_factory=list)
 
     @property
     def entity_references(self) -> List[LinkableElementReference]:
