@@ -1,4 +1,5 @@
 import abc
+import csv
 import os
 from copy import deepcopy
 from typing import (
@@ -10,6 +11,7 @@ from typing import (
     List,
     Mapping,
     Optional,
+    Set,
     Tuple,
     Type,
     TypeVar,
@@ -67,6 +69,7 @@ from dbt.contracts.graph.nodes import (
     SourceDefinition,
     UnitTestNode,
 )
+from dbt.events.types import JinjaLogWarning
 from dbt.exceptions import (
     CompilationError,
     ConflictingConfigKeysError,
@@ -94,7 +97,7 @@ from dbt.utils import MultiDict, args_to_dict
 from dbt_common.clients.jinja import MacroProtocol
 from dbt_common.constants import SECRET_ENV_PREFIX
 from dbt_common.context import get_invocation_context
-from dbt_common.events.functions import get_metadata_vars
+from dbt_common.events.functions import fire_event, get_metadata_vars
 from dbt_common.exceptions import (
     DbtInternalError,
     DbtRuntimeError,
@@ -1009,6 +1012,24 @@ class RuntimeFunctionResolver(BaseFunctionResolver):
                 target_kind="function",
                 disabled=(isinstance(target_function, Disabled)),
             )
+        function_node = target_function
+        if (
+            hasattr(target_function, "defer_function")
+            and target_function.defer_function
+            and self.config.args.defer
+            and (
+                (
+                    self.config.args.favor_state
+                    and target_function.unique_id not in selected_resources.SELECTED_RESOURCES
+                )
+                or not get_adapter(self.config).get_relation(
+                    target_function.database,
+                    target_function.schema,
+                    target_function.identifier,
+                )
+            )
+        ):
+            function_node = target_function.defer_function
 
         # Source quoting does _not_ respect global configs in dbt_project.yml, as documented here:
         # https://docs.getdbt.com/reference/project-configs/quoting
@@ -1018,7 +1039,7 @@ class RuntimeFunctionResolver(BaseFunctionResolver):
 
         return self.Relation.create_from(
             SourceQuotingBaseConfig(),
-            target_function,
+            function_node,
             limit=self.resolve_limit,
             event_time_filter=self.resolve_event_time_filter(target_function),
             type=RelationType.Function,
@@ -1249,6 +1270,17 @@ class ProviderContext(ManifestContext):
         except Exception:
             raise CompilationError(message_if_exception, self.model)
 
+    @staticmethod
+    def _read_csv_header(path: str, delimiter: str) -> Optional[Set[str]]:
+        try:
+            # Use utf-8-sig to handle BOM if present
+            with open(path, "r", encoding="utf-8-sig", newline="") as f:
+                reader = csv.reader(f, delimiter=delimiter)
+                header = next(reader)
+                return set(header)
+        except (IOError, StopIteration, TypeError):
+            return None
+
     @contextmember()
     def load_agate_table(self) -> "agate.Table":
         from dbt_common.clients import agate_helper
@@ -1267,10 +1299,33 @@ class ProviderContext(ManifestContext):
             assert self.model.root_path
             path = os.path.join(self.model.root_path, self.model.original_file_path)
 
-        column_types = self.model.config.column_types
+        column_types = self.model.config.column_types or {}
         delimiter = self.model.config.delimiter
+
+        # Validate that column_types keys exist in the file header
+        filtered_column_types = column_types
+        if column_types:
+            header_set = self._read_csv_header(path, delimiter)
+            if header_set is not None:
+                valid_column_types = set(column_types) & header_set
+                invalid_column_names = set(column_types) - header_set
+
+                if invalid_column_names:
+                    invalid_column_names_str = ", ".join(sorted(invalid_column_names))
+                    msg = (
+                        f"Column types specified for non-existent columns in seed '{self.model.name}' (file: {path}): "
+                        f"{invalid_column_names_str}. These column type overrides will be ignored."
+                    )
+                    fire_event(JinjaLogWarning(msg=msg))
+
+                filtered_column_types = {
+                    k: v for k, v in column_types.items() if k in valid_column_types
+                }
+
         try:
-            table = agate_helper.from_csv(path, text_columns=column_types, delimiter=delimiter)
+            table = agate_helper.from_csv(
+                path, text_columns=filtered_column_types, delimiter=delimiter
+            )
         except ValueError as e:
             raise LoadAgateTableValueError(e, node=self.model)
         # this is used by some adapters

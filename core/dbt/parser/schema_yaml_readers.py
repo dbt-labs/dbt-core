@@ -632,9 +632,14 @@ class MetricParser(YamlReader):
     def parse_v2_metrics_from_dbt_model_patch(self, model_patch: ParsedNodePatch) -> None:
         if model_patch.metrics is None:
             return
+        # Resolve the semantic model name, respecting custom name overrides
+        semantic_model_name = model_patch.name
+        if isinstance(model_patch.semantic_model, UnparsedSemanticModelConfig):
+            if model_patch.semantic_model.name is not None:
+                semantic_model_name = model_patch.semantic_model.name
         for metric in model_patch.metrics:
             semantic_model = (
-                model_patch.name if MetricType(metric.type) == MetricType.SIMPLE else None
+                semantic_model_name if MetricType(metric.type) == MetricType.SIMPLE else None
             )
             self.parse_metric(metric, generated_from=semantic_model)
 

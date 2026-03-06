@@ -18,14 +18,14 @@ class TestDeprecatedEnvVars:
         self.assert_deprecated(
             logs_dir,
             "DBT_DEFER_TO_STATE",
-            "DBT_DEFER",
+            "DBT_ENGINE_DEFER",
         )
 
     def test_favor_state(self, project, logs_dir):
         self.assert_deprecated(
             logs_dir,
             "DBT_FAVOR_STATE_MODE",
-            "DBT_FAVOR_STATE",
+            "DBT_ENGINE_FAVOR_STATE",
             command="build",
         )
 
@@ -33,14 +33,14 @@ class TestDeprecatedEnvVars:
         self.assert_deprecated(
             logs_dir,
             "DBT_NO_PRINT",
-            "DBT_PRINT",
+            "DBT_ENGINE_PRINT",
         )
 
     def test_state(self, project, logs_dir):
         self.assert_deprecated(
             logs_dir,
             "DBT_ARTIFACT_STATE_PATH",
-            "DBT_STATE",
+            "DBT_ENGINE_STATE",
             old_val=".",
         )
 
