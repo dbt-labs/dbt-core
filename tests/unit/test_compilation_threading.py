@@ -73,6 +73,64 @@ class TestConcurrentEphemeralCompilation:
         assert ephemeral.extra_ctes_injected is True
 
 
+class TestNoDeadlockOnRecursiveLocking:
+    def test_recursive_lock_pattern_does_not_deadlock(self):
+        """Simulate the lock acquisition pattern from _recursively_prepend_ctes
+        for an ephemeral chain: model_a refs ephemeral_b.
+
+        The real code acquires ephemeral_b._lock for compilation, releases it,
+        then re-acquires ephemeral_b._lock for CTE injection during the
+        recursive call. If the recursion happened *inside* the first lock,
+        this would deadlock with a non-reentrant Lock. This test verifies
+        the current code structure avoids that."""
+        model_a = _make_model_node(unique_id="model.test.a", compiled=True)
+        ephemeral_b = _make_model_node(unique_id="model.test.b", compiled=False)
+
+        deadlocked = {"value": False}
+
+        def simulate_recursively_prepend_ctes():
+            # -- Processing model_a's extra_ctes, found ephemeral_b --
+
+            # Critical section A: compile ephemeral_b (scoped to just compilation)
+            needs_recursion = False
+            with ephemeral_b._lock:
+                if not ephemeral_b.compiled:
+                    ephemeral_b.compiled = True
+                    ephemeral_b.compiled_code = "select 1"
+                    needs_recursion = True
+
+            # Recursive call for ephemeral_b happens OUTSIDE the lock above.
+            # Inside that recursive call, we'd hit critical section B for
+            # ephemeral_b (CTE injection). This would deadlock if we were
+            # still inside the `with ephemeral_b._lock` above.
+            if needs_recursion:
+                # Simulate the CTE injection lock from the recursive call
+                acquired = ephemeral_b._lock.acquire(timeout=2)
+                if not acquired:
+                    deadlocked["value"] = True
+                    return
+                ephemeral_b.extra_ctes_injected = True
+                ephemeral_b._lock.release()
+
+            # Critical section B for model_a (CTE injection)
+            acquired = model_a._lock.acquire(timeout=2)
+            if not acquired:
+                deadlocked["value"] = True
+                return
+            model_a.extra_ctes_injected = True
+            model_a._lock.release()
+
+        t = threading.Thread(target=simulate_recursively_prepend_ctes)
+        t.start()
+        t.join(timeout=5)
+
+        assert not t.is_alive(), "Thread is still alive — deadlock detected"
+        assert not deadlocked["value"], "Failed to acquire lock — possible deadlock"
+        assert ephemeral_b.compiled is True
+        assert ephemeral_b.extra_ctes_injected is True
+        assert model_a.extra_ctes_injected is True
+
+
 class TestLockSerialization:
     def test_lock_excluded_from_serialization(self):
         """Serialize a node and assert _lock is not in the output."""

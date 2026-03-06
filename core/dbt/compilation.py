@@ -551,8 +551,11 @@ class Compiler:
             if not cte_model.is_ephemeral_model:
                 raise DbtInternalError(f"{cte.id} is not ephemeral")
 
-            # Lock the ephemeral cte_model so only one thread compiles it.
-            # The second thread will see compiled=True and take the fast path.
+            # Lock the ephemeral cte_model to ensure only one thread compiles it.
+            # The lock is scoped to just the compilation step; the recursive
+            # _recursively_prepend_ctes call happens outside the lock to avoid
+            # deadlock (it will re-acquire this node's lock at CTE injection).
+            needs_recursion = False
             with cte_model._lock:
                 # This model has already been compiled and extra_ctes_injected,
                 # so it's been through here before. We already checked above for
@@ -560,16 +563,24 @@ class Compiler:
                 # have happened in another thread.
                 if cte_model.compiled is True and cte_model.extra_ctes_injected is True:
                     new_prepended_ctes = cte_model.extra_ctes
-                else:
+                elif not cte_model.compiled:
                     # This is an ephemeral parsed model that we can compile.
                     # Render the raw_code and set compiled to True
                     cte_model = self._compile_code(cte_model, manifest, extra_context)
-                    # recursively call this method, sets extra_ctes_injected to True
-                    cte_model, new_prepended_ctes = self._recursively_prepend_ctes(
-                        cte_model, manifest, extra_context
-                    )
-                    # Write compiled SQL file
-                    self._write_node(cte_model)
+                    needs_recursion = True
+                else:
+                    # compiled=True but extra_ctes not yet injected; another
+                    # thread compiled it but hasn't finished recursion yet.
+                    # We still need to recurse to get the prepended CTEs.
+                    needs_recursion = True
+
+            if needs_recursion:
+                # recursively call this method, sets extra_ctes_injected to True
+                cte_model, new_prepended_ctes = self._recursively_prepend_ctes(
+                    cte_model, manifest, extra_context
+                )
+                # Write compiled SQL file
+                self._write_node(cte_model)
 
             _extend_prepended_ctes(prepended_ctes, new_prepended_ctes)
 
