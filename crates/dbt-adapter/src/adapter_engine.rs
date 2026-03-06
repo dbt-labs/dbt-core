@@ -399,33 +399,44 @@ fn adbc_execute_with_options(
 
     let (schema, batches) = match do_execute(conn) {
         Ok(res) => res,
-        Err(Cancellable::Cancelled) => {
-            let e = AdapterError::new(
-                AdapterErrorKind::Cancelled,
-                "SQL statement execution was cancelled",
-            );
-
-            record_current_span_status_from_attrs(|attrs| {
+        Err(err @ (Cancellable::Cancelled | Cancellable::Error(_))) => {
+            let cancelled = || {
+                AdapterError::new(
+                    AdapterErrorKind::Cancelled,
+                    "SQL statement execution was cancelled",
+                )
+            };
+            let (adapter_error, error_message, vendor_code) = match err {
+                Cancellable::Cancelled => (cancelled(), None, None),
+                // Statements that were running while cancellation was triggered
+                // fail with an error here. But that error is a consequence of a
+                // forced cancellation, so we check the `CancellationToken` and
+                // treat the error as a cancellation and that makes the terminal
+                // output much better for users. Nothing went wrong with the SQL
+                // execution, it was just killed because the user asked for
+                // cancellation.
+                Cancellable::Error(_) if token.is_cancelled() => (cancelled(), None, None),
+                Cancellable::Error(e) => {
+                    let error_message = Some(format!("{:?}: {}", e.status, e.message));
+                    let vendor_code = Some(e.vendor_code);
+                    let adapter_error = adbc_error_to_adapter_error(e);
+                    (adapter_error, error_message, vendor_code)
+                }
+            };
+            let outcome = if adapter_error.kind() == AdapterErrorKind::Cancelled {
+                QueryOutcome::Canceled
+            } else {
+                QueryOutcome::Error
+            };
+            record_current_span_status_from_attrs(move |attrs| {
                 if let Some(attrs) = attrs.downcast_mut::<QueryExecuted>() {
                     attrs.dbt_core_event_code = "E017".to_string();
-                    attrs.set_query_outcome(QueryOutcome::Canceled);
+                    attrs.set_query_outcome(outcome);
+                    attrs.query_error_adapter_message = error_message.clone();
+                    attrs.query_error_vendor_code = vendor_code;
                 }
             });
-
-            return Err(e);
-        }
-        Err(Cancellable::Error(e)) => {
-            record_current_span_status_from_attrs(|attrs| {
-                if let Some(attrs) = attrs.downcast_mut::<QueryExecuted>() {
-                    attrs.dbt_core_event_code = "E017".to_string();
-                    attrs.set_query_outcome(QueryOutcome::Error);
-                    attrs.query_error_adapter_message =
-                        Some(format!("{:?}: {}", e.status, e.message));
-                    attrs.query_error_vendor_code = Some(e.vendor_code);
-                }
-            });
-
-            return Err(adbc_error_to_adapter_error(e));
+            return Err(adapter_error);
         }
     };
     let total_batch = concat_batches(&schema, &batches).map_err(arrow_error_to_adapter_error)?;
