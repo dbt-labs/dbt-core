@@ -1,0 +1,7 @@
+kind: Fixes
+body: Allow integer keys in `meta` configs by setting `strict_map_key=False` when reading `partial_parse.msgpack`, and coerce int keys to strings for consistency. Also upgrade the load failure log from debug to warning so users see it without `--debug`.
+time: 2026-03-03T12:00:00.000000Z
+custom:
+  Author: shnhdan
+  Issue: "12578"
+  PR: "12578"
