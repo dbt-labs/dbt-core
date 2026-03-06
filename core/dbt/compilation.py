@@ -554,6 +554,10 @@ class Compiler:
             # Lock the ephemeral cte_model so only one thread compiles it.
             # The second thread will see compiled=True and take the fast path.
             with cte_model._lock:
+                # This model has already been compiled and extra_ctes_injected,
+                # so it's been through here before. We already checked above for
+                # extra_ctes_injected, but checking again because updates may
+                # have happened in another thread.
                 if cte_model.compiled is True and cte_model.extra_ctes_injected is True:
                     new_prepended_ctes = cte_model.extra_ctes
                 else:
