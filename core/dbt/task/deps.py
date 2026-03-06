@@ -11,11 +11,20 @@ import dbt.utils
 from dbt.config import Project
 from dbt.config.project import load_yml_dict, package_config_from_data
 from dbt.config.renderer import PackageRenderer
-from dbt.constants import PACKAGE_LOCK_FILE_NAME, PACKAGE_LOCK_HASH_KEY
+from dbt.constants import (
+    DEFAULT_ENV_PLACEHOLDER,
+    PACKAGE_LOCK_CONTEXT_KEY,
+    PACKAGE_LOCK_FILE_NAME,
+    PACKAGE_LOCK_HASH_KEY,
+)
 from dbt.contracts.project import PackageSpec
 from dbt.deps.base import downloads_directory
 from dbt.deps.registry import RegistryPinnedPackage
-from dbt.deps.resolver import resolve_lock_packages, resolve_packages
+from dbt.deps.resolver import (
+    get_package_identifier,
+    resolve_lock_packages,
+    resolve_packages,
+)
 from dbt.events.types import (
     DepsAddPackage,
     DepsFoundDuplicatePackage,
@@ -30,6 +39,7 @@ from dbt.events.types import (
 )
 from dbt.task.base import BaseTask, move_to_nearest_project_dir
 from dbt_common.clients import system
+from dbt_common.context import get_invocation_context
 from dbt_common.events.functions import fire_event
 from dbt_common.events.types import Formatting
 
@@ -88,7 +98,7 @@ def _create_packages_yml_entry(package: str, version: Optional[str], source: str
 
 
 class DepsTask(BaseTask):
-    def __init__(self, args: Any, project: Project) -> None:
+    def __init__(self, args: Any, project: Project, profile: Any = None) -> None:
         super().__init__(args=args)
         # N.B. This is a temporary fix for a bug when using relative paths via
         # --project-dir with deps.  A larger overhaul of our path handling methods
@@ -97,6 +107,88 @@ class DepsTask(BaseTask):
         project.project_root = str(Path(project.project_root).resolve())
         self.project = project
         self.cli_vars = args.vars
+        self.profile = profile
+
+    def _get_package_renderer(self) -> PackageRenderer:
+        """Create a PackageRenderer with all available context (project vars, target)."""
+        all_vars = {}
+        all_vars.update(self.project.vars.to_dict())
+        all_vars.update(self.cli_vars)
+        target_dict = self.profile.to_target_dict() if self.profile else None
+        return PackageRenderer(all_vars, target_dict=target_dict)
+
+    def _build_context_data(
+        self,
+        env_var_values: Dict[str, Any],
+        var_values: Dict[str, Any],
+        target_values: Dict[str, Any],
+    ) -> str:
+        """Hash only the rendering context values that were actually referenced."""
+        context_data = {
+            "env_vars": env_var_values,
+            "vars": var_values,
+            "target": target_values,
+        }
+        return sha1(json.dumps(context_data, sort_keys=True).encode("utf-8")).hexdigest()
+
+    def _get_rendering_context(self, renderer: PackageRenderer) -> Dict[str, Any]:
+        """Extract the referenced rendering context from a renderer after resolution."""
+        env_vars_used = dict(renderer.ctx_obj.env_vars)
+
+        # Get only the var values that were actually accessed
+        accessed_vars = renderer.tracked_vars.accessed_keys
+        all_vars = {}
+        all_vars.update(self.project.vars.to_dict())
+        all_vars.update(self.cli_vars)
+        var_values = {k: all_vars.get(k) for k in accessed_vars}
+
+        # Get only the target keys that were actually accessed
+        target_values = {}
+        if renderer.tracked_target is not None:
+            target_dict = self.profile.to_target_dict() if self.profile else {}
+            target_values = {k: target_dict.get(k) for k in renderer.tracked_target.accessed_keys}
+
+        return {
+            "env_var_names": sorted(env_vars_used.keys()),
+            "var_names": sorted(accessed_vars),
+            "target_keys": (
+                sorted(renderer.tracked_target.accessed_keys) if renderer.tracked_target else []
+            ),
+            "hash": self._build_context_data(env_vars_used, var_values, target_values),
+        }
+
+    def _rendering_context_changed(self, lock_dict: Dict[str, Any]) -> bool:
+        """Check if the rendering context has changed since the lock file was written."""
+        stored_context = lock_dict.get(PACKAGE_LOCK_CONTEXT_KEY)
+        if not stored_context:
+            return False
+
+        stored_hash = stored_context.get("hash")
+
+        # Rebuild current values for only the keys that were referenced during last lock
+        env = get_invocation_context().env
+        env_var_names = stored_context.get("env_var_names", [])
+        current_env_vars = {}
+        for name in env_var_names:
+            if name in env:
+                current_env_vars[name] = env[name]
+            else:
+                current_env_vars[name] = DEFAULT_ENV_PLACEHOLDER
+
+        all_vars = {}
+        all_vars.update(self.project.vars.to_dict())
+        all_vars.update(self.cli_vars)
+        var_names = stored_context.get("var_names", [])
+        current_vars = {k: all_vars.get(k) for k in var_names}
+
+        target_keys = stored_context.get("target_keys", [])
+        current_target = {}
+        if target_keys and self.profile:
+            target_dict = self.profile.to_target_dict()
+            current_target = {k: target_dict.get(k) for k in target_keys}
+
+        current_hash = self._build_context_data(current_env_vars, current_vars, current_target)
+        return current_hash != stored_hash
 
     def track_package_install(
         self, package_name: str, source_type: str, version: Optional[str]
@@ -247,22 +339,37 @@ class DepsTask(BaseTask):
                     )
                 )
 
-    def lock(self) -> None:
+    def lock(self) -> bool:
+        """Resolve and lock packages.
+
+        Returns True if packages were locked, False if there are no packages to install.
+        When False, removes any stale lock file.
+        """
         lock_filepath = f"{self.project.project_root}/{PACKAGE_LOCK_FILE_NAME}"
 
-        packages = self.project.packages.packages
-        packages_installed: Dict[str, Any] = {"packages": []}
+        all_packages = self.project.packages.packages
+
+        packages = []
+        for pkg in all_packages:
+            if pkg.enabled is False:
+                identifier = get_package_identifier(pkg)
+                fire_event(Formatting(msg=f"Skipping disabled package {identifier}"))
+            else:
+                packages.append(pkg)
 
         if not packages:
             fire_event(DepsNoPackagesFound())
-            return
+            Path(lock_filepath).unlink(missing_ok=True)
+            return False
+
+        packages_installed: Dict[str, Any] = {"packages": []}
+        renderer = self._get_package_renderer()
 
         with downloads_directory():
-            resolved_deps = resolve_packages(packages, self.project, self.cli_vars)
+            resolved_deps = resolve_packages(packages, self.project, renderer)
 
         # this loop is to create the package-lock.yml in the same format as original packages.yml
         # package-lock.yml includes both the stated packages in packages.yml along with dependent packages
-        renderer = PackageRenderer(self.cli_vars)
         for package in resolved_deps:
             package_dict = package.to_dict()
             package_dict["name"] = package.get_project_name(self.project, renderer)
@@ -272,29 +379,43 @@ class DepsTask(BaseTask):
             self.project.packages.packages
         )
 
+        # Store rendering context for change detection of transitive deps.
+        packages_installed[PACKAGE_LOCK_CONTEXT_KEY] = self._get_rendering_context(renderer)
+
         with open(lock_filepath, "w") as lock_obj:
             yaml.dump(packages_installed, lock_obj, Dumper=dbtPackageDumper)
 
         fire_event(DepsLockUpdating(lock_filepath=lock_filepath))
+        return True
 
     def run(self) -> None:
         move_to_nearest_project_dir(self.args.project_dir)
         if self.args.add_package:
             self.add()
 
-        # Check lock file exist and generated by the same packages.yml
+        # Check lock file exists and was generated by the same packages.yml
         # or dependencies.yml.
         lock_file_path = f"{self.project.project_root}/{PACKAGE_LOCK_FILE_NAME}"
+        should_lock = False
         if not system.path_exists(lock_file_path):
-            self.lock()
+            should_lock = True
         elif self.args.upgrade:
-            self.lock()
+            should_lock = True
         else:
             # Check dependency definition is modified or not.
+            lock_dict = load_yml_dict(lock_file_path)
             current_hash = _create_sha1_hash(self.project.packages.packages)
-            previous_hash = load_yml_dict(lock_file_path).get(PACKAGE_LOCK_HASH_KEY, None)
+            previous_hash = lock_dict.get(PACKAGE_LOCK_HASH_KEY, None)
             if previous_hash != current_hash:
-                self.lock()
+                should_lock = True
+            elif self._rendering_context_changed(lock_dict):
+                should_lock = True
+
+        if should_lock and not self.lock():
+            # All packages disabled or none found — clean up stale installed packages
+            if not self.args.lock and system.path_exists(self.project.packages_install_path):
+                system.rmtree(self.project.packages_install_path)
+            return
 
         # Early return when 'dbt deps --lock'
         # Just resolve packages and write lock file, don't actually install packages
@@ -308,7 +429,7 @@ class DepsTask(BaseTask):
 
         packages_lock_dict = load_yml_dict(f"{self.project.project_root}/{PACKAGE_LOCK_FILE_NAME}")
 
-        renderer = PackageRenderer(self.cli_vars)
+        renderer = self._get_package_renderer()
         packages_lock_config = package_config_from_data(
             renderer.render_data(packages_lock_dict), packages_lock_dict
         ).packages
@@ -319,7 +440,6 @@ class DepsTask(BaseTask):
 
         with downloads_directory():
             lock_defined_deps = resolve_lock_packages(packages_lock_config)
-            renderer = PackageRenderer(self.cli_vars)
 
             packages_to_upgrade = []
 

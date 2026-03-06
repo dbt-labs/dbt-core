@@ -7,7 +7,7 @@ import dbt.deps
 import dbt.exceptions
 from dbt.clients.registry import is_compatible_version
 from dbt.config.project import PartialProject
-from dbt.config.renderer import DbtProjectYamlRenderer
+from dbt.config.renderer import DbtProjectYamlRenderer, PackageRenderer
 from dbt.contracts.project import (
     GitPackage,
     LocalPackage,
@@ -855,7 +855,9 @@ class TestPackageSpec(unittest.TestCase):
         with self.assertRaisesRegex(
             dbt.exceptions.DependencyError, "Cannot resolve private package"
         ):
-            resolve_packages(package_config.packages, mock.MagicMock(project_name="test"), {})
+            resolve_packages(
+                package_config.packages, mock.MagicMock(project_name="test"), PackageRenderer({})
+            )
 
     def test_dependency_resolution_allow_prerelease(self):
         package_config = PackageConfig.from_dict(
@@ -1226,3 +1228,117 @@ class TestCheckForDuplicatePackagesWithBooleans(unittest.TestCase):
         self.assertIsNotNone(result)
         self.assertEqual(len(result["packages"]), 1)
         self.assertIn("dbt-utils-extra", result["packages"][0]["git"])
+
+
+class TestPackageEnabledField(unittest.TestCase):
+    """Tests for the 'enabled' field on Package and its subclasses."""
+
+    def test_registry_package_enabled_default_none(self):
+        """Package with no 'enabled' defaults to None (treated as enabled)."""
+        pkg = RegistryPackage.from_dict({"package": "dbt-labs/dbt_utils", "version": "1.0.0"})
+        self.assertIsNone(pkg.enabled)
+
+    def test_registry_package_enabled_true(self):
+        pkg = RegistryPackage.from_dict(
+            {"package": "dbt-labs/dbt_utils", "version": "1.0.0", "enabled": True}
+        )
+        self.assertTrue(pkg.enabled)
+
+    def test_registry_package_enabled_false(self):
+        pkg = RegistryPackage.from_dict(
+            {"package": "dbt-labs/dbt_utils", "version": "1.0.0", "enabled": False}
+        )
+        self.assertFalse(pkg.enabled)
+
+    def test_git_package_enabled_field(self):
+        pkg = GitPackage.from_dict(
+            {"git": "https://github.com/dbt-labs/dbt-utils.git", "enabled": False}
+        )
+        self.assertFalse(pkg.enabled)
+
+    def test_local_package_enabled_field(self):
+        pkg = LocalPackage.from_dict({"local": "/path/to/package", "enabled": False})
+        self.assertFalse(pkg.enabled)
+
+    def test_tarball_package_enabled_field(self):
+        pkg = TarballPackage.from_dict(
+            {"tarball": "http://example.com/pkg.tar.gz", "name": "my_pkg", "enabled": False}
+        )
+        self.assertFalse(pkg.enabled)
+
+    def test_to_dict_enabled_none_absent(self):
+        """When enabled is None, 'enabled' key should be absent from serialized dict (hash stability)."""
+        pkg = RegistryPackage.from_dict({"package": "dbt-labs/dbt_utils", "version": "1.0.0"})
+        d = pkg.to_dict()
+        self.assertNotIn("enabled", d)
+
+    def test_to_dict_enabled_false_present(self):
+        """When enabled is False, 'enabled' key should be present in serialized dict."""
+        pkg = RegistryPackage.from_dict(
+            {"package": "dbt-labs/dbt_utils", "version": "1.0.0", "enabled": False}
+        )
+        d = pkg.to_dict()
+        self.assertIn("enabled", d)
+        self.assertFalse(d["enabled"])
+
+    def test_to_dict_enabled_true_present(self):
+        """When enabled is True, 'enabled' key should be present in serialized dict."""
+        pkg = RegistryPackage.from_dict(
+            {"package": "dbt-labs/dbt_utils", "version": "1.0.0", "enabled": True}
+        )
+        d = pkg.to_dict()
+        self.assertIn("enabled", d)
+        self.assertTrue(d["enabled"])
+
+
+class TestGetPackageIdentifier(unittest.TestCase):
+    """Tests for _get_package_identifier helper."""
+
+    def test_registry_package(self):
+        from dbt.deps.resolver import get_package_identifier
+
+        pkg = RegistryPackage(package="dbt-labs/dbt_utils", version="1.0.0")
+        self.assertEqual(get_package_identifier(pkg), "dbt-labs/dbt_utils")
+
+    def test_git_package(self):
+        from dbt.deps.resolver import get_package_identifier
+
+        pkg = GitPackage(git="https://github.com/dbt-labs/dbt-utils.git")
+        self.assertEqual(get_package_identifier(pkg), "https://github.com/dbt-labs/dbt-utils.git")
+
+    def test_local_package(self):
+        from dbt.deps.resolver import get_package_identifier
+
+        pkg = LocalPackage(local="/path/to/pkg")
+        self.assertEqual(get_package_identifier(pkg), "/path/to/pkg")
+
+    def test_tarball_package(self):
+        from dbt.deps.resolver import get_package_identifier
+
+        pkg = TarballPackage(tarball="http://example.com/pkg.tar.gz", name="my_pkg")
+        self.assertEqual(get_package_identifier(pkg), "my_pkg")
+
+
+class TestPackageRendererContext(unittest.TestCase):
+    """Tests for PackageRenderer with target_dict and project_name context."""
+
+    def test_renderer_with_target_dict(self):
+        from dbt.config.renderer import PackageRenderer
+
+        target = {"name": "dev", "schema": "analytics", "type": "postgres"}
+        renderer = PackageRenderer(cli_vars={}, target_dict=target)
+        self.assertEqual(renderer.context["target"], target)
+
+    def test_renderer_without_target_dict(self):
+        from dbt.config.renderer import PackageRenderer
+
+        renderer = PackageRenderer(cli_vars={})
+        self.assertNotIn("target", renderer.context)
+
+    def test_renderer_renders_target_expression(self):
+        from dbt.config.renderer import PackageRenderer
+
+        target = {"name": "dev", "schema": "analytics"}
+        renderer = PackageRenderer(cli_vars={}, target_dict=target)
+        result = renderer.render_value("{{ target.name }}")
+        self.assertEqual(result, "dev")

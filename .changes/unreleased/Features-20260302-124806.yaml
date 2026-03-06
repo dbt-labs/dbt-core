@@ -1,0 +1,6 @@
+kind: Features
+body: Added support to enable/disable project packages
+time: 2026-03-02T12:48:06.99667+05:30
+custom:
+    Author: sriramr98
+    Issue: "7434"
