@@ -5,11 +5,12 @@ from dataclasses import replace
 
 import pytest
 
-from dbt.artifacts.resources import ColumnInfo, TestConfig, TestMetadata
+from dbt.artifacts.resources import ColumnInfo, FunctionArgument, FunctionConfig, FunctionReturns, TestConfig, TestMetadata
 from dbt.compilation import inject_ctes_into_sql
 from dbt.contracts.files import FileHash
 from dbt.contracts.graph.nodes import (
     DependsOn,
+    FunctionNode,
     GenericTestNode,
     InjectedCTE,
     ModelConfig,
@@ -821,3 +822,89 @@ def test_inject_ctes_with_recursive():
     """
     generated_sql = inject_ctes_into_sql(starting_sql, ctes)
     assert norm_whitespace(generated_sql) == norm_whitespace(expected_sql)
+
+
+# ====================================
+# FunctionNode.same_contents tests
+# ====================================
+
+
+@pytest.fixture
+def basic_function_node():
+    return FunctionNode(
+        package_name="test",
+        path="functions/my_func.sql",
+        original_file_path="functions/my_func.sql",
+        language="sql",
+        raw_code="a_string + 1",
+        name="my_func",
+        resource_type=NodeType.Function,
+        unique_id="function.test.my_func",
+        fqn=["test", "my_func"],
+        database="test_db",
+        schema="test_schema",
+        alias="my_func",
+        checksum=FileHash.from_contents("a_string + 1"),
+        config=FunctionConfig(),
+        returns=FunctionReturns(data_type="integer"),
+        arguments=[FunctionArgument(name="a_string", data_type="string")],
+    )
+
+
+unchanged_function_nodes = [
+    # description, tags, meta are not tracked
+    lambda u: (u, replace(u, description="a description")),
+    lambda u: (u, replace(u, tags=["mytag"])),
+    lambda u: (u, replace(u, meta={"cool_key": "cool value"})),
+    # direct field-level database/schema/alias changes are not tracked
+    # (only config-level changes via unrendered_config matter)
+    lambda u: (u, replace(u, database="nope")),
+    lambda u: (u, replace(u, schema="nope")),
+    lambda u: (u, replace(u, alias="nope")),
+]
+
+changed_function_nodes = [
+    # old is None means the node is new
+    lambda u: (u, None),
+    # SQL body change
+    lambda u: (u, replace(u, raw_code="a_string + 2")),
+    # FQN change
+    lambda u: (
+        u,
+        replace(
+            u,
+            fqn=["test", "functions", "subdir", "my_func"],
+            original_file_path="functions/subdir/my_func.sql",
+            path="functions/subdir/my_func.sql",
+        ),
+    ),
+    # Regression: returns.data_type change must be detected (issue #12547)
+    lambda u: (u, replace(u, returns=FunctionReturns(data_type="boolean"))),
+    # Regression: argument data_type change must be detected (issue #12547)
+    lambda u: (u, replace(u, arguments=[FunctionArgument(name="a_string", data_type="boolean")])),
+    # argument added
+    lambda u: (
+        u,
+        replace(
+            u,
+            arguments=[
+                FunctionArgument(name="a_string", data_type="string"),
+                FunctionArgument(name="b_string", data_type="integer"),
+            ],
+        ),
+    ),
+    # argument removed
+    lambda u: (u, replace(u, arguments=[])),
+]
+
+
+@pytest.mark.parametrize("func", unchanged_function_nodes)
+def test_compare_unchanged_function(func, basic_function_node):
+    node, compare = func(basic_function_node)
+    assert node.same_contents(compare, "bigquery")
+
+
+@pytest.mark.parametrize("func", changed_function_nodes)
+def test_compare_changed_function(func, basic_function_node):
+    node, compare = func(basic_function_node)
+    assert not node.same_contents(compare, "bigquery")
