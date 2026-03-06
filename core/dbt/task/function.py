@@ -26,16 +26,6 @@ class FunctionRunner(CompileRunner):
         assert isinstance(node, FunctionNode)
         self.node = node
 
-    def get_node_representation(self):
-        display_quote_policy = {"database": False, "schema": False, "identifier": False}
-        relation = self.adapter.Relation.create_from(
-            self.config, self.node, quote_policy=display_quote_policy
-        )
-        # exclude the database from output if it's the default
-        if self.node.database == self.config.credentials.database:
-            relation = relation.include(database=False)
-        return str(relation)
-
     def describe_node(self) -> str:
         return f"function {self.get_node_representation()}"
 
