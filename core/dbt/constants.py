@@ -23,6 +23,7 @@ LEGACY_TIME_SPINE_GRANULARITY = TimeGranularity.DAY
 MINIMUM_REQUIRED_TIME_SPINE_GRANULARITY = TimeGranularity.DAY
 PARTIAL_PARSE_FILE_NAME = "partial_parse.msgpack"
 PACKAGE_LOCK_HASH_KEY = "sha1_hash"
+PACKAGE_LOCK_CONTEXT_KEY = "rendering_context"
 CATALOGS_FILE_NAME = "catalogs.yml"
 RUN_RESULTS_FILE_NAME = "run_results.json"
 CATALOG_FILENAME = "catalog.json"

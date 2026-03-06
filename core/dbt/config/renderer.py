@@ -250,15 +250,38 @@ class ProfileRenderer(SecretRenderer):
         return "Profile"
 
 
+class _TrackingDict(dict):
+    """A dict wrapper that records which keys are accessed."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.accessed_keys: set = set()
+
+    def __contains__(self, key):
+        self.accessed_keys.add(key)
+        return super().__contains__(key)
+
+    def __getitem__(self, key):
+        self.accessed_keys.add(key)
+        return super().__getitem__(key)
+
+    def get(self, key, default=None):
+        self.accessed_keys.add(key)
+        return super().get(key, default)
+
+
 class PackageRenderer(SecretRenderer):
     def __init__(
         self,
         cli_vars: Dict[str, Any] = {},
         target_dict: Optional[Dict[str, Any]] = None,
     ) -> None:
-        super().__init__(cli_vars)
+        self.tracked_vars = _TrackingDict(cli_vars)
+        super().__init__(self.tracked_vars)
+        self.tracked_target: Optional[_TrackingDict] = None
         if target_dict is not None:
-            self.context["target"] = target_dict
+            self.tracked_target = _TrackingDict(target_dict)
+            self.context["target"] = self.tracked_target
 
     @property
     def name(self):
