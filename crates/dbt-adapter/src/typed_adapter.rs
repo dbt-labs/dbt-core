@@ -3887,6 +3887,7 @@ impl ConcreteAdapter {
             type_ops,
             stmt_splitter,
             Arc::new(crate::cache::RelationCache::default()),
+            BTreeMap::new(),
         ));
         let is_true = flags.get("is_true").is_none_or(|v| v.is_true());
         let is_false = flags.get("is_false").is_some_and(|v| v.is_true());

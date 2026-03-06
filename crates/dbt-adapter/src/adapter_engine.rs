@@ -588,6 +588,7 @@ impl XdbcEngine {
     ///
     /// Used for replay modes and test adapters that must never talk to a
     /// real warehouse.
+    #[allow(clippy::too_many_arguments)]
     pub fn new_mock(
         adapter_type: AdapterType,
         auth: Arc<dyn Auth>,
@@ -596,6 +597,7 @@ impl XdbcEngine {
         type_ops: Box<dyn TypeOps>,
         splitter: Arc<dyn StmtSplitter>,
         relation_cache: Arc<RelationCache>,
+        behavior_flag_overrides: BTreeMap<String, bool>,
     ) -> Self {
         Self::build(
             adapter_type,
@@ -607,7 +609,7 @@ impl XdbcEngine {
             splitter,
             None,
             relation_cache,
-            BTreeMap::new(),
+            behavior_flag_overrides,
             never_cancels(),
             EngineMode::Mock,
         )
@@ -657,6 +659,7 @@ impl XdbcEngine {
         type_ops: Box<dyn TypeOps>,
         splitter: Arc<dyn StmtSplitter>,
         relation_cache: Arc<RelationCache>,
+        behavior_flag_overrides: BTreeMap<String, bool>,
         token: CancellationToken,
         recordings_path: PathBuf,
     ) -> Self {
@@ -670,7 +673,7 @@ impl XdbcEngine {
             splitter,
             None,
             relation_cache,
-            BTreeMap::new(),
+            behavior_flag_overrides,
             token,
             EngineMode::Replay(recordings_path),
         )
