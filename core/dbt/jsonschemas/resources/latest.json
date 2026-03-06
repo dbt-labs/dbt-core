@@ -1316,6 +1316,12 @@
             "null"
           ]
         },
+        "sql_header": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "static_analysis": {
           "anyOf": [
             {
