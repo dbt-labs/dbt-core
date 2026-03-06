@@ -13,6 +13,7 @@ use serde::Deserialize;
 
 use crate::relation::bigquery::*;
 use crate::relation::databricks::{DatabricksRelation, typed_constraint::TypedConstraint};
+use crate::relation::duckdb_should_include_database;
 use crate::relation::fabric::FabricRelation;
 use crate::relation::postgres::PostgresRelation;
 use crate::relation::redshift::RedshiftRelation;
@@ -293,8 +294,12 @@ pub fn do_create_relation(
             custom_quoting,
         )?) as Box<dyn BaseRelation>,
         AdapterType::DuckDB => {
-            // DuckDB file databases use 2-part names (schema.table) without catalog prefix
-            let include_policy = Policy::new(false, true, true);
+            // Local DuckDB uses schema.table; attached catalogs need database.schema.table.
+            let include_policy = Policy::new(
+                duckdb_should_include_database(Some(database.as_str())),
+                true,
+                true,
+            );
             Box::new(PostgresRelation::try_new_with_policy(
                 RelationPath {
                     database: Some(database).filter(|s| !s.is_empty()),

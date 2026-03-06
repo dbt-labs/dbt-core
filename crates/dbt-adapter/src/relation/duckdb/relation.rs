@@ -8,9 +8,9 @@ use minijinja::Value;
 
 use std::sync::Arc;
 
-/// DuckDB file databases use 2-part names (schema.table) without catalog prefix.
-/// This type produces relations with `include_policy = (false, true, true)`
-/// so that `render()` omits the database component.
+/// DuckDB local file databases use 2-part names (`schema.table`) without
+/// catalog prefix, but attached catalogs (including MotherDuck aliases)
+/// require fully qualified names.
 #[derive(Clone, Debug)]
 pub struct DuckDBRelationType(pub ResolvedQuoting);
 
@@ -24,6 +24,8 @@ impl StaticBaseRelation for DuckDBRelationType {
         custom_quoting: Option<ResolvedQuoting>,
         _temporary: Option<bool>,
     ) -> Result<Value, minijinja::Error> {
+        // Keep api.Relation.create backwards-compatible for DuckDB:
+        // render as schema.identifier regardless of provided database.
         let include_policy = Policy::new(false, true, true);
         Ok(
             RelationObject::new(Arc::new(PostgresRelation::try_new_with_policy(
