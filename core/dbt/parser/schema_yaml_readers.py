@@ -1150,6 +1150,7 @@ class SemanticModelParser(YamlReader):
             config=config,
             unrendered_config=unrendered_config,
             group=config.group,
+            tags=sorted(set(config.tags)),
         )
 
         ctx = generate_parse_semantic_models(

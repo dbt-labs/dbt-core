@@ -173,6 +173,8 @@ semantic_models:
       meta:
         my_meta: 'testing'
         my_other_meta: 'testing more'
+      tags:
+        - yaml_tag
     dimensions:
       - name: favorite_color
         type: categorical
