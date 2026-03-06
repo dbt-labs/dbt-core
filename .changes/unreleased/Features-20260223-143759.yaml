@@ -1,0 +1,6 @@
+kind: Features
+body: Add capability to install local packages with deepcopy
+time: 2026-02-23T14:37:59.011935+05:30
+custom:
+    Author: ash2shukla
+    Issue: "8223"
