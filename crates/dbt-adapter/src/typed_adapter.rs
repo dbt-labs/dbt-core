@@ -3804,7 +3804,21 @@ prevent unnecessary latency for other users."#,
                 None,
             );
 
-            vec![use_user_folder_for_python, use_materialization_v2]
+            let use_replace_on_for_insert_overwrite = BehaviorFlag::new(
+                "use_replace_on_for_insert_overwrite",
+                true,
+                Some(
+                    "Use INSERT INTO ... REPLACE ON syntax for insert_overwrite on SQL Warehouses. When enabled, only matching partitions are overwritten; historical partitions are preserved.",
+                ),
+                None,
+                None,
+            );
+
+            vec![
+                use_user_folder_for_python,
+                use_materialization_v2,
+                use_replace_on_for_insert_overwrite,
+            ]
         }
         Bigquery => {
             // https://github.com/dbt-labs/dbt-adapters/blob/b9ebd240e39882a8c43ed659de423c7504d4642a/dbt-bigquery/src/dbt/adapters/bigquery/impl.py#L109-L110
