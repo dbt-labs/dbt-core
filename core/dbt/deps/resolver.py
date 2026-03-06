@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterator, List, NoReturn, Set, Type
+from typing import Dict, Iterator, List, NoReturn, Set, Type
 
 from dbt.config import Project
 from dbt.config.renderer import PackageRenderer
@@ -133,12 +133,10 @@ def get_package_identifier(pkg: PackageSpec) -> str:
 def resolve_packages(
     packages: List[PackageSpec],
     project: Project,
-    cli_vars: Dict[str, Any],
+    renderer: PackageRenderer,
 ) -> List[PinnedPackage]:
     pending = PackageListing.from_contracts(packages)
     final = PackageListing()
-
-    renderer = PackageRenderer(cli_vars)
 
     while pending:
         next_pending = PackageListing()

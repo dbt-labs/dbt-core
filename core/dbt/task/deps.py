@@ -92,7 +92,7 @@ def _create_packages_yml_entry(package: str, version: Optional[str], source: str
 
 
 class DepsTask(BaseTask):
-    def __init__(self, args: Any, project: Project) -> None:
+    def __init__(self, args: Any, project: Project, profile: Any = None) -> None:
         super().__init__(args=args)
         # N.B. This is a temporary fix for a bug when using relative paths via
         # --project-dir with deps.  A larger overhaul of our path handling methods
@@ -101,6 +101,15 @@ class DepsTask(BaseTask):
         project.project_root = str(Path(project.project_root).resolve())
         self.project = project
         self.cli_vars = args.vars
+        self.profile = profile
+
+    def _get_package_renderer(self) -> PackageRenderer:
+        """Create a PackageRenderer with all available context (project vars, target)."""
+        all_vars = {}
+        all_vars.update(self.project.vars.to_dict())
+        all_vars.update(self.cli_vars)
+        target_dict = self.profile.to_target_dict() if self.profile else None
+        return PackageRenderer(all_vars, target_dict=target_dict)
 
     def track_package_install(
         self, package_name: str, source_type: str, version: Optional[str]
@@ -270,12 +279,13 @@ class DepsTask(BaseTask):
             fire_event(DepsNoPackagesFound())
             return
 
+        renderer = self._get_package_renderer()
+
         with downloads_directory():
-            resolved_deps = resolve_packages(packages, self.project, self.cli_vars)
+            resolved_deps = resolve_packages(packages, self.project, renderer)
 
         # this loop is to create the package-lock.yml in the same format as original packages.yml
         # package-lock.yml includes both the stated packages in packages.yml along with dependent packages
-        renderer = PackageRenderer(self.cli_vars)
         for package in resolved_deps:
             package_dict = package.to_dict()
             package_dict["name"] = package.get_project_name(self.project, renderer)
@@ -321,7 +331,7 @@ class DepsTask(BaseTask):
 
         packages_lock_dict = load_yml_dict(f"{self.project.project_root}/{PACKAGE_LOCK_FILE_NAME}")
 
-        renderer = PackageRenderer(self.cli_vars)
+        renderer = self._get_package_renderer()
         packages_lock_config = package_config_from_data(
             renderer.render_data(packages_lock_dict), packages_lock_dict
         ).packages
@@ -332,7 +342,6 @@ class DepsTask(BaseTask):
 
         with downloads_directory():
             lock_defined_deps = resolve_lock_packages(packages_lock_config)
-            renderer = PackageRenderer(self.cli_vars)
 
             packages_to_upgrade = []
 

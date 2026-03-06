@@ -7,7 +7,7 @@ import dbt.deps
 import dbt.exceptions
 from dbt.clients.registry import is_compatible_version
 from dbt.config.project import PartialProject
-from dbt.config.renderer import DbtProjectYamlRenderer
+from dbt.config.renderer import DbtProjectYamlRenderer, PackageRenderer
 from dbt.contracts.project import (
     GitPackage,
     LocalPackage,
@@ -855,7 +855,9 @@ class TestPackageSpec(unittest.TestCase):
         with self.assertRaisesRegex(
             dbt.exceptions.DependencyError, "Cannot resolve private package"
         ):
-            resolve_packages(package_config.packages, mock.MagicMock(project_name="test"), {})
+            resolve_packages(
+                package_config.packages, mock.MagicMock(project_name="test"), PackageRenderer({})
+            )
 
     def test_dependency_resolution_allow_prerelease(self):
         package_config = PackageConfig.from_dict(

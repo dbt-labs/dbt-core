@@ -260,6 +260,35 @@ def unset_profile(func):
     return update_wrapper(wrapper, func)
 
 
+def optional_profile(func):
+    """Try to load a real profile, falling back to UnsetProfile on failure.
+
+    This is used by commands like `deps` that can run without a profile
+    but benefit from having one (e.g. for conditional packages using
+    ``{{ target.name }}``).
+    """
+
+    def wrapper(*args, **kwargs):
+        ctx = args[0]
+        assert isinstance(ctx, Context)
+
+        flags = ctx.obj["flags"]
+        try:
+            profile = load_profile(
+                flags.PROJECT_DIR,
+                flags.VARS,
+                getattr(flags, "PROFILE", None),
+                getattr(flags, "TARGET", None),
+            )
+            ctx.obj["profile"] = profile
+        except Exception:
+            ctx.obj["profile"] = UnsetProfile()
+
+        return func(*args, **kwargs)
+
+    return update_wrapper(wrapper, func)
+
+
 def profile(func):
     def wrapper(*args, **kwargs):
         ctx = args[0]
