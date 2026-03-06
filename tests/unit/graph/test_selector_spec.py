@@ -157,6 +157,21 @@ def test_raw_parse_weird():
     assert result.children_depth is None
 
 
+def test_raw_parse_selector_method():
+    """selector:foo parses as method=Selector, value=foo (for combining YAML selectors with --select/--exclude)."""
+    raw = "1+selector:staging+2"
+    result = SelectionCriteria.from_single_spec(raw)
+    assert result.raw == raw
+    assert result.method == MethodName.Selector
+    assert not result.childrens_parents
+    assert result.children
+    assert result.parents
+    assert result.method_arguments == []
+    assert result.value == "staging"
+    assert result.children_depth == 2
+    assert result.parents_depth == 1
+
+
 def test_raw_parse_invalid():
     with pytest.raises(DbtRuntimeError):
         SelectionCriteria.from_single_spec("invalid_method:something")

@@ -229,6 +229,7 @@ class ListTask(GraphRunnableTask):
             previous_state=self.previous_state,
             resource_types=self.resource_types,
             include_empty_nodes=True,
+            selectors=self.config.selectors,
         )
 
     def interpret_results(self, results):

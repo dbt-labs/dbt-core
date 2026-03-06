@@ -176,11 +176,6 @@ def parse_dict_definition(definition: Dict[str, Any], result={}) -> SelectionSpe
             "method": key,
             "value": value,
         }
-    elif definition.get("method") == "selector":
-        sel_def = definition.get("value")
-        if sel_def not in result:
-            raise DbtValidationError(f"Existing selector definition for {sel_def} not found.")
-        return result[definition["value"]]["definition"]
     elif "method" in definition and "value" in definition:
         dct = definition
         if "exclude" in definition:
