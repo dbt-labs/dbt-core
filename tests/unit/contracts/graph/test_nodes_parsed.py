@@ -14,6 +14,7 @@ from dbt.artifacts.resources import (
     ExposureType,
     FreshnessThreshold,
     Hook,
+    MacroConfig,
     MacroDependsOn,
     MaturityType,
     Measure,
@@ -1790,6 +1791,10 @@ class TestParsedMacro(ContractTestCase):
             "unique_id": "macro.test.foo",
             "depends_on": {"macros": []},
             "meta": {},
+            "config": {
+                "meta": {},
+                "docs": {"show": True},
+            },
             "description": "my macro description",
             "docs": {"show": True},
             "arguments": [],
@@ -1807,6 +1812,7 @@ class TestParsedMacro(ContractTestCase):
             unique_id="macro.test.foo",
             depends_on=MacroDependsOn(),
             meta={},
+            config=MacroConfig(),
             description="my macro description",
             arguments=[],
         )

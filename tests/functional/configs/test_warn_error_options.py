@@ -299,15 +299,17 @@ SELECT id, event_time FROM {{ ref('input_model') }}
 """
 
 
-class TestRequireAllWarningsHandledByWarnErrorBehaviorFlag:
+class TestRequireAllWarningsHandledByWarnErrorBehaviorFlag(BaseTestWarnErrorOptionsFromProject):
     @pytest.fixture(scope="class")
-    def models(self):
+    def models(self) -> ModelsDictSpec:
         return {
             "input_model.sql": input_model_without_event_time_sql,
             "microbatch_model.sql": microbatch_model_sql,
         }
 
-    def test_require_all_warnings_handed_by_warn_error_behavior_flag(self, project):
+    def test_require_all_warnings_handed_by_warn_error_behavior_flag(
+        self, clear_project_flags, project
+    ):
         # Setup the event catchers
         microbatch_warning_catcher = EventCatcher(event_to_catch=MicrobatchModelNoEventTimeInputs)
         microbatch_error_catcher = EventCatcher(event_to_catch=MainEncounteredError)
