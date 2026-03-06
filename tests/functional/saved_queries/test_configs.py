@@ -1,6 +1,7 @@
 import pytest
 
 from dbt.contracts.graph.manifest import Manifest
+from dbt.contracts.graph.semantic_manifest import SemanticManifest
 from dbt.tests.util import update_config_file
 from dbt_semantic_interfaces.type_enums.export_destination_type import (
     ExportDestinationType,
@@ -356,3 +357,65 @@ class TestSavedQueryTagsAdditiveWithConfig(BaseConfigProject):
         assert len(result.result.saved_queries) == 1
         saved_query = result.result.saved_queries["saved_query.test.test_saved_query"]
         assert saved_query.tags == ["tag_a", "tag_b", "tag_c"]
+
+
+# The semantic manifest representation of a saved query should be identical
+# regardless of cache.enabled. The cache config lives in dbt-core's SavedQueryConfig
+# but is not part of dbt-semantic-interfaces' PydanticSavedQuery, so it is silently
+# dropped during semantic manifest serialization.
+class TestSemanticManifestUnaffectedByCacheConfig(BaseConfigProject):
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "saved_queries.yml": saved_queries_yml,
+            "schema.yml": schema_yml,
+            "fct_revenue.sql": fct_revenue_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "docs.md": saved_query_description,
+        }
+
+    def test_semantic_manifest_unchanged_by_cache_config(self, project):
+        runner = dbtTestRunner()
+
+        # Parse with default cache config (cache.enabled=False)
+        result = runner.invoke(["parse"])
+        assert result.success
+        assert isinstance(result.result, Manifest)
+
+        saved_query = result.result.saved_queries["saved_query.test.test_saved_query"]
+        baseline_cache_enabled = saved_query.config.cache.enabled
+        assert baseline_cache_enabled is False
+
+        # Build semantic manifest and capture the saved query representation
+        sm = SemanticManifest(result.result)
+        pydantic_sm = sm._get_pydantic_semantic_manifest()
+        assert len(pydantic_sm.saved_queries) == 1
+        baseline_sq_dict = pydantic_sm.saved_queries[0].dict()
+
+        # The semantic manifest saved query should not contain config or cache
+        assert "config" not in baseline_sq_dict
+        assert "cache" not in baseline_sq_dict
+
+        # Now enable cache via project config and re-parse
+        config_patch = {
+            "saved-queries": {"test": {"test_saved_query": {"+cache": {"enabled": True}}}}
+        }
+        update_config_file(config_patch, project.project_root, "dbt_project.yml")
+
+        result = runner.invoke(["parse"])
+        assert result.success
+        assert isinstance(result.result, Manifest)
+
+        saved_query = result.result.saved_queries["saved_query.test.test_saved_query"]
+        assert saved_query.config.cache.enabled is True
+
+        # Build semantic manifest again with cache enabled
+        sm = SemanticManifest(result.result)
+        pydantic_sm = sm._get_pydantic_semantic_manifest()
+        assert len(pydantic_sm.saved_queries) == 1
+        cache_enabled_sq_dict = pydantic_sm.saved_queries[0].dict()
+
+        # Sanity: the Manifest *did* change (cache flipped False → True) ...
+        assert saved_query.config.cache.enabled is not baseline_cache_enabled
+        # ... but the semantic manifest output is identical regardless
+        assert baseline_sq_dict == cache_enabled_sq_dict
