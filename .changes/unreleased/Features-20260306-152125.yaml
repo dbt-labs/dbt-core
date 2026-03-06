@@ -1,0 +1,6 @@
+kind: Features
+body: Apply +tags from dbt_project.yml to metrics
+time: 2026-03-06T15:21:25.806855+09:00
+custom:
+    Author: dtaniwaki
+    Issue: "12607"
