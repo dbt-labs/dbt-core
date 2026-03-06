@@ -1,0 +1,6 @@
+kind: Fixes
+body: Make `dbt retry` rebuild models when their tests fail
+time: 2025-12-25T09:45:00.000000-06:00
+custom:
+    Author: aranke
+    Issue: "10164"
