@@ -255,7 +255,7 @@ def load_raw_project(project_root: str, validate: bool = False) -> Dict[str, Any
 
 
 def _query_comment_from_cfg(
-    cfg_query_comment: Union[QueryComment, NoValue, str, None]
+    cfg_query_comment: Union[QueryComment, NoValue, str, None],
 ) -> QueryComment:
     if not cfg_query_comment:
         return QueryComment(comment="")
@@ -355,7 +355,9 @@ class PartialProject(RenderComponents):
         rendered_packages = renderer.render_packages(
             self.packages_dict, self.packages_specified_path
         )
-        rendered_selectors = renderer.render_selectors(self.selectors_dict)
+        rendered_selectors = renderer.render_selectors(
+            self.selectors_dict, rendered_project, self.project_root
+        )
 
         return RenderComponents(
             project_dict=rendered_project,
