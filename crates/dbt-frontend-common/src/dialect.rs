@@ -237,7 +237,7 @@ impl Dialect {
     pub fn is_valid_identifier_char(&self, c: char) -> bool {
         match self {
             Dialect::Sdf | Dialect::Trino => c.is_alphanumeric() || c == '_',
-            Dialect::Bigquery => c.is_alphanumeric() || ['_', '-', '$'].contains(&c),
+            Dialect::Bigquery => c.is_alphanumeric() || ['_', '-', '$', ':'].contains(&c),
             Dialect::Snowflake => {
                 // TODO: revert this once
                 // https://github.com/sdf-labs/sdf/issues/3328 is fixed:
@@ -287,6 +287,47 @@ impl Dialect {
         Ok(id)
     }
 
+    /// Parse a catalog/project identifier from the start of the string,
+    /// returning the identifier and the remaining unparsed input.
+    ///
+    /// For BigQuery, handles domain-scoped project ids where the domain
+    /// contains dots and a colon separates it from the project id
+    /// (e.g. "domain.co.uk:project-id"). For other dialects, delegates
+    /// to `parse_identifier_partial`.
+    fn parse_catalog_identifier_partial<'input>(
+        &self,
+        sql: &'input str,
+    ) -> InternalResult<(Identifier, &'input str)> {
+        if !matches!(self, Dialect::Bigquery) || sql.starts_with(self.quote_char()) {
+            return self.parse_identifier_partial(sql);
+        }
+
+        // Colons can't appear in unquoted BigQuery identifiers, so a colon
+        // in the raw string means this is a domain-scoped project id
+        // (e.g. "domain.co.uk:project-id").
+        if let Some(colon_pos) = sql.find(':') {
+            let domain_str = &sql[..colon_pos];
+            let domain_parts = self
+                .parse_dot_separated_identifiers(domain_str)
+                .map_err(|e| make_internal_err!("Failed to parse domain in {sql}: {e}"))?;
+
+            let after_colon = &sql[colon_pos + 1..];
+            let (project_id, rest) = self.parse_identifier_partial(after_colon)?;
+
+            let mut catalog = domain_parts
+                .iter()
+                .map(|id| id.to_value())
+                .collect::<Vec<_>>()
+                .join(".");
+            catalog.push(':');
+            catalog.push_str(&project_id.to_value());
+
+            Ok((Identifier::new(catalog), rest))
+        } else {
+            self.parse_identifier_partial(sql)
+        }
+    }
+
     fn parse_dot_separated_identifiers_partial<'input>(
         &self,
         sql: &'input str,
@@ -316,21 +357,35 @@ impl Dialect {
 
     /// Parse the given string as a qualified name.
     pub fn parse_qualified_name(&self, sql: &str) -> InternalResult<QualifiedName> {
-        let idents = self
-            .parse_dot_separated_identifiers(sql)
+        let (first, rest) = self
+            .parse_catalog_identifier_partial(sql)
             .map_err(|e| make_internal_err!("Failed to parse {sql} as qualified name: {e}"))?;
-        let idents = if self == &Dialect::Bigquery
+
+        let mut idents = vec![first];
+
+        if !rest.is_empty() {
+            let rest_after_dot = parse_dot(rest)
+                .map_err(|e| make_internal_err!("Failed to parse {sql} as qualified name: {e}"))?;
+            let remaining = self
+                .parse_dot_separated_identifiers(rest_after_dot)
+                .map_err(|e| make_internal_err!("Failed to parse {sql} as qualified name: {e}"))?;
+            idents.extend(remaining);
+        }
+
+        // BigQuery INFORMATION_SCHEMA queries can be region-qualified, producing
+        // 4 idents: [catalog, region, "information_schema", table]. Collapse the
+        // region into the catalog so we get 3.
+        if matches!(self, Dialect::Bigquery)
             && idents.len() == 4
             && idents[2].matches("information_schema")
         {
-            vec![
-                Identifier::new(format!("{}.{}", idents[0].to_value(), idents[1].to_value())),
+            let database = format!("{}.{}", idents[0].to_value(), idents[1].to_value());
+            idents = vec![
+                Identifier::new(database),
                 idents[2].clone(),
                 idents[3].clone(),
-            ]
-        } else {
-            idents
-        };
+            ];
+        }
 
         QualifiedName::try_from(idents)
     }
