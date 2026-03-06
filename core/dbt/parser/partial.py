@@ -945,8 +945,11 @@ class PartialParsing:
                     if self.saved_files[file_id]:
                         source_file = self.saved_files[file_id]
                         self.add_to_pp_files(source_file)
-                    # if the node's group has changed - need to reparse all referencing nodes to ensure valid ref access
-                    if node.group != elem.get("group"):
+                    # if the node's group or access has changed - need to reparse all referencing nodes to ensure valid ref access
+                    elem_config = elem.get("config", {})
+                    elem_group = elem.get("group") or elem_config.get("group")
+                    elem_access = elem.get("access") or elem_config.get("access")
+                    if node.group != elem_group or (elem_access == "private" and node.access != elem_access):
                         self.schedule_referencing_nodes_for_parsing(node.unique_id)
                     # If the latest version has changed, a version has been removed, or a version has been added,
                     #  we need to reparse referencing nodes.
@@ -1253,3 +1256,4 @@ class PartialParsing:
                         break  # if one env_var is changed we can stop
 
         return (env_vars_changed_source_files, env_vars_changed_schema_files)
+
