@@ -305,3 +305,4 @@ class CompiledResource(ParsedResource):
             if "compiled_code" in dct:
                 del dct["compiled_code"]
         return dct
+
