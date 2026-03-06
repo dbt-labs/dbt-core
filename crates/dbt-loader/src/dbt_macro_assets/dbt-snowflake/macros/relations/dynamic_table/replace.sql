@@ -44,7 +44,16 @@
         A valid DDL statement which will result in a new dynamic info schema table.
 -#}
 
-create or replace dynamic table {{ relation }}
+    {#- Determine transient: explicit config takes precedence, otherwise use behavior flag default -#}
+    {%- if dynamic_table.transient is not none -%}
+        {%- set is_transient = dynamic_table.transient -%}
+    {%- elif adapter.behavior.snowflake_default_transient_dynamic_tables.no_warn -%}
+        {%- set is_transient = true -%}
+    {%- else -%}
+        {%- set is_transient = false -%}
+    {%- endif -%}
+    {%- set transient_keyword = 'transient ' if is_transient else '' -%}
+create or replace {{ transient_keyword }}dynamic table {{ relation }}
     target_lag = '{{ dynamic_table.target_lag }}'
     warehouse = {{ dynamic_table.snowflake_warehouse }}
     {{ optional('refresh_mode', dynamic_table.refresh_mode) }}

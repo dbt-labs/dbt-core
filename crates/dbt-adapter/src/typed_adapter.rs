@@ -3762,22 +3762,15 @@ pub(crate) static DEFAULT_BASE_BEHAVIOR_FLAGS: LazyLock<[BehaviorFlag; 2]> = Laz
 pub(crate) fn adapter_specific_behavior_flags(adapter_type: AdapterType) -> Vec<BehaviorFlag> {
     match adapter_type {
         Snowflake => {
-            // https://github.com/dbt-labs/dbt-adapters/blob/917301379d4ece300d32a3366c71daf0c4ac44aa/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L87
+            // https://github.com/dbt-labs/dbt-adapters/blob/c4c04de76d5a6c56c95965041a93156fdeaf4641/dbt-snowflake/src/dbt/adapters/snowflake/impl.py#L46
             let flag = BehaviorFlag::new(
-                "enable_iceberg_materializations",
+                "snowflake_default_transient_dynamic_tables",
                 false,
                 Some(
-                    "Enabling Iceberg materializations introduces latency to metadata queries, specifically within the list_relations_without_caching macro. Since Iceberg benefits only those actively using it, we've made this behavior opt-in to prevent unnecessary latency for other users.",
+                    "When enabled, dynamic tables default to transient (matching regular table behavior). This is a breaking change from previous behavior where dynamic tables were non-transient.",
                 ),
-                Some(
-                    r#"Enabling Iceberg materializations introduces latency to metadata queries,
-specifically within the list_relations_without_caching macro. Since Iceberg
-benefits only those actively using it, we've made this behavior opt-in to
-prevent unnecessary latency for other users."#,
-                ),
-                Some(
-                    "https://docs.getdbt.com/reference/resource-configs/snowflake-configs#iceberg-table-format",
-                ),
+                None,
+                None,
             );
             vec![flag]
         }
