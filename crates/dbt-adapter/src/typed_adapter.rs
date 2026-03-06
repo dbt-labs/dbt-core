@@ -70,7 +70,7 @@ use dbt_xdbc::{Connection, QueryCtx};
 use dbt_yaml::Value as YmlValue;
 use indexmap::IndexMap;
 use minijinja::dispatch_object::DispatchObject;
-use minijinja::value::ValueMap;
+use minijinja::value::{Object, ValueMap};
 use minijinja::{self, invalid_argument, invalid_argument_inner};
 use minijinja::{State, Value, args};
 use once_cell::sync::Lazy;
@@ -3188,21 +3188,19 @@ impl ConcreteAdapter {
                     ));
                 }
 
-                let use_uniform =
-                    if let Some(val) = catalog_relation.adapter_properties.get("use_uniform") {
-                        val.eq_ignore_ascii_case("true")
-                    } else {
-                        false
-                    };
+                let use_managed_iceberg = self
+                    .behavior_object()
+                    .get_value(&Value::from("use_managed_iceberg"))
+                    .is_some_and(|flag| flag.is_true());
 
-                if use_uniform && catalog_relation.catalog_type != "unity" {
+                if use_managed_iceberg && catalog_relation.catalog_type != "unity" {
                     return Err(AdapterError::new(
                         AdapterErrorKind::Configuration,
                         "Managed Iceberg tables are only supported in Unity Catalog. Set 'use_uniform' adapter property to true for Hive Metastore.",
                     ));
                 }
 
-                Ok(use_uniform)
+                Ok(!use_managed_iceberg)
             }
             Postgres | Snowflake | Bigquery | Redshift | Salesforce | Sidecar | Spark | DuckDB
             | Fabric => {
@@ -3814,10 +3812,21 @@ prevent unnecessary latency for other users."#,
                 None,
             );
 
+            let use_managed_iceberg = BehaviorFlag::new(
+                "use_managed_iceberg",
+                false,
+                Some(
+                    "Use managed Iceberg tables when table_format is iceberg. When this flag is disabled, UniForm is used instead.",
+                ),
+                None,
+                None,
+            );
+
             vec![
                 use_user_folder_for_python,
                 use_materialization_v2,
                 use_replace_on_for_insert_overwrite,
+                use_managed_iceberg,
             ]
         }
         Bigquery => {
