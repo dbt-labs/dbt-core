@@ -1673,6 +1673,7 @@ class Manifest(MacroMethods, dbtClassMixin):
                 self.functions[unique_id] = replace(current, defer_function=defer_fn)
             else:
                 self.functions[unique_id] = function
+        # invalidate function lookup cache
         self._function_lookup = None
 
         # Rebuild the flat_graph, which powers the 'graph' context variable
