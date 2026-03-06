@@ -1267,6 +1267,15 @@
             "null"
           ]
         },
+        "+job_execution_timeout_seconds": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
         "+kms_key_name": {
           "type": [
             "string",
@@ -2364,6 +2373,15 @@
             "$ref": "#/definitions/AnyValue"
           }
         },
+        "+job_execution_timeout_seconds": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
         "+kms_key_name": {
           "type": [
             "string",
@@ -3194,6 +3212,14 @@
             "null"
           ]
         },
+        "+job_execution_timeout_seconds": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
         "+kms_key_name": {
           "type": [
             "string",
@@ -3837,6 +3863,15 @@
             "null"
           ]
         },
+        "+job_execution_timeout_seconds": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
         "+kms_key_name": {
           "type": [
             "string",
@@ -4455,6 +4490,15 @@
             "null"
           ]
         },
+        "+job_execution_timeout_seconds": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
         "+kms_key_name": {
           "type": [
             "string",
@@ -4982,6 +5026,15 @@
             "string",
             "null"
           ]
+        },
+        "+job_execution_timeout_seconds": {
+          "default": null,
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
         },
         "+kms_key_name": {
           "type": [
