@@ -1,7 +1,10 @@
 import pickle
+from abc import abstractmethod
 from datetime import timedelta
+from typing import Any, Dict
 
 import pytest
+from typing_extensions import override
 
 from dbt.artifacts.resources import (
     ExposureType,
@@ -17,12 +20,15 @@ from dbt.contracts.graph.unparsed import (
     Docs,
     HasColumnTests,
     UnparsedColumn,
+    UnparsedConversionTypeParams,
+    UnparsedDerivedDimensionV2,
     UnparsedDocumentationFile,
     UnparsedExposure,
     UnparsedMacro,
     UnparsedMetric,
     UnparsedMetricInputMeasure,
     UnparsedMetricTypeParams,
+    UnparsedMetricV2,
     UnparsedModelUpdate,
     UnparsedNode,
     UnparsedNodeUpdate,
@@ -34,6 +40,9 @@ from dbt.contracts.graph.unparsed import (
 from dbt.exceptions import ParsingError
 from dbt.node_types import NodeType
 from dbt.parser.schemas import ParserRef
+from dbt_semantic_interfaces.type_enums.conversion_calculation_type import (
+    ConversionCalculationType,
+)
 from tests.unit.utils import ContractTestCase
 
 
@@ -883,9 +892,93 @@ class TestUnparsedExposure(ContractTestCase):
         self.assert_fails_validation(tst)
 
 
-class TestUnparsedMetric(ContractTestCase):
+class TestUnparsedConversionTypeParams(ContractTestCase):
+    """Only Applies to v1 Semantic Metrics."""
+
+    ContractType = UnparsedConversionTypeParams
+
+    def get_old_style_ok_dict(self):
+        return {
+            "entity": "customers",
+            "base_measure": {
+                "name": "customers",
+                "filter": "is_new = true",
+                "join_to_timespine": False,
+            },
+            "conversion_measure": "orders",
+            "calculation": "conversion_rate",
+            "window": "7d",
+        }
+
+    def test_old_style_ok(self):
+        params = self.ContractType.from_dict(self.get_old_style_ok_dict())
+        assert params.base_measure is not None
+        assert params.conversion_measure is not None
+        assert params.calculation == ConversionCalculationType.CONVERSION_RATE.value
+        assert params.window == "7d"
+
+    def test_old_style_bad_no_base_measure(self):
+        tst = self.get_old_style_ok_dict()
+        del tst["base_measure"]
+        self.assert_fails_validation(tst)
+
+    def test_old_style_bad_no_conversion_measure(self):
+        tst = self.get_old_style_ok_dict()
+        del tst["conversion_measure"]
+        self.assert_fails_validation(tst)
+
+
+class BaseTestUnparsedMetric:
+
+    @abstractmethod
+    def get_ok_dict(self) -> Dict[str, Any]:
+        raise NotImplementedError()
+
+    def test_bad_tags(self):
+        tst = self.get_ok_dict()
+        tst["tags"] = [123]
+        self.assert_fails_validation(tst)
+
+    def test_bad_metric_name_with_spaces(self):
+        tst = self.get_ok_dict()
+        tst["name"] = "metric name with spaces"
+        self.assert_fails_validation(tst)
+
+    def test_bad_metric_name_too_long(self):
+        tst = self.get_ok_dict()
+        tst["name"] = "a" * 251
+        self.assert_fails_validation(tst)
+
+    def test_bad_metric_name_does_not_start_with_letter(self):
+        tst = self.get_ok_dict()
+        tst["name"] = "123metric"
+        self.assert_fails_validation(tst)
+
+        tst["name"] = "_metric"
+        self.assert_fails_validation(tst)
+
+    def test_bad_metric_name_contains_special_characters(self):
+        tst = self.get_ok_dict()
+        tst["name"] = "metric!name"
+        self.assert_fails_validation(tst)
+
+        tst["name"] = "metric@name"
+        self.assert_fails_validation(tst)
+
+        tst["name"] = "metric#name"
+        self.assert_fails_validation(tst)
+
+        tst["name"] = "metric$name"
+        self.assert_fails_validation(tst)
+
+        tst["name"] = "metric-name"
+        self.assert_fails_validation(tst)
+
+
+class TestUnparsedMetric(BaseTestUnparsedMetric, ContractTestCase):
     ContractType = UnparsedMetric
 
+    @override
     def get_ok_dict(self):
         return {
             "name": "new_customers",
@@ -928,44 +1021,55 @@ class TestUnparsedMetric(ContractTestCase):
         del tst["type_params"]
         self.assert_fails_validation(tst)
 
-    def test_bad_tags(self):
-        tst = self.get_ok_dict()
-        tst["tags"] = [123]
-        self.assert_fails_validation(tst)
 
-    def test_bad_metric_name_with_spaces(self):
-        tst = self.get_ok_dict()
-        tst["name"] = "metric name with spaces"
-        self.assert_fails_validation(tst)
+class TestUnparsedMetricV2(BaseTestUnparsedMetric, ContractTestCase):
+    ContractType = UnparsedMetricV2
 
-    def test_bad_metric_name_too_long(self):
-        tst = self.get_ok_dict()
-        tst["name"] = "a" * 251
-        self.assert_fails_validation(tst)
+    @override
+    def get_ok_dict(self):
+        return {
+            "name": "new_customers",
+            "label": "New Customers",
+            "description": "New customers",
+            "type": "simple",
+            "agg": "sum",
+            "filter": "is_new = true",
+            "join_to_timespine": False,
+            "config": {
+                "tags": [],
+                "meta": {"is_okr": True},
+            },
+        }
 
-    def test_bad_metric_name_does_not_start_with_letter(self):
-        tst = self.get_ok_dict()
-        tst["name"] = "123metric"
-        self.assert_fails_validation(tst)
+    def get_ok_dict_with_defaults(self):
+        dct = self.get_ok_dict()
+        dct["hidden"] = False
+        dct["period_agg"] = "first"
+        return dct
 
-        tst["name"] = "_metric"
-        self.assert_fails_validation(tst)
+    def test_ok(self):
+        metric = self.ContractType(
+            name="new_customers",
+            label="New Customers",
+            description="New customers",
+            agg="sum",
+            filter="is_new = true",
+            join_to_timespine=False,
+            config={
+                "tags": [],
+                "meta": {"is_okr": True},
+            },
+        )
+        dct = self.get_ok_dict()
+        # add defaults:
+        dct["hidden"] = False
+        dct["period_agg"] = "first"
+        self.assert_symmetric(metric, dct)
+        pickle.loads(pickle.dumps(metric))
 
-    def test_bad_metric_name_contains_special_characters(self):
-        tst = self.get_ok_dict()
-        tst["name"] = "metric!name"
-        self.assert_fails_validation(tst)
-
-        tst["name"] = "metric@name"
-        self.assert_fails_validation(tst)
-
-        tst["name"] = "metric#name"
-        self.assert_fails_validation(tst)
-
-        tst["name"] = "metric$name"
-        self.assert_fails_validation(tst)
-
-        tst["name"] = "metric-name"
+    def test_simple_metric_with_no_agg_fails_validation(self):
+        tst = self.get_ok_dict_with_defaults()
+        del tst["agg"]
         self.assert_fails_validation(tst)
 
 
@@ -1034,3 +1138,133 @@ def test_column_parse():
 
     with pytest.raises(ParsingError):
         ParserRef.from_target(unparsed_col)
+
+
+class TestUnparsedColumnTimeDimensionGranularityValidation(ContractTestCase):
+    """Test validation that SL YAML V2 column with time dimension must specify granularity,
+    and that dimension validity_params require granularity."""
+
+    ContractType = UnparsedColumn
+
+    def test_time_dimension_without_granularity_fails_validation(self):
+        column_dict = {
+            "name": "created_at",
+            "dimension": {"type": "time", "name": "created_at_dim"},
+        }
+        self.assert_fails_validation(column_dict)
+
+    def test_time_dimension_with_granularity_passes_validation(self):
+        column_dict = {
+            "name": "created_at",
+            "granularity": "day",
+            "dimension": {"type": "time", "name": "created_at_dim"},
+        }
+        col = self.ContractType.from_dict(column_dict)
+        self.assertEqual(col.granularity, "day")
+        self.assertEqual(col.name, "created_at")
+
+    def test_time_dimension_string_without_granularity_fails_validation(self):
+        """Dimension as string 'time' without granularity must fail."""
+        column_dict = {
+            "name": "created_at",
+            "dimension": "time",
+        }
+        self.assert_fails_validation(column_dict)
+
+    def test_time_dimension_string_with_granularity_passes_validation(self):
+        """Dimension as string 'time' with granularity must pass."""
+        column_dict = {
+            "name": "created_at",
+            "granularity": "day",
+            "dimension": "time",
+        }
+        col = self.ContractType.from_dict(column_dict)
+        self.assertEqual(col.granularity, "day")
+        self.assertEqual(col.name, "created_at")
+
+    def test_non_time_dimension_string_passes_without_granularity(self):
+        """Dimension as string (e.g. categorical) does not require granularity."""
+        column_dict = {
+            "name": "category",
+            "dimension": "categorical",
+        }
+        col = self.ContractType.from_dict(column_dict)
+        self.assertEqual(col.name, "category")
+        self.assertIsNone(col.granularity)
+
+    def test_dimension_with_validity_params_without_granularity_fails_validation(self):
+        """Dimension (dict) with validity_params must have column granularity."""
+        column_dict = {
+            "name": "valid_from",
+            "dimension": {
+                "type": "time",
+                "name": "valid_from_dim",
+                "validity_params": {"is_start": True, "is_end": False},
+            },
+        }
+        self.assert_fails_validation(column_dict)
+
+    def test_dimension_with_validity_params_with_granularity_passes_validation(self):
+        """Dimension (dict) with validity_params and granularity passes."""
+        column_dict = {
+            "name": "valid_from",
+            "granularity": "day",
+            "dimension": {
+                "type": "time",
+                "name": "valid_from_dim",
+                "validity_params": {"is_start": True, "is_end": True},
+            },
+        }
+        col = self.ContractType.from_dict(column_dict)
+        self.assertEqual(col.granularity, "day")
+        self.assertEqual(col.name, "valid_from")
+
+    def test_dimension_without_validity_params_passes_without_granularity_when_not_time(self):
+        """Dimension (dict) without validity_params and not time does not require granularity."""
+        column_dict = {
+            "name": "category",
+            "dimension": {"type": "categorical", "name": "category_dim"},
+        }
+        col = self.ContractType.from_dict(column_dict)
+        self.assertEqual(col.name, "category")
+        self.assertIsNone(col.granularity)
+
+
+class TestUnparsedDerivedDimensionV2ValidityParamsValidation(ContractTestCase):
+    """Test validation that UnparsedDerivedDimensionV2 only has validity_params when it has granularity."""
+
+    ContractType = UnparsedDerivedDimensionV2
+
+    def test_derived_dimension_with_validity_params_without_granularity_fails_validation(self):
+        """Derived dimension with validity_params must have granularity."""
+        dimension_dict = {
+            "type": "time",
+            "name": "valid_from_dim",
+            "expr": "valid_from",
+            "validity_params": {"is_start": True, "is_end": False},
+        }
+        self.assert_fails_validation(dimension_dict)
+
+    def test_derived_dimension_with_validity_params_with_granularity_passes_validation(self):
+        """Derived dimension with validity_params and granularity passes."""
+        dimension_dict = {
+            "type": "time",
+            "name": "valid_from_dim",
+            "expr": "valid_from",
+            "granularity": "day",
+            "validity_params": {"is_start": True, "is_end": True},
+        }
+        dim = self.ContractType.from_dict(dimension_dict)
+        self.assertEqual(dim.granularity, "day")
+        self.assertEqual(dim.name, "valid_from_dim")
+
+    def test_derived_dimension_without_validity_params_passes_without_granularity(self):
+        """Derived dimension without validity_params does not require granularity."""
+        dimension_dict = {
+            "type": "time",
+            "name": "some_dim",
+            "expr": "some_column",
+        }
+        dim = self.ContractType.from_dict(dimension_dict)
+        self.assertEqual(dim.name, "some_dim")
+        self.assertIsNone(dim.granularity)

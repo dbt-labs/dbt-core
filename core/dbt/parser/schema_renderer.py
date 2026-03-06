@@ -68,8 +68,17 @@ class SchemaYamlRenderer(BaseRenderer):
 
         if (
             len(keypath) >= 3
-            and keypath[0] in ("columns", "dimensions", "measures", "entities")
+            and keypath[0] in ("columns", "dimensions", "measures", "entities", "metrics")
             and keypath[2] in ("tests", "data_tests", "description")
+        ):
+            return True
+
+        # derived_semantics descriptions (v2 semantic layer)
+        if (
+            len(keypath) >= 4
+            and keypath[0] == "derived_semantics"
+            and keypath[1] in ("dimensions", "entities")
+            and keypath[3] in ("tests", "data_tests", "description")
         ):
             return True
 
@@ -106,6 +115,8 @@ class SchemaYamlRenderer(BaseRenderer):
             elif self._is_norender_key(keypath[0:]):
                 return False
         else:  # models, seeds, snapshots, analyses
+            if keypath[-1] == "filter" and "metrics" in keypath:
+                return False
             if self._is_norender_key(keypath[0:]):
                 return False
         return True

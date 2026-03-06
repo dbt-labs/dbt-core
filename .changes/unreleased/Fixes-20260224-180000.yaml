@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix doc() Jinja in derived_semantics dimension and entity descriptions being incorrectly rendered during v2 YAML parsing
+time: 2026-02-24T18:00:00.000000-08:00
+custom:
+    Author: theyostalservice
+    Issue: 12535

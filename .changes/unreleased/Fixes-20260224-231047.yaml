@@ -1,0 +1,6 @@
+kind: Fixes
+body: Improve logic for detecting config with missing plus prefix in dbt_project.yml
+time: 2026-02-24T23:10:47.240471+05:30
+custom:
+    Author: ash2shukla
+    Issue: "12371"

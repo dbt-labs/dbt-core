@@ -1,0 +1,6 @@
+kind: Features
+body: Enable parsing derived dimensions for v2 semantic layer YAML.
+time: 2026-01-28T17:20:52.400188-08:00
+custom:
+    Author: theyostalservice
+    Issue: "12404"

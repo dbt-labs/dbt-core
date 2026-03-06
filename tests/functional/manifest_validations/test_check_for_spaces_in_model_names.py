@@ -103,5 +103,5 @@ class TestAllowSpacesInModelNamesFalse:
         result = runner.invoke(["parse"])
         assert not result.success
         assert "Resource names cannot contain spaces" in result.exception.__str__()
-        assert len(spaces_check_catcher.caught_events) == 1
-        assert spaces_check_catcher.caught_events[0].info.level == EventLevel.ERROR
+        assert "my model.sql" in result.exception.__str__()
+        assert len(spaces_check_catcher.caught_events) == 0

@@ -186,6 +186,7 @@ class SourcePatcher:
         if (
             parsed_source.freshness
             and not parsed_source.loaded_at_field
+            and not parsed_source.loaded_at_query
             and not get_adapter(self.root_project).supports(Capability.TableLastModifiedMetadata)
         ):
             # Metadata-based freshness is being used by default for this node,

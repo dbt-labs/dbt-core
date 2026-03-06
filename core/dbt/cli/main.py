@@ -331,6 +331,7 @@ def docs_serve(ctx, **kwargs):
 @requires.preflight
 @requires.profile
 @requires.project
+@requires.catalogs
 @requires.runtime_config
 @requires.manifest
 def compile(ctx, **kwargs):
@@ -472,6 +473,7 @@ def deps(ctx, **kwargs):
 @p.profiles_dir_exists_false
 @p.project_dir
 @p.skip_profile_setup
+@p.skip_debug
 @p.vars
 @requires.postflight
 @requires.preflight

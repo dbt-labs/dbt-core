@@ -1,1 +1,1 @@
-../../../test/setup_db.sh
+../../../scripts/setup_db.sh

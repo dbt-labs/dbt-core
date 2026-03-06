@@ -781,6 +781,11 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
         # code consistency.
         deprecation_date: Optional[datetime.datetime] = None
         time_spine: Optional[TimeSpine] = None
+        semantic_model = None
+        metrics = None
+        derived_semantics = None
+        agg_time_dimension = None
+        primary_entity = None
 
         if isinstance(block.target, UnparsedModelUpdate):
             deprecation_date = block.target.deprecation_date
@@ -798,7 +803,11 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
                 if block.target.time_spine
                 else None
             )
-
+            semantic_model = block.target.semantic_model
+            metrics = block.target.metrics
+            derived_semantics = block.target.derived_semantics
+            agg_time_dimension = block.target.agg_time_dimension
+            primary_entity = block.target.primary_entity
         return ParsedNodePatch(
             name=block.target.name,
             original_file_path=block.target.original_file_path,
@@ -815,6 +824,11 @@ class NodePatchParser(PatchParser[NodeTarget, ParsedNodePatch], Generic[NodeTarg
             constraints=block.target.constraints,
             deprecation_date=deprecation_date,
             time_spine=time_spine,
+            semantic_model=semantic_model,
+            metrics=metrics,
+            derived_semantics=derived_semantics,
+            agg_time_dimension=agg_time_dimension,
+            primary_entity=primary_entity,
         )
 
     def parse_patch(self, block: TargetBlock[NodeTarget], refs: ParserRef) -> None:
@@ -1112,6 +1126,27 @@ class ModelPatchParser(NodePatchParser[UnparsedModelUpdate]):
                     unique_id=node.unique_id,
                     field_value=patch.access,
                 )
+        # breaking out False and None here is wordy but extra clear
+        semantic_model_enabled = patch.semantic_model is True or (
+            patch.semantic_model is not False
+            and patch.semantic_model is not None
+            and patch.semantic_model.enabled is not False
+        )
+        if semantic_model_enabled:
+            from dbt.parser.schema_yaml_readers import SemanticModelParser
+
+            semantic_model_parser = SemanticModelParser(self.schema_parser, self.yaml)
+            semantic_model_parser.parse_v2_semantic_model_from_dbt_model_patch(
+                node=node,
+                patch=patch,
+            )
+
+            from dbt.parser.schema_yaml_readers import MetricParser
+
+            MetricParser(self.schema_parser, self.yaml).parse_v2_metrics_from_dbt_model_patch(
+                patch
+            )
+
         # These two will have to be reapplied after config is built for versioned models
         self.patch_constraints(node, patch.constraints)
         self.patch_time_spine(node, patch.time_spine)

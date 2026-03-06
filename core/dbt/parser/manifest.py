@@ -28,6 +28,7 @@ from dbt.adapters.factory import (
 from dbt.artifacts.resources import (
     CatalogWriteIntegrationConfig,
     FileHash,
+    MetricInput,
     NodeRelation,
     NodeVersion,
 )
@@ -77,6 +78,7 @@ from dbt.events.types import (
     InvalidDisabledTargetInTestNode,
     MicrobatchModelNoEventTimeInputs,
     NodeNotFoundOrDisabled,
+    PackageNodeDependsOnRootProjectNode,
     ParsedFileLoadFailed,
     ParsePerfInfoPath,
     PartialParsingError,
@@ -635,23 +637,24 @@ class ManifestLoader:
     def check_for_spaces_in_resource_names(self):
         """Validates that resource names do not contain spaces
 
-        If `DEBUG` flag is `False`, logs only first bad model name
+        If `DEBUG` flag is `False`, logs only first bad model name, unless `REQUIRE_RESOURCE_NAMES_WITHOUT_SPACES` is `True` as error will indicate all bad model names
         If `DEBUG` flag is `True`, logs every bad model name
         If `REQUIRE_RESOURCE_NAMES_WITHOUT_SPACES` is `True`, logs are `ERROR` level and an exception is raised if any names are bad
         If `REQUIRE_RESOURCE_NAMES_WITHOUT_SPACES` is `False`, logs are `WARN` level
         """
-        improper_resource_names = 0
-        level = (
-            EventLevel.ERROR
-            if self.root_project.args.REQUIRE_RESOURCE_NAMES_WITHOUT_SPACES
-            else EventLevel.WARN
+        improper_resource_names_unique_ids = set()
+        error_on_invalid_resource_name = (
+            self.root_project.args.REQUIRE_RESOURCE_NAMES_WITHOUT_SPACES
         )
+        level = EventLevel.ERROR if error_on_invalid_resource_name else EventLevel.WARN
 
         flags = get_flags()
 
         for node in self.manifest.nodes.values():
             if " " in node.name:
-                if improper_resource_names == 0 or flags.DEBUG:
+                if (
+                    not improper_resource_names_unique_ids and not error_on_invalid_resource_name
+                ) or flags.DEBUG:
                     fire_event(
                         SpacesInResourceNameDeprecation(
                             unique_id=node.unique_id,
@@ -659,17 +662,23 @@ class ManifestLoader:
                         ),
                         level=level,
                     )
-                improper_resource_names += 1
+                improper_resource_names_unique_ids.add(node.unique_id)
 
-        if improper_resource_names > 0:
+        if improper_resource_names_unique_ids:
             if level == EventLevel.WARN:
                 dbt.deprecations.warn(
                     "resource-names-with-spaces",
-                    count_invalid_names=improper_resource_names,
+                    count_invalid_names=len(improper_resource_names_unique_ids),
                     show_debug_hint=(not flags.DEBUG),
                 )
             else:  # ERROR level
-                raise DbtValidationError("Resource names cannot contain spaces")
+                formatted_resources_with_spaces = "\n".join(
+                    f"  * '{unique_id}' ({self.manifest.nodes[unique_id].original_file_path})"
+                    for unique_id in improper_resource_names_unique_ids
+                )
+                raise DbtValidationError(
+                    f"Resource names cannot contain spaces:\n{formatted_resources_with_spaces}\nPlease rename the invalid model(s) so that their name(s) do not contain any spaces."
+                )
 
     def check_for_microbatch_deprecations(self) -> None:
         if not get_flags().require_batched_execution_for_custom_microbatch_strategy:
@@ -1021,22 +1030,24 @@ class ManifestLoader:
             v for k, v in config.cli_vars.items() if k.startswith(SECRET_ENV_PREFIX) and v.strip()
         ]
         stringified_cli_vars = pprint.pformat(config.cli_vars)
-        vars_hash = FileHash.from_contents(
-            "\x00".join(
-                [
-                    stringified_cli_vars,
-                    getattr(config.args, "profile", "") or "",
-                    getattr(config.args, "target", "") or "",
-                    __version__,
-                ]
-            )
-        )
+        vars_hash_contents = [
+            stringified_cli_vars,
+            config.profile_name,
+            config.target_name,
+            __version__,
+        ]
+
+        # We only add vars from `vars.yml` if it's present to prevent affecting users not using vars.yml from getting fully parsed.
+        if config.vars_from_file:
+            vars_hash_contents.append(pprint.pformat(config.vars_from_file))
+
+        vars_hash = FileHash.from_contents("\x00".join(vars_hash_contents))
         fire_event(
             StateCheckVarsHash(
                 checksum=vars_hash.checksum,
                 vars=scrub_secrets(stringified_cli_vars, secret_vars),
-                profile=config.args.profile,
-                target=config.args.target,
+                profile=config.profile_name,
+                target=config.target_name,
                 version=__version__,
             )
         )
@@ -1629,6 +1640,33 @@ def invalid_target_fail_unless_test(
         )
 
 
+def warn_if_package_node_depends_on_root_project_node(
+    node: ManifestNode,
+    target_model: ManifestNode,
+    ref_package_name: Optional[str],
+    current_project: str,
+) -> None:
+    """
+    Args:
+        node: The node that specifies the ref
+        target_model: The node that is being ref'd to
+        ref_package_name: The package name specified in the ref
+        current_project: The root project
+    """
+    if (
+        node.package_name != current_project
+        and target_model.package_name == current_project
+        and ref_package_name != current_project
+    ):
+        warn_or_error(
+            PackageNodeDependsOnRootProjectNode(
+                node_name=node.name,
+                package_name=node.package_name,
+                root_project_unique_id=target_model.unique_id,
+            )
+        )
+
+
 def _build_model_names_to_versions(manifest: Manifest) -> Dict[str, Dict]:
     model_names_to_versions: Dict[str, Dict] = {}
     for node in manifest.nodes.values():
@@ -1886,18 +1924,60 @@ def _process_refs(
                 scope=target_model.package_name,
             )
 
+        if not get_flags().require_ref_searches_node_package_before_root:
+            warn_if_package_node_depends_on_root_project_node(
+                node, target_model, ref.package, current_project
+            )
+
         target_model_id = target_model.unique_id
         node.depends_on.add_node(target_model_id)
 
 
-def _process_metric_depends_on(
+def _add_depends_on_metrics_to_v2_metric(
+    metric: Metric,
+    input_metrics: List[MetricInput],
+    manifest: Manifest,
+    current_project: str,
+) -> None:
+    """Set the depends_on property for a v2 metric that depends on other metrics"""
+    for input_metric in input_metrics:
+        target_metric = manifest.resolve_metric(
+            target_metric_name=input_metric.name,
+            target_metric_package=None,
+            current_project=current_project,
+            node_package=metric.package_name,
+        )
+
+        if target_metric is None:
+            raise dbt.exceptions.ParsingError(
+                f"The metric `{input_metric.name}` does not exist but was referenced.",
+                node=metric,
+            )
+        elif isinstance(target_metric, Disabled):
+            raise dbt.exceptions.ParsingError(
+                f"The metric `{input_metric.name}` is disabled and thus cannot be referenced.",
+                node=metric,
+            )
+
+        _process_metric_node(
+            manifest=manifest,
+            current_project=current_project,
+            metric=target_metric,
+        )
+        metric.depends_on.add_node(target_metric.unique_id)
+
+
+def _process_metric_depends_on_semantic_models_for_measures(
     manifest: Manifest,
     current_project: str,
     metric: Metric,
 ) -> None:
-    """For a given metric, set the `depends_on` property"""
+    """For a given v1 metric, set the `depends_on` property"""
 
-    assert len(metric.type_params.input_measures) > 0
+    assert (
+        len(metric.type_params.input_measures) > 0
+        or metric.type_params.metric_aggregation_params is not None
+    ), f"{metric} should have a measure or agg type defined, but it does not."
     for input_measure in metric.type_params.input_measures:
         target_semantic_model = manifest.resolve_semantic_model_for_measure(
             target_measure_name=input_measure.name,
@@ -1918,38 +1998,151 @@ def _process_metric_depends_on(
         metric.depends_on.add_node(target_semantic_model.unique_id)
 
 
+def _process_multiple_metric_inputs(
+    manifest: Manifest,
+    current_project: str,
+    metric: Metric,
+    metric_inputs: List[MetricInput],
+) -> None:
+    for input_metric in metric_inputs:
+        target_metric = manifest.resolve_metric(
+            target_metric_name=input_metric.name,
+            target_metric_package=None,
+            current_project=current_project,
+            node_package=metric.package_name,
+        )
+
+        if target_metric is None:
+            raise dbt.exceptions.ParsingError(
+                f"The metric `{input_metric.name}` does not exist but was referenced.",
+                node=metric,
+            )
+        elif isinstance(target_metric, Disabled):
+            raise dbt.exceptions.ParsingError(
+                f"The metric `{input_metric.name}` is disabled and thus cannot be referenced.",
+                node=metric,
+            )
+
+        _process_metric_node(
+            manifest=manifest, current_project=current_project, metric=target_metric
+        )
+        for input_measure in target_metric.type_params.input_measures:
+            metric.add_input_measure(input_measure)
+        metric.depends_on.add_node(target_metric.unique_id)
+
+
 def _process_metric_node(
     manifest: Manifest,
     current_project: str,
     metric: Metric,
 ) -> None:
     """Sets a metric's `input_measures` and `depends_on` properties"""
-
     # This ensures that if this metrics input_measures have already been set
     # we skip the work. This could happen either due to recursion or if multiple
     # metrics derive from another given metric.
     # NOTE: This does not protect against infinite loops
     if len(metric.type_params.input_measures) > 0:
         return
+        # TODO DI-4613: we need a v2 equivalent to avoid unnecessary work!  (This will
+        # probably require passing through / maintaining a "processed" set of metric names)
 
     if metric.type is MetricType.SIMPLE or metric.type is MetricType.CUMULATIVE:
-        assert (
-            metric.type_params.measure is not None
-        ), f"{metric} should have a measure defined, but it does not."
-        metric.add_input_measure(metric.type_params.measure)
-        _process_metric_depends_on(
-            manifest=manifest, current_project=current_project, metric=metric
-        )
+        if metric.type is MetricType.SIMPLE and (
+            metric.type_params.measure is None
+            and metric.type_params.metric_aggregation_params is None
+        ):
+            # This should be caught earlier, but just in case, we assert here to avoid
+            # any unexpected behaviors.
+            raise dbt.exceptions.ParsingError(
+                f"Simple metric {metric} should have a measure or agg type defined, but it does not.",
+                node=metric,
+            )
+        elif metric.type is MetricType.CUMULATIVE and (
+            metric.type_params.measure is None
+            and (
+                metric.type_params.cumulative_type_params is None
+                or metric.type_params.cumulative_type_params.metric is None
+            )
+        ):
+            raise dbt.exceptions.ParsingError(
+                f"Cumulative metric {metric} should have a measure or input_metric defined, but it does not.",
+                node=metric,
+            )
+        if metric.type_params.measure is not None:
+            # v1 dependencies
+            metric.add_input_measure(metric.type_params.measure)
+            _process_metric_depends_on_semantic_models_for_measures(
+                manifest=manifest, current_project=current_project, metric=metric
+            )
+        else:
+            # v2 dependencies
+            if metric.type is MetricType.SIMPLE:
+                semantic_model_dependency = metric.type_params.get_semantic_model_name()
+                if semantic_model_dependency is None:
+                    raise dbt.exceptions.ParsingError(
+                        f"Simple metric `{metric.name}` must be attached to a semantic model.",
+                        node=metric,
+                    )
+                unique_id = (
+                    f"{NodeType.SemanticModel}.{current_project}.{semantic_model_dependency}"
+                )
+                metric.depends_on.add_node(unique_id)
+            if metric.type is MetricType.CUMULATIVE:
+                cumulative_type_params = metric.type_params.cumulative_type_params
+                input_metric = (
+                    cumulative_type_params.metric if cumulative_type_params is not None else None
+                )
+                assert (
+                    input_metric is not None
+                ), f"Cumulative metric `{metric.name}` must have a metric as an input."
+                _add_depends_on_metrics_to_v2_metric(
+                    metric,
+                    input_metrics=[input_metric],
+                    manifest=manifest,
+                    current_project=current_project,
+                )
     elif metric.type is MetricType.CONVERSION:
         conversion_type_params = metric.type_params.conversion_type_params
         assert (
             conversion_type_params
         ), f"{metric.name} is a conversion metric and must have conversion_type_params defined."
-        metric.add_input_measure(conversion_type_params.base_measure)
-        metric.add_input_measure(conversion_type_params.conversion_measure)
-        _process_metric_depends_on(
-            manifest=manifest, current_project=current_project, metric=metric
-        )
+        # Handle old-style YAML measure inputs
+        base_measure = conversion_type_params.base_measure
+        conversion_measure = conversion_type_params.conversion_measure
+        base_metric = conversion_type_params.base_metric
+        conversion_metric = conversion_type_params.conversion_metric
+        if base_measure is not None or conversion_measure is not None:
+            # v1 dependencies
+            assert base_measure is not None and conversion_measure is not None, (
+                f"Conversion metric `{metric.name}` cannot have only one of base measure "
+                + "and conversion measure defined."
+            )
+            metric.add_input_measure(base_measure)
+            metric.add_input_measure(conversion_measure)
+            _process_metric_depends_on_semantic_models_for_measures(
+                manifest=manifest,
+                current_project=current_project,
+                metric=metric,
+            )
+        elif base_metric is not None or conversion_metric is not None:
+            # v2 dependencies
+            assert base_metric is not None and conversion_metric is not None, (
+                f"Conversion metric `{metric.name}` cannot have only one of base metric "
+                + "and conversion metric defined."
+            )
+            _add_depends_on_metrics_to_v2_metric(
+                metric,
+                input_metrics=[base_metric, conversion_metric],
+                manifest=manifest,
+                current_project=current_project,
+            )
+        else:
+            raise dbt.exceptions.ParsingError(
+                f"Depending the version of YAML being used, conversion metric `{metric.name}` "
+                + "must have base and conversion measures or base and conversion metrics defined.",
+                node=metric,
+            )
+
     elif metric.type is MetricType.DERIVED or metric.type is MetricType.RATIO:
         input_metrics = metric.input_metrics
         if metric.type is MetricType.RATIO:
@@ -1967,7 +2160,6 @@ def _process_metric_node(
                 current_project=current_project,
                 node_package=metric.package_name,
             )
-
             if target_metric is None:
                 raise dbt.exceptions.ParsingError(
                     f"The metric `{input_metric.name}` does not exist but was referenced by metric `{metric.name}`.",
@@ -1978,7 +2170,6 @@ def _process_metric_node(
                     f"The metric `{input_metric.name}` is disabled and thus cannot be referenced.",
                     node=metric,
                 )
-
             _process_metric_node(
                 manifest=manifest, current_project=current_project, metric=target_metric
             )

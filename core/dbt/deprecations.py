@@ -235,6 +235,21 @@ class DuplicateNameDistinctNodeTypesDeprecation(DBTDeprecation):
     _event = "DuplicateNameDistinctNodeTypesDeprecation"
 
 
+class TimeDimensionsRequireGranularityDeprecation(DBTDeprecation):
+    _name = "time-dimensions-require-granularity-deprecation"
+    _event = "TimeDimensionsRequireGranularityDeprecation"
+
+
+class GenericSemanticLayerDeprecation(DBTDeprecation):
+    _name = "generic-semantic-layer-deprecation"
+    _event = "GenericSemanticLayerDeprecation"
+
+
+class GenerateSchemaNameNullValueDeprecation(DBTDeprecation):
+    _name = "generate-schema-name-null-value-deprecation"
+    _event = "GenerateSchemaNameNullValueDeprecation"
+
+
 def renamed_env_var(old_name: str, new_name: str):
     class EnvironmentVariableRenamed(DBTDeprecation):
         _name = f"environment-variable-renamed:{old_name}"
@@ -322,6 +337,9 @@ deprecations_list: List[DBTDeprecation] = [
     MissingArgumentsPropertyInGenericTestDeprecation(),
     ModulesItertoolsUsageDeprecation(),
     DuplicateNameDistinctNodeTypesDeprecation(),
+    TimeDimensionsRequireGranularityDeprecation(),
+    GenericSemanticLayerDeprecation(),
+    GenerateSchemaNameNullValueDeprecation(),
 ]
 
 deprecations: Dict[str, DBTDeprecation] = {d.name: d for d in deprecations_list}

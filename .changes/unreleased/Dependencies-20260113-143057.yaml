@@ -1,0 +1,6 @@
+kind: Dependencies
+body: Bump dbt-protos minimum to 1.0.418
+time: 2026-01-13T14:30:57.311017-06:00
+custom:
+  Author: QMalcolm
+  Issue: NA

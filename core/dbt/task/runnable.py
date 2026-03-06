@@ -4,7 +4,19 @@ from abc import abstractmethod
 from concurrent.futures import as_completed
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import AbstractSet, Dict, Iterable, List, Optional, Set, Tuple, Type, Union
+from typing import (
+    AbstractSet,
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    Type,
+    Union,
+)
 
 import dbt.exceptions
 import dbt.tracking
@@ -173,6 +185,12 @@ class GraphRunnableTask(ConfiguredTask):
 
         self.job_queue = self.get_graph_queue()
 
+        # Set selected node IDs on the compiler so FK constraint compilation
+        # can determine whether to use deferred relations or current relations.
+        # FK targets that ARE selected should use current relations (being built now).
+        # FK targets that are NOT selected should use deferred relations (from state).
+        self.compiler.selected_node_ids = set(self.job_queue.get_selected_nodes())
+
         # we use this a couple of times. order does not matter.
         self._flattened_nodes = []
         for uid in self.job_queue.get_selected_nodes():
@@ -222,7 +240,10 @@ class GraphRunnableTask(ConfiguredTask):
         if cls is None:
             raise DbtInternalError("Could not find runner type for node.")
 
-        return cls(self.config, adapter, node, run_count, num_nodes)
+        runner = cls(self.config, adapter, node, run_count, num_nodes)
+        # Propagate selected node IDs to the runner's compiler for FK constraint resolution
+        runner.compiler.selected_node_ids = self.compiler.selected_node_ids
+        return runner
 
     def call_runner(self, runner: BaseRunner) -> RunResult:
         with log_contextvars(node_info=runner.node.node_info):
@@ -249,34 +270,17 @@ class GraphRunnableTask(ConfiguredTask):
                 thread_exception = e
             finally:
                 if result is not None:
-                    fire_event(
-                        NodeFinished(
-                            node_info=runner.node.node_info,
-                            run_result=result.to_msg_dict(),
+                    try:
+                        fire_event(
+                            NodeFinished(
+                                node_info=runner.node.node_info,
+                                run_result=result.to_msg_dict(),
+                            )
                         )
-                    )
+                    except Exception as e:
+                        result = self._handle_thread_exception(runner, e)
                 else:
-                    msg = f"Exception on worker thread. {thread_exception}"
-
-                    fire_event(
-                        GenericExceptionOnRun(
-                            unique_id=runner.node.unique_id,
-                            exc=str(thread_exception),
-                            node_info=runner.node.node_info,
-                        )
-                    )
-
-                    result = RunResult(
-                        status=RunStatus.Error,  # type: ignore
-                        timing=[],
-                        thread_id="",
-                        execution_time=0.0,
-                        adapter_response={},
-                        message=msg,
-                        failures=None,
-                        batch_results=None,
-                        node=runner.node,
-                    )
+                    result = self._handle_thread_exception(runner, thread_exception)
 
             # `_event_status` dict is only used for logging.  Make sure
             # it gets deleted when we're done with it
@@ -301,7 +305,7 @@ class GraphRunnableTask(ConfiguredTask):
 
         return result
 
-    def _submit(self, pool, args, callback):
+    def _submit(self, pool: DbtThreadPool, args: List[Any], callback: Callable) -> None:
         """If the caller has passed the magic 'single-threaded' flag, call the
         function directly instead of pool.apply_async. The single-threaded flag
          is intended for gathering more useful performance information about
@@ -319,7 +323,7 @@ class GraphRunnableTask(ConfiguredTask):
         if self._raise_next_tick is not None:
             raise self._raise_next_tick
 
-    def run_queue(self, pool):
+    def run_queue(self, pool: DbtThreadPool) -> None:
         """Given a pool, submit jobs from the queue to the pool."""
         if self.job_queue is None:
             raise DbtInternalError("Got to run_queue with no job queue set")
@@ -353,7 +357,8 @@ class GraphRunnableTask(ConfiguredTask):
         return
 
     # The build command overrides this
-    def handle_job_queue(self, pool, callback):
+    def handle_job_queue(self, pool: DbtThreadPool, callback: Callable) -> None:
+        assert self.job_queue is not None
         node = self.job_queue.get()
         self._raise_set_error()
         runner = self.get_runner(node)
@@ -364,6 +369,32 @@ class GraphRunnableTask(ConfiguredTask):
             runner.do_skip(cause=cause)
         args = [runner]
         self._submit(pool, args, callback)
+
+    def _handle_thread_exception(
+        self,
+        runner: BaseRunner,
+        thread_exception: Optional[Union[KeyboardInterrupt, SystemExit, Exception]],
+    ) -> RunResult:
+        msg = f"Exception on worker thread. {thread_exception}"
+        fire_event(
+            GenericExceptionOnRun(
+                unique_id=runner.node.unique_id,
+                exc=str(thread_exception),
+                node_info=runner.node.node_info,
+            )
+        )
+
+        return RunResult(
+            status=RunStatus.Error,  # type: ignore
+            timing=[],
+            thread_id="",
+            execution_time=0.0,
+            adapter_response={},
+            message=msg,
+            failures=None,
+            batch_results=None,
+            node=runner.node,
+        )
 
     def _handle_result(self, result: RunResult) -> None:
         """Mark the result as completed, insert the `CompileResultNode` into

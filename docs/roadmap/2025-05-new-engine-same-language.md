@@ -8,7 +8,7 @@ Since [last December](https://github.com/dbt-labs/dbt-core/blob/main/docs/roadma
 
 | **Version** | **When** | **Namesake** | **Stuff** |
 | --- | --- | --- | --- |
-| v1.10 | May (beta) | TBD | `--sample` mode. Catalogs. Macro argument validation. Calculate source freshness via a custom `loaded_at_query`. Deprecation warnings using new and improved jsonschemas. |
+| v1.10 | May (beta) | Florence Earle Coates | `--sample` mode. Catalogs. Macro argument validation. Calculate source freshness via a custom `loaded_at_query`. Deprecation warnings using new and improved jsonschemas. |
 
 … and **we’ve been building a [whole new dbt engine](https://github.com/dbt-labs/dbt-fusion) from the ground up**.
 

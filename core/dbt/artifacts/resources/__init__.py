@@ -5,6 +5,8 @@ from dbt.artifacts.resources.v1.catalog import Catalog, CatalogWriteIntegrationC
 # alias to latest resource definitions
 from dbt.artifacts.resources.v1.components import (
     ColumnConfig,
+    ColumnDimension,
+    ColumnEntity,
     ColumnInfo,
     CompiledResource,
     Contract,

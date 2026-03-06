@@ -17,10 +17,6 @@ The main subdirectories of core/dbt:
 - [`parser`](core/dbt/parser/README.md): Read project files, validate, construct python objects
 - [`task`](core/dbt/task/README.md): Set forth the actions that dbt can perform when invoked
 
-Legacy tests are found in the 'test' directory:
-- [`unit tests`](core/dbt/test/unit/README.md): Unit tests
-- [`integration tests`](core/dbt/test/integration/README.md): Integration tests
-
 ### Invoking dbt
 
 The "tasks" map to top-level dbt commands. So `dbt run` => task.run.RunTask, etc. Some are more like abstract base classes (GraphRunnableTask, for example) but all the concrete types outside of task should map to tasks. Currently one executes at a time. The tasks kick off their “Runners” and those do execute in parallel. The parallelism is managed via a thread pool, in GraphRunnableTask.
@@ -45,10 +41,9 @@ The Postgres adapter code is the most central, and many of its implementations a
 
 ## Testing dbt
 
-The [`test/`](test/) subdirectory includes unit and integration tests that run as continuous integration checks against open pull requests. Unit tests check mock inputs and outputs of specific python functions. Integration tests perform end-to-end dbt invocations against real adapters (Postgres, Redshift, Snowflake, BigQuery) and assert that the results match expectations. See [the contributing guide](CONTRIBUTING.md) for a step-by-step walkthrough of setting up a local development and testing environment.
+The [`tests/`](tests/) subdirectory includes unit and fuctional tests that run as continuous integration checks against open pull requests. Unit tests check mock inputs and outputs of specific python functions. Functional tests perform end-to-end dbt invocations against real adapters (Postgres) and assert that the results match expectations. See [the contributing guide](CONTRIBUTING.md) for a step-by-step walkthrough of setting up a local development and testing environment.
 
 ## Everything else
 
 - [docker](docker/): All dbt versions are published as Docker images on DockerHub. This subfolder contains the `Dockerfile` (constant) and `requirements.txt` (one for each version).
-- [etc](etc/): Images for README
 - [scripts](scripts/): Helper scripts for testing, releasing, and producing JSON schemas. These are not included in distributions of dbt, nor are they rigorously tested—they're just handy tools for the dbt maintainers :)

@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix v2 metric parsing using model name instead of custom semantic_model.name for generated_from, causing conversion metric validation to fail
+time: 2026-02-24T11:55:46.515181-08:00
+custom:
+    Author: theyostalservice
+    Issue: "12532"

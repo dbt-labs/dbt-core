@@ -1,4 +1,5 @@
 import abc
+import csv
 import os
 from copy import deepcopy
 from typing import (
@@ -10,6 +11,7 @@ from typing import (
     List,
     Mapping,
     Optional,
+    Set,
     Tuple,
     Type,
     TypeVar,
@@ -67,6 +69,7 @@ from dbt.contracts.graph.nodes import (
     SourceDefinition,
     UnitTestNode,
 )
+from dbt.events.types import JinjaLogWarning
 from dbt.exceptions import (
     CompilationError,
     ConflictingConfigKeysError,
@@ -94,7 +97,7 @@ from dbt.utils import MultiDict, args_to_dict
 from dbt_common.clients.jinja import MacroProtocol
 from dbt_common.constants import SECRET_ENV_PREFIX
 from dbt_common.context import get_invocation_context
-from dbt_common.events.functions import get_metadata_vars
+from dbt_common.events.functions import fire_event, get_metadata_vars
 from dbt_common.exceptions import (
     DbtInternalError,
     DbtRuntimeError,
@@ -544,7 +547,13 @@ class ParseConfigObject(Config):
     def require(self, name, validator=None):
         return ""
 
+    def meta_require(self, name, validator=None):
+        return ""
+
     def get(self, name, default=None, validator=None):
+        return ""
+
+    def meta_get(self, name, default=None, validator=None):
         return ""
 
     def persist_relation_docs(self) -> bool:
@@ -578,6 +587,16 @@ class RuntimeConfigObject(Config):
             raise MissingConfigError(unique_id=self.model.unique_id, name=name)
         return result
 
+    def _lookup_meta(self, name, default=_MISSING):
+        # if this is a macro, there might be no `model.config`.
+        if not hasattr(self.model, "config"):
+            result = default
+        else:
+            result = self.model.config.meta_get(name, default)
+        if result is _MISSING:
+            raise MissingConfigError(unique_id=self.model.unique_id, name=name)
+        return result
+
     def require(self, name, validator=None):
         to_return = self._lookup(name)
 
@@ -586,8 +605,24 @@ class RuntimeConfigObject(Config):
 
         return to_return
 
+    def meta_require(self, name, validator=None):
+        to_return = self._lookup_meta(name)
+
+        if validator is not None:
+            self._validate(validator, to_return)
+
+        return to_return
+
     def get(self, name, default=None, validator=None):
         to_return = self._lookup(name, default)
+
+        if validator is not None and default is not None:
+            self._validate(validator, to_return)
+
+        return to_return
+
+    def meta_get(self, name, default=None, validator=None):
+        to_return = self._lookup_meta(name, default)
 
         if validator is not None and default is not None:
             self._validate(validator, to_return)
@@ -1217,6 +1252,17 @@ class ProviderContext(ManifestContext):
         except Exception:
             raise CompilationError(message_if_exception, self.model)
 
+    @staticmethod
+    def _read_csv_header(path: str, delimiter: str) -> Optional[Set[str]]:
+        try:
+            # Use utf-8-sig to handle BOM if present
+            with open(path, "r", encoding="utf-8-sig", newline="") as f:
+                reader = csv.reader(f, delimiter=delimiter)
+                header = next(reader)
+                return set(header)
+        except (IOError, StopIteration, TypeError):
+            return None
+
     @contextmember()
     def load_agate_table(self) -> "agate.Table":
         from dbt_common.clients import agate_helper
@@ -1235,10 +1281,33 @@ class ProviderContext(ManifestContext):
             assert self.model.root_path
             path = os.path.join(self.model.root_path, self.model.original_file_path)
 
-        column_types = self.model.config.column_types
+        column_types = self.model.config.column_types or {}
         delimiter = self.model.config.delimiter
+
+        # Validate that column_types keys exist in the file header
+        filtered_column_types = column_types
+        if column_types:
+            header_set = self._read_csv_header(path, delimiter)
+            if header_set is not None:
+                valid_column_types = set(column_types) & header_set
+                invalid_column_names = set(column_types) - header_set
+
+                if invalid_column_names:
+                    invalid_column_names_str = ", ".join(sorted(invalid_column_names))
+                    msg = (
+                        f"Column types specified for non-existent columns in seed '{self.model.name}' (file: {path}): "
+                        f"{invalid_column_names_str}. These column type overrides will be ignored."
+                    )
+                    fire_event(JinjaLogWarning(msg=msg))
+
+                filtered_column_types = {
+                    k: v for k, v in column_types.items() if k in valid_column_types
+                }
+
         try:
-            table = agate_helper.from_csv(path, text_columns=column_types, delimiter=delimiter)
+            table = agate_helper.from_csv(
+                path, text_columns=filtered_column_types, delimiter=delimiter
+            )
         except ValueError as e:
             raise LoadAgateTableValueError(e, node=self.model)
         # this is used by some adapters

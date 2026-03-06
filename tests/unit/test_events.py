@@ -179,6 +179,9 @@ sample_values = [
     core_types.DuplicateNameDistinctNodeTypesDeprecation(
         resource_name="", package_name="", unique_id1="", unique_id2=""
     ),
+    core_types.TimeDimensionsRequireGranularityDeprecation(msg=""),
+    core_types.GenericSemanticLayerDeprecation(msg=""),
+    core_types.GenerateSchemaNameNullValueDeprecation(resource_unique_id=""),
     # E - DB Adapter ======================
     adapter_types.AdapterEventDebug(),
     adapter_types.AdapterEventInfo(),
@@ -311,6 +314,9 @@ sample_values = [
     core_types.MicrobatchModelNoEventTimeInputs(model_name=""),
     core_types.InvalidConcurrentBatchesConfig(num_models=1, adapter_type=""),
     core_types.InvalidMacroAnnotation(msg="", macro_file_path="", macro_unique_id=""),
+    core_types.PackageNodeDependsOnRootProjectNode(
+        node_name="", node_package="", root_project_unique_id=""
+    ),
     # M - Deps generation ======================
     core_types.GitSparseCheckoutSubdirectory(subdir=""),
     core_types.GitProgressCheckoutRevision(revision=""),

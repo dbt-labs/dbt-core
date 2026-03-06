@@ -1,0 +1,6 @@
+kind: Features
+body: Add parsing for new YAML for semantic layer entities attached to dbt models.
+time: 2026-01-26T16:44:58.041234-08:00
+custom:
+    Author: theyostalservice
+    Issue: "12395"
