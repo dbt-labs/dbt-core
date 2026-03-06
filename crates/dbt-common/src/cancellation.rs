@@ -12,9 +12,11 @@ pub use dbt_base::cancel::{
 /// finish after Ctrl+C (the "final wait").
 pub const TIMEOUT_AFTER_CTRL_C: Duration = Duration::from_secs(3);
 
-/// Information about the cancellation process after Ctrl+C.
+/// Information about the cancellation process after Ctrl+C (or fail-fast).
 #[derive(Debug)]
 pub struct CancellationReport {
+    /// Whether cancellation was triggered by a fail-fast.
+    pub fail_fast_triggered: bool,
     /// The max timeout duration for waiting for running operations to
     /// finish after Ctrl+C (the "final wait").
     pub timeout: Duration,
