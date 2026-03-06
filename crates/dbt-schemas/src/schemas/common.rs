@@ -1143,6 +1143,7 @@ pub enum Severity {
 #[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
 pub struct Versions {
     pub v: YmlValue,
+    pub deprecation_date: Option<String>,
     pub config: Verbatim<Option<dbt_yaml::Value>>,
     pub __additional_properties__: Verbatim<HashMap<String, YmlValue>>,
 }

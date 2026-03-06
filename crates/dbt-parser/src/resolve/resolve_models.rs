@@ -759,6 +759,22 @@ pub async fn resolve_models(
             )?;
         }
 
+        // For versioned models, use the per-version deprecation_date if present,
+        // falling back to the model-level deprecation_date.
+        let deprecation_date = if let Some(versions) = &properties.versions {
+            versions
+                .iter()
+                .find(|v| {
+                    maybe_version
+                        .as_ref()
+                        .is_some_and(|mv| Some(mv) == v.get_version().as_ref())
+                })
+                .and_then(|v| v.deprecation_date.clone())
+                .or_else(|| properties.deprecation_date.clone())
+        } else {
+            properties.deprecation_date.clone()
+        };
+
         validate_merge_update_columns_xor(&model_config, &dbt_asset.path)?;
 
         if let Some(freshness) = &model_config.freshness {
@@ -914,7 +930,7 @@ pub async fn resolve_models(
                 version: maybe_version.map(|v| v.into()),
                 latest_version: maybe_latest_version.map(|v| v.into()),
                 constraints: model_constraints,
-                deprecation_date: properties.deprecation_date.clone(),
+                deprecation_date,
                 primary_key: vec![], // applied in resolver.rs -> primary_key_inference.rs
                 time_spine,
                 access: model_config.access.clone().unwrap_or_default(),

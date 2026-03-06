@@ -188,6 +188,7 @@ mod tests {
     fn create_test_version(version: &str) -> Versions {
         Versions {
             v: dbt_yaml::Value::String(version.to_string(), Default::default()),
+            deprecation_date: None,
             config: dbt_yaml::Verbatim::from(None),
             __additional_properties__: dbt_yaml::Verbatim::from(std::collections::HashMap::new()),
         }
