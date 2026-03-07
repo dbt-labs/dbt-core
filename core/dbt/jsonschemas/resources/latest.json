@@ -21,6 +21,15 @@
         "$ref": "#/definitions/AnyValue"
       }
     },
+    "catalogs": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/AnyValue"
+      }
+    },
     "data_tests": {
       "type": [
         "array",
