@@ -886,11 +886,6 @@ impl TuiLayer {
     }
 
     fn handle_node_evaluated_end(&self, span: &SpanEndInfo, ne: &NodeEvaluated) {
-        // Do not emit anything for skipped node phases even in debug
-        if ne.node_outcome() == NodeOutcome::Skipped {
-            return;
-        }
-
         let phase = ne.phase();
 
         // Handle progress in interactive mode
@@ -899,19 +894,39 @@ impl TuiLayer {
                 phase,
                 ExecutionPhase::Render | ExecutionPhase::Analyze | ExecutionPhase::Run
             ) {
-                let status = if let Some(SpanStatus {
-                    code: StatusCode::Error,
-                    ..
-                }) = &span.status
-                {
-                    Some("failed")
-                } else {
-                    Some("succeeded")
+                let status = match ne.node_outcome() {
+                    NodeOutcome::Success => Some("succeeded"),
+                    NodeOutcome::Error => Some("failed"),
+                    NodeOutcome::Canceled => Some("cancelled"),
+                    NodeOutcome::Skipped => match ne.node_skip_reason() {
+                        NodeSkipReason::Cached => Some("reused"),
+                        NodeSkipReason::NoOp => Some("no-op"),
+                        NodeSkipReason::Upstream
+                        | NodeSkipReason::PhaseSkipped
+                        | NodeSkipReason::PhaseDisabled
+                        | NodeSkipReason::Unspecified => Some("skipped"),
+                    },
+                    NodeOutcome::Unspecified => {
+                        if let Some(SpanStatus {
+                            code: StatusCode::Error,
+                            ..
+                        }) = &span.status
+                        {
+                            Some("failed")
+                        } else {
+                            Some("succeeded")
+                        }
+                    }
                 };
 
                 let formatted_item = format_unique_id_as_progress_item(ne.unique_id.as_str());
                 progress.finish_bar_context(&ProgressId::Phase(phase), &formatted_item, status);
             }
+        }
+
+        // Do not emit anything for skipped node phases even in debug
+        if ne.node_outcome() == NodeOutcome::Skipped {
+            return;
         }
 
         // Print line only in debug mode.
