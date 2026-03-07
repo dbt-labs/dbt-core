@@ -385,7 +385,9 @@ def catalogs(func):
         flags = ctx.obj["flags"]
         ctx_project = ctx.obj["project"]
 
-        _catalogs = load_catalogs(flags.PROJECT_DIR, ctx_project.project_name, flags.VARS)
+        _catalogs = load_catalogs(
+            flags.PROJECT_DIR, ctx_project.project_name, ctx_project.all_source_paths, flags.VARS
+        )
         ctx.obj["catalogs"] = _catalogs
 
         return func(*args, **kwargs)

@@ -159,3 +159,34 @@ class TestDuplicateWriteIntegration:
             error_msg = "Catalog 'write_catalog' cannot have multiple 'write_integrations' with the same name: 'write_integration_1'."
             with pytest.raises(DbtValidationError, match=error_msg):
                 run_dbt(["run"])
+
+
+class TestCatalogsInSchemaYml:
+    @pytest.fixture
+    def schema_yml(self):
+        return {
+            "version": 2,
+            "catalogs": [
+                {"name": "write_catalog_1", "write_integrations": [write_integration_1]},
+                {"name": "write_catalog_2", "write_integrations": [write_integration_2]},
+            ],
+        }
+
+    def test_integration(self, project, schema_yml, adapter):
+        write_config_file(schema_yml, project.project_root, "models", "schema.yml")
+
+        with mock.patch.object(
+            type(project.adapter), "CATALOG_INTEGRATIONS", [WriteCatalogIntegration]
+        ):
+            run_dbt(["run"])
+
+            for i in range(1, 3):
+                write_integration = project.adapter.get_catalog_integration(f"write_catalog_{i}")
+                assert isinstance(write_integration, WriteCatalogIntegration)
+                assert write_integration.name == f"write_catalog_{i}"
+                assert write_integration.catalog_type == "write"
+                assert write_integration.catalog_name == f"write_integration_{i}"
+                assert write_integration.table_format == "write_format"
+                assert write_integration.external_volume == "write_external_volume"
+                assert write_integration.allows_writes is True
+                assert write_integration.my_custom_property == f"foo_{i}"
