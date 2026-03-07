@@ -1148,7 +1148,7 @@ fn canonicalize_dbt_model_tmp_suffix(sql: &str) -> String {
     static RE: once_cell::sync::Lazy<Regex> = once_cell::sync::Lazy::new(|| {
         // Match __dbt_tmp followed by one or more digits
         // This captures the pattern used by dbt for temporary table suffixes
-        Regex::new(r"(?i)(__dbt_tmp)\d+").unwrap()
+        Regex::new(r"(?i)(__dbt_tmp_?)\d*\b").unwrap()
     });
 
     RE.replace_all(sql, "${1}SUFFIX").to_string()
