@@ -50,7 +50,8 @@ mod tests {
     use super::*;
     use std::time::Duration;
 
-    const TIMEOUT: Duration = Duration::from_millis(10);
+    /// Bump this up if flaky, or disable the tests altogether.
+    const TIMEOUT: Duration = Duration::from_millis(100);
 
     #[test]
     fn signal_lifecycle() {

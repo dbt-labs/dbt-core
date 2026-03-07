@@ -20,4 +20,11 @@ pub trait CliParserTrait {
     where
         I: IntoIterator<Item = T>,
         T: Into<OsString> + Clone;
+
+    /// Derive the `--fail-fast` value from the parsed CLI.
+    ///
+    /// This is necessary to keep the generic test code
+    /// until we unify both dbt-cli and dbt-sa-cli into
+    /// a single one.
+    fn fail_fast_flag(&self, cli: &Self::CliType) -> bool;
 }

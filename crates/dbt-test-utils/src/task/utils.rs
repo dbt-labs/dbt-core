@@ -2,11 +2,11 @@ use crate::task::env::TracingReloadHandle;
 
 use super::TestResult;
 use super::log_capture::JsonLogEvent;
-use dbt_common::{
-    FsError, cancellation::CancellationToken, cli_parser_trait::CliParserTrait,
-    tracing::FsTraceConfig,
-};
+use dbt_cli_lib::ctrl_c::run_future_with_ctrlc_support;
+use dbt_common::cancellation::CancellationToken;
+use dbt_common::{FsError, cli_parser_trait::CliParserTrait, tracing::FsTraceConfig};
 use std::fmt::Debug;
+use std::pin::Pin;
 use std::{
     fs::File,
     future::Future,
@@ -318,7 +318,7 @@ pub fn strip_leading_relative(path: &Path) -> &Path {
 
 // Util function to execute fusion commands in tests
 #[allow(clippy::too_many_arguments)]
-pub async fn exec_fs<P: CliParserTrait + Default, Fut>(
+pub fn exec_fs<'a, P: CliParserTrait + Default, Fut>(
     feature_stack: Arc<FeatureStack>,
     cmd_vec: Vec<String>,
     project_dir: PathBuf,
@@ -328,10 +328,9 @@ pub async fn exec_fs<P: CliParserTrait + Default, Fut>(
     execute_fs: impl FnOnce(SystemArgs, P::CliType, Arc<FeatureStack>, CancellationToken) -> Fut,
     from_lib: impl FnOnce(&P::CliType) -> SystemArgs,
     tracing_handle: TracingReloadHandle,
-    token: CancellationToken,
-) -> FsResult<()>
+) -> Pin<Box<dyn Future<Output = FsResult<()>> + Send + 'a>>
 where
-    Fut: Future<Output = FsResult<()>>,
+    Fut: Future<Output = FsResult<()>> + Send + 'a,
 {
     // Check if project_dir has a .env.conformance file
     // NOTE: this has to be done before we parse Cli
@@ -341,14 +340,12 @@ where
         dotenvy::from_path(conformance_file).unwrap();
     }
 
-    // Redirect stdout and stderr to the specified files until the end of this
-    // scope, at which point the original stdout and stderr will be restored and
-    // the files will be closed.
-    let _stdout = with_redirected_stdout(stdout_file);
-    let _stderr = with_redirected_stderr(stderr_file);
-
-    let cli = P::default().parse_from(cmd_vec);
+    let cst = feature_stack.cancellation_token_source.clone();
+    let token = cst.token();
+    let parser = P::default();
+    let cli = parser.parse_from(cmd_vec);
     let arg = from_lib(&cli);
+    let fail_fast_flag = parser.fail_fast_flag(&cli);
     let trace_config = FsTraceConfig::new_from_io_args(
         arg.command,
         Some(&project_dir),
@@ -356,29 +353,42 @@ where
         &arg.io,
         "dbt-tests",
     );
-    let (middlewares, consumer_layers, mut shutdown_items) = trace_config.build_layers()?;
+    let (middlewares, consumer_layers, mut shutdown_items) = match trace_config.build_layers() {
+        Ok(layers) => layers,
+        Err(err) => {
+            return Box::pin(async move { Err(err) });
+        }
+    };
+
     tracing_handle.with_tracing_consumer(middlewares, consumer_layers);
 
-    let result = execute_fs(arg, cli, feature_stack, token).await;
+    let future = Box::pin(execute_fs(arg, cli, feature_stack, token));
+    Box::pin(async move {
+        // Redirect stdout and stderr for the duration of the future.
+        let _stdout = with_redirected_stdout(stdout_file);
+        let _stderr = with_redirected_stderr(stderr_file);
 
-    let shutdown_errors: Vec<FsError> = shutdown_items
-        .iter_mut()
-        .filter_map(|item| item.shutdown().err())
-        .map(|err| *err)
-        .collect();
+        let result = run_future_with_ctrlc_support(cst, future, fail_fast_flag).await;
 
-    match result {
-        Ok(()) if shutdown_errors.is_empty() => result,
-        Err(ref err)
-            if err.exit_status() == Some(0) // early-exit, but successful
+        let shutdown_errors: Vec<FsError> = shutdown_items
+            .iter_mut()
+            .filter_map(|item| item.shutdown().err())
+            .map(|err| *err)
+            .collect();
+
+        match result {
+            Ok(_) if shutdown_errors.is_empty() => Ok(()),
+            Err(ref err)
+                if err.exit_status() == Some(0) // early-exit, but successful
             && shutdown_errors.is_empty() =>
-        {
-            Ok(())
+            {
+                Ok(())
+            }
+            // If the run itself failed - return it's error and ignore shutdown
+            Err(err) => Err(err),
+            _ => unexpected_err!("Failed to shutdown telemetry"),
         }
-        // If the run itself failed - return it's error and ignore shutdown
-        Err(_) => result,
-        _ => unexpected_err!("Failed to shutdown telemetry"),
-    }
+    })
 }
 
 /// The purpose of this guard is two fold:

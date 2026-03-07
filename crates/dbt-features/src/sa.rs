@@ -1,3 +1,5 @@
+use dbt_common::cancellation::CancellationTokenSource;
+
 use crate::feature_stack::*;
 use crate::formatter::FormatterCommandHandler;
 use crate::linter::LinterCommandHandler;
@@ -27,6 +29,7 @@ impl SourceAvailableFeatureStackBuilder {
             instrumentation,
             formatter,
             linter,
+            cancellation_token_source: CancellationTokenSource::new(),
         };
         Box::new(stack)
     }

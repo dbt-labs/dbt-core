@@ -196,6 +196,10 @@ impl CliParserTrait for CliParser {
         self.try_parse_from_arg_matches_mut(&mut matches)
             .map_err(|err| self.format_error(err))
     }
+
+    fn fail_fast_flag(&self, cli: &Self::CliType) -> bool {
+        cli.common_args.fail_fast
+    }
 }
 
 #[derive(Debug, Clone)]

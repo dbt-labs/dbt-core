@@ -1,5 +1,6 @@
 use dbt_common::DiscreteEventEmitter;
 use dbt_common::FsResult;
+use dbt_common::cancellation::CancellationTokenSource;
 use dbt_common::io_args::EvalArgs;
 use dbt_schemas::state::ResolverState;
 use std::fmt;
@@ -34,6 +35,9 @@ pub struct FeatureStack {
     pub formatter: FormatterFeature,
     pub linter: LinterFeature,
     // TODO: add more features here
+    /// Global [CancelltionTokenSource] that can be used to signal cancellation to
+    /// tasks running in other threads from a signal handler (e.g. Ctrl+C).
+    pub cancellation_token_source: CancellationTokenSource,
 }
 
 impl fmt::Debug for FeatureStack {

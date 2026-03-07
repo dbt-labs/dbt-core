@@ -85,6 +85,10 @@ impl CliParserTrait for CliParser {
     {
         Cli::parse_from(itr)
     }
+
+    fn fail_fast_flag(&self, cli: &Self::CliType) -> bool {
+        cli.common_args().debug
+    }
 }
 
 #[derive(Parser, Debug, Clone)]
