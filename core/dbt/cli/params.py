@@ -9,6 +9,7 @@ from dbt.cli.option_types import (
     ChoiceTuple,
     Package,
     SampleType,
+    SqlParseOptionsType,
     WarnErrorOptionsType,
 )
 from dbt.cli.options import MultiOption
@@ -407,6 +408,17 @@ macro_debugging = _create_option_and_track_env_var(
     "--macro-debugging/--no-macro-debugging",
     envvar="DBT_MACRO_DEBUGGING",
     hidden=True,
+)
+
+
+sqlparse_options = _create_option_and_track_env_var(
+    "--sqlparse",
+    envvar="DBT_ENGINE_SQLPARSE",
+    hidden=True,
+    help="Set sqlparse options MAX_GROUPING_DEPTH and MAX_GROUPING_TOKENS as YAML.",
+    type=SqlParseOptionsType(),
+    default='{"MAX_GROUPING_DEPTH": null, "MAX_GROUPING_TOKENS": null}',
+    is_eager=True,
 )
 
 models = _create_option_and_track_env_var(*model_decls, **select_attrs)  # type: ignore[arg-type]
