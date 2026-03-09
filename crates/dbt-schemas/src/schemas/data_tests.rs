@@ -1,11 +1,11 @@
-use dbt_yaml::{JsonSchema, Spanned, UntaggedEnumDeserialize, Verbatim};
+use dbt_yaml::{DbtSchema, Spanned, UntaggedEnumDeserialize, Verbatim};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::collections::BTreeMap;
 
 use crate::schemas::project::DataTestConfig;
 
-#[derive(UntaggedEnumDeserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(UntaggedEnumDeserialize, Serialize, Debug, Clone, DbtSchema)]
 #[serde(untagged)]
 pub enum DataTests {
     String(Spanned<String>),
@@ -21,7 +21,7 @@ impl DataTests {
     }
 }
 
-#[derive(Debug, Clone, UntaggedEnumDeserialize, Serialize, JsonSchema)]
+#[derive(Debug, Clone, UntaggedEnumDeserialize, Serialize, DbtSchema)]
 #[serde(untagged)]
 pub enum CustomTest {
     MultiKey(Box<CustomTestMultiKey>),
@@ -29,7 +29,7 @@ pub enum CustomTest {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Deserialize, Serialize, DbtSchema)]
 pub struct CustomTestInner {
     pub name: Option<String>,
     pub description: Option<String>,
@@ -40,7 +40,7 @@ pub struct CustomTestInner {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Deserialize, Serialize, DbtSchema)]
 pub struct CustomTestMultiKey {
     pub test_name: String,
     pub name: Option<String>,

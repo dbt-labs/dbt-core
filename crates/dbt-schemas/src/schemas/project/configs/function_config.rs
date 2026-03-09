@@ -1,7 +1,7 @@
 use crate::schemas::serde::OmissibleGrantConfig;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::serde_utils::Omissible;
-use dbt_yaml::JsonSchema;
+use dbt_yaml::DbtSchema;
 use dbt_yaml::ShouldBe;
 use serde::{Deserialize, Serialize};
 // Type aliases for clarity
@@ -37,7 +37,7 @@ fn default_function_kind() -> Option<FunctionKind> {
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct ProjectFunctionConfig {
     #[serde(rename = "+access")]
     pub access: Option<Access>,
@@ -168,7 +168,7 @@ impl TypedRecursiveConfig for ProjectFunctionConfig {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, DbtSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct FunctionConfig {
     pub access: Option<Access>,

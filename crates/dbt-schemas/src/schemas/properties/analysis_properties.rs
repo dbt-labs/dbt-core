@@ -1,4 +1,4 @@
-use dbt_yaml::JsonSchema;
+use dbt_yaml::DbtSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 
@@ -7,7 +7,7 @@ use crate::schemas::project::AnalysesConfig;
 use crate::schemas::properties::GetConfig;
 
 #[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, DbtSchema)]
 pub struct AnalysesProperties {
     pub name: String,
     pub description: Option<String>,

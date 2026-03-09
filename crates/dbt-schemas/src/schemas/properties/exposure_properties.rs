@@ -1,13 +1,13 @@
 use crate::schemas::manifest::common::DbtOwner;
 use crate::schemas::nodes::ExposureType;
-use dbt_yaml::{JsonSchema, Spanned};
+use dbt_yaml::{DbtSchema, Spanned};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 
 use crate::schemas::project::ExposureConfig;
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct ExposureProperties {
     pub config: Option<ExposureConfig>,
     pub depends_on: Option<Vec<Spanned<String>>>,

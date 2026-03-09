@@ -1,7 +1,7 @@
 use indexmap::IndexMap;
 use std::collections::{BTreeMap, btree_map::Iter};
 
-use dbt_yaml::{JsonSchema, ShouldBe};
+use dbt_yaml::{DbtSchema, ShouldBe};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 
@@ -17,7 +17,7 @@ use crate::{
 };
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct ProjectSavedQueryConfig {
     #[serde(rename = "+cache")]
     pub cache: Option<SavedQueryCache>,
@@ -47,7 +47,7 @@ impl TypedRecursiveConfig for ProjectSavedQueryConfig {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, DbtSchema)]
 pub struct SavedQueryConfig {
     pub cache: Option<SavedQueryCache>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
@@ -64,13 +64,13 @@ pub struct SavedQueryConfig {
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, DbtSchema)]
 pub struct SavedQueryCache {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, Default, PartialEq, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, Default, PartialEq, DbtSchema)]
 #[allow(non_camel_case_types)]
 pub enum ExportConfigExportAs {
     #[default]

@@ -1,4 +1,4 @@
-use dbt_yaml::JsonSchema;
+use dbt_yaml::DbtSchema;
 use dbt_yaml::Spanned;
 use dbt_yaml::Verbatim;
 use serde::{Deserialize, Serialize};
@@ -262,7 +262,7 @@ pub fn default_to_grants(
 /// This configuration is a superset of all warehouse specific configurations
 /// that users can set
 #[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, DbtSchema)]
 pub struct WarehouseSpecificNodeConfig {
     // Shared
     pub partition_by: Option<PartitionConfig>,

@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use dbt_yaml::JsonSchema;
+use dbt_yaml::DbtSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 
@@ -34,7 +34,7 @@ impl From<Vec<String>> for WhereFilterIntersection {
 }
 
 #[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, DbtSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct DbtOwner {
     pub email: Option<StringOrArrayOfStrings>,
@@ -42,14 +42,14 @@ pub struct DbtOwner {
     pub __other__: BTreeMap<String, YmlValue>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, DbtSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct SourceFileMetadata {
     pub repo_file_path: String,
     pub file_slice: FileSlice,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, DbtSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct FileSlice {
     pub filename: String,

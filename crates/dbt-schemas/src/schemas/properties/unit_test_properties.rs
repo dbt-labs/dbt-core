@@ -7,12 +7,12 @@ use crate::schemas::{
     common::{Expect, Given},
     project::UnitTestConfig,
 };
-use dbt_yaml::JsonSchema;
+use dbt_yaml::DbtSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct UnitTestProperties {
     pub config: Option<UnitTestConfig>,
     pub description: Option<String>,
@@ -25,7 +25,7 @@ pub struct UnitTestProperties {
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct UnitTestOverrides {
     pub env_vars: Option<BTreeMap<String, YmlValue>>,
     pub macros: Option<BTreeMap<String, YmlValue>>,

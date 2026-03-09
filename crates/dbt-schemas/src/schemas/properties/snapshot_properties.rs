@@ -1,4 +1,4 @@
-use dbt_yaml::JsonSchema;
+use dbt_yaml::DbtSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 
@@ -8,7 +8,7 @@ use crate::schemas::project::SnapshotConfig;
 use crate::schemas::properties::GetConfig;
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct SnapshotProperties {
     pub name: String,
     pub relation: Option<String>,

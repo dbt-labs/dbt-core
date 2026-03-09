@@ -4,7 +4,7 @@ use crate::schemas::relations::DEFAULT_DATABRICKS_DATABASE;
 use crate::schemas::serde::{QueryTag, StringOrInteger, StringOrMap};
 
 use dbt_common::adapter::AdapterType;
-use dbt_yaml::JsonSchema;
+use dbt_yaml::DbtSchema;
 use dbt_yaml::UntaggedEnumDeserialize;
 use merge::Merge;
 use serde_derive::Deserialize;
@@ -26,12 +26,12 @@ pub struct DbtProfilesIntermediate {
     pub __profiles__: HashMap<ProfileName, dbt_yaml::Value>,
 }
 
-#[derive(Debug, Deserialize, Clone, PartialEq, JsonSchema)]
+#[derive(Debug, Deserialize, Clone, PartialEq, DbtSchema)]
 pub struct DbtProfiles {
     pub __profiles__: HashMap<ProfileName, DbConfig>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, UntaggedEnumDeserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, UntaggedEnumDeserialize, DbtSchema)]
 #[serde(tag = "type")]
 #[serde(rename_all = "lowercase")]
 #[allow(clippy::large_enum_variant)]
@@ -458,7 +458,7 @@ impl DbConfig {
     }
 }
 
-#[derive(Default, Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Serialize, Deserialize, DbtSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Execute {
     #[default]
@@ -512,7 +512,7 @@ impl Execute {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, DbtSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct DbTargets {
     #[serde(rename = "target", default = "default_target")]
@@ -537,7 +537,7 @@ mod merge_strategies_extend {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema, Merge)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, DbtSchema, Merge)]
 #[serde(rename_all = "snake_case")]
 #[merge(strategy = merge_strategies_extend::overwrite_option)]
 pub struct RedshiftDbConfig {
@@ -593,7 +593,7 @@ pub struct RedshiftDbConfig {
     pub idp_response_timeout: Option<i64>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema, Merge)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, DbtSchema, Merge)]
 #[merge(strategy = merge_strategies_extend::overwrite_option)]
 #[serde(rename_all = "snake_case")]
 pub struct SnowflakeDbConfig {
@@ -667,7 +667,7 @@ pub struct SnowflakeDbConfig {
     pub execute: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema, Merge)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, DbtSchema, Merge)]
 #[merge(strategy = merge_strategies_extend::overwrite_option)]
 #[serde(rename_all = "snake_case")]
 pub struct PostgresDbConfig {
@@ -704,7 +704,7 @@ pub struct PostgresDbConfig {
     pub password: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, Merge)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, DbtSchema, Merge)]
 #[merge(strategy = merge_strategies_extend::overwrite_option)]
 #[serde(rename_all = "snake_case")]
 pub struct BigqueryDbConfig {
@@ -776,7 +776,7 @@ pub struct BigqueryDbConfig {
     pub target_name: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, Merge)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, DbtSchema, Merge)]
 #[merge(strategy = merge_strategies_extend::overwrite_option)]
 #[serde(rename_all = "snake_case")]
 pub struct TrinoDbConfig {
@@ -796,7 +796,7 @@ pub struct TrinoDbConfig {
     pub role: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, Merge)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, DbtSchema, Merge)]
 #[merge(strategy = merge_strategies_extend::overwrite_option)]
 #[serde(rename_all = "snake_case")]
 pub struct DatafusionDbConfig {
@@ -810,7 +810,7 @@ pub struct DatafusionDbConfig {
     pub execute: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema, Merge)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, DbtSchema, Merge)]
 #[merge(strategy = merge_strategies_extend::overwrite_option)]
 #[serde(rename_all = "snake_case")]
 pub struct DatabricksDbConfig {
@@ -860,7 +860,7 @@ fn default_databricks_database() -> Option<String> {
     Some(DEFAULT_DATABRICKS_DATABASE.to_string())
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, Merge)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, DbtSchema, Merge)]
 #[merge(strategy = merge_strategies_extend::overwrite_option)]
 #[serde(rename_all = "snake_case")]
 pub struct SalesforceDbConfig {
@@ -893,7 +893,7 @@ fn default_data_transform_run_timeout() -> Option<i64> {
 /// A DuckDB secret for the Secrets Manager.
 /// Corresponds to upstream dbt-duckdb `Secret` dataclass.
 /// Generates a `CREATE OR REPLACE SECRET` statement.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, DbtSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct DuckDbSecret {
     /// Secret type: s3, azure, gcs, r2, huggingface, etc.
@@ -920,7 +920,7 @@ pub struct DuckDbSecret {
 /// A DuckDB database attachment.
 /// Corresponds to upstream dbt-duckdb `Attachment` dataclass.
 /// Generates an `ATTACH IF NOT EXISTS` statement.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, DbtSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct DuckDbAttachment {
     /// Path to the database file or connection string.
@@ -937,7 +937,7 @@ pub struct DuckDbAttachment {
 }
 
 /// DuckDB adapter configuration
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, JsonSchema, Merge)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default, DbtSchema, Merge)]
 #[merge(strategy = merge_strategies_extend::overwrite_option)]
 #[serde(rename_all = "snake_case")]
 pub struct DuckDbConfig {
@@ -974,7 +974,7 @@ pub struct DuckDbConfig {
     pub external_root: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, DbtSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum SparkMethod {
     Thrift,
@@ -982,7 +982,7 @@ pub enum SparkMethod {
     // TODO: HTTP, Spark Connect, EMR StartJob, Session (?)
 }
 
-#[derive(Default, Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Serialize, Deserialize, DbtSchema)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum SparkAuth {
     NoSasl,
@@ -1023,7 +1023,7 @@ impl std::str::FromStr for SparkAuth {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, Merge)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, DbtSchema, Merge)]
 #[merge(strategy = merge_strategies_extend::overwrite_option)]
 #[serde(rename_all = "snake_case")]
 pub struct SparkDbConfig {
@@ -1061,7 +1061,7 @@ pub struct SparkDbConfig {
 }
 
 // https://docs.getdbt.com/docs/core/connect-data-platform/fabric-setup#microsoft-entra-id-authentication
-#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, DbtSchema)]
 #[serde(rename_all = "PascalCase")]
 pub enum FabricAuth {
     #[default]
@@ -1088,7 +1088,7 @@ pub enum FabricAuth {
     // Auto,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, Merge)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, DbtSchema, Merge)]
 #[merge(strategy = merge_strategies_extend::overwrite_option)]
 #[serde(rename_all = "snake_case")]
 pub struct FabricDbConfig {
@@ -1154,7 +1154,7 @@ pub struct FabricDbConfig {
     pub api_url: Option<String>, // default = "https://api.fabric.microsoft.com/v1"
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, DbtSchema)]
 #[serde(untagged)]
 #[serde(rename_all = "snake_case")]
 #[allow(clippy::large_enum_variant)]
@@ -1173,20 +1173,20 @@ pub enum TargetContext {
     // Add other variants as needed
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, DbtSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct TrinoTargetEnv {
     pub __common__: CommonTargetContext,
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, DbtSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct DatafusionTargetEnv {
     pub database: String,
     pub __common__: CommonTargetContext,
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, DbtSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct PostgresTargetEnv {
     pub dbname: String,
@@ -1196,7 +1196,7 @@ pub struct PostgresTargetEnv {
     pub __common__: CommonTargetContext,
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, DbtSchema)]
 pub struct SnowflakeTargetEnv {
     pub account: String,
     pub user: String,
@@ -1222,7 +1222,7 @@ pub struct SnowflakeTargetEnv {
     pub __common__: CommonTargetContext,
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, DbtSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct BigqueryTargetEnv {
     pub project: String,
@@ -1251,7 +1251,7 @@ pub struct BigqueryTargetEnv {
     pub __common__: CommonTargetContext,
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, DbtSchema)]
 pub struct CommonTargetContext {
     pub database: String,
     pub schema: String,
@@ -1260,7 +1260,7 @@ pub struct CommonTargetContext {
     pub threads: Option<u16>,
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, DbtSchema)]
 pub struct DatabricksTargetEnv {
     pub host: Option<String>,
     pub http_path: Option<String>,
@@ -1268,7 +1268,7 @@ pub struct DatabricksTargetEnv {
     pub __common__: CommonTargetContext,
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, DbtSchema)]
 pub struct RedshiftTokenEndpoint {
     pub r#type: String,
     pub request_url: String,
@@ -1276,7 +1276,7 @@ pub struct RedshiftTokenEndpoint {
     pub request_data: String,
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, DbtSchema)]
 pub struct RedshiftTargetEnv {
     pub host: String,
     pub user: Option<String>,
@@ -1308,18 +1308,18 @@ pub struct RedshiftTargetEnv {
     pub idp_response_timeout: Option<i64>,
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, DbtSchema)]
 pub struct SalesforceTargetEnv {
     pub __common__: CommonTargetContext,
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, DbtSchema)]
 pub struct DuckDbTargetEnv {
     pub path: Option<String>,
     pub __common__: CommonTargetContext,
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, DbtSchema)]
 pub struct SparkTargetEnv {
     pub __common__: CommonTargetContext,
     pub method: SparkMethod,
@@ -1331,7 +1331,7 @@ pub struct SparkTargetEnv {
     pub kerberos_service_name: String,
 }
 
-#[derive(Serialize, JsonSchema)]
+#[derive(Serialize, DbtSchema)]
 pub struct FabricTargetEnv {
     pub __common__: CommonTargetContext,
     pub authentication: FabricAuth,

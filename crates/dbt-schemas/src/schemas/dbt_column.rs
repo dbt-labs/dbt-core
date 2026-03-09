@@ -2,7 +2,7 @@ use indexmap::IndexMap;
 use std::{collections::BTreeMap, sync::Arc};
 
 use dbt_common::FsResult;
-use dbt_yaml::{JsonSchema, UntaggedEnumDeserialize};
+use dbt_yaml::{DbtSchema, UntaggedEnumDeserialize};
 use serde::de::{MapAccess, Visitor};
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -103,7 +103,7 @@ where
 }
 
 #[skip_serializing_none]
-#[derive(Default, Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Default, Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct ColumnProperties {
     pub name: String,
     pub data_type: Option<String>,
@@ -121,7 +121,7 @@ pub struct ColumnProperties {
     pub dimension: Option<ColumnPropertiesDimension>,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, Default, JsonSchema, Eq, PartialEq, Display)]
+#[derive(Deserialize, Serialize, Debug, Clone, Default, DbtSchema, Eq, PartialEq, Display)]
 #[allow(non_camel_case_types)]
 pub enum Granularity {
     #[default]
@@ -139,7 +139,7 @@ pub enum Granularity {
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, Default, PartialEq, Eq)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema, Default, PartialEq, Eq)]
 pub struct ColumnConfig {
     #[serde(default)]
     pub tags: Option<StringOrArrayOfStrings>,
@@ -258,21 +258,21 @@ pub fn process_columns(
         .unwrap_or_default())
 }
 
-#[derive(UntaggedEnumDeserialize, Serialize, Debug, Clone, JsonSchema, Eq, PartialEq)]
+#[derive(UntaggedEnumDeserialize, Serialize, Debug, Clone, DbtSchema, Eq, PartialEq)]
 #[serde(untagged)]
 pub enum ColumnPropertiesDimension {
     DimensionConfig(ColumnPropertiesDimensionConfig),
     DimensionType(ColumnPropertiesDimensionType),
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, Eq, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema, Eq, PartialEq)]
 #[allow(non_camel_case_types)]
 pub enum ColumnPropertiesDimensionType {
     categorical,
     time,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, Eq, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema, Eq, PartialEq)]
 pub struct ColumnPropertiesDimensionConfig {
     #[serde(rename = "type")]
     pub type_: ColumnPropertiesDimensionType,
@@ -284,14 +284,14 @@ pub struct ColumnPropertiesDimensionConfig {
     pub validity_params: Option<DimensionValidityParams>,
 }
 
-#[derive(UntaggedEnumDeserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(UntaggedEnumDeserialize, Serialize, Debug, Clone, DbtSchema)]
 #[serde(untagged)]
 pub enum Entity {
     EntityConfig(EntityConfig),
     EntityType(ColumnPropertiesEntityType),
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, Eq, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema, Eq, PartialEq)]
 #[allow(non_camel_case_types)]
 pub enum ColumnPropertiesEntityType {
     foreign,
@@ -300,7 +300,7 @@ pub enum ColumnPropertiesEntityType {
     unique,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct EntityConfig {
     #[serde(rename = "type")]
     pub type_: ColumnPropertiesEntityType,

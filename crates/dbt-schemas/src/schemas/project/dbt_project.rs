@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::collections::btree_map::Iter;
 use std::fmt::Debug;
 
-use dbt_yaml::JsonSchema;
+use dbt_yaml::DbtSchema;
 
 // Type aliases for clarity
 type YmlValue = dbt_yaml::Value;
@@ -37,7 +37,7 @@ use super::ProjectSnapshotConfig;
 use super::ProjectSourceConfig;
 use super::ProjectUnitTestConfig;
 
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct ProjectDbtCloudConfig {
     #[serde(rename = "project-id")]
     pub project_id: Option<StringOrInteger>,
@@ -59,7 +59,7 @@ pub struct ProjectDbtCloudConfig {
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct DbtProjectNameOnly {
     pub name: String,
 
@@ -67,7 +67,7 @@ pub struct DbtProjectNameOnly {
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct DbtProjectSimplified {
     #[serde(rename = "packages-install-path")]
     pub packages_install_path: Option<String>,
@@ -90,7 +90,7 @@ pub struct DbtProjectSimplified {
 }
 
 #[derive(
-    Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, EnumString, Display, JsonSchema,
+    Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, EnumString, Display, DbtSchema,
 )]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
@@ -100,7 +100,7 @@ pub enum LogPath {
 }
 
 #[derive(
-    Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, EnumString, Display, JsonSchema,
+    Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, EnumString, Display, DbtSchema,
 )]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
@@ -110,7 +110,7 @@ pub enum TargetPath {
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct DbtProject {
     pub name: String,
     pub version: Option<FloatOrString>,
@@ -223,13 +223,13 @@ impl DbtProject {
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct _Dispatch {
     pub macro_namespace: String,
     pub search_order: Vec<String>,
 }
 
-#[derive(UntaggedEnumDeserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(UntaggedEnumDeserialize, Serialize, Debug, Clone, DbtSchema)]
 #[serde(untagged)]
 pub enum QueryComment {
     String(String),

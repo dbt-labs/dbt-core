@@ -1,10 +1,10 @@
 use crate::schemas::{project::DataTestConfig, properties::GetConfig};
-use dbt_yaml::JsonSchema;
+use dbt_yaml::DbtSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct DataTestProperties {
     pub config: Option<DataTestConfig>,
     pub description: Option<String>,

@@ -18,7 +18,7 @@ use std::{
 use strum::{Display, IntoEnumIterator};
 
 use dbt_common::io_args::{
-    ClapResourceType, DisplayFormat, EvalArgs, FsCommand, IoArgs, JsonSchemaTypes, Phases,
+    ClapResourceType, ClapSchemaTypes, DisplayFormat, EvalArgs, FsCommand, IoArgs, Phases,
     ShowOptions, SystemArgs, check_selector, check_var,
 };
 use dbt_common::row_limit::RowLimit;
@@ -227,9 +227,15 @@ pub struct ManArgs {
     #[clap(flatten)]
     pub common_args: CommonArgs,
 
-    /// Show these json schema types on the command line
+    /// Show the post-Jinja-transformation form of JSON schema for the specified
+    /// types on the command line. Repeatable to show multiple schema types.
     #[clap(long, num_args(0..))]
-    pub schema: Vec<JsonSchemaTypes>,
+    pub schema: Vec<ClapSchemaTypes>,
+
+    /// Show the pre-Jinja-transformation form of JSON schema for the specified
+    /// types on the command line. Repeatable to show multiple schema types.
+    #[clap(long, num_args(0..))]
+    pub pre_schema: Vec<ClapSchemaTypes>,
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -497,9 +503,16 @@ impl ListArgs {
 impl ManArgs {
     pub fn to_eval_args(&self, arg: SystemArgs, in_dir: &Path, out_dir: &Path) -> EvalArgs {
         let eval_args = self.common_args.to_eval_args(arg, in_dir, out_dir);
-        eval_args.set_schema(self.schema.clone())
+        eval_args.set_schema(
+            self.schema
+                .iter()
+                .map(|s| s.to_json_schema_types(false))
+                .chain(self.pre_schema.iter().map(|s| s.to_json_schema_types(true)))
+                .collect(),
+        )
     }
 }
+
 impl InitArgs {
     pub fn to_eval_args(&self, arg: SystemArgs, in_dir: &Path, out_dir: &Path) -> EvalArgs {
         let show = if arg.io.show.contains(&ShowOptions::All) {

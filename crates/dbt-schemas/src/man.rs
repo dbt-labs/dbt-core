@@ -12,7 +12,6 @@ use dbt_common::tracing::emit::println;
 
 use strum::IntoEnumIterator;
 
-use schemars::r#gen::SchemaSettings;
 use schemars::schema::*;
 use schemars::schema::{InstanceType, Schema, SchemaObject};
 
@@ -31,42 +30,34 @@ pub async fn execute_man_command(arg: &EvalArgs) -> FsResult<()> {
         );
     }
     for schema_type in &arg.schema {
+        dbt_yaml::maybe_transformable::set_generate_pre_transformation_schema(schema_type.is_pre());
+        let generator = schema_type.get_schema_settings().into_generator();
         match schema_type {
-            JsonSchemaTypes::Profile => {
-                let settings = SchemaSettings::default();
-                let generator = settings.into_generator();
+            JsonSchemaTypes::Profile(_) => {
                 let mut schema = generator.into_root_schema_for::<DbtProfiles>();
                 deny_additional_properties_in_root(&mut schema);
                 println(to_string_pretty(&schema)?);
             }
-            JsonSchemaTypes::Project => {
-                let settings = SchemaSettings::default();
-                let generator = settings.into_generator();
+            JsonSchemaTypes::Project(_) => {
                 let mut schema = generator.into_root_schema_for::<DbtProject>();
                 deny_additional_properties_in_root(&mut schema);
                 println(to_string_pretty(&schema)?);
             }
-            JsonSchemaTypes::Selector => {
-                let settings = SchemaSettings::default();
-                let generator = settings.into_generator();
+            JsonSchemaTypes::Selector(_) => {
                 let mut schema = generator.into_root_schema_for::<SelectorFile>();
                 deny_additional_properties_in_root(&mut schema);
                 println(to_string_pretty(&schema)?);
             }
-            JsonSchemaTypes::Schema => {
-                let settings = SchemaSettings::default();
-                let generator = settings.into_generator();
+            JsonSchemaTypes::Schema(_) => {
                 let mut schema = generator.into_root_schema_for::<DbtPropertiesFile>();
                 deny_additional_properties_in_root(&mut schema);
                 println(to_string_pretty(&schema)?);
             }
-            JsonSchemaTypes::Telemetry => {
-                let settings = SchemaSettings::draft07();
-                let generator = settings.into_generator();
+            JsonSchemaTypes::Telemetry(_) => {
                 let schema = generator.into_root_schema_for::<TelemetryRecord>();
                 println(to_string_pretty(&schema)?);
             }
-        }
+        };
     }
 
     Ok(())

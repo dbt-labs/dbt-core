@@ -8,7 +8,7 @@ use crate::schemas::project::SourceConfig;
 use crate::schemas::serde::StringOrArrayOfStrings;
 use crate::schemas::serde::bool_or_string_bool;
 use dbt_common::serde_utils::Omissible;
-use dbt_yaml::{JsonSchema, Verbatim};
+use dbt_yaml::{DbtSchema, Verbatim};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
@@ -17,7 +17,7 @@ use serde_with::skip_serializing_none;
 type YmlValue = dbt_yaml::Value;
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct SourceProperties {
     pub config: Option<SourceConfig>,
     #[serde(alias = "project", alias = "data_space")]
@@ -33,7 +33,7 @@ pub struct SourceProperties {
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct Tables {
     pub columns: Option<Vec<ColumnProperties>>,
     pub config: Option<TablesConfig>,
@@ -48,7 +48,7 @@ pub struct Tables {
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, Default)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema, Default)]
 pub struct TablesConfig {
     pub event_time: Option<String>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]

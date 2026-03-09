@@ -1,11 +1,11 @@
 use crate::schemas::data_tests::DataTests;
 use crate::schemas::project::FunctionConfig;
-use dbt_yaml::JsonSchema;
+use dbt_yaml::DbtSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 
 /// Function kind enum with same values as UDFKind
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq, Eq, Hash, Default)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema, PartialEq, Eq, Hash, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum FunctionKind {
     #[serde(rename = "scalar")]
@@ -19,7 +19,7 @@ pub enum FunctionKind {
 
 /// Function volatility enum - defines the function's eligibility for certain optimizations
 /// Matches the Python Volatility enum from dbt-core
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq, Eq, Hash)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema, PartialEq, Eq, Hash)]
 #[serde(rename_all = "lowercase")]
 pub enum Volatility {
     /// Deterministic - An deterministic function will always return the same output when given the same input.
@@ -34,7 +34,7 @@ pub enum Volatility {
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct FunctionArgument {
     pub name: Option<String>,
     pub data_type: Option<String>,
@@ -43,7 +43,7 @@ pub struct FunctionArgument {
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct FunctionReturnType {
     pub data_type: Option<String>,
     pub description: Option<String>,
@@ -54,7 +54,7 @@ fn default_language() -> Option<String> {
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct FunctionProperties {
     pub config: Option<FunctionConfig>,
     pub data_tests: Option<Vec<DataTests>>,

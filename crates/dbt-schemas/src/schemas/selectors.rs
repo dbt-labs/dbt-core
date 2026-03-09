@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 use std::ops::Deref;
 
 use dbt_common::node_selector::{IndirectSelection, SelectExpression};
-use dbt_yaml::{JsonSchema, UntaggedEnumDeserialize};
+use dbt_yaml::{DbtSchema, UntaggedEnumDeserialize};
 use serde::de::{self, IgnoredAny, MapAccess, Visitor};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
@@ -25,7 +25,7 @@ use super::serde::FloatOrString;
 
 /// A selector value that accepts any YAML scalar (string, boolean, number)
 /// and normalizes it to a string representation for downstream matching.
-#[derive(Debug, Clone, PartialEq, Eq, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, DbtSchema)]
 pub struct SelectorValue(pub String);
 
 impl SelectorValue {
@@ -127,7 +127,7 @@ impl<'de> Deserialize<'de> for SelectorValue {
 // ---- top-level file -------------------------------------------------------------------------
 //
 #[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, DbtSchema)]
 pub struct SelectorFile {
     pub version: Option<FloatOrString>,
     /// List of named selectors that may later be referenced with
@@ -140,7 +140,7 @@ pub struct SelectorFile {
 //
 
 #[skip_serializing_none]
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, DbtSchema)]
 pub struct SelectorDefinition {
     /// The key used in `--selector <name>`.
     pub name: String,
@@ -162,7 +162,7 @@ pub struct SelectorDefinition {
 // ---- definition discriminated union ---------------------------------------------------------
 //
 
-#[derive(Debug, Clone, Serialize, UntaggedEnumDeserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, UntaggedEnumDeserialize, DbtSchema)]
 #[serde(untagged)]
 pub enum SelectorDefinitionValue {
     /// CLI-style selector string (e.g. `"snowplow tag:nightly"`).
@@ -173,7 +173,7 @@ pub enum SelectorDefinitionValue {
 }
 
 /// Top‐level expression: either a boolean node or a single atom
-#[derive(Serialize, UntaggedEnumDeserialize, Debug, Clone, JsonSchema)]
+#[derive(Serialize, UntaggedEnumDeserialize, Debug, Clone, DbtSchema)]
 #[serde(untagged)]
 pub enum SelectorExpr {
     Composite(CompositeExpr),
@@ -181,7 +181,7 @@ pub enum SelectorExpr {
 }
 
 /// A boolean composition of other selectors
-#[derive(Serialize, Debug, Clone, JsonSchema)]
+#[derive(Serialize, Debug, Clone, DbtSchema)]
 #[serde(rename_all = "lowercase")]
 pub struct CompositeExpr {
     pub kind: BTreeMap<String, CompositeKind>,
@@ -263,7 +263,7 @@ impl<'de> Deserialize<'de> for CompositeExpr {
 }
 
 /// Is this an `OR` or an `AND`?
-#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
+#[derive(Serialize, Deserialize, Debug, Clone, DbtSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum CompositeKind {
     Union(Vec<SelectorDefinitionValue>),
@@ -275,7 +275,7 @@ pub enum CompositeKind {
 //
 
 /// The true leaves: either a method, a shorthand, or an exclude
-#[derive(Serialize, UntaggedEnumDeserialize, Debug, Clone, JsonSchema)]
+#[derive(Serialize, UntaggedEnumDeserialize, Debug, Clone, DbtSchema)]
 #[serde(untagged)]
 pub enum AtomExpr {
     Method(MethodAtomExpr),
@@ -301,7 +301,7 @@ pub struct SelectorEntry {
     pub description: Option<String>, // docs string from YAML
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, DbtSchema)]
 pub struct MethodAtomExpr {
     pub method: String,
     pub value: SelectorValue,
@@ -329,7 +329,7 @@ pub struct MethodAtomExpr {
     pub exclude: Option<Vec<SelectorDefinitionValue>>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, DbtSchema)]
 pub struct ExcludeAtomExpr {
     pub exclude: Vec<SelectorDefinitionValue>,
 }

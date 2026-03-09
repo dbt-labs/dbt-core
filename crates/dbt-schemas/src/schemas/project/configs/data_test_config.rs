@@ -1,5 +1,5 @@
 use dbt_common::io_args::StaticAnalysisKind;
-use dbt_yaml::{JsonSchema, ShouldBe, Spanned};
+use dbt_yaml::{DbtSchema, ShouldBe, Spanned};
 use serde::{Deserialize, Serialize};
 // Type aliases for clarity
 type YmlValue = dbt_yaml::Value;
@@ -24,7 +24,7 @@ use crate::schemas::serde::{
 };
 
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct ProjectDataTestConfig {
     #[serde(rename = "+alias")]
     pub alias: Option<String>,
@@ -295,7 +295,7 @@ impl TypedRecursiveConfig for ProjectDataTestConfig {
 }
 
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
-#[derive(Deserialize, Serialize, Debug, Clone, Default, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, Default, DbtSchema)]
 pub struct DataTestConfig {
     pub alias: Option<String>,
     #[serde(alias = "project", alias = "data_space")]

@@ -1,7 +1,7 @@
 use crate::schemas::manifest::postgres::PostgresIndex;
 use dbt_common::serde_utils::Omissible;
 use dbt_common::{CodeLocationWithFile, ErrorCode, FsError, FsResult, stdfs};
-use dbt_yaml::{JsonSchema, Spanned, UntaggedEnumDeserialize};
+use dbt_yaml::{DbtSchema, Spanned, UntaggedEnumDeserialize};
 use indexmap::IndexMap;
 use serde::{
     self, Deserialize, Deserializer, Serialize, Serializer,
@@ -212,7 +212,7 @@ pub fn default_true() -> Option<bool> {
 /// // Input: {"project": "foo", "env": "prod"}
 /// // Stores as: "{\"project\":\"foo\",\"env\":\"prod\"}"
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, DbtSchema)]
 pub struct QueryTag(pub String);
 
 impl QueryTag {
@@ -369,7 +369,7 @@ pub fn try_string_to_type<T: DeserializeOwned>(
     }
 }
 
-#[derive(Debug, Clone, Serialize, UntaggedEnumDeserialize, PartialEq, Eq, JsonSchema)]
+#[derive(Debug, Clone, Serialize, UntaggedEnumDeserialize, PartialEq, Eq, DbtSchema)]
 #[serde(untagged)]
 pub enum StringOrInteger {
     String(String),
@@ -426,14 +426,14 @@ impl StringOrInteger {
     }
 }
 
-#[derive(Debug, Serialize, UntaggedEnumDeserialize, Clone, PartialEq, JsonSchema)]
+#[derive(Debug, Serialize, UntaggedEnumDeserialize, Clone, PartialEq, DbtSchema)]
 #[serde(untagged)]
 pub enum StringOrMap {
     StringValue(String),
     MapValue(HashMap<String, YmlValue>),
 }
 
-#[derive(Serialize, UntaggedEnumDeserialize, Debug, Clone, JsonSchema)]
+#[derive(Serialize, UntaggedEnumDeserialize, Debug, Clone, DbtSchema)]
 #[serde(untagged)]
 pub enum StringOrArrayOfStrings {
     String(String),
@@ -475,7 +475,7 @@ impl Serialize for AsArray<'_> {
 /// This type handles grant configurations with the following behavior:
 /// - Normalizes string values to arrays during serialization
 /// - Preserves insertion order using IndexMap
-#[derive(Debug, Clone, PartialEq, Eq, Default, JsonSchema)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, DbtSchema)]
 pub struct GrantConfig(pub IndexMap<String, StringOrArrayOfStrings>);
 
 /// Wrapper around `Omissible<GrantConfig>` with Jinja-compatible serialization.
@@ -659,7 +659,7 @@ impl Eq for StringOrArrayOfStrings {}
 /// // Input: ["id", "tenant_id"]
 /// // Serializes as: ["id", "tenant_id"]
 /// ```
-#[derive(Debug, Clone, Default, PartialEq, Eq, JsonSchema)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, DbtSchema)]
 pub struct PrimaryKeyConfig(Option<StringOrArrayOfStrings>);
 
 impl PrimaryKeyConfig {
@@ -761,7 +761,7 @@ impl From<PrimaryKeyConfig> for Option<StringOrArrayOfStrings> {
 /// // Input (dict): {"my_index": {columns: ["id"], unique: true}}
 /// // Serializes as: [{columns: ["id"], unique: true}]  (keys are discarded)
 /// ```
-#[derive(Debug, Clone, Default, PartialEq, JsonSchema)]
+#[derive(Debug, Clone, Default, PartialEq, DbtSchema)]
 pub struct IndexesConfig(Option<Vec<PostgresIndex>>);
 
 impl IndexesConfig {
@@ -893,7 +893,7 @@ impl From<IndexesConfig> for Option<Vec<PostgresIndex>> {
     }
 }
 
-#[derive(UntaggedEnumDeserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(UntaggedEnumDeserialize, Serialize, Debug, Clone, DbtSchema)]
 #[serde(untagged)]
 pub enum SpannedStringOrArrayOfStrings {
     String(Spanned<String>),
@@ -955,7 +955,7 @@ impl PartialEq for SpannedStringOrArrayOfStrings {
 
 impl Eq for SpannedStringOrArrayOfStrings {}
 
-#[derive(UntaggedEnumDeserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(UntaggedEnumDeserialize, Serialize, Debug, Clone, DbtSchema)]
 #[serde(untagged)]
 pub enum FloatOrString {
     Number(f32),

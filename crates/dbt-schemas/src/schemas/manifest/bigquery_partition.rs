@@ -1,5 +1,5 @@
 use dbt_common::current_function_name;
-use dbt_yaml::{JsonSchema, UntaggedEnumDeserialize};
+use dbt_yaml::{DbtSchema, UntaggedEnumDeserialize};
 use minijinja::value::Enumerator;
 use minijinja::{Error as MinijinjaError, ErrorKind as MinijinjaErrorKind, State};
 use minijinja::{
@@ -14,7 +14,7 @@ use std::convert::AsRef;
 use std::{rc::Rc, sync::Arc};
 
 /// reference: https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-bigquery/src/dbt/adapters/bigquery/relation_configs/_partition.py#L12-L13
-#[derive(Debug, Clone, Serialize, Deserialize, Eq, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, DbtSchema)]
 pub struct BigqueryPartitionConfig {
     pub field: String,
     #[serde(default = "BigqueryPartitionConfig::default_data_type")]
@@ -78,14 +78,14 @@ enum PartitionConfigField {
     Range,
 }
 
-#[derive(Debug, Clone, Serialize, UntaggedEnumDeserialize, PartialEq, Eq, JsonSchema)]
+#[derive(Debug, Clone, Serialize, UntaggedEnumDeserialize, PartialEq, Eq, DbtSchema)]
 #[serde(untagged)]
 pub enum BigqueryPartitionConfigInner {
     Range(RangeConfig),
     Time(TimeConfig),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, DbtSchema)]
 pub struct TimeConfig {
     #[serde(default = "BigqueryPartitionConfig::default_granularity")]
     pub granularity: String,
@@ -96,12 +96,12 @@ pub struct TimeConfig {
     pub time_ingestion_partitioning: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, DbtSchema)]
 pub struct RangeConfig {
     pub range: Range,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, DbtSchema)]
 pub struct Range {
     pub start: i64,
     pub end: i64,
@@ -354,7 +354,7 @@ impl Object for BigqueryPartitionConfig {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq, DbtSchema)]
 pub struct GrantAccessToTarget {
     pub dataset: Option<String>,
     pub project: Option<String>,

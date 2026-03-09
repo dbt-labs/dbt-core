@@ -1,5 +1,5 @@
 use dbt_common::io_args::StaticAnalysisKind;
-use dbt_yaml::{JsonSchema, ShouldBe, Spanned};
+use dbt_yaml::{DbtSchema, ShouldBe, Spanned};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 // Type aliases for clarity
@@ -27,7 +27,7 @@ use crate::{
 };
 
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct ProjectUnitTestConfig {
     #[serde(default, rename = "+enabled", deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
@@ -260,7 +260,7 @@ impl TypedRecursiveConfig for ProjectUnitTestConfig {
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, Default, PartialEq, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, Default, PartialEq, DbtSchema)]
 pub struct UnitTestConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,

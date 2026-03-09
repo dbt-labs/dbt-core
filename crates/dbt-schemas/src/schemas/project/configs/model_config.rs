@@ -3,7 +3,7 @@ use crate::schemas::serde::OmissibleGrantConfig;
 use crate::schemas::serde::QueryTag;
 use dbt_common::io_args::StaticAnalysisKind;
 use dbt_common::serde_utils::Omissible;
-use dbt_yaml::JsonSchema;
+use dbt_yaml::DbtSchema;
 use dbt_yaml::Spanned;
 use dbt_yaml::Verbatim;
 use serde::{Deserialize, Serialize};
@@ -51,7 +51,7 @@ use crate::schemas::serde::{
 use dbt_yaml::ShouldBe;
 
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct ProjectModelConfig {
     #[serde(rename = "+access")]
     pub access: Option<Access>,
@@ -417,7 +417,7 @@ pub struct ProjectModelConfig {
     pub __additional_properties__: BTreeMap<String, ShouldBe<ProjectModelConfig>>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, DbtSchema)]
 #[serde(rename_all = "PascalCase")]
 /// See `category` from https://developer.salesforce.com/docs/data/connectapi/references/spec?meta=postDataLakeObject
 pub enum DataLakeObjectCategory {
@@ -439,7 +439,7 @@ impl TypedRecursiveConfig for ProjectModelConfig {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug, Default, Clone, PartialEq, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Default, Clone, PartialEq, DbtSchema)]
 pub struct ModelConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,

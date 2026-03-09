@@ -6,7 +6,7 @@ use serde_with::skip_serializing_none;
 
 use crate::schemas::serde::OmissibleGrantConfig;
 use dbt_common::serde_utils::Omissible;
-use dbt_yaml::JsonSchema;
+use dbt_yaml::DbtSchema;
 use dbt_yaml::Spanned;
 use dbt_yaml::Verbatim;
 
@@ -589,7 +589,7 @@ pub struct ManifestModel {
 
     pub __other__: BTreeMap<String, YmlValue>,
 }
-#[derive(Deserialize, Serialize, Debug, Default, Clone, PartialEq, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Default, Clone, PartialEq, DbtSchema)]
 pub struct ManifestModelConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
@@ -661,7 +661,7 @@ pub struct ManifestModelConfig {
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Default, PartialEq, Clone, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Default, PartialEq, Clone, DbtSchema)]
 pub struct ManifestSeedConfig {
     pub column_types: Option<BTreeMap<Spanned<String>, String>>,
     #[serde(alias = "project", alias = "data_space")]

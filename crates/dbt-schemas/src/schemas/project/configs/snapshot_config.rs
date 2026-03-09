@@ -2,7 +2,7 @@ use crate::schemas::common::ClusterConfig;
 use crate::schemas::serde::OmissibleGrantConfig;
 use crate::schemas::serde::QueryTag;
 use dbt_common::io_args::StaticAnalysisKind;
-use dbt_yaml::JsonSchema;
+use dbt_yaml::DbtSchema;
 use dbt_yaml::ShouldBe;
 use dbt_yaml::Spanned;
 use dbt_yaml::Verbatim;
@@ -41,7 +41,7 @@ use crate::schemas::serde::{
 };
 
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct ProjectSnapshotConfig {
     // Snapshot-specific Configuration
     #[serde(rename = "+database", alias = "+project", alias = "+data_space")]
@@ -337,7 +337,7 @@ impl TypedRecursiveConfig for ProjectSnapshotConfig {
 }
 
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, Default, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema, Default, PartialEq)]
 pub struct SnapshotConfig {
     // Snapshot-specific Configuration
     #[serde(alias = "project", alias = "data_space")]
@@ -391,7 +391,7 @@ pub struct SnapshotConfig {
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq, Eq, Default)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema, PartialEq, Eq, Default)]
 pub struct SnapshotMetaColumnNames {
     pub dbt_scd_id: Option<String>,
     pub dbt_updated_at: Option<String>,

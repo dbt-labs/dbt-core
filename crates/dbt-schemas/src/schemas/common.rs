@@ -5,11 +5,33 @@ use std::collections::{BTreeMap, HashMap};
 use std::str::FromStr;
 use std::time::Duration;
 
+use dbt_common::adapter::{AdapterType, quote_char};
+use dbt_common::{CodeLocationWithFile, ErrorCode, FsError, FsResult, err, fs_err};
+use dbt_telemetry::NodeMaterialization;
+use dbt_yaml::{DbtSchema, Spanned, UntaggedEnumDeserialize, Verbatim};
+use hex;
+use serde::{Deserialize, Deserializer, Serialize};
+// Type alias for clarity
+type YmlValue = dbt_yaml::Value;
+use serde_with::skip_serializing_none;
+use sha2::{Digest, Sha256};
+use strum::{Display, EnumIter, EnumString};
+
+use crate::dbt_types::RelationType;
+use crate::schemas::dbt_column::{ColumnPropertiesDimensionType, Granularity};
+use crate::schemas::manifest::BigqueryPartitionConfig;
+use crate::schemas::manifest::common::SourceFileMetadata;
+use crate::schemas::semantic_layer::semantic_manifest::SemanticLayerElementConfig;
+
+use super::serde::{
+    StringOrArrayOfStrings, bool_or_string_bool, bool_or_string_bool_default, i64_or_string_i64,
+};
+
 /// Indicates where schema metadata originates from.
 ///
 /// - `Remote` (default): Schema is fetched from the remote warehouse
 /// - `Local`: Schema is derived from YAML column definitions
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, DbtSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum SchemaOrigin {
     /// Schema metadata comes from the remote warehouse (default)
@@ -50,28 +72,7 @@ impl FromStr for SchemaOrigin {
     }
 }
 
-use dbt_common::adapter::{AdapterType, quote_char};
-use dbt_common::{CodeLocationWithFile, ErrorCode, FsError, FsResult, err, fs_err};
-use dbt_telemetry::NodeMaterialization;
-use dbt_yaml::{JsonSchema, Spanned, UntaggedEnumDeserialize, Verbatim};
-use hex;
-use serde::{Deserialize, Deserializer, Serialize};
-// Type alias for clarity
-type YmlValue = dbt_yaml::Value;
-use serde_with::skip_serializing_none;
-use sha2::{Digest, Sha256};
-use strum::{Display, EnumIter, EnumString};
-
-use crate::dbt_types::RelationType;
-use crate::schemas::dbt_column::{ColumnPropertiesDimensionType, Granularity};
-use crate::schemas::manifest::BigqueryPartitionConfig;
-use crate::schemas::manifest::common::SourceFileMetadata;
-use crate::schemas::semantic_layer::semantic_manifest::SemanticLayerElementConfig;
-
-use super::serde::{
-    StringOrArrayOfStrings, bool_or_string_bool, bool_or_string_bool_default, i64_or_string_i64,
-};
-#[derive(Default, Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq, Eq)]
+#[derive(Default, Deserialize, Serialize, Debug, Clone, DbtSchema, PartialEq, Eq)]
 pub struct FreshnessRules {
     #[serde(deserialize_with = "i64_or_string_i64")]
     pub count: Option<i64>,
@@ -100,7 +101,7 @@ impl FreshnessRules {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq, Eq, Default)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema, PartialEq, Eq, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum UpdatesOn {
     #[default]
@@ -129,7 +130,7 @@ impl FromStr for UpdatesOn {
     }
 }
 
-#[derive(Default, Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Default, Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct ModelFreshnessRules {
     pub count: Option<i64>,
     pub period: Option<FreshnessPeriod>,
@@ -188,7 +189,7 @@ impl ModelFreshnessRules {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq, Eq)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema, PartialEq, Eq)]
 #[allow(non_camel_case_types)]
 pub enum FreshnessPeriod {
     minute,
@@ -220,7 +221,7 @@ impl std::fmt::Display for FreshnessPeriod {
 
 // We don't skip serializing none here because dbt project evaluator checks for the presence of either error_after or warn_after
 // https://github.com/dbt-labs/dbt-project-evaluator/blob/94768b117573705e95a9456273de8e358efadb00/macros/unpack/get_source_values.sql#L27-L28
-#[derive(Default, Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq, Eq)]
+#[derive(Default, Deserialize, Serialize, Debug, Clone, DbtSchema, PartialEq, Eq)]
 pub struct FreshnessDefinition {
     #[serde(default, serialize_with = "serialize_freshness_rule")]
     pub error_after: Option<FreshnessRules>,
@@ -244,7 +245,7 @@ where
     }
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq, Eq)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema, PartialEq, Eq)]
 #[allow(non_camel_case_types)]
 pub enum FreshnessStatus {
     Pass,
@@ -281,7 +282,7 @@ impl<T: Clone + Merge<T>> Merge<Option<T>> for Option<T> {
     }
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter, Eq, JsonSchema)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, EnumIter, Eq, DbtSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum DbtMaterialization {
     #[default]
@@ -405,7 +406,7 @@ impl From<&DbtMaterialization> for NodeMaterialization {
     }
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Display, JsonSchema)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Display, DbtSchema)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum Access {
@@ -439,7 +440,7 @@ pub struct NodeDependsOn {
     pub nodes_with_ref_location: Vec<(String, CodeLocationWithFile)>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Copy, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Copy, DbtSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct ResolvedQuoting {
     #[serde(deserialize_with = "bool_or_string_bool_default")]
@@ -498,7 +499,7 @@ impl TryFrom<DbtQuoting> for ResolvedQuoting {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Default, Deserialize, PartialEq, Eq, Copy, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Default, Deserialize, PartialEq, Eq, Copy, DbtSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct DbtQuoting {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
@@ -600,7 +601,7 @@ impl<'de> Deserialize<'de> for DbtCheckColsSpec {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, EnumString, Display, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, EnumString, Display, DbtSchema)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum DbtBatchSize {
@@ -610,7 +611,7 @@ pub enum DbtBatchSize {
     Year,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, DbtSchema)]
 pub struct DbtContract {
     #[serde(default = "default_alias_types")]
     pub alias_types: bool,
@@ -635,7 +636,7 @@ impl Default for DbtContract {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, EnumString, Display, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, EnumString, Display, DbtSchema)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum DbtIncrementalStrategy {
@@ -654,14 +655,14 @@ pub enum DbtIncrementalStrategy {
     Custom(String),
 }
 
-#[derive(Debug, Clone, Serialize, UntaggedEnumDeserialize, PartialEq, Eq, JsonSchema)]
+#[derive(Debug, Clone, Serialize, UntaggedEnumDeserialize, PartialEq, Eq, DbtSchema)]
 #[serde(untagged)]
 pub enum DbtUniqueKey {
     Single(String),
     Multiple(Vec<String>),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, DbtSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum OnSchemaChange {
     Ignore,
@@ -672,7 +673,7 @@ pub enum OnSchemaChange {
     Unknown,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, DbtSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum OnConfigurationChange {
     Apply,
@@ -691,7 +692,7 @@ impl From<StringOrArrayOfStrings> for DbtUniqueKey {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, DbtSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum HardDeletes {
     Ignore,
@@ -720,7 +721,7 @@ impl TryFrom<String> for HardDeletes {
 }
 
 /// Constraints (model level or column level)
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, DbtSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct Constraint {
     #[serde(rename = "type")]
@@ -744,7 +745,7 @@ pub enum ConstraintSupport {
     NotSupported,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default, JsonSchema)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default, DbtSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ConstraintType {
     #[default]
@@ -834,13 +835,13 @@ impl DbtChecksum {
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct IncludeExclude {
     pub exclude: Option<StringOrArrayOfStrings>,
     pub include: Option<StringOrArrayOfStrings>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema, Default)]
+#[derive(Debug, Serialize, Deserialize, Clone, DbtSchema, Default)]
 pub struct Expect {
     pub rows: Option<Rows>,
     #[serde(default)]
@@ -849,7 +850,7 @@ pub struct Expect {
 }
 
 #[derive(
-    Debug, Serialize, Default, Deserialize, Clone, EnumString, Display, JsonSchema, PartialEq,
+    Debug, Serialize, Default, Deserialize, Clone, EnumString, Display, DbtSchema, PartialEq,
 )]
 #[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
@@ -860,7 +861,7 @@ pub enum Formats {
     Sql,
 }
 
-#[derive(Debug, Serialize, Default, Deserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Default, Deserialize, Clone, DbtSchema)]
 pub struct Given {
     pub input: Spanned<String>,
     pub rows: Option<Rows>,
@@ -869,7 +870,7 @@ pub struct Given {
     pub fixture: Option<String>,
 }
 
-#[derive(Debug, Serialize, UntaggedEnumDeserialize, Clone, JsonSchema)]
+#[derive(Debug, Serialize, UntaggedEnumDeserialize, Clone, DbtSchema)]
 #[serde(untagged)]
 pub enum Rows {
     String(String),
@@ -877,7 +878,7 @@ pub enum Rows {
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq, Eq, JsonSchema)]
+#[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq, Eq, DbtSchema)]
 pub struct DocsConfig {
     #[serde(default = "default_show")]
     pub show: bool,
@@ -889,14 +890,14 @@ fn default_show() -> bool {
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, DbtSchema)]
 pub struct PersistDocsConfig {
     pub columns: Option<bool>,
     pub relation: Option<bool>,
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, DbtSchema)]
 pub struct ScheduleConfig {
     pub cron: Option<String>,
     pub time_zone_value: Option<String>,
@@ -906,7 +907,7 @@ pub struct ScheduleConfig {
 /// This allows users to specify schedule as either:
 /// - A string: `schedule: "USING CRON 0,15,30,45 * * * * UTC"`
 /// - A structured config: `schedule: { cron: "0 * * * *", time_zone_value: "UTC" }`
-#[derive(UntaggedEnumDeserialize, Serialize, Debug, Clone, PartialEq, Eq, JsonSchema)]
+#[derive(UntaggedEnumDeserialize, Serialize, Debug, Clone, PartialEq, Eq, DbtSchema)]
 #[serde(untagged)]
 pub enum Schedule {
     String(String),
@@ -926,7 +927,7 @@ impl Schedule {
     }
 }
 
-#[derive(UntaggedEnumDeserialize, Serialize, Debug, Clone, PartialEq, Eq, JsonSchema)]
+#[derive(UntaggedEnumDeserialize, Serialize, Debug, Clone, PartialEq, Eq, DbtSchema)]
 #[serde(untagged)]
 pub enum Hooks {
     String(String),
@@ -1074,14 +1075,14 @@ pub fn hooks_equal(a: &Verbatim<Option<Hooks>>, b: &Verbatim<Option<Hooks>>) -> 
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Eq, DbtSchema)]
 pub struct HookConfig {
     pub sql: Option<String>,
     pub transaction: Option<bool>,
     pub index: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, DbtSchema, PartialEq)]
 pub struct Dimension {
     pub name: String,
     #[serde(rename = "type")]
@@ -1100,13 +1101,13 @@ fn default_false() -> bool {
     false
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, DbtSchema, PartialEq, Eq, Default)]
 pub struct DimensionTypeParams {
     pub time_granularity: Option<Granularity>,
     pub validity_params: Option<DimensionValidityParams>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, DbtSchema)]
 pub struct DimensionValidityParams {
     #[serde(default = "default_false")]
     pub is_start: bool,
@@ -1114,13 +1115,13 @@ pub struct DimensionValidityParams {
     pub is_end: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, DbtSchema)]
 pub struct SemanticModelDependsOn {
     pub macros: Vec<String>,
     pub nodes: Vec<String>,
 }
 
-#[derive(Default, Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq, Eq)]
+#[derive(Default, Deserialize, Serialize, Debug, Clone, DbtSchema, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum StoreFailuresAs {
     #[default]
@@ -1129,7 +1130,7 @@ pub enum StoreFailuresAs {
     View,
 }
 
-#[derive(Debug, Serialize, Default, Deserialize, Clone, EnumString, Display, JsonSchema)]
+#[derive(Debug, Serialize, Default, Deserialize, Clone, EnumString, Display, DbtSchema)]
 #[strum(serialize_all = "lowercase")]
 pub enum Severity {
     #[default]
@@ -1140,7 +1141,7 @@ pub enum Severity {
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct Versions {
     pub v: YmlValue,
     pub deprecation_date: Option<String>,
@@ -1454,7 +1455,7 @@ impl std::fmt::Display for SchemaRefreshInterval {
 /// This can be specified at source level (default for all tables) or
 /// at individual table level (overrides source-level settings).
 #[skip_serializing_none]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, DbtSchema, Default)]
 pub struct SyncConfig {
     /// How often to refresh the schema from the warehouse.
     /// Examples: "30m", "2h", "1d", "never"
@@ -1465,7 +1466,7 @@ pub struct SyncConfig {
 ///
 /// dbt-core allows either of the variants for the `cluster_by`
 /// to allow cluster on a single column or on multiple columns
-#[derive(Debug, Clone, Serialize, UntaggedEnumDeserialize, PartialEq, Eq, JsonSchema)]
+#[derive(Debug, Clone, Serialize, UntaggedEnumDeserialize, PartialEq, Eq, DbtSchema)]
 #[serde(untagged)]
 pub enum ClusterConfig {
     String(String),
@@ -1496,7 +1497,7 @@ impl ClusterConfig {
 /// but the bigquery-adapter throws RunTime error
 /// the behaviors are tested from the latest dbt-core + bigquery-adapter as this is written
 /// we're conformant to this behavior via here and via the `into_bigquery()` method
-#[derive(Debug, Clone, Serialize, UntaggedEnumDeserialize, PartialEq, Eq, JsonSchema)]
+#[derive(Debug, Clone, Serialize, UntaggedEnumDeserialize, PartialEq, Eq, DbtSchema)]
 #[serde(untagged)]
 pub enum PartitionConfig {
     String(String),

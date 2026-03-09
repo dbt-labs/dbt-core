@@ -694,17 +694,58 @@ pub enum Phases {
     All,
 }
 
-#[derive(
-    Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Hash, Eq, ValueEnum, Display, EnumIter,
-)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Hash, Eq, Display, EnumIter)]
 #[serde(rename_all = "lowercase")]
-#[clap(rename_all = "lowercase")]
 pub enum JsonSchemaTypes {
+    Selector(bool),
+    Schema(bool),
+    Project(bool),
+    Profile(bool),
+    Telemetry(bool),
+}
+
+impl JsonSchemaTypes {
+    pub fn is_pre(&self) -> bool {
+        match self {
+            JsonSchemaTypes::Selector(is_pre)
+            | JsonSchemaTypes::Schema(is_pre)
+            | JsonSchemaTypes::Project(is_pre)
+            | JsonSchemaTypes::Profile(is_pre)
+            | JsonSchemaTypes::Telemetry(is_pre) => *is_pre,
+        }
+    }
+
+    pub fn get_schema_settings(&self) -> schemars::r#gen::SchemaSettings {
+        match self {
+            JsonSchemaTypes::Selector(_)
+            | JsonSchemaTypes::Schema(_)
+            | JsonSchemaTypes::Project(_)
+            | JsonSchemaTypes::Profile(_) => schemars::r#gen::SchemaSettings::default(),
+            JsonSchemaTypes::Telemetry(_) => schemars::r#gen::SchemaSettings::draft07(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, ValueEnum)]
+#[clap(rename_all = "lowercase")]
+pub enum ClapSchemaTypes {
     Selector,
     Schema,
     Project,
     Profile,
     Telemetry,
+}
+
+impl ClapSchemaTypes {
+    pub fn to_json_schema_types(&self, is_pre: bool) -> JsonSchemaTypes {
+        match self {
+            ClapSchemaTypes::Selector => JsonSchemaTypes::Selector(is_pre),
+            ClapSchemaTypes::Schema => JsonSchemaTypes::Schema(is_pre),
+            ClapSchemaTypes::Project => JsonSchemaTypes::Project(is_pre),
+            ClapSchemaTypes::Profile => JsonSchemaTypes::Profile(is_pre),
+            ClapSchemaTypes::Telemetry => JsonSchemaTypes::Telemetry(is_pre),
+        }
+    }
 }
 
 #[derive(

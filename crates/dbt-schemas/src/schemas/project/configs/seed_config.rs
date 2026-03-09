@@ -2,7 +2,7 @@ use crate::schemas::common::ClusterConfig;
 use crate::schemas::serde::OmissibleGrantConfig;
 use crate::schemas::serde::QueryTag;
 use dbt_common::io_args::StaticAnalysisKind;
-use dbt_yaml::JsonSchema;
+use dbt_yaml::DbtSchema;
 use dbt_yaml::ShouldBe;
 use dbt_yaml::Spanned;
 use dbt_yaml::Verbatim;
@@ -39,7 +39,7 @@ use crate::schemas::serde::{
 };
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct ProjectSeedConfig {
     #[serde(rename = "+column_types")]
     pub column_types: Option<BTreeMap<Spanned<String>, String>>,
@@ -288,7 +288,7 @@ impl TypedRecursiveConfig for ProjectSeedConfig {
 }
 
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
-#[derive(Deserialize, Serialize, Debug, Default, PartialEq, Clone, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Default, PartialEq, Clone, DbtSchema)]
 pub struct SeedConfig {
     pub column_types: Option<BTreeMap<Spanned<String>, String>>,
     #[serde(alias = "project", alias = "data_space")]

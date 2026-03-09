@@ -1,4 +1,4 @@
-use dbt_yaml::{JsonSchema, ShouldBe};
+use dbt_yaml::{DbtSchema, ShouldBe};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
@@ -16,7 +16,7 @@ use crate::{
 };
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct ProjectMetricConfigs {
     #[serde(default, rename = "+enabled", deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
@@ -40,7 +40,7 @@ impl TypedRecursiveConfig for ProjectMetricConfigs {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema, PartialEq)]
 pub struct MetricConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,

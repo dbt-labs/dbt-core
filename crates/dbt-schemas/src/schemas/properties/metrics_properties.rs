@@ -1,12 +1,12 @@
 use crate::schemas::dbt_column::Granularity;
 use crate::schemas::project::MetricConfig;
-use dbt_yaml::JsonSchema;
+use dbt_yaml::DbtSchema;
 use dbt_yaml::UntaggedEnumDeserialize;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, Default)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema, Default)]
 pub struct MetricsProperties {
     pub name: String,
     #[serde(default = "default_hidden")]
@@ -46,7 +46,7 @@ pub fn default_hidden() -> Option<bool> {
     Some(false)
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default, JsonSchema)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default, DbtSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum MetricType {
     #[default]
@@ -57,7 +57,7 @@ pub enum MetricType {
     Conversion,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, DbtSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum AggregationType {
     Sum,
@@ -71,14 +71,14 @@ pub enum AggregationType {
     Count,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, DbtSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum PercentileType {
     Discrete,
     Continuous,
 }
 
-#[derive(Debug, Clone, Serialize, UntaggedEnumDeserialize, PartialEq, Eq, JsonSchema)]
+#[derive(Debug, Clone, Serialize, UntaggedEnumDeserialize, PartialEq, Eq, DbtSchema)]
 #[serde(untagged)]
 pub enum MetricExpr {
     String(String),
@@ -94,21 +94,21 @@ impl From<MetricExpr> for String {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, DbtSchema)]
 pub struct MetricPropertiesNonAdditiveDimension {
     pub name: String,
     pub window_agg: WindowChoice,
     pub group_by: Option<Vec<String>>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, DbtSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum WindowChoice {
     Min,
     Max,
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, DbtSchema)]
 pub struct MetricPropertiesMetricInput {
     pub name: String,
     pub filter: Option<String>,
@@ -117,14 +117,14 @@ pub struct MetricPropertiesMetricInput {
     pub offset_to_grain: Option<String>,
 }
 
-#[derive(UntaggedEnumDeserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(UntaggedEnumDeserialize, Serialize, Debug, Clone, DbtSchema)]
 #[serde(untagged)]
 pub enum StringOrMetricPropertiesMetricInput {
     String(String),
     MetricPropertiesMetricInput(MetricPropertiesMetricInput),
 }
 
-#[derive(Serialize, Deserialize, Default, Debug, Clone, JsonSchema, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Default, Debug, Clone, DbtSchema, PartialEq, Eq)]
 #[allow(non_camel_case_types)]
 pub enum ConversionCalculationType {
     conversions,
@@ -132,13 +132,13 @@ pub enum ConversionCalculationType {
     conversion_rate,
 }
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq, DbtSchema)]
 pub struct ConstantProperty {
     pub base_property: String,
     pub conversion_property: String,
 }
 
-#[derive(Default, Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq, Eq)]
+#[derive(Default, Deserialize, Serialize, Debug, Clone, DbtSchema, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum PeriodAggregationType {
     #[default]

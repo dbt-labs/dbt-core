@@ -41,7 +41,7 @@ use crate::schemas::{
     ref_and_source::{DbtRef, DbtSourceWrapper},
     serde::StringOrInteger,
 };
-use dbt_yaml::{Spanned, UntaggedEnumDeserialize};
+use dbt_yaml::{DbtSchema, Spanned, UntaggedEnumDeserialize};
 
 #[derive(
     Default, Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd, Serialize, Deserialize,
@@ -4293,7 +4293,7 @@ pub struct DbtExposure {
     pub deprecated_config: ExposureConfig,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq, dbt_yaml::JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq, DbtSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum ExposureType {
     #[default]

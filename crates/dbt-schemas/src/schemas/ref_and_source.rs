@@ -1,10 +1,10 @@
 use dbt_common::CodeLocationWithFile;
-use dbt_yaml::JsonSchema;
+use dbt_yaml::DbtSchema;
 use serde::{Deserialize, Deserializer, Serialize};
 
 use super::serde::StringOrInteger;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, DbtSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct DbtRef {
     pub name: String,

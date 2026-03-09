@@ -24,7 +24,7 @@ use dbt_common::constants::{DBT_PROJECT_YML, DBT_TARGET_DIR_NAME, NOOP};
 use dbt_common::io_args::FsCommand;
 use dbt_common::io_args::{BuildCacheMode, DisplayFormat, ListOutputFormat, StaticAnalysisKind};
 use dbt_common::io_args::{
-    ClapResourceType, EvalArgs, InternalPackageMode, IoArgs, JsonSchemaTypes,
+    ClapResourceType, ClapSchemaTypes, EvalArgs, InternalPackageMode, IoArgs,
     LocalExecutionBackendKind, OptimizeTestsOptions, Phases, RunCacheMode, ShowOptions, SystemArgs,
     TimeMachineModeKind, TimeMachineReplayOrdering, check_selector, check_target, check_var,
     validate_project_name,
@@ -1257,16 +1257,28 @@ pub struct ManArgs {
     #[clap(flatten)]
     pub common_args: CommonArgs,
 
-    /// Show these json schema types on the command line
+    /// Show the post-Jinja-transformation form of JSON schema for the specified
+    /// types on the command line. Repeatable to show multiple schema types.
     #[clap(long, num_args(0..))]
-    pub schema: Vec<JsonSchemaTypes>,
+    pub schema: Vec<ClapSchemaTypes>,
+
+    /// Show the pre-Jinja-transformation form of JSON schema for the specified
+    /// types on the command line. Repeatable to show multiple schema types.
+    #[clap(long, num_args(0..))]
+    pub pre_schema: Vec<ClapSchemaTypes>,
 }
 // dbt man --schema selector --schema project
 
 impl ManArgs {
     pub fn to_eval_args(&self, arg: SystemArgs, in_dir: &Path, out_dir: &Path) -> EvalArgs {
         let eval_args = self.common_args.to_eval_args(arg, in_dir, out_dir);
-        eval_args.set_schema(self.schema.clone())
+        eval_args.set_schema(
+            self.schema
+                .iter()
+                .map(|s| s.to_json_schema_types(false))
+                .chain(self.pre_schema.iter().map(|s| s.to_json_schema_types(true)))
+                .collect(),
+        )
     }
 }
 

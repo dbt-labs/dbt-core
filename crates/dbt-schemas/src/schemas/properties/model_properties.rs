@@ -17,12 +17,12 @@ use crate::schemas::properties::properties::GetConfig;
 use crate::schemas::semantic_layer::semantic_manifest::SemanticLayerElementConfig;
 use crate::schemas::serde::FloatOrString;
 use crate::schemas::serde::string_or_array;
-use dbt_yaml::JsonSchema;
+use dbt_yaml::DbtSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 
 /// Model level contraint
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, JsonSchema)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default, DbtSchema)]
 #[serde(rename_all = "snake_case")]
 pub struct ModelConstraint {
     #[serde(rename = "type")]
@@ -44,7 +44,7 @@ pub struct ModelConstraint {
 // todo: consider revising this design: warn_unsupported, warn_unenforced are adapter specific constraint. You don't want to specify them on all models!
 
 #[skip_serializing_none]
-#[derive(Default, Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Default, Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct ModelProperties {
     pub columns: Option<Vec<ColumnProperties>>,
     pub config: Option<ModelConfig>,
@@ -66,7 +66,7 @@ pub struct ModelProperties {
     pub primary_entity: Option<String>,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, Default)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema, Default)]
 pub struct ModelPropertiesSemanticModelConfig {
     pub enabled: bool,
     pub name: Option<String>,
@@ -125,27 +125,27 @@ impl GetConfig<ModelConfig> for ModelProperties {
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct ModelPropertiesTimeSpine {
     pub custom_granularities: Option<Vec<TimeSpineCustomGranularity>>,
     pub standard_granularity_column: String,
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct TimeSpineCustomGranularity {
     pub column_name: Option<String>,
     pub name: String,
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq, Eq)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema, PartialEq, Eq)]
 pub struct ModelFreshness {
     pub build_after: Option<ModelFreshnessRules>,
 }
 
 // derived_semantics properties nested in models
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq, Eq)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema, PartialEq, Eq)]
 pub struct DerivedSemantics {
     pub dimensions: Option<Vec<DerivedDimension>>,
     pub entities: Option<Vec<DerivedEntity>>,
@@ -160,7 +160,7 @@ impl Default for DerivedSemantics {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq, Eq)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema, PartialEq, Eq)]
 pub struct DerivedDimension {
     pub name: String,
     pub expr: String,
@@ -174,7 +174,7 @@ pub struct DerivedDimension {
     pub validity_params: Option<DimensionValidityParams>,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema, PartialEq, Eq)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema, PartialEq, Eq)]
 pub struct DerivedEntity {
     pub name: String,
     pub expr: String,

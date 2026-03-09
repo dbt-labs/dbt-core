@@ -1,4 +1,4 @@
-use dbt_yaml::{JsonSchema, Spanned};
+use dbt_yaml::{DbtSchema, Spanned};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
@@ -15,7 +15,7 @@ use dbt_yaml::ShouldBe;
 use std::collections::btree_map::Iter;
 
 // NOTE: No #[skip_serializing_none] - we handle None serialization in serialize_with_mode
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct ProjectAnalysisConfig {
     #[serde(default, rename = "+enabled", deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,
@@ -57,7 +57,7 @@ impl TypedRecursiveConfig for ProjectAnalysisConfig {
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Default, Clone, PartialEq, Eq, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Default, Clone, PartialEq, Eq, DbtSchema)]
 pub struct AnalysesConfig {
     #[serde(default, deserialize_with = "bool_or_string_bool")]
     pub enabled: Option<bool>,

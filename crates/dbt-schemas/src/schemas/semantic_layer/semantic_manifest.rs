@@ -1,4 +1,4 @@
-use dbt_yaml::JsonSchema;
+use dbt_yaml::DbtSchema;
 use indexmap::IndexMap;
 
 use serde::{Deserialize, Serialize};
@@ -64,7 +64,7 @@ impl From<&Nodes> for SemanticManifest {
     }
 }
 
-#[derive(Debug, Default, Serialize, Deserialize, Clone, Eq, PartialEq, JsonSchema)]
+#[derive(Debug, Default, Serialize, Deserialize, Clone, Eq, PartialEq, DbtSchema)]
 pub struct SemanticLayerElementConfig {
     pub meta: Option<IndexMap<String, YmlValue>>,
 }

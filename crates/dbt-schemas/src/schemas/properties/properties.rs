@@ -2,7 +2,7 @@ use crate::schemas::common::DocsConfig;
 use crate::schemas::common::Versions;
 use crate::schemas::manifest::common::DbtOwner;
 use crate::schemas::serde::{FloatOrString, bool_or_string_bool, string_or_array};
-use dbt_yaml::JsonSchema;
+use dbt_yaml::DbtSchema;
 use dbt_yaml::Spanned;
 use dbt_yaml::Verbatim;
 use indexmap::IndexMap;
@@ -78,7 +78,7 @@ pub struct MinimalUnitTestValue {
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct DbtPropertiesFile {
     pub models: Option<Vec<ModelProperties>>,
     pub snapshots: Option<Vec<SnapshotProperties>>,
@@ -103,7 +103,7 @@ pub struct DbtPropertiesFile {
 
 // -- Additional Properties
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 #[allow(dead_code)]
 pub struct AnalysesConfig {
     #[serde(default, deserialize_with = "string_or_array")]
@@ -116,7 +116,7 @@ pub struct AnalysesConfig {
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct GroupProperties {
     pub name: String,
     pub owner: DbtOwner,
@@ -125,13 +125,13 @@ pub struct GroupProperties {
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Default, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Deserialize, Default, Serialize, Debug, Clone, DbtSchema)]
 pub struct GroupConfig {
     pub meta: Option<IndexMap<String, YmlValue>>,
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct MacrosProperties {
     pub arguments: Option<Vec<MacrosArguments>>,
     pub description: Option<String>,
@@ -141,7 +141,7 @@ pub struct MacrosProperties {
 }
 
 #[skip_serializing_none]
-#[derive(Deserialize, Serialize, Debug, Clone, JsonSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, DbtSchema)]
 pub struct MacrosArguments {
     pub description: Option<String>,
     pub name: String,
