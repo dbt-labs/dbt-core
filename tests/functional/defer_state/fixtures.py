@@ -804,3 +804,20 @@ models:
       - name: name
         data_type: varchar(20)
 """
+
+
+double_it_sql = """
+SELECT value * 2
+"""
+
+double_it_yml = """
+functions:
+  - name: double_it
+    description: Doubles whatever number is passed in
+    arguments:
+      - name: value
+        data_type: float
+        description: A number to be doubled
+    returns:
+      data_type: float
+"""
