@@ -98,8 +98,36 @@ impl ColumnBuilder {
     }
 
     fn build_fabric(field: &FieldRef, type_ops: &dyn TypeOps) -> Column {
-        let _ = (field, type_ops);
-        unimplemented!("implement")
+        use AdapterType::Fabric;
+        let data_type = field.data_type();
+        let char_size = sql_types::var_size(Fabric, data_type);
+        let (numeric_precision, numeric_scale) = {
+            let precision_scale = sql_types::numeric_precision_scale(Fabric, data_type)
+                .ok()
+                .flatten();
+            match precision_scale {
+                Some((p, Some(s))) => (Some(p), Some(s)),
+                Some((p, None)) => (Some(p), None),
+                None => (None, None),
+            }
+        };
+
+        let mut type_name_or_formatted = String::new();
+        if type_ops
+            .format_arrow_type_as_sql(data_type, &mut type_name_or_formatted)
+            .is_err()
+        {
+            type_name_or_formatted = data_type.to_string();
+        }
+
+        Column::new(
+            Fabric,
+            field.name().to_string(),
+            type_name_or_formatted,
+            char_size.map(|p| p as u32),
+            numeric_precision.map(|p| p as u64),
+            numeric_scale.map(|s| s as u64),
+        )
     }
 
     fn build_snowflake(field: &FieldRef, type_ops: &dyn TypeOps) -> Column {

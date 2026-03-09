@@ -35,6 +35,36 @@ pub fn configure_compile_and_run_jinja_environment(
     env.set_undefined_behavior(UndefinedBehavior::Lenient);
 }
 
+#[derive(Debug)]
+struct DummyConfig;
+
+impl Object for DummyConfig {
+    fn call(
+        self: &Arc<Self>,
+        _: &State,
+        _: &[MinijinjaValue],
+        _: &[Rc<dyn RenderingEventListener>],
+    ) -> Result<MinijinjaValue, MinijinjaError> {
+        Ok(MinijinjaValue::from(""))
+    }
+
+    fn call_method(
+        self: &Arc<Self>,
+        _state: &State<'_, '_>,
+        name: &str,
+        _args: &[MinijinjaValue],
+        _listeners: &[Rc<dyn RenderingEventListener>],
+    ) -> Result<MinijinjaValue, MinijinjaError> {
+        match name {
+            "get" => Ok(MinijinjaValue::from(None::<Option<String>>)),
+            _ => Err(MinijinjaError::new(
+                MinijinjaErrorKind::UnknownMethod,
+                format!("Unknown method on config: {name}"),
+            )),
+        }
+    }
+}
+
 /// Configure the Jinja environment for the compile phase.
 pub fn build_compile_and_run_base_context(
     node_resolver: Arc<dyn NodeResolverTracker>,
@@ -44,13 +74,8 @@ pub fn build_compile_and_run_base_context(
     namespace_keys: Vec<String>,
 ) -> BTreeMap<String, MinijinjaValue> {
     let mut ctx = BTreeMap::new();
-    let config_macro = |_: &[MinijinjaValue]| -> Result<MinijinjaValue, MinijinjaError> {
-        Ok(MinijinjaValue::from(""))
-    };
-    ctx.insert(
-        "config".to_string(),
-        MinijinjaValue::from_function(config_macro),
-    );
+    let config = DummyConfig {};
+    ctx.insert("config".to_string(), MinijinjaValue::from_object(config));
 
     let macro_dispatch_order = DISPATCH_CONFIG
         .get()

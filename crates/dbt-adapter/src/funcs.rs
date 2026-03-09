@@ -1484,7 +1484,12 @@ pub fn format_sql_with_bindings(
     let formatter = SqlLiteralFormatter::new(adapter_type);
     let mut result = String::with_capacity(sql.len());
     // this placeholder char is seen from `get_binding_char` macro
-    let mut parts = sql.split("%s");
+    let binding_char = if adapter_type == AdapterType::Fabric {
+        "?"
+    } else {
+        "%s"
+    };
+    let mut parts = sql.split(binding_char);
     let mut binding_iter = bindings.as_object().unwrap().try_iter().unwrap();
 
     // Add the first part (before any %s)

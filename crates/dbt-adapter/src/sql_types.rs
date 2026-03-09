@@ -166,8 +166,7 @@ impl TypeOps for SATypeOpsImpl {
                 None
             }
             Sidecar => None,
-            Postgres | Salesforce | Spark | DuckDB => None, // these must be implemented at some point
-            Fabric => todo!("adapt_seed_type() for Fabric"),
+            Postgres | Salesforce | Spark | DuckDB | Fabric => None, // these must be implemented at some point
         }
     }
 }
@@ -641,6 +640,83 @@ pub mod postgres {
         };
         if !nullable {
             out.push_str(" not null");
+        }
+        Ok(())
+    }
+}
+
+pub mod fabric {
+
+    use arrow_schema::DataType;
+    use std::fmt::Write;
+
+    use crate::AdapterResult;
+    use crate::errors::{AdapterError, AdapterErrorKind};
+
+    // Microsoft Fabric row size limits allow VARCHAR up to 8000 bytes.
+    // We default to VARCHAR(8000) for string-like Arrow types because VARCHAR
+    // only stores the actual string length and does not allocate the full
+    // declared size. Therefore using the maximum allowed size does not add
+    // storage overhead but avoids truncation for longer values.
+    const FABRIC_MAX_VARCHAR_TYPE: &str = "VARCHAR(8000)";
+
+    pub fn try_format_type(
+        datatype: &DataType,
+        nullable: bool,
+        out: &mut String,
+    ) -> AdapterResult<()> {
+        match datatype {
+            DataType::Null => out.push_str("INT"),
+            DataType::Boolean => out.push_str("BIT"),
+            DataType::Int8 => out.push_str("SMALLINT"),
+            DataType::Int16 => out.push_str("SMALLINT"),
+            DataType::Int32 => out.push_str("INT"),
+            DataType::Int64 => out.push_str("BIGINT"),
+
+            DataType::UInt8 => out.push_str("SMALLINT"),
+            DataType::UInt16 => out.push_str("INT"),
+            DataType::UInt32 => out.push_str("BIGINT"),
+            DataType::UInt64 => out.push_str("DECIMAL(20,0)"),
+            DataType::Float32 => out.push_str("REAL"),
+            DataType::Float64 => out.push_str("FLOAT"),
+
+            DataType::Timestamp(_, _) => out.push_str("DATETIME2(6)"),
+
+            DataType::Date32 => out.push_str("DATE"),
+
+            DataType::Time32(_) | DataType::Time64(_) => out.push_str("TIME(6)"),
+
+            DataType::Interval(_) => {
+                return Err(AdapterError::new(
+                    AdapterErrorKind::UnsupportedType,
+                    "INTERVAL is not supported in Microsoft Fabric",
+                ));
+            }
+            DataType::Binary => out.push_str("VARBINARY(MAX)"),
+            DataType::Utf8 | DataType::Utf8View => out.push_str(FABRIC_MAX_VARCHAR_TYPE),
+
+            DataType::List(_) => {
+                return Err(AdapterError::new(
+                    AdapterErrorKind::UnsupportedType,
+                    "ARRAY is not supported in Microsoft Fabric",
+                ));
+            }
+
+            DataType::Dictionary(_, value) if value.as_ref() == &DataType::Utf8 => {
+                out.push_str(FABRIC_MAX_VARCHAR_TYPE)
+            }
+            DataType::Decimal128(precision, scale) => {
+                write!(out, "DECIMAL({precision}, {scale})").unwrap()
+            }
+            _ => {
+                return Err(AdapterError::new(
+                    AdapterErrorKind::UnsupportedType,
+                    format!("{datatype} is not convertible to fabric sql type"),
+                ));
+            }
+        };
+        if !nullable {
+            out.push_str(" NOT NULL");
         }
         Ok(())
     }

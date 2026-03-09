@@ -17,10 +17,21 @@ impl SqlLiteralFormatter {
     }
 
     pub fn format_bool(&self, b: bool) -> String {
-        if b {
-            "true".to_string()
-        } else {
-            "false".to_string()
+        match self.adapter_type {
+            AdapterType::Fabric => {
+                if b {
+                    "1".to_string()
+                } else {
+                    "0".to_string()
+                }
+            }
+            _ => {
+                if b {
+                    "true".to_string()
+                } else {
+                    "false".to_string()
+                }
+            }
         }
     }
 

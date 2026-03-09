@@ -203,6 +203,36 @@ impl ColumnStatic {
                     _ => column_type,
                 }
             }
+            // https://github.com/microsoft/dbt-fabric/blob/81d9764e24b00e7c923a2235ba68fa6bd6b90ea9/dbt/adapters/fabric/fabric_column.py#L8
+            AdapterType::Fabric => match column_type.to_uppercase().as_str() {
+                "STRING" => "VARCHAR(8000)",
+                "VARCHAR" => "VARCHAR(8000)",
+                "CHAR" => "CHAR(1)",
+                "NCHAR" => "CHAR(1)",
+                "NVARCHAR" => "VARCHAR(8000)",
+                "TIMESTAMP" => "DATETIME2(6)",
+                "DATETIME2" => "DATETIME2(6)",
+                "DATETIME2(6)" => "DATETIME2(6)",
+                "DATE" => "DATE",
+                "TIME" => "TIME(6)",
+                "FLOAT" => "FLOAT",
+                "REAL" => "REAL",
+                "INT" => "INT",
+                "INTEGER" => "INT",
+                "BIGINT" => "BIGINT",
+                "SMALLINT" => "SMALLINT",
+                "TINYINT" => "SMALLINT",
+                "BIT" => "BIT",
+                "BOOLEAN" => "BIT",
+                "DECIMAL" => "DECIMAL",
+                "NUMERIC" => "NUMERIC",
+                "MONEY" => "DECIMAL",
+                "SMALLMONEY" => "DECIMAL",
+                "UNIQUEIDENTIFIER" => "UNIQUEIDENTIFIER",
+                "VARBINARY" => "VARBINARY(MAX)",
+                "BINARY" => "BINARY(1)",
+                _ => column_type,
+            },
             // https://github.com/dbt-labs/dbt-adapters/blob/fed0e2e7a2e252175dcc9caccbdd91d354ac6a9d/dbt-adapters/src/dbt/adapters/base/column.py#L24
             _ => match column_type.to_uppercase().as_str() {
                 "STRING" => "TEXT",

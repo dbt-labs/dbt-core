@@ -9,9 +9,9 @@
   select
     {{ fail_calc }} as failures,
     case when {{ fail_calc }} {{ warn_if }}
-      then 'true' else 'false' end as should_warn,
+      then 1 else 0 end as should_warn,
     case when {{ fail_calc }} {{ error_if }}
-      then 'true' else 'false' end as should_error
+      then 1 else 0 end as should_error
   from dbt_internal_test
 
 {%- endmacro %}
