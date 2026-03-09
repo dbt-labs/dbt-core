@@ -130,6 +130,9 @@ message TestEvaluationDetail {
 
   // Pretty printed table diff if available.
   optional string diff_table = 4;
+
+  // Tell consumer whether or not the failure table exists.
+  optional bool store_failures = 5;
 }
 
 // Freshness-specific outcome details (only for SOURCE nodes with freshness checks).

@@ -38,6 +38,8 @@ pub struct ResolveArgs {
     pub sample_renaming: BTreeMap<String, (String, String, String)>,
     /// Global static analysis settings
     pub static_analysis: StaticAnalysisKind,
+    /// Store failures?
+    pub store_failures: bool,
 }
 
 impl ResolveArgs {
@@ -57,6 +59,7 @@ impl ResolveArgs {
             sample_config: RunFilter::try_from(arg.empty, arg.sample.clone())?,
             sample_renaming: arg.sample_renaming.clone(),
             static_analysis: arg.static_analysis,
+            store_failures: arg.store_failures,
         })
     }
 }

@@ -5,7 +5,6 @@ use dbt_telemetry::{
     LogMessage, LogRecordInfo, NodeEvaluated, NodeOutcome, NodeProcessed, NodeType, PhaseExecuted,
     ProgressMessage, QueryExecuted, SeverityNumber, ShowDataOutput, ShowResult, SpanEndInfo,
     SpanStartInfo, StateModifiedDiff, StatusCode, TelemetryOutputFlags, UserLogMessage,
-    node_processed,
 };
 use std::{
     sync::atomic::{AtomicBool, Ordering},
@@ -380,14 +379,12 @@ impl FileLogLayer {
         // Print unit test summary messages
         if (node.node_type() == NodeType::Test || node.node_type() == NodeType::UnitTest)
             && node.node_outcome() == NodeOutcome::Success
-            && let Some(node_processed::NodeOutcomeDetail::NodeTestDetail(t_outcome)) =
-                &node.node_outcome_detail
-            && let Some(diff_table) = t_outcome.diff_table.as_ref()
+            && let Some(test_failure_message) = format_test_failure(node, false)
         {
             self.write_log_lines(
                 span.end_time_unix_nano,
                 span.severity_number,
-                &[format_test_failure(&node.name, diff_table, false)],
+                &[test_failure_message],
             );
         }
     }

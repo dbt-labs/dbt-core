@@ -2149,6 +2149,9 @@ impl serde::Serialize for TestEvaluationDetail {
         if self.diff_table.is_some() {
             len += 1;
         }
+        if self.store_failures.is_some() {
+            len += 1;
+        }
         let mut struct_ser = serializer.serialize_struct("v1.public.events.fusion.node.TestEvaluationDetail", len)?;
         if self.test_outcome != 0 {
             let v = TestOutcome::try_from(self.test_outcome)
@@ -2160,6 +2163,9 @@ impl serde::Serialize for TestEvaluationDetail {
         }
         if let Some(v) = self.diff_table.as_ref() {
             struct_ser.serialize_field("diff_table", v)?;
+        }
+        if let Some(v) = self.store_failures.as_ref() {
+            struct_ser.serialize_field("store_failures", v)?;
         }
         struct_ser.end()
     }
@@ -2177,6 +2183,8 @@ impl<'de> serde::Deserialize<'de> for TestEvaluationDetail {
             "failingRows",
             "diff_table",
             "diffTable",
+            "store_failures",
+            "storeFailures",
         ];
 
         #[allow(clippy::enum_variant_names)]
@@ -2184,6 +2192,7 @@ impl<'de> serde::Deserialize<'de> for TestEvaluationDetail {
             TestOutcome,
             FailingRows,
             DiffTable,
+            StoreFailures,
             __SkipField__,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
@@ -2209,6 +2218,7 @@ impl<'de> serde::Deserialize<'de> for TestEvaluationDetail {
                             "testOutcome" | "test_outcome" => Ok(GeneratedField::TestOutcome),
                             "failingRows" | "failing_rows" => Ok(GeneratedField::FailingRows),
                             "diffTable" | "diff_table" => Ok(GeneratedField::DiffTable),
+                            "storeFailures" | "store_failures" => Ok(GeneratedField::StoreFailures),
                             _ => Ok(GeneratedField::__SkipField__),
                         }
                     }
@@ -2231,6 +2241,7 @@ impl<'de> serde::Deserialize<'de> for TestEvaluationDetail {
                 let mut test_outcome__ = None;
                 let mut failing_rows__ = None;
                 let mut diff_table__ = None;
+                let mut store_failures__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
                         GeneratedField::TestOutcome => {
@@ -2253,6 +2264,12 @@ impl<'de> serde::Deserialize<'de> for TestEvaluationDetail {
                             }
                             diff_table__ = map_.next_value()?;
                         }
+                        GeneratedField::StoreFailures => {
+                            if store_failures__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("storeFailures"));
+                            }
+                            store_failures__ = map_.next_value()?;
+                        }
                         GeneratedField::__SkipField__ => {
                             let _ = map_.next_value::<serde::de::IgnoredAny>()?;
                         }
@@ -2262,6 +2279,7 @@ impl<'de> serde::Deserialize<'de> for TestEvaluationDetail {
                     test_outcome: test_outcome__.unwrap_or_default(),
                     failing_rows: failing_rows__.unwrap_or_default(),
                     diff_table: diff_table__,
+                    store_failures: store_failures__,
                 })
             }
         }

@@ -15,6 +15,9 @@ pub struct TestEvaluationDetail {
     /// Pretty printed table diff if available.
     #[prost(string, optional, tag = "4")]
     pub diff_table: ::core::option::Option<::prost::alloc::string::String>,
+    /// Tell consumer whether or not the failure table exists.
+    #[prost(bool, optional, tag = "5")]
+    pub store_failures: ::core::option::Option<bool>,
 }
 impl crate::StaticName for TestEvaluationDetail {
     const FULL_NAME: &'static str = "v1.public.events.fusion.node.TestEvaluationDetail";

@@ -15,7 +15,6 @@ use dbt_telemetry::{
     NodeEvaluated, NodeOutcome, NodeProcessed, NodeSkipReason, NodeType, PhaseExecuted,
     ProgressMessage, QueryExecuted, SeverityNumber, ShowDataOutput, ShowResult, SpanEndInfo,
     SpanStartInfo, SpanStatus, StateModifiedDiff, StatusCode, TelemetryOutputFlags, UserLogMessage,
-    node_processed,
 };
 use dbt_tui_progress::ProgressController;
 
@@ -1005,16 +1004,15 @@ impl TuiLayer {
         // Capture and delay unit test summary messages regardless of show options
         if (node.node_type() == NodeType::Test || node.node_type() == NodeType::UnitTest)
             && node.node_outcome() == NodeOutcome::Success
-            && let Some(node_processed::NodeOutcomeDetail::NodeTestDetail(t_outcome)) =
-                &node.node_outcome_detail
-            && let Some(diff_table) = t_outcome.diff_table.as_ref()
         {
             // This is a failed test, capture its summary diff table to be printed on stdout later
-            data_provider.with_root_mut::<DelayedMessages>(|delayed_messages| {
-                delayed_messages.test_failures.push(DelayedMessage {
-                    message: format!("{}\n", format_test_failure(&node.name, diff_table, true)),
+            if let Some(test_failure_message) = format_test_failure(node, true) {
+                data_provider.with_root_mut::<DelayedMessages>(|delayed_messages| {
+                    delayed_messages.test_failures.push(DelayedMessage {
+                        message: format!("{}\n", test_failure_message),
+                    });
                 });
-            });
+            }
         }
 
         // In interactive non-debug mode, accumulate skipped test nodes instead of printing them individually

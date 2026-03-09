@@ -275,6 +275,7 @@ pub async fn resolve_data_tests(
         warn_if: Some("!= 0".to_string()),
         error_if: Some("!= 0".to_string()),
         limit: None,
+        store_failures: arg.store_failures.then_some(true),
         ..Default::default()
     };
 
