@@ -182,6 +182,7 @@ def cli(ctx, **kwargs):
 @p.project_dir
 @p.resource_type
 @p.exclude_resource_type
+@p.sqlparse_options
 @p.sample
 @p.select
 @p.selector
@@ -249,6 +250,7 @@ def docs(ctx, **kwargs):
 @global_flags
 @p.compile_docs
 @p.exclude
+@p.sqlparse_options
 @p.profiles_dir
 @p.project_dir
 @p.select
@@ -324,6 +326,7 @@ def docs_serve(ctx, **kwargs):
 @p.selector
 @p.inline
 @p.compile_inject_ephemeral_ctes
+@p.sqlparse_options
 @p.target_path
 @p.threads
 @p.vars
@@ -364,6 +367,7 @@ def compile(ctx, **kwargs):
 @p.selector
 @p.inline
 @p.inline_direct
+@p.sqlparse_options
 @p.target_path
 @p.threads
 @p.vars
@@ -561,6 +565,7 @@ def parse(ctx, **kwargs):
 @p.empty
 @p.event_time_start
 @p.event_time_end
+@p.sqlparse_options
 @p.sample
 @p.select
 @p.selector
@@ -695,6 +700,7 @@ def run_operation(ctx, **kwargs):
 @p.full_refresh
 @p.profiles_dir
 @p.project_dir
+@p.sqlparse_options
 @p.select
 @p.selector
 @p.show
@@ -730,6 +736,7 @@ def seed(ctx, **kwargs):
 @p.exclude
 @p.profiles_dir
 @p.project_dir
+@p.sqlparse_options
 @p.select
 @p.selector
 @p.target_path
@@ -771,6 +778,7 @@ def source(ctx, **kwargs):
 @global_flags
 @p.exclude
 @p.output_path  # TODO: Is this ok to re-use?  We have three different output params, how much can we consolidate?
+@p.sqlparse_options
 @p.profiles_dir
 @p.project_dir
 @p.select
@@ -814,6 +822,7 @@ cli.commands["source"].add_command(snapshot_freshness, "snapshot-freshness")  # 
 @p.exclude_resource_type
 @p.profiles_dir
 @p.project_dir
+@p.sqlparse_options
 @p.select
 @p.selector
 @p.store_failures
