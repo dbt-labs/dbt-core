@@ -1,5 +1,8 @@
 # **what?**
 # Generates and commits pytest-split test duration data for optimized test splitting.
+# It runs tests with pytest-split to generate duration data, and then merges the data
+# into a single file to reduce the time it takes to generate the durations file.  It
+# runs for 5+ hours otherwise.
 
 # **why?**
 # pytest-split uses duration data to balance test workloads across workers.
@@ -100,11 +103,16 @@ jobs:
         run: |
           cd core
           hatch -v run ci:integration-tests-generate-durations -- \
-            --store-durations \
-            --durations-path .test_durations_${{ matrix.split-group }} \
             --splits ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }} \
             --group ${{ matrix.split-group }} \
             || true
+          # Rename to per-group file (pytest-split overwrites with only this group's tests)
+          if [ -f .test_durations ]; then
+            mv .test_durations .test_durations_${{ matrix.split-group }}
+          else
+            echo "ERROR: .test_durations not created - check pytest output above"
+            exit 1
+          fi
 
       - name: "Upload partial durations file"
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # actions/upload-artifact@v4
@@ -112,6 +120,7 @@ jobs:
           name: durations-${{ matrix.split-group }}
           path: core/.test_durations_${{ matrix.split-group }}
           if-no-files-found: error
+          include-hidden-files: true
 
   merge-and-commit:
     name: "Merge and Commit Durations"

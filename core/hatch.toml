@@ -218,8 +218,8 @@ code-quality = "pre-commit run --all-files"
 # which causes timeouts. least_duration distributes tests evenly across groups by count while
 # still balancing duration, avoiding the overhead problem.
 integration-tests = "python -m pytest --cov=dbt --cov-report=xml -nauto --durations-path .test_durations --splitting-algorithm least_duration {args} ../tests/functional"
-# Used by update-test-durations.yml to run all tests and generate duration data
-integration-tests-generate-durations = "python -m pytest -nauto {args} ../tests/functional"
+# Used by update-test-durations.yml to generate duration data (runs in parallel split groups)
+integration-tests-generate-durations = "python -m pytest -nauto --durations-path .test_durations --splitting-algorithm least_duration --store-durations {args} ../tests/functional"
 
 # Note: Python version matrix is handled by GitHub Actions CI, not hatch.
 # This avoids running tests 4x per job. The CI sets up the Python version
