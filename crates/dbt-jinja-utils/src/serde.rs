@@ -440,6 +440,16 @@ fn render_jinja_str<S: Serialize>(
     listeners: &[Rc<dyn RenderingEventListener>],
     yaml_span: &dbt_yaml::Span,
 ) -> FsResult<Value> {
+    // Fast path: if string contains no Jinja control characters, return as-is
+    // Reference: https://github.com/dbt-labs/dbt-mantle/blob/main/core/dbt/clients/jinja.py#L139
+    if !RE_HAS_RENDER_CHARS.is_match(s) {
+        let result = if should_render_secrets {
+            render_secrets(s.to_string())?
+        } else {
+            s.to_string()
+        };
+        return Ok(Value::string(result));
+    }
     if check_single_expression_without_whitepsace_control(s) {
         let compiled = env.compile_expression(&s[2..s.len() - 2])?;
 
@@ -568,6 +578,11 @@ fn perform_typecheck<F>(
         }
     }
 }
+
+/// Matches Jinja control sequences (open/close of expression, block, comment).
+/// Equivalent to dbt-core's _HAS_RENDER_CHARS_PAT: re.compile(r"({[{%#]|[#}%]})").
+static RE_HAS_RENDER_CHARS: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(\{\{|\{\%|\{\#|%\}|#\}|\}\})").expect("valid regex"));
 
 static RE_SIMPLE_EXPR: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^\s*\{\{\s*[^{}]+\s*\}\}\s*$").expect("valid regex"));

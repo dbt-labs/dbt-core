@@ -102,6 +102,7 @@ fn parse_git_clone_error(stderr: &str, repo: &str, revision: Option<&str>) -> (E
 }
 
 pub fn is_commit(revision: &str) -> bool {
+    let revision = revision.trim();
     revision.len() == 40 && revision.chars().all(|c| c.is_ascii_hexdigit())
 }
 
