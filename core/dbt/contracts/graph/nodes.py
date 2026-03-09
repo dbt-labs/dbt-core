@@ -1,6 +1,5 @@
 import hashlib
 import os
-import threading
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -405,18 +404,6 @@ class ParsedNode(ParsedResource, NodeInfoMixin, ParsedNodeMandatory, Serializabl
 class CompiledNode(CompiledResource, ParsedNode):
     """Contains attributes necessary for SQL files and nodes with refs, sources, etc,
     so all ManifestNodes except SeedNode."""
-
-    def __post_init__(self):
-        self._lock = threading.Lock()
-
-    def __getstate__(self):
-        state = self.__dict__.copy()
-        state.pop("_lock", None)
-        return state
-
-    def __setstate__(self, state):
-        self.__dict__.update(state)
-        self._lock = threading.Lock()
 
     @property
     def empty(self):
