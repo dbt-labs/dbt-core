@@ -555,6 +555,7 @@ class Compiler:
             # The lock is scoped to just the compilation step; the recursive
             # _recursively_prepend_ctes call happens outside the lock to avoid
             # deadlock (it will re-acquire this node's lock at CTE injection).
+            new_prepended_ctes = None
             needs_recursion = False
             with cte_model._lock:
                 # This model has already been compiled and extra_ctes_injected,
@@ -582,6 +583,10 @@ class Compiler:
                 # Write compiled SQL file
                 self._write_node(cte_model)
 
+            if new_prepended_ctes is None:
+                raise DbtInternalError(
+                    f"Expected extra_ctes to be set for ephemeral model {cte.id}"
+                )
             _extend_prepended_ctes(prepended_ctes, new_prepended_ctes)
 
             cte_name = (
