@@ -1,4 +1,5 @@
 import json
+import os
 from typing import Dict
 from unittest import mock
 
@@ -1296,3 +1297,105 @@ class TestCompilationErrorOnSingleBatchRun(BaseMicrobatchTest):
     def test_microbatch(self, project) -> None:
         _, console_output = run_dbt_and_capture(["run"], expect_pass=False)
         assert "Completed with 1 error, 0 partial successes, and 0 warnings" in console_output
+
+
+microbatch_model_all_failing_sql = """
+{{ config(materialized='incremental', incremental_strategy='microbatch', unique_key='id', event_time='event_time', batch_size='day', begin=modules.datetime.datetime(2020, 1, 1, 0, 0, 0)) }}
+ invalid_sql
+select * from {{ ref('input_model') }}
+"""
+
+
+class TestMicrobatchRetryUsesOriginalInvocationTime(BaseMicrobatchTest):
+    """When all batches fail and dbt retry is run later, the retry should
+    recompute batches using the original invocation time, not the current time."""
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "input_model.sql": input_model_sql,
+            "microbatch_model.sql": microbatch_model_all_failing_sql,
+        }
+
+    def test_retry_uses_original_invocation_time(self, project):
+        # Run with end time of 2020-01-03 — produces 3 batches, all fail
+        with patch_microbatch_end_time("2020-01-03 13:57:00"):
+            run_dbt(["run"], expect_pass=False)
+
+        run_results = get_artifact(project.project_root, "target", "run_results.json")
+        microbatch_result = next(
+            r for r in run_results["results"] if "microbatch_model" in r["unique_id"]
+        )
+        assert microbatch_result["status"] == "error"
+
+        # Simulate the original run happening at 2020-01-03 by updating
+        # invocation_started_at in the saved run_results.json
+        run_results_path = os.path.join(project.project_root, "target", "run_results.json")
+        run_results["metadata"]["invocation_started_at"] = "2020-01-03T13:57:00Z"
+        with open(run_results_path, "w") as f:
+            json.dump(run_results, f)
+
+        # Fix the model so retry can succeed
+        write_file(
+            microbatch_model_sql,
+            project.project_root,
+            "models",
+            "microbatch_model.sql",
+        )
+
+        # Run retry WITHOUT patching end time. The fix ensures retry
+        # uses the original invocation time from run_results.json (2020-01-03),
+        # so only 3 batches are produced. Without the fix, it would use
+        # the current time and produce many more batches.
+        batch_catcher = EventCatcher(event_to_catch=LogBatchResult)
+        run_dbt(["retry"], callbacks=[batch_catcher.catch])
+
+        # Should only have 3 batches (2020-01-01, 2020-01-02, 2020-01-03)
+        assert len(batch_catcher.caught_events) == 3
+        self.assert_row_count(project, "microbatch_model", 3)
+
+
+class TestMicrobatchBuildRetryUsesOriginalInvocationTime(BaseMicrobatchTest):
+    """Same as above but using dbt build + retry to verify the issubclass
+    check ensures BuildTask also gets original invocation time behavior."""
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "input_model.sql": input_model_sql,
+            "microbatch_model.sql": microbatch_model_all_failing_sql,
+        }
+
+    def test_build_retry_uses_original_invocation_time(self, project):
+        # Run build with end time of 2020-01-03 — produces 3 batches, all fail
+        with patch_microbatch_end_time("2020-01-03 13:57:00"):
+            run_dbt(["build"], expect_pass=False)
+
+        run_results = get_artifact(project.project_root, "target", "run_results.json")
+        microbatch_result = next(
+            r for r in run_results["results"] if "microbatch_model" in r["unique_id"]
+        )
+        assert microbatch_result["status"] == "error"
+
+        # Simulate the original build happening at 2020-01-03 by updating
+        # invocation_started_at in the saved run_results.json
+        run_results_path = os.path.join(project.project_root, "target", "run_results.json")
+        run_results["metadata"]["invocation_started_at"] = "2020-01-03T13:57:00Z"
+        with open(run_results_path, "w") as f:
+            json.dump(run_results, f)
+
+        # Fix the model so retry can succeed
+        write_file(
+            microbatch_model_sql,
+            project.project_root,
+            "models",
+            "microbatch_model.sql",
+        )
+
+        # Retry should use the original invocation time, not "now"
+        batch_catcher = EventCatcher(event_to_catch=LogBatchResult)
+        run_dbt(["retry"], callbacks=[batch_catcher.catch])
+
+        # Should only have 3 batches (2020-01-01, 2020-01-02, 2020-01-03)
+        assert len(batch_catcher.caught_events) == 3
+        self.assert_row_count(project, "microbatch_model", 3)

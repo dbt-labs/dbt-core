@@ -98,12 +98,8 @@ jobs:
         with:
           python-version: "3.10"
 
-      - name: Install python dependencies
-        run: |
-          pip install --user --upgrade pip
-          pip --version
-          pip install hatch
-          hatch --version
+      - name: "Install hatch"
+        uses: pypa/hatch@257e27e51a6a5616ed08a39a408a21c35c9931bc # pypa/hatch@install
 
       - name: Run postgres setup script
         run: |
@@ -123,9 +119,7 @@ jobs:
         with:
           timeout_minutes: 30
           max_attempts: 3
-          command: cd core && hatch -v run ci:integration-tests -- -nauto
-        env:
-          PYTEST_ADDOPTS: ${{ format('--splits {0} --group {1}', env.PYTHON_INTEGRATION_TEST_WORKERS, matrix.split-group) }}
+          command: cd core && hatch -v run ci:integration-tests -- --splits ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }} --group ${{ matrix.split-group }}
 
   test-schema-report:
     name: Log Schema Test Suite

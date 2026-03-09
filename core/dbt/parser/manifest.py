@@ -1030,16 +1030,18 @@ class ManifestLoader:
             v for k, v in config.cli_vars.items() if k.startswith(SECRET_ENV_PREFIX) and v.strip()
         ]
         stringified_cli_vars = pprint.pformat(config.cli_vars)
-        vars_hash = FileHash.from_contents(
-            "\x00".join(
-                [
-                    stringified_cli_vars,
-                    config.profile_name,
-                    config.target_name,
-                    __version__,
-                ]
-            )
-        )
+        vars_hash_contents = [
+            stringified_cli_vars,
+            config.profile_name,
+            config.target_name,
+            __version__,
+        ]
+
+        # We only add vars from `vars.yml` if it's present to prevent affecting users not using vars.yml from getting fully parsed.
+        if config.vars_from_file:
+            vars_hash_contents.append(pprint.pformat(config.vars_from_file))
+
+        vars_hash = FileHash.from_contents("\x00".join(vars_hash_contents))
         fire_event(
             StateCheckVarsHash(
                 checksum=vars_hash.checksum,
