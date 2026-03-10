@@ -216,7 +216,6 @@ where
         runtime_config.clone(),
         allowed_dependencies.clone(),
         skip_ref_validation,
-        // Update to use introspection kind
         (matches!(
             model.base().static_analysis.clone().into_inner(),
             StaticAnalysisKind::Unsafe

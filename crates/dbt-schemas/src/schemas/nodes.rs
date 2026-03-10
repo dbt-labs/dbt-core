@@ -6,9 +6,9 @@ use std::{any::Any, collections::BTreeMap, fmt::Display, path::PathBuf, sync::Ar
 
 use chrono::Utc;
 use dbt_common::adapter::AdapterType;
-use dbt_common::io_args::StaticAnalysisOffReason;
+use dbt_common::io_args::{StaticAnalysisKind, StaticAnalysisOffReason};
 use dbt_common::tracing::emit::{emit_error_log_message, emit_warn_log_message};
-use dbt_common::{ErrorCode, FsResult, err, io_args::StaticAnalysisKind};
+use dbt_common::{ErrorCode, FsResult, err};
 use dbt_telemetry::{ExecutionPhase, NodeEvaluated, NodeProcessed, NodeType};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
@@ -2827,9 +2827,7 @@ impl InternalDbtNodeAttributes for DbtSemanticModel {
     fn set_quoting(&mut self, _quoting: ResolvedQuoting) {
         unimplemented!("")
     }
-    fn set_static_analysis(&mut self, _static_analysis: Spanned<StaticAnalysisKind>) {
-        unimplemented!("")
-    }
+    fn set_static_analysis(&mut self, _static_analysis: Spanned<StaticAnalysisKind>) {}
     fn search_name(&self) -> String {
         self.name()
     }
@@ -3008,9 +3006,7 @@ impl InternalDbtNodeAttributes for DbtMetric {
     fn set_quoting(&mut self, _quoting: ResolvedQuoting) {
         unimplemented!("")
     }
-    fn set_static_analysis(&mut self, _static_analysis: Spanned<StaticAnalysisKind>) {
-        unimplemented!("")
-    }
+    fn set_static_analysis(&mut self, _static_analysis: Spanned<StaticAnalysisKind>) {}
     fn search_name(&self) -> String {
         self.name()
     }
@@ -3226,9 +3222,7 @@ impl InternalDbtNodeAttributes for DbtSavedQuery {
     fn set_quoting(&mut self, _quoting: ResolvedQuoting) {
         unimplemented!("")
     }
-    fn set_static_analysis(&mut self, _static_analysis: Spanned<StaticAnalysisKind>) {
-        unimplemented!("")
-    }
+    fn set_static_analysis(&mut self, _static_analysis: Spanned<StaticAnalysisKind>) {}
     fn search_name(&self) -> String {
         self.name()
     }
