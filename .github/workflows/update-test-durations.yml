@@ -18,6 +18,12 @@ on:
   schedule:
     - cron: "0 0 * * 0"
   workflow_dispatch:
+    inputs:
+      auto-merge-pr:
+        description: "Whether to auto-merge the PR"
+        required: true
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -190,6 +196,7 @@ jobs:
           commit-message: "Update test durations for pytest-split"
           committer: "Github Build Bot <buildbot@fishtownanalytics.com>"
           branch: update-test-durations
+          base: main
           delete-branch: true
           title: "Update test durations for pytest-split"
           body: |
@@ -225,6 +232,7 @@ jobs:
     name: "Merge Pull Request"
     runs-on: ubuntu-latest
     needs: [create-pr, await-ci]
+    if: github.event_name == 'schedule' || inputs.auto-merge-pr == true
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -243,7 +251,7 @@ jobs:
     name: "Slack Notification"
     runs-on: ubuntu-latest
     needs: [create-pr, await-ci, merge-pr]
-    if: failure()
+    if: always()
     steps:
       - name: "Post Slack Notification"
         uses: ravsamhq/notify-slack-action@be814b201e233b2dc673608aa46e5447c8ab13f2 # ravsamhq/notify-slack-action@v2
