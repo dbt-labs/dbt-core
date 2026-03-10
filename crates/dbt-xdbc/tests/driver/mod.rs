@@ -167,6 +167,19 @@ mod tests {
                 builder.with_named_option("path", database_path)?;
                 Ok(builder)
             }
+            Backend::ClickHouse => {
+                let mut builder = database::Builder::new(backend);
+                let uri = env::var("ADBC_CLICKHOUSE_URI")
+                    .unwrap_or_else(|_| "http://localhost:8123".to_owned());
+                let username =
+                    env::var("ADBC_CLICKHOUSE_USERNAME").unwrap_or_else(|_| "default".to_owned());
+                let password = env::var("ADBC_CLICKHOUSE_PASSWORD").unwrap_or_default();
+                builder
+                    .with_parse_uri(uri)?
+                    .with_username(username)
+                    .with_password(password);
+                Ok(builder)
+            }
             Backend::Generic { .. } => unimplemented!("generic backend database builder in tests"),
         }?;
         if backend == Backend::Snowflake {
@@ -287,6 +300,9 @@ mod tests {
                 | Backend::DatabricksODBC
                 | Backend::RedshiftODBC => {
                     assert_eq!(batch.column(0).as_primitive::<Int32Type>().value(0), 42);
+                }
+                Backend::ClickHouse => {
+                    assert_eq!(batch.column(0).as_primitive::<UInt16Type>().value(0), 42);
                 }
                 _ => {
                     // BigQuery and others use Int64. We change this function as we expand the set
@@ -1128,5 +1144,11 @@ mod tests {
         let _ = fs::remove_file(&db_path);
         let _ = fs::remove_file(format!("{}.wal", db_path_str));
         Ok(())
+    }
+
+    #[test_with::env(ADBC_CLICKHOUSE_URI)]
+    #[test]
+    fn statement_execute_clickhouse() -> Result<()> {
+        execute_statement(Backend::ClickHouse)
     }
 }

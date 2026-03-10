@@ -124,7 +124,7 @@ pub const fn quote_char(backend: Backend) -> char {
     match backend {
         BigQuery | Databricks | DatabricksODBC | Spark => '`',
         Snowflake => '"',
-        Redshift | RedshiftODBC | Postgres | Salesforce | DuckDB => '"',
+        ClickHouse | Redshift | RedshiftODBC | Postgres | Salesforce | DuckDB => '"',
         // https://learn.microsoft.com/en-us/sql/t-sql/statements/set-quoted-identifier-transact-sql?view=sql-server-ver17
         SQLServer => '"',
         Generic { .. } => '"',
@@ -136,7 +136,7 @@ pub const fn canonical_quote(backend: Backend) -> QuotingStyle {
     use Backend::*;
     match backend {
         BigQuery | Databricks | DatabricksODBC | Spark => QuotingStyle::Backtick,
-        Snowflake | Redshift | RedshiftODBC | Postgres | Salesforce | DuckDB => {
+        ClickHouse | Snowflake | Redshift | RedshiftODBC | Postgres | Salesforce | DuckDB => {
             QuotingStyle::Double
         }
         // https://learn.microsoft.com/en-us/sql/t-sql/statements/set-quoted-identifier-transact-sql?view=sql-server-ver17
@@ -168,6 +168,7 @@ pub fn is_valid_ident_char(c: char, backend: Backend) -> bool {
         | Salesforce
         | DuckDB
         | SQLServer // TODO
+        | ClickHouse
         | Generic { .. } => c.is_alphanumeric() || c == '_',
     }
 }

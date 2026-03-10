@@ -84,7 +84,34 @@ impl DateTimeField {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone)]
+pub enum TimeZone {
+    Named(String),
+}
+
+impl TimeZone {
+    pub fn display(&self, backend: Backend) -> TimeZoneDisplay<'_> {
+        TimeZoneDisplay(self, backend)
+    }
+}
+
+pub struct TimeZoneDisplay<'a>(&'a TimeZone, Backend);
+
+impl fmt::Display for TimeZoneDisplay<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use Backend::*;
+        use TimeZone::*;
+        match (self.1, self.0) {
+            // https://clickhouse.com/docs/use-cases/time-series/date-time-data-types#time-series-timezones
+            (ClickHouse, Named(name)) => write!(f, "'{name}'")?,
+
+            (_, Named(name)) => write!(f, "{name}")?,
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
 pub enum TimeZoneSpec {
     /// WITH LOCAL TIME ZONE, TIMESTAMP_LTZ
     Local,
@@ -92,8 +119,12 @@ pub enum TimeZoneSpec {
     With,
     // WITHOUT TIME ZONE, TIMESTAMP_NTZ
     Without,
-    // no specification (e.g. TIMESTAMP)
+    /// no specification (e.g. TIMESTAMP)
     Unspecified,
+    /// Fixed timezone associated with the type instead of individual values.
+    ///
+    /// (e.g. DateTime('Europe/Berlin') on ClickHouse)
+    Fixed(TimeZone),
 }
 
 impl TimeZoneSpec {
@@ -118,6 +149,8 @@ impl TimeZoneSpec {
             (_, With) => write!(out, " WITH TIME ZONE"),
             (_, Without) => write!(out, " WITHOUT TIME ZONE"),
 
+            (_, Fixed(tz)) => write!(out, "('{}')", tz.display(backend)),
+
             (_, Unspecified) => Ok(()),
         }
     }
@@ -128,10 +161,10 @@ impl TimeZoneSpec {
         use fmt::Write as _;
         match (backend, self) {
             // See [TimeZoneSpec::write_with_leading_space] for explanation about BigQuery.
-            (BigQuery, _) => {
+            (BigQuery | ClickHouse, _) => {
                 debug_assert!(
                     matches!(self, Without | Unspecified),
-                    "BigQuery does not support time zone suffixes in its type names"
+                    "BigQuery and ClickHouse do not support time zone suffixes in their type names"
                 );
                 Ok(())
             }
@@ -168,10 +201,18 @@ impl TimeZoneSpec {
             // but we don't render it as TIMESTAMP_LTZ unless explicitly specified
             // even though TIMESTAMP_LTZ is an alias to TIMESTAMP in Databricks.
             (_, Unspecified) => Ok(()),
+
+            (_, Fixed(_)) => {
+                debug_assert!(
+                    false,
+                    "Fixed time zone specifications cannot be rendered as single-token suffixes"
+                );
+                Ok(())
+            }
         }
     }
 
-    pub fn is_with_time_zone(self, backend: Backend) -> bool {
+    pub fn is_with_time_zone(&self, backend: Backend) -> bool {
         use Backend::*;
         use TimeZoneSpec::*;
         match (backend, self) {
@@ -191,6 +232,13 @@ Avoid constructing Snowflake TIME/TIMESTAMP types without an explicit time zone 
 
             (_, With | Local) => true,
             (_, Without | Unspecified) => false,
+            (_, Fixed(_)) => {
+                debug_assert!(
+                    false,
+                    "Fixed time zone specifications cannot be categorized as simply with or without time zone"
+                );
+                true
+            }
         }
     }
 }
@@ -203,6 +251,7 @@ pub fn default_time_unit(backend: Backend) -> TimeUnit {
         BigQuery | Redshift | RedshiftODBC => Microsecond,
         Postgres | Salesforce | DuckDB => Microsecond,
         SQLServer => Microsecond,
+        ClickHouse => Second,
         Generic { .. } => Microsecond, // a reasonable default
     }
 }
@@ -480,6 +529,13 @@ impl SqlType {
                         // for debugging purposes, we still render these invalid specs
                         time_zone_spec.write_with_leading_space(backend, out)
                     }
+                    TimeZoneSpec::Fixed(_) => {
+                        debug_assert!(
+                            false,
+                            "Snowflake does not support fixed time zone specifications"
+                        );
+                        Ok(())
+                    }
                 }
             }
             (
@@ -703,7 +759,7 @@ impl SqlType {
                 match backend {
                     Snowflake => write!(out, "OBJECT(")?,
                     BigQuery | Databricks | DatabricksODBC | Spark => write!(out, "STRUCT<")?,
-                    Postgres | Salesforce | DuckDB => write!(out, "(")?,
+                    Postgres | Salesforce | DuckDB | ClickHouse => write!(out, "(")?,
                     // Redshift doesn't support object/struct types
                     Redshift | RedshiftODBC => write!(out, "(")?,
                     SQLServer => unimplemented!("SQL Server does't have a struct type"),
@@ -742,7 +798,7 @@ impl SqlType {
                 match backend {
                     Snowflake => write!(out, ")"),
                     BigQuery | Databricks | DatabricksODBC | Spark => write!(out, ">"),
-                    Postgres | Salesforce | DuckDB => write!(out, ")"),
+                    Postgres | Salesforce | DuckDB | ClickHouse => write!(out, ")"),
                     Redshift | RedshiftODBC => write!(out, ")"),
                     SQLServer => unimplemented!("SQL Server does't have a struct type"),
                     Generic { .. } => write!(out, ">"),
@@ -1145,6 +1201,10 @@ impl SqlType {
                 DataType::Decimal128(18, 0)
             }
             // }}}
+            (ClickHouse, Numeric(None) | BigNumeric(None)) => {
+                // https://clickhouse.com/docs/sql-reference/data-types/decimal#parameters
+                DataType::Decimal128(10, 0)
+            }
 
             // PostgreSQL {{{
             (Postgres | Salesforce | Generic { .. }, Numeric(None) | BigNumeric(None)) => {
@@ -1232,6 +1292,11 @@ impl SqlType {
                         // TODO: fs#8086
                         TimeUnit::Nanosecond
                     }
+                    // ClickHouse's `Time` type has a precision of 1 second:
+                    // https://clickhouse.com/docs/sql-reference/data-types/time
+                    // `Time64` has adjustable precision:
+                    // https://clickhouse.com/docs/sql-reference/data-types/time64
+                    (ClickHouse, None) => TimeUnit::Second,
                     (Generic { .. }, None) => {
                         // we pick microseconds as a reasonable default
                         TimeUnit::Microsecond
@@ -1264,6 +1329,20 @@ impl SqlType {
                     (BigQuery, Unspecified) => arrow_timestamp(*precision, Some("UTC".into())),
 
                     (_, Without | Unspecified) => arrow_timestamp(*precision, None),
+                    (_, Fixed(TimeZone::Named(name))) => {
+                        let arrow_tz = if name.eq_ignore_ascii_case("UTC") {
+                            Some("UTC".into())
+                        } else if name.eq_ignore_ascii_case("Europe/Berlin") {
+                            Some("Europe/Berlin".into())
+                        } else {
+                            debug_assert!(
+                                false,
+                                "TODO: Figure how to lookup Arrow timezones from a table provided by arrow-rs"
+                            );
+                            None
+                        };
+                        arrow_timestamp(*precision, arrow_tz)
+                    }
                 }
             }
             // A DATETIME is a timestamp without time zone information
@@ -1365,6 +1444,8 @@ impl SqlType {
                             )
                     }
                     BigQuery | Postgres | DuckDB => MonthDayNano, // MonthDayNano is exactly what BQ and PG use internally
+                    // FIXME: ClickHouse doesn't actually seem to support Arrow's Interval
+                    ClickHouse => MonthDayNano,
                     Salesforce => MonthDayNano, // Salesforce seems to follow PostgreSQL
                     SQLServer => MonthDayNano, // SQL Server doesn't appear to have an INTERVAL type
                     Generic { .. } => MonthDayNano, // Reasonable default
@@ -1506,6 +1587,7 @@ const BIGQUERY_KEYS: [&str; 2] = ["BIGQUERY:type", "type_text"];
 const DATABRICKS_KEYS: [&str; 2] = ["DBX:type", "type_text"];
 const REDSHIFT_KEYS: [&str; 2] = ["REDSHIFT:type", "type_text"];
 const DUCKDB_KEYS: [&str; 2] = ["DUCKDB:type", "type_text"];
+const CLICKHOUSE_KEYS: [&str; 2] = ["CLICKHOUSE:type", "type_text"];
 const SPARK_KEYS: [&str; 2] = ["SPARK:type", "type_text"];
 const SQLSERVER_KEYS: [&str; 2] = ["SQLSERVER:type", "type_text"];
 const GENERIC_KEYS: [&str; 2] = ["SQL:type", "type_text"];
@@ -1521,6 +1603,7 @@ fn metadata_type_candidate_keys(backend: Backend) -> &'static [&'static str] {
         Backend::DatabricksODBC => &DATABRICKS_KEYS,
         Backend::DuckDB => &DUCKDB_KEYS,
         Backend::SQLServer => &SQLSERVER_KEYS, // TODO
+        Backend::ClickHouse => &CLICKHOUSE_KEYS,
         Backend::Generic { .. } => &GENERIC_KEYS,
     }
 }
