@@ -42,7 +42,7 @@ use tracy_client::span;
 
 use indexmap::IndexMap;
 use std::collections::{BTreeMap, HashMap};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::{thread, time::Duration};
@@ -224,6 +224,11 @@ pub trait AdapterEngine: Send + Sync {
     /// Whether this is a replay engine
     fn is_replay(&self) -> bool {
         false
+    }
+
+    /// Returns the recordings directory for record/replay engines.
+    fn recordings_dir(&self) -> Option<&Path> {
+        None
     }
 
     /// Get the physical execution backend for sidecar engines.
@@ -642,6 +647,7 @@ impl XdbcEngine {
         token: CancellationToken,
         recordings_path: PathBuf,
     ) -> Self {
+        crate::record_and_replay::reset_counters(&recordings_path);
         Self::build(
             adapter_type,
             auth,
@@ -674,6 +680,7 @@ impl XdbcEngine {
         token: CancellationToken,
         recordings_path: PathBuf,
     ) -> Self {
+        crate::record_and_replay::reset_counters(&recordings_path);
         Self::build(
             adapter_type,
             auth,
@@ -788,6 +795,13 @@ impl AdapterEngine for XdbcEngine {
 
     fn is_replay(&self) -> bool {
         matches!(self.mode, EngineMode::Replay(_))
+    }
+
+    fn recordings_dir(&self) -> Option<&Path> {
+        match &self.mode {
+            EngineMode::Record(p) | EngineMode::Replay(p) => Some(p),
+            _ => None,
+        }
     }
 
     fn quoting(&self) -> ResolvedQuoting {

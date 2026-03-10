@@ -63,8 +63,15 @@ pub(crate) fn borrow_tlocal_connection<'a>(
     let conn = match CONNECTION.with(|c| c.take()) {
         None => engine.new_connection(state, node_id)?,
         Some(mut c) => {
-            c.update_node_id(node_id);
-            c
+            // Discard cached connections whose recordings path doesn't match
+            // the current engine. This prevents stale record/replay connections
+            // from writing to the wrong directory across sequential runs.
+            if c.recordings_path() != engine.recordings_dir() {
+                engine.new_connection(state, node_id)?
+            } else {
+                c.update_node_id(node_id);
+                c
+            }
         }
     };
     let mut guard = ConnectionGuard::new(conn);

@@ -32,13 +32,22 @@ use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-// The reason this is global is that we might have multiple adapters
-// (we do not limit the number of adapters people can instantiate) and
-// we might be running multiple fs commands in a single test (which
-// can create more than one adapter total).
-static COUNTERS: Lazy<DashMap<String, usize>> = Lazy::new(DashMap::new);
+/// Per-directory sequence counters for record/replay.
+///
+/// Keyed by recordings directory path so that multiple adapters and
+/// sequential `fs` commands (run_0 → run_1) each get their own counter
+/// namespace without any global state transitions.
+static COUNTERS: Lazy<DashMap<PathBuf, DashMap<String, usize>>> = Lazy::new(DashMap::new);
 
 static RECORDS_NAME: &str = "recordings.db";
+
+/// Clear sequence counters for the given recordings directory.
+///
+/// Called when a new record/replay engine is created so that each
+/// recording session starts with fresh sequence numbers.
+pub(crate) fn reset_counters(path: &Path) {
+    COUNTERS.remove(path);
+}
 
 // This is cleaning we need to do for our auto generated
 // schemas in tests. Note ideal it is not localized but if things
@@ -63,6 +72,7 @@ fn checksum8(input: &str) -> String {
 // and only sql content that we checksum and then append to it a
 // sequence number.
 fn compute_file_name(
+    recordings_dir: &Path,
     node_id: Option<&String>,
     sql: Option<&str>,
     metadata: bool,
@@ -90,7 +100,8 @@ fn compute_file_name(
         },
     };
 
-    let mut entry = COUNTERS.entry(id.clone()).or_insert(0);
+    let dir_counters = COUNTERS.entry(recordings_dir.to_path_buf()).or_default();
+    let mut entry = dir_counters.entry(id.clone()).or_insert(0);
     let file_name = format!("{}-{}", id, *entry);
     *entry += 1;
 
@@ -100,6 +111,7 @@ fn compute_file_name(
 /// Compute a file name for get_table_schema based on the table identifier.
 /// Uses a hash of the fully qualified table name.
 fn compute_file_name_for_table_schema(
+    recordings_dir: &Path,
     catalog: Option<&str>,
     db_schema: Option<&str>,
     table_name: &str,
@@ -115,7 +127,8 @@ fn compute_file_name_for_table_schema(
     let hash = checksum8(&fqn);
     // Use counter to handle multiple calls to the same table (e.g., before/after creation)
     let counter_key = format!("get_table_schema.{hash}");
-    let mut entry = COUNTERS.entry(counter_key).or_insert(0);
+    let dir_counters = COUNTERS.entry(recordings_dir.to_path_buf()).or_default();
+    let mut entry = dir_counters.entry(counter_key).or_insert(0);
     let file_name = format!("get_table_schema.{hash}-{}", *entry);
     *entry += 1;
     file_name
@@ -491,9 +504,10 @@ impl SqliteHandler {
         self.db_path.exists()
     }
 
-    /// TODO: it is not ideal that the a [`rusqlite::Connection``] is instantiated per Statement/Connection operation
+    /// Opens a SQLite connection to this handler's recordings database.
     fn connect(&self) -> FileHandlerResult<rusqlite::Connection> {
-        let conn = rusqlite::Connection::open(&self.db_path)?;
+        let path = &self.db_path;
+        let conn = rusqlite::Connection::open(path)?;
         conn.execute(
             "CREATE TABLE IF NOT EXISTS recordings (
                 unique_id TEXT NOT NULL,
@@ -695,7 +709,7 @@ impl Connection for RecordEngineConnection {
         let path = self.recordings_path.clone();
         create_dir_all(&path).map_err(|e| from_fs_error(e.into(), Some(&path)))?;
 
-        let unique_id = compute_file_name_for_table_schema(catalog, db_schema, table_name);
+        let unique_id = compute_file_name_for_table_schema(&path, catalog, db_schema, table_name);
 
         let sqlite_handler = SqliteHandler::new(&path);
 
@@ -716,6 +730,10 @@ impl Connection for RecordEngineConnection {
                 ))
             }
         }
+    }
+
+    fn recordings_path(&self) -> Option<&Path> {
+        Some(&self.recordings_path)
     }
 
     fn update_node_id(&mut self, node_id: Option<String>) {
@@ -766,7 +784,7 @@ impl Statement for RecordEngineStatement {
         let path = self.recordings_path.clone();
         create_dir_all(&path).map_err(|e| from_fs_error(e.into(), Some(&path)))?;
 
-        let unique_id = compute_file_name(self.node_id.as_ref(), Some(sql), self.metadata)?;
+        let unique_id = compute_file_name(&path, self.node_id.as_ref(), Some(sql), self.metadata)?;
 
         let sqlite_handler = SqliteHandler::new(&path);
 
@@ -931,7 +949,7 @@ impl Connection for ReplayEngineConnection {
     ) -> AdbcResult<Schema> {
         let path = self.recordings_path.clone();
         // Use table identifier for deterministic file naming (order-independent)
-        let unique_id = compute_file_name_for_table_schema(catalog, db_schema, table_name);
+        let unique_id = compute_file_name_for_table_schema(&path, catalog, db_schema, table_name);
 
         let storage_type = detect_storage_type(&path, &unique_id);
 
@@ -989,6 +1007,10 @@ impl Connection for ReplayEngineConnection {
         }
     }
 
+    fn recordings_path(&self) -> Option<&Path> {
+        Some(&self.recordings_path)
+    }
+
     fn update_node_id(&mut self, node_id: Option<String>) {
         self.node_id = node_id
     }
@@ -1039,7 +1061,12 @@ impl Statement for ReplayEngineStatement {
         };
 
         let path = self.recordings_path.clone();
-        let unique_id = compute_file_name(self.node_id.as_ref(), Some(replay_sql), self.metadata)?;
+        let unique_id = compute_file_name(
+            &path,
+            self.node_id.as_ref(),
+            Some(replay_sql),
+            self.metadata,
+        )?;
 
         // Detect storage type for backwards compatibility
         let storage_type = detect_storage_type(&path, &unique_id);
@@ -1055,9 +1082,6 @@ impl Statement for ReplayEngineStatement {
                 let record_sql = entry.sql.as_deref().unwrap_or("none");
                 if normalize_sql_for_comparison(record_sql)
                     != normalize_sql_for_comparison(replay_sql)
-                        .replace("DBT_TESTING_ALT", "[MASKED_ALT_WH]")
-                        .replace("FUSION_ADAPTER_TESTING", "[MASKED_WH]")
-                        .replace("FUSION_SLT_WAREHOUSE", "[MASKED_WH]")
                 {
                     panic!(
                         "Recorded query ({record_sql}) and actual query ({replay_sql}) do not match (unique_id: {unique_id})"
@@ -1116,11 +1140,6 @@ impl Statement for ReplayEngineStatement {
                     .map_err(|e| from_fs_error(e, Some(&path)))?;
                 if normalize_sql_for_comparison(&record_sql)
                     != normalize_sql_for_comparison(replay_sql)
-                        // we need to normalize
-                        // in CI, FUSION_SLT_WAREHOUSE is used,
-                        // locally, FUSION_ADAPTER_TESTING is used,
-                        .replace("FUSION_ADAPTER_TESTING", "[MASKED_WH]")
-                        .replace("FUSION_SLT_WAREHOUSE", "[MASKED_WH]")
                 {
                     panic!(
                         "Recorded query ({record_sql}) and actual query ({replay_sql}) do not match ({sql_path:?})"
@@ -1242,9 +1261,18 @@ impl Statement for ReplayEngineStatement {
 /// schema timestamp markers instead of collapsing whitespace, because the cache
 /// key must be insensitive to comments and timestamps but preserves whitespace
 /// structure.
+/// Masks environment-specific warehouse names so recordings are portable
+/// between CI (FUSION_SLT_WAREHOUSE) and local (FUSION_ADAPTER_TESTING).
+fn mask_warehouse_names(sql: &str) -> String {
+    sql.replace("DBT_TESTING_ALT", "[MASKED_ALT_WH]")
+        .replace("FUSION_ADAPTER_TESTING", "[MASKED_WH]")
+        .replace("FUSION_SLT_WAREHOUSE", "[MASKED_WH]")
+}
+
 fn normalize_sql_for_comparison(sql: &str) -> String {
     let normalized = normalize_dbt_tmp_name(sql);
-    normalized.split_whitespace().collect::<Vec<_>>().join(" ")
+    let collapsed = normalized.split_whitespace().collect::<Vec<_>>().join(" ");
+    mask_warehouse_names(&collapsed)
 }
 
 #[cfg(test)]

@@ -4,6 +4,7 @@
 
 use core::fmt;
 use std::collections::HashSet;
+use std::path::Path;
 use std::sync::Arc;
 
 use crate::driver_manager::ManagedConnection as ManagedAdbcConnection;
@@ -352,6 +353,12 @@ pub trait Connection: Send {
     /// Get a float option value by key.
     fn get_option_double(&self, _key: OptionConnection) -> Result<f64> {
         unimplemented!("ADBC connection float option retrieval")
+    }
+
+    /// Returns the recordings directory path for record/replay connections.
+    /// Non-recording connections return `None`.
+    fn recordings_path(&self) -> Option<&Path> {
+        None
     }
 
     /// [Debug](std::fmt::Debug) implementation for Connection.

@@ -292,8 +292,63 @@ pub fn rebuild_string_like_arrays(
 }
 
 /// Helper function to normalize SQL strings, error messages, and data in SQLite recordings database
+/// Like `update_sqlite_recordings` but only updates SQL and error columns,
+/// leaving Arrow data (data_base64) untouched. Use this for warehouse-name
+/// masking: replacing warehouse names in Arrow data would corrupt replay
+/// behaviour by making configuration-change detection see phantom diffs.
+fn update_sqlite_recordings_sql_only(
+    db_path: &Path,
+    replace_fn: &dyn Fn(&str) -> String,
+) -> TestResult<()> {
+    let conn = Connection::open(db_path)?;
+
+    let table_exists: bool = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='recordings'",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .map(|count| count > 0)?;
+    if !table_exists {
+        return Ok(());
+    }
+
+    let mut stmt = conn.prepare("SELECT unique_id, record_type, sql, error FROM recordings")?;
+    let recordings: Vec<(String, String, Option<String>, Option<String>)> = stmt
+        .query_map([], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+
+    for (unique_id, record_type, sql, error) in recordings {
+        let new_sql = sql.as_ref().map(|s| replace_fn(s));
+        let new_error = error.as_ref().map(|e| replace_fn(e));
+
+        if new_sql != sql || new_error != error {
+            conn.execute(
+                "UPDATE recordings SET sql = ?1, error = ?2 WHERE unique_id = ?3 AND record_type = ?4",
+                params![new_sql, new_error, unique_id, record_type],
+            )?;
+        }
+    }
+
+    Ok(())
+}
+
 fn update_sqlite_recordings(db_path: &Path, replace_fn: &dyn Fn(&str) -> String) -> TestResult<()> {
     let conn = Connection::open(db_path)?;
+
+    // Check if recordings table exists (compile-only runs may produce empty dbs)
+    let table_exists: bool = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='recordings'",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .map(|count| count > 0)?;
+    if !table_exists {
+        return Ok(());
+    }
 
     // Get all recordings
     let mut stmt =
@@ -428,14 +483,16 @@ impl Task for SedTask {
                 // Apply basic schema name replacement
                 update_sqlite_recordings(path, &replace_fn)?;
 
-                // Apply warehouse name replacement
+                // Apply warehouse name replacement (SQL-only: masking
+                // warehouse names inside Arrow data would corrupt replay
+                // by making configuration-change detection see phantom diffs).
                 let warehouse_replace = |content: &str| -> String {
                     content
                         .replace("DBT_TESTING_ALT", "[MASKED_ALT_WH]")
                         .replace("FUSION_ADAPTER_TESTING", "[MASKED_WH]")
                         .replace("FUSION_SLT_WAREHOUSE", "[MASKED_WH]")
                 };
-                update_sqlite_recordings(path, &warehouse_replace)?;
+                update_sqlite_recordings_sql_only(path, &warehouse_replace)?;
 
                 // Apply Time Elapsed regex removal
                 let re_time_elapsed = Regex::new(r"Time Elapsed:.*").unwrap();
@@ -507,6 +564,18 @@ fn dump_sqlite_recordings_to_yaml(db_path: &Path, yaml_path: &Path) -> TestResul
     }
 
     let conn = Connection::open(db_path)?;
+
+    // Check if recordings table exists (compile-only runs may produce empty dbs)
+    let table_exists: bool = conn
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='recordings'",
+            [],
+            |row| row.get::<_, i64>(0),
+        )
+        .map(|count| count > 0)?;
+    if !table_exists {
+        return Ok(());
+    }
 
     // Query all recordings, ordered by unique_id for consistency
     let mut stmt = conn.prepare(

@@ -180,7 +180,8 @@ def materialize(df, con):
 {% endmacro %}
 
 {% macro duckdb__make_temp_relation(base_relation, suffix) %}
-    {% set tmp_identifier = base_relation.identifier ~ suffix ~ py_current_timestring() %}
+    {% set suffix = adapter.generate_unique_temporary_table_suffix(suffix) %}
+    {% set tmp_identifier = base_relation.identifier ~ suffix %}
     {% do return(base_relation.incorporate(
                                   path={
                                     "identifier": tmp_identifier,

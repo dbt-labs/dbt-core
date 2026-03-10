@@ -7,7 +7,6 @@ use crate::task::{ProjectEnv, Task, TestEnv, TestResult};
 
 use async_trait::async_trait;
 use dbt_schemas::schemas::profiles::DbConfig;
-use merge::Merge;
 
 /// Used to load a fully resolved profiles.yml from the default directory (~/.dbt)
 /// and write it to the project env.
@@ -36,9 +35,13 @@ impl Task for HydrateProfilesTask {
                 .join("_profiles.override.yml");
 
             if override_profiles_path.exists() {
-                let override_db_config =
-                    load_db_config(&self.target, &self.schema, &override_profiles_path)?;
-                override_with(&mut db_config, override_db_config);
+                // The override file may only contain entries for some adapters
+                // (e.g. only duckdb). Silently skip if the target isn't present.
+                if let Ok(override_db_config) =
+                    load_db_config(&self.target, &self.schema, &override_profiles_path)
+                {
+                    override_with(&mut db_config, override_db_config);
+                }
             }
 
             write_db_config_to_test_profile(db_config, &project_env.absolute_project_dir)?;
@@ -50,8 +53,12 @@ impl Task for HydrateProfilesTask {
 fn override_with(original: &mut DbConfig, override_: DbConfig) {
     match (original, override_) {
         (DbConfig::Bigquery(self_bigquery), DbConfig::Bigquery(other_bigquery)) => {
+            use merge::Merge;
             self_bigquery.merge(*other_bigquery);
         }
-        _ => unimplemented!("database config override for non-BigQuery adapters"),
+        (DbConfig::DuckDB(self_duckdb), DbConfig::DuckDB(other_duckdb)) => {
+            *self_duckdb = other_duckdb;
+        }
+        _ => unimplemented!("database config override for non-BigQuery/DuckDB adapters"),
     }
 }
