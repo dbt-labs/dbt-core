@@ -164,6 +164,25 @@ changie new
 
 This creates a YAML entry in `.changes/unreleased/`. Changelog kinds: Breaking Changes, Features, Fixes, Docs, Under the Hood, Dependencies, Security.
 
+## Commit Discipline
+
+Separate distinct types of changes into their own commits. Do not combine unrelated changes in a single commit, even if they touch the same file. This keeps the history reviewable and individually revertable.
+
+The following categories of change should each be their own commit:
+
+- **Tidying** — fixing typos, improving variable names, cleaning up whitespace
+- **Abstractions** — extracting duplicated logic into a shared function or module
+- **Refactors** — restructuring code for readability, performance, or maintainability (without changing behavior)
+- **Bug fixes** — correcting incorrect behavior
+- **Features** — adding new functionality
+- **Tests** — adding or improving tests for existing behavior (coverage gaps, edge cases, flaky test fixes). Tests that accompany a new feature or bug fix belong in that commit, but standalone test work is its own category.
+- **Dependencies** — adding, removing, or upgrading dependencies
+- **Configuration** — changes to CI workflows, linter settings, build configs, pre-commit hooks, or other tooling
+
+When a task involves more than one of these, make separate commits in a logical order. For example, if a bug fix requires a refactor first, commit the refactor, then commit the fix. If a feature benefits from tidying nearby code, commit the tidying first, then the feature.
+
+Each commit should make sense in isolation: it should pass tests, not break the build, and have a clear message explaining *what* and *why*.
+
 ## Pull Requests
 
 - Target the `main` branch
