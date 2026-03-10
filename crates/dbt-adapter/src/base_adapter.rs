@@ -42,6 +42,7 @@ pub fn backend_of(adapter_type: AdapterType) -> Backend {
         AdapterType::DuckDB => Backend::DuckDB,
         AdapterType::Sidecar => Backend::DuckDB,
         AdapterType::Fabric => Backend::SQLServer,
+        AdapterType::ClickHouse => todo!("ClickHouse"),
     }
 }
 

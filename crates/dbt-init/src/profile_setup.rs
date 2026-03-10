@@ -263,6 +263,7 @@ impl ProfileSetup {
                     "DuckDB profile setup not yet implemented. DuckDB runs locally without credentials."
                 ));
             }
+            AdapterType::ClickHouse => todo!("ClickHouse"),
         };
 
         let mut outputs = HashMap::new();

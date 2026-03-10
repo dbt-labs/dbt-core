@@ -573,6 +573,7 @@ pub trait BaseRelation: BaseRelationProperties + Any + Send + Sync + fmt::Debug 
                 start.map(|start| format!("{event_time} >= '{start}'")),
                 end.map(|end| format!("{event_time} < '{end}'")),
             ),
+            AdapterType::ClickHouse => todo!("ClickHouse"),
         };
 
         // create the filter expression

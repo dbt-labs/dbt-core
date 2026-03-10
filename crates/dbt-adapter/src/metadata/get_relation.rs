@@ -68,6 +68,7 @@ pub fn get_relation(
                 "get_relation called on Sidecar adapter type without override",
             ))
         }
+        AdapterType::ClickHouse => todo!("ClickHouse"),
     }
 }
 

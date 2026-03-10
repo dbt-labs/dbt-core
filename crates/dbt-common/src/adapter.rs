@@ -31,6 +31,8 @@ pub enum AdapterType {
     Fabric,
     /// Sidecar (internal dispatch type for DuckDB backend in sidecar mode)
     Sidecar,
+    /// ClickHouse
+    ClickHouse,
 }
 
 pub fn dialect_of(adapter_type: AdapterType) -> Option<Dialect> {

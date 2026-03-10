@@ -56,6 +56,7 @@ pub fn create_static_relation(
             let fabric_relation_type = FabricRelationType(quoting);
             StaticBaseRelationObject::new(Arc::new(fabric_relation_type))
         }
+        AdapterType::ClickHouse => todo!("ClickHouse"),
     };
     Some(Value::from_object(result))
 }

@@ -29,6 +29,7 @@ impl ColumnBuilder {
             Postgres | Salesforce | Sidecar => Ok(Self::build_postgres_like(field, type_ops)),
             DuckDB => Ok(Self::build_postgres_like(field, type_ops)),
             Fabric => Ok(Self::build_fabric(field, type_ops)),
+            ClickHouse => todo!("ClickHouse"),
         }
     }
 
@@ -86,6 +87,7 @@ impl ColumnBuilder {
                 None, // numeric_scale
             ),
             Salesforce => todo!("Salesforce column creation not implemented yet"),
+            ClickHouse => todo!("ClickHouse"),
             Fabric => Column::new(
                 Fabric,
                 name,

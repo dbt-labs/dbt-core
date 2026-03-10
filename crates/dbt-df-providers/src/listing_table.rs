@@ -183,6 +183,7 @@ pub fn infer_seed_column_name_strategy(
             | AdapterType::Fabric
             | AdapterType::Sidecar,
         ) => InferColumnNameStrategy::Verbatim,
+        (false, AdapterType::ClickHouse) => todo!("ClickHouse"),
     }
 }
 

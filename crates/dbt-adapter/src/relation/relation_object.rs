@@ -360,6 +360,7 @@ pub fn do_create_relation(
             relation_type,
             custom_quoting,
         )) as Box<dyn BaseRelation>,
+        AdapterType::ClickHouse => todo!("ClickHouse"),
     };
     Ok(relation)
 }
