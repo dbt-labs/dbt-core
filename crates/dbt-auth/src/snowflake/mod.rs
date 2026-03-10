@@ -10,9 +10,7 @@ use std::fs;
 const APP_NAME: &str = "dbt";
 
 // WARNING: Still needs adjustment on what is considered must-have
-const CONNECTION_PARAMS_STR: [&str; 9] = [
-    "user",
-    "password",
+const CONNECTION_PARAMS_STR: [&str; 7] = [
     "account",
     "role",
     "warehouse",
@@ -28,7 +26,7 @@ const CONNECTION_PARAMS: [&str; 1] = ["port"];
 ///
 /// dbt snowflake only formalized `method` later in it's lifetime. For profiles without
 /// `method`, we must naively copy over all these fields. These are mutually exclusive fields.
-/// Username and password are always required, so they do not belong to this set.
+/// Username and password are handled separately because only warehouse-style auth requires them.
 const AUTH_PARAMS_USED_FOR_LEGACY_CONFIG: [&str; 6] = [
     "private_key_path",
     "private_key",
@@ -40,6 +38,8 @@ const AUTH_PARAMS_USED_FOR_LEGACY_CONFIG: [&str; 6] = [
 
 const DEFAULT_CONNECT_TIMEOUT: &str = "10s";
 const DEFAULT_REQUEST_TIMEOUT: &str = "600s";
+const OAUTH_STUB_USER: &str = "fs_user";
+const ADBC_STUB_PASSWORD: &str = "fs_pass";
 
 /// dbt Core expects durations in seconds only so this utility appends that s
 /// https://pkg.go.dev/time#ParseDuration for permitted units
@@ -47,45 +47,86 @@ fn postfix_seconds_unit(value: &str) -> String {
     format!("{value}s")
 }
 
+fn validate_warehouse_auth_fields(config: &AdapterConfig) -> Result<(), AuthError> {
+    if config.get_str("user").is_none() {
+        return Err(AuthError::config(
+            "Snowflake warehouse authentication requires 'user'.",
+        ));
+    }
+    if config.get_str("password").is_none() {
+        return Err(AuthError::config(
+            "Snowflake warehouse authentication requires 'password'.",
+        ));
+    }
+    Ok(())
+}
+
 #[derive(Debug)]
 enum SnowflakeAuthIR<'a> {
-    Warehouse,
-    WarehouseMFA,
+    Warehouse {
+        user: &'a str,
+        password: &'a str,
+    },
+    WarehouseMFA {
+        user: &'a str,
+        password: &'a str,
+    },
     Keypair {
+        user: &'a str,
+        password: &'a str,
         key_source: PrivateKeySource<'a>,
         private_key_passphrase: Option<&'a str>,
     },
     NativeOauth {
+        user: &'a str,
+        password: &'a str,
         client_id: &'a str,
         client_secret: &'a str,
         refresh_token: &'a str,
     },
     NativeOauthJWT {
+        user: &'a str,
+        password: &'a str,
         jwt_token: &'a str,
     },
-    Sso,
+    Sso {
+        user: &'a str,
+        password: &'a str,
+    },
 }
 
 impl<'a> SnowflakeAuthIR<'a> {
     pub fn apply(self, mut builder: DatabaseBuilder) -> Result<DatabaseBuilder, AuthError> {
         match self {
             Self::NativeOauth {
+                user,
+                password,
                 client_id,
                 client_secret,
                 refresh_token,
             } => {
+                builder.with_username(user);
+                builder.with_password(password);
                 builder.with_named_option(snowflake::AUTH_TYPE, snowflake::auth_type::OAUTH)?;
                 builder.with_named_option(snowflake::CLIENT_ID, client_id)?;
                 builder.with_named_option(snowflake::CLIENT_SECRET, client_secret)?;
                 builder.with_named_option(snowflake::REFRESH_TOKEN, refresh_token)?;
                 builder.with_named_option(snowflake::CLIENT_STORE_TEMP_CREDS, "true")?;
             }
-            Self::NativeOauthJWT { jwt_token } => {
+            Self::NativeOauthJWT {
+                user,
+                password,
+                jwt_token,
+            } => {
+                builder.with_username(user);
+                builder.with_password(password);
                 builder.with_named_option(snowflake::AUTH_TYPE, snowflake::auth_type::OAUTH)?;
                 builder.with_named_option(snowflake::AUTH_TOKEN, jwt_token)?;
                 builder.with_named_option(snowflake::CLIENT_STORE_TEMP_CREDS, "true")?;
             }
-            Self::Sso => {
+            Self::Sso { user, password } => {
+                builder.with_username(user);
+                builder.with_password(password);
                 builder.with_named_option(
                     snowflake::AUTH_TYPE,
                     snowflake::auth_type::EXTERNAL_BROWSER,
@@ -93,9 +134,13 @@ impl<'a> SnowflakeAuthIR<'a> {
                 builder.with_named_option(snowflake::CLIENT_STORE_TEMP_CREDS, "true")?;
             }
             Self::Keypair {
+                user,
+                password,
                 key_source,
                 private_key_passphrase,
             } => {
+                builder.with_username(user);
+                builder.with_password(password);
                 builder.with_named_option(snowflake::AUTH_TYPE, snowflake::auth_type::JWT)?;
                 match key_source {
                     PrivateKeySource::FilePath(path) => {
@@ -137,15 +182,18 @@ impl<'a> SnowflakeAuthIR<'a> {
                     }
                 }
             }
-            Self::WarehouseMFA => {
+            Self::WarehouseMFA { user, password } => {
+                builder.with_username(user);
+                builder.with_password(password);
                 builder.with_named_option(
                     snowflake::AUTH_TYPE,
                     snowflake::auth_type::USERNAME_PASSWORD_MFA,
                 )?;
                 builder.with_named_option(snowflake::CLIENT_CACHE_MFA_TOKEN, "true")?;
             }
-            Self::Warehouse => {
-                // No-op: username and password are standard
+            Self::Warehouse { user, password } => {
+                builder.with_username(user);
+                builder.with_password(password);
             }
         }
 
@@ -164,6 +212,17 @@ fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<SnowflakeAuthIR<'a>, Auth
 
         match method {
             "keypair" => {
+                if config.get_str("user").is_none() {
+                    return Err(AuthError::config(
+                        "Snowflake keypair authentication requires 'user'.",
+                    ));
+                }
+                if config.contains_key("password") {
+                    return Err(AuthError::config(
+                        "Snowflake keypair authentication does not support 'password'.",
+                    ));
+                }
+
                 let pk_path = config.get_str("private_key_path");
                 let pk_raw = config.get_str("private_key");
                 let pk_pass = config.get_str("private_key_passphrase");
@@ -180,12 +239,40 @@ fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<SnowflakeAuthIR<'a>, Auth
                 }?;
 
                 Ok(SnowflakeAuthIR::Keypair {
+                    user: config.get_str("user").expect("validated above"),
+                    password: ADBC_STUB_PASSWORD,
                     key_source: source,
                     private_key_passphrase: pk_pass,
                 })
             }
-            "sso" => Ok(SnowflakeAuthIR::Sso),
+            "sso" => {
+                if config.contains_key("password") {
+                    return Err(AuthError::config(
+                        "Snowflake SSO authentication does not support 'password'.",
+                    ));
+                }
+
+                config
+                    .get_str("user")
+                    .map(|user| SnowflakeAuthIR::Sso {
+                        user,
+                        password: ADBC_STUB_PASSWORD,
+                    })
+                    .ok_or_else(|| {
+                        AuthError::config("Snowflake SSO authentication requires 'user'.")
+                    })
+            }
             "snowflake_oauth" => {
+                if config.contains_key("user") {
+                    return Err(AuthError::config(
+                        "Snowflake OAuth authentication does not support 'user'.",
+                    ));
+                }
+                if config.contains_key("password") {
+                    return Err(AuthError::config(
+                        "Snowflake OAuth authentication does not support 'password'.",
+                    ));
+                }
                 if config.contains_key("token") {
                     return Err(AuthError::config(
                         "Rename 'token' to 'refresh_token' in profile for 'method: snowflake_oauth'.",
@@ -199,6 +286,8 @@ fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<SnowflakeAuthIR<'a>, Auth
                 match (cid, sec, tok) {
                     (Some(client_id), Some(client_secret), Some(refresh_token)) => {
                         Ok(SnowflakeAuthIR::NativeOauth {
+                            user: OAUTH_STUB_USER,
+                            password: ADBC_STUB_PASSWORD,
                             client_id,
                             client_secret,
                             refresh_token,
@@ -210,16 +299,42 @@ fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<SnowflakeAuthIR<'a>, Auth
                 }
             }
             "snowflake_oauth_jwt" => {
+                if config.contains_key("user") {
+                    return Err(AuthError::config(
+                        "Snowflake OAuth JWT authentication does not support 'user'.",
+                    ));
+                }
+                if config.contains_key("password") {
+                    return Err(AuthError::config(
+                        "Snowflake OAuth JWT authentication does not support 'password'.",
+                    ));
+                }
                 if let Some(jwt_token) = config.get_str("jwt_token") {
-                    Ok(SnowflakeAuthIR::NativeOauthJWT { jwt_token })
+                    Ok(SnowflakeAuthIR::NativeOauthJWT {
+                        user: OAUTH_STUB_USER,
+                        password: ADBC_STUB_PASSWORD,
+                        jwt_token,
+                    })
                 } else {
                     Err(AuthError::config(
                         "Profile requires 'jwt_token' for 'method: snowflake_oauth_jwt'.",
                     ))
                 }
             }
-            "warehouse" => Ok(SnowflakeAuthIR::Warehouse),
-            "warehouse_mfa" => Ok(SnowflakeAuthIR::WarehouseMFA),
+            "warehouse" => {
+                validate_warehouse_auth_fields(config)?;
+                Ok(SnowflakeAuthIR::Warehouse {
+                    user: config.get_str("user").expect("validated above"),
+                    password: config.get_str("password").expect("validated above"),
+                })
+            }
+            "warehouse_mfa" => {
+                validate_warehouse_auth_fields(config)?;
+                Ok(SnowflakeAuthIR::WarehouseMFA {
+                    user: config.get_str("user").expect("validated above"),
+                    password: config.get_str("password").expect("validated above"),
+                })
+            }
             unsupported_method => Err(AuthError::config(format!(
                 "Profile has unsupported authentication method {unsupported_method}"
             ))),
@@ -243,15 +358,56 @@ fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<SnowflakeAuthIR<'a>, Auth
         for key in AUTH_PARAMS_USED_FOR_LEGACY_CONFIG.iter() {
             if let Some(value) = config.get_str(key) {
                 return match *key {
-                    "private_key_path" => Ok(SnowflakeAuthIR::Keypair {
-                        key_source: PrivateKeySource::FilePath(value),
-                        private_key_passphrase: config.get_str("private_key_passphrase"),
-                    }),
-                    "private_key" => Ok(SnowflakeAuthIR::Keypair {
-                        key_source: PrivateKeySource::Raw(value),
-                        private_key_passphrase: config.get_str("private_key_passphrase"),
-                    }),
+                    "private_key_path" => {
+                        if config.get_str("user").is_none() {
+                            return Err(AuthError::config(
+                                "Snowflake keypair authentication requires 'user'.",
+                            ));
+                        }
+                        if config.contains_key("password") {
+                            return Err(AuthError::config(
+                                "Snowflake keypair authentication does not support 'password'.",
+                            ));
+                        }
+
+                        Ok(SnowflakeAuthIR::Keypair {
+                            user: config.get_str("user").expect("validated above"),
+                            password: ADBC_STUB_PASSWORD,
+                            key_source: PrivateKeySource::FilePath(value),
+                            private_key_passphrase: config.get_str("private_key_passphrase"),
+                        })
+                    }
+                    "private_key" => {
+                        if config.get_str("user").is_none() {
+                            return Err(AuthError::config(
+                                "Snowflake keypair authentication requires 'user'.",
+                            ));
+                        }
+                        if config.contains_key("password") {
+                            return Err(AuthError::config(
+                                "Snowflake keypair authentication does not support 'password'.",
+                            ));
+                        }
+
+                        Ok(SnowflakeAuthIR::Keypair {
+                            user: config.get_str("user").expect("validated above"),
+                            password: ADBC_STUB_PASSWORD,
+                            key_source: PrivateKeySource::Raw(value),
+                            private_key_passphrase: config.get_str("private_key_passphrase"),
+                        })
+                    }
                     "private_key_passphrase" => {
+                        if config.get_str("user").is_none() {
+                            return Err(AuthError::config(
+                                "Snowflake keypair authentication requires 'user'.",
+                            ));
+                        }
+                        if config.contains_key("password") {
+                            return Err(AuthError::config(
+                                "Snowflake keypair authentication does not support 'password'.",
+                            ));
+                        }
+
                         // We found a passphrase, so we MUST find a key source to go with it
                         let path = config.get_str("private_key_path");
                         let raw = config.get_str("private_key");
@@ -267,11 +423,24 @@ fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<SnowflakeAuthIR<'a>, Auth
                         };
 
                         Ok(SnowflakeAuthIR::Keypair {
+                            user: config.get_str("user").expect("validated above"),
+                            password: ADBC_STUB_PASSWORD,
                             key_source: source,
                             private_key_passphrase: Some(value),
                         })
                     }
                     "oauth_client_id" | "oauth_client_secret" => {
+                        if config.contains_key("user") {
+                            return Err(AuthError::config(
+                                "Snowflake OAuth authentication does not support 'user'.",
+                            ));
+                        }
+                        if config.contains_key("password") {
+                            return Err(AuthError::config(
+                                "Snowflake OAuth authentication does not support 'password'.",
+                            ));
+                        }
+
                         let cid = config.get_str("oauth_client_id");
                         let sec = config.get_str("oauth_client_secret");
                         // backwards compatibility; we'd prefer this to be named refresh_token but this
@@ -279,6 +448,8 @@ fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<SnowflakeAuthIR<'a>, Auth
                         match (cid, sec, tok) {
                             (Some(client_id), Some(client_secret), Some(refresh_token)) => {
                                 Ok(SnowflakeAuthIR::NativeOauth {
+                                    user: OAUTH_STUB_USER,
+                                    password: ADBC_STUB_PASSWORD,
                                     client_id,
                                     client_secret,
                                     refresh_token,
@@ -291,16 +462,44 @@ fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<SnowflakeAuthIR<'a>, Auth
                     }
                     "authenticator" => {
                         if value == "externalbrowser" {
-                            Ok(SnowflakeAuthIR::Sso)
+                            if config.contains_key("password") {
+                                return Err(AuthError::config(
+                                    "Snowflake SSO authentication does not support 'password'.",
+                                ));
+                            }
+
+                            config
+                                .get_str("user")
+                                .map(|user| SnowflakeAuthIR::Sso {
+                                    user,
+                                    password: ADBC_STUB_PASSWORD,
+                                })
+                                .ok_or_else(|| {
+                                    AuthError::config(
+                                        "Snowflake SSO authentication requires 'user'.",
+                                    )
+                                })
                         } else if value == "oauth" {
+                            if config.contains_key("user") {
+                                return Err(AuthError::config(
+                                    "Snowflake OAuth authentication does not support 'user'.",
+                                ));
+                            }
+                            if config.contains_key("password") {
+                                return Err(AuthError::config(
+                                    "Snowflake OAuth authentication does not support 'password'.",
+                                ));
+                            }
+
                             let cid = config.get_str("oauth_client_id");
                             let sec = config.get_str("oauth_client_secret");
                             let tok = config.get_str("refresh_token");
 
-                            // Use the tuple match to enforce all three fields
                             match (cid, sec, tok) {
                                 (Some(client_id), Some(client_secret), Some(refresh_token)) => {
                                     Ok(SnowflakeAuthIR::NativeOauth {
+                                        user: OAUTH_STUB_USER,
+                                        password: ADBC_STUB_PASSWORD,
                                         client_id,
                                         client_secret,
                                         refresh_token,
@@ -311,14 +510,33 @@ fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<SnowflakeAuthIR<'a>, Auth
                                 )),
                             }
                         } else if value == "jwt" {
+                            if config.contains_key("user") {
+                                return Err(AuthError::config(
+                                    "Snowflake OAuth JWT authentication does not support 'user'.",
+                                ));
+                            }
+                            if config.contains_key("password") {
+                                return Err(AuthError::config(
+                                    "Snowflake OAuth JWT authentication does not support 'password'.",
+                                ));
+                            }
+
                             config
                                 .get_str("token")
-                                .map(|jwt_token| SnowflakeAuthIR::NativeOauthJWT { jwt_token })
+                                .map(|jwt_token| SnowflakeAuthIR::NativeOauthJWT {
+                                    user: OAUTH_STUB_USER,
+                                    password: ADBC_STUB_PASSWORD,
+                                    jwt_token,
+                                })
                                 .ok_or_else(|| {
                                     AuthError::config("Legacy 'authenticator: jwt' requires token")
                                 })
                         } else if value == "username_password_mfa" {
-                            Ok(SnowflakeAuthIR::WarehouseMFA)
+                            validate_warehouse_auth_fields(config)?;
+                            Ok(SnowflakeAuthIR::WarehouseMFA {
+                                user: config.get_str("user").expect("validated above"),
+                                password: config.get_str("password").expect("validated above"),
+                            })
                         } else {
                             Err(AuthError::config(format!(
                                 "Unsupported authenticator: {value}"
@@ -331,7 +549,11 @@ fn parse_auth<'a>(config: &'a AdapterConfig) -> Result<SnowflakeAuthIR<'a>, Auth
         }
 
         // Fallback to username and password when no other auth is possible
-        Ok(SnowflakeAuthIR::Warehouse)
+        validate_warehouse_auth_fields(config)?;
+        Ok(SnowflakeAuthIR::Warehouse {
+            user: config.get_str("user").expect("validated above"),
+            password: config.get_str("password").expect("validated above"),
+        })
     }
 }
 
@@ -342,8 +564,6 @@ fn apply_connection_args(
     for key in CONNECTION_PARAMS_STR {
         if let Some(value) = config.get_str(key) {
             match key {
-                "user" => Ok(builder.with_username(value)),
-                "password" => Ok(builder.with_password(value)),
                 "account" => builder.with_named_option(snowflake::ACCOUNT, value),
                 "database" => builder.with_named_option(snowflake::DATABASE, value),
                 "schema" => builder.with_named_option(snowflake::SCHEMA, value),
@@ -422,16 +642,49 @@ mod tests {
     use rsa::RsaPrivateKey;
     use rsa::rand_core::OsRng;
 
-    // Build a base configuration common to all tests.
     fn base_config() -> Mapping {
-        let config = Mapping::from_iter([
+        Mapping::from_iter([
             ("user".into(), "U".into()),
             ("password".into(), "P".into()),
             ("account".into(), "A".into()),
             ("role".into(), "role".into()),
             ("warehouse".into(), "warehouse".into()),
-        ]);
-        config
+        ])
+    }
+
+    fn base_config_without_user() -> Mapping {
+        Mapping::from_iter([
+            ("password".into(), "P".into()),
+            ("account".into(), "A".into()),
+            ("role".into(), "role".into()),
+            ("warehouse".into(), "warehouse".into()),
+        ])
+    }
+
+    fn base_config_without_password() -> Mapping {
+        Mapping::from_iter([
+            ("user".into(), "U".into()),
+            ("account".into(), "A".into()),
+            ("role".into(), "role".into()),
+            ("warehouse".into(), "warehouse".into()),
+        ])
+    }
+
+    fn base_config_without_user_password() -> Mapping {
+        Mapping::from_iter([
+            ("account".into(), "A".into()),
+            ("role".into(), "role".into()),
+            ("warehouse".into(), "warehouse".into()),
+        ])
+    }
+
+    fn assert_parse_auth_config_error(config: Mapping, expected_msg: &str) {
+        let cfg = AdapterConfig::new(config);
+        let result = parse_auth(&cfg);
+        match result {
+            Err(AuthError::Config(msg)) => assert_eq!(msg, expected_msg),
+            other => panic!("Expected AuthError::Config({expected_msg:?}), got {other:?}"),
+        }
     }
 
     fn run_config_test(config: Mapping, expected: &[(&str, &str)]) {
@@ -634,8 +887,50 @@ mod tests {
     }
 
     #[test]
-    fn test_keypair_value_with_method_param() {
+    fn test_warehouse_method_requires_user() {
         let mut config = base_config();
+        config.remove("user");
+        config.insert("method".into(), "warehouse".into());
+        assert_parse_auth_config_error(
+            config,
+            "Snowflake warehouse authentication requires 'user'.",
+        );
+    }
+
+    #[test]
+    fn test_warehouse_method_requires_password() {
+        let mut config = base_config();
+        config.remove("password");
+        config.insert("method".into(), "warehouse".into());
+        assert_parse_auth_config_error(
+            config,
+            "Snowflake warehouse authentication requires 'password'.",
+        );
+    }
+
+    #[test]
+    fn test_keypair_method_requires_user() {
+        let mut config = base_config_without_user();
+        config.remove("password");
+        config.insert("method".into(), "keypair".into());
+        config.insert("private_key".into(), "private-key".into());
+        assert_parse_auth_config_error(config, "Snowflake keypair authentication requires 'user'.");
+    }
+
+    #[test]
+    fn test_keypair_method_rejects_password() {
+        let mut config = base_config();
+        config.insert("method".into(), "keypair".into());
+        config.insert("private_key".into(), "private-key".into());
+        assert_parse_auth_config_error(
+            config,
+            "Snowflake keypair authentication does not support 'password'.",
+        );
+    }
+
+    #[test]
+    fn test_keypair_value_with_method_param() {
+        let mut config = base_config_without_password();
         config.insert("method".into(), "keypair".into());
         let b64_der = {
             let rsa = RsaPrivateKey::new(&mut OsRng, 2048).expect("generate RSA key");
@@ -647,7 +942,7 @@ mod tests {
         config.insert("private_key".into(), b64_der.into());
         let expected = [
             ("user", "U"),
-            ("password", "P"),
+            ("password", ADBC_STUB_PASSWORD),
             (snowflake::ACCOUNT, "A"),
             (snowflake::ROLE, "role"),
             (snowflake::WAREHOUSE, "warehouse"),
@@ -673,12 +968,12 @@ mod tests {
         writeln!(tmp_file, "fake-private-key-data").unwrap();
         let temp_path = tmp_file.path().to_str().expect("Valid UTF-8 path");
 
-        let mut config = base_config();
+        let mut config = base_config_without_password();
         config.insert("method".into(), "keypair".into());
         config.insert("private_key_path".into(), temp_path.into());
         let expected = [
             ("user", "U"),
-            ("password", "P"),
+            ("password", ADBC_STUB_PASSWORD),
             (snowflake::ACCOUNT, "A"),
             (snowflake::ROLE, "role"),
             (snowflake::WAREHOUSE, "warehouse"),
@@ -700,7 +995,7 @@ mod tests {
 
     #[test]
     fn test_encrypted_keypair_without_method_param() {
-        let mut config = base_config();
+        let mut config = base_config_without_password();
         let expected_pem = wrap_pem_64(
             PEM_ENCRYPTED_START,
             ENCRYPTED_PKCS8_DER_B64,
@@ -711,7 +1006,7 @@ mod tests {
         config.insert("private_key_passphrase".into(), passphrase.into());
         let expected = [
             ("user", "U"),
-            ("password", "P"),
+            ("password", ADBC_STUB_PASSWORD),
             (snowflake::ACCOUNT, "A"),
             (snowflake::ROLE, "role"),
             (snowflake::WAREHOUSE, "warehouse"),
@@ -731,7 +1026,7 @@ mod tests {
 
     #[test]
     fn test_encrypted_keypair_with_method_param() {
-        let mut config = base_config();
+        let mut config = base_config_without_password();
         config.insert("method".into(), "keypair".into());
 
         let passphrase = "private_key_passphrase";
@@ -745,7 +1040,7 @@ mod tests {
 
         let expected = [
             ("user", "U"),
-            ("password", "P"),
+            ("password", ADBC_STUB_PASSWORD),
             (snowflake::ACCOUNT, "A"),
             (snowflake::ROLE, "role"),
             (snowflake::WAREHOUSE, "warehouse"),
@@ -765,11 +1060,49 @@ mod tests {
 
     #[test]
     fn test_external_browser_authentication() {
-        let mut config = base_config();
+        let mut config = base_config_without_password();
         config.insert("authenticator".into(), "externalbrowser".into());
         let expected = [
             ("user", "U"),
-            ("password", "P"),
+            ("password", ADBC_STUB_PASSWORD),
+            (snowflake::ACCOUNT, "A"),
+            (snowflake::ROLE, "role"),
+            (snowflake::WAREHOUSE, "warehouse"),
+            (snowflake::APPLICATION_NAME, APP_NAME),
+            (snowflake::AUTH_TYPE, snowflake::auth_type::EXTERNAL_BROWSER),
+            (snowflake::LOG_TRACING, "fatal"),
+            (snowflake::LOGIN_TIMEOUT, DEFAULT_CONNECT_TIMEOUT),
+            (snowflake::REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT),
+            (snowflake::CLIENT_STORE_TEMP_CREDS, "true"),
+        ];
+        run_config_test(config, &expected);
+    }
+
+    #[test]
+    fn test_external_browser_authentication_requires_user() {
+        let mut config = base_config_without_user_password();
+        config.insert("authenticator".into(), "externalbrowser".into());
+        assert_parse_auth_config_error(config, "Snowflake SSO authentication requires 'user'.");
+    }
+
+    #[test]
+    fn test_external_browser_authentication_rejects_password() {
+        let mut config = base_config();
+        config.insert("authenticator".into(), "externalbrowser".into());
+        assert_parse_auth_config_error(
+            config,
+            "Snowflake SSO authentication does not support 'password'.",
+        );
+    }
+
+    #[test]
+    fn test_external_browser_authentication_uses_stub_password() {
+        let mut config = base_config();
+        config.remove("password");
+        config.insert("authenticator".into(), "externalbrowser".into());
+        let expected = [
+            ("user", "U"),
+            ("password", ADBC_STUB_PASSWORD),
             (snowflake::ACCOUNT, "A"),
             (snowflake::ROLE, "role"),
             (snowflake::WAREHOUSE, "warehouse"),
@@ -785,11 +1118,49 @@ mod tests {
 
     #[test]
     fn test_external_browser_authentication_with_method_param() {
-        let mut config = base_config();
+        let mut config = base_config_without_password();
         config.insert("method".into(), "sso".into());
         let expected = [
             ("user", "U"),
-            ("password", "P"),
+            ("password", ADBC_STUB_PASSWORD),
+            (snowflake::ACCOUNT, "A"),
+            (snowflake::ROLE, "role"),
+            (snowflake::WAREHOUSE, "warehouse"),
+            (snowflake::APPLICATION_NAME, APP_NAME),
+            (snowflake::AUTH_TYPE, snowflake::auth_type::EXTERNAL_BROWSER),
+            (snowflake::LOG_TRACING, "fatal"),
+            (snowflake::LOGIN_TIMEOUT, DEFAULT_CONNECT_TIMEOUT),
+            (snowflake::REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT),
+            (snowflake::CLIENT_STORE_TEMP_CREDS, "true"),
+        ];
+        run_config_test(config, &expected);
+    }
+
+    #[test]
+    fn test_external_browser_authentication_with_method_param_requires_user() {
+        let mut config = base_config_without_user_password();
+        config.insert("method".into(), "sso".into());
+        assert_parse_auth_config_error(config, "Snowflake SSO authentication requires 'user'.");
+    }
+
+    #[test]
+    fn test_sso_method_rejects_password() {
+        let mut config = base_config();
+        config.insert("method".into(), "sso".into());
+        assert_parse_auth_config_error(
+            config,
+            "Snowflake SSO authentication does not support 'password'.",
+        );
+    }
+
+    #[test]
+    fn test_external_browser_authentication_with_method_param_uses_stub_password() {
+        let mut config = base_config();
+        config.remove("password");
+        config.insert("method".into(), "sso".into());
+        let expected = [
+            ("user", "U"),
+            ("password", ADBC_STUB_PASSWORD),
             (snowflake::ACCOUNT, "A"),
             (snowflake::ROLE, "role"),
             (snowflake::WAREHOUSE, "warehouse"),
@@ -805,14 +1176,14 @@ mod tests {
 
     #[test]
     fn test_native_oauth() {
-        let mut config = base_config();
+        let mut config = base_config_without_user_password();
         config.insert("authenticator".into(), "oauth".into());
         config.insert("oauth_client_id".into(), "C".into());
         config.insert("oauth_client_secret".into(), "S".into());
         config.insert("token".into(), "R".into());
         let expected = [
-            ("user", "U"),
-            ("password", "P"),
+            ("user", OAUTH_STUB_USER),
+            ("password", ADBC_STUB_PASSWORD),
             (snowflake::ACCOUNT, "A"),
             (snowflake::ROLE, "role"),
             (snowflake::WAREHOUSE, "warehouse"),
@@ -831,14 +1202,14 @@ mod tests {
 
     #[test]
     fn test_native_oauth_with_method_param() {
-        let mut config = base_config();
+        let mut config = base_config_without_user_password();
         config.insert("method".into(), "snowflake_oauth".into());
         config.insert("oauth_client_id".into(), "C".into());
         config.insert("oauth_client_secret".into(), "S".into());
         config.insert("refresh_token".into(), "R".into());
         let expected = [
-            ("user", "U"),
-            ("password", "P"),
+            ("user", OAUTH_STUB_USER),
+            ("password", ADBC_STUB_PASSWORD),
             (snowflake::ACCOUNT, "A"),
             (snowflake::ROLE, "role"),
             (snowflake::WAREHOUSE, "warehouse"),
@@ -857,7 +1228,7 @@ mod tests {
 
     #[test]
     fn test_oauth_fails_with_token_instead_of_refresh_token() {
-        let mut config = base_config();
+        let mut config = base_config_without_user_password();
         config.insert("method".into(), "snowflake_oauth".into());
         config.insert("oauth_client_id".into(), "client_id".into());
         config.insert("oauth_client_secret".into(), "secret".into());
@@ -881,6 +1252,34 @@ mod tests {
     }
 
     #[test]
+    fn test_oauth_method_rejects_user() {
+        let mut config = base_config_without_password();
+        config.remove("password");
+        config.insert("method".into(), "snowflake_oauth".into());
+        config.insert("oauth_client_id".into(), "client_id".into());
+        config.insert("oauth_client_secret".into(), "secret".into());
+        config.insert("refresh_token".into(), "refresh_token".into());
+        assert_parse_auth_config_error(
+            config,
+            "Snowflake OAuth authentication does not support 'user'.",
+        );
+    }
+
+    #[test]
+    fn test_legacy_oauth_rejects_user() {
+        let mut config = base_config_without_password();
+        config.remove("password");
+        config.insert("authenticator".into(), "oauth".into());
+        config.insert("oauth_client_id".into(), "client_id".into());
+        config.insert("oauth_client_secret".into(), "secret".into());
+        config.insert("refresh_token".into(), "refresh_token".into());
+        assert_parse_auth_config_error(
+            config,
+            "Snowflake OAuth authentication does not support 'user'.",
+        );
+    }
+
+    #[test]
     fn test_invalid_private_key_path() {
         let auth = SnowflakeAuth {};
         let bad_path = "this_file_does_not_exist.p8";
@@ -897,12 +1296,12 @@ mod tests {
         }
 
         // 1. Test Legacy Case
-        let mut legacy_map = base_config();
+        let mut legacy_map = base_config_without_password();
         legacy_map.insert("private_key_path".into(), bad_path.into());
         assert_file_not_found!(legacy_map, "Legacy");
 
         // 2. Test Modern Case
-        let mut modern_map = base_config();
+        let mut modern_map = base_config_without_password();
         modern_map.insert("method".into(), "keypair".into());
         modern_map.insert("private_key_path".into(), bad_path.into());
         assert_file_not_found!(modern_map, "Modern");
@@ -910,7 +1309,7 @@ mod tests {
 
     #[test]
     fn test_oauth_fails_with_missing_required_fields() {
-        let mut config = base_config();
+        let mut config = base_config_without_user_password();
         config.insert("method".into(), "snowflake_oauth".into());
         config.insert("oauth_client_id".into(), "client_id".into());
         // oauth_client_secret OMITTED ON PURPOSE
@@ -956,6 +1355,28 @@ mod tests {
             (snowflake::REQUEST_TIMEOUT, DEFAULT_REQUEST_TIMEOUT),
         ];
         run_config_test(config, &expected);
+    }
+
+    #[test]
+    fn test_userpass_mfa_requires_user() {
+        let mut config = base_config();
+        config.remove("user");
+        config.insert("authenticator".into(), "username_password_mfa".into());
+        assert_parse_auth_config_error(
+            config,
+            "Snowflake warehouse authentication requires 'user'.",
+        );
+    }
+
+    #[test]
+    fn test_userpass_mfa_requires_password() {
+        let mut config = base_config();
+        config.remove("password");
+        config.insert("authenticator".into(), "username_password_mfa".into());
+        assert_parse_auth_config_error(
+            config,
+            "Snowflake warehouse authentication requires 'password'.",
+        );
     }
 
     #[test]
@@ -1006,7 +1427,7 @@ mod tests {
 
     #[test]
     fn test_jwt_oauth() {
-        let mut config = base_config();
+        let mut config = base_config_without_user_password();
         config.insert("authenticator".into(), "jwt".into());
         config.insert(
             "token".into(),
@@ -1014,8 +1435,8 @@ mod tests {
         );
 
         let expected = [
-            ("user", "U"),
-            ("password", "P"),
+            ("user", OAUTH_STUB_USER),
+            ("password", ADBC_STUB_PASSWORD),
             (snowflake::ACCOUNT, "A"),
             (snowflake::ROLE, "role"),
             (snowflake::WAREHOUSE, "warehouse"),
@@ -1036,7 +1457,7 @@ mod tests {
 
     #[test]
     fn test_jwt_oauth_fails_with_token_instead_of_jwt() {
-        let mut config = base_config();
+        let mut config = base_config_without_user_password();
         config.insert("method".into(), "snowflake_oauth_jwt".into());
         config.insert("token".into(), "wrong_field".into());
 
@@ -1059,7 +1480,7 @@ mod tests {
 
     #[test]
     fn test_jwt_oauth_fails_with_missing_jwt() {
-        let mut config = base_config();
+        let mut config = base_config_without_user_password();
         config.insert("method".into(), "snowflake_oauth_jwt".into());
         // jwt intentionally missing
 
@@ -1078,6 +1499,18 @@ mod tests {
                 "Unexpected error message: {msg}"
             );
         }
+    }
+
+    #[test]
+    fn test_oauth_jwt_method_rejects_user() {
+        let mut config = base_config_without_password();
+        config.remove("password");
+        config.insert("method".into(), "snowflake_oauth_jwt".into());
+        config.insert("jwt_token".into(), "jwt".into());
+        assert_parse_auth_config_error(
+            config,
+            "Snowflake OAuth JWT authentication does not support 'user'.",
+        );
     }
 
     #[test]

@@ -1199,7 +1199,7 @@ pub struct PostgresTargetEnv {
 #[derive(Serialize, DbtSchema)]
 pub struct SnowflakeTargetEnv {
     pub account: String,
-    pub user: String,
+    pub user: Option<String>,
     pub warehouse: Option<String>,
     pub role: Option<String>,
     pub authenticator: Option<String>,
@@ -1377,7 +1377,7 @@ impl TryFrom<DbConfig> for TargetContext {
                 let database = config.database.ok_or_else(|| missing("database"))?;
                 Ok(TargetContext::Snowflake(SnowflakeTargetEnv {
                     account: config.account.ok_or_else(|| missing("account"))?,
-                    user: config.user.ok_or_else(|| missing("user"))?,
+                    user: config.user,
                     warehouse: config.warehouse,
                     role: config.role.clone(),
                     authenticator: config.authenticator,
@@ -1695,5 +1695,40 @@ mod tests {
         } else {
             panic!("Expected DbConfig::Bigquery, got {config:?}",);
         }
+    }
+
+    #[test]
+    fn test_snowflake_target_context_allows_missing_user() {
+        let config: DbConfig = SnowflakeDbConfig {
+            account: Some("acct".to_string()),
+            database: Some("db".to_string()),
+            schema: Some("schema".to_string()),
+            ..Default::default()
+        }
+        .into();
+
+        let target = TargetContext::try_from(config).expect("snowflake target context");
+        let TargetContext::Snowflake(target) = target else {
+            panic!("expected snowflake target context");
+        };
+        assert_eq!(target.user, None);
+    }
+
+    #[test]
+    fn test_snowflake_target_context_preserves_user_when_present() {
+        let config: DbConfig = SnowflakeDbConfig {
+            account: Some("acct".to_string()),
+            user: Some("user".to_string()),
+            database: Some("db".to_string()),
+            schema: Some("schema".to_string()),
+            ..Default::default()
+        }
+        .into();
+
+        let target = TargetContext::try_from(config).expect("snowflake target context");
+        let TargetContext::Snowflake(target) = target else {
+            panic!("expected snowflake target context");
+        };
+        assert_eq!(target.user.as_deref(), Some("user"));
     }
 }
