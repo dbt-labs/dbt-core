@@ -86,8 +86,9 @@ impl CliParserTrait for CliParser {
         Cli::parse_from(itr)
     }
 
-    fn fail_fast_flag(&self, cli: &Self::CliType) -> bool {
-        cli.common_args().debug
+    fn fail_fast_flag(&self, _cli: &Self::CliType) -> bool {
+        // SA CLI doesn't have --fail-fast support
+        false
     }
 }
 
