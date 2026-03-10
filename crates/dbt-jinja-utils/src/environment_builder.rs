@@ -4,9 +4,8 @@ use crate::{
 use dbt_adapter::BaseAdapter;
 use dbt_common::{ErrorCode, FsError, FsResult, fs_err, io_args::IoArgs, unexpected_fs_err};
 use minijinja::{
-    AdapterDispatchFunction, Argument, AsBoolFilterType, AsNativeFilterType, AsNumberFilterType,
-    AsTextFilterType, DynTypeObject, Environment, Error as MinijinjaError,
-    ErrorKind as MinijinjaErrorKind, UndefinedFunctionType, UserDefinedFunctionType, Value,
+    AdapterDispatchFunction, Argument, DynTypeObject, Environment, UndefinedFunctionType,
+    UserDefinedFunctionType, Value,
     compiler::typecheck::FunctionRegistry,
     constants::{
         DBT_AND_ADAPTERS_NAMESPACE, MACRO_NAMESPACE_REGISTRY, MACRO_TEMPLATE_REGISTRY,
@@ -15,7 +14,7 @@ use minijinja::{
     dispatch_object::get_internal_packages,
     funcsign_parser, load_builtins_with_namespace,
     macro_unit::MacroUnit,
-    value::{ValueKind, ValueMap},
+    value::ValueMap,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -422,149 +421,12 @@ impl JinjaEnvBuilder {
     /// Registers filter types in the function registry
     fn register_filter_types(&self) -> Arc<FunctionRegistry> {
         let mut registry = (*self.function_registry).clone();
-        registry.insert(
-            "as_bool".to_string(),
-            DynTypeObject::new(Arc::new(AsBoolFilterType)),
-        );
-        registry.insert(
-            "as_number".to_string(),
-            DynTypeObject::new(Arc::new(AsNumberFilterType)),
-        );
-        registry.insert(
-            "as_text".to_string(),
-            DynTypeObject::new(Arc::new(AsTextFilterType)),
-        );
-        registry.insert(
-            "as_native".to_string(),
-            DynTypeObject::new(Arc::new(AsNativeFilterType)),
-        );
+        dbt_jinja_filters::register_filter_types(&mut registry);
         Arc::new(registry)
     }
 
     fn register_filters(&mut self) {
-        // TODO: This might not be enough (just passing through the value)
-        // This is because it is likely that the value is a string and needs
-        // to be converted to a native type (i.e. parsed)
-        self.env.add_filter("as_native", |value: Value| Ok(value));
-        self.env
-            .add_filter("as_text", |value: Value| match value.kind() {
-                ValueKind::Bool => Ok(Value::from(format!("{value}"))),
-                ValueKind::String => Ok(value),
-                ValueKind::Number => Ok(Value::from(format!("{value}"))),
-                ValueKind::None => Ok(Value::from("")),
-                _ => {
-                    // Try to see if Value is an Object - use debug to render if so
-                    if let Some(object) = value.as_object() {
-                        // Call the render method on the object
-                        let debug = format!("{object:?}");
-                        Ok(Value::from(debug))
-                    } else {
-                        Err(MinijinjaError::new(
-                            MinijinjaErrorKind::InvalidOperation,
-                            format!("Failed applying 'as_text' filter to {}", value.kind()),
-                        ))
-                    }
-                }
-            });
-
-        self.env
-            .add_filter("as_bool",  |value: Value| match value.kind() {
-                ValueKind::Undefined => Ok(Value::UNDEFINED),
-                ValueKind::None => Ok(Value::from(false)),
-                ValueKind::Bool | ValueKind::Number => Ok(value),
-
-                ValueKind::String => {
-                    let str_ref = value.as_str().unwrap();
-                    if str_ref == "False" || str_ref == "false" {
-                        Ok(Value::from(false))
-                    } else if str_ref == "True" || str_ref == "true" {
-                        Ok(Value::from(true))
-                    } else {
-                        Ok(value)
-                    }
-                }
-                ValueKind::Bytes => {
-                    let bytes_ref = value.as_bytes().unwrap();
-                    let string_from_bytes =
-                        String::from_utf8(bytes_ref.to_vec()).map_err(|_| {
-                            MinijinjaError::new(
-                                MinijinjaErrorKind::InvalidOperation,
-                                "Failed applying 'as_number' filter to bytes",
-                            )
-                        })?;
-                    let bool = string_from_bytes.parse::<bool>().map_err(|_| {
-                        MinijinjaError::new(
-                            MinijinjaErrorKind::InvalidOperation,
-                            format!(
-                                "Failed applying 'as_number' filter to bytes string '{string_from_bytes}'"
-                            ),
-                        )
-                    })?;
-                    Ok(Value::from(bool))
-                }
-                ValueKind::Seq | ValueKind::Map | ValueKind::Iterable | ValueKind::Plain => {
-                    Ok(Value::from(value.is_true()))
-                }
-                ValueKind::Invalid => Err(MinijinjaError::new(
-                    MinijinjaErrorKind::InvalidOperation,
-                    "Failed applying 'as_bool' filter to invalid value",
-                )),
-                _ => Err(MinijinjaError::new(
-                    MinijinjaErrorKind::InvalidOperation,
-                    "Failed applying 'as_bool' filter to unknown value",
-                )),
-            });
-
-        self.env
-            .add_filter("as_number", |value: Value| match value.kind() {
-                ValueKind::Undefined => Ok(Value::UNDEFINED),
-                ValueKind::None => Ok(Value::from(0)),
-                ValueKind::Bool => Ok(value),
-                ValueKind::Number => Ok(value),
-                ValueKind::String => {
-                    let str_ref = value.as_str().unwrap();
-                    let num = match str_ref.parse::<i32>() {
-                        Ok(num) => num,
-                        Err(_) => {
-                            return Ok(value);
-                        }
-                    };
-                    Ok(Value::from(num))
-                }
-                ValueKind::Bytes => {
-                    let bytes_ref = value.as_bytes().unwrap();
-                    let string_from_bytes =
-                        String::from_utf8(bytes_ref.to_vec()).map_err(|_| {
-                            MinijinjaError::new(
-                                MinijinjaErrorKind::InvalidOperation,
-                                "Failed applying 'as_number' filter to bytes",
-                            )
-                        })?;
-                    let num = string_from_bytes.parse::<i32>().map_err(|_| {
-                        MinijinjaError::new(
-                            MinijinjaErrorKind::InvalidOperation,
-                            format!(
-                                "Failed applying 'as_number' filter to bytes string '{string_from_bytes}'"
-                            ),
-                        )
-                    })?;
-                    Ok(Value::from(num))
-                }
-                ValueKind::Seq | ValueKind::Map | ValueKind::Iterable | ValueKind::Plain => {
-                    Err(MinijinjaError::new(
-                        MinijinjaErrorKind::InvalidOperation,
-                        "Failed applying 'as_number' filter to map, seq, or iterable",
-                    ))
-                }
-                ValueKind::Invalid => Err(MinijinjaError::new(
-                    MinijinjaErrorKind::InvalidOperation,
-                    "Failed applying 'as_number' filter to invalid value",
-                )),
-                _ => Err(MinijinjaError::new(
-                    MinijinjaErrorKind::InvalidOperation,
-                    "Failed applying 'as_number' filter to unknown value",
-                )),
-            });
+        dbt_jinja_filters::register_filters(&mut self.env);
     }
 
     fn register_tests(&mut self) {

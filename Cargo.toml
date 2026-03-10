@@ -24,6 +24,8 @@ members = [
   "crates/dbt-loader",
   "crates/dbt-test-containers",
   "crates/dbt-parser",
+  "crates/dbt-jinja-filters",
+  "crates/dbt-profile",
   "crates/dbt-schemas",
   "crates/dbt-schema-store",
   "crates/dbt-telemetry",
@@ -196,10 +198,12 @@ dbt-features = { path = "crates/dbt-features" }
 dbt-frontend-common = { path = "crates/dbt-frontend-common" }
 dbt-ident = { path = "crates/dbt-ident" }
 dbt-init = { path = "crates/dbt-init" }
+dbt-jinja-filters = { path = "crates/dbt-jinja-filters" }
 dbt-jinja-utils = { path = "crates/dbt-jinja-utils" }
 dbt-loader = { path = "crates/dbt-loader" }
 dbt-parser = { path = "crates/dbt-parser" }
 dbt-proc-macros = { path = "crates/dbt-proc-macros" }
+dbt-profile = { path = "crates/dbt-profile" }
 
 dbt-sample = { path = "crates/dbt-sample" }
 dbt-schema-store = { path = "crates/dbt-schema-store" }
