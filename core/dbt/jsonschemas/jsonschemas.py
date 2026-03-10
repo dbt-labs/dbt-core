@@ -120,6 +120,23 @@ def _get_allowed_config_key_aliases() -> List[str]:
     return config_aliases
 
 
+def _get_allowed_config_fields_for_project_property(schema, property_field_name) -> List[str]:
+    property_defn = schema["properties"].get(property_field_name)
+    property_defn_name = None
+    if property_defn and "anyOf" in property_defn:
+        for any_of_item in property_defn["anyOf"]:
+            if "$ref" in any_of_item:
+                property_defn_name = any_of_item["$ref"].split("/")[-1]
+                break
+
+    if property_defn_name is None:
+        return []
+
+    allowed_config_fields = set(schema["definitions"][property_defn_name]["properties"])
+    allowed_config_fields.update(_get_allowed_config_key_aliases())
+    return list(allowed_config_fields)
+
+
 def _get_allowed_config_fields_from_error_path(
     yml_schema: Dict[str, Any], error_path: List[Union[str, int]]
 ) -> Optional[List[str]]:
@@ -241,11 +258,29 @@ def jsonschema_validate(schema: Dict[str, Any], json: Dict[str, Any], file_path:
             elif "dbt_project.yml" in file_path and error_path[0] in _HIERARCHICAL_CONFIG_KEYS:
                 for sub_error in sub_errors:
                     if isinstance(sub_error, ValidationError) and sub_error.validator == "type":
-                        # Only raise type-errors if they are indicating leaf config without a plus prefix
-                        if (
+                        allowed_config_fields = _get_allowed_config_fields_for_project_property(
+                            schema, property_field_name=error_path[0]
+                        )
+                        is_missing_plus_prefix = (
                             len(sub_error.path) > 0
                             and isinstance(sub_error.path[-1], str)
                             and not sub_error.path[-1].startswith("+")
+                        )
+                        had_valid_config_key_in_path = any(
+                            k in allowed_config_fields for k in sub_error.path
+                        )
+                        is_maybe_config_key = (
+                            len(sub_error.path) > 0
+                            and isinstance(sub_error.path[-1], str)
+                            and f"+{sub_error.path[-1]}" in allowed_config_fields
+                        )
+
+                        # if its missing a plus prefix, does not have valid config key in path
+                        # and the last part of the error path might be a valid config key
+                        if (
+                            is_missing_plus_prefix
+                            and is_maybe_config_key
+                            and not had_valid_config_key_in_path
                         ):
                             deprecations.warn(
                                 "missing-plus-prefix-in-config-deprecation",
