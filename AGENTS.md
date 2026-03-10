@@ -145,6 +145,8 @@ class TestMyFeature:
 
 Key utilities: `run_dbt()`, `run_dbt_and_capture()`, `get_manifest()`, `get_artifact()` from `dbt.tests.util`.
 
+Having multiple tests in a functional test class will mean that those tests **will share** the underlying dbt project fixture of the class. This means that if a test modifies the underlying project that will affect other tests in the same class. This leads to flakiness and means it is generally best practice to have one test per functional test class.
+
 ### Database Setup for Functional Tests
 
 ```sh
