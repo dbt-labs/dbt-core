@@ -98,6 +98,12 @@ selectors:
     definition:
       union:
         - selector:circular_selection_hop
+
+  - name: model_a_explicit_selector
+    description: Selects model_a with an explicit selector method
+    definition:
+      method: selector
+      value: model_a_selector
 """
 
 
@@ -226,3 +232,7 @@ class TestSelectorSelectorMethod:
     def test_circular_dependency(self, project):
         with pytest.raises(DbtRecursionError):
             run_dbt(["ls", "--select", "selector:circular_dependency_selector"], expect_pass=False)
+
+    def test_selector_with_explicit_selector_method(self, project):
+        result = run_dbt(["ls", "--select", "selector:model_a_explicit_selector"])
+        assert_result_set(result, {"test.model_a"})
