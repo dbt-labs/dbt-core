@@ -128,6 +128,12 @@ arrow-string = { git = "https://github.com/sdf-labs/arrow-rs", rev = "e4924d7d6d
 # arrow-select = { path = "../arrow-rs/arrow-select" }
 # arrow-string = { path = "../arrow-rs/arrow-string" }
 
+[profile.dev]
+# Keep debug info in separate .dwo files rather than bundling into the binary.
+# This significantly speeds up incremental linking on Linux because the linker
+# has far less data to process.
+split-debuginfo = "unpacked"
+
 [profile.dev.package."*"]
 # Enable basic optimizations for all non-member dependencies. This greatly
 # speeds up test times, with no loss of debuggability.
@@ -488,15 +494,7 @@ phf_shared = { version = "0.11" }
 
 # error handling
 anyhow = { version = "1.0.74" }
-thiserror = "1.0"
-
-# database / orms
-sea-orm = { version = "~1.1.13", features = [
-  "sqlx-postgres",
-  "runtime-async-std-native-tls",
-  "macros",
-] }
-sqlx = { version = "0.8", features = ["postgres", "runtime-tokio-native-tls"] }
+thiserror = "2"
 
 # logging
 env_logger = "0.10" # To be removed
