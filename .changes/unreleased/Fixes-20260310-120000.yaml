@@ -1,0 +1,6 @@
+kind: Fixes
+body: Fix list-type metric filters under models key being incorrectly rendered at parse time, causing 'Dimension is undefined' errors
+time: 2026-03-10T12:00:00.000000-08:00
+custom:
+    Author: theyostalservice
+    Issue: "12618"
