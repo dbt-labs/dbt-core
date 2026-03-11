@@ -153,7 +153,7 @@ jobs:
           git_user_signingkey: true
           git_commit_gpgsign: true
           git_committer_name: "Github Build Bot"
-          git_committer_email: "buildbot@fishtownanalytics.com"
+          git_committer_email: "buildbot@dbtlabs.com"
 
       - name: "Download all partial duration files"
         uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # actions/download-artifact@v7
@@ -206,8 +206,8 @@ jobs:
         with:
           token: ${{ secrets.FISHTOWN_BOT_PAT }}
           commit-message: "Update test durations for pytest-split"
-          author: "Github Build Bot <buildbot@fishtownanalytics.com>"
-          committer: "Github Build Bot <buildbot@fishtownanalytics.com>"
+          author: "Github Build Bot <buildbot@dbtlabs.com>"
+          committer: "Github Build Bot <buildbot@dbtlabs.com>"
           branch: update-test-durations
           base: main
           delete-branch: true
