@@ -14,13 +14,14 @@ pub(crate) fn new_loader() -> RelationConfigLoader<DatabricksRelationMetadata> {
     // TODO: missing from Python dbt-databricks:
     // - liquid clustering
     // - relation tags
-    let loaders: [Box<dyn ComponentConfigLoader<DatabricksRelationMetadata>>; 4] = [
+    let loaders: [Box<dyn ComponentConfigLoader<DatabricksRelationMetadata>>; 5] = [
         // Box::new(components::LiquidClusteringLoader),
         Box::new(components::PartitionByLoader),
         Box::new(components::RelationCommentLoader),
         Box::new(components::TblPropertiesLoader),
         Box::new(components::RefreshLoader),
         // Box::new(components::RelationTagsLoader),
+        Box::new(components::ColumnMasksLoader),
     ];
 
     RelationConfigLoader::new(loaders, requires_full_refresh)

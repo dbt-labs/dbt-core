@@ -3,11 +3,16 @@
 {%- endmacro %}
 
 {% macro databricks__get_create_streaming_table_as_sql(relation, sql) -%}
+  {# DIVERGENCE START:
+   # - partitioned_by is used here instead of partition_by when retrieving partitioning config
+   # - the config is directly returned, so we don't need to access streaming_table.config
+   #}
   {%- set streaming_table = adapter.get_config_from_model(config.model) -%}
-  {%- set partition_by = streaming_table.config["partition_by"].partition_by -%}
-  {%- set tblproperties = streaming_table.config["tblproperties"].tblproperties -%}
-  {%- set comment = streaming_table.config["comment"].comment -%}
-  {%- set refresh = streaming_table.config["refresh"] -%}
+  {%- set partition_by = streaming_table["partitioned_by"].partition_by -%}
+  {%- set tblproperties = streaming_table["tblproperties"].tblproperties -%}
+  {%- set comment = streaming_table["comment"].comment -%}
+  {%- set refresh = streaming_table["refresh"] -%}
+  {# DIVERGENCE END #}
 
   {%- set analysis_sql = sql | replace('STREAM ', '') | replace('stream ', '') -%}
 

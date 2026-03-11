@@ -4,6 +4,10 @@ pub(crate) mod column_comments;
 #[allow(unused_imports)]
 pub(crate) use column_comments::{ColumnComments, ColumnCommentsLoader};
 
+pub(crate) mod column_masks;
+#[allow(unused_imports)]
+pub(crate) use column_masks::{ColumnMasks, ColumnMasksLoader};
+
 pub(crate) mod column_tags;
 #[allow(unused_imports)]
 pub(crate) use column_tags::{ColumnTags, ColumnTagsLoader};

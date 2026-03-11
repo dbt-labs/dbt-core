@@ -13,7 +13,7 @@ fn requires_full_refresh(components: &IndexMap<&'static str, ComponentConfigChan
 pub(crate) fn new_loader() -> RelationConfigLoader<DatabricksRelationMetadata> {
     // TODO: missing from Python dbt-databricks:
     // - liquid clustering
-    let loaders: [Box<dyn ComponentConfigLoader<DatabricksRelationMetadata>>; 6] = [
+    let loaders: [Box<dyn ComponentConfigLoader<DatabricksRelationMetadata>>; 7] = [
         // TODO: column mask
         Box::new(components::ColumnCommentsLoader),
         Box::new(components::ColumnTagsLoader),
@@ -22,6 +22,7 @@ pub(crate) fn new_loader() -> RelationConfigLoader<DatabricksRelationMetadata> {
         // Box::new(components::LiquidClusteringLoader),
         Box::new(components::RelationTagsLoader),
         Box::new(components::TblPropertiesLoader),
+        Box::new(components::ColumnMasksLoader),
     ];
 
     RelationConfigLoader::new(loaders, requires_full_refresh)
@@ -37,6 +38,7 @@ mod tests {
     };
     use crate::relation::test_helpers::TestCase;
     use dbt_schemas::schemas::common::{Constraint, ConstraintType};
+    use dbt_schemas::schemas::dbt_column::ColumnMask;
     use indexmap::{IndexMap, IndexSet};
 
     fn create_test_cases() -> Vec<TestCase<DatabricksRelationMetadata, TestModelConfig>> {
@@ -62,6 +64,10 @@ mod tests {
                             type_: ConstraintType::NotNull,
                             ..Default::default()
                         }],
+                        column_mask: Some(ColumnMask {
+                            function: "function".to_string(),
+                            using_columns: None,
+                        }),
                     },
                 ],
                 tags: IndexMap::from_iter([
@@ -91,6 +97,10 @@ mod tests {
                             type_: ConstraintType::NotNull,
                             ..Default::default()
                         }],
+                        column_mask: Some(ColumnMask {
+                            function: "other function".to_string(),
+                            using_columns: None,
+                        }),
                         ..Default::default()
                     },
                     TestModelColumn {
@@ -98,6 +108,7 @@ mod tests {
                         comment: Some("old comment".to_string()),
                         tags: IndexMap::from_iter([("col_tag".to_string(), "new".to_string())]),
                         constraints: Vec::new(),
+                        ..Default::default()
                     },
                 ],
                 tags: IndexMap::from_iter([
@@ -172,6 +183,19 @@ mod tests {
                                 ("customKey".to_string(), "new".to_string()),
                                 ("customKey2".to_string(), "value".to_string()),
                             ]),
+                        )),
+                    ),
+                    (
+                        components::ColumnMasksLoader::type_name(),
+                        ComponentConfigChange::Some(components::ColumnMasksLoader::new(
+                            IndexMap::from_iter([(
+                                "a_column".to_string(),
+                                ColumnMask {
+                                    function: "other function".to_string(),
+                                    using_columns: None,
+                                },
+                            )]),
+                            vec!["b_column".to_string()],
                         )),
                     ),
                 ],

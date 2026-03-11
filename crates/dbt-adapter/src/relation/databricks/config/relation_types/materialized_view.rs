@@ -15,7 +15,7 @@ pub(crate) fn new_loader() -> RelationConfigLoader<DatabricksRelationMetadata> {
     // - liquid clustering
     // - relation tags
     // - query
-    let loaders: [Box<dyn ComponentConfigLoader<DatabricksRelationMetadata>>; 4] = [
+    let loaders: [Box<dyn ComponentConfigLoader<DatabricksRelationMetadata>>; 5] = [
         // Box::new(components::LiquidClusteringLoader),
         Box::new(components::RelationCommentLoader),
         Box::new(components::PartitionByLoader),
@@ -23,6 +23,7 @@ pub(crate) fn new_loader() -> RelationConfigLoader<DatabricksRelationMetadata> {
         Box::new(components::RefreshLoader),
         // Box::new(components::RelationTagsLoader),
         Box::new(components::TblPropertiesLoader),
+        Box::new(components::ColumnMasksLoader),
     ];
 
     RelationConfigLoader::new(loaders, requires_full_refresh)

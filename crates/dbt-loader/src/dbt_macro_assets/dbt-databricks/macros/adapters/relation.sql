@@ -57,9 +57,22 @@
 
 {% macro get_column_and_constraints_sql(relation, columns) %}
   (
+    {#- DIVERGENCE BEGIN: upstream inserts masks in column.render_for_create(); we build the column string manually because the Column type doesn't store mask information. -#}
     {% for column in columns %}
-      {{ column.render_for_create() }}{% if not loop.last or relation.create_constraints %},{% endif %}
+      {% set column_str = column.render_for_create() %}
+      {% set column_config = model.columns[column.name] %}
+      {% if column_config %}
+        {% set column_mask = column_config.get('column_mask') %}
+        {% if column_mask %}
+          {% set column_str = column_str ~ " MASK " ~ column_mask.function %}
+          {% if column_mask.using_columns %}
+            {% set column_str = column_str ~ " USING COLUMNS (" ~ column_mask.using_columns ~ ")" %}
+          {% endif %}
+        {% endif %}
+      {% endif %}
+      {{ column_str }}{% if not loop.last or relation.create_constraints %},{% endif %}
     {% endfor %}
+    {# DIVERGENCE END -#}
     {% if relation.create_constraints %}
       {{ relation.render_constraints_for_create() }}
     {% endif %}

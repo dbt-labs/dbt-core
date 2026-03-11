@@ -35,7 +35,7 @@ fn normalized_keys(map: &IndexMap<String, String>) -> IndexMap<String, &str> {
                 k.as_str()
             };
 
-            let lower = format!("`{}`", unquoted.to_lowercase());
+            let lower = unquoted.to_lowercase();
 
             (lower, v.as_ref())
         })
@@ -45,7 +45,7 @@ fn normalized_keys(map: &IndexMap<String, String>) -> IndexMap<String, &str> {
 // https://github.com/databricks/dbt-databricks/blob/11f7cf7b54e410a1dca05f6f6add8cd1ff8d42d2/dbt/adapters/databricks/relation_configs/column_comments.py#L23
 //
 // Small deviation from Core: it performs case/quote-insensitive comparison of keys. In the final map, it keeps the original casing and quotes all columns.
-// Fusion is lowercasing everything and quoting everything to simplify. We can do that because `COMMENT ON` queries are case insensitive anyways.
+// Fusion is lowercasing everything and unquoting everything to simplify. We can do that because `COMMENT ON` queries are case insensitive anyways.
 //
 // See: https://docs.databricks.com/aws/en/sql/language-manual/sql-ref-names
 fn normalized_keys_diff(
@@ -428,10 +428,10 @@ email,string,\n\
             .unwrap();
         assert_eq!(diff_config.value.len(), 2);
         assert_eq!(
-            diff_config.value.get("`id`"),
+            diff_config.value.get("id"),
             Some(&"Updated primary key".to_string())
         );
-        assert_eq!(diff_config.value.get("`age`"), Some(&"10".to_string()));
+        assert_eq!(diff_config.value.get("age"), Some(&"10".to_string()));
     }
 
     #[test]
@@ -454,6 +454,6 @@ email,string,\n\
             .unwrap();
         assert_eq!(diff_config.value.len(), 1);
         // Dropped comment gets reset to empty string
-        assert_eq!(diff_config.value.get("`name`"), Some(&"".to_string()));
+        assert_eq!(diff_config.value.get("name"), Some(&"".to_string()));
     }
 }

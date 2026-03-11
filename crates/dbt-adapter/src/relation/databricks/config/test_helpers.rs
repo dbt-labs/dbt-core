@@ -5,6 +5,7 @@ use crate::relation::test_helpers;
 use arrow::csv::ReaderBuilder;
 use arrow_schema::{DataType, Field, Schema};
 use dbt_agate::AgateTable;
+use dbt_schemas::schemas::dbt_column::ColumnMask;
 use dbt_schemas::schemas::{
     common::PartitionConfig, common::*, dbt_column::DbtColumn, nodes::*, project::*,
 };
@@ -19,6 +20,7 @@ pub(crate) struct TestModelColumn {
     pub comment: Option<String>,
     pub constraints: Vec<Constraint>,
     pub tags: IndexMap<String, String>,
+    pub column_mask: Option<ColumnMask>,
 }
 
 #[derive(Default)]
@@ -78,6 +80,7 @@ pub(crate) fn create_mock_dbt_model(cfg: TestModelConfig) -> DbtModel {
                             .map(|(k, v)| (k, YmlValue::from(v)))
                             .collect(),
                     ),
+                    column_mask: c.column_mask,
                     ..Default::default()
                 })
             })
@@ -130,6 +133,7 @@ pub(crate) fn create_mock_dbt_model(cfg: TestModelConfig) -> DbtModel {
     }
 }
 
+// TODO(anna): describe should return column masks
 pub(crate) fn create_mock_describe_extended_table<'a>(
     partition_columns: impl IntoIterator<Item = &'a str>,
     rows: impl IntoIterator<Item = (&'a str, &'a str)>,

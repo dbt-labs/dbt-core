@@ -46,6 +46,7 @@ pub struct DbtColumn {
     pub tags: Vec<String>,
     pub policy_tags: Option<Vec<String>>,
     pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
+    pub column_mask: Option<ColumnMask>,
     pub quote: Option<bool>,
     #[serde(default, rename = "config")]
     pub deprecated_config: ColumnConfig,
@@ -114,11 +115,18 @@ pub struct ColumnProperties {
     pub granularity: Option<Granularity>,
     pub policy_tags: Option<Vec<String>>,
     pub databricks_tags: Option<BTreeMap<String, YmlValue>>,
+    pub column_mask: Option<ColumnMask>,
     pub quote: Option<bool>,
     pub config: Option<ColumnConfig>,
 
     pub entity: Option<Entity>,
     pub dimension: Option<ColumnPropertiesDimension>,
+}
+
+#[derive(Debug, Default, Deserialize, Serialize, Clone, DbtSchema, Eq, PartialEq)]
+pub struct ColumnMask {
+    pub function: String,
+    pub using_columns: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, Default, DbtSchema, Eq, PartialEq, Display)]
@@ -248,6 +256,7 @@ pub fn process_columns(
                             .unwrap_or_default(),
                         policy_tags: cp.policy_tags.clone(),
                         databricks_tags: cp.databricks_tags.clone().or(cp_databricks_tags),
+                        column_mask: cp.column_mask.clone(),
                         quote: cp.quote,
                         deprecated_config: cp.config.clone().unwrap_or_default(),
                     }))
