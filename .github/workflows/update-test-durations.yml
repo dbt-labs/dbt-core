@@ -20,7 +20,7 @@ on:
   workflow_dispatch:
     inputs:
       auto-merge-pr:
-        description: "Whether to auto-merge the PR"
+        description: "Auto-merge the PR"
         required: true
         type: boolean
         default: true
