@@ -16,6 +16,7 @@ pub mod metrics;
 pub mod middlewares;
 mod private_events;
 pub mod reload;
+mod rotating_file_writer;
 mod shared;
 mod shared_writer;
 pub mod shutdown;

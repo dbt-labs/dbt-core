@@ -3,7 +3,7 @@ use crate::task::TestError;
 use crate::task::env::TracingReloadHandle;
 
 use super::io::{RmTask, TouchTask};
-use super::tasks::{NopTask, ShExecute};
+use super::tasks::{FnTask, NopTask, ShExecute};
 use super::utils::{check_set_user_env_var, redirect_buffer_to_stdin, strip_full_test_name};
 use super::{ProjectEnv, Task, TestEnv, TestResult};
 
@@ -84,6 +84,14 @@ impl TaskSeq {
     pub fn task(&mut self, task: Box<dyn Task>) -> &mut Self {
         self.tasks.push(task);
         self
+    }
+
+    /// Creates a helper task backed by a synchronous closure.
+    pub fn task_fn<F>(&mut self, func: F) -> &mut Self
+    where
+        F: Fn(&ProjectEnv, &TestEnv, usize) -> TestResult<()> + Send + Sync + 'static,
+    {
+        self.task(Box::new(FnTask::new(func)))
     }
 
     /// Creates a task for run a shell command.  NOTE: using this

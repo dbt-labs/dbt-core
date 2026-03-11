@@ -969,6 +969,44 @@ impl Task for NopTask {
     }
 }
 
+pub struct FnTask<F> {
+    func: F,
+    counted: bool,
+}
+
+impl<F> FnTask<F> {
+    pub fn new(func: F) -> Self {
+        Self {
+            func,
+            counted: false,
+        }
+    }
+
+    pub fn counted(mut self) -> Self {
+        self.counted = true;
+        self
+    }
+}
+
+#[async_trait]
+impl<F> Task for FnTask<F>
+where
+    F: Fn(&ProjectEnv, &TestEnv, usize) -> TestResult<()> + Send + Sync,
+{
+    async fn run(
+        &self,
+        project_env: &ProjectEnv,
+        test_env: &TestEnv,
+        task_index: usize,
+    ) -> TestResult<()> {
+        (self.func)(project_env, test_env, task_index)
+    }
+
+    fn is_counted(&self) -> bool {
+        self.counted
+    }
+}
+
 /// Task to execute any sh command.
 pub struct ShExecute {
     name: String,

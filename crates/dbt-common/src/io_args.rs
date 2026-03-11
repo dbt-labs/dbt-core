@@ -144,6 +144,7 @@ pub struct IoArgs {
     pub log_format: LogFormat,
     pub log_level: Option<LevelFilter>,
     pub log_level_file: Option<LevelFilter>,
+    pub log_file_max_bytes: u64,
     pub debug: bool,
 
     // Flags influencing error/warning behavior
@@ -227,6 +228,7 @@ impl fmt::Debug for IoArgs {
             .field("out_dir", &self.out_dir)
             .field("db_root", &self.db_root)
             .field("log_path", &self.log_path)
+            .field("log_file_max_bytes", &self.log_file_max_bytes)
             .field("otel_file_name", &self.otel_file_name)
             .field("status_reporter", &self.status_reporter.is_some())
             .finish()

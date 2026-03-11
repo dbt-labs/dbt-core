@@ -20,7 +20,9 @@ use strum::IntoEnumIterator;
 use strum_macros::Display;
 use uuid::Uuid;
 
-use dbt_common::constants::{DBT_PROJECT_YML, DBT_TARGET_DIR_NAME, NOOP};
+use dbt_common::constants::{
+    DBT_DEFAULT_LOG_FILE_MAX_BYTES, DBT_PROJECT_YML, DBT_TARGET_DIR_NAME, NOOP,
+};
 use dbt_common::io_args::FsCommand;
 use dbt_common::io_args::{BuildCacheMode, DisplayFormat, ListOutputFormat, StaticAnalysisKind};
 use dbt_common::io_args::{
@@ -1534,10 +1536,8 @@ pub struct CommonArgs {
     pub otel_parquet_file_name: Option<String>,
 
     /// Configure the max file size in bytes for a single dbt.log file, before rolling over. 0 means no limit.
-    #[arg(global = true, long, default_value = "false", env = "DBT_LOG_FILE_MAX_BYTES", value_parser = BoolishValueParser::new(),hide = true)]
-    pub log_file_max_bytes: bool,
-    #[arg(global = true, long, default_value = "false", env = "DBT_LOG_FILE_MAX_BYTES", value_parser = BoolishValueParser::new(),hide = true)]
-    pub no_log_file_max_bytes: bool,
+    #[arg(global = true, long, default_value_t = DBT_DEFAULT_LOG_FILE_MAX_BYTES, env = "DBT_LOG_FILE_MAX_BYTES", hide = true)]
+    pub log_file_max_bytes: u64,
 
     /// Set logging format; use --log-format-file to override.
     #[arg(global = true, long, env = "DBT_LOG_FORMAT", default_value_t = LogFormat::Default,)]
@@ -1877,6 +1877,7 @@ impl CommonArgs {
                 log_format: self.log_format,
                 log_level: self.log_level,
                 log_level_file: self.log_level_file,
+                log_file_max_bytes: self.log_file_max_bytes,
                 log_path: self.log_path.clone(),
                 otel_file_name: self.otel_file_name.clone(),
                 otel_parquet_file_name: self.otel_parquet_file_name.clone(),
@@ -2171,6 +2172,7 @@ impl InitArgs {
                 log_format: self.common_args.log_format,
                 log_level: self.common_args.log_level,
                 log_level_file: self.common_args.log_level_file,
+                log_file_max_bytes: self.common_args.log_file_max_bytes,
                 log_path: self.common_args.log_path.clone(),
                 otel_file_name: self.common_args.otel_file_name.clone(),
                 otel_parquet_file_name: self.common_args.otel_parquet_file_name.clone(),
@@ -2221,6 +2223,7 @@ pub fn from_main(cli: &Cli) -> SystemArgs {
                 (true, _) => Some(LevelFilter::Debug),
                 (false, _) => common_args.log_level_file,
             },
+            log_file_max_bytes: common_args.log_file_max_bytes,
             log_path: common_args.log_path,
             export_to_otlp: common_args.export_to_otlp,
             otel_file_name: common_args.otel_file_name,
@@ -2262,6 +2265,7 @@ pub fn from_lib(cli: &Cli) -> SystemArgs {
             log_format: common_args.log_format,
             log_level: common_args.log_level,
             log_level_file: common_args.log_level_file,
+            log_file_max_bytes: common_args.log_file_max_bytes,
             log_path: common_args.log_path,
             export_to_otlp: common_args.export_to_otlp,
             otel_file_name: common_args.otel_file_name,

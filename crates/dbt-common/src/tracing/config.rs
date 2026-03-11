@@ -16,12 +16,14 @@ use super::{
     },
     middlewares::markdown_log_filter::TelemetryMarkdownLogFilter,
     middlewares::metric_aggregator::TelemetryMetricAggregator,
+    rotating_file_writer::RotatingFileWriter,
     shutdown::TelemetryShutdownItem,
 };
 use crate::collections::HashSet;
 use crate::{
     constants::{
-        DBT_DEAFULT_LOG_FILE_NAME, DBT_DEAFULT_QUERY_LOG_FILE_NAME, DBT_LOG_DIR_NAME,
+        DBT_DEFAULT_LOG_FILE_BACKUP_COUNT, DBT_DEFAULT_LOG_FILE_MAX_BYTES,
+        DBT_DEFAULT_LOG_FILE_NAME, DBT_DEFAULT_QUERY_LOG_FILE_NAME, DBT_LOG_DIR_NAME,
         DBT_METADATA_DIR_NAME, DBT_PROJECT_YML, DBT_TARGET_DIR_NAME,
     },
     io_args::{FsCommand, IoArgs, ShowOptions},
@@ -61,6 +63,8 @@ pub struct FsTraceConfig {
     pub(super) log_path: PathBuf,
     /// Optional custom name for the log file. If None, defaults to `dbt.log`.
     pub(super) log_file_name: Option<String>,
+    /// Max size in bytes for rotating file logs. `0` means no limit.
+    pub(super) log_file_max_bytes: u64,
     /// Invocation ID. Used as trace ID for correlation
     pub(super) invocation_id: uuid::Uuid,
     /// Optional parent span ID for OpenTelemetry trace correlation.
@@ -93,6 +97,7 @@ impl Default for FsTraceConfig {
             otel_parquet_file_path: None,
             log_path: PathBuf::new(),
             log_file_name: None,
+            log_file_max_bytes: DBT_DEFAULT_LOG_FILE_MAX_BYTES,
             invocation_id: uuid::Uuid::now_v7(),
             parent_span_id: None,
             export_to_otlp: false,
@@ -160,6 +165,8 @@ impl FsTraceConfig {
     /// * `show_all_deprecations` - If true, show all deprecation warnings/errors instead of one per package
     /// * `log_file_name` - Optional custom name for the log file. If None, defaults to `dbt.log`.
     ///   If Some, creates log file at `{log_path}/{log_file_name}`
+    /// * `log_file_max_bytes` - Max size for rotating file logs in bytes.
+    ///   `0` means no size limit.
     /// * `disable_console_output` - If true, disables stdout/console output even when using Text/Default format
     ///
     /// # Path Resolution
@@ -212,6 +219,7 @@ impl FsTraceConfig {
         show_options: HashSet<ShowOptions>,
         show_all_deprecations: bool,
         log_file_name: Option<&str>,
+        log_file_max_bytes: u64,
         disable_console_output: bool,
     ) -> Self {
         let (in_dir, out_dir) = calculate_trace_dirs(project_dir, target_path);
@@ -238,6 +246,7 @@ impl FsTraceConfig {
                 .map(|file_name| out_dir.join(DBT_METADATA_DIR_NAME).join(file_name)),
             log_path: log_dir_path,
             log_file_name: log_file_name.map(|s| s.to_string()),
+            log_file_max_bytes,
             invocation_id,
             parent_span_id,
             export_to_otlp,
@@ -285,7 +294,8 @@ impl FsTraceConfig {
             true, // Always enable query log for now
             io_args.show.clone(),
             io_args.show_all_deprecations,
-            None,  // log_file_name - use default dbt.log
+            None, // log_file_name - use default dbt.log
+            io_args.log_file_max_bytes,
             false, // disable_console_output defaults to false for CLI
         )
     }
@@ -397,25 +407,21 @@ impl FsTraceConfig {
             let log_file_name = self
                 .log_file_name
                 .as_deref()
-                .unwrap_or(DBT_DEAFULT_LOG_FILE_NAME);
+                .unwrap_or(DBT_DEFAULT_LOG_FILE_NAME);
             let file_log_path = self.log_path.join(log_file_name);
-
-            // Open file in append mode, same as dbt core.
-            // NOTE: legacy logger based onfra also opens this file with `truncate` as of today.
-            // This is only working because we hold 2 implicit assumptions until full migration to tracing:
-            // 1. We only write end of run summary to the log file, so it comes last anyway
-            // 2. logger based infra flushes on each write, so we shouldn't have interleaved writes
-            let file = std::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(file_log_path)
-                .map_err(|e| {
-                    fs_err!(
-                        ErrorCode::IoError,
-                        "Failed to open telemetry log file for append: {}",
-                        e
-                    )
-                })?;
+            // Open file in rotating wrapper, same as dbt core.
+            let file = RotatingFileWriter::new(
+                &file_log_path,
+                self.log_file_max_bytes,
+                DBT_DEFAULT_LOG_FILE_BACKUP_COUNT,
+            )
+            .map_err(|e| {
+                fs_err!(
+                    ErrorCode::IoError,
+                    "Failed to open log file for append: {}",
+                    e
+                )
+            })?;
 
             if let Some((file_log_layer, writer_handle)) = match self.log_format {
                 LogFormat::Default | LogFormat::Text => Some(
@@ -439,10 +445,10 @@ impl FsTraceConfig {
 
         // Create query log writer layer (always enabled; internal-only event sink)
         if self.enable_query_log {
-            let file_path = self.log_path.join(DBT_DEAFULT_QUERY_LOG_FILE_NAME);
-
-            // Create or truncate existing file
-            let file = crate::stdfs::File::create(&file_path)?;
+            let file_path = self.log_path.join(DBT_DEFAULT_QUERY_LOG_FILE_NAME);
+            // Keep query_log.sql scoped to the current invocation.
+            let file = crate::stdfs::File::create(&file_path)
+                .map_err(|e| fs_err!(ErrorCode::IoError, "Failed to open query log file: {}", e))?;
 
             let (layer, handle) = build_query_log_layer_with_background_writer(file);
             shutdown_items.push(handle);

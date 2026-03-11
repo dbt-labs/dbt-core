@@ -84,6 +84,7 @@ powershell_script = "1.1.0"
 bytes = { workspace = true }
 dbt-test-primitives = { workspace = true }
 indoc = { workspace = true }
+tempfile = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
 [lib]

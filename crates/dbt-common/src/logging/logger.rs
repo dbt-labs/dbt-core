@@ -1,6 +1,6 @@
 use crate::FsResult;
 use crate::collections::HashMap;
-use crate::constants::{DBT_DEAFULT_LOG_FILE_NAME, DBT_LOG_DIR_NAME};
+use crate::constants::{DBT_DEFAULT_LOG_FILE_NAME, DBT_LOG_DIR_NAME};
 use crate::io_args::IoArgs;
 use crate::pretty_string::remove_ansi_codes;
 use crate::tracing::layers::tui_layer::with_suspended_progress_bars;
@@ -440,15 +440,15 @@ impl From<&IoArgs> for FsLogConfig {
                 .as_ref()
                 .map(|p| {
                     if p.is_relative() {
-                        args.in_dir.join(p).join(DBT_DEAFULT_LOG_FILE_NAME)
+                        args.in_dir.join(p).join(DBT_DEFAULT_LOG_FILE_NAME)
                     } else {
-                        p.join(DBT_DEAFULT_LOG_FILE_NAME)
+                        p.join(DBT_DEFAULT_LOG_FILE_NAME)
                     }
                 })
                 .unwrap_or_else(|| {
                     args.in_dir
                         .join(DBT_LOG_DIR_NAME)
-                        .join(DBT_DEAFULT_LOG_FILE_NAME)
+                        .join(DBT_DEFAULT_LOG_FILE_NAME)
                 }),
             file_log_level: args.log_level.unwrap_or(LevelFilter::Info), // default file log level
             file_log_format: args.log_format,
