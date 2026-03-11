@@ -57,6 +57,11 @@ pub fn create_static_relation(
             StaticBaseRelationObject::new(Arc::new(fabric_relation_type))
         }
         AdapterType::ClickHouse => todo!("ClickHouse"),
+        AdapterType::Starburst => todo!("Starburst"),
+        AdapterType::Athena => todo!("Athena"),
+        AdapterType::Trino => todo!("Trino"),
+        AdapterType::Dremio => todo!("Dremio"),
+        AdapterType::Oracle => todo!("Oracle"),
     };
     Some(Value::from_object(result))
 }

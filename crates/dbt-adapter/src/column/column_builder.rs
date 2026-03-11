@@ -30,6 +30,11 @@ impl ColumnBuilder {
             DuckDB => Ok(Self::build_postgres_like(field, type_ops)),
             Fabric => Ok(Self::build_fabric(field, type_ops)),
             ClickHouse => todo!("ClickHouse"),
+            Starburst => todo!("Starburst"),
+            Athena => todo!("Athena"),
+            Trino => todo!("Trino"),
+            Dremio => todo!("Dremio"),
+            Oracle => todo!("Oracle"),
         }
     }
 
@@ -88,6 +93,11 @@ impl ColumnBuilder {
             ),
             Salesforce => todo!("Salesforce column creation not implemented yet"),
             ClickHouse => todo!("ClickHouse"),
+            Starburst => todo!("Starburst"),
+            Athena => todo!("Athena"),
+            Trino => todo!("Trino"),
+            Dremio => todo!("Dremio"),
+            Oracle => todo!("Oracle"),
             Fabric => Column::new(
                 Fabric,
                 name,

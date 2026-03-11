@@ -361,6 +361,11 @@ pub fn do_create_relation(
             custom_quoting,
         )) as Box<dyn BaseRelation>,
         AdapterType::ClickHouse => todo!("ClickHouse"),
+        AdapterType::Starburst => todo!("Starburst"),
+        AdapterType::Athena => todo!("Athena"),
+        AdapterType::Trino => todo!("Trino"),
+        AdapterType::Dremio => todo!("Dremio"),
+        AdapterType::Oracle => todo!("Oracle"),
     };
     Ok(relation)
 }

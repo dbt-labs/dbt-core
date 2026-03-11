@@ -170,6 +170,11 @@ impl ConcreteAdapter {
                             Box::new(FabricMetadataAdapter::new(engine)) as Box<dyn MetadataAdapter>
                         }
                         ClickHouse => todo!("ClickHouse"),
+                        Starburst => todo!("Starburst"),
+                        Athena => todo!("Athena"),
+                        Trino => todo!("Trino"),
+                        Dremio => todo!("Dremio"),
+                        Oracle => todo!("Oracle"),
                     };
                 Some(metadata_adapter)
             }
@@ -286,7 +291,7 @@ impl ConcreteAdapter {
             Bigquery => &BIGQUERY,
             Databricks => &DATABRICKS,
             Redshift => &REDSHIFT,
-            Salesforce | Spark | ClickHouse => {
+            Salesforce | Spark | ClickHouse | Starburst | Athena | Trino | Dremio | Oracle => {
                 unimplemented!("valid_incremental_strategies not implemented")
             }
             Fabric => &FABRIC,
@@ -642,12 +647,14 @@ impl ConcreteAdapter {
             }
             Replay(
                 adapter_type @ (Postgres | Redshift | Salesforce | Sidecar | DuckDB | Spark
-                | Fabric | ClickHouse),
+                | Fabric | ClickHouse | Starburst | Athena | Trino | Dremio
+                | Oracle),
                 _,
             )
             | Impl(
                 adapter_type @ (Postgres | Redshift | Salesforce | Sidecar | DuckDB | Spark
-                | Fabric | ClickHouse),
+                | Fabric | ClickHouse | Starburst | Athena | Trino | Dremio
+                | Oracle),
                 _,
             ) => Err(AdapterError::new(
                 AdapterErrorKind::Internal,
@@ -662,7 +669,7 @@ impl ConcreteAdapter {
         }
         match self.adapter_type() {
             Snowflake | Redshift | Postgres | Sidecar | Salesforce | DuckDB | Fabric
-            | ClickHouse => {
+            | ClickHouse | Starburst | Athena | Trino | Dremio | Oracle => {
                 format!("\"{identifier}\"")
             }
             Bigquery | Databricks | Spark => {
@@ -684,6 +691,11 @@ impl ConcreteAdapter {
                 DuckDB => "schema_name",
                 Fabric => "schema",
                 ClickHouse => todo!("ClickHouse"),
+                Starburst => todo!("Starburst"),
+                Athena => todo!("Athena"),
+                Trino => todo!("Trino"),
+                Dremio => todo!("Dremio"),
+                Oracle => todo!("Oracle"),
             };
             get_column_values::<StringArray>(&result_set, col_name)?
         };
@@ -887,7 +899,7 @@ impl ConcreteAdapter {
                 )])))
             }
             Postgres | Bigquery | Databricks | Redshift | Salesforce | Sidecar | Spark | DuckDB
-            | Fabric | ClickHouse => {
+            | Fabric | ClickHouse | Starburst | Athena | Trino | Dremio | Oracle => {
                 let err = format!(
                     "describe_dynamic_table is not supported by the {} adapter",
                     adapter_type
@@ -1252,7 +1264,7 @@ impl ConcreteAdapter {
                 )
             }
             // TODO(serramatutu): get back to this later
-            Salesforce | Spark | ClickHouse => {
+            Salesforce | Spark | ClickHouse | Starburst | Athena | Trino | Dremio | Oracle => {
                 unimplemented!("get_columns_in_relation not implemented")
             }
         };
@@ -1359,7 +1371,8 @@ impl ConcreteAdapter {
                     .collect::<Vec<_>>();
                 Ok(columns)
             }
-            Salesforce | Spark | Fabric | ClickHouse => {
+            Salesforce | Spark | Fabric | ClickHouse | Starburst | Athena | Trino | Dremio
+            | Oracle => {
                 unimplemented!("get_columns_in_relation not implemented")
             }
             adapter_type @ DuckDB => {
@@ -1427,7 +1440,7 @@ impl ConcreteAdapter {
             }
             Impl(
                 Snowflake | Databricks | Redshift | Salesforce | Postgres | Sidecar | Spark
-                | DuckDB | Fabric | ClickHouse,
+                | DuckDB | Fabric | ClickHouse | Starburst | Athena | Trino | Dremio | Oracle,
                 _,
             ) => {
                 // downcast relation
@@ -1471,7 +1484,7 @@ impl ConcreteAdapter {
             }
             Impl(
                 Postgres | Bigquery | Databricks | Redshift | Sidecar | Spark | DuckDB | Fabric
-                | ClickHouse,
+                | ClickHouse | Starburst | Athena | Trino | Dremio | Oracle,
                 _,
             ) => {
                 // https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1072
@@ -1635,7 +1648,7 @@ impl ConcreteAdapter {
                 Ok(none_value())
             }
             Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark
-            | Fabric | DuckDB | ClickHouse => {
+            | Fabric | DuckDB | ClickHouse | Starburst | Athena | Trino | Dremio | Oracle => {
                 unimplemented!("only available with BigQuery adapter")
             }
         }
@@ -1648,7 +1661,7 @@ impl ConcreteAdapter {
     ) -> AdapterResult<Vec<String>> {
         match self.adapter_type() {
             Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark
-            | DuckDB | Fabric | ClickHouse => {
+            | DuckDB | Fabric | ClickHouse | Starburst | Athena | Trino | Dremio | Oracle => {
                 // https://github.com/dbt-labs/dbt-adapters/blob/main/dbt-adapters/src/dbt/adapters/base/impl.py#L1783
                 let mut result = vec![];
                 for (_, column) in columns_map {
@@ -1825,7 +1838,7 @@ impl ConcreteAdapter {
             (Fabric, Custom) => NotSupported,
 
             // Salesforce
-            (Salesforce | Spark | ClickHouse, _) => {
+            (Salesforce | Spark | ClickHouse | Starburst | Athena | Trino | Dremio | Oracle, _) => {
                 unimplemented!("constraint support not implemented")
             }
         }
@@ -1977,7 +1990,8 @@ impl ConcreteAdapter {
 
                 Ok(result)
             }
-            Salesforce | Spark | Fabric | ClickHouse => {
+            Salesforce | Spark | Fabric | ClickHouse | Starburst | Athena | Trino | Dremio
+            | Oracle => {
                 unimplemented!("grants not implemented")
             }
             DuckDB => {
@@ -2007,7 +2021,7 @@ impl ConcreteAdapter {
         match self.adapter_type() {
             Bigquery => nest_column_data_types(columns, constraints),
             Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark
-            | DuckDB | Fabric | ClickHouse => {
+            | DuckDB | Fabric | ClickHouse | Starburst | Athena | Trino | Dremio | Oracle => {
                 unimplemented!("only available with BigQuery adapter")
             }
         }
@@ -2110,7 +2124,7 @@ impl ConcreteAdapter {
                 Ok(none_value())
             }
             Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark
-            | DuckDB | Fabric | ClickHouse => {
+            | DuckDB | Fabric | ClickHouse | Starburst | Athena | Trino | Dremio | Oracle => {
                 unimplemented!("only available with BigQuery adapter")
             }
         }
@@ -2148,7 +2162,7 @@ impl ConcreteAdapter {
                 }
             }
             Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark
-            | DuckDB | Fabric | ClickHouse => {
+            | DuckDB | Fabric | ClickHouse | Starburst | Athena | Trino | Dremio | Oracle => {
                 unimplemented!("only available with BigQuery adapter")
             }
         }
@@ -2192,7 +2206,7 @@ impl ConcreteAdapter {
                 Ok(none_value())
             }
             Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark
-            | DuckDB | Fabric | ClickHouse => {
+            | DuckDB | Fabric | ClickHouse | Starburst | Athena | Trino | Dremio | Oracle => {
                 unimplemented!("only available with BigQuery adapter")
             }
         }
@@ -2280,7 +2294,7 @@ impl ConcreteAdapter {
             }
             Salesforce => todo!("load_dataframe() for the Salesforce adapter"),
             Postgres | Snowflake | Databricks | Redshift | Sidecar | Spark | DuckDB | Fabric
-            | ClickHouse => {
+            | ClickHouse | Starburst | Athena | Trino | Dremio | Oracle => {
                 unimplemented!("only available with BigQuery or Salesforce adapter")
             }
         }
@@ -2336,7 +2350,7 @@ impl ConcreteAdapter {
                 Ok(none_value())
             }
             Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark
-            | DuckDB | Fabric | ClickHouse => {
+            | DuckDB | Fabric | ClickHouse | Starburst | Athena | Trino | Dremio | Oracle => {
                 unimplemented!("only available with BigQuery adapter")
             }
         }
@@ -2523,7 +2537,7 @@ impl ConcreteAdapter {
             }
             Impl(
                 adapter_type @ (Snowflake | Bigquery | Databricks | Salesforce | Spark | Fabric
-                | ClickHouse),
+                | ClickHouse | Starburst | Athena | Trino | Dremio | Oracle),
                 _,
             ) => {
                 unimplemented!(
@@ -2596,7 +2610,8 @@ impl ConcreteAdapter {
                 }
             }
             adapter_type @ (Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar
-            | Spark | DuckDB | Fabric | ClickHouse) => {
+            | Spark | DuckDB | Fabric | ClickHouse | Starburst | Athena | Trino
+            | Dremio | Oracle) => {
                 unimplemented!(
                     "is_replaceable is only available with BigQuery adapter, not {}",
                     adapter_type
@@ -2659,7 +2674,7 @@ impl ConcreteAdapter {
                 Ok(Value::from_object(validated_config))
             }
             Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark
-            | DuckDB | Fabric | ClickHouse => {
+            | DuckDB | Fabric | ClickHouse | Starburst | Athena | Trino | Dremio | Oracle => {
                 unimplemented!("only available with BigQuery adapter")
             }
         }
@@ -2681,7 +2696,7 @@ impl ConcreteAdapter {
                 adapter_type,
             ),
             Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark
-            | DuckDB | Fabric | ClickHouse => {
+            | DuckDB | Fabric | ClickHouse | Starburst | Athena | Trino | Dremio | Oracle => {
                 unimplemented!("only available with BigQuery adapter")
             }
         }
@@ -2703,7 +2718,7 @@ impl ConcreteAdapter {
                 ),
             ),
             Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark
-            | DuckDB | Fabric | ClickHouse => {
+            | DuckDB | Fabric | ClickHouse | Starburst | Athena | Trino | Dremio | Oracle => {
                 unimplemented!("only available with BigQuery adapter")
             }
         }
@@ -2728,10 +2743,12 @@ impl ConcreteAdapter {
                 Ok(Value::from_serialize(options))
             }
             Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark
-            | DuckDB | Fabric | ClickHouse => Err(minijinja::Error::new(
-                minijinja::ErrorKind::InvalidOperation,
-                "get_common_options is only available with BigQuery adapter",
-            )),
+            | DuckDB | Fabric | ClickHouse | Starburst | Athena | Trino | Dremio | Oracle => {
+                Err(minijinja::Error::new(
+                    minijinja::ErrorKind::InvalidOperation,
+                    "get_common_options is only available with BigQuery adapter",
+                ))
+            }
         }
     }
 
@@ -2767,7 +2784,7 @@ impl ConcreteAdapter {
                 Ok(Value::from(result))
             }
             Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark
-            | DuckDB | Fabric | ClickHouse => {
+            | DuckDB | Fabric | ClickHouse | Starburst | Athena | Trino | Dremio | Oracle => {
                 unimplemented!("only available with BigQuery adapter")
             }
         }
@@ -2824,7 +2841,11 @@ impl ConcreteAdapter {
             }
             Impl(Redshift, _) => redshift::list_relations(self, query_ctx, conn, db_schema),
             Impl(DuckDB, _) => duckdb::list_relations(self, query_ctx, conn, db_schema),
-            Impl(adapter_type @ (Postgres | Salesforce | Sidecar | Fabric | ClickHouse), _) => {
+            Impl(
+                adapter_type @ (Postgres | Salesforce | Sidecar | Fabric | ClickHouse | Starburst
+                | Athena | Trino | Dremio | Oracle),
+                _,
+            ) => {
                 let err = AdapterError::new(
                     AdapterErrorKind::Internal,
                     format!(
@@ -2872,7 +2893,7 @@ impl ConcreteAdapter {
                 ))
             }
             Postgres | Snowflake | Bigquery | Redshift | Salesforce | Sidecar | DuckDB | Spark
-            | Fabric | ClickHouse => {
+            | Fabric | ClickHouse | Starburst | Athena | Trino | Dremio | Oracle => {
                 unimplemented!("has_dbr_capability: Only available for Databricks Adapter")
             }
         }
@@ -2904,7 +2925,7 @@ impl ConcreteAdapter {
                 Ok(Value::from(result))
             }
             Postgres | Snowflake | Bigquery | Redshift | Salesforce | Sidecar | Spark | DuckDB
-            | Fabric | ClickHouse => {
+            | Fabric | ClickHouse | Starburst | Athena | Trino | Dremio | Oracle => {
                 unimplemented!("only available with Databricksadapter")
             }
         }
@@ -3060,7 +3081,7 @@ impl ConcreteAdapter {
             }
 
             Postgres | Snowflake | Bigquery | Redshift | Salesforce | Sidecar | Spark | DuckDB
-            | Fabric | ClickHouse => {
+            | Fabric | ClickHouse | Starburst | Athena | Trino | Dremio | Oracle => {
                 unimplemented!("only available with Databricks adapter")
             }
         }
@@ -3139,7 +3160,7 @@ impl ConcreteAdapter {
                 Ok(())
             }
             Postgres | Snowflake | Bigquery | Redshift | Salesforce | Sidecar | Spark | DuckDB
-            | Fabric | ClickHouse => {
+            | Fabric | ClickHouse | Starburst | Athena | Trino | Dremio | Oracle => {
                 unimplemented!("only available with Databricks adapter")
             }
         }
@@ -3214,7 +3235,7 @@ impl ConcreteAdapter {
                 Ok(!use_managed_iceberg)
             }
             Postgres | Snowflake | Bigquery | Redshift | Salesforce | Sidecar | Spark | DuckDB
-            | Fabric | ClickHouse => {
+            | Fabric | ClickHouse | Starburst | Athena | Trino | Dremio | Oracle => {
                 unimplemented!("only available with Databricks adapter")
             }
         }
@@ -3524,7 +3545,7 @@ impl ConcreteAdapter {
                 Ok(())
             }
             Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark
-            | DuckDB | Fabric | ClickHouse => {
+            | DuckDB | Fabric | ClickHouse | Starburst | Athena | Trino | Dremio | Oracle => {
                 unimplemented!("only available with BigQuery adapter")
             }
         }
@@ -3576,7 +3597,7 @@ impl ConcreteAdapter {
                 Ok(None)
             }
             Postgres | Snowflake | Databricks | Redshift | Salesforce | Sidecar | Spark
-            | DuckDB | Fabric | ClickHouse => {
+            | DuckDB | Fabric | ClickHouse | Starburst | Athena | Trino | Dremio | Oracle => {
                 unimplemented!("only available with BigQuery adapter")
             }
         }
@@ -3858,7 +3879,8 @@ pub(crate) fn adapter_specific_behavior_flags(adapter_type: AdapterType) -> Vec<
             );
             vec![flag]
         }
-        Postgres | Redshift | Salesforce | Sidecar | Spark | DuckDB | ClickHouse => vec![],
+        Postgres | Redshift | Salesforce | Sidecar | Spark | DuckDB | ClickHouse | Starburst
+        | Athena | Trino | Dremio | Oracle => vec![],
     }
 }
 

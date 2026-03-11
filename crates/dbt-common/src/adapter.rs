@@ -33,6 +33,16 @@ pub enum AdapterType {
     Sidecar,
     /// ClickHouse
     ClickHouse,
+    /// Athena
+    Athena,
+    /// Starburst
+    Starburst,
+    /// Trino
+    Trino,
+    /// Dremio
+    Dremio,
+    /// Oracle
+    Oracle,
 }
 
 pub fn dialect_of(adapter_type: AdapterType) -> Option<Dialect> {

@@ -69,6 +69,11 @@ pub fn get_relation(
             ))
         }
         AdapterType::ClickHouse => todo!("ClickHouse"),
+        AdapterType::Starburst => todo!("Starburst"),
+        AdapterType::Athena => todo!("Athena"),
+        AdapterType::Trino => todo!("Trino"),
+        AdapterType::Dremio => todo!("Dremio"),
+        AdapterType::Oracle => todo!("Oracle"),
     }
 }
 

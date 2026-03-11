@@ -43,6 +43,11 @@ pub fn backend_of(adapter_type: AdapterType) -> Backend {
         AdapterType::Sidecar => Backend::DuckDB,
         AdapterType::Fabric => Backend::SQLServer,
         AdapterType::ClickHouse => todo!("ClickHouse"),
+        AdapterType::Starburst => todo!("Starburst"),
+        AdapterType::Athena => todo!("Athena"),
+        AdapterType::Trino => todo!("Trino"),
+        AdapterType::Dremio => todo!("Dremio"),
+        AdapterType::Oracle => todo!("Oracle"),
     }
 }
 
