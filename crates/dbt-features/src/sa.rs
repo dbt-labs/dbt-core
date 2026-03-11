@@ -1,4 +1,5 @@
 use dbt_common::cancellation::CancellationTokenSource;
+use dbt_common::fail_fast::FailFast;
 
 use crate::feature_stack::*;
 use crate::formatter::FormatterCommandHandler;
@@ -30,6 +31,7 @@ impl SourceAvailableFeatureStackBuilder {
             formatter,
             linter,
             cancellation_token_source: CancellationTokenSource::new(),
+            fail_fast: FailFast::new(),
         };
         Box::new(stack)
     }

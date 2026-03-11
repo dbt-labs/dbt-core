@@ -1,6 +1,7 @@
 use dbt_common::DiscreteEventEmitter;
 use dbt_common::FsResult;
 use dbt_common::cancellation::CancellationTokenSource;
+use dbt_common::fail_fast::FailFast;
 use dbt_common::io_args::EvalArgs;
 use dbt_schemas::state::ResolverState;
 use std::fmt;
@@ -38,6 +39,11 @@ pub struct FeatureStack {
     /// Global [CancelltionTokenSource] that can be used to signal cancellation to
     /// tasks running in other threads from a signal handler (e.g. Ctrl+C).
     pub cancellation_token_source: CancellationTokenSource,
+    /// Per CLI invocation fail-fast signal.
+    ///
+    /// Each invocation of the CLI (or test) gets its own isolated signal
+    /// so concurrent runs don't interfere with each other.
+    pub fail_fast: FailFast,
 }
 
 impl fmt::Debug for FeatureStack {

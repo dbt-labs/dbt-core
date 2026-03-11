@@ -341,6 +341,7 @@ where
     }
 
     let cst = feature_stack.cancellation_token_source.clone();
+    let fail_fast = feature_stack.fail_fast.clone();
     let token = cst.token();
     let parser = P::default();
     let cli = parser.parse_from(cmd_vec);
@@ -368,7 +369,7 @@ where
         let _stdout = with_redirected_stdout(stdout_file);
         let _stderr = with_redirected_stderr(stderr_file);
 
-        let result = run_future_with_ctrlc_support(cst, future, fail_fast_flag).await;
+        let result = run_future_with_ctrlc_support(cst, future, fail_fast, fail_fast_flag).await;
 
         let shutdown_errors: Vec<FsError> = shutdown_items
             .iter_mut()

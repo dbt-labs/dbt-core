@@ -1,7 +1,7 @@
 use dbt_adapter::statement::{StmtCancellationReport, cancel_all_tracked_statements};
 use dbt_common::FsResult;
 use dbt_common::cancellation::{CancellationReport, CancellationTokenSource, TIMEOUT_AFTER_CTRL_C};
-use dbt_common::fail_fast::*;
+use dbt_common::fail_fast::FailFast;
 
 use std::pin::Pin;
 use std::time::{Duration, Instant};
@@ -10,10 +10,11 @@ use std::time::{Duration, Instant};
 ///
 /// Pass `fail_fast_flag=true` is the user has invoked dbt with the `--fail-fast` flag.
 ///
-/// PRE-CONDITION: !fail_fast_flag || !has_fail_fast_triggered()
+/// PRE-CONDITION: !fail_fast_flag || !fail_fast.has_triggered()
 pub fn run_future_with_ctrlc_support<'a>(
     cst: CancellationTokenSource,
     future: Pin<Box<dyn Future<Output = FsResult<()>> + Send + 'a>>,
+    fail_fast: FailFast,
     fail_fast_flag: bool,
 ) -> Pin<Box<dyn Future<Output = FsResult<Option<CancellationReport>>> + Send + 'a>> {
     use futures::future::{Either, select};
@@ -26,10 +27,10 @@ pub fn run_future_with_ctrlc_support<'a>(
         // same cancellation logic.
         let ctrl_c = tokio::signal::ctrl_c();
         debug_assert!(
-            !fail_fast_flag || !has_fail_fast_triggered(),
+            !fail_fast_flag || !fail_fast.has_triggered(),
             "run_future_with_ctrlc_support called with fail-fast already triggered"
         );
-        let fail_fast = fail_fast_subscribe(fail_fast_flag);
+        let fail_fast = fail_fast.subscribe(fail_fast_flag);
         async move {
             futures::pin_mut!(ctrl_c, fail_fast);
             #[allow(clippy::let_and_return)]
