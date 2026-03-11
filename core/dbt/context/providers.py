@@ -1012,6 +1012,24 @@ class RuntimeFunctionResolver(BaseFunctionResolver):
                 target_kind="function",
                 disabled=(isinstance(target_function, Disabled)),
             )
+        function_node = target_function
+        if (
+            hasattr(target_function, "defer_function")
+            and target_function.defer_function
+            and self.config.args.defer
+            and (
+                (
+                    self.config.args.favor_state
+                    and target_function.unique_id not in selected_resources.SELECTED_RESOURCES
+                )
+                or not get_adapter(self.config).get_relation(
+                    target_function.database,
+                    target_function.schema,
+                    target_function.identifier,
+                )
+            )
+        ):
+            function_node = target_function.defer_function
 
         # Source quoting does _not_ respect global configs in dbt_project.yml, as documented here:
         # https://docs.getdbt.com/reference/project-configs/quoting
@@ -1021,7 +1039,7 @@ class RuntimeFunctionResolver(BaseFunctionResolver):
 
         return self.Relation.create_from(
             SourceQuotingBaseConfig(),
-            target_function,
+            function_node,
             limit=self.resolve_limit,
             event_time_filter=self.resolve_event_time_filter(target_function),
             type=RelationType.Function,
