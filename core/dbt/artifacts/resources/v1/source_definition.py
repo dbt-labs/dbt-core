@@ -2,7 +2,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Literal, Optional, Union
 
-from dbt.artifacts.resources.base import GraphResource
+from dbt.artifacts.resources.base import Docs, GraphResource
 from dbt.artifacts.resources.types import NodeType
 from dbt.artifacts.resources.v1.components import (
     ColumnInfo,
@@ -25,6 +25,7 @@ class SourceConfig(BaseConfig):
     loaded_at_query: Optional[str] = None
     meta: Dict[str, Any] = field(default_factory=dict, metadata=MergeBehavior.Update.meta())
     tags: List[str] = field(default_factory=list)
+    docs: Docs = field(default_factory=Docs)
 
 
 @dataclass
