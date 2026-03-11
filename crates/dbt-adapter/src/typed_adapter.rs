@@ -1207,6 +1207,9 @@ impl ConcreteAdapter {
                 // Plain DESCRIBE TABLE truncates long data types server-side
                 //
                 // https://github.com/databricks/dbt-databricks/blob/822b105b15e644676d9e1f47cbfd765cd4c1541f/dbt/adapters/databricks/impl.py#L439-L452
+                //
+                // Note: is_hive_metastore() returns false for Unity Catalog temporary tables (matching Python semantics).
+                // The `temporary` field only tracks UC temporary tables, not HMS temporary views.
                 let use_legacy = relation.is_hive_metastore().is_true()
                     || relation.is_materialized_view()
                     || relation.is_streaming_table();
@@ -4355,6 +4358,132 @@ mod tests {
         assert!(
             v.is_undefined(),
             "Expected column NOT to be selected when existing comment is already empty, got: {selected:?}"
+        );
+    }
+
+    /// Test that verifies the logic for determining when to use legacy DESCRIBE TABLE
+    /// vs. DESCRIBE EXTENDED ... AS JSON for Databricks relations.
+    ///
+    /// This test documents the expected behavior, matching Python dbt-databricks semantics:
+    /// - The `temporary` field only tracks Unity Catalog temporary tables, not HMS temporary views
+    /// - is_hive_metastore() returns false for UC temporary tables (even if database is "hive_metastore")
+    /// - Hive Metastore tables (both regular and temporary views): use legacy
+    /// - Unity Catalog regular tables: use JSON (NOT legacy)
+    /// - Unity Catalog temporary tables: use JSON (NOT legacy)
+    /// - Materialized views: use legacy
+    /// - Streaming tables: use legacy
+    #[test]
+    fn test_databricks_get_columns_use_legacy_logic() {
+        use crate::relation::databricks::{DEFAULT_DATABRICKS_DATABASE, DatabricksRelation};
+        use dbt_schemas::schemas::relations::DEFAULT_RESOLVED_QUOTING;
+
+        // Test 1: Non-temporary Hive Metastore table -> should use legacy
+        let hive_table = DatabricksRelation::new(
+            Databricks,
+            Some(DEFAULT_DATABRICKS_DATABASE.to_string()),
+            Some("schema1".to_string()),
+            Some("table1".to_string()),
+            Some(RelationType::Table),
+            None,
+            DEFAULT_RESOLVED_QUOTING,
+            None,
+            false,
+            false, // NOT temporary
+        );
+        assert!(
+            hive_table.is_hive_metastore().is_true(),
+            "Expected is_hive_metastore() to return true for non-temporary table in hive_metastore"
+        );
+        assert!(!hive_table.is_temporary(), "Expected non-temporary table");
+        // use_legacy = is_hive_metastore || is_materialized_view || is_streaming_table
+        // use_legacy = true || false || false = true
+        let use_legacy_hive_table = hive_table.is_hive_metastore().is_true()
+            || hive_table.is_materialized_view()
+            || hive_table.is_streaming_table();
+        assert!(
+            use_legacy_hive_table,
+            "Expected non-temporary Hive Metastore table to use legacy DESCRIBE"
+        );
+
+        // Test 2: Unity Catalog temporary table (with hive_metastore database name) -> should NOT use legacy
+        // Key test: is_hive_metastore() should return FALSE for UC temporary tables
+        // Note: In practice, UC temp tables wouldn't have database="hive_metastore", but this tests the logic
+        let uc_temp_table = DatabricksRelation::new(
+            Databricks,
+            Some(DEFAULT_DATABRICKS_DATABASE.to_string()),
+            Some("schema1".to_string()),
+            Some("temp_table".to_string()),
+            Some(RelationType::Table),
+            None,
+            DEFAULT_RESOLVED_QUOTING,
+            None,
+            false,
+            true, // IS temporary (UC temporary table)
+        );
+        assert!(
+            !uc_temp_table.is_hive_metastore().is_true(),
+            "Expected is_hive_metastore() to return FALSE for UC temporary table (matching Python semantics)"
+        );
+        assert!(uc_temp_table.is_temporary(), "Expected temporary table");
+        // use_legacy = is_hive_metastore || is_materialized_view || is_streaming_table
+        // use_legacy = false || false || false = false
+        let use_legacy_uc_temp = uc_temp_table.is_hive_metastore().is_true()
+            || uc_temp_table.is_materialized_view()
+            || uc_temp_table.is_streaming_table();
+        assert!(
+            !use_legacy_uc_temp,
+            "Expected UC temporary table to use JSON DESCRIBE (not legacy)"
+        );
+
+        // Test 3: Unity Catalog table (non-temporary) -> should NOT use legacy
+        let unity_table = DatabricksRelation::new(
+            Databricks,
+            Some("unity_catalog".to_string()),
+            Some("schema1".to_string()),
+            Some("table1".to_string()),
+            Some(RelationType::Table),
+            None,
+            DEFAULT_RESOLVED_QUOTING,
+            None,
+            false,
+            false,
+        );
+        assert!(
+            !unity_table.is_hive_metastore().is_true(),
+            "Expected Unity Catalog table (not Hive Metastore)"
+        );
+        // use_legacy = is_hive_metastore || is_materialized_view || is_streaming_table
+        // use_legacy = false || false || false = false
+        let use_legacy_unity = unity_table.is_hive_metastore().is_true()
+            || unity_table.is_materialized_view()
+            || unity_table.is_streaming_table();
+        assert!(
+            !use_legacy_unity,
+            "Expected Unity Catalog table to use JSON DESCRIBE (not legacy)"
+        );
+
+        // Test 4: Materialized view -> should use legacy
+        let mv = DatabricksRelation::new(
+            Databricks,
+            Some("unity_catalog".to_string()),
+            Some("schema1".to_string()),
+            Some("mv1".to_string()),
+            Some(RelationType::MaterializedView),
+            None,
+            DEFAULT_RESOLVED_QUOTING,
+            None,
+            false,
+            false,
+        );
+        assert!(mv.is_materialized_view(), "Expected materialized view");
+        // use_legacy = is_hive_metastore || is_materialized_view || is_streaming_table
+        // use_legacy = false || true || false = true
+        let use_legacy_mv = mv.is_hive_metastore().is_true()
+            || mv.is_materialized_view()
+            || mv.is_streaming_table();
+        assert!(
+            use_legacy_mv,
+            "Expected materialized view to use legacy DESCRIBE"
         );
     }
 }

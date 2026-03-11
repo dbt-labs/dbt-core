@@ -328,9 +328,16 @@ impl BaseRelation for DatabricksRelation {
     }
 
     fn is_hive_metastore(&self) -> Value {
-        let result = self.path.database.is_none()
+        // Match Python dbt-databricks semantics:
+        // def is_hive_metastore(database: Optional[str], temporary: Optional[bool] = False) -> bool:
+        //     return (database is None or database.lower() == "hive_metastore") and not temporary
+        //
+        // Note: The `temporary` field only tracks Unity Catalog temporary tables, not Hive Metastore temporary views.
+        // Unity Catalog temporary tables are never considered to be in Hive Metastore.
+        let result = (self.path.database.is_none()
             || self.path.database.as_ref().map(|s| s.to_lowercase())
-                == Some(DEFAULT_DATABRICKS_DATABASE.to_string());
+                == Some(DEFAULT_DATABRICKS_DATABASE.to_string()))
+            && !self.temporary;
 
         Value::from(result)
     }
