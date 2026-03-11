@@ -1,0 +1,4 @@
+kind: Fix
+change_type: bug
+issue_num: 11776
+onesentence: Avoid false positive AmbiguousCatalogMatchError when database has tables differing only by case
