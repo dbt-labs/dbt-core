@@ -115,7 +115,13 @@ class SchemaYamlRenderer(BaseRenderer):
             elif self._is_norender_key(keypath[0:]):
                 return False
         else:  # models, seeds, snapshots, analyses
-            if "filter" in keypath and "metrics" in keypath:
+            # Skip metric filters — consistent with the "metrics" branch above,
+            # using positional checks to avoid over-matching.
+            # metrics is always at keypath[0] in this branch (model-relative path),
+            # and filter is always at [-1] (string) or [-2] (list item).
+            if keypath[0] == "metrics" and (
+                keypath[-1] == "filter" or (len(keypath) > 1 and keypath[-2] == "filter")
+            ):
                 return False
             if self._is_norender_key(keypath[0:]):
                 return False
