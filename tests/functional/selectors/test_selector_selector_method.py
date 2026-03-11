@@ -3,6 +3,7 @@ from typing import Any
 import pytest
 
 from dbt.tests.util import run_dbt
+from dbt_common.exceptions import DbtRuntimeError
 from dbt_common.exceptions import RecursionError as DbtRecursionError
 
 models__model_a_sql = """
@@ -236,3 +237,7 @@ class TestSelectorSelectorMethod:
     def test_selector_with_explicit_selector_method(self, project):
         result = run_dbt(["ls", "--select", "selector:model_a_explicit_selector"])
         assert_result_set(result, {"test.model_a"})
+
+    def test_raises_if_no_selector_matches(self, project):
+        with pytest.raises(DbtRuntimeError):
+            run_dbt(["ls", "--select", "selector:nonexistent_selector"])
