@@ -90,7 +90,7 @@ jobs:
 
     steps:
       - name: "Check out the repository"
-        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # actions/checkout@v5
 
       - name: "Set up Python 3.11"
         uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # actions/setup-python@v6
@@ -123,7 +123,7 @@ jobs:
           fi
 
       - name: "Upload partial durations file"
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # actions/upload-artifact@v4
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # actions/upload-artifact@v6
         with:
           name: durations-${{ matrix.split-group }}
           path: core/.test_durations_${{ matrix.split-group }}
@@ -141,10 +141,10 @@ jobs:
 
     steps:
       - name: "Check out the repository"
-        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # actions/checkout@v5
 
       - name: "Download all partial duration files"
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # actions/download-artifact@v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # actions/download-artifact@v7
         with:
           pattern: durations-*
           path: partial-durations
@@ -218,7 +218,7 @@ jobs:
 
     steps:
       - name: "Check out the repository"
-        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # actions/checkout@v5
 
       - name: "Wait for CI to start"
         run: |
@@ -238,7 +238,7 @@ jobs:
 
     steps:
       - name: "Check out the repository"
-        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # actions/checkout@v4
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # actions/checkout@v5
 
       - name: "Merge PR"
         run: |
