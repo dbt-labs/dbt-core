@@ -740,7 +740,7 @@ pub fn nodes_from_dbt_manifest(manifest: DbtManifest, dbt_quoting: DbtQuoting) -
                             AdapterType::from_str(&manifest.metadata.adapter_type)
                                 .expect("Unknown or unsupported adapter type"),
                         ),
-                        deprecated_config: snapshot.config,
+                        deprecated_config: snapshot.config.into(),
                         compiled: snapshot.__base_attr__.compiled,
                         compiled_code: snapshot.__base_attr__.compiled_code,
                         __other__: snapshot.__other__,

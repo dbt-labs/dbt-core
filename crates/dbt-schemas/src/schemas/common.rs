@@ -986,6 +986,26 @@ impl Hooks {
         *self = Hooks::HookConfigArray(new_hooks);
     }
 
+    pub fn to_hook_config_array(&self) -> Vec<HookConfig> {
+        match self {
+            Hooks::String(s) => vec![HookConfig {
+                sql: Some(s.clone()),
+                transaction: Some(true),
+                index: None,
+            }],
+            Hooks::ArrayOfStrings(v) => v
+                .iter()
+                .map(|s| HookConfig {
+                    sql: Some(s.clone()),
+                    transaction: Some(true),
+                    index: None,
+                })
+                .collect(),
+            Hooks::HookConfig(h) => vec![h.clone()],
+            Hooks::HookConfigArray(v) => v.clone(),
+        }
+    }
+
     /// Compare hooks where different variants can be equal if they contain the same SQL
     /// These checks are needed so that we can conform to dbt-core/dbt-mantle
     /// when comparing hooks.

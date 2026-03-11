@@ -13,8 +13,8 @@ use dbt_yaml::Verbatim;
 use crate::schemas::common::DbtBatchSize;
 use crate::schemas::common::DbtIncrementalStrategy;
 use crate::schemas::common::DbtUniqueKey;
-use crate::schemas::common::{DocsConfig, OnConfigurationChange};
-use crate::schemas::common::{Hooks, OnSchemaChange};
+use crate::schemas::common::{DocsConfig, HardDeletes, OnConfigurationChange};
+use crate::schemas::common::{HookConfig, Hooks, OnSchemaChange};
 use crate::schemas::dbt_column::Granularity;
 use crate::schemas::project::configs::common::WarehouseSpecificNodeConfig;
 use crate::schemas::properties::ModelFreshness;
@@ -45,8 +45,8 @@ use crate::schemas::{
     nodes::{ExposureType, TestMetadata},
     project::{
         AnalysesConfig, DataTestConfig, ExposureConfig, FunctionConfig, MetricConfig, ModelConfig,
-        SavedQueryConfig, SeedConfig, SemanticModelConfig, SnapshotConfig, SourceConfig,
-        UnitTestConfig,
+        SavedQueryConfig, SeedConfig, SemanticModelConfig, SnapshotConfig, SnapshotMetaColumnNames,
+        SourceConfig, UnitTestConfig,
     },
     properties::{
         ModelConstraint, UnitTestOverrides,
@@ -394,6 +394,138 @@ impl From<DbtTest> for ManifestDataTest {
 }
 
 #[skip_serializing_none]
+#[derive(Deserialize, Serialize, Debug, Clone, Default, PartialEq)]
+pub struct ManifestSnapshotConfig {
+    #[serde(alias = "project", alias = "data_space")]
+    pub database: Option<String>,
+    #[serde(alias = "dataset")]
+    pub schema: Option<String>,
+    pub alias: Option<String>,
+    pub materialized: Option<DbtMaterialization>,
+    pub strategy: Option<String>,
+    pub unique_key: Option<StringOrArrayOfStrings>,
+    pub check_cols: Option<StringOrArrayOfStrings>,
+    pub updated_at: Option<String>,
+    pub dbt_valid_to_current: Option<String>,
+    pub snapshot_meta_column_names: Option<SnapshotMetaColumnNames>,
+    pub hard_deletes: Option<HardDeletes>,
+    pub target_database: Option<String>,
+    pub target_schema: Option<String>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub enabled: Option<bool>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub full_refresh: Option<bool>,
+    pub tags: Option<StringOrArrayOfStrings>,
+    #[serde(rename = "pre-hook", default)]
+    pub pre_hook: Vec<HookConfig>,
+    #[serde(rename = "post-hook", default)]
+    pub post_hook: Vec<HookConfig>,
+    pub persist_docs: Option<PersistDocsConfig>,
+    #[serde(default)]
+    pub grants: OmissibleGrantConfig,
+    pub event_time: Option<String>,
+    pub quoting: Option<DbtQuoting>,
+    pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
+    pub meta: Option<IndexMap<String, YmlValue>>,
+    pub group: Option<String>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub quote_columns: Option<bool>,
+    #[serde(default, deserialize_with = "bool_or_string_bool")]
+    pub invalidate_hard_deletes: Option<bool>,
+    pub docs: Option<DocsConfig>,
+    pub sync: Option<SyncConfig>,
+    pub __warehouse_specific_config__: WarehouseSpecificNodeConfig,
+}
+
+impl From<SnapshotConfig> for ManifestSnapshotConfig {
+    fn from(config: SnapshotConfig) -> Self {
+        Self {
+            database: config.database,
+            schema: config.schema,
+            alias: config.alias,
+            materialized: config.materialized,
+            strategy: config.strategy,
+            unique_key: config.unique_key,
+            check_cols: config.check_cols,
+            updated_at: config.updated_at,
+            dbt_valid_to_current: config.dbt_valid_to_current,
+            snapshot_meta_column_names: config.snapshot_meta_column_names,
+            hard_deletes: config.hard_deletes,
+            target_database: config.target_database,
+            target_schema: config.target_schema,
+            enabled: config.enabled,
+            full_refresh: config.full_refresh,
+            tags: config.tags,
+            pre_hook: (*config.pre_hook)
+                .as_ref()
+                .map(|h| h.to_hook_config_array())
+                .unwrap_or_default(),
+            post_hook: (*config.post_hook)
+                .as_ref()
+                .map(|h| h.to_hook_config_array())
+                .unwrap_or_default(),
+            persist_docs: config.persist_docs,
+            grants: config.grants,
+            event_time: config.event_time,
+            quoting: config.quoting,
+            static_analysis: config.static_analysis,
+            meta: config.meta,
+            group: config.group,
+            quote_columns: config.quote_columns,
+            invalidate_hard_deletes: config.invalidate_hard_deletes,
+            docs: config.docs,
+            sync: config.sync,
+            __warehouse_specific_config__: config.__warehouse_specific_config__,
+        }
+    }
+}
+
+impl From<ManifestSnapshotConfig> for SnapshotConfig {
+    fn from(config: ManifestSnapshotConfig) -> Self {
+        Self {
+            database: config.database,
+            schema: config.schema,
+            alias: config.alias,
+            materialized: config.materialized,
+            strategy: config.strategy,
+            unique_key: config.unique_key,
+            check_cols: config.check_cols,
+            updated_at: config.updated_at,
+            dbt_valid_to_current: config.dbt_valid_to_current,
+            snapshot_meta_column_names: config.snapshot_meta_column_names,
+            hard_deletes: config.hard_deletes,
+            target_database: config.target_database,
+            target_schema: config.target_schema,
+            enabled: config.enabled,
+            full_refresh: config.full_refresh,
+            tags: config.tags,
+            pre_hook: Verbatim::from(if config.pre_hook.is_empty() {
+                None
+            } else {
+                Some(Hooks::HookConfigArray(config.pre_hook))
+            }),
+            post_hook: Verbatim::from(if config.post_hook.is_empty() {
+                None
+            } else {
+                Some(Hooks::HookConfigArray(config.post_hook))
+            }),
+            persist_docs: config.persist_docs,
+            grants: config.grants,
+            event_time: config.event_time,
+            quoting: config.quoting,
+            static_analysis: config.static_analysis,
+            meta: config.meta,
+            group: config.group,
+            quote_columns: config.quote_columns,
+            invalidate_hard_deletes: config.invalidate_hard_deletes,
+            docs: config.docs,
+            sync: config.sync,
+            __warehouse_specific_config__: config.__warehouse_specific_config__,
+        }
+    }
+}
+
+#[skip_serializing_none]
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct ManifestSnapshot {
@@ -401,7 +533,7 @@ pub struct ManifestSnapshot {
     pub __base_attr__: ManifestNodeBaseAttributes,
 
     /// Snapshot Specific Attributes
-    pub config: SnapshotConfig,
+    pub config: ManifestSnapshotConfig,
 
     pub __other__: BTreeMap<String, YmlValue>,
 }
@@ -446,7 +578,7 @@ impl From<DbtSnapshot> for ManifestSnapshot {
                 build_path: Default::default(),
                 contract: Default::default(),
             },
-            config: snapshot.deprecated_config,
+            config: snapshot.deprecated_config.into(),
             __other__: snapshot.__other__,
         }
     }
@@ -611,10 +743,10 @@ pub struct ManifestModelConfig {
     pub lookback: Option<i32>,
     pub begin: Option<String>,
     pub persist_docs: Option<PersistDocsConfig>,
-    #[serde(alias = "post-hook")]
-    pub post_hook: Verbatim<Option<Hooks>>,
-    #[serde(alias = "pre-hook")]
-    pub pre_hook: Verbatim<Option<Hooks>>,
+    #[serde(rename = "post-hook", default)]
+    pub post_hook: Vec<HookConfig>,
+    #[serde(rename = "pre-hook", default)]
+    pub pre_hook: Vec<HookConfig>,
     pub quoting: Option<DbtQuoting>,
     pub column_types: Option<BTreeMap<Spanned<String>, String>>,
     #[serde(default, deserialize_with = "bool_or_string_bool")]
@@ -683,10 +815,10 @@ pub struct ManifestSeedConfig {
     pub group: Option<String>,
     pub meta: Option<IndexMap<String, YmlValue>>,
     pub persist_docs: Option<PersistDocsConfig>,
-    #[serde(alias = "post-hook")]
-    pub post_hook: Verbatim<Option<Hooks>>,
-    #[serde(alias = "pre-hook")]
-    pub pre_hook: Verbatim<Option<Hooks>>,
+    #[serde(rename = "post-hook", default)]
+    pub post_hook: Vec<HookConfig>,
+    #[serde(rename = "pre-hook", default)]
+    pub pre_hook: Vec<HookConfig>,
     pub static_analysis: Option<Spanned<StaticAnalysisKind>>,
     pub tags: Option<StringOrArrayOfStrings>,
     pub quoting: Option<DbtQuoting>,
@@ -713,8 +845,14 @@ impl From<SeedConfig> for ManifestSeedConfig {
             group: config.group,
             meta: config.meta,
             persist_docs: config.persist_docs,
-            post_hook: config.post_hook,
-            pre_hook: config.pre_hook,
+            post_hook: (*config.post_hook)
+                .as_ref()
+                .map(|h| h.to_hook_config_array())
+                .unwrap_or_default(),
+            pre_hook: (*config.pre_hook)
+                .as_ref()
+                .map(|h| h.to_hook_config_array())
+                .unwrap_or_default(),
             static_analysis: config.static_analysis,
             tags: config.tags,
             quoting: config.quoting,
@@ -742,8 +880,16 @@ impl From<ManifestSeedConfig> for SeedConfig {
             group: config.group,
             meta: config.meta,
             persist_docs: config.persist_docs,
-            post_hook: config.post_hook,
-            pre_hook: config.pre_hook,
+            post_hook: Verbatim::from(if config.post_hook.is_empty() {
+                None
+            } else {
+                Some(Hooks::HookConfigArray(config.post_hook))
+            }),
+            pre_hook: Verbatim::from(if config.pre_hook.is_empty() {
+                None
+            } else {
+                Some(Hooks::HookConfigArray(config.pre_hook))
+            }),
             static_analysis: config.static_analysis,
             tags: config.tags,
             quoting: config.quoting,
@@ -771,8 +917,14 @@ impl From<ModelConfig> for ManifestModelConfig {
             lookback: config.lookback,
             begin: config.begin,
             persist_docs: config.persist_docs,
-            post_hook: config.post_hook,
-            pre_hook: config.pre_hook,
+            post_hook: (*config.post_hook)
+                .as_ref()
+                .map(|h| h.to_hook_config_array())
+                .unwrap_or_default(),
+            pre_hook: (*config.pre_hook)
+                .as_ref()
+                .map(|h| h.to_hook_config_array())
+                .unwrap_or_default(),
             quoting: config.quoting,
             column_types: config.column_types,
             full_refresh: config.full_refresh,
@@ -832,8 +984,16 @@ impl From<ManifestModelConfig> for ModelConfig {
             lookback: config.lookback,
             begin: config.begin,
             persist_docs: config.persist_docs,
-            post_hook: config.post_hook,
-            pre_hook: config.pre_hook,
+            post_hook: Verbatim::from(if config.post_hook.is_empty() {
+                None
+            } else {
+                Some(Hooks::HookConfigArray(config.post_hook))
+            }),
+            pre_hook: Verbatim::from(if config.pre_hook.is_empty() {
+                None
+            } else {
+                Some(Hooks::HookConfigArray(config.pre_hook))
+            }),
             quoting: config.quoting,
             column_types: config.column_types,
             full_refresh: config.full_refresh,
