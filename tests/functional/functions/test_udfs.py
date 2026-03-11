@@ -541,6 +541,88 @@ class TestFunctionsIncludeAndExcludeByResourceType:
         assert len(result.results) == 0
 
 
+double_it_py_with_packages = """
+{{ config(packages=['scikit-learn', 'pandas==1.5.0']) }}
+def entry(value):
+    return value * 2
+"""
+
+double_it_python_with_packages_yml = """
+functions:
+  - name: double_it
+    description: Doubles whatever number is passed in
+    config:
+        runtime_version: "3.11"
+        entry_point: entry
+        packages:
+          - scikit-learn
+          - pandas==1.5.0
+    arguments:
+      - name: value
+        data_type: float
+        description: A number to be doubled
+    returns:
+      data_type: float
+"""
+
+
+class TestPythonFunctionPackagesViaJinjaConfig:
+    @pytest.fixture(scope="class")
+    def functions(self) -> Dict[str, str]:
+        return {
+            "double_it.py": double_it_py_with_packages,
+            "double_it.yml": double_it_python_yml,
+        }
+
+    def test_packages_set_via_jinja_config(self, project):
+        manifest = run_dbt(["parse"])
+        assert len(manifest.functions) == 1
+        function_node = manifest.functions["function.test.double_it"]
+        assert isinstance(function_node, FunctionNode)
+        assert function_node.language == "python"
+        assert function_node.config.packages == ["scikit-learn", "pandas==1.5.0"]
+
+
+class TestPythonFunctionPackagesViaYamlConfig:
+    @pytest.fixture(scope="class")
+    def functions(self) -> Dict[str, str]:
+        return {
+            "double_it.py": double_it_py,
+            "double_it.yml": double_it_python_with_packages_yml,
+        }
+
+    def test_packages_set_via_yaml_config(self, project):
+        manifest = run_dbt(["parse"])
+        assert len(manifest.functions) == 1
+        function_node = manifest.functions["function.test.double_it"]
+        assert isinstance(function_node, FunctionNode)
+        assert function_node.language == "python"
+        assert function_node.config.packages == ["scikit-learn", "pandas==1.5.0"]
+
+
+class TestPythonFunctionPackagesViaProjectConfig:
+    @pytest.fixture(scope="class")
+    def functions(self) -> Dict[str, str]:
+        return {
+            "double_it.py": double_it_py,
+            "double_it.yml": double_it_python_yml,
+        }
+
+    @pytest.fixture(scope="class")
+    def project_config_update(self):
+        return {
+            "functions": {"+packages": ["scikit-learn"]},
+        }
+
+    def test_packages_set_via_project_config(self, project):
+        manifest = run_dbt(["parse"])
+        assert len(manifest.functions) == 1
+        function_node = manifest.functions["function.test.double_it"]
+        assert isinstance(function_node, FunctionNode)
+        assert function_node.language == "python"
+        assert function_node.config.packages == ["scikit-learn"]
+
+
 class TestFunctionsGetSchemaCreatedIfNecessary:
     @pytest.fixture(scope="class")
     def functions(self) -> Dict[str, str]:
