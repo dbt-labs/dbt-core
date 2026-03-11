@@ -17,8 +17,9 @@ use dbt_common::stdfs;
 
 use dbt_common::err;
 use dbt_common::{ErrorCode, FsResult, fs_err, unexpected_fs_err};
+use dbt_jinja_vars::DbtVars;
 use dbt_schemas::schemas::project::DbtProject;
-use dbt_schemas::state::{DbtAsset, DbtPackage, DbtProfile, DbtVars, ResourcePathKind};
+use dbt_schemas::state::{DbtAsset, DbtPackage, DbtProfile, ResourcePathKind};
 
 use crate::args::LoadArgs;
 use crate::loader::load_inner;

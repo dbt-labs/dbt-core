@@ -13,13 +13,11 @@ use dbt_common::{
     ErrorCode, FsResult, adapter::AdapterType, cancellation::CancellationToken, fs_err,
     io_args::IoArgs,
 };
-use dbt_schemas::{
-    schemas::{
-        common::DbtQuoting,
-        dbt_catalogs::DbtCatalogs,
-        profiles::{DbConfig, TargetContext},
-    },
-    state::DbtVars,
+use dbt_jinja_vars::DbtVars;
+use dbt_schemas::schemas::{
+    common::DbtQuoting,
+    dbt_catalogs::DbtCatalogs,
+    profiles::{DbConfig, TargetContext},
 };
 use indexmap::IndexMap;
 use minijinja::{

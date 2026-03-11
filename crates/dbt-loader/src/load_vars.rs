@@ -1,5 +1,5 @@
 use dbt_common::FsResult;
-use dbt_schemas::state::DbtVars;
+use dbt_jinja_vars::DbtVars;
 use indexmap::IndexMap;
 
 // Load vars

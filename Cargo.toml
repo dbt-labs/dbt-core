@@ -25,6 +25,7 @@ members = [
   "crates/dbt-test-containers",
   "crates/dbt-parser",
   "crates/dbt-jinja-filters",
+  "crates/dbt-jinja-vars",
   "crates/dbt-profile",
   "crates/dbt-schemas",
   "crates/dbt-schema-store",
@@ -200,6 +201,7 @@ dbt-ident = { path = "crates/dbt-ident" }
 dbt-init = { path = "crates/dbt-init" }
 dbt-jinja-filters = { path = "crates/dbt-jinja-filters" }
 dbt-jinja-utils = { path = "crates/dbt-jinja-utils" }
+dbt-jinja-vars = { path = "crates/dbt-jinja-vars" }
 dbt-loader = { path = "crates/dbt-loader" }
 dbt-parser = { path = "crates/dbt-parser" }
 dbt-proc-macros = { path = "crates/dbt-proc-macros" }

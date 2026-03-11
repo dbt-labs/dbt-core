@@ -1,5 +1,5 @@
 use chrono_tz::Tz;
-use dbt_yaml::{Spanned, UntaggedEnumDeserialize};
+use dbt_yaml::Spanned;
 use indexmap::IndexMap;
 use std::{
     any::Any,
@@ -207,12 +207,7 @@ pub struct DbtPackage {
     pub embedded_file_contents: Option<HashMap<DbtPath, String>>,
 }
 
-#[derive(Clone, Debug, Serialize, UntaggedEnumDeserialize, PartialEq, Eq)]
-#[serde(untagged)]
-pub enum DbtVars {
-    Vars(BTreeMap<String, DbtVars>),
-    Value(dbt_yaml::Value),
-}
+pub use dbt_jinja_vars::DbtVars;
 
 #[derive(Debug, Clone)]
 pub struct DbtState {

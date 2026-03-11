@@ -35,11 +35,7 @@ use minijinja::listener::RenderingEventListener;
 
 use crate::{jinja_environment::JinjaEnv, phases::parse::sql_resource::SqlResource};
 
-/// The prefix for environment variables that contain secrets
-pub const SECRET_ENV_VAR_PREFIX: &str = "DBT_ENV_SECRET";
-
-/// The prefix for environment variables that are reserved for dbt
-pub const DBT_INTERNAL_ENV_VAR_PREFIX: &str = "_DBT";
+pub use dbt_jinja_vars::{DBT_INTERNAL_ENV_VAR_PREFIX, SECRET_ENV_VAR_PREFIX};
 
 /// The version of dbt used in this crate
 pub const DBT_VERSION: &str = "2.0.0"; // easter egg jokes for now

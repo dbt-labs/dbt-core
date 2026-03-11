@@ -2,7 +2,7 @@
 
 use std::{collections::BTreeMap, rc::Rc, sync::Arc};
 
-use dbt_schemas::state::DbtVars;
+use crate::DbtVars;
 use indexmap::IndexMap;
 
 use minijinja::{
@@ -10,7 +10,7 @@ use minijinja::{
     listener::RenderingEventListener, value::Object,
 };
 
-use super::VarFunction;
+use crate::VarFunction;
 
 /// A struct that represent a var object to be used in configuration contexts
 #[derive(Debug)]
@@ -169,7 +169,7 @@ mod tests {
         env.add_global(TARGET_PACKAGE_NAME, MinijinjaValue::from("my_new_project"));
 
         // Provide an empty vars namespace for this package (required by ConfiguredVar).
-        let mut vars = BTreeMap::new();
+        let mut vars: BTreeMap<String, IndexMap<String, DbtVars>> = BTreeMap::new();
         vars.insert("my_new_project".to_string(), IndexMap::new());
 
         let cli_vars = BTreeMap::new();

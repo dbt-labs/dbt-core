@@ -44,8 +44,9 @@ use project::DbtProject;
 use dbt_common::stdfs::last_modified;
 use dbt_common::{ErrorCode, create_debug_span, ectx, err, tokiofs};
 use dbt_common::{FsResult, fs_err};
+use dbt_jinja_vars::DbtVars;
 use dbt_schemas::schemas::project::{self, DbtProjectSimplified, ProjectDbtCloudConfig};
-use dbt_schemas::state::{DbtAsset, DbtPackage, DbtState, DbtVars, ResourcePathKind};
+use dbt_schemas::state::{DbtAsset, DbtPackage, DbtState, ResourcePathKind};
 
 use crate::args::LoadArgs;
 use crate::dbt_project_yml_loader::load_project_yml;
