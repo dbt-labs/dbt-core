@@ -9,6 +9,7 @@ from dbt import hooks
 from dbt.artifacts.resources.base import Docs
 from dbt.artifacts.resources.types import ModelHookType
 from dbt.artifacts.utils.validation import validate_color
+from dbt.flags import get_flags
 from dbt_common.contracts.config.base import BaseConfig, CompareBehavior, MergeBehavior
 from dbt_common.contracts.config.materialization import OnConfigurationChangeOption
 from dbt_common.contracts.config.metadata import Metadata, ShowBehavior
@@ -175,6 +176,7 @@ class TestConfig(NodeAndTestConfig):
     severity: Annotated[Severity, Pattern(SEVERITY_PATTERN)] = Severity("ERROR")
     store_failures: Optional[bool] = None
     store_failures_as: Optional[str] = None
+    sql_header: Any = None
     where: Optional[str] = None
     limit: Optional[int] = None
     fail_calc: str = "count(*)"
@@ -244,6 +246,7 @@ class TestConfig(NodeAndTestConfig):
             "error_if",
             "store_failures",
             "store_failures_as",
+            "sql_header",
         ]
 
         seen = set()
@@ -266,3 +269,10 @@ class TestConfig(NodeAndTestConfig):
 
         if data.get("materialized") and data.get("materialized") != "test":
             raise ValidationError("A test must have a materialized value of 'test'")
+
+        sql_header = data.get("sql_header")
+        if sql_header is not None and get_flags().require_sql_header_in_test_configs:
+            if not isinstance(sql_header, str):
+                raise ValidationError(
+                    f"sql_header must be a string. Got '{type(sql_header).__name__}'"
+                )

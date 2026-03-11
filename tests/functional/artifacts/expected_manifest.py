@@ -158,6 +158,7 @@ def get_rendered_tst_config(**updates):
         "severity": "ERROR",
         "store_failures": None,
         "store_failures_as": None,
+        "sql_header": None,
         "warn_if": "!= 0",
         "error_if": "!= 0",
         "fail_calc": "count(*)",
@@ -1666,6 +1667,12 @@ def expected_references_manifest(project):
                 "package_name": "test",
                 "meta": {
                     "some_key": 100,
+                },
+                "config": {
+                    "meta": {
+                        "some_key": 100,
+                    },
+                    "docs": {"node_color": None, "show": True},
                 },
                 "patch_path": "test://" + os.path.join("macros", "schema.yml"),
                 "resource_type": "macro",

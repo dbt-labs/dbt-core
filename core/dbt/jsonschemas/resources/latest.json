@@ -1040,6 +1040,14 @@
             "null"
           ]
         },
+        "job_execution_timeout_seconds": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
         "kms_key_name": {
           "type": [
             "string",
@@ -1303,6 +1311,12 @@
           ]
         },
         "source_alias": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sql_header": {
           "type": [
             "string",
             "null"
@@ -2454,6 +2468,14 @@
             "string",
             "null"
           ]
+        },
+        "job_execution_timeout_seconds": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
         },
         "kms_key_name": {
           "type": [
@@ -3960,6 +3982,14 @@
             "$ref": "#/definitions/AnyValue"
           }
         },
+        "job_execution_timeout_seconds": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
         "kms_key_name": {
           "type": [
             "string",
@@ -5456,6 +5486,14 @@
             "null"
           ]
         },
+        "job_execution_timeout_seconds": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
         "kms_key_name": {
           "type": [
             "string",
@@ -6220,6 +6258,14 @@
             "string",
             "null"
           ]
+        },
+        "job_execution_timeout_seconds": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
         },
         "kms_key_name": {
           "type": [
@@ -6994,6 +7040,14 @@
             "string",
             "null"
           ]
+        },
+        "job_execution_timeout_seconds": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
         },
         "kms_key_name": {
           "type": [
@@ -7910,6 +7964,14 @@
             "null"
           ]
         },
+        "job_execution_timeout_seconds": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
         "kms_key_name": {
           "type": [
             "string",
@@ -8330,6 +8392,12 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "deprecation_date": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "v": {

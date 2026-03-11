@@ -42,6 +42,16 @@ class CompileRunner(BaseRunner):
     def compile(self, manifest: Manifest):
         return self.compiler.compile_node(self.node, manifest, {})
 
+    def get_node_representation(self):
+        display_quote_policy = {"database": False, "schema": False, "identifier": False}
+        relation = self.adapter.Relation.create_from(
+            self.config, self.node, quote_policy=display_quote_policy
+        )
+        # exclude the database from output if it's the default
+        if self.node.database == self.config.credentials.database:
+            relation = relation.include(database=False)
+        return str(relation)
+
 
 class CompileTask(GraphRunnableTask):
     # We add a new inline node to the manifest during initialization

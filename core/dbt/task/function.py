@@ -27,7 +27,7 @@ class FunctionRunner(CompileRunner):
         self.node = node
 
     def describe_node(self) -> str:
-        return f"function {self.node.name}"  # TODO: add more info, similar to SeedRunner.describe_node
+        return f"function {self.get_node_representation()}"
 
     def before_execute(self) -> None:
         fire_event(

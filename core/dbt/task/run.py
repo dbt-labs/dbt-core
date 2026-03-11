@@ -206,16 +206,6 @@ def _validate_materialization_relations_dict(inp: Dict[Any, Any], model) -> List
 
 
 class ModelRunner(CompileRunner):
-    def get_node_representation(self):
-        display_quote_policy = {"database": False, "schema": False, "identifier": False}
-        relation = self.adapter.Relation.create_from(
-            self.config, self.node, quote_policy=display_quote_policy
-        )
-        # exclude the database from output if it's the default
-        if self.node.database == self.config.credentials.database:
-            relation = relation.include(database=False)
-        return str(relation)
-
     def describe_node(self) -> str:
         # TODO CL 'language' will be moved to node level when we change representation
         return f"{self.node.language} {self.node.get_materialization()} model {self.get_node_representation()}"

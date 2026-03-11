@@ -119,9 +119,7 @@ jobs:
         with:
           timeout_minutes: 30
           max_attempts: 3
-          command: cd core && hatch -v run ci:integration-tests -- -nauto
-        env:
-          PYTEST_ADDOPTS: ${{ format('--splits {0} --group {1}', env.PYTHON_INTEGRATION_TEST_WORKERS, matrix.split-group) }}
+          command: cd core && hatch -v run ci:integration-tests -- --splits ${{ env.PYTHON_INTEGRATION_TEST_WORKERS }} --group ${{ matrix.split-group }}
 
   test-schema-report:
     name: Log Schema Test Suite
