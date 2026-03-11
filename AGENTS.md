@@ -124,8 +124,9 @@ hatch run code-quality            # Pre-commit hooks on all files
 Or directly with pytest:
 
 ```sh
-python3 -m pytest tests/unit/path/to/test_file.py
-python3 -m pytest tests/functional/feature_name
+cd core
+hatch run python3 -m pytest ../tests/unit/path/to/test_file.py
+hatch run python3 -m pytest ../tests/functional/feature_name
 ```
 
 ### Functional Test Pattern
