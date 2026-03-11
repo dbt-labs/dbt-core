@@ -405,6 +405,27 @@ class TestBasicSnapshotYaml(BasicYaml):
         snapshot_setup(project, num_snapshot_models=2)
 
 
+class TestYamlSnapshotCompiledPath(BasicYaml):
+    def test_compiled_path(self, project):
+        """Verify yml-based snapshots get correct compiled paths without doubling."""
+        manifest = run_dbt(["parse"])
+        node = manifest.nodes["snapshot.test.snapshot_actual"]
+        assert node.path == "snapshot_actual.sql"
+        assert node.original_file_path == os.path.join("snapshots", "snapshot.yml")
+
+        run_dbt(["compile"])
+        expected = os.path.join(
+            project.project_root,
+            "target",
+            "compiled",
+            "test",
+            "snapshots",
+            "snapshot.yml",
+            "snapshot_actual.sql",
+        )
+        assert os.path.exists(expected), f"Compiled file not found: {expected}"
+
+
 class TestYamlSnapshotPartialParsing(BasicYaml):
     def test_snapshot_partial_parsing(self, project):
         manifest = run_dbt(["parse"])

@@ -741,10 +741,7 @@ class Compiler:
     def _write_node(
         self, node: ManifestSQLNode, split_suffix: Optional[str] = None
     ) -> ManifestSQLNode:
-        if not node.extra_ctes_injected or node.resource_type in (
-            NodeType.Snapshot,
-            NodeType.Seed,
-        ):
+        if not node.extra_ctes_injected or node.resource_type in (NodeType.Seed,):
             return node
         fire_event(WritingInjectedSQLForNode(node_info=get_node_info()))
 
