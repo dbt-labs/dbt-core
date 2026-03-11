@@ -193,8 +193,8 @@ jobs:
         uses: peter-evans/create-pull-request@271a8d0340265f705b14b6d32b9829c1cb33d45e # peter-evans/create-pull-request@v8
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          sign-commits: true
           commit-message: "Update test durations for pytest-split"
-          committer: "Github Build Bot <buildbot@fishtownanalytics.com>"
           branch: update-test-durations
           base: main
           delete-branch: true
