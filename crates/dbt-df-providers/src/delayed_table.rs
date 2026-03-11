@@ -92,7 +92,6 @@ impl TableProvider for DelayedDataTableProvider {
                 state,
                 &self.data_store.get_path_to_data(&self.canonical_fqn),
                 TableFormat::Parquet,
-                None,
             )
             .await?;
             let _ = self.data_provider.set(provider.clone());
