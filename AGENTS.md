@@ -157,6 +157,10 @@ docker-compose up -d database
 PGHOST=localhost PGUSER=root PGPASSWORD=password PGDATABASE=postgres bash scripts/setup_db.sh
 ```
 
+## Contributing Guide
+
+General contributing documetatnion can be found in [CONTRIBUTING.md](CONTRIBUTING.md)
+
 ## Changelog
 
 Use [changie](https://changie.dev/) — do **not** edit `CHANGELOG.md` directly (it is generated).
