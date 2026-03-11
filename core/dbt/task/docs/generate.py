@@ -133,6 +133,17 @@ class Catalog(Dict[CatalogKey, CatalogTable]):
             unique_ids = source_map.get(table.key(), set())
             for unique_id in unique_ids:
                 if unique_id in sources:
+                    # Check if this is a case-sensitivity issue (database has both "Subject" and "subject")
+                    # Only raise error if there are actually multiple sources defined in the manifest
+                    # that would map to the same key
+                    existing_table = sources[unique_id]
+                    # If the table names differ only by case, skip adding the duplicate
+                    if (
+                        existing_table.metadata.name.lower() == table.metadata.name.lower()
+                        and existing_table.metadata.name != table.metadata.name
+                    ):
+                        # Case-only difference - skip the duplicate to avoid false positive errors
+                        continue
                     raise AmbiguousCatalogMatchError(
                         unique_id,
                         sources[unique_id].to_dict(omit_none=True),
@@ -188,24 +199,26 @@ def format_stats(stats: PrimitiveDict) -> StatsDict:
     return stats_collector
 
 
-def mapping_key(node: ResultNode) -> CatalogKey:
+def mapping_key(node: ResultNode, case_sensitive: bool = False) -> CatalogKey:
     dkey = dbt_common.utils.formatting.lowercase(node.database)
+    if case_sensitive:
+        return CatalogKey(dkey, node.schema, node.identifier)
     return CatalogKey(dkey, node.schema.lower(), node.identifier.lower())
 
 
 def get_unique_id_mapping(
-    manifest: Manifest,
+    manifest: Manifest, case_sensitive: bool = False
 ) -> Tuple[Dict[CatalogKey, str], Dict[CatalogKey, Set[str]]]:
     # A single relation could have multiple unique IDs pointing to it if a
     # source were also a node.
     node_map: Dict[CatalogKey, str] = {}
     source_map: Dict[CatalogKey, Set[str]] = {}
     for unique_id, node in manifest.nodes.items():
-        key = mapping_key(node)
+        key = mapping_key(node, case_sensitive)
         node_map[key] = unique_id
 
     for unique_id, source in manifest.sources.items():
-        key = mapping_key(source)
+        key = mapping_key(source, case_sensitive)
         if key not in source_map:
             source_map[key] = set()
         source_map[key].add(unique_id)
