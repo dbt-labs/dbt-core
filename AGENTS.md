@@ -190,6 +190,8 @@ When a task involves more than one of these, make separate commits in a logical 
 
 Each commit should make sense in isolation: it should pass tests, not break the build, and have a clear message explaining *what* and *why*.
 
+Finally we require all commits to be signed with GPG keys. You can inspect if a GPG is present via `git config --global --get user.signingkey`. If it is not, please help the user setup a github GPG key.
+
 ## Pull Requests
 
 - Target the `main` branch
