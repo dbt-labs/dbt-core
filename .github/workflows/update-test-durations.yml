@@ -279,10 +279,12 @@ jobs:
               if os.environ.get(f"{job.upper().replace('-', '_')}_RESULT") == "failure"
           ]
           failed_summary = ", ".join(failed_jobs) if failed_jobs else "unknown job"
+          pr_url = os.environ.get("PR_URL", "")
+          pr_text = f"PR <{pr_url}|opened by the workflow>" if pr_url else "The workflow PR"
           text = (
-              f":x: Update Test Durations failed in <{os.environ['RUN_URL']}|"
-              f"{os.environ['GITHUB_WORKFLOW']}> for `{os.environ['GITHUB_REPOSITORY']}` "
-              f"on `{os.environ['GITHUB_REF_NAME']}`. Failed job(s): {failed_summary}."
+              f":x: {pr_text} failed to merge for `{os.environ['GITHUB_REPOSITORY']}` "
+              f"on `{os.environ['GITHUB_REF_NAME']}`. Failed job(s): {failed_summary}. "
+              f"<{os.environ['RUN_URL']}|View workflow run>."
           )
           print(json.dumps({"text": text}))
           PY
@@ -295,5 +297,6 @@ jobs:
           CREATE_PR_RESULT: ${{ needs.create-pr.result }}
           AWAIT_CI_RESULT: ${{ needs.await-ci.result }}
           MERGE_PR_RESULT: ${{ needs.merge-pr.result }}
+          PR_URL: ${{ needs.create-pr.outputs.pr_url }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_DEV_CORE_ALERTS }}
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_CORE_PR_CHANNEL_URL }}
