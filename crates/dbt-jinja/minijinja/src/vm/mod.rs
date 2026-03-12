@@ -1101,7 +1101,9 @@ impl<'env> Vm<'env> {
                     };
                     // Render the result of var function if it it has macro calls
                     let rv = if (name == &"var" || name == &"env_var")
-                        && rv.as_str().unwrap_or_default().contains("{{")
+                        && (rv.as_str().unwrap_or_default().contains("{{")
+                            || rv.as_str().unwrap_or_default().contains("{#")
+                            || rv.as_str().unwrap_or_default().contains("{%"))
                     {
                         let rv = self.env.render_str(
                             rv.as_str().unwrap(),
