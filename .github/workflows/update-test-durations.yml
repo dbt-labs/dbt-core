@@ -145,7 +145,7 @@ jobs:
 
       - name: "Import build bot GPG key"
         id: import-gpg
-        uses: crazy-max/ghaction-import-gpg@cb9bde2e2525e640591a934b1fd28eef1dcaf5e5 # crazy-max/ghaction-import-gpg@v6
+        uses: crazy-max/ghaction-import-gpg@2dc316deee8e90f13e1a351ab510b4d5bc0c82cd # crazy-max/ghaction-import-gpg@v7
         with:
           gpg_private_key: ${{ secrets.FISHTOWN_BOT_GPG_PRIVATE_KEY }}
           passphrase: ${{ secrets.FISHTOWN_BOT_GPG_PASSPHRASE }}
@@ -202,7 +202,7 @@ jobs:
 
       - name: "Create Pull Request"
         id: cpr
-        uses: peter-evans/create-pull-request@271a8d0340265f705b14b6d32b9829c1cb33d45e # peter-evans/create-pull-request@v8
+        uses: peter-evans/create-pull-request@c0f553fee5fe477594c15b259288f72874e0d33a # peter-evans/create-pull-request@v8.1.0
         with:
           token: ${{ secrets.FISHTOWN_BOT_PAT }}
           commit-message: "Update test durations for pytest-split"
@@ -256,6 +256,7 @@ jobs:
       - name: "Merge PR"
         run: |
           gh pr merge ${{ needs.create-pr.outputs.pr_number }} \
+            --admin \
             --squash \
             --body "Update test durations for pytest-split" \
             --delete-branch
@@ -264,16 +265,35 @@ jobs:
     name: "Slack Notification"
     runs-on: ubuntu-latest
     needs: [create-pr, await-ci, merge-pr]
-    if: always()
+    if: always() && contains(join(needs.*.result, ','), 'failure')
     steps:
       - name: "Post Slack Notification"
-        uses: ravsamhq/notify-slack-action@be814b201e233b2dc673608aa46e5447c8ab13f2 # ravsamhq/notify-slack-action@v2
-        with:
-          status: ${{ job.status}}
-          token: ${{ secrets.GITHUB_TOKEN }}
-          notification_title: "Update Test Durations Failed"
-          message_format: "{emoji} *{workflow}* {status_message} in <{repo_url}|{repo}@{branch}> on <{commit_url}|{commit_sha}>"
-          footer: "<{run_url}|View Run>"
-          notify_when: "failure"
+        run: |
+          python3 <<'PY' > slack-payload.json
+          import json
+          import os
+
+          failed_jobs = [
+              job
+              for job in ("create-pr", "await-ci", "merge-pr")
+              if os.environ.get(f"{job.upper().replace('-', '_')}_RESULT") == "failure"
+          ]
+          failed_summary = ", ".join(failed_jobs) if failed_jobs else "unknown job"
+          text = (
+              f":x: Update Test Durations failed in <{os.environ['RUN_URL']}|"
+              f"{os.environ['GITHUB_WORKFLOW']}> for `{os.environ['GITHUB_REPOSITORY']}` "
+              f"on `{os.environ['GITHUB_REF_NAME']}`. Failed job(s): {failed_summary}."
+          )
+          print(json.dumps({"text": text}))
+          PY
+
+          curl -X POST \
+            -H "Content-type: application/json" \
+            --data @slack-payload.json \
+            "$SLACK_WEBHOOK_URL"
         env:
+          CREATE_PR_RESULT: ${{ needs.create-pr.result }}
+          AWAIT_CI_RESULT: ${{ needs.await-ci.result }}
+          MERGE_PR_RESULT: ${{ needs.merge-pr.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_DEV_CORE_ALERTS }}
