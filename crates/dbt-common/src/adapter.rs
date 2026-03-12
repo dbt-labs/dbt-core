@@ -68,13 +68,20 @@ pub fn dialect_of(adapter_type: AdapterType) -> Option<Dialect> {
 }
 
 pub fn quote_char(adapter_type: AdapterType) -> char {
-    match dialect_of(adapter_type) {
-        Some(dialect) => dialect.quote_char(),
-        None => match adapter_type {
-            AdapterType::Fabric => '"',
-            AdapterType::DuckDB => '"',
-            _ => unimplemented!("quote_char() is not defined for {adapter_type}"),
-        },
+    use AdapterType::*;
+    match adapter_type {
+        Snowflake => '"',
+        Bigquery => '`',
+        Databricks | Spark => '`',
+        Redshift => '"',
+        Postgres | Salesforce => '"',
+        Fabric => '"',
+        DuckDB => '"',
+        Athena | Trino | Starburst => '"',
+        ClickHouse => '"',
+        Sidecar => '"',
+        Dremio => todo!("Dremio"),
+        Oracle => todo!("Oracle"),
     }
 }
 
