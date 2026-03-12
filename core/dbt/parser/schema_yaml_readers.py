@@ -508,6 +508,7 @@ class MetricParser(YamlReader):
                 ),
                 metric_aggregation_params=metric_aggregation_params,
                 join_to_timespine=unparsed_metric.join_to_timespine or False,
+                is_private=unparsed_metric.hidden,
             )
         else:
             raise DbtInternalError(
@@ -631,9 +632,14 @@ class MetricParser(YamlReader):
     def parse_v2_metrics_from_dbt_model_patch(self, model_patch: ParsedNodePatch) -> None:
         if model_patch.metrics is None:
             return
+        # Resolve the semantic model name, respecting custom name overrides
+        semantic_model_name = model_patch.name
+        if isinstance(model_patch.semantic_model, UnparsedSemanticModelConfig):
+            if model_patch.semantic_model.name is not None:
+                semantic_model_name = model_patch.semantic_model.name
         for metric in model_patch.metrics:
             semantic_model = (
-                model_patch.name if MetricType(metric.type) == MetricType.SIMPLE else None
+                semantic_model_name if MetricType(metric.type) == MetricType.SIMPLE else None
             )
             self.parse_metric(metric, generated_from=semantic_model)
 
@@ -912,12 +918,13 @@ class SemanticModelParser(YamlReader):
                 meta = dict(column.config.get("meta", {}))
                 meta.update((column.dimension.config or {}).get("meta", {}))
                 config = SemanticLayerElementConfig(meta=meta)
+                dimension_name = column.dimension.name or column.name
                 dimensions.append(
                     Dimension(
                         # required
                         type=DimensionType(column.dimension.type),
                         # fields that use column's values as fallback values
-                        name=column.dimension.name or column.name,
+                        name=dimension_name,
                         description=column.dimension.description or column.description,
                         config=config,
                         # optional fields
@@ -925,7 +932,9 @@ class SemanticModelParser(YamlReader):
                         is_partition=column.dimension.is_partition,
                         type_params=type_params,
                         metadata=None,  # Not yet supported in v1 or v2 YAML
-                        # expr argument is not supported for column-based dimensions
+                        # When the dimension name differs from the column name, set expr
+                        # to the column name so MetricFlow queries the correct warehouse column.
+                        expr=column.name if dimension_name != column.name else None,
                     )
                 )
         return dimensions
@@ -978,6 +987,9 @@ class SemanticModelParser(YamlReader):
                         type=column.entity.type,
                         description=column.entity.description,
                         label=column.entity.label,
+                        # When the entity name differs from the column name, set expr
+                        # to the column name so MetricFlow queries the correct warehouse column.
+                        expr=column.name if column.entity.name != column.name else None,
                         config=SemanticLayerElementConfig(
                             meta=column.entity.config.get("meta", column.config.get("meta", {}))
                         ),

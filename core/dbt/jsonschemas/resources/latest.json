@@ -644,15 +644,6 @@
         "conversion_rate"
       ]
     },
-    "CustomCheckLevel": {
-      "type": "string",
-      "enum": [
-        "error",
-        "warn",
-        "advisory",
-        "off"
-      ]
-    },
     "CustomTest": {
       "anyOf": [
         {
@@ -884,9 +875,13 @@
           ]
         },
         "clustered_by": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "compression": {
@@ -1044,6 +1039,14 @@
             "string",
             "null"
           ]
+        },
+        "job_execution_timeout_seconds": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
         },
         "kms_key_name": {
           "type": [
@@ -1313,6 +1316,12 @@
             "null"
           ]
         },
+        "sql_header": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "static_analysis": {
           "anyOf": [
             {
@@ -1353,6 +1362,7 @@
           ]
         },
         "tags": {
+          "default": [],
           "anyOf": [
             {
               "$ref": "#/definitions/StringOrArrayOfStrings"
@@ -1966,6 +1976,7 @@
           }
         },
         "tags": {
+          "default": [],
           "anyOf": [
             {
               "$ref": "#/definitions/StringOrArrayOfStrings"
@@ -2294,9 +2305,13 @@
           ]
         },
         "clustered_by": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "compression": {
@@ -2453,6 +2468,14 @@
             "string",
             "null"
           ]
+        },
+        "job_execution_timeout_seconds": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
         },
         "kms_key_name": {
           "type": [
@@ -3193,6 +3216,7 @@
           }
         },
         "tags": {
+          "default": [],
           "anyOf": [
             {
               "$ref": "#/definitions/StringOrArrayOfStrings"
@@ -3684,9 +3708,13 @@
           ]
         },
         "clustered_by": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "column_types": {
@@ -3732,15 +3760,6 @@
             "boolean",
             "null"
           ]
-        },
-        "custom_checks": {
-          "type": [
-            "object",
-            "null"
-          ],
-          "additionalProperties": {
-            "$ref": "#/definitions/CustomCheckLevel"
-          }
         },
         "database": {
           "type": [
@@ -3962,6 +3981,14 @@
           "additionalProperties": {
             "$ref": "#/definitions/AnyValue"
           }
+        },
+        "job_execution_timeout_seconds": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
         },
         "kms_key_name": {
           "type": [
@@ -4357,16 +4384,6 @@
             }
           ]
         },
-        "strictness": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/StrictnessMode"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
         "submission_method": {
           "type": [
             "string",
@@ -4403,6 +4420,7 @@
           ]
         },
         "tags": {
+          "default": [],
           "anyOf": [
             {
               "$ref": "#/definitions/StringOrArrayOfStrings"
@@ -5099,6 +5117,7 @@
           ]
         },
         "tags": {
+          "default": [],
           "anyOf": [
             {
               "$ref": "#/definitions/StringOrArrayOfStrings"
@@ -5276,9 +5295,13 @@
           ]
         },
         "clustered_by": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "column_types": {
@@ -5462,6 +5485,14 @@
             "string",
             "null"
           ]
+        },
+        "job_execution_timeout_seconds": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
         },
         "kms_key_name": {
           "type": [
@@ -5774,6 +5805,7 @@
           ]
         },
         "tags": {
+          "default": [],
           "anyOf": [
             {
               "$ref": "#/definitions/StringOrArrayOfStrings"
@@ -6027,9 +6059,13 @@
           ]
         },
         "clustered_by": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "compression": {
@@ -6222,6 +6258,14 @@
             "string",
             "null"
           ]
+        },
+        "job_execution_timeout_seconds": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
         },
         "kms_key_name": {
           "type": [
@@ -6561,6 +6605,7 @@
           ]
         },
         "tags": {
+          "default": [],
           "anyOf": [
             {
               "$ref": "#/definitions/StringOrArrayOfStrings"
@@ -6846,9 +6891,13 @@
           ]
         },
         "clustered_by": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "compression": {
@@ -6991,6 +7040,14 @@
             "string",
             "null"
           ]
+        },
+        "job_execution_timeout_seconds": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
         },
         "kms_key_name": {
           "type": [
@@ -7284,6 +7341,7 @@
           ]
         },
         "tags": {
+          "default": [],
           "anyOf": [
             {
               "$ref": "#/definitions/StringOrArrayOfStrings"
@@ -7413,6 +7471,8 @@
       "enum": [
         "unsafe",
         "off",
+        "baseline",
+        "strict",
         "on"
       ]
     },
@@ -7422,14 +7482,6 @@
         "ephemeral",
         "table",
         "view"
-      ]
-    },
-    "StrictnessMode": {
-      "type": "string",
-      "enum": [
-        "baseline",
-        "strict",
-        "custom"
       ]
     },
     "StringOrArrayOfStrings": {
@@ -7779,9 +7831,13 @@
           ]
         },
         "clustered_by": {
-          "type": [
-            "string",
-            "null"
+          "anyOf": [
+            {
+              "$ref": "#/definitions/StringOrArrayOfStrings"
+            },
+            {
+              "type": "null"
+            }
           ]
         },
         "compression": {
@@ -7907,6 +7963,14 @@
             "string",
             "null"
           ]
+        },
+        "job_execution_timeout_seconds": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
         },
         "kms_key_name": {
           "type": [
@@ -8328,6 +8392,12 @@
             {
               "type": "null"
             }
+          ]
+        },
+        "deprecation_date": {
+          "type": [
+            "string",
+            "null"
           ]
         },
         "v": {

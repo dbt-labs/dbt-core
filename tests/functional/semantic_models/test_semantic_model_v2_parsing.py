@@ -13,6 +13,8 @@ from dbt_semantic_interfaces.type_enums import (
 from tests.functional.assertions.test_runner import dbtTestRunner
 from tests.functional.semantic_models.fixtures import (
     base_schema_yml_v2,
+    base_schema_yml_v2_with_custom_sm_name,
+    derived_semantics_with_doc_jinja_yml,
     derived_semantics_yml,
     fct_revenue_sql,
     metricflow_time_spine_sql,
@@ -20,6 +22,9 @@ from tests.functional.semantic_models.fixtures import (
     schema_yml_v2_cumulative_metric_missing_input_metric,
     schema_yml_v2_metric_with_doc_jinja,
     schema_yml_v2_metric_with_filter_dimension_jinja,
+    schema_yml_v2_metric_with_input_metrics_filter_dimension_jinja,
+    schema_yml_v2_metric_with_numerator_filter_dimension_jinja,
+    schema_yml_v2_metrics_with_hidden,
     schema_yml_v2_simple_metric_on_model_1,
     schema_yml_v2_standalone_metrics,
     schema_yml_v2_standalone_metrics_with_doc_jinja,
@@ -78,6 +83,9 @@ class TestSemanticModelParsingWorks:
         assert id_dim.label == "ID Dimension"
         assert id_dim.is_partition is True
         assert id_dim.config.meta == {"component_level": "dimension_override"}
+        # dimension name "id_dim" differs from column name "id", so expr must
+        # be set to the column name for MetricFlow to query the correct column.
+        assert id_dim.expr == "id"
         second_dim = dimensions["second_dim"]
         assert second_dim.type == DimensionType.TIME
         assert second_dim.description == "This is the second column (dim)."
@@ -86,6 +94,9 @@ class TestSemanticModelParsingWorks:
         assert second_dim.config.meta == {}
         assert second_dim.type_params.validity_params.is_start is True
         assert second_dim.type_params.validity_params.is_end is True
+        # dimension name "second_dim" differs from column name "second_col",
+        # so expr must be set to the column name.
+        assert second_dim.expr == "second_col"
         col_with_default_dimensions = dimensions["col_with_default_dimensions"]
         assert col_with_default_dimensions.type == DimensionType.CATEGORICAL
         assert (
@@ -96,6 +107,8 @@ class TestSemanticModelParsingWorks:
         assert col_with_default_dimensions.is_partition is False
         assert col_with_default_dimensions.config.meta == {}
         assert col_with_default_dimensions.validity_params is None
+        # dimension name matches column name, so expr should not be set.
+        assert col_with_default_dimensions.expr is None
 
         # Entities
         assert len(semantic_model.entities) == 3
@@ -105,12 +118,17 @@ class TestSemanticModelParsingWorks:
         assert primary_entity.description == "This is the id entity, and it is the primary entity."
         assert primary_entity.label == "ID Entity"
         assert primary_entity.config.meta == {"component_level": "entity_override"}
+        # entity name "id_entity" differs from column name "id", so expr must
+        # be set to the column name for MetricFlow to query the correct column.
+        assert primary_entity.expr == "id"
 
         foreign_id_col = entities["foreign_id_col"]
         assert foreign_id_col.type == EntityType.FOREIGN
         assert foreign_id_col.description == "This is a foreign id column."
         assert foreign_id_col.label is None
         assert foreign_id_col.config.meta == {}
+        # entity name matches column name, so expr should not be set.
+        assert foreign_id_col.expr is None
 
         col_with_default_entity_testing_default_desc = entities[
             "col_with_default_entity_testing_default_desc"
@@ -122,6 +140,8 @@ class TestSemanticModelParsingWorks:
         )
         assert col_with_default_entity_testing_default_desc.label is None
         assert col_with_default_entity_testing_default_desc.config.meta == {}
+        # entity name differs from column name, so expr must be set.
+        assert col_with_default_entity_testing_default_desc.expr == "col_with_default_dimensions"
 
         # No measures in v2 YAML
         assert len(semantic_model.measures) == 0
@@ -450,6 +470,32 @@ class TestMetricOnModelParsingWorks:
         assert conversion_metric_pydantic.type_params.metric_aggregation_params is None
 
 
+class TestMetricHiddenMapsToIsPrivate:
+    """Test that a metric's 'hidden' field in YAML is reflected as 'is_private' on the parsed metric."""
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": base_schema_yml_v2 + schema_yml_v2_metrics_with_hidden,
+            "fct_revenue.sql": fct_revenue_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+        }
+
+    def test_metric_hidden_yaml_maps_to_is_private(self, project):
+        runner = dbtTestRunner()
+        result = runner.invoke(["parse"])
+        assert result.success
+        manifest = result.result
+        metrics = manifest.metrics
+        assert len(metrics) == 2
+
+        public_metric = metrics["metric.test.public_metric"]
+        assert public_metric.type_params.is_private is False
+
+        private_metric = metrics["metric.test.private_metric"]
+        assert private_metric.type_params.is_private is True
+
+
 class TestStandaloneMetricParsingSimpleMetricFails:
     @pytest.fixture(scope="class")
     def models(self):
@@ -569,6 +615,29 @@ class TestConversionMetricNoBaseMetricFails:
         result = runner.invoke(["parse"])
         assert not result.success
         assert "base_metric is required for conversion metrics." in str(result.exception)
+
+
+class TestDerivedSemanticsWithDocJinjaParsingWorks:
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": semantic_model_schema_yml_v2 + derived_semantics_with_doc_jinja_yml,
+            "fct_revenue.sql": fct_revenue_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+            "docs.md": semantic_model_descriptions,
+        }
+
+    def test_derived_semantics_doc_jinja_parsing(self, project) -> None:
+        runner = dbtTestRunner()
+        result = runner.invoke(["parse"])
+        assert result.success
+        manifest = result.result
+        assert len(manifest.semantic_models) == 1
+        semantic_model = manifest.semantic_models["semantic_model.test.fct_revenue"]
+        entities = {entity.name: entity for entity in semantic_model.entities}
+        assert entities["derived_id_entity"].description == "qux"
+        dimensions = {dimension.name: dimension for dimension in semantic_model.dimensions}
+        assert dimensions["derived_id_dimension"].description == "bar"
 
 
 class TestDerivedSemanticsParsingWorks:
@@ -706,7 +775,7 @@ class TestSimpleSemanticModelWithFilterWithFilterDimensionJinja:
         metric = manifest.metrics["metric.test.simple_metric_with_filter_dimension_jinja"]
         assert (
             metric.filter.where_filters[0].where_sql_template
-            == "{{ Dimension('id_entity__id_dim') }} > 0"
+            == "{{ Dimension('id_entity__id_dim') }} > 0 and {{ TimeDimension('id_entity__id_dim', 'day') }} > '2020-01-01'"
         )
 
 
@@ -745,6 +814,173 @@ class TestTopLevelSemanticsMetricWithDocJinja:
             .filter.where_filters[0]
             .where_sql_template
             == "{{ Dimension('id_entity__id_dim') }} > 0"
+        )
+
+
+class TestDerivedMetricWithInputMetricsFilterDimensionJinja:
+    """Test that {{ Dimension(...) }} jinja in input_metrics[].filter is not rendered at parse time."""
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": base_schema_yml_v2
+            + schema_yml_v2_metric_with_input_metrics_filter_dimension_jinja,
+            "fct_revenue.sql": fct_revenue_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+        }
+
+    def test_input_metrics_filter_jinja_not_rendered(self, project):
+        runner = dbtTestRunner()
+        result = runner.invoke(["parse"])
+        assert result.success
+        manifest = result.result
+        metric = manifest.metrics["metric.test.derived_metric_with_jinja_filter"]
+        assert metric.type == MetricType.DERIVED
+        # The input metric filter should preserve the Dimension jinja template
+        offset_input = [m for m in metric.type_params.metrics if m.alias == "offset_metric"][0]
+        assert "{{ Dimension('id_entity__id_dim') }} > 0" in (
+            offset_input.filter.where_filters[0].where_sql_template
+        )
+
+
+class TestRatioMetricWithNumeratorFilterDimensionJinja:
+    """Test that {{ Dimension(...) }} jinja in numerator.filter is not rendered at parse time."""
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": base_schema_yml_v2
+            + schema_yml_v2_metric_with_numerator_filter_dimension_jinja,
+            "fct_revenue.sql": fct_revenue_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+        }
+
+    def test_numerator_filter_jinja_not_rendered(self, project):
+        runner = dbtTestRunner()
+        result = runner.invoke(["parse"])
+        assert result.success
+        manifest = result.result
+        metric = manifest.metrics["metric.test.ratio_metric_with_jinja_filter"]
+        assert metric.type == MetricType.RATIO
+        # The numerator filter should preserve the Dimension jinja template
+        assert "{{ Dimension('id_entity__id_dim') }} > 0" in (
+            metric.type_params.numerator.filter.where_filters[0].where_sql_template
+        )
+
+
+class TestMetricOnModelWithCustomSemanticModelName:
+    """Test that metrics correctly reference the custom semantic model name when
+    semantic_model.name is set, rather than using the dbt model name."""
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": base_schema_yml_v2_with_custom_sm_name
+            + schema_yml_v2_simple_metric_on_model_1,
+            "fct_revenue.sql": fct_revenue_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+        }
+
+    def test_metrics_use_custom_semantic_model_name(self, project):
+        runner = dbtTestRunner()
+        result = runner.invoke(["parse"])
+        assert result.success
+        manifest = result.result
+
+        # Semantic model should be registered under the custom name
+        assert "semantic_model.test.custom_semantic_model" in manifest.semantic_models
+        semantic_model = manifest.semantic_models["semantic_model.test.custom_semantic_model"]
+        assert semantic_model.name == "custom_semantic_model"
+        # But it still points to the fct_revenue model
+        assert semantic_model.node_relation.alias == "fct_revenue"
+
+        # Simple metrics should reference the custom semantic model name
+        simple_metric = manifest.metrics["metric.test.simple_metric"]
+        assert (
+            simple_metric.type_params.metric_aggregation_params.semantic_model
+            == "custom_semantic_model"
+        )
+        assert "semantic_model.test.custom_semantic_model" in simple_metric.depends_on.nodes
+
+        simple_metric_2 = manifest.metrics["metric.test.simple_metric_2"]
+        assert (
+            simple_metric_2.type_params.metric_aggregation_params.semantic_model
+            == "custom_semantic_model"
+        )
+        assert "semantic_model.test.custom_semantic_model" in simple_metric_2.depends_on.nodes
+
+        # Conversion metric should pass validation (it references simple metrics
+        # which are linked to the custom-named semantic model)
+        conversion_metric = manifest.metrics["metric.test.conversion_metric"]
+        assert conversion_metric.type == MetricType.CONVERSION
+        assert (
+            conversion_metric.type_params.conversion_type_params.base_metric.name
+            == "simple_metric"
+        )
+        assert (
+            conversion_metric.type_params.conversion_type_params.conversion_metric.name
+            == "simple_metric_2"
+        )
+
+        # Verify semantic manifest validation also passes
+        semantic_manifest = SemanticManifest(manifest)
+        semantic_manifest_metrics = {
+            metric.name: metric
+            for metric in semantic_manifest._get_pydantic_semantic_manifest().metrics
+        }
+        assert (
+            semantic_manifest_metrics[
+                "simple_metric"
+            ].type_params.metric_aggregation_params.semantic_model
+            == "custom_semantic_model"
+        )
+
+
+class TestMetricOnModelWithoutCustomSemanticModelName:
+    """Test that metrics correctly use the dbt model name as the semantic model name
+    when no custom semantic_model.name is set (semantic_model: true)."""
+
+    @pytest.fixture(scope="class")
+    def models(self):
+        return {
+            "schema.yml": base_schema_yml_v2 + schema_yml_v2_simple_metric_on_model_1,
+            "fct_revenue.sql": fct_revenue_sql,
+            "metricflow_time_spine.sql": metricflow_time_spine_sql,
+        }
+
+    def test_metrics_use_model_name_as_semantic_model_name(self, project):
+        runner = dbtTestRunner()
+        result = runner.invoke(["parse"])
+        assert result.success
+        manifest = result.result
+
+        # Semantic model should be registered under the model name
+        assert "semantic_model.test.fct_revenue" in manifest.semantic_models
+
+        # Simple metrics should reference the model name
+        simple_metric = manifest.metrics["metric.test.simple_metric"]
+        assert simple_metric.type_params.metric_aggregation_params.semantic_model == "fct_revenue"
+        assert "semantic_model.test.fct_revenue" in simple_metric.depends_on.nodes
+
+        # Conversion metric should pass validation
+        conversion_metric = manifest.metrics["metric.test.conversion_metric"]
+        assert conversion_metric.type == MetricType.CONVERSION
+        assert (
+            conversion_metric.type_params.conversion_type_params.base_metric.name
+            == "simple_metric"
+        )
+
+        # Verify semantic manifest validation also passes
+        semantic_manifest = SemanticManifest(manifest)
+        semantic_manifest_metrics = {
+            metric.name: metric
+            for metric in semantic_manifest._get_pydantic_semantic_manifest().metrics
+        }
+        assert (
+            semantic_manifest_metrics[
+                "simple_metric"
+            ].type_params.metric_aggregation_params.semantic_model
+            == "fct_revenue"
         )
 
 

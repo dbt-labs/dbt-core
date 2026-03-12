@@ -1,5 +1,4 @@
 import datetime
-import pathlib
 import re
 import time
 from abc import ABCMeta, abstractmethod
@@ -17,7 +16,7 @@ from typing import (
     TypeVar,
 )
 
-from dbt.artifacts.resources import CustomGranularity, RefArgs, TimeSpine
+from dbt.artifacts.resources import CustomGranularity, Docs, RefArgs, TimeSpine
 from dbt.clients.checked_load import (
     checked_load,
     issue_deprecation_warnings_for_failures,
@@ -343,11 +342,7 @@ class SchemaParser(SimpleParser[YamlBlock, ModelNode]):
                 fqn = parser.get_fqn_prefix(block.path.relative_path)
                 fqn.append(snapshot["name"])
 
-                compiled_path = str(
-                    pathlib.PurePath("").joinpath(
-                        block.path.relative_path, snapshot["name"] + ".sql"
-                    )
-                )
+                compiled_path = snapshot["name"] + ".sql"
                 snapshot_node = parser._create_parsetime_node(
                     block,
                     compiled_path,
@@ -1392,8 +1387,18 @@ class MacroPatchParser(PatchParser[UnparsedMacroUpdate, ParsedMacroPatch]):
         macro.patch_path = patch.file_id
         macro.description = patch.description
         macro.created_at = time.time()
-        macro.meta = patch.meta
-        macro.docs = patch.docs
+
+        meta = {**(patch.meta or {}), **(patch.config.get("meta") or {})}
+        docs = patch.config.get("docs") or patch.docs
+
+        # config inherits from HasConfig which is a dict so we need to cast it to Docs
+        if isinstance(docs, dict):
+            docs = Docs(**docs)
+
+        macro.meta = meta
+        macro.docs = docs
+        macro.config.meta = meta
+        macro.config.docs = docs
 
         if getattr(get_flags(), "validate_macro_args", False):
             self._check_patch_arguments(macro, patch)

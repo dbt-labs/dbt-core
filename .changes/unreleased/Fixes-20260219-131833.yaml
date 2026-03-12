@@ -1,0 +1,6 @@
+kind: Fixes
+body: Correctly map 'hidden' field of metrics to 'is_private' field in manifests.
+time: 2026-02-19T13:18:33.912843-08:00
+custom:
+    Author: theyostalservice
+    Issue: "12518"

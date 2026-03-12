@@ -1,0 +1,6 @@
+kind: Under the Hood
+body: Handle missing column time granularities during parsing.
+time: 2026-02-10T15:12:44.460381-08:00
+custom:
+    Author: theyostalservice
+    Issue: "12472"

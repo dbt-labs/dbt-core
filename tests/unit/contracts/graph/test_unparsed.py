@@ -21,6 +21,7 @@ from dbt.contracts.graph.unparsed import (
     HasColumnTests,
     UnparsedColumn,
     UnparsedConversionTypeParams,
+    UnparsedDerivedDimensionV2,
     UnparsedDocumentationFile,
     UnparsedExposure,
     UnparsedMacro,
@@ -1137,3 +1138,133 @@ def test_column_parse():
 
     with pytest.raises(ParsingError):
         ParserRef.from_target(unparsed_col)
+
+
+class TestUnparsedColumnTimeDimensionGranularityValidation(ContractTestCase):
+    """Test validation that SL YAML V2 column with time dimension must specify granularity,
+    and that dimension validity_params require granularity."""
+
+    ContractType = UnparsedColumn
+
+    def test_time_dimension_without_granularity_fails_validation(self):
+        column_dict = {
+            "name": "created_at",
+            "dimension": {"type": "time", "name": "created_at_dim"},
+        }
+        self.assert_fails_validation(column_dict)
+
+    def test_time_dimension_with_granularity_passes_validation(self):
+        column_dict = {
+            "name": "created_at",
+            "granularity": "day",
+            "dimension": {"type": "time", "name": "created_at_dim"},
+        }
+        col = self.ContractType.from_dict(column_dict)
+        self.assertEqual(col.granularity, "day")
+        self.assertEqual(col.name, "created_at")
+
+    def test_time_dimension_string_without_granularity_fails_validation(self):
+        """Dimension as string 'time' without granularity must fail."""
+        column_dict = {
+            "name": "created_at",
+            "dimension": "time",
+        }
+        self.assert_fails_validation(column_dict)
+
+    def test_time_dimension_string_with_granularity_passes_validation(self):
+        """Dimension as string 'time' with granularity must pass."""
+        column_dict = {
+            "name": "created_at",
+            "granularity": "day",
+            "dimension": "time",
+        }
+        col = self.ContractType.from_dict(column_dict)
+        self.assertEqual(col.granularity, "day")
+        self.assertEqual(col.name, "created_at")
+
+    def test_non_time_dimension_string_passes_without_granularity(self):
+        """Dimension as string (e.g. categorical) does not require granularity."""
+        column_dict = {
+            "name": "category",
+            "dimension": "categorical",
+        }
+        col = self.ContractType.from_dict(column_dict)
+        self.assertEqual(col.name, "category")
+        self.assertIsNone(col.granularity)
+
+    def test_dimension_with_validity_params_without_granularity_fails_validation(self):
+        """Dimension (dict) with validity_params must have column granularity."""
+        column_dict = {
+            "name": "valid_from",
+            "dimension": {
+                "type": "time",
+                "name": "valid_from_dim",
+                "validity_params": {"is_start": True, "is_end": False},
+            },
+        }
+        self.assert_fails_validation(column_dict)
+
+    def test_dimension_with_validity_params_with_granularity_passes_validation(self):
+        """Dimension (dict) with validity_params and granularity passes."""
+        column_dict = {
+            "name": "valid_from",
+            "granularity": "day",
+            "dimension": {
+                "type": "time",
+                "name": "valid_from_dim",
+                "validity_params": {"is_start": True, "is_end": True},
+            },
+        }
+        col = self.ContractType.from_dict(column_dict)
+        self.assertEqual(col.granularity, "day")
+        self.assertEqual(col.name, "valid_from")
+
+    def test_dimension_without_validity_params_passes_without_granularity_when_not_time(self):
+        """Dimension (dict) without validity_params and not time does not require granularity."""
+        column_dict = {
+            "name": "category",
+            "dimension": {"type": "categorical", "name": "category_dim"},
+        }
+        col = self.ContractType.from_dict(column_dict)
+        self.assertEqual(col.name, "category")
+        self.assertIsNone(col.granularity)
+
+
+class TestUnparsedDerivedDimensionV2ValidityParamsValidation(ContractTestCase):
+    """Test validation that UnparsedDerivedDimensionV2 only has validity_params when it has granularity."""
+
+    ContractType = UnparsedDerivedDimensionV2
+
+    def test_derived_dimension_with_validity_params_without_granularity_fails_validation(self):
+        """Derived dimension with validity_params must have granularity."""
+        dimension_dict = {
+            "type": "time",
+            "name": "valid_from_dim",
+            "expr": "valid_from",
+            "validity_params": {"is_start": True, "is_end": False},
+        }
+        self.assert_fails_validation(dimension_dict)
+
+    def test_derived_dimension_with_validity_params_with_granularity_passes_validation(self):
+        """Derived dimension with validity_params and granularity passes."""
+        dimension_dict = {
+            "type": "time",
+            "name": "valid_from_dim",
+            "expr": "valid_from",
+            "granularity": "day",
+            "validity_params": {"is_start": True, "is_end": True},
+        }
+        dim = self.ContractType.from_dict(dimension_dict)
+        self.assertEqual(dim.granularity, "day")
+        self.assertEqual(dim.name, "valid_from_dim")
+
+    def test_derived_dimension_without_validity_params_passes_without_granularity(self):
+        """Derived dimension without validity_params does not require granularity."""
+        dimension_dict = {
+            "type": "time",
+            "name": "some_dim",
+            "expr": "some_column",
+        }
+        dim = self.ContractType.from_dict(dimension_dict)
+        self.assertEqual(dim.name, "some_dim")
+        self.assertIsNone(dim.granularity)

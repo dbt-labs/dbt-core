@@ -1,7 +1,7 @@
 import io
 import json
 import re
-from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Mapping, Optional, Tuple, Union
 
 from dbt.node_types import REFABLE_NODE_TYPES, AccessType, NodeType
 from dbt_common.constants import SECRET_ENV_PREFIX
@@ -1073,25 +1073,31 @@ class NonUniquePackageNameError(CompilationError):
 class UninstalledPackagesFoundError(CompilationError):
     def __init__(
         self,
-        count_packages_specified: int,
         count_packages_installed: int,
+        count_packages_specified: int,
         packages_specified_path: str,
         packages_install_path: str,
+        uninstalled_packages: Tuple[str, ...] = tuple(),
     ):
         self.count_packages_specified = count_packages_specified
         self.count_packages_installed = count_packages_installed
+        self.uninstalled_packages = uninstalled_packages
         self.packages_specified_path = packages_specified_path
         self.packages_install_path = packages_install_path
         super().__init__(msg=self.get_message())
 
     def get_message(self) -> str:
+        uninstalled_packages_str = ", ".join(self.uninstalled_packages)
         msg = (
-            f"dbt found {self.count_packages_specified} package(s) "
-            f"specified in {self.packages_specified_path}, but only "
-            f"{self.count_packages_installed} package(s) installed "
-            f'in {self.packages_install_path}. Run "dbt deps" to '
-            "install package dependencies."
+            f"dbt expects {self.count_packages_specified} package(s) "
+            f"based on packages specified in {self.packages_specified_path}, but "
+            f"found only {self.count_packages_installed} package(s) installed "
+            f"in {self.packages_install_path}. "
         )
+        if self.uninstalled_packages:
+            msg += f"Following packages were not found: {uninstalled_packages_str}. "
+
+        msg += 'Run "dbt deps" to install package dependencies.'
         return msg
 
 
